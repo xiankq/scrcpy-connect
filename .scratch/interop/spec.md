@@ -137,3 +137,9 @@ scrcpy 服务端固定版本并验证协议匹配；优先保持官方能力边�
 ## 8. Flutter代码组织与路由（2026-10-17追加）
 
 用户最后明确采用浅层结构：`lib/pages/<页面>/<页面>_page.dart`。每个页面独立文件与目录，`pages`直接位于`lib`下；不加features/core/app分组。页面专属控件和状态就近放入该页目录，公共控件、服务和路由分别放`lib/widgets`、`lib/services`、`lib/router`，入口为根`main.dart`和`app.dart`。业务导航统一使用go_router，定义可识别的路径与实体ID；设备首屏、tab、全屏远控、系统分享、返回和替换均按实际路由管理。临时弹窗和系统选择器保持自身结果语义。路由重建不恢复已停止活动、不复制身份，不用必须存在的临时extra作为实体恢复的唯一数据源。
+
+## 9. 工程化与平台职责（2026-10-17追加）
+
+导航采用go_router_builder生成typed route与StatefulShellRoute；状态采用riverpod_generator生成Notifier及不可变state，build_runner统一生成。成员包继承根analysis_options，启用Flutter基础lint、严格类型与官方Riverpod analyzer plugin；CI必须实际检出违规、检查生成源过期，不能仅声明包名。生成文件与根锁文件入库，构建缓存不入库。工程证据见[导航实现](../../docs/implementation/flutter-navigation.md)和[工具链研究](../../docs/research/flutter-engineering-toolchain.md)。
+
+Flutter/Rust为共享实现主体。Rust承担ADB、持续活动、导入/传输、容量/取消/恢复/持久化和媒体协议；Dart承担页面/共享交互编排、生成状态与跨端渲染组件。Android适配仅调用系统Intent/URI/FD、USB权限、前台服务、媒体焦点等实际OS能力并报告事实。原生层不独立复制任务、租约、重试和产品策略。已经实现的2176行Kotlin需逐块迁出共享职责；替换媒体路径必须保留真实PTS、渲染/输入尺寸、后台、焦点与重建验收，不能用删除Kotlin或搬成JNI冒称完成。

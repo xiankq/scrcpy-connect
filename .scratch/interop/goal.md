@@ -8,20 +8,20 @@
 
 设备列表固定首屏、所有设备平等；设备记录、配对信任、连接、控制会话与传输任务分开。被控无root、无额外APK，仅要求系统调试授权，允许临时JAR。主控始终不开调试，不跳过信任或认证。最新版ADB/scrcpy文档与固定源码对照实现，服务端可复用，自行编排完整生命周期。
 
-功能与取舍完整遵循spec、prod/scope、57项需求、32项流程与本会话最新纠正：设备管理/发现/配对/手动地址/USB、全屏投控和真实应用任务、文件/相册手动取用、传输冲突与恢复、实时通知与原应用、分级通话/声音、剪贴板对象、后台与中断恢复。录屏、自动备份、独立短信/联系人/相机/终端、自动编辑回写保持退出范围。
+功能与取舍完整遵循spec、prod/scope、59项需求、32项流程与本会话最新纠正：设备管理/发现/配对/手动地址/USB、全屏投控和真实应用任务、文件/相册手动取用、传输冲突与恢复、实时通知与原应用、分级通话/声音、剪贴板对象、后台与中断恢复。录屏、自动备份、独立短信/联系人/相机/终端、自动编辑回写保持退出范围。
 
 默认浅色，黑色/中性色为主题色，彩色图标小元素、液态玻璃导航/控制、Lucide优先，视觉值来自designs/design.md。移动远控全屏保留源画面比例，唯一常驻本机控件为可拖动、左右吸附收起且可访问的退出；所有异常/面板也保持全屏。77页设计是输入，缺失状态要在实际交互中补齐，并必要时回补Pencil共享组件。
 
 ## 权威输入
 
-- [总规格](spec.md)、[57项需求](requirements-audit.md)、[兼容矩阵](compatibility-matrix.md)、[访谈](interview.md)。本会话最新明确指令优先于历史记录。
+- [总规格](spec.md)、[59项需求](requirements-audit.md)、[兼容矩阵](compatibility-matrix.md)、[访谈](interview.md)。本会话最新明确指令优先于历史记录。
 - [产品说明](../../designs/prod/README.md)、[32条流程](../../designs/prod/coverage.md)、[页面与转换](../../designs/prod/user-flows.md)、[交互规则](../../designs/prod/interaction-rules.md)。
 - [视觉规范](../../designs/design.md)、[Pencil源文件](../../designs/mobile.pen)，不得作为文本读写pen。
 - [词表](../../GLOSSARY.md)、[ADR](../../docs/adr/)、[全部研究与来源](../../docs/research/README.md)、[20项研究/验证任务](issues/README.md)。历史未采用候选不自动恢复产品范围。
 
 ## 验收循环
 
-每条能力持续执行：固定版本与通过条件→实现真实链路→协议/业务/集成测试→构建→安装启动→真实设备操作和故障注入→截图与交互/性能检查→修复→相关回归→记录证据并按主题提交。测试通过后不无目的重复；新改动、故障和未解决风险必须触发相应回归。不得以TODO、假数据、mock成功、静态截图或按钮存在作为实现通过。
+每条能力持续执行：固定版本与通过条件→实现真实链路→协议/业务/集成测试→构建→安装启动→真实设备操作和故障注入→截图与交互/性能检查→修复→相关回归→记录证据并按主题提交。遇到慢首帧、平台限制或重复失败时，先查官方文档与固定源码，用独立输入/后端/工具构造对照；及时调整路径，不固守一个未经验证的假说。测试通过后不无目的重复；新改动、故障和未解决风险必须触发相应回归。不得以TODO、假数据、mock成功、静态截图或按钮存在作为实现通过。
 
 测试中的官方adb仅用作设备部署、对照和验收工具，产品运行不能调用或分发该可执行文件。主控测试AVD本身打开调试仅是测试部署条件，不能转化为产品用户要求。需要两台Android时分别建主控/被控AVD，记录设备API/ABI、网络/端口/授权、构建摘要和操作结果。
 
@@ -60,7 +60,7 @@
 | R13 | Rust/Flutter，Flutter主要UI与呈现，FRB供Dart调用 | Android运行已通过；流程继续验收 | FRB2.13.0，真实主控启动/Texture/AudioTrack |
 | R14 | monorepo | 已实现并构建 | Cargo/Dart workspace及首个Android APK |
 | R15 | Flutter Hooks/Riverpod等主流方案 | 已实现并验证 | Flutter hooks/riverpod；widget及实际Android界面 |
-| R16 | fvp作为初选，可验证后调整 | 已按实测分媒体适配 | fvp保留桌面视频预览；Android实时流采用MediaCodec Texture |
+| R16 | fvp作为初选，可验证后调整 | 共享fvp五codec实时视频生命周期通过；整机后台/旋转/音频待验 | 首帧与状态等待研究；真实HTTP/像素/捕获暂停恢复/PNG；旧Native待迁移完成后删除 |
 | R17 | 可调用Android模拟器进行调试 | 已完成环境与实测 | 三台独立API36 AVD，KVM无头；5554主控/5556和5558被控 |
 | R18 | 按功能分级；被控Android5+基础、现代系统无线/声音分别支持 | 能力分级已实现；仅API36运行证据 | API等级与实际错误分开；旧API/OEM矩阵待验 |
 | R19 | 设备优先首页/工作台、全局传输、设备信息与连接诊断 | 设备首屏/工作台/文件真实通过；其余流程继续验收 | product_flow与widget；全局传输/诊断已接真实核心 |
@@ -83,7 +83,7 @@
 | R36 | 长期通知历史移出范围，替代Q27旧可选历史 | 实现中未持久化通知正文或历史 | companion内存快照；生产无历史归档页面 |
 | R37 | 唤醒仅打开远控，不强制实体亮屏，需认证走手机解锁 | power_on=false，休眠隔离实测不自动开屏；显式wake通过 | sleeping_target_requires_explicit_wake；不声称验证密码/生物认证矩阵 |
 | R38 | 按原因/操作恢复，主动停保持停，未知发送/拨号/删除不重放 | 取消/主动断开与文件未知提交已有验证；进程回收恢复待补 | device_lifecycle、files_state、原子助手未知receipt；通知回复不自动重发 |
-| R39 | 资源不足保护已有重要活动和当前操作，先降新/非焦点负载 | 原子启动预留及保留旧活动通过；本机精确资源错误单次降新负载已实现待验 | resource_admission默认5+真实guard1；Native1100才降无应用副作用的新画面，1101/未知不重放；未验实际硬件耗尽 |
+| R39 | 资源不足保护已有重要活动和当前操作，先降新/非焦点负载 | 原子启动预留及保留旧活动通过；共享MDK资源错误分类及降低新窗口负载待补 | resource_admission默认5+真实guard1；旧Native1100降负载路径已停止使用，不以字符串猜测重放应用；实际硬件耗尽未验 |
 | R40 | 主控身份本机保管不自动迁移；元数据独立恢复，换机重新授权 | 已实现并测试 | preferences_lifecycle三项，包括USB/待连接无线0端口恢复；不含私钥不恢复授权 |
 | R41 | Apple/iOS Liquid Glass理念，官方网页研究；最新要求加强玻璃透色、亮边与控制层次 | 共享玻璃材质实现；实际浅色首屏/静态多外观验收 | 对比合成修复；深浅×黑白背景实际像素文字对比测试≥4.5；动态性能待验 |
 | R42 | 黑色/中性色是主题色，默认浅色，深色可选；允许图标/小元素彩色，否定深绿按钮 | 默认浅色/黑色主题/彩色Lucide已实现 | 真实启动图、浅深与低透明度widget截图；无厚重深绿按钮 |
@@ -99,9 +99,12 @@
 | R52 | 善用共享组件与实例，重复远控底层/控件/面板通过母组件统一更新 | Pencil共享组件既有完成；Flutter组件已落地 | 23母组件/470实例引用；packages/design_system共用glass/按钮/导航 |
 | R53 | 固定设备列表，所有设备平等，不存在备用手机角色 | 首屏实际通过 | /tmp/connect-avd/startup.png；生产无假设备/备用角色 |
 | R54 | 完整连接表单、设备管理与关联流程，按类型优化当前页面 | 手动连接/文件/全屏退出真实通过；其他系统授权流程持续验收 | product_flow_test；配对/二维码/USB表单及owned取消widget；物理USB未验 |
-| R55 | 每个页面独立文件，Dart页面文件统一以_page.dart结尾 | 正在按功能拆分 | 2026-10-17用户新增要求；迁移后重新验收 |
-| R56 | 采用go_router管理业务页面与返回、替换、系统分享路由 | 正在迁移 | 明确路由身份/ID参数；远控root全屏；不以generic Widget extra包装代替 |
-| R57 | 多文件夹架构，lib下直接pages及少量共享目录 | 正在迁移 | lib/pages/<页面>/<页面>_page.dart；共享widgets/services/router另放，不增加features/core/app嵌套 |
+| R55 | 每个页面独立文件，Dart页面文件统一以_page.dart结尾 | 已实现并回归 | 40页面目录/独立_page.dart；78应用widget及真实后台路由通过 |
+| R56 | 采用go_router管理业务页面与返回、替换、系统分享路由 | typed生成路由已实现并回归 | go_router_builder三tab shell/ID参数/恢复；远控root全屏及真实HOME返回通过 |
+| R57 | 多文件夹架构，lib下直接pages及少量共享目录 | 已实现并回归 | lib/pages/<页面>/<页面>_page.dart；共享widgets/services/router另放，不增加features/core/app嵌套 |
+
+| R58 | 使用go_router_builder、riverpod_generator、build_runner及官方lint，防止工程和架构退化 | 已完成生成迁移及严格分析/78项widget；真实Android五codec、后台与旋转通过 | 精确兼容版本、生成typed shell/导航、深冻结Notifier、根原生Riverpod插件负例实检、workspace only-check |
+| R59 | Flutter/Rust为主体，减少自维护Android代码和未来多端重复适配 | 正在重构 | 分享owner/导入/持久化与SAF复制迁共享Dart/Rust；自写267行视频decoder和Native视频入口已删除，真实产品五codec复验通过；音频仍在迁移，不把JNI改写称跨端完成 |
 
 ## 执行记录
 
@@ -126,3 +129,9 @@
 - 后续已定位并修复初始暂停：inactive并非不可见，改为仅释放触点/禁止输入；hidden/paused/detached才暂停。真实HOME→Activity返回→native新frame的完整测试退出0，恢复截图目视通过。目标休眠另行返回device_asleep，并保留用户明确的唤醒动作。
 - ADB第二批81e3bd2：reverse完整双向桥/授权入站OPEN、JDWP、单路径nofollow LST2及三压缩真实互操作，44默认测试与五target检查通过。工作区Rust全测/Clippy通过；Flutter39widget已通过。
 - 目录4真实+旧文件5真实回归通过，保留源变化、部分失败、当前批冲突策略与取消语义；Android私有暂存不得称已保存到系统位置，SAF导入/导出继续实施。
+
+- 2026-10-17共享媒体：核对官方scrcpy develop/SurfaceEncoder/ControlMessage/Controller与MDK API，修复起播前waitFor0同步等待、AV1默认FFmpeg路径，以及静止输入pause供帧顺序。五种codec真实Rust ADB→Matroska HTTP→fvp首帧/暂停/捕获恢复/非单色PNG/停止通过（12秒）；首帧1016/347/290/294/301ms，不含服务启动时间。记录docs/research/scrcpy-first-frame-and-latency.md；整机后台、旋转及音频迁移继续验收，没有标为全产品完成。
+
+- 共享视频整机后台：background_resume_test实际HOME/2秒后Activity返回、Core暂停/恢复、session.output.resumed真实snapshot回执、全屏无暂停覆盖及正常退出通过，12秒；截图/tmp/connect-e2e/shared-background/remote-after-actual-background.png已目视检查。共享Dart61项、应用78项widget、Rust59项与all-target clippy通过。生成检查发现controller hash陈旧，已真实重生成，随后only-check零写入通过。
+
+- 旋转与取消：同session/relay generation 1→2、真实新代像素/触控尺寸/Texture交接及bridge.dispose正常退出通过；目标自动旋转夹具恢复原值。修复Rust空闲事件流取消不退出，显式cancel token/RAII及7项API测试通过。删除Native视频后实际产品五codec完整回归28秒通过，提交4da9bf8；媒体driver在缺失完成回执时强制失败，负例已实测。

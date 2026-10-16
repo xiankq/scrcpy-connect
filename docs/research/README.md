@@ -16,6 +16,8 @@
 | [CallStyle动作目标隔离](callstyle-action-targeting.md) | 原通知PI与具体通话绑定的区别，Android11/16 Dialer反例及不能仅凭typed extras解锁按钮的依据 |
 | [AVD HEVC实际尺寸约束](hevc-emulator-constraints.md) | 软件编码器配置失败后的尺寸降级、独立码流／FFmpeg对照与1280／1080单变量验证 |
 | [scrcpy、媒体与服务端](scrcpy-media-and-server.md) | 固定 scrcpy 协议、JAR 生命周期、独立应用窗口、fvp/MDK 输入、PTS、音频、录制与并发 |
+| [首帧与客户端状态等待](scrcpy-first-frame-and-latency.md) | 官方静止补帧、播放器阻塞对照、五codec/后台/旋转与真实退出回归 |
+| [共享媒体封装与播放器](cross-platform-media-pipeline.md) | 纯Rust Matroska、PTS、鉴权HTTP、fvp公开接口与各平台验收边界 |
 | [Flutter/Rust 平台运行时](flutter-rust-platform-runtime.md) | Android 后台与权限、FRB/Riverpod 生命周期、USB 句柄、workspace、文件与输入 |
 | [设计系统与工具链](design-system-and-toolchain.md) | Google DESIGN.md、液态玻璃候选比较、Lucide、厂商交互参照、Pencil 无头路径 |
 | [Apple Liquid Glass 重设计依据](apple-liquid-glass-redesign.md) | HIG、WWDC25/26 的材质、导航、媒体与无障碍原则，以及中性色的设计应用 |
@@ -48,7 +50,7 @@
 
 Q22–Q27 已回答。用户希望 ADB 依赖链尽量纯 Rust；确认后台按活动类型保持、设备级声音、真实应用任务、身份不自动迁移。Q27当时接受的可选通知历史随后被最新范围取舍移除，只保留实时通知。具体纯 Rust 口径及 TLS/USB/压缩后端继续核查，不把一轮回答当成整个设计树已经闭合。
 
-全会话已完成[57项需求审计](../../.scratch/interop/requirements-audit.md)，补[分级兼容基线](../../.scratch/interop/compatibility-matrix.md)、[32项产品流程覆盖](../../designs/prod/coverage.md)及[20项后续任务](../../.scratch/interop/issues/README.md)。任务含19项研究/验证和1项设计补齐；已有研究不等于任务中的工程验证完成。
+全会话已完成[59项需求审计](../../.scratch/interop/requirements-audit.md)，补[分级兼容基线](../../.scratch/interop/compatibility-matrix.md)、[32项产品流程覆盖](../../designs/prod/coverage.md)及[20项后续任务](../../.scratch/interop/issues/README.md)。任务含19项研究/验证和1项设计补齐；已有研究不等于任务中的工程验证完成。
 
 Q28 用户要求依据 scrcpy 能力设计，已核实销毁虚拟显示内容和迁回主屏两条路径，不把此答复记为接受“默认迁回”。Q29–Q31 确认按中断原因恢复、实时通知动作同步远端、资源不足时保护已有重要活动。另有两项补充调查：纯 Rust ADB 依赖链、Android 手机输入与剪贴板；前者不自动撤销用户已接受的 fvp/MDK 媒体依赖选择，其范围专指 ADB。
 

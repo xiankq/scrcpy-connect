@@ -138,3 +138,6 @@
 | R55 | 一个页面一个文件，文件以page结尾 | 独立`*_page.dart`；可复用控件和helper另行归属，不能靠part合并页面 |
 | R56 | 使用go_router | 明确业务路由、实体ID与错误处理；首页tab有路由身份，返回/替换/分享/远控退出完整回归 |
 | R57 | 多文件夹架构，Dart文件不能全部放在同一层 | 用户最后明确采用lib/pages/<页面>/<页面>_page.dart；公共widgets/services/router在lib下，不增加features/core/app等深层分组 |
+
+| R58 | 最新工程化纠正 | 实际使用go_router_builder、riverpod_generator、build_runner与官方lint；锁文件、生成一致性、状态/资源归属不能只装依赖 |
+| R59 | 最新原生层纠正 | 共享业务放Rust/Dart，Android只保留系统授权/句柄/执行资格适配；成熟跨端媒体组件优先，不能为每平台各造播放器 |
