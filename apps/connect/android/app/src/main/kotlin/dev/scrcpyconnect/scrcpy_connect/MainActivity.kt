@@ -95,7 +95,7 @@ class MainActivity : FlutterActivity() {
     private fun bindNativeEvents() {
         val activity = java.lang.ref.WeakReference(this)
         audio.bind(this) { event -> activity.get()?.emit(event) }
-        IncomingShares.bind(this) { share -> activity.get()?.emit(mapOf("type" to "share.received", "data" to share)) }
+        IncomingShares.bind(this) { share -> activity.get()?.emit(mapOf("type" to "share.platform.pending", "data" to share)) }
     }
 
     private fun acceptIncoming(intent: Intent?, renewed: Boolean) {
@@ -127,17 +127,8 @@ class MainActivity : FlutterActivity() {
                 (entry.key as? String)?.let { it to entry.value }
             }?.toMap().orEmpty()
             if (documents.handle(call.method, documentArguments, result)) return
+            if (IncomingShares.handle(applicationContext, this, call, result)) return
             when (call.method) {
-                "sharing.pending" -> result.success(mapOf("shares" to IncomingShares.all(applicationContext)))
-                "sharing.consume" -> { call.argument<String>("shareId")?.let { IncomingShares.consume(applicationContext, it) }; result.success(mapOf("consumed" to true)) }
-                "sharing.retain" -> result.success(IncomingShares.retain(applicationContext, call.argument<String>("shareId") ?: error("Missing share id")))
-                "sharing.bind" -> result.success(IncomingShares.bindLease(applicationContext, call.argument<String>("leaseId") ?: error("Missing lease"), call.argument<String>("transferId") ?: error("Missing transfer")))
-                "sharing.release" -> { IncomingShares.release(applicationContext, call.argument<String>("leaseId") ?: error("Missing lease")); result.success(mapOf("released" to true)) }
-                "sharing.sources" -> result.success(IncomingShares.sources(applicationContext))
-                "sharing.reconcile" -> {
-                    val refs = call.argument<List<*>>("transfers") ?: emptyList<Any>()
-                    result.success(IncomingShares.reconcile(applicationContext, refs, call.argument<Boolean>("complete") == true))
-                }
                 "audio.start" -> {
                     val id = call.argument<String>("sourceId") ?: error("Missing audio source")
                     val port = call.argument<Number>("audioPort")?.toInt() ?: error("Missing audio port")
@@ -323,7 +314,7 @@ class MainActivity : FlutterActivity() {
         decoders.values.forEach { it.close() }
         decoders.clear()
         audio.detach(this)
-        IncomingShares.unbind(this)
+        IncomingShares.releaseOwner(this)
         events = null
         DiscoveryNetwork.release("activity")
         super.onDestroy()

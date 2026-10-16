@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory(prefix="interop-audio-contracts-") as build:
     subprocess.run([java, "-Xmx768m", "-cp", os.pathsep.join(map(str, compiler_jars)),
         "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect", "-jvm-target", "17",
         "-classpath", os.pathsep.join(map(str, [stdlib, sdk, flutter])), "-d", build,
-        str(source / "ShareImportPolicy.kt"), str(source / "AudioSessionOwnership.kt"), str(test)], check=True)
+        str(source / "AudioSessionOwnership.kt"), str(test)], check=True)
     # There is deliberately no android.jar or Flutter runtime here. Only the
     # production coordination and hardware ports execute, never framework stubs.
     subprocess.run([java, "-cp", build + os.pathsep + str(stdlib),
