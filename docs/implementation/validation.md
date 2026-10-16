@@ -1,6 +1,6 @@
 # 实施与真实验收记录
 
-目标入口为 [.scratch/interop/goal.md](../../.scratch/interop/goal.md)。下列结果区分协议单测、真实被控 adbd 和 Android 主控界面；未列通过的能力不推定已完成。下列历史验收保留当时的后端和测试名；当前共享媒体结果以最新迁移小节为准，旧AudioTrack/自写MediaCodec证据不能冒充新后端结果。
+目标入口为 [.scratch/interop/goal.md](../../.scratch/interop/goal.md)。2026-10-17的[完整重新核查](../../.scratch/interop/completion-reassessment.md)逐项纠正产品断链：本文件的历史实验通过不表示对应整个用户流程完成。下列结果区分协议单测、真实被控 adbd 和 Android 主控界面；未列通过的能力不推定已完成。下列历史验收保留当时的后端和测试名；当前共享媒体结果以最新迁移小节为准，旧AudioTrack/自写MediaCodec证据不能冒充新后端结果。
 
 ## 当前环境
 
@@ -55,7 +55,7 @@ CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e flutter drive \
   --dart-define=CONNECT_E2E_PORT=15556
 ```
 
-该脚本操作真实连接和渲染器；未提供端点时只验证启动/表单，不可计为远控通过。正式验收应保存命令退出码、设备能力与失败原因；截图不得放回designs/previews。
+该脚本操作真实连接和渲染器；本轮已消除缺端点时静默成功的旧行为：缺少合法端点必须失败，完整链路结束才写产品完成回执，driver必须校验。新的实际回归结果另记，不能继承旧版本退出码。正式验收应保存命令退出码、设备能力与失败原因；截图不得放回designs/previews。
 
 - 官方设计NPM lint：0 errors、26 warnings；5条为玻璃组件的扩展字段不在标准子token内，其余为颜色未在标准组件引用，不能写成零告警。
 - 新增非UTF8真实文件名碰撞测试通过：不可解析条目path=null/canManage=false，不会误删合法replacement-character命名的另一文件。
@@ -136,3 +136,14 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 - 增加实际HOME与MAIN/LAUNCHER返回回归，先证实旧singleTop产生两个UI宿主且旧实例失去engine；singleTask后同一宿主经onNewIntent接收分享，Flutter Navigator状态保留。am start -W并不确认Flutter window focus，测试有界等待真实resumed；最终等待4ms。九模式+返回组合16秒退出0、shareAcceptanceComplete=true，日志/tmp/connect-share-acceptance-final.log，metadata /tmp/connect-e2e/incoming-share/result.json。图片分享页与返回后的设备列表截图均已目视，保留/tmp不进Git。
 - 每个Activity独立持有发现锁；USB已交付fd仅精确Rust ACK关闭Java原句柄，无Activity仍可释放，未ACK上限16。重叠Activity生产协调器JVM端口测试与全Kotlin编译通过；物理USB与Wi-Fi多播环境未验。修复提交0cf1b66。
 - 全仓严格Flutter分析无问题，Dart格式与diff检查通过。共享SAF新路径、实际分享提交到被控设备、恶意provider/压力/120秒deadline、外部分享打断系统picker的取消语义仍需专项，不以此九模式替代。具体边界及复现见[研究记录](../research/android-share-trust.md)。
+
+## 全量核查后的实际页面回归（2026-10-17）
+
+本轮全量缺口见[重新核查](../../.scratch/interop/completion-reassessment.md)，不把局部通过当整个目标完成。UI修复`1660805`：诊断页消费真实Rust JSON；首次编码允许runtime candidate，已知不可用继续禁选；远控独立消息作用域，上一页保存反馈不遮挡手机，当前会话资源调整仍可显示。
+
+- 指定诊断/画质6项回归先红后绿；新增旧页面30秒SnackBar隔离测试先红后绿。整合后应用全量83项通过，严格全仓Flutter分析无问题，格式/diff通过。整合首轮遗漏confirm导入造成编译失败，修正后重新全量通过，日志`/tmp/connect-reaudit-app-tests-final.log`。
+- 使用本文件Android E2E命令，把capture目录设为`/tmp/connect-e2e/requirements-reaudit-final`。本次20秒真实退出0：手动连接/非法端口校验、真实文件目录、实际设备详情→诊断、实际画质页首次H.265选择、下一会话确实H.265且`firstFrameDecoded=true/evidence=mdk.snapshot`，全屏/触控/退出拖动吸附展开/返回均通过。诊断、编码选择和最终远控图已目视；日志`/tmp/connect-requirements-reaudit-fullscreen-final.log`，result.json的产品完成回执true。
+- 实际H.265码流230×512，截图仍明显低清；仅能证明页面选择到实际解码，不是视觉质量或低延迟验收。前一轮截图发现本地保存提示跨路由覆盖画面，独立作用域修复后最终截图已无此遮挡。动态玻璃/大字/读屏及完整IME仍未通过。
+- `product_flow_test.dart`不再在缺端点时静默成功。正常完整结束才产出`productAcceptanceComplete=true`；通用driver要求该回执，保留独立audio/background/clipboard/documents模式。纯Dart契约`test_driver/integration_test_contract_test.dart`通过，`--missing-product`真实退出255；该检查已接入`tool/check.sh`。新增页面滚动按具体route/scrollable定位、等转换完成，点击未命中即失败。中间失败如实留在临时日志，没有降低健康/像素/对象断言换取通过。
+
+本轮没有运行新的物理设备/四端整包/密码安全或当前共享SAF验收；多窗口、持续通知/认证/后台发布、安全通话、活动恢复/事件重取、完整文件/相册交付等仍是实现工作，不能称仅差测试。

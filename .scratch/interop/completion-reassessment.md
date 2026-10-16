@@ -226,6 +226,15 @@
 
 核查发现不随修复被删除。本节只登记已经实际完成的改动与证据；未执行的不填通过。持续目标仍为active。
 
+- 文档批次`3ebba18`：完整追溯60项要求、32流程、20任务；核实77页/12组/23母组件/470实例，修正spec、goal、兼容矩阵、访谈、原追溯和任务前沿的陈旧/过度概括。原Pencil未修改，预览只在临时目录。
+- UI批次`1660805`：A04诊断页按实际Rust返回显示连接/可达性/身份与下一步；A09允许尚未解码但可尝试的格式，已知不可用仍禁选，保存与实际验证分开。真实返回契约测试先失败后通过。
+- 真实截图又发现A29的一处运行偏差：上一页画质保存SnackBar跨路由遮挡远控。独立30秒旧提示测试先失败；远控改用独立ScaffoldMessenger，属于当前会话的资源调整仍可就近提示，旧页面消息不再进入。既有输入释放/资源调整测试继续通过。
+- 应用全量83项测试通过，日志`/tmp/connect-reaudit-app-tests-final.log`；全仓严格`flutter analyze --no-pub --fatal-infos --fatal-warnings`无问题；格式与diff检查通过。一次整合编译遗漏confirm导入已修正后重跑，不把首轮失败记为通过。
+- 当前APK实际重建/启动：controller5554→target5556；真实UI走手动连接/端口校验→目录→设备详情→诊断→画质页首次选择H.265→全屏真实像素→退出拖动/收起/展开/返回。20秒退出0，`productAcceptanceComplete=true`、`pageSelectedCodec=h265`、`evidence=mdk.snapshot`断言通过。日志`/tmp/connect-requirements-reaudit-fullscreen-final.log`；元数据`/tmp/connect-e2e/requirements-reaudit-final/result.json`。诊断/首次编码选择/全屏截图已实际查看，旧页面提示不再覆盖。
+- 该轮实际码流仍仅230×512，目视低清：A10视觉质量继续未完成；没有以H.265能播放关闭画质或低延迟需求，也没有测量新的端到端延迟。
+- A31：真实产品测试缺/非法端点即失败，完整结束才写completion；driver缺少/false/错误类型回执会失败，audio/background原检查保留。纯Dart契约正常退出0，缺回执负例实际退出255；真实页面早期点击未命中也确实被driver拒绝。检查已加入`tool/check.sh`。当前E2E按具体页面滚动并等待转换，未命中点击立即失败，不用后端直接修改画质冒充UI操作。
+- 本轮没有宣称执行安全adbd、物理USB/HAL、四宿主整包、完整多窗口/恢复/通知/相册SAF；其余任务保持开放。Rust/Bridge未改，本轮不无目的重跑其全部历史协议实验。
+
 ## 9. 文档与设计输入的落点
 
 这些输入仍是目标的一部分；研究报告中的历史候选先服从现行scope，不能重新加入录屏/备份/独立SMS。

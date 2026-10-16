@@ -151,3 +151,5 @@
 - singleTask最终九模式+HOME/launcher组合16秒全过（/tmp/connect-share-acceptance-final.log，completiontrue），确实一宿主且Flutter resumed；焦点实际等待4ms，不能用am start -W的显示完成代替。返回设备列表与图片分享页截图已目视。严格Flutter分析、Dart格式、JVM ownership与diff检查通过；新共享SAF及分享真实提交等继续保留待验。
 
 - 2026-10-17完整重新核查：发现36项实现/产品断链/设计/工程或验收缺口，逐项覆盖R01–R60/C01–C32/20任务；目标仍未完成。诊断与质量UI契约、真实产品验收假绿正在按独立批次修复，其余主线继续开放。
+
+- 重新核查修复批次1660805：实际诊断JSON、画质首次尝试及远控反馈作用域已修复。83应用测试和严格分析通过；新APK真实UI从设备诊断/首次H.265选择到实际mdk.snapshot、全屏/触控/退出20秒通过，completion=true。H.265实际230×512仍明显低清，不算质量通过。真实验收缺配置/缺completion不能静默绿，纯Dart负例退出255，已加入check。全量目标及其余36项账本中的未闭合部分仍继续开放，详见重新核查第8节。

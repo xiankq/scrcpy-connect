@@ -58,16 +58,7 @@ Future<void> main() async {
       final metadata = {...?data}..remove('screenshots');
       await File('${directory.path}/result.json')
           .writeAsString(jsonEncode(metadata));
-      if (Platform.environment['CONNECT_E2E_BACKGROUND'] == '1' &&
-          metadata['mediaAcceptanceComplete'] != true) {
-        throw StateError(
-          'The app did not complete background media acceptance.',
-        );
-      }
-      if (Platform.environment['CONNECT_E2E_AUDIO_LIFECYCLE'] == '1' &&
-          metadata['audioAcceptanceComplete'] != true) {
-        throw StateError('The app did not complete shared audio acceptance.');
-      }
+      validateAcceptanceReport(metadata, environment: Platform.environment);
     },
     onScreenshot: (name, bytes, [args]) async {
       final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
@@ -76,6 +67,34 @@ Future<void> main() async {
       return true;
     },
   );
+}
+
+/// Fail closed when a test exits without its expected acceptance receipt.
+/// Kept independent of a connected driver so host contracts can exercise it.
+void validateAcceptanceReport(
+  Map<String, dynamic> metadata, {
+  required Map<String, String> environment,
+}) {
+  // This driver's default target is the full product flow. Dedicated host
+  // fixture modes retain their own completion checks below.
+  final fixtureMode = [
+    'CONNECT_E2E_BACKGROUND',
+    'CONNECT_E2E_AUDIO_LIFECYCLE',
+    'CONNECT_E2E_CLIPBOARD',
+    'CONNECT_E2E_DOCUMENTS',
+  ].any((key) => environment[key] == '1');
+  if ((!fixtureMode || metadata.containsKey('productAcceptanceComplete')) &&
+      metadata['productAcceptanceComplete'] != true) {
+    throw StateError('The app did not complete real product acceptance.');
+  }
+  if (environment['CONNECT_E2E_BACKGROUND'] == '1' &&
+      metadata['mediaAcceptanceComplete'] != true) {
+    throw StateError('The app did not complete background media acceptance.');
+  }
+  if (environment['CONNECT_E2E_AUDIO_LIFECYCLE'] == '1' &&
+      metadata['audioAcceptanceComplete'] != true) {
+    throw StateError('The app did not complete shared audio acceptance.');
+  }
 }
 
 Future<void> triggerBackground(FlutterDriver driver) async {
