@@ -8,7 +8,7 @@ use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -27,6 +27,173 @@ pub(crate) const SERVER_SHA: &str =
     "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536";
 const MAX_PACKET: usize = 16 * 1024 * 1024;
 const CLIPBOARD_MAX: usize = (1 << 18) - 14;
+
+#[derive(Clone, Copy)]
+struct VideoCodec {
+    name: &'static str,
+    label: &'static str,
+    mime: &'static str,
+    wire: [u8; 4],
+}
+// Fixed v5.0.1 VideoCodec.java IDs, including leading zeroes for 3-byte names.
+const VIDEO_CODECS: [VideoCodec; 5] = [
+    VideoCodec {
+        name: "h264",
+        label: "H.264",
+        mime: "video/avc",
+        wire: *b"h264",
+    },
+    VideoCodec {
+        name: "h265",
+        label: "H.265",
+        mime: "video/hevc",
+        wire: *b"h265",
+    },
+    VideoCodec {
+        name: "av1",
+        label: "AV1",
+        mime: "video/av01",
+        wire: *b"\0av1",
+    },
+    VideoCodec {
+        name: "vp8",
+        label: "VP8",
+        mime: "video/x-vnd.on2.vp8",
+        wire: *b"\0vp8",
+    },
+    VideoCodec {
+        name: "vp9",
+        label: "VP9",
+        mime: "video/x-vnd.on2.vp9",
+        wire: *b"\0vp9",
+    },
+];
+
+fn video_codec(name: &str) -> CoreResult<VideoCodec> {
+    VIDEO_CODECS
+        .iter()
+        .find(|codec| codec.name == name)
+        .copied()
+        .ok_or_else(|| invalid("视频编码格式无效。"))
+}
+
+#[derive(Clone)]
+struct VideoEncoder {
+    codec: String,
+    name: String,
+    hardware: Option<bool>,
+}
+
+fn parse_encoders(text: &str) -> CoreResult<Vec<VideoEncoder>> {
+    if !text.contains("List of video encoders:") {
+        return Err(CoreError::new(
+            "encoder_probe",
+            "设备未返回可识别的编码器列表。",
+        ));
+    }
+    let mut result = Vec::new();
+    let mut seen = HashSet::new();
+    for line in text.lines().filter(|line| line.contains("--video-codec=")) {
+        let fields: Vec<_> = line.split_ascii_whitespace().collect();
+        let codec = fields
+            .iter()
+            .find_map(|field| field.strip_prefix("--video-codec="))
+            .ok_or_else(|| CoreError::new("encoder_probe", "编码器列表格式无效。"))?;
+        let name = fields
+            .iter()
+            .find_map(|field| field.strip_prefix("--video-encoder="))
+            .filter(|name| crate::preferences::valid_encoder(name))
+            .ok_or_else(|| CoreError::new("encoder_probe", "设备返回的编码器名称无效。"))?;
+        video_codec(codec)?;
+        if seen.insert((codec.to_owned(), name.to_owned())) {
+            result.push(VideoEncoder {
+                codec: codec.into(),
+                name: name.into(),
+                hardware: if fields.contains(&"(hw)") {
+                    Some(true)
+                } else if fields.contains(&"(sw)") {
+                    Some(false)
+                } else {
+                    None
+                },
+            });
+        }
+        if result.len() > 1024 {
+            return Err(CoreError::new("encoder_probe", "编码器列表超出限制。"));
+        }
+    }
+    Ok(result)
+}
+
+fn selected_video(settings: &Value) -> CoreResult<(VideoCodec, Option<&str>)> {
+    let codec = video_codec(settings["videoCodec"].as_str().unwrap_or("h264"))?;
+    let encoder = match &settings["videoEncoder"] {
+        Value::Null => None,
+        Value::String(value) if crate::preferences::valid_encoder(value) => Some(value.as_str()),
+        _ => return Err(invalid("视频编码器名称无效。")),
+    };
+    Ok((codec, encoder))
+}
+
+fn validate_encoder_selection(settings: &Value, encoders: &[VideoEncoder]) -> CoreResult<()> {
+    let (codec, encoder) = selected_video(settings)?;
+    if !encoders
+        .iter()
+        .any(|entry| entry.codec == codec.name && encoder.is_none_or(|name| entry.name == name))
+    {
+        return Err(CoreError::new(
+            "encoder_unavailable",
+            "这台设备未枚举到所选格式与编码器组合；现有会话保持运行。",
+        ));
+    }
+    Ok(())
+}
+
+fn current_quality(settings: &Value) -> Value {
+    json!({"preset":settings["qualityPreset"],"maxSize":settings["maxSize"],"maxFps":settings["maxFps"],
+        "bitRate":settings["videoBitRate"],"videoBitRate":settings["videoBitRate"],"codec":settings["videoCodec"],
+        "videoCodec":settings["videoCodec"],"videoEncoder":settings["videoEncoder"],"audio":false})
+}
+
+fn quality_patch(current: &Value, params: &Value) -> CoreResult<Value> {
+    let mut next = current.clone();
+    if let Some(value) = params.get("preset") {
+        let (size, fps, rate) = match value.as_str() {
+            Some("smooth") => (720, 30, 2_000_000),
+            Some("balanced") => (1280, 60, 8_000_000),
+            Some("clear") => (1920, 60, 12_000_000),
+            _ => return Err(invalid("画质预设无效。")),
+        };
+        next["qualityPreset"] = value.clone();
+        next["maxSize"] = json!(size);
+        next["maxFps"] = json!(fps);
+        next["videoBitRate"] = json!(rate);
+    }
+    for (key, alias) in [
+        ("maxSize", "maxSize"),
+        ("maxFps", "maxFps"),
+        ("videoBitRate", "bitRate"),
+        ("videoCodec", "codec"),
+        ("videoEncoder", "encoder"),
+    ] {
+        if let Some(value) = params.get(key).or_else(|| params.get(alias)) {
+            next[key] = value.clone();
+        }
+    }
+    if ["audioMode", "audioEnabled", "audioCodec"]
+        .iter()
+        .any(|key| params.get(key).is_some())
+    {
+        return Err(invalid("设备声音设置请使用独立音源设置。"));
+    }
+    let quality: serde_json::Map<String, Value> = crate::preferences::QUALITY_KEYS
+        .iter()
+        .map(|key| ((*key).to_owned(), next[*key].clone()))
+        .collect();
+    crate::preferences::validate_quality(&Value::Object(quality))?;
+    selected_video(&next)?;
+    Ok(next)
+}
 
 pub(crate) struct Session {
     device_id: String,
@@ -203,7 +370,20 @@ fn package_name(value: &str) -> CoreResult<&str> {
 
 impl Runtime {
     pub(crate) async fn start_session(&self, params: &Value) -> CoreResult<Value> {
+        let device = required(params, "deviceId")?;
+        let settings =
+            crate::preferences::quality_settings(&self.store.read().await.settings, Some(device));
+        let settings = quality_patch(&settings, params)?;
+        self.start_session_with_settings(params, &settings).await
+    }
+
+    async fn start_session_with_settings(
+        &self,
+        params: &Value,
+        settings: &Value,
+    ) -> CoreResult<Value> {
         let device_id = required(params, "deviceId")?.to_owned();
+        let (selected_codec, selected_encoder) = selected_video(settings)?;
         let client = self.client(&device_id).await?;
         let package = params
             .get("packageName")
@@ -230,6 +410,8 @@ impl Runtime {
         if self.sessions.lock().await.len() >= 16 {
             return Err(CoreError::new("session_limit", "控制会话数量已达到上限。"));
         }
+        let encoders = self.probe_video_encoders(&device_id).await?;
+        validate_encoder_selection(settings, &encoders)?;
         let id = uuid::Uuid::new_v4().to_string();
         let video_token = format!(
             "{}{}",
@@ -246,7 +428,7 @@ impl Runtime {
         let cancellation = CancellationToken::new();
         let mut guard = CancelOnDrop(Some(cancellation.clone()));
         let state = Arc::new(RwLock::new(
-            json!({"sessionId":id,"id":id,"deviceId":device_id,"name":package.as_deref().unwrap_or("手机屏幕"),"packageName":package,"status":"starting","createdAt":now(),"codec":"h264","audio":false,"apiLevel":device.api_level}),
+            json!({"sessionId":id,"id":id,"deviceId":device_id,"name":package.as_deref().unwrap_or("手机屏幕"),"packageName":package,"status":"starting","createdAt":now(),"codec":selected_codec.name,"mime":selected_codec.mime,"videoEncoder":selected_encoder,"encoderSelection":if selected_encoder.is_some(){"explicit"}else{"platformDefault"},"quality":current_quality(settings),"audio":false,"apiLevel":device.api_level}),
         ));
         let cleanup_cancel = cancellation.clone();
         let cleanup_client = client.clone();
@@ -286,7 +468,6 @@ impl Runtime {
                 )
                 .await;
         });
-        let settings = self.store.read().await.settings.clone();
         let max_size = settings["maxSize"]
             .as_u64()
             .unwrap_or(1280)
@@ -308,10 +489,15 @@ impl Runtime {
             .await?;
             drop(sync);
             let mut command = format!(
-                "CLASSPATH={} app_process / --nice-name={} com.genymobile.scrcpy.Server 5.0.1 scid={scid:08x} log_level=warn video=true audio=false control=true video_codec=h264 max_size={max_size} max_fps={max_fps} video_bit_rate={bit_rate} tunnel_forward=true cleanup=true vd_destroy_content=false clipboard_autosync=false power_on=false send_dummy_byte=true send_device_meta=true send_stream_meta=true send_frame_meta=true",
+                "CLASSPATH={} app_process / --nice-name={} com.genymobile.scrcpy.Server 5.0.1 scid={scid:08x} log_level=warn video=true audio=false control=true video_codec={} max_size={max_size} max_fps={max_fps} video_bit_rate={bit_rate} tunnel_forward=true cleanup=true vd_destroy_content=false clipboard_autosync=false power_on=false send_dummy_byte=true send_device_meta=true send_stream_meta=true send_frame_meta=true",
                 quote(&remote_jar)?,
-                quote(&format!("interop.scrcpy:{scid:08x}:{remote_jar}"))?
+                quote(&format!("interop.scrcpy:{scid:08x}:{remote_jar}"))?,
+                selected_codec.name,
             );
+            if let Some(encoder) = selected_encoder {
+                command.push(' ');
+                command.push_str(&quote(&format!("video_encoder={encoder}"))?);
+            }
             if package.is_some() {
                 command.push_str(" new_display=1080x1920 vd_system_decorations=false");
             }
@@ -416,16 +602,17 @@ wait "$child""#
             video.read_exact(&mut name).await?;
             let mut codec = [0; 4];
             video.read_exact(&mut codec).await?;
-            if codec != *b"h264" {
+            if codec != selected_codec.wire {
                 return Err(CoreError::new(
                     "video_codec",
-                    "设备未提供所需的 H.264 视频流。",
+                    "设备实际视频编码与请求格式不一致。",
                 ));
             }
             let mut initial = [0; 12];
             video.read_exact(&mut initial).await?;
-            let (width, height) = session_dimensions(&initial)?
-                .ok_or_else(|| CoreError::new("video_protocol", "视频流缺少会话尺寸。"))?;
+            // Streamer writes the codec ID before MediaCodec.configure(). Wait
+            // for encoded output, not just metadata, before reporting encoder readiness.
+            let (preface, width, height) = read_video_preface(&mut video, initial).await?;
             let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
             let port = listener.local_addr()?.port();
             let (control_tx, control_rx) = mpsc::channel(64);
@@ -454,6 +641,7 @@ wait "$child""#
                 data["videoPort"] = json!(port);
                 data["width"] = json!(width);
                 data["height"] = json!(height);
+                data["encodedKeyFrameReady"] = json!(true);
                 data["deviceName"] = json!(String::from_utf8_lossy(
                     &name[..name.iter().position(|b| *b == 0).unwrap_or(64)]
                 ));
@@ -467,7 +655,7 @@ wait "$child""#
                     listener,
                     video_token,
                     video,
-                    initial,
+                    preface,
                     SessionContext {
                         cancellation: video_cancel,
                         state: video_state,
@@ -548,7 +736,7 @@ wait "$child""#
             return Ok(json!({"sessions":result}));
         }
         if command == "session.quality.options" {
-            return self.quality_options().await;
+            return self.quality_options(params).await;
         }
         if command == "session.quality" {
             return self.change_quality(params).await;
@@ -852,93 +1040,174 @@ wait "$child""#
         Ok(json!({"activities":activities,"sessions":sessions,"transfers":transfers["transfers"]}))
     }
 
-    async fn quality_options(&self) -> CoreResult<Value> {
-        let settings = self.store.read().await.settings.clone();
+    async fn probe_video_encoders(&self, device: &str) -> CoreResult<Vec<VideoEncoder>> {
+        let client = self.client(device).await?;
+        if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
+            return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
+        }
+        let path = format!(
+            "/data/local/tmp/interop-encoders-{}.jar",
+            uuid::Uuid::new_v4()
+        );
+        let result = async {
+            let operation = OperationOptions { timeout: Duration::from_secs(15), ..Default::default() };
+            let mut sync = client.sync(operation.clone()).await?;
+            sync.push(&RemotePath::new(&path)?, &mut &SERVER[..], 0o600,
+                now().min(u32::MAX as u64) as u32, SERVER.len() as u64).await?;
+            drop(sync);
+            let command = format!("CLASSPATH={} app_process / com.genymobile.scrcpy.Server 5.0.1 list_encoders=true cleanup=true log_level=info", quote(&path)?);
+            let output = client.shell(&command, 256 * 1024, operation).await?;
+            if output.exit_code.is_some_and(|code| code != 0) {
+                return Err(CoreError::new("encoder_probe", "设备编码器枚举失败；尚未确认所选格式可用。"));
+            }
+            let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+            text.push_str(&String::from_utf8_lossy(&output.stderr));
+            parse_encoders(&text)
+        }.await;
+        let _ = client
+            .shell(
+                &format!("rm -f -- {}", quote(&path)?),
+                4096,
+                OperationOptions {
+                    timeout: Duration::from_secs(3),
+                    ..Default::default()
+                },
+            )
+            .await;
+        result
+    }
+
+    async fn quality_options(&self, params: &Value) -> CoreResult<Value> {
+        let device = match params.get("deviceId") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(id)) if !id.is_empty() => Some(id.as_str()),
+            _ => return Err(invalid("设备标识无效。")),
+        };
+        if let Some(id) = device {
+            self.device(id).await?;
+        }
+        let settings =
+            crate::preferences::quality_settings(&self.store.read().await.settings, device);
+        let (encoders, reason) = if let Some(device) = device {
+            match self.probe_video_encoders(device).await {
+                Ok(encoders) => (
+                    Some(encoders),
+                    "已从被控设备枚举；实际配置、资源与主控解码仍需验证。".to_owned(),
+                ),
+                Err(error) => (None, error.message),
+            }
+        } else {
+            (None, "尚未选择并探测被控设备。".to_owned())
+        };
+        let entries: Vec<Value> = encoders.as_deref().unwrap_or_default().iter().map(|encoder|
+            json!({"name":encoder.name,"codec":encoder.codec,"available":encoders.is_some(),"status":"available","hardwareAccelerated":encoder.hardware,
+                "reason":"设备已枚举此编码器；不保证当前资源足够或所选参数配置成功。"})).collect();
+        let codecs: Vec<Value> = VIDEO_CODECS.iter().map(|codec| {
+            let listed: Vec<_> = entries.iter().filter(|encoder| encoder["codec"] == codec.name).cloned().collect();
+            let available = !listed.is_empty();
+            json!({"id":codec.name,"value":codec.name,"name":codec.label,"label":codec.label,"mime":codec.mime,
+                "status":if encoders.is_none(){"unknown"}else if available{"available"}else{"unavailable"},"available":available,
+                "reason":if encoders.is_none(){reason.as_str()}else if available{"目标已枚举编码器；尚需主控解码交集与实际配置验证。"}else{"目标本次未枚举此格式的编码器。"},
+                "encoders":listed,"decoderStatus":"unknown","requiresDecoder":true})
+        }).collect();
         Ok(
-            json!({"current":{"preset":settings["qualityPreset"],"maxSize":settings["maxSize"],"maxFps":settings["maxFps"],"bitRate":settings["videoBitRate"],"codec":"h264","videoBitRate":settings["videoBitRate"],"videoCodec":"h264","audio":false},
-            "presets":[{"id":"smooth","name":"流畅","available":true},{"id":"balanced","name":"均衡","available":true},{"id":"clear","name":"清晰","available":true}],
-            "maxSize":[{"value":720,"label":"720","available":true},{"value":1280,"label":"1280","available":true},{"value":1920,"label":"1920","available":true}],
-            "maxFps":[{"value":30,"label":"30 fps","available":true},{"value":60,"label":"60 fps","available":true}],
-            "bitRate":[{"value":2000000,"label":"2 Mbps","available":true},{"value":8000000,"label":"8 Mbps","available":true},{"value":12000000,"label":"12 Mbps","available":true}],
-            "codec":[{"value":"h264","label":"H.264","available":true}],"codecs":[{"id":"h264","name":"H.264","available":true}],"maxSizes":[720,1280,1920],"frameRates":[30,60],"audioAvailable":false}),
+            json!({"current":current_quality(&settings),"deviceId":device,"scope":if device.is_some(){"device"}else{"global"},
+            "probe":{"status":if encoders.is_some(){"enumerated"}else{"unknown"},"source":"scrcpy-5.0.1-list-encoders","reason":reason},
+            "presets":[{"id":"smooth","name":"流畅","available":encoders.is_some()},{"id":"balanced","name":"均衡","available":encoders.is_some()},{"id":"clear","name":"清晰","available":encoders.is_some()}],
+            "maxSize":[{"value":720,"label":"720","available":encoders.is_some()},{"value":1280,"label":"1280","available":encoders.is_some()},{"value":1920,"label":"1920","available":encoders.is_some()}],
+            "maxFps":[{"value":30,"label":"30 fps","available":encoders.is_some()},{"value":60,"label":"60 fps","available":encoders.is_some()}],
+            "bitRate":[{"value":2000000,"label":"2 Mbps","available":encoders.is_some()},{"value":8000000,"label":"8 Mbps","available":encoders.is_some()},{"value":12000000,"label":"12 Mbps","available":encoders.is_some()}],
+            "codec":codecs,"codecs":codecs,"encoders":entries,"maxSizes":[720,1280,1920],"frameRates":[30,60],"audioAvailable":false}),
         )
+    }
+
+    async fn save_device_quality(&self, device: &str, settings: &Value) -> CoreResult<()> {
+        let quality: serde_json::Map<String, Value> = crate::preferences::QUALITY_KEYS
+            .iter()
+            .map(|key| ((*key).to_owned(), settings[*key].clone()))
+            .collect();
+        crate::preferences::validate_quality(&Value::Object(quality.clone()))?;
+        let previous = {
+            let mut store = self.store.write().await;
+            if !store.settings["deviceQuality"].is_object() {
+                store.settings["deviceQuality"] = json!({});
+            }
+            let map = store.settings["deviceQuality"]
+                .as_object_mut()
+                .expect("quality map");
+            if !map.contains_key(device) && map.len() >= 256 {
+                return Err(CoreError::new(
+                    "quality_limit",
+                    "设备画质覆盖数量已达到上限。",
+                ));
+            }
+            map.insert(device.to_owned(), Value::Object(quality.clone()))
+        };
+        if let Err(error) = self.persist().await {
+            let mut store = self.store.write().await;
+            let map = store.settings["deviceQuality"]
+                .as_object_mut()
+                .expect("quality map");
+            // Do not overwrite a newer successful concurrent settings operation.
+            if map.get(device) == Some(&Value::Object(quality)) {
+                if let Some(previous) = previous {
+                    map.insert(device.to_owned(), previous);
+                } else {
+                    map.remove(device);
+                }
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     async fn change_quality(&self, params: &Value) -> CoreResult<Value> {
         let device = required(params, "deviceId")?.to_owned();
         self.client(&device).await?;
-        let mut settings = self.store.write().await;
-        let mut next = settings.settings.clone();
-        if let Some(preset) = params["preset"].as_str() {
-            let (size, fps, rate) = match preset {
-                "smooth" => (720, 30, 2_000_000),
-                "balanced" => (1280, 60, 8_000_000),
-                "clear" => (1920, 60, 12_000_000),
-                _ => return Err(invalid("画质预设无效。")),
-            };
-            next["qualityPreset"] = json!(preset);
-            next["maxSize"] = json!(size);
-            next["maxFps"] = json!(fps);
-            next["videoBitRate"] = json!(rate);
-        }
-        for (key, min, max) in [
-            ("maxSize", 320, 4096),
-            ("maxFps", 1, 120),
-            ("videoBitRate", 500_000, 50_000_000),
-        ] {
-            if let Some(value) = params.get(key).or_else(|| {
-                if key == "videoBitRate" {
-                    params.get("bitRate")
+        let next = quality_patch(
+            &crate::preferences::quality_settings(&self.store.read().await.settings, Some(&device)),
+            params,
+        )?;
+        let previous = {
+            let sessions = self.sessions.lock().await;
+            if let Some(id) = params.get("sessionId") {
+                let id = id.as_str().ok_or_else(|| invalid("会话标识无效。"))?;
+                let session = sessions
+                    .get(id)
+                    .ok_or_else(|| CoreError::new("not_found", "控制会话已结束。"))?;
+                if session.device_id != device {
+                    return Err(invalid("会话不属于所选设备。"));
+                }
+                Some((id.to_owned(), session.package.clone()))
+            } else {
+                let mut matching = sessions.iter().filter(|(_, session)| {
+                    session.device_id == device && !session.cancellation.is_cancelled()
+                });
+                let first = matching
+                    .next()
+                    .map(|(id, session)| (id.clone(), session.package.clone()));
+                if matching.next().is_none() {
+                    first
                 } else {
                     None
                 }
-            }) {
-                let value = value
-                    .as_u64()
-                    .filter(|n| *n >= min && *n <= max)
-                    .ok_or_else(|| invalid("画质参数超出范围。"))?;
-                next[key] = json!(value);
             }
-        }
-        if params
-            .get("videoCodec")
-            .or_else(|| params.get("codec"))
-            .unwrap_or(&Value::Null)
-            .as_str()
-            .is_some_and(|codec| codec != "h264")
-        {
-            return Err(CoreError::new("unsupported", "当前解码链路仅支持 H.264。"));
-        }
-        if params.get("audioMode").is_some()
-            || params.get("audioEnabled").is_some()
-            || params.get("audioCodec").is_some()
-        {
-            return Err(CoreError::new(
-                "unsupported",
-                "当前设备声音链路尚未完成连接。",
-            ));
-        }
-        settings.settings = next;
-        drop(settings);
-        self.persist().await?;
-        let previous = {
-            let sessions = self.sessions.lock().await;
-            sessions
-                .iter()
-                .find(|(id, s)| {
-                    params["sessionId"]
-                        .as_str()
-                        .map_or(s.device_id == device, |wanted| *id == wanted)
-                })
-                .map(|(id, s)| (id.clone(), s.package.clone()))
         };
-        if let Some((id, package)) = previous {
-            self.stop_session(&id).await;
-            return self
-                .start_session(&json!({"deviceId":device,"packageName":package}))
-                .await;
-        }
-        Ok(json!({"appliesNextSession":true,"current":self.quality_options().await?["current"]}))
+        // A target keyframe does not prove a local decoder can render it.
+        // Keep every current session/task alive; the user explicitly reopens
+        // after saving. This also avoids implicit migration of app tasks.
+        validate_encoder_selection(&next, &self.probe_video_encoders(&device).await?)?;
+        self.save_device_quality(&device, &next).await?;
+        let active = self
+            .sessions
+            .lock()
+            .await
+            .values()
+            .any(|session| session.device_id == device && !session.cancellation.is_cancelled());
+        Ok(
+            json!({"deviceId":device,"appliesNextSession":true,"needsRestart":active,"existingSessionId":previous.as_ref().map(|(id, _)| id),
+            "current":current_quality(&next),"seamless":false,"reason":"设置已保存到这台设备，下次打开屏幕或应用时生效；当前所有会话继续使用原设置。"}),
+        )
     }
 
     async fn screenshot(&self, params: &Value) -> CoreResult<Value> {
@@ -1032,11 +1301,55 @@ fn session_dimensions(header: &[u8; 12]) -> CoreResult<Option<(u32, u32)>> {
     Ok(Some((width, height)))
 }
 
+async fn read_video_preface(
+    video: &mut AdbStream,
+    initial: [u8; 12],
+) -> CoreResult<(Vec<u8>, u32, u32)> {
+    tokio::time::timeout(Duration::from_secs(8), async {
+        let mut bytes = initial.to_vec();
+        let (mut width, mut height) = session_dimensions(&initial)?
+            .ok_or_else(|| CoreError::new("video_protocol", "视频流缺少会话尺寸。"))?;
+        for _ in 0..64 {
+            let mut header = [0; 12];
+            video.read_exact(&mut header).await?;
+            if let Some((updated_width, updated_height)) = session_dimensions(&header)? {
+                width = updated_width;
+                height = updated_height;
+                bytes.extend_from_slice(&header);
+                continue;
+            }
+            let length = u32::from_be_bytes(header[8..].try_into().expect("header")) as usize;
+            if length == 0 || length > MAX_PACKET || bytes.len() + length + 12 > 2 * MAX_PACKET {
+                return Err(CoreError::new("video_protocol", "首帧数据超出大小限制。"));
+            }
+            bytes.extend_from_slice(&header);
+            let start = bytes.len();
+            bytes.resize(start + length, 0);
+            video.read_exact(&mut bytes[start..]).await?;
+            let flags = u64::from_be_bytes(header[..8].try_into().expect("header"));
+            if flags & (1 << 61) != 0 && flags & (1 << 62) == 0 {
+                return Ok((bytes, width, height));
+            }
+        }
+        Err(CoreError::new(
+            "video_protocol",
+            "设备未提供有界的编码首帧。",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CoreError::new(
+            "encoder_start_failed",
+            "所选编码器未及时提供首帧；现有会话保持运行。",
+        )
+    })?
+}
+
 async fn run_video(
     listener: TcpListener,
     token: String,
     mut video: AdbStream,
-    initial: [u8; 12],
+    initial: Vec<u8>,
     context: SessionContext,
 ) {
     let SessionContext {
@@ -1278,6 +1591,60 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn video_encoders_require_official_header_and_preserve_codec_association() {
+        let list = "[server] INFO: List of video encoders:\n    --video-codec=h264 --video-encoder=c2.android.avc.encoder (sw)\n    --video-codec=h265 --video-encoder=c2.vendor.hevc.encoder (hw) [vendor]\n    --audio-codec=opus --audio-encoder=c2.android.opus.encoder\n    --video-codec=h264 --video-encoder=c2.android.avc.encoder (alias for other)";
+        let encoders = parse_encoders(list).unwrap();
+        assert_eq!(encoders.len(), 2);
+        assert_eq!(encoders[0].hardware, Some(false));
+        assert_eq!(encoders[1].hardware, Some(true));
+        assert!(parse_encoders("not a successful server list").is_err());
+        assert!(parse_encoders("List of video encoders:\n--video-codec=h264").is_err());
+        assert!(
+            parse_encoders("List of video encoders:")
+                .unwrap()
+                .is_empty()
+        );
+        let mut settings = crate::preferences::defaults();
+        settings["videoCodec"] = json!("h265");
+        settings["videoEncoder"] = json!("c2.android.avc.encoder");
+        assert_eq!(
+            validate_encoder_selection(&settings, &encoders)
+                .unwrap_err()
+                .code,
+            "encoder_unavailable"
+        );
+        settings["videoEncoder"] = json!("c2.vendor.hevc.encoder");
+        validate_encoder_selection(&settings, &encoders).unwrap();
+    }
+
+    #[test]
+    fn five_codec_wire_ids_include_leading_zero_and_quality_rejects_injection() {
+        assert_eq!(video_codec("h264").unwrap().wire, *b"h264");
+        assert_eq!(video_codec("h265").unwrap().wire, *b"h265");
+        assert_eq!(video_codec("av1").unwrap().wire, [0, b'a', b'v', b'1']);
+        assert_eq!(video_codec("vp8").unwrap().wire, [0, b'v', b'p', b'8']);
+        assert_eq!(video_codec("vp9").unwrap().wire, [0, b'v', b'p', b'9']);
+        let current = crate::preferences::defaults();
+        for bad in [
+            json!({"codec":null}),
+            json!({"codec":"h266"}),
+            json!({"videoEncoder":"c2.x; reboot"}),
+            json!({"videoEncoder":"$(id)"}),
+            json!({"maxSize":"1280"}),
+        ] {
+            assert!(quality_patch(&current, &bad).is_err(), "accepted {bad}");
+        }
+        let next = quality_patch(
+            &current,
+            &json!({"preset":"smooth","videoCodec":"av1","videoEncoder":null}),
+        )
+        .unwrap();
+        assert_eq!(next["maxFps"], 30);
+        assert_eq!(next["videoCodec"], "av1");
+        assert_eq!(current["videoCodec"], "h264");
+    }
+
     #[test]
     fn process_stat_uses_starttime_after_the_parenthesized_command() {
         let mut fields = vec!["0"; 20];

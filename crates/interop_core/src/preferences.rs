@@ -10,7 +10,69 @@ pub(crate) fn defaults() -> Value {
         "backgroundConnection":true,"backgroundKeepAlive":true,"backgroundAudio":false,
         "audioMode":"follow","audioDevices":[],"clipboardEnabled":false,"clipboardTarget":"current",
         "clipboardSync":false,"clipboardMode":"follow","clipboardDevice":null,
-        "qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":8_000_000,"videoCodec":"h264"})
+        "qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":8_000_000,"videoCodec":"h264","videoEncoder":null,"deviceQuality":{}})
+}
+
+pub(crate) const QUALITY_KEYS: [&str; 6] = [
+    "qualityPreset",
+    "maxSize",
+    "maxFps",
+    "videoBitRate",
+    "videoCodec",
+    "videoEncoder",
+];
+
+pub(crate) fn quality_settings(settings: &Value, device: Option<&str>) -> Value {
+    let mut result = defaults();
+    for key in QUALITY_KEYS {
+        if let Some(value) = settings.get(key) {
+            result[key] = value.clone();
+        }
+    }
+    if let Some(overrides) = device
+        .and_then(|id| settings["deviceQuality"].get(id))
+        .and_then(Value::as_object)
+    {
+        for (key, value) in overrides {
+            result[key] = value.clone();
+        }
+    }
+    result
+}
+
+pub(crate) fn valid_encoder(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+fn quality_value(key: &str, value: &Value) -> bool {
+    match key {
+        "qualityPreset" => matches!(value.as_str(), Some("smooth" | "balanced" | "clear")),
+        "videoCodec" => matches!(
+            value.as_str(),
+            Some("h264" | "h265" | "av1" | "vp8" | "vp9")
+        ),
+        "videoEncoder" => value.is_null() || value.as_str().is_some_and(valid_encoder),
+        "maxSize" => value.as_u64().is_some_and(|n| (320..=4096).contains(&n)),
+        "maxFps" => value.as_u64().is_some_and(|n| (1..=120).contains(&n)),
+        "videoBitRate" => value
+            .as_u64()
+            .is_some_and(|n| (500_000..=50_000_000).contains(&n)),
+        _ => false,
+    }
+}
+
+pub(crate) fn validate_quality(values: &Value) -> CoreResult<()> {
+    let object = values
+        .as_object()
+        .ok_or_else(|| CoreError::new("invalid_argument", "画质设置必须是对象。"))?;
+    if object.iter().any(|(key, value)| !quality_value(key, value)) {
+        return Err(CoreError::new("invalid_argument", "画质设置包含无效值。"));
+    }
+    Ok(())
 }
 
 fn validated_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
@@ -35,13 +97,14 @@ fn validated_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
             "clipboardMode" => matches!(value.as_str(), Some("follow" | "fixed")),
             "clipboardDevice" => value.is_null() || value.as_str().is_some_and(|s| s.len() <= 128),
             "clipboardTarget" => value.as_str().is_some_and(|s| s.len() <= 128),
-            "qualityPreset" => matches!(value.as_str(), Some("smooth" | "balanced" | "clear")),
-            "videoCodec" => value == "h264",
-            "maxSize" => value.as_u64().is_some_and(|n| (320..=4096).contains(&n)),
-            "maxFps" => value.as_u64().is_some_and(|n| (1..=120).contains(&n)),
-            "videoBitRate" => value
-                .as_u64()
-                .is_some_and(|n| (500_000..=50_000_000).contains(&n)),
+            "qualityPreset" | "videoCodec" | "videoEncoder" | "maxSize" | "maxFps"
+            | "videoBitRate" => quality_value(key, value),
+            "deviceQuality" => value.as_object().is_some_and(|map| {
+                map.len() <= 256
+                    && map.iter().all(|(id, quality)| {
+                        uuid::Uuid::parse_str(id).is_ok() && validate_quality(quality).is_ok()
+                    })
+            }),
             _ => false,
         };
         if !valid {
@@ -93,7 +156,10 @@ impl Runtime {
                     .as_array()
                     .filter(|a| a.len() <= 256)
                     .ok_or_else(|| CoreError::new("invalid_data", "设备列表无效或过长。"))?;
-                let settings = validated_settings(&defaults(), &metadata["settings"])?;
+                let mut settings = validated_settings(&defaults(), &metadata["settings"])?;
+                // Restored devices receive new identities; old per-device quality keys
+                // must not silently attach to a different authorization record.
+                settings["deviceQuality"] = json!({});
                 let mut restored = Vec::new();
                 for entry in entries {
                     let transport = required(entry, "transport")?;

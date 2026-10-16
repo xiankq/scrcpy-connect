@@ -176,6 +176,30 @@ ADB stream → Rust 解协议 → 裸 elementary stream 或重新封装的流 �
 - **推论：**可替换边界至少要保留 codec config、设备 PTS、session/dimensions、解码 / 渲染状态、音频 clock / route、统计与 shutdown 语义；如果接口只暴露 `play(url)`，将来的 packet decoder 替换会被迫重做协议 / 同步层。这里只记录边界必须表达的信息，不决定最终模块 API。
 - fvp 自身 Android minSdk 21；Darwin podspec iOS12 / macOS10.13；FRB模板更低值只是模板。当前 Flutter 官方支持页对应 3.47：Android API24+、iOS15+、Windows10+、macOS12+。因此当前 Flutter 的 Android7+ 主控基线一致；被控 Android5+ 是 JAR 功能分级，不能和主控运行平台混为一谈。未来 Apple / Windows 仅有依赖支持证据，本轮未验证构建和行为。[F08]、[F09]、[R03]、[R04]、[A11]
 
+## 2026-10-17 多编码与设备级质量实施验收
+
+Rust core 现使用自己的 ADB 连接运行校验过 SHA 的官方 5.0.1 JAR，传入 `list_encoders=true`，解析设备返回的 `--video-codec` / `--video-encoder`，不按 Android 版本硬编码支持状态。枚举解析遵循固定提交的 [LogUtils](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/util/LogUtils.java)。编码器名称限制为 1–256 个 ASCII 字母、数字、点、下划线或连字符，传给远端 shell 前还会引用整个参数；枚举不兼容的 codec / encoder 组合在启动前拒绝。
+
+`session.quality.options{deviceId?}` 返回五种 codec、MIME、实际 encoder 列表与 `unknown/available/unavailable`、原因。没有设备或探测失败时不返回 `available=true`；已枚举也仅证明设备报告了 encoder，不保证其参数、当前资源或本机 decoder 可配置成功。五种 wire ID 分别为 `h264`、`h265`、`\0av1`、`\0vp8`、`\0vp9`，core 对请求与实际四字节 ID 作一致性校验；默认保持 H.264。[固定 VideoCodec](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/video/VideoCodec.java)
+
+质量保存在 `settings.deviceQuality[deviceId]`，最多 256 项；未设置的设备继承全局默认。`session.quality` 先验证完整参数及目标实际枚举组合，再仅保存这台设备的下次启动设置，返回 `appliesNextSession/needsRestart`，不隐式停止、替换或迁移任何当前会话/应用任务。元数据恢复生成新设备 UUID 时清空旧质量映射。单次 `session.start/apps.launch` 可提供经过相同验证的覆盖参数，不修改持久化偏好。`videoEncoder:null` 表示由平台选择，不把它虚报为已知的实际 encoder 名称。
+
+官方 `SurfaceEncoder` 在 MediaCodec 配置前就写 codec header，因此 header 不能作为编码成功证据。core 还等待有界的实际编码关键帧：8 秒、最多 64 个包、32 MiB 首帧缓冲；结果标记 `encodedKeyFrameReady`，不冒充主控已经渲染。主控首帧仍由实际 decoder 回报；仅有目标关键帧不足以保证更换本机 decoder 不失败，所以此版没有“无损热切换”承诺。[SurfaceEncoder](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java#L102)
+
+真实验收使用 `emulator-5556` 的授权 adbd `127.0.0.1:15556`，独立临时 Runtime/会话，不操作主控 `5554`、不安装被控 APK、不重启系统、不改变目标屏幕状态。官方 JAR 实际列出 8 个软件 encoder：H.264 两个、H.265 一个、AV1 一个、VP8 两个、VP9 两个。五种 codec 均收到实际标识、尺寸与关键帧，FFmpeg 强制 `-frames:v 1` 后均产生经 PNG 头核对尺寸的 **324×720** 图像；显式使用 `c2.android.avc.encoder`、`c2.android.hevc.encoder`、`c2.android.av1.encoder`、`c2.android.vp8.encoder`、`c2.android.vp9.encoder`。这验证目标编码与宿主 FFmpeg 解码，不等于 Android 本机五种 decoder 的实际渲染验收。[真实测试](../../crates/interop_core/tests/video_quality_android.rs)
+
+AV1 的原始 packet 不能在测试中随意拼接为无边界 OBU 输入：本次 raw OBU demux 曾失败；保持 access-unit 边界并使用测试专用 IVF `AV01` 封装后真实解码通过。VP8/VP9 同样使用测试 IVF，H.264/H.265 使用原始 Annex B。该封装仅存在测试，不加入产品播放链路。静止画面不保证定时产生后续关键帧，负例保活通过旧 scrcpy 控制通道真实回复验证；测试不伪造 Native 纹理确认。不存在 encoder 返回 `encoder_unavailable` 后原 session ID/codec 不变；有效质量保存后原会话仍保留旧尺寸参数。
+
+测试工具是临时 `imageio-ffmpeg==0.6.0` 提供的 `ffmpeg 7.0.2-static`，SHA-256 为 `e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99`，不作为产品依赖或分发二进制。执行命令：
+
+```sh
+rtk proxy env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
+  INTEROP_FFMPEG=/tmp/interop-test-tools/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2 \
+  /home/xiankq/.cargo/bin/cargo +stable test -p interop-core --test video_quality_android -- --ignored --nocapture
+```
+
+补充真实同次启动覆盖：持久化设置保持 VP8 / maxSize 720 时，单次请求 H.264 / maxSize 640，实际解码 **288×640**，随后读取持久化设置仍未改变；含此项完整测试退出 0、耗时 12.79 秒。默认测试另覆盖无设备未知状态、非法参数原子拒绝、设备级偏好隔离/恢复清理、五种 wire ID、解析错误及 codec/encoder 不兼容。AVD 的软件 encoder 成功不代表厂商硬编、长时间运行、多窗口资源或目标设备所有分辨率/FPS 都通过；也没有对未枚举组合实施伪回退。
+
 ## 当前决定与研究前沿
 
 - 真实任务、单实例迁移说明、设备级单路声音可固定/主动混音，已由Q24／25确定；关闭窗口保留任务并迁回主屏为后续代理默认。不再问同义问题。任务06／08／13验证实际行为。
