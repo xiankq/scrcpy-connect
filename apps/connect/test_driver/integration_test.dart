@@ -43,6 +43,18 @@ Future<void> main() async {
   }
   await integrationDriver(
     driver: driver,
+    writeResponseOnFailure: true,
+    responseDataCallback: (data) async {
+      final metadata = {...?data}..remove('screenshots');
+      await File('${directory.path}/result.json')
+          .writeAsString(jsonEncode(metadata));
+      if (Platform.environment['CONNECT_E2E_BACKGROUND'] == '1' &&
+          metadata['mediaAcceptanceComplete'] != true) {
+        throw StateError(
+          'The app did not complete background media acceptance.',
+        );
+      }
+    },
     onScreenshot: (name, bytes, [args]) async {
       final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       await File('${directory.path}/$safeName.png')

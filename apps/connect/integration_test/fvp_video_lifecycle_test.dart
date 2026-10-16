@@ -149,24 +149,32 @@ void main() {
           await tester.runAsync(() async {
             VideoJson? resumed;
             if (!const bool.fromEnvironment('CONNECT_FVP_FIRST_FRAME_ONLY')) {
-              final VideoJson paused;
-              try {
-                paused = await presentation.request('session.pause', {
+              const cycles = int.fromEnvironment(
+                'CONNECT_FVP_PAUSE_CYCLES',
+                defaultValue: 1,
+              );
+              expect(cycles, inInclusiveRange(1, 20));
+              for (var cycle = 0; cycle < cycles; cycle++) {
+                final VideoJson paused;
+                try {
+                  paused = await presentation.request('session.pause', {
+                    'sessionId': activeSession,
+                  });
+                } on InteropException catch (error) {
+                  evidence['pauseFailure'] = error.details;
+                  rethrow;
+                }
+                expect(paused['paused'], true);
+                expect(paused['applied'], true);
+                expect(paused['capturePaused'], true);
+                resumed = await presentation.request('session.resume', {
                   'sessionId': activeSession,
                 });
-              } on InteropException catch (error) {
-                evidence['pauseFailure'] = error.details;
-                rethrow;
+                expect(resumed['capturePaused'], false);
+                expect(resumed['paused'], false);
+                expect(resumed['snapshotReceipts'], cycle + 2);
               }
-              expect(paused['paused'], true);
-              expect(paused['applied'], true);
-              expect(paused['capturePaused'], true);
-              resumed = await presentation.request('session.resume', {
-                'sessionId': activeSession,
-              });
-              expect(resumed['capturePaused'], false);
-              expect(resumed['paused'], false);
-              expect(resumed['snapshotReceipts'], 2);
+              evidence['pauseResumeCycles'] = cycles;
             }
             final shot = await outputs.screenshot(
               activeSession!,

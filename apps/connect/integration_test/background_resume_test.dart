@@ -142,6 +142,9 @@ void main() {
           }
         }
       }
+      expect(tester.takeException(), isNull);
+      binding.reportData ??= {};
+      binding.reportData!['mediaAcceptanceComplete'] = true;
     },
     skip: address.isEmpty || port.isEmpty,
     timeout: const Timeout(Duration(minutes: 3)),

@@ -79,6 +79,12 @@ MDK `prepare(0)`仅可确认媒体信息，不保证那一刻已经显示首帧�
 
 Flutter host driver 曾在应用测试超时后输出成功并返回空 metadata。媒体 driver 现要求清理结束后的 `mediaAcceptanceComplete=true`；已用失败运行确认缺失回执时非零退出。验收同时检查应用断言与真实像素，不能只看 host 的“All tests passed”。
 
+## 状态回调竞态复查
+
+独立复查发现 native `waitFor` 可以先于经 ReceivePort/broadcast 递送的 Dart 回调确认状态；因此“上次 callback 已是 playing”不能跳过本次恢复请求。新共享 `PlaybackConfirmation` 每次先请求，再以正数1ms native query 确认；回调只唤醒实际查询，不独立充当 ACK。`close()` 先阻止新查询、取消并排空所有 waiter，播放器再释放句柄；否则退出时仍在运行的暂停轮询可能读取已删除的 native handle。4项接口回归覆盖迟到回调、无回调确认、释放取消与超时/查询失败清理，独立只读复查通过。
+
+真实五编码各连续3次暂停/恢复回归通过（15秒），本地首帧H264/H265/AV1/VP8/VP9为1179/406/284/293/282ms，每种4次真实snapshot回执（首次+3次恢复）；日志 `/tmp/connect-fvp-final-video-cycles.log`，完整元数据 `/tmp/connect-e2e/fvp-three-cycles-result.json`。复现时使用完整生命周期命令，追加 `--dart-define=CONNECT_FVP_PAUSE_CYCLES=3`。这验证实际调用链，不能声称可以确定触发每一种线程调度。HOME driver也已加专属完成回执校验，历史成功日志仍是实际应用测试通过，而非仅主机空回执。
+
 ## 一手来源
 
 [S01]: https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/doc/develop.md#screen-video-encoding

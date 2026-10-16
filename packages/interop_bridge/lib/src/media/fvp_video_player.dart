@@ -5,6 +5,7 @@ import 'package:fvp/mdk.dart' as mdk;
 
 import '../interop_exception.dart';
 import 'video_player_port.dart';
+import 'playback_confirmation.dart';
 
 /// Uses only public fvp APIs. Codec selection remains MDK's actual runtime
 /// decision; videoDecoders is a priority list and is never reported as evidence.
@@ -50,6 +51,12 @@ class FvpVideoPlayer implements VideoPlayerPort {
       'candidates': decoders,
       'runtimeSelectionVerified': false,
     });
+    _confirmation = PlaybackConfirmation(
+      changes: _player.onStateChanged.map((event) => event.newValue),
+      request: (target) => _player.state = target,
+      // Zero can block until EOF in this SDK; always use a positive bound.
+      query: (target) => _player.waitFor(target, timeout: 1),
+    );
     _subscriptions.add(
       _player.onStateChanged.listen((event) {
         _confirmedState = event.newValue;
@@ -85,6 +92,7 @@ class FvpVideoPlayer implements VideoPlayerPort {
   }
 
   late final _player = mdk.Player();
+  late final PlaybackConfirmation<mdk.PlaybackState> _confirmation;
   static final _retiring = <Future<VideoJson>>{};
   mdk.PlaybackState? _confirmedState;
   Future<int>? _creatingTexture;
@@ -157,43 +165,17 @@ class FvpVideoPlayer implements VideoPlayerPort {
     final target = paused
         ? mdk.PlaybackState.paused
         : mdk.PlaybackState.playing;
-    if (_confirmedState == target) return;
-    // The public Dart getter is a requested-value cache. Confirm through the
-    // native state callback without blocking the Flutter isolate in waitFor().
-    final changed = Completer<void>();
-    final subscription = _player.onStateChanged.listen((event) {
-      if (event.newValue == target && !changed.isCompleted) changed.complete();
+    final receipt = await _confirmation.set(target);
+    _check();
+    _emit({
+      'kind': 'diagnostic',
+      'category': 'playback.confirmation',
+      'target': '$target',
+      'lastCallback': '$_confirmedState',
+      'mediaStatus': '${_player.mediaStatus}',
+      'queries': receipt.queries,
+      'maxQueryMs': receipt.maxQueryMs,
     });
-    var queryCount = 0, maxQueryMs = 0;
-    // Zero is not a safe nonblocking query in this SDK. The previous zero
-    // query blocked startup until EOF; a Dart timeout cannot interrupt FFI.
-    final polling = Timer.periodic(const Duration(milliseconds: 20), (_) {
-      if (changed.isCompleted) return;
-      final watch = Stopwatch()..start();
-      final confirmed = _player.waitFor(target, timeout: 1);
-      queryCount++;
-      if (watch.elapsedMilliseconds > maxQueryMs) {
-        maxQueryMs = watch.elapsedMilliseconds;
-      }
-      if (confirmed && !changed.isCompleted) changed.complete();
-    });
-    try {
-      _player.state = target;
-      await changed.future.timeout(const Duration(seconds: 4));
-      _check();
-    } finally {
-      polling.cancel();
-      await subscription.cancel();
-      _emit({
-        'kind': 'diagnostic',
-        'category': 'playback.confirmation',
-        'target': '$target',
-        'lastCallback': '$_confirmedState',
-        'mediaStatus': '${_player.mediaStatus}',
-        'queries': queryCount,
-        'maxQueryMs': maxQueryMs,
-      });
-    }
   }
 
   @override
@@ -228,7 +210,9 @@ class FvpVideoPlayer implements VideoPlayerPort {
         'nativeDeleteConfirmed': false,
       };
     }
-    var stopped = _confirmedState == mdk.PlaybackState.stopped;
+    // Cancel and drain native state queries before any handle can be deleted.
+    await _confirmation.close();
+    var stopped = false;
     final stoppedEvent = Completer<void>();
     final subscription = _player.onStateChanged.listen((event) {
       if (event.newValue == mdk.PlaybackState.stopped &&
