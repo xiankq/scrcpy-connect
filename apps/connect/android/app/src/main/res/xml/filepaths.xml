@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Overrides open_filex's root/files grants. Identity and journals are never exportable. -->
+    <files-path name="screenshots" path="screenshots/" />
+    <files-path name="media" path="media/" />
+    <cache-path name="documents" path="documents/" />
+    <cache-path name="outgoing" path="outgoing/" />
+    <cache-path name="share_plus" path="share_plus/" />
+</paths>

@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#1B1B1F" android:pathData="M24,0H84Q108,0 108,24V84Q108,108 84,108H24Q0,108 0,84V24Q0,0 24,0Z" />
+    <!-- Lucide link-2 (ISC), shared with the connection notification. -->
+    <group android:translateX="30" android:translateY="30" android:scaleX="2" android:scaleY="2">
+        <path android:pathData="M9,17H7A5,5 0,0 1,7 7H9M15,7H17A5,5 0,0 1,17 17H15M8,12H16" android:strokeWidth="2" android:strokeColor="#FFFFFF" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent" />
+    </group>
+</vector>
