@@ -7,6 +7,7 @@ mod files;
 mod model;
 mod preferences;
 mod remote_helper;
+pub mod resource;
 mod runtime;
 mod scrcpy;
 

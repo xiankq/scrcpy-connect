@@ -19,7 +19,7 @@ use std::{
 use tokio::sync::{RwLock, broadcast, mpsc, oneshot, watch};
 
 const SERVER: &[u8] = include_bytes!("../../../servers/companion/companion.jar");
-const SERVER_SHA: &str = "860429cd93eb40b61a2064e589facb6d21db5a8cb1526fe859dd5933f9e71d0b";
+const SERVER_SHA: &str = "719e57e3317d91d0858aa722f86770275d3af6130ad2ff0cd4334a5f7722b828";
 const MAX_MESSAGE: usize = 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -70,7 +70,11 @@ async fn read_message(stream: &mut AdbStream, line: &mut Vec<u8>) -> CoreResult<
                 return Err(CoreError::new("protocol_error", "互联服务消息超过限制。"));
             }
             let message: Vec<_> = line.drain(..=end).collect();
-            return Ok(serde_json::from_slice(&message)?);
+            let mut value: Value = serde_json::from_slice(&message)?;
+            if value["result"].get("sourceStamp").is_some() {
+                value["result"]["rpcBytesReceived"] = json!(message.len());
+            }
+            return Ok(value);
         }
         if line.len() > MAX_MESSAGE {
             return Err(CoreError::new("protocol_error", "互联服务消息超过限制。"));
@@ -160,7 +164,7 @@ impl Companion {
             uuid::Uuid::new_v4().simple()
         );
         let remote_jar = format!("/data/local/tmp/{socket_name}.jar");
-        let startup = async {
+        let startup = Box::pin(async {
             let mut sync = client.sync(operations(&cancellation)).await?;
             let count = sync
                 .push(
@@ -208,7 +212,7 @@ impl Companion {
                 ));
             }
             Ok((shell, stream, line, ready))
-        };
+        });
         let result = tokio::time::timeout(Duration::from_secs(25), startup).await;
         let (shell, stream, line, initial) = match result {
             Ok(Ok(result)) => result,
@@ -275,7 +279,9 @@ impl Companion {
         let mut payload = params.clone();
         payload["command"] = json!(command);
         payload["requestId"] = json!(uuid::Uuid::new_v4().to_string());
-        let action = !command.ends_with(".list") && command != "clipboard.get";
+        let action = !command.ends_with(".list")
+            && command != "clipboard.get"
+            && !command.starts_with("media.");
         let (result, receiver) = oneshot::channel();
         let request = Request {
             payload,
@@ -301,6 +307,19 @@ impl Companion {
         })?
     }
     async fn stop(&self) {
+        // Keep the authenticated socket alive until the media owner confirms
+        // that its exact Process objects exited. Closing shell transport alone
+        // does not acknowledge Java finally/child cleanup.
+        if !self.cancellation.is_cancelled() {
+            let _ = tokio::time::timeout(
+                Duration::from_secs(6),
+                self.request(
+                    "media.shutdown",
+                    &json!({"operationId":uuid::Uuid::new_v4().to_string()}),
+                ),
+            )
+            .await;
+        }
         self.cancellation.cancel();
         let mut stopped = self.stopped.clone();
         let _ = tokio::time::timeout(Duration::from_secs(5), async {
@@ -391,6 +410,29 @@ async fn run(
 }
 
 impl Runtime {
+    // Cancellation must never start another helper after disconnect.
+    pub(crate) async fn cancel_companion_media(
+        &self,
+        device: &str,
+        operation: &str,
+    ) -> CoreResult<Value> {
+        let companion = self
+            .companions
+            .lock()
+            .await
+            .get(device)
+            .filter(|companion| !companion.cancellation.is_cancelled())
+            .cloned();
+        match companion {
+            Some(companion) => {
+                companion
+                    .request("media.thumbnail.cancel", &json!({"operationId":operation}))
+                    .await
+            }
+            None => Ok(json!({"cancelRequested":true,"notRunning":true})),
+        }
+    }
+
     pub(crate) async fn companion_command(
         self: &Arc<Self>,
         command: &str,
@@ -426,7 +468,13 @@ impl Runtime {
                         operations.insert(format!("companion:{id}"), token.clone());
                     }
                     self.emit("companion.starting", Some(id), json!({"status":"starting"}));
-                    Companion::start(client, id.into(), self.events.clone(), token.clone()).await?
+                    Box::pin(Companion::start(
+                        client,
+                        id.into(),
+                        self.events.clone(),
+                        token.clone(),
+                    ))
+                    .await?
                 };
                 let _operations = self.device_operations.lock().await;
                 if token.is_cancelled() || self.device(id).await?.status != "connected" {
@@ -471,17 +519,30 @@ impl Runtime {
         Ok(result)
     }
     pub(crate) async fn stop_device_companion(&self, id: &str) {
-        if let Some(token) = self
-            .device_operations
-            .lock()
-            .await
-            .remove(&format!("companion:{id}"))
-        {
-            token.cancel();
-        }
-        let companion = self.companions.lock().await.remove(id);
+        let token = {
+            let mut operations = self.device_operations.lock().await;
+            let prefix = format!("thumbnail:{id}:");
+            for (key, token) in operations.iter() {
+                if key.starts_with(&prefix) {
+                    token.cancel();
+                }
+            }
+            operations.remove(&format!("companion:{id}"))
+        };
+        let companion = self.companions.lock().await.get(id).cloned();
         if let Some(companion) = companion {
             companion.stop().await;
+            let mut companions = self.companions.lock().await;
+            if companions
+                .get(id)
+                .is_some_and(|current| Arc::ptr_eq(current, &companion))
+            {
+                companions.remove(id);
+            }
+        }
+        // No established helper means this only cancels in-flight startup.
+        if let Some(token) = token {
+            token.cancel();
         }
     }
 }

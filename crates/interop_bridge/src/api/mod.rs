@@ -3,7 +3,7 @@ use interop_core::Runtime;
 use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
 
-static RUNTIME: OnceLock<Arc<Runtime>> = OnceLock::new();
+static RUNTIME: tokio::sync::OnceCell<Arc<Runtime>> = tokio::sync::OnceCell::const_new();
 static EXECUTOR: OnceLock<tokio::runtime::Handle> = OnceLock::new();
 
 #[flutter_rust_bridge::frb(init)]
@@ -13,16 +13,16 @@ pub fn init_app() {
 }
 
 pub async fn initialize(data_directory: String) -> Result<(), String> {
-    if RUNTIME.get().is_some() {
-        return Ok(());
-    }
-    let runtime = Runtime::initialize(data_directory)
-        .await
-        .map_err(|e| e.to_string())?;
-    let _ = EXECUTOR.set(tokio::runtime::Handle::current());
     RUNTIME
-        .set(runtime)
-        .map_err(|_| "Runtime was initialized concurrently".to_owned())
+        .get_or_try_init(|| async {
+            let runtime = Runtime::initialize(data_directory)
+                .await
+                .map_err(|e| e.to_string())?;
+            let _ = EXECUTOR.set(tokio::runtime::Handle::current());
+            Ok::<_, String>(runtime)
+        })
+        .await?;
+    Ok(())
 }
 
 /// Android's foreground notification can stop connections while Dart is paused.
@@ -96,4 +96,30 @@ pub async fn events(sink: crate::frb_generated::StreamSink<String>) -> Result<()
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn concurrent_initialization_shares_one_identity_and_runtime() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().to_string_lossy().into_owned();
+        let (first, second) =
+            tokio::join!(super::initialize(root.clone()), super::initialize(root));
+        first.unwrap();
+        second.unwrap();
+        let identity = tokio::fs::read(directory.path().join("host_identity.pem"))
+            .await
+            .unwrap();
+        assert!(!identity.is_empty());
+        super::initialize(directory.path().to_string_lossy().into_owned())
+            .await
+            .unwrap();
+        assert_eq!(
+            identity,
+            tokio::fs::read(directory.path().join("host_identity.pem"))
+                .await
+                .unwrap()
+        );
+    }
 }

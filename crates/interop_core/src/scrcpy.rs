@@ -3,6 +3,7 @@
 use crate::{
     CoreError, CoreResult, Runtime,
     model::{now, quote, required},
+    resource::ResourceStatus,
 };
 use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, sync::RemotePath};
 use serde_json::{Value, json};
@@ -153,6 +154,20 @@ fn current_quality(settings: &Value) -> Value {
     json!({"preset":settings["qualityPreset"],"maxSize":settings["maxSize"],"maxFps":settings["maxFps"],
         "bitRate":settings["videoBitRate"],"videoBitRate":settings["videoBitRate"],"codec":settings["videoCodec"],
         "videoCodec":settings["videoCodec"],"videoEncoder":settings["videoEncoder"],"audio":false})
+}
+
+fn record_decoded_size(state: &mut Value, receipt: &Value) {
+    let dimensions = receipt["decodedWidth"]
+        .as_u64()
+        .zip(receipt["decodedHeight"].as_u64());
+    if let Some((width, height)) = dimensions
+        && (1..=16384).contains(&width)
+        && (1..=16384).contains(&height)
+        && width * height <= 67_108_864
+    {
+        state["decodedWidth"] = json!(width);
+        state["decodedHeight"] = json!(height);
+    }
 }
 
 fn quality_patch(current: &Value, params: &Value) -> CoreResult<Value> {
@@ -369,6 +384,46 @@ fn package_name(value: &str) -> CoreResult<&str> {
 }
 
 impl Runtime {
+    async fn session_resource_busy(&self, busy: crate::resource::ResourceBusy) -> CoreError {
+        let mut error: CoreError = busy.into();
+        let mut important = Vec::new();
+        // Read existing observations only: rejection must not start a companion,
+        // reconnect a device, pause audio, or send a call action.
+        if let Ok(sources) = self.audio_command("audio.sources", &json!({})).await
+            && let Some(sources) = sources["sources"].as_array()
+        {
+            for source in sources {
+                important.push(
+                    json!({"id":format!("audio:{}",source["sourceId"].as_str().unwrap_or_default()),
+                    "deviceId":source["deviceId"],"kind":"audio","status":source["status"],
+                    "canPause":source["status"]=="playing","preserved":true}),
+                );
+            }
+        }
+        let companions = self
+            .companions
+            .lock()
+            .await
+            .iter()
+            .map(|(device, companion)| (device.clone(), companion.clone()))
+            .collect::<Vec<_>>();
+        for (device, companion) in companions {
+            let observed = companion.capability_state().await;
+            if let Some(calls) = observed["calls"]["calls"].as_array()
+                && !calls.is_empty()
+            {
+                important.push(
+                    json!({"id":format!("call-observation:{device}"),"deviceId":device,
+                    "kind":"call_observation","aggregate":true,"status":observed["calls"]["status"],
+                    "canPause":false,"preserved":true}),
+                );
+            }
+        }
+        error.details["importantActivities"] = json!(important);
+        error.details["automaticStop"] = json!(false);
+        error
+    }
+
     pub(crate) async fn start_session(&self, params: &Value) -> CoreResult<Value> {
         let device = required(params, "deviceId")?;
         let settings =
@@ -407,12 +462,27 @@ impl Runtime {
         if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
             return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
         }
-        if self.sessions.lock().await.len() >= 16 {
-            return Err(CoreError::new("session_limit", "控制会话数量已达到上限。"));
-        }
+        let id = uuid::Uuid::new_v4().to_string();
+        let activity_id = format!("session:{id}");
+        let cancellation = CancellationToken::new();
+        let mut guard = CancelOnDrop(Some(cancellation.clone()));
+        let reservation = match self.resource_admission.reserve_session(
+            activity_id.clone(),
+            device_id.clone(),
+            package.clone().unwrap_or_else(|| "手机屏幕".into()),
+            cancellation.clone(),
+        ) {
+            Ok(reservation) => reservation,
+            Err(busy) => return Err(self.session_resource_busy(busy).await),
+        };
         let encoders = self.probe_video_encoders(&device_id).await?;
         validate_encoder_selection(settings, &encoders)?;
-        let id = uuid::Uuid::new_v4().to_string();
+        if cancellation.is_cancelled() {
+            return Err(CoreError::new(
+                "cancelled",
+                "新的控制会话启动已取消；已有活动保持不变。",
+            ));
+        }
         let video_token = format!(
             "{}{}",
             uuid::Uuid::new_v4().simple(),
@@ -425,8 +495,6 @@ impl Runtime {
                 .expect("UUID"),
         ) & 0x7fff_ffff;
         let remote_jar = format!("/data/local/tmp/interop-scrcpy-{id}.jar");
-        let cancellation = CancellationToken::new();
-        let mut guard = CancelOnDrop(Some(cancellation.clone()));
         let state = Arc::new(RwLock::new(
             json!({"sessionId":id,"id":id,"deviceId":device_id,"name":package.as_deref().unwrap_or("手机屏幕"),"packageName":package,"status":"starting","createdAt":now(),"codec":selected_codec.name,"mime":selected_codec.mime,"videoEncoder":selected_encoder,"encoderSelection":if selected_encoder.is_some(){"explicit"}else{"platformDefault"},"quality":current_quality(settings),"audio":false,"apiLevel":device.api_level}),
         ));
@@ -438,6 +506,7 @@ impl Runtime {
         let cleanup_device = device_id.clone();
         tokio::spawn(async move {
             cleanup_cancel.cancelled().await;
+            reservation.stopping();
             {
                 let mut data = cleanup_state.write().await;
                 if data["status"] != "failed" {
@@ -467,6 +536,9 @@ impl Runtime {
                     },
                 )
                 .await;
+            // Hold the application slot through teardown, including EOF and
+            // startup failures. A cancelled task cannot orphan its reservation.
+            drop(reservation);
         });
         let max_size = settings["maxSize"]
             .as_u64()
@@ -669,10 +741,17 @@ wait "$child""#
                 OwnedProcess::capture(&client, pid, &remote_jar, format!("{scid:08x}")).await?;
             Ok::<_, CoreError>((control_tx, process_closed, process))
         };
-        let (control, process_closed, process) =
-            tokio::time::timeout(Duration::from_secs(20), startup)
-                .await
-                .map_err(|_| CoreError::new("timeout", "控制服务启动超时。"))??;
+        let (control, process_closed, process) = tokio::select! {
+            _ = cancellation.cancelled() => return Err(CoreError::new("cancelled", "新的控制会话启动已取消；已有活动保持不变。")),
+            result = tokio::time::timeout(Duration::from_secs(20), startup) => result
+                .map_err(|_| CoreError::new("timeout", "控制服务启动超时。"))??,
+        };
+        if cancellation.is_cancelled() {
+            return Err(CoreError::new(
+                "cancelled",
+                "新的控制会话启动已取消；已有活动保持不变。",
+            ));
+        }
         let mut result = state.read().await.clone();
         result["videoToken"] = json!(return_token);
         self.sessions.lock().await.insert(
@@ -692,6 +771,7 @@ wait "$child""#
     }
 
     pub(crate) async fn stop_device_sessions(&self, device: &str) {
+        self.resource_admission.cancel_device(device);
         let ids = self
             .sessions
             .lock()
@@ -723,6 +803,15 @@ wait "$child""#
     }
 
     pub(crate) async fn session_command(&self, command: &str, params: &Value) -> CoreResult<Value> {
+        if command == "session.stop"
+            && let Some(id) = params["sessionId"].as_str()
+            && !self.sessions.lock().await.contains_key(id)
+            && self.resource_admission.cancel(&format!("session:{id}"))
+        {
+            return Ok(
+                json!({"sessionId":id,"status":"stopping","starting":true,"applicationStopped":false}),
+            );
+        }
         if command == "session.list" {
             let mut result = Vec::new();
             for session in self.sessions.lock().await.values() {
@@ -786,12 +875,18 @@ wait "$child""#
             let mut data = state.write().await;
             data["textureId"] = json!(texture);
             data["status"] = json!("streaming");
+            self.resource_admission
+                .set_status(&format!("session:{id}"), ResourceStatus::Streaming);
             if let Some(name) = params["decoderName"].as_str() {
                 data["decoderName"] = json!(name);
             }
             if let Some(hardware) = params["hardwareAccelerated"].as_bool() {
                 data["hardwareAccelerated"] = json!(hardware);
             }
+            // Decoder output dimensions are diagnostic receipts. Touch routing
+            // must keep using the scrcpy session dimensions, not a padded or
+            // cropped decoder buffer size.
+            record_decoded_size(&mut data, params);
             self.emit("session.updated", data["deviceId"].as_str(), data.clone());
             return Ok(data.clone());
         }
@@ -801,6 +896,7 @@ wait "$child""#
                 return Err(CoreError::new("renderer_not_ready", "实时渲染尚未就绪。"));
             }
             data["lastFrameAt"] = json!(now());
+            record_decoded_size(&mut data, params);
             for key in ["frameCount", "framesDecoded", "presentationTimeUs"] {
                 if let Some(value) = params[key].as_u64() {
                     data[key] = json!(value);
@@ -828,6 +924,14 @@ wait "$child""#
                 return Err(CoreError::new("disconnected", "控制会话已结束。"));
             }
             data["status"] = json!(if pausing { "paused" } else { "streaming" });
+            self.resource_admission.set_status(
+                &format!("session:{id}"),
+                if pausing {
+                    ResourceStatus::Paused
+                } else {
+                    ResourceStatus::Streaming
+                },
+            );
             data["presentationOnly"] = json!(false);
             data["capturePaused"] = json!(pausing);
             data["awaitingSession"] = json!(command.ends_with("resume"));
@@ -1027,6 +1131,20 @@ wait "$child""#
         for session in &sessions {
             activities.push(json!({"id":format!("session:{}",session["sessionId"].as_str().unwrap_or_default()),"deviceId":session["deviceId"],"deviceName":device_name(session["deviceId"].as_str().unwrap_or_default()),"name":session["name"],"status":session["status"],"canStop":true,"stopImpact":"仅关闭这个控制会话，手机应用任务交回设备，不会强停应用。"}));
         }
+        let known = activities
+            .iter()
+            .filter_map(|activity| activity["id"].as_str().map(str::to_owned))
+            .collect::<HashSet<_>>();
+        for reserved in self
+            .resource_admission
+            .activities()
+            .into_iter()
+            .filter(|reserved| !known.contains(&reserved.id))
+        {
+            activities.push(json!({"id":reserved.id,"deviceId":reserved.device_id,"deviceName":device_name(&reserved.device_id),
+                "name":reserved.name,"status":reserved.status,"canStop":true,"canPause":reserved.can_pause,
+                "reserved":true,"stopImpact":"仅取消这个正在启动或清理的控制会话；已有其他活动保持不变。"}));
+        }
         if let Some(transfers) = transfers["transfers"].as_array() {
             for transfer in transfers.iter().filter(|transfer| {
                 matches!(
@@ -1110,14 +1228,30 @@ wait "$child""#
                 "reason":if encoders.is_none(){reason.as_str()}else if available{"目标已枚举编码器；尚需主控解码交集与实际配置验证。"}else{"目标本次未枚举此格式的编码器。"},
                 "encoders":listed,"decoderStatus":"unknown","requiresDecoder":true})
         }).collect();
+        let mut active_streams = Vec::new();
+        if let Some(device) = device {
+            for session in self.sessions.lock().await.values() {
+                if session.device_id == device && !session.cancellation.is_cancelled() {
+                    let state = session.state.read().await;
+                    active_streams.push(
+                        json!({"sessionId":state["sessionId"],"name":state["name"],
+                        "codec":state["codec"],"width":state["width"],"height":state["height"],
+                        "decodedWidth":state["decodedWidth"],"decodedHeight":state["decodedHeight"],
+                        "requestedMaxSize":state["quality"]["maxSize"],"status":state["status"],
+                        "dimensionsSource":"scrcpy-session-metadata"}),
+                    );
+                }
+            }
+        }
         Ok(
             json!({"current":current_quality(&settings),"deviceId":device,"scope":if device.is_some(){"device"}else{"global"},
+            "activeStreams":active_streams,
             "probe":{"status":if encoders.is_some(){"enumerated"}else{"unknown"},"source":"scrcpy-5.0.1-list-encoders","reason":reason},
             "presets":[{"id":"smooth","name":"流畅","available":encoders.is_some()},{"id":"balanced","name":"均衡","available":encoders.is_some()},{"id":"clear","name":"清晰","available":encoders.is_some()}],
-            "maxSize":[{"value":720,"label":"720","available":encoders.is_some()},{"value":1280,"label":"1280","available":encoders.is_some()},{"value":1920,"label":"1920","available":encoders.is_some()}],
+            "maxSize":[{"value":720,"label":"720","available":encoders.is_some()},{"value":1080,"label":"1080","available":encoders.is_some()},{"value":1280,"label":"1280","available":encoders.is_some()},{"value":1920,"label":"1920","available":encoders.is_some()}],
             "maxFps":[{"value":30,"label":"30 fps","available":encoders.is_some()},{"value":60,"label":"60 fps","available":encoders.is_some()}],
             "bitRate":[{"value":2000000,"label":"2 Mbps","available":encoders.is_some()},{"value":8000000,"label":"8 Mbps","available":encoders.is_some()},{"value":12000000,"label":"12 Mbps","available":encoders.is_some()}],
-            "codec":codecs,"codecs":codecs,"encoders":entries,"maxSizes":[720,1280,1920],"frameRates":[30,60],"audioAvailable":false}),
+            "codec":codecs,"codecs":codecs,"encoders":entries,"maxSizes":[720,1080,1280,1920],"frameRates":[30,60],"audioAvailable":false}),
         )
     }
 
@@ -1591,6 +1725,143 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    #[ignore = "requires real Android adbd; reserves App guard slots without allocating additional encoders"]
+    async fn real_admission_rejection_preserves_owned_encoded_stream_and_failed_start_releases_slot()
+     {
+        let address = std::env::var("INTEROP_ADBD_ADDRESS").unwrap_or_else(|_| "127.0.0.1".into());
+        let port: u16 = std::env::var("INTEROP_ADBD_PORT")
+            .expect("set INTEROP_ADBD_PORT")
+            .parse()
+            .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let device = runtime
+            .invoke("devices.add", json!({"address":address,"port":port}))
+            .await
+            .unwrap();
+        let device = device["deviceId"].as_str().unwrap();
+        runtime
+            .invoke("devices.connect", json!({"deviceId":device}))
+            .await
+            .unwrap();
+        let old = runtime.start_session(&json!({"deviceId":device,"videoCodec":"h264","maxSize":720,"maxFps":30,"videoBitRate":1_000_000})).await.unwrap();
+        let old_id = old["sessionId"].as_str().unwrap();
+        let mut socket = tokio::net::TcpStream::connect((
+            "127.0.0.1",
+            old["videoPort"].as_u64().unwrap() as u16,
+        ))
+        .await
+        .unwrap();
+        socket
+            .write_all(old["videoToken"].as_str().unwrap().as_bytes())
+            .await
+            .unwrap();
+        socket.write_all(b"\n").await.unwrap();
+        let mut reservations = Vec::new();
+        // These occupy application slots, not hardware resources. One real
+        // encoded stream suffices; never exhaust the emulator's actual codecs.
+        for index in 1..crate::resource::APP_SESSION_LIMIT {
+            reservations.push(
+                runtime
+                    .resource_admission
+                    .reserve_session(
+                        format!("session:fixture-{index}"),
+                        device.to_owned(),
+                        "pending fixture".into(),
+                        CancellationToken::new(),
+                    )
+                    .unwrap(),
+            );
+        }
+        let busy = runtime
+            .start_session(&json!({"deviceId":device}))
+            .await
+            .unwrap_err();
+        assert_eq!(busy.code, "resource_busy");
+        assert_eq!(busy.details["reason"], "app_session_guard");
+        assert_eq!(busy.details["hardwareCapacityKnown"], false);
+        assert!(
+            busy.details["activities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|activity| activity["id"] == format!("session:{old_id}"))
+        );
+        assert_eq!(
+            runtime.sessions.lock().await[old_id].state.read().await["sessionId"],
+            old_id
+        );
+        assert!(
+            !runtime.sessions.lock().await[old_id]
+                .cancellation
+                .is_cancelled()
+        );
+        // The already running stream still supplies its real config/keyframe.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let mut header = [0; 12];
+                socket.read_exact(&mut header).await.unwrap();
+                if session_dimensions(&header).unwrap().is_some() {
+                    continue;
+                }
+                let flags = u64::from_be_bytes(header[..8].try_into().unwrap());
+                let length = u32::from_be_bytes(header[8..].try_into().unwrap()) as usize;
+                assert!((1..=MAX_PACKET).contains(&length));
+                socket.read_exact(&mut vec![0; length]).await.unwrap();
+                if flags & (1 << 61) != 0 && flags & (1 << 62) == 0 {
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        drop(reservations);
+        let invalid = runtime
+            .start_session(&json!({"deviceId":device,"videoEncoder":"c2.interop.missing.encoder"}))
+            .await
+            .unwrap_err();
+        assert_eq!(invalid.code, "encoder_unavailable");
+        let reserved = runtime.resource_admission.activities();
+        assert_eq!(reserved.len(), 1);
+        assert_eq!(reserved[0].id, format!("session:{old_id}"));
+        assert!(
+            !runtime.sessions.lock().await[old_id]
+                .cancellation
+                .is_cancelled()
+        );
+        drop(socket);
+        runtime.stop_session(old_id).await;
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !runtime.resource_admission.activities().is_empty() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        runtime
+            .invoke("devices.disconnect", json!({"deviceId":device}))
+            .await
+            .unwrap();
+    }
+
+    #[test]
+    fn decoder_receipt_cannot_change_remote_input_coordinates() {
+        let mut state = json!({"width":230,"height":512});
+        record_decoded_size(
+            &mut state,
+            &json!({"width":230,"height":512,"decodedWidth":240,"decodedHeight":512}),
+        );
+        assert_eq!(state["width"], 230);
+        assert_eq!(state["height"], 512);
+        assert_eq!(state["decodedWidth"], 240);
+        record_decoded_size(
+            &mut state,
+            &json!({"decodedWidth":999999,"decodedHeight":512}),
+        );
+        assert_eq!(state["decodedWidth"], 240);
+    }
+
     #[test]
     fn video_encoders_require_official_header_and_preserve_codec_association() {
         let list = "[server] INFO: List of video encoders:\n    --video-codec=h264 --video-encoder=c2.android.avc.encoder (sw)\n    --video-codec=h265 --video-encoder=c2.vendor.hevc.encoder (hw) [vendor]\n    --audio-codec=opus --audio-encoder=c2.android.opus.encoder\n    --video-codec=h264 --video-encoder=c2.android.avc.encoder (alias for other)";

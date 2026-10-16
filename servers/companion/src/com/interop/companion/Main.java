@@ -37,6 +37,7 @@ public final class Main {
     private static final int MAX_LINE = 1024 * 1024;
     private static final int MAX_CLIPBOARD = (1 << 18) - 14;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final MediaJobs media = new MediaJobs(this::send);
     private final AtomicBoolean refreshPending = new AtomicBoolean();
     private final AtomicBoolean clipboardRefreshPending = new AtomicBoolean();
     private final Map<String, Item> notifications = new LinkedHashMap<>();
@@ -390,6 +391,7 @@ public final class Main {
             }).get();send(ready);
             for(String line;(line=readLine(input))!=null;) {
                 final JSONObject request=new JSONObject(line);
+                if (request.optString("command").startsWith("media.")) { media.accept(request); continue; }
                 worker.submit(()-> {
                     JSONObject response=new JSONObject().put("requestId",request.getString("requestId"));
                     try {response.put("result",execute(request));}
@@ -398,6 +400,7 @@ public final class Main {
                 }).get();
             }
         } finally {
+            media.close();
             try {if(clipboardListening) clipboardInvoke("removePrimaryClipChangedListener",clipboardToken);} catch(Exception ignored) {}
             try {if(notificationToken!=null) invoke(notificationManager,"unregisterListener",notificationToken,userId);} catch(Exception ignored) {}
             try {if(phoneToken!=null && Build.VERSION.SDK_INT>=31) invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[0],false);} catch(Exception ignored) {}

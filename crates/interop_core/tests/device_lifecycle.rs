@@ -40,6 +40,15 @@ async fn device_ids_survive_storage_and_equal_addresses_never_merge_records() {
     assert_eq!(device["address"], "192.0.2.7");
     assert_eq!(device["port"], 37001);
     assert_eq!(device["status"], "offline");
+    restored.invoke("settings.update",json!({"deviceQuality":{&id:{"videoCodec":"h265"}},"audioDevices":[&id],"clipboardMode":"fixed","clipboardDevice":&id})).await.unwrap();
+    restored
+        .invoke("devices.forget", json!({"deviceId":&id}))
+        .await
+        .unwrap();
+    let settings = restored.invoke("settings.get", json!({})).await.unwrap();
+    assert!(settings["deviceQuality"].get(&id).is_none());
+    assert_eq!(settings["audioDevices"], json!([]));
+    assert!(settings["clipboardDevice"].is_null());
 }
 
 #[tokio::test]
@@ -77,19 +86,29 @@ async fn explicit_disconnect_cancels_an_in_progress_connection_and_prevents_revi
         .await
         .unwrap()
         .unwrap();
-    runtime
-        .invoke("devices.disconnect", json!({"deviceId":id}))
-        .await
-        .unwrap();
-    let result = tokio::time::timeout(Duration::from_secs(2), connect)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(result.unwrap_err().code, "cancelled");
+    let disconnect_owner = runtime.clone();
+    let disconnect_id = id.clone();
+    let disconnect = tokio::spawn(async move {
+        disconnect_owner
+            .invoke("devices.disconnect", json!({"deviceId":disconnect_id}))
+            .await
+    });
+    // Cancellation must close the socket promptly. Persistent offline state
+    // also fsyncs; its completion must not be confused with network release.
     tokio::time::timeout(Duration::from_secs(2), server)
         .await
         .unwrap()
         .unwrap();
+    tokio::time::timeout(Duration::from_secs(20), disconnect)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let result = tokio::time::timeout(Duration::from_secs(20), connect)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.unwrap_err().code, "cancelled");
     let record = runtime
         .invoke("device.info", json!({"deviceId":id}))
         .await

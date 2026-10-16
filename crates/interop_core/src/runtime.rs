@@ -23,6 +23,7 @@ pub struct Runtime {
     pub(crate) events: broadcast::Sender<Value>,
     pub(crate) persistence: Mutex<()>,
     pub(crate) sessions: Mutex<HashMap<String, crate::scrcpy::Session>>,
+    pub(crate) resource_admission: crate::resource::ResourceAdmission,
     pub(crate) audio_sources: Mutex<HashMap<String, crate::audio::AudioSource>>,
     pub(crate) companions: Mutex<HashMap<String, Arc<crate::companion::Companion>>>,
     pub(crate) transfers: Mutex<HashMap<String, crate::files::Transfer>>,
@@ -99,6 +100,7 @@ impl Runtime {
             events,
             persistence: Mutex::new(()),
             sessions: Mutex::new(HashMap::new()),
+            resource_admission: crate::resource::ResourceAdmission::default(),
             audio_sources: Mutex::new(HashMap::new()),
             companions: Mutex::new(HashMap::new()),
             transfers: Mutex::new(HashMap::new()),
@@ -229,6 +231,8 @@ impl Runtime {
             }
             "media.list" => Box::pin(self.list_media(&params)).await,
             "media.preview" => Box::pin(self.preview_media(&params)).await,
+            "media.thumbnail" => Box::pin(self.thumbnail_media(&params)).await,
+            "media.thumbnail.cancel" => Box::pin(self.cancel_thumbnail_media(&params)).await,
             "apps.list" => Box::pin(self.list_apps(&params)).await,
             "apps.launch" => Box::pin(self.launch_app(&params)).await,
             "session.start" => Box::pin(self.start_session(&params)).await,
@@ -248,7 +252,7 @@ impl Runtime {
             | "session.quality.options" => Box::pin(self.session_command(command, &params)).await,
             "settings.get" => Ok(self.store.read().await.settings.clone()),
             "audio.start" | "audio.stop" | "audio.ready" | "audio.sources" | "audio.volume"
-            | "audio.pause" | "audio.resume" => {
+            | "audio.pause" | "audio.resume" | "audio.presentation" => {
                 Box::pin(self.audio_command(command, &params)).await
             }
             "settings.update" | "settings.export" | "settings.import" | "system.info" => {

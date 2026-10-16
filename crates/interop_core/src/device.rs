@@ -451,10 +451,26 @@ impl Runtime {
         if let Some(client) = self.connections.lock().await.remove(id) {
             client.close();
         }
-        if forget {
-            self.store.write().await.devices.retain(|d| d.id != id);
-        }
+        let changed_settings = if forget {
+            let mut store = self.store.write().await;
+            store.devices.retain(|d| d.id != id);
+            if let Some(quality) = store.settings["deviceQuality"].as_object_mut() {
+                quality.remove(id);
+            }
+            if let Some(audio) = store.settings["audioDevices"].as_array_mut() {
+                audio.retain(|value| value.as_str() != Some(id));
+            }
+            if store.settings["clipboardDevice"] == id {
+                store.settings["clipboardDevice"] = Value::Null;
+            }
+            Some(store.settings.clone())
+        } else {
+            None
+        };
         self.changed_devices().await?;
+        if let Some(settings) = changed_settings {
+            self.emit("settings.changed", None, settings);
+        }
         Ok(json!({"deviceId":id,"disconnected":true,"forgotten":forget}))
     }
     pub(crate) async fn discover_devices(&self) -> CoreResult<Value> {
@@ -915,6 +931,12 @@ impl Runtime {
             )
         }
     }
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "windows",
+        target_os = "macos"
+    ))]
     async fn adopt_usb(
         &self,
         client: Client,
@@ -1070,6 +1092,11 @@ impl Runtime {
     pub(crate) async fn capabilities(&self, id: &str) -> CoreResult<Value> {
         let device = self.device(id).await?;
         let client = self.client(id).await.ok();
+        let companion = self.companions.lock().await.get(id).cloned();
+        let companion_snapshot = match companion {
+            Some(companion) if client.is_some() => Some(companion.capability_state().await),
+            _ => None,
+        };
         let mut entries = Vec::new();
         let mut add = |key: &str, status: &str, reason: &str| {
             entries.push(json!({"key":key,"id":key,"name":key,"status":status,"reason":reason}))
@@ -1166,8 +1193,8 @@ impl Runtime {
             );
             add(
                 "clipboard",
-                "unknown",
-                "已有屏幕控制与无视频临时服务两条文本通道；此设备读写与监听资格须实际请求后确认，主控仍受本机剪贴板权限限制。",
+                companion_snapshot.as_ref().and_then(|snapshot|snapshot["clipboard"]["status"].as_str()).unwrap_or("unknown"),
+                companion_snapshot.as_ref().and_then(|snapshot|snapshot["clipboard"]["reason"].as_str()).unwrap_or("已有屏幕控制与无视频文本通道；状态反映目标当前探测结果，主控自动同步仍须在前台并遵守本机权限。"),
             );
         } else {
             add(
@@ -1233,9 +1260,7 @@ impl Runtime {
                 "声音链路已实现；此设备尚无实际播放结果，请在声音页主动开启后确认。"
             },
         );
-        let companion = self.companions.lock().await.get(id).cloned();
-        if let Some(companion) = companion {
-            let snapshot = companion.capability_state().await;
+        if let Some(snapshot) = companion_snapshot {
             for key in ["notifications", "calls"] {
                 let feature = &snapshot[key];
                 let status = feature["controlStatus"]

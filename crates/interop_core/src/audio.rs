@@ -49,6 +49,42 @@ fn emit(events: &broadcast::Sender<Value>, kind: &str, device: &str, data: Value
     let _ = events.send(json!({"type":kind,"deviceId":device,"data":data,"timestamp":now()}));
 }
 
+fn apply_presentation(data: &mut Value, params: &Value) -> CoreResult<()> {
+    let revision = params["revision"]
+        .as_u64()
+        .ok_or_else(|| CoreError::new("audio_not_applied", "播放器缺少声音状态版本。"))?;
+    let play_state = params["playState"]
+        .as_str()
+        .filter(|state| matches!(*state, "playing" | "paused"));
+    if params["applied"] != true || play_state.is_none() {
+        return Err(CoreError::new(
+            "audio_not_applied",
+            "播放器尚未确认实际声音状态。",
+        ));
+    }
+    if data["nativeRevision"]
+        .as_u64()
+        .is_some_and(|previous| revision < previous)
+    {
+        return Ok(());
+    }
+    data["nativeRevision"] = json!(revision);
+    data["status"] = json!(play_state.unwrap());
+    for key in ["manualPaused", "focusPaused", "backgroundPaused"] {
+        if let Some(value) = params[key].as_bool() {
+            data[key] = json!(value);
+        }
+    }
+    data["presentationOnly"] = json!(false);
+    data["playbackVerified"] = json!(true);
+    if let Some(reason) = params["reason"].as_str() {
+        data["reason"] = json!(reason.chars().take(1024).collect::<String>());
+    } else {
+        data.as_object_mut().unwrap().remove("reason");
+    }
+    Ok(())
+}
+
 impl Runtime {
     pub(crate) async fn stop_device_audio(&self, device: &str) {
         self.audio_sources.lock().await.remove(device);
@@ -96,28 +132,57 @@ impl Runtime {
         }
         match command {
             "audio.ready" => {
-                if params["playState"] != "playing" {
-                    return Err(CoreError::new(
-                        "audio_not_ready",
-                        "音频播放器尚未开始工作。",
-                    ));
+                if data["nativeAttached"] == true {
+                    apply_presentation(&mut data, params)?;
+                } else {
+                    let paused_after_first_write = params["playState"] == "paused"
+                        && params["nativeReady"] == true
+                        && params["applied"] == true
+                        && params["bytesWritten"]
+                            .as_u64()
+                            .is_some_and(|count| count > 0)
+                        && params["revision"].as_u64().is_some();
+                    if params["playState"] != "playing" && !paused_after_first_write {
+                        return Err(CoreError::new(
+                            "audio_not_ready",
+                            "音频播放器尚未开始工作。",
+                        ));
+                    }
+                    data["status"] = json!(if paused_after_first_write {
+                        "paused"
+                    } else {
+                        "playing"
+                    });
+                    data["nativeAttached"] = json!(true);
+                    for key in ["manualPaused", "backgroundPaused", "focusPaused"] {
+                        if let Some(value) = params[key].as_bool() {
+                            data[key] = json!(value);
+                        }
+                    }
+                    if let Some(revision) = params["revision"].as_u64() {
+                        data["nativeRevision"] = json!(revision);
+                    }
+                    // Playing silence is valid playback, but is not proof that any
+                    // particular target application is currently emitting sound.
+                    data["audibleContentVerified"] = json!(false);
                 }
-                data["status"] = json!("playing");
-                data["nativeAttached"] = json!(true);
-                // Playing silence is valid playback, but is not proof that any
-                // particular target application is currently emitting sound.
-                data["audibleContentVerified"] = json!(false);
             }
             "audio.pause" | "audio.resume" => {
                 if data["nativeAttached"] != true {
                     return Err(CoreError::new("audio_not_ready", "音频播放器尚未就绪。"));
                 }
-                data["status"] = json!(if command == "audio.pause" {
-                    "paused"
-                } else {
-                    "playing"
-                });
-                data["presentationOnly"] = json!(true);
+                if params["applied"] != true {
+                    return Ok(
+                        json!({"sourceId":data["sourceId"],"deviceId":device_id,"nativeApplyRequired":true,"paused":command=="audio.pause"}),
+                    );
+                }
+                apply_presentation(&mut data, params)?;
+            }
+            "audio.presentation" => {
+                if data["nativeAttached"] != true {
+                    return Err(CoreError::new("audio_not_ready", "音频播放器尚未就绪。"));
+                }
+                apply_presentation(&mut data, params)?;
             }
             "audio.volume" => {
                 let volume = params
@@ -435,6 +500,31 @@ async fn forward_audio(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn presentation_state_requires_actual_native_acknowledgement() {
+        let mut state = json!({"status":"playing","manualPaused":false});
+        for receipt in [
+            json!({"revision":1,"playState":"paused"}),
+            json!({"revision":1,"applied":true,"playState":"starting"}),
+        ] {
+            assert_eq!(
+                apply_presentation(&mut state, &receipt).unwrap_err().code,
+                "audio_not_applied"
+            );
+            assert_eq!(state["status"], "playing");
+        }
+        apply_presentation(&mut state,&json!({"revision":2,"applied":true,"playState":"paused","manualPaused":false,"focusPaused":true,"reason":"temporary focus loss"})).unwrap();
+        assert_eq!(state["status"], "paused");
+        assert_eq!(state["manualPaused"], false);
+        assert_eq!(state["focusPaused"], true);
+        assert_eq!(state["playbackVerified"], true);
+        assert_eq!(state["presentationOnly"], false);
+        apply_presentation(&mut state,&json!({"revision":1,"applied":true,"playState":"playing","manualPaused":false,"focusPaused":false})).unwrap();
+        assert_eq!(
+            state["status"], "paused",
+            "A late older native acknowledgement cannot undo the current focus pause."
+        );
+    }
     #[test]
     fn raw_audio_is_stereo_aligned_and_has_no_video_flags() {
         let mut header = [0; 12];

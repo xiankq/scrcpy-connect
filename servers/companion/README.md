@@ -90,6 +90,29 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 第二个独立 companion 写入触发第一个实例实时事件，启动期间断开取消，
 以及断开后的读取拒绝。旧 Android 签名、OEM、锁屏及多用户矩阵尚未运行验证。
 
+## 目标端媒体缩略图
+
+`media.stat` 和 `media.thumbnail` 使用独立的有界媒体队列：一个正在运行的
+解码进程、一个排队项。每次通过 `ProcessBuilder` 启动同 JAR 的独立 shell
+`app_process` 子进程，不经过 shell 拼接。通知、通话和剪贴板的原队列保持独立。
+子进程只返回最大 256 KiB 的 JPEG（64–512 像素，默认 256），不把原图或视频
+传回主控，不授予额外权限。图片先解析尺寸并按 `inSampleSize` 解码，处理全部
+八种 EXIF 方向；视频用 `MediaDataSource` + `getScaledFrameAtTime`，保留平台已
+应用的视频旋转。图片像素上限 100 MP、输入 256 MiB；视频输入上限 64 GiB。
+
+打开源文件使用 `O_NOFOLLOW`，拒绝末端符号链接和非普通文件。解码前后核对
+打开的描述符和当前路径的 dev/inode/mode/size/mtime/ctime；纳秒字段只在平台
+真实提供时使用，不声称文件系统具备纳秒精度。Rust 再核对源戳、JPEG 摘要和
+尺寸，缓存只含小 JPEG 及元数据；每次缓存命中仍校验目标源戳。
+
+媒体操作使用一次性 UUID；取消和完成后不能复用。关闭 stdin 会由子进程独立
+监视线程杀死自身，8 秒独立 watchdog 限制 native 解码，父进程确认退出并回收
+后才回报取消；无法确认则返回 `media_cleanup_unknown`。不会按过期的数字 PID
+杀进程。Android <26 的有界进程生命周期、Android 26 的有界视频取帧尚未实现，
+返回 `thumbnail_api_pending`，不伪称系统不支持。OOM、损坏、无帧、权限拒绝和
+源变化均显式失败，不自动下载原件补救。详细边界和实测见
+[媒体缩略图管线](../../docs/research/media-thumbnail-pipeline.md)。
+
 ## 协议与生命周期
 
 - 随机 abstract socket 名加 256 位随机认证 token；token 不落盘、不写日志。
@@ -110,7 +133,7 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 输出固定 ZIP 时间戳的 `companion.jar`；不联网安装工具。Rust 内嵌 JAR 并校验
 SHA-256；修改源码后需重新构建并同步 `SERVER_SHA`。测试 Fixture 不编入产品 JAR。
 当前产品 JAR 的 SHA-256 为
-`860429cd93eb40b61a2064e589facb6d21db5a8cb1526fe859dd5933f9e71d0b`。
+`719e57e3317d91d0858aa722f86770275d3af6130ad2ff0cd4334a5f7722b828`。
 
 ```sh
 bash servers/companion/build.sh
