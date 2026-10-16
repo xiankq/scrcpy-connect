@@ -34,11 +34,57 @@ and cancellation-safe incremental output events. `cmd` quotes each argument;
 `abb`/`abb_exec` encode Binder arguments with their protocol's NUL separators.
 `connect_socket` has typed TCP/local/JDWP/vsock destinations, and `reboot` has typed
 targets. `exec` and `open` expose unmodified byte streams. `sync` supports
-64-bit stat/list v2, legacy fallbacks, and bounded streaming push/pull; paths are
-bytes and never interpolated into shell commands. `push_compressed` and
+64-bit stat/list v2, single-path no-follow `lstat`, legacy fallbacks, and bounded
+streaming push/pull; paths are bytes and never interpolated into shell commands. `push_compressed` and
 `pull_compressed` add Brotli/LZ4/Zstd via bounded pure Rust codec workers; their
-codec round trips and cancellation are tested, while compressed sync still needs
-official adbd interoperability validation.
+decoders have been checked against official adbd in both directions, including
+empty, binary, compressible and incompressible files. Decompression output limits,
+interrupted push input, cancellation and reuse of healthy sync streams have
+separate real-device checks. `lstat` uses LST2 or legacy no-follow STAT; legacy
+metadata has 32-bit size/time and cannot distinguish permission errors from
+absence. The tested Android SELinux policy denies adbd metadata access to some
+shell-created symlinks; this remains a remote permission error. A system symlink
+was verified to remain a symlink with LST2 and become its target with STA2.
+
+`reverse_forward` installs an adbd device-side TCP or Unix listener and bridges
+accepted connections to an explicitly supplied host TCP address. TCP port zero
+returns the allocated device port. Rebind, no-rebind, listing and removal use the
+direct `reverse:` protocol; device-initiated streams are accepted only for random
+opaque service names registered by this client. Both bridge directions progress
+independently under backpressure. Listeners persist until removal or transport
+disconnection, so dropping `ReverseBinding` metadata does not remove a listener.
+`reverse_remove_all` affects adbd's entire listener table, potentially including
+other hosts; prefer removing an individual owned binding.
+
+```rust,no_run
+use interop_adb::{Client, OperationOptions, ReverseSocket};
+# async fn example(client: &Client) -> interop_adb::Result<()> {
+let host = "127.0.0.1:8080".parse().unwrap();
+let binding = client.reverse_forward(
+    &ReverseSocket::Tcp(0), host, true, OperationOptions::default(),
+).await?;
+// Device connections to binding.device now reach the host's port 8080.
+client.reverse_remove(&binding.device, OperationOptions::default()).await?;
+# Ok(())
+# }
+```
+
+This is distinct from `host:forward`, which belongs to the adb server's 5037
+smart-socket protocol. This crate does not connect to that server. Use
+`connect_socket` to open a device socket directly; an application can expose its
+own host listener if it needs forward-like behavior.
+
+`jdwp_processes` reads the initial length-framed `track-jdwp` update, including an
+empty list, instead of relying on legacy `jdwp` closing an empty response.
+`track_jdwp` provides bounded incremental updates and preserves partial frames
+when a read future is dropped. Returned PIDs are process handles, not stable
+application identities.
+
+Generic `open` also permits advanced adbd services. In particular, `dev:` is not
+a general file API: an actual non-pollable `/dev/zero` descriptor caused the tested
+official daemon to abort while adding it to epoll (`EPERM`). There is deliberately
+no typed generic device-file API; use sync for files. Only use low-level serial
+services with a known pollable device and the relevant platform support.
 
 The default `usb` feature uses nusb's native Android/Linux, WinUSB and IOKit
 backends. `usb::list_devices` and `UsbDevice::open` support platform enumeration.
@@ -66,11 +112,25 @@ Validation distinguishes wire fixtures from device interoperability:
 ```sh
 cargo test -p interop-adb
 cargo test -p interop-adb --test wireless_boringssl -- --ignored
+INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
+  cargo test -p interop-adb --test reverse_adbd --test sync_adbd -- --ignored
 ```
 
 The optional ignored tests use an independently built official BoringSSL helper;
 their source documents setup. Actual device tests need a reachable authorized
-adbd endpoint and separate platform evidence. Generic `open` permits adbd service
-access, but this crate does not yet provide typed forward/reverse, package
-management, delayed ACK, incremental
-install or a 5037 smart-socket compatibility server.
+adbd endpoint. The reverse test checks TCP/Unix listeners, concurrent bridging,
+rebind/no-rebind, removal and JDWP updates. The sync test checks all three codecs
+against the daemon, output bounds and interrupted input, using only a unique
+temporary device directory. Neither test invokes an adb executable. A wire
+fixture additionally withholds a write ACK until input is consumed to check
+full-duplex bridge progress, and rejects unapproved device OPENs.
+
+Protocol behavior is checked against fixed AOSP revision
+[`1cf2f017d312f73b3dc53bda85ef2610e35a80e9`](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/):
+[reverse requests](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/adb.cpp),
+[listener handling](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/adb_listeners.cpp),
+[JDWP](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/daemon/jdwp_service.cpp),
+and [sync](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/daemon/file_sync_service.cpp).
+
+Typed host forwarding, package management, delayed ACK, incremental install and
+a 5037 smart-socket compatibility server remain outside this crate's current API.

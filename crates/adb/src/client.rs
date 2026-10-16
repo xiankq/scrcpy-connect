@@ -80,6 +80,24 @@ struct Inner {
     next_id: AtomicU32,
     cancellation: CancellationToken,
     failure: Arc<Mutex<Option<String>>>,
+    reverses: Arc<crate::reverse::Registry>,
+}
+impl Inner {
+    fn next_stream_id(&self) -> Result<u32> {
+        let mut id = self.next_id.load(Ordering::Relaxed);
+        loop {
+            let next = id
+                .checked_add(1)
+                .ok_or_else(|| Error::Protocol("stream ID space exhausted; reconnect".into()))?;
+            match self
+                .next_id
+                .compare_exchange_weak(id, next, Ordering::Relaxed, Ordering::Relaxed)
+            {
+                Ok(id) => return Ok(id),
+                Err(current) => id = current,
+            }
+        }
+    }
 }
 impl Drop for Inner {
     fn drop(&mut self) {
@@ -249,6 +267,15 @@ impl Client {
         let routes: Routes = Arc::new(Mutex::new(HashMap::new()));
         let cancellation = CancellationToken::new();
         let failure = Arc::new(Mutex::new(None));
+        let inner = Arc::new(Inner {
+            info,
+            writer: tx.clone(),
+            routes: routes.clone(),
+            next_id: AtomicU32::new(1),
+            cancellation: cancellation.clone(),
+            failure: failure.clone(),
+            reverses: Default::default(),
+        });
         let writer_failure = failure.clone();
         let writer_cancel = cancellation.clone();
         tokio::spawn(async move {
@@ -266,12 +293,19 @@ impl Client {
         let read_cancel = cancellation.clone();
         let read_routes = routes.clone();
         let read_tx = tx.clone();
-        let max_payload = info.max_payload.min(protocol::MAX_PAYLOAD);
-        let skip_checksum = info.version >= protocol::VERSION;
+        let max_payload = inner.info.max_payload.min(protocol::MAX_PAYLOAD);
+        let skip_checksum = inner.info.version >= protocol::VERSION;
         let read_failure = failure.clone();
+        let read_inner = Arc::downgrade(&inner);
         tokio::spawn(async move {
             loop {
                 let frame = tokio::select! { _ = read_cancel.cancelled() => break, frame = Frame::read(&mut reader, max_payload, skip_checksum) => match frame { Ok(frame) => frame, Err(error) => { *read_failure.lock().expect("failure mutex") = Some(format!("transport read: {error}")); break; } } };
+                if frame.command == protocol::OPEN {
+                    if let Some(inner) = read_inner.upgrade() {
+                        accept_reverse(inner, frame);
+                    }
+                    continue;
+                }
                 let description = (
                     frame.command.to_le_bytes(),
                     frame.arg0,
@@ -350,16 +384,7 @@ impl Client {
             read_cancel.cancel();
             read_routes.lock().expect("route mutex poisoned").clear();
         });
-        Ok(Self {
-            inner: Arc::new(Inner {
-                info,
-                writer: tx,
-                routes,
-                next_id: AtomicU32::new(1),
-                cancellation,
-                failure,
-            }),
-        })
+        Ok(Self { inner })
     }
 
     pub fn info(&self) -> &DeviceInfo {
@@ -374,6 +399,9 @@ impl Client {
     }
     pub fn close(&self) {
         self.inner.cancellation.cancel();
+    }
+    pub(crate) fn reverse_registry(&self) -> &Arc<crate::reverse::Registry> {
+        &self.inner.reverses
     }
 
     pub async fn open(&self, service: &str, options: OperationOptions) -> Result<AdbStream> {
@@ -396,20 +424,7 @@ impl Client {
         if self.is_closed() {
             return Err(Error::Closed);
         }
-        let local = loop {
-            let id = self.inner.next_id.load(Ordering::Relaxed);
-            let next = id
-                .checked_add(1)
-                .ok_or_else(|| Error::Protocol("stream ID space exhausted; reconnect".into()))?;
-            if self
-                .inner
-                .next_id
-                .compare_exchange_weak(id, next, Ordering::Relaxed, Ordering::Relaxed)
-                .is_ok()
-            {
-                break id;
-            }
-        };
+        let local = self.inner.next_stream_id()?;
         let (data_tx, data) = mpsc::channel(2);
         let (ack_tx, ack) = mpsc::channel(2);
         {
@@ -459,6 +474,176 @@ impl Client {
         }
         Ok(stream)
     }
+}
+
+fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
+    let reject = |inner: &Inner| {
+        if inner
+            .writer
+            .try_send(Frame::new(protocol::CLSE, 0, frame.arg0, Vec::new()))
+            .is_err()
+        {
+            inner.cancellation.cancel();
+        }
+    };
+    let service = frame.payload.strip_suffix(&[0]).unwrap_or(&frame.payload);
+    let destination =
+        if frame.arg0 != 0 && frame.arg1 == 0 && service.len() <= 1024 && !service.contains(&0) {
+            inner.reverses.destination(service)
+        } else {
+            None
+        };
+    let Some(destination) = destination else {
+        reject(&inner);
+        return;
+    };
+    let Ok(local) = inner.next_stream_id() else {
+        reject(&inner);
+        return;
+    };
+    let (data_tx, data) = mpsc::channel(2);
+    let (ack_tx, ack) = mpsc::channel(2);
+    {
+        let mut routes = inner.routes.lock().expect("route mutex poisoned");
+        if routes.len() >= 128 || routes.values().any(|route| route.remote == frame.arg0) {
+            drop(routes);
+            reject(&inner);
+            return;
+        }
+        routes.insert(
+            local,
+            Route {
+                remote: frame.arg0,
+                awaiting_ack: false,
+                data: data_tx,
+                ack: ack_tx,
+            },
+        );
+    }
+    let mut stream = AdbStream {
+        inner: inner.clone(),
+        local,
+        remote: frame.arg0,
+        data,
+        ack,
+        buffer: Vec::new(),
+        offset: 0,
+        pending_ack: false,
+        options: OperationOptions {
+            timeout: Duration::from_secs(365 * 86400),
+            cancellation: CancellationToken::new(),
+        },
+        eof: false,
+        poisoned: false,
+    };
+    tokio::spawn(async move {
+        let result = bounded(destination.connect_timeout, &inner.cancellation, async {
+            Ok(TcpStream::connect(destination.address).await?)
+        })
+        .await;
+        let Ok(socket) = result else {
+            inner
+                .routes
+                .lock()
+                .expect("route mutex poisoned")
+                .remove(&local);
+            stream.eof = true;
+            let _ = stream
+                .send(Frame::new(protocol::CLSE, 0, frame.arg0, Vec::new()))
+                .await;
+            return;
+        };
+        if !inner
+            .routes
+            .lock()
+            .expect("route mutex poisoned")
+            .contains_key(&local)
+        {
+            stream.eof = true;
+            drop(stream);
+            return;
+        }
+        if stream
+            .send(Frame::new(protocol::OKAY, local, frame.arg0, Vec::new()))
+            .await
+            .is_err()
+        {
+            return;
+        }
+        let _ = socket.set_nodelay(true);
+        let (mut read, mut write) = socket.into_split();
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut from_device = vec![0; 64 * 1024];
+        let mut from_host = vec![0; 64 * 1024];
+        // Read and write independently: awaiting a WRTE acknowledgment must not
+        // stop consuming (and acknowledging) data in the other direction.
+        let (_, mut acknowledgments) = mpsc::channel(1);
+        std::mem::swap(&mut acknowledgments, &mut stream.ack);
+        let from_device_task = async {
+            loop {
+                let count = stream.read(&mut from_device).await?;
+                if count == 0 {
+                    return Ok::<(), Error>(());
+                }
+                write.write_all(&from_device[..count]).await?;
+            }
+        };
+        let from_host_task = async {
+            loop {
+                let count = read.read(&mut from_host).await?;
+                if count == 0 {
+                    return Ok::<(), Error>(());
+                }
+                write_stream_frames(
+                    &inner,
+                    local,
+                    frame.arg0,
+                    &mut acknowledgments,
+                    &from_host[..count],
+                )
+                .await?;
+            }
+        };
+        tokio::select! {
+            _ = inner.cancellation.cancelled() => {},
+            _ = from_device_task => {},
+            _ = from_host_task => {},
+        }
+    });
+}
+
+async fn write_stream_frames(
+    inner: &Inner,
+    local: u32,
+    remote: u32,
+    acknowledgments: &mut mpsc::Receiver<u32>,
+    bytes: &[u8],
+) -> Result<()> {
+    for chunk in bytes.chunks(inner.info.max_payload) {
+        {
+            let mut routes = inner.routes.lock().expect("route mutex poisoned");
+            let route = routes.get_mut(&local).ok_or(Error::Closed)?;
+            if route.awaiting_ack {
+                return Err(Error::Protocol(
+                    "a stream write is already awaiting acknowledgement".into(),
+                ));
+            }
+            route.awaiting_ack = true;
+        }
+        tokio::select! {
+            _ = inner.cancellation.cancelled() => return Err(Error::Closed),
+            result = inner.writer.send(Frame::new(protocol::WRTE, local, remote, chunk.to_vec())) => {
+                result.map_err(|_| Error::Closed)?;
+            }
+        }
+        let acknowledged_remote = acknowledgments.recv().await.ok_or(Error::Closed)?;
+        if acknowledged_remote != remote {
+            return Err(Error::Protocol(
+                "WRTE acknowledgement changed remote stream ID".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// A logical ADB stream. Reads acknowledge only consumed packets, providing per-stream backpressure.
@@ -561,31 +746,7 @@ impl AdbStream {
         self.poisoned = true;
         let options = self.options.clone();
         let result = bounded(options.timeout, &options.cancellation, async {
-            for chunk in bytes.chunks(self.inner.info.max_payload) {
-                {
-                    let mut routes = self.inner.routes.lock().expect("route mutex poisoned");
-                    let route = routes.get_mut(&self.local).ok_or(Error::Closed)?;
-                    if route.awaiting_ack {
-                        return Err(Error::Protocol(
-                            "a stream write is already awaiting acknowledgement".into(),
-                        ));
-                    }
-                    route.awaiting_ack = true;
-                }
-                self.send(Frame::new(
-                    protocol::WRTE,
-                    self.local,
-                    self.remote,
-                    chunk.to_vec(),
-                ))
-                .await?;
-                let remote = self.ack.recv().await.ok_or(Error::Closed)?;
-                if remote != self.remote {
-                    return Err(Error::Protocol(
-                        "WRTE acknowledgement changed remote stream ID".into(),
-                    ));
-                }
-            }
+            write_stream_frames(&self.inner, self.local, self.remote, &mut self.ack, bytes).await?;
             Ok(())
         })
         .await;

@@ -261,8 +261,21 @@ impl Sync {
         Ok(Error::Remote(String::from_utf8_lossy(&bytes).into_owned()))
     }
 
-    /// Uses stat_v2 when available, retaining 64-bit sizes. Legacy stat returns adbd's 32-bit size.
+    /// Follow the final symlink using stat_v2, retaining 64-bit sizes. Legacy
+    /// adbd only supplies no-follow STAT with 32-bit size/time, used as a fallback.
     pub async fn stat(&mut self, path: &RemotePath) -> Result<FileStat> {
+        self.metadata(path, true).await
+    }
+
+    /// Inspect one path without following its final symlink (LST2 or legacy
+    /// STAT). This does not list the parent directory. Intermediate components
+    /// still follow normal kernel pathname resolution. Legacy metadata has
+    /// 32-bit size/time and cannot distinguish absence from permission errors.
+    pub async fn lstat(&mut self, path: &RemotePath) -> Result<FileStat> {
+        self.metadata(path, false).await
+    }
+
+    async fn metadata(&mut self, path: &RemotePath, follow: bool) -> Result<FileStat> {
         if !self.healthy {
             return Err(Error::Closed);
         }
@@ -270,14 +283,18 @@ impl Sync {
         let options = self.options.clone();
         let result = bounded(options.timeout, &options.cancellation, async {
             let v2 = self.features.contains("stat_v2");
-            self.request(if v2 { b"STA2" } else { b"STAT" }, path.as_bytes())
-                .await?;
+            let request = if v2 {
+                if follow { b"STA2" } else { b"LST2" }
+            } else {
+                b"STAT"
+            };
+            self.request(request, path.as_bytes()).await?;
             let id = self.id().await?;
             if &id == b"FAIL" {
                 return Err(self.fail().await?);
             }
             if v2 {
-                if &id != b"STA2" {
+                if &id != request {
                     return Err(Error::Protocol("unexpected stat_v2 response".into()));
                 }
                 let mut bytes = [0; 68];

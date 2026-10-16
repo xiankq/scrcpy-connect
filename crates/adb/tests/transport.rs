@@ -109,6 +109,221 @@ fn options() -> OperationOptions {
 }
 
 #[tokio::test]
+async fn sync_lstat_selects_nofollow_protocol_and_preserves_metadata_widths() {
+    for modern in [false, true] {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            handshake(&mut socket, if modern { "stat_v2" } else { "" }).await;
+            let open = read(&mut socket).await;
+            assert_eq!(open.payload, b"sync:\0");
+            send(&mut socket, protocol::OKAY, 22, open.arg0, &[]).await;
+            let request = read(&mut socket).await;
+            let id = if modern { b"LST2" } else { b"STAT" };
+            assert_eq!(&request.payload[..4], id);
+            assert_eq!(&request.payload[8..], b"/one/link");
+            send(&mut socket, protocol::OKAY, 22, open.arg0, &[]).await;
+            let mut response = id.to_vec();
+            if modern {
+                let mut fields = [0; 68];
+                fields[20..24].copy_from_slice(&0o120777u32.to_le_bytes());
+                fields[36..44].copy_from_slice(&0x1_0000_0001u64.to_le_bytes());
+                fields[52..60].copy_from_slice(&(-10i64).to_le_bytes());
+                response.extend_from_slice(&fields);
+            } else {
+                response.extend_from_slice(&0o120777u32.to_le_bytes());
+                response.extend_from_slice(&17u32.to_le_bytes());
+                response.extend_from_slice(&42u32.to_le_bytes());
+            }
+            send(&mut socket, protocol::WRTE, 22, open.arg0, &response).await;
+            while read(&mut socket).await.command != protocol::CLSE {}
+        });
+        let client = Client::connect_tcp(address, ConnectOptions::default())
+            .await
+            .unwrap();
+        let mut sync = client.sync(options()).await.unwrap();
+        let stat = sync
+            .lstat(&RemotePath::new(b"/one/link").unwrap())
+            .await
+            .unwrap();
+        assert_eq!(stat.mode & 0o170000, 0o120000);
+        assert_eq!(stat.size, if modern { 0x1_0000_0001 } else { 17 });
+        assert_eq!(stat.modified_seconds, if modern { -10 } else { 42 });
+        drop(sync);
+        server.await.unwrap();
+        client.close();
+    }
+}
+
+#[tokio::test]
+async fn reverse_bridge_acknowledges_input_while_output_ack_is_withheld() {
+    use interop_adb::ReverseSocket;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let host = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let destination = host.local_addr().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let host_task = tokio::spawn(async move {
+        let (mut socket, _) = host.accept().await.unwrap();
+        socket.write_all(&[19; 4096]).await.unwrap();
+        let mut input = [0; 11];
+        socket.read_exact(&mut input).await.unwrap();
+        assert_eq!(&input, b"from device");
+    });
+    let (finished, completion) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        handshake(&mut socket, "").await;
+        let open = read(&mut socket).await;
+        let service = open.payload.strip_suffix(&[0]).unwrap();
+        let token = service.split(|byte| *byte == b';').nth(1).unwrap();
+        let mut incoming = token.to_vec();
+        incoming.push(0);
+        send(&mut socket, protocol::OKAY, 50, open.arg0, &[]).await;
+        send(&mut socket, protocol::WRTE, 50, open.arg0, b"OKAY").await;
+        assert_eq!(read(&mut socket).await.command, protocol::OKAY);
+        send(&mut socket, protocol::CLSE, 50, open.arg0, &[]).await;
+        // A device initiates the approved reverse service after registration.
+        send(&mut socket, protocol::OPEN, 600, 0, &incoming).await;
+        let accepted = loop {
+            let frame = read(&mut socket).await;
+            if frame.command == protocol::OKAY && frame.arg1 == 600 {
+                break frame;
+            }
+        };
+        let output = read(&mut socket).await;
+        assert_eq!(output.command, protocol::WRTE);
+        assert_eq!(output.payload, [19; 4096]);
+        // Withhold output's ACK until the host consumes input. A sequential
+        // read/write bridge deadlocks here even though the two directions differ.
+        send(
+            &mut socket,
+            protocol::WRTE,
+            600,
+            accepted.arg0,
+            b"from device",
+        )
+        .await;
+        let input_ack = read(&mut socket).await;
+        assert_eq!(input_ack.command, protocol::OKAY);
+        assert_eq!(input_ack.arg1, 600);
+        send(&mut socket, protocol::OKAY, 600, accepted.arg0, &[]).await;
+        let _ = finished.send(());
+        // Keep the transport alive until the host receives its input.
+        let _ = read(&mut socket).await;
+    });
+    let client = Client::connect_tcp(address, ConnectOptions::default())
+        .await
+        .unwrap();
+    client
+        .reverse_forward(&ReverseSocket::Tcp(12345), destination, true, options())
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), completion)
+        .await
+        .unwrap()
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), host_task)
+        .await
+        .unwrap()
+        .unwrap();
+    client.close();
+    server.abort();
+}
+
+#[tokio::test]
+async fn unsolicited_device_open_cannot_dial_arbitrary_host_ports() {
+    let host = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = host.local_addr().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (rejected, seen) = tokio::sync::oneshot::channel();
+    let (finish, finished) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        handshake(&mut socket, "").await;
+        send(
+            &mut socket,
+            protocol::OPEN,
+            444,
+            0,
+            format!("tcp:{}\0", target.port()).as_bytes(),
+        )
+        .await;
+        let close = read(&mut socket).await;
+        assert_eq!(close.command, protocol::CLSE);
+        assert_eq!((close.arg0, close.arg1), (0, 444));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), host.accept())
+                .await
+                .is_err()
+        );
+        rejected.send(()).unwrap();
+        let open = read(&mut socket).await;
+        assert_eq!(open.command, protocol::OPEN);
+        send(&mut socket, protocol::OKAY, 99, open.arg0, &[]).await;
+        send(&mut socket, protocol::WRTE, 99, open.arg0, b"safe").await;
+        loop {
+            if read(&mut socket).await.command == protocol::CLSE {
+                break;
+            }
+        }
+        finished.await.unwrap();
+    });
+    let client = Client::connect_tcp(address, ConnectOptions::default())
+        .await
+        .unwrap();
+    seen.await.unwrap();
+    let mut stream = client.open("safe", options()).await.unwrap();
+    let mut value = [0; 4];
+    stream.read_exact(&mut value).await.unwrap();
+    assert_eq!(&value, b"safe");
+    stream.close().await.unwrap();
+    assert!(!client.is_closed());
+    finish.send(()).unwrap();
+    server.await.unwrap();
+    client.close();
+}
+
+#[tokio::test]
+async fn jdwp_tracker_preserves_partial_header_when_read_future_is_dropped() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (resume, resumed) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        handshake(&mut socket, "").await;
+        let open = read(&mut socket).await;
+        assert_eq!(open.payload, b"track-jdwp\0");
+        send(&mut socket, protocol::OKAY, 7, open.arg0, &[]).await;
+        send(&mut socket, protocol::WRTE, 7, open.arg0, b"00").await;
+        resumed.await.unwrap();
+        assert_eq!(read(&mut socket).await.command, protocol::OKAY);
+        send(&mut socket, protocol::WRTE, 7, open.arg0, b"04123\n").await;
+        loop {
+            if read(&mut socket).await.command == protocol::CLSE {
+                break;
+            }
+        }
+    });
+    let client = Client::connect_tcp(address, ConnectOptions::default())
+        .await
+        .unwrap();
+    let mut tracker = client.track_jdwp(20, options()).await.unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), tracker.next_event())
+            .await
+            .is_err()
+    );
+    resume.send(()).unwrap();
+    let ids = tracker.next_event().await.unwrap().unwrap();
+    assert_eq!(ids.iter().map(|id| id.get()).collect::<Vec<_>>(), [123]);
+    tracker.close().await.unwrap();
+    server.await.unwrap();
+}
+
+#[tokio::test]
 #[ignore = "requires a real reachable adbd endpoint"]
 async fn real_adbd_shell_keeps_transport_online() {
     let address = std::env::var("INTEROP_ADBD_ENDPOINT").expect("set INTEROP_ADBD_ENDPOINT");

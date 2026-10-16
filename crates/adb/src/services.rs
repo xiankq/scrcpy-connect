@@ -401,7 +401,9 @@ impl Client {
         .await
     }
 
-    /// Open a raw exec byte stream, for commands whose binary output must not pass through a PTY.
+    /// Open adbd's exec byte stream. Prefer shell_session(Raw) when stdin,
+    /// stderr and exit status need explicit framing; the invoked program may
+    /// itself choose interactive terminal behavior.
     pub async fn exec(&self, command: &str, options: OperationOptions) -> Result<crate::AdbStream> {
         self.open(&format!("exec:{command}"), options).await
     }
