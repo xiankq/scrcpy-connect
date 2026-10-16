@@ -68,8 +68,11 @@ class _Harness {
   final players = <_Player>[];
   final calls = <(String, AudioJson)>[], events = <AudioJson>[];
   bool disposed = false, granted = true, backgroundReady = true;
+  bool focusBusy = false;
+  bool reuseNativeEpoch = false;
+  int? nativeEpoch;
   int epochs = 0, relays = 0, packets = 3;
-  Completer<AudioJson>? focusOpening, mediaOpening;
+  Completer<AudioJson>? focusOpening, focusClosing, mediaOpening;
   String? endpointUrl;
   late final outputs = PortableAudioOutputs(
     core: core,
@@ -108,10 +111,21 @@ class _Harness {
     calls.add((method, {...params}));
     switch (method) {
       case 'audio.platform.focus.acquire':
+        if (focusBusy) {
+          throw const InteropException('audio_owner_busy', 'another owner');
+        }
+        if (reuseNativeEpoch) {
+          nativeEpoch ??= ++epochs;
+          return focusOpening == null
+              ? {'granted': granted, 'epoch': nativeEpoch}
+              : focusOpening!.future;
+        }
         return focusOpening == null
             ? {'granted': granted, 'epoch': ++epochs}
             : focusOpening!.future;
       case 'audio.platform.focus.release':
+        if (focusClosing != null) await focusClosing!.future;
+        if (params['epoch'] == nativeEpoch) nativeEpoch = null;
         return {'released': true};
       case 'audio.platform.background':
         return {'ready': params['enabled'] == true && backgroundReady};
@@ -359,30 +373,38 @@ void main() {
     },
   );
 
-  test(
-    'a cancelled acquisition cannot abandon a newly started source lease',
-    () async {
-      final h = _Harness()..focusOpening = Completer();
-      await h.visible();
-      final oldFocus = h.focusOpening!;
-      final starting = h.outputs.start(_stream('A'));
-      final cancelled = expectLater(starting, throwsA(_code('cancelled')));
-      await Future<void>.delayed(Duration.zero);
-      await h.outputs.stop('A');
-      await cancelled;
-      h
-        ..focusOpening = null
-        ..epochs = 1;
-      final ready = await h.outputs.start(_stream('B', 'device-B'));
-      expect(ready['focusEpoch'], 2);
-      oldFocus.complete({'granted': true, 'epoch': 1});
-      await Future<void>.delayed(Duration.zero);
-      expect(h.named('audio.platform.focus.release').single.$2['epoch'], 1);
-      expect(h.outputs.status('B')['playState'], 'playing');
-      expect(h.players.last.releases, 0);
-      await h.outputs.dispose();
-    },
-  );
+  test('cancelled acquisition drains its reused native epoch before another acquire', () async {
+    final h = _Harness()
+      ..reuseNativeEpoch = true
+      ..focusOpening = Completer();
+    await h.visible();
+    final oldFocus = h.focusOpening!;
+    final starting = h.outputs.start(_stream('A'));
+    final cancelled = expectLater(starting, throwsA(_code('cancelled')));
+    await Future<void>.delayed(Duration.zero);
+    await h.outputs.stop('A');
+    await cancelled;
+    h.focusOpening = null;
+    final replacement = h.outputs.start(_stream('B', 'device-B'));
+    await Future<void>.delayed(Duration.zero);
+    // NativeAudioRuntime returns an existing epoch to the same owner. A
+    // second acquire here would return 1, and A's late cleanup would kill B.
+    expect(h.named('audio.platform.focus.acquire'), hasLength(1));
+    h.focusClosing = Completer();
+    oldFocus.complete({'granted': true, 'epoch': 1});
+    await Future<void>.delayed(Duration.zero);
+    expect(h.named('audio.platform.focus.acquire'), hasLength(1));
+    expect(h.named('audio.platform.focus.release').single.$2['epoch'], 1);
+    h.focusClosing!.complete({'released': true});
+    h.focusClosing = null;
+    final ready = await replacement;
+    expect(ready['focusEpoch'], 2);
+    expect(h.named('audio.platform.focus.acquire'), hasLength(2));
+    expect(h.nativeEpoch, 2);
+    expect(h.outputs.status('B')['playState'], 'playing');
+    expect(h.players.last.releases, 0);
+    await h.outputs.dispose();
+  });
 
   test(
     'late media open cannot reopen a stopped source or leak its relay',
@@ -398,6 +420,33 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(h.closed, ['late-A']);
       expect(h.players.single.calls, isEmpty);
+      await h.outputs.dispose();
+    },
+  );
+
+  test(
+    'a release timeout keeps its native lease barrier until the actual reply',
+    () async {
+      final h = _Harness()..reuseNativeEpoch = true;
+      await h.visible();
+      await h.outputs.start(_stream('A'));
+      h.focusClosing = Completer();
+      await h.outputs.stop(
+        'A',
+      ); // User cleanup is bounded; native is still pending.
+      expect(h.nativeEpoch, 1);
+      await expectLater(
+        h.outputs.start(_stream('B')),
+        throwsA(_code('audio_timeout')),
+      );
+      expect(h.named('audio.platform.focus.acquire'), hasLength(1));
+      expect(h.nativeEpoch, 1);
+      h.focusClosing!.complete({'released': true});
+      h.focusClosing = null;
+      await Future<void>.delayed(Duration.zero);
+      final recovered = await h.outputs.start(_stream('C'));
+      expect(recovered['focusEpoch'], 2);
+      expect(h.nativeEpoch, 2);
       await h.outputs.dispose();
     },
   );
@@ -485,5 +534,69 @@ void main() {
     );
     expect(other.players.single.calls, isEmpty);
     await other.outputs.dispose();
+  });
+
+  test(
+    'platform cleanup keeps its exact owner ID and a busy owner is retryable',
+    () async {
+      final first = _Harness();
+      await first.visible();
+      await first.outputs.start(_stream('A'));
+      final second = _Harness()..focusBusy = true;
+      await second.visible();
+      await expectLater(
+        second.outputs.start(_stream('B')),
+        throwsA(_code('audio_owner_busy')),
+      );
+      expect(second.named('media.open'), isEmpty);
+      expect(first.outputs.status('A')['playState'], 'playing');
+      second.focusBusy = false;
+      await second.outputs.start(_stream('C'));
+      final firstOwner = first
+          .named('audio.platform.focus.acquire')
+          .single
+          .$2['ownerId'];
+      final secondOwner = second
+          .named('audio.platform.focus.acquire')
+          .last
+          .$2['ownerId'];
+      expect(firstOwner, isNot(secondOwner));
+      await second.outputs.dispose();
+      expect(first.players.single.releases, 0);
+      await first.outputs.dispose();
+      expect(
+        first.named('audio.platform.focus.release').single.$2['ownerId'],
+        firstOwner,
+      );
+      expect(
+        second.named('audio.platform.focus.release').single.$2['ownerId'],
+        secondOwner,
+      );
+    },
+  );
+
+  test('real service loss pauses background audio and ignores another owner events', () async {
+    final h = _Harness();
+    await h.visible();
+    await h.outputs.policy(true);
+    await h.outputs.start(_stream('A'));
+    await h.outputs.setVisible(false);
+    final owner = h.named('audio.platform.focus.acquire').single.$2['ownerId'];
+    Future<void> service(String ownerId, bool ready) =>
+        h.outputs.handlePlatformEvent({
+          'type': 'audio.platform.background',
+          'data': {'ownerId': ownerId, 'ready': ready},
+        });
+    await service('stale-owner', false);
+    expect(h.outputs.status('A')['playState'], 'playing');
+    await service(owner as String, false);
+    expect(h.outputs.status('A')['backgroundPaused'], true);
+    await h.outputs.pause('A');
+    await service(owner, true);
+    expect(h.outputs.status('A')['manualPaused'], true);
+    expect(h.outputs.status('A')['playState'], 'paused');
+    await h.outputs.resume('A');
+    expect(h.outputs.status('A')['playState'], 'playing');
+    await h.outputs.dispose();
   });
 }

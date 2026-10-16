@@ -47,7 +47,7 @@
 | --- | --- | --- | --- |
 | R01 | 参考小米桌面与iOS、OPPO/vivo/苹果等成熟互联，完整规划，常规取舍由代理负责 | 既有竞品研究与规划完成；实现持续验收 | docs/research/manufacturer-*与prod/scope；运行功能逐项回填 |
 | R02 | 面向普通用户，首次尽量无感、日常简单，不让用户输命令 | 引导/表单/扫码路径已实现；普通用户可用性仍待验 | product_flow真实手动连接；首次系统调试授权仍不能由普通App跳过 |
-| R03 | Android手机控手机优先；平板与桌面扩展 | 手机双机全屏操作/后台恢复/五codec渲染通过；平板静态验收 | product_flow/background_resume/native_video_codecs；平板widget截图 |
+| R03 | Android手机控手机优先；平板与桌面扩展 | 手机双机全屏操作/后台恢复/五codec渲染通过；平板静态验收 | product_flow/background_resume/video_codecs；平板widget截图 |
 | R04 | 被控无需额外APK/no root，系统调试授权，允许临时JAR | 真实被控端通过；Android主控部分通过 | 固定5.0.1 JAR与真实adbd/虚拟display测试；无APK/root |
 | R05 | 主控始终不要求调试，不提供本机ADB增强 | 已实现；Android普通权限路径 | 主控仅网络、USB授权、媒体播放；测试调试只部署使用 |
 | R06 | 仅Android当前实施／运行验证，未来iOS/Windows/macOS留适配 | Android整包运行已通过；其他平台接口已建 | Flutter四端runner；ADB/core跨target检查，Apple/Windows宿主链接未通过 |
@@ -57,20 +57,20 @@
 | R10 | 参考最新版ADB无线；USB/局域网及已有可达跨网，不依赖账号云/中继/自动穿透 | 现代无线实际通过；USB编译未实物验收 | 真实PAKE/TLS及重连；手动TCP；USB系统授权/FD导入与取消路径 |
 | R11 | 复用scrcpy server JAR但自行实现主控流程 | 已实测 | crates/interop_core/tests/scrcpy_device.rs；实际SPS/PPS/IDR与主控首帧 |
 | R12 | 最新版单应用启动、独立显示、多实例按实际支持 | 真实被控端通过；主控应用页待完整E2E | scrcpy_device：Settings虚拟display、应用枚举、任务保留 |
-| R13 | Rust/Flutter，Flutter主要UI与呈现，FRB供Dart调用 | Android运行已通过；流程继续验收 | FRB2.13.0，真实主控启动/Texture/AudioTrack |
+| R13 | Rust/Flutter，Flutter主要UI与呈现，FRB供Dart调用 | Android运行已通过；流程继续验收 | FRB2.13.0，真实主控启动/共享fvp Texture与PCM |
 | R14 | monorepo | 已实现并构建 | Cargo/Dart workspace及首个Android APK |
 | R15 | Flutter Hooks/Riverpod等主流方案 | 已实现并验证 | Flutter hooks/riverpod；widget及实际Android界面 |
-| R16 | fvp作为初选，可验证后调整 | 共享fvp五codec实时视频生命周期通过；整机后台/旋转/音频待验 | 首帧与状态等待研究；真实HTTP/像素/捕获暂停恢复/PNG；旧Native待迁移完成后删除 |
+| R16 | fvp作为初选，可验证后调整 | 共享fvp五codec/PCM/后台/旋转/双设备焦点通过；长期与四端待验 | 官方文档对照；实际像素/时钟/Activity重建；旧Native视频和音频播放循环均已删除 |
 | R17 | 可调用Android模拟器进行调试 | 已完成环境与实测 | 三台独立API36 AVD，KVM无头；5554主控/5556和5558被控 |
 | R18 | 按功能分级；被控Android5+基础、现代系统无线/声音分别支持 | 能力分级已实现；仅API36运行证据 | API等级与实际错误分开；旧API/OEM矩阵待验 |
 | R19 | 设备优先首页/工作台、全局传输、设备信息与连接诊断 | 设备首屏/工作台/文件真实通过；其余流程继续验收 | product_flow与widget；全局传输/诊断已接真实核心 |
 | R20 | 多设备、多控制会话、传输并行；手机切换/分屏、大屏并排 | 两台被控同时连接及对象隔离真实通过；多控制窗口/布局继续验收 | native_clipboard_test三AVD；多会话实际资源矩阵待补 |
-| R21 | 后台连接/通知/传输继续，暂停不可见视频，主动音频保持，回前台恢复 | HOME视频与声音策略真实通过；长后台/进程回收待验 | background_resume及native_audio：默认停声/主动续声/OS媒体FGS；连接/通知/传输长时仍待验 |
+| R21 | 后台连接/通知/传输继续，暂停不可见视频，主动音频保持，回前台恢复 | HOME视频/声音与同进程Activity重建通过；长后台/进程回收待验 | background_resume及audio_lifecycle：默认停声/主动续声/OS媒体FGS；新Activity/同PID/同音源；连接/通知/传输长时仍待验 |
 | R22 | 默认低延迟；清晰度/帧率/码率/编码器及三档预设 | 五codec/逐设备参数已渲染；HEVC已定位目标编码器尺寸降级，实际尺寸提示待新包验 | bfaee32；五种FFmpeg真实解码与Native全屏；质量保存下次打开，保留旧会话；非延迟数值验收 |
 | R23 | 不引入查看模式、直接操作；保留主动实体屏幕开关，与锁定分开 | 直接触控真实通过；实体屏开关仍待专门验收 | product_flow真实点击；无查看模式；不绕过锁屏 |
 | R24 | 真实应用任务/登录态；单实例迁移说明，多实例按实际能力 | 真实被控端通过；主控启动页继续E2E | 独立display启动Settings，关闭后实际任务仍存在 |
 | R25 | 关闭窗口默认与任务去向依据scrcpy，由代理定默认 | 已按scrcpy设置并实测 | vd_destroy_content=false；停止会话后任务保留，迁移/多实例按实际系统 |
-| R26 | 声音按设备只播一次；多设备默认单路，可固定/主动混音 | 单设备真实播放/暂停/后台策略通过；多设备混音仍待实测 | native_audio start/dedup/volume/mute/pause/head/resume/HOME/stop；共享AudioFocus JVM7 |
+| R26 | 声音按设备只播一次；多设备默认单路，可固定/主动混音 | 双设备同时播放及外部焦点实测通过；物理听感待验 | 真实双AVD音源/去重；外部AudioManager临时loss/手动暂停保留/gain/永久loss终止旧ID/新ID重新开启 |
 | R27 | 剪贴板跟随当前设备，可固定，其他后台设备不覆盖 | 文本自动同步三AVD真实通过；普通主控后台暂停访问 | 本机↔目标/独立客户端变更/跟随固定隔离/HOME零读写/禁用；图片文件剪贴板仍分级待补 |
 | R28 | 文本/图片/文件、系统分享、本机打开；内容和目标可辨 | 路由/确认已实现，文本与系统文件部分真实通过 | clipboard与SAF E2E；图片/文件系统分享及本机应用打开仍待E2E |
 | R29 | 同名询问保留两份/替换/跳过，可应用当前任务 | 批冲突实际通过 | files_android.rs：本批applyToAll隔离，未知保存结果不重试 |
@@ -104,7 +104,7 @@
 | R57 | 多文件夹架构，lib下直接pages及少量共享目录 | 已实现并回归 | lib/pages/<页面>/<页面>_page.dart；共享widgets/services/router另放，不增加features/core/app嵌套 |
 
 | R58 | 使用go_router_builder、riverpod_generator、build_runner及官方lint，防止工程和架构退化 | 已完成生成迁移及严格分析/78项widget；真实Android五codec、后台与旋转通过 | 精确兼容版本、生成typed shell/导航、深冻结Notifier、根原生Riverpod插件负例实检、workspace only-check |
-| R59 | Flutter/Rust为主体，减少自维护Android代码和未来多端重复适配 | 正在重构 | 分享owner/导入/持久化与SAF复制迁共享Dart/Rust；自写267行视频decoder和Native视频入口已删除，真实产品五codec复验通过；音频仍在迁移，不把JNI改写称跨端完成 |
+| R59 | Flutter/Rust为主体，减少自维护Android代码和未来多端重复适配 | 正在重构 | 分享owner/导入/持久化与SAF复制迁共享Dart/Rust；267行视频decoder与313行PCM播放器已删除；真实五codec/声音/Activity重建/双设备焦点通过，Kotlin从2176降至1172行；OS适配仍保留，四端编译未冒称完成 |
 
 ## 执行记录
 
@@ -135,3 +135,6 @@
 - 共享视频整机后台：background_resume_test实际HOME/2秒后Activity返回、Core暂停/恢复、session.output.resumed真实snapshot回执、全屏无暂停覆盖及正常退出通过，12秒；截图/tmp/connect-e2e/shared-background/remote-after-actual-background.png已目视检查。共享Dart61项、应用78项widget、Rust59项与all-target clippy通过。生成检查发现controller hash陈旧，已真实重生成，随后only-check零写入通过。
 
 - 旋转与取消：同session/relay generation 1→2、真实新代像素/触控尺寸/Texture交接及bridge.dispose正常退出通过；目标自动旋转夹具恢复原值。修复Rust空闲事件流取消不退出，显式cancel token/RAII及7项API测试通过。删除Native视频后实际产品五codec完整回归28秒通过，提交4da9bf8；媒体driver在缺失完成回执时强制失败，负例已实测。
+
+- 共享音频迁移：直接PCM生命周期4秒、产品HOME与同进程Activity重建14秒通过；补齐host退出前等待finally后13秒复验，完成回执true、开发设置恢复且临时archive不存在。外部AudioManager双设备焦点测试先红后绿16秒通过：临时loss保留手动暂停、永久loss关闭准确旧ID且gain不复活，用户显式新开取得新ID。修复旧焦点acquire/release迟到复用epoch竞态，22项对应单测与独立review通过。
+- 整合tool/check.sh实际退出0：Rust133 passed/41 ignored、应用78、桥接71、生成only-check、严格分析、Riverpod插件负例及Google官方design lint通过（0 errors/26 warnings/1 info）。旧Rust生成格式和新增helper严格lint问题在首轮检查发现后修正，第二轮全绿。当前尚未完成长期后台、系统回收、真实HAL/扬声器、共享SAF新路径及外部分享实际验收等剩余矩阵。

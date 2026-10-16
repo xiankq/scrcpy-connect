@@ -21,6 +21,9 @@ class PortableAudioOutputs {
   }) : _factory = playerFactory ?? FvpAudioPlayer.new;
 
   final AudioRequest core, platform;
+  static int _nextOwner = 0;
+  final String _ownerId =
+      'audio-${DateTime.now().microsecondsSinceEpoch}-${_nextOwner++}';
   final void Function(AudioJson) emit;
   final bool Function() isDisposed;
   final AudioPlayerFactory _factory;
@@ -29,6 +32,7 @@ class PortableAudioOutputs {
   final _stopped = <String>{};
   final _releases = <Future<AudioJson>>{};
   final _releasedEpochs = <int>{};
+  final _epochReleases = <int, Future<void>>{};
   int? _epoch;
   int _lastEpoch = -1, _focusGeneration = 0, _policyRevision = 0;
   String _focusSignal = 'none';
@@ -369,6 +373,13 @@ class PortableAudioOutputs {
       await setVisible(data['visible'] as bool);
       return;
     }
+    if (event['type'] == 'audio.platform.background' &&
+        data['ownerId'] == _ownerId &&
+        data['ready'] is bool) {
+      _backgroundReady = _backgroundAllowed && data['ready'] == true;
+      await _reconcile('background_service');
+      return;
+    }
     if (event['type'] != 'audio.platform.focus' ||
         data['epoch'] != _epoch ||
         _epoch == null) {
@@ -395,45 +406,52 @@ class PortableAudioOutputs {
   bool get _eligible => _visible || (_backgroundAllowed && _backgroundReady);
 
   Future<void> _ensureFocus() async {
-    if (_epoch != null) {
-      return; // Transient loss is not permission to steal focus back.
-    }
-    final pending = _acquiring;
-    if (pending != null) return pending;
-    final operation = _acquireFocus();
-    _acquiring = operation;
-    try {
-      await operation;
-    } finally {
-      if (identical(_acquiring, operation)) _acquiring = null;
+    while (true) {
+      // Native may return the same epoch to overlapping requests by this owner.
+      // Keep both acquisition and its actual late release as barriers, even
+      // when the original caller cancels/times out. Never reuse a pending lease.
+      await Future.wait(_epochReleases.values.toList())
+          .timeout(operationTimeout);
+      if (_epoch != null) {
+        return; // Transient loss is not permission to steal focus back.
+      }
+      var operation = _acquiring;
+      if (operation == null) {
+        operation = _acquireFocus();
+        _acquiring = operation;
+        final owned = operation;
+        void clear() {
+          if (identical(_acquiring, owned)) _acquiring = null;
+        }
+
+        unawaited(
+          operation.then<void>(
+            (_) => clear(),
+            onError: (Object _, StackTrace _) => clear(),
+          ),
+        );
+      }
+      try {
+        await operation.timeout(operationTimeout);
+      } on InteropException catch (error) {
+        if (error.code != 'cancelled' ||
+            _disposed ||
+            isDisposed() ||
+            _entries.isEmpty) {
+          rethrow;
+        }
+        // The old source was cancelled; wait for its cleanup, then acquire a
+        // fresh lease for the remaining source, rather than failing that source.
+      }
+      if (_disposed || isDisposed() || _entries.isEmpty) throw _cancelled();
     }
   }
 
   Future<void> _acquireFocus() async {
     final generation = _focusGeneration;
-    final request = platform('audio.platform.focus.acquire', {});
-    var expired = false;
-    unawaited(
-      request.then<void>((result) {
-        final epoch = result['epoch'];
-        if (result['granted'] == true &&
-            epoch is int &&
-            (expired ||
-                _disposed ||
-                isDisposed() ||
-                _entries.isEmpty ||
-                generation != _focusGeneration)) {
-          unawaited(_releaseEpoch(epoch));
-        }
-      }, onError: (Object _, StackTrace _) {}),
-    );
-    final AudioJson result;
-    try {
-      result = await request.timeout(operationTimeout);
-    } on TimeoutException {
-      expired = true;
-      rethrow;
-    }
+    // Caller timeouts must not detach this operation from _acquiring. Its
+    // platform reply can still carry a live lease that needs exact cleanup.
+    final result = await _platform('audio.platform.focus.acquire', {});
     final epoch = result['epoch'];
     if (_disposed ||
         isDisposed() ||
@@ -460,14 +478,29 @@ class PortableAudioOutputs {
   }
 
   Future<void> _releaseEpoch(int epoch) async {
-    if (!_releasedEpochs.add(epoch)) return;
-    if (_releasedEpochs.length > 4096) {
-      _releasedEpochs.remove(_releasedEpochs.first);
-    }
+    if (_releasedEpochs.contains(epoch)) return;
+    final operation = _epochReleases.putIfAbsent(epoch, () async {
+      await _platform('audio.platform.focus.release', {'epoch': epoch});
+      _releasedEpochs.add(epoch);
+      if (_releasedEpochs.length > 4096) {
+        _releasedEpochs.remove(_releasedEpochs.first);
+      }
+    });
+    unawaited(
+      operation.then<void>(
+        (_) {
+          if (identical(_epochReleases[epoch], operation)) {
+            _epochReleases.remove(epoch);
+          }
+        },
+        onError: (Object _, StackTrace _) {
+          // Unknown cleanup stays a failed barrier: a new acquire must fail safely
+          // instead of receiving and later abandoning the same native lease.
+        },
+      ),
+    );
     try {
-      await platform('audio.platform.focus.release', {
-        'epoch': epoch,
-      }).timeout(operationTimeout);
+      await operation.timeout(operationTimeout);
     } catch (_) {
       /* Never acquire a replacement lease while cleaning up an old one. */
     }
@@ -488,7 +521,7 @@ class PortableAudioOutputs {
     while (true) {
       final enabled = !_disposed && _backgroundAllowed && _entries.isNotEmpty;
       if (_backgroundRequested == enabled) return;
-      final request = platform('audio.platform.background', {
+      final request = _platform('audio.platform.background', {
         'enabled': enabled,
       });
       unawaited(
@@ -496,7 +529,7 @@ class PortableAudioOutputs {
           if (enabled &&
               (_disposed || !_backgroundAllowed || _entries.isEmpty)) {
             unawaited(
-              platform('audio.platform.background', {'enabled': false})
+              _platform('audio.platform.background', {'enabled': false})
                   .timeout(operationTimeout)
                   .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
             );
@@ -516,6 +549,9 @@ class PortableAudioOutputs {
       _backgroundReady = enabled && ready;
     }
   }
+
+  Future<AudioJson> _platform(String command, AudioJson params) =>
+      platform(command, {...params, 'ownerId': _ownerId});
 
   Future<void> _reconcile(String reason) async {
     await Future.wait(
@@ -586,7 +622,6 @@ class PortableAudioOutputs {
   void _invalidateEmptyFocus() {
     if (_entries.isEmpty) {
       _focusGeneration++;
-      _acquiring = null;
     }
   }
 

@@ -1,28 +1,34 @@
 package dev.scrcpyconnect.scrcpy_connect
 
-// Shared import policy contracts now execute against the Rust ImportManager.
+/** Tests production thin OS ownership without constructing framework stubs. */
 object NativeOwnershipTest {
     @JvmStatic fun main(args: Array<String>) {
-        activityRebindingDoesNotReplaceAudio()
-        println("PASS: Android audio Activity attachment ownership")
-    }
-    private class Audio : OwnedAudio {
-        var closed = 0; var paused = false; var revision = 0L
-        override fun background(paused: Boolean): Map<String, Any?> { this.paused = paused; revision++; return status() }
-        override fun status() = mapOf("sourceId" to "same-source", "applied" to true, "revision" to revision, "playState" to if (paused) "paused" else "playing")
-        override fun close() { closed++ }
-    }
-    private fun activityRebindingDoesNotReplaceAudio() {
-        val receipts = mutableListOf<Map<String, Any?>>()
-        val owner = AudioSessionOwnership { receipts.add(it) }
-        val oldActivity = Any(); val newActivity = Any(); val audio = Audio()
-        owner.setVisible(oldActivity, true); owner.add("same-source", audio)
-        owner.setVisible(oldActivity, false); check(audio.paused && audio.closed == 0)
-        owner.setVisible(newActivity, true); check(!audio.paused && owner.get("same-source") === audio)
-        owner.backgroundAllowed = true
-        owner.setVisible(newActivity, false); check(!audio.paused && audio.closed == 0)
-        owner.setVisible(Any(), false); check(!audio.paused) // late detach cannot stop shared owner
-        check(owner.snapshots().single()["sourceId"] == "same-source")
-        owner.stopAll(); owner.stopAll(); check(audio.closed == 1 && owner.empty())
+        val owner = AudioPlatformOwnership()
+        val firstActivity = Any()
+        val replacementActivity = Any()
+        check(owner.visible(firstActivity, true))
+        check(!owner.visible(replacementActivity, true))
+        check(!owner.visible(firstActivity, false) && owner.visible)
+        check(owner.claim("first-engine"))
+        val first = owner.nextEpoch()
+        check(!owner.claim("other-engine"))
+        check(owner.visible(replacementActivity, false) && !owner.visible)
+        check(owner.epoch == first) // Activity loss does not release the OS lease.
+        check(!owner.clearEpoch(first + 1) && owner.epoch == first)
+        owner.background = true
+        check(owner.clearEpoch(first))
+        owner.releaseIfUnused()
+        check(owner.owner == "first-engine") // Actual FGS request still owned.
+        owner.background = false
+        owner.releaseIfUnused()
+        check(owner.claim("new-engine"))
+        val next = owner.nextEpoch()
+        check(next > first)
+        check(!owner.clearEpoch(first) && owner.epoch == next)
+        check(!owner.claim("first-engine")) // Late old owner cannot claim new lease.
+        check(owner.clearEpoch(next))
+        owner.releaseIfUnused()
+        check(owner.owner == null)
+        println("PASS: Activity visibility aggregation, owner refusal, background ownership and stale epoch isolation")
     }
 }

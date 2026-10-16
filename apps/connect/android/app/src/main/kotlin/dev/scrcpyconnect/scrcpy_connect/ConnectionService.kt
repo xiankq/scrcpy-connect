@@ -51,7 +51,7 @@ class ConnectionService : Service() {
         val stop = PendingIntent.getService(this, 1, Intent(this, ConnectionService::class.java).setAction("STOP"), PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "connections") else @Suppress("DEPRECATION") Notification.Builder(this)
         val notification = builder.setSmallIcon(dev.scrcpyconnect.scrcpy_connect.R.drawable.ic_connection)
-            .setContentTitle("邻接正在保持设备活动").setContentText(if (audioRequested) "设备声音正在播放，可返回应用调整或停止。" else "保持已连接的设备与进行中的传输。")
+            .setContentTitle("邻接正在保持设备活动").setContentText(if (audioRequested) "已启用设备声音后台保持，可返回应用调整或停止。" else "保持已连接的设备与进行中的传输。")
             .setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null, "停止连接", stop).build()).build()
         if (Build.VERSION.SDK_INT >= 29) {
             val types = (if (connectionRequested) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0) or
@@ -67,8 +67,7 @@ class ConnectionService : Service() {
         if (intent?.action == "STOP") {
             connectionRequested = false
             audioRequested = false
-            NativeAudioRuntime.get(applicationContext).stopAll()
-            MainActivity.cancelPendingConnections()
+            ProcessFlutterHost.stopRequested(applicationContext)
             NativeCore.stopAll()
             stopSelf()
         } else if (connectionRequested || audioRequested) updateForeground()

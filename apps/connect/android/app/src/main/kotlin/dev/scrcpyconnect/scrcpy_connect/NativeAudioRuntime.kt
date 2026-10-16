@@ -1,13 +1,18 @@
 package dev.scrcpyconnect.scrcpy_connect
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import java.lang.ref.WeakReference
 
-
-/** Same-process owner. Process death never recreates players, focus, tokens or remote capture. */
+/** Thin OS adapter only. PCM, player state and compound pause reasons belong to Dart. */
 class NativeAudioRuntime private constructor(private val app: Context) {
     companion object {
         @Volatile private var instance: NativeAudioRuntime? = null
@@ -17,102 +22,142 @@ class NativeAudioRuntime private constructor(private val app: Context) {
     }
     private val main = Handler(Looper.getMainLooper())
     private val focus = AudioFocusController(app)
-    private var boundOwner: WeakReference<Any>? = null
+    private val owners = AudioPlatformOwnership()
+    private var lease: FocusLeases.Lease? = null
     private var emitter: ((Map<String, Any?>) -> Unit)? = null
-    private var desiredBackground = false
-    private val replies = linkedMapOf<String, DetachedResult>()
-    private val players = linkedMapOf<String, RemoteAudioPlayer>()
-    private val ready = mutableSetOf<String>()
-    private val ownership = AudioSessionOwnership { receipt ->
-        emit(mapOf("type" to "audio.focus", "deviceId" to receipt["deviceId"],
-            "data" to (receipt + mapOf("reason" to "background_policy"))))
-    }
-
-    /** The relay drops the old engine's MethodChannel.Result on detach. */
-    private class DetachedResult(owner: Any, private var target: MethodChannel.Result?, private val completed: (Any?) -> Any?) : MethodChannel.Result {
-        private val owner = WeakReference(owner)
-        fun detach(old: Any) { if (owner.get() === old) target = null }
-        override fun success(result: Any?) { val reply = target; target = null; val receipt = completed(result); reply?.success(receipt) }
-        override fun error(code: String, message: String?, details: Any?) { val reply = target; target = null; reply?.error(code, message, details) }
-        override fun notImplemented() { val reply = target; target = null; reply?.notImplemented() }
-    }
-
-    fun bind(owner: Any, callback: (Map<String, Any?>) -> Unit) { boundOwner = WeakReference(owner); emitter = callback }
-    fun unbindEvents(owner: Any) { if (boundOwner?.get() === owner) { boundOwner = null; emitter = null } }
-    fun detach(owner: Any) {
-        ownership.setVisible(owner, false)
-        replies.values.forEach { it.detach(owner) }
-        if (boundOwner?.get() === owner) { boundOwner = null; emitter = null }
-    }
-    fun visible(owner: Any, visible: Boolean) { ownership.setVisible(owner, visible) }
-    fun policy(allowed: Boolean): Map<String, Any?> {
-        desiredBackground = allowed
-        updateService()
-        foregroundChanged()
-        return mapOf("backgroundAllowed" to allowed)
-    }
-    private fun updateService() { ConnectionService.keepAudio(app, desiredBackground && !ownership.empty()) }
-    fun foregroundChanged() { ownership.backgroundAllowed = desiredBackground && ConnectionService.mediaPlaybackReady }
-    private fun emit(event: Map<String, Any?>) {
-        main.post {
-            if (event["type"] == "audio.failed") {
-                val data = event["data"] as? Map<*, *>
-                val id = data?.get("sourceId") as? String
-                players.remove(id); ownership.remove(id); replies.remove(id); ready.remove(id)
-                runCatching { updateService() }
+    private var backgroundGeneration = 0L
+    private var pendingBackground: MethodChannel.Result? = null
+    private var noisyRegistered = false
+    private val noisy = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                val epoch = owners.epoch ?: return
+                releaseLease()
+                emit("audio.platform.focus", mapOf("epoch" to epoch, "signal" to "noisy"))
             }
-            if (boundOwner?.get() != null) emitter?.invoke(event)
         }
     }
-    fun start(owner: Any, id: String, deviceId: String?, port: Int, token: String, result: MethodChannel.Result) {
+
+    fun bind(callback: (Map<String, Any?>) -> Unit) { emitter = callback }
+    private fun emit(type: String, data: Map<String, Any?>) {
+        main.post { emitter?.invoke(mapOf("type" to type, "data" to data)) }
+    }
+    fun visible(owner: Any, value: Boolean) {
+        if (owners.visible(owner, value)) emit("audio.platform.visibility", mapOf("visible" to owners.visible))
+    }
+    fun detach(owner: Any) = visible(owner, false)
+
+    fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
+        if (!call.method.startsWith("audio.platform.")) return false
         check(Looper.myLooper() == Looper.getMainLooper())
-        val existing = players[id]
-        if (existing != null) {
-            val state = existing.status()
-            if (state["applied"] == true) result.success(state)
-            else result.error("audio_start_pending", "设备声音仍在准备中，请等待原请求。", null)
+        try {
+            if (call.method == "audio.platform.state") {
+                result.success(mapOf("visible" to owners.visible,
+                    "mediaPlaybackReady" to ConnectionService.mediaPlaybackReady,
+                    "sameEngineOwnership" to true, "processSurvivalGuaranteed" to false))
+                return true
+            }
+            val owner = call.argument<String>("ownerId")
+            require(owner != null && owner.length in 1..128) { "Missing audio output owner" }
+            when (call.method) {
+                "audio.platform.focus.acquire" -> {
+                    if (!owners.claim(owner)) {
+                        result.error("audio_owner_busy", "另一个声音输出仍在释放焦点，请稍后重试。", null)
+                    } else if (lease != null) {
+                        result.success(mapOf("granted" to (lease?.state() == FocusSignal.GRANTED), "epoch" to owners.epoch))
+                    } else {
+                        val epoch = owners.nextEpoch()
+                        lease = focus.acquire { signal ->
+                            if (owners.epoch != epoch) return@acquire
+                            if (signal == FocusSignal.PERMANENT_LOSS) releaseLease()
+                            emit("audio.platform.focus", mapOf("epoch" to epoch, "signal" to signal.wire))
+                        }
+                        if (lease == null) owners.clearEpoch(epoch) else {
+                            try { registerNoisy() } catch (error: Exception) { releaseLease(); throw error }
+                        }
+                        result.success(mapOf("granted" to (lease != null), "epoch" to epoch))
+                        releaseUnusedOwner()
+                    }
+                }
+                "audio.platform.focus.release" -> {
+                    val epoch = call.argument<Number>("epoch")?.toLong()
+                    val matches = owners.owner == owner && epoch != null && owners.epoch == epoch
+                    if (matches) releaseLease()
+                    result.success(mapOf("released" to matches))
+                }
+                "audio.platform.background" -> background(owner, call.argument<Boolean>("enabled") == true, result)
+                else -> result.notImplemented()
+            }
+        } catch (error: Exception) {
+            result.error("audio_platform_failed", error.message ?: "系统声音操作未完成。", null)
+        }
+        return true
+    }
+
+    private fun registerNoisy() {
+        if (noisyRegistered) return
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(noisy, filter, Context.RECEIVER_NOT_EXPORTED)
+        else @Suppress("DEPRECATION") app.registerReceiver(noisy, filter)
+        noisyRegistered = true
+    }
+    private fun releaseLease() {
+        lease?.close(); lease = null
+        owners.epoch?.let { owners.clearEpoch(it) }
+        if (noisyRegistered) { runCatching { app.unregisterReceiver(noisy) }; noisyRegistered = false }
+        releaseUnusedOwner()
+    }
+    private fun releaseUnusedOwner() { owners.releaseIfUnused() }
+
+    private fun background(owner: String, enabled: Boolean, result: MethodChannel.Result) {
+        if ((enabled && !owners.claim(owner)) || (!enabled && owners.owner != null && owners.owner != owner)) {
+            result.error("audio_owner_busy", "后台声音资格不属于此输出。", null)
             return
         }
-        val reply = DetachedResult(owner, result) { receipt ->
-            if (players.containsKey(id)) {
-                ready.add(id)
-                val data = (receipt as? Map<*, *>)?.entries?.mapNotNull { (key, value) -> (key as? String)?.let { it to value } }?.toMap().orEmpty()
-                val confirmed = data + mapOf("nativeReady" to true)
-                emit(mapOf("type" to "audio.ready", "deviceId" to deviceId, "data" to confirmed))
-                confirmed
-            } else receipt
-        }; replies[id] = reply
-        val player = RemoteAudioPlayer(id, deviceId, focus, ::emit)
-        players[id] = player
-        ownership.add(id, object : OwnedAudio {
-            override fun background(paused: Boolean) = player.setBackgroundPaused(paused)
-            override fun status() = player.status()
-            override fun close() = player.close()
-        })
-        try { updateService() } catch (error: Exception) {
-            stop(id); reply.error("audio_background_unavailable", error.message, null); return
+        val generation = ++backgroundGeneration
+        pendingBackground?.error("cancelled", "后台声音请求已被更新。", null)
+        pendingBackground = null
+        owners.background = enabled
+        try { ConnectionService.keepAudio(app, enabled) } catch (error: Exception) {
+            owners.background = false
+            runCatching { ConnectionService.keepAudio(app, false) }
+            releaseUnusedOwner()
+            result.error("audio_background_unavailable", error.message, null)
+            return
         }
-        val deadline = android.os.SystemClock.uptimeMillis() + 5000
-        fun launchWhenEligible() {
-            if (players[id] !== player) return
-            if (ownership.isVisible() || (desiredBackground && ConnectionService.mediaPlaybackReady)) {
-                foregroundChanged()
-                player.start(port, token, reply)
-            } else if (!desiredBackground) {
-                // A foreground start may have become background while the
-                // remote stream was preparing. Keep it paused, never auto-play.
-                player.start(port, token, reply)
-            } else if (android.os.SystemClock.uptimeMillis() >= deadline) {
-                stop(id); reply.error("audio_background_unavailable", "媒体前台服务尚未就绪，没有开始声音播放。", null)
-            } else main.postDelayed({ launchWhenEligible() }, 25)
+        if (!enabled) {
+            releaseUnusedOwner()
+            result.success(mapOf("enabled" to false, "ready" to false))
+            return
         }
-        launchWhenEligible()
+        pendingBackground = result
+        val deadline = SystemClock.uptimeMillis() + 2500
+        fun confirm() {
+            if (generation != backgroundGeneration || pendingBackground !== result) return
+            if (ConnectionService.mediaPlaybackReady) {
+                pendingBackground = null
+                result.success(mapOf("enabled" to true, "ready" to true, "mediaPlaybackReady" to true))
+            } else if (SystemClock.uptimeMillis() >= deadline) {
+                pendingBackground = null
+                owners.background = false
+                runCatching { ConnectionService.keepAudio(app, false) }
+                releaseUnusedOwner()
+                result.error("audio_background_unavailable", "系统尚未确认媒体前台服务。", null)
+            } else main.postDelayed({ confirm() }, 25)
+        }
+        confirm()
     }
-    fun stop(id: String?) { players.remove(id); ownership.remove(id); replies.remove(id); ready.remove(id); updateService() }
-    fun stopAll() { players.clear(); ownership.stopAll(); replies.clear(); ready.clear(); updateService() }
-    fun paused(id: String?, paused: Boolean): Map<String, Any?> = player(id).setPaused(paused)
-    fun volume(id: String?, volume: Float, muted: Boolean) = player(id).volume(volume, muted)
-    fun status(id: String?): Map<String, Any?> = player(id).status()
-    fun attach(): Map<String, Any?> = mapOf("sources" to players.map { (id, player) -> player.status() + mapOf("nativeReady" to ready.contains(id)) }, "sameProcess" to true)
-    private fun player(id: String?) = players[id] ?: error("设备声音已经停止。")
+    fun foregroundChanged() {
+        emit("audio.platform.background", mapOf("ready" to ConnectionService.mediaPlaybackReady,
+            "enabled" to owners.background, "ownerId" to owners.owner))
+    }
+    /** Explicit Stop or a Dart engine restart; never called for Activity detach. */
+    fun stopAll() {
+        backgroundGeneration++
+        pendingBackground?.error("cancelled", "声音活动已停止。", null)
+        pendingBackground = null
+        owners.background = false
+        releaseLease()
+        runCatching { ConnectionService.keepAudio(app, false) }
+    }
 }

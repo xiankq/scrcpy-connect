@@ -6,7 +6,7 @@
 
 Rust 继续负责 ADB、scrcpy 帧边界、配置包、PTS 和有界输出；将压缩视频或 PCM 封装为标准 Matroska，通过带随机凭据的 localhost HTTP 流交给 `package:fvp/mdk.dart` 的公开 `Player.media`。Flutter 负责展示 Texture 和输入坐标映射；系统权限、音频焦点、前台服务、SAF 等仍保留薄平台适配。首轮使用每端点一个 Track，视频属于控制会话，音频属于设备共享音源；两个独立 Player 不等于已实现音画同步。
 
-这条路线可替代自维护解码/PCM 写入循环，但不意味着可以立即删除所有 Android 原生代码。当前后台音源由进程中的原生 owner 保持，跨 Activity/engine 生命周期继续运行；Dart 创建的 Player 尚不能直接提供同等所有权保证。实际迁移还必须验证焦点、拔耳机、HOME、暂停/恢复、Activity 销毁、旋转、重连和长期运行。
+这条路线可替代自维护解码/PCM 写入循环，但不意味着可以立即删除所有 Android 原生代码。此前后台音源由原生 owner 保持；当前改为applicationContext创建并保留Flutter engine，Dart Player/channel不随Activity销毁，Activity只弱引用提供UI适配。真实HOME两轮与Activity身份改变/同PID恢复已通过；真实外部App焦点临时/永久loss与双设备并行已通过；拔耳机、长后台、重连和系统回收仍分项验收，不能据此声称进程死亡后继续运行。
 
 ## 固定依赖与接口事实
 
@@ -69,4 +69,4 @@ rtk proxy env INTEROP_ADBD_PORT=15556 INTEROP_FFMPEG=/absolute/ffmpeg cargo +sta
 
 共享HTTP视频已在Android双AVD经公开fvp Player通过五种codec的首帧、实际暂停、捕获暂停/恢复、再次snapshot、非单色PNG与停止释放；没有调用自维护Kotlin视频方法。初始同步waitFor0阻塞和AV1默认decoder缺失已定位并修正，详见[首帧与状态等待](scrcpy-first-frame-and-latency.md)。
 
-真实产品 HOME/返回以及同一会话旋转 generation 交接、新代像素、触控尺寸已通过。删除旧 Native 视频实现后，产品页面五种编码再测全部通过；视频不再维护 Android 自写解码循环。待完成门槛仍含 PCM真实播放、长后台/系统回收、焦点与音频生命周期所有权、长期时钟漂移、慢消费者/断线全链路、四平台二进制锁定。旧 Native 音频继续保留，OS 权限和后台适配按系统要求保留。
+真实产品 HOME/返回以及同一会话旋转 generation 交接、新代像素、触控尺寸已通过。删除旧 Native 视频实现后，产品页面五种编码再测全部通过；视频不再维护 Android 自写解码循环。待完成门槛仍含 PCM真实播放、长后台/系统回收、物理路由变化与长期音频生命周期、长期时钟漂移、慢消费者/断线全链路、四平台二进制锁定。共享PCM公开fvp生命周期已4秒通过，实际产品HOME和Activity重建14秒通过；旧313行Native音频播放循环已删除。暂停时钟先推进约80ms后稳定，恢复后继续前进；这不是扬声器采样证明。OS权限和后台适配按系统要求保留。

@@ -1,6 +1,6 @@
 # 实施与真实验收记录
 
-目标入口为 [.scratch/interop/goal.md](../../.scratch/interop/goal.md)。下列结果区分协议单测、真实被控 adbd 和 Android 主控界面；未列通过的能力不推定已完成。
+目标入口为 [.scratch/interop/goal.md](../../.scratch/interop/goal.md)。下列结果区分协议单测、真实被控 adbd 和 Android 主控界面；未列通过的能力不推定已完成。下列历史验收保留当时的后端和测试名；当前共享媒体结果以最新迁移小节为准，旧AudioTrack/自写MediaCodec证据不能冒充新后端结果。
 
 ## 当前环境
 
@@ -117,3 +117,15 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 - 资源模块默认5项、core默认39 passed/26 ignored及真实guard1项通过。实际guard以1条自身H264流+15个隔离测试预留填满应用16名额，拒绝新启动后旧会话ID和码流仍可用，失败/取消释放预留；这不是实际耗尽设备编码器。暂停并不释放名额或codec，不提示暂停后必然能开新会话。
 - 固定scrcpy日志无法可靠提供MediaCodec数值错误，未知错误不重试。Android本机仅精确1100资源不足且未启动应用的全新整屏请求可单次降低该次负载；1101 reclaimed、应用任务已启动或未知失败不重放。原生自动降载和资源不足选择流程仍待运行验收。
 - 用户追加Flutter组织要求：lib/pages下每页独立目录和*_page.dart；共享widgets/services/router保持浅层，业务导航迁移go_router。迁移中的旧57测试证据不推定新路由已经通过。
+
+## 共享媒体迁移最新验收（2026-10-17）
+
+- 首帧依据官方scrcpy开发文档和源码逐项对照，定位起播前同步waitFor0阻塞；静止补帧已在官方server启用，没有重复配置冒称修复。按MDK官方decoder优先级启用实际AV1路径。五编码共享视频完整生命周期12秒通过；删除267行RemoteVideoDecoder及Native视频入口后，真实产品五codec再测28秒通过。详见[完整实验与来源](../research/scrcpy-first-frame-and-latency.md)。
+- 新共享状态确认每次请求后以正数1ms查询native状态；迟到Dart callback只触发实际查询。close先取消并排空确认再释放句柄。4项竞态回归与独立review通过；五codec各3次暂停/恢复，共15次实际像素恢复在15秒内通过，首帧本地1179/406/284/293/282ms（另计server启动），每种4次snapshot回执。
+- 共享视频真实HOME2秒→返回Activity→capture恢复→snapshot→健康全屏通过；同session/relay旋转generation 1→2、新Texture/实际像素/Core触控尺寸同步与bridge.dispose正常结束通过。固定目标自动旋转条件后还原原值；稳定截图已目视检查方向和比例。空闲Rust事件观察者取消导致退出挂起的问题已修复，7项Rust接口测试与真实退出通过。
+- 共享音频已接入，313行RemoteAudioPlayer删除。Native只负责OS焦点/耳机断开/FGS，Dart Player由进程Flutter engine持有、channel保持engine所有权、Activity弱引用转交UI适配；不宣称进程死亡可继续播放。直接真实PCM生命周期4秒通过：48000Hz/双声道、mediaInfo、native playing确认、源PCM与播放时钟前进；暂停clock采样每200ms为73/153/153/153/153/153ms，证明先短暂稳定后停止前进，恢复250ms后前进262ms。没有伪造bytesWritten或宣称物理扬声器可闻。
+- 实际产品音频HOME两轮、Activity真实销毁再创建14秒通过：默认后台暂停，启用backgroundAudio后时钟持续前进且实际mediaPlayback FGS存在；新Activity身份与同一PID均由host实际dumpsys/pidof核对，Dart同一音源继续使用。系统setAlwaysFinish运行标志由独立host测试夹具调用并恢复；直接改数据库不能证明Activity重建。日志 `/tmp/connect-shared-audio-real-recreate.log`。补host结束前等待finally清理后，13秒复验通过；完成回执true、设置恢复为原值且临时archive不存在。最终日志 `/tmp/connect-shared-audio-recreate-final.log`，metadata `/tmp/connect-e2e/shared-audio-recreate-final/result.json`。
+- 独立review发现取消的旧焦点获取回复可能释放新音源复用的epoch，已保持真实acquire/release barrier，包含调用超时后实际release仍pending的情况。22项音频测试先红后绿，独立复查通过。真实外部App焦点争夺另已先红后绿16秒通过：双设备同时播放、临时loss双方暂停/时钟稳定、gain保留其中手动暂停、永久loss关闭旧Core source与output，释放外部焦点不复活旧ID；用户新开取得新ID。首次失败捕获共享迁移只暂停但未终止旧捕获的回退，生产Bridge按sourceId+deviceId停止并释放，重复/迟到事件不能关闭替代源。日志 `/tmp/connect-shared-audio-focus-fixed.log`、metadata `/tmp/connect-e2e/shared-audio-focus-fixed/audio-focus-result.json`，独立fixture已卸载。长期后台/系统回收、扬声器/耳机物理输出与四平台最终链接仍需独立证据。
+- 当前已完成生成typed routes/Notifier、78项app widget、严格分析、真实workspace only-check及Riverpod插件违规负例。Rust工作区133默认测试通过、41项设备/外部工具用例显式ignored；all-target clippy通过。Google DESIGN.md官方lint为0 errors/26 warnings/1 info。整合 `tool/check.sh` 第二轮已实际退出0：133 Rust/41 ignored、78应用与71桥接、生成检查、严格分析、插件负例及官方设计lint全部执行；首轮发现新增helper/driver的严格lint并修正。随后永久焦点语义修正又经分析与上述真实红→绿验证，不将其他历史证据自动继承为新版本全通过。
+
+- 音频/engine整合后再次运行实际产品五codec，26秒通过；完成回执true，日志 `/tmp/connect-final-product-five-codecs.log`，metadata `/tmp/connect-e2e/final-product-five-codecs-result.json`。HEVC截图目视仍明显低清，与此前目标AVD软件encoder降尺寸现象相似；本轮未重新独立测量实际码流尺寸，不能把首帧可渲染当作五种视觉质量均通过。画质验证继续保留，未隐藏此缺口。

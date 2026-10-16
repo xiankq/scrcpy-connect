@@ -11,6 +11,7 @@ import 'src/rust/api.dart' as core;
 import 'src/rust/frb_generated.dart';
 import 'src/media_intent.dart';
 import 'src/media/portable_video.dart';
+import 'src/media/portable_audio.dart';
 import 'src/media/video_presentation.dart';
 import 'src/share_intake.dart';
 import 'src/documents/documents_coordinator.dart';
@@ -32,11 +33,15 @@ class InteropBridge {
   final _videoMonitors = <String, Timer>{};
   final _videoPolling = <String>{};
   final _audioSources = <String, Map<String, dynamic>>{};
-  final _pendingAudioPresentation = <String, Map<String, dynamic>>{};
-  bool _adoptingAudio = false;
   final _mediaIntents = MediaIntents();
   bool _disposed = false;
   Future<void>? _disposing;
+  late final _audioOutputs = PortableAudioOutputs(
+    core: _invoke,
+    platform: _audioPlatformRequest,
+    emit: _handleAudioOutput,
+    isDisposed: () => _disposed,
+  );
   late final _videoOutputs = PortableVideoOutputs(
     core: _invoke,
     emit: _handleVideoOutput,
@@ -61,9 +66,24 @@ class InteropBridge {
   StreamSubscription<String>? _coreSubscription;
   StreamSubscription<dynamic>? _platformSubscription;
 
-  static Future<InteropBridge> initialize({
-    required String dataDirectory,
-  }) async {
+  static Future<InteropBridge>? _initializing;
+  static InteropBridge? _active;
+
+  static Future<InteropBridge> initialize({required String dataDirectory}) {
+    if (_active case final existing? when !existing._disposed) {
+      return Future.error(
+        const InteropException(
+          'bridge_already_initialized',
+          '此引擎已有互联桥接，请复用现有实例。',
+        ),
+      );
+    }
+    return _initializing ??= _initialize(dataDirectory).whenComplete(() {
+      _initializing = null;
+    });
+  }
+
+  static Future<InteropBridge> _initialize(String dataDirectory) async {
     await RustLib.init();
     await core.initialize(dataDirectory: dataDirectory);
     final bridge = InteropBridge._(dataDirectory);
@@ -76,7 +96,6 @@ class InteropBridge {
             bridge._handleCoreEvent(event);
           }, onError: bridge._events.addError);
       if (Platform.isAndroid) {
-        bridge._adoptingAudio = true;
         bridge._platformSubscription = _mediaEvents
             .receiveBroadcastStream()
             .listen((event) {
@@ -84,12 +103,23 @@ class InteropBridge {
                 if (bridge._disposed) return;
                 final message = Map<String, dynamic>.from(event);
                 bridge._events.add(message);
-                unawaited(bridge._handleNativeEvent(message));
+                unawaited(
+                  bridge._handleNativeEvent(message).catchError((Object error) {
+                    if (!bridge._disposed) {
+                      bridge._events.add({
+                        'type': 'platform.failed',
+                        'data': {'reason': '$error'},
+                      });
+                    }
+                  }),
+                );
               }
             }, onError: bridge._events.addError);
-        await bridge._adoptNativeAudio();
-        bridge._adoptingAudio = false;
-        bridge._pendingAudioPresentation.clear();
+        final state = await bridge._platformRequest(
+          'audio.platform.state',
+          const {},
+        );
+        await bridge._audioOutputs.setVisible(state['visible'] == true);
         await bridge._shareIntake.configure();
         unawaited(
           bridge._shareIntake.attach().catchError((Object error) {
@@ -102,6 +132,12 @@ class InteropBridge {
           }),
         );
       }
+      // An isolate restart loses Player objects and their one-use streams.
+      // Retire orphaned captures rather than adopting an unverified playback.
+      await bridge._retireUnownedAudio();
+      final settings = await bridge._invoke('settings.get', const {});
+      await bridge._audioOutputs.policy(settings['backgroundAudio'] == true);
+      _active = bridge;
       return bridge;
     } catch (_) {
       // Failed attachment owns no new media. Detach these observers without
@@ -110,7 +146,7 @@ class InteropBridge {
       await bridge._detachCoreEvents();
       await bridge._platformSubscription?.cancel();
       bridge._audioSources.clear();
-      bridge._pendingAudioPresentation.clear();
+      await bridge._audioOutputs.dispose();
       await bridge._events.close();
       rethrow;
     }
@@ -154,57 +190,13 @@ class InteropBridge {
           });
         }
       }
-    } else if (event['type'] == 'audio.ready' &&
-        data['sourceId'] is String &&
-        data['nativeReady'] == true) {
-      final source = _audioSources[data['sourceId']];
-      if (source != null) {
-        try {
-          await _invoke('audio.ready', {
-            ...data,
-            'deviceId': source['deviceId'],
-          });
-        } catch (_) {
-          /* An ended source cannot be reattached by a late write. */
-        }
-      } else if (_adoptingAudio) {
-        // First PCM can arrive while the initial core snapshot is awaited.
-        // Keep it until source/device identity has been checked; never create
-        // an audio owner from a native event alone.
-        _rememberAudioPresentation(data);
-      }
-    } else if (event['type'] == 'audio.focus' && data['sourceId'] is String) {
-      final source = _audioSources[data['sourceId']];
-      if (source != null) {
-        try {
-          await _invoke('audio.presentation', {
-            ...data,
-            'deviceId': source['deviceId'],
-          });
-        } catch (_) {
-          // Late focus callbacks cannot recreate a stopped or replaced source.
-        }
-      } else if (_adoptingAudio) {
-        _rememberAudioPresentation(data);
-      }
-    } else if (event['type'] == 'audio.failed' && data['sourceId'] is String) {
-      final id = data['sourceId'] as String;
-      final source = _audioSources[id];
-      try {
-        if (source != null) {
-          await _invoke('audio.stop', {
-            'sourceId': id,
-            'deviceId': source['deviceId'],
-          });
-        }
-      } catch (_) {
-        // A stale failure cannot stop a replacement source with another ID.
-      }
-      await _closeAudio(id);
+    } else if (event['type']?.toString().startsWith('audio.platform.') ==
+        true) {
+      await _audioOutputs.handlePlatformEvent(event);
     } else if (event['type'] == 'connections.stopped') {
       _mediaIntents.cancelAll();
       await Future.wait(_textures.keys.toList().map(_closeVideo));
-      _audioSources.clear();
+      await Future.wait(_audioSources.keys.toList().map(_closeAudio));
     }
   }
 
@@ -286,9 +278,69 @@ class InteropBridge {
 
   Future<void> _closeAudio(String id) async {
     _audioSources.remove(id);
+    await _audioOutputs.stop(id);
+  }
+
+  void _handleAudioOutput(Map<String, dynamic> event) {
+    if (_disposed) return;
+    _events.add(event);
+    final data = Map<String, dynamic>.from(event['data'] as Map);
+    final id = data['sourceId'];
+    final source = _audioSources[id];
+    if (id is! String ||
+        source == null ||
+        data['deviceId'] != source['deviceId']) {
+      return;
+    }
+    if (event['type'] == 'audio.output.failed' ||
+        (event['type'] == 'audio.presentation' && _terminalAudioFocus(data))) {
+      // Claim this exact owner before awaiting so duplicate/late focus events
+      // cannot stop it twice or act on another device's replacement source.
+      _audioSources.remove(id);
+      _mediaIntents.stop(id, audio: true);
+      unawaited(() async {
+        try {
+          await _invoke('audio.stop', {
+            'sourceId': id,
+            'deviceId': source['deviceId'],
+          });
+        } catch (_) {
+          /* The exact source may already have ended; never stop by device alone. */
+        } finally {
+          await _closeAudio(id);
+        }
+      }());
+    } else if (event['type'] == 'audio.presentation') {
+      unawaited(
+        _invoke(
+          'audio.presentation',
+          data,
+        ).catchError((Object _) => <String, dynamic>{}),
+      );
+    }
+  }
+
+  bool _terminalAudioFocus(Map<String, dynamic> receipt) =>
+      receipt['requiresUserResume'] == true &&
+      ['permanentLoss', 'noisy'].contains(receipt['focusSignal']);
+
+  Future<Map<String, dynamic>> _audioPlatformRequest(
+    String command,
+    Map<String, dynamic> params,
+  ) async {
+    if (!Platform.isAndroid) {
+      return {
+        'supported': false,
+        'granted': false,
+        'ready': false,
+        'reason': '此平台的声音焦点和后台适配尚未完成运行验证。',
+      };
+    }
     try {
-      await _platform.invokeMethod<void>('audio.stop', {'sourceId': id});
-    } catch (_) {}
+      return await _platformRequest(command, params);
+    } on PlatformException catch (error) {
+      throw InteropException(error.code, error.message ?? '系统声音操作未完成。');
+    }
   }
 
   Stream<Map<String, dynamic>> get events => _events.stream;
@@ -303,79 +355,21 @@ class InteropBridge {
         : <String, dynamic>{};
   }
 
-  void _rememberAudioPresentation(Map<String, dynamic> data) {
-    final id = data['sourceId'] as String;
-    if (!_pendingAudioPresentation.containsKey(id) &&
-        _pendingAudioPresentation.length >= 16) {
-      return;
-    }
-    final previous = _pendingAudioPresentation[id];
-    final revision = data['revision'] as num? ?? -1;
-    final previousRevision = previous?['revision'] as num? ?? -1;
-    _pendingAudioPresentation[id] = revision >= previousRevision
-        ? {...?previous, ...data}
-        : {...data, ...?previous};
-  }
-
   Future<Map<String, dynamic>> _videoCapabilities() async =>
       _videoOutputs.capabilities();
 
-  Future<void> _adoptNativeAudio() async {
-    final attached =
-        await _platform.invokeMethod<Map<dynamic, dynamic>>('audio.attach') ??
-        const {};
+  Future<void> _retireUnownedAudio() async {
     final known =
         (await _invoke('audio.sources', const {}))['sources'] as List? ??
         const [];
-    for (final receipt
-        in (attached['sources'] as List? ?? const [])
-            .whereType<Map<Object?, Object?>>()) {
-      final id = receipt['sourceId'];
-      final matching = known.whereType<Map<Object?, Object?>>().where(
-        (source) =>
-            source['sourceId'] == id &&
-            source['deviceId'] == receipt['deviceId'],
-      );
-      final source = matching.firstOrNull;
-      if (id is! String ||
-          source == null ||
-          !['playing', 'paused', 'starting'].contains(source['status'])) {
-        if (id is String) {
-          await _platform.invokeMethod<void>('audio.stop', {'sourceId': id});
-        }
-        continue;
-      }
-      final ready = _pendingAudioPresentation.remove(id);
-      final native = Map<String, dynamic>.from(
-        ready != null && ready['deviceId'] == source['deviceId']
-            ? {...receipt, ...ready}
-            : receipt,
-      );
-      if (source['nativeAttached'] != true && native['nativeReady'] != true) {
-        _audioSources[id] = Map<String, dynamic>.from(source);
-        continue;
-      }
-      if (source['nativeAttached'] != true &&
-          (!['playing', 'paused'].contains(native['playState']) ||
-              (native['bytesWritten'] as num? ?? 0) <= 0)) {
-        await _platform.invokeMethod<void>('audio.stop', {'sourceId': id});
+    for (final source in known.whereType<Map<Object?, Object?>>()) {
+      if (source['sourceId'] is String &&
+          source['deviceId'] is String &&
+          !['stopped', 'failed', 'error'].contains(source['status'])) {
         await _invoke('audio.stop', {
-          'sourceId': id,
+          'sourceId': source['sourceId'],
           'deviceId': source['deviceId'],
         });
-        continue;
-      }
-      _audioSources[id] = Map<String, dynamic>.from(source);
-      try {
-        await _invoke(
-          source['nativeAttached'] == true
-              ? 'audio.presentation'
-              : 'audio.ready',
-          {...native, 'sourceId': id, 'deviceId': source['deviceId']},
-        );
-      } on InteropException {
-        // Another source ending during attach does not stop healthy sources.
-        _audioSources.remove(id);
       }
     }
   }
@@ -486,8 +480,8 @@ class InteropBridge {
               )
               .toList()
         : const <String>[];
-    if (Platform.isAndroid && command == 'audio.status') {
-      return _platformRequest(command, params);
+    if (command == 'audio.status') {
+      return _audioOutputs.status(params['sourceId'] as String?);
     }
     if (command == 'session.pause' || command == 'session.resume') {
       final receipt = await _videoPresentation.request(command, params);
@@ -564,36 +558,32 @@ class InteropBridge {
       }
       params = {...params, ...Map<String, dynamic>.from(permission)};
     }
-    if (command == 'audio.volume' && Platform.isAndroid) {
+    if (command == 'audio.volume') {
       final proposed = await _invoke(command, params);
-      final applied = await _platform.invokeMethod<Map<dynamic, dynamic>>(
-        'audio.volume',
-        proposed,
+      final applied = await _audioOutputs.volume(
+        proposed['sourceId'] as String,
+        volume: (proposed['volume'] as num).toDouble(),
+        muted: proposed['muted'] == true,
       );
-      if (applied == null || applied['applied'] != true) {
-        throw const InteropException('audio_volume_failed', '未能调整设备声音。');
-      }
-      return _invoke(command, {
+      final updated = await _invoke(command, {
         ...params,
         ...proposed,
-        ...Map<String, dynamic>.from(applied),
+        ...applied,
       });
+      return {...updated, ...applied};
     }
-    if ((command == 'audio.pause' || command == 'audio.resume') &&
-        Platform.isAndroid) {
+    if (command == 'audio.pause' || command == 'audio.resume') {
       final proposed = await _invoke(command, params);
-      final applied = await _platform.invokeMethod<Map<dynamic, dynamic>>(
-        command,
-        proposed,
-      );
-      if (applied == null || applied['applied'] != true) {
-        throw const InteropException('audio_not_applied', '声音播放器尚未确认操作。');
-      }
-      return _invoke(command, {
+      final id = proposed['sourceId'] as String;
+      final applied = command == 'audio.pause'
+          ? await _audioOutputs.pause(id)
+          : await _audioOutputs.resume(id);
+      final updated = await _invoke(command, {
         ...params,
         ...proposed,
-        ...Map<String, dynamic>.from(applied),
+        ...applied,
       });
+      return {...updated, ...applied};
     }
     final Map<String, dynamic> result;
     try {
@@ -610,11 +600,8 @@ class InteropBridge {
         });
       }
     }
-    if (Platform.isAndroid &&
-        (command == 'settings.get' || command == 'settings.update')) {
-      await _platform.invokeMethod<void>('audio.policy', {
-        'backgroundAllowed': result['backgroundAudio'] == true,
-      });
+    if (command == 'settings.get' || command == 'settings.update') {
+      await _audioOutputs.policy(result['backgroundAudio'] == true);
     }
     if (command == 'session.quality.options') {
       final local = await _videoCapabilities();
@@ -661,38 +648,38 @@ class InteropBridge {
         });
         throw const InteropException('cancelled', '已停止本次声音，不会重新启动。');
       }
-      if (!Platform.isAndroid) {
-        await _invoke('audio.stop', {'deviceId': result['deviceId']});
-        throw const InteropException('renderer_pending', '此平台的声音播放尚未提供。');
-      }
+      final id = result['sourceId'] as String;
+      _audioSources[id] = result;
       try {
-        final native = await _platform.invokeMethod<Map<dynamic, dynamic>>(
-          'audio.start',
+        final playback = await _audioOutputs.start(
           result,
+          cancelled: () => _disposed || intent?.cancelled == true,
         );
-        if (native == null || native['playState'] != 'playing') {
-          throw const InteropException('audio_not_ready', '设备声音尚未开始播放。');
-        }
         if (_disposed || intent?.cancelled == true) {
           throw const InteropException('cancelled', '已停止本次声音，不会重新启动。');
         }
-        _audioSources[result['sourceId'] as String] = result;
-        final ready = await _invoke('audio.ready', {
-          ...result,
-          ...Map<String, dynamic>.from(native),
-        });
+        if (_terminalAudioFocus(playback)) {
+          // The first actual playback may have lost focus before its ready
+          // receipt arrived. Production capture still must stop in that case.
+          throw const InteropException(
+            'audio_focus_lost',
+            '声音焦点已结束，请重新打开此设备声音。',
+          );
+        }
+        final ready = await _invoke('audio.ready', {...result, ...playback});
         if (_disposed || intent?.cancelled == true) {
           throw const InteropException('cancelled', '已停止本次声音，不会重新启动。');
         }
-        return ready;
+        return {...ready, ...playback};
       } catch (_) {
-        await _invoke('audio.stop', {
-          'deviceId': result['deviceId'],
-          'sourceId': result['sourceId'],
-        });
-        await _platform.invokeMethod<void>('audio.stop', {
-          'sourceId': result['sourceId'],
-        });
+        try {
+          await _invoke('audio.stop', {
+            'deviceId': result['deviceId'],
+            'sourceId': id,
+          });
+        } finally {
+          await _closeAudio(id);
+        }
         rethrow;
       }
     }
@@ -751,10 +738,7 @@ class InteropBridge {
     }
     if (command == 'audio.stop') {
       for (final id in stoppingAudioIds) {
-        if (Platform.isAndroid) {
-          await _platform.invokeMethod<void>('audio.stop', {'sourceId': id});
-        }
-        _audioSources.remove(id);
+        await _closeAudio(id);
       }
     }
     if (command == 'devices.disconnect' || command == 'devices.forget') {
@@ -769,10 +753,7 @@ class InteropBridge {
           in _audioSources.keys
               .where((id) => _audioSources[id]?['deviceId'] == deviceId)
               .toList()) {
-        if (Platform.isAndroid) {
-          await _platform.invokeMethod<void>('audio.stop', {'sourceId': id});
-        }
-        _audioSources.remove(id);
+        await _closeAudio(id);
       }
     }
     if (Platform.isAndroid &&
@@ -826,11 +807,16 @@ class InteropBridge {
       await _closeVideo(id);
     }
     await _videoOutputs.dispose();
-    if (Platform.isAndroid) {
-      for (final id in audioIds) {
-        await _closeAudio(id);
+    for (final id in audioIds) {
+      final deviceId = _audioSources[id]?['deviceId'];
+      if (deviceId is String) {
+        try {
+          await _invoke('audio.stop', {'sourceId': id, 'deviceId': deviceId});
+        } catch (_) {}
       }
+      await _closeAudio(id);
     }
+    await _audioOutputs.dispose();
     _textures.clear();
     _audioSources.clear();
     try {
@@ -839,6 +825,7 @@ class InteropBridge {
     } on TimeoutException {
       /* In-flight core startup retains its own bounded cancellation cleanup. */
     }
+    if (identical(_active, this)) _active = null;
     await _events.close();
   }
 }

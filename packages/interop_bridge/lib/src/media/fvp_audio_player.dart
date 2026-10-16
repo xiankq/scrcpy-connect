@@ -4,6 +4,7 @@ import 'package:fvp/mdk.dart' as mdk;
 
 import '../interop_exception.dart';
 import 'audio_player_port.dart';
+import 'playback_confirmation.dart';
 
 /// Audio-only MDK output. Never creates a Flutter texture, parses PCM, or
 /// requests system focus. State receipts use callbacks/native waitFor, not the
@@ -42,6 +43,7 @@ class FvpAudioPlayer implements AudioPlayerPort {
   final _subscriptions = <StreamSubscription<dynamic>>[];
   bool _initialized = false, _closed = false, _hasPlayed = false;
   Future<AudioJson>? _releasing;
+  late final _confirmation = _newConfirmation();
 
   @override
   Stream<AudioJson> get events => _events.stream;
@@ -112,39 +114,18 @@ class FvpAudioPlayer implements AudioPlayerPort {
     return AudioFormat(format.codec, format.sampleRate, format.channels);
   }
 
-  Future<void> _state(
-    mdk.PlaybackState target, {
-    bool releasing = false,
-  }) async {
-    if (!releasing) _check();
-    final receipt = Completer<void>();
-    final subscription = _player.onStateChanged.listen((event) {
-      if (event.newValue == target && !receipt.isCompleted) receipt.complete();
-    });
-    final timer = Timer.periodic(const Duration(milliseconds: 25), (_) {
-      if (_closed && !releasing) {
-        if (!receipt.isCompleted) {
-          receipt.completeError(
-            const InteropException('cancelled', '此声音输出已结束。'),
-          );
-        }
-        return;
-      }
-      // Never use zero/default here: timeout: 0 blocked the calling isolate
-      // until live-input EOF in the Android MDK probe. A positive 1ms query
-      // returned in 0–1ms there. Query only after requesting the state; a Dart
-      // Timer cannot interrupt a synchronous native waitFor call.
-      if (!receipt.isCompleted && _player.waitFor(target, timeout: 1)) {
-        receipt.complete();
-      }
-    });
-    try {
-      _player.state = target;
-      await receipt.future.timeout(const Duration(seconds: 4));
-    } finally {
-      timer.cancel();
-      await subscription.cancel();
-    }
+  PlaybackConfirmation<mdk.PlaybackState> _newConfirmation() =>
+      PlaybackConfirmation(
+        changes: _player.onStateChanged.map((event) => event.newValue),
+        request: (target) => _player.state = target,
+        // Zero/default waitFor blocked the isolate in the Android probe.
+        // Query only after a request, with an explicitly positive timeout.
+        query: (target) => _player.waitFor(target, timeout: 1),
+      );
+
+  Future<void> _state(mdk.PlaybackState target) async {
+    _check();
+    await _confirmation.set(target);
   }
 
   @override
@@ -191,13 +172,18 @@ class FvpAudioPlayer implements AudioPlayerPort {
         'nativeDeleteConfirmed': false,
       };
     }
+    // Cancel and drain all playback waiters before entering shutdown. The
+    // dedicated shutdown confirmation is itself drained before native dispose.
+    await _confirmation.close();
+    final shutdown = _newConfirmation();
     var stopped = false;
     try {
-      await _state(mdk.PlaybackState.stopped, releasing: true);
+      await shutdown.set(mdk.PlaybackState.stopped);
       stopped = true;
-    } on TimeoutException {
-      // A request is not an actual stopped-state receipt.
+    } catch (_) {
+      // A request or a late callback is not an actual stopped-state receipt.
     } finally {
+      await shutdown.close();
       for (final subscription in _subscriptions) {
         await subscription.cancel();
       }

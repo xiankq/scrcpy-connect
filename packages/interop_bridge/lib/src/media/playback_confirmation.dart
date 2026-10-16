@@ -6,16 +6,12 @@ import '../interop_exception.dart';
 /// callbacks. Closing drains every waiter before its owner deletes the handle.
 class PlaybackConfirmation<T> {
   PlaybackConfirmation({
-    required Stream<T> changes,
-    required void Function(T) request,
-    required bool Function(T) query,
-    Duration timeout = const Duration(seconds: 4),
-    Duration interval = const Duration(milliseconds: 20),
-  }) : _changes = changes,
-       _request = request,
-       _query = query,
-       _timeout = timeout,
-       _interval = interval;
+    required this._changes,
+    required this._request,
+    required this._query,
+    this._timeout = const Duration(seconds: 4),
+    this._interval = const Duration(milliseconds: 20),
+  });
 
   final Stream<T> _changes;
   final void Function(T) _request;

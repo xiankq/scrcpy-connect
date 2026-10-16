@@ -68,7 +68,7 @@ MDK `prepare(0)`仅可确认媒体信息，不保证那一刻已经显示首帧�
 
 1. 静止输入的暂停原先4秒失败：有界查询约1～2ms返回false，更换decoder无效。官方ControlMessage定义RESET_VIDEO=17，Controller只请求重置现有encoder，不注入点击或重启应用。[S08][S09] 实测在请求本地pause后用该控制消息提供新编码输出，可以收到真实暂停ACK。共享VideoPresentation现按会话串行化：本地pause请求/refresh/真实ACK → Core暂停捕获；恢复则Core先继续捕获并RESET_VIDEO → 本地playing ACK与实际snapshot。确认失败不提交捕获暂停，尽可能恢复本地消费者，保留原始错误。五种编码完整链路已通过；真实 HOME 退后台2秒再返回 Activity 也在产品页面通过，恢复要求真实 snapshot，不能由 streaming 状态代替。更长后台、系统回收仍需另外验收。
 2. 旋转已验证同一 session/relay 的 generation 1→2、新代真实 snapshot、Texture 更换及 Core 触控尺寸同步，测试约5秒通过。模拟器自动旋转会随传感器转回；测试夹具关闭目标自动旋转，结束恢复原设置。另一次7秒回归在旋转动画后900ms截图，目视确认画面方向与比例正确；这900ms仅用于稳定视觉检查，不计作首帧时间。
-3. 删除267行 RemoteVideoDecoder 及 MainActivity 视频方法后，真实产品页面的五种编码再次全部通过（28秒），包含 Texture、实际首帧、沉浸布局、退出与停止。旧声音实现仍保留，等待共享 PCM 的焦点、后台与生命周期证据。
+3. 删除267行 RemoteVideoDecoder 及 MainActivity 视频方法后，真实产品页面的五种编码再次全部通过（28秒），包含 Texture、实际首帧、沉浸布局、退出与停止。后续共享PCM暂停恢复、实际产品HOME与Activity重建已通过，旧声音循环也已删除；真实外部焦点、长期后台、进程回收等仍单独验收。
 4. 公共dispose为async-void，只能报告请求及纹理分离，不能伪称native delete已确认。fvp锁文件也不能锁定所有平台下载的MDK二进制；四端归档与摘要仍需固定。
 
 ## 回归证据与退出保证
@@ -84,6 +84,8 @@ Flutter host driver 曾在应用测试超时后输出成功并返回空 metadata
 独立复查发现 native `waitFor` 可以先于经 ReceivePort/broadcast 递送的 Dart 回调确认状态；因此“上次 callback 已是 playing”不能跳过本次恢复请求。新共享 `PlaybackConfirmation` 每次先请求，再以正数1ms native query 确认；回调只唤醒实际查询，不独立充当 ACK。`close()` 先阻止新查询、取消并排空所有 waiter，播放器再释放句柄；否则退出时仍在运行的暂停轮询可能读取已删除的 native handle。4项接口回归覆盖迟到回调、无回调确认、释放取消与超时/查询失败清理，独立只读复查通过。
 
 真实五编码各连续3次暂停/恢复回归通过（15秒），本地首帧H264/H265/AV1/VP8/VP9为1179/406/284/293/282ms，每种4次真实snapshot回执（首次+3次恢复）；日志 `/tmp/connect-fvp-final-video-cycles.log`，完整元数据 `/tmp/connect-e2e/fvp-three-cycles-result.json`。复现时使用完整生命周期命令，追加 `--dart-define=CONNECT_FVP_PAUSE_CYCLES=3`。这验证实际调用链，不能声称可以确定触发每一种线程调度。HOME driver也已加专属完成回执校验，历史成功日志仍是实际应用测试通过，而非仅主机空回执。
+
+音频与engine迁移后，实际产品五codec再次26秒通过，完成回执true；日志 `/tmp/connect-final-product-five-codecs.log`。HEVC目视仍低清，沿用已列出的AVD编码器/实际尺寸专项验收，不将首帧渲染成功写成全画质验收。
 
 ## 一手来源
 

@@ -14,7 +14,6 @@ import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.UUID
@@ -31,7 +30,6 @@ class MainActivity : FlutterActivity() {
     private val main = Handler(Looper.getMainLooper())
     private val documents by lazy { PlatformDocuments(this) }
     private val audio by lazy { NativeAudioRuntime.get(applicationContext) }
-    private var events: EventChannel.EventSink? = null
     private var pendingUsb: MethodChannel.Result? = null
     private var pendingDevice: UsbDevice? = null
     private var pendingUsbAttempt: String? = null
@@ -55,18 +53,14 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         current = java.lang.ref.WeakReference(this)
-        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.scrcpyconnect/media_events")
-            .setStreamHandler(object : EventChannel.StreamHandler {
-                override fun onListen(arguments: Any?, sink: EventChannel.EventSink) { events = sink; bindNativeEvents() }
-                override fun onCancel(arguments: Any?) { events = null; audio.unbindEvents(this@MainActivity); IncomingShares.unbind(this@MainActivity) }
-            })
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.scrcpyconnect/platform")
-            .setMethodCallHandler(::handlePlatform)
+        ProcessFlutterHost.attach(this)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, IntentFilter(usbAction), RECEIVER_NOT_EXPORTED)
         else @Suppress("DEPRECATION") registerReceiver(usbReceiver, IntentFilter(usbAction))
-        bindNativeEvents()
         acceptIncoming(intent, false)
     }
+
+    override fun provideFlutterEngine(context: Context): FlutterEngine = ProcessFlutterHost.engine(context)
+    override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun onStart() {
         super.onStart()
@@ -86,13 +80,7 @@ class MainActivity : FlutterActivity() {
         acceptIncoming(intent, true)
     }
 
-    private fun emit(event: Map<String, Any?>) { main.post { events?.success(event) } }
-
-    private fun bindNativeEvents() {
-        val activity = java.lang.ref.WeakReference(this)
-        audio.bind(this) { event -> activity.get()?.emit(event) }
-        IncomingShares.bind(this) { share -> activity.get()?.emit(mapOf("type" to "share.platform.pending", "data" to share)) }
-    }
+    private fun emit(event: Map<String, Any?>) = ProcessFlutterHost.emit(event)
 
     private fun acceptIncoming(intent: Intent?, renewed: Boolean) {
         val caller = if (Build.VERSION.SDK_INT >= 35) runCatching { if (renewed) currentCaller else initialCaller }.getOrNull() else null
@@ -111,11 +99,9 @@ class MainActivity : FlutterActivity() {
         pendingUsb = null
         pendingDevice = null
         pendingUsbAttempt = null
-        audio.stopAll()
-        emit(mapOf("type" to "connections.stopped", "data" to emptyMap<String,Any>()))
     }
 
-    private fun handlePlatform(call: MethodCall, result: MethodChannel.Result) {
+    internal fun handlePlatform(call: MethodCall, result: MethodChannel.Result) {
         try {
             val documentArguments = (call.arguments as? Map<*, *>)?.entries?.mapNotNull { entry ->
                 (entry.key as? String)?.let { it to entry.value }
@@ -123,29 +109,6 @@ class MainActivity : FlutterActivity() {
             if (documents.handle(call.method, documentArguments, result)) return
             if (IncomingShares.handle(applicationContext, this, call, result)) return
             when (call.method) {
-                "audio.start" -> {
-                    val id = call.argument<String>("sourceId") ?: error("Missing audio source")
-                    val port = call.argument<Number>("audioPort")?.toInt() ?: error("Missing audio port")
-                    val token = call.argument<String>("audioToken") ?: error("Missing audio token")
-                    audio.start(this, id, call.argument<String>("deviceId"), port, token, result)
-                }
-                "audio.attach" -> result.success(audio.attach())
-                "audio.stop" -> { audio.stop(call.argument<String>("sourceId")); result.success(null) }
-                "audio.pause", "audio.resume" -> {
-                    result.success(audio.paused(call.argument<String>("sourceId"), call.method == "audio.pause"))
-                }
-                "audio.status" -> {
-                    result.success(audio.status(call.argument<String>("sourceId")))
-                }
-                "audio.policy" -> {
-                    result.success(audio.policy(call.argument<Boolean>("backgroundAllowed") == true))
-                }
-                "audio.volume" -> {
-                    val volume = call.argument<Number>("volume")?.toFloat() ?: 1f
-                    val muted = call.argument<Boolean>("muted") ?: false
-                    if (!audio.volume(call.argument<String>("sourceId"), volume,muted)) result.error("audio_volume_failed", "无法调整此设备声音。", null)
-                    else result.success(mapOf("applied" to true, "volume" to volume, "muted" to muted))
-                }
                 "usb.authorize" -> authorizeUsb(call, result)
                 "usb.release" -> {
                     UsbLeases.connections.remove(call.argument<String>("usbLeaseId"))?.close()
@@ -283,7 +246,7 @@ class MainActivity : FlutterActivity() {
         runCatching { unregisterReceiver(usbReceiver) }
         audio.detach(this)
         IncomingShares.releaseOwner(this)
-        events = null
+        ProcessFlutterHost.detach(this)
         DiscoveryNetwork.release("activity")
         super.onDestroy()
     }

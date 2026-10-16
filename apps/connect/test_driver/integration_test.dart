@@ -14,8 +14,14 @@ Future<void> main() async {
   );
   await directory.create(recursive: true);
   final driver = await FlutterDriver.connect();
+  var hostFinished = false;
+  Future<void>? audioOperation;
   if (Platform.environment['CONNECT_E2E_AUDIO_LIFECYCLE'] == '1') {
-    driveAudioLifecycle(driver).catchError((Object error, StackTrace stack) {
+    audioOperation = driveAudioLifecycle(
+      driver,
+      shouldStop: () => hostFinished,
+    );
+    audioOperation.catchError((Object error, StackTrace stack) {
       stderr.writeln('Actual audio lifecycle test failed: $error');
       exit(1);
     });
@@ -45,6 +51,10 @@ Future<void> main() async {
     driver: driver,
     writeResponseOnFailure: true,
     responseDataCallback: (data) async {
+      // extended integrationDriver exits the process after this callback.
+      // Drain host fixture cleanup before it can terminate pending finallys.
+      hostFinished = true;
+      await audioOperation;
       final metadata = {...?data}..remove('screenshots');
       await File('${directory.path}/result.json')
           .writeAsString(jsonEncode(metadata));
@@ -53,6 +63,10 @@ Future<void> main() async {
         throw StateError(
           'The app did not complete background media acceptance.',
         );
+      }
+      if (Platform.environment['CONNECT_E2E_AUDIO_LIFECYCLE'] == '1' &&
+          metadata['audioAcceptanceComplete'] != true) {
+        throw StateError('The app did not complete shared audio acceptance.');
       }
     },
     onScreenshot: (name, bytes, [args]) async {
