@@ -72,9 +72,9 @@
 | R25 | 关闭窗口默认与任务去向依据scrcpy，由代理定默认 | 已按scrcpy设置并实测 | vd_destroy_content=false；停止会话后任务保留，迁移/多实例按实际系统 |
 | R26 | 声音按设备只播一次；多设备默认单路，可固定/主动混音 | 双设备同时播放及外部焦点实测通过；物理听感待验 | 真实双AVD音源/去重；外部AudioManager临时loss/手动暂停保留/gain/永久loss终止旧ID/新ID重新开启 |
 | R27 | 剪贴板跟随当前设备，可固定，其他后台设备不覆盖 | 文本自动同步三AVD真实通过；普通主控后台暂停访问 | 本机↔目标/独立客户端变更/跟随固定隔离/HOME零读写/禁用；图片文件剪贴板仍分级待补 |
-| R28 | 文本/图片/文件、系统分享、本机打开；内容和目标可辨 | 路由/确认已实现，文本与系统文件部分真实通过 | clipboard与SAF E2E；图片/文件系统分享及本机应用打开仍待E2E |
+| R28 | 文本/图片/文件、系统分享、本机打开；内容和目标可辨 | 外部分享导入/取消九模式真实通过；提交至设备及本机打开待验 | Rust真实pipe字节/中文名/多文件/别名、拒绝无授权与本应用URI/超限、慢源取消、图片页目视；桌面返回宿主先红后绿 |
 | R29 | 同名询问保留两份/替换/跳过，可应用当前任务 | 批冲突实际通过 | files_android.rs：本批applyToAll隔离，未知保存结果不重试 |
-| R30 | 文件浏览/搜索/目录/基本管理、批量双向取用与传输 | 文件/目录/本机SAF真实通过，provider故障矩阵仍待补 | files_android5+files_tree_android4；SAF三阶段实际字节/空目录通过 |
+| R30 | 文件浏览/搜索/目录/基本管理、批量双向取用与传输 | 被控端文件/目录通过；共享SAF新路径与provider故障矩阵待验 | files_android5+files_tree_android4；旧SAF三阶段字节/空目录已通过，不能替代新共享复制路径验收 |
 | R31 | 相册图片/视频预览、手动保存分享，拍摄/修图转原应用 | 页面已实现；缩略图效率与相册真实E2E在补 | 目标端有界JPEG、EXIF8方向/视频旋转/缓存/取消实际通过；主控新链路待E2E |
 | R32 | 来电/通话页，接听拒接挂断，双向语音按能力，拨号等去原应用 | 真实来电状态通过；安全逐通话控制待实现 | 聚合Telecom API无法绑定具体call；快速A结束/B来电负例证实；危险全局动作已拒绝 |
 | R33 | 短信只通知与远控原应用，不做收件箱/写库/短信业务页 | 范围与UI已落实；通知原应用路径真实被控端通过 | 无独立SMS业务页；原通知PendingIntent/手机应用入口 |
@@ -104,7 +104,7 @@
 | R57 | 多文件夹架构，lib下直接pages及少量共享目录 | 已实现并回归 | lib/pages/<页面>/<页面>_page.dart；共享widgets/services/router另放，不增加features/core/app嵌套 |
 
 | R58 | 使用go_router_builder、riverpod_generator、build_runner及官方lint，防止工程和架构退化 | 已完成生成迁移及严格分析/78项widget；真实Android五codec、后台与旋转通过 | 精确兼容版本、生成typed shell/导航、深冻结Notifier、根原生Riverpod插件负例实检、workspace only-check |
-| R59 | Flutter/Rust为主体，减少自维护Android代码和未来多端重复适配 | 正在重构 | 分享owner/导入/持久化与SAF复制迁共享Dart/Rust；267行视频decoder与313行PCM播放器已删除；真实五codec/声音/Activity重建/双设备焦点通过，Kotlin从2176降至1172行；OS适配仍保留，四端编译未冒称完成 |
+| R59 | Flutter/Rust为主体，减少自维护Android代码和未来多端重复适配 | 正在重构 | 分享owner/导入/持久化与SAF复制迁共享Dart/Rust；267行视频decoder与313行PCM播放器已删除；真实五codec/声音/Activity重建/双设备焦点通过，Kotlin删除播放器后1172行，补宿主/OS租约隔离后1246行（10文件）；OS适配仍保留，四端编译未冒称完成 |
 
 ## 执行记录
 
@@ -138,3 +138,8 @@
 
 - 共享音频迁移：直接PCM生命周期4秒、产品HOME与同进程Activity重建14秒通过；补齐host退出前等待finally后13秒复验，完成回执true、开发设置恢复且临时archive不存在。外部AudioManager双设备焦点测试先红后绿16秒通过：临时loss保留手动暂停、永久loss关闭准确旧ID且gain不复活，用户显式新开取得新ID。修复旧焦点acquire/release迟到复用epoch竞态，22项对应单测与独立review通过。
 - 整合tool/check.sh实际退出0：Rust133 passed/41 ignored、应用78、桥接71、生成only-check、严格分析、Riverpod插件负例及Google官方design lint通过（0 errors/26 warnings/1 info）。旧Rust生成格式和新增helper严格lint问题在首轮检查发现后修正，第二轮全绿。当前尚未完成长期后台、系统回收、真实HAL/扬声器、共享SAF新路径及外部分享实际验收等剩余矩阵。
+
+- 外部分享实际验收：九模式20秒通过（/tmp/connect-incoming-share-final.log），真实URI grant/pipe进入Rust，校验字节、中文名、大小、多文件、错误原因、取消后pending及来源清理。测试提供方补onNewIntent/CLEAR_TOP|SINGLE_TOP、显式ClipData避免系统自动授权，以及未知大小null处理；超大AssetFD由Rust真实容量拒绝。图片页截图已目视。并非已验收提交到被控设备、恶意provider压力或120秒deadline。
+- 分享后的桌面返回新负例确认：旧singleTop留下两个MainActivity，旧实例onStart/onResume仍脱离engine，/tmp/connect-share-launcher-before.log实际失败。singleTask后最小7秒通过，实际单宿主、resumed及设备列表正常。Discovery改每Activity独立token，USB交付后仅exact Rust ACK释放（上限16），无需Activity的release由process host处理；真实production协调器JVM端口测试与全Kotlin编译通过，物理USB未验。
+
+- singleTask最终九模式+HOME/launcher组合16秒全过（/tmp/connect-share-acceptance-final.log，completiontrue），确实一宿主且Flutter resumed；焦点实际等待4ms，不能用am start -W的显示完成代替。返回设备列表与图片分享页截图已目视。严格Flutter分析、Dart格式、JVM ownership与diff检查通过；新共享SAF及分享真实提交等继续保留待验。

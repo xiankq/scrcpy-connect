@@ -129,3 +129,10 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 - 当前已完成生成typed routes/Notifier、78项app widget、严格分析、真实workspace only-check及Riverpod插件违规负例。Rust工作区133默认测试通过、41项设备/外部工具用例显式ignored；all-target clippy通过。Google DESIGN.md官方lint为0 errors/26 warnings/1 info。整合 `tool/check.sh` 第二轮已实际退出0：133 Rust/41 ignored、78应用与71桥接、生成检查、严格分析、插件负例及官方设计lint全部执行；首轮发现新增helper/driver的严格lint并修正。随后永久焦点语义修正又经分析与上述真实红→绿验证，不将其他历史证据自动继承为新版本全通过。
 
 - 音频/engine整合后再次运行实际产品五codec，26秒通过；完成回执true，日志 `/tmp/connect-final-product-five-codecs.log`，metadata `/tmp/connect-e2e/final-product-five-codecs-result.json`。HEVC截图目视仍明显低清，与此前目标AVD软件encoder降尺寸现象相似；本轮未重新独立测量实际码流尺寸，不能把首帧可渲染当作五种视觉质量均通过。画质验证继续保留，未隐藏此缺口。
+
+## 共享导入与桌面返回（2026-10-17）
+
+- 外部独立分享APK经真实Intent/系统grant/可读pipe，进入共享Rust导入器与Flutter typed分享页。九模式验证文字、图片、多文件、外部provider别名，准确拒绝无grant/本应用URI/33文件/513MiB声明，慢源进入importing后可取消；逐文件校验实际字节/长度、消费后pending清空、未提交来源删除。超大来源提供真实AssetFD，由Rust容量检查拒绝，不依赖fixture自己抛异常，也不声称metadata查询前拒绝。
+- 增加实际HOME与MAIN/LAUNCHER返回回归，先证实旧singleTop产生两个UI宿主且旧实例失去engine；singleTask后同一宿主经onNewIntent接收分享，Flutter Navigator状态保留。am start -W并不确认Flutter window focus，测试有界等待真实resumed；最终等待4ms。九模式+返回组合16秒退出0、shareAcceptanceComplete=true，日志/tmp/connect-share-acceptance-final.log，metadata /tmp/connect-e2e/incoming-share/result.json。图片分享页与返回后的设备列表截图均已目视，保留/tmp不进Git。
+- 每个Activity独立持有发现锁；USB已交付fd仅精确Rust ACK关闭Java原句柄，无Activity仍可释放，未ACK上限16。重叠Activity生产协调器JVM端口测试与全Kotlin编译通过；物理USB与Wi-Fi多播环境未验。修复提交0cf1b66。
+- 全仓严格Flutter分析无问题，Dart格式与diff检查通过。共享SAF新路径、实际分享提交到被控设备、恶意provider/压力/120秒deadline、外部分享打断系统picker的取消语义仍需专项，不以此九模式替代。具体边界及复现见[研究记录](../research/android-share-trust.md)。
