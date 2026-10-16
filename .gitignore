@@ -1,2 +1,18 @@
 # Design preview exports belong in the system temporary directory.
 /designs/previews/
+
+# Workspace outputs and machine-local configuration.
+/target/
+**/target/
+/.dart_tool/
+/build/
+**/.dart_tool/
+**/build/
+**/android/local.properties
+**/android/.gradle/
+**/android/app/src/main/jniLibs/
+**/.flutter-plugins-dependencies
+**/.DS_Store
+.env
+*.keystore
+*.jks

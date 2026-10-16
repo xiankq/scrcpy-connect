@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = ["crates/adb", "crates/interop_core", "crates/interop_bridge"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

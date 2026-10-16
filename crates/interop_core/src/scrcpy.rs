@@ -1,0 +1,1484 @@
+//! Fixed scrcpy 5.0.1 protocol: compressed media stays off the Dart event channel.
+//! Source: Genymobile/scrcpy v5.0.1 Streamer, DesktopConnection and ControlMessageReader.
+use crate::{
+    CoreError, CoreResult, Runtime,
+    model::{now, quote, required},
+};
+use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, sync::RemotePath};
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    sync::{Mutex, RwLock, broadcast, mpsc, oneshot},
+    time::Instant,
+};
+
+pub(crate) const SERVER: &[u8] = include_bytes!("../../../servers/vendor/scrcpy-server-v5.0.1");
+pub(crate) const SERVER_SHA: &str =
+    "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536";
+const MAX_PACKET: usize = 16 * 1024 * 1024;
+const CLIPBOARD_MAX: usize = (1 << 18) - 14;
+
+pub(crate) struct Session {
+    device_id: String,
+    package: Option<String>,
+    cancellation: CancellationToken,
+    control: mpsc::Sender<ControlRequest>,
+    state: Arc<RwLock<Value>>,
+    process_closed: Arc<AtomicBool>,
+    process: OwnedProcess,
+}
+#[derive(Clone)]
+struct OwnedProcess {
+    pid: u32,
+    started: u64,
+    jar: String,
+    scid: String,
+}
+
+fn process_stat(bytes: &[u8]) -> CoreResult<(char, u64)> {
+    let text = std::str::from_utf8(bytes)
+        .map_err(|_| CoreError::new("process_identity", "服务进程标识无效。"))?;
+    // comm is parenthesized and may itself contain spaces or parentheses.
+    let (_, fields) = text
+        .rsplit_once(") ")
+        .ok_or_else(|| CoreError::new("process_identity", "服务进程状态无效。"))?;
+    let fields = fields.split_ascii_whitespace().collect::<Vec<_>>();
+    let state = fields
+        .first()
+        .and_then(|v| v.chars().next())
+        .ok_or_else(|| CoreError::new("process_identity", "服务进程状态缺失。"))?;
+    let started = fields
+        .get(19)
+        .and_then(|v| v.parse().ok())
+        .ok_or_else(|| CoreError::new("process_identity", "服务进程启动标识缺失。"))?;
+    Ok((state, started))
+}
+
+impl OwnedProcess {
+    async fn capture(
+        client: &interop_adb::Client,
+        pid: u32,
+        jar: &str,
+        scid: String,
+    ) -> CoreResult<Self> {
+        let stat = client
+            .shell(
+                &format!("cat /proc/{pid}/stat"),
+                4096,
+                OperationOptions::default(),
+            )
+            .await?;
+        let (_, started) = process_stat(&stat.stdout)?;
+        let process = Self {
+            pid,
+            started,
+            jar: jar.to_owned(),
+            scid,
+        };
+        process.signal(client, false).await?;
+        Ok(process)
+    }
+
+    async fn signal(&self, client: &interop_adb::Client, pause: bool) -> CoreResult<()> {
+        // Revalidate in the signaling shell, including the kernel start time,
+        // rather than retaining a numeric PID across independent shell calls.
+        // The launcher also keeps a parent alive to CONT on stdin EOF.
+        // app_process rewrites argv[0]; explicitly give it a unique nice-name
+        // containing both our private JAR path and SCID, then match that whole arg.
+        let identity = quote(&format!("\ninterop.scrcpy:{}:{}\n", self.scid, self.jar))?;
+        let command = format!(
+            r#"p={pid}
+expected={started}
+identity() {{
+  IFS= read -r stat < /proc/$p/stat || return 1
+  rest=${{stat##*) }}
+  set -- $rest
+  state=$1
+  shift 19 || return 1
+  [ "$1" = "$expected" ] || return 1
+  cmd=$(tr '\000' '\n' < /proc/$p/cmdline) || return 1
+  cmd="
+$cmd
+"
+  case "$cmd" in *{identity}*) ;; *) return 1 ;; esac
+}}
+identity || {{ printf 'identity-mismatch\n'; exit 41; }}
+kill -{signal} "$p" || exit 42
+i=0
+while [ "$i" -lt 30 ]; do
+  identity || exit 41
+  case "$state" in {states}) printf 'verified:%s\n' "$state"; exit 0 ;; esac
+  i=$((i+1))
+  sleep 0.01
+done
+exit 43"#,
+            pid = self.pid,
+            started = self.started,
+            signal = if pause { "STOP" } else { "CONT" },
+            states = if pause { "T|t" } else { "R|S|D|I" }
+        );
+        let output = client
+            .shell(
+                &command,
+                4096,
+                OperationOptions {
+                    timeout: Duration::from_secs(3),
+                    ..Default::default()
+                },
+            )
+            .await?;
+        if output.exit_code.is_some_and(|code| code != 0)
+            || !output.stdout.starts_with(b"verified:")
+        {
+            return Err(CoreError::new(
+                "process_control",
+                "无法确认本会话服务进程的暂停或恢复状态。",
+            ));
+        }
+        Ok(())
+    }
+}
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.cancellation.cancel();
+    }
+}
+enum ControlRequest {
+    Send(Vec<u8>, oneshot::Sender<CoreResult<Value>>),
+    ClipboardGet(oneshot::Sender<CoreResult<Value>>),
+    ClipboardSet(String, bool, oneshot::Sender<CoreResult<Value>>),
+}
+struct CancelOnDrop(Option<CancellationToken>);
+struct SessionContext {
+    cancellation: CancellationToken,
+    state: Arc<RwLock<Value>>,
+    events: broadcast::Sender<Value>,
+    device: String,
+}
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        if let Some(token) = &self.0 {
+            token.cancel();
+        }
+    }
+}
+
+fn options(token: &CancellationToken) -> OperationOptions {
+    OperationOptions {
+        timeout: Duration::from_secs(365 * 86400),
+        cancellation: token.clone(),
+    }
+}
+fn event(events: &broadcast::Sender<Value>, kind: &str, device: &str, data: Value) {
+    let _ = events.send(json!({"type":kind,"deviceId":device,"data":data,"timestamp":now()}));
+}
+fn invalid(message: &str) -> CoreError {
+    CoreError::new("invalid_argument", message)
+}
+fn package_name(value: &str) -> CoreResult<&str> {
+    if value.is_empty()
+        || value.len() > 230
+        || !value.split('.').all(|part| {
+            let mut bytes = part.bytes();
+            bytes
+                .next()
+                .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+                && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        })
+    {
+        return Err(invalid("应用包名无效。"));
+    }
+    Ok(value)
+}
+
+impl Runtime {
+    pub(crate) async fn start_session(&self, params: &Value) -> CoreResult<Value> {
+        let device_id = required(params, "deviceId")?.to_owned();
+        let client = self.client(&device_id).await?;
+        let package = params
+            .get("packageName")
+            .and_then(Value::as_str)
+            .map(package_name)
+            .transpose()?
+            .map(str::to_owned);
+        let device = self.device(&device_id).await?;
+        if package.is_none() && self.device_sleeping(&device_id).await? == Some(true) {
+            return Err(CoreError::new(
+                "device_asleep",
+                "手机当前处于系统休眠，尚未提供画面。可在手机上唤醒，或明确选择唤醒手机；这可能点亮实体屏幕，仍需使用手机自身的锁屏解锁。",
+            ));
+        }
+        if package.is_some() && device.api_level.is_some_and(|level| level < 29) {
+            return Err(CoreError::new(
+                "unsupported",
+                "独立应用窗口需要 Android 10 或更新版本。",
+            ));
+        }
+        if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
+            return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
+        }
+        if self.sessions.lock().await.len() >= 16 {
+            return Err(CoreError::new("session_limit", "控制会话数量已达到上限。"));
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        let video_token = format!(
+            "{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        );
+        let return_token = video_token.clone();
+        let scid = u32::from_be_bytes(
+            uuid::Uuid::new_v4().as_bytes()[..4]
+                .try_into()
+                .expect("UUID"),
+        ) & 0x7fff_ffff;
+        let remote_jar = format!("/data/local/tmp/interop-scrcpy-{id}.jar");
+        let cancellation = CancellationToken::new();
+        let mut guard = CancelOnDrop(Some(cancellation.clone()));
+        let state = Arc::new(RwLock::new(
+            json!({"sessionId":id,"id":id,"deviceId":device_id,"name":package.as_deref().unwrap_or("手机屏幕"),"packageName":package,"status":"starting","createdAt":now(),"codec":"h264","audio":false,"apiLevel":device.api_level}),
+        ));
+        let cleanup_cancel = cancellation.clone();
+        let cleanup_client = client.clone();
+        let cleanup_path = remote_jar.clone();
+        let cleanup_state = state.clone();
+        let cleanup_events = self.events.clone();
+        let cleanup_device = device_id.clone();
+        tokio::spawn(async move {
+            cleanup_cancel.cancelled().await;
+            {
+                let mut data = cleanup_state.write().await;
+                if data["status"] != "failed" {
+                    data["status"] = json!("stopped");
+                }
+                data.as_object_mut()
+                    .expect("session state")
+                    .remove("textureId");
+                data.as_object_mut()
+                    .expect("session state")
+                    .remove("videoPort");
+                event(
+                    &cleanup_events,
+                    "session.disconnected",
+                    &cleanup_device,
+                    data.clone(),
+                );
+            }
+            let cleanup = format!("rm -f -- {}", quote(&cleanup_path).expect("generated path"));
+            let _ = cleanup_client
+                .shell(
+                    &cleanup,
+                    4096,
+                    OperationOptions {
+                        timeout: Duration::from_secs(3),
+                        ..Default::default()
+                    },
+                )
+                .await;
+        });
+        let settings = self.store.read().await.settings.clone();
+        let max_size = settings["maxSize"]
+            .as_u64()
+            .unwrap_or(1280)
+            .clamp(320, 4096);
+        let max_fps = settings["maxFps"].as_u64().unwrap_or(60).clamp(1, 120);
+        let bit_rate = settings["videoBitRate"]
+            .as_u64()
+            .unwrap_or(8_000_000)
+            .clamp(500_000, 50_000_000);
+        let startup = async {
+            let mut sync = client.sync(OperationOptions::default()).await?;
+            sync.push(
+                &RemotePath::new(&remote_jar)?,
+                &mut &SERVER[..],
+                0o600,
+                now().min(u32::MAX as u64) as u32,
+                SERVER.len() as u64,
+            )
+            .await?;
+            drop(sync);
+            let mut command = format!(
+                "CLASSPATH={} app_process / --nice-name={} com.genymobile.scrcpy.Server 5.0.1 scid={scid:08x} log_level=warn video=true audio=false control=true video_codec=h264 max_size={max_size} max_fps={max_fps} video_bit_rate={bit_rate} tunnel_forward=true cleanup=true vd_destroy_content=false clipboard_autosync=false power_on=false send_dummy_byte=true send_device_meta=true send_stream_meta=true send_frame_meta=true",
+                quote(&remote_jar)?,
+                quote(&format!("interop.scrcpy:{scid:08x}:{remote_jar}"))?
+            );
+            if package.is_some() {
+                command.push_str(" new_display=1080x1920 vd_system_decorations=false");
+            }
+            // Keep a shell parent reading its own stdin. EOF resumes a stopped
+            // child before waiting, so an unplugged controller cannot strand a
+            // frozen service. starttime guards the cleanup signal against reuse.
+            command = format!(
+                r#"{command} </dev/null &
+child=$!
+IFS= read -r stat < /proc/$child/stat
+rest=${{stat##*) }}
+set -- $rest
+shift 19
+started=$1
+resume_child() {{
+  IFS= read -r stat < /proc/$child/stat || return
+  rest=${{stat##*) }}
+  set -- $rest
+  shift 19 || return
+  [ "$1" = "$started" ] && kill -CONT "$child" 2>/dev/null
+}}
+trap resume_child EXIT HUP INT TERM
+printf '__INTEROP_PID__%s\n' "$child"
+while IFS= read -r keepalive; do :; done
+resume_child
+wait "$child""#
+            );
+            let mut process = client.exec(&command, options(&cancellation)).await?;
+            let mut pid_line = Vec::new();
+            loop {
+                let mut byte = [0];
+                process.read_exact(&mut byte).await?;
+                if byte[0] == b'\n' {
+                    break;
+                }
+                pid_line.push(byte[0]);
+                if pid_line.len() > 64 {
+                    return Err(CoreError::new("process_identity", "服务进程启动标识无效。"));
+                }
+            }
+            let pid = std::str::from_utf8(&pid_line)
+                .ok()
+                .and_then(|line| line.strip_prefix("__INTEROP_PID__"))
+                .and_then(|pid| pid.parse::<u32>().ok())
+                .filter(|pid| *pid > 1)
+                .ok_or_else(|| CoreError::new("process_identity", "服务进程启动标识缺失。"))?;
+            let process_closed = Arc::new(AtomicBool::new(false));
+            let logs = Arc::new(Mutex::new(Vec::new()));
+            let process_cancel = cancellation.clone();
+            let process_closed_task = process_closed.clone();
+            let process_logs = logs.clone();
+            tokio::spawn(async move {
+                let mut buffer = [0; 4096];
+                loop {
+                    let result = tokio::select! { _ = process_cancel.cancelled() => break, result = process.read(&mut buffer) => result };
+                    match result {
+                        Ok(0) | Err(_) => break,
+                        Ok(count) => {
+                            let mut logs = process_logs.lock().await;
+                            let room = 16_384usize.saturating_sub(logs.len());
+                            logs.extend_from_slice(&buffer[..count.min(room)]);
+                        }
+                    }
+                }
+                process_closed_task.store(true, Ordering::Release);
+                process_cancel.cancel();
+            });
+            let socket = RemoteSocket::LocalAbstract(format!("scrcpy_{scid:08x}"));
+            let deadline = Instant::now() + Duration::from_secs(12);
+            let mut video = loop {
+                if process_closed.load(Ordering::Acquire) {
+                    return Err(CoreError::new(
+                        "server_start_failed",
+                        String::from_utf8_lossy(&logs.lock().await).to_string(),
+                    ));
+                }
+                match tokio::time::timeout(
+                    Duration::from_millis(600),
+                    client.connect_socket(&socket, options(&cancellation)),
+                )
+                .await
+                {
+                    Ok(Ok(video)) => break video,
+                    Ok(Err(error)) if Instant::now() >= deadline => return Err(error.into()),
+                    Err(_) if Instant::now() >= deadline => {
+                        return Err(CoreError::new("timeout", "控制服务套接字未就绪。"));
+                    }
+                    _ => tokio::time::sleep(Duration::from_millis(40)).await,
+                }
+            };
+            // This socket must be connected before reading device metadata: adbd's
+            // server sends metadata only after all enabled channels are accepted.
+            let control = client
+                .connect_socket(&socket, options(&cancellation))
+                .await?;
+            let mut dummy = [0];
+            video.read_exact(&mut dummy).await?;
+            if dummy != [0] {
+                return Err(CoreError::new("video_protocol", "控制服务连接标识无效。"));
+            }
+            let mut name = [0; 64];
+            video.read_exact(&mut name).await?;
+            let mut codec = [0; 4];
+            video.read_exact(&mut codec).await?;
+            if codec != *b"h264" {
+                return Err(CoreError::new(
+                    "video_codec",
+                    "设备未提供所需的 H.264 视频流。",
+                ));
+            }
+            let mut initial = [0; 12];
+            video.read_exact(&mut initial).await?;
+            let (width, height) = session_dimensions(&initial)?
+                .ok_or_else(|| CoreError::new("video_protocol", "视频流缺少会话尺寸。"))?;
+            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
+            let port = listener.local_addr()?.port();
+            let (control_tx, control_rx) = mpsc::channel(64);
+            let actor_cancel = cancellation.clone();
+            let actor_events = self.events.clone();
+            let actor_device = device_id.clone();
+            let actor_state = state.clone();
+            tokio::spawn(async move {
+                run_control(
+                    control,
+                    control_rx,
+                    actor_cancel,
+                    actor_events,
+                    actor_device,
+                    actor_state,
+                )
+                .await;
+            });
+            if let Some(package) = &package {
+                let mut bytes = vec![16, package.len() as u8];
+                bytes.extend_from_slice(package.as_bytes());
+                request_control(&control_tx, ControlRequest::Send, bytes).await?;
+            }
+            {
+                let mut data = state.write().await;
+                data["videoPort"] = json!(port);
+                data["width"] = json!(width);
+                data["height"] = json!(height);
+                data["deviceName"] = json!(String::from_utf8_lossy(
+                    &name[..name.iter().position(|b| *b == 0).unwrap_or(64)]
+                ));
+            }
+            let video_cancel = cancellation.clone();
+            let video_state = state.clone();
+            let video_events = self.events.clone();
+            let video_device = device_id.clone();
+            tokio::spawn(async move {
+                run_video(
+                    listener,
+                    video_token,
+                    video,
+                    initial,
+                    SessionContext {
+                        cancellation: video_cancel,
+                        state: video_state,
+                        events: video_events,
+                        device: video_device,
+                    },
+                )
+                .await;
+            });
+            let process =
+                OwnedProcess::capture(&client, pid, &remote_jar, format!("{scid:08x}")).await?;
+            Ok::<_, CoreError>((control_tx, process_closed, process))
+        };
+        let (control, process_closed, process) =
+            tokio::time::timeout(Duration::from_secs(20), startup)
+                .await
+                .map_err(|_| CoreError::new("timeout", "控制服务启动超时。"))??;
+        let mut result = state.read().await.clone();
+        result["videoToken"] = json!(return_token);
+        self.sessions.lock().await.insert(
+            id,
+            Session {
+                device_id,
+                package,
+                cancellation,
+                control,
+                state,
+                process_closed,
+                process,
+            },
+        );
+        guard.0 = None;
+        Ok(result)
+    }
+
+    pub(crate) async fn stop_device_sessions(&self, device: &str) {
+        let ids = self
+            .sessions
+            .lock()
+            .await
+            .iter()
+            .filter(|(_, s)| s.device_id == device)
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        for id in ids {
+            self.stop_session(&id).await;
+        }
+    }
+
+    async fn stop_session(&self, id: &str) {
+        let process_closed = self
+            .sessions
+            .lock()
+            .await
+            .remove(id)
+            .map(|session| session.process_closed.clone());
+        if let Some(closed) = process_closed {
+            let _ = tokio::time::timeout(Duration::from_secs(3), async {
+                while !closed.load(Ordering::Acquire) {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await;
+        }
+    }
+
+    pub(crate) async fn session_command(&self, command: &str, params: &Value) -> CoreResult<Value> {
+        if command == "session.list" {
+            let mut result = Vec::new();
+            for session in self.sessions.lock().await.values() {
+                if params["deviceId"]
+                    .as_str()
+                    .is_none_or(|device| device == session.device_id)
+                {
+                    result.push(session.state.read().await.clone());
+                }
+            }
+            return Ok(json!({"sessions":result}));
+        }
+        if command == "session.quality.options" {
+            return self.quality_options().await;
+        }
+        if command == "session.quality" {
+            return self.change_quality(params).await;
+        }
+        if command == "session.screenshot" {
+            return self.screenshot(params).await;
+        }
+        let (id, control, state, package, process, cancellation) = {
+            let sessions = self.sessions.lock().await;
+            let session_id = params["sessionId"].as_str();
+            let device_id = params["deviceId"].as_str();
+            let (id, session) = sessions
+                .iter()
+                .find(|(id, session)| {
+                    session_id.map_or_else(
+                        || device_id.is_some_and(|device| device == session.device_id),
+                        |wanted| *id == wanted,
+                    )
+                })
+                .ok_or_else(|| {
+                    CoreError::new("session_required", "请先打开这台设备的实时画面。")
+                })?;
+            if session.cancellation.is_cancelled() && command != "session.stop" {
+                return Err(CoreError::new(
+                    "disconnected",
+                    "控制会话已结束，请重新打开。",
+                ));
+            }
+            (
+                id.clone(),
+                session.control.clone(),
+                session.state.clone(),
+                session.package.clone(),
+                session.process.clone(),
+                session.cancellation.clone(),
+            )
+        };
+        if command == "session.stop" {
+            self.stop_session(&id).await;
+            return Ok(json!({"sessionId":id,"status":"stopped","applicationStopped":false}));
+        }
+        if command == "session.ready" {
+            let texture = params["textureId"]
+                .as_i64()
+                .filter(|id| *id >= 0)
+                .ok_or_else(|| invalid("渲染纹理无效。"))?;
+            let mut data = state.write().await;
+            data["textureId"] = json!(texture);
+            data["status"] = json!("streaming");
+            if let Some(name) = params["decoderName"].as_str() {
+                data["decoderName"] = json!(name);
+            }
+            if let Some(hardware) = params["hardwareAccelerated"].as_bool() {
+                data["hardwareAccelerated"] = json!(hardware);
+            }
+            self.emit("session.updated", data["deviceId"].as_str(), data.clone());
+            return Ok(data.clone());
+        }
+        if command == "session.frame" {
+            let mut data = state.write().await;
+            if data["textureId"].is_null() {
+                return Err(CoreError::new("renderer_not_ready", "实时渲染尚未就绪。"));
+            }
+            data["lastFrameAt"] = json!(now());
+            for key in ["frameCount", "framesDecoded", "presentationTimeUs"] {
+                if let Some(value) = params[key].as_u64() {
+                    data[key] = json!(value);
+                }
+            }
+            self.emit("session.frame", data["deviceId"].as_str(), data.clone());
+            return Ok(json!({"received":true}));
+        }
+        if matches!(command, "session.pause" | "session.resume") {
+            let mut data = state.write().await;
+            if data["textureId"].is_null() {
+                return Err(CoreError::new("renderer_not_ready", "实时渲染尚未就绪。"));
+            }
+            let pausing = command.ends_with("pause");
+            let client = self
+                .client(data["deviceId"].as_str().expect("device id"))
+                .await?;
+            if let Err(error) = process.signal(&client, pausing).await {
+                if pausing {
+                    let _ = process.signal(&client, false).await;
+                }
+                return Err(error);
+            }
+            if cancellation.is_cancelled() {
+                return Err(CoreError::new("disconnected", "控制会话已结束。"));
+            }
+            data["status"] = json!(if pausing { "paused" } else { "streaming" });
+            data["presentationOnly"] = json!(false);
+            data["capturePaused"] = json!(pausing);
+            data["awaitingSession"] = json!(command.ends_with("resume"));
+            self.emit("session.updated", data["deviceId"].as_str(), data.clone());
+            let result = data.clone();
+            drop(data);
+            // Resume the stopped capture process, then reset its encoder to
+            // obtain a fresh session/configuration/keyframe for the decoder.
+            if command.ends_with("resume") {
+                request_control(&control, ControlRequest::Send, vec![17]).await?;
+            }
+            return Ok(result);
+        }
+        let mut bytes = Vec::new();
+        match command {
+            "session.touch" => bytes = touch_message(params, &*state.read().await)?,
+            "session.key" => {
+                let key = params["keyCode"]
+                    .as_u64()
+                    .filter(|key| *key <= 1024)
+                    .ok_or_else(|| invalid("按键编码无效。"))? as u32;
+                let actions: &[u8] = match params["action"].as_str().unwrap_or("press") {
+                    "down" => &[0],
+                    "up" => &[1],
+                    "press" => &[0, 1],
+                    _ => return Err(invalid("按键动作无效。")),
+                };
+                for action in actions {
+                    bytes.extend_from_slice(&[0, *action]);
+                    bytes.extend_from_slice(&key.to_be_bytes());
+                    bytes.extend_from_slice(&0u32.to_be_bytes());
+                    bytes.extend_from_slice(
+                        &(params["metaState"]
+                            .as_u64()
+                            .unwrap_or(0)
+                            .min(u32::MAX as u64) as u32)
+                            .to_be_bytes(),
+                    );
+                }
+            }
+            "session.text" => {
+                let text = required(params, "text")?;
+                if text.len() > CLIPBOARD_MAX {
+                    return Err(invalid("输入文字过长。"));
+                }
+                if !text.is_ascii() {
+                    if state.read().await["apiLevel"]
+                        .as_u64()
+                        .is_some_and(|level| level < 24)
+                    {
+                        return Err(CoreError::new(
+                            "unsupported",
+                            "Android 7 以下的系统输入通道不支持粘贴此类文字。",
+                        ));
+                    }
+                    return clipboard_set(&control, text.to_owned(), true).await;
+                }
+                for chunk in text.as_bytes().chunks(300) {
+                    bytes.push(1);
+                    bytes.extend_from_slice(&(chunk.len() as u32).to_be_bytes());
+                    bytes.extend_from_slice(chunk);
+                }
+            }
+            "session.rotate" => bytes.push(11),
+            "session.screen" => {
+                bytes.extend_from_slice(&[
+                    10,
+                    match params["mode"].as_str() {
+                        Some("on") => 1,
+                        Some("off") => 0,
+                        _ => return Err(invalid("屏幕模式无效。")),
+                    },
+                ]);
+            }
+            "session.launch" => {
+                let package = package
+                    .as_deref()
+                    .ok_or_else(|| invalid("当前会话不是应用窗口。"))?;
+                bytes.extend_from_slice(&[16, package.len() as u8]);
+                bytes.extend_from_slice(package.as_bytes());
+            }
+            _ => return Err(CoreError::new("unknown_command", "控制操作无效。")),
+        }
+        request_control(&control, ControlRequest::Send, bytes).await
+    }
+
+    pub(crate) async fn clipboard_command(
+        self: &Arc<Self>,
+        command: &str,
+        params: &Value,
+    ) -> CoreResult<Value> {
+        let device = required(params, "deviceId")?;
+        if !matches!(command, "clipboard.get" | "clipboard.set") {
+            return Err(invalid("剪贴板操作无效。"));
+        }
+        let text = if command == "clipboard.set" {
+            let text = params["text"]
+                .as_str()
+                .ok_or_else(|| invalid("剪贴板内容无效。"))?;
+            if text.len() > CLIPBOARD_MAX {
+                return Err(invalid("剪贴板文字过长。"));
+            }
+            Some(text)
+        } else {
+            None
+        };
+        let control = self
+            .sessions
+            .lock()
+            .await
+            .values()
+            .find(|session| {
+                session.device_id == device
+                    && !session.cancellation.is_cancelled()
+                    && !session.control.is_closed()
+            })
+            .map(|session| session.control.clone());
+        let Some(control) = control else {
+            return self.companion_command(command, params).await;
+        };
+        if let Some(text) = text {
+            return clipboard_set(&control, text.to_owned(), false).await;
+        }
+        let (reply, receiver) = oneshot::channel();
+        control
+            .send(ControlRequest::ClipboardGet(reply))
+            .await
+            .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
+        receive_reply(receiver).await
+    }
+
+    pub(crate) async fn list_apps(&self, params: &Value) -> CoreResult<Value> {
+        let client = self.client(required(params, "deviceId")?).await?;
+        let path = format!("/data/local/tmp/interop-apps-{}.jar", uuid::Uuid::new_v4());
+        let mut sync = client.sync(OperationOptions::default()).await?;
+        sync.push(
+            &RemotePath::new(&path)?,
+            &mut &SERVER[..],
+            0o600,
+            now() as u32,
+            SERVER.len() as u64,
+        )
+        .await?;
+        drop(sync);
+        let command = format!(
+            "CLASSPATH={} app_process / com.genymobile.scrcpy.Server 5.0.1 list_apps=true cleanup=true",
+            quote(&path)?
+        );
+        let result = client
+            .shell(&command, 4 * 1024 * 1024, OperationOptions::default())
+            .await;
+        let _ = client
+            .shell(
+                &format!("rm -f -- {}", quote(&path)?),
+                4096,
+                OperationOptions::default(),
+            )
+            .await;
+        let result = result?;
+        if result.exit_code.is_some_and(|code| code != 0) {
+            return Err(CoreError::new(
+                "apps_unavailable",
+                String::from_utf8_lossy(&result.stderr).to_string(),
+            ));
+        }
+        let mut text = String::from_utf8_lossy(&result.stdout).to_string();
+        text.push_str(&String::from_utf8_lossy(&result.stderr));
+        Ok(json!({"apps":parse_apps(&text)?}))
+    }
+
+    pub(crate) async fn launch_app(&self, params: &Value) -> CoreResult<Value> {
+        self.start_session(params).await
+    }
+
+    pub(crate) async fn activities(&self) -> CoreResult<Value> {
+        let mut sessions = Vec::new();
+        for session in self.sessions.lock().await.values() {
+            if !session.cancellation.is_cancelled() {
+                sessions.push(session.state.read().await.clone());
+            }
+        }
+        let transfers = self.list_transfers().await?;
+        let devices = self.store.read().await.devices.clone();
+        let device_name = |id: &str| {
+            devices
+                .iter()
+                .find(|device| device.id == id)
+                .map(|device| device.name.clone())
+                .unwrap_or_else(|| "Android 设备".into())
+        };
+        let mut activities = Vec::new();
+        for (device, client) in self.connections.lock().await.iter() {
+            if !client.is_closed() {
+                activities.push(json!({"id":format!("connection:{device}"),"deviceId":device,"deviceName":device_name(device),"name":"设备连接","status":"connected","canStop":true,"stopImpact":"断开这台设备，并停止它的控制会话和传输任务；其他设备不受影响。"}));
+            }
+        }
+        for session in &sessions {
+            activities.push(json!({"id":format!("session:{}",session["sessionId"].as_str().unwrap_or_default()),"deviceId":session["deviceId"],"deviceName":device_name(session["deviceId"].as_str().unwrap_or_default()),"name":session["name"],"status":session["status"],"canStop":true,"stopImpact":"仅关闭这个控制会话，手机应用任务交回设备，不会强停应用。"}));
+        }
+        if let Some(transfers) = transfers["transfers"].as_array() {
+            for transfer in transfers.iter().filter(|transfer| {
+                matches!(
+                    transfer["status"].as_str(),
+                    Some("queued" | "running" | "finalizing" | "conflict")
+                )
+            }) {
+                activities.push(json!({"id":format!("transfer:{}",transfer["id"].as_str().unwrap_or_default()),"deviceId":transfer["deviceId"],"deviceName":device_name(transfer["deviceId"].as_str().unwrap_or_default()),"name":transfer["name"],"status":transfer["status"],"canStop":true,"stopImpact":"仅取消这一项传输；已完成的文件不回滚，未完成内容保留为实际中断状态。"}));
+            }
+        }
+        Ok(json!({"activities":activities,"sessions":sessions,"transfers":transfers["transfers"]}))
+    }
+
+    async fn quality_options(&self) -> CoreResult<Value> {
+        let settings = self.store.read().await.settings.clone();
+        Ok(
+            json!({"current":{"preset":settings["qualityPreset"],"maxSize":settings["maxSize"],"maxFps":settings["maxFps"],"bitRate":settings["videoBitRate"],"codec":"h264","videoBitRate":settings["videoBitRate"],"videoCodec":"h264","audio":false},
+            "presets":[{"id":"smooth","name":"流畅","available":true},{"id":"balanced","name":"均衡","available":true},{"id":"clear","name":"清晰","available":true}],
+            "maxSize":[{"value":720,"label":"720","available":true},{"value":1280,"label":"1280","available":true},{"value":1920,"label":"1920","available":true}],
+            "maxFps":[{"value":30,"label":"30 fps","available":true},{"value":60,"label":"60 fps","available":true}],
+            "bitRate":[{"value":2000000,"label":"2 Mbps","available":true},{"value":8000000,"label":"8 Mbps","available":true},{"value":12000000,"label":"12 Mbps","available":true}],
+            "codec":[{"value":"h264","label":"H.264","available":true}],"codecs":[{"id":"h264","name":"H.264","available":true}],"maxSizes":[720,1280,1920],"frameRates":[30,60],"audioAvailable":false}),
+        )
+    }
+
+    async fn change_quality(&self, params: &Value) -> CoreResult<Value> {
+        let device = required(params, "deviceId")?.to_owned();
+        self.client(&device).await?;
+        let mut settings = self.store.write().await;
+        let mut next = settings.settings.clone();
+        if let Some(preset) = params["preset"].as_str() {
+            let (size, fps, rate) = match preset {
+                "smooth" => (720, 30, 2_000_000),
+                "balanced" => (1280, 60, 8_000_000),
+                "clear" => (1920, 60, 12_000_000),
+                _ => return Err(invalid("画质预设无效。")),
+            };
+            next["qualityPreset"] = json!(preset);
+            next["maxSize"] = json!(size);
+            next["maxFps"] = json!(fps);
+            next["videoBitRate"] = json!(rate);
+        }
+        for (key, min, max) in [
+            ("maxSize", 320, 4096),
+            ("maxFps", 1, 120),
+            ("videoBitRate", 500_000, 50_000_000),
+        ] {
+            if let Some(value) = params.get(key).or_else(|| {
+                if key == "videoBitRate" {
+                    params.get("bitRate")
+                } else {
+                    None
+                }
+            }) {
+                let value = value
+                    .as_u64()
+                    .filter(|n| *n >= min && *n <= max)
+                    .ok_or_else(|| invalid("画质参数超出范围。"))?;
+                next[key] = json!(value);
+            }
+        }
+        if params
+            .get("videoCodec")
+            .or_else(|| params.get("codec"))
+            .unwrap_or(&Value::Null)
+            .as_str()
+            .is_some_and(|codec| codec != "h264")
+        {
+            return Err(CoreError::new("unsupported", "当前解码链路仅支持 H.264。"));
+        }
+        if params.get("audioMode").is_some()
+            || params.get("audioEnabled").is_some()
+            || params.get("audioCodec").is_some()
+        {
+            return Err(CoreError::new(
+                "unsupported",
+                "当前设备声音链路尚未完成连接。",
+            ));
+        }
+        settings.settings = next;
+        drop(settings);
+        self.persist().await?;
+        let previous = {
+            let sessions = self.sessions.lock().await;
+            sessions
+                .iter()
+                .find(|(id, s)| {
+                    params["sessionId"]
+                        .as_str()
+                        .map_or(s.device_id == device, |wanted| *id == wanted)
+                })
+                .map(|(id, s)| (id.clone(), s.package.clone()))
+        };
+        if let Some((id, package)) = previous {
+            self.stop_session(&id).await;
+            return self
+                .start_session(&json!({"deviceId":device,"packageName":package}))
+                .await;
+        }
+        Ok(json!({"appliesNextSession":true,"current":self.quality_options().await?["current"]}))
+    }
+
+    async fn screenshot(&self, params: &Value) -> CoreResult<Value> {
+        let device = required(params, "deviceId")?;
+        if self
+            .sessions
+            .lock()
+            .await
+            .values()
+            .any(|s| s.device_id == device && s.package.is_some() && !s.cancellation.is_cancelled())
+        {
+            return Err(CoreError::new(
+                "native_capture_required",
+                "独立应用窗口截图需要从当前渲染画面保存。",
+            ));
+        }
+        let client = self.client(device).await?;
+        let mut stream = client
+            .exec("screencap -p", OperationOptions::default())
+            .await?;
+        let mut bytes = Vec::new();
+        let mut buffer = [0; 64 * 1024];
+        loop {
+            let count = stream.read(&mut buffer).await?;
+            if count == 0 {
+                break;
+            }
+            if bytes.len() + count > 32 * 1024 * 1024 {
+                return Err(CoreError::new("screenshot_limit", "截图超出大小限制。"));
+            }
+            bytes.extend_from_slice(&buffer[..count]);
+        }
+        if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") || !bytes.ends_with(b"\0\0\0\0IEND\xaeB`\x82") {
+            return Err(CoreError::new(
+                "screenshot_failed",
+                "设备没有返回有效截图。",
+            ));
+        }
+        let directory = self.root.join("screenshots");
+        tokio::fs::create_dir_all(&directory).await?;
+        let path = directory.join(format!("{}.png", uuid::Uuid::new_v4()));
+        Self::private_write(&path, &bytes).await?;
+        Ok(json!({"localPath":path,"mime":"image/png","size":bytes.len()}))
+    }
+}
+
+async fn request_control<F>(
+    sender: &mpsc::Sender<ControlRequest>,
+    constructor: F,
+    bytes: Vec<u8>,
+) -> CoreResult<Value>
+where
+    F: FnOnce(Vec<u8>, oneshot::Sender<CoreResult<Value>>) -> ControlRequest,
+{
+    let (reply, receiver) = oneshot::channel();
+    sender
+        .send(constructor(bytes, reply))
+        .await
+        .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
+    receive_reply(receiver).await
+}
+async fn receive_reply(receiver: oneshot::Receiver<CoreResult<Value>>) -> CoreResult<Value> {
+    tokio::time::timeout(Duration::from_secs(6), receiver)
+        .await
+        .map_err(|_| CoreError::new("timeout", "设备未及时响应控制请求。"))?
+        .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?
+}
+async fn clipboard_set(
+    sender: &mpsc::Sender<ControlRequest>,
+    text: String,
+    paste: bool,
+) -> CoreResult<Value> {
+    let (reply, receiver) = oneshot::channel();
+    sender
+        .send(ControlRequest::ClipboardSet(text, paste, reply))
+        .await
+        .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
+    receive_reply(receiver).await
+}
+
+fn session_dimensions(header: &[u8; 12]) -> CoreResult<Option<(u32, u32)>> {
+    let flags = u32::from_be_bytes(header[..4].try_into().expect("header"));
+    if flags & 0x8000_0000 == 0 {
+        return Ok(None);
+    }
+    let width = u32::from_be_bytes(header[4..8].try_into().expect("header"));
+    let height = u32::from_be_bytes(header[8..].try_into().expect("header"));
+    if flags & 0x7fff_fffe != 0 || width == 0 || height == 0 || width > 16384 || height > 16384 {
+        return Err(CoreError::new("video_protocol", "视频会话尺寸无效。"));
+    }
+    Ok(Some((width, height)))
+}
+
+async fn run_video(
+    listener: TcpListener,
+    token: String,
+    mut video: AdbStream,
+    initial: [u8; 12],
+    context: SessionContext,
+) {
+    let SessionContext {
+        cancellation,
+        state,
+        events,
+        device,
+    } = context;
+    let operation = async {
+        let output = accept_media(&listener, &token).await?;
+        output.set_nodelay(true)?;
+        let (mut native_reader, mut output) = output.into_split();
+        let native_cancel = cancellation.clone();
+        tokio::spawn(async move {
+            let mut unexpected = [0];
+            tokio::select! { _ = native_cancel.cancelled() => {}, _ = native_reader.read(&mut unexpected) => { native_cancel.cancel(); } }
+        });
+        let ready_state = state.clone();
+        let ready_cancel = cancellation.clone();
+        tokio::spawn(async move {
+            tokio::select! { _ = ready_cancel.cancelled() => {}, _ = tokio::time::sleep(Duration::from_secs(20)) => {
+                let mut data = ready_state.write().await;
+                if data["textureId"].is_null() { data["status"] = json!("failed"); data["reason"] = json!("视频渲染器未返回可用画面。"); ready_cancel.cancel(); }
+            } }
+        });
+        output.write_all(&initial).await?;
+        loop {
+            let mut header = [0; 12];
+            video.read_exact(&mut header).await?;
+            if let Some((width, height)) = session_dimensions(&header)? {
+                let mut data = state.write().await;
+                data["width"] = json!(width);
+                data["height"] = json!(height);
+                data["awaitingSession"] = json!(false);
+                event(&events, "session.updated", &device, data.clone());
+                if data["status"] != "paused" {
+                    output.write_all(&header).await?;
+                }
+                continue;
+            }
+            let length = u32::from_be_bytes(header[8..].try_into().expect("video header")) as usize;
+            if length == 0 || length > MAX_PACKET {
+                return Err(CoreError::new("video_protocol", "视频数据包大小无效。"));
+            }
+            let mut bytes = vec![0; length];
+            video.read_exact(&mut bytes).await?;
+            {
+                let data = state.read().await;
+                if data["status"] == "paused" || data["awaitingSession"] == true {
+                    continue;
+                }
+            }
+            output.write_all(&header).await?;
+            output.write_all(&bytes).await?;
+        }
+        #[allow(unreachable_code)]
+        Ok::<(), CoreError>(())
+    };
+    let result =
+        tokio::select! { _ = cancellation.cancelled() => Ok(()), result = operation => result };
+    if let Err(error) = result {
+        let mut data = state.write().await;
+        data["status"] = json!("failed");
+        data["reason"] = json!(error.message);
+    }
+    cancellation.cancel();
+}
+
+/// Fixed-length authenticated loopback media connection. No media bytes are
+/// sent to unauthenticated clients; repeated failures share the startup deadline.
+pub(crate) async fn accept_media(
+    listener: &TcpListener,
+    token: &str,
+) -> CoreResult<tokio::net::TcpStream> {
+    use subtle::ConstantTimeEq;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let (mut candidate, _) = tokio::time::timeout_at(deadline, listener.accept())
+            .await
+            .map_err(|_| CoreError::new("renderer_timeout", "未能连接媒体呈现器。"))??;
+        let mut authentication = [0; 65];
+        if tokio::time::timeout_at(
+            deadline.min(Instant::now() + Duration::from_secs(3)),
+            candidate.read_exact(&mut authentication),
+        )
+        .await
+        .is_ok_and(|result| result.is_ok())
+            && authentication[64] == b'\n'
+            && bool::from(authentication[..64].ct_eq(token.as_bytes()))
+        {
+            return Ok(candidate);
+        }
+    }
+}
+
+async fn run_control(
+    mut stream: AdbStream,
+    mut requests: mpsc::Receiver<ControlRequest>,
+    cancellation: CancellationToken,
+    events: broadcast::Sender<Value>,
+    device: String,
+    state: Arc<RwLock<Value>>,
+) {
+    let mut incoming = Vec::new();
+    let mut buffer = [0; 4096];
+    let mut gets: VecDeque<oneshot::Sender<CoreResult<Value>>> = VecDeque::new();
+    let mut sets: HashMap<u64, oneshot::Sender<CoreResult<Value>>> = HashMap::new();
+    let mut sequence = 1u64;
+    loop {
+        tokio::select! {
+            _ = cancellation.cancelled() => break,
+            request = requests.recv() => {
+                let Some(request) = request else { break; };
+                let (bytes, immediate) = match request {
+                    ControlRequest::Send(bytes, reply) => (bytes, Some(reply)),
+                    ControlRequest::ClipboardGet(reply) => { gets.retain(|reply| !reply.is_closed()); if gets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; } gets.push_back(reply); (vec![8,0], None) },
+                    ControlRequest::ClipboardSet(text, paste, reply) => {
+                        sets.retain(|_,reply| !reply.is_closed()); if sets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; }
+                        sequence = sequence.wrapping_add(1).max(1); let mut bytes = vec![9]; bytes.extend_from_slice(&sequence.to_be_bytes()); bytes.push(u8::from(paste)); bytes.extend_from_slice(&(text.len() as u32).to_be_bytes()); bytes.extend_from_slice(text.as_bytes()); sets.insert(sequence,reply); (bytes,None)
+                    }
+                };
+                let result = stream.write_all(&bytes).await.map_err(CoreError::from);
+                if let Some(reply) = immediate { let _ = reply.send(result.map(|()| json!({"sent":true}))); }
+                else if result.is_err() { break; }
+            },
+            result = stream.read(&mut buffer) => {
+                let Ok(count) = result else { break; }; if count == 0 { break; }
+                incoming.extend_from_slice(&buffer[..count]);
+                loop {
+                    if incoming.is_empty() { break; }
+                    let needed = match incoming[0] {
+                        0 => { if incoming.len() < 5 { break; } let length = u32::from_be_bytes(incoming[1..5].try_into().expect("clipboard length")) as usize; if length > (1 << 18)-5 { cancellation.cancel(); break; } 5 + length },
+                        1 => 9,
+                        2 => { if incoming.len() < 5 { break; } 5 + u16::from_be_bytes(incoming[3..5].try_into().expect("UHID length")) as usize },
+                        _ => { cancellation.cancel(); break; }
+                    };
+                    if incoming.len() < needed { break; }
+                    if incoming[0] == 0 {
+                        let Ok(text) = std::str::from_utf8(&incoming[5..needed]) else { cancellation.cancel(); break; };
+                        if let Some(reply) = gets.pop_front() { let _ = reply.send(Ok(json!({"text":text}))); }
+                        event(&events,"clipboard.changed",&device,json!({"text":text,"sessionId":state.read().await["sessionId"]}));
+                    } else if incoming[0] == 1 {
+                        let sequence = u64::from_be_bytes(incoming[1..9].try_into().expect("clipboard sequence")); if let Some(reply) = sets.remove(&sequence) { let _ = reply.send(Ok(json!({"applied":true}))); }
+                    }
+                    incoming.drain(..needed);
+                }
+            }
+        }
+    }
+    cancellation.cancel();
+}
+
+fn touch_message(params: &Value, state: &Value) -> CoreResult<Vec<u8>> {
+    let action = match params["action"].as_str() {
+        Some("down") => 0,
+        Some("up") => 1,
+        Some("move") => 2,
+        Some("cancel") => 3,
+        _ => return Err(invalid("触控动作无效。")),
+    };
+    let width = params["screenWidth"]
+        .as_u64()
+        .filter(|v| *v > 0 && *v <= u16::MAX as u64)
+        .ok_or_else(|| invalid("触控画面尺寸无效。"))?;
+    let height = params["screenHeight"]
+        .as_u64()
+        .filter(|v| *v > 0 && *v <= u16::MAX as u64)
+        .ok_or_else(|| invalid("触控画面尺寸无效。"))?;
+    if state["width"].as_u64() != Some(width) || state["height"].as_u64() != Some(height) {
+        return Err(CoreError::new(
+            "stale_frame",
+            "画面尺寸已变化，请等待新画面后重试。",
+        ));
+    }
+    let x = params["x"]
+        .as_i64()
+        .filter(|x| *x >= 0 && *x < width as i64)
+        .ok_or_else(|| invalid("触控位置超出画面。"))? as u32;
+    let y = params["y"]
+        .as_i64()
+        .filter(|y| *y >= 0 && *y < height as i64)
+        .ok_or_else(|| invalid("触控位置超出画面。"))? as u32;
+    let pointer = params["pointerId"]
+        .as_u64()
+        .ok_or_else(|| invalid("触点标识无效。"))?;
+    let pressure = params["pressure"]
+        .as_f64()
+        .unwrap_or(if action == 1 || action == 3 { 0.0 } else { 1.0 });
+    if !pressure.is_finite() || !(0.0..=1.0).contains(&pressure) {
+        return Err(invalid("触控压力无效。"));
+    }
+    let pressure = ((pressure * 65536.0) as u32).min(65535) as u16;
+    let mut bytes = vec![2, action];
+    bytes.extend_from_slice(&pointer.to_be_bytes());
+    bytes.extend_from_slice(&x.to_be_bytes());
+    bytes.extend_from_slice(&y.to_be_bytes());
+    bytes.extend_from_slice(&(width as u16).to_be_bytes());
+    bytes.extend_from_slice(&(height as u16).to_be_bytes());
+    bytes.extend_from_slice(&pressure.to_be_bytes());
+    bytes.extend_from_slice(&0u32.to_be_bytes());
+    bytes.extend_from_slice(&0u32.to_be_bytes());
+    Ok(bytes)
+}
+
+fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
+    let mut apps = Vec::new();
+    let mut pending: Option<(bool, String)> = None;
+    if !text.contains("List of apps:") {
+        return Err(CoreError::new(
+            "apps_unavailable",
+            "设备没有返回可解析的应用列表。",
+        ));
+    }
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed
+            .strip_prefix("* ")
+            .or_else(|| trimmed.strip_prefix("- "))
+        {
+            let system = trimmed.starts_with('*');
+            if let Some((name, package)) = rest.rsplit_once(char::is_whitespace)
+                && package_name(package).is_ok()
+                && package.contains('.')
+            {
+                apps.push(json!({"name":name.trim(),"packageName":package,"system":system}));
+                pending = None;
+                continue;
+            }
+            pending = Some((system, rest.to_owned()));
+        } else if let Some((system, name)) = pending.take()
+            && package_name(trimmed).is_ok()
+        {
+            apps.push(json!({"name":name,"packageName":trimmed,"system":system}));
+        }
+    }
+    Ok(apps)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn process_stat_uses_starttime_after_the_parenthesized_command() {
+        let mut fields = vec!["0"; 20];
+        fields[0] = "T";
+        fields[19] = "12345";
+        let stat = format!("99 (name with ) parens) {}", fields.join(" "));
+        assert_eq!(process_stat(stat.as_bytes()).unwrap(), ('T', 12345));
+        assert!(process_stat(b"99 invalid").is_err());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires real Android adbd; pauses only this test-owned capture process"]
+    async fn real_capture_process_stops_resumes_and_unfreezes_on_socket_close() {
+        use std::sync::atomic::AtomicU64;
+        let address = std::env::var("INTEROP_ADBD_ADDRESS").unwrap_or_else(|_| "127.0.0.1".into());
+        let port: u16 = std::env::var("INTEROP_ADBD_PORT")
+            .expect("set INTEROP_ADBD_PORT")
+            .parse()
+            .unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(root.path()).await.unwrap();
+        let device = runtime
+            .invoke("devices.add", json!({"address":address,"port":port}))
+            .await
+            .unwrap();
+        let id = device["deviceId"].as_str().unwrap();
+        runtime
+            .invoke("devices.connect", json!({"deviceId":id}))
+            .await
+            .unwrap();
+        let session = runtime
+            .start_session(&json!({"deviceId":id}))
+            .await
+            .unwrap();
+        let session_id = session["sessionId"].as_str().unwrap();
+        let (process, state, control) = {
+            let sessions = runtime.sessions.lock().await;
+            let session = &sessions[session_id];
+            (
+                session.process.clone(),
+                session.state.clone(),
+                session.control.clone(),
+            )
+        };
+        let client = runtime.client(id).await.unwrap();
+        let mut socket = tokio::net::TcpStream::connect((
+            "127.0.0.1",
+            session["videoPort"].as_u64().unwrap() as u16,
+        ))
+        .await
+        .unwrap();
+        socket
+            .write_all(session["videoToken"].as_str().unwrap().as_bytes())
+            .await
+            .unwrap();
+        socket.write_all(b"\n").await.unwrap();
+        let count = Arc::new(AtomicU64::new(0));
+        let reader_count = count.clone();
+        let reader = tokio::spawn(async move {
+            loop {
+                let mut header = [0; 12];
+                if socket.read_exact(&mut header).await.is_err() {
+                    break;
+                }
+                if header[0] & 0x80 != 0 {
+                    continue;
+                }
+                let length = u32::from_be_bytes(header[8..].try_into().unwrap()) as usize;
+                assert!(length <= MAX_PACKET);
+                let mut bytes = vec![0; length];
+                if socket.read_exact(&mut bytes).await.is_err() {
+                    break;
+                }
+                reader_count.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while count.load(Ordering::SeqCst) < 2 {
+                tokio::time::sleep(Duration::from_millis(10)).await
+            }
+        })
+        .await
+        .unwrap();
+        // The process identity mismatch must not signal even this owned server.
+        let mut mismatched = process.clone();
+        mismatched.started += 1;
+        assert!(mismatched.signal(&client, true).await.is_err());
+        process.signal(&client, true).await.unwrap();
+        let stat = client
+            .shell(
+                &format!("cat /proc/{}/stat", process.pid),
+                4096,
+                OperationOptions::default(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(process_stat(&stat.stdout).unwrap().0, 'T');
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        let frozen = count.load(Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            frozen,
+            "frames continued after capture process stopped"
+        );
+        process.signal(&client, false).await.unwrap();
+        state.write().await["awaitingSession"] = json!(true);
+        request_control(&control, ControlRequest::Send, vec![17])
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while count.load(Ordering::SeqCst) <= frozen {
+                tokio::time::sleep(Duration::from_millis(10)).await
+            }
+        })
+        .await
+        .unwrap();
+        process.signal(&client, true).await.unwrap();
+        // Close the actual transport while the child is stopped. The remote
+        // launcher must observe stdin EOF and resume it for normal socket cleanup.
+        client.close();
+        reader.abort();
+        let inspection =
+            interop_adb::Client::connect_tcp((address.as_str(), port), Default::default())
+                .await
+                .unwrap();
+        tokio::time::timeout(Duration::from_secs(8), async {
+            loop {
+                let stat = inspection
+                    .shell(
+                        &format!("cat /proc/{}/stat", process.pid),
+                        4096,
+                        OperationOptions::default(),
+                    )
+                    .await
+                    .unwrap();
+                if let Ok((process_state, started)) = process_stat(&stat.stdout) {
+                    if started != process.started || !matches!(process_state, 'T' | 't') {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await
+            }
+        })
+        .await
+        .expect("capture was stranded stopped after disconnect");
+        tokio::time::timeout(Duration::from_secs(8), async {
+            loop {
+                let stat = inspection
+                    .shell(
+                        &format!("cat /proc/{}/stat", process.pid),
+                        4096,
+                        OperationOptions::default(),
+                    )
+                    .await
+                    .unwrap();
+                if process_stat(&stat.stdout).map_or(true, |(state, started)| {
+                    started != process.started || state == 'Z'
+                }) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("test-owned capture process did not finish normal socket cleanup");
+        runtime.stop_session(session_id).await;
+        inspection.close();
+    }
+    #[test]
+    fn session_headers_have_dimensions_in_the_last_eight_bytes() {
+        let mut bytes = [0; 12];
+        bytes[..4].copy_from_slice(&0x8000_0001u32.to_be_bytes());
+        bytes[4..8].copy_from_slice(&720u32.to_be_bytes());
+        bytes[8..].copy_from_slice(&1280u32.to_be_bytes());
+        assert_eq!(session_dimensions(&bytes).unwrap(), Some((720, 1280)));
+        bytes[4..8].fill(0);
+        assert!(session_dimensions(&bytes).is_err());
+        assert_eq!(session_dimensions(&[0; 12]).unwrap(), None);
+    }
+    #[test]
+    fn touch_is_big_endian_and_rejects_stale_sizes_and_outside_points() {
+        let mut params = json!({"action":"down","pointerId":7,"x":100,"y":200,"screenWidth":720,"screenHeight":1280,"pressure":1.0});
+        let state = json!({"width":720,"height":1280});
+        let bytes = touch_message(&params, &state).unwrap();
+        assert_eq!(bytes.len(), 32);
+        assert_eq!(&bytes[2..10], &7u64.to_be_bytes());
+        assert_eq!(&bytes[22..24], &u16::MAX.to_be_bytes());
+        params["x"] = json!(720);
+        assert!(touch_message(&params, &state).is_err());
+        params["x"] = json!(1);
+        params["screenWidth"] = json!(1280);
+        assert!(touch_message(&params, &state).is_err());
+    }
+    #[test]
+    fn official_app_labels_keep_spaces_and_long_name_continuations() {
+        let apps = parse_apps("[server] INFO: List of apps:\n * System Settings                 com.android.settings\n - An extremely long application name\n                                  org.example.long\n").unwrap();
+        assert_eq!(apps.len(), 2);
+        assert_eq!(apps[0]["name"], "System Settings");
+        assert_eq!(apps[1]["packageName"], "org.example.long");
+    }
+}

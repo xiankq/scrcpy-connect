@@ -1,0 +1,417 @@
+package com.interop.companion;
+
+import android.app.Notification;
+import android.app.AppOpsManager;
+import android.app.KeyguardManager;
+import android.app.PendingIntent;
+import android.app.RemoteInput;
+import android.content.ComponentName;
+import android.content.ClipData;
+import android.content.pm.PackageManager;
+import android.content.Context;
+import android.content.Intent;
+import android.net.LocalServerSocket;
+import android.net.LocalSocket;
+import android.os.Binder;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.IBinder;
+import android.os.IInterface;
+import android.os.Parcel;
+import android.os.Looper;
+import android.os.Process;
+import android.service.notification.StatusBarNotification;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.*;
+import java.lang.reflect.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+
+/** Temporary shell-UID Binder bridge. No APK, service grant, AppOp, or database access. */
+public final class Main {
+    private static final String PACKAGE = "com.android.shell";
+    private static final int MAX_LINE = 1024 * 1024;
+    private static final int MAX_CLIPBOARD = (1 << 18) - 14;
+    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final AtomicBoolean refreshPending = new AtomicBoolean();
+    private final AtomicBoolean clipboardRefreshPending = new AtomicBoolean();
+    private final Map<String, Item> notifications = new LinkedHashMap<>();
+    private final Map<String, Item> byKey = new HashMap<>();
+    private Object notificationManager, telecom, registry, notificationToken, phoneToken;
+    private int userId, callState;
+    private String notificationError, callError, callId;
+    private volatile int rawPhoneState=-1;
+    private final AtomicLong phoneGeneration=new AtomicLong();
+    private long observedPhoneGeneration;
+    private long emittedPhoneGeneration=-1;
+    private int emittedCallState=-1;
+    private boolean notificationsTruncated;
+    private BufferedWriter output;
+    private Context shellContext;
+    private Object clipboard, clipboardToken;
+    private boolean clipboardListening;
+
+    private static final class Item {
+        StatusBarNotification sbn;
+        JSONObject json;
+        String fingerprint;
+    }
+    private static final class Failure extends Exception {
+        final String code;
+        Failure(String code, String message) { super(message); this.code=code; }
+    }
+    static Object invoke(Object receiver, String name, Object... args) throws Exception {
+        for (Method method : receiver.getClass().getMethods()) {
+            if (!method.getName().equals(name) || method.getParameterTypes().length != args.length) continue;
+            boolean compatible=true;
+            Class<?>[] types=method.getParameterTypes();
+            for(int i=0;i<types.length;i++) {
+                if(args[i]==null) {if(types[i].isPrimitive()) compatible=false;}
+                else if(!types[i].isPrimitive() && !types[i].isInstance(args[i])) compatible=false;
+            }
+            if(!compatible) continue;
+            try { method.setAccessible(true); return method.invoke(receiver,args); }
+            catch(InvocationTargetException e) {throw e.getCause() instanceof Exception ? (Exception)e.getCause() : e;}
+        }
+        throw new NoSuchMethodException(name+"/"+args.length);
+    }
+    static Object service(String name,String descriptor) throws Exception {
+        Class<?> manager=Class.forName("android.os.ServiceManager");
+        IBinder binder=(IBinder)manager.getMethod("getService",String.class).invoke(null,name);
+        if(binder==null) throw new Failure("service_unavailable",name+" service is absent");
+        return Class.forName(descriptor+"$Stub").getMethod("asInterface",IBinder.class).invoke(null,binder);
+    }
+    private Object callback(String descriptor,final Runnable changed) throws Exception {
+        final Class<?> api=Class.forName(descriptor);
+        final Set<Integer> phoneStateTransactions=new HashSet<>();
+        if(descriptor.equals("com.android.internal.telephony.IPhoneStateListener")) {
+            Class<?> stub=Class.forName(descriptor+"$Stub");
+            for(String method:new String[]{"onCallStateChanged","onLegacyCallStateChanged"}) {
+                try {Field field=stub.getDeclaredField("TRANSACTION_"+method);field.setAccessible(true);phoneStateTransactions.add(field.getInt(null));} catch(NoSuchFieldException ignored) {}
+            }
+        }
+        final Binder binder=new Binder() {
+            @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags) {
+                if(code==IBinder.INTERFACE_TRANSACTION) {if(reply!=null) reply.writeString(descriptor);return true;}
+                data.enforceInterface(descriptor);
+                if(phoneStateTransactions.contains(code)) {
+                    // Preserve every delivered state transition before the
+                    // worker coalesces invalidations. In particular 1,0,1 must
+                    // never be mistaken for the same observed ringing episode.
+                    int state=data.readInt();
+                    if(state!=rawPhoneState) {rawPhoneState=state;phoneGeneration.incrementAndGet();}
+                }
+                // Callbacks are invalidations, not a polling timer. A fresh token-
+                // scoped snapshot reconciles updates/removals and preserves PIs.
+                changed.run();
+                if(reply!=null) reply.writeNoException();
+                return true;
+            }
+        };
+        Object token=Proxy.newProxyInstance(api.getClassLoader(),new Class<?>[]{api},(proxy,method,args)-> {
+            if(method.getName().equals("asBinder")) return binder;
+            if(method.getName().equals("toString")) return "InteropBinderCallback";
+            if(method.getName().equals("hashCode")) return System.identityHashCode(proxy);
+            if(method.getName().equals("equals")) return proxy==args[0];
+            return null;
+        });
+        binder.attachInterface((IInterface)token,descriptor);
+        return token;
+    }
+    private static String text(CharSequence input,int limit) {
+        if(input==null) return "";
+        String value=input.toString();return value.length()>limit?value.substring(0,limit):value;
+    }
+    private static String error(Exception e) {return e.getClass().getSimpleName()+": "+text(e.getMessage(),512);}
+    private synchronized void send(JSONObject message) throws Exception {
+        if(output==null) return;
+        output.write(message.toString());output.write('\n');output.flush();
+    }
+    private void scheduleRefresh() {
+        if(!refreshPending.compareAndSet(false,true)) return;
+        worker.execute(()-> {
+            refreshPending.set(false);
+            try {refreshNotifications(true);refreshCalls(true);} catch(Exception e) {
+                try {send(new JSONObject().put("event","companion.error").put("reason",error(e)));} catch(Exception ignored) {}
+            }
+        });
+    }
+    private void prepareContext() throws Exception {
+        Object thread=Class.forName("android.app.ActivityThread").getMethod("systemMain").invoke(null);
+        Context systemContext=(Context)invoke(thread,"getSystemContext");
+        shellContext=systemContext.createPackageContext(PACKAGE,0);
+        if(!PACKAGE.equals(shellContext.getPackageName()) || shellContext.getApplicationInfo().uid!=Process.myUid()) throw new Failure("wrong_identity","Package attribution must match the actual shell UID");
+    }
+    private void initialize() throws Exception {
+        if(Process.myUid()!=2000) throw new Failure("wrong_identity","Companion requires the authorized ADB shell identity");
+        try {userId=(Integer)Class.forName("android.app.ActivityManager").getMethod("getCurrentUser").invoke(null);} catch(Exception e) {userId=0;}
+        try {
+            notificationManager=service("notification","android.app.INotificationManager");
+            notificationToken=callback("android.service.notification.INotificationListener",this::scheduleRefresh);
+            invoke(notificationManager,"registerListener",notificationToken,new ComponentName(PACKAGE,"com.interop.companion.Listener"),userId);
+            refreshNotifications(false);
+        } catch(Exception e) {notificationError=error(e);}
+        try {
+            telecom=service("telecom","com.android.internal.telecom.ITelecomService");
+            registry=service("telephony.registry","com.android.internal.telephony.ITelephonyRegistry");
+            phoneToken=callback("com.android.internal.telephony.IPhoneStateListener",this::scheduleRefresh);
+            if(Build.VERSION.SDK_INT>=31) {
+                invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[]{6},true);
+            } else {
+                invoke(registry,"listenForSubscriber",Integer.MAX_VALUE,PACKAGE,null,phoneToken,32,true);
+            }
+            refreshCalls(false);
+        } catch(Exception e) {callError=error(e);}
+    }
+    // Only known AOSP IClipboard attribution layouts are accepted. Every call
+    // uses the actual installed shell package; no synthetic android identity.
+    private Object clipboardInvoke(String name,Object first) throws Exception {
+        for(Method method:clipboard.getClass().getMethods()) {
+            if(!method.getName().equals(name)) continue;
+            Class<?>[] types=method.getParameterTypes();
+            int offset=first==null?0:1;
+            if(types.length<=offset || (first!=null && !types[0].isInstance(first))) continue;
+            int count=types.length-offset;
+            boolean known=count==1 && types[offset]==String.class
+                || count==2 && types[offset]==String.class && types[offset+1]==int.class
+                || count==3 && types[offset]==String.class && types[offset+1]==String.class && types[offset+2]==int.class
+                || count==4 && types[offset]==String.class && types[offset+1]==String.class && types[offset+2]==int.class && types[offset+3]==int.class;
+            if(!known) continue;
+            List<Object> args=new ArrayList<>();
+            if(first!=null) args.add(first);
+            args.add(PACKAGE);
+            if(count>=3) args.add(null); // Actual shell attribution tag is absent.
+            if(count>=2) args.add(userId);
+            if(count==4) args.add(0); // Context.DEVICE_ID_DEFAULT, not a virtual-device identity.
+            return invoke(clipboard,name,args.toArray());
+        }
+        throw new Failure("clipboard_api_unavailable","Unsupported IClipboard attribution signature: "+name);
+    }
+    private void checkClipboardAccess(boolean writing) throws Exception {
+        KeyguardManager keyguard=(KeyguardManager)shellContext.getSystemService(Context.KEYGUARD_SERVICE);
+        if(keyguard==null) throw new Failure("clipboard_api_unavailable","Target keyguard state is unavailable");
+        boolean locked=Build.VERSION.SDK_INT>=23?keyguard.isDeviceLocked():keyguard.isKeyguardLocked();
+        if(locked) throw new Failure("clipboard_locked","Unlock the target device before reading or verifying its clipboard");
+        if(Build.VERSION.SDK_INT>=29 && shellContext.checkCallingOrSelfPermission("android.permission.READ_CLIPBOARD_IN_BACKGROUND")!=PackageManager.PERMISSION_GRANTED)
+            throw new Failure("permission_denied","The target shell package lacks background clipboard permission");
+        AppOpsManager ops=(AppOpsManager)shellContext.getSystemService(Context.APP_OPS_SERVICE);
+        if(ops==null || ops.checkOpNoThrow(writing?"android:write_clipboard":"android:read_clipboard",Process.myUid(),PACKAGE)!=AppOpsManager.MODE_ALLOWED)
+            throw new Failure("permission_denied","The target denies this clipboard AppOp");
+    }
+    private void ensureClipboard() throws Exception {
+        checkClipboardAccess(false);
+        if(clipboard==null) clipboard=service("clipboard","android.content.IClipboard");
+        if(!clipboardListening) {
+            if(clipboardToken==null) clipboardToken=callback("android.content.IOnPrimaryClipChangedListener",this::scheduleClipboardRefresh);
+            clipboardInvoke("addPrimaryClipChangedListener",clipboardToken);
+            clipboardListening=true;
+        }
+    }
+    private JSONObject clipboardGet() throws Exception {
+        ensureClipboard();
+        ClipData clip=(ClipData)clipboardInvoke("getPrimaryClip",null);
+        checkClipboardAccess(false);
+        boolean hasText=false;String value="";
+        if(clip!=null && clip.getItemCount()>0) {
+            CharSequence input=clip.getItemAt(0).getText();
+            if(input==null) throw new Failure("clipboard_not_text","The target clipboard contains non-text content");
+            value=input.toString();hasText=true;
+        }
+        if(value.getBytes(StandardCharsets.UTF_8).length>MAX_CLIPBOARD || JSONObject.quote(value).getBytes(StandardCharsets.UTF_8).length>MAX_LINE-1024) throw new Failure("clipboard_too_large","Clipboard text exceeds the synchronization limit");
+        return new JSONObject().put("text",value).put("hasText",hasText).put("available",true).put("live",clipboardListening).put("source","companion");
+    }
+    private JSONObject clipboardSet(JSONObject request) throws Exception {
+        String value=request.getString("text");
+        if(value.getBytes(StandardCharsets.UTF_8).length>MAX_CLIPBOARD || JSONObject.quote(value).getBytes(StandardCharsets.UTF_8).length>MAX_LINE-1024) throw new Failure("invalid_argument","Clipboard text exceeds the synchronization limit");
+        ensureClipboard();checkClipboardAccess(true);
+        clipboardInvoke("setPrimaryClip",ClipData.newPlainText("跨设备互联",value));
+        JSONObject verified=clipboardGet();
+        if(!verified.getBoolean("hasText") || !value.equals(verified.getString("text"))) throw new Failure("clipboard_not_applied","The target clipboard changed or did not accept the requested text");
+        return new JSONObject().put("applied",true).put("source","companion");
+    }
+    private void scheduleClipboardRefresh() {
+        if(!clipboardRefreshPending.compareAndSet(false,true)) return;
+        try {worker.execute(()-> {
+            clipboardRefreshPending.set(false);
+            try {send(new JSONObject().put("event","clipboard.changed").put("data",clipboardGet()));}
+            catch(Exception e) {
+                try {send(new JSONObject().put("event","clipboard.unavailable").put("data",new JSONObject().put("available",false).put("live",false).put("reason",error(e))));} catch(Exception ignored) {}
+            }
+        });} catch(RejectedExecutionException ignored) {clipboardRefreshPending.set(false);}
+    }
+    private static boolean mutable(PendingIntent intent) {
+        return intent!=null && (Build.VERSION.SDK_INT<31 || !intent.isImmutable());
+    }
+    private static int replyAction(Notification notification) {
+        if(notification.actions==null) return -1;
+        for(int i=0;i<notification.actions.length;i++) {
+            Notification.Action action=notification.actions[i];
+            RemoteInput[] inputs=action.getRemoteInputs();
+            if(!mutable(action.actionIntent) || inputs==null) continue;
+            for(RemoteInput input:inputs) if(input.getAllowFreeFormInput()) return i;
+        }
+        return -1;
+    }
+    private void refreshNotifications(boolean event) throws Exception {
+        if(notificationManager==null || notificationToken==null || notificationError!=null) return;
+        Object slice=invoke(notificationManager,"getActiveNotificationsFromListener",notificationToken,null,0);
+        @SuppressWarnings("unchecked") List<StatusBarNotification> current=(List<StatusBarNotification>)invoke(slice,"getList");
+        Map<String,Item> next=new LinkedHashMap<>();Map<String,Item> keys=new HashMap<>();
+        int snapshotBytes=0;notificationsTruncated=false;
+        for(StatusBarNotification sbn:current) {
+            if(next.size()>=1000) {notificationsTruncated=true;break;}
+            Notification n=sbn.getNotification();Bundle extras=n.extras;
+            JSONObject data=new JSONObject().put("key",sbn.getKey()).put("packageName",sbn.getPackageName())
+                .put("appName",sbn.getPackageName()).put("userId",sbn.getUserId()).put("uid",sbn.getUid())
+                .put("title",text(extras.getCharSequence(Notification.EXTRA_TITLE),4096))
+                .put("body",text(extras.getCharSequence(Notification.EXTRA_BIG_TEXT,extras.getCharSequence(Notification.EXTRA_TEXT)),16384))
+                .put("postedAt",sbn.getPostTime()).put("canOpen",n.contentIntent!=null)
+                .put("canDismiss",sbn.isClearable()).put("canReply",replyAction(n)>=0);
+            StringBuilder fingerprint=new StringBuilder(data.toString());
+            fingerprint.append(n.contentIntent==null?0:n.contentIntent.hashCode());
+            if(n.actions!=null) for(Notification.Action action:n.actions) {
+                fingerprint.append(text(action.title,512)).append(action.actionIntent==null?0:action.actionIntent.hashCode());
+                if(Build.VERSION.SDK_INT>=31) fingerprint.append(action.isAuthenticationRequired());
+                if(action.getRemoteInputs()!=null) for(RemoteInput input:action.getRemoteInputs()) fingerprint.append(input.getResultKey());
+            }
+            Item old=byKey.get(sbn.getKey());Item item=new Item();item.sbn=sbn;item.fingerprint=fingerprint.toString();
+            String id=old!=null && old.fingerprint.equals(item.fingerprint)?old.json.getString("id"):UUID.randomUUID().toString();
+            item.json=data.put("id",id).put("revision",id);
+            snapshotBytes+=item.json.toString().getBytes(StandardCharsets.UTF_8).length;
+            if(snapshotBytes>768*1024) {notificationsTruncated=true;break;}
+            next.put(id,item);keys.put(sbn.getKey(),item);
+        }
+        String before=notificationList().toString();notifications.clear();notifications.putAll(next);byKey.clear();byKey.putAll(keys);
+        if(event && !before.equals(notificationList().toString())) send(new JSONObject().put("event","notifications.changed").put("data",notificationSnapshot()));
+    }
+    private JSONArray notificationList() {JSONArray result=new JSONArray();for(Item item:notifications.values()) result.put(item.json);return result;}
+    private JSONObject notificationSnapshot() throws Exception {
+        return new JSONObject().put("notifications",notificationList()).put("status",notificationError==null && !notificationsTruncated?"available":"limited")
+            .put("reason",notificationError!=null?notificationError:notificationsTruncated?"部分通知未同步，请进入手机查看。":JSONObject.NULL)
+            .put("truncated",notificationsTruncated).put("live",notificationError==null).put("userId",userId);
+    }
+    private boolean keyguardLocked() throws Exception {
+        return (Boolean)invoke(service("window","android.view.IWindowManager"),"isKeyguardLocked");
+    }
+    private JSONObject notificationAction(String command,JSONObject request) throws Exception {
+        if(notificationError!=null) throw new Failure("permission_or_api_unavailable",notificationError);
+        refreshNotifications(false);
+        Item item=notifications.get(request.getString("notificationId"));
+        if(item==null) throw new Failure("notification_expired","The original notification changed or was removed; refresh before acting");
+        Notification notification=item.sbn.getNotification();
+        if(command.equals("notifications.dismiss")) {
+            if(!item.sbn.isClearable()) throw new Failure("not_dismissible","Android marks this notification as ongoing");
+            invoke(notificationManager,"cancelNotificationsFromListener",notificationToken,new String[]{item.sbn.getKey()});
+            refreshNotifications(true);
+            return new JSONObject().put("acceptedBySystem",true).put("dismissed",!byKey.containsKey(item.sbn.getKey())).put("markedRead",false);
+        }
+        if(keyguardLocked()) throw new Failure("authentication_required","Unlock the target device before continuing this notification action");
+        if(command.equals("notifications.open")) {
+            if(notification.contentIntent==null) throw new Failure("no_original_action","The original notification has no content PendingIntent");
+            notification.contentIntent.send();
+            return new JSONObject().put("acceptedBySystem",true).put("located",true).put("requiresRemoteView",true).put("applicationConfirmed",false);
+        }
+        int index=replyAction(notification);
+        if(index<0) throw new Failure("reply_unavailable","The original notification has no mutable free-form RemoteInput action");
+        Notification.Action action=notification.actions[index];
+        if(Build.VERSION.SDK_INT>=31 && action.isAuthenticationRequired()) throw new Failure("authentication_required","This original action requires target-side application authentication");
+        String reply=request.getString("text");if(reply.isEmpty() || reply.length()>16384) throw new Failure("invalid_argument","Reply must contain 1 to 16384 characters");
+        Bundle results=new Bundle();List<RemoteInput> selected=new ArrayList<>();
+        for(RemoteInput input:action.getRemoteInputs()) if(input.getAllowFreeFormInput()) {results.putCharSequence(input.getResultKey(),reply);selected.add(input);}
+        Intent fillIn=new Intent();RemoteInput.addResultsToIntent(selected.toArray(new RemoteInput[0]),fillIn,results);
+        if(Build.VERSION.SDK_INT>=28) RemoteInput.setResultsSource(fillIn,RemoteInput.SOURCE_FREE_FORM_INPUT);
+        action.actionIntent.send(shellContext,0,fillIn);
+        return new JSONObject().put("status","acceptedBySystem").put("acceptedBySystem",true).put("delivered",JSONObject.NULL).put("message","原应用动作已交给系统；未确认应用或消息服务送达，不会自动重发。");
+    }
+    private void refreshCalls(boolean event) throws Exception {
+        if(telecom==null || callError!=null) return;
+        int previous=callState;int actual=(Integer)invoke(telecom,"getCallStateUsingPackage",PACKAGE,null);
+        long generation=phoneGeneration.get();
+        if(actual!=0 && (callId==null || generation!=observedPhoneGeneration)) callId=UUID.randomUUID().toString();
+        observedPhoneGeneration=generation;
+        if(actual==0) callId=null;
+        callState=actual;
+        if(event && (emittedCallState!=actual || emittedPhoneGeneration!=generation)) {
+            emittedCallState=actual;emittedPhoneGeneration=generation;
+            send(new JSONObject().put("event",actual==1?"calls.incoming":"calls.changed").put("data",callSnapshot()));
+        }
+    }
+    private JSONObject callSnapshot() throws Exception {
+        JSONArray calls=new JSONArray();
+        if(callState!=0 && callError==null) calls.put(new JSONObject().put("id",callId).put("state",callState==1?"ringing":"active")
+            .put("name","当前系统通话").put("canAnswer",false).put("canReject",false)
+            .put("canHangup",false).put("canSetRoute",false).put("aggregate",true).put("generation",observedPhoneGeneration));
+        return new JSONObject().put("calls",calls).put("status","limited").put("controlStatus","limited").put("live",callError==null)
+            .put("reason",callError==null?"当前只能同步系统聚合通话状态；具体通话的安全定位尚未完成，请在手机原电话应用接听或挂断。多SIM、通话等待与第三方VoIP仍待验证。":callError)
+            .put("audioStatus","unknown").put("audioRoute","声音与麦克风继续由被控手机处理；主控双向通话音频尚未实现。");
+    }
+    private JSONObject callAction(JSONObject request) throws Exception {
+        // Telecom's aggregate endCall/acceptRingingCall take no call object.
+        // Even a fresh state check races a replacement call between Binder
+        // transactions. An observation UUID cannot make those operations safe.
+        throw new Failure("call_targeting_unavailable","具体通话的安全定位尚未完成，未执行任何接听或挂断；请在手机原电话应用处理。");
+    }
+    private JSONObject execute(JSONObject request) throws Exception {
+        String command=request.getString("command");
+        if(command.equals("notifications.list")) {refreshNotifications(false);return notificationSnapshot();}
+        if(command.equals("notifications.open") || command.equals("notifications.dismiss") || command.equals("notifications.reply")) return notificationAction(command,request);
+        if(command.equals("calls.list")) {refreshCalls(false);return callSnapshot();}
+        if(command.equals("calls.action")) return callAction(request);
+        if(command.equals("clipboard.get")) return clipboardGet();
+        if(command.equals("clipboard.set")) return clipboardSet(request);
+        throw new Failure("invalid_command","Unknown companion command");
+    }
+    private static String readLine(InputStream input) throws Exception {
+        ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+        for(int b;(b=input.read())!=-1;) {if(b=='\n') return new String(bytes.toByteArray(),StandardCharsets.UTF_8);if(bytes.size()>=MAX_LINE) throw new Failure("input_limit","Companion request too large");bytes.write(b);}
+        return bytes.size()==0?null:new String(bytes.toByteArray(),StandardCharsets.UTF_8);
+    }
+    private void run(String socketName,String secret) throws Exception {
+        LocalServerSocket server=new LocalServerSocket(socketName);
+        ScheduledExecutorService watchdog=Executors.newSingleThreadScheduledExecutor();
+        Future<?> startupDeadline=watchdog.schedule(()-> {try {server.close();}catch(Exception ignored){}},20,TimeUnit.SECONDS);
+        // This is the only stdout protocol. Notification text/reply drafts are
+        // exchanged solely through the authenticated in-memory local socket.
+        System.out.println("INTEROP_COMPANION_READY "+Process.myPid());System.out.flush();
+        try(LocalSocket socket=server.accept()) {
+            socket.setSoTimeout(15000);InputStream input=new BufferedInputStream(socket.getInputStream());
+            String auth=readLine(input);
+            if(auth==null || !secret.equals(new JSONObject(auth).optString("token"))) throw new Failure("unauthorized","Companion socket authentication failed");
+            startupDeadline.cancel(false);watchdog.shutdownNow();
+            socket.setSoTimeout(0);output=new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(),StandardCharsets.UTF_8));
+            JSONObject ready=worker.submit(()-> {
+                initialize();
+                return new JSONObject().put("event","ready").put("protocol",1).put("uid",Process.myUid()).put("apiLevel",Build.VERSION.SDK_INT)
+                    .put("notifications",notificationSnapshot()).put("calls",callSnapshot());
+            }).get();send(ready);
+            for(String line;(line=readLine(input))!=null;) {
+                final JSONObject request=new JSONObject(line);
+                worker.submit(()-> {
+                    JSONObject response=new JSONObject().put("requestId",request.getString("requestId"));
+                    try {response.put("result",execute(request));}
+                    catch(Exception e) {String code=e instanceof Failure?((Failure)e).code:e instanceof PendingIntent.CanceledException?"notification_expired":e instanceof SecurityException?"permission_denied":"companion_error";response.put("error",new JSONObject().put("code",code).put("message",error(e)));}
+                    send(response);return null;
+                }).get();
+            }
+        } finally {
+            try {if(clipboardListening) clipboardInvoke("removePrimaryClipChangedListener",clipboardToken);} catch(Exception ignored) {}
+            try {if(notificationToken!=null) invoke(notificationManager,"unregisterListener",notificationToken,userId);} catch(Exception ignored) {}
+            try {if(phoneToken!=null && Build.VERSION.SDK_INT>=31) invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[0],false);} catch(Exception ignored) {}
+            watchdog.shutdownNow();worker.shutdownNow();server.close();
+        }
+    }
+    public static void main(String[] args) {
+        try {
+            if(args.length!=2 || !args[0].matches("interop-companion-[0-9a-f]{32}") || !args[1].matches("[0-9a-f]{64}")) throw new Failure("invalid_argument","Expected a random abstract socket name and authentication token");
+            Looper.prepareMainLooper();
+            Main main=new Main();main.prepareContext();main.run(args[0],args[1]);System.exit(0);
+        } catch(Exception e) {
+            Exception cause=e.getCause() instanceof Exception?(Exception)e.getCause():e;
+            System.err.println("INTEROP_COMPANION_ERROR "+error(cause));System.exit(1);
+        }
+    }
+}

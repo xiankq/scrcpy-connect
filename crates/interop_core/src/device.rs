@@ -1,0 +1,1440 @@
+//! Persistent device identity and live connection lifecycle. Network locations
+//! never serve as device identifiers; discovery changes endpoints, not trust.
+use crate::{
+    CoreError, CoreResult, Runtime,
+    model::{Device, now, required},
+};
+use interop_adb::{
+    Client, ConnectOptions, OperationOptions,
+    wireless::{
+        self, QrPairing, TlsConfig,
+        discovery::{Discovery, DiscoveryEvent, Service, ServiceKind},
+    },
+};
+use serde_json::{Value, json};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio_util::sync::CancellationToken;
+
+fn operations(seconds: u64, cancellation: CancellationToken) -> OperationOptions {
+    OperationOptions {
+        timeout: Duration::from_secs(seconds),
+        cancellation,
+    }
+}
+fn host(params: &Value) -> CoreResult<String> {
+    let value = required(params, "address")?.trim();
+    if value.is_empty()
+        || value.len() > 253
+        || value
+            .bytes()
+            .any(|b| b.is_ascii_whitespace() || matches!(b, 0 | b'/' | b'\\' | b'[' | b']'))
+    {
+        return Err(CoreError::new(
+            "invalid_address",
+            "请输入不含端口的设备 IP 或主机名。",
+        ));
+    }
+    if value.contains(':')
+        && value
+            .split('%')
+            .next()
+            .unwrap_or_default()
+            .parse::<std::net::Ipv6Addr>()
+            .is_err()
+    {
+        return Err(CoreError::new(
+            "invalid_address",
+            "IPv6 地址无效；端口请单独填写。",
+        ));
+    }
+    Ok(value.to_owned())
+}
+fn port(params: &Value) -> CoreResult<u16> {
+    params
+        .get("port")
+        .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
+        .and_then(|p| u16::try_from(p).ok())
+        .filter(|p| *p != 0)
+        .ok_or_else(|| CoreError::new("invalid_port", "端口必须是 1 到 65535 之间的数字。"))
+}
+fn endpoint(address: &str, port: u16) -> String {
+    if address.contains(':') {
+        format!("[{address}]:{port}")
+    } else {
+        format!("{address}:{port}")
+    }
+}
+fn address_of(address: SocketAddr) -> String {
+    match address {
+        SocketAddr::V4(v4) => v4.ip().to_string(),
+        SocketAddr::V6(v6) if v6.scope_id() != 0 => format!("{}%{}", v6.ip(), v6.scope_id()),
+        SocketAddr::V6(v6) => v6.ip().to_string(),
+    }
+}
+fn blank_device(address: String, port: u16, transport: &str) -> Device {
+    Device {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: "Android 设备".into(),
+        address,
+        port,
+        guid: None,
+        serial: None,
+        transport: transport.into(),
+        status: "offline".into(),
+        model: None,
+        android_version: None,
+        api_level: None,
+        battery: None,
+        last_seen: None,
+        reason: None,
+        auto_reconnect: false,
+    }
+}
+fn matches_guid(instance: &str, guid: &str) -> bool {
+    if guid.is_empty() {
+        return false;
+    }
+    instance == guid
+        || instance
+            .strip_prefix(guid)
+            .and_then(|s| s.strip_prefix(" ("))
+            .and_then(|s| s.strip_suffix(')'))
+            .is_some_and(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
+}
+
+#[derive(Default)]
+struct Metadata {
+    model: Option<String>,
+    release: Option<String>,
+    api: Option<u32>,
+    serial: Option<String>,
+    battery: Option<u32>,
+    error: Option<String>,
+}
+fn nonempty(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "unknown" && *s != "null")
+        .map(str::to_owned)
+}
+async fn metadata(client: &Client, token: CancellationToken) -> Metadata {
+    let command = "getprop ro.product.model; getprop ro.build.version.release; getprop ro.build.version.sdk; getprop ro.serialno; dumpsys battery";
+    let output = match client.shell(command, 64 * 1024, operations(8, token)).await {
+        Ok(output) => output,
+        Err(error) => {
+            return Metadata {
+                error: Some(format!("读取设备信息失败：{error}")),
+                ..Default::default()
+            };
+        }
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut lines = text.lines();
+    let model = nonempty(lines.next());
+    let release = nonempty(lines.next());
+    let api = lines.next().and_then(|s| s.trim().parse().ok());
+    let serial = nonempty(lines.next());
+    let rest = lines.collect::<Vec<_>>();
+    let number = |key: &str| {
+        rest.iter()
+            .find_map(|line| line.trim().strip_prefix(key)?.trim().parse::<u32>().ok())
+    };
+    let battery = number("level:").and_then(|level| {
+        number("scale:")
+            .filter(|n| *n > 0)
+            .map(|scale| (u64::from(level) * 100 / u64::from(scale)).min(100) as u32)
+    });
+    Metadata {
+        model,
+        release,
+        api,
+        serial,
+        battery,
+        error: None,
+    }
+}
+
+impl Runtime {
+    async fn changed_devices(&self) -> CoreResult<()> {
+        self.persist().await?;
+        self.emit(
+            "devices.changed",
+            None,
+            json!({"devices": self.store.read().await.devices}),
+        );
+        Ok(())
+    }
+    async fn tls_config(&self) -> CoreResult<TlsConfig> {
+        let identity = self.identity.clone();
+        tokio::task::spawn_blocking(move || TlsConfig::experimental_rustcrypto(&identity))
+            .await
+            .map_err(|e| CoreError::new("tls_error", e.to_string()))?
+            .map_err(Into::into)
+    }
+    async fn connect_options(&self, token: CancellationToken) -> CoreResult<ConnectOptions> {
+        Ok(ConnectOptions {
+            identity: Some(self.identity.clone()),
+            tls: Some(self.tls_config().await?),
+            request_authorization: true,
+            public_key_comment: "interop-controller".into(),
+            operations: operations(60, token),
+        })
+    }
+    pub(crate) async fn add_device(&self, params: &Value) -> CoreResult<Value> {
+        let address = host(params)?;
+        let port = port(params)?;
+        let explicit = params.get("deviceId").and_then(Value::as_str);
+        let device = {
+            let mut store = self.store.write().await;
+            if let Some(id) = explicit {
+                let existing = store
+                    .devices
+                    .iter_mut()
+                    .find(|d| d.id == id)
+                    .ok_or_else(|| CoreError::new("not_found", "原设备记录已不存在。"))?;
+                if existing.status == "connected" || existing.status == "connecting" {
+                    return Err(CoreError::new(
+                        "device_busy",
+                        "请先断开设备，再修改连接地址。",
+                    ));
+                }
+                existing.address = address;
+                existing.port = port;
+                existing.transport = if existing.guid.is_some() {
+                    "tls"
+                } else {
+                    "tcp"
+                }
+                .into();
+                existing.reason = None;
+                existing.clone()
+            } else {
+                let record = blank_device(address, port, "tcp");
+                store.devices.push(record.clone());
+                record
+            }
+        };
+        self.changed_devices().await?;
+        Ok(json!({"deviceId":device.id,"device":device}))
+    }
+    pub(crate) async fn rename_device(&self, params: &Value) -> CoreResult<Value> {
+        let id = required(params, "deviceId")?;
+        let name = required(params, "name")?.trim();
+        if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
+            return Err(CoreError::new(
+                "invalid_name",
+                "设备名称需为 1 到 80 个可见字符。",
+            ));
+        }
+        let device = {
+            let mut store = self.store.write().await;
+            let record = store
+                .devices
+                .iter_mut()
+                .find(|d| d.id == id)
+                .ok_or_else(|| CoreError::new("not_found", "设备记录已不存在。"))?;
+            record.name = name.into();
+            record.clone()
+        };
+        self.changed_devices().await?;
+        Ok(json!({"device":device}))
+    }
+    /// A form attempt gets its own cancellation alias. The device alias remains
+    /// available to explicit disconnect; finishing an old attempt never removes
+    /// the token installed by a newer attempt.
+    pub(crate) async fn connect_device_with_attempt(
+        &self,
+        id: &str,
+        attempt_id: Option<&str>,
+    ) -> CoreResult<Value> {
+        if attempt_id.is_some_and(|attempt| {
+            attempt.is_empty() || attempt == id || attempt.contains('\0') || attempt.len() > 200
+        }) {
+            return Err(CoreError::new("invalid_argument", "连接尝试标识无效。"));
+        }
+        let token = CancellationToken::new();
+        if let Some(attempt) = attempt_id {
+            let mut pending = self.device_operations.lock().await;
+            if let Some(previous) = pending.insert(attempt.into(), token.clone()) {
+                previous.cancel();
+            }
+        }
+        let result = self
+            .connect_device_with_token(id, true, token.clone())
+            .await;
+        if let Some(attempt) = attempt_id {
+            let mut pending = self.device_operations.lock().await;
+            if !token.is_cancelled() {
+                pending.remove(attempt);
+            }
+        }
+        result
+    }
+    async fn connect_device_with_authorization(
+        &self,
+        id: &str,
+        request_authorization: bool,
+    ) -> CoreResult<Value> {
+        self.connect_device_with_token(id, request_authorization, CancellationToken::new())
+            .await
+    }
+    async fn connect_device_with_token(
+        &self,
+        id: &str,
+        request_authorization: bool,
+        token: CancellationToken,
+    ) -> CoreResult<Value> {
+        if token.is_cancelled() {
+            return Err(CoreError::new("cancelled", "连接已取消。"));
+        }
+        if let Ok(client) = self.client(id).await {
+            return Ok(
+                json!({"connected":!client.is_closed(),"deviceId":id,"device":self.device(id).await?}),
+            );
+        }
+        let device = {
+            let mut pending = self.device_operations.lock().await;
+            let mut store = self.store.write().await;
+            let record = store
+                .devices
+                .iter_mut()
+                .find(|d| d.id == id)
+                .ok_or_else(|| CoreError::new("not_found", "设备记录已不存在。"))?;
+            if !request_authorization && (!record.auto_reconnect || record.status != "offline") {
+                return Err(CoreError::new(
+                    "cancelled",
+                    "自动重连已取消或已有连接正在处理。",
+                ));
+            }
+            if let Some(previous) = pending.insert(id.into(), token.clone()) {
+                previous.cancel();
+            }
+            if record.transport != "usb" && record.port == 0 {
+                pending.remove(id);
+                return Err(CoreError::new(
+                    "connection_port_required",
+                    "配对已完成，请填写无线调试页面上的连接端口，无需再次配对。",
+                ));
+            }
+            record.status = "connecting".into();
+            record.reason = None;
+            record.auto_reconnect = true;
+            record.clone()
+        };
+        self.changed_devices().await?;
+        let attempt = async {
+            let mut options = self.connect_options(token.clone()).await?;
+            options.request_authorization = request_authorization;
+            let client = if device.transport == "usb" {
+                self.connect_usb_record(&device, options).await?
+            } else {
+                Client::connect_tcp(endpoint(&device.address, device.port), options).await?
+            };
+            let info = metadata(&client, token.clone()).await;
+            self.attach_client(id, client, info, &token).await
+        }
+        .await;
+        if let Err(error) = &attempt {
+            let pending = self.device_operations.lock().await;
+            if !token.is_cancelled() || pending.get(id).is_some_and(CancellationToken::is_cancelled)
+            {
+                let mut store = self.store.write().await;
+                if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
+                    let unauthorized = error.code == "authorization_required"
+                        || error.message.contains("CertificateRequired")
+                        || error.message.contains("BadCertificate")
+                        || error.message.contains("UnknownCA");
+                    record.status = if unauthorized {
+                        "unauthorized"
+                    } else {
+                        "offline"
+                    }
+                    .into();
+                    record.reason = Some(error.message.clone());
+                    if unauthorized || token.is_cancelled() {
+                        record.auto_reconnect = false;
+                    }
+                }
+            }
+            drop(pending);
+            self.changed_devices().await?;
+        }
+        attempt
+    }
+    async fn attach_client(
+        &self,
+        id: &str,
+        client: Client,
+        info: Metadata,
+        token: &CancellationToken,
+    ) -> CoreResult<Value> {
+        let _pending = self.device_operations.lock().await;
+        if token.is_cancelled() {
+            client.close();
+            return Err(CoreError::new("cancelled", "连接已取消。"));
+        }
+        if client.is_closed() {
+            return Err(CoreError::new(
+                "disconnected",
+                "设备在读取连接信息时已断开。",
+            ));
+        }
+        let device = {
+            let mut store = self.store.write().await;
+            let record = store
+                .devices
+                .iter_mut()
+                .find(|d| d.id == id)
+                .ok_or_else(|| CoreError::new("not_found", "设备记录已移除。"))?;
+            if let (Some(known), Some(actual)) = (&record.serial, &info.serial)
+                && known != actual
+            {
+                client.close();
+                return Err(CoreError::new(
+                    "device_identity_mismatch",
+                    "连接地址上的设备序列号与原记录不同，请作为另一台设备添加。",
+                ));
+            }
+            if record.name == "Android 设备"
+                && let Some(model) = &info.model
+            {
+                record.name = model.clone();
+            }
+            if info.model.is_some() {
+                record.model = info.model;
+            }
+            if info.release.is_some() {
+                record.android_version = info.release;
+            }
+            if info.api.is_some() {
+                record.api_level = info.api;
+            }
+            if info.serial.is_some() {
+                record.serial = info.serial;
+            }
+            record.battery = info.battery;
+            record.status = "connected".into();
+            record.reason = info.error;
+            record.auto_reconnect = true;
+            record.last_seen = Some(now());
+            let mut clients = self.connections.lock().await;
+            if let Some(old) = clients.insert(id.into(), client) {
+                old.close();
+            }
+            record.clone()
+        };
+        drop(_pending);
+        self.changed_devices().await?;
+        self.emit("device.changed", Some(id), json!(device));
+        Ok(json!({"connected":true,"deviceId":id,"device":device}))
+    }
+    pub(crate) async fn disconnect_device(&self, id: &str, forget: bool) -> CoreResult<Value> {
+        self.device(id).await?;
+        {
+            let mut pending = self.device_operations.lock().await;
+            if let Some(token) = pending.remove(id) {
+                token.cancel();
+            }
+            let mut store = self.store.write().await;
+            if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
+                record.auto_reconnect = false;
+                record.status = "offline".into();
+                record.reason = None;
+            }
+        }
+        self.stop_device_activities(id).await?;
+        if let Some(client) = self.connections.lock().await.remove(id) {
+            client.close();
+        }
+        if forget {
+            self.store.write().await.devices.retain(|d| d.id != id);
+        }
+        self.changed_devices().await?;
+        Ok(json!({"deviceId":id,"disconnected":true,"forgotten":forget}))
+    }
+    pub(crate) async fn discover_devices(&self) -> CoreResult<Value> {
+        let discovery = Discovery::new()?;
+        let options = operations(3, CancellationToken::new());
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut found = HashMap::<String, Service>::new();
+        while Instant::now() < deadline {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match tokio::time::timeout(remaining, discovery.next(&options)).await {
+                Ok(Ok(DiscoveryEvent::Resolved(service))) => {
+                    found.insert(service.fullname.clone(), service);
+                }
+                Ok(Ok(DiscoveryEvent::Removed { fullname })) => {
+                    found.remove(&fullname);
+                }
+                Ok(Err(interop_adb::Error::Timeout)) | Err(_) => break,
+                Ok(Err(error)) => return Err(error.into()),
+            }
+        }
+        let known = self.store.read().await.devices.clone();
+        let devices = found.values().map(|service| {
+            let trusted = if service.kind == ServiceKind::Connect { known.iter().find(|device|device.guid.as_ref().is_some_and(|guid|matches_guid(&service.instance,guid))) } else { None };
+            json!({"instance":service.instance,"hostname":service.hostname,
+            "fullname":service.fullname,"kind":match service.kind {ServiceKind::Pairing=>"pairing",ServiceKind::Connect=>"tls",ServiceKind::Legacy=>"tcp"},
+            "endpoints":service.endpoints.iter().map(|address| json!({"address":address_of(*address),"port":address.port()})).collect::<Vec<_>>(),
+            "properties":service.properties,"trusted":trusted.is_some(),"deviceId":trusted.map(|device|&device.id)})
+        }).collect::<Vec<_>>();
+        Ok(json!({"devices":devices,"manualConnectionAvailable":true}))
+    }
+    pub(crate) async fn pair_device(&self, params: &Value) -> CoreResult<Value> {
+        if let Some(id) = params.get("deviceId").and_then(Value::as_str) {
+            self.device(id).await?;
+        }
+        let address = host(params)?;
+        let port = port(params)?;
+        let code = required(params, "code")?;
+        if code.len() != 6 || !code.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(CoreError::new(
+                "invalid_pairing_code",
+                "请输入设备当前显示的六位配对码。",
+            ));
+        }
+        let attempt_id = params
+            .get("attemptId")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let token = CancellationToken::new();
+        if let Some(old) = self
+            .device_operations
+            .lock()
+            .await
+            .insert(attempt_id.clone(), token.clone())
+        {
+            old.cancel();
+        }
+        self.emit(
+            "pairing.changed",
+            None,
+            json!({"status":"waiting","attemptId":attempt_id}),
+        );
+        let options = operations(60, token.clone());
+        let result: CoreResult<wireless::PairingResult> = tokio::select! {
+            biased;
+            _ = token.cancelled() => Err(CoreError::new("cancelled","配对操作已取消。")),
+            result = tokio::time::timeout(options.timeout,async {
+                let tls = self.tls_config().await?;
+                let transport=tokio::net::TcpStream::connect(endpoint(&address,port)).await?;
+                Ok(wireless::pair(transport,code,&self.identity,&tls,"interop-controller",&options).await?)
+            }) => result.unwrap_or_else(|_|Err(CoreError::new("timeout","配对操作超时，请检查当前配对码。"))),
+        };
+        let result = match result {
+            Ok(result) => {
+                self.finish_pairing(
+                    result.guid,
+                    address,
+                    params.get("deviceId").and_then(Value::as_str),
+                    &token,
+                )
+                .await
+            }
+            Err(error) => Err(error),
+        };
+        if !token.is_cancelled() {
+            self.device_operations.lock().await.remove(&attempt_id);
+        }
+        result
+    }
+    async fn finish_pairing(
+        &self,
+        guid: String,
+        address: String,
+        explicit_id: Option<&str>,
+        token: &CancellationToken,
+    ) -> CoreResult<Value> {
+        let id = {
+            let mut store = self.store.write().await;
+            let index = if let Some(id) = explicit_id {
+                Some(
+                    store
+                        .devices
+                        .iter()
+                        .position(|d| d.id == id)
+                        .ok_or_else(|| {
+                            CoreError::new(
+                                "not_found",
+                                "原设备记录不存在；配对已成功，请重新发现设备。",
+                            )
+                        })?,
+                )
+            } else {
+                store
+                    .devices
+                    .iter()
+                    .position(|d| d.guid.as_deref() == Some(&guid))
+            };
+            let record = if let Some(index) = index {
+                &mut store.devices[index]
+            } else {
+                store.devices.push(blank_device(address.clone(), 0, "tls"));
+                store.devices.last_mut().expect("pushed device")
+            };
+            if record.guid.as_ref().is_some_and(|known| known != &guid) {
+                return Err(CoreError::new(
+                    "device_identity_mismatch",
+                    "配对的是另一台设备，原记录未被覆盖。",
+                ));
+            }
+            record.guid = Some(guid.clone());
+            record.address = address;
+            record.transport = "tls".into();
+            record.status = "offline".into();
+            record.auto_reconnect = false;
+            record.reason = Some("配对已完成，正在发现独立的连接端口。".into());
+            record.id.clone()
+        };
+        self.changed_devices().await?;
+        if self.client(&id).await.is_ok() {
+            if let Some(record) = self
+                .store
+                .write()
+                .await
+                .devices
+                .iter_mut()
+                .find(|d| d.id == id)
+            {
+                record.status = "connected".into();
+                record.reason = None;
+                record.auto_reconnect = true;
+            }
+            self.changed_devices().await?;
+            return Ok(
+                json!({"paired":true,"deviceId":id,"device":self.device(&id).await?,"connected":true}),
+            );
+        }
+        let connect_endpoint = tokio::select! { biased; _=token.cancelled()=>None, result=self.find_connect_endpoint(&guid)=>result };
+        let connected = if let Some(endpoint) = connect_endpoint {
+            let mut store = self.store.write().await;
+            if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
+                record.address = address_of(endpoint);
+                record.port = endpoint.port();
+            }
+            drop(store);
+            self.connect_device_with_token(&id, true, token.child_token())
+                .await
+                .is_ok()
+        } else {
+            let mut store = self.store.write().await;
+            if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
+                record.auto_reconnect = !token.is_cancelled();
+                record.reason = Some(
+                    if token.is_cancelled() {
+                        "配对已完成；后续连接已取消，授权身份仍保留。"
+                    } else {
+                        "配对已完成；未发现连接服务，请填写无线调试页面的连接端口，无需重新配对。"
+                    }
+                    .into(),
+                );
+            }
+            drop(store);
+            self.changed_devices().await?;
+            false
+        };
+        Ok(
+            json!({"paired":true,"deviceId":id,"device":self.device(&id).await?,"connected":connected,"connectionPortRequired":!connected && self.device(&id).await?.port == 0}),
+        )
+    }
+    async fn find_connect_endpoint(&self, guid: &str) -> Option<SocketAddr> {
+        let discovery = Discovery::new().ok()?;
+        let options = operations(5, CancellationToken::new());
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if let DiscoveryEvent::Resolved(service) = discovery.next(&options).await.ok()?
+                    && service.kind == ServiceKind::Connect
+                    && matches_guid(&service.instance, guid)
+                {
+                    return service.endpoints.first().copied();
+                }
+            }
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+    pub(crate) async fn qr_pairing(self: &Arc<Self>) -> CoreResult<Value> {
+        let qr = QrPairing::generate();
+        let response = json!({"payload":qr.payload().as_str(),"serviceName":qr.service_name(),"attemptId":qr.service_name(),"expiresAt":now()+120});
+        let token = CancellationToken::new();
+        if let Some((_, old)) = self
+            .qr_attempt
+            .lock()
+            .await
+            .replace((qr.service_name().into(), token.clone()))
+        {
+            old.cancel();
+        }
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            let Some(runtime) = weak.upgrade() else {
+                return;
+            };
+            runtime.emit(
+                "pairing.changed",
+                None,
+                json!({"status":"waiting","serviceName":qr.service_name(),"attemptId":qr.service_name()}),
+            );
+            let result = tokio::select! {
+                _ = token.cancelled() => Err(CoreError::new("cancelled", "二维码配对已取消。")),
+                result = tokio::time::timeout(Duration::from_secs(120), async {
+                    let discovery = Discovery::new()?;
+                    let tls = runtime.tls_config().await?;
+                    let options = operations(120, token.clone());
+                    loop {
+                        if let DiscoveryEvent::Resolved(service) = discovery.next(&options).await?
+                            && service.kind == ServiceKind::Pairing && service.instance == qr.service_name() {
+                            let mut last = None;
+                            for address in service.endpoints {
+                                let attempt = async {
+                                    let stream = tokio::net::TcpStream::connect(address).await?;
+                                    let paired = wireless::pair(stream, qr.password(), &runtime.identity, &tls, "interop-controller", &options).await?;
+                                    Ok::<_,CoreError>((paired.guid,address_of(address)))
+                                }.await;
+                                match attempt { Ok(value) => return Ok(value), Err(error) => last = Some(error) }
+                            }
+                            return Err(last.unwrap_or_else(|| CoreError::new("pairing_failed", "已发现配对服务，但没有可达地址。")));
+                        }
+                    }
+                }) => result.unwrap_or_else(|_| Err(CoreError::new("expired", "二维码已过期，请生成新的二维码。"))),
+            };
+            let result = match result {
+                Ok((guid, address)) => runtime.finish_pairing(guid, address, None, &token).await,
+                Err(error) => Err(error),
+            };
+            match result {
+                Ok(value) => runtime.emit("pairing.changed", value.get("deviceId").and_then(Value::as_str), json!({"status":"paired","attemptId":qr.service_name(),"result":value})),
+                Err(error) => runtime.emit("pairing.changed", None, json!({"attemptId":qr.service_name(),"status":match error.code.as_str() {"expired"=>"expired","cancelled"=>"cancelled",_=>"failed"},"code":error.code,"message":error.message})),
+            }
+        });
+        Ok(response)
+    }
+    pub(crate) async fn enable_wireless(&self, params: &Value) -> CoreResult<Value> {
+        let id = required(params, "deviceId")?;
+        let requested = params
+            .get("port")
+            .map(|_| port(params))
+            .transpose()?
+            .unwrap_or(5555);
+        let client = self.client(id).await?;
+        let mut stream = client
+            .open(&format!("tcpip:{requested}"), OperationOptions::default())
+            .await?;
+        let mut bytes = Vec::new();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let mut buffer = [0u8; 1024];
+            loop {
+                match stream.read(&mut buffer).await {
+                    Ok(0) => break,
+                    Ok(count) => {
+                        if bytes.len() + count > 8192 {
+                            return Err(interop_adb::Error::OutputLimit);
+                        }
+                        bytes.extend_from_slice(&buffer[..count]);
+                    }
+                    Err(interop_adb::Error::Closed) if !bytes.is_empty() => break,
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|_| CoreError::new("timeout", "等待设备开启无线监听超时。"))??;
+        let response = String::from_utf8_lossy(&bytes).into_owned();
+        if !response.contains("restarting in TCP mode") {
+            return Err(CoreError::new("wireless_setup_failed", response));
+        }
+        Ok(
+            json!({"enabled":true,"port":requested,"encrypted":false,"response":response,
+            "connectionRequired":true,"message":"已通过授权连接请求开启旧式 TCP 调试；请填写设备当前网络地址后连接。"}),
+        )
+    }
+    pub(crate) async fn usb_devices(&self, params: &Value) -> CoreResult<Value> {
+        let token = CancellationToken::new();
+        let connecting = params.get("fd").is_some()
+            || params.get("connect").and_then(Value::as_bool) == Some(true);
+        let explicit = params.get("deviceId").and_then(Value::as_str);
+        // New USB devices have no record yet, but must still be cancellable by Stop All.
+        let attempt_id = params["attemptId"]
+            .as_str()
+            .filter(|id| !id.is_empty() && id.len() <= 128)
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("usb:{}", uuid::Uuid::new_v4()));
+        if connecting
+            && let Some(previous) = self
+                .device_operations
+                .lock()
+                .await
+                .insert(attempt_id.clone(), token.clone())
+        {
+            previous.cancel();
+        }
+        if connecting && let Some(id) = explicit {
+            let mut pending = self.device_operations.lock().await;
+            let mut store = self.store.write().await;
+            let record = store
+                .devices
+                .iter_mut()
+                .find(|d| d.id == id)
+                .ok_or_else(|| CoreError::new("not_found", "设备记录已不存在。"))?;
+            if let Some(previous) = pending.insert(id.into(), token.clone()) {
+                previous.cancel();
+            }
+            record.status = "connecting".into();
+            record.auto_reconnect = true;
+            record.reason = None;
+            drop(store);
+            drop(pending);
+            self.changed_devices().await?;
+        }
+        let result = self.usb_devices_inner(params, &token).await;
+        if let Err(error) = &result
+            && connecting
+            && !token.is_cancelled()
+            && let Some(id) = explicit
+        {
+            if let Some(record) = self
+                .store
+                .write()
+                .await
+                .devices
+                .iter_mut()
+                .find(|d| d.id == id)
+            {
+                record.status = if error.code == "authorization_required" {
+                    "unauthorized"
+                } else {
+                    "offline"
+                }
+                .into();
+                record.reason = Some(error.message.clone());
+                record.auto_reconnect = false;
+            }
+            self.changed_devices().await?;
+        }
+        if !token.is_cancelled() {
+            self.device_operations.lock().await.remove(&attempt_id);
+        }
+        result
+    }
+    async fn usb_devices_inner(
+        &self,
+        params: &Value,
+        token: &CancellationToken,
+    ) -> CoreResult<Value> {
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "windows",
+            target_os = "macos"
+        ))]
+        {
+            if let Some(fd) = params.get("fd") {
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                {
+                    use std::os::fd::FromRawFd;
+                    let fd = fd
+                        .as_i64()
+                        .and_then(|v| i32::try_from(v).ok())
+                        .filter(|n| *n >= 0)
+                        .ok_or_else(|| CoreError::new("invalid_fd", "USB 授权描述符无效。"))?;
+                    // fcntl atomically duplicates an OS handle without assuming that
+                    // an arbitrary caller-supplied integer is a valid BorrowedFd.
+                    let duplicate = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 0) };
+                    if duplicate < 0 {
+                        return Err(std::io::Error::last_os_error().into());
+                    }
+                    let owned = unsafe { std::os::fd::OwnedFd::from_raw_fd(duplicate) };
+                    let options = self.connect_options(token.clone()).await?;
+                    let transport =
+                        interop_adb::usb::from_owned_fd(owned, options.operations.clone()).await?;
+                    let client = Client::connect_transport(transport, options).await?;
+                    return self
+                        .adopt_usb(
+                            client,
+                            params.get("deviceId").and_then(Value::as_str),
+                            token,
+                        )
+                        .await;
+                }
+                #[cfg(not(any(target_os = "linux", target_os = "android")))]
+                {
+                    let _ = fd;
+                    return Err(CoreError::new(
+                        "unsupported_platform",
+                        "当前平台不通过文件描述符导入 USB。",
+                    ));
+                }
+            }
+            let devices =
+                interop_adb::usb::list_devices(operations(10, CancellationToken::new())).await?;
+            if params.get("connect").and_then(Value::as_bool) == Some(true) {
+                let serial = required(params, "serial")?;
+                let matches = devices
+                    .iter()
+                    .filter(|d| d.serial_number() == Some(serial))
+                    .collect::<Vec<_>>();
+                if matches.len() != 1 {
+                    return Err(CoreError::new(
+                        "usb_selection_required",
+                        "未找到唯一匹配的 USB 设备，请重新选择。",
+                    ));
+                }
+                let options = self.connect_options(token.clone()).await?;
+                let transport = matches[0].open(options.operations.clone()).await?;
+                let client = Client::connect_transport(transport, options).await?;
+                return self
+                    .adopt_usb(
+                        client,
+                        params.get("deviceId").and_then(Value::as_str),
+                        token,
+                    )
+                    .await;
+            }
+            Ok(
+                json!({"supported":true,"devices":devices.iter().map(|device| json!({"vendorId":device.vendor_id(),"productId":device.product_id(),"serial":device.serial_number(),"permission":"os_authorization_required"})).collect::<Vec<_>>(),"controllerDebuggingRequired":false}),
+            )
+        }
+        #[cfg(not(any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "windows",
+            target_os = "macos"
+        )))]
+        {
+            let _ = (params, token);
+            Ok(
+                json!({"supported":false,"devices":[],"reason":"此平台的 USB 后端尚未实现。","controllerDebuggingRequired":false}),
+            )
+        }
+    }
+    async fn adopt_usb(
+        &self,
+        client: Client,
+        explicit_id: Option<&str>,
+        token: &CancellationToken,
+    ) -> CoreResult<Value> {
+        let info = metadata(&client, token.clone()).await;
+        if token.is_cancelled() {
+            client.close();
+            return Err(CoreError::new("cancelled", "USB 连接已取消。"));
+        }
+        if client.is_closed() {
+            return Err(CoreError::new(
+                "disconnected",
+                "USB 设备在读取信息时已断开。",
+            ));
+        }
+        let id = {
+            let mut store = self.store.write().await;
+            let index = if let Some(id) = explicit_id {
+                Some(
+                    store
+                        .devices
+                        .iter()
+                        .position(|d| d.id == id)
+                        .ok_or_else(|| CoreError::new("not_found", "设备记录已不存在。"))?,
+                )
+            } else {
+                info.serial.as_ref().and_then(|serial| {
+                    store
+                        .devices
+                        .iter()
+                        .position(|d| d.serial.as_ref() == Some(serial))
+                })
+            };
+            let record = if let Some(index) = index {
+                &mut store.devices[index]
+            } else {
+                store.devices.push(blank_device(String::new(), 0, "usb"));
+                store.devices.last_mut().expect("pushed record")
+            };
+            if let (Some(known), Some(actual)) = (&record.serial, &info.serial)
+                && known != actual
+            {
+                client.close();
+                return Err(CoreError::new(
+                    "device_identity_mismatch",
+                    "USB 设备与选定记录的序列号不同。",
+                ));
+            }
+            record.transport = "usb".into();
+            record.id.clone()
+        };
+        self.attach_client(&id, client, info, token).await
+    }
+    async fn connect_usb_record(
+        &self,
+        device: &Device,
+        options: ConnectOptions,
+    ) -> CoreResult<Client> {
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "windows",
+            target_os = "macos"
+        ))]
+        {
+            if cfg!(target_os = "android") {
+                return Err(CoreError::new(
+                    "usb_permission_required",
+                    "USB 连接需要主控系统重新提供授权描述符；无需开启主控调试。",
+                ));
+            }
+            let serial = device.serial.as_deref().ok_or_else(|| {
+                CoreError::new(
+                    "usb_selection_required",
+                    "设备没有可核验的 USB 序列号，请重新选择并授权。",
+                )
+            })?;
+            let devices = interop_adb::usb::list_devices(options.operations.clone()).await?;
+            let matches = devices
+                .iter()
+                .filter(|d| d.serial_number() == Some(serial))
+                .collect::<Vec<_>>();
+            if matches.len() != 1 {
+                return Err(CoreError::new(
+                    "usb_disconnected",
+                    "USB 设备已断开或需要重新选择。",
+                ));
+            }
+            let transport = matches[0].open(options.operations.clone()).await?;
+            Ok(Client::connect_transport(transport, options).await?)
+        }
+        #[cfg(not(any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "windows",
+            target_os = "macos"
+        )))]
+        {
+            let _ = (device, options);
+            Err(CoreError::new(
+                "unsupported_platform",
+                "此平台的 USB 后端尚未实现。",
+            ))
+        }
+    }
+    pub(crate) async fn device_sleeping(&self, id: &str) -> CoreResult<Option<bool>> {
+        let client = self.client(id).await?;
+        let output = client
+            .shell(
+                "dumpsys power | sed -n 's/^ *mWakefulness=//p'",
+                4096,
+                operations(5, CancellationToken::new()),
+            )
+            .await?;
+        Ok(match String::from_utf8_lossy(&output.stdout).trim() {
+            "Asleep" | "Dozing" => Some(true),
+            "Awake" | "Dreaming" => Some(false),
+            // An unrecognized OEM dump is unknown, never evidence of sleep.
+            _ => None,
+        })
+    }
+
+    pub(crate) async fn wake_device(&self, id: &str) -> CoreResult<Value> {
+        let client = self.client(id).await?;
+        let output = client
+            .shell(
+                "input keyevent 224",
+                4096,
+                operations(5, CancellationToken::new()),
+            )
+            .await
+            .map_err(|error| {
+                CoreError::new(
+                    "result_unknown",
+                    format!("唤醒请求结果未知，请查看手机状态后再决定是否重试。{error}"),
+                )
+            })?;
+        if output.exit_code.is_some_and(|code| code != 0) {
+            return Err(CoreError::new(
+                "wake_failed",
+                "手机系统未接受唤醒请求，请在被控手机上手动唤醒。",
+            ));
+        }
+        let sleeping = self.device_sleeping(id).await.unwrap_or(None);
+        Ok(
+            json!({"deviceId":id,"requested":true,"awake":sleeping.map(|value|!value),
+            "reason":"仅请求系统唤醒，仍使用手机自身的锁屏与解锁方式。"}),
+        )
+    }
+
+    pub(crate) async fn capabilities(&self, id: &str) -> CoreResult<Value> {
+        let device = self.device(id).await?;
+        let client = self.client(id).await.ok();
+        let mut entries = Vec::new();
+        let mut add = |key: &str, status: &str, reason: &str| {
+            entries.push(json!({"key":key,"id":key,"name":key,"status":status,"reason":reason}))
+        };
+        if let Some(client) = &client {
+            let shell = client
+                .shell(
+                    "printf interop-capability-check",
+                    1024,
+                    operations(5, CancellationToken::new()),
+                )
+                .await;
+            let shell_ok = shell
+                .as_ref()
+                .is_ok_and(|o| o.stdout == b"interop-capability-check");
+            add(
+                "shell",
+                if shell_ok { "available" } else { "limited" },
+                if shell_ok {
+                    "已通过当前设备授权连接验证 shell。"
+                } else {
+                    "ADB 已连接，但 shell 探测未成功。"
+                },
+            );
+            let sync_ok = match client.sync(operations(5, CancellationToken::new())).await {
+                Ok(mut sync) => match interop_adb::sync::RemotePath::new("/") {
+                    Ok(path) => sync.stat(&path).await.is_ok(),
+                    Err(_) => false,
+                },
+                Err(_) => false,
+            };
+            add(
+                "files",
+                if sync_ok { "available" } else { "limited" },
+                if sync_ok {
+                    "已通过当前连接验证文件服务；受 Android 文件权限限制。"
+                } else {
+                    "当前文件服务探测失败，可查看连接诊断。"
+                },
+            );
+        } else {
+            add("shell", "unknown", "设备尚未连接，无法探测。");
+            add("files", "unknown", "设备尚未连接，无法探测。");
+        }
+        if device.api_level.is_some_and(|api| api < 30) {
+            add(
+                "wirelessPairing",
+                "unavailable",
+                "设备 Android 版本低于 11，系统不提供现代无线配对；可使用授权 USB 开启旧式 TCP。",
+            );
+        } else if device.guid.is_some() {
+            add(
+                "wirelessPairing",
+                "available",
+                "已通过配对协议取得该设备 GUID；连接状态单独记录。",
+            );
+        } else if device.api_level.is_none() {
+            add(
+                "wirelessPairing",
+                "unknown",
+                "尚未读取设备 Android 版本，现代无线配对能力待确认。",
+            );
+        } else {
+            add(
+                "wirelessPairing",
+                "needsSetup",
+                "请在被控设备系统中开启无线调试并完成配对。",
+            );
+        }
+        let active_session = self
+            .activities()
+            .await
+            .ok()
+            .and_then(|activities| activities.get("sessions").cloned())
+            .and_then(|sessions| sessions.as_array().cloned())
+            .is_some_and(|sessions| {
+                sessions
+                    .iter()
+                    .any(|session| session["deviceId"] == id && session["status"] == "streaming")
+            });
+        if client.is_some() && device.api_level.is_some_and(|api| api >= 21) {
+            add(
+                "screen",
+                if active_session {
+                    "available"
+                } else {
+                    "limited"
+                },
+                if active_session {
+                    "当前设备已有实际视频控制会话。"
+                } else {
+                    "scrcpy 5.0.1 屏幕链路已实现并经 Android 16 验证；当前设备编码器及厂商输入权限在启动时确认。"
+                },
+            );
+            add(
+                "clipboard",
+                "unknown",
+                "已有屏幕控制与无视频临时服务两条文本通道；此设备读写与监听资格须实际请求后确认，主控仍受本机剪贴板权限限制。",
+            );
+        } else {
+            add(
+                "screen",
+                "unknown",
+                "设备未连接或 Android 版本尚未读取，无法确认屏幕能力。",
+            );
+            add("clipboard", "unknown", "设备尚无可核验的控制会话。");
+        }
+        if let Some(client) = &client {
+            let packages = client
+                .shell(
+                    "pm list packages",
+                    512 * 1024,
+                    operations(8, CancellationToken::new()),
+                )
+                .await;
+            if packages.as_ref().is_ok_and(|output| {
+                output.exit_code.is_none_or(|code| code == 0)
+                    && output.stdout.starts_with(b"package:")
+            }) {
+                add(
+                    "apps",
+                    if device.api_level.is_some_and(|api| api >= 29) {
+                        "available"
+                    } else {
+                        "limited"
+                    },
+                    "已通过当前设备的应用包列表探测；独立应用窗口要求 Android 10+，具体应用能否启动仍受系统及应用条件限制。",
+                );
+            } else {
+                add(
+                    "apps",
+                    "limited",
+                    "当前设备应用列表探测未成功，请查看连接诊断；不能据此认定设备不支持。",
+                );
+            }
+        } else {
+            add("apps", "unknown", "设备尚未连接，无法探测应用能力。");
+        }
+        let audio = self.audio_command("audio.sources", &json!({})).await?;
+        let playing = audio["sources"].as_array().is_some_and(|sources| {
+            sources.iter().any(|source| {
+                source["deviceId"] == id
+                    && source["status"] == "playing"
+                    && source["nativeAttached"] == true
+            })
+        });
+        add(
+            "audio",
+            if playing {
+                "available"
+            } else if device.api_level.is_some_and(|api| api < 30) {
+                "unavailable"
+            } else {
+                "unknown"
+            },
+            if playing {
+                "该设备当前已有实际主控播放器；应用是否允许捕获声音仍按其内容权限处理。"
+            } else if device.api_level.is_some_and(|api| api < 30) {
+                "scrcpy声音转发要求被控Android 11或更新版本。"
+            } else {
+                "声音链路已实现；此设备尚无实际播放结果，请在声音页主动开启后确认。"
+            },
+        );
+        let companion = self.companions.lock().await.get(id).cloned();
+        if let Some(companion) = companion {
+            let snapshot = companion.capability_state().await;
+            for key in ["notifications", "calls"] {
+                let feature = &snapshot[key];
+                let status = feature["controlStatus"]
+                    .as_str()
+                    .or_else(|| feature["status"].as_str())
+                    .unwrap_or("unknown");
+                add(
+                    key,
+                    status,
+                    feature["reason"]
+                        .as_str()
+                        .unwrap_or("当前临时互联服务已探测；操作资格仍需按最新内容逐项校验。"),
+                );
+            }
+        } else {
+            add(
+                "notifications",
+                "unknown",
+                "尚未在当前连接探测通知服务；打开通知页后验证，不能据此认定不支持。",
+            );
+            add(
+                "calls",
+                "unknown",
+                "尚未读取当前电话状态；安全逐通话控制仍待实现，可在远控中使用手机原电话应用。",
+            );
+        }
+        add(
+            "background",
+            "unknown",
+            "后台保持由主控的系统权限、电量策略与当前活动决定，请在后台与连接页检查。",
+        );
+        Ok(
+            json!({"deviceId":id,"capabilities":entries,"features":client.map(|c| c.info().features.iter().cloned().collect::<Vec<_>>()).unwrap_or_default()}),
+        )
+    }
+    pub(crate) async fn diagnose(&self, id: &str) -> CoreResult<Value> {
+        let device = self.device(id).await?;
+        let client = self.client(id).await.ok();
+        let tcp_reachable = if device.transport != "usb" && device.port != 0 {
+            Some(
+                tokio::time::timeout(
+                    Duration::from_secs(3),
+                    tokio::net::TcpStream::connect(endpoint(&device.address, device.port)),
+                )
+                .await
+                .is_ok_and(|result| result.is_ok()),
+            )
+        } else {
+            None
+        };
+        let properties = if let Some(client) = &client {
+            client.shell("getprop service.adb.tls.port; getprop persist.adb.tls_server.enable; getprop mdns_service_version", 8192, operations(5,CancellationToken::new())).await
+                .ok().map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        } else {
+            None
+        };
+        Ok(
+            json!({"deviceId":id,"device":device,"connected":client.is_some(),"tcpReachable":tcp_reachable,"usbBackendAvailable":interop_adb::usb::supported(),
+            "wirelessProperties":properties,"identityPresent":true,"tlsProvider":"rustls-rustcrypto 0.0.2-alpha (experimental, not production-approved)",
+            "notes":["配对端口与连接端口不同。","mDNS 不可用时仍可手动填写可达的连接地址。","网络可达、已配对与设备连接是独立状态。"]}),
+        )
+    }
+    pub(crate) fn spawn_connection_monitor(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            let mut backoff = HashMap::<String, (u32, Instant)>::new();
+            let mut reconnecting = HashMap::<String, tokio::task::JoinHandle<()>>::new();
+            let discovery = Discovery::new().ok();
+            loop {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                let Some(runtime) = weak.upgrade() else {
+                    break;
+                };
+                reconnecting.retain(|_, task| !task.is_finished());
+                for record in &runtime.store.read().await.devices {
+                    if record.status == "connected" {
+                        backoff.remove(&record.id);
+                    }
+                }
+                let closed = runtime
+                    .connections
+                    .lock()
+                    .await
+                    .iter()
+                    .filter(|(_, client)| client.is_closed())
+                    .map(|(id, _)| id.clone())
+                    .collect::<Vec<_>>();
+                for id in closed {
+                    let removed = {
+                        let mut connections = runtime.connections.lock().await;
+                        if connections.get(&id).is_some_and(Client::is_closed) {
+                            connections.remove(&id);
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if removed {
+                        if let Some(record) = runtime
+                            .store
+                            .write()
+                            .await
+                            .devices
+                            .iter_mut()
+                            .find(|d| d.id == id)
+                        {
+                            record.status = "offline".into();
+                            record.reason =
+                                Some("设备连接已中断，活动已停止；将按重连设置恢复连接。".into());
+                        }
+                        let _ = runtime.stop_device_activities(&id).await;
+                        let _ = runtime.changed_devices().await;
+                    }
+                }
+                if let Some(discovery) = &discovery {
+                    let options = operations(1, CancellationToken::new());
+                    for _ in 0..8 {
+                        let Ok(Ok(DiscoveryEvent::Resolved(service))) = tokio::time::timeout(
+                            Duration::from_millis(5),
+                            discovery.next(&options),
+                        )
+                        .await
+                        else {
+                            break;
+                        };
+                        if service.kind != ServiceKind::Connect {
+                            continue;
+                        }
+                        let Some(endpoint) = service.endpoints.first().copied() else {
+                            continue;
+                        };
+                        let mut changed = false;
+                        for record in &mut runtime.store.write().await.devices {
+                            if record
+                                .guid
+                                .as_ref()
+                                .is_some_and(|guid| matches_guid(&service.instance, guid))
+                                && record.transport != "usb"
+                            {
+                                let address = address_of(endpoint);
+                                if record.address != address || record.port != endpoint.port() {
+                                    record.address = address;
+                                    record.port = endpoint.port();
+                                    backoff.remove(&record.id);
+                                    changed = true;
+                                }
+                            }
+                        }
+                        if changed {
+                            let _ = runtime.changed_devices().await;
+                        }
+                    }
+                }
+                let records = runtime
+                    .store
+                    .read()
+                    .await
+                    .devices
+                    .iter()
+                    .filter(|d| {
+                        d.auto_reconnect
+                            && d.status == "offline"
+                            && (d.transport == "usb" || d.port != 0)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                for device in records {
+                    if reconnecting.contains_key(&device.id) {
+                        continue;
+                    }
+                    if backoff
+                        .get(&device.id)
+                        .is_some_and(|(_, deadline)| Instant::now() < *deadline)
+                    {
+                        continue;
+                    }
+                    let count = backoff
+                        .get(&device.id)
+                        .map_or(1, |(count, _)| count.saturating_add(1));
+                    backoff.insert(
+                        device.id.clone(),
+                        (
+                            count,
+                            Instant::now() + Duration::from_secs(1u64 << count.min(6)),
+                        ),
+                    );
+                    // A reconnect never requests a fresh UI authorization prompt.
+                    // connect_device's existing identity handles the STLS/auth path;
+                    // an authorization failure disables automatic retry.
+                    let owner = runtime.clone();
+                    let id = device.id.clone();
+                    reconnecting.insert(
+                        device.id,
+                        tokio::spawn(async move {
+                            let _ = owner.connect_device_with_authorization(&id, false).await;
+                        }),
+                    );
+                }
+            }
+        });
+    }
+}

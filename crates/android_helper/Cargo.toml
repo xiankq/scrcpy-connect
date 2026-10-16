@@ -1,0 +1,19 @@
+[package]
+name = "interop-android-helper"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+license = "Apache-2.0"
+
+[workspace]
+
+[dependencies]
+libc = "=0.2.190"
+
+[profile.release]
+opt-level = "z"
+panic = "abort"
+lto = true
+codegen-units = 1
+strip = "symbols"
