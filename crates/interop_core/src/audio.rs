@@ -1,5 +1,5 @@
 //! One independent scrcpy output-audio capture per device. Raw PCM is presented
-//! by a native AudioTrack adapter; this module never claims voice-call capture.
+//! by a platform output adapter; this module never claims voice-call capture.
 use crate::{
     CoreError, CoreResult, Runtime,
     model::{now, quote, required},
@@ -85,6 +85,98 @@ fn apply_presentation(data: &mut Value, params: &Value) -> CoreResult<()> {
     Ok(())
 }
 
+fn apply_ready(data: &mut Value, params: &Value) -> CoreResult<()> {
+    let shared = params["backend"] == "fvp";
+    if shared {
+        let valid_clock = params["clockStartMs"]
+            .as_i64()
+            .zip(params["clockEndMs"].as_i64())
+            .is_some_and(|(start, end)| start >= 0 && end > start);
+        if params["applied"] != true
+            || params["revision"].as_u64().is_none()
+            || !matches!(params["playState"].as_str(), Some("playing" | "paused"))
+            || [
+                "mediaInfoReady",
+                "playingConfirmed",
+                "sourcePcmReceived",
+                "playbackClockAdvanced",
+            ]
+            .iter()
+            .any(|key| params[*key] != true)
+            || !params["sourcePcmPackets"]
+                .as_u64()
+                .is_some_and(|count| count > 0)
+            || !valid_clock
+            || params["sampleRate"] != 48000
+            || params["channels"] != 2
+        {
+            return Err(CoreError::new(
+                "audio_not_ready",
+                "共享播放器尚未返回完整的真实声音播放证据。",
+            ));
+        }
+    }
+    if data["nativeAttached"] == true {
+        if (data["backend"] == "fvp") != shared {
+            return Err(CoreError::new(
+                "audio_not_ready",
+                "声音输出后端与已连接的音源不一致。",
+            ));
+        }
+        return apply_presentation(data, params);
+    }
+    // Preserve the existing native AudioTrack acknowledgement requirements.
+    let paused_after_first_write = params["playState"] == "paused"
+        && params["nativeReady"] == true
+        && params["applied"] == true
+        && params["bytesWritten"]
+            .as_u64()
+            .is_some_and(|count| count > 0)
+        && params["revision"].as_u64().is_some();
+    if params["playState"] != "playing" && !paused_after_first_write && !shared {
+        return Err(CoreError::new(
+            "audio_not_ready",
+            "音频播放器尚未开始工作。",
+        ));
+    }
+    data["status"] = params["playState"].clone();
+    data["nativeAttached"] = json!(true);
+    for key in ["manualPaused", "backgroundPaused", "focusPaused"] {
+        if let Some(value) = params[key].as_bool() {
+            data[key] = json!(value);
+        }
+    }
+    if let Some(revision) = params["revision"].as_u64() {
+        data["nativeRevision"] = json!(revision);
+    }
+    if shared {
+        data["backend"] = json!("fvp");
+        data["playbackVerified"] = json!(true);
+        data["speakerSamplesVerified"] = json!(false);
+        for key in [
+            "mediaInfoReady",
+            "playingConfirmed",
+            "sourcePcmReceived",
+            "playbackClockAdvanced",
+            "sourcePcmPackets",
+            "clockStartMs",
+            "clockEndMs",
+        ] {
+            data[key] = params[key].clone();
+        }
+    }
+    // Playback (including silence) cannot identify the target app producing it
+    // or prove that physical speaker samples have been observed.
+    data["audibleContentVerified"] = json!(false);
+    Ok(())
+}
+
+fn should_forward_pcm(data: &Value) -> bool {
+    // The shared player owns presentation pause. It still needs fresh, bounded
+    // input to confirm a resume; stopping upstream here can deadlock that ack.
+    data["status"] != "paused" || data["backend"] == "fvp"
+}
+
 impl Runtime {
     pub(crate) async fn stop_device_audio(&self, device: &str) {
         self.audio_sources.lock().await.remove(device);
@@ -132,40 +224,7 @@ impl Runtime {
         }
         match command {
             "audio.ready" => {
-                if data["nativeAttached"] == true {
-                    apply_presentation(&mut data, params)?;
-                } else {
-                    let paused_after_first_write = params["playState"] == "paused"
-                        && params["nativeReady"] == true
-                        && params["applied"] == true
-                        && params["bytesWritten"]
-                            .as_u64()
-                            .is_some_and(|count| count > 0)
-                        && params["revision"].as_u64().is_some();
-                    if params["playState"] != "playing" && !paused_after_first_write {
-                        return Err(CoreError::new(
-                            "audio_not_ready",
-                            "音频播放器尚未开始工作。",
-                        ));
-                    }
-                    data["status"] = json!(if paused_after_first_write {
-                        "paused"
-                    } else {
-                        "playing"
-                    });
-                    data["nativeAttached"] = json!(true);
-                    for key in ["manualPaused", "backgroundPaused", "focusPaused"] {
-                        if let Some(value) = params[key].as_bool() {
-                            data[key] = json!(value);
-                        }
-                    }
-                    if let Some(revision) = params["revision"].as_u64() {
-                        data["nativeRevision"] = json!(revision);
-                    }
-                    // Playing silence is valid playback, but is not proof that any
-                    // particular target application is currently emitting sound.
-                    data["audibleContentVerified"] = json!(false);
-                }
+                apply_ready(&mut data, params)?;
             }
             "audio.pause" | "audio.resume" => {
                 if data["nativeAttached"] != true {
@@ -472,7 +531,7 @@ async fn forward_audio(
             let length = pcm_packet_size(&header)?;
             let mut bytes = vec![0; length];
             audio.read_exact(&mut bytes).await?;
-            if state.read().await["status"] == "paused" {
+            if !should_forward_pcm(&*state.read().await) {
                 continue;
             }
             output.write_all(&header).await?;
@@ -500,6 +559,96 @@ async fn forward_audio(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn shared_receipt() -> Value {
+        json!({"backend":"fvp","applied":true,"revision":7,"playState":"paused","focusPaused":true,
+            "mediaInfoReady":true,"playingConfirmed":true,"sourcePcmReceived":true,"playbackClockAdvanced":true,
+            "sourcePcmPackets":2,"clockStartMs":0,"clockEndMs":40,"sampleRate":48000,"channels":2})
+    }
+    #[test]
+    fn shared_ready_requires_all_independent_evidence_and_a_valid_clock() {
+        for key in [
+            "mediaInfoReady",
+            "playingConfirmed",
+            "sourcePcmReceived",
+            "playbackClockAdvanced",
+            "sourcePcmPackets",
+            "clockStartMs",
+            "clockEndMs",
+            "revision",
+            "sampleRate",
+            "channels",
+            "applied",
+        ] {
+            let mut receipt = shared_receipt();
+            receipt.as_object_mut().unwrap().remove(key);
+            let mut state = json!({"status":"starting"});
+            assert_eq!(
+                apply_ready(&mut state, &receipt).unwrap_err().code,
+                "audio_not_ready",
+                "{key}"
+            );
+            assert_eq!(state, json!({"status":"starting"}));
+            assert!(should_forward_pcm(&state));
+        }
+        for (key, value) in [
+            ("sourcePcmPackets", json!(0)),
+            ("clockEndMs", json!(0)),
+            ("clockStartMs", json!(-1)),
+            ("sampleRate", json!(44100)),
+            ("playState", json!("starting")),
+        ] {
+            let mut receipt = shared_receipt();
+            receipt[key] = value;
+            assert!(apply_ready(&mut json!({"status":"starting"}), &receipt).is_err());
+        }
+    }
+    #[test]
+    fn shared_first_playback_can_be_acknowledged_after_focus_paused_it() {
+        let mut state = json!({"status":"starting"});
+        apply_ready(&mut state, &shared_receipt()).unwrap();
+        assert_eq!(state["status"], "paused");
+        assert_eq!(state["nativeAttached"], true);
+        assert_eq!(state["nativeRevision"], 7);
+        assert_eq!(state["speakerSamplesVerified"], false);
+        assert!(state.get("bytesWritten").is_none());
+        assert!(
+            should_forward_pcm(&state),
+            "MDK must receive fresh packets to resume."
+        );
+        apply_presentation(
+            &mut state,
+            &json!({"revision":9,"applied":true,"playState":"playing","focusPaused":false}),
+        )
+        .unwrap();
+        apply_ready(&mut state, &shared_receipt()).unwrap();
+        assert_eq!(
+            state["status"], "playing",
+            "A late ready cannot undo a newer presentation."
+        );
+        assert_eq!(state["nativeRevision"], 9);
+    }
+    #[test]
+    fn native_ready_validation_and_pause_drop_are_preserved() {
+        let mut state = json!({"status":"starting"});
+        assert!(
+            apply_ready(
+                &mut state,
+                &json!({"playState":"paused","applied":true,"revision":1,"nativeReady":true})
+            )
+            .is_err()
+        );
+        apply_ready(&mut state, &json!({"playState":"paused","applied":true,"revision":1,"nativeReady":true,"bytesWritten":4})).unwrap();
+        assert!(!should_forward_pcm(&state));
+        assert!(
+            apply_ready(&mut state, &shared_receipt()).is_err(),
+            "A ready receipt cannot switch an already attached backend."
+        );
+        assert_eq!(state["status"], "paused");
+        let mut playing = json!({"status":"starting"});
+        apply_ready(&mut playing, &json!({"playState":"playing"})).unwrap();
+        assert_eq!(playing["status"], "playing");
+        assert!(should_forward_pcm(&playing));
+    }
     #[test]
     fn presentation_state_requires_actual_native_acknowledgement() {
         let mut state = json!({"status":"playing","manualPaused":false});

@@ -905,6 +905,12 @@ wait "$child""#
             self.emit("session.frame", data["deviceId"].as_str(), data.clone());
             return Ok(json!({"received":true}));
         }
+        if command == "session.refresh" {
+            // Official scrcpy RESET_VIDEO restarts only the existing encoder.
+            // It neither injects a gesture nor launches/migrates an app task.
+            request_control(&control, ControlRequest::Send, vec![17]).await?;
+            return Ok(json!({"sessionId":id,"refreshRequested":true}));
+        }
         if matches!(command, "session.pause" | "session.resume") {
             let mut data = state.write().await;
             if data["textureId"].is_null() {

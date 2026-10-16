@@ -27,6 +27,9 @@ pub struct Runtime {
     pub(crate) audio_sources: Mutex<HashMap<String, crate::audio::AudioSource>>,
     pub(crate) companions: Mutex<HashMap<String, Arc<crate::companion::Companion>>>,
     pub(crate) transfers: Mutex<HashMap<String, crate::files::Transfer>>,
+    pub(crate) sharing: Mutex<Option<Arc<crate::sharing::ImportManager>>>,
+    pub(crate) documents: crate::documents::CopyManager,
+    pub(crate) media: crate::media::http::MediaStreams,
     pub(crate) qr_attempt: Mutex<Option<(String, tokio_util::sync::CancellationToken)>>,
     pub(crate) device_operations: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
 }
@@ -104,6 +107,9 @@ impl Runtime {
             audio_sources: Mutex::new(HashMap::new()),
             companions: Mutex::new(HashMap::new()),
             transfers: Mutex::new(HashMap::new()),
+            sharing: Mutex::new(None),
+            documents: crate::documents::CopyManager::default(),
+            media: crate::media::http::MediaStreams::default(),
             qr_attempt: Mutex::new(None),
             device_operations: Mutex::new(HashMap::new()),
         });
@@ -187,6 +193,53 @@ impl Runtime {
     }
 
     pub async fn invoke(self: &Arc<Self>, command: &str, params: Value) -> CoreResult<Value> {
+        if matches!(command, "media.open" | "media.status" | "media.close") {
+            return self.media.command(command, &params).await;
+        }
+        if command.starts_with("document.") {
+            let result = if matches!(command, "document.cancel" | "document.limits") {
+                self.documents.request(command, params)
+            } else {
+                let manager = self.documents.clone();
+                let command = command.to_owned();
+                tokio::task::spawn_blocking(move || manager.request(&command, params))
+                    .await
+                    .map_err(|_| {
+                        CoreError::new("document_worker_failed", "本机文件任务意外结束。")
+                    })?
+            };
+            return result.map_err(|error| CoreError {
+                code: error.code.into(),
+                message: error.message,
+                details: error.details,
+            });
+        }
+        if command.starts_with("sharing.") {
+            return self.sharing_command(command, &params).await;
+        }
+        if command == "files.push"
+            && let Some(share) = params["shareId"].as_str()
+        {
+            let manager = self.sharing_manager().await?;
+            return Box::pin(manager.submit_checked(share, &params, || async {
+                match Box::pin(self.start_transfer(command, params.clone())).await {
+                    Ok(receipt) => Ok(receipt),
+                    Err(error) => {
+                        let sources: Vec<_> = params["items"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|item| item["source"].as_str())
+                            .collect();
+                        let published = self.transfers.lock().await.values().any(|task| {
+                            task.direction == "push" && sources.contains(&task.source.as_str())
+                        });
+                        Err((error, !published))
+                    }
+                }
+            }))
+            .await;
+        }
         match command {
             "devices.list" => Ok(json!({"devices":self.store.read().await.devices})),
             "devices.add" => Box::pin(self.add_device(&params)).await,
@@ -247,6 +300,7 @@ impl Runtime {
             | "session.frame"
             | "session.list"
             | "session.rotate"
+            | "session.refresh"
             | "session.pause"
             | "session.resume"
             | "session.quality.options" => Box::pin(self.session_command(command, &params)).await,

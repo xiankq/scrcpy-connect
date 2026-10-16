@@ -784,7 +784,11 @@ impl Runtime {
                     runtime.spawn_transfer(id, generation);
                 }
             }
-            let _ = runtime.persist_transfers().await;
+            // The shared owner reclaims only fully confirmed batches. This
+            // must run without a Flutter engine or an attached event listener.
+            if runtime.persist_transfers().await.is_ok() {
+                let _ = runtime.reconcile_shares_from_transfers().await;
+            }
         });
     }
     async fn verify_completed_tree(&self, batch: &str) {
