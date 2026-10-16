@@ -1,0 +1,2 @@
+- 视觉与组件语义遵循 design.md 指定的基线。视觉值只在该规范与 Pencil implementation token 中确定，不得另建平行 token 或裸写具体值。
+- 使用 Pencil MCP 读写 `.pen` 文件；MCP 不可用时，使用能力近似且无需 App 的 `pen interactive` 无头命令。禁止将 `.pen` 文件作为文本直接编辑。
