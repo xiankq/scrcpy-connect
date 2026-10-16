@@ -13,6 +13,63 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('feedback from the previous page never overlays remote content', (
+    tester,
+  ) async {
+    final controller = createTestController(
+      (command, [params = const {}]) async => command == 'session.start'
+          ? {
+              'sessionId': 'phone-screen',
+              'textureId': 1,
+              'width': 200,
+              'height': 400,
+            }
+          : {},
+    );
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('上一页的操作结果'),
+                      duration: Duration(seconds: 30),
+                    ),
+                  );
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => RemotePage(
+                        controller: controller,
+                        device: const {'id': 'phone'},
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('进入远控'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('进入远控'));
+      await tester.pumpAndSettle();
+      expect(find.byType(Texture), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(RemotePage),
+          matching: find.byType(SnackBar),
+        ),
+        findsNothing,
+      );
+      expect(find.text('上一页的操作结果'), findsNothing);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    }
+  });
   testWidgets(
     'native first-frame receipt displays resource adjustment once even when the early frame preceded binding',
     (tester) async {

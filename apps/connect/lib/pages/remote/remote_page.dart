@@ -1,9 +1,9 @@
+import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/remote/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/remote_input.dart';
-import 'package:scrcpy_connect/widgets/dialogs.dart';
 
 import 'dart:async';
 
@@ -51,6 +51,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   int startAttempt = 0;
   bool lifecyclePaused = false;
   bool adjustmentShown = false;
+  final remoteMessenger = GlobalKey<ScaffoldMessengerState>();
 
   void trace(String detail) {
     if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
@@ -317,7 +318,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
     adjustmentShown = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !exiting) feedback(context, message);
+      if (mounted && !exiting) {
+        remoteMessenger.currentState?.showSnackBar(
+          SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+        );
+      }
     });
   }
 
@@ -572,148 +577,159 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final height = (num.tryParse('${session?['height']}') ?? 0).toDouble();
     final texture = int.tryParse('${session?['textureId']}');
     final valid = texture != null && width > 0 && height > 0;
-    return PopScope(
-      canPop: exiting,
-      onPopInvokedWithResult: (popped, _) {
-        if (!popped) unawaited(leave());
-      },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        resizeToAvoidBottomInset: true,
-        body: Focus(
-          autofocus: true,
-          focusNode: keyboardFocus,
-          onKeyEvent: key,
-          onFocusChange: (focused) {
-            if (!focused) unawaited(releaseInputs());
-          },
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: LayoutBuilder(
-                  builder: (context, constraints) => Listener(
-                    behavior: HitTestBehavior.opaque,
-                    onPointerDown: (event) => pointer(
-                      event,
-                      'down',
-                      constraints.biggest,
-                      Size(width, height),
+    // The app messenger carries feedback between routes. A remote session has
+    // its own scope so results from local pages cannot cover the phone screen.
+    return ScaffoldMessenger(
+      key: remoteMessenger,
+      child: PopScope(
+        canPop: exiting,
+        onPopInvokedWithResult: (popped, _) {
+          if (!popped) unawaited(leave());
+        },
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          resizeToAvoidBottomInset: true,
+          body: Focus(
+            autofocus: true,
+            focusNode: keyboardFocus,
+            onKeyEvent: key,
+            onFocusChange: (focused) {
+              if (!focused) unawaited(releaseInputs());
+            },
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: (event) => pointer(
+                        event,
+                        'down',
+                        constraints.biggest,
+                        Size(width, height),
+                      ),
+                      onPointerMove: (event) => pointer(
+                        event,
+                        'move',
+                        constraints.biggest,
+                        Size(width, height),
+                      ),
+                      onPointerUp: (event) => pointer(
+                        event,
+                        'up',
+                        constraints.biggest,
+                        Size(width, height),
+                      ),
+                      onPointerCancel: (event) => pointer(
+                        event,
+                        'cancel',
+                        constraints.biggest,
+                        Size(width, height),
+                      ),
+                      child: valid
+                          ? Center(
+                              child: AspectRatio(
+                                aspectRatio: width / height,
+                                child: Texture(textureId: texture),
+                              ),
+                            )
+                          : const SizedBox.expand(),
                     ),
-                    onPointerMove: (event) => pointer(
-                      event,
-                      'move',
-                      constraints.biggest,
-                      Size(width, height),
-                    ),
-                    onPointerUp: (event) => pointer(
-                      event,
-                      'up',
-                      constraints.biggest,
-                      Size(width, height),
-                    ),
-                    onPointerCancel: (event) => pointer(
-                      event,
-                      'cancel',
-                      constraints.biggest,
-                      Size(width, height),
-                    ),
-                    child: valid
-                        ? Center(
-                            child: AspectRatio(
-                              aspectRatio: width / height,
-                              child: Texture(textureId: texture),
-                            ),
-                          )
-                        : const SizedBox.expand(),
                   ),
                 ),
-              ),
-              if (connecting)
-                const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
-              if (error != null || paused)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Glass(
-                      solid: true,
-                      padding: const EdgeInsets.all(24),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 360),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              paused
-                                  ? LucideIcons.pause
-                                  : LucideIcons.monitorOff,
-                              size: 32,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              errorCode == 'device_asleep'
-                                  ? '手机处于休眠状态'
-                                  : paused
-                                  ? '画面已暂停'
-                                  : '暂时无法打开实时画面',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              error ?? '等待连接恢复后的首帧。',
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 20),
-                            if (errorCode == 'resource_busy')
-                              FilledButton(
-                                onPressed: () =>
-                                    ActivitiesRoute().push<void>(context),
-                                child: const Text('管理当前活动'),
+                if (connecting)
+                  const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                if (error != null || paused)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Glass(
+                        solid: true,
+                        padding: const EdgeInsets.all(24),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                paused
+                                    ? LucideIcons.pause
+                                    : LucideIcons.monitorOff,
+                                size: 32,
                               ),
-                            if (errorCode == 'device_asleep')
-                              FilledButton(
-                                onPressed: connecting ? null : wakeAndStart,
-                                child: const Text('唤醒手机'),
+                              const SizedBox(height: 16),
+                              Text(
+                                errorCode == 'device_asleep'
+                                    ? '手机处于休眠状态'
+                                    : paused
+                                    ? '画面已暂停'
+                                    : '暂时无法打开实时画面',
+                                style: Theme.of(context).textTheme.titleLarge,
                               ),
-                            OutlinedButton(
-                              onPressed: connecting ? null : start,
-                              child: const Text('重新检查'),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(
+                                error ?? '等待连接恢复后的首帧。',
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 20),
+                              if (errorCode == 'resource_busy')
+                                FilledButton(
+                                  onPressed: () =>
+                                      ActivitiesRoute().push<void>(context),
+                                  child: const Text('管理当前活动'),
+                                ),
+                              if (errorCode == 'device_asleep')
+                                FilledButton(
+                                  onPressed: connecting ? null : wakeAndStart,
+                                  child: const Text('唤醒手机'),
+                                ),
+                              OutlinedButton(
+                                onPressed: connecting ? null : start,
+                                child: const Text('重新检查'),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              if (ime)
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  width: 1,
-                  height: 1,
-                  child: TextField(
-                    focusNode: inputFocus,
-                    controller: text,
-                    autofocus: true,
-                    obscureText: sensitive,
-                    enableSuggestions: !sensitive,
-                    autocorrect: !sensitive,
-                    enableInteractiveSelection: !sensitive,
-                    onChanged: textChanged,
-                    onSubmitted: (_) {
-                      if (!canSendInput) return;
-                      unawaited(
-                        send('session.key', {'keyCode': 66, 'action': 'down'}),
-                      );
-                      unawaited(
-                        send('session.key', {'keyCode': 66, 'action': 'up'}),
-                      );
-                    },
+                if (ime)
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    width: 1,
+                    height: 1,
+                    child: TextField(
+                      focusNode: inputFocus,
+                      controller: text,
+                      autofocus: true,
+                      obscureText: sensitive,
+                      enableSuggestions: !sensitive,
+                      autocorrect: !sensitive,
+                      enableInteractiveSelection: !sensitive,
+                      onChanged: textChanged,
+                      onSubmitted: (_) {
+                        if (!canSendInput) return;
+                        unawaited(
+                          send('session.key', {
+                            'keyCode': 66,
+                            'action': 'down',
+                          }),
+                        );
+                        unawaited(
+                          send('session.key', {'keyCode': 66, 'action': 'up'}),
+                        );
+                      },
+                    ),
                   ),
+                ExitHandle(
+                  onExit: leave,
+                  deviceLabel: deviceName(widget.device),
                 ),
-              ExitHandle(onExit: leave, deviceLabel: deviceName(widget.device)),
-            ],
+              ],
+            ),
           ),
         ),
       ),

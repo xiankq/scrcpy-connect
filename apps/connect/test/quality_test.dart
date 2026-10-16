@@ -154,9 +154,10 @@ void main() {
             {
               'id': 'h265',
               'name': 'H.265',
-              'available': false,
+              'available': true,
               'status': 'available',
               'decoderStatus': 'unavailable',
+              'canAttempt': true,
               'reason': '本机没有可用解码器。',
             },
             {
@@ -165,6 +166,7 @@ void main() {
               'available': false,
               'status': 'unknown',
               'decoderStatus': 'available',
+              'canAttempt': true,
               'reason': '尚未完成目标编码器探测。',
             },
             {
@@ -179,7 +181,8 @@ void main() {
               'name': 'VP9',
               'available': true,
               'status': 'available',
-              'decoderStatus': 'available',
+              'decoderStatus': 'unknown',
+              'canAttempt': true,
             },
           ],
         };
@@ -221,6 +224,73 @@ void main() {
       );
       expect(find.text('H.264'), findsOneWidget);
       expect(requests.where((r) => r.$1 == 'session.stop'), isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'real bridge runtime-decode contract permits a first codec choice without claiming it verified',
+    (tester) async {
+      final requests = <(String, Json)>[];
+      var selected = 'h264';
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        requests.add((command, params));
+        if (command == 'session.quality') {
+          selected = params['videoCodec'] as String;
+          return {'appliesNextSession': true};
+        }
+        return {
+          'current': {'videoCodec': selected},
+          'decoderProbe': 'runtimeDecodeRequired',
+          'codecs': [
+            for (final codec in ['h264', 'h265'])
+              {
+                'id': codec,
+                'name': codec == 'h264' ? 'H.264' : 'H.265',
+                // The bridge merges local canAttempt into available instead
+                // of forwarding canAttempt to each codec.
+                'available': true,
+                'status': 'available',
+                'targetStatus': 'available',
+                'decoderStatus': codec == 'h264' ? 'available' : 'unknown',
+                'reason': '目标已枚举编码器，仍需实际配置验证。',
+              },
+          ],
+        };
+      });
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: QualityPage(
+            controller: controller,
+            device: const {'id': 'phone'},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('编码格式'));
+      await tester.tap(find.text('编码格式'));
+      await tester.pumpAndSettle();
+      final choice = tester.widget<ListTile>(
+        find.ancestor(of: find.text('H.265'), matching: find.byType(ListTile)),
+      );
+      expect(choice.enabled, isTrue);
+      expect(find.textContaining('下次打开画面时确认'), findsWidgets);
+      await tester.tap(find.text('H.265'));
+      await tester.pumpAndSettle();
+      expect(requests.where((r) => r.$1 == 'session.quality').single.$2, {
+        'deviceId': 'phone',
+        'videoCodec': 'h265',
+        'videoEncoder': null,
+      });
+      expect(find.text('H.265'), findsOneWidget);
+      expect(find.textContaining('下次打开画面时确认'), findsWidgets);
+      expect(requests.where((r) => r.$1 == 'session.start'), isEmpty);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();

@@ -39,19 +39,38 @@ class QualityPage extends HookWidget {
           final codecId = value(current, 'videoCodec');
           final matching = codecs.where((item) => item['id'] == codecId);
           final codec = matching.firstOrNull ?? <String, dynamic>{};
-          bool codecAvailable(Json item) =>
-              item['available'] == true &&
-              item['decoderStatus'] == 'available' &&
-              (item['targetStatus'] ?? item['status']) == 'available';
-          final available = codecAvailable(codec);
+          bool codecSelectable(Json item) {
+            if (item['available'] != true ||
+                item['decoderStatus'] == 'unavailable' ||
+                (item['targetStatus'] ?? item['status']) != 'available') {
+              return false;
+            }
+            if (item['decoderStatus'] == 'available') return true;
+            // The bridge folds local canAttempt into available, retaining the
+            // runtime probe kind instead of forwarding the per-codec flag.
+            return item['canAttempt'] == true ||
+                (item['canAttempt'] != false &&
+                    data['decoderProbe'] == 'runtimeDecodeRequired');
+          }
+
+          final available = codecSelectable(codec);
           String codecReason(Json item) {
             if (item['available'] != true && value(item, 'reason').isNotEmpty) {
               return value(item, 'reason');
             }
+            if ((item['targetStatus'] ?? item['status']) != 'available') {
+              return value(item, 'reason', '尚未确认这台设备的编码能力。');
+            }
+            if (item['decoderStatus'] == 'unavailable') {
+              return value(item, 'reason', '本机没有可用解码器。');
+            }
+            if (item['decoderStatus'] != 'available' && codecSelectable(item)) {
+              return '可尝试此格式；本机能否播放将在下次打开画面时确认。';
+            }
             if (item['decoderStatus'] != 'available') {
               return '尚未确认本机可用的解码器。${value(item, 'reason')}';
             }
-            return value(item, 'reason', '尚未确认这台设备的编码能力。');
+            return '双方支持此格式，实际使用仍取决于设备资源。';
           }
 
           Future<void> apply(Json patch) async {
@@ -124,7 +143,7 @@ class QualityPage extends HookWidget {
                   ...item,
                   'label': value(item, 'name', value(item, 'id')),
                   'value': item['id'],
-                  'available': codecAvailable(item),
+                  'available': codecSelectable(item),
                   'reason': codecReason(item),
                 },
             ], codecId);
@@ -234,9 +253,10 @@ class QualityPage extends HookWidget {
                 trailing: const Icon(LucideIcons.chevronRight, size: 18),
                 onTap: applying.value || codec.isEmpty ? null : chooseEncoder,
               ),
-              if (!available) StateNote(codecReason(codec)),
+              if (!available || codec['decoderStatus'] != 'available')
+                StateNote(codecReason(codec)),
               const StateNote(
-                '只允许选择已确认的设备编码与本机解码组合。调整失败后保留原值；实际画质仍受设备性能与连接状况影响。',
+                '可尝试的格式仍需打开实际画面后确认，保存设置不代表解码已通过。调整失败后保留原值；实际画质仍受设备性能与连接状况影响。',
               ),
               if (objects(data['activeStreams']).isNotEmpty) ...[
                 const SectionTitle('正在使用的画面'),
