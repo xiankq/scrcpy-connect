@@ -19,13 +19,16 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.UUID
 
 private object UsbLeases {
-    val connections = mutableMapOf<String, UsbDeviceConnection>()
+    // A missing ACK cannot create unbounded OS descriptor retention. Do not
+    // expire an offered fd: Rust may not yet have executed F_DUPFD_CLOEXEC.
+    val connections = UsbHandoffLeases<UsbDeviceConnection>(16) { it.close() }
 }
 
 class MainActivity : FlutterActivity() {
     companion object {
         private var current: java.lang.ref.WeakReference<MainActivity>? = null
         fun cancelPendingConnections() { current?.get()?.cancelPendingConnectionsAndMedia() }
+        fun releaseUsbLease(id: String?) { UsbLeases.connections.release(id) }
     }
     private val main = Handler(Looper.getMainLooper())
     private val documents by lazy { PlatformDocuments(this) }
@@ -35,10 +38,13 @@ class MainActivity : FlutterActivity() {
     private var pendingUsbAttempt: String? = null
     private var usbChooser: AlertDialog? = null
     private var usbGeneration = 0L
+    private val activityLease = Any()
+    private val usbPermissionOwner = UUID.randomUUID().toString()
     private val usbAction get() = "$packageName.USB_PERMISSION"
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != usbAction || intent.getLongExtra("generation", -1) != usbGeneration) return
+            if (intent.action != usbAction || intent.getStringExtra("owner") != usbPermissionOwner ||
+                intent.getLongExtra("generation", -1) != usbGeneration) return
             val result = pendingUsb ?: return
             val device = pendingDevice
             pendingUsb = null
@@ -65,12 +71,12 @@ class MainActivity : FlutterActivity() {
     override fun onStart() {
         super.onStart()
         audio.visible(this, true)
-        DiscoveryNetwork.acquire(this, "activity")
+        DiscoveryNetwork.acquire(this, activityLease)
     }
 
     override fun onStop() {
         audio.visible(this, false)
-        DiscoveryNetwork.release("activity")
+        DiscoveryNetwork.release(activityLease)
         super.onStop()
     }
 
@@ -111,7 +117,7 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "usb.authorize" -> authorizeUsb(call, result)
                 "usb.release" -> {
-                    UsbLeases.connections.remove(call.argument<String>("usbLeaseId"))?.close()
+                    releaseUsbLease(call.argument<String>("usbLeaseId"))
                     result.success(null)
                 }
                 "usb.cancel" -> {
@@ -210,7 +216,8 @@ class MainActivity : FlutterActivity() {
         }
         pendingDevice = device
         val permission = PendingIntent.getBroadcast(this, generation.toInt(), Intent(usbAction).setPackage(packageName)
-            .setData(android.net.Uri.parse("scrcpyconnect://usb-permission/$generation")).putExtra("generation", generation),
+            .setData(android.net.Uri.parse("scrcpyconnect://usb-permission/$usbPermissionOwner/$generation"))
+            .putExtra("generation", generation).putExtra("owner", usbPermissionOwner),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         manager.requestPermission(device, permission)
     }
@@ -220,9 +227,20 @@ class MainActivity : FlutterActivity() {
         val connection = manager.openDevice(device)
         if (connection == null) { result.error("usb_open_failed", "系统未能打开 USB 设备。", null); return }
         val leaseId = UUID.randomUUID().toString()
-        UsbLeases.connections[leaseId] = connection
-        result.success(mapOf("fd" to connection.fileDescriptor, "usbLeaseId" to leaseId, "usbDeviceId" to device.deviceName,
-            "deviceName" to (device.productName ?: "Android 手机")))
+        if (!UsbLeases.connections.register(leaseId, activityLease, connection)) {
+            connection.close()
+            result.error("usb_lease_limit", "USB 授权交接仍未完成，请先结束已有请求。", null)
+            return
+        }
+        try {
+            val descriptor = connection.fileDescriptor
+            check(descriptor >= 0 && UsbLeases.connections.handoff(leaseId, activityLease))
+            result.success(mapOf("fd" to descriptor, "usbLeaseId" to leaseId, "usbDeviceId" to device.deviceName,
+                "deviceName" to (device.productName ?: "Android 手机")))
+        } catch (error: Exception) {
+            releaseUsbLease(leaseId)
+            throw error
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -241,13 +259,12 @@ class MainActivity : FlutterActivity() {
         pendingUsb = null
         pendingDevice = null
         pendingUsbAttempt = null
-        UsbLeases.connections.values.forEach { it.close() }
-        UsbLeases.connections.clear()
+        UsbLeases.connections.abandon(activityLease)
         runCatching { unregisterReceiver(usbReceiver) }
         audio.detach(this)
         IncomingShares.releaseOwner(this)
         ProcessFlutterHost.detach(this)
-        DiscoveryNetwork.release("activity")
+        DiscoveryNetwork.release(activityLease)
         super.onDestroy()
     }
 }

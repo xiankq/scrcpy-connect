@@ -33,7 +33,12 @@ internal object ProcessFlutterHost {
                 })
             MethodChannel(created.dartExecutor.binaryMessenger, "dev.scrcpyconnect/platform")
                 .setMethodCallHandler { call, result ->
-                    if (!audio.handle(call, result)) {
+                    if (call.method == "usb.release") {
+                        // This is the Rust handoff acknowledgement, not a UI
+                        // operation. It must work after the host was destroyed.
+                        MainActivity.releaseUsbLease(call.argument<String>("usbLeaseId"))
+                        result.success(null)
+                    } else if (!audio.handle(call, result)) {
                         val host = activity?.get()
                         if (host != null) host.handlePlatform(call, result)
                         else result.error("activity_unavailable", "请返回应用后执行此系统界面操作。", null)
