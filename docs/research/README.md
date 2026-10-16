@@ -1,8 +1,8 @@
 # 互联产品技术调研
 
-日期：2026-10-16（Asia/Shanghai）。本轮使用 research、grilling 和 domain-modeling，目的是补足产品与技术决策，不冻结架构、不开始应用实现。
+研究基线日期：2026-10-16（Asia/Shanghai）。研究阶段使用 research、grilling 和 domain-modeling 补足产品与技术决策；后续实施已于2026-10-17推进，当前证据与缺口见[验收记录](../implementation/validation.md)和[持续目标](../../.scratch/interop/goal.md)。下文保留研究阶段的证据边界，不能用历史“未验证”覆盖后续实际结果。
 
-研究成果已汇总到[规格](../../.scratch/interop/spec.md)。[产品设计](../../designs/prod/README.md)进一步描述用户体验，并与[九类 39 个页面](../../designs/prod/user-flows.md)对应。设计已按最新范围重绘，以黑色为主题色、浅色为默认外观。预览按需导出到系统临时目录，仓库保留设计源文件、规范与所需素材；应用工程和实际构建尚未开始。
+研究成果已汇总到[规格](../../.scratch/interop/spec.md)。[产品设计](../../designs/prod/README.md)进一步描述用户体验，并与[页面与转换](../../designs/prod/user-flows.md)对应。设计已按最新范围重绘，以黑色为主题色、浅色为默认外观。预览按需导出到系统临时目录，仓库保留设计源文件、规范与所需素材；目前已建立Flutter/Rust工程并获得真实Android构建和部分双机E2E证据。
 
 ## 如何阅读
 
@@ -13,6 +13,8 @@
 | [四端编译交付约束](cross-platform-build-contract.md) | 核心、FRB 链接与 Flutter 整包三层验收，平台依赖隔离、宿主 SDK 与 CI |
 | [厂商互联完整流程](manufacturer-workflows.md) | 小米 Windows／苹果端功能、版本记录，以及文件编辑回写、相册备份和本机内容接续 |
 | [免 APK 通知、短信与通话](android-shell-interop-capabilities.md) | shell 真实身份、通知 Binder token、原通知动作、SMS AppOps 与通话音频的 HAL 条件 |
+| [CallStyle动作目标隔离](callstyle-action-targeting.md) | 原通知PI与具体通话绑定的区别，Android11/16 Dialer反例及不能仅凭typed extras解锁按钮的依据 |
+| [AVD HEVC实际尺寸约束](hevc-emulator-constraints.md) | 软件编码器配置失败后的尺寸降级、独立码流／FFmpeg对照与1280／1080单变量验证 |
 | [scrcpy、媒体与服务端](scrcpy-media-and-server.md) | 固定 scrcpy 协议、JAR 生命周期、独立应用窗口、fvp/MDK 输入、PTS、音频、录制与并发 |
 | [Flutter/Rust 平台运行时](flutter-rust-platform-runtime.md) | Android 后台与权限、FRB/Riverpod 生命周期、USB 句柄、workspace、文件与输入 |
 | [设计系统与工具链](design-system-and-toolchain.md) | Google DESIGN.md、液态玻璃候选比较、Lucide、厂商交互参照、Pencil 无头路径 |
@@ -20,7 +22,7 @@
 | [手机输入与剪贴板](mobile-input-and-clipboard.md) | 普通主控 App 与远端 shell 权限区别、中文 IME、图片/文件 URI、厂商体验证据 |
 | [需求缺口关键事实复核](requirements-gap-verification.md) | scrcpy基础下限、ADB无线版本差异、首次授权下限与Apple本地网络/后台边界 |
 
-每份报告区分直接证据、工程推论与未执行的 POC。引用上游作者的兼容说明不等于本项目已完成设备验收；当前没有编译应用、连接被控设备或验证性能。
+每份报告区分直接证据、工程推论与未执行的 POC。引用上游作者的兼容说明不等于本项目已完成设备验收；实际构建、被控设备互通与性能分别以验收记录为准。
 
 最新产品范围已收敛：录屏和自动备份移除；短信经通知接续手机原应用，通话、相册与文件管理保留专用页。其他取舍见[功能范围](../../designs/prod/scope.md)。研究报告中曾调查或建议的能力不等于当前产品承诺；专项证据见[小米与华为的页面路由](manufacturer-scope-xiaomi.md)。
 
@@ -46,7 +48,7 @@
 
 Q22–Q27 已回答。用户希望 ADB 依赖链尽量纯 Rust；确认后台按活动类型保持、设备级声音、真实应用任务、身份不自动迁移。Q27当时接受的可选通知历史随后被最新范围取舍移除，只保留实时通知。具体纯 Rust 口径及 TLS/USB/压缩后端继续核查，不把一轮回答当成整个设计树已经闭合。
 
-全会话已完成[54项需求审计](../../.scratch/interop/requirements-audit.md)，补[分级兼容基线](../../.scratch/interop/compatibility-matrix.md)、[32项产品流程覆盖](../../designs/prod/coverage.md)及[20项后续任务](../../.scratch/interop/issues/README.md)。任务含19项研究/验证和1项设计补齐；已有研究不等于任务中的工程验证完成。
+全会话已完成[57项需求审计](../../.scratch/interop/requirements-audit.md)，补[分级兼容基线](../../.scratch/interop/compatibility-matrix.md)、[32项产品流程覆盖](../../designs/prod/coverage.md)及[20项后续任务](../../.scratch/interop/issues/README.md)。任务含19项研究/验证和1项设计补齐；已有研究不等于任务中的工程验证完成。
 
 Q28 用户要求依据 scrcpy 能力设计，已核实销毁虚拟显示内容和迁回主屏两条路径，不把此答复记为接受“默认迁回”。Q29–Q31 确认按中断原因恢复、实时通知动作同步远端、资源不足时保护已有重要活动。另有两项补充调查：纯 Rust ADB 依赖链、Android 手机输入与剪贴板；前者不自动撤销用户已接受的 fvp/MDK 媒体依赖选择，其范围专指 ADB。
 
