@@ -154,16 +154,6 @@ class InteropBridge {
           });
         }
       }
-    } else if (event['type'] == 'session.frame' &&
-        data['sessionId'] is String) {
-      final id = data['sessionId'] as String;
-      if (_textures.containsKey(id)) {
-        try {
-          await _invoke('session.frame', data);
-        } catch (_) {
-          // A frame from an already stopped renderer cannot reopen its session.
-        }
-      }
     } else if (event['type'] == 'audio.ready' &&
         data['sourceId'] is String &&
         data['nativeReady'] == true) {
@@ -197,13 +187,6 @@ class InteropBridge {
       } else if (_adoptingAudio) {
         _rememberAudioPresentation(data);
       }
-    } else if (event['type'] == 'session.failed' &&
-        data['sessionId'] is String) {
-      final id = data['sessionId'] as String;
-      try {
-        await _invoke('session.stop', {'sessionId': id});
-      } catch (_) {}
-      await _closeVideo(id);
     } else if (event['type'] == 'audio.failed' && data['sourceId'] is String) {
       final id = data['sourceId'] as String;
       final source = _audioSources[id];

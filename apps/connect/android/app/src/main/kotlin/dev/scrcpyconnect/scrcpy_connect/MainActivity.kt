@@ -17,7 +17,6 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import java.io.File
 import java.util.UUID
 
 private object UsbLeases {
@@ -31,10 +30,8 @@ class MainActivity : FlutterActivity() {
     }
     private val main = Handler(Looper.getMainLooper())
     private val documents by lazy { PlatformDocuments(this) }
-    private val decoders = mutableMapOf<String, RemoteVideoDecoder>()
     private val audio by lazy { NativeAudioRuntime.get(applicationContext) }
     private var events: EventChannel.EventSink? = null
-    private var registry: io.flutter.view.TextureRegistry? = null
     private var pendingUsb: MethodChannel.Result? = null
     private var pendingDevice: UsbDevice? = null
     private var pendingUsbAttempt: String? = null
@@ -58,7 +55,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         current = java.lang.ref.WeakReference(this)
-        registry = flutterEngine.renderer
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.scrcpyconnect/media_events")
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, sink: EventChannel.EventSink) { events = sink; bindNativeEvents() }
@@ -115,8 +111,6 @@ class MainActivity : FlutterActivity() {
         pendingUsb = null
         pendingDevice = null
         pendingUsbAttempt = null
-        decoders.values.forEach { it.close() }
-        decoders.clear()
         audio.stopAll()
         emit(mapOf("type" to "connections.stopped", "data" to emptyMap<String,Any>()))
     }
@@ -151,30 +145,6 @@ class MainActivity : FlutterActivity() {
                     val muted = call.argument<Boolean>("muted") ?: false
                     if (!audio.volume(call.argument<String>("sourceId"), volume,muted)) result.error("audio_volume_failed", "无法调整此设备声音。", null)
                     else result.success(mapOf("applied" to true, "volume" to volume, "muted" to muted))
-                }
-                "video.start" -> {
-                    val id = call.argument<String>("sessionId") ?: error("Missing session id")
-                    val port = call.argument<Number>("videoPort")?.toInt() ?: error("Missing video port")
-                    val token = call.argument<String>("videoToken") ?: error("Missing video token")
-                    val videoCodec = call.argument<String>("codec") ?: "h264"
-                    if (!RemoteVideoDecoder.mimeTypes.containsKey(videoCodec)) { result.error("codec_unavailable", "此媒体适配尚不支持所选编码器。", null); return }
-                    decoders.remove(id)?.close()
-                    val decoder = RemoteVideoDecoder(id, call.argument<String>("deviceId"), registry!!, ::emit, videoCodec)
-                    decoders[id] = decoder
-                    decoder.start(port, token, result)
-                }
-                "video.capabilities" -> result.success(RemoteVideoDecoder.capabilities())
-                "video.stop" -> { decoders.remove(call.argument<String>("sessionId"))?.close(); result.success(null) }
-                "video.pause" -> {
-                    val decoder = decoders[call.argument<String>("sessionId")]
-                    if (decoder == null) result.error("no_session", "当前控制会话已结束。", null)
-                    else { decoder.setPaused(call.argument<Boolean>("paused") ?: true); result.success(null) }
-                }
-                "video.screenshot" -> {
-                    val id = call.argument<String>("sessionId")
-                    val decoder = decoders[id]
-                    if (decoder == null) { result.error("no_session", "请先打开要截图的远控会话。", null); return }
-                    decoder.screenshot(File(filesDir, "screenshots/${UUID.randomUUID()}.png"), result)
                 }
                 "usb.authorize" -> authorizeUsb(call, result)
                 "usb.release" -> {
@@ -311,8 +281,6 @@ class MainActivity : FlutterActivity() {
         UsbLeases.connections.values.forEach { it.close() }
         UsbLeases.connections.clear()
         runCatching { unregisterReceiver(usbReceiver) }
-        decoders.values.forEach { it.close() }
-        decoders.clear()
         audio.detach(this)
         IncomingShares.releaseOwner(this)
         events = null
