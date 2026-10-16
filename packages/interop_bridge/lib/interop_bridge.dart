@@ -57,6 +57,7 @@ class InteropBridge {
     platform: _platformRequest,
     isDisposed: () => _disposed,
   );
+  String? _eventSubscriptionId;
   StreamSubscription<String>? _coreSubscription;
   StreamSubscription<dynamic>? _platformSubscription;
 
@@ -67,10 +68,13 @@ class InteropBridge {
     await core.initialize(dataDirectory: dataDirectory);
     final bridge = InteropBridge._(dataDirectory);
     try {
-      bridge._coreSubscription = core.events().listen((message) {
-        final event = jsonDecode(message) as Map<String, dynamic>;
-        bridge._handleCoreEvent(event);
-      }, onError: bridge._events.addError);
+      bridge._eventSubscriptionId = await core.openEvents();
+      bridge._coreSubscription = core
+          .events(subscriptionId: bridge._eventSubscriptionId!)
+          .listen((message) {
+            final event = jsonDecode(message) as Map<String, dynamic>;
+            bridge._handleCoreEvent(event);
+          }, onError: bridge._events.addError);
       if (Platform.isAndroid) {
         bridge._adoptingAudio = true;
         bridge._platformSubscription = _mediaEvents
@@ -103,7 +107,7 @@ class InteropBridge {
       // Failed attachment owns no new media. Detach these observers without
       // stopping an existing process-owned background source.
       bridge._disposed = true;
-      await bridge._coreSubscription?.cancel();
+      await bridge._detachCoreEvents();
       await bridge._platformSubscription?.cancel();
       bridge._audioSources.clear();
       bridge._pendingAudioPresentation.clear();
@@ -113,7 +117,8 @@ class InteropBridge {
   }
 
   void _handleCoreEvent(Map<String, dynamic> event) {
-    if (_disposed) return;
+    // Transport heartbeats detect a dead Dart port; they are not product state.
+    if (_disposed || event['type'] == 'runtime.heartbeat') return;
     _events.add(event);
     final data = event['data'] is Map
         ? Map<String, dynamic>.from(event['data'] as Map)
@@ -808,6 +813,14 @@ class InteropBridge {
     return result;
   }
 
+  Future<void> _detachCoreEvents() async {
+    final id = _eventSubscriptionId;
+    _eventSubscriptionId = null;
+    if (id != null) await core.cancelEvents(subscriptionId: id);
+    await _coreSubscription?.cancel();
+    _coreSubscription = null;
+  }
+
   Future<void> dispose() => _disposing ??= _dispose();
 
   Future<void> _dispose() async {
@@ -824,7 +837,7 @@ class InteropBridge {
       ...pending.where((i) => i.audio).expand((i) => i.ids),
     };
     if (Platform.isAndroid) await _shareIntake.detach();
-    await _coreSubscription?.cancel();
+    await _detachCoreEvents();
     await _platformSubscription?.cancel();
     for (final id in videoIds) {
       await _closeVideo(id);

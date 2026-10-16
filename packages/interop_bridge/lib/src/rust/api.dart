@@ -13,4 +13,14 @@ Future<void> initialize({required String dataDirectory}) =>
 Future<String> invoke({required String requestJson}) =>
     RustLib.instance.api.crateApiInvoke(requestJson: requestJson);
 
-Stream<String> events() => RustLib.instance.api.crateApiEvents();
+/// Reserve one event observer before constructing Dart's async* listener.
+/// Unused reservations expire after 60 seconds and count toward the 64-slot cap.
+Future<String> openEvents() => RustLib.instance.api.crateApiOpenEvents();
+
+/// Cancel only this observer; core connections and other observers keep running.
+/// Dart must call this before awaiting StreamSubscription.cancel().
+Future<void> cancelEvents({required String subscriptionId}) =>
+    RustLib.instance.api.crateApiCancelEvents(subscriptionId: subscriptionId);
+
+Stream<String> events({required String subscriptionId}) =>
+    RustLib.instance.api.crateApiEvents(subscriptionId: subscriptionId);

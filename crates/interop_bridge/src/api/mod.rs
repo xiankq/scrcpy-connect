@@ -3,8 +3,12 @@ use interop_core::Runtime;
 use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
 
+pub(crate) mod event_observers;
+use event_observers::{EventObservers, pump_events};
+
 static RUNTIME: tokio::sync::OnceCell<Arc<Runtime>> = tokio::sync::OnceCell::const_new();
 static EXECUTOR: OnceLock<tokio::runtime::Handle> = OnceLock::new();
+static EVENT_OBSERVERS: OnceLock<EventObservers> = OnceLock::new();
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
@@ -72,29 +76,51 @@ pub async fn invoke(request_json: String) -> String {
     }.to_string()
 }
 
-pub async fn events(sink: crate::frb_generated::StreamSink<String>) -> Result<(), String> {
+/// Reserve one event observer before constructing Dart's async* listener.
+/// Unused reservations expire after 60 seconds and count toward the 64-slot cap.
+pub async fn open_events() -> Result<String, String> {
+    RUNTIME
+        .get()
+        .ok_or_else(|| "互联核心尚未初始化。".to_owned())?;
+    EVENT_OBSERVERS
+        .get_or_init(EventObservers::bounded)
+        .open()
+        .map(|id| id.to_string())
+}
+
+/// Cancel only this observer; core connections and other observers keep running.
+/// Dart must call this before awaiting StreamSubscription.cancel().
+pub async fn cancel_events(subscription_id: String) -> Result<(), String> {
+    let id =
+        uuid::Uuid::parse_str(&subscription_id).map_err(|_| "事件订阅标识无效。".to_owned())?;
+    EVENT_OBSERVERS
+        .get_or_init(EventObservers::bounded)
+        .cancel(id);
+    Ok(())
+}
+
+pub async fn events(
+    subscription_id: String,
+    sink: crate::frb_generated::StreamSink<String>,
+) -> Result<(), String> {
+    let id =
+        uuid::Uuid::parse_str(&subscription_id).map_err(|_| "事件订阅标识无效。".to_owned())?;
+    let Some(lease) = EVENT_OBSERVERS
+        .get_or_init(EventObservers::bounded)
+        .listen(id)?
+    else {
+        return Ok(());
+    };
     let runtime = RUNTIME
         .get()
         .ok_or_else(|| "互联核心尚未初始化。".to_owned())?;
-    let mut receiver = runtime.subscribe();
-    loop {
-        match receiver.recv().await {
-            Ok(event) => {
-                if sink.add(event.to_string()).is_err() {
-                    break;
-                }
-            }
-            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                if sink
-                    .add(json!({"type":"state.resync","data":{}}).to_string())
-                    .is_err()
-                {
-                    break;
-                }
-            }
-            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-        }
-    }
+    pump_events(
+        runtime.subscribe(),
+        &lease.token,
+        std::time::Duration::from_secs(15),
+        |event| sink.add(event).is_ok(),
+    )
+    .await;
     Ok(())
 }
 
