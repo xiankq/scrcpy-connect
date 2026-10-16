@@ -31,4 +31,8 @@ Requirements: R21、R38–R39
 
 ## 当前状态
 
-未执行本任务的工程验证；已有事实研究见输入。
+2026-10-17重新核查：真实HOME视频/声音、同进程Activity重建和主动停/未知结果保护已有证据。
+
+瞬断/进程恢复只恢复连接，缺持续活动意图；state.resync、长期后台/系统Stop仍缺。
+
+任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

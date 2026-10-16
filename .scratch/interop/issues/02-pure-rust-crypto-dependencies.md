@@ -31,4 +31,8 @@ Requirements: R08–R09、R40
 
 ## 当前状态
 
-未执行本任务的工程验证；已有事实研究见输入。
+2026-10-17重新核查：已有依赖/feature调查并实际使用纯Rust协议/密码路线。
+
+RustCrypto生产警告、RSA时序风险、安全评估与四端正式依赖闭包仍未解决。
+
+任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

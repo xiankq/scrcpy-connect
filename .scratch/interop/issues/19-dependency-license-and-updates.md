@@ -31,4 +31,8 @@ Requirements: R07–R16、R43–R44、R50
 
 ## 当前状态
 
-未执行本任务的工程验证；已有事实研究见输入。
+2026-10-17重新核查：已有锁文件、生成Dart检查、严格分析、官方设计lint和部分来源摘要。
+
+FRB重生成、companion源到JAR、JVM统一门禁、未跟踪真实测试和安全发布依据仍未闭合。
+
+任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

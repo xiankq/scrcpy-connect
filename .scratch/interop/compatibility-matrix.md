@@ -6,7 +6,7 @@
 
 每个实测条目最终记录：主控OS/ABI/应用与SDK版本、被控API/build/ROM/用户、连接方式、JAR摘要、功能与权限、证据来源、测试步骤/结果、状态/原因/替代路径。文档支持→实验通过→目标真机通过为不同证据等级；不可用与尚未测试不同。
 
-以下统一为“有文档/源码依据、未做本项目实验”。未知/需要设置/可用/受限/不可用由实际探测与结果决定，不能仅按API数字在所有ROM启用。
+以下功能表保留上游基线，不是当前逐项实验状态。已有API36双机、共享媒体/文件/通知等局部结果见[验收记录](../../docs/implementation/validation.md)，实际实现偏差见[完整重新核查](completion-reassessment.md)。未知/需要设置/可用/受限/不可用由实际探测与结果决定，不能仅按API数字在所有ROM启用。
 
 | 功能 | 主控条件 | 被控基线及分级条件 | 尚须验证／受限路径 |
 | --- | --- | --- | --- |
@@ -33,10 +33,10 @@
 
 | 主控平台 | 当前承诺 | 本轮真实状态 |
 | --- | --- | --- |
-| Android | 当前功能实施/运行重点；核心/FRB/Flutter实际编译 | 无应用工程与构建/运行通过结果；已有静态稿与研究 |
-| iOS | 核心/FRB/Flutter实际编译；TCP/发现/媒体等保留适配 | 构建未执行；USB候选排除/条件返回，本地网络与后台运行未验 |
-| Windows | 核心/FRB/Flutter实际编译 | 构建未执行；WinUSB驱动、媒体和玻璃运行未验 |
-| macOS | 核心/FRB/Flutter实际编译 | 构建未执行；本地网络/沙箱/USB与媒体运行未验 |
+| Android | 当前功能实施/运行重点；核心/FRB/Flutter实际编译 | Flutter/Rust整包和API36三AVD部分真实流程已通过；完整产品流程/旧API/OEM/物理设备未通过 |
+| iOS | 核心/FRB/Flutter实际编译；TCP/发现/媒体等保留适配 | ADB/core cargo check已通过；FRB链接受缺Apple SDK限制，整包无产物；USB条件返回、本地网络与后台未验 |
+| Windows | 核心/FRB/Flutter实际编译 | ADB/core cargo check已通过；FRB链接缺MSVC工具，整包无产物；WinUSB/媒体/玻璃未验 |
+| macOS | 核心/FRB/Flutter实际编译 | ADB/core cargo check已通过；FRB/整包缺Apple SDK；沙箱网络资格配置有缺口，运行未验 |
 
 Q32要求实际构建，不允许以“Rust/Flutter支持平台”替代。正式CPU/最低OS/SDK/feature闭包须在任务03形成建议和证据；这里不以示例目标静默排除其他架构。
 

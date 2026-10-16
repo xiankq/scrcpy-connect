@@ -31,4 +31,8 @@ Requirements: R06–R07、R13–R15
 
 ## 当前状态
 
-未执行本任务的工程验证；已有事实研究见输入。
+2026-10-17重新核查：monorepo、FRB、生成路由/状态、Android整包和部分跨target check已完成。
+
+Apple/Windows宿主最终链接/整包、平台资格配置、FRB/JAR一致性门禁与持续活动所有权仍缺。
+
+任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

@@ -31,4 +31,8 @@ Requirements: R33–R37、R38
 
 ## 当前状态
 
-未执行本任务的工程验证；已有事实研究见输入。
+2026-10-17重新核查：临时shell listener、快照/原PI/清除/失效校验已有部分真实证据。
+
+从连接起持续订阅、后台系统通知、认证接续及实际应用回复送达仍缺。
+
+任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

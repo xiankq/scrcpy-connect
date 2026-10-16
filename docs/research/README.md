@@ -50,7 +50,7 @@
 
 Q22–Q27 已回答。用户希望 ADB 依赖链尽量纯 Rust；确认后台按活动类型保持、设备级声音、真实应用任务、身份不自动迁移。Q27当时接受的可选通知历史随后被最新范围取舍移除，只保留实时通知。具体纯 Rust 口径及 TLS/USB/压缩后端继续核查，不把一轮回答当成整个设计树已经闭合。
 
-全会话已完成[59项需求审计](../../.scratch/interop/requirements-audit.md)，补[分级兼容基线](../../.scratch/interop/compatibility-matrix.md)、[32项产品流程覆盖](../../designs/prod/coverage.md)及[20项后续任务](../../.scratch/interop/issues/README.md)。任务含19项研究/验证和1项设计补齐；已有研究不等于任务中的工程验证完成。
+已建立[60项需求追溯](../../.scratch/interop/requirements-audit.md)，补[分级兼容基线](../../.scratch/interop/compatibility-matrix.md)、[32项产品流程覆盖](../../designs/prod/coverage.md)及[20项后续任务](../../.scratch/interop/issues/README.md)。任务含19项研究/验证和1项设计补齐；已有研究不等于任务中的工程验证完成。2026-10-17已按源码/设计对象/实际测试路径做[完整重新核查](../../.scratch/interop/completion-reassessment.md)，发现产品主线缺实现与断链；该核查优先于研究阶段的状态描述。
 
 Q28 用户要求依据 scrcpy 能力设计，已核实销毁虚拟显示内容和迁回主屏两条路径，不把此答复记为接受“默认迁回”。Q29–Q31 确认按中断原因恢复、实时通知动作同步远端、资源不足时保护已有重要活动。另有两项补充调查：纯 Rust ADB 依赖链、Android 手机输入与剪贴板；前者不自动撤销用户已接受的 fvp/MDK 媒体依赖选择，其范围专指 ADB。
 

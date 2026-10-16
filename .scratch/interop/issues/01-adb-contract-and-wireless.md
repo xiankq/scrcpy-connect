@@ -31,4 +31,8 @@ Requirements: R08–R11
 
 ## 当前状态
 
-未执行本任务的工程验证；已有事实研究见输入。
+2026-10-17重新核查：独立ADB库及配对/TLS、压缩、reverse、JDWP已有实现与真实互操作。
+
+公开服务完整契约、版本/Wi-Fi2行为、安全授权负例及恢复矩阵仍未闭合。
+
+任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
