@@ -1,0 +1,169 @@
+import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/services/clipboard_coordinator.dart';
+import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:design_system/design_system.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+class ConnectApp extends HookConsumerWidget {
+  const ConnectApp({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.watch(appControllerProvider.notifier);
+    final appDevices = ref.watch(
+      appControllerProvider.select((state) => state.devices),
+    );
+    final appSettings = ref.watch(
+      appControllerProvider.select((state) => state.settings),
+    );
+    final appPendingShares = ref.watch(
+      appControllerProvider.select((state) => state.pendingShares),
+    );
+    final appLastEvent = ref.watch(
+      appControllerProvider.select((state) => state.lastEvent),
+    );
+    final appEventRevision = ref.watch(
+      appControllerProvider.select((state) => state.eventRevision),
+    );
+    ref.watch(clipboardCoordinatorProvider);
+    final navigator = useMemoized(() => GlobalKey<NavigatorState>());
+    final router = useMemoized(() => createAppRouter(navigatorKey: navigator), [
+      controller,
+    ]);
+    useEffect(() => router.dispose, [router]);
+    final sharing = useRef<String?>(null);
+    final shareCycle = useState(0);
+    final lifecycle = useAppLifecycleState();
+    useEffect(
+      () {
+        if (sharing.value != null ||
+            appPendingShares.isEmpty ||
+            (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+          return null;
+        }
+        final share = appPendingShares.first;
+        sharing.value = value(share, 'shareId');
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final state = navigator.currentState;
+          if (state == null || !state.mounted) {
+            sharing.value = null;
+            return;
+          }
+          await IncomingShareRoute(shareId: value(share, 'shareId'))
+              .push<void>(state.context);
+          sharing.value = null;
+          if (state.mounted) shareCycle.value++;
+        });
+        return null;
+      },
+      [appPendingShares.length, appEventRevision, lifecycle, shareCycle.value],
+    );
+    final presentedCall = useRef<String?>(null);
+    useEffect(() {
+      final event = appLastEvent;
+      if (event == null ||
+          !['calls.incoming', 'call.incoming'].contains(event['type']) ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return null;
+      }
+      final data = jsonObject(event['data']);
+      final call = data['id'] != null
+          ? data
+          : objects(data['calls'])
+                .where((call) => call['state'] == 'ringing')
+                .firstOrNull;
+      if (call == null || data['live'] == false) return null;
+      final id = value(call, 'id');
+      final key = '${event['deviceId']}:$id';
+      if (id.isEmpty || presentedCall.value == key) return null;
+      final matches = appDevices.where((d) => d['id'] == event['deviceId']);
+      if (matches.isEmpty) return null;
+      presentedCall.value = key;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final context = navigator.currentContext;
+        if (context == null || !context.mounted) return;
+        final device = matches.first;
+        showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) => SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const FeatureIcon(
+                      LucideIcons.phoneIncoming,
+                      color: ConnectTokens.mint,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      value(call, 'name', value(call, 'number', '当前来电')),
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text('${deviceName(device)} 有来电'),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        CallsRoute(deviceId: value(device, 'id'))
+                            .push<void>(navigator.currentContext!);
+                      },
+                      child: const Text('查看来电与声音'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        openRemoteRoute(
+                          navigator.currentContext!,
+                          deviceId: value(device, 'id'),
+                        );
+                      },
+                      child: const Text('在手机上处理'),
+                    ),
+                    const StateNote('新的来电不会自动接听或抢占现有通话。'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      });
+      return null;
+    }, [appEventRevision]);
+    final mode = switch (appSettings['appearance']) {
+      'dark' => ThemeMode.dark,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.light,
+    };
+    final lightTheme = useMemoized(() => ConnectTokens.theme(Brightness.light));
+    final darkTheme = useMemoized(() => ConnectTokens.theme(Brightness.dark));
+    return MaterialApp.router(
+      title: '邻接',
+      restorationScopeId: 'connect-app',
+      routerConfig: router,
+      debugShowCheckedModeBanner: false,
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: mode,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          disableAnimations:
+              appSettings['reduceMotion'] == true ||
+              MediaQuery.disableAnimationsOf(context),
+        ),
+        child: GlassPreferences(
+          reduceTransparency: appSettings['reduceTransparency'] == true,
+          child: child!,
+        ),
+      ),
+    );
+  }
+}

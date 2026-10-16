@@ -1,0 +1,6 @@
+rust_input: crate::api
+rust_root: crates/interop_bridge
+dart_root: packages/interop_bridge
+dart_output: packages/interop_bridge/lib/src/rust
+rust_output: crates/interop_bridge/src/frb_generated.rs
+web: false

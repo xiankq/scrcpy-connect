@@ -1,0 +1,11 @@
+name: scrcpy_connect_workspace
+publish_to: none
+environment:
+  sdk: ^3.13.5
+workspace:
+  - apps/connect
+  - packages/design_system
+  - packages/interop_bridge
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
