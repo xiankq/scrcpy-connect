@@ -1,2 +1,5 @@
 - 视觉与组件语义遵循 design.md 指定的基线。视觉值只在该规范与 Pencil implementation token 中确定，不得另建平行 token 或裸写具体值。
+- 编写产品设计说明时先读 `prod/README.md`；产品定位、信息架构、用户流程和交互规则在 `prod/` 维护，工程选型与实现路线在技术文档维护。
 - 使用 Pencil MCP 读写 `.pen` 文件；MCP 不可用时，使用能力近似且无需 App 的 `pen interactive` 无头命令。禁止将 `.pen` 文件作为文本直接编辑。
+- 截图、图片和 PDF 预览导出使用系统临时目录；Git 保留设计源文件、规范与画布实际引用的素材。
+- 修改 `design.md` 后，运行[工具链记录](../docs/research/design-system-and-toolchain.md)中的官方 DESIGN.md lint 命令，修复错误并说明剩余警告。

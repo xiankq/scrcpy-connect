@@ -1,0 +1,2 @@
+# Design preview exports belong in the system temporary directory.
+/designs/previews/
