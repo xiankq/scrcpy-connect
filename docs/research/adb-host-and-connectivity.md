@@ -62,17 +62,22 @@ ADB 协议没有为“触控比文件推送更优先”定义跨流服务等级�
 不能把它简化为“一个包一次ACK”。[固定adb.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/adb.cpp)、
 [固定sockets.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/sockets.cpp)。
 
-本项目当前仍为经典模式：未宣告该feature、OPEN.arg1=0、只接空OKAY、逐包等待ACK、
-读完WRTE返还ACK、每流两个接收包。直接加feature会破坏OPEN／reverse／OKAY兼容；
-`from_negotiated_transport`也没有记录本地主动协商结果。实施应独立增加默认关闭的
-连接选项、显式协商状态、信用累计及唤醒、逐流与全连接字节预算，再整体实现正反向
-读写／关闭；不能对每个手机流照搬32MiB窗口。[当前client.rs](../../crates/adb/src/client.rs)。
+后续已实施默认关闭的`ConnectOptions::burst_mode`，仅主动宣告且对端也支持时启用；
+`Client::burst_mode()`报告实际状态。默认经典模式仍以OPEN.arg1=0、空OKAY、逐包ACK
+和两包接收队列运行。外部连接器原`from_negotiated_transport`保留经典格式；新增
+`from_negotiated_transport_with_burst`要求调用者确实主动宣告过feature，不能只看远端。
+Burst实现正反向流、signed i32增量／i64累计信用、部分消费返还、取消与关闭尾包；
+每流64KiB信用及一个max_payload超额接收，128MiB全连接保守预留涵盖队列元数据和
+保留读缓冲，尾包消费者释放前不回收预留。未直接照搬桌面32MiB窗口。
+[client.rs](../../crates/adb/src/client.rs)、[信用／预算](../../crates/adb/src/burst.rs)。
 
 这些是可实施的协议差距，**尚未证明是当前约一秒视频等待的原因**。先采逐stream
 payload读取、路由／消费、ACK实际写出及包大小／间隔；后续Burst A/B保持设备／画面／
 码率，比较延迟和排队，而不只吞吐。回归需含classic及双方feature组合、正反向流、
 部分读／合并信用、零／负／耗尽／恢复、非法长度与ID、慢流隔离、取消／尾包及TLS。
-当前测量与边界见[视频记录](../implementation/video-performance.md)；本节没有启用Burst。
+这些协议回归已纳入完整ADB测试72通过／13忽略，包括真实本地TCP反向桥及Rust TLS
+协议端；不是实际USB／无线TLS adbd／全平台长稳通过。Core的`adbBurstMode`默认关闭、
+只影响新连接；经典／Burst双AVD视频对照和范围见[视频记录](../implementation/video-performance.md)。
 
 ## 3. 已证事实：无线配对、密钥与连接安全
 

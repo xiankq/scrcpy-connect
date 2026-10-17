@@ -913,3 +913,143 @@ VIDEO2实际纹理已目视。保留SurfaceSync、跳36帧与1441ms原生启动�
 保留release／native hooks／Gradle／CMake缓存与原始性能／崩溃资料。
 `/tmp/connect-clock-cleanup.json`记录删除范围；被控独立核验无本批捕获进程，夹具包不存在。
 原五项用户未跟踪文件未动，未push。下一轮继续性能／首帧／稳定性，完整目标仍active。
+
+## 可选ADB Burst与宿主排空诊断（2026-10-18）
+
+本批不修改、重建两个scrcpy JAR，也不新增Android原生媒体实现。Rust ADB的
+`ConnectOptions::burst_mode`默认false，主动宣告`delayed_ack`并与对端相交后才启用。
+外部连接器原入口始终经典格式，新入口须明确传入本地主动宣告结果；实际模式由
+`Client::burst_mode()`及Core连接／诊断的`adbBurstActive`返回。
+Core `settings.adbBurstMode`只影响新连接，已有连接不静默改变线协议。
+
+实现signed i32增量／i64累计send credit、正信用可整包超额、部分读取返还信用，
+取消／关闭清除不再有效的返还并保留已收到尾包。每流64KiB接收窗口，额外保留一个
+max_payload和保守元数据／读缓冲；全连接128MiB预留，路由和消费者均释放才归还。
+零字节WRTE不占队列；普通writer仍64帧＋一个in-flight，拒绝反向OPEN另有128个
+空CLSE控制槽，满时有界等待、取消可中断，不无限spawn或关闭整连接。
+
+真实协议回归先红后绿：初始CNXN缺feature、反向关闭尾包被丢、writer满且CLSE后
+tail read等待无效credit三个接缝均复现后修复。消费停读超过5秒仍完整收到尾包，
+不再以固定5秒超时截断。两轮独立只读review先发现反向拒绝全连接取消与尾包截断，
+修复后复核两项关闭、未新增有证据问题；静态review不冒充动态测试。
+完整ADB 72通过／13忽略（含19个Burst wire测试），Core 153通过／49忽略，
+`/tmp/connect-burst-{adb,core}.log`；workspace all-target `-D warnings` clippy及fmt通过，
+`/tmp/connect-burst-{clippy,fmt}.log`。被忽略设备项不是实际运行通过。
+这些测试包括本地TCP反向桥及Rust STLS/TLS协议端，不覆盖实际USB／无线TLS adbd长稳。
+
+### 先隔离解码／呈现，再观察目标写出
+
+临时`/tmp/connect-raw-drain.py`直接连接宿主127.0.0.1:25556，用经典ADB逐WRTE立即ACK，
+排空相同H264 1280／60／8Mbps、repeat33334µs码流12秒，无解码／Flutter／新像素断言。
+只用于故障隔离，非产品依赖或性能验收替代。系统adb仅负责独立实验夹具安装、已有
+JAR推送、时钟采样及清理。每次唯一nice-name／远端JAR和fixture均由该次任务精确清理。
+初次pm path不存在返回1导致脚本在安装前退出，改为仅接受空输出的不存在结果后重跑，
+没有把该次失败计为测量。
+
+| 宿主诊断 | 媒体包数／后半统计数 | PTS→首payload中位条件界 | 头→整包中位 |
+| --- | --- | --- | --- |
+| 快速排空 | 406／203 | 461.589–494.773ms | 0.012ms |
+| 排空＋目标video TID strace | 417／209 | 513.819–553.180ms | 0.958ms |
+
+前后各三次`/proc/uptime`保留10ms量化／全往返区间；额外假设目标BOOTTIME−nanoTime
+接近相邻夹具观测的0、运行中无休眠／VM暂停／跳变。表中是源buffer PTS年龄条件界，
+没有新像素匹配，不能替代Android输入到实际呈现；全量包均保留，后半统计仅排除启动。
+原始`/tmp/connect-raw-drain-{15ba2e4dfadb,3e20eb2a8cb8}/result.json`。
+
+第二次只strace自己捕获服务的video TID11799，857个write、417个媒体头均按原始PTS
+匹配；syscall中位25µs、最大9505µs，没有100ms以上调用。
+`/tmp/connect-raw-drain-3e20eb2a8cb8/{video.strace,trace-summary.json}`。
+**只排除这次宿主排空时的长socket write阻塞**，没有观测Android呈现路径相同结论。
+仍数百毫秒的源年龄支持继续区分Surface采集／GPU fence／编码输入及组件排队，
+不能叫作纯编码CPU时间或断言16个input slots已实际积满。
+固定AOSP时间轴、slot与fence源码、后续首帧候选及MDK官方修复边界见
+[本轮研究](../research/scrcpy-first-frame-performance.md#aosp-surface-时间轴输入槽与无重建观测2026-10-18)。
+
+### Android同配置经典／Burst对照
+
+同一主控emulator-5554与目标emulator-5556、API36 x64／SwiftShader、H264请求
+1280／60／8Mbps、实际576×1280、AMediaCodec、动态夹具、逐帧trace及时钟括号。
+没有重启AVD、重建夹具或改变编码参数；未固定实际目标编码器名称，只请求同一平台默认。
+先经典再Burst，各两轮8次正常输入＋1次暂停期间输入；两个连接回执分别false／true。
+Core独立数据目录每组显式写setting，避免前一次持久状态污染。
+
+| 指标 | 经典 | Burst |
+| --- | --- | --- |
+| 输入到解码像素 P50／P95 | 1224／1493ms | 1324／1670ms |
+| 完整首像素，第1／2轮 | 3014／2876ms | 2521／2768ms |
+| Core关键帧后额外工作 | 0／0ms | 0／0ms |
+| 绘制结束→首payload，第1轮中位界 | 998.464–1055.279ms | 932.954–971.210ms |
+| 同上，第2轮 | 893.405–960.046ms | 1022.362–1082.362ms |
+| 校准区间宽，第1／2轮 | 56.815／66.641ms | 38.256／60.000ms |
+| 输入→relay中位 | 995.621ms | 1045.510ms |
+| relay→onVideo中位 | 217.038ms | 223.456ms |
+| onVideo→snapshot中位 | 33.194ms | 33.319ms |
+| 完整scrcpy包读取跨度中位 | 0.015ms | 0.013ms |
+| raw写中位 | 0.049ms | 0.046ms |
+| 暂停确认，第1／2轮 | 264／272ms | 262／286ms |
+| resume→新像素，第1／2轮 | 459／575ms | 579／544ms |
+
+所有16项正常输入及额外2项暂停输入均匹配目标时间线，clockBounds.complete／
+frameCorrelationComplete／targetTimelineComplete均true。画面新像素、两轮实际
+Flutter呈现和停止／纹理分离通过；两个最终VIDEO2截图已目视。每组第二轮首次Flutter
+截图仍旧VIDEO9，驱动沿已有有界重试取得VIDEO2，首张失败证据保留，不当成无延迟呈现。
+nativeDeleteConfirmed仍false；夹具uninstalled／absent均true。
+
+**两组严格命令均退出1**：首帧1000ms、P50 200ms、P95 300ms门槛没有放宽，
+startupBudgetMet／inputLatencyBudgetMet／videoPerformanceComplete均false。
+这批没有消除主要上游等待；不能依据两轮首帧数值就宣称可靠加速，也不把更高P95解释成
+已证明所有Burst设备更慢。Burst保留为显式可选协议能力、默认关闭；真实无线TLS、USB、
+多流公平／资源、断网恢复和小时级稳定性仍未通过此对照。
+
+复现命令（同上一节`transportDrive`环境与已构建独立fixture，候选仅改false为true和
+输出目录／日志名；不在计时期间并行编译其他任务）：
+
+```sh
+CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+CONNECT_E2E_TARGET=emulator-5556 CONNECT_E2E_DEVICE=emulator-5554 \
+CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
+CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_VIDEO_TIMELINE=true \
+CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-burst-classic \
+flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/video_performance.dart --target=integration_test/video_performance_test.dart \
+  --dart-define=CONNECT_PERF_DECODER=native --dart-define=CONNECT_PERF_TRACE_FRAMES=true \
+  --dart-define=CONNECT_PERF_TRACE_CLOCK=true --dart-define=CONNECT_PERF_ADB_BURST=false \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556 \
+  --dart-define=CONNECT_PERF_MAX_SIZE=1280 --dart-define=CONNECT_PERF_MAX_FPS=60 \
+  --dart-define=CONNECT_PERF_BIT_RATE=8000000 --dart-define=CONNECT_PERF_ROUNDS=2 \
+  --dart-define=CONNECT_PERF_TRANSITIONS=8 --dart-define=CONNECT_PERF_PAUSE_CYCLES=1 \
+  --dart-define=CONNECT_PERF_MAX_START_MS=1000 --dart-define=CONNECT_PERF_MAX_P50_MS=200 \
+  --dart-define=CONNECT_PERF_MAX_P95_MS=300
+```
+
+原始`/tmp/connect-e2e/video-burst-{classic,credit}/result.json`、各自target-timeline／cleanup
+和实际截图；日志`/tmp/connect-video-burst-{classic,credit}.log`。
+经典APK构建74.1秒、安装1741ms；两组仅改变Dart define，第二组使用同一Rust本地产物。
+严格Flutter分析4.2秒无问题（实施时终端回执）；Core iOS／macOS／Windows交叉check
+3.13／3.11／3.10秒通过，`/tmp/connect-burst-{ios,macos,windows}.log`，不等于三宿主Flutter整包。
+
+下一项优先区分Surface输入fence／采集及编码组件排队，并比较静态、动态负载；
+首帧另核实重复codec创建的实际代价，证实需要服务端变更才重建JAR。
+MDK安全帧读回候选单独验证，不以取消像素断言绕过崩溃。
+
+代码提交`b391cac`。恢复普通main首次构建8.6秒／安装590ms后，原主控QEMU276588
+退出、管理会话exit143，日志仅有正常关闭／等待kill流程及既有GL告警，触发源未确定；
+不冒称该次热重载成功或归因产品崩溃。`/tmp/connect-burst-main.log`。
+确认进程不存在后，恢复同一interop-controller原数据、原SwiftShader后端，
+`-no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect`，17.905秒启动。
+`/tmp/connect-burst-controller-recovery.log`。**所有A/B性能样本均在恢复前采集**，
+恢复后未补混比样本，也未因为重启覆盖失败结果。
+
+随后普通main构建6.5秒／安装1134ms，实际VM热重载124ms成功、运行错误查询无Dart错误；
+`/tmp/connect-burst-main-r2.log`、设备首页`/tmp/connect-burst-main.png`已目视，随后detach。
+SurfaceSync／跳37帧／1504ms启动帧告警仍在，不称应用启动性能通过。
+本批未生成新的签名ARM包，未物理ARM运行；两个JAR摘要不变、完全未重建。
+被控独立复核没有本批捕获／strace进程，实际包`dev.scrcpyconnect.videofixture`不存在，
+`/tmp/connect-burst-target-inspection.json`。首次独立包名检查误写了下划线，已按manifest
+修正并重测；驱动自身两组卸载回执始终使用正确包名。
+
+停止Gradle后清理436处明确debug目录／debug APK及本批非视频Core测试可执行文件／.d，
+实际释放5740.1MiB、空闲54.9GiB；`/tmp/connect-burst-cleanup.json`。
+保留release／native hooks／Gradle／CMake／Rust依赖与incremental、当前视频／ADB／
+网络稳定性测试程序及原始性能／崩溃证据，没有使用全仓clean。
+原五项用户未跟踪文件未动、未stage、未push；完整目标继续active。

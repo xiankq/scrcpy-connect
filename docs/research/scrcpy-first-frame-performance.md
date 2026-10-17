@@ -6,6 +6,12 @@
 
 ## 结论与产物身份
 
+后续2026-10-18传输批次仍未改变或重建JAR。下表是初次调查快照；暂停修复后的
+当前捕获JAR SHA-256为`b46cd074600c33802dc764df8a9e056271725cb9b51daf4a3494dfffadbbac89`，
+官方JAR仍为`764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536`。
+仅服务端源码／补丁／版本／构建工具链变化或显式可复现核验才需要重建，
+Flutter或Rust的传输／播放器改动不会自行改变已嵌入的JAR字节。
+
 **推论：本轮视频传输、首帧与连接稳定性没有证据要求新增 Java 补丁或重新构建 JAR。** 首先改进主控设备的计时、播放器请求/确认顺序、数据消费与背压处理；保持现有服务端协议与暂停扩展。这个结论不意味着可以把当前视频会话换成未修改官方 JAR：当前主控已经依赖暂停扩展 type 128，直接替换会破坏协议。[本地实现](../../crates/interop_core/src/scrcpy.rs)、[已有补丁说明](../../servers/scrcpy/README.md)
 
 | 对象 | 本轮核验 | 结论 |
@@ -58,6 +64,71 @@
 | 5 | 静止屏幕冷启动、五种编码、旋转、新窗口启动、慢消费者、暂停恢复、连接中断取消分别实测；比较首帧分位数与稳定态延迟 | **需验证**：本轮未运行；原记录中的模拟器结果不代表真机或所有平台 |
 
 **需验证：**只有在日志与对照实验确认：按协议建立连接且主控持续消费、正确处理新代配置并请求播放后，特定被控编码器仍未产生可用首帧，或现有暂停补丁出现可复现服务端缺陷，才有依据另行提出服务端源码修改与重建。该判断必须指向具体设备/编码器和失败阶段；目前没有这样的新增证据。
+
+## AOSP Surface 时间轴、输入槽与无重建观测（2026-10-18）
+
+**已证源码事实，非所有厂商API保证：**Android16 `System.nanoTime()`调用
+`clock_gettime(CLOCK_MONOTONIC)`；SurfaceFlinger虚拟屏HWC输出用默认`systemTime()`
+重新盖时间戳，GPU路径则经默认AUTO的Surface queueBuffer取CLOCK_MONOTONIC。
+两条标准实现都没有任意固定半秒偏移或首帧归零。
+[libcore System.c](https://android.googlesource.com/platform/libcore/+/fff4fcc0cf7f080cf2511cbb57561482b13b218f/ojluni/src/main/native/System.c#254)、
+[Timers.h](https://android.googlesource.com/platform/system/core/+/68be0c2c0006a0740d0b1809abe4717308f90d15/libutils/include/utils/Timers.h#75)、
+[VirtualDisplaySurface](https://android.googlesource.com/platform/frameworks/native/+/2827a4a16b0340ecd07c2d5a6c89991799b362bb/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp#258)、
+[RenderSurface](https://android.googlesource.com/platform/frameworks/native/+/2827a4a16b0340ecd07c2d5a6c89991799b362bb/services/surfaceflinger/CompositionEngine/src/RenderSurface.cpp#201)、
+[Surface AUTO处理](https://android.googlesource.com/platform/frameworks/native/+/2827a4a16b0340ecd07c2d5a6c89991799b362bb/libs/gui/Surface.cpp#1066)。
+
+**已证：**GBS默认输入时间偏移为0、未开启timelapse或skipFramesBefore变换；普通路径
+把bufferTimeNs除1000送入codec。C2NodeImpl即使调整内部timestamp gap也将原始时间
+存到customOrdinal，输入为Surface时CCodecBufferChannel输出强制恢复它。
+因此该标准路径的媒体PTS与nanoTime同原点；但PTS是虚拟屏buffer的时间，不是应用
+drawEnd、GPU fence完成或编码计算开始。重复帧PTS可从上一真实帧递增生成，亦不等于
+新像素年龄。实测AVD二进制尚未与这些源码逐字核对，OEM实现也不能据此一概保证；
+现有报告仍保留额外PTS假设，优先用已匹配新计数的drawEnd区间。
+[GBS时间处理](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/module/bqhelper/GraphicBufferSource.cpp#807)、
+[C2保留原时间](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/C2NodeImpl.cpp#328)、
+[输出恢复时间](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/CCodecBufferChannel.cpp#2667)。
+
+**已证结构、占用待测：**C2NodeImpl给Surface输入适配器默认16个slot；较大分辨率才会
+查询input/pipeline delay并改为4+delay。它不是“攒满16帧才能输出”或输出buffer数量。
+GBS以该数注册输入ID和最大acquired数；C2NodeImpl可能先逐个等待GPU fence，再提交
+组件。故源PTS已老且socket写很快，仍不能唯一归因编码计算。没有查到应用可通用设置
+的Surface输入队列深度／只留最新帧开关；`KEY_NUM_SLOTS`由codec设置，应用值被忽略，
+`allow-frame-drop`用于解码输出，`max-fps-to-encoder`也不保证清空已有在途旧帧。
+[C2默认槽及fence等待](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/C2NodeImpl.cpp#118)、
+[输入注册](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/CCodec.cpp#553)、
+[KEY_NUM_SLOTS实现契约](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/media/java/android/media/MediaFormat.java#1787)。
+
+**观测方法：**pinned Streamer先write12字节帧头再写body，全部写完后才release codec输出。
+在本批独立实验中只跟踪自己启动的`video` TID，`strace -ttt -T -xx -s 12 -e trace=write,writev`
+可把头中PTS与实际接收媒体包匹配，无需JAR埋点；syscall耗时可直接验证长写阻塞，
+guest wall clock与主控monotonic仍不能直接相减。classic adbd发WRTE后停读服务socket，
+等OKAY再恢复，故ACK往返也可反向影响编码输出，不可只看payload复制耗时。
+[固定Streamer](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/device/Streamer.java#L77)、
+[AOSP classic socket读停启](https://android.googlesource.com/platform/packages/modules/adb/+/ce023afef190b0cea7f8939e9dd5ee3ee79b137b/sockets.cpp#176)。
+
+**后续首帧候选，未优化验收：**当前暂停补丁先创建一个codec取能力后释放，再创建实际
+捕获实例。应独立验证能否在不破坏初始暂停、资源释放及错误重试的前提下移除重复创建，
+不能未经实测就重建JAR或宣称可节省多少首帧时间。该开销不解释持续运行中每次输入的等待。
+
+## MDK snapshot官方修复与替代接口核查（2026-10-18）
+
+官方fvp最新发布仍0.39.1、MDK为0.39.0。MDK 0.39.0的snapshot条目涉及JPEG编码失败，
+没有指出renderer请求队列空完成回调；fvp相关变化主要涉及dispose／callback清理。
+没有查到比当前版本更新且明确修复本次`std::function`空回调的已发布版本，
+不能把升级当作已有修复。[fvp变更](https://github.com/wang-bin/fvp/blob/master/CHANGELOG.md)、
+[MDK 0.39.0](https://github.com/wang-bin/mdk-sdk/releases/tag/v0.39.0)。
+
+仍open的[MDK #117](https://github.com/wang-bin/mdk-sdk/issues/117)报告高频snapshot崩溃，
+未给出明确根因或修复版本；已关闭的[fvp #146](https://github.com/wang-bin/fvp/issues/146)
+虽然同样bad_function_call，但栈为onStateChanged、2024年关闭，不能认定与本次同因。
+MDK releases/latest网页缓存曾误指0.38.0，本轮以releases.atom及0.39.0独立发布页交叉核对。
+
+官方候选是现有`Player.onFrame<VideoFrame>()`获取进入renderer之前的解码帧，
+再用`VideoFrame.to()`转换为可读主机内存帧，通过bufferData／bytesPerLine读取。
+它可绕开renderer snapshot请求接口，无需全局软件解码；但Android当前硬解后端转换
+是否可行、安全及开销均未实测，不能因此删除原生崩溃项或降级像素验收。
+[onFrame文档](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs#templateclass-frame-player-onframestdfunctionintframe-inttrack-cb)、
+[VideoFrame.to契约](https://github.com/wang-bin/libmdk-capi/blob/main/include/mdk/cpp/VideoFrame.h#L222-L233)。
 
 [R01]: https://api.github.com/repos/Genymobile/scrcpy/releases/tags/v5.0.1
 [R02]: https://api.github.com/repos/Genymobile/scrcpy/git/tags/a0c27ff382c411af1301dcc1cd8205c9aeb81996

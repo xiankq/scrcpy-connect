@@ -136,3 +136,15 @@ ADB消费／raw分段已实施：默认关闭、256项上限、source PTS及捕�
 仍有首轮长尾及2.6秒首帧；支持负载／排队方向，候选已撤回，默认60fps和两个JAR不变。
 两组新像素／18项时间线／暂停恢复／呈现／停止／卸载完成，严格性能和MDK崩溃项仍开放。
 [模型、源码依据与真实结果](../../../docs/implementation/video-performance.md#时钟括号与surface输入实验2026-10-18)。
+
+Burst后续：Rust ADB已补完整默认关闭的字节credit协议，双方主动feature相交、
+部分消费返还、有界逐流／连接预算及正反向关闭尾包；Core显式设置仅影响新连接。
+19项新wire测试、完整ADB72通过／13忽略、Core153／49忽略及严格workspace检查通过。
+实际双AVD每组16次新像素／2次暂停完成且模式回执匹配；经典P50／P95=1224／1493ms，
+Burst=1324／1670ms，首帧仍2.5–3.0秒，两组严格门槛均失败。没有消除主要上游等待，
+Burst默认继续关闭，不是完整视频性能修复。宿主无解码快速排空仍约0.46–0.55秒PTS年龄，
+目标video线程857次write最长9.505ms，仅排除该次宿主实验长socket写阻塞。
+后续优先Surface采集／fence／编码输入排队和冷创建开销；没有通用应用可控input slots
+旋钮的已证方案。MDK当前发布无对应snapshot空回调修复；onFrame→VideoFrame.to为
+待验候选，不降低实际像素门禁。两个JAR未改、未重建，任务继续开放。
+[真实对照、范围和复现](../../../docs/implementation/video-performance.md#可选adb-burst与宿主排空诊断2026-10-18)。

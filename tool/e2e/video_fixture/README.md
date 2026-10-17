@@ -57,6 +57,11 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 仍会影响预热时间。缺失、逆序或不相容数据会保存报告并使观测验收失败。
 [算法、来源及实际结果](../../../docs/implementation/video-performance.md#时钟括号与surface输入实验2026-10-18)。
 
+`CONNECT_PERF_ADB_BURST=true`仅用于ADB传输对照，默认关闭。每次初始化显式写入
+该开关，避免持久偏好污染下一组；每轮新连接记录`adbBurstActive`并断言实际协商值
+等于请求值。Burst候选必须使用宣告`delayed_ack`的adbd，对不支持的旧设备不能冒充
+候选测量。保持其他画质、时间线、像素和预算参数一致；该开关不改变scrcpy JAR。
+
 从release切回E2E后，先在应用目录执行`flutter pub get --offline`恢复测试插件注册，
 再运行--no-pub drive；没有缓存时使用正常pub get。不要手改生成注册文件。
 默认高清80次、当前仍失败的1秒首帧门槛及原始证据见

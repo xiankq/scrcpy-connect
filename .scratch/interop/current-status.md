@@ -4,6 +4,35 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+最新传输批次：Rust ADB新增默认关闭的`delayed_ack`完整字节信用流控，
+Core设置`adbBurstMode`仅影响新连接，连接／诊断回执保留实际协商状态；不重建JAR。
+完整ADB测试72通过／13忽略、Core153通过／49忽略，工作区all-target严格clippy及fmt通过。
+协议回归覆盖协商、正反向流、信用与有界内存、慢流隔离、TLS及关闭尾包；忽略项不计
+真实设备证据。双AVD经典／Burst动态新像素对照各两轮16次完成，实际模式均按请求协商。
+P50／P95为1224／1493→1324／1670ms，首帧3014／2876→2521／2768ms，严格门槛均失败。
+绘制结束→首payload两轮中位界998–1055／893–960ms→933–971／1022–1082ms，
+没有消除上游主要等待；Burst保留可选能力、默认关闭，不宣称视频优化成功。
+每组两次暂停恢复、真实AMediaCodec新像素／Flutter呈现、纹理分离和夹具卸载通过；
+nativeDeleteConfirmed仍false，MDK截图崩溃未因本次通过关闭。原始结果
+`/tmp/connect-e2e/video-burst-{classic,credit}/result.json`。
+
+独立宿主快速排空经典ADB视频、移除解码与Flutter后，源PTS→首payload的条件中位界
+仍为462–495ms；第二次带目标video线程strace为514–553ms。后者417个媒体头全部按
+原始PTS对应857次write，单次最长9.505ms，没有100ms以上写调用。这仅适用于宿主排空
+诊断，依赖连续时钟及目标BOOTTIME／nanoTime近零差假设；不是Android真实呈现延迟。
+支持继续查采集／Surface输入／fence／编码排队，未证明唯一根因或实际16帧积压。
+资料核查及原始路径见[本轮研究](../../docs/research/scrcpy-first-frame-performance.md)。
+
+本批代码`b391cac`；三宿主Rust Core交叉check通过，不代表Flutter整包。
+普通main首次构建8.6秒／安装590ms后主控QEMU退出，管理会话exit143，仅见退出流程，
+未确定触发源；不将其计热重载通过。恢复同一AVD原数据／SwiftShader后构建6.5秒、
+安装1134ms，实际VM热重载124ms成功、无Dart运行错误，设备首页已目视后detach。
+性能对照全部来自该次恢复之前，未把恢复后数据混入。SurfaceSync和1504ms启动帧
+告警仍在。停止Gradle、精确清理436处debug／非视频测试产物，释放5740.1MiB，
+空闲54.9GiB；保留release／native hooks／构建缓存／当前视频与ADB测试／原始证据。
+被控无本批捕获／trace进程、实际夹具包不存在；未重建JAR或签名ARM包，原五项用户
+未跟踪文件未动、未push。下一段查Surface／fence／编码排队与冷创建，目标继续active。
+
 最新时钟括号批次：默认关闭的`session.clock.probe`用同一主控Rust媒体时钟包住
 `exec:cat /proc/uptime`完整响应，独立目标夹具以BOOTTIME／nanoTime／BOOTTIME三读数
 夹住输入和绘制。每轮前后三次探针，保留10ms量化和完整往返的不确定区间；仅在本轮
