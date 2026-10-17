@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -16,11 +17,28 @@ public final class VideoPatternActivity extends Activity {
     private int counter;
     private boolean motion;
     private int frame;
+    private int sequence;
+    private int drawnSequence = -1;
+    private String timelineRun;
+
+    private void configure(Intent intent) {
+        motion = intent.getBooleanExtra("motion", false);
+        String run = intent.getStringExtra("timelineRun");
+        timelineRun = run != null && run.matches("[a-zA-Z0-9_-]{1,80}") ? run : null;
+    }
+
+    private void trace(String kind, long startUs, long eventTimeMs) {
+        if (timelineRun == null) return;
+        Log.i("ConnectVideoClock", "{\"run\":\"" + timelineRun
+            + "\",\"kind\":\"" + kind + "\",\"sequence\":" + sequence
+            + ",\"counter\":" + counter + ",\"nanoUs\":" + System.nanoTime() / 1000
+            + ",\"drawStartUs\":" + startUs + ",\"eventUptimeMs\":" + eventTimeMs + "}");
+    }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        motion = getIntent().getBooleanExtra("motion", false);
+        configure(getIntent());
         pattern = new Pattern();
         setContentView(pattern);
     }
@@ -28,7 +46,9 @@ public final class VideoPatternActivity extends Activity {
     @Override public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         counter = 0;
-        motion = intent.getBooleanExtra("motion", false);
+        sequence = 0;
+        drawnSequence = -1;
+        configure(intent);
         pattern.invalidate();
     }
 
@@ -36,6 +56,8 @@ public final class VideoPatternActivity extends Activity {
         if (event.getKeyCode() != KeyEvent.KEYCODE_DPAD_DOWN) return super.dispatchKeyEvent(event);
         if (event.getAction() == KeyEvent.ACTION_UP) {
             counter = (counter + 1) & 15;
+            sequence++;
+            trace("input", 0, event.getEventTime());
             pattern.invalidate();
         }
         return true;
@@ -45,6 +67,7 @@ public final class VideoPatternActivity extends Activity {
         private final Paint paint = new Paint();
         Pattern() { super(VideoPatternActivity.this); }
         @Override protected void onDraw(Canvas canvas) {
+            long startUs = timelineRun == null ? 0 : System.nanoTime() / 1000;
             for (int bit = 0; bit < 4; bit++) {
                 paint.setColor((counter & (1 << bit)) != 0 ? 0xffff4040 : 0xff40c0ff);
                 canvas.drawRect(getWidth() * bit / 4f, 0,
@@ -74,6 +97,10 @@ public final class VideoPatternActivity extends Activity {
             paint.setTextSize(getWidth() / 12f);
             canvas.drawText("VIDEO " + counter + (motion ? " / " + frame : ""),
                 getWidth() / 16f, getHeight() * .85f, paint);
+            if (drawnSequence != sequence) {
+                drawnSequence = sequence;
+                trace("draw", startUs, 0);
+            }
         }
     }
 }

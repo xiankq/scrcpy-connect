@@ -138,6 +138,7 @@ void main() {
       );
       String? device, session;
       var expected = 0;
+      var inputSequence = 0;
       try {
         await real(() async {
           final deadline = Stopwatch()..start();
@@ -330,6 +331,7 @@ void main() {
             final observation = Stopwatch()..start();
             for (var sample = 0; sample < transitions; sample++) {
               expected = (expected + 1) & 15;
+              inputSequence++;
               final traceBefore = (player as FvpVideoPlayer).frameTrace;
               final watch = Stopwatch()..start();
               await request('session.key', {
@@ -379,6 +381,7 @@ void main() {
               }
               final sampleEvidence = <String, dynamic>{
                 'counter': expected,
+                'fixtureSequence': inputSequence,
                 'controlMs': controlMs,
                 'snapshotMs': reads,
                 'totalMs': totalMs,
@@ -427,6 +430,12 @@ void main() {
                 );
               }
               (evidence['samples'] as List<VideoJson>).add(sampleEvidence);
+              debugPrint(
+                'VIDEO_INPUT_SAMPLE ${jsonEncode({
+                  'round': round,
+                  for (final key in const ['fixtureSequence', 'counter', 'controlMs', 'totalMs', 'relayFrame', 'inputToRelayUs', 'relayToDecodeUs', 'decodeToSnapshotUs']) key: sampleEvidence[key],
+                })}',
+              );
             }
             final after = await request('media.status', {
               'relayId': ready['relayId'],
@@ -499,12 +508,14 @@ void main() {
               // resumed callback or an old snapshot cannot satisfy freshness.
               sample['stage'] = 'changeWhilePaused';
               expected = (expected + 1) & 15;
+              inputSequence++;
               await request('session.key', {
                 'sessionId': session,
                 'keyCode': 20,
                 'action': 'press',
               });
               sample['expectedCounter'] = expected;
+              sample['fixtureSequence'] = inputSequence;
               sample['stage'] = 'resume';
               watch.reset();
               final resumed = await presentation.request('session.resume', {

@@ -12,6 +12,10 @@ Future<void> main() async {
   final controller = environment['CONNECT_E2E_DEVICE'];
   final apk = environment['CONNECT_E2E_VIDEO_FIXTURE'];
   final fixtureMotion = environment['CONNECT_E2E_VIDEO_MOTION'] == 'true';
+  final timelineEnabled = environment['CONNECT_E2E_VIDEO_TIMELINE'] == 'true';
+  final timelineRun = 'video_${DateTime.now().microsecondsSinceEpoch}_$pid';
+  List<Map<String, dynamic>>? targetTimeline;
+  String? targetTimelineError;
   if (adb == null ||
       target == null ||
       controller == null ||
@@ -80,6 +84,34 @@ Future<void> main() async {
     if (!installed) return;
     final cleanup = <String, Object?>{};
     if (installed) {
+      if (timelineEnabled) {
+        try {
+          final log = await command([
+            'logcat',
+            '-d',
+            '-v',
+            'raw',
+            '-s',
+            'ConnectVideoClock:I',
+            '*:S',
+          ]);
+          final records = <Map<String, dynamic>>[];
+          for (final line in const LineSplitter().convert(log)) {
+            if (!line.startsWith('{')) continue;
+            final record = jsonDecode(line) as Map<String, dynamic>;
+            if (record['run'] == timelineRun) records.add(record);
+          }
+          // Preserve even a partial/empty timeline after an early native crash.
+          // Successful samples are checked below, after uninstall completes.
+          targetTimeline = records;
+          await File('${output.path}/target-timeline.json')
+              .writeAsString(jsonEncode(records));
+        } catch (error) {
+          // A missing observation must still uninstall this invocation's APK.
+          cleanup['timelineError'] = '$error';
+          targetTimelineError = '$error';
+        }
+      }
       try {
         await capture(target, 'target-final');
       } catch (error) {
@@ -120,6 +152,7 @@ Future<void> main() async {
       '--ez',
       'motion',
       '$fixtureMotion',
+      if (timelineEnabled) ...['--es', 'timelineRun', timelineRun],
     ]);
     await capture(target, 'target-initial');
     final driver = await FlutterDriver.connect();
@@ -145,10 +178,70 @@ Future<void> main() async {
         final report = {...?data}..remove('screenshots');
         report['fixtureCleanupConfirmed'] = true;
         report['fixtureMotionEnabled'] = fixtureMotion;
+        if (timelineEnabled) {
+          report['targetTimeline'] = targetTimeline;
+          if (targetTimelineError != null) {
+            report['targetTimelineError'] = targetTimelineError;
+          }
+          final missing = <int>[];
+          final segments = <Map<String, dynamic>>[];
+          for (final round in (report['rounds'] as List? ?? const [])) {
+            for (final sample in [
+              ...round['samples'] as List,
+              ...round['pauseSamples'] as List? ?? const [],
+            ]) {
+              final sequence = sample['fixtureSequence'];
+              // A failed pause may never have sent its next input. Preserve
+              // that original failure rather than failing this postprocessor.
+              if (sequence is! int) continue;
+              final counter = sample['counter'] ?? sample['expectedCounter'];
+              final inputs = (targetTimeline ?? const <Map<String, dynamic>>[])
+                  .where(
+                    (r) => r['sequence'] == sequence && r['kind'] == 'input',
+                  )
+                  .toList();
+              final draws = (targetTimeline ?? const <Map<String, dynamic>>[])
+                  .where(
+                    (r) => r['sequence'] == sequence && r['kind'] == 'draw',
+                  )
+                  .toList();
+              if (inputs.length != 1 ||
+                  draws.length != 1 ||
+                  inputs.single['counter'] != counter ||
+                  draws.single['counter'] != counter) {
+                missing.add(sequence);
+                continue;
+              }
+              final input = inputs.single, draw = draws.single;
+              final wait =
+                  (draw['drawStartUs'] as int) - (input['nanoUs'] as int);
+              final duration =
+                  (draw['nanoUs'] as int) - (draw['drawStartUs'] as int);
+              if (wait < 0 || duration < 0) missing.add(sequence);
+              segments.add({
+                'sequence': sequence,
+                'counter': counter,
+                'inputToDrawStartUs': wait,
+                'drawCallbackUs': duration,
+              });
+            }
+          }
+          report['targetDrawSegments'] = segments;
+          report['missingTargetSequences'] = missing;
+          report['targetTimelineComplete'] =
+              targetTimelineError == null &&
+              missing.isEmpty &&
+              segments.isNotEmpty;
+        }
         await File('${output.path}/result.json')
             .writeAsString(jsonEncode(report));
         if (report['videoPerformanceComplete'] != true) {
           throw StateError('Video performance loop incomplete.');
+        }
+        if (timelineEnabled && report['targetTimelineComplete'] != true) {
+          throw StateError(
+            'Target timeline does not cover every actual input.',
+          );
         }
       },
     );
