@@ -11,6 +11,18 @@ val releaseKey = Properties().apply {
     if (releaseKeyFile.exists()) releaseKeyFile.inputStream().use { load(it) }
 }
 
+// Fail before Flutter AOT/Rust compilation instead of successfully publishing
+// an unsigned app-release.apk which Android's installer cannot parse.
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.project == project && it.name.endsWith("Release") }) {
+        check(releaseKeyFile.isFile) {
+            "Release signing is not configured. From the repository root run: " +
+                "python3 tool/android.py init-signing (local sideload key), " +
+                "or provide apps/connect/android/key.properties with your release key."
+        }
+    }
+}
+
 android {
     namespace = "dev.scrcpyconnect.scrcpy_connect"
     compileSdk = flutter.compileSdkVersion
@@ -34,6 +46,24 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Flutter's default filters include all three supported ABIs even when
+        // --target-platform selects one. Exclude plugin-only ABIs: an installer
+        // must never select an architecture lacking Flutter and the Rust core.
+        if (providers.gradleProperty("split-per-abi").orNull != "true") {
+            val requestedPlatforms = providers.gradleProperty("target-platform")
+                .orElse("android-arm,android-arm64,android-x64").get().split(",")
+            val abis = mapOf(
+                "android-arm" to "armeabi-v7a",
+                "android-arm64" to "arm64-v8a",
+                "android-x64" to "x86_64",
+            )
+            ndk {
+                abiFilters.clear()
+                abiFilters.addAll(requestedPlatforms.map {
+                    requireNotNull(abis[it]) { "Unsupported Android target platform: $it" }
+                })
+            }
+        }
     }
 
     signingConfigs {

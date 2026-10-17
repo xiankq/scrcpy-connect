@@ -1,6 +1,6 @@
 # 当前完成度与下一步验收
 
-更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R60／C01–C32逐项追溯和A01–A59发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
+更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R60／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
 ## 状态口径
 
@@ -117,3 +117,7 @@ A54已补[Apple自身连续互通工作流](../../docs/research/apple-continuity
 普通lib/main.dart当前源码实际构建27.7秒／安装555ms，CLI R热重启1,763ms，`/tmp/connect-ime-call-main.log`；设备列表空态截图`/tmp/connect-ime-call-main-restarted.png`已目视后detach。两条FRB旧isolate投递告警和启动跳帧仍有，该首页不代替A59或完整动态视觉。
 
 A59后续：第八轮目标先截图、750ms后主控截图、延迟再次两端截图，31秒通过且两张主控图均显示你好🙂；六checkpoint及查询恢复通过。证据`/tmp/connect-e2e/remote-ime-r8/`，截图含UTC时刻，不将其冒称端到端延迟数据。限定该流程旧画面疑点未复现，无播放器生产改动。[范围](../../docs/implementation/mobile-ime.md)。用户新增默认`flutter build apk`耗时及安装包信息为空反馈：本机release无key.properties，正在独立核验签名／实际安装并补构建入口；尚未归因用户原APK。
+
+## 渐进交付：默认release安装与打包速度（A60）
+
+用户默认`flutter build apk`安装失败反馈已复现：无签名仍构建成功，独立apksigner拒绝／PackageManager报INSTALL_PARSE_FAILED_NO_CERTIFICATES。现配置本机持久私密签名、无配置编译前拒绝、单ABI插件过滤及Gradle任务缓存，新增可重复初始化／构建／独立验证入口。x64 50.2MB／通用三ABI128.9MB均通过ZIP／签名／包名入口／ELF／16KB对齐，三ABI默认命令73.468秒，同源重复10.760秒；不是冷编译10秒承诺。实际第三AVD首次安装＋冷启动正常设备页＋同签名更新成功，本次安装已卸载且多余AVD关闭，主控原数据未动。[可复现入口、原始失败、命令与边界](../../docs/implementation/android-packaging.md)。尚无物理arm64执行／商店分发证据，其他四宿主和全部产品门禁不因此通过。

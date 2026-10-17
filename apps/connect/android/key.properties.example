@@ -1,0 +1,7 @@
+# Copy to key.properties for your own release identity, or run from repo root:
+# python3 tool/android.py init-signing
+# Relative storeFile paths resolve from apps/connect/android.
+storeFile=keystores/your-release-key.jks
+keyAlias=your-release-alias
+storePassword=replace-locally
+keyPassword=replace-locally

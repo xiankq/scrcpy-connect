@@ -18,6 +18,7 @@ dart --disable-dart-dev --packages=.dart_tool/package_config.json apps/connect/t
 npx --yes --package=@google/design.md@0.4.0 designmd lint designs/design.md
 if [[ "${1:-}" == "--android" ]]; then
   (cd apps/connect && flutter build apk --debug --no-pub --target-platform android-arm,android-arm64,android-x64)
+  python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-debug.apk
   # These Kotlin tests have JVM main entrypoints, not JUnit annotations;
   # Gradle's testDebugUnitTest alone does not execute their assertions.
   python3 apps/connect/android/app/src/test/run_native_ownership_tests.py

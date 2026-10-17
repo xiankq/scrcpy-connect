@@ -55,3 +55,5 @@ A48还发现`PlatformDocuments.kt:94`仍用产品AlertDialog决定同名保留�
 - [ ] 当前实施指导同步离页保留／协作暂停、显式关闭才stop与共享呈现所有权；Android已构建，其他宿主未验，不能沿用ADR的旧状态。
 
 源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。
+
+2026-10-18用户默认APK反馈：已复现并修复A60未签名release成功包及单ABI不完整插件架构。新增签名初始化／最终APK独立校验、Gradle任务缓存；默认三ABI真实release签名与首次安装／启动／同签名更新通过，同源重复10.760秒。[完整范围](../../../docs/implementation/android-packaging.md)。四端最终链接和干净远端job仍独立开放，不以本地Android结果代替。

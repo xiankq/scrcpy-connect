@@ -35,7 +35,28 @@ cd apps/connect
 flutter build apk --debug --target-platform android-x64
 ```
 
-生成绑定使用固定 `flutter_rust_bridge_codegen 2.13.0`，在根目录运行 `flutter_rust_bridge_codegen generate`。临时 JAR／助手的构建、源码与产物哈希见各自 `servers/*/README.md`。Android release 不自动使用 debug 签名；自行提供被 Git 忽略的 `apps/connect/android/key.properties`（storeFile、storePassword、keyAlias、keyPassword）后才配置 release 签名。
+生成绑定使用固定 `flutter_rust_bridge_codegen 2.13.0`，在根目录运行 `flutter_rust_bridge_codegen generate`。临时 JAR／助手的构建、源码与产物哈希见各自 `servers/*/README.md`。
+
+### Android 安装包
+
+`flutter build apk` 默认构建 release。首次在仓库根目录执行以下命令，生成本机持久的侧载签名，再为常见 arm64 手机构建并验证安装包：
+
+```sh
+python3 tool/android.py init-signing
+python3 tool/android.py build
+```
+
+已配置的签名不会被替换；私钥与 `key.properties` 不进入 Git，请自行私密备份这两份文件，后续更新需要同一身份。正式分发时可按 [配置示例](apps/connect/android/key.properties.example) 换成自己的发布密钥。缺少签名会在编译前明确失败，不再生成未签名的“成功”包，也不会悄悄用 debug 密钥签 release。
+
+打包入口默认只编译 arm64；模拟器使用 `--abi x64`，旧手机使用 `--abi arm`，全架构包使用 `--abi universal`。直接在 `apps/connect` 执行 `flutter build apk` 仍会生成三架构通用签名包。单架构模式也会过滤插件的其他架构库，避免只有插件、没有 Flutter／Rust 的不完整 ABI。
+
+最终 APK 在 `apps/connect/build/app/outputs/flutter-apk/app-release.apk`。可独立复核：
+
+```sh
+python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-release.apk
+```
+
+验证包括 ZIP 完整性、签名、16KB 对齐、包名／启动入口和实际 Flutter／Rust ELF 架构。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[实测与限制](docs/implementation/android-packaging.md)。
 
 ## 设计与验收
 
