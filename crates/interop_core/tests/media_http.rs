@@ -606,16 +606,18 @@ async fn missing_initial_packet_releases_the_raw_source_after_the_real_protocol_
 }
 
 #[tokio::test]
-async fn a_config_burst_without_following_data_times_out_instead_of_holding_capture_forever() {
+async fn a_truncated_configuration_payload_still_times_out_and_releases_capture() {
     let streams = MediaStreams::default();
     let raw = raw_listener().await;
     let (relay, _playback, mut source) = running_video(&streams, &raw, 1).await;
     dimensions(&mut source, 640, 288).await;
-    config(&mut source, true).await;
+    source.write_u64(1 << 62).await.unwrap();
+    source.write_u32(100).await.unwrap();
+    source.write_all(&[1, 2]).await.unwrap(); // Actual incomplete configuration payload.
     assert_eq!(
         tokio::time::timeout(Duration::from_secs(15), source.read(&mut [0; 1]))
             .await
-            .expect("incomplete configuration deadline must release capture")
+            .expect("truncated configuration deadline must release capture")
             .unwrap(),
         0
     );
@@ -623,4 +625,38 @@ async fn a_config_burst_without_following_data_times_out_instead_of_holding_capt
         status(&streams, &relay, "failed").await["errorCode"],
         "media_timeout"
     );
+}
+
+#[tokio::test]
+async fn complete_video_configuration_can_remain_idle_until_capture_resumes() {
+    let streams = MediaStreams::default();
+    let raw = raw_listener().await;
+    let (relay, mut playback, mut source) = running_video(&streams, &raw, 1).await;
+    // RESET_VIDEO may finish its session/configuration just before capture is
+    // cooperatively suspended. These are complete units, not a truncated packet.
+    dimensions(&mut source, 288, 640).await;
+    config(&mut source, false).await;
+    tokio::time::sleep(Duration::from_millis(10_300)).await;
+    let retained = streams
+        .command("media.status", &json!({"relayId":relay["relayId"]}))
+        .await
+        .unwrap();
+    assert_eq!(
+        retained["status"], "streaming",
+        "valid idle configuration must not end the retained window: {retained}"
+    );
+    frame(&mut source, 12_000_000, true).await;
+    assert!(http_chunk(&mut playback).await.is_some());
+    assert_eq!(
+        streams
+            .command("media.status", &json!({"relayId":relay["relayId"]}))
+            .await
+            .unwrap()["generation"],
+        1
+    );
+    streams
+        .command("media.close", &json!({"relayId":relay["relayId"]}))
+        .await
+        .unwrap();
+    closed_raw(&mut source).await;
 }

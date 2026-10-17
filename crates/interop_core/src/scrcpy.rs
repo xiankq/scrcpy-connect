@@ -26,6 +26,9 @@ use tokio::{
 pub(crate) const SERVER: &[u8] = include_bytes!("../../../servers/vendor/scrcpy-server-v5.0.1");
 pub(crate) const SERVER_SHA: &str =
     "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536";
+const CAPTURE_SERVER: &[u8] = include_bytes!("../../../servers/scrcpy/interop-scrcpy-server.jar");
+const CAPTURE_SERVER_SHA: &str =
+    include_str!("../../../servers/scrcpy/interop-scrcpy-server.sha256");
 const MAX_PACKET: usize = 16 * 1024 * 1024;
 const CLIPBOARD_MAX: usize = (1 << 18) - 14;
 
@@ -339,6 +342,7 @@ enum ControlRequest {
     Send(Vec<u8>, oneshot::Sender<CoreResult<Value>>),
     ClipboardGet(oneshot::Sender<CoreResult<Value>>),
     ClipboardSet(String, bool, oneshot::Sender<CoreResult<Value>>),
+    Capture(bool, oneshot::Sender<CoreResult<Value>>),
 }
 struct CancelOnDrop(Option<CancellationToken>);
 struct SessionContext {
@@ -459,7 +463,7 @@ impl Runtime {
                 "独立应用窗口需要 Android 10 或更新版本。",
             ));
         }
-        if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
+        if format!("{:x}", Sha256::digest(CAPTURE_SERVER)) != CAPTURE_SERVER_SHA.trim() {
             return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
         }
         let id = uuid::Uuid::new_v4().to_string();
@@ -553,10 +557,10 @@ impl Runtime {
             let mut sync = client.sync(OperationOptions::default()).await?;
             sync.push(
                 &RemotePath::new(&remote_jar)?,
-                &mut &SERVER[..],
+                &mut &CAPTURE_SERVER[..],
                 0o600,
                 now().min(u32::MAX as u64) as u32,
-                SERVER.len() as u64,
+                CAPTURE_SERVER.len() as u64,
             )
             .await?;
             drop(sync);
@@ -621,6 +625,7 @@ wait "$child""#
             let process_cancel = cancellation.clone();
             let process_closed_task = process_closed.clone();
             let process_logs = logs.clone();
+            let process_state = state.clone();
             tokio::spawn(async move {
                 let mut buffer = [0; 4096];
                 loop {
@@ -633,6 +638,18 @@ wait "$child""#
                             logs.extend_from_slice(&buffer[..count.min(room)]);
                         }
                     }
+                }
+                if !process_cancel.is_cancelled() {
+                    let detail = String::from_utf8_lossy(&process_logs.lock().await)
+                        .trim()
+                        .to_owned();
+                    let mut state = process_state.write().await;
+                    state["status"] = json!("failed");
+                    state["reason"] = json!(if detail.is_empty() {
+                        "被控端的窗口服务已结束，请检查连接后重新打开。".to_owned()
+                    } else {
+                        detail
+                    });
                 }
                 process_closed_task.store(true, Ordering::Release);
                 process_cancel.cancel();
@@ -684,9 +701,9 @@ wait "$child""#
             video.read_exact(&mut initial).await?;
             // Streamer writes the codec ID before MediaCodec.configure(). Wait
             // for encoded output, not just metadata, before reporting encoder readiness.
-            let (preface, width, height) = read_video_preface(&mut video, initial).await?;
-            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
-            let port = listener.local_addr()?.port();
+            // A decoration-free virtual display may stay blank until START_APP.
+            // Like upstream's independent controller/demuxer threads, do not
+            // wait for an encoded frame before launching its real application.
             let (control_tx, control_rx) = mpsc::channel(64);
             let actor_cancel = cancellation.clone();
             let actor_events = self.events.clone();
@@ -708,6 +725,9 @@ wait "$child""#
                 bytes.extend_from_slice(package.as_bytes());
                 request_control(&control_tx, ControlRequest::Send, bytes).await?;
             }
+            let (preface, width, height) = read_video_preface(&mut video, initial).await?;
+            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
+            let port = listener.local_addr()?.port();
             {
                 let mut data = state.write().await;
                 data["videoPort"] = json!(port);
@@ -837,17 +857,24 @@ wait "$child""#
             let sessions = self.sessions.lock().await;
             let session_id = params["sessionId"].as_str();
             let device_id = params["deviceId"].as_str();
-            let (id, session) = sessions
-                .iter()
-                .find(|(id, session)| {
-                    session_id.map_or_else(
-                        || device_id.is_some_and(|device| device == session.device_id),
-                        |wanted| *id == wanted,
-                    )
-                })
-                .ok_or_else(|| {
-                    CoreError::new("session_required", "请先打开这台设备的实时画面。")
-                })?;
+            let mut matching = sessions.iter().filter(|(id, session)| {
+                session_id.map_or_else(
+                    || device_id.is_some_and(|device| device == session.device_id),
+                    |wanted| *id == wanted,
+                )
+            });
+            let (id, session) = matching.next().ok_or_else(|| {
+                CoreError::new("session_required", "请先打开这台设备的实时画面。")
+            })?;
+            if session_id.is_none() && matching.next().is_some() {
+                return Err(CoreError::new(
+                    "ambiguous_session",
+                    "这台设备有多个窗口，请选择需要操作的窗口。",
+                ));
+            }
+            if device_id.is_some_and(|device| device != session.device_id) {
+                return Err(invalid("会话不属于所选设备。"));
+            }
             if session.cancellation.is_cancelled() && command != "session.stop" {
                 return Err(CoreError::new(
                     "disconnected",
@@ -874,9 +901,22 @@ wait "$child""#
                 .ok_or_else(|| invalid("渲染纹理无效。"))?;
             let mut data = state.write().await;
             data["textureId"] = json!(texture);
-            data["status"] = json!("streaming");
-            self.resource_admission
-                .set_status(&format!("session:{id}"), ResourceStatus::Streaming);
+            // A replacement renderer may finish after capture was paused.
+            // Its texture evidence does not resume the remote source.
+            let capture_paused = data["capturePaused"] == true;
+            data["status"] = json!(if capture_paused {
+                "paused"
+            } else {
+                "streaming"
+            });
+            self.resource_admission.set_status(
+                &format!("session:{id}"),
+                if capture_paused {
+                    ResourceStatus::Paused
+                } else {
+                    ResourceStatus::Streaming
+                },
+            );
             if let Some(name) = params["decoderName"].as_str() {
                 data["decoderName"] = json!(name);
             }
@@ -912,23 +952,34 @@ wait "$child""#
             return Ok(json!({"sessionId":id,"refreshRequested":true}));
         }
         if matches!(command, "session.pause" | "session.resume") {
-            let mut data = state.write().await;
-            if data["textureId"].is_null() {
-                return Err(CoreError::new("renderer_not_ready", "实时渲染尚未就绪。"));
-            }
-            let pausing = command.ends_with("pause");
-            let client = self
-                .client(data["deviceId"].as_str().expect("device id"))
-                .await?;
-            if let Err(error) = process.signal(&client, pausing).await {
-                if pausing {
-                    let _ = process.signal(&client, false).await;
+            let device_id = {
+                let data = state.read().await;
+                if data["textureId"].is_null() {
+                    return Err(CoreError::new("renderer_not_ready", "实时渲染尚未就绪。"));
                 }
-                return Err(error);
+                data["deviceId"].as_str().expect("device id").to_owned()
+            };
+            let pausing = command.ends_with("pause");
+            let client = self.client(&device_id).await?;
+            // Verify our exact process identity without freezing its Binder,
+            // display or controller threads. Cooperative capture has its own ACK.
+            process.signal(&client, false).await?;
+            let (reply, receiver) = oneshot::channel();
+            control
+                .send(ControlRequest::Capture(pausing, reply))
+                .await
+                .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
+            let receipt = receive_reply(receiver).await?;
+            if receipt["capturePaused"] != pausing || receipt["confirmed"] != true {
+                return Err(CoreError::new(
+                    "capture_unconfirmed",
+                    "设备未确认捕获状态。",
+                ));
             }
             if cancellation.is_cancelled() {
                 return Err(CoreError::new("disconnected", "控制会话已结束。"));
             }
+            let mut data = state.write().await;
             data["status"] = json!(if pausing { "paused" } else { "streaming" });
             self.resource_admission.set_status(
                 &format!("session:{id}"),
@@ -940,13 +991,13 @@ wait "$child""#
             );
             data["presentationOnly"] = json!(false);
             data["capturePaused"] = json!(pausing);
-            data["awaitingSession"] = json!(command.ends_with("resume"));
+            data["captureStateConfirmed"] = json!(true);
+            data["capturePauseMode"] = json!("cooperative");
+            data["awaitingSession"] = json!(!pausing);
             self.emit("session.updated", data["deviceId"].as_str(), data.clone());
             let result = data.clone();
             drop(data);
-            // Resume the stopped capture process, then reset its encoder to
-            // obtain a fresh session/configuration/keyframe for the decoder.
-            if command.ends_with("resume") {
+            if !pausing {
                 request_control(&control, ControlRequest::Send, vec![17]).await?;
             }
             return Ok(result);
@@ -1334,7 +1385,7 @@ wait "$child""#
             }
         };
         // A target keyframe does not prove a local decoder can render it.
-        // Keep every current session/task alive; the user explicitly reopens
+        // Keep every current session/task alive; the user explicitly closes and reopens
         // after saving. This also avoids implicit migration of app tasks.
         validate_encoder_selection(&next, &self.probe_video_encoders(&device).await?)?;
         self.save_device_quality(&device, &next).await?;
@@ -1346,7 +1397,7 @@ wait "$child""#
             .any(|session| session.device_id == device && !session.cancellation.is_cancelled());
         Ok(
             json!({"deviceId":device,"appliesNextSession":true,"needsRestart":active,"existingSessionId":previous.as_ref().map(|(id, _)| id),
-            "current":current_quality(&next),"seamless":false,"reason":"设置已保存到这台设备，下次打开屏幕或应用时生效；当前所有会话继续使用原设置。"}),
+            "current":current_quality(&next),"seamless":false,"reason":"设置已保存到这台设备，新建屏幕或应用窗口时生效；已保留的窗口继续使用原设置，关闭后重新打开即可应用。"}),
         )
     }
 
@@ -1520,12 +1571,17 @@ async fn run_video(
             let mut header = [0; 12];
             video.read_exact(&mut header).await?;
             if let Some((width, height)) = session_dimensions(&header)? {
-                let mut data = state.write().await;
-                data["width"] = json!(width);
-                data["height"] = json!(height);
-                data["awaitingSession"] = json!(false);
-                event(&events, "session.updated", &device, data.clone());
-                if data["status"] != "paused" {
+                let forward = {
+                    let mut data = state.write().await;
+                    data["width"] = json!(width);
+                    data["height"] = json!(height);
+                    data["awaitingSession"] = json!(false);
+                    event(&events, "session.updated", &device, data.clone());
+                    data["status"] != "paused"
+                };
+                // A slow presentation consumer must not hold the session state
+                // lock needed by control acknowledgements and cancellation.
+                if forward {
                     output.write_all(&header).await?;
                 }
                 continue;
@@ -1597,6 +1653,7 @@ async fn run_control(
     let mut buffer = [0; 4096];
     let mut gets: VecDeque<oneshot::Sender<CoreResult<Value>>> = VecDeque::new();
     let mut sets: HashMap<u64, oneshot::Sender<CoreResult<Value>>> = HashMap::new();
+    let mut captures: HashMap<u64, (bool, oneshot::Sender<CoreResult<Value>>)> = HashMap::new();
     let mut sequence = 1u64;
     loop {
         tokio::select! {
@@ -1606,6 +1663,19 @@ async fn run_control(
                 let (bytes, immediate) = match request {
                     ControlRequest::Send(bytes, reply) => (bytes, Some(reply)),
                     ControlRequest::ClipboardGet(reply) => { gets.retain(|reply| !reply.is_closed()); if gets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; } gets.push_back(reply); (vec![8,0], None) },
+                    ControlRequest::Capture(paused, reply) => {
+                        captures.retain(|_, (_, reply)| !reply.is_closed());
+                        if captures.len() >= 8 {
+                            let _ = reply.send(Err(CoreError::new("busy", "捕获状态请求较多，请稍后重试。")));
+                            continue;
+                        }
+                        sequence = sequence.wrapping_add(1).max(1);
+                        let mut bytes = vec![128];
+                        bytes.extend_from_slice(&sequence.to_be_bytes());
+                        bytes.push(u8::from(paused));
+                        captures.insert(sequence, (paused, reply));
+                        (bytes, None)
+                    }
                     ControlRequest::ClipboardSet(text, paste, reply) => {
                         sets.retain(|_,reply| !reply.is_closed()); if sets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; }
                         sequence = sequence.wrapping_add(1).max(1); let mut bytes = vec![9]; bytes.extend_from_slice(&sequence.to_be_bytes()); bytes.push(u8::from(paste)); bytes.extend_from_slice(&(text.len() as u32).to_be_bytes()); bytes.extend_from_slice(text.as_bytes()); sets.insert(sequence,reply); (bytes,None)
@@ -1632,7 +1702,11 @@ async fn run_control(
                         if let Some(reply) = gets.pop_front() { let _ = reply.send(Ok(json!({"text":text}))); }
                         event(&events,"clipboard.changed",&device,json!({"text":text,"sessionId":state.read().await["sessionId"]}));
                     } else if incoming[0] == 1 {
-                        let sequence = u64::from_be_bytes(incoming[1..9].try_into().expect("clipboard sequence")); if let Some(reply) = sets.remove(&sequence) { let _ = reply.send(Ok(json!({"applied":true}))); }
+                        let sequence = u64::from_be_bytes(incoming[1..9].try_into().expect("control sequence"));
+                        if let Some(reply) = sets.remove(&sequence) { let _ = reply.send(Ok(json!({"applied":true}))); }
+                        else if let Some((paused, reply)) = captures.remove(&sequence) {
+                            let _ = reply.send(Ok(json!({"capturePaused":paused,"confirmed":true})));
+                        }
                     }
                     incoming.drain(..needed);
                 }
@@ -1731,6 +1805,111 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn renderer_ready_preserves_capture_pause_after_generation_replacement() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let cancellation = CancellationToken::new();
+        let _reservation = runtime
+            .resource_admission
+            .reserve_session(
+                "session:fixture".into(),
+                "device".into(),
+                "window".into(),
+                cancellation.clone(),
+            )
+            .unwrap();
+        let state = Arc::new(RwLock::new(json!({
+            "sessionId":"fixture", "deviceId":"device", "status":"starting",
+            "width":1080, "height":1920,
+        })));
+        let (control, _requests) = mpsc::channel(1);
+        // The ready boundary only consumes renderer evidence: no device or
+        // remote process is started by this fixture.
+        runtime.sessions.lock().await.insert(
+            "fixture".into(),
+            Session {
+                device_id: "device".into(),
+                package: None,
+                cancellation,
+                control,
+                state: state.clone(),
+                process_closed: Arc::new(AtomicBool::new(true)),
+                process: OwnedProcess {
+                    pid: 0,
+                    started: 0,
+                    jar: String::new(),
+                    scid: String::new(),
+                },
+            },
+        );
+        let initial = runtime
+            .session_command(
+                "session.ready",
+                &json!({"sessionId":"fixture", "textureId":1}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(initial["status"], "streaming");
+        assert_eq!(
+            runtime.resource_admission.activities()[0].status,
+            ResourceStatus::Streaming
+        );
+
+        // The capture ACK arrives before a pending generation's ready receipt.
+        {
+            let mut snapshot = state.write().await;
+            snapshot["status"] = json!("paused");
+            snapshot["capturePaused"] = json!(true);
+            snapshot["captureStateConfirmed"] = json!(true);
+        }
+        runtime
+            .resource_admission
+            .set_status("session:fixture", ResourceStatus::Paused);
+        let delayed = runtime
+            .session_command(
+                "session.ready",
+                &json!({"sessionId":"fixture", "textureId":2,
+                    "decodedWidth":640, "decodedHeight":360, "decoderName":"replacement",
+                    "status":"streaming", "capturePaused":false}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(delayed["textureId"], 2);
+        assert_eq!(delayed["decodedWidth"], 640);
+        assert_eq!(delayed["decodedHeight"], 360);
+        assert_eq!(delayed["decoderName"], "replacement");
+        assert_eq!(delayed["status"], "paused");
+        assert_eq!(delayed["capturePaused"], true);
+        assert_eq!(delayed["captureStateConfirmed"], true);
+        let activity = &runtime.resource_admission.activities()[0];
+        assert_eq!(activity.status, ResourceStatus::Paused);
+        assert!(activity.can_resume);
+        assert!(!activity.can_pause);
+
+        // A subsequent acknowledged resume still accepts renderer updates.
+        {
+            let mut snapshot = state.write().await;
+            snapshot["status"] = json!("streaming");
+            snapshot["capturePaused"] = json!(false);
+        }
+        let resumed = runtime
+            .session_command(
+                "session.ready",
+                &json!({"sessionId":"fixture", "textureId":3}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resumed["textureId"], 3);
+        assert_eq!(resumed["status"], "streaming");
+        assert_eq!(resumed["capturePaused"], false);
+        assert_eq!(
+            runtime.resource_admission.activities()[0].status,
+            ResourceStatus::Streaming
+        );
+    }
+
     #[tokio::test]
     #[ignore = "requires real Android adbd; reserves App guard slots without allocating additional encoders"]
     async fn real_admission_rejection_preserves_owned_encoded_stream_and_failed_start_releases_slot()

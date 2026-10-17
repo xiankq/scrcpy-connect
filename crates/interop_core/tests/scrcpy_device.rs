@@ -407,3 +407,95 @@ async fn real_scrcpy_touch_and_ascii_unicode_text_reach_android_edit_text() {
         .await
         .unwrap();
 }
+
+/// Protocol lifecycle fixture only. Flutter's real renderer is tested separately.
+#[tokio::test]
+#[ignore = "requires isolated real Android 10+ adbd; starts Settings and pauses its own main capture"]
+async fn paused_main_keeps_application_start_independent() {
+    main_and_application_start(true).await;
+}
+
+#[tokio::test]
+#[ignore = "requires isolated real Android 10+ adbd; starts main capture and Settings concurrently"]
+async fn streaming_main_keeps_application_start_independent() {
+    main_and_application_start(false).await;
+}
+
+async fn main_and_application_start(paused: bool) {
+    let address = std::env::var("INTEROP_ADBD_ADDRESS").unwrap_or_else(|_| "127.0.0.1".into());
+    let port: u16 = std::env::var("INTEROP_ADBD_PORT")
+        .expect("set INTEROP_ADBD_PORT")
+        .parse()
+        .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize(root.path()).await.unwrap();
+    let device = runtime
+        .invoke("devices.add", json!({"address":address,"port":port}))
+        .await
+        .unwrap();
+    let id = device["deviceId"].as_str().unwrap();
+    runtime
+        .invoke("devices.connect", json!({"deviceId":id}))
+        .await
+        .unwrap();
+    runtime
+        .invoke("devices.wake", json!({"deviceId":id}))
+        .await
+        .unwrap();
+    let main = runtime
+        .invoke("session.start", json!({"deviceId":id,"maxSize":720}))
+        .await
+        .unwrap();
+    let mut socket =
+        tokio::net::TcpStream::connect(("127.0.0.1", main["videoPort"].as_u64().unwrap() as u16))
+            .await
+            .unwrap();
+    socket
+        .write_all(main["videoToken"].as_str().unwrap().as_bytes())
+        .await
+        .unwrap();
+    socket.write_all(b"\n").await.unwrap();
+    let reader = tokio::spawn(async move {
+        let mut buffer = [0; 65536];
+        while socket.read(&mut buffer).await.unwrap_or(0) != 0 {}
+    });
+    // Headless acknowledgement enables the protocol pause command. It is not
+    // evidence of a real renderer or a decoded frame.
+    runtime
+        .invoke(
+            "session.ready",
+            json!({"sessionId":main["sessionId"],"textureId":0}),
+        )
+        .await
+        .unwrap();
+    if paused {
+        runtime
+            .invoke("session.pause", json!({"sessionId":main["sessionId"]}))
+            .await
+            .unwrap();
+    }
+    let app = runtime
+        .invoke(
+            "session.start",
+            json!({"deviceId":id,"packageName":"com.android.settings","maxSize":720}),
+        )
+        .await;
+    runtime
+        .invoke("session.stop", json!({"sessionId":main["sessionId"]}))
+        .await
+        .unwrap();
+    if let Ok(session) = &app {
+        runtime
+            .invoke("session.stop", json!({"sessionId":session["sessionId"]}))
+            .await
+            .unwrap();
+    }
+    runtime
+        .invoke("devices.disconnect", json!({"deviceId":id}))
+        .await
+        .unwrap();
+    reader.abort();
+    let app = app.expect("a retained main capture must not prevent another real application from producing its first keyframe");
+    assert_ne!(app["sessionId"], main["sessionId"]);
+    assert_eq!(app["encodedKeyFrameReady"], true);
+}

@@ -87,6 +87,20 @@ Flutter host driver 曾在应用测试超时后输出成功并返回空 metadata
 
 音频与engine迁移后，实际产品五codec再次26秒通过，完成回执true；日志 `/tmp/connect-final-product-five-codecs.log`。HEVC目视仍低清，沿用已列出的AVD编码器/实际尺寸专项验收，不将首帧渲染成功写成全画质验收。
 
+## 无装饰应用显示的启动顺序复查
+
+2026-10-17，多窗口真实页面回归发现：主屏出图，打开Settings独立窗口却在8秒首帧等待后报`encoder_start_failed`。把流程缩小到已有`real_application_display_clipboard_and_task_survive_session_stop`（不启动或暂停主屏）仍稳定失败，排除了必须有旧冻结窗口的解释。修复前日志`/tmp/connect-virtual-start-before.log`，用例耗时11.26秒，退出101。
+
+官方客户端在控制线程和视频demuxer启动后提交START_APP，不等待首个解码帧；服务端收到请求后等待虚拟display可用，再在该display启动应用。[S10][S09] 本项目旧顺序是先读取关键帧，再创建控制actor并发送START_APP。无系统装饰的新显示尚无应用内容时，这形成启动依赖环；重复帧参数不能替代首次内容。此因果判断来自源码和下面的单变量实测。
+
+现保留socket、codec及session尺寸校验，在会话尺寸收到后创建控制actor并提交一次START_APP，再等待有界关键帧；不放宽关键帧、解码或真实任务断言。修复后相同用例4.25秒通过，日志`/tmp/connect-virtual-start-after.log`，覆盖真实应用、剪贴板和关闭后任务保留。复现命令（官方adb只用于部署，测试实际调用Rust ADB）：
+
+```bash
+rtk proxy env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 cargo test -p interop-core --test scrcpy_device real_application_display_clipboard_and_task_survive_session_stop -- --ignored --nocapture
+```
+
+这项结果不证明主控多窗口UI或并发资源全部通过；它们继续由独立Android E2E验收。
+
 ## 一手来源
 
 [S01]: https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/doc/develop.md#screen-video-encoding
@@ -106,3 +120,5 @@ Flutter host driver 曾在应用测试超时后输出成功并返回空 metadata
 
 [S08]: https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/control/ControlMessage.java
 [S09]: https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/control/Controller.java
+
+[S10]: https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/app/src/scrcpy.c#L902-L970

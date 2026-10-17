@@ -1,0 +1,2 @@
+# A unified patch's empty context line contains a required leading space.
+servers/scrcpy/patches/*.patch whitespace=-blank-at-eol

@@ -436,9 +436,10 @@ async fn packet_group(
         }
         unreachable!("nonzero bounded packet group")
     };
-    tokio::time::timeout(Duration::from_secs(10), gather)
-        .await
-        .map_err(|_| CoreError::new("media_timeout", "媒体配置未及时跟随数据包。"))?
+    // A complete session/configuration may be followed by a deliberate capture
+    // pause. Only an incomplete individual unit has a delivery deadline.
+    // Initial generation startup still has its own bounded prepare deadline.
+    gather.await
 }
 
 async fn prepare_generation(
