@@ -68,3 +68,5 @@ A58实际mdns-sd旧锁版有上游确认的HINFO解析器panic；精确0.21.2修
 上述新锁版复验现已通过：真实DNS-SD／TLS七项77.36秒，三端核心check4.24／4.18／8.26秒；最终完整门禁应用246／Bridge106／设计3、Rust186／58 ignored、三ABI／native／实际manifest和ELF全部通过。普通main实际R热重启2,929ms与设备列表截图已目视；不是物理USB／HAL／进程死亡／宿主整包或全设计通过。
 
 A59（2026-10-18）：真实IME链路证明目标原应用已提交你好🙂，但主控committed截图当时仍显示空查询。当前只是有顺序的截图差异，不能归因永久停帧；需在独立确认目标已绘制后限定时窗检查主控新像素／PTS，覆盖工具页暂停重进。未计动态视觉通过，见[输入证据](../../../docs/implementation/mobile-ime.md)。
+
+2026-10-18正式CallsPage真实E2E第三轮16秒通过：观察→来电sheet实际查看入口→打开系统通话界面→全屏原通话像素，同一TC身份／确切模拟号码仍ringing，四宿主checkpoint及恢复清理全true；截图含目标OS首次沉浸提示，未点接听／拒接。前序gsm list夹具与modal hit-test失败未计通过。[证据与命令](../../../docs/implementation/current-call-ui.md)。物理通话／逐call控制／双向音频仍未完成。

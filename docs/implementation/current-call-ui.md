@@ -24,4 +24,24 @@ rtk proxy env ANDROID_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   --locked -- --ignored --nocapture --test-threads=1
 ```
 
-这是公开Runtime＋实际系统界面的证据，尚不是正式CallsPage→全屏像素的完整产品E2E。物理PSTN／VoIP、多SIM／通话等待、具体callId adapter、主控麦克风／双向声音／路由仍按任务12／20独立推进；新入口不能用于关闭这些要求。
+### 正式页面真实E2E（2026-10-18后续）
+
+新增`integration_test/current_call_ui_test.dart`与独立driver，实际第三轮16秒通过，构建12.1秒／安装656ms；`/tmp/connect-current-call-ui-r3.log`、`/tmp/connect-e2e/current-call-ui-r3/result.json`。正式通话页启动观察→真实模拟来电→选择产品来电提醒“查看来电与声音”→通话页“打开系统通话界面”→生产全屏RemotePage与真实解码。动作前目标独立确认Settings前台；之后独立确认InCallActivity、同一TC@7且确切5550101246仍振铃。两端实际截图已目视，远控全屏显示原系统通话界面／接听拒接控件及目标自身首次沉浸“Viewing full screen / Got it”提示；提示也是被控实际像素，不以它遮住的呼叫标题声称完整可见。未点击接听或拒接。
+
+四个一次性checkpoint完整通过，观察、连接、设置、焦点、精确会话清理与自有来电取消全部true，无清理错误；不发全局ENDCALL。驱动拒绝已有通话，保留目标Telecom／Telephony独立记录。严格分析最终两文件无问题；第一次lint发现use_null_aware_elements已修。
+
+此前两轮不算通过：r1模拟器37.2.12的gsm list仅回OK，原驱动误认为没有来电；改为实际Telecom单呼叫身份＋Telephony原号码／状态，后续每点保持同一身份。r2真实产品来电sheet覆盖通话页，直接点底层按钮被hit-test拒绝；测试改为操作产品真实“查看来电与声音”入口，没有透过遮挡点按钮或关闭产品提示机制。
+
+复现（apps/connect目录，目标必须隔离且无现有通话，端口按当前实际转发设置）：
+
+```sh
+rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
+  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/current-call-ui \
+  flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/current_call_ui.dart \
+  --target=integration_test/current_call_ui_test.dart \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556
+```
+
+物理PSTN／VoIP、多SIM／通话等待、具体callId adapter、主控麦克风／双向声音／路由仍按任务12／20独立推进；新入口及该E2E不能用于关闭这些要求。
