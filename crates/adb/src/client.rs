@@ -130,7 +130,7 @@ impl Client {
             &options.operations.cancellation,
             async {
                 let stream = TcpStream::connect(address).await?;
-                stream.set_nodelay(true)?;
+                crate::tcp::configure(&stream)?;
                 Self::connect_transport(stream, options.clone()).await
             },
         )

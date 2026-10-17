@@ -9,6 +9,7 @@ pub mod protocol;
 mod reverse;
 mod services;
 pub mod sync;
+mod tcp;
 pub mod usb;
 pub mod wireless;
 

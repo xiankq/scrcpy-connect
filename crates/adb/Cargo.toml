@@ -15,6 +15,7 @@ base64 = "0.22.1"
 rand = "0.8.5"
 rsa = { version = "0.9.8", features = ["sha1", "sha2", "pem"] }
 sha1 = { version = "0.10.6", features = ["oid"] }
+socket2 = { version = "0.6.5", features = ["all"] }
 thiserror = "2.0.12"
 tokio = { version = "1.45", features = ["io-util", "net", "rt", "sync", "time", "macros"] }
 tokio-util = { version = "0.7.15", features = ["rt"] }
