@@ -289,6 +289,61 @@ void main() {
     expect(h.closed, ['relay-1']);
   });
 
+  test('resume follows a replacement generation without pausing it or cancelling the session', () async {
+    final h = _Harness();
+    await h.output.start(_stream('A'));
+    await h.output.pause('A');
+    final old = h.players.single;
+    old.presentation = Completer();
+    final resuming = h.output.resume('A');
+    // Attach a handler before replacement retires the in-flight old player.
+    final resumed = expectLater(
+      resuming,
+      completion(containsPair('generation', 2)),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await h.output.reattach('A', endpoint: _endpoint('relay-1', generation: 2));
+    await resumed;
+    expect((await resuming)['paused'], false);
+    expect(h.players.last.calls, isNot(contains('pause')));
+    expect(h.closed, isEmpty);
+    expect(old.released, 1);
+    old.presentation!.complete();
+    await h.output.dispose();
+  });
+
+  test(
+    'pause follows replacement and a queued resume uses the surviving player',
+    () async {
+      final h = _Harness();
+      await h.output.start(_stream('A'));
+      final old = h.players.single;
+      old.presentation = Completer();
+      final pausing = h.output.pause('A');
+      final paused = expectLater(
+        pausing,
+        completion(containsPair('generation', 2)),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final resuming = h.output.resume('A');
+      final resumed = expectLater(
+        resuming,
+        completion(containsPair('paused', false)),
+      );
+      await h.output.reattach(
+        'A',
+        endpoint: _endpoint('relay-1', generation: 2),
+      );
+      await paused;
+      await resumed;
+      expect((await pausing)['paused'], true);
+      expect(h.players.last.calls, contains('pause'));
+      expect(h.closed, isEmpty);
+      old.presentation!.complete();
+      await h.output.dispose();
+    },
+  );
+
   test('stopping a pending shared relay generation cancels both players without double close', () async {
     final h = _Harness();
     await h.output.start(_stream('A'));

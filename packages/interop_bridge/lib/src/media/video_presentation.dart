@@ -3,6 +3,43 @@ import 'dart:async';
 import '../interop_exception.dart';
 import 'video_player_port.dart';
 
+/// Combines core session state with the renderer's latest output. Player
+/// receipts may also contain old core state from a resume request, so only
+/// rendering evidence may override the current session snapshot.
+VideoJson sessionWithVideoOutput(VideoJson session, VideoJson? output) => {
+  ...session,
+  for (final key in const [
+    'relayId',
+    'textureId',
+    'decodedWidth',
+    'decodedHeight',
+    'decoderName',
+    'hardwareAccelerated',
+    'generation',
+    'backend',
+    'firstFrameDecoded',
+    'evidence',
+    'snapshotReceipts',
+    'presentedToWidget',
+    'continuousFrameTelemetry',
+  ])
+    if (output?.containsKey(key) == true) key: output![key],
+};
+
+/// Merges receipts for one session without replacing a newer renderer output.
+/// A delayed resume may finish after a generation change; its state and frame
+/// evidence belong to the old texture. Unversioned receipts cannot replace a
+/// known generation, while receipts for the same generation may update state.
+VideoJson mergeVideoOutputReceipt(VideoJson? current, VideoJson receipt) {
+  final currentGeneration = current?['generation'];
+  final receiptGeneration = receipt['generation'];
+  if (currentGeneration is int &&
+      (receiptGeneration is! int || receiptGeneration < currentGeneration)) {
+    return {...current!};
+  }
+  return {...?current, ...receipt};
+}
+
 /// Coordinates the local consumer and the existing remote capture process.
 /// Pausing capture first would starve the local reader's state acknowledgement.
 class VideoPresentation {
@@ -29,6 +66,12 @@ class VideoPresentation {
           .where((s) => s['deviceId'] == params['deviceId']);
       if (matches.isEmpty) {
         throw const InteropException('session_required', '请先打开这台设备的实时画面。');
+      }
+      if (matches.length > 1) {
+        throw const InteropException(
+          'ambiguous_session',
+          '这台设备有多个控制会话，请选择具体画面。',
+        );
       }
       id = matches.first['sessionId'];
     }

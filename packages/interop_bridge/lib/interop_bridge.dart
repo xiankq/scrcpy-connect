@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 
@@ -213,7 +214,7 @@ class InteropBridge {
     final data = Map<String, dynamic>.from(event['data'] as Map);
     final id = data['sessionId'];
     if (id is! String || !_textures.containsKey(id)) return;
-    _textures[id] = {..._textures[id]!, ...data};
+    _textures[id] = mergeVideoOutputReceipt(_textures[id], data);
     unawaited(
       _invoke('session.ready', data).catchError((Object error) {
         // A stopped session cannot be revived by a late generation receipt.
@@ -262,6 +263,9 @@ class InteropBridge {
       }
     } catch (error) {
       if (!current()) return;
+      if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
+        debugPrint('[connect.video] reattach failed: $error');
+      }
       _events.add({
         'type': 'session.failed',
         'deviceId': _textures[id]?['deviceId'],
@@ -491,7 +495,7 @@ class InteropBridge {
           id is String &&
           _textures.containsKey(id) &&
           receipt['firstFrameDecoded'] == true) {
-        _textures[id] = {...?_textures[id], ...receipt};
+        _textures[id] = mergeVideoOutputReceipt(_textures[id], receipt);
         _events.add({
           'type': 'session.output.resumed',
           'deviceId': receipt['deviceId'],
@@ -724,10 +728,10 @@ class InteropBridge {
         ...result,
         'sessions': [
           for (final item in result['sessions'] as List)
-            {
-              ...Map<String, dynamic>.from(item as Map),
-              ...?_textures[item['sessionId']],
-            },
+            sessionWithVideoOutput(
+              Map<String, dynamic>.from(item as Map),
+              _textures[item['sessionId']],
+            ),
         ],
       };
     }

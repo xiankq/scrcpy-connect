@@ -186,6 +186,7 @@ class PortableVideoOutputs {
       generation,
       _factory(),
       old.cancelled,
+      playback: old.playback,
     );
     candidate.relay = _text(endpoint, 'relayId');
     candidate.ownsRelay = candidate.relay != old.relay;
@@ -195,8 +196,13 @@ class PortableVideoOutputs {
       final receipt = await _prepare(candidate, endpoint);
       _check(candidate);
       if (!identical(_entries[id], old)) throw _cancelled();
-      candidate.paused = old.paused;
-      if (old.paused) await _await(candidate, candidate.player.setPaused(true));
+      // Presentation belongs to the logical session. A resume may still be
+      // awaiting the retired player's state callback or snapshot at this point.
+      var appliedPaused = false;
+      while (appliedPaused != candidate.playback.paused) {
+        appliedPaused = candidate.playback.paused;
+        await _await(candidate, candidate.player.setPaused(appliedPaused));
+      }
       _check(candidate);
       _pending.remove(id);
       _entries[id] = candidate;
@@ -223,47 +229,65 @@ class PortableVideoOutputs {
   Future<VideoJson> pause(String id) => _presentation(id, true);
   Future<VideoJson> resume(String id) => _presentation(id, false);
   Future<VideoJson> _presentation(String id, bool paused) {
-    final entry = _entry(id);
-    final revision = ++entry.presentationRevision;
-    if (++entry.queuedControls > 8) {
-      entry.queuedControls--;
+    final playback = _entry(id).playback;
+    if (++playback.queuedControls > 8) {
+      playback.queuedControls--;
       throw const InteropException('renderer_busy', '视频状态操作过于频繁，请稍后再试。');
     }
-    final operation = entry.control.then((_) async {
-      _check(entry);
-      // A previous request may have timed out before its state callback. Ask
-      // the player to confirm even an apparently unchanged requested state.
-      final changing = _await(
-        entry,
-        entry.player.setPaused(paused),
-        operationTimeout,
-      );
-      // A static stream may have no next packet to let the reader acknowledge
-      // pause. RESET_VIDEO refreshes this same encoder, without app/input side
-      // effects. The caller must keep capture running until local pause ACK.
-      unawaited(
-        changing.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
-      );
-      if (paused) {
-        await _await(
-          entry,
-          core('session.refresh', {'sessionId': id}),
-          operationTimeout,
-        );
+    final operation = playback.control.then((_) async {
+      playback.paused = paused;
+      // Generation replacement must remain independent of a blocked old player.
+      // Follow only replacements of this session, never a stop/re-created owner.
+      for (var attempt = 0; attempt < 8; attempt++) {
+        final entry = _entry(id);
+        if (!identical(entry.playback, playback)) throw _cancelled();
+        try {
+          return await _applyPresentation(entry, paused);
+        } catch (_) {
+          final current = _entries[id];
+          if (current == null ||
+              identical(current, entry) ||
+              !identical(current.playback, playback)) {
+            rethrow;
+          }
+        }
       }
-      await changing;
-      _check(entry);
-      entry.paused = paused;
-      if (!paused) await _verifyFrame(entry);
-      _check(entry);
-      if (revision != entry.presentationRevision) throw _cancelled();
-      return {..._receipt(entry), 'paused': paused, 'applied': true};
+      throw const InteropException('renderer_busy', '画面正在连续调整，请稍后重试。');
     });
-    entry.control = operation.then<void>(
+    playback.control = operation.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
-    return operation.whenComplete(() => entry.queuedControls--);
+    return operation.whenComplete(() => playback.queuedControls--);
+  }
+
+  Future<VideoJson> _applyPresentation(_Output entry, bool paused) async {
+    _check(entry);
+    // A previous request may have timed out before its state callback. Ask
+    // the player to confirm even an apparently unchanged requested state.
+    final changing = _await(
+      entry,
+      entry.player.setPaused(paused),
+      operationTimeout,
+    );
+    // A static stream may have no next packet to let the reader acknowledge
+    // pause. RESET_VIDEO refreshes this same encoder, without app/input side
+    // effects. The caller must keep capture running until local pause ACK.
+    unawaited(
+      changing.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
+    if (paused) {
+      await _await(
+        entry,
+        core('session.refresh', {'sessionId': entry.id}),
+        operationTimeout,
+      );
+    }
+    await changing;
+    _check(entry);
+    if (!paused) await _verifyFrame(entry);
+    _check(entry);
+    return {..._receipt(entry), 'paused': paused, 'applied': true};
   }
 
   Future<void> _verifyFrame(_Output entry) async {
@@ -549,12 +573,14 @@ class _Output {
     this.codec,
     this.generation,
     this.player,
-    this.cancelled,
-  );
+    this.cancelled, {
+    _Playback? playback,
+  }) : playback = playback ?? _Playback();
   final String id, device, codec;
   final int generation;
   final VideoPlayerPort player;
   final bool Function()? cancelled;
+  final _Playback playback;
   final cancellation = StreamController<void>.broadcast(sync: true);
   final diagnostics = <VideoJson>[];
   final closedRelays = <String>{};
@@ -562,12 +588,11 @@ class _Output {
   String? relay;
   StreamSubscription<VideoJson>? observer;
   VideoTexture? texture;
-  bool closed = false, paused = false, snapshotBusy = false;
+  bool closed = false, snapshotBusy = false;
   bool ownsRelay = true;
   bool timedOut = false;
   Timer? startTimer;
-  int snapshotReceipts = 0, presentationRevision = 0, queuedControls = 0;
-  Future<void> control = Future.value();
+  int snapshotReceipts = 0;
   void cancel() {
     startTimer?.cancel();
     if (closed) return;
@@ -575,6 +600,12 @@ class _Output {
     cancellation.add(null);
     unawaited(cancellation.close());
   }
+}
+
+class _Playback {
+  bool paused = false;
+  int queuedControls = 0;
+  Future<void> control = Future.value();
 }
 
 InteropException _cancelled() =>
