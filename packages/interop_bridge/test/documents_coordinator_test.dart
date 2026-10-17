@@ -146,6 +146,257 @@ class Fixture {
 }
 
 void main() {
+  for (final applyToRemaining in [false, true]) {
+    testWidgets(
+      'skip applies ${applyToRemaining ? 'through this save only' : 'to one conflict only'}',
+      (tester) async {
+        final f = Fixture()..selected = ['parent'];
+        f.node('parent', 'Target', directory: true);
+        f.local['/cache/source'] = {'kind': 'directory'};
+        final events = <DocumentsJson>[];
+        final coordinator = DocumentsCoordinator(
+          core: (command, params) async {
+            if (command == 'document.localChildren' &&
+                params['path'] == '/cache/source') {
+              return {
+                'identity': {'kind': 'directory'},
+                'entries': [
+                  for (final name in ['one', 'two'])
+                    {
+                      'name': name,
+                      'path': '/cache/source/$name',
+                      'identity': {'kind': 'directory'},
+                    },
+                ],
+              };
+            }
+            return f.core(command, params);
+          },
+          platform: (command, params) async {
+            final result = await f.platform(command, params);
+            if (command == 'documents.platform.create' &&
+                params['name'] == 'Tree') {
+              // A provider-side writer creates same-name children after our new
+              // root appears. Both are external filesystem conflicts.
+              for (final name in ['one', 'two']) {
+                f.node(name, name, directory: true);
+              }
+              f.children[result['handle'] as String] = ['one', 'two'];
+            }
+            return result;
+          },
+          onConflictChanged: events.add,
+        );
+        f.local['/cache/source/one'] = {'kind': 'directory'};
+        f.local['/cache/source/two'] = {'kind': 'directory'};
+        final job = coordinator.request('documents.export', {
+          'operationId': 'batch',
+          'localPath': '/cache/source',
+          'kind': 'directory',
+          'name': 'Tree',
+        });
+        await tester.pump();
+        final first = events.last['pending'] as DocumentsJson;
+        expect(first['name'], 'one');
+        await coordinator.request('documents.conflict.resolve', {
+          'operationId': 'batch',
+          'conflictId': first['conflictId'],
+          'choice': 'skip',
+          'applyToRemaining': applyToRemaining,
+        });
+        await tester.pump();
+        if (!applyToRemaining) {
+          final second = events.last['pending'] as DocumentsJson;
+          expect(second['name'], 'two');
+          expect(
+            await coordinator.request('documents.conflict.resolve', {
+              'operationId': 'batch',
+              'conflictId': first['conflictId'],
+              'choice': 'cancel',
+            }),
+            {'resolved': false},
+          );
+          await coordinator.request('documents.conflict.resolve', {
+            'operationId': 'batch',
+            'conflictId': second['conflictId'],
+            'choice': 'skip',
+          });
+        }
+        final result = await job;
+        expect(result['status'], 'partial');
+        expect(result['skipped'], 2);
+        expect(
+          events.where((event) => event['pending'] != null),
+          hasLength(applyToRemaining ? 1 : 2),
+        );
+        final next = coordinator.request('documents.export', {
+          'operationId': 'next-batch',
+          'localPath': '/cache/source',
+          'kind': 'directory',
+          'name': 'Tree',
+        });
+        await tester.pump();
+        expect(
+          (events.last['pending'] as DocumentsJson)['operationId'],
+          'next-batch',
+        );
+        await coordinator.request('documents.cancel', {
+          'operationId': 'next-batch',
+        });
+        expect((await next)['status'], 'cancelled');
+        await coordinator.dispose();
+      },
+    );
+  }
+
+  testWidgets(
+    'an unanswered shared conflict expires and cannot hold the next save',
+    (tester) async {
+      final f = Fixture()..selected = ['parent'];
+      f.node('parent', 'Target', directory: true);
+      f.node('old', 'Tree', directory: true);
+      f.children['parent'] = ['old'];
+      f.local['/cache/source'] = {'kind': 'directory'};
+      final coordinator = DocumentsCoordinator(
+        core: (command, params) async {
+          final response = await f.core(command, params);
+          return command == 'document.limits'
+              ? {...response, 'timeoutMillis': 20}
+              : response;
+        },
+        platform: f.platform,
+      );
+      final job = coordinator.request('documents.export', {
+        'operationId': 'timeout-conflict',
+        'localPath': '/cache/source',
+        'kind': 'directory',
+        'name': 'Tree',
+      });
+      await tester.pump();
+      final pending =
+          (await coordinator.request('documents.conflict.get', {
+                'operationId': 'timeout-conflict',
+              }))['pending']
+              as DocumentsJson;
+      await expectLater(
+        coordinator.request('documents.conflict.resolve', {
+          ...pending,
+          'choice': 'replace',
+        }),
+        throwsA(isA<InteropException>()),
+      );
+      await tester.pump(const Duration(milliseconds: 21));
+      final result = await job;
+      expect(result['status'], 'partial');
+      expect(
+        (result['errors'] as List).single,
+        containsPair('code', 'timeout'),
+      );
+      expect(
+        (await coordinator.request('documents.conflict.get', {
+          'operationId': 'timeout-conflict',
+        }))['pending'],
+        isNull,
+      );
+      expect(
+        await coordinator.request('documents.conflict.resolve', {
+          ...pending,
+          'choice': 'keepBoth',
+        }),
+        {'resolved': false},
+      );
+      expect(
+        f.calls.where((call) => call.$1 == 'documents.platform.create'),
+        isEmpty,
+      );
+      f.children['parent'] = [];
+      expect(
+        (await coordinator.request('documents.export', {
+          'operationId': 'healthy-next',
+          'localPath': '/cache/source',
+          'kind': 'directory',
+          'name': 'Tree',
+        }))['status'],
+        'saved',
+      );
+      await coordinator.dispose();
+    },
+  );
+
+  testWidgets(
+    'conflict cancellation clears its event and stale decisions cannot resolve another operation',
+    (tester) async {
+      final f = Fixture()..selected = ['parent'];
+      f.node('parent', 'Target', directory: true);
+      f.node('old', 'Tree', directory: true);
+      f.children['parent'] = ['old'];
+      f.local['/cache/source'] = {'kind': 'directory'};
+      final events = <DocumentsJson>[];
+      final coordinator = DocumentsCoordinator(
+        core: f.core,
+        platform: f.platform,
+        onConflictChanged: events.add,
+      );
+      Future<DocumentsJson> start(String id) =>
+          coordinator.request('documents.export', {
+            'operationId': id,
+            'localPath': '/cache/source',
+            'kind': 'directory',
+            'name': 'Tree',
+          });
+      final oldJob = start('old-operation');
+      await tester.pump();
+      final oldPending = events.single['pending'] as DocumentsJson;
+      expect(
+        (await coordinator.request('documents.conflict.get', {
+          'operationId': 'other-device-operation',
+        }))['pending'],
+        isNull,
+      );
+      await coordinator.request('documents.cancel', {
+        'operationId': 'old-operation',
+      });
+      expect((await oldJob)['status'], 'cancelled');
+      expect(events.last, {'operationId': 'old-operation', 'pending': null});
+      final newJob = start('new-operation');
+      await tester.pump();
+      final current = events.last['pending'] as DocumentsJson;
+      expect(
+        await coordinator.request('documents.conflict.resolve', {
+          'operationId': 'old-operation',
+          'conflictId': oldPending['conflictId'],
+          'choice': 'keepBoth',
+        }),
+        {'resolved': false},
+      );
+      expect(
+        await coordinator.request('documents.conflict.resolve', {
+          'operationId': 'new-operation',
+          'conflictId': oldPending['conflictId'],
+          'choice': 'cancel',
+        }),
+        {'resolved': false},
+      );
+      expect(
+        (await coordinator.request('documents.conflict.get', {
+          'operationId': 'new-operation',
+          'conflictId': current['conflictId'],
+        }))['pending'],
+        current,
+      );
+      expect(
+        f.calls.where((c) => c.$1 == 'documents.platform.create'),
+        isEmpty,
+      );
+      await coordinator.request('documents.conflict.resolve', {
+        'operationId': 'new-operation',
+        'conflictId': current['conflictId'],
+        'choice': 'cancel',
+      });
+      expect((await newJob)['status'], 'cancelled');
+      await coordinator.dispose();
+    },
+  );
   test(
     'a rejected source before the picker is failed without a partial save',
     () async {
@@ -596,26 +847,55 @@ void main() {
       );
     },
   );
-  test('existing provider names require explicit conflict and keep both preserves originals', () async {
-    final f = Fixture()..selected = ['parent'];
-    f.node('parent', 'Target', directory: true);
-    f.node('old', 'Tree', directory: true);
-    f.children['parent'] = ['old'];
-    f.local['/cache/source'] = {'kind': 'directory'};
-    final result = await f.coordinator.request('documents.export', {
-      'localPath': '/cache/source',
-      'kind': 'directory',
-      'name': 'Tree',
-    });
-    expect(result['status'], 'saved');
-    expect(f.nodes['old']!['name'], 'Tree');
-    expect(
-      f.calls.where((c) => c.$1 == 'documents.platform.conflict'),
-      hasLength(1),
-    );
-    expect((result['renamed'] as List<Object?>), hasLength(1));
-    expect(f.calls.where((c) => c.$1 == 'documents.platform.delete'), isEmpty);
-  });
+  testWidgets(
+    'existing provider names wait for a shared decision and keep both preserves originals',
+    (tester) async {
+      final f = Fixture()..selected = ['parent'];
+      f.node('parent', 'Target', directory: true);
+      f.node('old', 'Tree', directory: true);
+      f.children['parent'] = ['old'];
+      f.local['/cache/source'] = {'kind': 'directory'};
+      final job = f.coordinator.request('documents.export', {
+        'operationId': 'conflicting-tree',
+        'localPath': '/cache/source',
+        'kind': 'directory',
+        'name': 'Tree',
+      });
+      await tester.pump();
+      final pending =
+          (await f.coordinator.request('documents.conflict.get', {
+                'operationId': 'conflicting-tree',
+              }))['pending']
+              as DocumentsJson;
+      expect(pending['name'], 'Tree');
+      expect(pending['choices'], ['keepBoth', 'skip', 'cancel']);
+      expect(pending['replacementSupported'], false);
+      expect(
+        f.calls.where((c) => c.$1 == 'documents.platform.create'),
+        isEmpty,
+      );
+      expect(
+        await f.coordinator.request('documents.conflict.resolve', {
+          'operationId': 'conflicting-tree',
+          'conflictId': pending['conflictId'],
+          'choice': 'keepBoth',
+        }),
+        containsPair('resolved', true),
+      );
+      final result = await job;
+      expect(result['status'], 'saved');
+      expect(f.nodes['old']!['name'], 'Tree');
+      expect(
+        f.calls.where((c) => c.$1 == 'documents.platform.conflict'),
+        isEmpty,
+      );
+      expect((result['renamed'] as List<Object?>), hasLength(1));
+      expect(
+        f.calls.where((c) => c.$1 == 'documents.platform.delete'),
+        isEmpty,
+      );
+    },
+  );
   test(
     'provider file success requires observed saved size and always releases FD',
     () async {

@@ -44,15 +44,20 @@ String _name(String name) {
 
 /// Shared SAF planning. Android only supplies operation-owned URI capabilities
 /// and descriptor leases; bounded byte copying belongs to the shared core.
+/// A single pending conflict belongs to the active operation and its overall
+/// deadline. Reads require that operation's ID; decisions additionally require
+/// the exact conflict ID, so delayed page actions cannot resolve a later prompt.
 class DocumentsCoordinator {
   DocumentsCoordinator({
     required this._core,
     required this._platform,
     bool Function()? isDisposed,
+    this.onConflictChanged,
   }) : _isDisposed = isDisposed ?? (() => false);
   final DocumentsRequest _core;
   final DocumentsRequest _platform;
   final bool Function() _isDisposed;
+  final void Function(DocumentsJson)? onConflictChanged;
   final _issued = <String>{};
   _Operation? _active;
   bool _disposed = false;
@@ -61,6 +66,44 @@ class DocumentsCoordinator {
     String command, [
     DocumentsJson params = const {},
   ]) async {
+    if (command == 'documents.conflict.get') {
+      final op = _active;
+      final pending = op?.pendingConflict;
+      return {
+        'pending':
+            op != null &&
+                !op.cancelled &&
+                op.id == params['operationId'] &&
+                (params['conflictId'] == null ||
+                    pending?['conflictId'] == params['conflictId'])
+            ? pending
+            : null,
+      };
+    }
+    if (command == 'documents.conflict.resolve') {
+      final op = _active;
+      final pending = op?.pendingConflict;
+      if (op == null ||
+          op.cancelled ||
+          pending == null ||
+          op.id != params['operationId'] ||
+          pending['conflictId'] != params['conflictId']) {
+        return {'resolved': false};
+      }
+      final choice = _text(params, 'choice');
+      if (!['keepBoth', 'skip', 'cancel'].contains(choice) ||
+          (params['applyToRemaining'] != null &&
+              params['applyToRemaining'] is! bool)) {
+        throw const InteropException('invalid_decision', '请选择保留两份、跳过或取消。');
+      }
+      if (params['applyToRemaining'] == true && choice != 'cancel') {
+        op.conflict = choice;
+      }
+      _clearConflict(op);
+      op.conflictReply!.complete(choice);
+      op.conflictReply = null;
+      return {'resolved': true};
+    }
     if (command == 'documents.cancel') {
       final op = _active;
       final matches = op != null && op.id == params['operationId'];
@@ -268,6 +311,7 @@ class DocumentsCoordinator {
 
   Future<void> _cancel(_Operation op) async {
     op.cancelled = true;
+    _clearConflict(op);
     if (!op.interrupted.isCompleted) op.interrupted.complete();
     await (op.cancellationRequest ??= Future.wait([
       _platformCall('documents.platform.cancel', {
@@ -519,14 +563,7 @@ class DocumentsCoordinator {
     var name = _name(requested);
     if (existing.any((child) => child['name'] == name)) {
       final decision = op.conflict == 'ask'
-          ? _text(
-              await _platformCall('documents.platform.conflict', {
-                'operationId': op.id,
-                'name': name,
-              }),
-              'choice',
-              'cancel',
-            )
+          ? await _conflict(op, name)
           : op.conflict;
       if (decision == 'cancel') {
         throw const InteropException('cancelled', '已取消保存；已完成内容保留。');
@@ -597,6 +634,36 @@ class DocumentsCoordinator {
       });
     }
     return created;
+  }
+
+  Future<String> _conflict(_Operation op, String name) async {
+    op.check(_disposed || _isDisposed());
+    final reply = Completer<String>();
+    op.conflictReply = reply;
+    op.pendingConflict = Map<String, dynamic>.unmodifiable({
+      'operationId': op.id,
+      'conflictId': _id(),
+      'name': name,
+      'choices': const ['keepBoth', 'skip', 'cancel'],
+      'replacementSupported': false,
+      'replacementUnavailableReason': '系统文档提供方不能保证原子替换；已有内容不会被覆盖。',
+    });
+    onConflictChanged?.call({
+      'operationId': op.id,
+      'pending': op.pendingConflict,
+    });
+    try {
+      return await op.wait(reply.future);
+    } finally {
+      _clearConflict(op);
+      op.conflictReply = null;
+    }
+  }
+
+  void _clearConflict(_Operation op) {
+    if (op.pendingConflict == null) return;
+    op.pendingConflict = null;
+    onConflictChanged?.call({'operationId': op.id, 'pending': null});
   }
 
   Future<void> _exportNode(
@@ -713,7 +780,10 @@ class DocumentsCoordinator {
 
 class _Operation {
   _Operation(this.id, this.command, this.conflict);
-  final String id, command, conflict;
+  final String id, command;
+  String conflict;
+  DocumentsJson? pendingConflict;
+  Completer<String>? conflictReply;
   DocumentsJson limits = {};
   List<String> roots = [];
   String cache = '', name = '';

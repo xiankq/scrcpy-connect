@@ -79,6 +79,11 @@ class InteropBridge {
     core: _invoke,
     platform: _platformRequest,
     isDisposed: () => _disposed,
+    onConflictChanged: (data) {
+      if (!_disposed) {
+        _events.add({'type': 'documents.conflict.changed', 'data': data});
+      }
+    },
   );
   late final _systemDelivery = SystemDelivery(
     core: _invoke,

@@ -60,3 +60,23 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 同一真实流程支持`text`、`image`、`video`三种明确样本。媒体测试须同时设置host环境`CONNECT_E2E_CONTENT_KIND=image`（或`video`）和Flutter参数`--dart-define=CONNECT_E2E_CONTENT_KIND=image`，并将`CONNECT_E2E_FFMPEG`指定为host FFmpeg绝对路径。工具只生成320×180 JPEG或6秒H264 MP4临时样本，不是产品运行依赖。host独立读取样本、计算hash并核验导出；严格检查接收MIME，不只比长度。
 
 媒体变体从真实相册网格进入：目标缩略图必须解码出像素，原件预览也必须加载；视频检查真实时钟前进、暂停、拖动定位和静音。之后仍经过实际系统选择器取消/保存、Sharesheet接收及字节/hash/grant核验。被控唯一源分别位于Pictures/Movies，主控导出位于Downloads，两处路径单独拥有和精确清理。此变体不证明超2MiB原件、所有媒体格式、媒体索引分页或云提供方能力。
+
+## 共享系统目录冲突与零成果结果（A48）
+
+系统目录同名决定现在由共享DocumentsCoordinator和Flutter保存页承担，Android只提供系统选择、授权、元数据和句柄。冲突绑定operationId／conflictId，支持保留两份、跳过、取消及本次后续策略；过期决定不能作用新任务。等待纳入本次操作期限，取消／离页清理对应等待者。无法安全替换时继续禁用替换，不把远端文件的三选一直接套到系统提供方。
+
+真实双AVD `document_conflict_flow_test.dart`／`test_driver/document_conflict.dart` 从app.main、实际目录取回、正式DocumentExportRoute进入；宿主实际操作DocumentsUI，独立核验旧目录／同名文件字节与inode／时间戳、新UTF-8及二进制副本、空目录、跳过／取消／离页无写入，旧决定不能影响新操作。最终r5完整通过3分02秒，`/tmp/connect-e2e/document-conflict-r5/result.json`全部必需产品及宿主回执为true，`emptyPartialReceiptRendered:true`；保存冲突和跳过结果截图已目视，确认全零结果显示“本次未保存内容”。
+
+前几轮的DocumentsUI Downloads／Download识别及误读持久回执未公开的renamed／createdCount字段导致测试失败，均未算通过；第四轮功能通过后，目视发现全跳过却报部分已保存，新增公共页面红测后修复并由第五轮复验。持久回执保持现有公开投影，host以实际文件核验成果，没有扩字段来掩盖夹具错误。
+
+```sh
+rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
+  CONNECT_E2E_TARGET_ADB_PORT=5555 \
+  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/document-conflict \
+  flutter drive --no-pub -d emulator-5554 \
+  --driver=test_driver/document_conflict.dart \
+  --target=integration_test/document_conflict_flow_test.dart
+```
+
+本轮实际勾选后续策略，但没有制造第二个自然同名冲突；多冲突策略由协调器测试覆盖，回执明确`realSubsequentApplyConflictVerified:false`。仅证明已测本地树提供方，不证明云提供方／写入杀进程／外部分享打断选择器；多USB选择产品UI仍未迁到共享层。

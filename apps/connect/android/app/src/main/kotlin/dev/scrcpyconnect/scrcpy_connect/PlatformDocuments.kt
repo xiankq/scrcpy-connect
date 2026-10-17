@@ -1,7 +1,6 @@
 package dev.scrcpyconnect.scrcpy_connect
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.CancellationSignal
@@ -34,8 +33,6 @@ class PlatformDocuments(private val activity: Activity) {
         val documents = mutableMapOf<String, Uri>()
         val descriptors = mutableMapOf<String, ParcelFileDescriptor>()
         var picker: DocumentPickerReply? = null
-        var choice: MethodChannel.Result? = null
-        var dialog: AlertDialog? = null
         var pickerMode = ""
     }
     private class Failure(val code: String, message: String) : Exception(message)
@@ -87,18 +84,6 @@ class PlatformDocuments(private val activity: Activity) {
             return true
         }
         if (destroyed || op == null || op.cancelled.get()) {result.error("cancelled", "文档授权已释放或操作已取消。", null); return true}
-        if (action == "conflict") {
-            if (op.choice != null) {result.error("documents_busy", "已有系统确认正在等待。", null); return true}
-            op.choice = result
-            fun complete(choice: String) {val pending = op.choice; op.choice = null; op.dialog = null; pending?.success(mapOf("choice" to choice))}
-            op.dialog = AlertDialog.Builder(activity).setTitle("存在同名项目")
-                .setMessage("${params["name"]}\n系统文档提供方不能保证原子覆盖。请选择保留两者、跳过或取消；本机暂存会保留。")
-                .setPositiveButton("保留两者") { _, _ -> complete("keepBoth") }
-                .setNeutralButton("跳过") { _, _ -> complete("skip") }
-                .setNegativeButton("取消") { _, _ -> complete("cancel") }
-                .setOnCancelListener {complete("cancel")}.create().also {it.show()}
-            return true
-        }
         worker.execute {
             try {
                 check(op)
@@ -249,8 +234,6 @@ class PlatformDocuments(private val activity: Activity) {
             try {@Suppress("DEPRECATION") activity.finishActivity(code)} catch (_: Exception) {}
         }
         op.picker?.success(mapOf("status" to "cancelled")); op.picker = null
-        op.choice?.success(mapOf("choice" to "cancel")); op.choice = null
-        op.dialog?.dismiss(); op.dialog = null
         // Closing a descriptor and cancelling a provider call may block Binder;
         // use the one bounded worker rather than the platform/UI thread.
         closer.execute {

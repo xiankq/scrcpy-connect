@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import 'document_conflict_panel.dart';
+
 class DocumentExportForm extends HookWidget {
   const DocumentExportForm({
     super.key,
@@ -40,6 +42,17 @@ class DocumentExportForm extends HookWidget {
         reviewedOperation.value == operation.recordOperationId;
     final result = operation.result;
     final status = value(result ?? {}, 'status');
+    final savedCounts = [
+      result?['files'],
+      result?['directories'],
+      result?['bytes'],
+    ];
+    final confirmedEmpty =
+        result?['partialDestinationPossible'] == false &&
+        savedCounts.every((count) => count is num && count == 0);
+    final hasSavedContent = savedCounts.any(
+      (count) => count is num && count > 0,
+    );
     final waiting = operation.busy || status == 'pending';
     final unknown =
         result != null &&
@@ -66,6 +79,9 @@ class DocumentExportForm extends HookWidget {
             onPressed: operation.cancelling ? null : operation.cancel,
             child: Text(operation.cancelling ? '正在取消…' : '取消本次保存'),
           ),
+          if ((operation.operationId ?? operation.recordOperationId)
+              case final owner?)
+            DocumentConflictPanel(controller: controller, operationId: owner),
         ],
         if (operation.error != null)
           StateNote(operation.error!, icon: LucideIcons.circleAlert),
@@ -82,7 +98,12 @@ class DocumentExportForm extends HookWidget {
               children: [
                 Text(switch (status) {
                   'saved' => '已保存到系统位置',
-                  'partial' => '部分内容已保存，请核对',
+                  'partial' =>
+                    hasSavedContent
+                        ? '部分内容已保存，请核对'
+                        : confirmedEmpty
+                        ? '本次未保存内容'
+                        : '保存未完成，请核对',
                   'cancelled' => '本次系统保存已取消',
                   'failed' => '本次保存未开始',
                   'pending' => '上次系统保存尚未结束',
