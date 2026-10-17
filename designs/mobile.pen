@@ -17367,7 +17367,7 @@
                   "id": "lVtiy",
                   "type": "ref",
                   "ref": "OuAnF",
-                  "name": "传输与保存位置",
+                  "name": "媒体暂存",
                   "width": "fill_container",
                   "descendants": {
                     "i9kceM": {
@@ -17446,14 +17446,14 @@
                       ]
                     },
                     "n4qgqg": {
-                      "icon": "folder-down",
-                      "fill": "$accent-amber"
+                      "icon": "hard-drive",
+                      "fill": "$accent-violet"
                     },
                     "nyAaN": {
-                      "content": "传输与保存位置"
+                      "content": "媒体暂存"
                     },
                     "r3Anl": {
-                      "content": "收到文件前询问保存位置",
+                      "content": "查看占用，保留使用中的内容",
                       "enabled": true
                     },
                     "kb9Ts": {
@@ -34781,7 +34781,7 @@
       "x": 0,
       "y": 11704,
       "name": "分组 / 偏好与恢复",
-      "width": 4740,
+      "width": 5704,
       "height": 96,
       "fill": "$transparent",
       "layout": "vertical",
@@ -39409,6 +39409,317 @@
               "enabled": false
             }
           }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Q2ZaRT",
+      "x": 4820,
+      "y": 11800,
+      "name": "偏好与恢复 / 媒体暂存",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "z8G34",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "LJrLQ",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        },
+        {
+          "id": "B6rxYU",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "媒体暂存导航",
+          "x": 24,
+          "y": 62,
+          "width": 354,
+          "descendants": {
+            "aFRxw": {
+              "content": "媒体暂存"
+            },
+            "jRKTF": {
+              "content": "仅管理互联媒体，不影响手机原件"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "e1nZN3",
+          "x": 24,
+          "y": 154,
+          "name": "媒体暂存内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "TsRlZ",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "占用与预算",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "hard-drive"
+                },
+                "jkfuF": {
+                  "content": "已用 128.0 MB"
+                },
+                "zLCqC": {
+                  "content": "暂存预算 512.0 MB\n需要空间时，自动回收不再使用的内容。"
+                }
+              }
+            },
+            {
+              "id": "RbvBj",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "受保护 · 96.0 MB",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "shield-check",
+                  "fill": "$accent-violet"
+                },
+                "nyAaN": {
+                  "content": "受保护 · 96.0 MB"
+                },
+                "r3Anl": {
+                  "content": "预览、准备、保存或分享中的内容"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "DMCpn",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "可回收 · 32.0 MB",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "brush-cleaning",
+                  "fill": "$accent-violet"
+                },
+                "nyAaN": {
+                  "content": "可回收 · 32.0 MB"
+                },
+                "r3Anl": {
+                  "content": "可重新从手机获取"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "OE6xH",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "清理可回收暂存",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "清理可回收暂存"
+                }
+              }
+            },
+            {
+              "id": "IejIB",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "保留说明",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "info"
+                },
+                "jkfuF": {
+                  "content": "使用中的内容会保留"
+                },
+                "zLCqC": {
+                  "content": "已交给其他应用的原件继续保留，避免分享尚未读取完成时被清理。\n不会删除手机原件或你已保存的文件。"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "dPgTI",
+      "x": 5302,
+      "y": 11800,
+      "name": "偏好与恢复 / 清理后仍有受保护内容",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "mcSPY",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "I2tprm",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        },
+        {
+          "id": "qvtQq",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "媒体暂存导航",
+          "x": 24,
+          "y": 62,
+          "width": 354,
+          "descendants": {
+            "aFRxw": {
+              "content": "媒体暂存"
+            },
+            "jRKTF": {
+              "content": "仅管理互联媒体，不影响手机原件"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "c4e6E9",
+          "x": 24,
+          "y": 154,
+          "name": "媒体暂存内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "myYy2",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "占用与预算",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "hard-drive"
+                },
+                "jkfuF": {
+                  "content": "已用 96.0 MB"
+                },
+                "zLCqC": {
+                  "content": "已回收 32.0 MB，受保护内容已保留。"
+                }
+              }
+            },
+            {
+              "id": "h0GBSD",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "受保护 · 96.0 MB",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "shield-check",
+                  "fill": "$accent-violet"
+                },
+                "nyAaN": {
+                  "content": "受保护 · 96.0 MB"
+                },
+                "r3Anl": {
+                  "content": "预览、准备、保存或分享中的内容"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "o0w8fd",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "可回收 · 32.0 MB",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "brush-cleaning",
+                  "fill": "$accent-violet"
+                },
+                "nyAaN": {
+                  "content": "可回收 · 0 B"
+                },
+                "r3Anl": {
+                  "content": "可重新从手机获取"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "gP1qH",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "清理可回收暂存",
+              "width": "fill_container",
+              "opacity": 0.4,
+              "descendants": {
+                "mpPvv": {
+                  "content": "清理可回收暂存"
+                }
+              }
+            },
+            {
+              "id": "sGvGX",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "保留说明",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "info"
+                },
+                "jkfuF": {
+                  "content": "使用中的内容会保留"
+                },
+                "zLCqC": {
+                  "content": "已交给其他应用的原件继续保留，避免分享尚未读取完成时被清理。\n不会删除手机原件或你已保存的文件。"
+                }
+              }
+            }
+          ]
         }
       ]
     }

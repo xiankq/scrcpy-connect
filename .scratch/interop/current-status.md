@@ -1,6 +1,6 @@
 # 当前完成度与下一步验收
 
-更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R60／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
+更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
 ## 状态口径
 
@@ -22,7 +22,7 @@
 | 06 通知与原应用；R33–R37，C18–C21 | **部分**：免APK listener、持续观察／独立停止、原PI／清除／失效保护、主屏复用；跨页回复有界保护及独立receiver原文count1；API36真实后台OS发布／精确撤回／通知栏点击后当前内容呈现 | **未实现／未验**：完整锁屏／应用认证后重取并重验、拒权／渠道／冷启动／系统停止／OEM及真实来电提醒、真实聊天服务一次接收／进程死亡恢复。下一步实际关闭渠道／撤权与认证完成后重验，不能重放未知回复 | [11](issues/11-notifications-continuation.md)、[14](issues/14-background-and-recovery.md)、[18](issues/18-complete-design-state-coverage.md) |
 | 07 通话；R26/R32/R39，C22–C24 | **部分**：聚合状态与受限提示、危险全局动作明确拒绝；已补当前系统通话界面接续，实际Runtime9.94秒及正式CallsPage→来电提醒→当前界面→全屏原通话像素16秒均通过，同一呼叫仍ringing，未新增逐call控制或通话音频 | **未实现**：安全绑定具体呼叫的接听／拒接／挂断与真实双向通话音频。**未验**：PSTN／VoIP、同设备多呼叫／多SIM、耳机／麦克风／转手机／结束恢复；下一步固定具体call身份及物理HAL对照，安全拒绝不能算功能完成 | [12](issues/12-calls-and-audio-arbitration.md)、[20](issues/20-android-validation-bench.md) |
 | 08 文件与传输；R28–R30/R38，C11–C14 | **部分**：目录／基础管理、双向传输、三选一远端冲突／本批策略、无覆盖发布、有界搜索；A44已实施精确原件／操作的持久保存账本，13项Runtime重开／并发／限额／落盘失败及跨页unknown回归通过。双AVD取消→保存→离页重进恢复saved→分享43秒通过，独立63字节／hash／grant及重进截图已核验 | **未验**：Android实际写入中杀进程／unknown恢复及切设备迟到回执；Runtime重开不替代此证据。**部分**：已有批量选择、目录扫描／导入／导出与批次进度代码，最终交付和异常闭环未验。**未实现／未验**：浏览分类完整体验、provider／非seek／云盘／空间／撤权、恢复意图及外部分享打断系统选择器（A55）。A48系统provider冲突已迁到共享协调器与Flutter页面，按operation／conflict身份决定并支持本次后续策略；多USB设备选择仍由Kotlin产品AlertDialog决定。系统目录冲突真实E2E最终r5完整3分02秒通过并核验文件／零成果标题，前几轮夹具及第四轮目视发现的误报均保留记录；下一步继续实际中断与USB共享选择 | [09](issues/09-file-endpoints-and-recovery.md)、[14](issues/14-background-and-recovery.md)、[19](issues/19-dependency-license-and-updates.md) |
-| 09 相册与预览；R31，C15–C17 | **部分**：缩略图／旋转／单项大小和并发限制；真实网格JPEG／MP4→原件预览→准备→系统取消／保存／分享，字节／hash／授权／双MIME；视频时钟／暂停／定位／静音 | **未实现／未验**：总磁盘预算／淘汰／清理及活动原件保护（A51）；A53本批已接动态共享目录扫描、权限空DONE复核、部分结果、冻结快照分页和mtime；10项公开Runtime协议fixture、7项公开页面测试及真实105原件双AVD85秒链路已通过；目视新发现A57已补共享调度／精确取消／有限重试，9项公开测试及真实15＋21张可见网格解码通过，完整异常／长稳仍待验，持续增量／其他用户和卷等仍独立说明；持续增量及实际大原件准备进度／取消、批量、全格式／损坏／缓冲／结束／断线／源变化／空间矩阵；无音轨MP4不证明物理音频。下一步大原件中断／离页取消，先验证准备活动与残留 | [10](issues/10-gallery-video-and-content.md)、[09](issues/09-file-endpoints-and-recovery.md)、[18](issues/18-complete-design-state-coverage.md) |
+| 09 相册与预览；R31，C15–C17 | **部分**：缩略图／旋转／单项大小和并发限制；真实网格JPEG／MP4→原件预览→准备→系统取消／保存／分享，字节／hash／授权／双MIME；视频时钟／暂停／定位／静音 | **部分**：A51已接512MiB预算／淘汰、正式清理页和活动原件租约，真实Core与正式双AVD页面13秒通过、独立字节／删除核验全true；持久外部分享保留、预算调整入口及大文件／长稳仍待闭合；A53本批已接动态共享目录扫描、权限空DONE复核、部分结果、冻结快照分页和mtime；10项公开Runtime协议fixture、7项公开页面测试及真实105原件双AVD85秒链路已通过；目视新发现A57已补共享调度／精确取消／有限重试，9项公开测试及真实15＋21张可见网格解码通过，完整异常／长稳仍待验，持续增量／其他用户和卷等仍独立说明；持续增量及实际大原件准备进度／取消、批量、全格式／损坏／缓冲／结束／断线／源变化／空间矩阵；无音轨MP4不证明物理音频。下一步大原件中断／离页取消，先验证准备活动与残留 | [10](issues/10-gallery-video-and-content.md)、[09](issues/09-file-endpoints-and-recovery.md)、[18](issues/18-complete-design-state-coverage.md) |
 | 10 剪贴板与分享；R27–R28，C26–C27 | **部分**：文本跟随／固定／隔离与普通主控后台停读、专用页返回正确跟随；外部九模式导入／取消；出站文本／JPEG／MP4真实Sharesheet和独立receiver | **部分**：外部PNG→显式选A→切全局焦点B→一次提交，实际三AVD14秒通过，独立核验A字节／hash且B不变；两次刷新不重传。**未实现／未验**：图片／文件剪贴板URI授权生命周期、系统本机打开、批量／大原件、授权撤回／中断。下一步继续撤权／中断及同型号设备区分，不把单PNG外推完整分享 | [13](issues/13-device-targets-and-sharing.md)、[09](issues/09-file-endpoints-and-recovery.md)、[20](issues/20-android-validation-bench.md) |
 | 11 后台、恢复与活动；R21/R38–R40，C28–C29 | **部分**：不可见视频协作暂停、主动声音／Activity重建、同runtime水位快照校准和过期播放器清理、主标签核验重试；回复跨页保护；A44系统保存持久账本及重开pending转unknown，真实saved离页重进通过 | **未实现／未验**：断网／换网／进程死亡／系统Stop／重启的完整活动意图与恢复资格；A23已接设备音源活动投影、精确sourceId独立停止与本地Player释放；真实播放→确认停止→连接／观察保留9秒通过。任务仍需按具体活动核对。Android写入中杀进程的unknown恢复仍未验。下一步活动×中断原因矩阵逐格注入并核对主动停仍停／未知副作用不重放 | [14](issues/14-background-and-recovery.md)、[15](issues/15-identity-trust-and-transports.md)、[20](issues/20-android-validation-bench.md) |
 | 12 设计、易用性与研究；R01/R41–R50/R52，C01–C32 | **部分**：同一pen **93独立页／12类／26母组件／588实例／153变量**，保存重开核对；新tch6A／qTeGO；浅色／黑中性／小彩色／Lucide、全屏共享组件；实时背景折射已实现并有实际视频截图 | **未实现／未验**：全部状态与实际UI闭环、可打断液态形变、独立光学／视频性能／大字／读屏／高对比／减少动态矩阵、token全覆盖；A45内拖已通过组件与真实远控验收，TalkBack／完整无障碍仍未验；OPPO／vivo地区与端角色操作证据，Apple自身连续互通官方流程研究（A54）已补，实操未验；当前实际依赖的逐库契约／版本差异未闭合（A56）。下一步按coverage逐流程补入口→操作→失败→恢复并对照真实UI；相册范围面板短内容高度／灰色材质仍有实际视觉差距，93页静态完整性不等于实现验收 | [16](issues/16-glass-and-performance-budget.md)、[17](issues/17-manufacturer-mobile-flows.md)、[18](issues/18-complete-design-state-coverage.md)、[19](issues/19-dependency-license-and-updates.md) |
@@ -40,7 +40,7 @@
 | [内容交付](../../docs/implementation/content-delivery.md)、[搜索](../../docs/implementation/file-search.md) | 单项文本／JPEG／MP4与搜索已有真实结果；A44新增持久账本与真实saved页面重进，Android杀进程unknown仍未验；首次重进夹具失败未计通过 |
 | [系统提醒](../../docs/implementation/system-notifications.md) | 真实OS投递／撤回／点击；仍保留权限／认证／冷启动等矩阵 |
 | [主屏应用widget](../../apps/connect/test/app_launch_test.dart)、[公开Runtime真实测试](../../crates/interop_core/tests/app_launch_android.rs) | 10项应用widget／38项生命周期回归；真实Runtime两项及双AVD51秒通过，独立display0／9个进程checkpoint、主屏同ID与实际Settings截图；旧宽松截图不计视觉通过，跨进程unknown与真实失败回退仍未验 |
-| [Pencil覆盖](../../designs/prod/coverage.md)、[交互规则](../../designs/prod/interaction-rules.md) | 当前93页静态结构与产品规则；实际实现和动态验收逐项单独核对 |
+| [Pencil覆盖](../../designs/prod/coverage.md)、[交互规则](../../designs/prod/interaction-rules.md) | 当前95页静态结构与产品规则；实际实现和动态验收逐项单独核对 |
 
 ## 历史与更新规则
 
@@ -129,3 +129,15 @@ A59后续：第八轮目标先截图、750ms后主控截图、延迟再次两端
 本批最终普通lib/main.dart实际构建14.8秒／安装526ms、R热重启4,401ms，`/tmp/connect-packaging-main.log`；重启设备列表截图`/tmp/connect-packaging-main-restarted.png`已目视后detach。保留两条FRB旧isolate投递告警和启动跳帧，不称性能达标。最终arm64原件46,625,578字节／SHA-256 82bafbe09f8ca803e45204f3b49696e1946c04931ee4ff4135890986d5057cc2，独立签名／ZIP／manifest／ELF／ZIP页对齐通过，留存`/tmp/connect-artifacts/connect-arm64-release.apk`；三ABI原件同目录保留供安装。实际执行仅x64，物理arm64仍未验。R61／R62已回填统一目标与规格，不缩减既有62需求／32流程。
 
 本批实际清理完成：终止临时第三AVD并卸载实验release，普通main detach后清除过期中间产物／debug包／Kotlin／incremental，仅保留最终arm64 APK（build共45MiB）、必要临时证据和复用缓存；磁盘余量78GiB。保留用户原有未跟踪测试／examples，未push。下一批仍为A51媒体预算／活动原件保护及USB共享选择，不展开新的输入／通话边界矩阵。
+
+## 渐进交付：媒体暂存保护与清理（A51部分）
+
+`839293e`实现512MiB持久预算、旧内容淘汰、活动写入预留／精确消费者租约、交付账本与保守系统分享保护，源变化不覆盖旧消费者文件，清理后传输撤下保存入口。接收／详情中断状态曾被自己的租约阻止重传，公开红测复现后修正；Core136 passed／48 ignored、Bridge106、应用全量256及后续相关20／11项回归通过，忽略项不计实际设备证据。`c723af7`加入生成路由与正式设置页、确认清理与真实空间回执。真实Core Android2.90秒及正式双AVD页面r4完整13秒通过，宿主逐字节／实际删除／远端保留／精确夹具清理全部true，hostErrors为空；预览和清理前后截图已目视。前三轮注册／Android规范别名／转场夹具失败均保留。[完整命令和限制](../../docs/implementation/media-cache.md)。
+
+Pencil在偏好类别同行补两页，95页／十二类／26母组件／604实例／153变量，无断引、可见裁切或页面重叠，预览仅临时目录。实际页的matte内容面板与动态玻璃光学／性能不能据此算完整设计通过。A51整体仍不关闭：显式管理外部保留、用户预算调整／超预算大原件路径、真实空间满／进程死亡／长稳和巨量小文件核算继续待验。
+
+Core对iOS／macOS／Windows MSVC交叉check30.93／17.04／20.31秒通过，非对应宿主Flutter链接；误选未安装GNU target的缺core失败未计通过。当前arm64 release38.86秒、46,740,766字节、SHA-256 a948e13cbd98c3552e4462415e9e964505b16c60d54e6e85c919be18242865e0，签名与完整性通过，留存`/tmp/connect-artifacts/connect-arm64-cache-release.apk`；物理ARM运行仍未验。`5b9cb1f`补E2E后旧测试插件注册导致--no-pub release失败的提前诊断，实际51秒编译失败与正常刷新后成功均记录，不手改SDK或生成Java。[打包依据](../../docs/implementation/android-packaging.md)。
+
+普通main实际构建19.9秒／安装469ms、CLI R热重启4,513ms，`/tmp/connect-media-cache-main.log`，设备列表空态截图`/tmp/connect-media-cache-main-restarted.png`已目视后detach；两条FRB旧isolate投递及启动跳帧告警保留。最终严格分析／164输入生成一致性／Rust格式与clippy通过。实际清理本批过期debug、宿主测试可执行文件、incremental与Python缓存，释放12,264MiB，磁盘余量75.3GiB；保留最新release、必要证据、release中间缓存及native hooks／Gradle可复用缓存，避免每次全clean拖慢打包。原先五项未跟踪用户测试／examples未动，无push。
+
+**用户最新主优先级：视频流传输性能、首帧速度、连接稳定性。** 下一批以可重复的实际计时／帧呈现和重连证据驱动优化，对照scrcpy开发者文档，先建立分阶段基线；USB共享选择顺延。十二领域和完整目标继续active，不把本批缓存或打包通过当作产品整体完成。
