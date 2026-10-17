@@ -171,7 +171,7 @@ server/                       被控端临时 JAR，独立 Android 构建边界
 
 ### 本机文件入口不能退化为普通路径字符串
 
-**事实。** SAF 返回用户选定的 URI／目录树授权；Android11+ 对根目录、Download 整目录、Android/data／obb 等存在选择限制。可持久化 URI grant 仍可能因文档移动／删除失效；provider 的能力 flags 决定支持写入／删除等操作，`DocumentFile.canWrite()` 甚至不能独自证明可编辑。`ACTION_CREATE_DOCUMENT` 遇重名会自动加编号，不能当覆盖 API。[SAF 文件访问](https://developer.android.com/training/data-storage/shared/documents-files)。
+**事实。** SAF 返回用户选定的 URI／目录树授权；Android11+ 对根目录、Download 整目录、Android/data／obb 等存在选择限制。可持久化 URI grant 仍可能因文档移动／删除失效；provider 的能力 flags 决定支持写入／删除等操作，`DocumentFile.canWrite()` 甚至不能独自证明可编辑。官方入门页描述 `ACTION_CREATE_DOCUMENT` 同名会加编号，但固定Android源码也存在用户选择已有文件后直接返回原URI的路径；返回URI不能证明排他新建，也不能据此安全截断。后续[提供方专项](provider-output-streams.md)记录了该源码反例及当前安全保存边界，优先于将入门说明外推成保证。[SAF 文件访问](https://developer.android.com/training/data-storage/shared/documents-files)。
 
 **事实。** MediaStore 对媒体管理提供独立接口与权限规则，Android10+ 的 `IS_PENDING` 可使新媒体在写入期间不向其他应用发布；它不提供对任意 SAF provider／远端文件系统的统一事务。[MediaStore guide](https://developer.android.com/training/data-storage/shared/media)。
 

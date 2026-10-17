@@ -38,7 +38,7 @@
 
 ## 生命周期与返回
 
-三标签保留分支状态，返回按标签访问历史恢复。根路由使用显式 Flutter `MaterialPage`，保证桌面与移动端保留相同的页面过渡语义。全屏远控覆盖根 Navigator，底部标签和页面顶栏不会进入远控画面。主题更新、事件更新与 `router.refresh()` 保留同一路由的活动远控子树及其首次打开决定，临时 extra 被重新解码也不会丢失已绑定画面；新的进程恢复仍必须重新查找会话，不能自动创建画面。路由重建保留原 RemotePage 状态；退出或声明式移除只停止它绑定的 sessionId，保留目标应用任务。
+三标签保留分支状态，返回按标签访问历史恢复。根路由使用显式 Flutter `MaterialPage`，保证桌面与移动端保留相同的页面过渡语义。全屏远控覆盖根 Navigator，底部标签和页面顶栏不会进入远控画面。主题更新、事件更新与 `router.refresh()` 保留同一路由的活动远控子树及其首次打开决定，临时 extra 被重新解码也不会丢失已绑定画面；新的进程恢复仍必须重新查找会话，不能自动创建画面。路由重建保留原 RemotePage 状态；普通退出或路由移除释放本次呈现意图，并请求暂停不可见画面，保留真实会话与应用任务；显式关闭才停止准确的 sessionId。暂停拒绝或挂起不得阻止离页，同一会话重新进入后的挂起队列恢复仍待验收。
 
 新远控只接受短暂的 `RemoteLaunchIntent`，不把 Widget 放进 extra。该意图丢失后只显示明确重新打开入口。已有会话按 deviceId 与 sessionId 重新查找，不以页面恢复自动创建新流。
 
@@ -50,7 +50,7 @@
 
 `appDependenciesProvider` 在应用根 `ProviderScope` 注入真实 bridge request、events 和 close。生成的 `appControllerProvider` 使用 `ref.watch` 持有该依赖，并通过 `ref.onDispose` 取消唯一事件订阅、关闭事件流及释放 transport。异步设备/设置回执受请求序号和 provider 生命周期约束，旧回执不会覆盖新状态。`session.frame` 仅向持有 session 的页面事件流转发，不更新整个应用的状态快照。
 
-生成的 `clipboardCoordinatorProvider` 持有前台剪贴板协调器，并监听设备、偏好和焦点字段，销毁时取消 timer、事件和生命周期观察。普通文本控制器与视频播放器仍按页面本身的生命周期持有。
+生成的 `clipboardCoordinatorProvider` 持有前台剪贴板协调器，并监听设备、偏好和焦点字段，销毁时取消 timer、事件和生命周期观察。普通文本控制器随页面释放；视频播放器和呈现意图通过共享 SessionViews 按真实会话及代际管理，页面取得与释放自己的呈现资格。页面销毁不等于停止真实会话。当前同runtime校准与呈现重建不等于进程死亡后完整恢复，具体边界见[状态恢复](state-recovery.md)。
 
 独立测试可使用真实的生成 provider，不需要构造 ChangeNotifier：
 

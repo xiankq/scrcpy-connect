@@ -21,6 +21,7 @@
 | [协作暂停捕获](cooperative-capture-pause.md) | 固定scrcpy源码的捕获扩展、停止编码与保留task、ACK/代际边界、可复现构建与真实多窗口 |
 | [Flutter/Rust 平台运行时](flutter-rust-platform-runtime.md) | Android 后台与权限、FRB/Riverpod 生命周期、USB 句柄、workspace、文件与输入 |
 | [Flutter工程工具链](flutter-engineering-toolchain.md) | typed路由、生成Riverpod、build_runner、官方lint和生成一致性 |
+| [系统保存与提供方流契约](provider-output-streams.md) | SAF已有URI反例、rw／w／pipe／proxy FD、错误通道及系统保存完成证据；专项研究不等于提供方矩阵已实测 |
 | [系统分享信任与所有权](android-share-trust.md) | 外部URI/grant、导入/取消、持久源、Activity/engine边界与实际分享驱动 |
 | [目标端缩略图](media-thumbnail-pipeline.md) | JPEG/视频帧、EXIF/旋转、有界作业、缓存/取消和真实端验证 |
 | [主控系统通知投递](controller-notification-delivery.md) | 跨端插件固定版本、权限/通道、普通来电提醒、系统历史隐私与Windows包身份限制；尚未实现完整投递 |
