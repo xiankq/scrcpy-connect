@@ -2,6 +2,7 @@ import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/remote/remote_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
+import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
@@ -14,6 +15,110 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final lateResume in [false, true]) {
+    testWidgets(
+      'returning from device B restores A focus${lateResume ? ' despite a late B resume' : ''}',
+      (tester) async {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        final oldResume = Completer<Json>();
+        final commands = <(String, Json)>[];
+        final sessions = <String, Json>{};
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          commands.add((command, params));
+          if (command == 'session.start') {
+            final id = value(params, 'deviceId');
+            return sessions[id] = {
+              'sessionId': 'session-$id',
+              'deviceId': id,
+              'textureId': id == 'a' ? 1 : 2,
+              'width': 200,
+              'height': 400,
+              'firstFrameDecoded': true,
+              'evidence': 'mdk.snapshot',
+            };
+          }
+          if (command == 'session.resume') {
+            if (lateResume && params['sessionId'] == 'session-b') {
+              return oldResume.future;
+            }
+            return sessions.values.firstWhere(
+              (s) => s['sessionId'] == params['sessionId'],
+            );
+          }
+          return <String, dynamic>{};
+        });
+        try {
+          await tester.pumpWidget(
+            RouterTestApp(
+              controller: controller,
+              devices: const [
+                {'id': 'a'},
+                {'id': 'b'},
+              ],
+              home: RemotePage(
+                controller: controller,
+                device: const {'id': 'a'},
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(controller.snapshot().focusedDeviceId, 'a');
+          unawaited(
+            openRemoteRoute(
+              tester.element(find.byType(RemotePage)),
+              deviceId: 'b',
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(controller.snapshot().focusedDeviceId, 'b');
+          if (lateResume) {
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.inactive,
+            );
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.paused,
+            );
+            await tester.pumpAndSettle();
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.resumed,
+            );
+            await tester.pumpAndSettle();
+            expect(
+              commands.where(
+                (c) =>
+                    c.$1 == 'session.resume' &&
+                    c.$2['sessionId'] == 'session-b',
+              ),
+              hasLength(1),
+            );
+          }
+          closePage<void>(tester.element(find.byType(RemotePage)));
+          await tester.pumpAndSettle();
+          expect(controller.snapshot().focusedDeviceId, 'a');
+          if (lateResume) {
+            oldResume.complete(sessions['b']!);
+            await tester.pumpAndSettle();
+            expect(controller.snapshot().focusedDeviceId, 'a');
+          }
+          expect(find.byType(Texture), findsOneWidget);
+          expect(commands.where((c) => c.$1 == 'session.start'), hasLength(2));
+          expect(tester.takeException(), isNull);
+        } finally {
+          if (!oldResume.isCompleted) {
+            oldResume.complete(sessions['b'] ?? <String, dynamic>{});
+          }
+          await tester.pumpAndSettle();
+          await tester.pumpWidget(const SizedBox());
+          controller.dispose();
+        }
+      },
+    );
+  }
   for (final terminal in ['session.disconnected', 'session.failed']) {
     testWidgets('a late resume cannot clear $terminal or accept new input', (
       tester,

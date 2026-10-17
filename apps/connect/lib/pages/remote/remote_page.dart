@@ -228,7 +228,6 @@ class _RemotePageState extends State<RemotePage>
       trace(
         'start.return status=${value(result, 'status')} hasTexture=${result['textureId'] != null} boundBefore=${sessionId.isNotEmpty} lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
       );
-      unawaited(controller.focusDevice(value(widget.device, 'id')));
       setState(() {
         session = result;
         controlAvailable = sessionId.isNotEmpty && result['textureId'] != null;
@@ -248,6 +247,9 @@ class _RemotePageState extends State<RemotePage>
         visible:
             result['status'] != 'paused' && result['capturePaused'] != true,
       );
+      if (retained == null) {
+        focusVisibleDevice();
+      }
       if (retained != null) {
         await resumeView();
         if (!mounted || exiting || attempt != startAttempt) return;
@@ -576,6 +578,26 @@ class _RemotePageState extends State<RemotePage>
     }
   }
 
+  void focusVisibleDevice() {
+    // A retained page can finish starting or resuming after another device
+    // becomes visible. Only the current route and session owner may set focus.
+    if (!mounted ||
+        exiting ||
+        covered ||
+        !acceptsInput ||
+        stateUnverified ||
+        sessionEnded ||
+        view?.isCurrent != true ||
+        ModalRoute.of(context)?.isCurrent == false) {
+      return;
+    }
+    final deviceId = value(widget.device, 'id');
+    if (controller.snapshot().focusedDeviceId == deviceId) {
+      return;
+    }
+    unawaited(controller.focusDevice(deviceId));
+  }
+
   Future<void> resumeView() async {
     if (stateUnverified ||
         sessionId.isEmpty ||
@@ -589,6 +611,7 @@ class _RemotePageState extends State<RemotePage>
       owned = controller.sessionViews.claim(sessionId, visible: false);
       view = owned;
     }
+    focusVisibleDevice();
     final epoch = ++visibilityEpoch;
     trace('resume.begin epoch=$epoch session=$sessionId');
     presentationVisible = true;

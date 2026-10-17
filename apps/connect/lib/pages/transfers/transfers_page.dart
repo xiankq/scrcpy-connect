@@ -5,6 +5,7 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/transfer_state.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/recovery_status.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import 'package:flutter/material.dart';
@@ -136,29 +137,37 @@ class TransfersPage extends HookConsumerWidget {
     );
     if (embedded) {
       return SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '传输',
-                      style: Theme.of(context).textTheme.displaySmall,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '刷新任务',
-                    onPressed: () => revision.value++,
-                    icon: const Icon(LucideIcons.refreshCw),
-                  ),
-                ],
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: constraints.maxHeight / 2,
+                ),
+                child: const RecoveryStatus(),
               ),
-            ),
-            Expanded(child: content),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '传输',
+                        style: Theme.of(context).textTheme.displaySmall,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '刷新任务',
+                      onPressed: () => revision.value++,
+                      icon: const Icon(LucideIcons.refreshCw),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(child: content),
+            ],
+          ),
         ),
       );
     }

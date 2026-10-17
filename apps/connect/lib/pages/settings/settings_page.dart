@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/recovery_status.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -114,7 +115,23 @@ class SettingsPage extends HookConsumerWidget {
         ),
       ],
     );
-    if (embedded) return SafeArea(child: body);
+    if (embedded) {
+      return SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: constraints.maxHeight / 2,
+                ),
+                child: const RecoveryStatus(),
+              ),
+              Expanded(child: body),
+            ],
+          ),
+        ),
+      );
+    }
     return PageFrame(title: '设置', child: body);
   }
 }
