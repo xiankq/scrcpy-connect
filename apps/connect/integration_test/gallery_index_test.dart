@@ -242,6 +242,47 @@ void main() {
         final router = GoRouter.of(tester.element(find.byType(Scaffold).first));
         router.go(GalleryRoute(deviceId: deviceId!).location);
         final gallery = find.byType(GalleryPage);
+        Future<int> waitForVisibleThumbnails() async {
+          var count = 0;
+          await waitFor(
+            tester,
+            () {
+              final viewport =
+                  Offset.zero &
+                  (tester.view.physicalSize / tester.view.devicePixelRatio);
+              final cells = find
+                  .descendant(
+                    of: gallery,
+                    matching: find.byType(MediaThumbnail),
+                  )
+                  .evaluate()
+                  .where((element) {
+                    final area = tester
+                        .getRect(find.byWidget(element.widget))
+                        .intersect(viewport);
+                    return area.width > 32 && area.height > 32;
+                  })
+                  .toList();
+              count = cells.length;
+              return count >= 6 &&
+                  cells.every(
+                    (element) => find
+                        .descendant(
+                          of: find.byWidget(element.widget),
+                          matching: find.byType(RawImage),
+                        )
+                        .evaluate()
+                        .any(
+                          (image) => (image.widget as RawImage).image != null,
+                        ),
+                  );
+            },
+            timeout: const Duration(seconds: 60),
+            reason: 'Every visible gallery cell must decode its actual remote thumbnail.',
+          );
+          return count;
+        }
+
         await waitFor(
           tester,
           () =>
@@ -253,15 +294,9 @@ void main() {
           timeout: const Duration(seconds: 45),
           reason: 'The actual gallery must present its first frozen page.',
         );
-        await waitFor(
-          tester,
-          () => find
-              .descendant(of: gallery, matching: find.byType(RawImage))
-              .evaluate()
-              .any((element) => (element.widget as RawImage).image != null),
-          timeout: const Duration(seconds: 45),
-          reason: 'At least one actual remote thumbnail must decode.',
-        );
+        binding.reportData!['firstVisibleThumbnails'] =
+            await waitForVisibleThumbnails();
+        binding.reportData!['actualVisibleThumbnailsDecoded'] = true;
         await binding.convertFlutterSurfaceToImage();
         await tester.pump(const Duration(milliseconds: 300));
         hostFixture = {
@@ -292,7 +327,16 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 200));
         await tester.tap(more);
-        await tester.pump(const Duration(milliseconds: 200));
+        await waitFor(
+          tester,
+          () => more.evaluate().isEmpty,
+          reason: 'The second actual page must finish loading.',
+        );
+        binding.reportData!['scrolledVisibleThumbnails'] =
+            await waitForVisibleThumbnails();
+        binding.reportData!['actualScrolledThumbnailsDecoded'] = true;
+        await tester.pump(const Duration(milliseconds: 1200));
+        await binding.takeScreenshot('gallery-scrolled-thumbnails');
         await tester.scrollUntilVisible(
           find.text('相册范围与未读项目'),
           -800,
@@ -322,7 +366,7 @@ void main() {
           maxScrolls: 60,
         );
         await tester.tap(find.text('相册范围与未读项目'));
-        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump(const Duration(milliseconds: 1200));
         expect(find.textContaining('文件修改时间不等于拍摄时间'), findsOneWidget);
         await binding.takeScreenshot('gallery-explicit-scope');
         await tester.tap(find.text('关闭范围'));

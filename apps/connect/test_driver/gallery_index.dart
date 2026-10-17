@@ -180,6 +180,8 @@ Future<void> main() async {
             'actualDynamicRoots',
             'actualStablePages',
             'actualGalleryLoadMore',
+            'actualVisibleThumbnailsDecoded',
+            'actualScrolledThumbnailsDecoded',
             'actualScopeVisible',
             'actualRefreshSnapshotIsolation',
             'fixtureRemoved',

@@ -51,3 +51,11 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 该轮仅要求至少一张实际缩略图解码，目视暴露A57：各cell直接并发请求，而companion只有一个worker和一个等待位，busy后widget保持失败、离屏未精确取消。此证据只能证明单张通路，不能证明多图网格可用。共享有界调度、精确取消、有限busy恢复和真实多图门槛须单独实现与复验；A53和相册领域仍未整体关闭。
 
 本批代码完整`tool/check.sh --android`退出0，日志`/tmp/connect-gallery-all-gates.log`：应用237／Bridge106／设计系统3、Rust186 passed／58 ignored，150输入生成一致、205文件格式零改动、严格分析／clippy／lint负例／capture JAR与JVM、三ABI APK125.8秒／四组native main／实际manifest和Flutter／Rust ELF均通过。默认ignored不计通过；DESIGN仍31警告／1信息，原有Kotlin警告保留。这份门禁先于A57修复，不外推后续代码。
+
+## A57缩略图队列与实际多图复验
+
+每个controller／device现在共享生成Riverpod provider拥有的队列，最多128项等待、同设备只发一条实际请求。每次尝试有新UUID；离屏删除排队项、取消活动精确operationId。取消确认不提前释放lane，必须等原请求真正结束；keepAlive保留同一lane，快速重进也不能与旧请求重叠。仅busy最多3次带退避尝试，其他失败保留原因和主动重试；提供本机图片时不走远端队列。换设备与换来源不保留旧图。
+
+8cell公开widget红测实测同时发8条请求，期望1；修复后9项新widget／API测试与7项相册回归全部通过。覆盖精确取消、未开始项不发送、重进等待旧请求、busy恢复／三次终止、权限错误手动重试、跨设备同路径隔离、本地失败和有界队列。100×100失败格子无溢出，重试点击区至少44逻辑像素。严格分析与独立只读审查通过，原生成文件无diff，仅新增该provider生成物。
+
+更强的真实第四轮`/tmp/connect-gallery-index-r4.log`完整1分59秒通过，回执`/tmp/connect-e2e/gallery-index-r4/result.json`：首屏15张和滚动／加载更多后的21张可见缩略图均实际解码，原有105原件范围／排序／分页／刷新隔离／宿主原文及大小／清理证据全部通过。新增两项必需回执由host严格检查，不再允许单张成功代表网格。首屏和滚动后截图均已目视，范围截图另有留存；没有用该轮证明长时滚动／低内存／磁盘预算／全格式或全部设计状态。最终综合门禁和普通main重启另列总验收记录。
