@@ -82,8 +82,8 @@ fn video_codec(name: &str) -> CoreResult<VideoCodec> {
 }
 
 // A live decoder may wait for subsequent frames even when the remote screen is
-// static. Keep that wait short without requesting more than 30 repeats/second
-// or exceeding a user's lower FPS choice. This is an existing server option.
+// static. Bound the repeat timeout by a 30fps frame period and respect a
+// user's lower FPS choice. This option is a timeout, not a steady frame rate.
 fn repeat_frame_delay_us(max_fps: u64) -> u64 {
     1_000_000u64.div_ceil(max_fps.clamp(1, 30))
 }
@@ -237,6 +237,23 @@ struct OwnedProcess {
     scid: String,
 }
 
+fn launch_identity(bytes: &[u8]) -> CoreResult<(u32, u64)> {
+    let parsed = std::str::from_utf8(bytes)
+        .ok()
+        .and_then(|line| line.strip_prefix("__INTEROP_PID__"))
+        .and_then(|fields| fields.split_once(':'))
+        .filter(|(pid, started)| {
+            !pid.is_empty()
+                && !started.is_empty()
+                && pid.bytes().all(|byte| byte.is_ascii_digit())
+                && started.bytes().all(|byte| byte.is_ascii_digit())
+        })
+        .and_then(|(pid, started)| Some((pid.parse::<u32>().ok()?, started.parse::<u64>().ok()?)))
+        .filter(|(pid, started)| *pid > 1 && *started > 0);
+    parsed.ok_or_else(|| CoreError::new("process_identity", "服务进程启动标识缺失或无效。"))
+}
+
+#[cfg(test)]
 fn process_stat(bytes: &[u8]) -> CoreResult<(char, u64)> {
     let text = std::str::from_utf8(bytes)
         .map_err(|_| CoreError::new("process_identity", "服务进程标识无效。"))?;
@@ -260,17 +277,13 @@ impl OwnedProcess {
     async fn capture(
         client: &interop_adb::Client,
         pid: u32,
+        started: u64,
         jar: &str,
         scid: String,
     ) -> CoreResult<Self> {
-        let stat = client
-            .shell(
-                &format!("cat /proc/{pid}/stat"),
-                4096,
-                OperationOptions::default(),
-            )
-            .await?;
-        let (_, started) = process_stat(&stat.stdout)?;
+        // The launcher's shell reads the child start time before handing it
+        // over. exec preserves it. Verify the same kernel identity and the
+        // complete JAR/SCID nice-name below, without a second stat request.
         let process = Self {
             pid,
             started,
@@ -648,11 +661,12 @@ impl Runtime {
             command = format!(
                 r#"{command} </dev/null &
 child=$!
-IFS= read -r stat < /proc/$child/stat
+IFS= read -r stat < /proc/$child/stat || exit 40
 rest=${{stat##*) }}
 set -- $rest
-shift 19
+shift 19 || exit 40
 started=$1
+case "$started" in ''|*[!0-9]*) exit 40 ;; esac
 resume_child() {{
   IFS= read -r stat < /proc/$child/stat || return
   rest=${{stat##*) }}
@@ -661,7 +675,7 @@ resume_child() {{
   [ "$1" = "$started" ] && kill -CONT "$child" 2>/dev/null
 }}
 trap resume_child EXIT HUP INT TERM
-printf '__INTEROP_PID__%s\n' "$child"
+printf '__INTEROP_PID__%s:%s\n' "$child" "$started"
 while IFS= read -r keepalive; do :; done
 resume_child
 wait "$child""#
@@ -679,12 +693,7 @@ wait "$child""#
                     return Err(CoreError::new("process_identity", "服务进程启动标识无效。"));
                 }
             }
-            let pid = std::str::from_utf8(&pid_line)
-                .ok()
-                .and_then(|line| line.strip_prefix("__INTEROP_PID__"))
-                .and_then(|pid| pid.parse::<u32>().ok())
-                .filter(|pid| *pid > 1)
-                .ok_or_else(|| CoreError::new("process_identity", "服务进程启动标识缺失。"))?;
+            let (pid, started) = launch_identity(&pid_line)?;
             let process_closed = Arc::new(AtomicBool::new(false));
             let logs = Arc::new(Mutex::new(Vec::new()));
             let process_cancel = cancellation.clone();
@@ -826,11 +835,29 @@ wait "$child""#
                 bytes.extend_from_slice(package_name.as_bytes());
                 request_launch(&control_tx, bytes, permit).await?;
             }
-            let (preface, width, height) = read_video_preface(&mut video, initial).await?;
-            startup_timing.insert(
-                "encodedKeyFrameMs".into(),
-                json!(startup_clock.elapsed().as_millis() as u64),
-            );
+            // Metadata proves app_process has reached its configured socket.
+            // Verify its launcher-recorded identity while the encoder produces
+            // the first key frame. Both must succeed before publishing an input.
+            // try_join keeps cancellation local: neither operation is detached.
+            let encoded = async {
+                let frame = read_video_preface(&mut video, initial).await?;
+                Ok::<_, CoreError>((frame, startup_clock.elapsed().as_millis() as u64))
+            };
+            let verified = async {
+                let process = OwnedProcess::capture(
+                    &client,
+                    pid,
+                    started,
+                    &remote_jar,
+                    format!("{scid:08x}"),
+                )
+                .await?;
+                Ok::<_, CoreError>((process, startup_clock.elapsed().as_millis() as u64))
+            };
+            let (((preface, width, height), encoded_ms), (process, verified_ms)) =
+                tokio::try_join!(encoded, verified)?;
+            startup_timing.insert("encodedKeyFrameMs".into(), json!(encoded_ms));
+            startup_timing.insert("processVerifiedMs".into(), json!(verified_ms));
             let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
             let port = listener.local_addr()?.port();
             {
@@ -862,8 +889,6 @@ wait "$child""#
                 )
                 .await;
             });
-            let process =
-                OwnedProcess::capture(&client, pid, &remote_jar, format!("{scid:08x}")).await?;
             Ok::<_, CoreError>((control_tx, process_closed, process))
         };
         let started = tokio::select! {
@@ -2702,6 +2727,44 @@ mod tests {
     }
 
     #[test]
+    fn launch_receipt_requires_a_complete_decimal_kernel_identity() {
+        assert_eq!(
+            launch_identity(b"__INTEROP_PID__123:456").unwrap(),
+            (123, 456)
+        );
+        assert_eq!(
+            launch_identity(b"__INTEROP_PID__4294967295:18446744073709551615").unwrap(),
+            (u32::MAX, u64::MAX)
+        );
+        for receipt in [
+            "__INTEROP_PID__123",
+            "__INTEROP_PID__123:",
+            "__INTEROP_PID__:456",
+            "__INTEROP_PID__123:456:789",
+            "__INTEROP_PID__0:456",
+            "__INTEROP_PID__1:456",
+            "__INTEROP_PID__123:0",
+            "__INTEROP_PID__+123:456",
+            "__INTEROP_PID__123:+456",
+            "__INTEROP_PID__-123:456",
+            "__INTEROP_PID__123:-456",
+            "__INTEROP_PID__123: 456",
+            "__INTEROP_PID__123:456\r",
+            "__INTEROP_PID__4294967296:456",
+            "__INTEROP_PID__123:18446744073709551616",
+            "__INTEROP_PID__123:４５６",
+            "123:456",
+        ] {
+            assert_eq!(
+                launch_identity(receipt.as_bytes()).unwrap_err().code,
+                "process_identity",
+                "accepted {receipt:?}"
+            );
+        }
+        assert!(launch_identity(&[0xff]).is_err());
+    }
+
+    #[test]
     fn process_stat_uses_starttime_after_the_parenthesized_command() {
         let mut fields = vec!["0"; 20];
         fields[0] = "T";
@@ -2746,6 +2809,7 @@ mod tests {
             )
         };
         let client = runtime.client(id).await.unwrap();
+        eprintln!("test-owned capture jar: {}", process.jar);
         let mut socket = tokio::net::TcpStream::connect((
             "127.0.0.1",
             session["videoPort"].as_u64().unwrap() as u16,
@@ -2870,6 +2934,15 @@ mod tests {
         .await
         .expect("test-owned capture process did not finish normal socket cleanup");
         runtime.stop_session(session_id).await;
+        let cleanup = inspection
+            .shell(
+                &format!("rm -f -- {}", quote(&process.jar).unwrap()),
+                4096,
+                OperationOptions::default(),
+            )
+            .await
+            .unwrap();
+        assert!(cleanup.exit_code.is_none_or(|code| code == 0));
         inspection.close();
     }
     #[test]
