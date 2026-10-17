@@ -12,6 +12,7 @@
 | [纯 Rust ADB 依赖链](pure-rust-adb-dependencies.md) | 两个候选的实际 feature、TLS provider 成熟度、nusb、双向压缩、系统 API 边界与验证矩阵 |
 | [四端编译交付约束](cross-platform-build-contract.md) | 核心、FRB 链接与 Flutter 整包三层验收，平台依赖隔离、宿主 SDK 与 CI |
 | [厂商互联完整流程](manufacturer-workflows.md) | 小米 Windows／苹果端功能、版本记录，以及文件编辑回写、相册备份和本机内容接续 |
+| [Apple自身连续互通操作](apple-continuity-workflows.md) | Mac镜像、通知与原应用、Handoff／AirDrop／剪贴板、独立通话，以及FaceTime手机／iPad获允远控的不同条件 |
 | [免 APK 通知、短信与通话](android-shell-interop-capabilities.md) | shell 真实身份、通知 Binder token、原通知动作、SMS AppOps 与通话音频的 HAL 条件 |
 | [CallStyle动作目标隔离](callstyle-action-targeting.md) | 原通知PI与具体通话绑定的区别，Android11/16 Dialer反例及不能仅凭typed extras解锁按钮的依据 |
 | [AVD HEVC实际尺寸约束](hevc-emulator-constraints.md) | 软件编码器配置失败后的尺寸降级、独立码流／FFmpeg对照与1280／1080单变量验证 |
