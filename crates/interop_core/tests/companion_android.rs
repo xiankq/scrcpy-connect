@@ -2,7 +2,7 @@ use interop_core::Runtime;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 
-async fn runtime() -> (tempfile::TempDir, Arc<Runtime>, String) {
+async fn disconnected_runtime() -> (tempfile::TempDir, Arc<Runtime>, String) {
     let endpoint: std::net::SocketAddr = std::env::var("INTEROP_CORE_TEST_ENDPOINT")
         .expect("INTEROP_CORE_TEST_ENDPOINT")
         .parse()
@@ -17,10 +17,29 @@ async fn runtime() -> (tempfile::TempDir, Arc<Runtime>, String) {
         .await
         .unwrap();
     let id = device["deviceId"].as_str().unwrap().to_owned();
+    (root, runtime, id)
+}
+async fn runtime() -> (tempfile::TempDir, Arc<Runtime>, String) {
+    let (root, runtime, id) = disconnected_runtime().await;
     runtime
         .invoke("devices.connect", json!({"deviceId":id}))
         .await
         .unwrap();
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let observation = runtime
+                .invoke("observation.status", json!({"deviceId":id}))
+                .await
+                .unwrap();
+            if observation["notifications"]["live"] == true && observation["calls"]["live"] == true
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("actual helper establishes explicit continuous observation");
     (root, runtime, id)
 }
 fn adb(args: &[&str]) -> String {
@@ -222,14 +241,12 @@ async fn rust_runtime_receives_live_notifications_rejects_old_actions_and_clears
         .invoke("devices.disconnect", json!({"deviceId":id}))
         .await
         .unwrap();
-    assert_eq!(
-        runtime
-            .invoke("notifications.list", json!({"deviceId":id}))
-            .await
-            .unwrap_err()
-            .code,
-        "disconnected"
-    );
+    let disconnected = runtime
+        .invoke("notifications.list", json!({"deviceId":id}))
+        .await
+        .unwrap();
+    assert_eq!(disconnected["status"], "unknown");
+    assert_eq!(disconnected["live"], false);
 }
 
 #[tokio::test]
@@ -316,15 +333,12 @@ async fn rust_runtime_observes_rapid_replacement_and_refuses_unsafe_aggregate_ac
 #[tokio::test]
 #[ignore = "requires an actual Android endpoint"]
 async fn disconnect_cancels_companion_startup_instead_of_reviving_it() {
-    let (_root, runtime, id) = runtime().await;
+    let (_root, runtime, id) = disconnected_runtime().await;
     let mut events = runtime.subscribe();
-    let owner = runtime.clone();
-    let device = id.clone();
-    let startup = tokio::spawn(async move {
-        owner
-            .invoke("notifications.list", json!({"deviceId":device}))
-            .await
-    });
+    runtime
+        .invoke("devices.connect", json!({"deviceId":id}))
+        .await
+        .unwrap();
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             if events.recv().await.unwrap()["type"] == "companion.starting" {
@@ -341,13 +355,13 @@ async fn disconnect_cancels_companion_startup_instead_of_reviving_it() {
     .await
     .expect("stop cancels startup before waiting on its lock")
     .unwrap();
-    assert!(
-        tokio::time::timeout(Duration::from_secs(2), startup)
-            .await
-            .unwrap()
-            .unwrap()
-            .is_err()
-    );
+    let observation = runtime
+        .invoke("observation.status", json!({"deviceId":id}))
+        .await
+        .unwrap();
+    assert_eq!(observation["wanted"], true);
+    assert_eq!(observation["phase"], "waiting_connection");
+    assert_eq!(observation["notifications"]["live"], false);
     assert_eq!(
         runtime
             .invoke("device.info", json!({"deviceId":id}))

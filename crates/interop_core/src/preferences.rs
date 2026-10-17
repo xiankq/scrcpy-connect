@@ -202,6 +202,7 @@ impl Runtime {
                         last_seen: None,
                         reason: Some("此记录来自恢复，请在被控手机重新核验授权。".into()),
                         auto_reconnect: false,
+                        observation_wanted: true,
                     });
                 }
                 let count = restored.len();
@@ -257,6 +258,11 @@ impl Runtime {
 
     pub(crate) async fn stop_activity(self: &Arc<Self>, params: &Value) -> CoreResult<Value> {
         let id = required(params, "activityId")?;
+        if let Some(id) = id.strip_prefix("observation:") {
+            return self
+                .observation_command("observation.stop", &json!({"deviceId":id}))
+                .await;
+        }
         if let Some(id) = id.strip_prefix("connection:") {
             return self.disconnect_device(id, false).await;
         }

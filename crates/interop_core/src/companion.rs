@@ -19,7 +19,7 @@ use std::{
 use tokio::sync::{RwLock, mpsc, oneshot, watch};
 
 const SERVER: &[u8] = include_bytes!("../../../servers/companion/companion.jar");
-const SERVER_SHA: &str = "719e57e3317d91d0858aa722f86770275d3af6130ad2ff0cd4334a5f7722b828";
+const SERVER_SHA: &str = "0026e5af2db8558b2ba1eebac22c84303e20d3ee1a7b184bc683f808cf3889bb";
 const MAX_MESSAGE: usize = 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -34,9 +34,10 @@ struct Pending {
     result: oneshot::Sender<CoreResult<Value>>,
 }
 pub(crate) struct Companion {
+    pub(crate) id: uuid::Uuid,
     cancellation: CancellationToken,
     requests: mpsc::Sender<Request>,
-    state: Arc<RwLock<Value>>,
+    pub(crate) state: Arc<RwLock<Value>>,
     stopped: watch::Receiver<bool>,
 }
 impl Companion {
@@ -161,6 +162,7 @@ impl Companion {
         device: String,
         events: crate::events::EventBus,
         cancellation: CancellationToken,
+        runtime: Weak<Runtime>,
     ) -> CoreResult<Arc<Self>> {
         if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
             return Err(CoreError::new("server_integrity", "内置互联服务校验失败。"));
@@ -264,6 +266,7 @@ impl Companion {
         });
         let actor_state = state.clone();
         let actor_cancel = cancellation.clone();
+        let id = uuid::Uuid::new_v4();
         tokio::spawn(async move {
             run(
                 stream,
@@ -272,24 +275,30 @@ impl Companion {
                 actor_state,
                 actor_cancel,
                 events,
-                device,
+                ObservationContext {
+                    runtime,
+                    helper: id,
+                    device,
+                },
             )
             .await;
         });
         guard.0 = None;
         Ok(Arc::new(Self {
+            id,
             cancellation,
             requests: sender,
             state,
             stopped,
         }))
     }
-    async fn request(&self, command: &str, params: &Value) -> CoreResult<Value> {
+    pub(crate) async fn request(&self, command: &str, params: &Value) -> CoreResult<Value> {
         let mut payload = params.clone();
         payload["command"] = json!(command);
         payload["requestId"] = json!(uuid::Uuid::new_v4().to_string());
         let action = !command.ends_with(".list")
             && command != "clipboard.get"
+            && command != "observation.set"
             && !command.starts_with("media.");
         let (result, receiver) = oneshot::channel();
         let request = Request {
@@ -363,6 +372,7 @@ async fn commit_message(
     state: &RwLock<Value>,
     events: &crate::events::EventBus,
     device: &str,
+    context: Option<&ObservationContext>,
 ) -> CoreResult<()> {
     if let Some(kind) = response["event"].as_str() {
         let section = match kind {
@@ -371,6 +381,21 @@ async fn commit_message(
             _ => None,
         };
         if let Some(section) = section {
+            if let Some(context) = context {
+                if let Some(runtime) = context.runtime.upgrade() {
+                    runtime
+                        .commit_observation(
+                            device,
+                            context.helper,
+                            &response,
+                            Some(section),
+                            Some(kind),
+                            state,
+                        )
+                        .await;
+                }
+                return Ok(());
+            }
             let data = response["data"].clone();
             let mut state = state.write().await;
             state[section] = data.clone();
@@ -393,7 +418,7 @@ async fn commit_message(
         let request = pending
             .remove(id)
             .ok_or_else(|| CoreError::new("protocol_error", "互联服务返回未知请求。"))?;
-        let result = if let Some(error) = response.get("error") {
+        let mut result = if let Some(error) = response.get("error") {
             Err(CoreError::new(
                 error["code"].as_str().unwrap_or("companion_error"),
                 error["message"].as_str().unwrap_or("互联动作失败。"),
@@ -407,9 +432,42 @@ async fn commit_message(
             _ => None,
         };
         if let (Some(section), Ok(data)) = (section, &result) {
-            let mut state = state.write().await;
-            state[section] = data.clone();
-            events.note_state_change();
+            if let Some(context) = context {
+                if let Some(runtime) = context.runtime.upgrade() {
+                    let accepted = runtime
+                        .commit_observation(
+                            device,
+                            context.helper,
+                            &json!({"data":data}),
+                            Some(section),
+                            None,
+                            state,
+                        )
+                        .await;
+                    if !accepted {
+                        result = runtime
+                            .observation_status(device)
+                            .await
+                            .map(|observation| observation[section].clone());
+                    }
+                }
+            } else {
+                let mut state = state.write().await;
+                state[section] = data.clone();
+                events.note_state_change();
+            }
+        } else if request.command == "observation.set" {
+            if let (Some(context), Ok(data)) = (context, &result)
+                && let Some(runtime) = context.runtime.upgrade()
+                && !runtime
+                    .commit_observation(device, context.helper, data, None, None, state)
+                    .await
+            {
+                result = Err(CoreError::new(
+                    "cancelled",
+                    "此观察回执所属的连接或意图已改变。",
+                ));
+            }
         } else if matches!(request.command.as_str(), "clipboard.get" | "clipboard.set") {
             let capability = match &result {
                 Ok(_) => json!({"status":"available","live":true}),
@@ -433,8 +491,9 @@ async fn run(
     state: Arc<RwLock<Value>>,
     cancellation: CancellationToken,
     events: crate::events::EventBus,
-    device: String,
+    context: ObservationContext,
 ) {
+    let device = &context.device;
     let mut pending = HashMap::<String, Pending>::new();
     let result:CoreResult<()>=async {loop {tokio::select! {
         _=cancellation.cancelled()=>return Ok(()),
@@ -451,7 +510,7 @@ async fn run(
             tokio::time::timeout(RPC_TIMEOUT,stream.write_all(&bytes)).await.map_err(|_|CoreError::new("timeout","互联服务写入超时。"))??;
         },
         response=read_message(&mut stream,&mut line)=>{
-            commit_message(response?,&mut pending,&state,&events,&device).await?;
+            commit_message(response?,&mut pending,&state,&events,device,Some(&context)).await?;
         }
     }}}.await;
     cancellation.cancel();
@@ -473,9 +532,21 @@ async fn run(
     event(
         &events,
         "companion.stopped",
-        &device,
+        device,
         json!({"reason":reason}),
     );
+    drop(state);
+    if let Some(runtime) = context.runtime.upgrade() {
+        runtime
+            .observation_helper_stopped(device, context.helper, &reason)
+            .await;
+    }
+}
+
+struct ObservationContext {
+    runtime: Weak<Runtime>,
+    helper: uuid::Uuid,
+    device: String,
 }
 
 impl Runtime {
@@ -508,6 +579,40 @@ impl Runtime {
         params: &Value,
     ) -> CoreResult<Value> {
         let id = required(params, "deviceId")?;
+        if command == "observation.set"
+            && params["enabled"] == true
+            && !self
+                .observation_is_current(id, params["epoch"].as_u64().unwrap_or(0))
+                .await
+        {
+            return Err(CoreError::new(
+                "cancelled",
+                "此观察意图已停止或连接已改变。",
+            ));
+        }
+        if let Some(section) = match command {
+            "notifications.list" => Some("notifications"),
+            "calls.list" => Some("calls"),
+            _ => None,
+        } {
+            let observation = self.observation_status(id).await?;
+            if observation["wanted"] != true
+                || !matches!(observation["phase"].as_str(), Some("observing" | "limited"))
+            {
+                let mut result = observation[section].clone();
+                result["deviceId"] = json!(id);
+                return Ok(result);
+            }
+        }
+        if command.starts_with("notifications.") && !command.ends_with(".list") {
+            let observation = self.observation_status(id).await?;
+            if observation["wanted"] != true || observation["notifications"]["live"] != true {
+                return Err(CoreError::new(
+                    "observation_required",
+                    "请先明确启动此设备的实时通知观察。",
+                ));
+            }
+        }
         let companion = if params["allowStart"] == false {
             let existing = self
                 .companions
@@ -568,6 +673,7 @@ impl Runtime {
                             id.into(),
                             self.events.clone(),
                             token.clone(),
+                            Arc::downgrade(self),
                         ))
                         .await?
                     };
@@ -588,7 +694,22 @@ impl Runtime {
             drop(startup);
             companion
         };
+        if command == "observation.set" && params["enabled"] == true {
+            let epoch = params["epoch"].as_u64().unwrap_or(0);
+            if !self.bind_observation(id, epoch, companion.id).await {
+                return Err(CoreError::new(
+                    "cancelled",
+                    "此观察意图已停止或连接已改变。",
+                ));
+            }
+        }
         let mut result = companion.request(command, params).await?;
+        if command == "observation.set" && result["observationEnabled"] != params["enabled"] {
+            return Err(CoreError::new(
+                "observation_cleanup_unknown",
+                "尚未确认远端观察监听完成清理。",
+            ));
+        }
         result["deviceId"] = json!(id);
         if let Some(calls) = result["calls"].as_array_mut() {
             let device = self.device(id).await?;
@@ -651,6 +772,7 @@ mod tests {
         let (requests, receiver) = mpsc::channel(32);
         let (_, stopped) = watch::channel(false);
         let companion = Arc::new(Companion {
+            id: uuid::Uuid::new_v4(),
             cancellation: CancellationToken::new(),
             requests,
             state: Arc::new(RwLock::new(json!({
@@ -697,6 +819,19 @@ mod tests {
     #[tokio::test]
     async fn a_list_receipt_cannot_overwrite_a_newer_observed_change() {
         let (_directory, runtime, device, companion, mut requests) = cached_companion().await;
+        runtime.store.write().await.devices[0].status = "connected".into();
+        let started = runtime
+            .invoke("observation.start", json!({"deviceId":device}))
+            .await
+            .unwrap();
+        let generation = started["generation"].as_u64().unwrap();
+        assert!(
+            runtime
+                .bind_observation(&device, generation, companion.id)
+                .await
+        );
+        let cache = companion.capability_state().await;
+        assert!(runtime.commit_observation(&device,companion.id,&json!({"observationEpoch":generation,"observationEnabled":true,"notifications":cache["notifications"],"calls":cache["calls"]}),None,None,&companion.state).await);
         for (command, section) in [
             ("notifications.list", "notifications"),
             ("calls.list", "calls"),
@@ -731,6 +866,7 @@ mod tests {
                 &companion.state,
                 &runtime.events,
                 &device,
+                None,
             )
             .await
             .unwrap();
@@ -750,6 +886,7 @@ mod tests {
                 &companion.state,
                 &runtime.events,
                 &device,
+                None,
             )
             .await
             .unwrap();
@@ -758,5 +895,171 @@ mod tests {
             let snapshot = runtime.invoke("state.snapshot", json!({})).await.unwrap();
             assert_eq!(snapshot["companions"][0]["state"][section], newer);
         }
+    }
+
+    async fn wire_response(
+        runtime: &Arc<Runtime>,
+        device: &str,
+        helper: &Companion,
+        request: Request,
+        result: Value,
+    ) {
+        let id = request.payload["requestId"].as_str().unwrap().to_owned();
+        let mut pending = HashMap::from([(
+            id.clone(),
+            Pending {
+                command: request.payload["command"].as_str().unwrap().into(),
+                action: request.action,
+                result: request.result,
+            },
+        )]);
+        commit_message(
+            json!({"requestId":id,"result":result}),
+            &mut pending,
+            &helper.state,
+            &runtime.events,
+            device,
+            Some(&ObservationContext {
+                runtime: Arc::downgrade(runtime),
+                helper: helper.id,
+                device: device.into(),
+            }),
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancelled_helper_invalidates_observation_projection_before_exit_callback() {
+        let (_directory, runtime, device, helper, _requests) = cached_companion().await;
+        runtime.store.write().await.devices[0].status = "connected".into();
+        let started = runtime
+            .invoke("observation.start", json!({"deviceId":device}))
+            .await
+            .unwrap();
+        let epoch = started["generation"].as_u64().unwrap();
+        assert!(runtime.bind_observation(&device, epoch, helper.id).await);
+        assert!(runtime.commit_observation(&device,helper.id,&json!({"observationEpoch":epoch,"observationEnabled":true,"notifications":{"notifications":[{"id":"old-action"}],"status":"available","live":true},"calls":{"calls":[],"status":"limited","live":true}}),None,None,&helper.state).await);
+        helper.cancellation.cancel();
+        let status = runtime
+            .invoke("observation.status", json!({"deviceId":device}))
+            .await
+            .unwrap();
+        assert_eq!(status["notifications"]["live"], false);
+        assert_eq!(status["notifications"]["status"], "unknown");
+        assert_eq!(status["notifications"]["notifications"], json!([]));
+        let snapshot = runtime.invoke("state.snapshot", json!({})).await.unwrap();
+        assert_eq!(snapshot["observations"][0]["notifications"]["live"], false);
+    }
+
+    #[tokio::test]
+    async fn wanted_observation_rebinds_after_helper_loss_and_connection_replacement() {
+        tokio::time::timeout(Duration::from_secs(30), async {
+            let (_directory, runtime, device, old_helper, mut old_requests) = cached_companion().await;
+            runtime.store.write().await.devices[0].status = "connected".into();
+            runtime.invoke("observation.start", json!({"deviceId":device})).await.unwrap();
+            let request = old_requests.recv().await.unwrap();
+            let old_epoch = request.payload["epoch"].as_u64().unwrap();
+            wire_response(&runtime, &device, &old_helper, request, json!({"observationEpoch":old_epoch,"observationEnabled":true,"cleanupConfirmed":true,"notifications":{"notifications":[],"status":"available","live":true},"calls":{"calls":[],"status":"limited","live":true}})).await;
+            old_helper.cancellation.cancel();
+            runtime.observation_helper_stopped(&device, old_helper.id, "transport lost").await;
+            let failed = runtime.invoke("observation.status", json!({"deviceId":device})).await.unwrap();
+            assert_eq!(failed["wanted"], true);
+            assert_eq!(failed["notifications"]["live"], false);
+
+            let (sender, mut requests) = mpsc::channel(32);
+            let (_, stopped) = watch::channel(false);
+            let helper = Arc::new(Companion { id:uuid::Uuid::new_v4(), cancellation:CancellationToken::new(), requests:sender, state:Arc::new(RwLock::new(json!({}))), stopped });
+            runtime.companions.lock().await.insert(device.clone(), helper.clone());
+            let request = requests.recv().await.unwrap();
+            assert_eq!(request.payload["command"], "observation.set", "recovery never replays a user action");
+            let epoch = request.payload["epoch"].as_u64().unwrap();
+            assert!(epoch > old_epoch);
+            assert!(!runtime.commit_observation(&device,old_helper.id,&json!({"observationEpoch":epoch,"observationEnabled":true}),None,None,&old_helper.state).await);
+            wire_response(&runtime,&device,&helper,request,json!({"observationEpoch":epoch,"observationEnabled":true,"cleanupConfirmed":true,"notifications":{"notifications":[],"status":"available","live":true},"calls":{"calls":[],"status":"limited","live":true}})).await;
+            runtime.observation_helper_stopped(&device,old_helper.id,"late old exit").await;
+            assert_eq!(runtime.observation_status(&device).await.unwrap()["notifications"]["live"],true);
+
+            runtime.store.write().await.devices[0].status="offline".into();
+            runtime.observation_connection_changed(&device).await;
+            let waiting=runtime.observation_status(&device).await.unwrap();
+            assert_eq!(waiting["wanted"],true);
+            assert_eq!(waiting["phase"],"waiting_connection");
+            assert_eq!(helper.state.read().await["notifications"]["live"],false);
+            runtime.store.write().await.devices[0].status="connected".into();
+            runtime.observation_connection_changed(&device).await;
+            let request=requests.recv().await.unwrap();
+            let reconnected_epoch=request.payload["epoch"].as_u64().unwrap();
+            assert!(reconnected_epoch>epoch);
+            assert!(!runtime.commit_observation(&device,helper.id,&json!({"observationEpoch":epoch,"observationEnabled":true}),None,None,&helper.state).await);
+            wire_response(&runtime,&device,&helper,request,json!({"observationEpoch":reconnected_epoch,"observationEnabled":true,"cleanupConfirmed":true,"notifications":{"notifications":[],"status":"available","live":true},"calls":{"calls":[],"status":"limited","live":true}})).await;
+            assert_eq!(runtime.invoke("observation.status",json!({"deviceId":device})).await.unwrap()["notifications"]["live"],true);
+            assert!(runtime.commit_observation(&device,helper.id,&json!({"observationEpoch":reconnected_epoch,"observationEnabled":true,"notifications":{"notifications":[],"status":"limited","live":false,"reason":"permission changed"},"calls":{"calls":[],"status":"limited","live":true}}),None,None,&helper.state).await);
+            let retry=runtime.invoke("observation.start",json!({"deviceId":device})).await.unwrap();
+            assert!(retry["generation"].as_u64().unwrap()>reconnected_epoch,"explicit start retries unavailable listeners");
+        }).await.expect("wanted observation recovers after bounded backoff");
+    }
+
+    #[tokio::test]
+    async fn observation_stop_preserves_clipboard_media_and_rejects_late_observation_data() {
+        tokio::time::timeout(Duration::from_secs(30), async {
+            let (_directory,runtime,device,helper,mut requests)=cached_companion().await;
+            runtime.store.write().await.devices[0].status="connected".into();
+            runtime.invoke("observation.start",json!({"deviceId":device})).await.unwrap();
+            let start=requests.recv().await.unwrap();
+            assert_eq!(start.payload["command"],"observation.set");
+            assert_eq!(start.payload["enabled"],true);
+            let epoch=start.payload["epoch"].as_u64().unwrap();
+            wire_response(&runtime,&device,&helper,start,json!({"observationEpoch":epoch,"observationEnabled":true,"cleanupConfirmed":true,"notifications":{"notifications":[],"status":"available","live":true},"calls":{"calls":[],"status":"limited","live":true}})).await;
+            assert_eq!(runtime.invoke("observation.status",json!({"deviceId":device})).await.unwrap()["notifications"]["live"],true);
+            let owner=runtime.clone();let target=device.clone();
+            let late_list=tokio::spawn(async move {owner.invoke("notifications.list",json!({"deviceId":target,"allowStart":false})).await});
+            let list_request=requests.recv().await.unwrap();
+            assert_eq!(list_request.payload["command"],"notifications.list");
+            let thumbnail=CancellationToken::new();
+            runtime.device_operations.lock().await.insert(format!("thumbnail:{device}:owned"),thumbnail.clone());
+            let owner=runtime.clone();let target=device.clone();
+            let clipboard=tokio::spawn(async move {owner.invoke("clipboard.get",json!({"deviceId":target,"allowStart":false})).await});
+            let clipboard_request=requests.recv().await.unwrap();
+            assert_eq!(clipboard_request.payload["command"],"clipboard.get");
+            let owner=runtime.clone();let target=device.clone();
+            let stopping=tokio::spawn(async move {owner.invoke("observation.stop",json!({"deviceId":target})).await});
+            let stop=requests.recv().await.unwrap();
+            assert_eq!(stop.payload["command"],"observation.set");assert_eq!(stop.payload["enabled"],false);
+            let stopped_epoch=stop.payload["epoch"].as_u64().unwrap();
+            assert!(stopped_epoch>epoch);
+            let mut events=runtime.subscribe();
+            let context=ObservationContext {runtime:Arc::downgrade(&runtime),helper:helper.id,device:device.clone()};
+            commit_message(json!({"event":"notifications.changed","data":{"notifications":[{"id":"late"}],"status":"available","live":true,"observationEpoch":epoch,"observationEnabled":true}}),&mut HashMap::new(),&helper.state,&runtime.events,&device,Some(&context)).await.unwrap();
+            assert!(events.try_recv().is_err(),"stopped epochs cannot publish late observations");
+            wire_response(&runtime,&device,&helper,stop,json!({"observationEpoch":stopped_epoch,"observationEnabled":false,"cleanupConfirmed":true,"notifications":{"notifications":[],"status":"stopped","live":false},"calls":{"calls":[],"status":"stopped","live":false}})).await;
+            let stopped=stopping.await.unwrap().unwrap();assert_eq!(stopped["phase"],"stopped");assert_eq!(stopped["wanted"],false);
+            wire_response(&runtime,&device,&helper,list_request,json!({"observationEpoch":epoch,"observationEnabled":true,"notifications":[{"id":"late-action"}],"status":"available","live":true})).await;
+            let late_result=late_list.await.unwrap().unwrap();
+            assert_eq!(late_result["status"],"stopped","an old list receipt cannot restore stopped observation authority");
+            assert_eq!(late_result["live"],false);
+            assert!(helper.is_active());assert!(!thumbnail.is_cancelled());assert!(!clipboard_request.result.is_closed());
+            wire_response(&runtime,&device,&helper,clipboard_request,json!({"text":"still owned","available":true,"live":true})).await;
+            assert_eq!(clipboard.await.unwrap().unwrap()["text"],"still owned");
+            assert_eq!(runtime.invoke("notifications.list",json!({"deviceId":device,"allowStart":true})).await.unwrap()["status"],"stopped");
+            assert!(requests.try_recv().is_err(),"list must not enqueue a new helper/observation request");
+            runtime.store.write().await.devices[0].status="offline".into();
+            runtime.observation_connection_changed(&device).await;
+            runtime.store.write().await.devices[0].status="connected".into();
+            runtime.observation_connection_changed(&device).await;
+            tokio::task::yield_now().await;
+            assert_eq!(runtime.observation_status(&device).await.unwrap()["wanted"],false);
+            assert!(requests.try_recv().is_err(),"reconnecting cannot reset the stopped intent");
+            runtime.invoke("observation.start",json!({"deviceId":device})).await.unwrap();
+            let restarted=requests.recv().await.unwrap();
+            let new_epoch=restarted.payload["epoch"].as_u64().unwrap();
+            assert!(new_epoch>stopped_epoch);
+            let before=runtime.events.cursor();
+            assert!(!runtime.commit_observation(&device,helper.id,&json!({"observationEpoch":stopped_epoch,"observationEnabled":false}),None,None,&helper.state).await);
+            assert!(!runtime.commit_observation(&device,uuid::Uuid::new_v4(),&json!({"observationEpoch":new_epoch,"observationEnabled":true}),None,None,&helper.state).await);
+            assert_eq!(runtime.events.cursor().sequence,before.sequence,"old intent and foreign helper receipts cannot publish");
+            wire_response(&runtime,&device,&helper,restarted,json!({"observationEpoch":new_epoch,"observationEnabled":true,"cleanupConfirmed":true,"notifications":{"notifications":[],"status":"available","live":true},"calls":{"calls":[],"status":"limited","live":true}})).await;
+            assert_eq!(runtime.observation_status(&device).await.unwrap()["notifications"]["live"],true);
+        }).await.expect("shared helper observation transitions must complete");
     }
 }

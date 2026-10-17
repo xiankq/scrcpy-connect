@@ -22,6 +22,11 @@ async fn connected() -> (tempfile::TempDir, Arc<Runtime>, String) {
     let root = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(root.path()).await.unwrap();
     let id = add(&runtime, endpoint).await;
+    // Exercise clipboard's own helper startup independently of observation.
+    runtime
+        .invoke("observation.stop", json!({"deviceId":id}))
+        .await
+        .unwrap();
     runtime
         .invoke("devices.connect", json!({"deviceId":id}))
         .await
@@ -72,6 +77,15 @@ async fn no_session_clipboard_round_trips_and_receives_another_companion_change(
     assert_eq!(original["source"], "companion");
     assert_eq!(original["available"], true);
     assert_eq!(original["live"], true);
+    let snapshot = runtime.invoke("state.snapshot", json!({})).await.unwrap();
+    assert_eq!(snapshot["observations"][0]["wanted"], false);
+    for section in ["notifications", "calls"] {
+        assert_eq!(
+            snapshot["companions"][0]["state"][section]["status"],
+            "stopped"
+        );
+        assert_eq!(snapshot["companions"][0]["state"][section]["live"], false);
+    }
     let marker = format!("interop 无会话 clipboard \n\"\\ {}", uuid::Uuid::new_v4());
     assert_eq!(
         runtime

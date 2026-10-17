@@ -43,7 +43,8 @@ async fn recovery_queries_do_not_start_an_observer_or_require_a_connection() {
         snapshot["companions"][0]["state"]["notifications"]["live"],
         false
     );
-    // An explicit user request preserves the existing connection requirement.
+    // A list is a projection query. Enabling a helper cannot change the durable
+    // observation intent or turn an unknown projection into a live observer.
     assert_eq!(
         runtime
             .invoke(
@@ -51,8 +52,7 @@ async fn recovery_queries_do_not_start_an_observer_or_require_a_connection() {
                 json!({"deviceId":id,"allowStart":true})
             )
             .await
-            .unwrap_err()
-            .code,
-        "disconnected"
+            .unwrap()["status"],
+        "unknown"
     );
 }

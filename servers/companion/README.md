@@ -115,6 +115,19 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 
 ## 协议与生命周期
 
+- JAR 启动只建立共享传输；剪贴板和缩略图不会隐式注册通知或来电 listener。
+  Rust 的 `observation.start/stop/status/list` 管理设备上的持久观察意图，
+  `observationWanted` 旧记录默认 `true`，不持久化通知、通话或动作引用。
+  连接成功后恢复仍被请求的观察，断线保留意图并将内容标为 `unknown/live=false`。
+  主动停止持久化 `false`，列表读取和重连均不重启，需明确调用 start。
+- 远端 `observation.set` 接收 `enabled` 和单调 `epoch`，返回
+  `observationEnabled/observationEpoch/cleanupConfirmed` 及通知、通话状态。
+  停止会注销两个 listener 并清除动作引用，保留 helper、剪贴板与媒体工作。
+  Rust 同时校验当前 helper UUID、设备连接与观察代际；旧事件和旧回执不恢复
+  已停止的内容。`allowStart` 仅允许启动共享 helper，不代替观察意图。
+- `observation.changed` 和 `state.snapshot.observations` 使用同一代际与事件水位。
+  启动返回意图状态（可为 `starting`），通过 status/event 等待 `observing/limited`；
+  平台拒绝或未核验时保持显式受限／未知状态，不将空集合说成已确认无内容。
 - 随机 abstract socket 名加 256 位随机认证 token；token 不落盘、不写日志。
 - 协议版本 1，UTF-8 JSON line，请求带 `requestId`；响应或实时 event 独立传输。
 - 单消息上限 1 MiB，通知快照控制在 768 KiB；截断返回 `truncated=true`
@@ -133,7 +146,11 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 输出固定 ZIP 时间戳的 `companion.jar`；不联网安装工具。Rust 内嵌 JAR 并校验
 SHA-256；修改源码后需重新构建并同步 `SERVER_SHA`。测试 Fixture 不编入产品 JAR。
 当前产品 JAR 的 SHA-256 为
-`719e57e3317d91d0858aa722f86770275d3af6130ad2ff0cd4334a5f7722b828`。
+`0026e5af2db8558b2ba1eebac22c84303e20d3ee1a7b184bc683f808cf3889bb`。
+
+上述观察生命周期的新增路径已通过无 Android 的 Runtime／真实 actor 提交回归，
+并重建 JAR；本次尚未执行 Android 端 listener 停止、重连恢复和 OEM 验证。
+下列既有 AVD 证据属于此前功能验证，不作为本次生命周期变更的设备端验收。
 
 ```sh
 bash servers/companion/build.sh

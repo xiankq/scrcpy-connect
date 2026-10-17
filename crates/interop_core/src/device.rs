@@ -167,6 +167,7 @@ fn blank_device(address: String, port: u16, transport: &str) -> Device {
         last_seen: None,
         reason: None,
         auto_reconnect: false,
+        observation_wanted: true,
     }
 }
 fn matches_guid(instance: &str, guid: &str) -> bool {
@@ -507,6 +508,7 @@ impl Runtime {
             record.clone()
         };
         drop(_pending);
+        self.observation_connection_changed(id).await;
         self.changed_devices().await?;
         {
             let store = self.store.read().await;
@@ -549,6 +551,7 @@ impl Runtime {
         }
         self.changed_devices().await?;
         if forget {
+            self.forget_observation(id).await;
             // Persistence can wait behind newer settings writes. Publish the
             // current projection under its guard, never a pre-wait clone.
             let store = self.store.read().await;

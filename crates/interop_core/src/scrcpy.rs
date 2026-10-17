@@ -1212,6 +1212,12 @@ wait "$child""#
                 activities.push(json!({"id":format!("transfer:{}",transfer["id"].as_str().unwrap_or_default()),"deviceId":transfer["deviceId"],"deviceName":device_name(transfer["deviceId"].as_str().unwrap_or_default()),"name":transfer["name"],"status":transfer["status"],"canStop":true,"stopImpact":"仅取消这一项传输；已完成的文件不回滚，未完成内容保留为实际中断状态。"}));
             }
         }
+        for observation in self.observation_list().await? {
+            if observation["wanted"] == true {
+                let id = observation["deviceId"].as_str().unwrap_or_default();
+                activities.push(json!({"id":format!("observation:{id}"),"deviceId":id,"deviceName":device_name(id),"name":"通知与来电观察","status":observation["phase"],"canStop":true,"stopImpact":"仅停止这台设备的通知与来电观察；剪贴板和媒体处理保持运行。"}));
+            }
+        }
         Ok(json!({"activities":activities,"sessions":sessions,"transfers":transfers["transfers"]}))
     }
 

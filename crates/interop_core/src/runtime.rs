@@ -26,6 +26,8 @@ pub struct Runtime {
     pub(crate) resource_admission: crate::resource::ResourceAdmission,
     pub(crate) audio_sources: Mutex<HashMap<String, crate::audio::AudioSource>>,
     pub(crate) companions: Mutex<HashMap<String, Arc<crate::companion::Companion>>>,
+    pub(crate) observations: Mutex<HashMap<String, crate::observation::Observation>>,
+    pub(crate) observation_wakeup: Arc<tokio::sync::Notify>,
     pub(crate) transfers: Mutex<HashMap<String, crate::files::Transfer>>,
     pub(crate) sharing: Mutex<Option<Arc<crate::sharing::ImportManager>>>,
     pub(crate) documents: crate::documents::CopyManager,
@@ -106,6 +108,8 @@ impl Runtime {
             resource_admission: crate::resource::ResourceAdmission::default(),
             audio_sources: Mutex::new(HashMap::new()),
             companions: Mutex::new(HashMap::new()),
+            observations: Mutex::new(HashMap::new()),
+            observation_wakeup: Arc::new(tokio::sync::Notify::new()),
             transfers: Mutex::new(HashMap::new()),
             sharing: Mutex::new(None),
             documents: crate::documents::CopyManager::default(),
@@ -116,6 +120,7 @@ impl Runtime {
         runtime.restore_transfers().await?;
         runtime.persist().await?;
         runtime.spawn_connection_monitor();
+        runtime.spawn_observation_supervisor();
         Ok(runtime)
     }
 
@@ -172,6 +177,7 @@ impl Runtime {
     }
 
     pub(crate) async fn stop_device_activities(&self, id: &str) -> CoreResult<()> {
+        self.observation_connection_changed(id).await;
         for transfer in self
             .transfers
             .lock()
@@ -241,6 +247,8 @@ impl Runtime {
             .await;
         }
         match command {
+            "observation.start" | "observation.stop" | "observation.status"
+            | "observation.list" => self.observation_command(command, &params).await,
             "state.snapshot" => Box::pin(self.state_snapshot()).await,
             "devices.list" => Ok(json!({"devices":self.store.read().await.devices})),
             "devices.add" => Box::pin(self.add_device(&params)).await,

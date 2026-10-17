@@ -17,14 +17,14 @@ impl Runtime {
             let sources = self.audio_command("audio.sources", &Value::Null).await?;
             let transfers = self.list_transfers().await?;
             let activities = self.activities().await?;
+            let observations = self.observation_list().await?;
             let shares = match self.sharing.lock().await.clone() {
                 Some(manager) => {
                     manager.command("sharing.pending", &Value::Null)?["shares"].clone()
                 }
                 None => json!([]),
             };
-            // Clone owners before awaiting individual caches. The existing
-            // notifications.list/calls.list commands may launch a companion.
+            // Clone owners before awaiting individual capability caches.
             let cached = self.companions.lock().await.clone();
             let mut companions = Vec::new();
             for device in &devices {
@@ -50,7 +50,7 @@ impl Runtime {
                     "devices":devices,"settings":settings,
                     "sessions":sessions["sessions"],"sources":sources["sources"],
                     "transfers":transfers["transfers"],"activities":activities["activities"],
-                    "shares":shares,"companions":companions
+                    "shares":shares,"companions":companions,"observations":observations
                 }));
             }
             tokio::task::yield_now().await;

@@ -62,7 +62,9 @@ try:
             break
         events.append(ready)
     assert ready["uid"] == 2000 and ready["protocol"] == 1
-    assert ready["notifications"]["status"] == "available", ready["notifications"].get("reason")
+    assert ready["notifications"]["status"] == "stopped"
+    assert ready["notifications"]["live"] is False
+    assert ready["calls"]["live"] is False
 
     def request(command, **params):
         global counter
@@ -79,6 +81,9 @@ try:
         result = request(command, **params)
         assert "error" not in result, result.get("error")
         return result["result"]
+
+    started = success("observation.set", enabled=True, epoch=1)
+    assert started["notifications"]["status"] == "available", started["notifications"].get("reason")
 
     fixture = subprocess.Popen(base + ["shell", "CLASSPATH=/data/local/tmp/interop-companion-fixture.jar app_process / com.interop.companion.Fixture"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     fixture_ready = json.loads(line(fixture))
@@ -155,6 +160,13 @@ try:
         call_state("idle")
         assert any(item.get("event") == "calls.incoming" for item in events), "real TelephonyRegistry callback"
         print("PASS: real virtual-modem callbacks, rapid replacement remains ringing after old action; all unsafe aggregate controls refused; no call-audio claim")
+
+    stopped = success("observation.set", enabled=False, epoch=2)
+    assert stopped["cleanupConfirmed"] is True, stopped
+    assert stopped["notifications"]["live"] is False and stopped["calls"]["live"] is False
+    assert success("notifications.list")["status"] == "stopped"
+    assert request("observation.set", enabled=True, epoch=1)["error"]["code"] == "stale_observation"
+    assert success("calls.list")["live"] is False
 
 finally:
     if options.calls:

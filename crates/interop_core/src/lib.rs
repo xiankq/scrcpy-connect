@@ -8,6 +8,7 @@ mod file_tree;
 mod files;
 pub mod media;
 mod model;
+mod observation;
 mod preferences;
 mod remote_helper;
 pub mod resource;

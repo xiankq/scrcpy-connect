@@ -55,6 +55,9 @@ public final class Main {
     private Context shellContext;
     private Object clipboard, clipboardToken;
     private boolean clipboardListening;
+    private volatile boolean observationEnabled;
+    private volatile long observationEpoch;
+    private boolean notificationsListening, callsListening;
 
     private static final class Item {
         StatusBarNotification sbn;
@@ -88,6 +91,8 @@ public final class Main {
     }
     private Object callback(String descriptor,final Runnable changed) throws Exception {
         final Class<?> api=Class.forName(descriptor);
+        final boolean observationCallback=!descriptor.equals("android.content.IOnPrimaryClipChangedListener");
+        final long callbackEpoch=observationEpoch;
         final Set<Integer> phoneStateTransactions=new HashSet<>();
         if(descriptor.equals("com.android.internal.telephony.IPhoneStateListener")) {
             Class<?> stub=Class.forName(descriptor+"$Stub");
@@ -99,6 +104,9 @@ public final class Main {
             @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags) {
                 if(code==IBinder.INTERFACE_TRANSACTION) {if(reply!=null) reply.writeString(descriptor);return true;}
                 data.enforceInterface(descriptor);
+                if(observationCallback && (!observationEnabled || callbackEpoch!=observationEpoch)) {
+                    if(reply!=null) reply.writeNoException();return true;
+                }
                 if(phoneStateTransactions.contains(code)) {
                     // Preserve every delivered state transition before the
                     // worker coalesces invalidations. In particular 1,0,1 must
@@ -132,14 +140,15 @@ public final class Main {
         if(output==null) return;
         output.write(message.toString());output.write('\n');output.flush();
     }
-    private void scheduleRefresh() {
-        if(!refreshPending.compareAndSet(false,true)) return;
-        worker.execute(()-> {
+    private void scheduleRefresh(long epoch) {
+        if(!observationEnabled || epoch!=observationEpoch || !refreshPending.compareAndSet(false,true)) return;
+        try {worker.execute(()-> {
             refreshPending.set(false);
+            if(!observationEnabled || epoch!=observationEpoch) return;
             try {refreshNotifications(true);refreshCalls(true);} catch(Exception e) {
                 try {send(new JSONObject().put("event","companion.error").put("reason",error(e)));} catch(Exception ignored) {}
             }
-        });
+        });} catch(RejectedExecutionException ignored) {refreshPending.set(false);}
     }
     private void prepareContext() throws Exception {
         Object thread=Class.forName("android.app.ActivityThread").getMethod("systemMain").invoke(null);
@@ -150,23 +159,50 @@ public final class Main {
     private void initialize() throws Exception {
         if(Process.myUid()!=2000) throw new Failure("wrong_identity","Companion requires the authorized ADB shell identity");
         try {userId=(Integer)Class.forName("android.app.ActivityManager").getMethod("getCurrentUser").invoke(null);} catch(Exception e) {userId=0;}
+        // Shared media/clipboard use never acquires notification or phone listeners.
+    }
+    private JSONObject observationSnapshot(boolean cleanupConfirmed) throws Exception {
+        return new JSONObject().put("observationEpoch",observationEpoch).put("observationEnabled",observationEnabled)
+            .put("cleanupConfirmed",cleanupConfirmed).put("notifications",notificationSnapshot()).put("calls",callSnapshot());
+    }
+    private JSONObject setObservation(JSONObject request) throws Exception {
+        long epoch=request.getLong("epoch");boolean enabled=request.getBoolean("enabled");
+        if(epoch<1 || epoch<observationEpoch) throw new Failure("stale_observation","The observation intent was replaced");
+        if(epoch==observationEpoch && enabled==observationEnabled && (!notificationsListening && !callsListening || enabled)) return observationSnapshot(true);
+        observationEnabled=false;observationEpoch=epoch;
+        notifications.clear();byKey.clear();callId=null;callState=0;rawPhoneState=-1;
+        phoneGeneration.incrementAndGet();emittedPhoneGeneration=-1;emittedCallState=-1;
+        notificationsTruncated=false;notificationError=null;callError=null;
+        boolean clean=true;
+        if(notificationsListening) {
+            try {invoke(notificationManager,"unregisterListener",notificationToken,userId);notificationsListening=false;notificationToken=null;}
+            catch(Exception e) {notificationError=error(e);clean=false;}
+        }
+        if(callsListening) {
+            try {
+                if(Build.VERSION.SDK_INT>=31) invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[0],false);
+                else invoke(registry,"listenForSubscriber",Integer.MAX_VALUE,PACKAGE,null,phoneToken,0,false);
+                callsListening=false;phoneToken=null;
+            } catch(Exception e) {callError=error(e);clean=false;}
+        }
+        if(!enabled || !clean) return observationSnapshot(clean);
+        observationEnabled=true;
+        final long currentEpoch=epoch;
         try {
             notificationManager=service("notification","android.app.INotificationManager");
-            notificationToken=callback("android.service.notification.INotificationListener",this::scheduleRefresh);
+            notificationToken=callback("android.service.notification.INotificationListener",()->scheduleRefresh(currentEpoch));
             invoke(notificationManager,"registerListener",notificationToken,new ComponentName(PACKAGE,"com.interop.companion.Listener"),userId);
-            refreshNotifications(false);
+            notificationsListening=true;refreshNotifications(false);
         } catch(Exception e) {notificationError=error(e);}
         try {
             telecom=service("telecom","com.android.internal.telecom.ITelecomService");
             registry=service("telephony.registry","com.android.internal.telephony.ITelephonyRegistry");
-            phoneToken=callback("com.android.internal.telephony.IPhoneStateListener",this::scheduleRefresh);
-            if(Build.VERSION.SDK_INT>=31) {
-                invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[]{6},true);
-            } else {
-                invoke(registry,"listenForSubscriber",Integer.MAX_VALUE,PACKAGE,null,phoneToken,32,true);
-            }
-            refreshCalls(false);
+            phoneToken=callback("com.android.internal.telephony.IPhoneStateListener",()->scheduleRefresh(currentEpoch));
+            if(Build.VERSION.SDK_INT>=31) invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[]{6},true);
+            else invoke(registry,"listenForSubscriber",Integer.MAX_VALUE,PACKAGE,null,phoneToken,32,true);
+            callsListening=true;refreshCalls(false);
         } catch(Exception e) {callError=error(e);}
+        return observationSnapshot(true);
     }
     // Only known AOSP IClipboard attribution layouts are accepted. Every call
     // uses the actual installed shell package; no synthetic android identity.
@@ -258,7 +294,7 @@ public final class Main {
         return -1;
     }
     private void refreshNotifications(boolean event) throws Exception {
-        if(notificationManager==null || notificationToken==null || notificationError!=null) return;
+        if(!observationEnabled || !notificationsListening || notificationError!=null) return;
         Object slice=invoke(notificationManager,"getActiveNotificationsFromListener",notificationToken,null,0);
         @SuppressWarnings("unchecked") List<StatusBarNotification> current=(List<StatusBarNotification>)invoke(slice,"getList");
         Map<String,Item> next=new LinkedHashMap<>();Map<String,Item> keys=new HashMap<>();
@@ -291,7 +327,8 @@ public final class Main {
     }
     private JSONArray notificationList() {JSONArray result=new JSONArray();for(Item item:notifications.values()) result.put(item.json);return result;}
     private JSONObject notificationSnapshot() throws Exception {
-        return new JSONObject().put("notifications",notificationList()).put("status",notificationError==null && !notificationsTruncated?"available":"limited")
+        if(!observationEnabled) return new JSONObject().put("notifications",new JSONArray()).put("status",notificationError==null?"stopped":"unknown").put("live",false).put("reason",notificationError==null?"通知与来电观察已停止。":notificationError).put("observationEpoch",observationEpoch).put("observationEnabled",false);
+        return new JSONObject().put("observationEpoch",observationEpoch).put("observationEnabled",true).put("notifications",notificationList()).put("status",notificationError==null && !notificationsTruncated?"available":"limited")
             .put("reason",notificationError!=null?notificationError:notificationsTruncated?"部分通知未同步，请进入手机查看。":JSONObject.NULL)
             .put("truncated",notificationsTruncated).put("live",notificationError==null).put("userId",userId);
     }
@@ -299,6 +336,7 @@ public final class Main {
         return (Boolean)invoke(service("window","android.view.IWindowManager"),"isKeyguardLocked");
     }
     private JSONObject notificationAction(String command,JSONObject request) throws Exception {
+        if(!observationEnabled || !notificationsListening) throw new Failure("observation_required","Start notification observation before using its actions");
         if(notificationError!=null) throw new Failure("permission_or_api_unavailable",notificationError);
         refreshNotifications(false);
         Item item=notifications.get(request.getString("notificationId"));
@@ -329,7 +367,7 @@ public final class Main {
         return new JSONObject().put("status","acceptedBySystem").put("acceptedBySystem",true).put("delivered",JSONObject.NULL).put("message","原应用动作已交给系统；未确认应用或消息服务送达，不会自动重发。");
     }
     private void refreshCalls(boolean event) throws Exception {
-        if(telecom==null || callError!=null) return;
+        if(!observationEnabled || !callsListening || callError!=null) return;
         int previous=callState;int actual=(Integer)invoke(telecom,"getCallStateUsingPackage",PACKAGE,null);
         long generation=phoneGeneration.get();
         if(actual!=0 && (callId==null || generation!=observedPhoneGeneration)) callId=UUID.randomUUID().toString();
@@ -342,11 +380,12 @@ public final class Main {
         }
     }
     private JSONObject callSnapshot() throws Exception {
+        if(!observationEnabled) return new JSONObject().put("calls",new JSONArray()).put("status",callError==null?"stopped":"unknown").put("live",false).put("reason",callError==null?"通知与来电观察已停止。":callError).put("audioStatus","unknown").put("observationEpoch",observationEpoch).put("observationEnabled",false);
         JSONArray calls=new JSONArray();
         if(callState!=0 && callError==null) calls.put(new JSONObject().put("id",callId).put("state",callState==1?"ringing":"active")
             .put("name","当前系统通话").put("canAnswer",false).put("canReject",false)
             .put("canHangup",false).put("canSetRoute",false).put("aggregate",true).put("generation",observedPhoneGeneration));
-        return new JSONObject().put("calls",calls).put("status","limited").put("controlStatus","limited").put("live",callError==null)
+        return new JSONObject().put("observationEpoch",observationEpoch).put("observationEnabled",true).put("calls",calls).put("status","limited").put("controlStatus","limited").put("live",callError==null)
             .put("reason",callError==null?"当前只能同步系统聚合通话状态；具体通话的安全定位尚未完成，请在手机原电话应用接听或挂断。多SIM、通话等待与第三方VoIP仍待验证。":callError)
             .put("audioStatus","unknown").put("audioRoute","声音与麦克风继续由被控手机处理；主控双向通话音频尚未实现。");
     }
@@ -358,6 +397,7 @@ public final class Main {
     }
     private JSONObject execute(JSONObject request) throws Exception {
         String command=request.getString("command");
+        if(command.equals("observation.set")) return setObservation(request);
         if(command.equals("notifications.list")) {refreshNotifications(false);return notificationSnapshot();}
         if(command.equals("notifications.open") || command.equals("notifications.dismiss") || command.equals("notifications.reply")) return notificationAction(command,request);
         if(command.equals("calls.list")) {refreshCalls(false);return callSnapshot();}
@@ -402,8 +442,7 @@ public final class Main {
         } finally {
             media.close();
             try {if(clipboardListening) clipboardInvoke("removePrimaryClipChangedListener",clipboardToken);} catch(Exception ignored) {}
-            try {if(notificationToken!=null) invoke(notificationManager,"unregisterListener",notificationToken,userId);} catch(Exception ignored) {}
-            try {if(phoneToken!=null && Build.VERSION.SDK_INT>=31) invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[0],false);} catch(Exception ignored) {}
+            try {setObservation(new JSONObject().put("enabled",false).put("epoch",observationEpoch+1));} catch(Exception ignored) {}
             watchdog.shutdownNow();worker.shutdownNow();server.close();
         }
     }

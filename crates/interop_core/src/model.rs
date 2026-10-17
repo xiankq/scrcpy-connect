@@ -83,6 +83,12 @@ pub struct Device {
     pub reason: Option<String>,
     #[serde(default)]
     pub auto_reconnect: bool,
+    #[serde(default = "observation_default")]
+    pub observation_wanted: bool,
+}
+
+fn observation_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
