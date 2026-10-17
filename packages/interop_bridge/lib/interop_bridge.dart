@@ -14,6 +14,7 @@ import 'src/media_intent.dart';
 import 'src/media/portable_video.dart';
 import 'src/media/portable_audio.dart';
 import 'src/media/video_presentation.dart';
+import 'src/media/video_output_lifecycle.dart';
 import 'src/media/media_snapshot.dart';
 import 'src/state_recovery.dart';
 import 'src/share_intake.dart';
@@ -56,6 +57,15 @@ class InteropBridge {
     core: _invoke,
     pauseOutput: _videoOutputs.pause,
     resumeOutput: _videoOutputs.resume,
+  );
+  late final VideoOutputLifecycle _videoLifecycle = VideoOutputLifecycle(
+    outputs: _textures,
+    core: _invoke,
+    closeOutput: _closeVideo,
+    reattachOutput: (id, endpoint) =>
+        _videoOutputs.reattach(id, endpoint: endpoint),
+    emit: _events.add,
+    isDisposed: () => _disposed,
   );
   late final _stateRecovery = StateRecovery(
     read: (current) => readMediaSnapshot(
@@ -256,19 +266,7 @@ class InteropBridge {
   }
 
   void _handleVideoOutput(Map<String, dynamic> event) {
-    if (_disposed) return;
-    _events.add(event);
-    if (event['type'] != 'session.output.changed') return;
-    final data = Map<String, dynamic>.from(event['data'] as Map);
-    final id = data['sessionId'];
-    if (id is! String || !_textures.containsKey(id)) return;
-    _textures[id] = mergeVideoOutputReceipt(_textures[id], data);
-    unawaited(
-      _invoke('session.ready', data).catchError((Object error) {
-        // A stopped session cannot be revived by a late generation receipt.
-        return <String, dynamic>{};
-      }),
-    );
+    _videoLifecycle.handle(event);
   }
 
   void _monitorVideo(String id) {
@@ -284,51 +282,10 @@ class InteropBridge {
   }
 
   Future<void> _pollVideo(String id, Timer owner) async {
-    bool current() => !_disposed && identical(_videoMonitors[id], owner);
-    try {
-      final texture = _textures[id];
-      if (!current() || texture == null) return;
-      final status = await _invoke('media.status', {
-        'relayId': texture['relayId'],
-      });
-      if (!current()) return;
-      if (status['endpoint'] is Map<Object?, Object?>) {
-        final endpoint = Map<String, dynamic>.from(status['endpoint'] as Map);
-        if ((endpoint['generation'] as num? ?? 0) >
-            (texture['generation'] as num? ?? 0)) {
-          await _videoOutputs.reattach(id, endpoint: endpoint);
-          return;
-        }
-      }
-      if (['closed', 'failed'].contains(status['status'])) {
-        if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
-          debugPrint('[connect.video] ended session=$id status=$status');
-        }
-        _events.add({
-          'type': 'session.failed',
-          'deviceId': texture['deviceId'],
-          'data': {'sessionId': id, 'reason': status['reason'] ?? '远端视频输入已结束。'},
-        });
-        await _invoke('session.stop', {'sessionId': id});
-        await _closeVideo(id);
-      }
-    } catch (error) {
-      if (!current()) return;
-      if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
-        debugPrint('[connect.video] reattach failed: $error');
-      }
-      _events.add({
-        'type': 'session.failed',
-        'deviceId': _textures[id]?['deviceId'],
-        'data': {'sessionId': id, 'reason': '画面恢复失败，请重新打开：$error'},
-      });
-      await _closeVideo(id);
-      try {
-        await _invoke('session.stop', {'sessionId': id});
-      } catch (_) {
-        /* A concurrent disconnect already ended this session. */
-      }
-    }
+    await _videoLifecycle.poll(
+      id,
+      current: () => !_disposed && identical(_videoMonitors[id], owner),
+    );
   }
 
   Future<void> _closeAudio(String id) {
