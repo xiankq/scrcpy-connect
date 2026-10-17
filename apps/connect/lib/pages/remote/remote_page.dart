@@ -102,6 +102,7 @@ class _RemotePageState extends State<RemotePage>
       sessionId.isNotEmpty;
 
   Future<void> releaseInputs() {
+    resetTextInput();
     var completion = releasePointers();
     final keys = Map<int, (String, int)>.from(heldKeys);
     heldKeys.clear();
@@ -140,6 +141,7 @@ class _RemotePageState extends State<RemotePage>
   }
 
   String previousText = inputSentinel;
+  bool resettingText = false;
   StreamSubscription<Json>? eventSubscription;
   Future<void> inputQueue = Future<void>.value();
   AppController get controller => widget.controller;
@@ -148,6 +150,9 @@ class _RemotePageState extends State<RemotePage>
   @override
   void initState() {
     super.initState();
+    // IMEs can finish composition without changing text; onChanged misses it.
+    text.addListener(textChanged);
+    inputFocus.addListener(inputFocusChanged);
     WidgetsBinding.instance.addObserver(this);
     eventSubscription = controller.eventStream().listen(onEvent);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -259,6 +264,7 @@ class _RemotePageState extends State<RemotePage>
           error = value(result, 'reason', '尚未获得设备的实时画面。请检查设备连接和视频能力。');
         }
       });
+      if (ime && widget.requestKeyboard) inputFocus.requestFocus();
       if (sessionId.isEmpty || result['textureId'] == null) return;
       view = controller.claimSessionView(
         sessionId,
@@ -984,19 +990,31 @@ class _RemotePageState extends State<RemotePage>
     }
   }
 
-  void textChanged(String next) {
+  void inputFocusChanged() {
+    if (!inputFocus.hasFocus) resetTextInput();
+  }
+
+  void resetTextInput() {
+    previousText = inputSentinel;
+    resettingText = true;
+    text.value = const TextEditingValue(
+      text: inputSentinel,
+      selection: TextSelection.collapsed(offset: 1),
+    );
+    resettingText = false;
+  }
+
+  void textChanged() {
+    if (resettingText) return;
     if (!canSendInput) {
-      previousText = inputSentinel;
-      text.value = const TextEditingValue(
-        text: inputSentinel,
-        selection: TextSelection.collapsed(offset: 1),
-      );
+      resetTextInput();
       return;
     }
     // Only send committed IME text; pinyin/candidate composition remains local.
     if (text.value.composing.isValid && !text.value.composing.isCollapsed) {
       return;
     }
+    final next = text.text;
     final before = previousText.characters.toList();
     final after = next.characters.toList();
     var common = 0;
@@ -1015,11 +1033,7 @@ class _RemotePageState extends State<RemotePage>
     // Keep one invisible local character so IME backspace can still delete
     // pre-existing remote text after the local insertion buffer is empty.
     if (next.isEmpty) {
-      previousText = inputSentinel;
-      text.value = const TextEditingValue(
-        text: inputSentinel,
-        selection: TextSelection.collapsed(offset: 1),
-      );
+      resetTextInput();
     }
   }
 
@@ -1129,6 +1143,8 @@ class _RemotePageState extends State<RemotePage>
     sessionRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     eventSubscription?.cancel();
+    text.removeListener(textChanged);
+    inputFocus.removeListener(inputFocusChanged);
     inputFocus.dispose();
     keyboardFocus.dispose();
     text.dispose();
@@ -1307,7 +1323,6 @@ class _RemotePageState extends State<RemotePage>
                       enableSuggestions: !sensitive,
                       autocorrect: !sensitive,
                       enableInteractiveSelection: !sensitive,
-                      onChanged: textChanged,
                       onSubmitted: (_) {
                         if (!canSendInput) return;
                         unawaited(

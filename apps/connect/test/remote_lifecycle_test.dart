@@ -15,6 +15,174 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'local IME commits Chinese and emoji once when composition ends',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final commands = <(String, Json)>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add((command, params));
+        return command == 'session.start'
+            ? {
+                'sessionId': 'original',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+              }
+            : {};
+      });
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: RemotePage(
+              controller: controller,
+              device: const {'id': 'phone'},
+              requestKeyboard: true,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+          isTrue,
+          reason: 'The public keyboard request must focus its input itself.',
+        );
+        expect(tester.testTextInput.hasAnyClients, isTrue);
+        await tester.showKeyboard(find.byType(TextField));
+        const composing = TextEditingValue(
+          text: '\u200B你好🙂',
+          selection: TextSelection.collapsed(offset: 5),
+          composing: TextRange(start: 1, end: 5),
+        );
+        tester.testTextInput.updateEditingValue(composing);
+        await tester.pump();
+        expect(commands.where((c) => c.$1 == 'session.text'), isEmpty);
+        tester.testTextInput.updateEditingValue(
+          composing.copyWith(composing: const TextRange.collapsed(5)),
+        );
+        await tester.pump();
+        tester.testTextInput.updateEditingValue(
+          composing.copyWith(composing: TextRange.empty),
+        );
+        await tester.pump();
+        expect(commands.where((c) => c.$1 == 'session.text').map((c) => c.$2), [
+          {'sessionId': 'original', 'text': '你好🙂'},
+        ]);
+        expect(commands.where((c) => c.$1 == 'session.key'), isEmpty);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
+  for (final interruption in ['pause', 'replacement', 'focus loss']) {
+    testWidgets('local IME discards uncommitted text after $interruption', (
+      tester,
+    ) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final events = StreamController<Json>.broadcast(sync: true);
+      final commands = <(String, Json)>[];
+      var starts = 0;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add((command, params));
+        if (command == 'session.start' || command == 'session.resume') {
+          if (command == 'session.start') starts++;
+          return {
+            'sessionId': 'session-$starts',
+            'textureId': starts,
+            'width': 200,
+            'height': 400,
+            'firstFrameDecoded': true,
+            'evidence': 'mdk.snapshot',
+          };
+        }
+        return {};
+      }, events: events.stream);
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: RemotePage(
+              controller: controller,
+              device: const {'id': 'phone'},
+              requestKeyboard: true,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.showKeyboard(find.byType(TextField));
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '\u200B旧内容🙂',
+            selection: TextSelection.collapsed(offset: 6),
+            composing: TextRange(start: 1, end: 6),
+          ),
+        );
+        await tester.pump();
+        if (interruption == 'pause') {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.inactive,
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.hidden,
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.paused,
+          );
+          await tester.pumpAndSettle();
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.hidden,
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.inactive,
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          await tester.pumpAndSettle();
+        } else if (interruption == 'replacement') {
+          events.add({
+            'type': 'session.disconnected',
+            'data': {'sessionId': 'session-1'},
+          });
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('重新检查'));
+          await tester.pumpAndSettle();
+        } else {
+          tester.widget<TextField>(find.byType(TextField)).focusNode!.unfocus();
+          await tester.pumpAndSettle();
+        }
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          '\u200B',
+        );
+        expect(commands.where((c) => c.$1 == 'session.text'), isEmpty);
+        await tester.showKeyboard(find.byType(TextField));
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '\u200B新🙂',
+            selection: TextSelection.collapsed(offset: 4),
+          ),
+        );
+        await tester.pump();
+        expect(commands.where((c) => c.$1 == 'session.text').map((c) => c.$2), [
+          {'sessionId': 'session-$starts', 'text': '新🙂'},
+        ]);
+        expect(commands.where((c) => c.$1 == 'session.key'), isEmpty);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+        await events.close();
+      }
+    });
+  }
   for (final systemBack in [false, true]) {
     for (final hanging in [false, true]) {
       testWidgets(

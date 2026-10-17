@@ -66,3 +66,5 @@ Requirements: R03、R17–R18、R20–R22、R39
 A58实际mdns-sd旧锁版有上游确认的HINFO解析器panic；精确0.21.2修复线已接入，离线上游原回归与窄编译通过。真实DNS-SD七项、三ABI及iOS／macOS／Windows核心check须按新锁版单独复验；不向共享宿主5353发送畸形包，不把依赖源码事实写成Android坏包现场验证。见[实际锁版契约](../../../docs/research/locked-mdns-contract.md)。
 
 上述新锁版复验现已通过：真实DNS-SD／TLS七项77.36秒，三端核心check4.24／4.18／8.26秒；最终完整门禁应用246／Bridge106／设计3、Rust186／58 ignored、三ABI／native／实际manifest和ELF全部通过。普通main实际R热重启2,929ms与设备列表截图已目视；不是物理USB／HAL／进程死亡／宿主整包或全设计通过。
+
+A59（2026-10-18）：真实IME链路证明目标原应用已提交你好🙂，但主控committed截图当时仍显示空查询。当前只是有顺序的截图差异，不能归因永久停帧；需在独立确认目标已绘制后限定时窗检查主控新像素／PTS，覆盖工具页暂停重进。未计动态视觉通过，见[输入证据](../../../docs/implementation/mobile-ime.md)。
