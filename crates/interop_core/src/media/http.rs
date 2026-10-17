@@ -408,7 +408,13 @@ async fn packet_group(
         let mut unit = first;
         for units in 1..=limit {
             match unit {
-                Unit::Dimensions(width, height) => dimensions = Some((width, height)),
+                Unit::Dimensions(width, height) => {
+                    dimensions = Some((width, height));
+                    // A reset may replace an encoder after CSD but before its
+                    // first frame. Only config packets from the newest session
+                    // belong to the frame we will eventually forward.
+                    configuration = None;
+                }
                 Unit::Packet { flags, bytes } if flags & (1 << 62) != 0 => {
                     let configuration = configuration.get_or_insert_with(Vec::new);
                     if configuration.len() + bytes.len() > MAX_CONFIGURATION_BYTES {

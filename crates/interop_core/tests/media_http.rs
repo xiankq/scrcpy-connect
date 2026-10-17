@@ -489,6 +489,53 @@ async fn running_video(
 }
 
 #[tokio::test]
+async fn consecutive_encoder_sessions_before_a_frame_keep_only_the_latest_configuration() {
+    for changed in [false, true] {
+        let streams = MediaStreams::default();
+        let raw = raw_listener().await;
+        let (relay, mut playback, mut source) = running_video(&streams, &raw, 1).await;
+        // The first encoder is reset after CSD, before any frame. The second
+        // encoder's SPS/PPS may be equal or different; neither may be appended
+        // to the abandoned session's configuration.
+        dimensions(&mut source, 288, 640).await;
+        config(&mut source, false).await;
+        dimensions(&mut source, 288, 640).await;
+        config(&mut source, changed).await;
+        frame(&mut source, 99_999, true).await;
+
+        if changed {
+            graceful_end(&mut playback).await;
+            let next = next_endpoint(&streams, &relay, 2).await;
+            drop(playback);
+            playback = client(&next, true).await;
+            matroska_has_first_keyframe_origin_and_size(
+                &first_matroska(&mut playback).await,
+                288,
+                640,
+                true,
+            );
+        } else {
+            use webm_iterable::{WebmIterator, matroska_spec::MatroskaSpec as Tag};
+            let chunk = http_chunk(&mut playback)
+                .await
+                .expect("equal replacement CSD must keep the original HTTP stream live");
+            let tags = WebmIterator::new(chunk.as_slice(), &[])
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            assert!(tags.contains(&Tag::SimpleBlock(vec![
+                0x81, 0, 0, 0x80, 0, 0, 0, 2, 0x65, 1
+            ])));
+            assert_eq!(status(&streams, &relay, "streaming").await["generation"], 1);
+        }
+        streams
+            .command("media.close", &json!({"relayId":relay["relayId"]}))
+            .await
+            .unwrap();
+        closed_raw(&mut source).await;
+    }
+}
+
+#[tokio::test]
 async fn absent_next_generation_consumer_times_out_and_releases_the_unique_raw_source() {
     let streams = MediaStreams::default();
     let raw = raw_listener().await;
