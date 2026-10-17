@@ -47,6 +47,7 @@ void main() {
     (tester) async {
       const traceFrames = bool.fromEnvironment('CONNECT_PERF_TRACE_FRAMES');
       const traceClock = bool.fromEnvironment('CONNECT_PERF_TRACE_CLOCK');
+      const adbBurst = bool.fromEnvironment('CONNECT_PERF_ADB_BURST');
       expect(
         !traceClock || traceFrames,
         true,
@@ -57,6 +58,7 @@ void main() {
         'videoPerformanceComplete': false,
         if (traceFrames) 'frameCorrelationComplete': false,
         if (traceClock) 'clockBracketsRequested': true,
+        'adbBurstRequested': adbBurst,
         'rounds': rounds,
       };
       Future<VideoJson> request(
@@ -167,6 +169,8 @@ void main() {
           await core.initialize(
             dataDirectory: '${support.path}/video-performance',
           );
+          // Persisted test state must not leak the previous comparison mode.
+          await request('settings.update', {'adbBurstMode': adbBurst});
           final added = await request('devices.add', {
             'address': const String.fromEnvironment(
               'CONNECT_E2E_ADDRESS',
@@ -224,7 +228,17 @@ void main() {
           await real(() async {
             final connected = Stopwatch()..start();
             if (!keepConnection || round == 0) {
-              await request('devices.connect', {'deviceId': device});
+              final connection = await request('devices.connect', {
+                'deviceId': device,
+              });
+              evidence['adbBurstActive'] = connection['adbBurstActive'];
+              expect(
+                connection['adbBurstActive'],
+                adbBurst,
+                reason: 'The transport comparison requires the actual negotiated mode.',
+              );
+            } else {
+              evidence['adbBurstActive'] = rounds.first['adbBurstActive'];
             }
             evidence['connectMs'] = connected.elapsedMilliseconds;
             evidence['connectionReused'] = keepConnection && round > 0;

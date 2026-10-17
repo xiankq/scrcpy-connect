@@ -400,6 +400,10 @@ impl Runtime {
             tls_policy: TlsPolicy::Optional,
             request_authorization: true,
             public_key_comment: "interop-controller".into(),
+            // Match upstream's experimental, opt-in rollout. Each new
+            // transport negotiates independently; an existing client keeps
+            // its wire format until it is explicitly disconnected.
+            burst_mode: self.store.read().await.settings["adbBurstMode"] == true,
             operations: operations(60, token),
         })
     }
@@ -528,7 +532,7 @@ impl Runtime {
         }
         if let Ok(client) = self.client(id).await {
             return Ok(
-                json!({"connected":!client.is_closed(),"deviceId":id,"device":self.device(id).await?}),
+                json!({"connected":!client.is_closed(),"deviceId":id,"device":self.device(id).await?,"adbBurstActive":client.burst_mode()}),
             );
         }
         let device = {
@@ -695,6 +699,7 @@ impl Runtime {
                 "设备在读取连接信息时已断开。",
             ));
         }
+        let burst_active = client.burst_mode();
         let device = {
             let mut store = self.store.write().await;
             // Keep the generation check atomic with the record/client update.
@@ -766,7 +771,7 @@ impl Runtime {
                 self.emit("device.changed", Some(id), json!(current));
             }
         }
-        Ok(json!({"connected":true,"deviceId":id,"device":device}))
+        Ok(json!({"connected":true,"deviceId":id,"device":device,"adbBurstActive":burst_active}))
     }
     pub(crate) async fn disconnect_device(&self, id: &str, forget: bool) -> CoreResult<Value> {
         self.device(id).await?;
@@ -1656,6 +1661,8 @@ impl Runtime {
         };
         Ok(
             json!({"deviceId":id,"device":device,"connected":client.is_some(),"tcpReachable":tcp_reachable,"usbBackendAvailable":interop_adb::usb::supported(),
+            "adbBurstActive":client.as_ref().map(Client::burst_mode),
+            "adbBurstRequested":self.store.read().await.settings["adbBurstMode"]==true,
             "wirelessProperties":properties,"identityPresent":true,"tlsProvider":"rustls-rustcrypto 0.0.2-alpha (experimental, not production-approved)",
             "notes":["配对端口与连接端口不同。","mDNS 不可用时仍可手动填写可达的连接地址。","网络可达、已配对与设备连接是独立状态。"]}),
         )

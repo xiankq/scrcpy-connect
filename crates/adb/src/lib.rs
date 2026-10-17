@@ -1,5 +1,6 @@
 //! Independent ADB host: no adb executable or localhost adb server is used.
 //! Transports are byte streams; platform USB permission and endpoint adapters stay outside the core.
+mod burst;
 mod client;
 mod compression;
 mod error;

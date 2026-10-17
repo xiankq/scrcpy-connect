@@ -40,6 +40,12 @@ impl Default for OperationOptions {
 #[derive(Debug, Clone)]
 pub struct ConnectOptions {
     pub identity: Option<Identity>,
+    /// Advertise experimental AOSP delayed_ack. Active only when the peer also supports it.
+    /// Uses a conservative 64 KiB receive window per stream (plus one negotiated
+    /// max-payload overshoot), with a 128 MiB connection receive reservation
+    /// budget including worst-case tiny-packet metadata. Budget exhaustion
+    /// rejects new streams without interrupting existing ones. Default: false.
+    pub burst_mode: bool,
     /// Explicitly allow a device authorization prompt after the key signature is rejected.
     pub request_authorization: bool,
     pub public_key_comment: String,
@@ -62,6 +68,7 @@ impl Default for ConnectOptions {
     fn default() -> Self {
         Self {
             identity: None,
+            burst_mode: false,
             request_authorization: false,
             public_key_comment: "interop-adb".into(),
             tls: None,
@@ -85,12 +92,16 @@ struct Route {
     data: mpsc::Sender<ReceivedPayload>,
     ack: mpsc::Sender<u32>,
     trace: Option<Subscription>,
+    burst: Option<crate::burst::Flow>,
 }
 type Routes = Arc<Mutex<HashMap<u32, Route>>>;
 
 struct Inner {
     info: DeviceInfo,
+    burst_mode: bool,
+    receive_budget: crate::burst::Budget,
     writer: mpsc::Sender<Frame>,
+    reverse_rejections: mpsc::Sender<Frame>,
     routes: Routes,
     next_id: AtomicU32,
     cancellation: CancellationToken,
@@ -157,13 +168,16 @@ impl Client {
                 "AUTH and TLS must use the same host identity".into(),
             ));
         }
+        let burst_mode = options.burst_mode;
         let mut transport: Box<dyn Transport> = Box::new(transport);
         let operation_options = options.operations.clone();
         let (transport, info) = bounded(
             operation_options.timeout,
             &operation_options.cancellation,
             async move {
-            let banner = b"host::features=shell_v2,cmd,stat_v2,ls_v2,abb,abb_exec,sendrecv_v2,sendrecv_v2_brotli,sendrecv_v2_lz4,sendrecv_v2_zstd;\0".to_vec();
+                let mut banner = b"host::features=shell_v2,cmd,stat_v2,ls_v2,abb,abb_exec,sendrecv_v2,sendrecv_v2_brotli,sendrecv_v2_lz4,sendrecv_v2_zstd".to_vec();
+                if burst_mode { banner.extend_from_slice(b",delayed_ack"); }
+                banner.extend_from_slice(b";\0");
                 Frame::new(
                     protocol::CNXN,
                     protocol::VERSION,
@@ -278,11 +292,24 @@ impl Client {
             },
         )
         .await?;
-        Self::from_negotiated_transport(transport, info)
+        Self::from_negotiated_transport_with_burst(transport, info, burst_mode)
     }
 
     /// Attach a transport after an external authenticated STLS/TLS connector has completed CNXN.
     pub fn from_negotiated_transport<T: Transport>(transport: T, info: DeviceInfo) -> Result<Self> {
+        Self::from_negotiated_transport_with_burst(transport, info, false)
+    }
+
+    /// Attach an externally authenticated/negotiated transport. `burst_mode`
+    /// must be true only if that connector actively advertised delayed_ack in
+    /// its own CNXN; the peer feature is additionally required. The legacy
+    /// attach method always retains classic flow control.
+    pub fn from_negotiated_transport_with_burst<T: Transport>(
+        transport: T,
+        info: DeviceInfo,
+        burst_mode: bool,
+    ) -> Result<Self> {
+        let burst_mode = burst_mode && info.features.contains("delayed_ack");
         if info.max_payload == 0
             || info.max_payload > protocol::MAX_PAYLOAD
             || info.version < protocol::LEGACY_VERSION
@@ -293,13 +320,21 @@ impl Client {
             ));
         }
         let (mut reader, mut writer) = tokio::io::split(transport);
+        // Credit never bypasses this shared bounded writer. With one frame in
+        // flight, outgoing payload storage is at most 65 * max_payload bytes.
         let (tx, mut rx) = mpsc::channel::<Frame>(64);
+        // Rejected device OPENs must not disconnect healthy streams when the
+        // data writer is full. Only empty CLSEs enter this bounded control queue.
+        let (reject_tx, mut reject_rx) = mpsc::channel::<Frame>(128);
         let routes: Routes = Arc::new(Mutex::new(HashMap::new()));
         let cancellation = CancellationToken::new();
         let failure = Arc::new(Mutex::new(None));
         let inner = Arc::new(Inner {
             info,
+            burst_mode,
+            receive_budget: Default::default(),
             writer: tx.clone(),
+            reverse_rejections: reject_tx,
             routes: routes.clone(),
             next_id: AtomicU32::new(1),
             cancellation: cancellation.clone(),
@@ -311,7 +346,12 @@ impl Client {
         let writer_cancel = cancellation.clone();
         tokio::spawn(async move {
             loop {
-                let frame = tokio::select! { _ = writer_cancel.cancelled() => break, frame = rx.recv() => match frame { Some(frame) => frame, None => break } };
+                let frame = tokio::select! {
+                    biased;
+                    _ = writer_cancel.cancelled() => break,
+                    Some(frame) = reject_rx.recv() => frame,
+                    frame = rx.recv() => match frame { Some(frame) => frame, None => break },
+                };
                 let result = tokio::select! { _ = writer_cancel.cancelled() => break, result = frame.write(&mut writer) => result };
                 if let Err(error) = result {
                     *writer_failure.lock().expect("failure mutex") =
@@ -351,7 +391,7 @@ impl Client {
                 let (frame, timing) = tokio::select! { _ = read_cancel.cancelled() => break, frame = receive => match frame { Ok(frame) => frame, Err(error) => { *read_failure.lock().expect("failure mutex") = Some(format!("transport read: {error}")); break; } } };
                 if frame.command == protocol::OPEN {
                     if let Some(inner) = read_inner.upgrade() {
-                        accept_reverse(inner, frame);
+                        accept_reverse(inner, frame).await;
                     }
                     continue;
                 }
@@ -366,15 +406,41 @@ impl Client {
                 let mut route_description = None;
                 {
                     let mut routes = read_routes.lock().expect("route mutex poisoned");
+                    let duplicate_remote = burst_mode
+                        && frame.command == protocol::OKAY
+                        && routes
+                            .get(&frame.arg1)
+                            .is_some_and(|route| route.remote == 0)
+                        && routes
+                            .values()
+                            .any(|route| route.remote == frame.arg0 && frame.arg0 != 0);
                     if let Some(route) = routes.get_mut(&frame.arg1) {
                         route_description = Some((route.remote, route.awaiting_ack));
-                        if frame.command != protocol::CLSE
-                            && (frame.arg0 == 0
-                                || (route.remote != 0 && route.remote != frame.arg0))
+                        if duplicate_remote
+                            || (frame.command != protocol::CLSE
+                                && (frame.arg0 == 0
+                                    || (route.remote != 0 && route.remote != frame.arg0)))
                         {
                             invalid = true;
                         } else {
                             match frame.command {
+                                protocol::OKAY if route.burst.is_some() => {
+                                    if route
+                                        .burst
+                                        .as_mut()
+                                        .expect("burst flow")
+                                        .acknowledge(&frame.payload)
+                                        .is_err()
+                                    {
+                                        invalid = true;
+                                    } else if route.remote == 0 {
+                                        route.remote = frame.arg0;
+                                        route.awaiting_ack = false;
+                                        if route.ack.try_send(frame.arg0).is_err() {
+                                            invalid = true;
+                                        }
+                                    }
+                                }
                                 protocol::OKAY
                                     if frame.payload.is_empty() && route.awaiting_ack =>
                                 {
@@ -385,6 +451,16 @@ impl Client {
                                     }
                                 }
                                 protocol::WRTE if route.remote != 0 => {
+                                    if let Some(burst) = route.burst.as_mut() {
+                                        if !burst.receive(frame.payload.len()) {
+                                            invalid = true;
+                                        }
+                                        // Empty WRTEs consume no byte credit; do not let them
+                                        // allocate unbounded receive/trace queue entries.
+                                        if frame.payload.is_empty() {
+                                            continue;
+                                        }
+                                    }
                                     // AOSP's EOF/error path flushes a final packet even
                                     // while an earlier WRTE awaits ACK. Preserve that
                                     // bounded tail instead of rejecting valid shells.
@@ -410,24 +486,32 @@ impl Client {
                                             timing.clock,
                                         ))
                                     });
-                                    if route
-                                        .data
-                                        .try_send(ReceivedPayload {
-                                            bytes: frame.payload,
-                                            timing: trace,
-                                        })
-                                        .is_err()
+                                    if invalid
+                                        || route
+                                            .data
+                                            .try_send(ReceivedPayload {
+                                                bytes: frame.payload,
+                                                timing: trace,
+                                            })
+                                            .is_err()
                                     {
                                         invalid = true;
                                     }
                                 }
                                 protocol::CLSE
-                                    if route.remote == 0 || frame.arg0 == route.remote =>
+                                    if (route.remote == 0
+                                        || frame.arg0 == route.remote
+                                        || (burst_mode && frame.arg0 == 0))
+                                        && (!burst_mode || frame.payload.is_empty()) =>
                                 {
                                     response = Some(Frame::new(
                                         protocol::CLSE,
                                         frame.arg1,
-                                        frame.arg0,
+                                        if burst_mode && frame.arg0 == 0 {
+                                            route.remote
+                                        } else {
+                                            frame.arg0
+                                        },
                                         Vec::new(),
                                     ));
                                     routes.remove(&frame.arg1);
@@ -446,6 +530,15 @@ impl Client {
                             Vec::new(),
                         ));
                     }
+                    if invalid && burst_mode {
+                        let remote = routes
+                            .remove(&frame.arg1)
+                            .map(|route| route.remote)
+                            .filter(|remote| *remote != 0)
+                            .unwrap_or(frame.arg0);
+                        response = Some(Frame::new(protocol::CLSE, frame.arg1, remote, Vec::new()));
+                        invalid = false;
+                    }
                 }
                 if invalid {
                     *read_failure.lock().expect("failure mutex") = Some(format!(
@@ -463,6 +556,11 @@ impl Client {
             read_routes.lock().expect("route mutex poisoned").clear();
         });
         Ok(Self { inner })
+    }
+
+    /// Whether delayed_ack was actively negotiated by both ends of this connection.
+    pub fn burst_mode(&self) -> bool {
+        self.inner.burst_mode
     }
 
     pub fn info(&self) -> &DeviceInfo {
@@ -507,8 +605,21 @@ impl Client {
         if self.is_closed() {
             return Err(Error::Closed);
         }
+        let reservation = if self.inner.burst_mode {
+            Some(
+                self.inner
+                    .receive_budget
+                    .reserve(self.inner.info.max_payload)?,
+            )
+        } else {
+            None
+        };
         let local = self.inner.next_stream_id()?;
-        let (data_tx, data) = mpsc::channel(2);
+        let (data_tx, data) = mpsc::channel(if self.inner.burst_mode {
+            crate::burst::RECEIVE_PACKETS
+        } else {
+            2
+        });
         let (ack_tx, ack) = mpsc::channel(2);
         {
             let mut routes = self.inner.routes.lock().expect("route mutex poisoned");
@@ -525,6 +636,9 @@ impl Client {
                     data: data_tx,
                     ack: ack_tx,
                     trace: None,
+                    burst: reservation
+                        .as_ref()
+                        .map(|reservation| crate::burst::Flow::new(reservation.clone(), 0, true)),
                 },
             );
         }
@@ -539,6 +653,8 @@ impl Client {
             trace_token: None,
             offset: 0,
             pending_ack: false,
+            pending_credit: 0,
+            _receive_reservation: reservation,
             options,
             eof: false,
             poisoned: false,
@@ -548,7 +664,16 @@ impl Client {
         let open_options = stream.options.clone();
         let result = bounded(open_options.timeout, &open_options.cancellation, async {
             stream
-                .send(Frame::new(protocol::OPEN, local, 0, payload))
+                .send(Frame::new(
+                    protocol::OPEN,
+                    local,
+                    if self.inner.burst_mode {
+                        crate::burst::RECEIVE_WINDOW as u32
+                    } else {
+                        0
+                    },
+                    payload,
+                ))
                 .await?;
             stream.remote = stream.ack.recv().await.ok_or(Error::Closed)?;
             Ok(())
@@ -562,50 +687,75 @@ impl Client {
     }
 }
 
-fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
-    let reject = |inner: &Inner| {
-        if inner
-            .writer
-            .try_send(Frame::new(protocol::CLSE, 0, frame.arg0, Vec::new()))
-            .is_err()
-        {
-            inner.cancellation.cancel();
-        }
-    };
+async fn reject_reverse(inner: &Inner, remote: u32) {
+    tokio::select! {
+        _ = inner.cancellation.cancelled() => {},
+        result = inner.reverse_rejections.send(Frame::new(protocol::CLSE, 0, remote, Vec::new())) => {
+            if result.is_err() { inner.cancellation.cancel(); }
+        },
+    }
+}
+
+async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
     let service = frame.payload.strip_suffix(&[0]).unwrap_or(&frame.payload);
-    let destination =
-        if frame.arg0 != 0 && frame.arg1 == 0 && service.len() <= 1024 && !service.contains(&0) {
-            inner.reverses.destination(service)
-        } else {
-            None
-        };
+    let destination = if frame.arg0 != 0
+        && (frame.arg1 != 0) == inner.burst_mode
+        && service.len() <= 1024
+        && !service.contains(&0)
+    {
+        inner.reverses.destination(service)
+    } else {
+        None
+    };
     let Some(destination) = destination else {
-        reject(&inner);
+        reject_reverse(&inner, frame.arg0).await;
         return;
     };
     let Ok(local) = inner.next_stream_id() else {
-        reject(&inner);
+        reject_reverse(&inner, frame.arg0).await;
         return;
     };
-    let (data_tx, data) = mpsc::channel(2);
+    let reservation = if inner.burst_mode {
+        match inner.receive_budget.reserve(inner.info.max_payload) {
+            Ok(reservation) => Some(reservation),
+            Err(_) => {
+                reject_reverse(&inner, frame.arg0).await;
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    let (data_tx, data) = mpsc::channel(if inner.burst_mode {
+        crate::burst::RECEIVE_PACKETS
+    } else {
+        2
+    });
     let (ack_tx, ack) = mpsc::channel(2);
-    {
+    let inserted = {
         let mut routes = inner.routes.lock().expect("route mutex poisoned");
         if routes.len() >= 128 || routes.values().any(|route| route.remote == frame.arg0) {
-            drop(routes);
-            reject(&inner);
-            return;
+            false
+        } else {
+            routes.insert(
+                local,
+                Route {
+                    remote: frame.arg0,
+                    awaiting_ack: false,
+                    data: data_tx,
+                    ack: ack_tx,
+                    trace: None,
+                    burst: reservation.as_ref().map(|reservation| {
+                        crate::burst::Flow::new(reservation.clone(), i64::from(frame.arg1), false)
+                    }),
+                },
+            );
+            true
         }
-        routes.insert(
-            local,
-            Route {
-                remote: frame.arg0,
-                awaiting_ack: false,
-                data: data_tx,
-                ack: ack_tx,
-                trace: None,
-            },
-        );
+    };
+    if !inserted {
+        reject_reverse(&inner, frame.arg0).await;
+        return;
     }
     let mut stream = AdbStream {
         inner: inner.clone(),
@@ -618,6 +768,8 @@ fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
         trace_token: None,
         offset: 0,
         pending_ack: false,
+        pending_credit: 0,
+        _receive_reservation: reservation,
         options: OperationOptions {
             timeout: Duration::from_secs(365 * 86400),
             cancellation: CancellationToken::new(),
@@ -652,11 +804,7 @@ fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
             drop(stream);
             return;
         }
-        if stream
-            .send(Frame::new(protocol::OKAY, local, frame.arg0, Vec::new()))
-            .await
-            .is_err()
-        {
+        if stream.accept_reverse().await.is_err() {
             return;
         }
         let _ = socket.set_nodelay(true);
@@ -693,12 +841,66 @@ fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
                 .await?;
             }
         };
+        tokio::pin!(from_device_task);
         tokio::select! {
             _ = inner.cancellation.cancelled() => {},
-            _ = from_device_task => {},
-            _ = from_host_task => {},
+            _ = &mut from_device_task => {},
+            result = from_host_task => {
+                // A remote CLSE also wakes a sender waiting on byte credit.
+                // Keep delivering already-routed input before closing its TCP
+                // destination; selecting the woken writer must not lose tails.
+                if inner.burst_mode && matches!(result, Err(Error::Closed))
+                    && !inner.cancellation.is_cancelled()
+                {
+                    tokio::select! {
+                        _ = inner.cancellation.cancelled() => {},
+                        _ = &mut from_device_task => {},
+                    }
+                }
+            },
         }
     });
+}
+
+async fn write_burst_frame(inner: &Inner, local: u32, remote: u32, bytes: &[u8]) -> Result<()> {
+    let changed = inner
+        .routes
+        .lock()
+        .expect("route mutex poisoned")
+        .get(&local)
+        .and_then(|route| route.burst.as_ref())
+        .map(|flow| flow.changed.clone())
+        .ok_or(Error::Closed)?;
+    loop {
+        let notified = changed.notified();
+        tokio::pin!(notified);
+        // Register before checking credit so an OKAY/CLSE cannot be lost.
+        notified.as_mut().enable();
+        let ready = {
+            let routes = inner.routes.lock().expect("route mutex poisoned");
+            let route = routes.get(&local).ok_or(Error::Closed)?;
+            route.burst.as_ref().expect("burst flow").send_credit > 0
+        };
+        if ready {
+            let permit = tokio::select! {
+                _ = inner.cancellation.cancelled() => return Err(Error::Closed),
+                permit = inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
+            };
+            let mut routes = inner.routes.lock().expect("route mutex poisoned");
+            let route = routes.get_mut(&local).ok_or(Error::Closed)?;
+            let flow = route.burst.as_mut().expect("burst flow");
+            // A negative OKAY may have arrived while waiting for the writer.
+            if flow.send_credit > 0 {
+                flow.send_credit -= bytes.len() as i64;
+                permit.send(Frame::new(protocol::WRTE, local, remote, bytes.to_vec()));
+                return Ok(());
+            }
+        }
+        tokio::select! {
+            _ = inner.cancellation.cancelled() => return Err(Error::Closed),
+            _ = &mut notified => {},
+        }
+    }
 }
 
 async fn write_stream_frames(
@@ -709,6 +911,10 @@ async fn write_stream_frames(
     bytes: &[u8],
 ) -> Result<()> {
     for chunk in bytes.chunks(inner.info.max_payload) {
+        if inner.burst_mode {
+            write_burst_frame(inner, local, remote, chunk).await?;
+            continue;
+        }
         {
             let mut routes = inner.routes.lock().expect("route mutex poisoned");
             let route = routes.get_mut(&local).ok_or(Error::Closed)?;
@@ -735,7 +941,8 @@ async fn write_stream_frames(
     Ok(())
 }
 
-/// A logical ADB stream. Reads acknowledge only consumed packets, providing per-stream backpressure.
+/// A logical ADB stream. Reads acknowledge only consumed bytes (or complete
+/// packets in classic mode), providing per-stream backpressure.
 /// An interrupted write closes this stream because the peer's ACK state is then uncertain.
 pub struct AdbStream {
     inner: Arc<Inner>,
@@ -748,12 +955,102 @@ pub struct AdbStream {
     trace_token: Option<Arc<()>>,
     offset: usize,
     pending_ack: bool,
+    pending_credit: usize,
+    _receive_reservation: Option<Arc<crate::burst::Reservation>>,
     options: OperationOptions,
     eof: bool,
     poisoned: bool,
 }
 
 impl AdbStream {
+    async fn accept_reverse(&self) -> Result<()> {
+        let permit = tokio::select! {
+            _ = self.inner.cancellation.cancelled() => return Err(Error::Closed),
+            permit = self.inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
+        };
+        let mut routes = self.inner.routes.lock().expect("route mutex poisoned");
+        let route = routes.get_mut(&self.local).ok_or(Error::Closed)?;
+        let payload = if let Some(flow) = route.burst.as_mut() {
+            flow.receive_credit = crate::burst::RECEIVE_WINDOW as i64;
+            (crate::burst::RECEIVE_WINDOW as i32).to_le_bytes().to_vec()
+        } else {
+            Vec::new()
+        };
+        permit.send(Frame::new(protocol::OKAY, self.local, self.remote, payload));
+        Ok(())
+    }
+
+    fn try_return_credit(&mut self) {
+        if self.pending_credit == 0 {
+            return;
+        }
+        let Ok(permit) = self.inner.writer.try_reserve() else {
+            return;
+        };
+        self.return_credit(permit);
+        self.pending_credit = 0;
+    }
+
+    fn return_credit(&self, permit: mpsc::Permit<'_, Frame>) {
+        let mut routes = self.inner.routes.lock().expect("route mutex poisoned");
+        if let Some(flow) = routes
+            .get_mut(&self.local)
+            .and_then(|route| route.burst.as_mut())
+        {
+            flow.receive_credit += self.pending_credit as i64;
+            debug_assert!(flow.receive_credit <= crate::burst::RECEIVE_WINDOW as i64);
+            permit.send(Frame::new(
+                protocol::OKAY,
+                self.local,
+                self.remote,
+                (self.pending_credit as i32).to_le_bytes().to_vec(),
+            ));
+        }
+    }
+
+    async fn flush_credit(&mut self) -> Result<()> {
+        if self.pending_credit == 0 {
+            return Ok(());
+        }
+        let changed = self
+            .inner
+            .routes
+            .lock()
+            .expect("route mutex poisoned")
+            .get(&self.local)
+            .and_then(|route| route.burst.as_ref())
+            .map(|flow| flow.changed.clone());
+        let Some(changed) = changed else {
+            self.pending_credit = 0;
+            return Ok(());
+        };
+        loop {
+            let notified = changed.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if !self
+                .inner
+                .routes
+                .lock()
+                .expect("route mutex poisoned")
+                .contains_key(&self.local)
+            {
+                // CLSE makes outstanding receive credit irrelevant. Do not let
+                // a full writer queue prevent delivery of already-routed tails.
+                self.pending_credit = 0;
+                return Ok(());
+            }
+            let permit = tokio::select! {
+                _ = self.inner.cancellation.cancelled() => { self.pending_credit = 0; return Ok(()); },
+                permit = self.inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
+                _ = &mut notified => continue,
+            };
+            self.return_credit(permit);
+            self.pending_credit = 0;
+            return Ok(());
+        }
+    }
+
     /// Enable or disable bounded, per-WRTE receive timing for this stream.
     /// The clock must return monotonic microseconds in the caller's domain.
     /// It must be quick and must not call back into this client. Changing the
@@ -790,6 +1087,10 @@ impl AdbStream {
                     let count = output.len().min(self.buffer.len() - self.offset);
                     output[..count].copy_from_slice(&self.buffer[self.offset..self.offset + count]);
                     self.offset += count;
+                    if self.inner.burst_mode {
+                        self.pending_credit += count;
+                        self.try_return_credit();
+                    }
                     if self.offset == self.buffer.len() && self.pending_ack {
                         // Try synchronously so cancelling read cannot lose already-copied bytes.
                         let ack = Frame::new(protocol::OKAY, self.local, self.remote, Vec::new());
@@ -798,6 +1099,9 @@ impl AdbStream {
                         }
                     }
                     return Ok(count);
+                }
+                if self.inner.burst_mode {
+                    self.flush_credit().await?;
                 }
                 if self.pending_ack {
                     // A close can follow the final WRTE; consume queued tail before reporting EOF.
@@ -832,7 +1136,7 @@ impl AdbStream {
                                 });
                         }
                         self.offset = 0;
-                        self.pending_ack = true;
+                        self.pending_ack = !self.inner.burst_mode;
                     }
                     None => {
                         self.eof = true;

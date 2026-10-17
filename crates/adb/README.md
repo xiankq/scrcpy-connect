@@ -28,6 +28,22 @@ failed sync operations close their affected stream rather than reuse uncertain
 protocol state. Callers should drop a sync object when abandoning an in-progress
 operation.
 
+`ConnectOptions::burst_mode` opts into AOSP's experimental `delayed_ack` byte-credit
+flow control; it defaults to `false`. Both peers must advertise support, and
+`Client::burst_mode()` reports the actual negotiated mode. Without mutual support
+the connection retains classic per-packet acknowledgements. External connectors
+must use `from_negotiated_transport_with_burst` only when their own handshake
+advertised the feature; `from_negotiated_transport` always keeps classic framing.
+Changing an application's preference does not renegotiate an existing connection.
+
+Burst streams reserve a 64 KiB receive window plus one negotiated maximum-payload
+overshoot and conservative queue metadata. A connection caps these reservations
+at 128 MiB; ownership persists through close until the consumer drains or drops
+the tail. Partial reads return consumed byte credit, and signed credit deltas may
+temporarily take a sender below zero. This is a protocol capability, not a promise
+of lower video latency. Wire tests cover negotiation, credit, backpressure, reverse
+streams, cancellation and TLS; real-device/platform coverage is reported separately.
+
 For opt-in receive diagnostics, `AdbStream::set_read_trace_clock` accepts a quick,
 non-reentrant monotonic microsecond clock. `read_trace()` returns only the latest
 WRTE receipt: payload read start/completion, routing and first consumption in
@@ -158,5 +174,5 @@ Protocol behavior is checked against fixed AOSP revision
 [JDWP](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/daemon/jdwp_service.cpp),
 and [sync](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/daemon/file_sync_service.cpp).
 
-Typed host forwarding, package management, delayed ACK, incremental install and
+Typed host forwarding, package management, incremental install and
 a 5037 smart-socket compatibility server remain outside this crate's current API.
