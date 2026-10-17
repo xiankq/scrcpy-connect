@@ -44,7 +44,7 @@ public final class Main {
     private final Map<String, Item> byKey = new HashMap<>();
     private Object notificationManager, telecom, registry, notificationToken, phoneToken;
     private int userId, callState;
-    private String notificationError, callError, callId;
+    private String notificationError, callError, callId, callUiError;
     private volatile int rawPhoneState=-1;
     private final AtomicLong phoneGeneration=new AtomicLong();
     private long observedPhoneGeneration;
@@ -172,7 +172,7 @@ public final class Main {
         observationEnabled=false;observationEpoch=epoch;
         notifications.clear();byKey.clear();callId=null;callState=0;rawPhoneState=-1;
         phoneGeneration.incrementAndGet();emittedPhoneGeneration=-1;emittedCallState=-1;
-        notificationsTruncated=false;notificationError=null;callError=null;
+        notificationsTruncated=false;notificationError=null;callError=null;callUiError=null;
         boolean clean=true;
         if(notificationsListening) {
             try {invoke(notificationManager,"unregisterListener",notificationToken,userId);notificationsListening=false;notificationToken=null;}
@@ -386,9 +386,47 @@ public final class Main {
         if(callState!=0 && callError==null) calls.put(new JSONObject().put("id",callId).put("state",callState==1?"ringing":"active")
             .put("name","当前系统通话").put("canAnswer",false).put("canReject",false)
             .put("canHangup",false).put("canSetRoute",false).put("aggregate",true).put("generation",observedPhoneGeneration));
+        boolean uiApiAvailable=systemCallUiMethod()!=null;
         return new JSONObject().put("observationEpoch",observationEpoch).put("observationEnabled",true).put("calls",calls).put("status","limited").put("controlStatus","limited").put("live",callError==null)
+            .put("canOpenSystemCallUi",callError==null && callsListening && callState!=0 && uiApiAvailable && callUiError==null)
+            .put("canRetrySystemCallUi",callError==null && callsListening && callState!=0 && uiApiAvailable && callUiError!=null)
+            .put("systemCallUiStatus",callUiError!=null?"limited":telecom==null?"unknown":uiApiAvailable?"available":"unsupported")
+            .put("systemCallUiReason",callUiError!=null?"打开系统通话界面失败："+callUiError+"。可重试打开，或在手机上继续处理。":!uiApiAvailable?"此系统未提供已适配的通话界面打开接口。":"仅请求打开手机当前系统通话界面，不定位或控制某一通电话；界面是否出现需在远控画面确认。")
             .put("reason",callError==null?"当前只能同步系统聚合通话状态；具体通话的安全定位尚未完成，请在手机原电话应用接听或挂断。多SIM、通话等待与第三方VoIP仍待验证。":callError)
             .put("audioStatus","unknown").put("audioRoute","声音与麦克风继续由被控手机处理；主控双向通话音频尚未实现。");
+    }
+    private Method systemCallUiMethod() {
+        if(telecom==null) return null;
+        for(Method method:telecom.getClass().getMethods()) {
+            if(!method.getName().equals("showInCallScreen")) continue;
+            Class<?>[] types=method.getParameterTypes();
+            if(Arrays.equals(types,new Class<?>[]{boolean.class,String.class,String.class})
+                || Arrays.equals(types,new Class<?>[]{boolean.class,String.class})) return method;
+        }
+        return null;
+    }
+    private JSONObject openSystemCallUi(JSONObject request) throws Exception {
+        if(request.has("callId")) throw new Failure("call_targeting_unavailable","此入口仅打开手机当前系统通话界面，不能定位指定通话。");
+        if(!observationEnabled || !callsListening || callError!=null) throw new Failure("observation_required","请先核验此设备的实时通话状态。");
+        refreshCalls(false);
+        if(callState==0) throw new Failure("no_current_call","手机当前已没有系统通话，请重新核验通话状态。");
+        int currentUser=(Integer)Class.forName("android.app.ActivityManager").getMethod("getCurrentUser").invoke(null);
+        if(currentUser!=userId) throw new Failure("user_changed","被控设备的当前用户已变化，请重新核验通话。");
+        Method method=systemCallUiMethod();
+        if(method==null) throw new Failure("call_ui_unsupported","此系统未提供已适配的通话界面打开接口，请在手机上继续处理。");
+        try {
+            method.setAccessible(true);
+            if(method.getParameterTypes().length==3) method.invoke(telecom,false,PACKAGE,null);
+            else method.invoke(telecom,false,PACKAGE);
+        } catch(Exception e) {
+            Exception cause=e instanceof InvocationTargetException && e.getCause() instanceof Exception?(Exception)e.getCause():e;
+            callUiError=error(cause);
+            throw new Failure(cause instanceof SecurityException?"permission_denied":"call_ui_unavailable","手机未接受打开系统通话界面的请求："+callUiError);
+        }
+        callUiError=null;
+        return new JSONObject().put("target","currentSystemCall").put("status","acceptedBySystem")
+            .put("acceptedBySystem",true).put("uiVisible",JSONObject.NULL).put("callControlled",false)
+            .put("message","系统已接受打开当前通话界面的请求；请在远控画面确认，不代表接听或挂断了通话。");
     }
     private JSONObject callAction(JSONObject request) throws Exception {
         // Telecom's aggregate endCall/acceptRingingCall take no call object.
@@ -402,6 +440,7 @@ public final class Main {
         if(command.equals("notifications.list")) {refreshNotifications(false);return notificationSnapshot();}
         if(command.equals("notifications.open") || command.equals("notifications.dismiss") || command.equals("notifications.reply")) return notificationAction(command,request);
         if(command.equals("calls.list")) {refreshCalls(false);return callSnapshot();}
+        if(command.equals("calls.open")) return openSystemCallUi(request);
         if(command.equals("calls.action")) return callAction(request);
         if(command.equals("clipboard.get")) return clipboardGet();
         if(command.equals("clipboard.set")) return clipboardSet(request);

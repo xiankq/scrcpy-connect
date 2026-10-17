@@ -20,6 +20,8 @@ class CallsPage extends HookConsumerWidget {
       appControllerProvider.select((state) => state.eventRevision),
     );
     final starting = useState(false);
+    final openingCallUi = useState(false);
+    final callUiFailure = useState<String?>(null);
     return PageFrame(
       title: '来电与通话',
       subtitle: deviceName(device),
@@ -56,6 +58,29 @@ class CallsPage extends HookConsumerWidget {
           final verified =
               data['live'] == true &&
               (state == 'available' || state == 'limited');
+          Future<void> openCurrentCallUi() async {
+            if (openingCallUi.value) return;
+            openingCallUi.value = true;
+            callUiFailure.value = null;
+            try {
+              final result = await perform(context, controller, 'calls.open', {
+                'deviceId': device['id'],
+              });
+              if (!context.mounted || result == null) return;
+              if (result['acceptedBySystem'] != true ||
+                  result['target'] != 'currentSystemCall') {
+                callUiFailure.value = '手机尚未确认接受打开系统通话界面的请求。';
+                return;
+              }
+              await openRemoteRoute(context, deviceId: value(device, 'id'));
+            } finally {
+              if (context.mounted) {
+                openingCallUi.value = false;
+                refresh();
+              }
+            }
+          }
+
           return ListView(
             padding: const EdgeInsets.all(24),
             children: [
@@ -76,6 +101,27 @@ class CallsPage extends HookConsumerWidget {
                     ),
                     if (value(data, 'reason').isNotEmpty)
                       StateNote(value(data, 'reason')),
+                    if (value(data, 'systemCallUiReason').isNotEmpty)
+                      StateNote(value(data, 'systemCallUiReason')),
+                    if (callUiFailure.value != null)
+                      StateNote(callUiFailure.value!),
+                    if (verified &&
+                        calls.isNotEmpty &&
+                        (data['canOpenSystemCallUi'] == true ||
+                            data['canRetrySystemCallUi'] == true))
+                      TextButton.icon(
+                        onPressed: openingCallUi.value
+                            ? null
+                            : openCurrentCallUi,
+                        icon: const Icon(LucideIcons.phone),
+                        label: Text(
+                          openingCallUi.value
+                              ? '正在打开…'
+                              : data['canRetrySystemCallUi'] == true
+                              ? '重试打开系统通话界面'
+                              : '打开系统通话界面',
+                        ),
+                      ),
                     Text(
                       value(data, 'audioRoute', '声音与麦克风继续由被控手机处理'),
                       style: Theme.of(context).textTheme.bodySmall,

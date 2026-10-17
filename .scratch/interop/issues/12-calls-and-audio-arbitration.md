@@ -38,3 +38,5 @@ Requirements: R26、R32、R39
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
 
 2026-10-18渐进交付：A23设备声音已列入当前活动并可按精确音源独立停止，Core与本地fvp输出均释放；真实AVD9秒通过且连接／观察保留。该链路不证明物理扬声器声音、PSTN／VoIP接听或双向通话音频，具体呼叫控制与通话音频继续开放。
+
+2026-10-18当前系统通话界面接续：calls.open只以deviceId请求当前系统通话界面，拒绝callId、不执行接听／挂断；页面成功后进入已有全屏远控。真实公开Runtime9.94秒确认InCallActivity前台、modem保持ringing及旧动作拒绝；JAR已同步，正式页面到全屏像素的产品E2E仍待验。不能因此关闭具体呼叫控制或双向通话音频，见[实施边界](../../../docs/implementation/current-call-ui.md)。

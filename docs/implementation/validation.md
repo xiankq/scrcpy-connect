@@ -677,3 +677,15 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 三AVD互异名称＋两端独占marker同时由host和公开files.list核对映射，外部非导出provider凭真实grant向产品提交PNG。页面明确选A后调用公开focusDevice(B)，仍只向A上传；host独立读取68字节与SHA256 `ce01132c640469ef7fb497e7496b12f5046d633b588f397e5c45a6c3efc85037`一致、B无同路径文件、消费后两次刷新不新增传输，精确清理全true。目标确认截图已目视；两台同型号默认同名的选项仍需可辨识线索，不以此声称完整视觉完成。窄分析通过；不沿用上一批全门禁。
 
 运行准备期间宿主发生重启（uptime证据），先后出现磁盘不足及KVM权限暂不可用；只清理本仓可重建Rust增量缓存，KVM恢复后重新启动隔离AVD。两条占约20GB的编辑器只读文件扫描已结束，无配置修改。此前/tmp日志／预览随主机重启消失属临时证据生命周期；本轮通过证据写入新/tmp目录，不伪造恢复测试。该事件不是产品进程或网络恢复通过。
+
+## 渐进输入／通话UI接续与视觉边界（2026-10-18）
+
+最终公开页面43项通过，`/tmp/connect-ime-calls-widget-final.log`；最终6文件严格分析无问题。IME组合结束／文字不变漏提交和入口不自动聚焦两处分别先红后绿；前者仅onChanged，后者外层Focus先抢焦点，需要明确requestFocus。
+
+真实IME第七轮30秒通过（2.64秒构建／555ms安装），`/tmp/connect-remote-ime-r7.log`、`/tmp/connect-e2e/remote-ime-r7/result.json`：真实decoder／公开键盘工具、实际scrcpy touch与系统Settings六个独立XML checkpoint，原文你好🙂一次、组合无泄漏、延迟不重复及查询恢复，inspectionError=null。[完整命令和失败](mobile-ime.md)。第1–4轮ANR／异步工具加载／真实焦点缺陷／XML实体读取失败不计通过；第5轮功能通过但主控ANR遮盖截图，第6轮因通话测试旧ENDCALL清理导致目标Asleep失败，已改精确取消自有模拟号码并显式唤醒。
+
+**A59视觉未通过**：第7轮目标截图显示新文本，主控截图仍为空查询。这里只证实捕获时差异，尚未对齐实际绘制／媒体PTS，不据此断言永久停帧；首帧snapshot不证明持续画面更新。保留原图／回执，回填07／08／20，后续限定时窗验证新像素。
+
+通话当前UI接续真实Runtime最终9.94秒／构建1.28秒通过，`/tmp/connect-call-system-ui-r2.log`。先让Settings前台，再calls.open并独立dumpsys确认真实InCallActivity前台，modem仍ringing；旧操作不能结束替代call。夹具只取消自己的两个模拟号码，不再全局ENDCALL。该证据不替正式CallsPage→全屏像素E2E，不代表具体callId控制或双向音频。[命令与JAR摘要](current-call-ui.md)。本批未跑新的完整门禁／三ABI留存或其他宿主整包。
+
+普通lib/main.dart当前源码实际构建27.7秒／安装555ms，CLI R热重启1,763ms，`/tmp/connect-ime-call-main.log`；设备列表空态截图`/tmp/connect-ime-call-main-restarted.png`已目视后detach。两条FRB旧isolate投递告警和启动跳帧仍有，该首页不代替A59或完整动态视觉。

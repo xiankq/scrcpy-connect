@@ -19,7 +19,7 @@ use std::{
 use tokio::sync::{RwLock, mpsc, oneshot, watch};
 
 const SERVER: &[u8] = include_bytes!("../../../servers/companion/companion.jar");
-const SERVER_SHA: &str = "4a3082a8c4bcfe2a83293136dae513a0d5f9436bbe4f3db353c7b95341c28960";
+const SERVER_SHA: &str = "77007b4fb29e51296a448e669178f43c775854b3f4665ea5af44412c207447de";
 const MAX_MESSAGE: usize = 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -579,6 +579,21 @@ impl Runtime {
         params: &Value,
     ) -> CoreResult<Value> {
         let id = required(params, "deviceId")?;
+        if command == "calls.open" {
+            if params.get("callId").is_some() {
+                return Err(CoreError::new(
+                    "call_targeting_unavailable",
+                    "此入口仅打开手机当前系统通话界面，不能定位指定通话。",
+                ));
+            }
+            let observation = self.observation_status(id).await?;
+            if observation["wanted"] != true || observation["calls"]["live"] != true {
+                return Err(CoreError::new(
+                    "observation_required",
+                    "请先核验此设备的实时通话状态。",
+                ));
+            }
+        }
         if command == "observation.set"
             && params["enabled"] == true
             && !self

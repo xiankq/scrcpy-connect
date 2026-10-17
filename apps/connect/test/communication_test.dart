@@ -17,6 +17,74 @@ import 'package:flutter_test/flutter_test.dart';
 const device = {'id': 'phone', 'name': '来源手机', 'status': 'connected'};
 
 void main() {
+  for (final accepted in [true, false]) {
+    testWidgets(
+      'current system call opens remote view only after system UI acceptance: $accepted',
+      (tester) async {
+        final commands = <(String, Json)>[];
+        final opening = Completer<Json>();
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          commands.add((command, params));
+          if (command == 'calls.open') return opening.future;
+          if (command == 'calls.list') {
+            return {
+              'status': 'limited',
+              'live': true,
+              'canOpenSystemCallUi': true,
+              'calls': [
+                {
+                  'id': 'aggregate-observation',
+                  'state': 'ringing',
+                  'aggregate': true,
+                },
+              ],
+            };
+          }
+          return {};
+        });
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            theme: ConnectTokens.theme(Brightness.light),
+            home: CallsPage(controller: controller, device: device),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('打开系统通话界面'));
+        await tester.tap(find.text('打开系统通话界面'));
+        await tester.pump();
+        expect(commands.where((entry) => entry.$1 == 'calls.open').single.$2, {
+          'deviceId': 'phone',
+        });
+        expect(commands.where((entry) => entry.$1 == 'session.start'), isEmpty);
+        if (accepted) {
+          opening.complete({
+            'target': 'currentSystemCall',
+            'acceptedBySystem': true,
+            'uiVisible': null,
+            'callControlled': false,
+          });
+        } else {
+          opening.completeError(Exception('设备拒绝打开系统通话界面'));
+        }
+        await tester.pumpAndSettle();
+        expect(
+          commands.where((entry) => entry.$1 == 'session.start'),
+          accepted ? isNotEmpty : isEmpty,
+        );
+        expect(commands.where((entry) => entry.$1 == 'calls.action'), isEmpty);
+        if (!accepted) {
+          expect(find.textContaining('设备拒绝打开系统通话界面'), findsOneWidget);
+        }
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      },
+    );
+  }
+
   testWidgets(
     'a limited partial notification snapshot preserves its items and fallback opens no original action',
     (tester) async {

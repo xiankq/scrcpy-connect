@@ -349,6 +349,7 @@ impl Runtime {
             | "notifications.reply"
             | "notifications.dismiss"
             | "calls.list"
+            | "calls.open"
             | "calls.action" => Box::pin(self.companion_command(command, &params)).await,
             "clipboard.get" | "clipboard.set" => {
                 Box::pin(self.clipboard_command(command, &params)).await

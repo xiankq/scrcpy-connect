@@ -75,16 +75,6 @@ impl Drop for ModemCleanup {
                 .args(["-s", &serial, "emu", "gsm", "cancel", number])
                 .output();
         }
-        let _ = std::process::Command::new(binary)
-            .args([
-                "-s",
-                &serial,
-                "shell",
-                "input",
-                "keyevent",
-                "KEYCODE_ENDCALL",
-            ])
-            .output();
     }
 }
 async fn wait_modem_state(state: u8) {
@@ -277,6 +267,53 @@ async fn rust_runtime_observes_rapid_replacement_and_refuses_unsafe_aggregate_ac
     for capability in ["canAnswer", "canReject", "canHangup"] {
         assert_eq!(first[capability], false);
     }
+    // Opening the system's current call UI is a separate, non-control action.
+    // Move away first so Binder acceptance alone cannot satisfy this check.
+    adb(&[
+        "shell",
+        "am",
+        "start",
+        "-W",
+        "-a",
+        "android.settings.SETTINGS",
+    ]);
+    assert!(
+        adb(&["shell", "dumpsys", "activity", "activities"])
+            .lines()
+            .any(|line| line.contains("ResumedActivity") && line.contains("com.android.settings"))
+    );
+    assert_eq!(
+        runtime
+            .invoke("calls.open", json!({"deviceId":id,"callId":first["id"]}))
+            .await
+            .unwrap_err()
+            .code,
+        "call_targeting_unavailable"
+    );
+    let opened = runtime
+        .invoke("calls.open", json!({"deviceId":id}))
+        .await
+        .unwrap();
+    assert_eq!(opened["acceptedBySystem"], true);
+    assert_eq!(opened["target"], "currentSystemCall");
+    assert!(opened["uiVisible"].is_null());
+    assert_eq!(opened["callControlled"], false);
+    tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            let actual_ui = adb(&["shell", "dumpsys", "activity", "activities"]);
+            if actual_ui.lines().any(|line| {
+                line.contains("ResumedActivity")
+                    && line.to_ascii_lowercase().contains("incall")
+                    && (line.contains("dialer") || line.contains("incallui"))
+            }) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("the actual current InCallActivity must become foreground");
+    wait_modem_state(1).await;
     for action in ["answer", "reject", "hangup"] {
         assert_eq!(
             runtime
@@ -322,7 +359,7 @@ async fn rust_runtime_observes_rapid_replacement_and_refuses_unsafe_aggregate_ac
     );
     adb(&["emu", "gsm", "cancel", "5550101235"]);
     adb(&["emu", "gsm", "cancel", "5550101234"]);
-    adb(&["shell", "input", "keyevent", "KEYCODE_ENDCALL"]);
+    wait_modem_state(0).await;
     wait_call(&runtime, &id, "idle").await;
     runtime
         .invoke("devices.disconnect", json!({"deviceId":id}))
