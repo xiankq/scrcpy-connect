@@ -3808,6 +3808,483 @@
               "fontWeight": "$weight-label"
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "E0Ctfk",
+          "x": 24,
+          "y": 2800,
+          "name": "组件 / 跨目录搜索条件",
+          "reusable": true,
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-xs",
+          "children": [
+            {
+              "type": "ellipse",
+              "id": "F6TUTI",
+              "layoutPosition": "absolute",
+              "x": 236,
+              "y": 10,
+              "name": "搜索控制层 / 琥珀透色",
+              "fill": {
+                "type": "gradient",
+                "gradientType": "radial",
+                "enabled": true,
+                "rotation": 0,
+                "size": {
+                  "width": 1,
+                  "height": 1
+                },
+                "colors": [
+                  {
+                    "color": "$accent-amber-soft",
+                    "position": 0
+                  },
+                  {
+                    "color": "$transparent",
+                    "position": 1
+                  }
+                ]
+              },
+              "width": 110,
+              "height": 172,
+              "effect": {
+                "type": "blur",
+                "radius": 16
+              }
+            },
+            {
+              "type": "text",
+              "id": "WixmJ",
+              "name": "搜索根目录",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "/storage/emulated/0/Download",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "type": "frame",
+              "id": "pK2D3",
+              "name": "搜索范围选择",
+              "width": "fill_container",
+              "gap": "$space-xs",
+              "children": [
+                {
+                  "id": "sU1X4",
+                  "type": "ref",
+                  "ref": "anf55",
+                  "name": "当前目录及子目录",
+                  "width": "fill_container",
+                  "height": 32,
+                  "padding": [
+                    "$space-xxs",
+                    "$space-xs"
+                  ],
+                  "fill": "$primary",
+                  "descendants": {
+                    "gcunj": {
+                      "content": "当前目录及子目录",
+                      "fill": "$on-primary"
+                    }
+                  }
+                },
+                {
+                  "id": "rnpo9",
+                  "type": "ref",
+                  "ref": "anf55",
+                  "name": "整个共享存储",
+                  "width": "fill_container",
+                  "height": 32,
+                  "padding": [
+                    "$space-xxs",
+                    "$space-xs"
+                  ],
+                  "fill": [
+                    "$glass",
+                    {
+                      "type": "gradient",
+                      "gradientType": "linear",
+                      "enabled": true,
+                      "rotation": 45,
+                      "size": {
+                        "height": 1
+                      },
+                      "colors": [
+                        {
+                          "color": "$glass-shine",
+                          "position": 0
+                        },
+                        {
+                          "color": "$transparent",
+                          "position": 0.48
+                        },
+                        {
+                          "color": "$glass-reflection",
+                          "position": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "descendants": {
+                    "gcunj": {
+                      "content": "整个共享存储",
+                      "fill": "$text"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "LA8p9",
+              "type": "ref",
+              "ref": "Nrkcq",
+              "name": "文件名子串",
+              "width": "fill_container",
+              "descendants": {
+                "Th2Ov": {
+                  "enabled": false
+                },
+                "S7RAIQ": {
+                  "content": "行程"
+                },
+                "MfqEL": {
+                  "enabled": true,
+                  "icon": "search"
+                },
+                "t8HMH": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "rxtff",
+              "name": "类型筛选",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$space-xxs",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "C4kJk",
+                  "name": "全部 / 图片 / 视频 / 音频",
+                  "width": "fill_container",
+                  "gap": "$space-xxs",
+                  "children": [
+                    {
+                      "id": "OuqS0",
+                      "type": "ref",
+                      "ref": "anf55",
+                      "name": "全部",
+                      "width": "fill_container",
+                      "height": 32,
+                      "padding": [
+                        "$space-xxs",
+                        "$space-xs"
+                      ],
+                      "fill": "$primary",
+                      "descendants": {
+                        "gcunj": {
+                          "content": "全部",
+                          "fill": "$on-primary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "q2WjF",
+                      "type": "ref",
+                      "ref": "anf55",
+                      "name": "图片",
+                      "width": "fill_container",
+                      "height": 32,
+                      "padding": [
+                        "$space-xxs",
+                        "$space-xs"
+                      ],
+                      "fill": [
+                        "$glass",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "descendants": {
+                        "gcunj": {
+                          "content": "图片",
+                          "fill": "$text"
+                        }
+                      }
+                    },
+                    {
+                      "id": "N0Baid",
+                      "type": "ref",
+                      "ref": "anf55",
+                      "name": "视频",
+                      "width": "fill_container",
+                      "height": 32,
+                      "padding": [
+                        "$space-xxs",
+                        "$space-xs"
+                      ],
+                      "fill": [
+                        "$glass",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "descendants": {
+                        "gcunj": {
+                          "content": "视频",
+                          "fill": "$text"
+                        }
+                      }
+                    },
+                    {
+                      "id": "VrXeq",
+                      "type": "ref",
+                      "ref": "anf55",
+                      "name": "音频",
+                      "width": "fill_container",
+                      "height": 32,
+                      "padding": [
+                        "$space-xxs",
+                        "$space-xs"
+                      ],
+                      "fill": [
+                        "$glass",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "descendants": {
+                        "gcunj": {
+                          "content": "音频",
+                          "fill": "$text"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "OjSB0",
+                  "name": "文档 / 压缩包 / 文件夹",
+                  "width": "fill_container",
+                  "gap": "$space-xxs",
+                  "children": [
+                    {
+                      "id": "tlGr4",
+                      "type": "ref",
+                      "ref": "anf55",
+                      "name": "文档",
+                      "width": "fill_container",
+                      "height": 32,
+                      "padding": [
+                        "$space-xxs",
+                        "$space-xs"
+                      ],
+                      "fill": [
+                        "$glass",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "descendants": {
+                        "gcunj": {
+                          "content": "文档",
+                          "fill": "$text"
+                        }
+                      }
+                    },
+                    {
+                      "id": "h6MD7C",
+                      "type": "ref",
+                      "ref": "anf55",
+                      "name": "压缩包",
+                      "width": "fill_container",
+                      "height": 32,
+                      "padding": [
+                        "$space-xxs",
+                        "$space-xs"
+                      ],
+                      "fill": [
+                        "$glass",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "descendants": {
+                        "gcunj": {
+                          "content": "压缩包",
+                          "fill": "$text"
+                        }
+                      }
+                    },
+                    {
+                      "id": "WJvCa",
+                      "type": "ref",
+                      "ref": "anf55",
+                      "name": "文件夹",
+                      "width": "fill_container",
+                      "height": 32,
+                      "padding": [
+                        "$space-xxs",
+                        "$space-xs"
+                      ],
+                      "fill": [
+                        "$glass",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "descendants": {
+                        "gcunj": {
+                          "content": "文件夹",
+                          "fill": "$text"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "kuUWK",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "明确提交搜索",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "搜索"
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -8565,13 +9042,26 @@
                   "fill": "$secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "搜索手机文件",
+                  "content": "筛选当前目录",
                   "lineHeight": "$line-label",
                   "fontFamily": "$font-label",
                   "fontSize": "$size-label",
                   "fontWeight": "$weight-label"
                 }
               ]
+            },
+            {
+              "id": "Wr8BW",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "搜索子文件夹入口 / 手机共享存储",
+              "width": "fill_container",
+              "height": 44,
+              "descendants": {
+                "gcunj": {
+                  "content": "搜索子文件夹"
+                }
+              }
             },
             {
               "type": "frame",
@@ -29968,7 +30458,7 @@
                   "stroke": "$muted"
                 },
                 "S7RAIQ": {
-                  "content": "搜索此目录",
+                  "content": "筛选当前目录",
                   "fill": "$secondary"
                 },
                 "MfqEL": {
@@ -29979,6 +30469,19 @@
                   "content": "",
                   "enabled": false,
                   "fill": "$secondary"
+                }
+              }
+            },
+            {
+              "id": "oaUj6",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "搜索子文件夹入口 / 保留目录筛选",
+              "width": "fill_container",
+              "height": 44,
+              "descendants": {
+                "gcunj": {
+                  "content": "搜索子文件夹"
                 }
               }
             },
@@ -34220,7 +34723,7 @@
       "x": 0,
       "y": 7248,
       "name": "分组 / 文件与传输",
-      "width": 7632,
+      "width": 9078,
       "height": 96,
       "fill": "$transparent",
       "layout": "vertical",
@@ -34250,7 +34753,7 @@
           "fill": "$secondary",
           "textGrowth": "fixed-width",
           "width": "fill_container",
-          "content": "目录、管理、发送、原文件准备与系统保存分享 · 16 页",
+          "content": "目录、管理、跨目录搜索、发送与原文件取用 · 19 页",
           "lineHeight": "$line-caption",
           "fontFamily": "$font-caption",
           "fontSize": "$size-caption",
@@ -35512,6 +36015,658 @@
         },
         {
           "id": "s8PIcW",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "lm0us",
+      "x": 7712,
+      "y": 7344,
+      "name": "文件与传输 / 搜索子文件夹",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "w13zBi",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "o3NbOd",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "搜索 / 固定设备",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "搜索子文件夹"
+            },
+            "jRKTF": {
+              "content": "Pixel 9 Pro · 文件名搜索"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "Hu6R7",
+          "x": 24,
+          "y": 144,
+          "name": "搜索条件与范围说明",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "VTdME",
+              "type": "ref",
+              "ref": "E0Ctfk",
+              "name": "搜索条件",
+              "width": "fill_container"
+            },
+            {
+              "type": "text",
+              "id": "mlT8Y",
+              "name": "只按名称查找",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "输入文件名的一部分，点击搜索后开始。只匹配名称，不读取文件正文。",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "type": "text",
+              "id": "K9PzB",
+              "name": "空查询规则",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "不填名称时，请选择一种具体类型；“全部”不能与空名称一起搜索。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "id": "k7rfz",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "搜索范围说明入口",
+              "width": "fill_container",
+              "descendants": {
+                "i9kceM": {
+                  "fill": "$accent-violet-soft"
+                },
+                "n4qgqg": {
+                  "icon": "info",
+                  "fill": "$accent-violet"
+                },
+                "nyAaN": {
+                  "content": "搜索范围与跳过项"
+                },
+                "r3Anl": {
+                  "content": "共享存储内可访问的原目录及子目录"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "tURAS",
+              "name": "范围限制",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "遇到无权限目录、深度／时间／数量上限，或无效文件名时会跳过或停止并说明。不会跟随子符号链接。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "type": "text",
+              "id": "gWXY9",
+              "name": "离开搜索页",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "离开本页会取消本次搜索。传输与手机控制继续按各自状态运行。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            }
+          ]
+        },
+        {
+          "id": "SPRj0",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "jcZXq",
+      "x": 8194,
+      "y": 7344,
+      "name": "文件与传输 / 跨目录搜索进行中",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "rKcbC",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "MNXC1",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "搜索结果 / 固定设备",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "跨目录结果"
+            },
+            "jRKTF": {
+              "content": "Pixel 9 Pro · 整个共享存储"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "wxl4s",
+          "x": 24,
+          "y": 144,
+          "name": "条件与渐进搜索结果",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-sm",
+          "children": [
+            {
+              "id": "XuXpc",
+              "type": "ref",
+              "ref": "E0Ctfk",
+              "name": "搜索条件 / 正在执行",
+              "width": "fill_container",
+              "descendants": {
+                "WixmJ": {
+                  "content": "/storage/emulated/0"
+                },
+                "sU1X4": {
+                  "fill": [
+                    "$glass",
+                    {
+                      "type": "gradient",
+                      "gradientType": "linear",
+                      "enabled": true,
+                      "rotation": 45,
+                      "size": {
+                        "height": 1
+                      },
+                      "colors": [
+                        {
+                          "color": "$glass-shine",
+                          "position": 0
+                        },
+                        {
+                          "color": "$transparent",
+                          "position": 0.48
+                        },
+                        {
+                          "color": "$glass-reflection",
+                          "position": 1
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "sU1X4/gcunj": {
+                  "fill": "$text"
+                },
+                "rnpo9": {
+                  "fill": "$primary"
+                },
+                "rnpo9/gcunj": {
+                  "fill": "$on-primary"
+                },
+                "LA8p9/S7RAIQ": {
+                  "content": "行程"
+                },
+                "kuUWK/mpPvv": {
+                  "content": "停止搜索"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "Dza4a",
+              "name": "搜索进度与停止语义",
+              "fill": "$text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "搜索中 · 已找到 3 项，结果继续增加",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "type": "text",
+              "id": "C0bq9",
+              "name": "实际检查范围",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "已检查 42 个文件夹 / 1,280 项\n正在检查 Documents / 旅行",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "type": "frame",
+              "id": "f81B4Y",
+              "name": "包含完整父目录的搜索结果",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$space-zero",
+              "children": [
+                {
+                  "id": "d5vvQY",
+                  "type": "ref",
+                  "ref": "OuAnF",
+                  "name": "行程清单.txt / /storage/emulated/0/Download/旅行",
+                  "width": "fill_container",
+                  "height": 72,
+                  "descendants": {
+                    "i9kceM": {
+                      "fill": "$accent-amber-soft"
+                    },
+                    "n4qgqg": {
+                      "icon": "file-text",
+                      "fill": "$accent-amber"
+                    },
+                    "nyAaN": {
+                      "content": "行程清单.txt"
+                    },
+                    "r3Anl": {
+                      "content": "/storage/emulated/0/Download/旅行"
+                    }
+                  }
+                },
+                {
+                  "id": "Swna6",
+                  "type": "ref",
+                  "ref": "OuAnF",
+                  "name": "行程清单.txt / /storage/emulated/0/Documents/旅行",
+                  "width": "fill_container",
+                  "height": 72,
+                  "descendants": {
+                    "i9kceM": {
+                      "fill": "$accent-amber-soft"
+                    },
+                    "n4qgqg": {
+                      "icon": "file-text",
+                      "fill": "$accent-amber"
+                    },
+                    "nyAaN": {
+                      "content": "行程清单.txt"
+                    },
+                    "r3Anl": {
+                      "content": "/storage/emulated/0/Documents/旅行"
+                    }
+                  }
+                },
+                {
+                  "id": "v9NNi",
+                  "type": "ref",
+                  "ref": "OuAnF",
+                  "name": "行程资料 / /storage/emulated/0/Download",
+                  "width": "fill_container",
+                  "height": 72,
+                  "descendants": {
+                    "i9kceM": {
+                      "fill": "$accent-amber-soft"
+                    },
+                    "n4qgqg": {
+                      "icon": "folder",
+                      "fill": "$accent-amber"
+                    },
+                    "nyAaN": {
+                      "content": "行程资料"
+                    },
+                    "r3Anl": {
+                      "content": "/storage/emulated/0/Download"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "LvbIG",
+              "name": "结果操作说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "点击文件重新核验详情；点击文件夹进入原目录。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "type": "text",
+              "id": "uWeVo",
+              "name": "部分范围与停止约束",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "搜索仅反映本次已检查的范围，不是存储快照。停止后保留已找到的内容。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            }
+          ]
+        },
+        {
+          "id": "NumiD",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "zD1BI",
+      "x": 8676,
+      "y": 7344,
+      "name": "文件与传输 / 已停止的部分搜索结果",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "QCJqT",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "Z4W5Zr",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "搜索结果 / 固定设备",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "部分搜索结果"
+            },
+            "jRKTF": {
+              "content": "Pixel 9 Pro · 整个共享存储"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "u9RtF",
+          "x": 24,
+          "y": 144,
+          "name": "条件与渐进搜索结果",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-sm",
+          "children": [
+            {
+              "id": "VDHdD",
+              "type": "ref",
+              "ref": "E0Ctfk",
+              "name": "已修改条件 / 待点击更新",
+              "width": "fill_container",
+              "descendants": {
+                "WixmJ": {
+                  "content": "/storage/emulated/0"
+                },
+                "sU1X4": {
+                  "fill": [
+                    "$glass",
+                    {
+                      "type": "gradient",
+                      "gradientType": "linear",
+                      "enabled": true,
+                      "rotation": 45,
+                      "size": {
+                        "height": 1
+                      },
+                      "colors": [
+                        {
+                          "color": "$glass-shine",
+                          "position": 0
+                        },
+                        {
+                          "color": "$transparent",
+                          "position": 0.48
+                        },
+                        {
+                          "color": "$glass-reflection",
+                          "position": 1
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "sU1X4/gcunj": {
+                  "fill": "$text"
+                },
+                "rnpo9": {
+                  "fill": "$primary"
+                },
+                "rnpo9/gcunj": {
+                  "fill": "$on-primary"
+                },
+                "LA8p9/S7RAIQ": {
+                  "content": "会议"
+                },
+                "kuUWK/mpPvv": {
+                  "content": "搜索"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "dLuYH",
+              "name": "搜索进度与停止语义",
+              "fill": "$warning",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "已停止 · 保留已找到的 3 项",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "type": "text",
+              "id": "wVHgh",
+              "name": "实际检查范围",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "已检查 42 个文件夹 / 1,280 项\n跳过 2 个无权限目录；其余目录未搜索。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "type": "text",
+              "id": "jKOYo",
+              "name": "旧结果待更新",
+              "fill": "$warning",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "条件已修改。以下仍为“行程”的结果，点击搜索更新。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "type": "frame",
+              "id": "j2H9jO",
+              "name": "包含完整父目录的搜索结果",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$space-zero",
+              "children": [
+                {
+                  "id": "pPisa",
+                  "type": "ref",
+                  "ref": "OuAnF",
+                  "name": "行程清单.txt / /storage/emulated/0/Download/旅行",
+                  "width": "fill_container",
+                  "height": 72,
+                  "descendants": {
+                    "i9kceM": {
+                      "fill": "$accent-amber-soft"
+                    },
+                    "n4qgqg": {
+                      "icon": "file-text",
+                      "fill": "$accent-amber"
+                    },
+                    "nyAaN": {
+                      "content": "行程清单.txt"
+                    },
+                    "r3Anl": {
+                      "content": "/storage/emulated/0/Download/旅行"
+                    }
+                  }
+                },
+                {
+                  "id": "PgumL",
+                  "type": "ref",
+                  "ref": "OuAnF",
+                  "name": "行程清单.txt / /storage/emulated/0/Documents/旅行",
+                  "width": "fill_container",
+                  "height": 72,
+                  "descendants": {
+                    "i9kceM": {
+                      "fill": "$accent-amber-soft"
+                    },
+                    "n4qgqg": {
+                      "icon": "file-text",
+                      "fill": "$accent-amber"
+                    },
+                    "nyAaN": {
+                      "content": "行程清单.txt"
+                    },
+                    "r3Anl": {
+                      "content": "/storage/emulated/0/Documents/旅行"
+                    }
+                  }
+                },
+                {
+                  "id": "H1OmM",
+                  "type": "ref",
+                  "ref": "OuAnF",
+                  "name": "行程资料 / /storage/emulated/0/Download",
+                  "width": "fill_container",
+                  "height": 72,
+                  "descendants": {
+                    "i9kceM": {
+                      "fill": "$accent-amber-soft"
+                    },
+                    "n4qgqg": {
+                      "icon": "folder",
+                      "fill": "$accent-amber"
+                    },
+                    "nyAaN": {
+                      "content": "行程资料"
+                    },
+                    "r3Anl": {
+                      "content": "/storage/emulated/0/Download"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "Gz4Af",
+              "name": "结果操作说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "点击文件重新核验详情；点击文件夹进入原目录。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "type": "text",
+              "id": "DM21W",
+              "name": "部分范围与停止约束",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "尚未检查全部范围；未找到更多不代表没有文件。停止后不会自动重新搜索。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            }
+          ]
+        },
+        {
+          "id": "LvWU4",
           "type": "ref",
           "ref": "HeXc3",
           "name": "系统手势指示",
