@@ -13,6 +13,7 @@ mod gallery_index;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod local_publication;
 pub mod media;
+mod media_cache;
 mod model;
 mod observation;
 mod preferences;

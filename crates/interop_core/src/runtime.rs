@@ -36,6 +36,7 @@ pub struct Runtime {
     pub(crate) deliveries: crate::delivery::DeliveryJournal,
     pub(crate) app_opens: crate::app_open::AppOpens,
     pub(crate) media: crate::media::http::MediaStreams,
+    pub(crate) media_cache: crate::media_cache::MediaCache,
     pub(crate) qr_attempt: Mutex<Option<(String, tokio_util::sync::CancellationToken)>>,
     pub(crate) device_operations: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
 }
@@ -44,6 +45,7 @@ impl Runtime {
     pub async fn initialize(root: impl AsRef<Path>) -> CoreResult<Arc<Self>> {
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(&root).await?;
+        let root = fs::canonicalize(&root).await?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -103,6 +105,7 @@ impl Runtime {
         let events = crate::events::EventBus::new(256);
         let deliveries = crate::delivery::DeliveryJournal::open(&root).await?;
         let app_opens = crate::app_open::AppOpens::open(&root).await?;
+        let media_cache = crate::media_cache::MediaCache::open(&root).await?;
         let runtime = Arc::new(Self {
             root,
             identity,
@@ -124,6 +127,7 @@ impl Runtime {
             deliveries,
             app_opens,
             media: crate::media::http::MediaStreams::default(),
+            media_cache,
             qr_attempt: Mutex::new(None),
             device_operations: Mutex::new(HashMap::new()),
         });
@@ -211,7 +215,14 @@ impl Runtime {
     }
 
     pub async fn invoke(self: &Arc<Self>, command: &str, params: Value) -> CoreResult<Value> {
+        if command.starts_with("media.cache.") {
+            return self.cache_command(command, &params).await;
+        }
         if command.starts_with("delivery.") {
+            let _cache_gate = self.media_cache.gate.lock().await;
+            if command == "delivery.begin" {
+                self.cache_validate_delivery_locked(&params).await?;
+            }
             return self.deliveries.command(command, &params).await;
         }
         if matches!(command, "media.open" | "media.status" | "media.close") {

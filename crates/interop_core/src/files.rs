@@ -72,6 +72,8 @@ pub(crate) struct Transfer {
     pub tree_complete: bool,
     #[serde(default = "local_scope")]
     pub destination_scope: String,
+    #[serde(default)]
+    pub cache_evicted: bool,
     #[serde(skip)]
     pub cancellation: CancellationToken,
 }
@@ -152,13 +154,21 @@ fn transfer_value(task: &Transfer) -> Value {
     value["restartFromBeginning"] = json!(true);
     value["restartRequiresSourceCheck"] = json!(true);
     value["canCancel"] = json!(!terminal(&task.status));
-    let can_export = task.direction == "pull"
+    let cache_evicted = task.cache_evicted
+        || (task.direction == "pull"
+            && task.destination_scope == "privateCache"
+            && terminal(&task.status)
+            && std::fs::symlink_metadata(&task.destination).is_err());
+    value["cacheEvicted"] = json!(cache_evicted);
+    let can_export = !cache_evicted
+        && task.direction == "pull"
         && task.status == "completed"
         && (task.kind == "file"
             || (task.kind == "directory" && task.tree_verified && task.tree_complete));
     value["canExport"] = json!(can_export);
     value["canExportPartial"] = json!(
-        task.direction == "pull"
+        !cache_evicted
+            && task.direction == "pull"
             && task.kind == "directory"
             && task.tree_verified
             && !task.tree_complete
@@ -260,6 +270,8 @@ struct ThumbnailCache {
     jpeg_bytes: u64,
     width: u32,
     height: u32,
+    #[serde(default)]
+    artifact: String,
 }
 fn jpeg_dimensions(bytes: &[u8]) -> CoreResult<(u32, u32)> {
     let invalid = || CoreError::new("invalid_thumbnail", "缩略图 JPEG 结构或尺寸无效。");
@@ -577,9 +589,31 @@ impl Runtime {
             }
             store.insert(task.id.clone(), task);
         }
+        let missing = store
+            .values()
+            .filter(|task| {
+                task.direction == "pull"
+                    && task.destination_scope == "privateCache"
+                    && task.kind == "file"
+                    && task.status == "completed"
+                    && std::fs::symlink_metadata(&task.destination).is_err()
+            })
+            .map(|task| PathBuf::from(&task.destination))
+            .collect::<Vec<_>>();
+        for task in store
+            .values_mut()
+            .filter(|task| task.direction == "pull" && task.destination_scope == "privateCache")
+        {
+            if missing
+                .iter()
+                .any(|path| path.starts_with(&task.destination))
+            {
+                task.cache_evicted = true;
+            }
+        }
         Ok(())
     }
-    async fn persist_transfers(&self) -> CoreResult<()> {
+    pub(crate) async fn persist_transfers(&self) -> CoreResult<()> {
         let _guard = self.persistence.lock().await;
         let tasks: Vec<_> = self.transfers.lock().await.values().cloned().collect();
         Self::private_write(
@@ -662,6 +696,27 @@ impl Runtime {
                 "目录扫描超过两分钟；没有写入任何目标，请分批选择。",
             )
         })??;
+        let _cache_gate = if !push && destination_scope == "privateCache" {
+            let gate = self.media_cache.gate.lock().await;
+            for entry in selection
+                .entries
+                .iter()
+                .filter(|entry| entry.parent.is_none())
+            {
+                self.cache_validate_destination_locked(&entry.destination)
+                    .await?;
+            }
+            let bytes = selection
+                .entries
+                .iter()
+                .filter(|entry| entry.kind == "file")
+                .filter_map(|entry| entry.stamp.as_ref())
+                .fold(0_u64, |sum, stamp| sum.saturating_add(stamp.size));
+            self.cache_admit_locked(bytes).await?;
+            Some(gate)
+        } else {
+            None
+        };
         let ids: Vec<_> = selection
             .entries
             .iter()
@@ -720,6 +775,7 @@ impl Runtime {
                 tree_verified: false,
                 tree_complete: false,
                 destination_scope: destination_scope.into(),
+                cache_evicted: false,
                 cancellation: CancellationToken::new(),
             });
         }
@@ -743,6 +799,7 @@ impl Runtime {
         tokio::spawn(async move {
             let result = runtime.run_transfer(&id, generation).await;
             let data = {
+                let _gate = runtime.media_cache.gate.lock().await;
                 let mut tasks = runtime.transfers.lock().await;
                 if let Some(task) = tasks.get_mut(&id).filter(|t| t.generation == generation) {
                     if let Err(error) = result
@@ -1079,6 +1136,7 @@ impl Runtime {
         let _ = ticker.await;
         match result {
             Ok((count, mode)) => {
+                let _gate = self.media_cache.gate.lock().await;
                 let mut tasks = self.transfers.lock().await;
                 if let Some(saved) = tasks.get_mut(id).filter(|t| t.generation == generation) {
                     saved.status = "completed".into();
@@ -1088,6 +1146,7 @@ impl Runtime {
                     saved.error = None;
                     saved.error_code = None;
                     saved.temporary_path = None;
+                    saved.cache_evicted = false;
                 }
                 Ok(())
             }
@@ -1395,6 +1454,7 @@ impl Runtime {
         self.save_attempt(task).await
     }
     async fn save_attempt(&self, task: &Transfer) -> CoreResult<()> {
+        let _gate = self.media_cache.gate.lock().await;
         let mut tasks = self.transfers.lock().await;
         let saved = tasks
             .get_mut(&task.id)
@@ -1409,6 +1469,41 @@ impl Runtime {
         command: &str,
         p: &Value,
     ) -> CoreResult<Value> {
+        let _cache_gate = if command != "transfers.get" {
+            Some(self.media_cache.gate.lock().await)
+        } else {
+            None
+        };
+        if matches!(command, "transfers.resume" | "transfers.resolve") {
+            let previous = self
+                .transfers
+                .lock()
+                .await
+                .get(required(p, "transferId")?)
+                .cloned();
+            if let Some(previous) = previous.filter(|task| {
+                task.direction == "pull"
+                    && task.destination_scope == "privateCache"
+                    && (transfer_value(task)["canRestart"] == true || task.status == "conflict")
+            }) {
+                let bytes = if command == "transfers.resume" {
+                    self.cache_validate_destination_locked(&previous.destination)
+                        .await?;
+                    previous.total.unwrap_or(0)
+                } else {
+                    if let Some(path) = &previous.temporary_path {
+                        fs::symlink_metadata(path)
+                            .await
+                            .map(|m| m.len())
+                            .unwrap_or(0)
+                            .min(previous.total.unwrap_or(0))
+                    } else {
+                        0
+                    }
+                };
+                self.cache_admit_locked(bytes).await?;
+            }
+        }
         if command == "transfers.cancel"
             && let Some(batch) = p["batchId"].as_str()
         {
@@ -1508,6 +1603,8 @@ impl Runtime {
         task.error = None;
         task.error_code = None;
         task.transferred = 0;
+        task.temporary_path = None;
+        task.cache_evicted = false;
         let generation = task.generation;
         let batch = task.batch_id.clone();
         let index = task.item_index;
@@ -1676,6 +1773,11 @@ impl Runtime {
         self.device_operations.lock().await.remove(&key);
         let mut result = result?;
         if token.is_cancelled() {
+            if let Some(lease) = result["cacheLeaseId"].as_str() {
+                let _ = self
+                    .cache_command("media.cache.release", &json!({"leaseId":lease}))
+                    .await;
+            }
             return Err(CoreError::new(
                 "cancelled",
                 "缩略图请求已取消，没有发布结果。",
@@ -1705,12 +1807,18 @@ impl Runtime {
             "{:x}",
             Sha256::digest(format!("thumbnail-v1\0{device}\0{path}\0{max_size}"))
         );
-        let cache = self.root.join("media").join("thumbnails");
-        fs::create_dir_all(&cache).await?;
-        let metadata_path = cache.join(format!("{key}.json"));
         let params = json!({"deviceId":device,"path":path,"kind":kind,"maxSize":max_size,"ownerOperationId":operation});
         let before = Box::pin(self.thumbnail_rpc("media.stat", params.clone(), phase)).await?;
         let source = ThumbnailSource::parse(&before["sourceStamp"])?;
+        let version = format!("{:x}", Sha256::digest(serde_json::to_vec(&source)?));
+        let cache = self
+            .root
+            .join("media")
+            .join("thumbnails")
+            .join(format!("{key}-{version}"));
+        let lookup = self.cache_writer(cache.clone(), 0).await?;
+        fs::create_dir_all(&cache).await?;
+        let metadata_path = cache.join("metadata.json");
         let mut transferred = before["rpcBytesReceived"].as_u64().unwrap_or(0);
         let cached = if fs::metadata(&metadata_path)
             .await
@@ -1729,8 +1837,12 @@ impl Runtime {
             && cached.jpeg_bytes <= MAX_THUMBNAIL as u64
             && cached.sha256.len() == 64
             && cached.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+            && !cached.artifact.is_empty()
+            && !cached.artifact.contains('/')
+            && !cached.artifact.contains('\\')
+            && !cached.artifact.contains("..")
         {
-            let target = cache.join(format!("{key}-{}.jpg", cached.sha256));
+            let target = cache.join(&cached.artifact);
             if fs::symlink_metadata(&target)
                 .await
                 .is_ok_and(|meta| meta.is_file() && meta.len() == cached.jpeg_bytes)
@@ -1742,13 +1854,19 @@ impl Runtime {
                         && dimensions.1 <= max_size
                 })
             {
+                let _gate = self.media_cache.gate.lock().await;
+                let lease = self.media_cache.lease(vec![cache.clone()]);
                 return Ok(
-                    json!({"localPath":target,"mime":"image/jpeg","thumbnail":true,"width":cached.width,"height":cached.height,
+                    json!({"localPath":target,"cacheLeaseId":lease,"mime":"image/jpeg","thumbnail":true,"width":cached.width,"height":cached.height,
                 "originalSize":source.size,"cacheHit":true,"sourceStamp":source,"sourceValidation":source.validation(),
                 "bytesTransferred":transferred,"jpegBytes":cached.jpeg_bytes,"jpegBytesTransferred":0,"originalBytesTransferred":0,"transferAccounting":"companionJsonPayloadBytes"}),
                 );
             }
         }
+        drop(lookup);
+        let writer = self
+            .cache_writer(cache.clone(), MAX_THUMBNAIL as u64 + 4096)
+            .await?;
         let response =
             Box::pin(self.thumbnail_rpc("media.thumbnail", params.clone(), phase)).await?;
         transferred =
@@ -1792,7 +1910,8 @@ impl Runtime {
                 "媒体源已经变化，请重新获取缩略图。",
             ));
         }
-        let target = cache.join(format!("{key}-{sha256}.jpg"));
+        let artifact = format!("{}-{sha256}.jpg", uuid::Uuid::new_v4());
+        let target = cache.join(&artifact);
         let metadata = ThumbnailCache {
             version: 1,
             source: source.clone(),
@@ -1800,18 +1919,15 @@ impl Runtime {
             jpeg_bytes: jpeg.len() as u64,
             width,
             height,
+            artifact,
         };
         Self::private_write(&target, &jpeg).await?;
         Self::private_write(&metadata_path, &serde_json::to_vec(&metadata)?).await?;
-        if let Some(previous) = cached.filter(|cached| {
-            cached.sha256 != metadata.sha256
-                && cached.sha256.len() == 64
-                && cached.sha256.bytes().all(|b| b.is_ascii_hexdigit())
-        }) {
-            let _ = fs::remove_file(cache.join(format!("{key}-{}.jpg", previous.sha256))).await;
-        }
+        let _gate = self.media_cache.gate.lock().await;
+        let lease = self.media_cache.lease(vec![cache]);
+        drop(writer);
         Ok(
-            json!({"localPath":target,"mime":"image/jpeg","thumbnail":true,"width":width,"height":height,"originalSize":source.size,
+            json!({"localPath":target,"cacheLeaseId":lease,"mime":"image/jpeg","thumbnail":true,"width":width,"height":height,"originalSize":source.size,
             "cacheHit":false,"sourceStamp":source,"sourceValidation":source.validation(),"bytesTransferred":transferred,
             "jpegBytes":jpeg.len(),"jpegBytesTransferred":jpeg.len(),"originalBytesTransferred":0,"transferAccounting":"companionJsonPayloadBytes",
             "orientationApplied":response["orientationApplied"],"orientation":response["orientation"],"videoRotation":response["videoRotation"]}),
@@ -1832,8 +1948,6 @@ impl Runtime {
             .and_then(|v| v.to_str())
             .filter(|v| v.len() <= 12 && v.bytes().all(|b| b.is_ascii_alphanumeric()))
             .unwrap_or("bin");
-        let target = cache.join(format!("{key}.{extension}"));
-        let metadata_path = cache.join(format!("{key}.json"));
         let options = OperationOptions {
             timeout: Duration::from_secs(300),
             ..Default::default()
@@ -1843,21 +1957,41 @@ impl Runtime {
         if source.mode & 0o170000 != 0o100000 {
             return Err(CoreError::new("not_a_file", "预览源必须是普通文件。"));
         }
+        // Version the artifact by the observed source stamp, and use a fresh
+        // filename on repair. An existing player's file is never replaced.
+        let version = format!("{:x}", Sha256::digest(serde_json::to_vec(&source)?));
+        let cache = cache.join(format!("{key}-{version}"));
+        let lookup = self.cache_writer(cache.clone(), 0).await?;
+        fs::create_dir_all(&cache).await?;
+        let metadata_path = cache.join("metadata.json");
         let cached = fs::read(&metadata_path)
             .await
             .ok()
             .and_then(|b| serde_json::from_slice::<MediaCache>(&b).ok());
+        let target = fs::read_to_string(cache.join("current"))
+            .await
+            .ok()
+            .filter(|name| !name.contains('/') && !name.contains('\\') && !name.contains(".."))
+            .map(|name| cache.join(name));
         if let Some(cached) = cached
+            && let Some(target) = target
             && cached.source == source
             && fs::metadata(&target)
                 .await
                 .is_ok_and(|m| m.is_file() && m.len() == cached.local_size)
             && file_digest(&target).await? == cached.sha256
         {
+            let _gate = self.media_cache.gate.lock().await;
+            let lease = self.media_cache.lease(vec![cache.clone()]);
             return Ok(
-                json!({"localPath":target,"mime":mime(&path),"cacheHit":true,"size":source.size,"sourceValidation":"sizeModeMtimeSeconds","thumbnail":false}),
+                json!({"localPath":target,"cacheLeaseId":lease,"mime":mime(&path),"cacheHit":true,"size":source.size,"sourceValidation":"sizeModeMtimeSeconds","thumbnail":false}),
             );
         }
+        drop(lookup);
+        let writer = self
+            .cache_writer(cache.clone(), source.size.saturating_add(4096))
+            .await?;
+        let target = cache.join(format!("{}.{}", uuid::Uuid::new_v4(), extension));
         let temp = cache.join(format!(".{key}-{}.part", uuid::Uuid::new_v4()));
         let mut file = fs::OpenOptions::new()
             .write(true)
@@ -1893,8 +2027,16 @@ impl Runtime {
         };
         fs::rename(&temp, &target).await?;
         Self::private_write(&metadata_path, &serde_json::to_vec(&metadata)?).await?;
+        Self::private_write(
+            &cache.join("current"),
+            target.file_name().unwrap().to_string_lossy().as_bytes(),
+        )
+        .await?;
+        let _gate = self.media_cache.gate.lock().await;
+        let lease = self.media_cache.lease(vec![cache]);
+        drop(writer);
         Ok(
-            json!({"localPath":target,"mime":mime(&path),"cacheHit":false,"size":metadata.source.size,"sourceValidation":"sizeModeMtimeSeconds","thumbnail":false}),
+            json!({"localPath":target,"cacheLeaseId":lease,"mime":mime(&path),"cacheHit":false,"size":metadata.source.size,"sourceValidation":"sizeModeMtimeSeconds","thumbnail":false}),
         )
     }
 }

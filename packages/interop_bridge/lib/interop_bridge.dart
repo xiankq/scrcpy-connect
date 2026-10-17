@@ -617,6 +617,12 @@ class InteropBridge {
       if (path is! String || path.isEmpty) {
         throw const InteropException('invalid_path', '缺少本机文件位置。');
       }
+      // A system URI grant may outlive the external activity. Conservatively
+      // retain managed originals before handing them to another application.
+      await _invoke('media.cache.retain', {
+        'localPath': path,
+        'ifManaged': true,
+      });
       final opened = await OpenFilex.open(path);
       if (opened.type != ResultType.done) {
         throw InteropException('open_failed', opened.message);

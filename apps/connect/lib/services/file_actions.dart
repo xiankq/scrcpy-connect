@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:scrcpy_connect/services/media_cache_directory.dart';
 import 'package:share_plus/share_plus.dart';
 
 bool fileCanOpen(Json file) =>
@@ -55,6 +55,10 @@ Future<void> retrieveFile(
   final local = value(result, 'localPath', value(result, 'path'));
   if (share && local.isNotEmpty && result['status'] == 'completed') {
     try {
+      await controller.request('media.cache.retain', {
+        'localPath': local,
+        'ifManaged': true,
+      });
       await SharePlus.instance.share(ShareParams(files: [XFile(local)]));
     } catch (e) {
       if (context.mounted) feedback(context, '无法交给系统分享：$e');
@@ -112,8 +116,6 @@ Future<void> retrieveSelection(
 /// Outgoing user files are isolated from private identity and app state. The
 /// native FileProvider exposes this subtree, never the whole temporary root.
 Future<Directory> receivedDirectory() async {
-  final cache = await getTemporaryDirectory();
-  final outgoing = await Directory('${cache.path}/outgoing')
-      .create(recursive: true);
+  final outgoing = await outgoingMediaDirectory();
   return outgoing.createTemp('received-');
 }

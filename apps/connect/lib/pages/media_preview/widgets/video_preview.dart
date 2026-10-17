@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:async';
+
+import 'package:scrcpy_connect/services/media_cache_lease.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -7,9 +10,15 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:video_player/video_player.dart';
 
 class VideoPreview extends HookWidget {
-  const VideoPreview({super.key, required this.source, required this.fallback});
+  const VideoPreview({
+    super.key,
+    required this.source,
+    required this.fallback,
+    this.cacheLease,
+  });
   final String source;
   final VoidCallback fallback;
+  final MediaCacheLease? cacheLease;
   @override
   Widget build(BuildContext context) {
     final player = useMemoized(
@@ -20,11 +29,18 @@ class VideoPreview extends HookWidget {
     );
     final future = useMemoized(player.initialize, [player]);
     final initialized = useFuture(future);
+    final release = useMemoized(() => cacheLease?.hold(), [player, cacheLease]);
     useEffect(
       () => () {
-        player.dispose();
+        unawaited(
+          player.dispose().then<void>(
+            (_) => release?.call(),
+            // Keep protection if the player cannot confirm resource release.
+            onError: (Object _, StackTrace _) {},
+          ),
+        );
       },
-      [player],
+      [player, release],
     );
     useListenable(player);
     useOnAppLifecycleStateChange((previous, next) {

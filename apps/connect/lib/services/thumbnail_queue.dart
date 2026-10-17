@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/services/media_cache_lease.dart';
 
 part 'thumbnail_queue.g.dart';
 
@@ -57,6 +58,8 @@ class ThumbnailQueue {
           'path': lease.path,
           'operationId': lease._operationId,
         });
+        lease._cacheLease = MediaCacheLease.fromReceipt(controller, result);
+        if (lease._released) lease._cacheLease?.release();
         if (!lease._released) lease._result.complete(result);
         return;
       } catch (failure, stack) {
@@ -82,6 +85,7 @@ class ThumbnailQueue {
   void _release(ThumbnailLease lease) {
     if (lease._released) return;
     lease._released = true;
+    lease._cacheLease?.release();
     lease._cancelled.complete();
     _waiting.remove(lease);
     if (_active == lease && lease._operationId != null) {
@@ -128,6 +132,8 @@ class ThumbnailLease {
   final _cancelled = Completer<void>();
   bool _released = false;
   String? _operationId;
+  MediaCacheLease? _cacheLease;
+  MediaCacheLease? get cacheLease => _cacheLease;
   Future<Json> get result => _result.future;
   void release() => _owner._release(this);
 }

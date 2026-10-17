@@ -1,5 +1,6 @@
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/thumbnail_queue.dart';
+import 'package:scrcpy_connect/widgets/cached_file_image.dart';
 
 import 'dart:io';
 
@@ -102,11 +103,14 @@ class MediaThumbnail extends HookConsumerWidget {
             cacheWidth: 320,
             errorBuilder: (_, _, _) => placeholder('缩略图无法显示，请重试。'),
           )
-        : Image.file(
-            File(source),
+        : Image(
+            image: ResizeImage.resizeIfNeeded(
+              320,
+              null,
+              CachedFileImage(File(source), lease: lease?.cacheLease),
+            ),
             key: ValueKey('$source:${retry.value}'),
             fit: BoxFit.cover,
-            cacheWidth: 320,
             errorBuilder: (_, _, _) => placeholder('缩略图无法显示，请重试。'),
           );
   }

@@ -328,7 +328,14 @@ async fn actual_push_pull_hash_atomic_conflict_rename_delete_and_preview_cache()
         .await
         .unwrap();
     assert_eq!(changed["cacheHit"], false);
-    assert_eq!(changed["localPath"], first["localPath"]);
+    assert_ne!(changed["localPath"], first["localPath"]);
+    assert_eq!(
+        tokio::fs::read(repaired["localPath"].as_str().unwrap())
+            .await
+            .unwrap(),
+        bytes,
+        "a source change must preserve the original held by an existing consumer"
+    );
     assert_eq!(
         tokio::fs::read(changed["localPath"].as_str().unwrap())
             .await

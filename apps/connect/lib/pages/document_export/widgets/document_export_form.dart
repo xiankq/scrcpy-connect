@@ -1,5 +1,6 @@
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/document_operation.dart';
+import 'package:scrcpy_connect/services/media_cache_lease.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
@@ -28,6 +29,7 @@ class DocumentExportForm extends HookWidget {
   final bool partial;
   @override
   Widget build(BuildContext context) {
+    final cacheLease = useTransferCacheLease(controller, transferId);
     final operation = useDocumentOperation(
       controller,
       exportSource: {
@@ -60,6 +62,11 @@ class DocumentExportForm extends HookWidget {
         status != 'pending' &&
         (result['partialDestinationPossible'] == true ||
             !['partial', 'cancelled', 'failed'].contains(status));
+    if (transferId != null && (!cacheLease.hasData || cacheLease.hasError)) {
+      return cacheLease.hasError
+          ? StateNote('无法保留这份暂存：${cacheLease.error}。请返回原设备重新取回。')
+          : const Center(child: CircularProgressIndicator.adaptive());
+    }
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [

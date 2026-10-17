@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/services/app_dependencies.dart';
+import 'package:scrcpy_connect/services/media_cache_directory.dart';
 import 'package:scrcpy_connect/services/local_notification_sink.dart';
 import 'package:scrcpy_connect/services/system_notifications.dart';
 import 'package:scrcpy_connect/app.dart';
@@ -20,9 +21,14 @@ Future<void> main() async {
   );
   try {
     final directory = await getApplicationSupportDirectory();
+    await directory.create(recursive: true);
     final bridge = await InteropBridge.initialize(
-      dataDirectory: directory.path,
+      dataDirectory: await directory.resolveSymbolicLinks(),
     );
+    final outgoing = await outgoingMediaDirectory();
+    await bridge.request('media.cache.configure', {
+      'outgoingDirectory': outgoing.path,
+    });
     final dependencies = AppDependencies(
       request: (command, [params = const {}]) async {
         try {

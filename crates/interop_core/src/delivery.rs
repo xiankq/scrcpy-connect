@@ -138,6 +138,19 @@ fn clean_result(input: &Value) -> CoreResult<Value> {
 }
 
 impl DeliveryJournal {
+    pub(crate) async fn protected_paths(&self) -> Vec<PathBuf> {
+        self.ledger
+            .lock()
+            .await
+            .records
+            .values()
+            .filter(|record| {
+                matches!(record.status.as_str(), "pending" | "result_unknown")
+                    || record.result["partialDestinationPossible"] == true
+            })
+            .map(|record| PathBuf::from(&record.local_path))
+            .collect()
+    }
     pub(crate) async fn open(root: &Path) -> CoreResult<Self> {
         let path = root.join("deliveries.json");
         let mut ledger = match fs::File::open(&path).await {
