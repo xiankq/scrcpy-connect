@@ -44,3 +44,5 @@ Requirements: R06–R07、R13–R15
 本地Android三ABI整包通过不等于持续门禁：`.github/workflows/check.yml:38`没有传`--android`，所以`tool/check.sh`条件内的APK构建和native ownership main没有CI覆盖（A46）。下一步明确Android CI入口，实际job验证构建／测试失败会阻断。Apple／Windows宿主整包和最终链接仍另行验收。
 
 A48还发现`PlatformDocuments.kt:94`仍用产品AlertDialog决定同名保留／跳过／取消，共享协调器调用`documents.platform.conflict`；应将策略／产品UI归共享Dart，原生保留系统授权／provider／FD适配，并回归离页／取消／迟到结果。当前状态见[当前完成度](../current-status.md)。
+
+后续A46配置已显式调用`./tool/check.sh --android`，并加入此前未执行的audio JVM runner、实际APK三ABI Flutter／Rust ELF与manifest核验、成功产物留存。三ABI构建106.8秒、4组native main检查通过；首个包检查误把apkanalyzer数值枚举当成错误，依据固定API36 SDK和官方常量修正后，原Android脚本分支重新构建11.1秒并全部通过。损坏arm64 Rust ELF头的独立负例被精确拒绝。远端CI未运行、分支保护未配置；Apple／Windows整包和原生产物闭包不据此关闭，详见[验收](../../../docs/implementation/validation.md)。

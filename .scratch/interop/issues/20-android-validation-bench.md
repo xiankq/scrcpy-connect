@@ -45,4 +45,6 @@ Requirements: R03、R17–R18、R20–R22、R39
 
 新增A43退出pause拒绝／挂起已实际先红后绿，32项生命周期／会话视图回归通过；本地退出局部修复不能覆盖旧挂起队列重进或真实UI E2E。A44导出未知→离页→重进、A45内拖保持展开、A46 Android/native CI门禁及A48真实provider冲突UI继续待实施／验收。主屏应用3项widget及公开Runtime真实目标任务观察已有证据，中文错误提示已有widget，但当前UI完整E2E仍在途。
 
+后续A44持久账本13项、真实系统保存saved重进／分享43秒；A45实际486×1080内拖展开／退出25秒；A49公开Runtime两项16.57秒、主屏接续＋两独立窗口51秒／9个独立进程任务checkpoint均已通过，最终关键截图已目视。早期路由时序、异步pause及HOME／空白启动面的宽松图未冒充通过。默认全量212项应用／102项Bridge／176项Rust通过（49 ignored另记）；A46本地三ABI及native／APK门禁正负例通过，远端CI仍未验。当前界限继续以[账本](../current-status.md)和[验收日志](../../../docs/implementation/validation.md)为准；真实杀进程unknown、网络／USB／OEM／物理音频／完整无障碍性能与四端最终产物仍待验，任务保持开放。
+
 首次secure=1 AVD码配对／系统接口撤权两轮64秒、JPEG／MP4真实内容交付、有界搜索、系统提醒及共享折射均已有后续证据，不笼统称“全部未验”。量产OEM／真实Settings Forget、物理USB／IME／HAL／热功耗／完整恢复和四宿主整包仍开放；当前权威结论见[当前完成度](../current-status.md)。

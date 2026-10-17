@@ -30,9 +30,16 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
-      - name: Install pinned capture-server Android tools
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Install pinned Android tools
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
       - name: Install the repository Rust toolchain
         run: rustup show
-      - name: Generation, analysis, tests, and design lint
-        run: ./tool/check.sh
+      - name: Generation, analysis, tests, design lint, and Android APK gates
+        run: ./tool/check.sh --android
+      - name: Retain the verified Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: apps/connect/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7

@@ -601,3 +601,17 @@ A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、�
 失败与验收加严原样保留：第一次`connect-app-primary-and-windows-e2e.log`在本地已离页但异步pause尚未回执时即要求paused而失败，现仅只读轮询原ID至5秒上限，不补发pause。46秒后续流程虽通过，主屏截图仍为旧HOME；51秒第一版像素门槛又把白色启动面当内容。两者不计主屏视觉通过，最终加入内容对比门槛并目视Settings后才登记。该已知stock浅色Settings／深色HOME样本门槛不是通用UI识别器，不外推所有应用。命令仍为apps/connect下`flutter drive --no-pub -d emulator-5554 --driver=test_driver/session_workspace.dart --target=integration_test/session_workspace_test.dart`，host指定ADB／target及capture目录，Flutter指定ADDRESS=10.0.2.2、PORT=15556。
 
 真实副屏失败后的手机回退、旧API／OEM、实际renderer首帧故障、unknown跨进程持久化、多实例和任务迁回完整矩阵继续待验。独立代码审查发现的两项新缺陷修复后复核未再发现确定问题；这不替代上述缺口。
+
+## Android持续门禁与本轮全量检查（A46）
+
+CI保留既有`host-checks`身份，显式调用`./tool/check.sh --android`，安装固定NDK并留存成功APK。原生测试是Kotlin object main，不能把Gradle没有JUnit用例时的成功当成这些断言已执行；现同时执行ownership与audio两份runner。Android分支还检查实际包内三ABI的Flutter／Rust ELF class和machine，以及备份／明文策略、单Activity入口与私有前台服务类型。远端job、故障阻断和分支保护尚未运行／配置，不把本地通过写成远端CI回执。
+
+本地首个整条运行因精简PATH漏掉npx而中止；补Node路径后，生成143输入／10秒、格式196文件零改动、可复现JAR摘要、capture JVM检查、workspace all-target clippy、Rust176 passed／49 ignored、严格分析／Riverpod lint负例、应用212项、设计系统3项、driver验收契约和Bridge102项全部通过。官方DESIGN.md工具固定0.4.0：0错误／31警告／1信息，警告仍为既有光学扩展和组件颜色引用，未隐藏。
+
+三ABI整包构建106.8秒通过，4组native main检查通过；新增manifest检查首次误拒绝正确包，原因是apkanalyzer打印数值枚举。固定API36的android.jar经`javap -constants`确认LAUNCH_SINGLE_TASK=2，connectedDevice=16、mediaPlayback=2；解析现同时接受对应符号或精确数值，不放宽错误模式／额外服务位。[ActivityInfo参考](https://developer.android.com/reference/android/content/pm/ActivityInfo#LAUNCH_SINGLE_TASK)、[ServiceInfo参考](https://developer.android.com/reference/android/content/pm/ServiceInfo#FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)。修正后实际Android脚本分支重建11.1秒、两份runner及全部打包校验通过（`/tmp/connect-android-gates-final.log`）。独立样本仅截取实际六个ELF头并将arm64 Rust machine改为x64，原门禁明确报对应架构错误，退出非零（`/tmp/connect-android-gate-negative.log`）；没有修改真实APK或降低门禁要求。
+
+三ABI实际APK暂存`/tmp/connect-lifecycle-three-abis-p7uhsufm/app-debug.apk`，249715366字节，SHA-256 `7d66deab1f04e767d3b2cb6b4f22eeb19f596c44152d001fc409028c34d55102`；回执`/tmp/connect-lifecycle-apk-receipt.json`。这份保留避免后续普通main单ABI部署覆盖唯一产物；不作为Git内容，也不宣称发布签名或其他三平台已构建。日志仍有Java8选项、PlatformDocuments非空断言及模拟器渲染／首屏跳帧等既有警告。
+
+解析修正后最后重新执行**整条**`rtk proxy env PATH=<Rust/Flutter/Node及系统路径> CARGO_BUILD_JOBS=2 ANDROID_HOME=/home/xiankq/Android/Sdk ./tool/check.sh --android`，实际退出0，`/tmp/connect-lifecycle-all-gates-final.log`。同一轮生成143输入／10秒、应用212项16秒、设计系统3项、Bridge102项、Rust176／49 ignored和其余门禁全部通过，三ABI增量构建2,384ms，随后4组native main及实际manifest／ELF通过。此前npx缺失和错误数值枚举解析的两次失败日志仍保留，未合并包装成首次整条通过。
+
+最后普通`lib/main.dart`实际构建11.3秒、安装启动，CLI按R热重启1,417ms，设备列表空态`/tmp/connect-lifecycle-main-restarted.png`已目视，随后detach。默认浅色／黑色主动作、紫色小图标、玻璃底部导航与固定设备首页可见；不以此替代全部设计状态或独立光学验收。仍有两条FRB旧isolate投递警告与启动SurfaceSync／跳帧日志，未称零运行告警。
