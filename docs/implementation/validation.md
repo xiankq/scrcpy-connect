@@ -485,3 +485,38 @@ JPEG初次43秒、MP4初次44秒通过。独立只读review发现接收器用URI
 图片/视频预览及保存/分享结果已原生目视。返回系统分享后曾捕获偏浅状态栏图标；额外记录实际`shared-product-windows.txt`，生产窗口明确`apr=LIGHT_STATUS_BARS LIGHT_NAVIGATION_BARS`，系统转场结束后的产品截图图标正常。没有把瞬时截图推断成已定位的业务错误，也没有为此增加原生样式代码；完整动态/对比/无障碍矩阵仍开放。
 
 只扩展测试源与独立接收器，产品实现/依赖及Pencil页面数未再变化。FFmpeg仅host测试工具；JPEG/无音轨MP4的小样本成功不证明物理声音、全格式、HEIF/HEVC/动态照片、超2MiB、长原件准备/取消/空间满/撤权、索引分页或批量能力。当前剩余工作已同步goal、任务10/13及第12.2节。
+
+## 跨目录搜索与真实文件页验收
+
+本批补有界、可取消的跨目录名称/类型搜索。文件页当前目录筛选保留；新页固定设备与搜索根，修改条件需明确提交，同名结果展示父目录，进入详情重新核验。Rust持有独立只读搜索，Flutter处理固定ID轮询、离页迟到取消及读取世代；没有新增被控APK、主控调试要求、原生业务或媒体依赖。接口、边界和重跑命令见[搜索实现](file-search.md)。
+
+### 真实缺陷与公开回归
+
+- Runtime公开命令回归先因命令不存在失败，补start/get/cancel后通过。真实AOSP的Sync LIST可能因链接元数据errno13整体失败，也可能权限拒绝却返回空DONE；加入目录权限核对及有界固定glob/NUL/lstat回退，查询不进入shell。
+- 独立review发现根目录`/`去尾分隔符后权限检查变空路径；真实adbd公开根目录用例先红，保留权限根后绿。链接/无效UTF-8/权限错误/上限均保留结果并标partial，不假报已搜完整范围。
+- 页面公开回归覆盖固定来源、离页前start未返回后的精确取消，以及旧running快照覆盖cancelled。最后一项曾因只有一次pump而假绿；增加实际读取次数与两帧观察后确实红，独立读取世代修复后绿。没有把测试未观察到帧的成功当修复证据。
+- E2E清理采用独立嵌套finally，目标唯一目录清理失败也不跳过本机临时文件与本次设备记录清理。driver只有在实际搜索、筛选、详情重验和夹具精确清理全部回执为true时通过，拒绝扩大成完整产品验收。
+
+### 双AVD与视觉结果
+
+API36/x86_64双AVD，主控emulator-5554，目标emulator-5556，既有host转发15556→5555，产品访问10.0.2.2:15556。目标为预先准备的legacy TCP/secure=0；不是首次授权、安全配对、USB或物理机覆盖。测试通过公开文件操作创建唯一目录/子目录及19字节UTF-8文件，再实际点击文件页搜索入口、输入“报告”、筛选文档、点击嵌套结果并验证详情路径，最后精确清理。
+
+| 运行 | 结果及证据 |
+| --- | --- |
+| `/tmp/connect-file-search-ui.log`，6秒 | 失败：转场时泛TextField定位匹配两页；不是产品搜索失败。夹具创建/清理均true，未记为通过 |
+| `/tmp/connect-file-search-ui-fixed.log`，10秒 | 数据链路通过，但截图仍为旧running/单条帧；不记为最终视觉通过 |
+| `/tmp/connect-file-search-ui-visual.log`，11秒 | 最终通过；限定FileSearchPage定位，完成回执后等待实际绘制，再截屏。搜索全部3项、文档2项、原文件详情重验及精确清理通过 |
+
+最终`/tmp/connect-e2e/file-search-ui-visual/result.json`含`fileSearchComplete/actualNestedNames/actualTypeFilter/actualDetailRevalidated/fixtureCreated/fixtureRemoved:true`，唯一根为`/sdcard/Download/connect-search-1792233667877933`。原生目视`file-search-documents.png`已显示“搜索完成”、两条同名文件及不同完整父目录、浅色玻璃范围控件与黑中性类型胶囊，无该页可见重叠；截图只在tmp。该结论不扩展到全部页面/字体比例/读屏或液态动态性能。
+
+### 自动检查与源稿
+
+- 应用全部181测试通过，`/tmp/connect-file-search-app-all.log`；视觉调整后新增3项定向回归再过，`/tmp/connect-file-search-widget-visual.log`。
+- Rust workspace39套件、163通过/46忽略，`/tmp/connect-file-search-rust-workspace.log`；其中2项真实adbd用例另以include-ignored显式执行通过，不把默认忽略算通过。相关clippy及cargo fmt通过。
+- build_runner生成一致性检查通过（141输入），严格Flutter分析无问题。Android arm/arm64/x64三ABI整包构建158.9秒通过，`/tmp/connect-file-search-three-abis.log`；不外推iOS/Windows/macOS。
+- 独立只读最终review确认嵌套清理、driver门槛和旧快照防护，未发现新增有证据问题；review本身未运行测试。
+- 同一Pencil文件/传输类别行增加lm0us/jcZXq/zD1BI及共享条件组件E0Ctfk；保存重开87页（85手机/2大屏）、12类、24母组件/545实例、153变量。原顶层/实例ID保留，无断链/占位/页重叠；预览`/tmp/file-search-design-reopen/`，不入Git。3页代表状态不等于所有异常/空结果或可点击原型完成。
+
+普通lib/main.dart另实际构建启动并按R热重启1,414ms；设备列表首屏`/tmp/connect-file-search-main-restarted.png`已原生目视，随后detach保留运行。第一次CLI未分配TTY而无法发送R，退出该CLI后重开TTY才实际完成，不把初次启动当热重启证据。重启仍记录两条FRB旧isolate投递警告。
+
+运行仍有SurfaceSync/跳帧/IME inactive等模拟器日志，不声称零警告或达到性能指标。目录/批量系统交付、浏览分类、provider/空间/撤权矩阵、可恢复传输意图、完整设计状态及其他第12.2节完整目标继续开放。
