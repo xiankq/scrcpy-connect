@@ -48,6 +48,32 @@
 
 ADB 协议没有为“触控比文件推送更优先”定义跨流服务等级。支持多路复用不等于已经实现公平调度；所有流仍共享 USB/TCP 带宽和底层写队列。对 CLSE 前已收尾部数据，AOSP 有保留待写队列后再销毁 socket 的路径，不能收到 close 就丢掉所有缓存。[asocket 的背压职责](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/docs/dev/asocket.md)、[sockets.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/sockets.cpp)
 
+### 2.4 Burst Mode复核与当前实现差距（2026-10-18）
+
+只读子代理复核上述Android17固定修订，另核官方新文档：Burst Mode从Platform Tools
+36.0.0提供，当前仍为默认关闭的实验功能，主机由`ADB_BURST_MODE=1`启用。wire feature
+仍叫`delayed_ack`；主机主动宣告与设备支持取交集，不能根据对端banner直接启用。
+[官方Burst说明](https://developer.android.com/tools/adb#burst_mode)、
+[固定transport.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/transport.cpp)。
+
+双方一旦协商，普通和reverse OPEN的arg1均须给初始额度，首个及持续OKAY携带4字节
+有符号增量；累计额度为signed64，允许零／负增量。额度大于零即可发一个完整WRTE，
+扣除后可以暂时为负；接收预算应容纳最多额外一个包，消费者实际交付字节后才返还。
+不能把它简化为“一个包一次ACK”。[固定adb.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/adb.cpp)、
+[固定sockets.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/sockets.cpp)。
+
+本项目当前仍为经典模式：未宣告该feature、OPEN.arg1=0、只接空OKAY、逐包等待ACK、
+读完WRTE返还ACK、每流两个接收包。直接加feature会破坏OPEN／reverse／OKAY兼容；
+`from_negotiated_transport`也没有记录本地主动协商结果。实施应独立增加默认关闭的
+连接选项、显式协商状态、信用累计及唤醒、逐流与全连接字节预算，再整体实现正反向
+读写／关闭；不能对每个手机流照搬32MiB窗口。[当前client.rs](../../crates/adb/src/client.rs)。
+
+这些是可实施的协议差距，**尚未证明是当前约一秒视频等待的原因**。先采逐stream
+payload读取、路由／消费、ACK实际写出及包大小／间隔；后续Burst A/B保持设备／画面／
+码率，比较延迟和排队，而不只吞吐。回归需含classic及双方feature组合、正反向流、
+部分读／合并信用、零／负／耗尽／恢复、非法长度与ID、慢流隔离、取消／尾包及TLS。
+当前测量与边界见[视频记录](../implementation/video-performance.md)；本节没有启用Burst。
+
 ## 3. 已证事实：无线配对、密钥与连接安全
 
 ### 3.1 旧 TCP 与 Android 11+ 无线调试分开

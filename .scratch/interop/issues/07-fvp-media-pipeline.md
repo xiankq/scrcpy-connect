@@ -116,3 +116,12 @@ ADB消费／raw分段已实施：默认关闭、256项上限、source PTS及捕�
 当前读时钟看不到首包先前接收／排队，下一项补实际packet reader及路由／消费分段，
 不能据此排除ADB或物理网络。只读review的收据发布竞争已补有界等待；两个JAR未改。
 最终同版复跑、原始命令／证据／时钟边界见[当前传输记录](../../../docs/implementation/video-performance.md#adb消费raw转发与解码后端对照2026-10-18)。
+
+逐WRTE后续：接收观测已实施，默认关闭、恒定每stream收据及token隔离，ACK不变；
+真实协议回归先红后绿，完整ADB52项／13 ignored、Core4项及clippy通过。Android同配置
+16次新像素与18项时间线完整，20个首末WRTE payload读中位0.256ms、路由→消费0.014ms，
+输入→relay仍1002ms，P50／P95=1268／1584ms、首帧3138／2840ms严格失败。头读完前的
+等待仍不可见，下一项带误差界关联目标源PTS与主控收包，继续分编码前后，不能直接
+相减未同步时钟。Burst官方仍实验默认关闭，本库缺完整credit支持，待独立实施与A/B，
+没有只改banner。JAR未改，已有MDK崩溃继续开放。
+[实测与观测范围](../../../docs/implementation/video-performance.md#逐wrte接收与消费实测2026-10-18)。

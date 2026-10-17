@@ -53,6 +53,33 @@ SurfaceSync与1421ms启动帧告警仍在，不称启动流畅度通过。停止
 输出，释放1488.6MiB、空闲61.0GiB，保留release／native hooks／构建缓存／原始证据；
 被控无本批捕获进程，夹具已卸载，原五项用户未跟踪文件未动。
 
+ADB整包接收观测后续（2026-10-18，`2f54b91`）：独立Rust库补逐stream、默认关闭、恒定收据存储的
+`set_read_trace_clock`／`read_trace`，Core记录首／末WRTE的payload读取、路由及首次消费，
+沿用主控同一单调时钟。订阅token隔离换时钟／停用后的在途及排队收据，字节和ACK语义
+不变；无订阅时新WRTE不采时钟或加路由查询锁，仍有原子检查和可选字段开销。真实协议
+回归先红后绿，完整ADB52项／13 ignored、Core同组4项、all-target clippy与fmt通过；
+只读review未发现确定问题，三宿主Core交叉check结果另见记录，不等于整包链接验收。
+
+同环境1280／60／8Mbps动态请求，2轮16次新像素与18项目标时间线完整匹配，2次暂停、
+实际计数9／2呈现和卸载确认完成。20个实际首末WRTE的payload读中位0.256ms、最大
+9.252ms，路由→首次消费0.014ms、最大0.034ms；首WRTE已读完→scrcpy首字节中位
+0.019ms。输入→relay仍1002.445ms，报告P50／P95=1268／1584ms、首帧3138／2840ms，
+严格失败。这组证据不支持该一秒花在已测的整包读取或消费队列，但起点在ADB头读完后，
+仍不能区分编码输出、adbd排队与更早的传输／头等待。下一项建立带误差界的目标源PTS
+与主控时钟关联，不能直接相减未同步的两端时钟。已有MDK snapshot崩溃未修复。
+
+只读研究复核AOSP Burst仍需显式启用、双方协商及完整有符号字节credit；本库尚未支持，
+继续经典模式，不只改feature或扩大队列。固定一手来源和必要回归回填
+[ADB研究](../../docs/research/adb-host-and-connectivity.md#24-burst-mode复核与当前实现差距2026-10-18)，
+新实测及边界见[整包记录](../../docs/implementation/video-performance.md#逐wrte接收与消费实测2026-10-18)。
+本批无Dart／Android主控原生呈现改动，没有重建或改动两个scrcpy JAR；这是诊断与研究
+增量，完整目标／性能／稳定性继续开放。
+Core对aarch64 iOS／macOS及x64 Windows交叉check分别3.94／3.86／3.87秒通过，仅编译
+检查，不冒充三端Flutter整包链接。普通main构建9.1秒／安装592ms、实际热重载134ms及
+运行错误查询完成，设备首页及最终计数2图片已目视；SurfaceSync、跳帧及1432ms启动帧
+告警仍保留。停止Gradle，清理382处debug输出，释放1488.7MiB、空闲60.5GiB，保留
+release／native hooks／构建缓存／原始性能及崩溃证据；被控无捕获进程／夹具。
+
 ## 状态口径
 
 - **已落实**：只对列明的实现与已通过证据成立，不外推整个领域完成。

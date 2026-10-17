@@ -711,3 +711,81 @@ VM Service改用WebSocket连接后实际热重载241ms成功、Dart运行错误�
 `/tmp/connect-transport-cleanup.json`；保留release、native hooks、Gradle／CMake、
 未知Flutter模式缓存和性能／崩溃原始证据。被控无本批捕获进程且夹具不存在，原五项
 用户未跟踪文件未动。此次没有改默认画质、后端或scrcpy JAR，完整目标与任务07继续开放。
+
+## 逐WRTE接收与消费实测（2026-10-18）
+
+独立ADB库增加[可选接收观测](../../crates/adb/README.md)，调用方提供单调微秒clock。
+`Frame::read_observed`在24字节头校验／payload分配后、payload读取前后计时；路由将
+metadata随原有字节队列交给AdbStream。首次消费记时，后续部分读复用同一sequence及
+首次消费时间。Core仅在`traceFrames`开启时订阅，已有256条raw trace中补
+`firstAdbRead`／`lastAdbRead`，不增加Dart逐包桥接、日志或JAR行为。
+
+订阅以token标识，路由与消费各复核一次，换clock／停用清空当前收据并丢弃旧metadata，
+不丢字节；在途payload仍可能完成一次旧clock调用，然后丢弃结果。Route移除／CLSE／
+连接清理自动释放订阅。正常无订阅的新WRTE不采时钟或多取路由锁，保留一次原子检查、
+可选metadata字段及每连接订阅计数；没有声称完全零开销。收据只保留当前包，不累积历史。
+
+真实tokio byte transport→ADB reader／路由→AdbStream回归：header及一字节payload
+先到，剩余延迟30ms，完整包就绪后再等20ms消费；先前stub在期望收据处真实失败，补
+实现后通过。验证读取消、未整包前不交字节、部分消费不提前ACK、计时／字节一致、关闭
+不采时钟，并补换clock期间在途旧包及停用前已排队包的隔离。最初一次服务参数类型编译
+错误已修正，不当作症状红。日志`/tmp/connect-adb-read-trace-{red,green}.log`。
+
+完整ADB52 passed／13 ignored、Core视频传输4 passed（10.30秒）、两crate all-target
+clippy -D warnings（7.97秒）及fmt通过，日志`/tmp/connect-adb-read-{full,core-regression,clippy,fmt}.log`。
+只读review未发现确定问题；保留“多个scrcpy包可能共用一个WRTE收据”的语义边界。
+
+### 实际Android路径
+
+沿用上节同一双API36 x64 AVD、动态夹具与目标时间线、H264 1280／60fps／8Mbps请求、
+实际576×1280及AMediaCodec，2轮各8次输入／1次暂停。原有Dart测试自动保留新增raw
+字段，无需修改测试播放器或生成FRB。16项同PTS关联、18项目标输入／绘制、2次暂停
+恢复、Flutter实际计数9／2呈现和卸载确认完整；最终计数2图已目视。严格1000／200／300ms
+预算失败，驱动退出1，未当作性能绿。
+
+| 指标 | 中位 | 最大 |
+| --- | ---: | ---: |
+| 20个去重首末WRTE的payload读 | 0.256ms | 9.252ms |
+| WRTE路由→首次消费 | 0.014ms | 0.034ms |
+| 首WRTE读完→scrcpy首字节返回 | 0.019ms | 0.038ms |
+| 首WRTE开始读payload→末WRTE读完 | 0.310ms | 14.335ms |
+| raw写 | 0.047ms | 0.107ms |
+| 完整scrcpy包读完→relay | 0.125ms | 3.221ms |
+| 输入→relay | 1002.445ms | 1297.105ms |
+| relay→onVideo | 256.443ms | 405.122ms |
+
+16项中4项跨两个WRTE，12项首末sequence相同；这20项是当前新像素样本的端点包，
+不是整场所有ADB包分位数。payload开始计时前的头等待、TLS／kernel先前缓存、目标
+编码／adbd积压均未计入，起点不能解释为第一个网络字节到达。首次消费与首字节返回
+相差的是主控小段处理，多个scrcpy包共享WRTE时也不能称为每帧独立的队列停留。
+
+报告输入到新像素P50／P95=1268／1584ms、完整首像素3138／2840ms。实际同域小区间
+不支持“该一秒在已测payload读或消费队列中”，但没有排除第一包头前的ADB／网络等待。
+下一项用明确误差界关联源PTS／目标时钟与主控收包，进一步区分输出前后，不凭这组
+数据断言是编码器。仍不关闭既有MDK snapshot空回调崩溃。
+
+原始JSON `/tmp/connect-e2e/video-adb-packet/result.json`、目标时间线及Flutter图片在
+同目录，日志`/tmp/connect-video-adb-packet.log`，临时派生汇总
+`/tmp/connect-adb-packet-segments.json`不是独立原始证据。复现命令与上节native完全相同，
+只把capture目录改为video-adb-packet；两个JAR摘要保持764eb6f…／b46cd074…，均未重建。
+构建70.4秒含本批Rust改动与恢复debug输出，仍有SDK XML工具版本告警；不是稳定热构建
+时间，也不与此前增量秒数混比。
+
+并行只读研究确认当前[AOSP Burst](../research/adb-host-and-connectivity.md#24-burst-mode复核与当前实现差距2026-10-18)
+仍为实验性默认关闭；当前经典流控有明确兼容范围。完整credit支持是独立工作，可能
+提高吞吐也可能放大排队，尚无本项目A/B收益，未只加feature或修改默认窗口。
+
+代码提交`2f54b91`。修改后Core交叉`cargo check -p interop-core --target`分别覆盖
+`aarch64-apple-ios`（3.94秒）、`aarch64-apple-darwin`（3.86秒）、
+`x86_64-pc-windows-msvc`（3.87秒）通过，日志
+`/tmp/connect-adb-read-<target>.log`。这是Rust库编译检查，不是三个宿主的最终链接／
+Flutter整包或运行证据。Android本批由实际x64测试APK验证，既有签名ARM64 release
+未更新，不声称包含新诊断。
+
+普通main重新构建9.1秒、安装592ms，经真实VM WebSocket连接热重载134ms，运行错误
+查询无Dart错误，已detach；首页`/tmp/connect-adb-read-main.png`及最终动态计数2画面
+已目视。仍有SurfaceSync／跳33帧／1432ms原生启动帧告警，不视为启动性能通过。
+停止Gradle后清理382处明确debug输出，释放1488.7MiB、空闲60.5GiB，收据
+`/tmp/connect-adb-read-cleanup.json`；保留release、native hooks、Gradle／CMake、未知
+Flutter模式缓存、原始性能／崩溃证据。被控无本批捕获进程，夹具已卸载；原五项用户
+未跟踪文件未纳入提交。任务07与完整目标继续开放。
