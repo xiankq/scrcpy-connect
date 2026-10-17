@@ -442,6 +442,7 @@ impl Runtime {
                     let unauthorized = error.code == "authorization_required"
                         || error.message.contains("CertificateRequired")
                         || error.message.contains("BadCertificate")
+                        || error.message.contains("CertificateUnknown")
                         || error.message.contains("UnknownCA");
                     record.status = if unauthorized {
                         "unauthorized"
