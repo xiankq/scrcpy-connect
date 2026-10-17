@@ -94,6 +94,8 @@ JNI 0.22.4 默认不启用 JVM invocation；Rust 通过已有 JNIEnv 函数表�
 
 mdns-sd **0.21.5**，固定源码 `a25148c4d7adea836316dac2eca6c5bbdd79aa15`，通过 Rust UDP socket 实现 DNS-SD，不要求外置 Bonjour daemon。清单使用 socket2、mio、if-addrs、socket-pktinfo 等平台接口；所检正常依赖没有 C 实现构建项，仍须对最终目标闭包复核。[源码与清单](https://github.com/keepsimple1/mdns-sd/tree/a25148c4d7adea836316dac2eca6c5bbdd79aa15)
 
+上述为研究候选版本。2026-10-18实际锁版核对发现工程原为0.17.2，存在上游已修复的HINFO解析器panic；本批生产／测试统一精确0.21.2修复线，不是已经使用0.21.5。具体API／feature差异、系统依赖和已执行／未验边界见[实际mDNS锁版契约](locked-mdns-contract.md)。
+
 Android Wi-Fi 默认组播过滤可能影响原始 UDP 接收，须管理 MulticastLock 与 CHANGE_WIFI_MULTICAST_STATE；Android 17 target 37 的本地网络权限也覆盖本地 socket 活动。NsdManager 的系统服务行为不能直接当作 mdns-sd 原始 socket 已获相同待遇的证据。发现失败需要区分权限、网络接口和无设备。[MulticastLock](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock)、[本地网络权限](https://developer.android.com/privacy-and-security/local-network-permission)、[NsdManager](https://developer.android.com/reference/android/net/nsd/NsdManager)
 
 未来 iOS 原始 multicast 有 entitlement/本地网络隐私约束；系统 Bonjour 是另一可替换发现后端。发现层不应阻断手动 IP、IPv6 带 scope 地址与可达跨网连接，也不能把已配对设备等同当前在线。[Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
