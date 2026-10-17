@@ -53,6 +53,7 @@ class _RemotePageState extends State<RemotePage>
   final activePointers = <int>{};
   final pointerPositions = <int, Json>{};
   final heldKeys = <int, (String, int)>{};
+  final detachedCleanupBindings = <(String, int)>{};
   bool controlAvailable = false;
   int bindingGeneration = 0;
   int startAttempt = 0;
@@ -357,6 +358,35 @@ class _RemotePageState extends State<RemotePage>
     });
   }
 
+  void detachForUnknownAppLaunch(Json record) {
+    // Only this exact outgoing binding may drain cleanup after the page adopts
+    // the operation record. New input still needs the current live binding.
+    final outgoing = (sessionId, bindingGeneration);
+    detachedCleanupBindings.add(outgoing);
+    final releases = releaseInputs().whenComplete(() {
+      detachedCleanupBindings.remove(outgoing);
+    });
+    final owned = view;
+    view = null;
+    visibilityEpoch++;
+    bindingGeneration++;
+    controlAvailable = false;
+    presentationVisible = false;
+    awaitingResume = false;
+    paused = true;
+    if (owned != null) {
+      // Pause belongs to the captured view, even after adopting the record.
+      // A lost control stream may reject pause; it cannot erase launch evidence.
+      unawaited(
+        owned
+            .release(afterInput: releases)
+            .catchError((Object _) => <String, dynamic>{}),
+      );
+    }
+    // Neither input receipts nor capture pause gate reviewing this fixed record.
+    showUnknownAppLaunch(record);
+  }
+
   Future<void> checkAppLaunch() async {
     setState(() => connecting = true);
     try {
@@ -413,6 +443,9 @@ class _RemotePageState extends State<RemotePage>
         reconcileOnly = false;
         paused = false;
         connecting = false;
+        if (widget.initialAction?.tool == RemoteTool.launchApp) {
+          initialActionApplied = false;
+        }
         errorCode = null;
         error = '本次打开记录已关闭，手机上的应用任务已保留。可明确选择重新打开。';
       });
@@ -858,9 +891,11 @@ class _RemotePageState extends State<RemotePage>
         (command == 'session.touch' &&
             ['up', 'cancel'].contains(params['action']));
     inputQueue = inputQueue.then((_) async {
+      final detachedCleanup =
+          cleanup && detachedCleanupBindings.contains((id, generation));
       if ((!cleanup && !controlAvailable) ||
           id.isEmpty ||
-          id != sessionId ||
+          (id != sessionId && !detachedCleanup) ||
           (!cleanup && generation != bindingGeneration)) {
         return;
       }
@@ -882,10 +917,24 @@ class _RemotePageState extends State<RemotePage>
       trace('request.complete command=$command');
     } catch (e) {
       trace('request.failed command=$command kind=${e.runtimeType}');
-      if (mounted &&
-          !exiting &&
-          generation == bindingGeneration &&
-          params['sessionId'] == sessionId) {
+      if (mounted && !exiting && params['sessionId'] == sessionId) {
+        final details = e is RequestFailure
+            ? jsonObject(e.details)
+            : <String, dynamic>{};
+        if (command == 'session.launch' &&
+            remoteFailureCode(e) == 'app_launch_unknown' &&
+            details['launchOutcome'] == 'unknown' &&
+            details['recordOnly'] == true &&
+            value(details, 'sessionId').isNotEmpty &&
+            details['sessionId'] == details['launchOperationId'] &&
+            details['sessionId'] != params['sessionId'] &&
+            details['deviceId'] == widget.device['id'] &&
+            details['packageName'] == params['packageName'] &&
+            details['linkedSessionId'] == params['sessionId']) {
+          detachForUnknownAppLaunch(details);
+          return;
+        }
+        if (generation != bindingGeneration) return;
         if ([
           'not_found',
           'disconnected',

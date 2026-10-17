@@ -51,3 +51,9 @@ Requirements: R04、R11–R12、R24–R25
 - [ ] A50：主屏session.launch也拥有固定操作身份与未知结果，事件核验pending不得提交新启动；不同页面实例／进程死亡不能绕过保护。
 
 源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。
+
+## A49／A50 本批实际进展
+
+私有操作账本已实现，断开不再删除 unknown；Runtime 重建转为只读核对，主屏 START_APP 独立记录并进入 Bridge 恢复屏障。真实 Android 四项 50.17 秒通过，排队 START_APP 被关闭后迟到 ACK 不能再发送；写盘失败保持当前内存门禁。页面 49 项窄回归涵盖 unknown 晚于断开事件、输入释放挂起和精确关闭，不等待旧 ACK。
+
+这更新上述“仅 Runtime 内”的历史限制，不代表 Android 杀进程现场或完整任务已关闭；见[本批边界](../../../docs/implementation/app-launch-recovery.md)。

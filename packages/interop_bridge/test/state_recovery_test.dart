@@ -25,6 +25,7 @@ void main() {
       'session.start',
       'session.resume',
       'session.text',
+      'session.launch',
       'apps.launch',
       'audio.start',
       'observation.start',

@@ -4,6 +4,7 @@ import 'support/test_controller.dart';
 import 'support/router_test_app.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/apps/apps_page.dart';
 import 'package:scrcpy_connect/pages/remote/remote_page.dart';
@@ -185,6 +186,304 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'a phone-screen unknown open is checked and closed by its operation id',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final calls = <(String, Json)>[];
+      const screen = {
+        'sessionId': 'original-main',
+        'deviceId': 'phone',
+        'textureId': 1,
+        'width': 200,
+        'height': 400,
+        'status': 'ready',
+        'firstFrameDecoded': true,
+        'evidence': 'mdk.snapshot',
+      };
+      const unknown = {
+        'sessionId': 'unknown-phone-open',
+        'launchOperationId': 'unknown-phone-open',
+        'linkedSessionId': 'original-main',
+        'deviceId': 'phone',
+        'packageName': 'com.android.settings',
+        'status': 'failed',
+        'launchOutcome': 'unknown',
+        'recordOnly': true,
+      };
+      var submitted = false;
+      var recordOpen = true;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        calls.add((command, params));
+        if (command == 'session.launch' && recordOpen) {
+          submitted = true;
+          throw const RequestFailure('app_launch_unknown', '应用打开结果未知', unknown);
+        }
+        if (command == 'session.stop') recordOpen = false;
+        return switch (command) {
+          'session.list' => {
+            'sessions': [screen, if (submitted && recordOpen) unknown],
+          },
+          'session.resume' => screen,
+          _ => {},
+        };
+      });
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: RemotePage(
+              controller: controller,
+              device: const {'id': 'phone'},
+              initialAction: const RemoteControlIntent.launchApp(
+                'com.android.settings',
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('应用打开结果待核对'), findsOneWidget);
+        expect(find.byType(Texture), findsNothing);
+        expect(find.text('关闭本次打开记录'), findsOneWidget);
+        await tester.tap(find.text('只读检查'));
+        await tester.pumpAndSettle();
+        expect(calls.where((c) => c.$1 == 'session.launch'), hasLength(1));
+        expect(calls.where((c) => c.$1 == 'session.start'), isEmpty);
+        expect(calls.where((c) => c.$1 == 'session.stop'), isEmpty);
+        await tester.tap(find.text('关闭本次打开记录'));
+        await tester.pumpAndSettle();
+        expect(calls.where((c) => c.$1 == 'session.stop'), isEmpty);
+        await tester.tap(find.text('确认关闭'));
+        await tester.pumpAndSettle();
+        final stopped = calls.singleWhere((c) => c.$1 == 'session.stop').$2;
+        expect(stopped['sessionId'], 'unknown-phone-open');
+        expect(stopped['keepTask'], true);
+        expect(calls.where((c) => c.$1 == 'session.launch'), hasLength(1));
+        expect(find.text('重新打开'), findsOneWidget);
+        await tester.tap(find.text('重新打开'));
+        await tester.pumpAndSettle();
+        expect(calls.where((c) => c.$1 == 'session.launch'), hasLength(2));
+        expect(
+          calls.lastWhere((c) => c.$1 == 'session.launch').$2['sessionId'],
+          'original-main',
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
+
+  for (final stalled in ['pause', 'key-up', 'pointer-cancel']) {
+    testWidgets(
+      'unknown phone-screen opening can be checked and closed while $stalled is pending',
+      (tester) async {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        final launch = Completer<Json>();
+        final blocked = Completer<Json>();
+        final calls = <(String, Json)>[];
+        const screen = {
+          'sessionId': 'held-main',
+          'deviceId': 'phone',
+          'textureId': 1,
+          'width': 200,
+          'height': 400,
+          'status': 'ready',
+          'firstFrameDecoded': true,
+          'evidence': 'mdk.snapshot',
+        };
+        const unknown = {
+          'sessionId': 'held-open-record',
+          'launchOperationId': 'held-open-record',
+          'linkedSessionId': 'held-main',
+          'deviceId': 'phone',
+          'packageName': 'com.android.settings',
+          'status': 'failed',
+          'launchOutcome': 'unknown',
+          'recordOnly': true,
+        };
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          calls.add((command, params));
+          if ((stalled == 'pause' && command == 'session.pause') ||
+              (stalled == 'key-up' &&
+                  command == 'session.key' &&
+                  params['action'] == 'up') ||
+              (stalled == 'pointer-cancel' &&
+                  command == 'session.touch' &&
+                  params['action'] == 'cancel')) {
+            return blocked.future;
+          }
+          return switch (command) {
+            'session.list' => {
+              'sessions': [screen],
+            },
+            'session.resume' => screen,
+            'session.launch' => launch.future,
+            _ => {},
+          };
+        });
+        TestGesture? gesture;
+        try {
+          await tester.pumpWidget(
+            RouterTestApp(
+              controller: controller,
+              home: RemotePage(
+                controller: controller,
+                device: const {'id': 'phone'},
+                initialAction: const RemoteControlIntent.launchApp(
+                  'com.android.settings',
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+          gesture = await tester.startGesture(
+            const Offset(400, 300),
+            pointer: 101,
+          );
+          launch.completeError(
+            const RequestFailure('app_launch_unknown', '应用打开结果未知', unknown),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 30));
+          expect(find.text('关闭本次打开记录'), findsOneWidget);
+          await tester.tap(find.text('只读检查'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('关闭本次打开记录'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('确认关闭'));
+          await tester.pumpAndSettle();
+          expect(
+            calls.singleWhere((c) => c.$1 == 'session.stop').$2['sessionId'],
+            'held-open-record',
+          );
+          expect(calls.where((c) => c.$1 == 'session.launch'), hasLength(1));
+          expect(blocked.isCompleted, isFalse);
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
+          blocked.complete({});
+          await tester.pumpAndSettle();
+          final keyUp = calls.singleWhere(
+            (c) => c.$1 == 'session.key' && c.$2['action'] == 'up',
+          );
+          final pointerCancel = calls.singleWhere(
+            (c) => c.$1 == 'session.touch' && c.$2['action'] == 'cancel',
+          );
+          final paused = calls.singleWhere((c) => c.$1 == 'session.pause');
+          expect(keyUp.$2['sessionId'], 'held-main');
+          expect(pointerCancel.$2['sessionId'], 'held-main');
+          expect(paused.$2['sessionId'], 'held-main');
+          expect(calls.indexOf(keyUp), lessThan(calls.indexOf(paused)));
+          expect(calls.indexOf(pointerCancel), lessThan(calls.indexOf(paused)));
+          expect(calls.where((c) => c.$1 == 'session.key'), hasLength(1));
+        } finally {
+          if (!launch.isCompleted) launch.complete({});
+          if (!blocked.isCompleted) blocked.complete({});
+          await gesture?.up();
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+          await tester.pumpWidget(const SizedBox());
+          controller.dispose();
+        }
+      },
+    );
+  }
+
+  testWidgets(
+    'a terminal main-screen event cannot discard its later unknown app-open record',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final events = StreamController<Json>.broadcast(sync: true);
+      final launch = Completer<Json>();
+      final calls = <(String, Json)>[];
+      const screen = {
+        'sessionId': 'ended-main',
+        'deviceId': 'phone',
+        'textureId': 1,
+        'width': 200,
+        'height': 400,
+        'status': 'ready',
+        'firstFrameDecoded': true,
+        'evidence': 'mdk.snapshot',
+      };
+      const unknown = {
+        'sessionId': 'late-open-record',
+        'launchOperationId': 'late-open-record',
+        'linkedSessionId': 'ended-main',
+        'deviceId': 'phone',
+        'packageName': 'com.android.settings',
+        'status': 'failed',
+        'launchOutcome': 'unknown',
+        'recordOnly': true,
+      };
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        calls.add((command, params));
+        if (command == 'session.pause') {
+          throw const RequestFailure('disconnected', '原画面已结束');
+        }
+        return switch (command) {
+          'session.list' => {
+            'sessions': [screen, unknown],
+          },
+          'session.resume' => screen,
+          'session.launch' => launch.future,
+          _ => {},
+        };
+      }, events: events.stream);
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: RemotePage(
+              controller: controller,
+              device: const {'id': 'phone'},
+              initialAction: const RemoteControlIntent.launchApp(
+                'com.android.settings',
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        events.add({
+          'type': 'session.disconnected',
+          'deviceId': 'phone',
+          'data': {'sessionId': 'ended-main', 'reason': '原画面已结束'},
+        });
+        launch.completeError(
+          const RequestFailure('app_launch_unknown', '应用打开结果未知', unknown),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('只读检查'), findsOneWidget);
+        await tester.tap(find.text('关闭本次打开记录'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('确认关闭'));
+        await tester.pumpAndSettle();
+        expect(
+          calls.singleWhere((c) => c.$1 == 'session.stop').$2['sessionId'],
+          'late-open-record',
+        );
+        expect(calls.where((c) => c.$1 == 'session.launch'), hasLength(1));
+        expect(calls.where((c) => c.$1 == 'session.start'), isEmpty);
+      } finally {
+        if (!launch.isCompleted) launch.complete({});
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+        await events.close();
+      }
+    },
+  );
 
   testWidgets(
     'an unknown app launch is not replayed when checking the screen again',

@@ -33,6 +33,7 @@ pub struct Runtime {
     pub(crate) sharing: Mutex<Option<Arc<crate::sharing::ImportManager>>>,
     pub(crate) documents: crate::documents::CopyManager,
     pub(crate) deliveries: crate::delivery::DeliveryJournal,
+    pub(crate) app_opens: crate::app_open::AppOpens,
     pub(crate) media: crate::media::http::MediaStreams,
     pub(crate) qr_attempt: Mutex<Option<(String, tokio_util::sync::CancellationToken)>>,
     pub(crate) device_operations: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
@@ -100,6 +101,7 @@ impl Runtime {
         }
         let events = crate::events::EventBus::new(256);
         let deliveries = crate::delivery::DeliveryJournal::open(&root).await?;
+        let app_opens = crate::app_open::AppOpens::open(&root).await?;
         let runtime = Arc::new(Self {
             root,
             identity,
@@ -118,6 +120,7 @@ impl Runtime {
             sharing: Mutex::new(None),
             documents: crate::documents::CopyManager::default(),
             deliveries,
+            app_opens,
             media: crate::media::http::MediaStreams::default(),
             qr_attempt: Mutex::new(None),
             device_operations: Mutex::new(HashMap::new()),

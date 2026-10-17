@@ -21,6 +21,7 @@ bool needsVerifiedState(String command, StateJson params) {
     'session.text',
     'session.screen',
     'session.rotate',
+    'session.launch',
     'apps.launch',
     'audio.start',
     'audio.resume',

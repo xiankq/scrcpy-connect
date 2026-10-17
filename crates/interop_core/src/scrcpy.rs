@@ -339,6 +339,11 @@ impl Drop for Session {
     }
 }
 enum ControlRequest {
+    Launch(
+        Vec<u8>,
+        crate::app_open::LaunchPermit,
+        oneshot::Sender<CoreResult<Value>>,
+    ),
     Send(Vec<u8>, oneshot::Sender<CoreResult<Value>>),
     ClipboardGet(oneshot::Sender<CoreResult<Value>>),
     ClipboardSet(String, bool, oneshot::Sender<CoreResult<Value>>),
@@ -371,7 +376,7 @@ fn event(events: &crate::events::EventBus, kind: &str, device: &str, data: Value
 fn invalid(message: &str) -> CoreError {
     CoreError::new("invalid_argument", message)
 }
-fn package_name(value: &str) -> CoreResult<&str> {
+pub(crate) fn package_name(value: &str) -> CoreResult<&str> {
     if value.is_empty()
         || value.len() > 230
         || !value.split('.').all(|part| {
@@ -466,13 +471,16 @@ impl Runtime {
     ) -> CoreResult<Value> {
         let device_id = required(params, "deviceId")?.to_owned();
         let (selected_codec, selected_encoder) = selected_video(settings)?;
-        let client = self.client(&device_id).await?;
         let package = params
             .get("packageName")
             .and_then(Value::as_str)
             .map(package_name)
             .transpose()?
             .map(str::to_owned);
+        if let Some(package) = &package {
+            self.app_opens.ensure_available(&device_id, package).await?;
+        }
+        let client = self.client(&device_id).await?;
         if package.is_some() {
             for session in self.sessions.lock().await.values() {
                 if session.device_id == device_id && session.package == package {
@@ -758,6 +766,12 @@ wait "$child""#
                 // Persist the operation identity before a possibly partial write.
                 // START_APP has no application-completion acknowledgement. A
                 // timeout, cancellation or lost write receipt cannot justify replay.
+                let permit = self
+                    .app_opens
+                    .begin(&id, &id, &device_id, package_name)
+                    .await?;
+                app_launch_submitted = true;
+                state.write().await["launchOperationId"] = json!(id);
                 let mut sessions = self.sessions.lock().await;
                 for session in sessions.values() {
                     if session.device_id == device_id && session.package == package {
@@ -780,11 +794,10 @@ wait "$child""#
                         process: None,
                     },
                 );
-                app_launch_submitted = true;
                 drop(sessions);
                 let mut bytes = vec![16, package_name.len() as u8];
                 bytes.extend_from_slice(package_name.as_bytes());
-                request_control(&control_tx, ControlRequest::Send, bytes).await?;
+                request_launch(&control_tx, bytes, permit).await?;
             }
             let (preface, width, height) = read_video_preface(&mut video, initial).await?;
             let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
@@ -842,6 +855,9 @@ wait "$child""#
             Ok(started) => started,
             Err(error) if app_launch_submitted => {
                 cancellation.cancel();
+                // Admission was durable before START_APP. A failed terminal
+                // write leaves pending evidence, which also blocks replay.
+                let _ = self.app_opens.finish(&id, Some(&error.code)).await;
                 let mut observed = state.write().await;
                 observed["status"] = json!("failed");
                 observed["launchOutcome"] = json!("unknown");
@@ -852,6 +868,17 @@ wait "$child""#
             }
             Err(error) => return Err(error),
         };
+        if app_launch_submitted
+            && let Err(error) = self.app_opens.finish(&id, None).await
+        {
+            cancellation.cancel();
+            let mut observed = state.write().await;
+            observed["status"] = json!("failed");
+            observed["launchOutcome"] = json!("unknown");
+            observed["failureCode"] = json!(error.code);
+            observed["reason"] = json!(unknown_app_launch(&observed).message);
+            return Err(unknown_app_launch(&observed));
+        }
         let mut result = {
             let mut observed = state.write().await;
             if app_launch_submitted {
@@ -897,6 +924,21 @@ wait "$child""#
             .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
         for id in ids {
+            let keep_unknown = {
+                let sessions = self.sessions.lock().await;
+                if let Some(session) = sessions.get(&id) {
+                    let unknown = session.state.read().await["launchOutcome"] == "unknown";
+                    if unknown {
+                        session.cancellation.cancel();
+                    }
+                    unknown
+                } else {
+                    false
+                }
+            };
+            if keep_unknown {
+                continue;
+            }
             self.stop_session(&id).await;
         }
     }
@@ -920,6 +962,22 @@ wait "$child""#
 
     pub(crate) async fn session_command(&self, command: &str, params: &Value) -> CoreResult<Value> {
         if command == "session.stop"
+            && params["keepLaunchRecord"] != true
+            && let Some(id) = params["sessionId"].as_str()
+            && self
+                .app_opens
+                .close(id, params["deviceId"].as_str())
+                .await?
+            && !self.sessions.lock().await.contains_key(id)
+        {
+            self.emit(
+                "session.updated",
+                params["deviceId"].as_str(),
+                json!({"sessionId":id,"status":"stopped"}),
+            );
+            return Ok(json!({"sessionId":id,"status":"stopped","applicationStopped":false}));
+        }
+        if command == "session.stop"
             && let Some(id) = params["sessionId"].as_str()
             && !self.sessions.lock().await.contains_key(id)
             && self.resource_admission.cancel(&format!("session:{id}"))
@@ -936,6 +994,14 @@ wait "$child""#
                     .is_none_or(|device| device == session.device_id)
                 {
                     result.push(session.state.read().await.clone());
+                }
+            }
+            for record in self.app_opens.unresolved(params["deviceId"].as_str()).await {
+                if !result
+                    .iter()
+                    .any(|session| session["sessionId"] == record["sessionId"])
+                {
+                    result.push(record);
                 }
             }
             return Ok(json!({"sessions":result}));
@@ -991,13 +1057,21 @@ wait "$child""#
             if params["keepLaunchRecord"] == true && package.is_some() {
                 // Renderer setup can fail after an app was opened. Tear down
                 // capture resources while retaining its fixed operation record.
+                let persisted = self
+                    .app_opens
+                    .finish(&id, Some("renderer_start_failed"))
+                    .await;
                 cancellation.cancel();
                 let mut observed = state.write().await;
                 observed["status"] = json!("failed");
                 observed["launchOutcome"] = json!("unknown");
                 observed["reason"] = json!(unknown_app_launch(&observed).message);
+                if persisted.is_err() {
+                    return Err(unknown_app_launch(&observed));
+                }
                 return Ok(observed.clone());
             }
+            self.app_opens.close(&id, Some(&session_device)).await?;
             self.stop_session(&id).await;
             return Ok(json!({"sessionId":id,"status":"stopped","applicationStopped":false}));
         }
@@ -1196,6 +1270,9 @@ wait "$child""#
                 let package = requested
                     .or(package.as_deref())
                     .ok_or_else(|| invalid("请指定要在手机屏幕打开的应用。"))?;
+                self.app_opens
+                    .ensure_available(&session_device, package)
+                    .await?;
                 let sessions = self.sessions.lock().await;
                 for session in sessions.values() {
                     if session.device_id == session_device
@@ -1210,6 +1287,37 @@ wait "$child""#
                 drop(sessions);
                 bytes.extend_from_slice(&[16, package.len() as u8]);
                 bytes.extend_from_slice(package.as_bytes());
+                let operation = uuid::Uuid::new_v4().to_string();
+                let permit = self
+                    .app_opens
+                    .begin(&operation, &id, &session_device, package)
+                    .await?;
+                self.events.note_state_change();
+                let sent = request_launch(&control, bytes, permit).await;
+                let failure = match sent {
+                    Ok(mut receipt) => match self.app_opens.finish(&operation, None).await {
+                        Ok(()) => {
+                            self.events.note_state_change();
+                            receipt["launchOperationId"] = json!(operation);
+                            receipt["launchOutcome"] = json!("sent");
+                            return Ok(receipt);
+                        }
+                        Err(error) => error,
+                    },
+                    Err(error) => error,
+                };
+                // The write may have reached the real application. Keep the
+                // record even when capture or this page subsequently ends.
+                let _ = self.app_opens.finish(&operation, Some(&failure.code)).await;
+                self.events.note_state_change();
+                let record = self
+                    .app_opens
+                    .unresolved(Some(&session_device))
+                    .await
+                    .into_iter()
+                    .find(|record| record["launchOperationId"] == operation)
+                    .ok_or_else(|| CoreError::new("cancelled", "本次打开记录已明确关闭。"))?;
+                return Err(crate::app_open::unknown(record));
             }
             _ => return Err(CoreError::new("unknown_command", "控制操作无效。")),
         }
@@ -1310,6 +1418,14 @@ wait "$child""#
             let observed = session.state.read().await;
             if !session.cancellation.is_cancelled() || observed["launchOutcome"] == "unknown" {
                 sessions.push(observed.clone());
+            }
+        }
+        for record in self.app_opens.unresolved(None).await {
+            if !sessions
+                .iter()
+                .any(|session| session["sessionId"] == record["sessionId"])
+            {
+                sessions.push(record);
             }
         }
         let transfers = self.list_transfers().await?;
@@ -1593,6 +1709,26 @@ wait "$child""#
     }
 }
 
+struct CancelLaunchOnDrop(crate::app_open::LaunchPermit);
+impl Drop for CancelLaunchOnDrop {
+    fn drop(&mut self) {
+        self.0.cancel();
+    }
+}
+async fn request_launch(
+    sender: &mpsc::Sender<ControlRequest>,
+    bytes: Vec<u8>,
+    permit: crate::app_open::LaunchPermit,
+) -> CoreResult<Value> {
+    let _guard = CancelLaunchOnDrop(permit.clone());
+    request_control(
+        sender,
+        |bytes, reply| ControlRequest::Launch(bytes, permit, reply),
+        bytes,
+    )
+    .await
+}
+
 async fn request_control<F>(
     sender: &mpsc::Sender<ControlRequest>,
     constructor: F,
@@ -1809,6 +1945,23 @@ async fn run_control(
             request = requests.recv() => {
                 let Some(request) = request else { break; };
                 let (bytes, immediate) = match request {
+                    ControlRequest::Launch(bytes, permit, reply) => {
+                        if !permit.claim() {
+                            let _ = reply.send(Err(CoreError::new("cancelled", "本次应用打开已关闭。")));
+                            continue;
+                        }
+                        let result = tokio::select! {
+                            biased;
+                            _ = permit.cancelled() => Err(CoreError::new("cancelled", "本次应用打开已关闭。")),
+                            _ = cancellation.cancelled() => Err(CoreError::new("disconnected", "控制连接已结束。")),
+                            result = stream.write_all(&bytes) => result.map_err(CoreError::from),
+                        };
+                        let abort = result.is_err() || permit.is_cancelled();
+                        permit.complete();
+                        let _ = reply.send(result.map(|()| json!({"sent":true})));
+                        if abort { break; }
+                        continue;
+                    }
                     ControlRequest::Send(bytes, reply) => (bytes, Some(reply)),
                     ControlRequest::ClipboardGet(reply) => { gets.retain(|reply| !reply.is_closed()); if gets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; } gets.push_back(reply); (vec![8,0], None) },
                     ControlRequest::Capture(paused, reply) => {
