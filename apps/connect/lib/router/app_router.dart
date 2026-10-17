@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/router/route_repository.dart';
 import 'package:scrcpy_connect/router/record_route.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
@@ -352,24 +353,31 @@ class ConnectionFormRoute extends GoRouteData with $ConnectionFormRoute {
     this.address = '',
     this.port = '',
     this.pairing = false,
+    this.transport,
   });
   final String? deviceId;
   final String address;
   final String port;
   final bool pairing;
+  final ConnectionTransport? transport;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
     final records = _records(context);
     Widget page(BuildContext _, GoRouterState state) {
-      Widget form() => ConnectionFormPage(
+      Widget form([Json? record]) => ConnectionFormPage(
         key: state.pageKey,
         controller: controller,
         pairing: pairing,
         address: address,
         port: port,
         deviceId: deviceId,
+        transport: record == null
+            ? transport
+            : connectionTransportForRecord(record) == ConnectionTransport.tls
+            ? ConnectionTransport.tls
+            : transport ?? ConnectionTransport.tcp,
       );
       final id = deviceId;
       return id == null
@@ -377,7 +385,7 @@ class ConnectionFormRoute extends GoRouteData with $ConnectionFormRoute {
           : RecordRoute(
               identity: 'connection:$id',
               load: () => records.device(id),
-              builder: (_, record) => form(),
+              builder: (_, record) => form(record),
             );
     }
 

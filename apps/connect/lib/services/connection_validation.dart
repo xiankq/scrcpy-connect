@@ -2,6 +2,13 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'dart:io';
 
+enum ConnectionTransport { tls, tcp }
+
+ConnectionTransport connectionTransportForRecord(Json record) =>
+    record['transport'] == 'tcp' && record['guid'] == null
+    ? ConnectionTransport.tcp
+    : ConnectionTransport.tls;
+
 String? validateAddress(String? input) {
   final text = input?.trim() ?? '';
   if (text.isEmpty) return '请输入被控手机的地址';

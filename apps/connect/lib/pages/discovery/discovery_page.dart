@@ -66,6 +66,11 @@ class DiscoveryPage extends StatelessWidget {
                         : '等待核验授权'}',
                 onTap: () => ConnectionFormRoute(
                   pairing: pairingService,
+                  transport: pairingService
+                      ? null
+                      : d['kind'] == 'tcp'
+                      ? ConnectionTransport.tcp
+                      : ConnectionTransport.tls,
                   address: value(endpoint, 'address'),
                   port: value(endpoint, 'port'),
                   deviceId: responseDeviceId(d),

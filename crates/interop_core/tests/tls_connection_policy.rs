@@ -5,7 +5,11 @@ use serde_json::{Value, json};
 use std::time::Duration;
 use tokio::net::TcpListener;
 
-async fn connect_record(transport: &str, paired: bool) -> (CoreResult<Value>, Value, usize) {
+async fn connect_record(
+    transport: &str,
+    paired: bool,
+    public_add: bool,
+) -> (CoreResult<Value>, Value, usize) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = tokio::spawn(async move {
@@ -39,27 +43,46 @@ async fn connect_record(transport: &str, paired: bool) -> (CoreResult<Value>, Va
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
     let added = runtime
-        .invoke("devices.add", json!({"address":"127.0.0.1","port":port}))
+        .invoke(
+            "devices.add",
+            json!({"address":"127.0.0.1","port":port,"transport":transport}),
+        )
         .await
         .unwrap();
     let id = added["deviceId"].as_str().unwrap().to_owned();
     drop(runtime);
-    // Input fixture represents a previously paired/restored device record.
-    let path = directory.path().join("devices.json");
-    let mut store: Value = serde_json::from_slice(&tokio::fs::read(&path).await.unwrap()).unwrap();
-    let record = &mut store["devices"][0];
-    record["transport"] = json!(transport);
-    record["guid"] = if paired {
-        json!("paired-fixture")
-    } else {
-        Value::Null
-    };
-    record["serial"] = json!("known-device-serial");
-    record["observationWanted"] = json!(false);
-    tokio::fs::write(&path, serde_json::to_vec(&store).unwrap())
-        .await
-        .unwrap();
+    if !public_add {
+        // Input fixture represents a previously paired/restored device record.
+        let path = directory.path().join("devices.json");
+        let mut store: Value =
+            serde_json::from_slice(&tokio::fs::read(&path).await.unwrap()).unwrap();
+        let record = &mut store["devices"][0];
+        record["transport"] = json!(transport);
+        record["guid"] = if paired {
+            json!("paired-fixture")
+        } else {
+            Value::Null
+        };
+        record["serial"] = json!("known-device-serial");
+        record["observationWanted"] = json!(false);
+        tokio::fs::write(&path, serde_json::to_vec(&store).unwrap())
+            .await
+            .unwrap();
+    }
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    if public_add {
+        let updated = runtime
+            .invoke(
+                "devices.add",
+                json!({"deviceId":id,"address":"127.0.0.1","port":port,"transport":"tcp"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            updated["device"]["transport"], transport,
+            "updating an existing TLS record must not downgrade its security"
+        );
+    }
     let result = tokio::time::timeout(
         Duration::from_secs(20),
         runtime.invoke("devices.connect", json!({"deviceId":id})),
@@ -84,7 +107,7 @@ async fn connect_record(transport: &str, paired: bool) -> (CoreResult<Value>, Va
 #[tokio::test]
 async fn paired_records_refuse_plaintext_even_when_metadata_has_no_serial() {
     for transport in ["tls", "tcp"] {
-        let (result, record, services) = connect_record(transport, true).await;
+        let (result, record, services) = connect_record(transport, true, false).await;
         let error = result.expect_err("a paired modern endpoint must require TLS");
         assert!(error.message.contains("TLS is required"), "{error:?}");
         assert_ne!(record["status"], "connected");
@@ -97,8 +120,60 @@ async fn paired_records_refuse_plaintext_even_when_metadata_has_no_serial() {
 
 #[tokio::test]
 async fn legacy_tcp_records_still_accept_a_plaintext_daemon() {
-    let (result, record, services) = connect_record("tcp", false).await;
+    let (result, record, services) = connect_record("tcp", false, false).await;
     assert_eq!(result.unwrap()["connected"], true);
     assert_eq!(record["status"], "connected");
     assert_eq!(services, 1, "the legacy connection proceeds to metadata");
+}
+
+#[tokio::test]
+async fn explicit_tls_add_and_tcp_update_refuse_plaintext_without_a_paired_guid() {
+    let (result, record, services) = connect_record("tls", false, true).await;
+    let error = result.expect_err("an explicitly added modern endpoint must require TLS");
+    assert!(error.message.contains("TLS is required"), "{error:?}");
+    assert_eq!(record["transport"], "tls");
+    assert_eq!(services, 0, "must reject before querying a device service");
+}
+
+#[tokio::test]
+async fn invalid_add_transport_is_rejected_before_mutating_records() {
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let result = runtime
+        .invoke(
+            "devices.add",
+            json!({"address":"127.0.0.1","port":12345,"transport":"unknown"}),
+        )
+        .await;
+    assert!(
+        result.is_err(),
+        "unknown transport must not create a record"
+    );
+    let list = runtime.invoke("devices.list", Value::Null).await.unwrap();
+    assert_eq!(list["devices"], json!([]));
+
+    let added = runtime
+        .invoke(
+            "devices.add",
+            json!({"address":"127.0.0.1","port":12345,"transport":"tls"}),
+        )
+        .await
+        .unwrap();
+    let result = runtime
+        .invoke(
+            "devices.add",
+            json!({"deviceId":added["deviceId"],"address":"192.0.2.2","port":54321,"transport":"unknown"}),
+        )
+        .await;
+    assert!(
+        result.is_err(),
+        "unknown transport must not update a record"
+    );
+    let record = runtime
+        .invoke("device.info", json!({"deviceId":added["deviceId"]}))
+        .await
+        .unwrap();
+    assert_eq!(record["address"], "127.0.0.1");
+    assert_eq!(record["port"], 12345);
+    assert_eq!(record["transport"], "tls");
 }

@@ -76,6 +76,10 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
   const port = String.fromEnvironment('CONNECT_E2E_PORT');
+  const transport = String.fromEnvironment(
+    'CONNECT_E2E_TRANSPORT',
+    defaultValue: 'tls',
+  );
   binding.reportData = {
     ...?binding.reportData,
     'productAcceptanceComplete': false,
@@ -94,6 +98,11 @@ void main() {
       reason:
           'Set CONNECT_E2E_PORT to the real target connection port (1–65535).',
     );
+    expect(
+      transport,
+      isIn(['tls', 'tcp']),
+      reason: 'Select the real target transport explicitly; the port does not identify its security type.',
+    );
     final originalHitTestPolicy = WidgetController.hitTestWarningShouldBeFatal;
     WidgetController.hitTestWarningShouldBeFatal = true;
     final semantics = tester.ensureSemantics();
@@ -108,6 +117,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text('手动填写地址'));
       await tester.pump(const Duration(milliseconds: 400));
+      if (transport == 'tcp') {
+        await tester.tap(find.text('现代无线调试（加密）'));
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(find.text('旧版 TCP（USB 授权后开启）').last);
+        await tester.pump(const Duration(milliseconds: 400));
+      }
       await tester.enterText(find.byType(TextFormField).at(0), address);
       await tester.enterText(find.byType(TextFormField).at(1), '65536');
       await tester.ensureVisible(find.text('连接设备'));

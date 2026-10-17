@@ -20,12 +20,14 @@ class ConnectionFormPage extends HookWidget {
     this.address = '',
     this.port = '',
     this.deviceId,
+    this.transport,
   });
   final AppController controller;
   final bool pairing;
   final String address;
   final String port;
   final String? deviceId;
+  final ConnectionTransport? transport;
   @override
   Widget build(BuildContext context) {
     final host = useTextEditingController(text: address);
@@ -37,6 +39,9 @@ class ConnectionFormPage extends HookWidget {
     final error = useState<String?>(null);
     final activeAttempt = useRef<String?>(null);
     final cancelling = useState(false);
+    final selectedTransport = useState(ConnectionTransport.tls);
+    final effectiveTransport = transport ?? selectedTransport.value;
+    final legacyTcp = effectiveTransport == ConnectionTransport.tcp;
     useEffect(
       () => () {
         final attempt = activeAttempt.value;
@@ -79,6 +84,7 @@ class ConnectionFormPage extends HookWidget {
             if (deviceId != null) 'deviceId': deviceId,
             'port': int.parse(portField.text.trim()),
             if (pairing) 'code': code.text.trim(),
+            if (!pairing) 'transport': effectiveTransport.name,
           },
         );
         if (!context.mounted || activeAttempt.value != attempt) return;
@@ -134,17 +140,50 @@ class ConnectionFormPage extends HookWidget {
           padding: const EdgeInsets.all(24),
           children: [
             Text(
-              pairing ? '填写配对窗口的信息' : '填写无线调试主页面的信息',
+              pairing
+                  ? '填写配对窗口的信息'
+                  : legacyTcp
+                  ? '填写已开启的 TCP 连接信息'
+                  : '填写无线调试主页面的信息',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 12),
             Text(
               pairing
                   ? '配对端口与日常连接端口不同。配对码过期后，请在被控手机重新打开配对窗口。'
-                  : '使用已经授权的地址及连接端口。首次连接需要先配对。',
+                  : legacyTcp
+                  ? '先通过 USB 完成授权并开启 TCP 连接。此方式不使用无线调试的加密连接，请只在可信网络中使用。'
+                  : '使用已经配对的地址及连接端口，连接必须加密。首次连接需要先配对。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 28),
+            if (!pairing) ...[
+              if (transport == null && deviceId == null)
+                DropdownButtonFormField<ConnectionTransport>(
+                  initialValue: selectedTransport.value,
+                  decoration: const InputDecoration(labelText: '连接方式'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ConnectionTransport.tls,
+                      child: Text('现代无线调试（加密）'),
+                    ),
+                    DropdownMenuItem(
+                      value: ConnectionTransport.tcp,
+                      child: Text('旧版 TCP（USB 授权后开启）'),
+                    ),
+                  ],
+                  onChanged: busy.value
+                      ? null
+                      : (next) {
+                          if (next != null) selectedTransport.value = next;
+                        },
+                )
+              else
+                Text(
+                  legacyTcp ? '旧版 TCP（USB 授权后开启）' : '现代无线调试（加密）',
+                ),
+              const SizedBox(height: 20),
+            ],
             TextFormField(
               controller: host,
               validator: validateAddress,
@@ -163,7 +202,11 @@ class ConnectionFormPage extends HookWidget {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: pairing ? '配对端口' : '连接端口',
-                helperText: pairing ? '配对弹窗中显示的端口' : '无线调试主页面中显示的端口，不固定为 5555',
+                helperText: pairing
+                    ? '配对弹窗中显示的端口'
+                    : legacyTcp
+                    ? '填写通过 USB 开启 TCP 连接时设置的端口'
+                    : '无线调试主页面中显示的端口，不固定为 5555',
               ),
             ),
             if (pairing) ...[
@@ -215,6 +258,7 @@ class ConnectionFormPage extends HookWidget {
                     OutlinedButton(
                       onPressed: () => ConnectionFormRoute(
                         address: host.text,
+                        transport: ConnectionTransport.tls,
                         deviceId: responseDeviceId(result.value, deviceId),
                       ).push<void>(context),
                       child: const Text('填写连接端口'),
@@ -223,7 +267,7 @@ class ConnectionFormPage extends HookWidget {
                 ),
               ),
             const SizedBox(height: 20),
-            if (!pairing)
+            if (!pairing && !legacyTcp)
               TextButton(
                 onPressed: () => ConnectionFormRoute(
                   pairing: true,

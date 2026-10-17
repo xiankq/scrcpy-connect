@@ -372,6 +372,11 @@ mixin $ConnectionFormRoute on GoRouteData {
               _$boolConverter,
             ) ??
             false,
+        transport: _$convertMapValue(
+          'transport',
+          state.uri.queryParameters,
+          _$ConnectionTransportEnumMap._$fromName,
+        ),
       );
 
   ConnectionFormRoute get _self => this as ConnectionFormRoute;
@@ -384,6 +389,8 @@ mixin $ConnectionFormRoute on GoRouteData {
       if (_self.address != '') 'address': _self.address,
       if (_self.port != '') 'port': _self.port,
       if (_self.pairing != false) 'pairing': _self.pairing.toString(),
+      if (_self.transport != null)
+        'transport': _$ConnectionTransportEnumMap[_self.transport!],
     },
   );
 
@@ -400,6 +407,11 @@ mixin $ConnectionFormRoute on GoRouteData {
   @override
   void replace(BuildContext context) => context.replace(location);
 }
+
+const _$ConnectionTransportEnumMap = {
+  ConnectionTransport.tls: 'tls',
+  ConnectionTransport.tcp: 'tcp',
+};
 
 T? _$convertMapValue<T>(
   String key,
@@ -419,6 +431,11 @@ bool _$boolConverter(String value) {
     default:
       throw UnsupportedError('Cannot convert "$value" into a bool.');
   }
+}
+
+extension<T extends Enum> on Map<T, String> {
+  T? _$fromName(String? value) =>
+      entries.where((element) => element.value == value).firstOrNull?.key;
 }
 
 RouteBase get $discoveryRoute => GoRouteData.$route(

@@ -264,6 +264,18 @@ impl Runtime {
     pub(crate) async fn add_device(&self, params: &Value) -> CoreResult<Value> {
         let address = host(params)?;
         let port = port(params)?;
+        let transport = match params.get("transport") {
+            None => None,
+            Some(Value::String(kind)) if matches!(kind.as_str(), "tls" | "tcp") => {
+                Some(kind.as_str())
+            }
+            Some(_) => {
+                return Err(CoreError::new(
+                    "invalid_transport",
+                    "请选择现代无线调试或旧式 TCP 连接。",
+                ));
+            }
+        };
         let explicit = params.get("deviceId").and_then(Value::as_str);
         let device = {
             let mut store = self.store.write().await;
@@ -281,16 +293,19 @@ impl Runtime {
                 }
                 existing.address = address;
                 existing.port = port;
-                existing.transport = if existing.guid.is_some() {
+                // Endpoint edits never weaken a known modern wireless identity.
+                // Legacy callers may omit transport, so retain the old record's
+                // policy rather than reclassifying it from its current port.
+                existing.transport = if existing.guid.is_some() || existing.transport == "tls" {
                     "tls"
                 } else {
-                    "tcp"
+                    transport.unwrap_or("tcp")
                 }
                 .into();
                 existing.reason = None;
                 existing.clone()
             } else {
-                let record = blank_device(address, port, "tcp");
+                let record = blank_device(address, port, transport.unwrap_or("tcp"));
                 store.devices.push(record.clone());
                 record
             }
