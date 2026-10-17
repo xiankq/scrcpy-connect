@@ -279,3 +279,54 @@ A42原先使用lastEvent触发来电，连续calls.incoming→observation.change
 
 
 最后按Flutter工具要求启动普通`lib/main.dart`并实际发送`R`，回执`Restarted application in 1,375ms`；原生截图`/tmp/connect-reaudit-hot-restart.png`已目视为正常浅色设备列表空态，随后detach保留应用。重启阶段FRB打印两次旧Dart消息投递失败提示；不以此次启动截图证明全部热重启资源回收或完整恢复生命周期。
+
+
+## 连接入口、设备归属与原通知回复闭环
+
+本批持续修复上一轮A37/A38/A40，而非重新缩小目标。代码分为`fb6b69d`连接类型、`9f8448e`可见设备、`ebd9bcb`跨页回复及`06a6c99`独立接收验收四批本地提交。
+
+### 连接与路由的红绿
+
+发现kind=tls曾到表单/devices.add变普通TCP；Core又忽略transport。`/tmp/connect-transport-entry-red.log`中前7项为有效失败，初版pairing fixture的点击超出视口不算产品红，修正滚动后8项全绿。Core公开add→重启→显式tcp更新→连接必须仍TLS，非法transport不得写入；新增2项先红后绿，策略总4项通过。已有tls/GUID不能被表单或Core降级，新手动入口默认TLS；旧TCP明确选择，端口本身不决定安全类型。
+
+工作台A→B→返回实际停留焦点B的红见`/tmp/connect-reply-focus-red.log`。共享可见设备声明后typed Workspace/Files/Gallery/Remote、follow/fixed及实际ClipboardCoordinator、late lookup替换、同帧核验及前后台资格6项通过，`/tmp/connect-reply-focus-route-green.log`。一次扩展夹具用非法inactive→paused跳转被framework拒绝，补齐hidden过渡后通过；不算产品缺陷，不是物理三机音频/剪贴板通过。
+
+### 草稿和提交保护
+
+`/tmp/connect-reply-focus-red.log`另外2项重现离页后accepted/unknown文字与保护丢失。修复应用级有界内存状态后，原通知revision变化、实际typed route原通知消失也先红后绿（`/tmp/connect-reply-revision-red.log`、`/tmp/connect-reply-route-red.log`）。新状态按device/id/revision隔离，最多64项/每项16384字符，不保存通知正文/标题历史或持久化草稿；满时保留未决提交，空未提交草稿释放空间。
+
+独立只读审查继续发现并用4个真实失败覆盖：authentication_required明确未发送却被永久unknown锁住；resynced漏清被移除设备；恢复companion快照漏失效动作；空editing草稿占满。`/tmp/connect-reply-review-red.log`为7 passed/4 failed，修复后11项全绿`/tmp/connect-reply-review-green.log`。只有Main在PendingIntent.send前明确抛出的authentication_required/observation_required允许用户完成条件后再提交，Core仍重验原动作；过期/不可回复旧动作禁止使用，其他未知继续保护。恢复快照按devices及companions校准，迟到结果不能重建已删内容。
+
+### 独立Android接收证据
+
+旧JAR fixture脚本遗漏MediaJobs/Thumbnail导致编译失败，已修复源码集。严格receiver probe连续两次实际超时，目标日志两条`registerReceiverWithFeature: no app for null`已由主代理独立复核保存`/tmp/connect-receiver-probe-failure-evidence.log`；不是没测或skip通过。[固定AOSP分支](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-16.0.0_r1/services/core/java/com/android/server/am/BroadcastController.java#L291)要求对应ApplicationThread的ProcessRecord，旧裸shell测试receiver没有实际注册。原严格断言保留。
+
+新增[临时通知测试APK](../../tool/e2e/notification_fixture/README.md)仅为独立原接收端；不进产品/companion，不新增被控安装前提。只在明确API36隔离AVD安装本次不存在的测试包、授予该fixture自己的POST_NOTIFICATIONS；有既有包就拒绝覆盖，精确清理并仅卸载本次拥有安装。主控/产品权限和AppOps均未修改。构建产物仅tmp，签名验证通过；独立manifest receiver从原RemoteInput结果key读中文/换行/emoji，AtomicFile记录run/id/原文/count，并在关闭run资格、取消PI后发布最终清理回执防止删除次数证据。
+
+PATH已含本机Rust/Flutter；先在仓库根目录构建`rtk proxy python3 tool/e2e/notification_fixture/build.py`，再进入`apps/connect`运行：
+
+```sh
+rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  CONNECT_E2E_TARGET=emulator-5556 \
+  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/notification-reply-final \
+  flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/notification_reply.dart \
+  --target=integration_test/notification_reply_test.dart \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+  --dart-define=CONNECT_E2E_PORT=15556
+```
+
+两轮分别日志`/tmp/connect-notification-reply-real.log`、`/tmp/connect-notification-reply-final.log`，均约16秒完整退出0，`notificationReplyComplete=true`。实际Flutter通知UI打开原动作→发送→展示accepted而未宣称送达→离页重进继续禁止重发→仅通过UI清除通知0→旧typed route只核对/复制原文。host用run-as读取独立receipt及CLEANUP最终snapshot，原文完全匹配、count均1；独立Android列表证明IDs1/2/3仍在、仅0消失，随后精确清理/卸载且无hostErrors。结果及两张图各在`/tmp/connect-e2e/notification-reply-{current,final}/`，accepted和过期复制页面已实际目视。是合成原接收端实际收到，不是第三方聊天App或消息服务送达，也不证明后台OS提醒、锁屏认证或OEM覆盖。
+
+最终轮还要求主控已存在可读纯文本剪贴板基线，复制前检查、finally恢复该文字；回执`clipboardBaselinePresent/clipboardRestored=true`。不声称恢复任意ClipData/MIME或空剪贴板。测试自己新建的device记录最终forget，既有记录不被删除。host验收缺完成报告/receiver、次数0或2、错文/跨run、保护缺失、清理/文字恢复未确认均失败；文字恢复门禁实际红→绿`/tmp/connect-notification-clipboard-contract-{red,green}.log`。
+
+### 当前合并检查与剩余边界
+
+Rust工作区159 passed/44 ignored（`/tmp/connect-context-rust.log`）、all-target clippy `-D warnings`（`/tmp/connect-context-clippy.log`）通过；忽略用例没有冒记默认通过。App全量154项`/tmp/connect-context-app-final.log`，随后host文字恢复3项定向通过。初次严格分析捕获格式/nullable问题，修正后最终`/tmp/connect-context-final-analysis-verified.log`无问题；build_runner真实生成/only-check通过`/tmp/connect-context-generated-check.log`。
+
+最新产品流程显式`--dart-define=CONNECT_E2E_TRANSPORT=tcp`选择旧TCP，保留加密无线默认，不按端口猜：日志`/tmp/connect-tls-entry-product-final.log`，19秒完整退出0，产品完成回执true、首次H265选择与真实像素通过；六图及JSON仅`/tmp/connect-e2e/tls-entry-product-final/`。全屏、退出和回复过期保留页已再次目视；实际230×512低清未通过质量，整体液态玻璃/完整设计仍未完成。
+
+完整用户首次授权、生产密码和安全adbd、四宿主整包、IME/原应用回退、内容系统保存、断网/进程/系统Stop恢复、通知OS投递/认证和真实通话仍开放；上述默认、widget和隔离fixture的通过不替代它们。
+
+
+最终另启动普通`lib/main.dart`并实际热重启，返回`Restarted application in 1,363ms`；截图`/tmp/connect-context-hot-restart.png`仅在tmp，随后detach。FRB在旧isolate切换期间仍打印两条投递失败提示，未将启动截图当成资源回收或进程恢复全部通过。

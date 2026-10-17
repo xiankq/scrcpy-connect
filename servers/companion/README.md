@@ -199,3 +199,24 @@ active/idle；安全审查发现它们无法可靠绑定具体通话，产品路
 还需验证系统服务重启、多用户/工作资料、真实 OEM 权限与 SELinux 差异、
 敏感通知脱敏、应用认证、通知权限拒绝、平台锁屏隐私投影和长期运行资源表现。
 当前声明限于上述实际 AVD，不外推所有 Android 或所有应用。
+
+
+### API36接收端验收的更正与补充
+
+本轮修复`tests/build-fixture.sh`遗漏MediaJobs/Thumbnail源码导致的编译失败；
+产物仍仅在tmp，未替换产品JAR。未跳过receiver的旧JAR probe连续两次在实际
+接收处超时。主代理复核logcat明确记录`registerReceiverWithFeature: no app for null`；
+[固定Android16 BroadcastController](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-16.0.0_r1/services/core/java/com/android/server/am/BroadcastController.java#L291)
+在没有对应ApplicationThread进程记录时直接拒绝注册。因此旧probe的系统接受回执
+不能代表原receiver收到，诊断保留严格失败，未把skip-receiver变成通过。
+
+现新增独立[API36通知接收验收夹具](../../tool/e2e/notification_fixture/README.md)，
+仅在隔离目标AVD临时安装测试APK，由AMS实际管理receiver；本次安装才授予它自己
+声明的POST_NOTIFICATIONS，退出精确清理并卸载。它不进入主控/companion分发，
+不是被控用户的新前提，没有更改产品权限、AppOps或JAR摘要。
+
+两轮Flutter真实通知UI→原RemoteInput→离页重进→精确清除→过期route复制均约16秒
+通过，独立私有receipt及清理前最终snapshot原文一致、count=1；最终轮确认恢复主控
+文字剪贴板基线并移除本次设备记录。日志及截图仅在tmp，完整命令与边界见
+[验证记录](../../docs/implementation/validation.md)。这只证明该合成原接收器实际收到，
+不代表真实聊天应用、消息服务、锁屏/OEM或后台OS提醒已完成。

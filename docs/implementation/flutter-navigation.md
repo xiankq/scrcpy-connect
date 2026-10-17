@@ -79,3 +79,6 @@ container.dispose();
 ## 验证
 
 既有页面与交互测试继续保留。`router_test.dart` 覆盖分支状态与返回、ID 查找、缺失记录、远控重建与会话清理、typed 目录结果、分享返回和表单替换。`architecture_test.dart` 约束浅层页面目录、单页文件、生成 typed 路由与共享组件位置。`app_provider_test.dart` 验证深冻结快照、晚回执抑制、transport 释放、原生帧隔离和设置更新顺序。Android 真机/模拟器 integration tests 仍从实际桥接服务读取状态，不用路由测试 fixture 代替原生验收。
+
+
+设备专用页在`_deviceRecord`确认设备后共用`VisibleDeviceFocus`，以ModalRoute当前资格、生命周期及核验状态声明归属；失去资格只撤回自己的待处理声明，不能清空新页面的焦点。post-frame再次检查epoch、设备、mounted及实际route，返回/replace或同帧核验后正确跟随；Remote继续使用更严格的会话/画面核验，不由共享包装器抢先设焦点。独立回复route重新读取通知，失效且已有本机回复时仅呈现核对/复制，不把内存内容恢复成远端动作。公开typed路由六项与实际回复流程见[验收记录](validation.md#连接入口设备归属与原通知回复闭环)。
