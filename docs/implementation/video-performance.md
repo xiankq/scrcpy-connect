@@ -232,7 +232,7 @@ relay写前/写后、MDK onVideo及native snapshot共用Rust单调时钟，按�
 
 最终生产改动只有两处：Rust通过现有`video_codec_options=repeat-previous-frame-after:long=...`将静态重复间隔设为`ceil(1e6 / min(maxFps,30))`微秒，尊重1–29fps的低帧率选择；独立视频Player打开前设置MDK `fps=-1`，尽快呈现解码帧。该Player关闭音轨，独立音源播放器不变。[scrcpy v5.0.1 SurfaceEncoder默认值与自定义覆盖顺序](https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java)、[MDK setFrameRate](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs#void-setframeratefloat-value)。组合试验中relay写后到onVideo中位约130ms、onVideo到snapshot约12ms；不能把全部改善归因于某一个内部队列。
 
-代价是静态重复请求从默认约10次/秒提高至最多约30次/秒，会增加编解码工作。实际编码器可能抑制重复，不保证持续产生30个网络包/秒；2秒静止观察基线6–15包/300–787字节，候选5–12包/280–988字节，不足以推断真实手机功耗或高动态带宽。首帧仍未改善：同4轮基线启动到可读像素997–1256ms，候选1172–1286ms；不能将持续交互收益写成冷首帧收益。
+此处调整的是静态画面重复超时，从默认100ms缩短到约33.334ms。Android API契约是在没有新帧时重复一次，不代表固定每秒输出30帧；更早重复可能增加编解码工作，实际包量仍需测量。[MediaFormat契约](https://developer.android.com/reference/android/media/MediaFormat#KEY_REPEAT_PREVIOUS_FRAME_AFTER)。2秒静止观察基线6–15包/300–787字节，候选5–12包/280–988字节，不足以推断真实手机功耗或高动态带宽。首帧仍未改善：同4轮基线启动到可读像素997–1256ms，候选1172–1286ms；不能将持续交互收益写成冷首帧收益。
 
 可复现正常路径门槛：沿用前述drive入口，追加以下定义，不启用TRACE_FRAMES。开启观测则追加`CONNECT_PERF_TRACE_FRAMES=true`，不要混合两种snapshot实现的统计作为同路径对照。
 
@@ -265,3 +265,62 @@ Core交叉check iOS/macOS/Windows通过；bridge Android arm64在明确NDK CC/AR
 最终`a694b78`的arm64签名release构建63.53秒，同模式`--no-pub`复建22.59秒，两次APK摘要一致；该增量耗时高于前批4.09秒，未做额外归因或宣称打包进一步加速。当前产物`/tmp/connect-artifacts/connect-arm64-video-release.apk`，46,773,534字节、SHA-256 `c9cc21d19df2b5d5ca726ad5b182854bbb5721a10fa06de0981e171e6f5a285f`；原签名身份和包结构/16KB对齐检查通过。未在物理ARM运行。[打包记录](android-packaging.md)。
 
 全部构建结束后停止本批闲置Gradle，删除明确debug模式中间产物/重复debug APK及一个被替代Core测试程序，共59处，实际释放1379.4MiB，空闲63.0GiB。保留release、native hooks、CMake、Gradle、当前视频测试及模式不明的Flutter hash缓存；`/tmp/connect-native-final-cleanup.json`。原有五项未跟踪文件未动、未stage，未push；任务07和完整产品目标保持开放。
+
+
+## 冷启动身份校验与默认高清复验（2026-10-18 后续）
+
+上一批640/30/2Mbps持续交互结果不覆盖默认画质。本批给真实图案入口增加可选maxSize/maxFps/bitRate，仍使用原来的默认值保留旧基准可复现；追加首帧与关键帧后工作量两个独立门槛，记录实际解码尺寸和各项预算判定，任一失败仍使整体回执失败。本次1秒完整首帧是工程排查门槛，未通过不能写成产品承诺或已验收。
+
+本节冷启动指重新ADB连接后的新捕获/播放器，未重启AVD或清空系统缓存。默认1280/60fps/8Mbps、实际AMediaCodec、关闭诊断trace，三轮8次真实变化的基线完整跑完：实际尺寸均576×1280；首帧1210/1246/1254ms，P50/P95=185/371ms，统计未去掉冷操作。1秒首帧失败，P95也超过300ms，不能套用上一批640结果宣称高清延迟通过。`/tmp/connect-e2e/video-hd-cold-baseline-r2/result.json`和`/tmp/connect-video-hd-cold-baseline-r2.log`。
+
+此前第一次高清尝试只完成一轮后因integration_test注册缺失失败，不是三轮基线：release准备流程过滤了开发插件，直接--no-pub切回drive沿用了该注册。应用目录执行`flutter pub get --offline`重新准备后复跑完成完整采样但性能门槛失败，不能把测试基础设施失败当成媒体性能红证据。
+
+| 身份校验步骤（均为同配置三轮） | 首关键帧后剩余Core工作（ms） | 完整首帧（ms） |
+| --- | --- | --- |
+| 基线：关键帧后再读/proc并核验 | 95 / 97 / 93 | 1210 / 1246 / 1254 |
+| 仅复用launcher的starttime，省重复读取 | 47 / 47 / 48 | 1235 / 1281 / 1205 |
+| 再与首关键帧读取并行核验 | **0 / 1 / 0** | 1276 / 1196 / 1245 |
+
+launcher已经为了断线解冻而读取子进程PID/starttime；现在通过有界PID:starttime回执交给Rust，严格拒绝缺失/多字段、非十进制、0/1 PID、0 starttime、溢出和非法UTF8。exec替换程序而保留进程身份，因此无需随后再次cat同一stat；后续每次signal仍检查starttime及完整JAR/SCID nice-name，不退化为数字PID。metadata已经证明app_process进入socket初始化后，才开始identity核验；与首关键帧预读用try_join本地并行，两者成功才发布listener，任一失败另一future被drop且外围取消守卫仍清理。START_APP仍先记录durable permit、提交再等待，不自动重放unknown。[execve属性](https://man7.org/linux/man-pages/man2/execve.2.html)、[/proc starttime字段](https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html)。
+
+这消除了可复现的关键帧后等待，但**目前完整首帧没有得到改善证据**：不同轮次的枚举/首编码及播放器首次输出浮动掩盖了局部收益。不得将95→0ms直接从独立轮次的总耗时相减，或将source关键帧就绪称为主控画面可见。step1/并行结果分别在`/tmp/connect-e2e/video-hd-cold-{identity,parallel}/result.json`，失败日志保留。
+
+真实Rust→adbd→现有JAR进程回归：step1为7.59秒、并行为4.17秒，错误starttime拒绝、STOP/CONT、连接EOF后暂停进程解冻并退出通过，最后通过独立连接精确删除自己的JAR。最初默认2MiB调试测试线程stack overflow，不是产品回归通过；以RUST_MIN_STACK=8388608重跑，日志`/tmp/connect-cold-identity-real-step1-r2.log`、`/tmp/connect-cold-identity-real-parallel.log`。解析边界单元通过。独立只读review未发现新增正确性问题。
+
+只调整repeat超时约16.667ms的额外候选，在首轮1139ms首次可读后遇到session.pause控制超时，未完成三轮，更未过1秒门槛。已恢复约33.334ms超时，不纳入生产；`/tmp/connect-e2e/video-hd-cold-repeat60/result.json`。不能只挑其首帧数字而忽略暂停失败，也不能仅凭一次失败断言所有设备会有同一根因。后续需对高负载暂停的消费者背压/ACK链路建独立回归；本地先暂停是为解决MDK静止输入确认，不能未经验证简单颠倒顺序。继续保留现有JAR及暂停扩展。
+
+
+最终保留33.334ms超时并扩大到默认高清4轮80次：P50=**201ms**、P95=**248ms**，门槛仍为200/300ms，没有将201向下取整或放宽门槛。完整首帧1185/1122/1141/1234ms，1秒门槛仍失败；关键帧后开销四轮均0ms，20ms门槛通过。`startupBudgetMet=false`、`postKeyFrameBudgetMet=true`、`inputLatencyBudgetMet=false`、整体`videoPerformanceComplete=false`。四轮实际AMediaCodec、576×1280新像素、Flutter呈现、暂停恢复、输出停止确认与纹理分离、夹具卸载都完成，nativeDeleteConfirmed仍false，不能称原生资源已全部确认删除。`/tmp/connect-e2e/video-hd-cold-final-80/result.json`、`/tmp/connect-video-hd-cold-final-80.log`。该图案负载不等于高动态吞吐或60fps稳定输出验证。
+
+`67d6fb9`提交测量入口，`657990c`提交身份校验时序。复现默认高清严格门槛时，沿用图案drive及环境变量，将定义设为：
+
+```sh
+--dart-define=CONNECT_PERF_DECODER=native \
+--dart-define=CONNECT_PERF_MAX_SIZE=1280 \
+--dart-define=CONNECT_PERF_MAX_FPS=60 \
+--dart-define=CONNECT_PERF_BIT_RATE=8000000 \
+--dart-define=CONNECT_PERF_ROUNDS=4 \
+--dart-define=CONNECT_PERF_TRANSITIONS=20 \
+--dart-define=CONNECT_PERF_MAX_START_MS=1000 \
+--dart-define=CONNECT_PERF_MAX_POST_KEYFRAME_MS=20 \
+--dart-define=CONNECT_PERF_MAX_P50_MS=200 \
+--dart-define=CONNECT_PERF_MAX_P95_MS=300 \
+--dart-define=CONNECT_PERF_IDLE_MS=2000
+```
+
+在release和E2E之间切换后，应先在应用目录执行`flutter pub get --offline`（依赖尚未缓存时使用正常pub get），再执行--no-pub drive；不要手改生成的注册文件。此严格命令当前预期退出非零，不能把完成80次采样等同全指标通过。
+
+后续研究/实施保持三项：记录首包到首次onVideo/renderer的冷阶段，区分AVD软件实现与实体ARM；为高负载暂停的HTTP消费者背压与控制ACK建真实故障回归；独立固定高动态图案、持续时长和码率测量吞吐/内存/热。并行JAR上传与枚举仅列为候选，必须先验证失败/取消后无晚到上传复活文件，不因预计节省几十毫秒跳过清理所有权。保持原有完整产品目标与任务07开放。
+
+
+本批最终Rust Core lib40 passed/2 ignored（10.30秒）、Core/Bridge all-target clippy -D warnings（4.47秒）及cargo fmt通过；严格Flutter分析7.1秒无问题。ignored不计真实通过；上面的真实进程测试另行显式执行。Core iOS/macOS/Windows MSVC交叉check通过，日志`/tmp/connect-cold-check-{ios,macos,windows}.log`，不代表三宿主Flutter/bridge整包或运行。
+
+正式RemotePage五编码24秒通过，`/tmp/connect-e2e/video-cold-product-five/result.json`各codec rendered且mediaAcceptanceComplete=true；H264全屏Settings/浮动退出、高清最终VIDEO0及普通main设备列表截图已目视。普通main构建12.4秒/安装552ms，DTD实际热重启2325ms、运行错误查询无错误，日志`/tmp/connect-cold-main.log`；仍有启动SurfaceSync/跳帧和两条旧isolate投递告警，不记启动流畅通过。热重启后已detach。
+
+宿主独立核对本批17个精确会话JAR路径均不存在，目标夹具APK已卸载（`/tmp/connect-cold-remote-cleanup.json`）。两个原有scrcpy JAR的完整摘要仍与前文一致，未改、未重建。
+
+
+当前签名ARM64产物59.50秒构建、同模式复建2.40秒且摘要一致；`/tmp/connect-artifacts/connect-arm64-video-release.apk`为46,773,534字节、SHA-256 `9411b4f9ab12a20c75d18c4ad0942e93b2d8a0fa024c391a7af6ef5a672a66ae`，原签名身份与ZIP/manifest/ELF/16KB对齐检查通过。它包含`657990c`，未物理ARM上机；原c9cc21d1…产物已另存。详见[打包记录](android-packaging.md)。
+
+
+最终另行显式执行既有真实应用窗口/剪贴板/关闭保留任务测试，4.37秒通过，`/tmp/connect-cold-app-window.log`；它覆盖新并行路径中的START_APP，但不是所有unknown故障/UI迁回验收。随后独立ps和目录检查未发现残留捕获进程或捕获JAR，`/tmp/connect-cold-final-target-inspection.json`。闲置Gradle已停止，清理59处明确debug/过期测试产物，实际释放1373.8MiB、剩余62.6GiB；保留release/native hooks/CMake/Gradle和当前视频测试，`/tmp/connect-cold-cleanup.json`。原先五项未跟踪文件仍未动、未stage、未push，完整目标继续active。

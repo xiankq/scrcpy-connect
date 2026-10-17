@@ -81,3 +81,11 @@ python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-re
 
 
 同模式`--no-pub`复建22.59秒，APK摘要一致；`/tmp/connect-native-final-release-warm.log`。高于前批4.09秒，没有将不同批次增量时间当作继续加速的证据，也没有改签名/降低优化级别换速度。随后停止闲置Gradle并清理明确debug产物，释放1379.4MiB、剩余63.0GiB；release/native hooks/CMake/Gradle和无法判断模式的Flutter缓存保留。
+
+
+## 捕获身份校验并行化后的产物
+
+`657990c`后，ARM64签名release实际59.50秒构建通过，同模式`--no-pub`复建2.40秒且APK摘要一致。日志`/tmp/connect-cold-release.log`及`/tmp/connect-cold-release-warm.log`。当前`/tmp/connect-artifacts/connect-arm64-video-release.apk`为46,773,534字节、SHA-256 `9411b4f9ab12a20c75d18c4ad0942e93b2d8a0fa024c391a7af6ef5a672a66ae`；签名证书身份、ZIP完整性、manifest、arm64 ELF及16KB ZIP对齐均由工具复验。前一批c9cc21d1…包另存`connect-arm64-before-cold-ownership-release.apk`。未在物理ARM运行，不以x64 AVD结果代替。冷构建含源码变更、缓存仍保留，2.40秒不能当作干净检出构建时间；JAR仍未重建。
+
+
+本批所有构建/测试结束后停止闲置Gradle、清理明确debug及过期测试产物59处，释放1373.8MiB、空闲62.6GiB；保留有效release/native hooks/CMake/Gradle、当前视频测试和模式不明的Flutter缓存。原始证据及最终APK继续放/tmp，没有重新全clean。
