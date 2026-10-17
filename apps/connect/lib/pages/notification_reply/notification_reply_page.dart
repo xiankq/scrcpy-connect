@@ -1,5 +1,10 @@
 import 'package:scrcpy_connect/router/navigation.dart';
+
+import 'dart:async';
+
 import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/services/notification_replies.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -8,7 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class NotificationReplyPage extends HookWidget {
+class NotificationReplyPage extends HookConsumerWidget {
   const NotificationReplyPage({
     super.key,
     required this.controller,
@@ -19,16 +24,31 @@ class NotificationReplyPage extends HookWidget {
   final Json device;
   final Json notification;
   @override
-  Widget build(BuildContext context) {
-    final draft = useTextEditingController();
-    final busy = useState(false);
-    final unknown = useState(false);
-    final accepted = useState(false);
-    final acceptedMessage = useState('');
-    final error = useState<String?>(null);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final key = AppController.notificationReplyKey(
+      value(device, 'id'),
+      notification,
+    );
+    final reply =
+        ref.watch(
+          appControllerProvider.select(
+            (state) => state.notificationReplies[key],
+          ),
+        ) ??
+        const NotificationReplyState();
+    final pending = ref.watch(
+      appControllerProvider.select((state) => state.reconciliationPending),
+    );
+    final draft = useTextEditingController(text: reply.text, keys: [key]);
+    final capacityError = useState<String?>(null);
+    final busy = reply.phase == NotificationReplyPhase.submitting;
+    final localOnly = notification['localReplyOnly'] == true;
+    final guarded = !reply.canEdit || localOnly;
     return PageFrame(
       title: '快捷回复',
-      subtitle: '${deviceName(device)} · ${value(notification, 'appName')}',
+      subtitle: value(notification, 'appName').isEmpty
+          ? deviceName(device)
+          : '${deviceName(device)} · ${value(notification, 'appName')}',
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -41,8 +61,15 @@ class NotificationReplyPage extends HookWidget {
           const SizedBox(height: 24),
           TextField(
             controller: draft,
-            enabled: !busy.value,
-            readOnly: unknown.value || accepted.value,
+            enabled: !busy,
+            readOnly: guarded,
+            maxLength: 16384,
+            onChanged: (text) {
+              capacityError.value =
+                  controller.updateNotificationReplyDraft(key, text)
+                  ? null
+                  : '本机保留的回复已达到容量上限，当前内容尚未保留，请复制后到手机上处理。';
+            },
             minLines: 4,
             maxLines: 12,
             decoration: const InputDecoration(
@@ -50,73 +77,33 @@ class NotificationReplyPage extends HookWidget {
               alignLabelWithHint: true,
             ),
           ),
-          if (error.value != null)
-            StateNote(error.value!, icon: LucideIcons.circleAlert),
+          if (capacityError.value != null)
+            StateNote(capacityError.value!, icon: LucideIcons.circleAlert),
+          if (reply.expired) const StateNote('这条通知已更新或结束，旧回复动作不能再使用。已保留草稿。'),
+          if (localOnly && !reply.expired)
+            const StateNote('当前无法核验这条通知，以下仅为本机保留的回复。'),
           const SizedBox(height: 20),
-          if (!unknown.value && !accepted.value)
+          if (!guarded || busy)
             FilledButton(
-              onPressed: busy.value
+              onPressed: busy || pending || capacityError.value != null
                   ? null
-                  : () async {
-                      if (draft.text.trim().isEmpty) return;
-                      busy.value = true;
-                      error.value = null;
-                      try {
-                        final result = await controller.request(
-                          'notifications.reply',
-                          {
-                            'deviceId': device['id'],
-                            'notificationId': notification['id'],
-                            'text': draft.text,
-                          },
-                        );
-                        if (!context.mounted) return;
-                        if (result['status'] == 'acceptedBySystem' ||
-                            result['acceptedBySystem'] == true) {
-                          accepted.value = true;
-                          acceptedMessage.value = value(
-                            result,
-                            'message',
-                            '原应用动作已交给系统；未确认消息送达，不会自动重发。',
-                          );
-                        } else if (result['status'] == 'unknown') {
-                          unknown.value = true;
-                        } else if (result['status'] == 'completed' ||
-                            result['status'] == 'sent') {
-                          feedback(context, '回复已由手机确认提交');
-                          closePage<void>(context);
-                        } else if (result['status'] == 'failed') {
-                          error.value = value(
-                            result,
-                            'reason',
-                            '手机明确返回提交失败，已保留回复草稿。',
-                          );
-                        } else {
-                          error.value = value(
-                            result,
-                            'reason',
-                            '尚未确认回复结果，请在手机上核对',
-                          );
-                          unknown.value = true;
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          error.value = '$e';
-                          unknown.value = true;
-                        }
-                      } finally {
-                        if (context.mounted) busy.value = false;
-                      }
-                    },
-              child: Text(busy.value ? '正在提交…' : '发送回复'),
+                  : () => unawaited(controller.submitNotificationReply(key)),
+              child: Text(busy ? '正在提交…' : '发送回复'),
             ),
-          if (unknown.value || accepted.value) ...[
+          if (reply.message.isNotEmpty)
             StateNote(
-              accepted.value
-                  ? acceptedMessage.value
-                  : '回复结果尚未确认，已保留提交内容。请先在手机原应用核对，不会自动重发。',
-              icon: accepted.value ? LucideIcons.info : LucideIcons.circleAlert,
+              reply.message,
+              icon: reply.phase == NotificationReplyPhase.accepted
+                  ? LucideIcons.info
+                  : LucideIcons.circleAlert,
             ),
+          if (!guarded && !busy && reply.message.isNotEmpty)
+            TextButton(
+              onPressed: () =>
+                  openRemoteRoute(context, deviceId: value(device, 'id')),
+              child: const Text('在手机上完成后返回'),
+            ),
+          if (guarded && !busy) ...[
             FilledButton(
               onPressed: () =>
                   openRemoteRoute(context, deviceId: value(device, 'id')),

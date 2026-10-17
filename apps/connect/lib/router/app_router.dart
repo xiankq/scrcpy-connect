@@ -721,7 +721,7 @@ class NotificationReplyRoute extends GoRouteData with $NotificationReplyRoute {
       final id = notificationId;
       return RecordRoute(
         identity: 'notification:${device['id']}:$id',
-        load: () => records.notification(value(device, 'id'), id),
+        load: () => records.notificationReply(value(device, 'id'), id),
         builder: (_, notification) => NotificationReplyPage(
           controller: controller,
           device: device,

@@ -85,6 +85,48 @@ class RouteRepository {
     return matches.first;
   }
 
+  /// A retained reply is text to check or copy, never a recovered remote action.
+  Future<Json> notificationReply(String deviceId, String id) async {
+    Json? retained() {
+      if (controller.isDisposed()) return null;
+      final key = controller
+          .snapshot()
+          .notificationReplies
+          .keys
+          .where((key) => key.deviceId == deviceId && key.notificationId == id)
+          .lastOrNull;
+      return key == null
+          ? null
+          : {
+              'id': key.notificationId,
+              'revision': key.revision,
+              'title': '本机保留的回复',
+              'localReplyOnly': true,
+            };
+    }
+
+    try {
+      final snapshot = await controller.request('notifications.list', {
+        'deviceId': deviceId,
+      });
+      controller.reconcileNotificationReplies(deviceId, snapshot);
+      final current = objects(snapshot['notifications'])
+          .where((notification) => notification['id'] == id)
+          .firstOrNull;
+      if (snapshot['live'] == true && current != null) return current;
+      final saved = retained();
+      if (saved != null) return saved;
+      throw const RequestFailure(
+        'missing_notification',
+        '这条通知已失效或无法核验，请返回通知列表核对。',
+      );
+    } catch (_) {
+      final saved = retained();
+      if (saved != null) return saved;
+      rethrow;
+    }
+  }
+
   Future<Json> share(String id) async {
     await controller.loadPendingShares();
     final matches = controller.snapshot().pendingShares.where(
