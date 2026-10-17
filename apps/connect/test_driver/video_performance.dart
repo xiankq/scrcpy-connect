@@ -11,6 +11,7 @@ Future<void> main() async {
   final target = environment['CONNECT_E2E_TARGET'];
   final controller = environment['CONNECT_E2E_DEVICE'];
   final apk = environment['CONNECT_E2E_VIDEO_FIXTURE'];
+  final fixtureMotion = environment['CONNECT_E2E_VIDEO_MOTION'] == 'true';
   if (adb == null ||
       target == null ||
       controller == null ||
@@ -116,6 +117,9 @@ Future<void> main() async {
       '-W',
       '-n',
       '$package/.VideoPatternActivity',
+      '--ez',
+      'motion',
+      '$fixtureMotion',
     ]);
     await capture(target, 'target-initial');
     final driver = await FlutterDriver.connect();
@@ -140,6 +144,7 @@ Future<void> main() async {
         await cleanupFixture();
         final report = {...?data}..remove('screenshots');
         report['fixtureCleanupConfirmed'] = true;
+        report['fixtureMotionEnabled'] = fixtureMotion;
         await File('${output.path}/result.json')
             .writeAsString(jsonEncode(report));
         if (report['videoPerformanceComplete'] != true) {

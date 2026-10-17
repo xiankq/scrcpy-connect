@@ -14,10 +14,13 @@ import android.view.WindowManager;
 public final class VideoPatternActivity extends Activity {
     private Pattern pattern;
     private int counter;
+    private boolean motion;
+    private int frame;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        motion = getIntent().getBooleanExtra("motion", false);
         pattern = new Pattern();
         setContentView(pattern);
     }
@@ -25,6 +28,7 @@ public final class VideoPatternActivity extends Activity {
     @Override public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         counter = 0;
+        motion = intent.getBooleanExtra("motion", false);
         pattern.invalidate();
     }
 
@@ -46,9 +50,30 @@ public final class VideoPatternActivity extends Activity {
                 canvas.drawRect(getWidth() * bit / 4f, 0,
                     getWidth() * (bit + 1) / 4f, getHeight(), paint);
             }
+            if (motion) {
+                // Changing tiles create sustained encode/transport/decode load.
+                // Keep the middle band unchanged for the counter oracle used
+                // by both decoded snapshots and Android composition captures.
+                for (int y = 0; y < getHeight(); y += 64) {
+                    for (int x = 0; x < getWidth(); x += 64) {
+                        int seed = frame * 1664525 + x * 1013904223 + y * 69069;
+                        seed ^= seed >>> 16;
+                        paint.setColor(0xff000000 | (seed & 0x00ffffff));
+                        if (y < getHeight() * .4f) {
+                            canvas.drawRect(x, y, x + 64,
+                                Math.min(y + 64, getHeight() * .4f), paint);
+                        } else if (y >= getHeight() * .6f) {
+                            canvas.drawRect(x, y, x + 64, y + 64, paint);
+                        }
+                    }
+                }
+                frame++;
+                postInvalidateOnAnimation();
+            }
             paint.setColor(Color.BLACK);
             paint.setTextSize(getWidth() / 12f);
-            canvas.drawText("VIDEO " + counter, getWidth() / 16f, getHeight() * .85f, paint);
+            canvas.drawText("VIDEO " + counter + (motion ? " / " + frame : ""),
+                getWidth() / 16f, getHeight() * .85f, paint);
         }
     }
 }

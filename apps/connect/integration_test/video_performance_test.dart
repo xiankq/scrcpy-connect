@@ -43,7 +43,7 @@ void main() {
     );
   });
   testWidgets(
-    'real decoded freshness, first frame, pause and repeated connections',
+    'real decoded freshness, first frame, pause and repeated device connections',
     (tester) async {
       const traceFrames = bool.fromEnvironment('CONNECT_PERF_TRACE_FRAMES');
       final rounds = <VideoJson>[];
@@ -425,15 +425,92 @@ void main() {
                 'bytes': (end['bytes'] as int) - (after['bytes'] as int),
               };
             }
-            final paused = await presentation.request('session.pause', {
-              'sessionId': session,
-            });
-            expect(paused['capturePaused'], true);
-            final resumed = await presentation.request('session.resume', {
-              'sessionId': session,
-            });
-            expect(resumed['firstFrameDecoded'], true);
-            expect(resumed['capturePaused'], false);
+            const pauseCycles = int.fromEnvironment(
+              'CONNECT_PERF_PAUSE_CYCLES',
+              defaultValue: 1,
+            );
+            expect(pauseCycles, inInclusiveRange(1, 50));
+            final pauseSamples = <VideoJson>[];
+            evidence['pauseSamples'] = pauseSamples;
+            for (var cycle = 0; cycle < pauseCycles; cycle++) {
+              final sample = <String, dynamic>{
+                'cycle': cycle,
+                'stage': 'pause',
+              };
+              pauseSamples.add(sample);
+              final watch = Stopwatch()..start();
+              late VideoJson paused;
+              try {
+                paused = await presentation.request('session.pause', {
+                  'sessionId': session,
+                });
+              } catch (error) {
+                sample['error'] = '$error';
+                sample['failedAfterMs'] = watch.elapsedMilliseconds;
+                try {
+                  final sessions = await request('session.list');
+                  final snapshot = (sessions['sessions'] as List)
+                      .cast<VideoJson>()
+                      .singleWhere((entry) => entry['sessionId'] == session);
+                  sample['failureState'] = {
+                    for (final key in const [
+                      'status',
+                      'capturePaused',
+                      'captureStateConfirmed',
+                      'awaitingSession',
+                    ])
+                      key: snapshot[key],
+                  };
+                } catch (inspectionError) {
+                  sample['failureStateError'] = '$inspectionError';
+                }
+                rethrow;
+              }
+              sample['pauseMs'] = watch.elapsedMilliseconds;
+              expect(paused['capturePaused'], true);
+              expect(paused['captureStateConfirmed'], true);
+              // Change the independent target while capture is stopped. A
+              // resumed callback or an old snapshot cannot satisfy freshness.
+              sample['stage'] = 'changeWhilePaused';
+              expected = (expected + 1) & 15;
+              await request('session.key', {
+                'sessionId': session,
+                'keyCode': 20,
+                'action': 'press',
+              });
+              sample['expectedCounter'] = expected;
+              sample['stage'] = 'resume';
+              watch.reset();
+              final resumed = await presentation.request('session.resume', {
+                'sessionId': session,
+              });
+              sample['resumeMs'] = watch.elapsedMilliseconds;
+              expect(resumed['firstFrameDecoded'], true);
+              expect(resumed['capturePaused'], false);
+              sample['stage'] = 'newPixels';
+              while (true) {
+                final pixels = await player
+                    .snapshot(width: 64, height: 64)
+                    .timeout(const Duration(seconds: 3));
+                if (pixels != null &&
+                    pattern(pixels.rgba, 64, 64) == expected) {
+                  break;
+                }
+                if (watch.elapsed > const Duration(seconds: 3)) {
+                  throw StateError(
+                    'Resume retained old pixels: round=$round cycle=$cycle expected=$expected',
+                  );
+                }
+                await Future<void>.delayed(const Duration(milliseconds: 10));
+              }
+              sample['resumeToFreshMs'] = watch.elapsedMilliseconds;
+              sample['stage'] = 'complete';
+              // Preserve completed cycles in the host log even if a native
+              // decoder crash prevents the final JSON response from arriving.
+              debugPrint(
+                'VIDEO_PAUSE_SAMPLE ${jsonEncode({'round': round, ...sample})}',
+              );
+            }
             evidence['pauseResumeVerified'] = true;
           });
           await tester.pump();
