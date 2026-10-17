@@ -80,6 +80,11 @@ void main() {
     'CONNECT_E2E_TRANSPORT',
     defaultValue: 'tls',
   );
+  const minimumVideoEdge = int.fromEnvironment('CONNECT_E2E_MIN_VIDEO_EDGE');
+  const requestedVideoEdge = int.fromEnvironment(
+    'CONNECT_E2E_VIDEO_MAX_SIZE',
+    defaultValue: 1280,
+  );
   binding.reportData = {
     ...?binding.reportData,
     'productAcceptanceComplete': false,
@@ -226,6 +231,25 @@ void main() {
         reason:
             'The real quality page must persist H.265 for the next session.',
       );
+      if (minimumVideoEdge > 0) {
+        await tester.ensureVisible(find.text('分辨率上限'));
+        await tester.tap(find.text('分辨率上限'));
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(
+          find.descendant(
+            of: find.byType(BottomSheet),
+            matching: find.widgetWithText(ListTile, '$requestedVideoEdge'),
+          ),
+        );
+        await waitFor(
+          tester,
+          () =>
+              find.byType(BottomSheet).evaluate().isEmpty &&
+              find.text('$requestedVideoEdge').evaluate().isNotEmpty,
+          reason:
+              'Resolution acceptance must request $requestedVideoEdge through the product page.',
+        );
+      }
       await tester.pageBack();
       await waitFor(
         tester,
@@ -281,8 +305,30 @@ void main() {
       binding.reportData!['pageSelectedCodec'] = session['codec'];
       binding.reportData!['actualStreamWidth'] = session['width'];
       binding.reportData!['actualStreamHeight'] = session['height'];
+      binding.reportData!['requestedQuality'] = session['quality'];
+      binding.reportData!['minimumVideoEdge'] = minimumVideoEdge;
+      binding.reportData!['decodedWidth'] = session['decodedWidth'];
+      binding.reportData!['decodedHeight'] = session['decodedHeight'];
       await tester.pump(const Duration(milliseconds: 300));
       await binding.takeScreenshot('remote-live');
+      if (minimumVideoEdge > 0) {
+        expect(jsonObject(session['quality'])['maxSize'], requestedVideoEdge);
+        final width = session['width'] as int;
+        final height = session['height'] as int;
+        expect(
+          width > height ? width : height,
+          greaterThanOrEqualTo(minimumVideoEdge),
+          reason: 'Real encoded pixels must meet the explicitly requested acceptance resolution.',
+        );
+        final decodedWidth = session['decodedWidth'] as int;
+        final decodedHeight = session['decodedHeight'] as int;
+        expect(
+          decodedWidth > decodedHeight ? decodedWidth : decodedHeight,
+          greaterThanOrEqualTo(minimumVideoEdge),
+          reason:
+              'An encoded-size receipt alone does not prove decoded quality.',
+        );
+      }
       final handle = find.descendant(
         of: find.byType(ExitHandle),
         matching: find.byType(GestureDetector),
