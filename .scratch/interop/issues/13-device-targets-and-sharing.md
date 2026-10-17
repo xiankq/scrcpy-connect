@@ -35,7 +35,7 @@ Requirements: R26–R28
 
 后续出站单项系统分享已通过实际Sharesheet、独立receiver读取content URI授权及原始字节/hash核验；样本从文本扩展到真实相册JPEG/MP4，Intent MIME与URI解析MIME分别校验。回到产品只声明交给选中应用，不伪称已向他人发送。固定任务跨设备焦点变化有公开路由回归。
 
-图片文件剪贴板、外部入站分享实际提交/本机打开、目标固定的重启验收仍缺。A38已补共享可见设备声明及Remote独立资格，Workspace/Files/Gallery返回、late lookup、恢复与root覆盖六项公开路由回归通过，follow回原设备、fixed不变；不改在途任务目标。批量/大原件/其他媒体组合及实际多AVD完整并行/混音仍需验证。
+图片文件剪贴板、本机打开和目标固定的进程重启验收仍缺；外部入站PNG选A后切焦点B并实际交付A已通过三AVD链路，见下方后续记录。A38已补共享可见设备声明及Remote独立资格，Workspace/Files/Gallery返回、late lookup、恢复与root覆盖六项公开路由回归通过，follow回原设备、fixed不变；不改在途任务目标。批量/大原件/其他媒体组合及实际多AVD完整并行/混音仍需验证。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
 
@@ -47,3 +47,5 @@ Requirements: R26–R28
 - [ ] A56：系统选择／分享／本机打开的实际包装库取消、未知结果、URI授权和缓存契约与锁版对应；平台API研究不能替代库的实际行为。
 
 源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。
+
+2026-10-18渐进验收：新增incoming_share_target_test.dart及独立host driver，外部PNG→显式选A→全局焦点B→实际推送A／消费且刷新不重提14秒通过。host核对两个独立AVD及唯一marker，A原件68字节／SHA256一致，B无同路径文件，finally清理完整。没有重写已有产品固定目标逻辑。批量／大原件／撤权／进程重启与A55仍开放；同型号默认同名的接收选项可辨识度仍需改善。

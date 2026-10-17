@@ -669,3 +669,11 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 首轮在observation.start返回starting时错误要求终态；改只读轮询后继续。第二轮MissingPluginException发生于截图：先前普通main的自动GeneratedPluginRegistrant排除了dev测试插件，而--no-pub没有重新生成；执行离线flutter pub get恢复自动注册后第三轮通过。没有手改注册器或生产Kotlin，没有把失败计通过。
 
 本批按用户要求只跑对应窄检查与这一条实际链路，前批完整门禁／三ABI APK不可冒称A23的门禁或产物。物理音频输出、真实多源同时播放后只停一台、后台／进程恢复及通话仍独立待验。
+
+## 渐进验收：入站PNG固定接收设备（2026-10-18）
+
+在apps/connect，以明确独立controller／target／secondTarget环境运行`flutter drive -d emulator-5554 --no-pub --driver=test_driver/incoming_share_target.dart --target=integration_test/incoming_share_target_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556 --dart-define=CONNECT_E2E_SECOND_PORT=15558`（所有命令经rtk proxy；完整环境与fixture构建见[内容交付](content-delivery.md#外部入站内容的固定目标)）。首轮14秒通过、构建52秒／安装745ms，`/tmp/connect-incoming-share-target-r1.log`、`/tmp/connect-e2e/incoming-share-target/result.json`。
+
+三AVD互异名称＋两端独占marker同时由host和公开files.list核对映射，外部非导出provider凭真实grant向产品提交PNG。页面明确选A后调用公开focusDevice(B)，仍只向A上传；host独立读取68字节与SHA256 `ce01132c640469ef7fb497e7496b12f5046d633b588f397e5c45a6c3efc85037`一致、B无同路径文件、消费后两次刷新不新增传输，精确清理全true。目标确认截图已目视；两台同型号默认同名的选项仍需可辨识线索，不以此声称完整视觉完成。窄分析通过；不沿用上一批全门禁。
+
+运行准备期间宿主发生重启（uptime证据），先后出现磁盘不足及KVM权限暂不可用；只清理本仓可重建Rust增量缓存，KVM恢复后重新启动隔离AVD。两条占约20GB的编辑器只读文件扫描已结束，无配置修改。此前/tmp日志／预览随主机重启消失属临时证据生命周期；本轮通过证据写入新/tmp目录，不伪造恢复测试。该事件不是产品进程或网络恢复通过。

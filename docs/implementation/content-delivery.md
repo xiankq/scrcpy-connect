@@ -20,7 +20,7 @@
 
 ## 共享与系统适配边界
 
-Flutter 承担主要页面与任务归属；共享 Dart 协调树规划、数量／容量限制和操作生命周期；Rust 持有借用 FD 的副本并复制、核验和同步。Android 管理系统选择器、URI／授权和原始 PFD，但 `PlatformDocuments` 仍有产品同名冲突弹窗（A48），所以尚未完全收敛到 OS 适配边界。该决策与界面仍须迁回共享层，保留提供方不可原子替换时的安全限制；没有重新引入原生视频循环。
+Flutter 承担主要页面与任务归属；共享 Dart 协调树规划、数量／容量限制和操作生命周期；Rust 持有借用 FD 的副本并复制、核验和同步。Android 管理系统选择器、URI／授权和原始 PFD；A48的系统保存同名冲突决策与界面已迁到共享协调器／Flutter，保留提供方不可原子替换时的安全限制。原生USB多设备选择仍待迁移，没有重新引入原生视频循环。
 
 完成提供方描述符时，共享层显式传递 `success`／`abort`。成功路径执行 `checkError → close → checkError`，各步失败也继续释放并保留首错；失败／取消发送 `closeWithError`。没有实际 lease 的回执不能确认成功。复制本身失败时，关闭失败不能覆盖原错误。上述 API 不提供远端持久提交 ACK；契约与固定 AOSP 来源见[提供方研究](../research/provider-output-streams.md)。
 
@@ -80,3 +80,23 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 ```
 
 本轮实际勾选后续策略，但没有制造第二个自然同名冲突；多冲突策略由协调器测试覆盖，回执明确`realSubsequentApplyConflictVerified:false`。仅证明已测本地树提供方，不证明云提供方／写入杀进程／外部分享打断选择器；多USB选择产品UI仍未迁到共享层。
+
+## 外部入站内容的固定目标
+
+IncomingSharePage让用户明确选接收设备，提交前捕获该设备和目录；全局焦点变化不会改收件设备。2026-10-18三AVD14秒通过一条PNG链路；独立host确认A字节／hash、B同路径不存在和consume后不重提，未改生产实现。
+
+先构建并仅在主控安装tool/e2e/share_fixture的APK。工作目录apps/connect，PATH包含Flutter／Rust，ANDROID_HOME指向SDK；目标端5556／5558分别开放已授权测试TCP及hostforward15556／15558。运行：
+
+```sh
+rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
+  CONNECT_E2E_SECOND_TARGET=emulator-5558 \
+  flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/incoming_share_target.dart \
+  --target=integration_test/incoming_share_target_test.dart \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+  --dart-define=CONNECT_E2E_PORT=15556 \
+  --dart-define=CONNECT_E2E_SECOND_PORT=15558
+```
+
+显式三端不得相同，ro.boot.qemu.avd_name须非空且互异；允许目标ro.serialno相同，实际映射由各端独占目录marker和公开files.list共同确认。严格结果与截图只写/tmp/connect-e2e/incoming-share-target。软件ADB仅作为独立实验读数工具，不进入产品依赖。其余批量／大原件／权限撤销／提交断线和进程恢复继续开放。
