@@ -10,6 +10,7 @@
 **/build/
 **/android/local.properties
 **/android/.gradle/
+**/android/.kotlin/
 **/android/app/src/main/jniLibs/
 **/.flutter-plugins-dependencies
 **/.DS_Store
