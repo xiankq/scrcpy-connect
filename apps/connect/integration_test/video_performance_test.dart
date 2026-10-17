@@ -76,12 +76,34 @@ void main() {
       }
 
       late VideoPlayerPort player;
+      late List<VideoJson> decoderEvents;
+      const decoderPolicy = String.fromEnvironment(
+        'CONNECT_PERF_DECODER',
+        defaultValue: 'platform',
+      );
+      final decoderCandidates = switch (decoderPolicy) {
+        'platform' => null,
+        'software' => const ['FFmpeg:thread_type=slice', 'dav1d'],
+        'software-default' => const ['FFmpeg', 'dav1d'],
+        _ => throw ArgumentError.value(decoderPolicy, 'CONNECT_PERF_DECODER'),
+      };
+      binding.reportData!['decoderPolicy'] = decoderPolicy;
       var disposed = false;
       final outputs = PortableVideoOutputs(
         core: request,
         emit: (_) {},
         isDisposed: () => disposed,
-        playerFactory: () => player = FvpVideoPlayer(),
+        playerFactory: () {
+          final events = <VideoJson>[];
+          decoderEvents = events;
+          final instance = FvpVideoPlayer(videoDecoders: decoderCandidates);
+          // Closed by release along with this player's event stream. Retain
+          // native decoder receipts, never infer a selection from priorities.
+          instance.events.listen((event) {
+            if (event['category'] == 'decoder.video') events.add({...event});
+          });
+          return player = instance;
+        },
       );
       final presentation = VideoPresentation(
         core: request,
@@ -132,6 +154,7 @@ void main() {
           final evidence = <String, dynamic>{
             'round': round,
             'inputToDecodedMs': <int>[],
+            'samples': <VideoJson>[],
           };
           rounds.add(evidence);
           late VideoJson ready;
@@ -151,6 +174,16 @@ void main() {
             evidence['coreStartMs'] = watch.elapsedMilliseconds;
             evidence['coreStartupTimingMs'] = stream['captureStartupTimingMs'];
             ready = await outputs.start(stream);
+            evidence['decoderEvents'] = decoderEvents;
+            if (decoderPolicy != 'platform') {
+              expect(
+                decoderEvents.any(
+                  (event) => event['error'] == 0 && event['detail'] == 'FFmpeg',
+                ),
+                true,
+                reason: 'The software comparison requires an actual FFmpeg open receipt.',
+              );
+            }
             evidence['startToDecodedMs'] = watch.elapsedMilliseconds;
             evidence['outputStartupTimingMs'] = ready['outputStartupTimingMs'];
             await request('session.ready', {
@@ -200,10 +233,14 @@ void main() {
                 'keyCode': 20,
                 'action': 'press',
               });
+              final controlMs = watch.elapsedMilliseconds;
+              final reads = <int>[];
               while (true) {
+                final read = Stopwatch()..start();
                 final pixels = await player
                     .snapshot(width: 64, height: 64)
                     .timeout(const Duration(seconds: 3));
+                reads.add(read.elapsedMilliseconds);
                 if (pixels != null &&
                     pattern(pixels.rgba, 64, 64) == expected) {
                   break;
@@ -218,6 +255,12 @@ void main() {
               (evidence['inputToDecodedMs'] as List<int>).add(
                 watch.elapsedMilliseconds,
               );
+              (evidence['samples'] as List<VideoJson>).add({
+                'counter': expected,
+                'controlMs': controlMs,
+                'snapshotMs': reads,
+                'totalMs': watch.elapsedMilliseconds,
+              });
             }
             final after = await request('media.status', {
               'relayId': ready['relayId'],
@@ -302,6 +345,34 @@ void main() {
             await request('devices.disconnect', {'deviceId': device});
           });
         }
+        final timings = [
+          for (final round in rounds)
+            ...(round['inputToDecodedMs'] as List<int>),
+        ]..sort();
+        final p95 = timings[(timings.length * .95).ceil() - 1];
+        final p50 = timings[(timings.length * .50).ceil() - 1];
+        binding.reportData!['inputToDecodedP50Ms'] = p50;
+        binding.reportData!['inputToDecodedP95Ms'] = p95;
+        expect(
+          p50,
+          lessThanOrEqualTo(
+            const int.fromEnvironment(
+              'CONNECT_PERF_MAX_P50_MS',
+              defaultValue: 3000,
+            ),
+          ),
+          reason: 'Typical new decoded pixels must meet the requested latency budget.',
+        );
+        expect(
+          p95,
+          lessThanOrEqualTo(
+            const int.fromEnvironment(
+              'CONNECT_PERF_MAX_P95_MS',
+              defaultValue: 3000,
+            ),
+          ),
+          reason: 'Actual new decoded pixels must meet the requested latency budget.',
+        );
         binding.reportData!['videoPerformanceComplete'] = true;
       } finally {
         await tester.runAsync(() async {

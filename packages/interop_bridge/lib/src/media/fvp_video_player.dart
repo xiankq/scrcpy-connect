@@ -10,13 +10,18 @@ import 'playback_confirmation.dart';
 /// Uses only public fvp APIs. Codec selection remains MDK's actual runtime
 /// decision; videoDecoders is a priority list and is never reported as evidence.
 class FvpVideoPlayer implements VideoPlayerPort {
-  factory FvpVideoPlayer() {
+  /// Explicit priorities support real backend comparisons. The list still is
+  /// not evidence of which decoder MDK actually opens; observe decoder.video.
+  factory FvpVideoPlayer({List<String>? videoDecoders}) {
     if (_retiring.length >= 8) {
       throw const InteropException('resource_busy', '播放器资源仍在释放，请稍后重新打开画面。');
     }
-    return FvpVideoPlayer._();
+    return FvpVideoPlayer._(
+      videoDecoders == null ? null : List.unmodifiable(videoDecoders),
+    );
   }
-  FvpVideoPlayer._();
+  FvpVideoPlayer._(this._videoDecoders);
+  final List<String>? _videoDecoders;
 
   void _initialize() {
     if (_initialized) return;
@@ -34,20 +39,25 @@ class FvpVideoPlayer implements VideoPlayerPort {
     // Public fvp currently exposes no getGlobalOption for MDK's runtime hint.
     // Use MDK's documented platform priorities; these are candidates, not proof
     // that any decoder can open this device's actual stream.
-    final decoders = switch (defaultTargetPlatform) {
-      TargetPlatform.android => const ['AMediaCodec', 'FFmpeg', 'dav1d'],
-      TargetPlatform.iOS ||
-      TargetPlatform.macOS => const ['VT', 'FFmpeg', 'dav1d'],
-      TargetPlatform.windows => const [
-        'MFT:d3d=11',
-        'D3D11',
-        'DXVA',
-        'FFmpeg',
-        'dav1d',
-      ],
-      TargetPlatform.linux => const ['VAAPI', 'FFmpeg', 'dav1d'],
-      TargetPlatform.fuchsia => const ['FFmpeg', 'dav1d'],
-    };
+    // Frame threading queues additional frames. Slice threading preserves
+    // within-frame parallelism without requiring later live frames to arrive.
+    const software = 'FFmpeg:thread_type=slice';
+    final decoders =
+        _videoDecoders ??
+        switch (defaultTargetPlatform) {
+          TargetPlatform.android => const ['AMediaCodec', software, 'dav1d'],
+          TargetPlatform.iOS ||
+          TargetPlatform.macOS => const ['VT', software, 'dav1d'],
+          TargetPlatform.windows => const [
+            'MFT:d3d=11',
+            'D3D11',
+            'DXVA',
+            software,
+            'dav1d',
+          ],
+          TargetPlatform.linux => const ['VAAPI', software, 'dav1d'],
+          TargetPlatform.fuchsia => const [software, 'dav1d'],
+        };
     _player.videoDecoders = decoders;
     _emit({
       'kind': 'diagnostic',
