@@ -32,12 +32,15 @@ class ClipboardCoordinator with WidgetsBindingObserver {
   bool _pollQueued = false;
   bool _remoteQueued = false;
   bool _conflict = false;
+  bool _reconciling = false;
   final Set<int> _activations = {};
   bool get _foreground =>
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
   bool _active(String target, int generation) =>
       !_disposed &&
       !controller.isDisposed() &&
+      !_reconciling &&
+      !controller.snapshot().reconciliationPending &&
       _foreground &&
       _target == target &&
       _generation == generation &&
@@ -56,6 +59,11 @@ class ClipboardCoordinator with WidgetsBindingObserver {
   }
 
   void configure() {
+    if (_disposed) return;
+    if (_reconciling || controller.snapshot().reconciliationPending) {
+      _suspendForVerification(controller.snapshot().reconciliationError);
+      return;
+    }
     final enabled = controller.snapshot().settings['clipboardSync'] == true;
     final mode = value(
       controller.snapshot().settings,
@@ -96,6 +104,27 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     } else {
       controller.updateClipboardState('checking');
       _scheduleActivation(target, generation);
+    }
+  }
+
+  void _suspendForVerification([String? reason]) {
+    _reconciling = true;
+    _generation++;
+    _configuration = '';
+    _timer?.cancel();
+    _timer = null;
+    _initialized = false;
+    _pendingRemote = null;
+    _local = null;
+    _remote = null;
+    _conflict = false;
+    if (controller.snapshot().settings['clipboardSync'] == true) {
+      controller.updateClipboardState(
+        'waitingVerification',
+        reason ?? '正在核验设备状态，剪贴板同步已暂停。',
+      );
+    } else {
+      controller.updateClipboardState('disabled');
     }
   }
 
@@ -193,7 +222,29 @@ class ClipboardCoordinator with WidgetsBindingObserver {
   }
 
   void _event(Json event) {
-    if (_disposed || !_foreground || event['deviceId'] != _target) return;
+    if (_disposed) return;
+    if (event['type'] == 'state.resync' ||
+        event['type'] == 'state.resync.failed') {
+      _suspendForVerification(controller.snapshot().reconciliationError);
+      return;
+    }
+    if (event['type'] == 'state.resynced') {
+      if (controller.snapshot().reconciliationPending) return;
+      _reconciling = false;
+      _configuration = '';
+      _initialized = false;
+      _pendingRemote = null;
+      _local = null;
+      _remote = null;
+      configure();
+      return;
+    }
+    if (!_foreground ||
+        _reconciling ||
+        controller.snapshot().reconciliationPending ||
+        event['deviceId'] != _target) {
+      return;
+    }
     final data = event['data'] is Map<Object?, Object?>
         ? jsonObject(event['data'])
         : <String, dynamic>{};
@@ -325,7 +376,13 @@ ClipboardCoordinator clipboardCoordinator(Ref ref) {
   final coordinator = ClipboardCoordinator(controller);
   ref.listen(
     appControllerProvider.select(
-      (state) => (state.settings, state.devices, state.focusedDeviceId),
+      (state) => (
+        state.settings,
+        state.devices,
+        state.focusedDeviceId,
+        state.reconciliationPending,
+        state.reconciliationError,
+      ),
     ),
     (_, next) => coordinator.configure(),
   );

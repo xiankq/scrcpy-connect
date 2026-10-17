@@ -64,6 +64,11 @@ class _RemotePageState extends State<RemotePage>
   bool presentationVisible = true;
   bool awaitingResume = false;
   int visibilityEpoch = 0;
+  bool stateUnverified = false;
+  bool sessionEnded = false;
+  bool reconcileOnly = false;
+  int stateEpoch = 0;
+  int? reconciledSequence;
   final remoteMessenger = GlobalKey<ScaffoldMessengerState>();
 
   void trace(String detail) {
@@ -88,6 +93,7 @@ class _RemotePageState extends State<RemotePage>
       !covered &&
       presentationVisible &&
       !awaitingResume &&
+      !stateUnverified &&
       sessionId.isNotEmpty;
 
   Future<void> releaseInputs() {
@@ -112,7 +118,9 @@ class _RemotePageState extends State<RemotePage>
     final releases = pointerPositions.values.toList();
     activePointers.clear();
     pointerPositions.clear();
-    if (!controlAvailable) return Future<void>.value();
+    if (!controlAvailable) {
+      return reconcileOnly ? inputQueue : Future<void>.value();
+    }
     // A physical key-up can already be queued after its held entry was
     // removed. Flush live input before stopping or replacing this session.
     Future<void> completion = inputQueue;
@@ -138,11 +146,21 @@ class _RemotePageState extends State<RemotePage>
     WidgetsBinding.instance.addObserver(this);
     eventSubscription = controller.eventStream().listen(onEvent);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    unawaited(start());
+    if (controller.snapshot().reconciliationPending) {
+      session = widget.existingSession;
+      markStateUnknown();
+    } else {
+      unawaited(start());
+    }
   }
 
   Future<void> start() async {
+    if (reconcileOnly || controller.snapshot().reconciliationPending) {
+      await reconcileState();
+      return;
+    }
     final attempt = ++startAttempt;
+    final recoveryEpoch = stateEpoch;
     trace(
       'start.begin lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
     );
@@ -179,6 +197,19 @@ class _RemotePageState extends State<RemotePage>
             if (widget.packageName != null) 'packageName': widget.packageName,
           });
       if (!mounted || exiting || attempt != startAttempt) {
+        if (mounted && !exiting && recoveryEpoch != stateEpoch) {
+          // The launch was already submitted. Its late result is an identity
+          // to verify, never a reason to launch or stop the task again.
+          if (sessionId.isEmpty) {
+            setState(() {
+              session = {...result}..remove('textureId');
+              stateUnverified = true;
+              connecting = false;
+              error = '会话结果尚待核验，请重新检查。';
+            });
+          }
+          return;
+        }
         if (retained == null) {
           final staleId = value(result, 'sessionId', value(result, 'id'));
           if (staleId.isNotEmpty && staleId != sessionId) {
@@ -201,6 +232,8 @@ class _RemotePageState extends State<RemotePage>
       setState(() {
         session = result;
         controlAvailable = sessionId.isNotEmpty && result['textureId'] != null;
+        presentationVisible = true;
+        awaitingResume = false;
         lifecyclePaused = false;
         connecting = retained != null && result['textureId'] != null;
         paused = result['status'] == 'paused';
@@ -298,6 +331,19 @@ class _RemotePageState extends State<RemotePage>
     final data = event['data'] is Map<Object?, Object?>
         ? jsonObject(event['data'])
         : <String, dynamic>{};
+    if (event['type'] == 'state.resync') {
+      markStateUnknown();
+      return;
+    }
+    if (event['type'] == 'state.resync.failed') {
+      markStateUnknown(value(data, 'reason', '状态检查未完成，请重试。'));
+      return;
+    }
+    if (event['type'] == 'state.resynced') {
+      applyReconciledState(data);
+      return;
+    }
+    if (stateUnverified || (reconcileOnly && view?.isCurrent != true)) return;
     if (value(event, 'type').startsWith('session.')) {
       trace(
         'event type=${event['type']} status=${value(data, 'status')} bound=${sessionId.isNotEmpty} sessionMatches=${data['sessionId'] == null || data['sessionId'] == sessionId} deviceMatches=${event['deviceId'] == null || event['deviceId'] == widget.device['id']} hasTexture=${data['textureId'] != null} pausedBefore=$paused',
@@ -366,9 +412,17 @@ class _RemotePageState extends State<RemotePage>
         trace('updated.applied paused=$paused');
       case 'session.disconnected':
       case 'session.failed':
+        // A completed old resume is no longer evidence for this binding.
+        // Hide presentation intent too: its separately emitted frame receipt
+        // must not clear the terminal error after the Future is invalidated.
+        visibilityEpoch++;
+        bindingGeneration++;
+        presentationVisible = false;
+        awaitingResume = false;
         controlAvailable = false;
         unawaited(releaseInputs());
         setState(() {
+          connecting = false;
           paused = true;
           error = value(data, 'reason', '连接已中断，当前画面已暂停。恢复首帧后才能继续操作。');
         });
@@ -382,6 +436,90 @@ class _RemotePageState extends State<RemotePage>
         } else {
           inputFocus.unfocus();
         }
+    }
+  }
+
+  void markStateUnknown([String? reason]) {
+    trace(
+      'reconcile.unknown reason=$reason session=$sessionId visibility=$visibilityEpoch',
+    );
+    stateEpoch++;
+    visibilityEpoch++;
+    startAttempt++;
+    // Freeze new input first, then drain only releases against this exact
+    // binding. A UUID is never reused for a replacement control session.
+    stateUnverified = true;
+    unawaited(releaseInputs());
+    bindingGeneration++;
+    controlAvailable = false;
+    setState(() {
+      stateUnverified = true;
+      sessionEnded = false;
+      reconcileOnly = true;
+      initialActionApplied = true;
+      connecting = false;
+      paused = true;
+      awaitingResume = false;
+      error = reason ?? '正在重新核对活动状态，完成前暂停操作。';
+      errorCode = null;
+    });
+  }
+
+  void applyReconciledState(Json snapshot) {
+    final sequence = snapshot['sequence'];
+    trace(
+      'reconcile.snapshot sequence=$sequence session=$sessionId unverified=$stateUnverified covered=$covered lifecyclePaused=$lifecyclePaused acceptsInput=$acceptsInput',
+    );
+    if (!stateUnverified && sequence is int && sequence == reconciledSequence) {
+      return;
+    }
+    reconciledSequence = sequence is int ? sequence : null;
+    reconcileOnly = true;
+    final existing = objects(snapshot['sessions'])
+        .where(
+          (item) =>
+              value(item, 'sessionId', value(item, 'id')) == sessionId &&
+              sessionId.isNotEmpty,
+        )
+        .firstOrNull;
+    visibilityEpoch++;
+    setState(() {
+      connecting = false;
+      paused = true;
+      awaitingResume = false;
+      controlAvailable = false;
+      if (existing == null ||
+          ['stopped', 'failed', 'error'].contains(existing['status'])) {
+        session = {...?session}..remove('textureId');
+        stateUnverified = true;
+        sessionEnded = true;
+        error = '原会话已结束或无法核验。请检查当前活动，不会自动创建新窗口。';
+      } else {
+        session = existing;
+        stateUnverified = false;
+        sessionEnded = false;
+        error = null;
+      }
+    });
+    if (stateUnverified) return;
+    if (!covered && acceptsInput && !lifecyclePaused) {
+      unawaited(resumeView());
+    } else {
+      unawaited(pauseView());
+    }
+  }
+
+  Future<void> reconcileState() async {
+    markStateUnknown();
+    final epoch = stateEpoch;
+    try {
+      // The Bridge publishes state.resynced only after its full read barrier.
+      // A command receipt alone must never unlock this surface.
+      await controller.request('state.reconcile');
+    } catch (failure) {
+      if (mounted && !exiting && epoch == stateEpoch) {
+        setState(() => error = remoteFailure(failure));
+      }
     }
   }
 
@@ -425,30 +563,42 @@ class _RemotePageState extends State<RemotePage>
   Future<void> pauseView() async {
     final owned = view;
     if (owned == null || !owned.isCurrent) return;
-    visibilityEpoch++;
+    final epoch = ++visibilityEpoch;
     presentationVisible = false;
     final releases = releaseInputs();
     if (mounted) setState(() => paused = true);
     try {
       await owned.pause(afterInput: releases);
     } catch (failure) {
-      if (mounted && !exiting) setState(() => error = remoteFailure(failure));
+      if (mounted && !exiting && epoch == visibilityEpoch) {
+        setState(() => error = remoteFailure(failure));
+      }
     }
   }
 
   Future<void> resumeView() async {
-    if (sessionId.isEmpty || covered || exiting || !acceptsInput) return;
+    if (stateUnverified ||
+        sessionId.isEmpty ||
+        covered ||
+        exiting ||
+        !acceptsInput) {
+      return;
+    }
     var owned = view;
     if (owned == null || !owned.isCurrent) {
       owned = controller.sessionViews.claim(sessionId, visible: false);
       view = owned;
     }
     final epoch = ++visibilityEpoch;
+    trace('resume.begin epoch=$epoch session=$sessionId');
     presentationVisible = true;
     awaitingResume = true;
     setState(() => paused = true);
     try {
-      final receipt = await owned.resume();
+      final receipt = await owned.resume(afterInput: inputQueue);
+      trace(
+        'resume.receipt epoch=$epoch current=$visibilityEpoch owned=${owned.isCurrent} covered=$covered evidence=${receipt['evidence']}',
+      );
       if (!mounted ||
           exiting ||
           !owned.isCurrent ||
@@ -469,6 +619,9 @@ class _RemotePageState extends State<RemotePage>
         error = null;
       });
     } catch (failure) {
+      trace(
+        'resume.failed epoch=$epoch current=$visibilityEpoch reason=$failure',
+      );
       if (mounted && !exiting && epoch == visibilityEpoch) {
         setState(() {
           connecting = false;
@@ -499,11 +652,15 @@ class _RemotePageState extends State<RemotePage>
     final id = sessionId;
     final generation = bindingGeneration;
     final captured = {'sessionId': id, ...params};
+    final cleanup =
+        (command == 'session.key' && params['action'] == 'up') ||
+        (command == 'session.touch' &&
+            ['up', 'cancel'].contains(params['action']));
     inputQueue = inputQueue.then((_) async {
-      if (!controlAvailable ||
+      if ((!cleanup && !controlAvailable) ||
           id.isEmpty ||
           id != sessionId ||
-          generation != bindingGeneration) {
+          (!cleanup && generation != bindingGeneration)) {
         return;
       }
       final newInput =
@@ -804,7 +961,11 @@ class _RemotePageState extends State<RemotePage>
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                errorCode == 'device_asleep'
+                                sessionEnded
+                                    ? '控制会话已结束'
+                                    : stateUnverified
+                                    ? '正在核验会话状态'
+                                    : errorCode == 'device_asleep'
                                     ? '手机处于休眠状态'
                                     : paused
                                     ? '画面已暂停'
@@ -829,7 +990,9 @@ class _RemotePageState extends State<RemotePage>
                                   child: const Text('唤醒手机'),
                                 ),
                               OutlinedButton(
-                                onPressed: connecting ? null : start,
+                                onPressed: connecting
+                                    ? null
+                                    : (reconcileOnly ? reconcileState : start),
                                 child: const Text('重新检查'),
                               ),
                             ],

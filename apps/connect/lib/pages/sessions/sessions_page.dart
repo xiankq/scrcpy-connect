@@ -24,8 +24,9 @@ class SessionsPage extends HookWidget {
     final stream = useMemoized(
       () => controller.eventStream().where(
         (event) =>
-            value(event, 'type').startsWith('session.') &&
-            event['type'] != 'session.frame',
+            (value(event, 'type').startsWith('session.') &&
+                event['type'] != 'session.frame') ||
+            value(event, 'type').startsWith('state.'),
       ),
       [controller],
     );

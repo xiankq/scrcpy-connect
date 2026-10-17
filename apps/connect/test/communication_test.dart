@@ -65,15 +65,20 @@ void main() {
   );
 
   testWidgets(
-    'unknown notification state cannot be presented as a confirmed empty list',
+    'unknown notification state remains unverified until an explicit observation request',
     (tester) async {
-      final controller = createTestController(
-        (command, [params = const {}]) async => {
+      final queries = <Json>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'notifications.list') queries.add(params);
+        return {
           'status': 'unknown',
           'reason': '尚未获得实时通知状态',
           'notifications': <Json>[],
-        },
-      );
+        };
+      });
       await tester.pumpWidget(
         RouterTestApp(
           controller: controller,
@@ -84,6 +89,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('尚未获得实时通知状态'), findsOneWidget);
       expect(find.text('没有当前通知'), findsNothing);
+      expect(queries.single.containsKey('allowStart'), isFalse);
+      await tester.tap(find.text('重新核验通知'));
+      await tester.pumpAndSettle();
+      expect(queries.where((query) => query['allowStart'] == true), [
+        {'deviceId': 'phone', 'allowStart': true},
+      ]);
+      expect(queries.last.containsKey('allowStart'), isFalse);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },

@@ -214,7 +214,18 @@ class CallsPage extends HookConsumerWidget {
                 icon: const Icon(LucideIcons.smartphone, size: 18),
                 label: const Text('在手机上继续处理'),
               ),
-              TextButton(onPressed: refresh, child: const Text('刷新通话状态')),
+              TextButton(
+                onPressed: () async {
+                  final result = await perform(
+                    context,
+                    controller,
+                    'calls.list',
+                    {'deviceId': device['id'], 'allowStart': true},
+                  );
+                  if (context.mounted && result != null) refresh();
+                },
+                child: const Text('刷新通话状态'),
+              ),
               const StateNote(
                 '新的来电不会自动接听、抢占麦克风或结束已有通话。无法可靠针对某次呼叫操作时，请使用原手机界面。',
               ),

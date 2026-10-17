@@ -1,6 +1,7 @@
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/remote/remote_page.dart';
+import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
@@ -13,6 +14,615 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final terminal in ['session.disconnected', 'session.failed']) {
+    testWidgets('a late resume cannot clear $terminal or accept new input', (
+      tester,
+    ) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final events = StreamController<Json>.broadcast(sync: true);
+      final resumed = Completer<Json>();
+      final commands = <String>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add(command);
+        if (command == 'session.resume') return resumed.future;
+        return command == 'session.start'
+            ? {
+                'sessionId': 'original',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+              }
+            : <String, dynamic>{};
+      }, events: events.stream);
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(
+        commands.where((command) => command == 'session.resume'),
+        hasLength(1),
+      );
+      events.add({
+        'type': terminal,
+        'deviceId': 'phone',
+        'data': {'sessionId': 'original', 'reason': '原会话已经结束'},
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('原会话已经结束'), findsOneWidget);
+      final oldReceipt = <String, dynamic>{
+        'sessionId': 'original',
+        'textureId': 2,
+        'firstFrameDecoded': true,
+        'evidence': 'mdk.snapshot',
+      };
+      resumed.complete(oldReceipt);
+      await tester.pumpAndSettle();
+      // The Bridge also publishes output evidence for that same late request.
+      events.add({
+        'type': 'session.output.resumed',
+        'deviceId': 'phone',
+        'data': oldReceipt,
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('原会话已经结束'), findsOneWidget);
+      expect(find.text('画面已暂停'), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(commands.where((command) => command == 'session.key'), isEmpty);
+      expect(
+        commands.where((command) => command == 'session.start'),
+        hasLength(1),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    });
+  }
+
+  testWidgets(
+    'resync drains original input releases before verifying resumed pixels',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final events = StreamController<Json>.broadcast(sync: true);
+      final cleanup = Completer<Json>();
+      final commands = <(String, Json)>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add((command, params));
+        if (command == 'session.touch' && params['action'] == 'cancel') {
+          return cleanup.future;
+        }
+        return command == 'session.start' || command == 'session.resume'
+            ? {
+                'sessionId': 'original',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+                'firstFrameDecoded': true,
+                'evidence': 'mdk.snapshot',
+              }
+            : {};
+      }, events: events.stream);
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+      final gesture = await tester.startGesture(
+        const Offset(400, 300),
+        pointer: 101,
+      );
+      await tester.pump();
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      events.add({
+        'type': 'state.resynced',
+        'data': {
+          'devices': <Json>[],
+          'settings': <String, dynamic>{},
+          'shares': <Json>[],
+          'sequence': 1,
+          'sessions': [
+            {
+              'sessionId': 'original',
+              'status': 'paused',
+              'capturePaused': true,
+              'textureId': 1,
+              'width': 200,
+              'height': 400,
+            },
+          ],
+        },
+      });
+      await tester.pumpAndSettle();
+      expect(
+        commands
+            .where((c) => c.$1 == 'session.touch')
+            .map((c) => c.$2['action']),
+        ['down', 'cancel'],
+      );
+      expect(commands.where((c) => c.$1 == 'session.resume'), isEmpty);
+      cleanup.complete({});
+      await tester.pumpAndSettle();
+      expect(
+        commands.where((c) => c.$1 == 'session.key').map((c) => c.$2['action']),
+        ['down', 'up'],
+      );
+      expect(
+        commands
+            .where((c) => c.$1 == 'session.key' || c.$1 == 'session.touch')
+            .every((c) => c.$2['sessionId'] == 'original'),
+        isTrue,
+      );
+      expect(
+        commands.indexWhere(
+          (c) => c.$1 == 'session.key' && c.$2['action'] == 'up',
+        ),
+        lessThan(commands.indexWhere((c) => c.$1 == 'session.resume')),
+      );
+      await gesture.up();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(commands.where((c) => c.$1 == 'session.key'), hasLength(2));
+      expect(commands.where((c) => c.$1 == 'session.touch'), hasLength(2));
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    },
+  );
+
+  testWidgets('covered resync waits for the original route to become visible', (
+    tester,
+  ) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final events = StreamController<Json>.broadcast(sync: true);
+    final commands = <String>[];
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      commands.add(command);
+      return command == 'session.start' || command == 'session.resume'
+          ? {
+              'sessionId': 'original',
+              'textureId': 1,
+              'width': 200,
+              'height': 400,
+              'firstFrameDecoded': true,
+              'evidence': 'mdk.snapshot',
+            }
+          : {};
+    }, events: events.stream);
+    await tester.pumpWidget(
+      RouterTestApp(
+        controller: controller,
+        home: RemotePage(controller: controller, device: const {'id': 'phone'}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final navigator = Navigator.of(tester.element(find.byType(RemotePage)));
+    unawaited(
+      navigator.push<void>(
+        MaterialPageRoute(builder: (_) => const Scaffold(body: Text('其他页面'))),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final successor = controller.sessionViews.claim('original', visible: false);
+    events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+    events.add({
+      'type': 'state.resynced',
+      'data': {
+        'devices': <Json>[],
+        'settings': <String, dynamic>{},
+        'shares': <Json>[],
+        'sequence': 10,
+        'sessions': [
+          {
+            'sessionId': 'original',
+            'status': 'paused',
+            'capturePaused': true,
+            'textureId': 1,
+            'width': 200,
+            'height': 400,
+          },
+        ],
+      },
+    });
+    await tester.pumpAndSettle();
+    expect(commands.where((c) => c == 'session.resume'), isEmpty);
+    await successor.release();
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(commands.where((c) => c == 'session.resume'), hasLength(1));
+    expect(commands.where((c) => c == 'session.start'), hasLength(1));
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+    await events.close();
+  });
+
+  testWidgets(
+    'a launch returning after resync keeps only its identity for read-only verification',
+    (tester) async {
+      final events = StreamController<Json>.broadcast(sync: true);
+      final launched = Completer<Json>();
+      final commands = <String>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add(command);
+        return command == 'session.start' ? launched.future : {};
+      }, events: events.stream);
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+            initialAction: const RemoteControlIntent.key(3),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(commands.where((c) => c == 'session.start'), hasLength(1));
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      events.add({
+        'type': 'state.resynced',
+        'data': {
+          'devices': <Json>[],
+          'settings': <String, dynamic>{},
+          'shares': <Json>[],
+          'sessions': <Json>[],
+          'sequence': 10,
+        },
+      });
+      launched.complete({
+        'sessionId': 'late',
+        'textureId': 1,
+        'width': 200,
+        'height': 400,
+      });
+      await tester.pumpAndSettle();
+      expect(find.byType(Texture), findsNothing);
+      expect(find.text('会话结果尚待核验，请重新检查。'), findsOneWidget);
+      await tester.tap(find.text('重新检查'));
+      await tester.pumpAndSettle();
+      expect(commands.where((c) => c == 'state.reconcile'), hasLength(1));
+      expect(
+        commands.where(
+          (c) => ['session.key', 'session.resume', 'session.stop'].contains(c),
+        ),
+        isEmpty,
+      );
+      expect(commands.where((c) => c == 'session.start'), hasLength(1));
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    },
+  );
+
+  testWidgets(
+    'repeated resync markers fence old resume pixels and never replay a tool action',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final events = StreamController<Json>.broadcast(sync: true);
+      final firstResume = Completer<Json>();
+      final secondResume = Completer<Json>();
+      final commands = <(String, Json)>[];
+      var resumes = 0;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add((command, params));
+        if (command == 'session.resume') {
+          return ++resumes == 1 ? firstResume.future : secondResume.future;
+        }
+        return command == 'session.start'
+            ? {
+                'sessionId': 'original',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+              }
+            : {};
+      }, events: events.stream);
+      final snapshot = <String, dynamic>{
+        'devices': <Json>[],
+        'settings': <String, dynamic>{},
+        'shares': <Json>[],
+        'sequence': 10,
+        'sessions': [
+          {
+            'sessionId': 'original',
+            'deviceId': 'phone',
+            'status': 'paused',
+            'capturePaused': true,
+            'textureId': 1,
+            'width': 200,
+            'height': 400,
+          },
+        ],
+      };
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+            initialAction: const RemoteControlIntent.key(3),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(commands.where((c) => c.$1 == 'session.key'), hasLength(2));
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      events.add({'type': 'state.resynced', 'data': snapshot});
+      await tester.pumpAndSettle();
+      expect(resumes, 1);
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      events.add({
+        'type': 'state.resynced',
+        'data': {...snapshot, 'sequence': 11},
+      });
+      firstResume.complete({
+        'sessionId': 'original',
+        'textureId': 2,
+        'firstFrameDecoded': true,
+        'evidence': 'mdk.snapshot',
+      });
+      await tester.pumpAndSettle();
+      expect(resumes, 2);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(commands.where((c) => c.$1 == 'session.key'), hasLength(2));
+      secondResume.complete({
+        'sessionId': 'original',
+        'textureId': 3,
+        'firstFrameDecoded': true,
+        'evidence': 'mdk.snapshot',
+      });
+      await tester.pumpAndSettle();
+      events.add({
+        'type': 'state.resynced',
+        'data': {...snapshot, 'sequence': 11},
+      });
+      await tester.pumpAndSettle();
+      expect(resumes, 2);
+      expect(find.text('画面已暂停'), findsNothing);
+      expect(tester.widget<Texture>(find.byType(Texture)).textureId, 3);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(
+        commands
+            .where((c) => c.$1 == 'session.key')
+            .map((c) => c.$2['keyCode']),
+        [3, 3, 22, 22],
+      );
+      expect(commands.where((c) => c.$1 == 'session.start'), hasLength(1));
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    },
+  );
+
+  testWidgets(
+    'background resync keeps capture paused until visibility returns',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final events = StreamController<Json>.broadcast(sync: true);
+      final commands = <String>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add(command);
+        return command == 'session.start' || command == 'session.resume'
+            ? {
+                'sessionId': 'original',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+                'firstFrameDecoded': true,
+                'evidence': 'mdk.snapshot',
+              }
+            : {};
+      }, events: events.stream);
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pumpAndSettle();
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      events.add({
+        'type': 'state.resynced',
+        'data': {
+          'devices': <Json>[],
+          'settings': <String, dynamic>{},
+          'shares': <Json>[],
+          'sequence': 10,
+          'sessions': [
+            {
+              'sessionId': 'original',
+              'status': 'streaming',
+              'capturePaused': false,
+              'textureId': 1,
+              'width': 200,
+              'height': 400,
+            },
+          ],
+        },
+      });
+      await tester.pumpAndSettle();
+      expect(commands.where((c) => c == 'session.resume'), isEmpty);
+      expect(commands.where((c) => c == 'session.pause'), hasLength(2));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(commands.where((c) => c == 'session.resume'), hasLength(1));
+      expect(commands.where((c) => c == 'session.start'), hasLength(1));
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    },
+  );
+
+  testWidgets(
+    'failed reconciliation stays frozen and explicit retry never starts another task',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final events = StreamController<Json>.broadcast(sync: true);
+      final commands = <String>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add(command);
+        if (command == 'state.reconcile') {
+          throw const RequestFailure('unavailable', '仍无法检查');
+        }
+        return command == 'session.start'
+            ? {
+                'sessionId': 'original',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+              }
+            : {};
+      }, events: events.stream);
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      events.add({
+        'type': 'state.resync.failed',
+        'data': {'reason': '快照不可用'},
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('快照不可用'), findsOneWidget);
+      expect(controller.snapshot().reconciliationPending, isTrue);
+      await tester.tap(find.text('重新检查'));
+      await tester.pumpAndSettle();
+      expect(find.text('仍无法检查'), findsOneWidget);
+      expect(find.text('正在核验会话状态'), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(commands.where((c) => c == 'session.key'), isEmpty);
+      expect(commands.where((c) => c == 'state.reconcile'), hasLength(1));
+      expect(commands.where((c) => c == 'session.start'), hasLength(1));
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    },
+  );
+
+  testWidgets(
+    'resync freezes input, clears a missing session and retries only reconciliation',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final events = StreamController<Json>.broadcast(sync: true);
+      final commands = <String>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add(command);
+        return command == 'session.start'
+            ? {
+                'sessionId': 'original',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+              }
+            : {};
+      }, events: events.stream);
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      await tester.pumpAndSettle();
+      expect(find.text('正在核验会话状态'), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
+      events.add({
+        'type': 'session.frame',
+        'data': {'sessionId': 'original', 'textureId': 1},
+      });
+      await tester.pumpAndSettle();
+      expect(commands.where((c) => c == 'session.key'), isEmpty);
+      events.add({
+        'type': 'state.resynced',
+        'data': {
+          'devices': <Json>[],
+          'settings': <String, dynamic>{},
+          'shares': <Json>[],
+          'sessions': <Json>[],
+          'sequence': 1,
+        },
+      });
+      await tester.pumpAndSettle();
+      expect(find.byType(Texture), findsNothing);
+      expect(find.textContaining('原会话已结束'), findsOneWidget);
+      expect(find.text('控制会话已结束'), findsOneWidget);
+      expect(find.text('正在核验会话状态'), findsNothing);
+      await tester.tap(find.text('重新检查'));
+      await tester.pumpAndSettle();
+      expect(commands.where((c) => c == 'state.reconcile'), hasLength(1));
+      expect(commands.where((c) => c == 'session.start'), hasLength(1));
+      expect(commands.where((c) => c == 'session.resume'), isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    },
+  );
+
   testWidgets('feedback from the previous page never overlays remote content', (
     tester,
   ) async {

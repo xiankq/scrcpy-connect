@@ -2,6 +2,7 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_card.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/widgets/recovery_status.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -37,6 +38,7 @@ class DevicesPage extends HookConsumerWidget {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            const SliverToBoxAdapter(child: RecoveryStatus()),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(24, 30, 24, 0),
               sliver: SliverToBoxAdapter(

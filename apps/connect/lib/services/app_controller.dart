@@ -91,6 +91,9 @@ class AppController extends _$AppController {
   int _generation = 0;
   int _deviceRequest = 0;
   int _settingsRequest = 0;
+  // Authority changes invalidate save receipts independently of queued writes.
+  int _settingsEpoch = 0;
+  int _shareRequest = 0;
 
   @override
   AppState build() {
@@ -107,16 +110,64 @@ class AppController extends _$AppController {
       (event) {
         if (!_current(generation)) return;
         final frozen = immutableJson(event);
-        events.add(frozen);
+        final data = jsonObject(event['data']);
+        if (event['type'] == 'state.resynced' &&
+            !state.reconciliationPending &&
+            data['sequence'] != null &&
+            data['sequence'] == state.reconciledSnapshot?['sequence']) {
+          return;
+        }
         // Native frames belong to their bound surface, never the global state.
-        if (event['type'] == 'session.frame') return;
+        if (event['type'] == 'session.frame') {
+          events.add(frozen);
+          return;
+        }
         var next = state.copyWith(
           lastEvent: () => frozen,
           eventRevision: state.eventRevision + 1,
         );
+        if (event['type'] == 'state.resync' ||
+            event['type'] == 'state.resync.failed') {
+          ownedViews.markUncertain();
+          _deviceRequest++;
+          _settingsRequest++;
+          _settingsEpoch++;
+          _shareRequest++;
+          _audioFocusTarget = null;
+          next = next.copyWith(
+            reconciliationPending: true,
+            reconciliationError: () => event['type'] == 'state.resync.failed'
+                ? value(data, 'reason', '状态检查未完成，请重试。')
+                : null,
+          );
+        } else if (event['type'] == 'state.resynced') {
+          final snapshot = jsonObject(event['data']);
+          ownedViews.reconcile(objects(snapshot['sessions']));
+          _deviceRequest++;
+          _settingsRequest++;
+          _settingsEpoch++;
+          _shareRequest++;
+          next = next.copyWith(
+            devices: objects(snapshot['devices']),
+            settings: jsonObject(snapshot['settings']),
+            pendingShares: objects(snapshot['shares'])
+                .where(
+                  (share) =>
+                      !_consumedShareIds.contains(value(share, 'shareId')),
+                )
+                .toList(),
+            loading: false,
+            deviceError: () => null,
+            settingsError: () => null,
+            reconciliationPending: false,
+            reconciliationError: () => null,
+            reconciledSnapshot: () => snapshot,
+          );
+        }
         if (event['type'] == 'settings.changed' &&
             event['data'] is Map<Object?, Object?>) {
           _settingsRequest++;
+          _settingsEpoch++;
           next = next.copyWith(settings: jsonObject(event['data']));
         }
         if (event['type'] == 'share.received' &&
@@ -124,6 +175,8 @@ class AppController extends _$AppController {
           next = _withShare(next, jsonObject(event['data']));
         }
         state = next;
+        // Bound pages must see the calibrated state while handling this event.
+        events.add(frozen);
         if (value(event, 'type').startsWith('device')) {
           unawaited(refreshDevices());
         }
@@ -190,9 +243,10 @@ class AppController extends _$AppController {
 
   Future<void> loadPendingShares() async {
     final generation = _generation;
+    final requestId = ++_shareRequest;
     try {
       final result = await request('sharing.pending');
-      if (!_current(generation)) return;
+      if (!_current(generation) || requestId != _shareRequest) return;
       var next = state;
       for (final share in objects(result['shares'])) {
         next = _withShare(next, share);
@@ -241,6 +295,7 @@ class AppController extends _$AppController {
     try {
       final result = await request('settings.get');
       if (_current(generation) && requestId == _settingsRequest) {
+        _settingsEpoch++;
         state = state.copyWith(settings: result, settingsError: () => null);
       }
     } catch (error) {
@@ -255,8 +310,9 @@ class AppController extends _$AppController {
     _settingsRequest++;
     final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
       if (!_current(generation)) return;
+      final epoch = _settingsEpoch;
       final result = await request('settings.update', {key: next});
-      if (_current(generation)) {
+      if (_current(generation) && epoch == _settingsEpoch) {
         state = state.copyWith(
           settings: {...state.settings, key: next, ...result},
         );
@@ -290,6 +346,7 @@ class AppController extends _$AppController {
     _audioFocusQueue = _audioFocusQueue.then((_) async {
       bool intended() =>
           _current(generation) &&
+          !state.reconciliationPending &&
           _audioFocusTarget == id &&
           value(state.settings, 'audioMode', 'follow') == 'follow' &&
           state.settings['audioDevices'] is List<Object?> &&

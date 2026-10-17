@@ -45,6 +45,50 @@ List<Json> _sessions() => [
 ];
 
 void main() {
+  testWidgets(
+    'a reconciled snapshot refreshes the session workspace without replay',
+    (tester) async {
+      final events = StreamController<Json>.broadcast(sync: true);
+      final sessions = _sessions();
+      final commands = <String>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add(command);
+        return command == 'session.list'
+            ? {'sessions': sessions.map(Map<String, dynamic>.of).toList()}
+            : {};
+      }, events: events.stream);
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: SessionsPage(controller: controller, device: _phone),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('窗口 B'), findsOneWidget);
+      sessions.removeLast();
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      events.add({
+        'type': 'state.resynced',
+        'data': {
+          'sessions': sessions,
+          'devices': [_phone],
+          'settings': <String, dynamic>{},
+          'shares': <Json>[],
+          'sequence': 9,
+        },
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('窗口 B'), findsNothing);
+      expect(commands.where((c) => c != 'session.list'), isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    },
+  );
+
   testWidgets('closing B refreshes the session workspace and preserves A', (
     tester,
   ) async {

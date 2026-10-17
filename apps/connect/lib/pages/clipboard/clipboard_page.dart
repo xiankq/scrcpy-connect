@@ -160,7 +160,7 @@ class ClipboardPage extends HookConsumerWidget {
                       context,
                       controller,
                       'clipboard.get',
-                      {'deviceId': selected.value},
+                      {'deviceId': selected.value, 'allowStart': true},
                     );
                     if (result != null && result['text'] != null) {
                       await Clipboard.setData(

@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/widgets/recovery_status.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -41,7 +42,20 @@ class PageFrame extends StatelessWidget {
       ),
       actions: actions,
     ),
-    body: SafeArea(top: false, child: child),
+    body: SafeArea(
+      top: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Column(
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: constraints.maxHeight / 2),
+              child: const RecoveryStatus(),
+            ),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    ),
     bottomNavigationBar: bottom == null
         ? null
         : SafeArea(

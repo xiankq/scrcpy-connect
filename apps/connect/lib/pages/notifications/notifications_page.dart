@@ -40,6 +40,16 @@ class NotificationsPage extends HookConsumerWidget {
           child: const Text('在手机上继续处理'),
         ),
         builder: (context, data, refresh) {
+          Future<void> verify() async {
+            final result = await perform(
+              context,
+              controller,
+              'notifications.list',
+              {'deviceId': device['id'], 'allowStart': true},
+            );
+            if (context.mounted && result != null) refresh();
+          }
+
           final notifications = objects(data['notifications'])
               .where((n) => !hidden.value.contains(value(n, 'id')))
               .toList();
@@ -61,7 +71,7 @@ class NotificationsPage extends HookConsumerWidget {
                         openRemoteRoute(context, deviceId: value(device, 'id')),
                     child: const Text('在手机上查看'),
                   ),
-                  TextButton(onPressed: refresh, child: const Text('重新核验通知')),
+                  TextButton(onPressed: verify, child: const Text('重新核验通知')),
                 ],
               ),
             );
@@ -72,13 +82,13 @@ class NotificationsPage extends HookConsumerWidget {
               title: '没有当前通知',
               message: '这里只显示仍有效的通知，不建立长期通知档案。',
               action: TextButton(
-                onPressed: refresh,
+                onPressed: verify,
                 child: const Text('刷新当前通知'),
               ),
             );
           }
           return RefreshIndicator(
-            onRefresh: () async => refresh(),
+            onRefresh: verify,
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [

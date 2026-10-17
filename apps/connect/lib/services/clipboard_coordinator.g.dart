@@ -57,4 +57,4 @@ final class ClipboardCoordinatorProvider
 }
 
 String _$clipboardCoordinatorHash() =>
-    r'69de8a85bc3a415059a41be94566c21acd7123cf';
+    r'4ef7a1fa8fb14b7ce8381ab5f05e343685770a74';

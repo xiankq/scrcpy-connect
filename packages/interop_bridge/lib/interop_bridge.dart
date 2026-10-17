@@ -184,6 +184,11 @@ class InteropBridge {
     }
     if (event['type'] == 'session.disconnected') {
       final id = data['sessionId'];
+      if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
+        debugPrint(
+          '[connect.video] core ended session=$id reason=${data['reason']}',
+        );
+      }
       if (id is String) unawaited(_closeVideo(id));
     } else if (event['type'] == 'audio.updated' &&
         const [
@@ -224,6 +229,11 @@ class InteropBridge {
   }
 
   Future<void> _closeVideo(String id) async {
+    if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
+      debugPrint(
+        '[connect.video] close session=$id from=${StackTrace.current}',
+      );
+    }
     _videoMonitors.remove(id)?.cancel();
     _textures.remove(id);
     await _videoOutputs.stop(id);
@@ -275,6 +285,9 @@ class InteropBridge {
         }
       }
       if (['closed', 'failed'].contains(status['status'])) {
+        if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
+          debugPrint('[connect.video] ended session=$id status=$status');
+        }
         _events.add({
           'type': 'session.failed',
           'deviceId': texture['deviceId'],
@@ -431,6 +444,12 @@ class InteropBridge {
     String command,
     Map<String, dynamic> params,
   ) async {
+    if (command == 'session.stop' &&
+        const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
+      debugPrint(
+        '[connect.video] stop params=$params from=${StackTrace.current}',
+      );
+    }
     final raw = await core.invoke(
       requestJson: jsonEncode({'command': command, 'params': params}),
     );

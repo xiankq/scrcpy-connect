@@ -40,6 +40,9 @@ class AppState {
     required this.clipboardReadCount,
     required this.clipboardWriteCount,
     required this.clipboardSendCount,
+    required this.reconciliationPending,
+    required this.reconciliationError,
+    required this.reconciledSnapshot,
   });
   factory AppState({
     List<Json> devices = const [],
@@ -57,6 +60,9 @@ class AppState {
     int clipboardReadCount = 0,
     int clipboardWriteCount = 0,
     int clipboardSendCount = 0,
+    bool reconciliationPending = false,
+    String? reconciliationError,
+    Json? reconciledSnapshot,
   }) => AppState._(
     devices: _records(devices),
     settings: immutableJson(settings),
@@ -73,6 +79,11 @@ class AppState {
     clipboardReadCount: clipboardReadCount,
     clipboardWriteCount: clipboardWriteCount,
     clipboardSendCount: clipboardSendCount,
+    reconciliationPending: reconciliationPending,
+    reconciliationError: reconciliationError,
+    reconciledSnapshot: reconciledSnapshot == null
+        ? null
+        : immutableJson(reconciledSnapshot),
   );
   final List<Json> devices;
   final Json settings;
@@ -89,6 +100,9 @@ class AppState {
   final int clipboardReadCount;
   final int clipboardWriteCount;
   final int clipboardSendCount;
+  final bool reconciliationPending;
+  final String? reconciliationError;
+  final Json? reconciledSnapshot;
 
   AppState copyWith({
     List<Json>? devices,
@@ -106,6 +120,9 @@ class AppState {
     int? clipboardReadCount,
     int? clipboardWriteCount,
     int? clipboardSendCount,
+    bool? reconciliationPending,
+    String? Function()? reconciliationError,
+    Json? Function()? reconciledSnapshot,
   }) => AppState._(
     devices: devices == null ? this.devices : _records(devices),
     settings: settings == null ? this.settings : immutableJson(settings),
@@ -128,5 +145,13 @@ class AppState {
     clipboardReadCount: clipboardReadCount ?? this.clipboardReadCount,
     clipboardWriteCount: clipboardWriteCount ?? this.clipboardWriteCount,
     clipboardSendCount: clipboardSendCount ?? this.clipboardSendCount,
+    reconciliationPending: reconciliationPending ?? this.reconciliationPending,
+    reconciliationError: reconciliationError == null
+        ? this.reconciliationError
+        : reconciliationError(),
+    reconciledSnapshot: _nullableRecord(
+      reconciledSnapshot,
+      this.reconciledSnapshot,
+    ),
   );
 }

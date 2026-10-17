@@ -5,6 +5,72 @@ import 'package:scrcpy_connect/services/session_views.dart';
 
 void main() {
   test(
+    'leaving during unknown state still pauses its exact live owner as cleanup',
+    () async {
+      final commands = <String>[];
+      final views = SessionViews((command, [params = const {}]) async {
+        commands.add('$command:${params['sessionId']}');
+        return {};
+      });
+      final live = views.claim('live', visible: true);
+      views.markUncertain();
+      await live.release();
+      expect(commands, ['session.pause:live']);
+      views.reconcile([
+        {'sessionId': 'live', 'status': 'streaming'},
+      ]);
+      await live.release();
+      expect(commands, ['session.pause:live']);
+    },
+  );
+
+  test(
+    'a visibility command queued before resync cannot run after calibration',
+    () async {
+      final commands = <String>[];
+      final input = Completer<void>();
+      final views = SessionViews((command, [params = const {}]) async {
+        commands.add(command);
+        return {};
+      });
+      final live = views.claim('live', visible: true);
+      final oldPause = live.pause(afterInput: input.future);
+      final oldResume = live.resume();
+      await Future<void>.delayed(Duration.zero);
+      views.markUncertain();
+      views.reconcile([
+        {'sessionId': 'live', 'status': 'paused', 'capturePaused': true},
+      ]);
+      final verifiedResume = live.resume();
+      input.complete();
+      await Future.wait([oldPause, oldResume, verifiedResume]);
+      expect(commands, ['session.resume']);
+    },
+  );
+
+  test('snapshot calibration invalidates missing and terminal owners without releasing them', () async {
+    final commands = <String>[];
+    final views = SessionViews((command, [params = const {}]) async {
+      commands.add('$command:${params['sessionId']}');
+      return {};
+    });
+    final missing = views.claim('missing', visible: true);
+    final failed = views.claim('failed', visible: true);
+    final live = views.claim('live', visible: false);
+    views.reconcile([
+      {'sessionId': 'failed', 'status': 'failed'},
+      {'sessionId': 'live', 'status': 'paused', 'capturePaused': true},
+    ]);
+    expect(missing.isCurrent, isFalse);
+    expect(failed.isCurrent, isFalse);
+    expect(live.isCurrent, isTrue);
+    await missing.release();
+    await failed.resume();
+    await live.resume();
+    expect(commands, ['session.resume:live']);
+  });
+
+  test(
     'failed resume still pauses capture when the view is released',
     () async {
       final commands = <String>[];

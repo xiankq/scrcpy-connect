@@ -8,6 +8,7 @@ class SessionViews {
   final SessionRequest request;
   final _owners = <String, SessionView>{};
   final _tails = <String, Future<void>>{};
+  bool _uncertain = false;
 
   SessionView claim(String id, {required bool visible}) {
     if (id.isEmpty) throw ArgumentError.value(id, 'id');
@@ -18,19 +19,47 @@ class SessionViews {
 
   void invalidate() => _owners.clear();
 
+  /// Until a snapshot arrives, old views may only clean up their exact session.
+  void markUncertain() {
+    _uncertain = true;
+    for (final owner in _owners.values) {
+      owner._revision++;
+    }
+  }
+
+  void reconcile(List<SessionJson> sessions) {
+    final current = <String, SessionJson>{
+      for (final session in sessions)
+        if (!['stopped', 'failed', 'error'].contains(session['status']))
+          (session['sessionId'] ?? session['id']).toString(): session,
+    };
+    _uncertain = false;
+    _owners.removeWhere((id, _) => !current.containsKey(id));
+    for (final entry in _owners.entries) {
+      final session = current[entry.key]!;
+      entry.value._revision++;
+      entry.value._visible =
+          session['capturePaused'] != true && session['status'] != 'paused';
+    }
+  }
+
   Future<SessionJson> _visibility(
     SessionView view,
     bool visible, {
     Future<void>? afterInput,
     bool release = false,
   }) {
+    final revision = view._revision;
     final operation = (_tails[view.id] ?? Future<void>.value()).then((_) async {
       // Drain even a superseded view's releases before its successor resumes.
       await afterInput;
       if (!identical(_owners[view.id], view)) return <String, dynamic>{};
+      if ((_uncertain && visible) || (revision != view._revision && !release)) {
+        return <String, dynamic>{};
+      }
       var succeeded = false;
       try {
-        if (!visible && !view._visible) {
+        if (!visible && !view._visible && !_uncertain) {
           succeeded = true;
           return <String, dynamic>{};
         }
@@ -41,7 +70,9 @@ class SessionViews {
           visible ? 'session.resume' : 'session.pause',
           {'sessionId': view.id},
         );
-        view._visible = visible;
+        if (revision == view._revision && identical(_owners[view.id], view)) {
+          view._visible = visible;
+        }
         succeeded = true;
         return receipt;
       } finally {
@@ -67,10 +98,12 @@ class SessionView {
   final String id;
   bool _visible;
   bool _released = false;
+  int _revision = 0;
   bool get isCurrent => !_released && identical(_views._owners[id], this);
 
-  Future<SessionJson> resume() =>
-      _released ? Future.value({}) : _views._visibility(this, true);
+  Future<SessionJson> resume({Future<void>? afterInput}) => _released
+      ? Future.value({})
+      : _views._visibility(this, true, afterInput: afterInput);
   Future<SessionJson> pause({Future<void>? afterInput}) => _released
       ? Future.value({})
       : _views._visibility(this, false, afterInput: afterInput);

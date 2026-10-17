@@ -26,6 +26,234 @@ ProviderContainer scope(
 );
 
 void main() {
+  for (final update in ['state.resynced', 'settings.changed']) {
+    test('a late saved setting cannot overwrite $update authority', () async {
+      final events = StreamController<Json>.broadcast(sync: true);
+      final saving = Completer<Json>();
+      final container = scope(
+        (command, [params = const {}]) => saving.future,
+        events: events.stream,
+      );
+      final notifier = container.read(appControllerProvider.notifier);
+      final pending = notifier.updateSetting('appearance', 'dark');
+      await Future<void>.delayed(Duration.zero);
+      const authoritative = <String, dynamic>{
+        'appearance': 'system',
+        'backgroundAudio': true,
+      };
+      if (update == 'state.resynced') {
+        events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+        events.add({
+          'type': update,
+          'data': {
+            'devices': <Json>[],
+            'sessions': <Json>[],
+            'shares': <Json>[],
+            'settings': authoritative,
+            'sequence': 9,
+          },
+        });
+      } else {
+        events.add({'type': update, 'data': authoritative});
+      }
+      saving.complete({'appearance': 'dark', 'backgroundAudio': false});
+      await pending;
+      expect(notifier.snapshot().settings, authoritative);
+      container.dispose();
+      await events.close();
+    });
+  }
+
+  test(
+    'queuing a second setting does not discard the first save receipt',
+    () async {
+      final first = Completer<Json>();
+      final second = Completer<Json>();
+      final requests = <Json>[];
+      final container = scope((command, [params = const {}]) {
+        requests.add(params);
+        return requests.length == 1 ? first.future : second.future;
+      });
+      final notifier = container.read(appControllerProvider.notifier);
+      final savingFirst = notifier.updateSetting('appearance', 'dark');
+      await Future<void>.delayed(Duration.zero);
+      final savingSecond = notifier.updateSetting('backgroundAudio', true);
+      first.complete({'appearance': 'dark'});
+      await savingFirst;
+      expect(notifier.snapshot().settings, {'appearance': 'dark'});
+      await Future<void>.delayed(Duration.zero);
+      expect(requests, [
+        {'appearance': 'dark'},
+        {'backgroundAudio': true},
+      ]);
+      second.complete({'backgroundAudio': true});
+      await savingSecond;
+      expect(notifier.snapshot().settings, {
+        'appearance': 'dark',
+        'backgroundAudio': true,
+      });
+      container.dispose();
+    },
+  );
+
+  test(
+    'duplicate verified snapshots cannot forget that a view resumed capture',
+    () async {
+      final events = StreamController<Json>.broadcast(sync: true);
+      final commands = <String>[];
+      final container = scope((command, [params = const {}]) async {
+        commands.add(command);
+        return {};
+      }, events: events.stream);
+      final notifier = container.read(appControllerProvider.notifier);
+      final view = notifier.sessionViews.claim('live', visible: true);
+      final snapshot = <String, dynamic>{
+        'devices': <Json>[],
+        'settings': <String, dynamic>{},
+        'shares': <Json>[],
+        'sequence': 1,
+        'sessions': [
+          {'sessionId': 'live', 'status': 'paused', 'capturePaused': true},
+        ],
+      };
+      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+      expect(notifier.snapshot().reconciliationPending, isTrue);
+      events.add({'type': 'state.resynced', 'data': snapshot});
+      expect(notifier.snapshot().reconciliationPending, isFalse);
+      await view.resume();
+      events.add({'type': 'state.resynced', 'data': snapshot});
+      await view.release();
+      expect(commands, ['session.resume', 'session.pause']);
+      expect(
+        () => notifier.snapshot().reconciledSnapshot!['sequence'] = 2,
+        throwsUnsupportedError,
+      );
+      container.dispose();
+      await events.close();
+    },
+  );
+
+  test('dependency replacement invalidates old recovery owners and ignores late snapshots', () async {
+    final oldEvents = StreamController<Json>.broadcast(sync: true);
+    final newEvents = StreamController<Json>.broadcast(sync: true);
+    final commands = <String>[];
+    Future<Json> request(String command, [Json params = const {}]) async {
+      commands.add(command);
+      return {};
+    }
+
+    final container = scope(request, events: oldEvents.stream);
+    final oldController = container.read(appControllerProvider.notifier);
+    final oldView = oldController.sessionViews.claim('old', visible: true);
+    oldEvents.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+    container.updateOverrides([
+      appDependenciesProvider.overrideWithValue(
+        AppDependencies(
+          request: request,
+          events: newEvents.stream,
+          initialize: false,
+          initialState: AppState(
+            devices: [
+              {'id': 'new'},
+            ],
+          ),
+        ),
+      ),
+    ]);
+    final current = container.read(appControllerProvider.notifier);
+    expect(current.snapshot().devices.single['id'], 'new');
+    expect(oldView.isCurrent, isFalse);
+    oldEvents.add({
+      'type': 'state.resynced',
+      'data': {
+        'devices': [
+          {'id': 'stale'},
+        ],
+        'sessions': <Json>[],
+        'sequence': 1,
+      },
+    });
+    await oldView.release();
+    expect(current.snapshot().devices.single['id'], 'new');
+    expect(commands, isEmpty);
+    container.dispose();
+    await oldEvents.close();
+    await newEvents.close();
+  });
+
+  test('resync replaces authoritative projections and fences older reads without replay', () async {
+    final events = StreamController<Json>.broadcast(sync: true);
+    final oldDevices = Completer<Json>();
+    final oldSettings = Completer<Json>();
+    final oldShares = Completer<Json>();
+    final commands = <String>[];
+    final container = scope(
+      (command, [params = const {}]) {
+        commands.add(command);
+        return switch (command) {
+          'devices.list' => oldDevices.future,
+          'settings.get' => oldSettings.future,
+          'sharing.pending' => oldShares.future,
+          _ => Future.value(<String, dynamic>{}),
+        };
+      },
+      events: events.stream,
+      initialState: AppState(
+        pendingShares: [
+          {'shareId': 'gone'},
+        ],
+      ),
+    );
+    final notifier = container.read(appControllerProvider.notifier);
+    final reads = [
+      notifier.refreshDevices(),
+      notifier.loadSettings(),
+      notifier.loadPendingShares(),
+    ];
+    Json? stateSeenByListener;
+    final listener = notifier.eventStream().listen((event) {
+      if (event['type'] == 'state.resynced') {
+        stateSeenByListener = notifier.snapshot().devices.single;
+      }
+    });
+    events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+    events.add({
+      'type': 'state.resynced',
+      'data': {
+        'devices': [
+          {'id': 'verified'},
+        ],
+        'settings': {'appearance': 'dark'},
+        'shares': [
+          {'shareId': 'current', 'status': 'ready'},
+        ],
+        'sessions': <Json>[],
+        'sequence': 42,
+      },
+    });
+    oldDevices.complete({
+      'devices': [
+        {'id': 'stale'},
+      ],
+    });
+    oldSettings.complete({'appearance': 'light'});
+    oldShares.complete({
+      'shares': [
+        {'shareId': 'stale'},
+      ],
+    });
+    await Future.wait(reads);
+    final restored = notifier.snapshot();
+    expect(restored.devices.single['id'], 'verified');
+    expect(stateSeenByListener?['id'], 'verified');
+    expect(restored.settings, {'appearance': 'dark'});
+    expect(restored.pendingShares.single['shareId'], 'current');
+    expect(commands, ['devices.list', 'settings.get', 'sharing.pending']);
+    await listener.cancel();
+    container.dispose();
+    await events.close();
+  });
+
   test(
     'generated notifier snapshots deeply freeze transport collections',
     () async {
