@@ -1,0 +1,322 @@
+import 'dart:convert';
+import 'dart:developer' as developer;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:interop_bridge/src/media/fvp_video_player.dart';
+import 'package:interop_bridge/src/media/portable_video.dart';
+import 'package:interop_bridge/src/media/video_presentation.dart';
+import 'package:interop_bridge/src/rust/api.dart' as core;
+import 'package:interop_bridge/src/rust/frb_generated.dart';
+import 'package:path_provider/path_provider.dart';
+
+// Recognize the independent target's four bit color pattern, not a receipt,
+// nonempty image, or different arbitrary pixels. Use the palette's channel
+// ratios so RGB range/transfer conversion cannot masquerade as a stale frame.
+int? pattern(List<int> rgba, int width, int height, {ui.Rect? region}) {
+  final bounds =
+      region ?? ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
+  var counter = 0;
+  for (var bit = 0; bit < 4; bit++) {
+    final x = (bounds.left + bounds.width * (bit + .5) / 4).floor();
+    final offset = (bounds.center.dy.floor() * width + x) * 4;
+    final r = rgba[offset], g = rgba[offset + 1], b = rgba[offset + 2];
+    if (r > 30 && r > g * 1.5 && r > b * 1.5) {
+      counter |= 1 << bit;
+    } else if (!(b > 60 && b > r * 1.5 && g > r * 1.5)) {
+      return null;
+    }
+  }
+  return counter;
+}
+
+void main() {
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  var hostReady = false;
+  developer.registerExtension('ext.connect.videoPerformance', (_, args) async {
+    if (args['ready'] == 'true') hostReady = true;
+    return developer.ServiceExtensionResponse.result(
+      jsonEncode({'ready': hostReady}),
+    );
+  });
+  testWidgets(
+    'real decoded freshness, first frame, pause and repeated connections',
+    (tester) async {
+      final rounds = <VideoJson>[];
+      binding.reportData = {
+        'videoPerformanceComplete': false,
+        'rounds': rounds,
+      };
+      Future<VideoJson> request(
+        String command, [
+        VideoJson params = const {},
+      ]) async {
+        final result = jsonDecode(
+          await core.invoke(
+            requestJson: jsonEncode({'command': command, 'params': params}),
+          ),
+        ) as VideoJson;
+        if (result['ok'] != true) {
+          throw StateError('$command: ${result['error']}');
+        }
+        return result['data'] as VideoJson;
+      }
+
+      Future<void> real(Future<void> Function() action) async {
+        final completed = await tester.runAsync(() async {
+          await action();
+          return true;
+        });
+        if (completed != true) {
+          throw StateError('Real-device stage failed; see original exception.');
+        }
+      }
+
+      late VideoPlayerPort player;
+      var disposed = false;
+      final outputs = PortableVideoOutputs(
+        core: request,
+        emit: (_) {},
+        isDisposed: () => disposed,
+        playerFactory: () => player = FvpVideoPlayer(),
+      );
+      final presentation = VideoPresentation(
+        core: request,
+        pauseOutput: outputs.pause,
+        resumeOutput: outputs.resume,
+      );
+      String? device, session;
+      var expected = 0;
+      try {
+        await real(() async {
+          final deadline = Stopwatch()..start();
+          while (!hostReady) {
+            if (deadline.elapsed > const Duration(seconds: 40)) {
+              throw StateError('Host fixture not ready.');
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+          }
+          await RustLib.init();
+          final support = await getApplicationSupportDirectory();
+          await core.initialize(
+            dataDirectory: '${support.path}/video-performance',
+          );
+          final added = await request('devices.add', {
+            'address': const String.fromEnvironment(
+              'CONNECT_E2E_ADDRESS',
+              defaultValue: '10.0.2.2',
+            ),
+            'port': const int.fromEnvironment(
+              'CONNECT_E2E_PORT',
+              defaultValue: 25556,
+            ),
+          });
+          device = (added['device'] as VideoJson)['id'] as String;
+        });
+        const roundCount = int.fromEnvironment(
+          'CONNECT_PERF_ROUNDS',
+          defaultValue: 4,
+        );
+        const transitions = int.fromEnvironment(
+          'CONNECT_PERF_TRANSITIONS',
+          defaultValue: 8,
+        );
+        expect(roundCount, inInclusiveRange(1, 20));
+        expect(transitions, inInclusiveRange(2, 100));
+        var converted = false;
+        final textureKey = GlobalKey();
+        for (var round = 0; round < roundCount; round++) {
+          final evidence = <String, dynamic>{
+            'round': round,
+            'inputToDecodedMs': <int>[],
+          };
+          rounds.add(evidence);
+          late VideoJson ready;
+          await real(() async {
+            final connected = Stopwatch()..start();
+            await request('devices.connect', {'deviceId': device});
+            evidence['connectMs'] = connected.elapsedMilliseconds;
+            final watch = Stopwatch()..start();
+            final stream = await request('session.start', {
+              'deviceId': device,
+              'videoCodec': 'h264',
+              'maxSize': 640,
+              'maxFps': 30,
+              'bitRate': 2000000,
+            });
+            session = stream['sessionId'] as String;
+            evidence['coreStartMs'] = watch.elapsedMilliseconds;
+            evidence['coreStartupTimingMs'] = stream['captureStartupTimingMs'];
+            ready = await outputs.start(stream);
+            evidence['startToDecodedMs'] = watch.elapsedMilliseconds;
+            evidence['outputStartupTimingMs'] = ready['outputStartupTimingMs'];
+            await request('session.ready', {
+              'sessionId': session,
+              'textureId': ready['textureId'],
+            });
+            final pixels = await player.snapshot(width: 64, height: 64);
+            expect(pixels, isNotNull);
+            evidence['initialSampleRGBA'] = [
+              for (var bit = 0; bit < 4; bit++)
+                pixels!.rgba.sublist(
+                  (32 * 64 + (64 * (bit + .5) / 4).floor()) * 4,
+                  (32 * 64 + (64 * (bit + .5) / 4).floor()) * 4 + 4,
+                ),
+            ];
+            expect(pattern(pixels!.rgba, 64, 64), expected);
+          });
+          await tester.pumpWidget(
+            MaterialApp(
+              home: ColoredBox(
+                color: Colors.black,
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio:
+                        (ready['decodedWidth'] as int) /
+                        (ready['decodedHeight'] as int),
+                    child: Texture(
+                      key: textureKey,
+                      textureId: ready['textureId'] as int,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+          await real(() async {
+            final before = await request('media.status', {
+              'relayId': ready['relayId'],
+            });
+            final observation = Stopwatch()..start();
+            for (var sample = 0; sample < transitions; sample++) {
+              expected = (expected + 1) & 15;
+              final watch = Stopwatch()..start();
+              await request('session.key', {
+                'sessionId': session,
+                'keyCode': 20,
+                'action': 'press',
+              });
+              while (true) {
+                final pixels = await player
+                    .snapshot(width: 64, height: 64)
+                    .timeout(const Duration(seconds: 3));
+                if (pixels != null &&
+                    pattern(pixels.rgba, 64, 64) == expected) {
+                  break;
+                }
+                if (watch.elapsed > const Duration(seconds: 3)) {
+                  throw StateError(
+                    'Stale decoded pixels: round=$round sample=$sample expected=$expected',
+                  );
+                }
+                await Future<void>.delayed(const Duration(milliseconds: 10));
+              }
+              (evidence['inputToDecodedMs'] as List<int>).add(
+                watch.elapsedMilliseconds,
+              );
+            }
+            final after = await request('media.status', {
+              'relayId': ready['relayId'],
+            });
+            evidence['transferObservation'] = {
+              'elapsedMs': observation.elapsedMilliseconds,
+              'packets': (after['packets'] as int) - (before['packets'] as int),
+              'bytes': (after['bytes'] as int) - (before['bytes'] as int),
+            };
+            final paused = await presentation.request('session.pause', {
+              'sessionId': session,
+            });
+            expect(paused['capturePaused'], true);
+            final resumed = await presentation.request('session.resume', {
+              'sessionId': session,
+            });
+            expect(resumed['firstFrameDecoded'], true);
+            expect(resumed['capturePaused'], false);
+            evidence['pauseResumeVerified'] = true;
+          });
+          await tester.pump();
+          if (!converted) {
+            await binding.convertFlutterSurfaceToImage();
+            converted = true;
+          }
+          await tester.pump();
+          final screenshot = await binding.takeScreenshot(
+            'video-performance-$round',
+          );
+          final imageCodec = await ui.instantiateImageCodec(
+            Uint8List.fromList(screenshot),
+          );
+          final frame = await imageCodec.getNextFrame();
+          try {
+            final rgba = await frame.image.toByteData();
+            final box =
+                textureKey.currentContext!.findRenderObject()! as RenderBox;
+            final origin = box.localToGlobal(Offset.zero);
+            final scaleX =
+                frame.image.width *
+                tester.view.devicePixelRatio /
+                tester.view.physicalSize.width;
+            final scaleY =
+                frame.image.height *
+                tester.view.devicePixelRatio /
+                tester.view.physicalSize.height;
+            final region = ui.Rect.fromLTWH(
+              origin.dx * scaleX,
+              origin.dy * scaleY,
+              box.size.width * scaleX,
+              box.size.height * scaleY,
+            );
+            expect(
+              pattern(
+                rgba!.buffer.asUint8List(),
+                frame.image.width,
+                frame.image.height,
+                region: region,
+              ),
+              expected,
+              reason: 'The actual Flutter surface must show the newest target pattern.',
+            );
+            evidence['presentedCounter'] = expected;
+          } finally {
+            frame.image.dispose();
+            imageCodec.dispose();
+          }
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump();
+          await real(() async {
+            final stopped = await outputs.stop(session!);
+            evidence['stop'] = stopped;
+            for (final output
+                in (stopped['outputs'] as List)
+                    .whereType<Map<Object?, Object?>>()) {
+              expect(output['textureDetached'], true);
+              expect(output['cleanupUnconfirmed'], isNot(true));
+              expect(output['disposeDeferred'], isNot(true));
+            }
+            await request('session.stop', {'sessionId': session});
+            session = null;
+            await request('devices.disconnect', {'deviceId': device});
+          });
+        }
+        binding.reportData!['videoPerformanceComplete'] = true;
+      } finally {
+        await tester.runAsync(() async {
+          await outputs.dispose();
+          disposed = true;
+          if (session != null) {
+            await request('session.stop', {'sessionId': session});
+          }
+          if (device != null) {
+            await request('devices.disconnect', {'deviceId': device});
+          }
+        });
+      }
+      expect(tester.takeException(), isNull);
+    },
+    timeout: const Timeout(Duration(minutes: 8)),
+  );
+}

@@ -26,7 +26,11 @@ class FvpVideoPlayer implements VideoPlayerPort {
       ..mute = true
       ..setBufferRange(min: 0, max: 150, drop: true)
       ..setProperty('avformat.input', 'matroska')
-      ..setProperty('avformat.fpsprobesize', '0');
+      ..setProperty('avformat.fpsprobesize', '0')
+      // The relay supplies codec configuration and dimensions in its Matroska
+      // header. Do not sample a large part of a mostly static live stream.
+      // Keep the initial IDR buffered; +nobuffer can discard it during probing.
+      ..setProperty('avformat.probesize', '32');
     // Public fvp currently exposes no getGlobalOption for MDK's runtime hint.
     // Use MDK's documented platform priorities; these are candidates, not proof
     // that any decoder can open this device's actual stream.

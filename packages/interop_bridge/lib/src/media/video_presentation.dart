@@ -22,6 +22,7 @@ VideoJson sessionWithVideoOutput(VideoJson session, VideoJson? output) => {
     'snapshotReceipts',
     'presentedToWidget',
     'continuousFrameTelemetry',
+    'outputStartupTimingMs',
   ])
     if (output?.containsKey(key) == true) key: output![key],
 };

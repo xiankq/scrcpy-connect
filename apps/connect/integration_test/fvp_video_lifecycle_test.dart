@@ -93,6 +93,7 @@ void main() {
             });
             activeSession = stream['sessionId'] as String;
             evidence['coreStartMs'] = watch.elapsedMilliseconds;
+            evidence['coreStartupTimingMs'] = stream['captureStartupTimingMs'];
             watch.reset();
             // No Texture widget exists at this point. A timeout is a failed
             // premount readiness contract, never a fabricated ready receipt.
@@ -103,8 +104,16 @@ void main() {
               rethrow;
             }
             evidence['firstDecodedFrameMs'] = watch.elapsedMilliseconds;
-            expect(watch.elapsedMilliseconds, lessThan(5000));
             evidence['firstFrame'] = ready;
+            expect(
+              watch.elapsedMilliseconds,
+              lessThan(
+                const int.fromEnvironment(
+                  'CONNECT_FVP_MAX_FIRST_FRAME_MS',
+                  defaultValue: 5000,
+                ),
+              ),
+            );
             expect(ready!['firstFrameDecoded'], true);
             expect(ready!['presentedToWidget'], false);
             expect(ready!['snapshotReceipts'], 1);

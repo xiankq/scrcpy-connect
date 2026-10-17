@@ -31,12 +31,31 @@ class _Player implements VideoPlayerPort {
   Completer<void>? presentation;
   Completer<VideoPixels?>? pixels;
   bool nullFrame = false;
+  bool startupDiagnostics = false;
   int texture = 7, released = 0;
   @override
   Stream<VideoJson> get events => changes.stream;
   @override
   Future<VideoTexture> open(String url) async {
     calls.add('open');
+    if (startupDiagnostics) {
+      changes.add({
+        'kind': 'diagnostic',
+        'category': 'video.prepare',
+        'elapsedMs': 12,
+      });
+      changes.add({
+        'kind': 'diagnostic',
+        'category': 'video.texture',
+        'elapsedMs': 17,
+      });
+      // Other diagnostics may have absent or nonnumeric elapsed values.
+      changes.add({
+        'kind': 'diagnostic',
+        'category': 'video.prepare',
+        'elapsedMs': 'unknown',
+      });
+    }
     return opening == null ? VideoTexture(texture, 720, 1280) : opening!.future;
   }
 
@@ -110,6 +129,23 @@ class _Harness {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('startup timings preserve bounded player observations and actual frame verification', () async {
+    final h = _Harness()..opening = Completer();
+    final pending = h.output.start(_stream('timed'));
+    h.players.single.startupDiagnostics = true;
+    h.opening!.complete(_endpoint('timed'));
+    final receipt = await pending;
+    final timing = receipt['outputStartupTimingMs'] as Map;
+    expect(timing['video.prepare'], 12);
+    expect(timing['video.texture'], 17);
+    expect(
+      timing['verifiedFrameMs'],
+      greaterThanOrEqualTo(timing['playingMs'] as int),
+    );
+    expect(h.players.single.calls.last, 'snapshot:32:32');
+    expect(receipt['presentedToWidget'], false);
+    await h.output.dispose();
+  });
   test('first receipt requires actual pixels and never overwrites remote touch dimensions', () async {
     final h = _Harness();
     expect(

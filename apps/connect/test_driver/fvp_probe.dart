@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 Future<void> main() async {
-  final output = Directory('/tmp/connect-e2e/fvp');
+  final output = Directory(
+    Platform.environment['CONNECT_E2E_CAPTURE_DIR'] ?? '/tmp/connect-e2e/fvp',
+  );
   await output.create(recursive: true);
   await integrationDriver(
     writeResponseOnFailure: true,

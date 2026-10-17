@@ -115,6 +115,8 @@ class PortableVideoOutputs {
 
   Future<VideoJson> _prepare(_Output entry, VideoJson endpoint) async {
     _check(entry);
+    entry.startupTimingMs['relayOpenedMs'] =
+        entry.startupClock.elapsedMilliseconds;
     if ((endpoint['kind'] != null && endpoint['kind'] != 'video') ||
         (endpoint['codec'] != null && endpoint['codec'] != entry.codec)) {
       throw const InteropException('invalid_endpoint', '媒体输入类型或实际编码与视频输出不一致。');
@@ -124,6 +126,15 @@ class PortableVideoOutputs {
       if (!_owns(entry) || entry.closed || _disposed || isDisposed()) return;
       if (entry.diagnostics.length < 24 && event['kind'] == 'diagnostic') {
         entry.diagnostics.add({...event});
+      }
+      final elapsed = event['elapsedMs'];
+      if (event['kind'] == 'diagnostic' &&
+          const {
+            'video.prepare',
+            'video.texture',
+          }.contains(event['category']) &&
+          elapsed is int) {
+        entry.startupTimingMs[event['category'] as String] = elapsed;
       }
       if (event['kind'] == 'failed' && entry.texture != null) {
         emit({
@@ -139,6 +150,7 @@ class PortableVideoOutputs {
       }
     });
     final texture = await _await(entry, entry.player.open(url));
+    entry.startupTimingMs['openedMs'] = entry.startupClock.elapsedMilliseconds;
     _check(entry);
     if (texture.id < 0 ||
         texture.width < 1 ||
@@ -149,7 +161,10 @@ class PortableVideoOutputs {
     }
     entry.texture = texture;
     await _await(entry, entry.player.setPaused(false));
+    entry.startupTimingMs['playingMs'] = entry.startupClock.elapsedMilliseconds;
     await _verifyFrame(entry);
+    entry.startupTimingMs['verifiedFrameMs'] =
+        entry.startupClock.elapsedMilliseconds;
     _check(entry);
     _verifiedCodecs.add(entry.codec);
     entry.startTimer?.cancel();
@@ -563,6 +578,7 @@ class PortableVideoOutputs {
     'snapshotReceipts': entry.snapshotReceipts,
     'presentedToWidget': false,
     'continuousFrameTelemetry': false,
+    'outputStartupTimingMs': {...entry.startupTimingMs},
   };
 }
 
@@ -583,6 +599,8 @@ class _Output {
   final _Playback playback;
   final cancellation = StreamController<void>.broadcast(sync: true);
   final diagnostics = <VideoJson>[];
+  final startupClock = Stopwatch()..start();
+  final startupTimingMs = <String, int>{};
   final closedRelays = <String>{};
   Future<VideoJson>? ready, releasing;
   String? relay;
