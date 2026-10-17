@@ -51,3 +51,13 @@ A46确认CI仅运行不带`--android`的`tool/check.sh`，三ABI APK和native ow
 - [ ] 修正会诱导回归的当前指导：ADR构建状态、页面计数、离页与显式关闭、播放器所有权及SAF返回已有URI反例；研究索引必须能找到提供方专项。
 
 源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。
+
+## A56实际锁版处置与A58
+
+实际0.17.2已确认存在上游修复的HINFO长度越界panic，发现接收路径先于信任过滤。此次同步生产／测试依赖至精确0.21.2修复线，版本／feature／源码证据见[实际mDNS契约](../../../docs/research/locked-mdns-contract.md)。窄编译和上游离线原回归通过，真实七项DNS-SD及当前综合门禁另记，不把未运行ignored用例计通过。
+
+- [ ] A58：修复发布锁定、坏包解析回归、真实发现／端点撤销与TLS互操作、四端依赖和编译证据分别通过；Core发现daemon终止后的清理／重建另行实施验证。
+
+A56其余逐库契约／完整ADB fuzz、生产密码与四宿主整包继续开放。
+
+A58解析器修复已提交`e776065`，新锁版真实DNS-SD／TLS七项77.36秒、iOS／macOS／Windows核心check、完整`tool/check.sh --android`全部通过；三ABI APK与实际manifest／ELF均核验。默认Rust186／58 ignored与显式七项分别记，不重复计数。上面的整项仍开放，因为daemon异常关闭后的重建／清理尚未实现，其余库契约／完整ADB／生产密码和宿主整包也未闭合。

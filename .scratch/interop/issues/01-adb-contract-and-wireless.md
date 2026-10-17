@@ -60,3 +60,13 @@ Requirements: R08–R11
 ## A52 候选与代际实施
 
 后台可信 GUID 候选遍历及更新／撤销／ABA 已接 Core，真实 DNS-SD／TLS 七项 89.08 秒通过；初始仅缓存旧地址、随后发现新地址的错误发布先红后绿。缓存按可信 GUID 限额并回收遗忘设备。首次配对快速路径、多网卡／物理换网／IPv6 scope／Wi-Fi2仍未关闭，不能把本批局部结果当“完整无线”验收。详见[无线重连](../../../docs/implementation/wireless-reconnect.md)。
+
+## A56实际锁版处置与A58
+
+实际0.17.2已确认存在上游修复的HINFO长度越界panic，发现接收路径先于信任过滤。此次同步生产／测试依赖至精确0.21.2修复线，版本／feature／源码证据见[实际mDNS契约](../../../docs/research/locked-mdns-contract.md)。窄编译和上游离线原回归通过，真实七项DNS-SD及当前综合门禁另记，不把未运行ignored用例计通过。
+
+- [ ] A58：修复发布锁定、坏包解析回归、真实发现／端点撤销与TLS互操作、四端依赖和编译证据分别通过；Core发现daemon终止后的清理／重建另行实施验证。
+
+A56其余逐库契约／完整ADB fuzz、生产密码与四宿主整包继续开放。
+
+A58解析器修复已提交`e776065`，新锁版真实DNS-SD／TLS七项77.36秒、iOS／macOS／Windows核心check、完整`tool/check.sh --android`全部通过；三ABI APK与实际manifest／ELF均核验。默认Rust186／58 ignored与显式七项分别记，不重复计数。上面的整项仍开放，因为daemon异常关闭后的重建／清理尚未实现，其余库契约／完整ADB／生产密码和宿主整包也未闭合。

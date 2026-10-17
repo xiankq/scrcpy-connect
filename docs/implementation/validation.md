@@ -633,3 +633,29 @@ iOS／macOS／Windows Rust核心交叉check分别5.92／4.56／4.36秒通过，`
 中文分支后最终当前代码**完整r3退出0**，`/tmp/connect-oct17-all-gates-r3.log`：应用230／Bridge106／设计3，Rust176passed／58ignored，146输入生成一致、200文件格式零修改、严格分析／clippy／插件负例、capture JAR／JVM、driver契约与DESIGN检查通过；三ABI APK24.9秒、四组native与实际打包manifest／ELF通过。默认ignored仍不计通过，真实DNS-SD／TLS七项和真实应用故障四项由上面的独立命令证明。其他三平台仍只有Rust核心cross-check，不变成完整宿主产物。
 
 最后普通`lib/main.dart`实际构建16.4秒、安装683ms、CLI R热重启1,982ms，`/tmp/connect-oct17-main-final.log`。截图`/tmp/connect-oct17-main-restarted.png`已目视：设备列表固定首屏、浅色／黑色主动作、紫色小元素与玻璃底导航可见，随后detach。DTD可发现IDE实例但无active app，因此实际重启在本次CLI完成；两条FRB旧isolate及SurfaceSync／启动跳帧仍有，不称性能／零告警或全页面设计通过。未push，原先未跟踪的clipboard／documents／input与examples未夹带提交。
+
+## 相册动态范围与稳定分页（A53，2026-10-18）
+
+设计批次`f264bf1`、代码批次`513fb38`：当前用户主共享存储动态检查，明确排除／未读范围、停止与离页精确取消、mtime冻结快照分页、主动刷新及换设备隔离。10项公开Runtime协议fixture和7项公开页面测试通过。目录4097媒体被丢空、fallback失败项漏计预算、64issues后预算耗尽panic都由fixture先红后绿修复；每快照8MiB计typed容器和字符串容量，不是磁盘缓存预算。[公开契约](gallery-index.md)。
+
+实际双AVD第三轮85秒完整通过：`/tmp/connect-gallery-index-r3.log`、`/tmp/connect-e2e/gallery-index-r3/result.json`。105个原件含共享根、Download、自定义、Android/media，实际加载更多／范围面板／主动刷新106项且旧快照105项；宿主独立原文4207字节、105项大小、精确清理全部true，hostErrors为空。前两轮截图args和滚出汇总的夹具失败原样保留，不作通过。
+
+完整`tool/check.sh --android`退出0（`/tmp/connect-gallery-all-gates.log`）：应用237／Bridge106／设计系统3、Rust186 passed／58 ignored、150输入生成一致／205文件格式零改动／严格分析与clippy／capture JAR与JVM／lint负例、三ABI APK125.8秒／四组native main／实际manifest和ELF通过。DESIGN31警告／1信息、原有Kotlin警告保留。新增核心对iOS／macOS／Windows check分别3.80／3.24／2.89秒（`/tmp/connect-gallery-core-cross-checks.log`）；不是对应宿主Flutter整包。
+
+Pencil保存关闭重开已核对93独立页／12行类别／26母组件／588实例／153变量；四个新增相册代表状态已目视，预览只在/tmp。该轮实际截图又发现A57多图缩略图并发失败，原至少一张解码门槛不足以证明网格可用；共享调度与更强真实多图门槛单列验收，不能从上述门禁继承。A51磁盘预算、持续增量、真实拒权／低内存／大原件／回收及其余完整领域继续开放。
+
+## 多图调度和实际锁版后续（A57／A58）
+
+`7654619`：共享设备队列、精确取消、busy有限恢复／手动重试；9项新公开widget与7项相册回归、严格分析通过，独立只读review无新证实问题。真实第四轮1分59秒（`/tmp/connect-gallery-index-r4.log`），首屏15张与滚动后21张可见缩略图全部实际解码；105原件范围／分页／刷新、宿主原文4207字节／全部大小／精确清理全true、hostErrors为空。回执`/tmp/connect-e2e/gallery-index-r4/result.json`，两张网格已目视，不再以单张解码证明网格可用。该轮发生在mDNS锁版修复之前，保持场景证据边界。
+
+`e776065`：实际mDNS旧锁版核查发现上游已修复的HINFO越界panic，将生产与测试统一精确0.21.2，无发现适配源码变化。窄ADB／Core全部测试目标check、已有discovery单测通过；四端增量依赖树无新增C构建或原生密码／USB实现，系统FFI仍保留。API／feature／版本差异与影响事实、推断分别见[锁版研究](../research/locked-mdns-contract.md)。
+
+HINFO验证只运行修复版已有回归：将registry发布源码原样复制到`/tmp/interop-a58-mdns-rm3xpyvi/mdns-sd-0.21.2`，运行`rtk proxy env CARGO_TARGET_DIR=/tmp/interop-a58-upstream-target /home/xiankq/.cargo/bin/cargo test --manifest-path /tmp/interop-a58-mdns-rm3xpyvi/mdns-sd-0.21.2/Cargo.toml --lib test_hinfo_char_string_at_end_of_packet --locked`。原测试1 passed／53 filtered，构建6.85秒；没有修改registry／生产解析器，没有本地旧版坏包红测，也没有向共享5353注入消息。
+
+新锁版真实公开Runtime DNS-SD／TLS七项77.36秒全部通过（`/tmp/connect-mdns-safe-reconnect.log`）；不是默认忽略后被计通过。iOS／macOS／Windows核心cross-check分别4.24／4.18／8.26秒通过（`/tmp/connect-mdns-safe-core-cross-checks.log`）。Core发现异常关闭后的重建、其他上游修复、A56其余依赖契约与三宿主Flutter整包仍未关闭。
+
+本批最终完整`tool/check.sh --android`退出0（`/tmp/connect-gallery-mdns-final-gates.log`）：应用246／Bridge106／设计3、Rust186 passed／58 ignored、152输入生成一致／208文件格式零改动／严格分析与clippy／lint负例／capture JAR和JVM、三ABI APK184.1秒／四组native main／实际manifest及ELF均通过。DESIGN仍31警告／1信息，既有Kotlin警告保留。没有把默认ignored计通过，也没有把旧锁版门禁继承为新锁版通过。
+
+最终普通main实际构建15.2秒、安装881ms，CLI R热重启2,929ms，日志`/tmp/connect-gallery-mdns-main.log`；截图`/tmp/connect-gallery-mdns-main-restarted.png`已目视，设备列表固定首屏／浅色黑主动作／紫色小元素和玻璃导航可见，随后detach。仍有两条FRB旧isolate投递告警；这是普通入口检查，不代表完整视觉或性能。相册范围面板的短内容空白／灰色材质层次已记为实际视觉待改。
+
+普通main部署覆盖同路径APK，第一次留存副本缺armv7，独立ELF校验明确拒绝，未记为三架构产物。detach后以同一源码另建三ABI APK，44.9秒通过，`/tmp/connect-gallery-three-abis-retained.log`；立即复制并独立核对六个Flutter／Rust ELF。有效保留物`/tmp/connect-gallery-verified-apk-bo5dw7zs/app-debug.apk`，250013986字节，SHA-256 `2df5e735d8e5027139f250e6526ad1f7f62a7238e4c0d40e21c7e00a94118a7d`；回执`/tmp/connect-gallery-apk-receipt.json`。这是临时调试包，不是发布签名／其余宿主产物，不进Git。
