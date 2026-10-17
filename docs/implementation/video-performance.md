@@ -524,3 +524,111 @@ release，也不把旧release说成包含新测试入口。
 `/tmp/connect-native-crash-cleanup.json`。保留release、native hooks、Gradle／CMake
 缓存、未知模式的Flutter缓存与临时崩溃证据。新tombstone已复制核对后精确移除设备
 对应文件；目标检查无本批捕获进程，夹具不存在。原五项用户未跟踪文件未修改。
+
+## 目标输入绘制与源PTS观测（2026-10-18）
+
+`aa9330e`在已有默认关闭、最多256条的relay trace中补原始`sourcePtsUs`，独立于
+减去首帧origin后的`ptsUs`；不改变码流、播放参数或关闭观测时的逐帧路径。实际
+HTTP回归先看到Null／5003000不等，再补实现，16项HTTP测试全部通过，
+`/tmp/connect-source-pts-{red,green}.log`。本批未重建任何scrcpy JAR。
+
+`e99d4b6`给独立实验夹具增加可选`CONNECT_E2E_VIDEO_TIMELINE=true`：每次新计数
+记录真实按键处理、首次onDraw开始／结束、公开KeyEvent事件毫秒值。每轮运行ID
+隔离，递增sequence跨轮关联，而不只按会回绕的4 bit计数查找；驱动同时匹配暂停
+期间输入，缺失／重复／计数不符／同进程负间隔均使观测验收失败。默认不开启日志，
+不是产品额外安装APK或主控原生视频实现。每次完整输入还打印有界阶段回执
+`VIDEO_INPUT_SAMPLE`，使原生崩溃后仍可追溯已完成样本。
+
+### 时钟范围
+
+同目标`System.nanoTime()`在AOSP基于MONOTONIC，与uptime时钟一致；
+KeyEvent的公开`getEventTime()`只有毫秒精度，scrcpy注入时以uptimeMillis赋值。
+因此事件时间至应用处理的差值只反映注入后的目标分发等待，不包含主控至注入的
+传输。onDraw开始／结束只给出该回调CPU执行区间，不等于GPU／合成／屏幕呈现。
+[Android SystemClock](https://developer.android.com/reference/android/os/SystemClock)、
+[KeyEvent](https://developer.android.com/reference/android/view/KeyEvent#getEventTime())。
+
+scrcpy的Streamer直接发送`BufferInfo.presentationTimeUs`，这是输入帧派生时间戳，
+不是`dequeueOutputBuffer`完成时刻。[BufferInfo契约](https://developer.android.com/reference/android/media/MediaCodec.BufferInfo#presentationTimeUs)、
+[固定scrcpy Streamer](https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/src/main/java/com/genymobile/scrcpy/device/Streamer.java)。
+AOSP虚拟显示HWC路径在queueBuffer时使用systemTime，GPU路径可透传输入时间戳；
+普通Surface默认使用MONOTONIC。GL路径、厂商、重定基准与速度调整仍须单独核对，
+不能把任意SurfaceTexture PTS都保证为nanoTime。
+[VirtualDisplaySurface](https://android.googlesource.com/platform/frameworks/native/+/bfb51bb9a282ae2c1c48d777679890bbb038a287/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp#250)、
+[SurfaceTexture契约](https://developer.android.com/reference/android/graphics/SurfaceTexture#getTimestamp())。
+
+本次匹配同一目标的画面计数，源PTS与目标nano域吻合；报告“绘制结束至所观察源帧
+PTS间隔”，不标为纯合成或编码耗时。一次轮询不保证捕获首个包含新计数的源帧，
+重复上一帧还可递增PTS，因此这是所观察新像素帧的间隔。主控relay单调时钟与目标
+PTS保留各自域，未直接相减。[GraphicBufferSource时间戳与重复帧](https://android.googlesource.com/platform/frameworks/av/+/d37e465f355b37efd6f0fac99a42991e5f88a3cb/media/module/bqhelper/GraphicBufferSource.cpp)。
+
+### 双AVD动态对照
+
+相同1280／8Mbps、实际576×1280、AMediaCodec、2轮各8个输入／1次暂停，动态夹具
+开启；60fps原始结果`/tmp/connect-e2e/video-source-clock/result.json`，18个实际输入
+与绘制均唯一匹配，包括计数回绕。15fps结果`video-source-clock-15/result.json`
+由新增驱动自动完成同样的18项校验，`targetTimelineComplete=true`。
+
+| 指标 | 请求60fps | 请求15fps实验 |
+| --- | ---: | ---: |
+| 报告输入→新像素P50／P95 | 1308／1707ms | 566／911ms |
+| 输入→relay中位 | 1012.366ms | 227.061ms |
+| relay HTTP写中位 | 0.059ms | 0.069ms |
+| relay→onVideo中位 | 222.241ms | 316.613ms |
+| onVideo→snapshot中位 | 33.401ms | 32.368ms |
+| 目标按键处理→onDraw开始中位 | 0.902ms | 1.003ms |
+| onDraw回调CPU区间中位 | 0.393ms | 0.419ms |
+| 绘制结束→所观察源PTS间隔中位 | 67.483ms | 83.174ms |
+| 目标注入事件→应用处理中位 | 39.902ms | 36.053ms |
+| 完整首像素两轮 | 2821／2567ms | 2914／2802ms |
+
+码流配置仅把maxFps改15；现有重复超时也随其派生为66.667ms，60fps配置为33.334ms。
+两轮对照之间还补了计时结束后的逐输入进度日志，尚未用最终同版夹具重采60fps；
+15fps是后续负载实验线索，不是严格单独修改编码器内部帧率的归因证明。实际转发约17.54／17.95包每秒与
+15.17／15.16包每秒，这不是保证对应唯一图像的呈现fps。支持负载／排队方向，
+没有排除控制注入之前的延迟，也尚不区分目标编码完成与ADB传输。默认画质保持，
+不能把降帧实验当所有设备的产品优化或1000／200／300ms已通过。两次未崩溃也
+不能关闭已有MDK空snapshot回调崩溃。下一项补默认关闭的Rust ADB读取完成／
+raw写出／relay同PTS时钟，先缩小主控传输等待，无需重建服务端JAR。
+
+复现沿用上节drive环境／定义，加`CONNECT_E2E_VIDEO_TIMELINE=true`；第一次为
+`CONNECT_PERF_MAX_FPS=60`，第二次为15。原日志分别
+`/tmp/connect-video-source-clock.log`与`/tmp/connect-video-source-clock-15.log`，
+目标原始记录单独保存在对应目录的`target-timeline.json`。临时汇总
+`/tmp/connect-source-clock-segments.json`不是独立原始证据，最终原始JSON优先。
+
+### 观测失败保留原始故障
+
+只读代码复核发现时间线采集失败会在finally抛出并覆盖主流程错误。实际临时ADB
+代理注入“首次目标截图失败＋logcat失败”：修复前错误变为timeline失败，修复后
+保留`Cannot capture target-initial`，`cleanup.json`仍记录timelineError及卸载／
+不存在确认。记录`/tmp/connect-source-clock-fault-{red,green}.log`，目录对应
+`/tmp/connect-e2e/video-source-clock-fault-{red,green}/`。这些退出码是预期失败，
+判定通过依据是原始错误、采集错误与最终卸载三个事实，不把非零退出本身称绿。
+
+另只让logcat失败，复用同一15fps测试APK完成实际16次输入：最终
+`/tmp/connect-e2e/video-source-clock-report-fault/result.json`先保存完整原始视频
+报告（videoPerformanceComplete=true），再以targetTimelineComplete=false报观测
+失败，卸载仍确认。该次不计为时间线或性能通过。采集异常现在只记录，成功回调
+落盘后再检查完整性；崩溃时可以保存空／部分目标记录而不凭空补数据。修复复核通过。
+
+最终严格Flutter分析8.1秒无问题，Core all-target clippy -D warnings 4.81秒与
+cargo fmt通过；原始日志`/tmp/connect-source-clock-final-analyze.log`及
+`/tmp/connect-source-clock-clippy.log`。两次完整动态画面与故障代理均使用真实目标，
+没有将lab APK作为产品依赖。既有签名ARM64包未更新，新增诊断字段只在本批实际
+构建的x64测试APK运行验证，正常关闭trace的播放逻辑没有变化。
+
+普通main首次构建18.6秒后安装失败：原主控QEMU进程174462已退出，设备不在线。
+没有把这次失败当应用安装或热重载通过。恢复原AVD数据；一次误选host GPU的启动
+因无显示环境失败，已终止该次启动并恢复此前SwiftShader后端。新QEMU进程276588、
+工具session57057启动，5554的sys.boot_completed=1，普通main热构建6.7秒、安装979ms，
+实际DTD热重载123ms成功，错误查询无Dart运行错误，截图
+`/tmp/connect-source-clock-main.png`与15fps最终计数2画面已目视。仍有SurfaceSync及
+跳帧原生告警，不视为启动流畅度或完整视频首帧已通过。性能数据均在原进程退出前
+取得；恢复后只作普通App验收，未来性能配对测试必须重新固定环境。
+
+临时故障代理与三个marker已删除，保留日志／JSON收据；
+`/tmp/connect-source-clock-fault-cleanup.json`。停止Gradle并清理382处明确debug输出，
+实际释放1488.5MiB、空闲61.4GiB，`/tmp/connect-source-clock-cleanup.json`；保留
+release、native hooks、Gradle／CMake及未知模式的Flutter缓存。被控无本批捕获
+进程，夹具已卸载，原五项用户未跟踪文件未改。完整目标与任务07继续开放。

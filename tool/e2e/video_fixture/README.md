@@ -36,6 +36,19 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 结果保留完成数与用时；原生崩溃没有最终JSON时仍可保留最后一次完成回执。
 这个隔离对照用于区分持续renderer读回与暂停／释放触发的问题，不是性能优化参数。
 
+`CONNECT_E2E_VIDEO_TIMELINE=true`在独立夹具启用按键处理及首次新计数`onDraw`
+开始／结束的`System.nanoTime()/1000`记录，公开`KeyEvent.getEventTime()`另以毫秒
+保存。驱动按每次运行ID筛选单一日志tag，保存`target-timeline.json`；最终结果按
+递增`fixtureSequence`逐项匹配实际计数，包含暂停期间输入，支持4 bit计数回绕，
+`targetTimelineComplete`须为true。原生崩溃时也保留可取得的部分日志并卸载夹具；
+时间线采集错误不会覆盖原始主流程错误，正常回调先写完整报告再报观测失败。
+
+配合`CONNECT_PERF_TRACE_FRAMES=true`，relay有界记录保留原始`sourcePtsUs`以及
+归一化`ptsUs`，每次完整输入的`VIDEO_INPUT_SAMPLE`日志保留对应阶段与帧回执，
+避免原生崩溃抹掉全部已完成输入。源PTS不是编码完成时间，跨设备时钟不可直接
+相减；同目标onDraw回调也不是GPU／合成／物理呈现完成。
+[时钟定义、对照与边界](../../../docs/implementation/video-performance.md#目标输入绘制与源pts观测2026-10-18)。
+
 从release切回E2E后，先在应用目录执行`flutter pub get --offline`恢复测试插件注册，
 再运行--no-pub drive；没有缓存时使用正常pub get。不要手改生成注册文件。
 默认高清80次、当前仍失败的1秒首帧门槛及原始证据见
