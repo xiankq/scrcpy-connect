@@ -141,3 +141,14 @@ Core对iOS／macOS／Windows MSVC交叉check30.93／17.04／20.31秒通过，非
 普通main实际构建19.9秒／安装469ms、CLI R热重启4,513ms，`/tmp/connect-media-cache-main.log`，设备列表空态截图`/tmp/connect-media-cache-main-restarted.png`已目视后detach；两条FRB旧isolate投递及启动跳帧告警保留。最终严格分析／164输入生成一致性／Rust格式与clippy通过。实际清理本批过期debug、宿主测试可执行文件、incremental与Python缓存，释放12,264MiB，磁盘余量75.3GiB；保留最新release、必要证据、release中间缓存及native hooks／Gradle可复用缓存，避免每次全clean拖慢打包。原先五项未跟踪用户测试／examples未动，无push。
 
 **用户最新主优先级：视频流传输性能、首帧速度、连接稳定性。** 下一批以可重复的实际计时／帧呈现和重连证据驱动优化，对照scrcpy开发者文档，先建立分阶段基线；USB共享选择顺延。十二领域和完整目标继续active，不把本批缓存或打包通过当作产品整体完成。
+
+
+## 视频主优先级：首帧对照、持续新像素与阻塞期限
+
+本批不重建JAR：官方v5.0.1与既有暂停补丁产物职责/摘要分别核验，保持当前视频暂停协议。[一手核查](../../docs/research/scrcpy-first-frame-performance.md)。同负载H264三样本输出首像素中位数1036→411ms，完整会话启动1823→1175ms；主控已知Matroska头的probesize32消除了长时间探测，单独analyzeduration无收益已撤回。没有移除首帧像素验证/播放确认，也没有使用丢初始IDR的nobuffer。五编码及各3次暂停恢复16秒通过，正式RemotePage五编码另28秒通过，实截图已目视；HEVC画质和物理硬解仍不据此通过。
+
+真实ADB半包和活HTTP消费者不读两类阻塞均先红后绿，分别补单元开始后的完整交付期限/实际输出交付期限各10秒；完整包之间静止与主动取消保留，3+2条回归通过。独立目标动态图案r5 66秒通过6次连接/120次新像素/暂停恢复/纹理分离，输入到snapshot可读P50/P95/P99为446/452/569ms，含readback与轮询；6张实际Flutter截图及目标图已核对。夹具自动卸载/包不存在均true，r4 SDK直接exit绕过finally的漏清理已实际补清并修驱动，未隐藏失败。[阶段计时、对照原件、各次失败、命令与限制](../../docs/implementation/video-performance.md)。
+
+主任务继续active，下一段仍围绕持续交互约0.45秒等待、Core启动核验约0.35–0.47秒、播放器失败传播与真实半开/切网重连开展。低复杂度色块640包不是高动态满负荷吞吐，主动重连不是Wi-Fi故障自动恢复，66秒不是小时级长稳。音画共同时间基/漂移、并发/玻璃负载、物理ARM/ROM/温度/耗电、四宿主Flutter整包继续开放；USB共享选择仍顺延。
+
+`1cc5774`/`d41a26d`分别提交阻塞修复和首帧优化/真实基准。最终Core141 passed /48 ignored（35 suites）、Bridge107、相关应用43通过；严格分析/165输入生成一致性/格式/clippy通过。iOS/macOS/Windows MSVC Core交叉check8.61/3.19/6.59秒通过，非对应宿主Flutter整包。普通main构建27.4秒/安装584ms/R热重启2250ms，设备列表截图已目视后detach；旧isolate及SurfaceSyncGroup告警保留。本批闲置Gradle已停止，清理debug/incremental与过期非视频测试可执行文件实际释放11132MiB，余量73.2GiB，保留视频反馈循环及打包有效缓存，五项原有未跟踪文件未动，无push。
