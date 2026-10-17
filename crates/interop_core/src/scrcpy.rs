@@ -81,6 +81,13 @@ fn video_codec(name: &str) -> CoreResult<VideoCodec> {
         .ok_or_else(|| invalid("视频编码格式无效。"))
 }
 
+// A live decoder may wait for subsequent frames even when the remote screen is
+// static. Keep that wait short without requesting more than 30 repeats/second
+// or exceeding a user's lower FPS choice. This is an existing server option.
+fn repeat_frame_delay_us(max_fps: u64) -> u64 {
+    1_000_000u64.div_ceil(max_fps.clamp(1, 30))
+}
+
 #[derive(Clone)]
 pub(crate) struct VideoEncoder {
     codec: String,
@@ -598,6 +605,7 @@ impl Runtime {
             .unwrap_or(1280)
             .clamp(320, 4096);
         let max_fps = settings["maxFps"].as_u64().unwrap_or(60).clamp(1, 120);
+        let repeat_delay = repeat_frame_delay_us(max_fps);
         let bit_rate = settings["videoBitRate"]
             .as_u64()
             .unwrap_or(8_000_000)
@@ -624,6 +632,9 @@ impl Runtime {
                 quote(&format!("interop.scrcpy:{scid:08x}:{remote_jar}"))?,
                 selected_codec.name,
             );
+            command.push_str(&format!(
+                " video_codec_options=repeat-previous-frame-after:long={repeat_delay}"
+            ));
             if let Some(encoder) = selected_encoder {
                 command.push(' ');
                 command.push_str(&quote(&format!("video_encoder={encoder}"))?);
@@ -2648,6 +2659,19 @@ mod tests {
         );
         settings["videoEncoder"] = json!("c2.vendor.hevc.encoder");
         validate_encoder_selection(&settings, &encoders).unwrap();
+    }
+
+    #[test]
+    fn live_repeat_cadence_respects_frame_budget_and_low_fps_choices() {
+        for fps in 1..=120 {
+            let delay = repeat_frame_delay_us(fps);
+            assert!((33_334..=1_000_000).contains(&delay));
+            assert!(
+                delay * fps >= 1_000_000,
+                "repeats exceed requested {fps}fps"
+            );
+            assert!(delay * 30 >= 1_000_000, "static repeat budget exceeded");
+        }
     }
 
     #[test]

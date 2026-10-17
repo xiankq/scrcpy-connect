@@ -49,6 +49,9 @@ class FvpVideoPlayer implements VideoPlayerPort {
       ..setBufferRange(min: 0, max: 150, drop: true)
       ..setProperty('avformat.input', 'matroska')
       ..setProperty('avformat.fpsprobesize', '0')
+      // This player carries live video only. Present decoded frames immediately
+      // instead of allowing playback-clock queues to backpressure decoding.
+      ..setProperty('fps', '-1')
       // The relay supplies codec configuration and dimensions in its Matroska
       // header. Do not sample a large part of a mostly static live stream.
       // Keep the initial IDR buffered; +nobuffer can discard it during probing.

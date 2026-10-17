@@ -475,8 +475,9 @@ void main() {
               frame.image.dispose();
               imageCodec.dispose();
             }
-            if (surfaceWatch.elapsed > const Duration(milliseconds: 1500))
+            if (surfaceWatch.elapsed > const Duration(milliseconds: 1500)) {
               break;
+            }
             await tester.pump();
           }
           expect(
