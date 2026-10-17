@@ -707,3 +707,90 @@ async fn complete_video_configuration_can_remain_idle_until_capture_resumes() {
         .unwrap();
     closed_raw(&mut source).await;
 }
+
+// A connected consumer with a closed receive window is different from an idle
+// captured screen: there are real compressed packets waiting to be delivered.
+async fn stopped_http_consumer_releases_capture(explicit_close: bool) {
+    let streams = MediaStreams::default();
+    let raw = raw_listener().await;
+    let relay = open_video(&streams, &raw, 1).await;
+    let (address, path) = endpoint(&relay);
+    let socket = tokio::net::TcpSocket::new_v4().unwrap();
+    socket.set_recv_buffer_size(4096).unwrap();
+    let mut playback = socket.connect(address.parse().unwrap()).await.unwrap();
+    playback
+        .write_all(format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes())
+        .await
+        .unwrap();
+    let mut source = authorized_raw(&raw).await;
+    dimensions(&mut source, 288, 640).await;
+    config(&mut source, false).await;
+    frame(&mut source, 0, true).await;
+    first_matroska(&mut playback).await;
+    status(&streams, &relay, "streaming").await;
+    // Keep playback alive without reading any more bytes. Enough valid H264
+    // packets are supplied to fill actual TCP buffers, not a mocked write.
+    let (mut source_reader, mut source_writer) = source.into_split();
+    let sender = tokio::spawn(async move {
+        let mut bytes = vec![0x55; 1024 * 1024];
+        bytes[..5].copy_from_slice(&[0, 0, 0, 1, 0x41]);
+        for index in 1..=64u64 {
+            source_writer.write_u64(index * 1000).await?;
+            source_writer.write_u32(bytes.len() as u32).await?;
+            source_writer.write_all(&bytes).await?;
+        }
+        Ok::<_, std::io::Error>(())
+    });
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        !sender.is_finished(),
+        "real TCP backpressure must be reached before checking its deadline"
+    );
+    if explicit_close {
+        streams
+            .command("media.close", &json!({"relayId":relay["relayId"]}))
+            .await
+            .unwrap();
+    }
+    let released = tokio::time::timeout(
+        Duration::from_secs(if explicit_close { 1 } else { 12 }),
+        source_reader.read(&mut [0; 1]),
+    )
+    .await;
+    let final_status = if !explicit_close {
+        Some(
+            streams
+                .command("media.status", &json!({"relayId":relay["relayId"]}))
+                .await
+                .unwrap(),
+        )
+    } else {
+        None
+    };
+    // Always cancel the blocked writer, including on the intentional red run.
+    streams
+        .command("media.close", &json!({"relayId":relay["relayId"]}))
+        .await
+        .unwrap();
+    sender.abort();
+    let _ = sender.await;
+    drop(playback);
+    assert!(
+        matches!(released, Ok(Ok(0)) | Ok(Err(_))),
+        "a non-reading live HTTP consumer must release raw capture within its delivery budget; status={final_status:?}",
+    );
+    if let Some(final_status) = final_status {
+        assert_eq!(final_status["status"], "failed");
+        assert_eq!(final_status["errorCode"], "media_timeout");
+    }
+}
+
+#[tokio::test]
+async fn video_transport_deadline_nonreading_http_consumer_releases_raw_capture() {
+    stopped_http_consumer_releases_capture(false).await;
+}
+
+#[tokio::test]
+async fn video_transport_deadline_cancel_releases_a_backpressured_http_consumer() {
+    stopped_http_consumer_releases_capture(true).await;
+}

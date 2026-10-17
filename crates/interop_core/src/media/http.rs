@@ -270,12 +270,19 @@ async fn read_unit(source: &mut TcpStream, video: bool) -> CoreResult<Unit> {
 }
 
 async fn chunk(output: &mut OwnedWriteHalf, bytes: &[u8]) -> CoreResult<()> {
-    output
-        .write_all(format!("{:x}\r\n", bytes.len()).as_bytes())
-        .await?;
-    output.write_all(bytes).await?;
-    output.write_all(b"\r\n").await?;
-    Ok(())
+    // Bound delivery only while actual bytes are pending, never the idle
+    // interval between frames. Fail the relay rather than dropping compressed
+    // packets whose references the decoder may still require.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        output
+            .write_all(format!("{:x}\r\n", bytes.len()).as_bytes())
+            .await?;
+        output.write_all(bytes).await?;
+        output.write_all(b"\r\n").await?;
+        Ok::<_, CoreError>(())
+    })
+    .await
+    .map_err(|_| CoreError::new("media_timeout", "播放器未及时读取媒体输出。"))?
 }
 
 async fn relay(
@@ -518,7 +525,12 @@ async fn forward_generation(
         track,
     } = ready;
     let mut mux = MatroskaMuxer::new(generation, track).map_err(mux_error)?;
-    output.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: video/x-matroska\r\nTransfer-Encoding: chunked\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").await?;
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        output.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: video/x-matroska\r\nTransfer-Encoding: chunked\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"),
+    )
+    .await
+    .map_err(|_| CoreError::new("media_timeout", "播放器未及时读取媒体输出。"))??;
     chunk(&mut output, &mux.take_header()).await?;
     loop {
         let (flags, bytes) = packet;

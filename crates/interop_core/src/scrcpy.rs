@@ -469,6 +469,10 @@ impl Runtime {
         params: &Value,
         settings: &Value,
     ) -> CoreResult<Value> {
+        // Cumulative milestones use one local monotonic clock. They measure
+        // startup work, never latency by subtracting the device's media PTS.
+        let startup_clock = Instant::now();
+        let mut startup_timing = serde_json::Map::new();
         let device_id = required(params, "deviceId")?.to_owned();
         let (selected_codec, selected_encoder) = selected_video(settings)?;
         let package = params
@@ -522,6 +526,10 @@ impl Runtime {
         };
         let encoders = self.probe_video_encoders(&device_id).await?;
         validate_encoder_selection(settings, &encoders)?;
+        startup_timing.insert(
+            "validatedMs".into(),
+            json!(startup_clock.elapsed().as_millis() as u64),
+        );
         if cancellation.is_cancelled() {
             return Err(CoreError::new(
                 "cancelled",
@@ -606,6 +614,10 @@ impl Runtime {
             )
             .await?;
             drop(sync);
+            startup_timing.insert(
+                "uploadedMs".into(),
+                json!(startup_clock.elapsed().as_millis() as u64),
+            );
             let mut command = format!(
                 "CLASSPATH={} app_process / --nice-name={} com.genymobile.scrcpy.Server 5.0.1 scid={scid:08x} log_level=warn video=true audio=false control=true video_codec={} max_size={max_size} max_fps={max_fps} video_bit_rate={bit_rate} tunnel_forward=true cleanup=true vd_destroy_content=false clipboard_autosync=false power_on=false send_dummy_byte=true send_device_meta=true send_stream_meta=true send_frame_meta=true",
                 quote(&remote_jar)?,
@@ -741,6 +753,10 @@ wait "$child""#
             }
             let mut initial = [0; 12];
             video.read_exact(&mut initial).await?;
+            startup_timing.insert(
+                "metadataMs".into(),
+                json!(startup_clock.elapsed().as_millis() as u64),
+            );
             // Streamer writes the codec ID before MediaCodec.configure(). Wait
             // for encoded output, not just metadata, before reporting encoder readiness.
             // A decoration-free virtual display may stay blank until START_APP.
@@ -800,6 +816,10 @@ wait "$child""#
                 request_launch(&control_tx, bytes, permit).await?;
             }
             let (preface, width, height) = read_video_preface(&mut video, initial).await?;
+            startup_timing.insert(
+                "encodedKeyFrameMs".into(),
+                json!(startup_clock.elapsed().as_millis() as u64),
+            );
             let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
             let port = listener.local_addr()?.port();
             {
@@ -879,6 +899,11 @@ wait "$child""#
         }
         let mut result = {
             let mut observed = state.write().await;
+            startup_timing.insert(
+                "totalMs".into(),
+                json!(startup_clock.elapsed().as_millis() as u64),
+            );
+            observed["captureStartupTimingMs"] = Value::Object(startup_timing);
             if app_launch_submitted {
                 observed["launchOutcome"] = json!("observed");
             }
@@ -1858,8 +1883,28 @@ async fn run_video(
         output.write_all(&initial).await?;
         loop {
             let mut header = [0; 12];
-            video.read_exact(&mut header).await?;
-            if let Some((width, height)) = session_dimensions(&header)? {
+            // A static screen may remain silent between complete units. Once
+            // a unit starts, bound its entire header/session/payload delivery:
+            // the downstream relay cannot see a fragment buffered here.
+            video.read_exact(&mut header[..1]).await?;
+            let complete = async {
+                video.read_exact(&mut header[1..]).await?;
+                if let Some(dimensions) = session_dimensions(&header)? {
+                    return Ok((Some(dimensions), Vec::new()));
+                }
+                let length =
+                    u32::from_be_bytes(header[8..].try_into().expect("video header")) as usize;
+                if length == 0 || length > MAX_PACKET {
+                    return Err(CoreError::new("video_protocol", "视频数据包大小无效。"));
+                }
+                let mut bytes = vec![0; length];
+                video.read_exact(&mut bytes).await?;
+                Ok((None, bytes))
+            };
+            let (dimensions, bytes) = tokio::time::timeout(Duration::from_secs(10), complete)
+                .await
+                .map_err(|_| CoreError::new("video_timeout", "视频数据包未及时发送完整。"))??;
+            if let Some((width, height)) = dimensions {
                 let forward = {
                     let mut data = state.write().await;
                     data["width"] = json!(width);
@@ -1875,12 +1920,6 @@ async fn run_video(
                 }
                 continue;
             }
-            let length = u32::from_be_bytes(header[8..].try_into().expect("video header")) as usize;
-            if length == 0 || length > MAX_PACKET {
-                return Err(CoreError::new("video_protocol", "视频数据包大小无效。"));
-            }
-            let mut bytes = vec![0; length];
-            video.read_exact(&mut bytes).await?;
             {
                 let data = state.read().await;
                 if data["status"] == "paused" || data["awaitingSession"] == true {
@@ -2111,6 +2150,231 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Exercise the actual ADB route and run_video, rather than only a packet
+    // parser: the HTTP relay cannot see bytes buffered by this upstream hop.
+    struct VideoTransportFixture {
+        peer: tokio::io::DuplexStream,
+        client: interop_adb::Client,
+        local: u32,
+        output: tokio::net::TcpStream,
+        state: Arc<RwLock<Value>>,
+        cancellation: CancellationToken,
+        running: tokio::task::JoinHandle<()>,
+    }
+
+    impl VideoTransportFixture {
+        async fn start() -> Self {
+            use interop_adb::{
+                DeviceInfo,
+                protocol::{self, Frame},
+            };
+            let (transport, mut peer) = tokio::io::duplex(64 * 1024);
+            let client = interop_adb::Client::from_negotiated_transport(
+                transport,
+                DeviceInfo {
+                    version: protocol::VERSION,
+                    max_payload: 64 * 1024,
+                    banner: "device::".into(),
+                    features: HashSet::new(),
+                },
+            )
+            .unwrap();
+            let cancellation = CancellationToken::new();
+            let opening_client = client.clone();
+            let opening_options = options(&cancellation);
+            let opening = tokio::spawn(async move {
+                opening_client
+                    .open("localabstract:scrcpy-fixture", opening_options)
+                    .await
+                    .unwrap()
+            });
+            let open = Frame::read(&mut peer, 64 * 1024, true).await.unwrap();
+            assert_eq!(open.command, protocol::OPEN);
+            Frame::new(protocol::OKAY, 77, open.arg0, Vec::new())
+                .write(&mut peer)
+                .await
+                .unwrap();
+            let video = opening.await.unwrap();
+            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+                .await
+                .unwrap();
+            let address = listener.local_addr().unwrap();
+            let state = Arc::new(RwLock::new(json!({
+                "sessionId":"fixture", "status":"streaming", "textureId":1,
+            })));
+            let token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+            let running = tokio::spawn(run_video(
+                listener,
+                token.into(),
+                video,
+                b"fixture-preface".to_vec(),
+                SessionContext {
+                    cancellation: cancellation.clone(),
+                    state: state.clone(),
+                    events: crate::events::EventBus::new(8),
+                    device: "fixture-device".into(),
+                },
+            ));
+            let mut output = tokio::net::TcpStream::connect(address).await.unwrap();
+            output
+                .write_all(format!("{token}\n").as_bytes())
+                .await
+                .unwrap();
+            let mut preface = [0; 15];
+            tokio::time::timeout(Duration::from_secs(1), output.read_exact(&mut preface))
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(&preface, b"fixture-preface");
+            Self {
+                peer,
+                client,
+                local: open.arg0,
+                output,
+                state,
+                cancellation,
+                running,
+            }
+        }
+
+        async fn deliver(&mut self, bytes: Vec<u8>) {
+            use interop_adb::protocol::{self, Frame};
+            Frame::new(protocol::WRTE, 77, self.local, bytes)
+                .write(&mut self.peer)
+                .await
+                .unwrap();
+            let receipt = tokio::time::timeout(
+                Duration::from_secs(1),
+                Frame::read(&mut self.peer, 64 * 1024, true),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(
+                receipt.command,
+                protocol::OKAY,
+                "run_video consumed this ADB fragment"
+            );
+        }
+
+        async fn stop(&mut self) {
+            use interop_adb::protocol::{self, Frame};
+            self.cancellation.cancel();
+            tokio::time::timeout(Duration::from_secs(1), &mut self.running)
+                .await
+                .expect("cancel releases the actual forwarding task")
+                .unwrap();
+            let mut remaining = Vec::new();
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                self.output.read_to_end(&mut remaining),
+            )
+            .await
+            .expect("cancel closes the authenticated media output")
+            .unwrap();
+            let closed = tokio::time::timeout(
+                Duration::from_secs(1),
+                Frame::read(&mut self.peer, 64 * 1024, true),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(
+                closed.command,
+                protocol::CLSE,
+                "only the media ADB route is closed"
+            );
+            assert!(
+                !self.client.is_closed(),
+                "other device services remain usable"
+            );
+            self.client.close();
+        }
+    }
+
+    async fn partial_video_unit_must_expire(bytes: Vec<u8>) {
+        let mut fixture = VideoTransportFixture::start().await;
+        fixture.deliver(bytes).await;
+        let completed = tokio::time::timeout(Duration::from_secs(11), async {
+            while !fixture.running.is_finished() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .is_ok();
+        let status = fixture.state.read().await.clone();
+        fixture.stop().await;
+        assert!(
+            completed,
+            "an already-started scrcpy unit must expire after 10 seconds; status={status}"
+        );
+        assert_eq!(status["status"], "failed");
+    }
+
+    #[tokio::test]
+    async fn video_transport_deadline_truncated_units_release_the_real_adb_route() {
+        let session = [
+            0x8000_0000u32.to_be_bytes(),
+            288u32.to_be_bytes(),
+            640u32.to_be_bytes(),
+        ]
+        .concat();
+        let mut payload = [0u64.to_be_bytes().as_slice(), 4u32.to_be_bytes().as_slice()].concat();
+        payload.push(0x65);
+        // All cases run concurrently so this regression has one real 11s window.
+        tokio::join!(
+            partial_video_unit_must_expire(vec![0]),
+            partial_video_unit_must_expire(session[..11].to_vec()),
+            partial_video_unit_must_expire(payload),
+        );
+    }
+
+    #[tokio::test]
+    async fn video_transport_deadline_complete_units_allow_static_idle_and_cancel() {
+        let mut fixture = VideoTransportFixture::start().await;
+        let packet = [
+            0u64.to_be_bytes().as_slice(),
+            1u32.to_be_bytes().as_slice(),
+            &[0x65],
+        ]
+        .concat();
+        fixture.deliver(packet.clone()).await;
+        let mut received = vec![0; packet.len()];
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            fixture.output.read_exact(&mut received),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(received, packet);
+        tokio::time::sleep(Duration::from_millis(10_300)).await;
+        assert!(
+            !fixture.running.is_finished(),
+            "no first byte means normal static-screen idle"
+        );
+        fixture.deliver(packet.clone()).await;
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            fixture.output.read_exact(&mut received),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            received, packet,
+            "idle must not discard the next complete compressed packet"
+        );
+        fixture.stop().await;
+    }
+
+    #[tokio::test]
+    async fn video_transport_deadline_cancel_during_partial_unit_is_prompt() {
+        let mut fixture = VideoTransportFixture::start().await;
+        fixture.deliver(vec![0]).await;
+        fixture.stop().await;
+    }
 
     #[tokio::test]
     async fn renderer_ready_preserves_capture_pause_after_generation_replacement() {
