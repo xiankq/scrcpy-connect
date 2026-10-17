@@ -175,8 +175,23 @@ void main() {
         const keepConnection = bool.fromEnvironment(
           'CONNECT_PERF_KEEP_CONNECTION',
         );
+        const maxSize = int.fromEnvironment(
+          'CONNECT_PERF_MAX_SIZE',
+          defaultValue: 640,
+        );
+        const maxFps = int.fromEnvironment(
+          'CONNECT_PERF_MAX_FPS',
+          defaultValue: 30,
+        );
+        const bitRate = int.fromEnvironment(
+          'CONNECT_PERF_BIT_RATE',
+          defaultValue: 2000000,
+        );
         expect(roundCount, inInclusiveRange(1, 20));
         expect(transitions, inInclusiveRange(2, 100));
+        expect(maxSize, inInclusiveRange(320, 4096));
+        expect(maxFps, inInclusiveRange(1, 120));
+        expect(bitRate, inInclusiveRange(500000, 50000000));
         var converted = false;
         final textureKey = GlobalKey();
         for (var round = 0; round < roundCount; round++) {
@@ -198,15 +213,19 @@ void main() {
             final stream = await request('session.start', {
               'deviceId': device,
               'videoCodec': 'h264',
-              'maxSize': 640,
-              'maxFps': 30,
-              'bitRate': 2000000,
+              'maxSize': maxSize,
+              'maxFps': maxFps,
+              'bitRate': bitRate,
             });
             session = stream['sessionId'] as String;
             evidence['sessionId'] = session;
             evidence['quality'] = stream['quality'];
             evidence['coreStartMs'] = watch.elapsedMilliseconds;
             evidence['coreStartupTimingMs'] = stream['captureStartupTimingMs'];
+            final startup = stream['captureStartupTimingMs'] as VideoJson;
+            evidence['postKeyFrameMs'] =
+                (startup['totalMs'] as int) -
+                (startup['encodedKeyFrameMs'] as int);
             if (keepConnection && round > 0) {
               expect(
                 (stream['captureStartupTimingMs'] as VideoJson)['validatedMs'],
@@ -241,6 +260,8 @@ void main() {
               );
             }
             evidence['startToDecodedMs'] = watch.elapsedMilliseconds;
+            evidence['decodedWidth'] = ready['decodedWidth'];
+            evidence['decodedHeight'] = ready['decodedHeight'];
             evidence['outputStartupTimingMs'] = ready['outputStartupTimingMs'];
             await request('session.ready', {
               'sessionId': session,
@@ -513,24 +534,60 @@ void main() {
         final p50 = timings[(timings.length * .50).ceil() - 1];
         binding.reportData!['inputToDecodedP50Ms'] = p50;
         binding.reportData!['inputToDecodedP95Ms'] = p95;
+        const maxStartMs = int.fromEnvironment(
+          'CONNECT_PERF_MAX_START_MS',
+          defaultValue: 5000,
+        );
+        const maxPostKeyFrameMs = int.fromEnvironment(
+          'CONNECT_PERF_MAX_POST_KEYFRAME_MS',
+          defaultValue: 5000,
+        );
+        const maxP50Ms = int.fromEnvironment(
+          'CONNECT_PERF_MAX_P50_MS',
+          defaultValue: 3000,
+        );
+        const maxP95Ms = int.fromEnvironment(
+          'CONNECT_PERF_MAX_P95_MS',
+          defaultValue: 3000,
+        );
+        // Preserve every independent verdict even if the first assertion fails.
+        // The overall receipt still requires all budgets to pass.
+        binding.reportData!.addAll({
+          'budgetsMs': {
+            'start': maxStartMs,
+            'postKeyFrame': maxPostKeyFrameMs,
+            'inputP50': maxP50Ms,
+            'inputP95': maxP95Ms,
+          },
+          'startupBudgetMet': rounds.every(
+            (round) => (round['startToDecodedMs'] as int) <= maxStartMs,
+          ),
+          'postKeyFrameBudgetMet': rounds.every(
+            (round) => (round['postKeyFrameMs'] as int) <= maxPostKeyFrameMs,
+          ),
+          'inputLatencyBudgetMet': p50 <= maxP50Ms && p95 <= maxP95Ms,
+        });
+        for (final round in rounds) {
+          expect(
+            round['postKeyFrameMs'],
+            lessThanOrEqualTo(maxPostKeyFrameMs),
+            reason:
+                'Post-keyframe startup work must meet its independent budget.',
+          );
+          expect(
+            round['startToDecodedMs'],
+            lessThanOrEqualTo(maxStartMs),
+            reason: 'Every first decoded frame must meet the requested startup budget.',
+          );
+        }
         expect(
           p50,
-          lessThanOrEqualTo(
-            const int.fromEnvironment(
-              'CONNECT_PERF_MAX_P50_MS',
-              defaultValue: 3000,
-            ),
-          ),
+          lessThanOrEqualTo(maxP50Ms),
           reason: 'Typical new decoded pixels must meet the requested latency budget.',
         );
         expect(
           p95,
-          lessThanOrEqualTo(
-            const int.fromEnvironment(
-              'CONNECT_PERF_MAX_P95_MS',
-              defaultValue: 3000,
-            ),
-          ),
+          lessThanOrEqualTo(maxP95Ms),
           reason: 'Actual new decoded pixels must meet the requested latency budget.',
         );
         binding.reportData!['videoPerformanceComplete'] = true;
