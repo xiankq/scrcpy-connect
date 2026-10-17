@@ -83,7 +83,9 @@ String bytes(dynamic input) {
 class AppController extends _$AppController {
   late AppDependencies _dependencies;
   late StreamController<Json> _events;
-  late SessionViews sessionViews;
+  late SessionViews _sessionViews;
+  SessionView claimSessionView(String sessionId, {required bool visible}) =>
+      _sessionViews.claim(sessionId, visible: visible);
   final _consumedShareIds = <String>{};
   String? _audioFocusTarget;
   Future<void> _audioFocusQueue = Future<void>.value();
@@ -100,8 +102,8 @@ class AppController extends _$AppController {
   AppState build() {
     final dependencies = ref.watch(appDependenciesProvider);
     _dependencies = dependencies;
-    sessionViews = SessionViews(dependencies.request);
-    final ownedViews = sessionViews;
+    _sessionViews = SessionViews(dependencies.request);
+    final ownedViews = _sessionViews;
     final generation = ++_generation;
     _disposed = false;
     _consumedShareIds.clear();

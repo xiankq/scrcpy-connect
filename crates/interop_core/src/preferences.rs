@@ -8,6 +8,7 @@ use std::sync::Arc;
 pub(crate) fn defaults() -> Value {
     json!({"appearance":"light","reduceTransparency":false,"reduceMotion":false,
         "backgroundConnection":true,"backgroundKeepAlive":true,"backgroundAudio":false,
+        "notificationAlerts":true,"callAlerts":true,
         "audioMode":"follow","audioDevices":[],"clipboardEnabled":false,"clipboardTarget":"current",
         "clipboardSync":false,"clipboardMode":"follow","clipboardDevice":null,
         "qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":8_000_000,"videoCodec":"h264","videoEncoder":null,"deviceQuality":{}})
@@ -88,6 +89,8 @@ fn validated_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
             | "backgroundConnection"
             | "backgroundKeepAlive"
             | "backgroundAudio"
+            | "notificationAlerts"
+            | "callAlerts"
             | "clipboardEnabled"
             | "clipboardSync" => value.is_boolean(),
             "audioMode" => matches!(value.as_str(), Some("follow" | "fixed" | "mix" | "single")),

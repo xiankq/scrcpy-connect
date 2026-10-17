@@ -335,7 +335,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final successor = controller.sessionViews.claim('original', visible: false);
+    final successor = controller.claimSessionView('original', visible: false);
     events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
     events.add({
       'type': 'state.resynced',

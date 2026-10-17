@@ -1,6 +1,7 @@
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/services/system_notifications.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -23,6 +24,21 @@ class BackgroundPage extends HookConsumerWidget {
     );
     final changing = useState(false);
     final revision = useState(0);
+    final alerts = ref.watch(systemNotificationCoordinatorProvider);
+    useListenable(alerts.changes);
+    final alertStatus = alerts.status;
+    Future<void> updateAlert(String key, bool value) async {
+      if (changing.value) return;
+      changing.value = true;
+      try {
+        await controller.updateSetting(key, value);
+      } catch (error) {
+        if (context.mounted) feedback(context, '$error');
+      } finally {
+        if (context.mounted) changing.value = false;
+      }
+    }
+
     return PageFrame(
       title: '后台与连接',
       child: ListView(
@@ -84,6 +100,60 @@ class BackgroundPage extends HookConsumerWidget {
                 ],
               ),
             ),
+          ),
+          const SectionTitle('系统提醒'),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('远端通知提醒'),
+            subtitle: const Text('离开邻接后提醒有新通知，正文在应用中查看'),
+            value: appSettings['notificationAlerts'] != false,
+            onChanged: changing.value
+                ? null
+                : (value) => updateAlert('notificationAlerts', value),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('远端来电提醒'),
+            subtitle: const Text('仅提醒并进入通话页，不自动接听或开启麦克风'),
+            value: appSettings['callAlerts'] != false,
+            onChanged: changing.value
+                ? null
+                : (value) => updateAlert('callAlerts', value),
+          ),
+          StateNote(
+            alertStatus.reason.isEmpty ? '正在检查系统通知条件。' : alertStatus.reason,
+          ),
+          if (alertStatus.notificationChannelEnabled == false)
+            const StateNote('远端实时通知渠道已关闭，请在系统设置中开启。'),
+          if (alertStatus.callChannelEnabled == false)
+            const StateNote('远端来电提醒渠道已关闭，请在系统设置中开启。'),
+          Wrap(
+            spacing: 12,
+            children: [
+              if (alertStatus.canRequest)
+                OutlinedButton(
+                  onPressed: changing.value
+                      ? null
+                      : () async {
+                          changing.value = true;
+                          try {
+                            await alerts.requestPermission();
+                          } finally {
+                            if (context.mounted) changing.value = false;
+                          }
+                        },
+                  child: const Text('允许系统提醒'),
+                ),
+              if (alertStatus.canOpenSettings)
+                TextButton(
+                  onPressed: () async {
+                    if (!await alerts.openSettings() && context.mounted) {
+                      feedback(context, '暂时无法打开系统通知设置。');
+                    }
+                  },
+                  child: const Text('系统通知设置'),
+                ),
+            ],
           ),
           const SectionTitle('离开前台后'),
           const ActionRow(

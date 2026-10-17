@@ -307,6 +307,7 @@ public final class Main {
                 .put("title",text(extras.getCharSequence(Notification.EXTRA_TITLE),4096))
                 .put("body",text(extras.getCharSequence(Notification.EXTRA_BIG_TEXT,extras.getCharSequence(Notification.EXTRA_TEXT)),16384))
                 .put("postedAt",sbn.getPostTime()).put("canOpen",n.contentIntent!=null)
+                .put("groupSummary",(n.flags & Notification.FLAG_GROUP_SUMMARY)!=0)
                 .put("canDismiss",sbn.isClearable()).put("canReply",replyAction(n)>=0);
             StringBuilder fingerprint=new StringBuilder(data.toString());
             fingerprint.append(n.contentIntent==null?0:n.contentIntent.hashCode());

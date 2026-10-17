@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/clipboard_coordinator.dart';
+import 'package:scrcpy_connect/services/system_notifications.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -34,6 +35,78 @@ class ConnectApp extends HookConsumerWidget {
     final sharing = useRef<String?>(null);
     final shareCycle = useState(0);
     final lifecycle = useAppLifecycleState();
+    final systemNotifications = ref.watch(
+      systemNotificationCoordinatorProvider,
+    );
+    useListenable(systemNotifications.changes);
+    useOnAppLifecycleStateChange((previous, current) {
+      // Pausing can prevent the next frame. Delivery eligibility must change
+      // in the lifecycle callback, before any subsequent source event.
+      systemNotifications.setForeground(current == AppLifecycleState.resumed);
+      if (current == AppLifecycleState.resumed) {
+        unawaited(systemNotifications.refreshStatus());
+      }
+    });
+    useEffect(() {
+      systemNotifications.setForeground(
+        lifecycle == null || lifecycle == AppLifecycleState.resumed,
+      );
+      return null;
+    }, [systemNotifications, lifecycle]);
+    final appLoading = ref.watch(
+      appControllerProvider.select(
+        (state) => state.loading || state.reconciliationPending,
+      ),
+    );
+    useEffect(() {
+      if (appLoading ||
+          systemNotifications.pendingActivation == null ||
+          (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+        return null;
+      }
+      var active = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!active ||
+            controller.snapshot().loading ||
+            controller.snapshot().reconciliationPending ||
+            (WidgetsBinding.instance.lifecycleState != null &&
+                WidgetsBinding.instance.lifecycleState !=
+                    AppLifecycleState.resumed)) {
+          return;
+        }
+        final context = navigator.currentContext;
+        if (context == null || !context.mounted) return;
+        final activation = systemNotifications.takeActivation();
+        if (activation == null) return;
+        if (!activation.available) {
+          showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('这条提醒已失效'),
+              content: Text(activation.reason),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('知道了'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+        switch (activation.target.kind) {
+          case SystemNotificationKind.notification:
+            router.push<void>(
+              NotificationsRoute(deviceId: activation.target.deviceId).location,
+            );
+          case SystemNotificationKind.call:
+            router.push<void>(
+              CallsRoute(deviceId: activation.target.deviceId).location,
+            );
+        }
+      });
+      return () => active = false;
+    }, [systemNotifications.pendingActivation, appLoading, lifecycle, router]);
     useEffect(
       () {
         if (sharing.value != null ||

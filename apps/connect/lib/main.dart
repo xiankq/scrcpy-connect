@@ -1,4 +1,6 @@
 import 'package:scrcpy_connect/services/app_dependencies.dart';
+import 'package:scrcpy_connect/services/local_notification_sink.dart';
+import 'package:scrcpy_connect/services/system_notifications.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -34,7 +36,12 @@ Future<void> main() async {
     );
     runApp(
       ProviderScope(
-        overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
+        overrides: [
+          appDependenciesProvider.overrideWithValue(dependencies),
+          systemNotificationSinkProvider.overrideWithValue(
+            LocalNotificationSink(),
+          ),
+        ],
         child: const ConnectApp(),
       ),
     );

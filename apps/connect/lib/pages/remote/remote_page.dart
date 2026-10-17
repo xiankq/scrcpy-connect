@@ -242,7 +242,7 @@ class _RemotePageState extends State<RemotePage>
         }
       });
       if (sessionId.isEmpty || result['textureId'] == null) return;
-      view = controller.sessionViews.claim(
+      view = controller.claimSessionView(
         sessionId,
         visible:
             result['status'] != 'paused' && result['capturePaused'] != true,
@@ -608,7 +608,7 @@ class _RemotePageState extends State<RemotePage>
     }
     var owned = view;
     if (owned == null || !owned.isCurrent) {
-      owned = controller.sessionViews.claim(sessionId, visible: false);
+      owned = controller.claimSessionView(sessionId, visible: false);
       view = owned;
     }
     focusVisibleDevice();

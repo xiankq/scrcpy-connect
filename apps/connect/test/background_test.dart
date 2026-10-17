@@ -32,7 +32,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(commands.where((c) => c.$1 == 'background.request'), isEmpty);
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(find.widgetWithText(SwitchListTile, '允许后台保持'));
       await tester.pumpAndSettle();
       final requests = commands
           .where((c) => c.$1 == 'background.request')
@@ -47,7 +47,7 @@ void main() {
         lessThan(commands.indexWhere((c) => c.$1 == 'background.request')),
       );
       expect(commands.where((c) => c.$1 == 'background.status'), hasLength(2));
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(find.widgetWithText(SwitchListTile, '允许后台保持'));
       await tester.pumpAndSettle();
       expect(commands.lastWhere((c) => c.$1 == 'background.request').$2, {
         'enabled': false,

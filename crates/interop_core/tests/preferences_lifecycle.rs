@@ -73,3 +73,41 @@ async fn usb_and_pending_wireless_metadata_restore_without_network_endpoints_or_
         assert_eq!(device["autoReconnect"], false);
     }
 }
+
+#[tokio::test]
+async fn system_alert_preferences_persist_separately_from_observation_and_background() {
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let initial = runtime.invoke("settings.get", json!({})).await.unwrap();
+    assert_eq!(initial["notificationAlerts"], true);
+    assert_eq!(initial["callAlerts"], true);
+    let updated = runtime
+        .invoke(
+            "settings.update",
+            json!({"notificationAlerts":false,"callAlerts":false}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        updated["backgroundKeepAlive"],
+        initial["backgroundKeepAlive"]
+    );
+    assert!(
+        runtime
+            .invoke(
+                "settings.update",
+                json!({"notificationAlerts":true,"callAlerts":"false"})
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        runtime.invoke("settings.get", json!({})).await.unwrap(),
+        updated
+    );
+    drop(runtime);
+    let reopened = Runtime::initialize(directory.path()).await.unwrap();
+    let persisted = reopened.invoke("settings.get", json!({})).await.unwrap();
+    assert_eq!(persisted["notificationAlerts"], false);
+    assert_eq!(persisted["callAlerts"], false);
+}

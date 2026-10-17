@@ -19,7 +19,7 @@ use std::{
 use tokio::sync::{RwLock, mpsc, oneshot, watch};
 
 const SERVER: &[u8] = include_bytes!("../../../servers/companion/companion.jar");
-const SERVER_SHA: &str = "0026e5af2db8558b2ba1eebac22c84303e20d3ee1a7b184bc683f808cf3889bb";
+const SERVER_SHA: &str = "4a3082a8c4bcfe2a83293136dae513a0d5f9436bbe4f3db353c7b95341c28960";
 const MAX_MESSAGE: usize = 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(20);
 

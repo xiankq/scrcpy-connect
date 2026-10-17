@@ -146,7 +146,7 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 输出固定 ZIP 时间戳的 `companion.jar`；不联网安装工具。Rust 内嵌 JAR 并校验
 SHA-256；修改源码后需重新构建并同步 `SERVER_SHA`。测试 Fixture 不编入产品 JAR。
 当前产品 JAR 的 SHA-256 为
-`0026e5af2db8558b2ba1eebac22c84303e20d3ee1a7b184bc683f808cf3889bb`。
+`4a3082a8c4bcfe2a83293136dae513a0d5f9436bbe4f3db353c7b95341c28960`。
 
 上述观察生命周期已通过 Runtime／真实 actor 提交回归，并重建 JAR。
 2026-10-17随后在API36目标AVD执行 `observation_android`：无需页面查询即收到live观察，

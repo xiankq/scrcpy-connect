@@ -106,7 +106,7 @@ void main() {
         return {};
       }, events: events.stream);
       final notifier = container.read(appControllerProvider.notifier);
-      final view = notifier.sessionViews.claim('live', visible: true);
+      final view = notifier.claimSessionView('live', visible: true);
       final snapshot = <String, dynamic>{
         'devices': <Json>[],
         'settings': <String, dynamic>{},
@@ -144,7 +144,7 @@ void main() {
 
     final container = scope(request, events: oldEvents.stream);
     final oldController = container.read(appControllerProvider.notifier);
-    final oldView = oldController.sessionViews.claim('old', visible: true);
+    final oldView = oldController.claimSessionView('old', visible: true);
     oldEvents.add({'type': 'state.resync', 'data': <String, dynamic>{}});
     container.updateOverrides([
       appDependenciesProvider.overrideWithValue(
