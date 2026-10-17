@@ -46,10 +46,17 @@ void main() {
     'real decoded freshness, first frame, pause and repeated device connections',
     (tester) async {
       const traceFrames = bool.fromEnvironment('CONNECT_PERF_TRACE_FRAMES');
+      const traceClock = bool.fromEnvironment('CONNECT_PERF_TRACE_CLOCK');
+      expect(
+        !traceClock || traceFrames,
+        true,
+        reason: 'Clock brackets require the existing native frame clock.',
+      );
       final rounds = <VideoJson>[];
       binding.reportData = {
         'videoPerformanceComplete': false,
         if (traceFrames) 'frameCorrelationComplete': false,
+        if (traceClock) 'clockBracketsRequested': true,
         'rounds': rounds,
       };
       Future<VideoJson> request(
@@ -84,6 +91,11 @@ void main() {
           throw StateError('Real-device stage failed; see original exception.');
         }
       }
+
+      Future<List<VideoJson>> clockProbes(String sessionId) async => [
+        for (var probe = 0; probe < 3; probe++)
+          await request('session.clock.probe', {'sessionId': sessionId}),
+      ];
 
       late VideoPlayerPort player;
       late List<VideoJson> decoderEvents;
@@ -327,6 +339,9 @@ void main() {
                 }
               }
             }
+            if (traceClock) {
+              evidence['clockBefore'] = await clockProbes(session!);
+            }
             final before = await request('media.status', {
               'relayId': ready['relayId'],
             });
@@ -493,6 +508,9 @@ void main() {
               'bytes': (after['bytes'] as int) - (before['bytes'] as int),
               'frameTrace': ?after['frameTrace'],
             };
+            if (traceClock) {
+              evidence['clockAfter'] = await clockProbes(session!);
+            }
             const idleMs = int.fromEnvironment('CONNECT_PERF_IDLE_MS');
             expect(idleMs, inInclusiveRange(0, 10000));
             if (idleMs > 0) {

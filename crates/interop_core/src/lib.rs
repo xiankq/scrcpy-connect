@@ -1,6 +1,7 @@
 //! Device, connection, session and transfer lifecycle owned independently of UI.
 mod app_open;
 mod audio;
+mod clock_probe;
 mod companion;
 mod delivery;
 mod device;

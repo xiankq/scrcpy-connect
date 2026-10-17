@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -27,12 +28,19 @@ public final class VideoPatternActivity extends Activity {
         timelineRun = run != null && run.matches("[a-zA-Z0-9_-]{1,80}") ? run : null;
     }
 
-    private void trace(String kind, long startUs, long eventTimeMs) {
+    private void trace(String kind, long startUs, long eventTimeMs,
+            long startBootBeforeUs, long startBootAfterUs) {
         if (timelineRun == null) return;
+        long bootBeforeUs = SystemClock.elapsedRealtimeNanos() / 1000;
+        long nanoUs = System.nanoTime() / 1000;
+        long bootAfterUs = SystemClock.elapsedRealtimeNanos() / 1000;
         Log.i("ConnectVideoClock", "{\"run\":\"" + timelineRun
             + "\",\"kind\":\"" + kind + "\",\"sequence\":" + sequence
-            + ",\"counter\":" + counter + ",\"nanoUs\":" + System.nanoTime() / 1000
-            + ",\"drawStartUs\":" + startUs + ",\"eventUptimeMs\":" + eventTimeMs + "}");
+            + ",\"counter\":" + counter + ",\"nanoUs\":" + nanoUs
+            + ",\"bootBeforeUs\":" + bootBeforeUs + ",\"bootAfterUs\":" + bootAfterUs
+            + ",\"drawStartUs\":" + startUs + ",\"eventUptimeMs\":" + eventTimeMs
+            + ",\"drawStartBootBeforeUs\":" + startBootBeforeUs
+            + ",\"drawStartBootAfterUs\":" + startBootAfterUs + "}");
     }
 
     @Override public void onCreate(Bundle state) {
@@ -57,7 +65,7 @@ public final class VideoPatternActivity extends Activity {
         if (event.getAction() == KeyEvent.ACTION_UP) {
             counter = (counter + 1) & 15;
             sequence++;
-            trace("input", 0, event.getEventTime());
+            trace("input", 0, event.getEventTime(), 0, 0);
             pattern.invalidate();
         }
         return true;
@@ -67,7 +75,9 @@ public final class VideoPatternActivity extends Activity {
         private final Paint paint = new Paint();
         Pattern() { super(VideoPatternActivity.this); }
         @Override protected void onDraw(Canvas canvas) {
+            long bootBeforeUs = timelineRun == null ? 0 : SystemClock.elapsedRealtimeNanos() / 1000;
             long startUs = timelineRun == null ? 0 : System.nanoTime() / 1000;
+            long bootAfterUs = timelineRun == null ? 0 : SystemClock.elapsedRealtimeNanos() / 1000;
             for (int bit = 0; bit < 4; bit++) {
                 paint.setColor((counter & (1 << bit)) != 0 ? 0xffff4040 : 0xff40c0ff);
                 canvas.drawRect(getWidth() * bit / 4f, 0,
@@ -99,7 +109,7 @@ public final class VideoPatternActivity extends Activity {
                 getWidth() / 16f, getHeight() * .85f, paint);
             if (drawnSequence != sequence) {
                 drawnSequence = sequence;
-                trace("draw", startUs, 0);
+                trace("draw", startUs, 0, bootBeforeUs, bootAfterUs);
             }
         }
     }

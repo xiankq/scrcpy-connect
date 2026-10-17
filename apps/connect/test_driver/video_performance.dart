@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import 'video_clock_bounds.dart';
+
 Future<void> main() async {
   const package = 'dev.scrcpyconnect.videofixture';
   final environment = Platform.environment;
@@ -233,6 +235,12 @@ Future<void> main() async {
               missing.isEmpty &&
               segments.isNotEmpty;
         }
+        if (report['clockBracketsRequested'] == true) {
+          report['clockBounds'] = videoClockBounds(
+            (report['rounds'] as List).cast<ClockJson>(),
+            targetTimeline ?? const [],
+          );
+        }
         await File('${output.path}/result.json')
             .writeAsString(jsonEncode(report));
         if (report['videoPerformanceComplete'] != true) {
@@ -241,6 +249,12 @@ Future<void> main() async {
         if (timelineEnabled && report['targetTimelineComplete'] != true) {
           throw StateError(
             'Target timeline does not cover every actual input.',
+          );
+        }
+        if (report['clockBracketsRequested'] == true &&
+            (report['clockBounds'] as ClockJson)['complete'] != true) {
+          throw StateError(
+            'Conditional clock bounds are incomplete; see raw probes.',
           );
         }
       },

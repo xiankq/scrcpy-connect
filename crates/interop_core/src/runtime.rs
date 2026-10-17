@@ -338,6 +338,7 @@ impl Runtime {
             | "session.quality"
             | "session.screenshot"
             | "session.ready"
+            | "session.clock.probe"
             | "session.frame"
             | "session.list"
             | "session.rotate"

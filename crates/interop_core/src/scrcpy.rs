@@ -1143,6 +1143,13 @@ wait "$child""#
                 "应用打开结果未知，请先核对并关闭本次记录。",
             )
         })?;
+        if command == "session.clock.probe" {
+            if !state.read().await["transportTrace"].is_array() {
+                return Err(invalid("时钟采样仅用于已开启逐帧观测的诊断会话。"));
+            }
+            let client = self.client(&session_device).await?;
+            return crate::clock_probe::sample(&client, cancellation).await;
+        }
         if command == "session.ready" {
             let texture = params["textureId"]
                 .as_i64()
