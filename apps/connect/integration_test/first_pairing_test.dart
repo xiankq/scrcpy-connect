@@ -183,13 +183,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    Future<void> openForm({bool pairing = false, String? deviceId}) async {
-      ConnectionFormRoute(
-        pairing: pairing,
-        deviceId: deviceId,
-        transport: ConnectionTransport.tls,
-      ).go(tester.element(find.byType(Scaffold).first));
-      await tester.pump();
+    Future<void> waitForForm({bool pairing = false, String? deviceId}) async {
       await waitFor(
         tester,
         () =>
@@ -198,8 +192,18 @@ void main() {
             tester.widget<ConnectionFormPage>(page).deviceId == deviceId &&
             ModalRoute.of(tester.element(page))?.animation?.status ==
                 AnimationStatus.completed,
-        reason: 'The typed production route must show the connection form.',
+        reason: 'The production route must show the expected connection form.',
       );
+    }
+
+    Future<void> openForm({bool pairing = false, String? deviceId}) async {
+      ConnectionFormRoute(
+        pairing: pairing,
+        deviceId: deviceId,
+        transport: ConnectionTransport.tls,
+      ).go(tester.element(find.byType(Scaffold).first));
+      await tester.pump();
+      await waitForForm(pairing: pairing, deviceId: deviceId);
       await fill('IP 地址或主机名', address!);
     }
 
@@ -256,6 +260,14 @@ void main() {
     }
 
     Future<Json> record(String id) => request('device.info', {'deviceId': id});
+
+    void assertAuthorizationFeedback() {
+      expect(formErrors().single, contains('被控设备未信任此主控的授权身份'));
+      expect(
+        find.descendant(of: page, matching: find.text('重新配对')),
+        findsOneWidget,
+      );
+    }
 
     Future<void> assertAuthRejection(String id, String reportKey) async {
       final device = await record(id);
@@ -322,10 +334,29 @@ void main() {
       final deviceId = ownedIds.single;
       expect((await record(deviceId))['guid'], isNull);
       await assertAuthRejection(deviceId, 'initialUnpairedRejected');
+      assertAuthorizationFeedback();
       publish('initial-rejected');
       await tester.pump(const Duration(seconds: 1));
 
-      await openForm(pairing: true, deviceId: deviceId);
+      final repair = find.descendant(
+        of: page,
+        matching: find.widgetWithText(TextButton, '重新配对'),
+      );
+      await tester.ensureVisible(repair);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(repair.hitTestable(), findsOneWidget);
+      await tester.tap(repair);
+      await tester.pump();
+      await waitForForm(pairing: true, deviceId: deviceId);
+      expect(
+        tester.widget<TextField>(field('IP 地址或主机名')).controller!.text,
+        address,
+      );
+      expect(tester.widget<TextField>(field('配对端口')).controller!.text, isEmpty);
+      expect(
+        tester.widget<TextField>(field('配对码')).controller!.text.isEmpty,
+        true,
+      );
       await fill('配对端口', '$pairPort');
       // Change exactly one digit of the current valid code. Neither value is
       // placed in the report, diagnostics, extension response, or screenshots.
@@ -335,10 +366,30 @@ void main() {
       await submit(pairing: true);
       await waitForFormRejection();
       expect((await record(deviceId))['guid'], isNull);
-      final wrongError = formErrors().join(' ').toLowerCase();
+      final failure = tester
+          .widget<ConnectionFailureNote>(
+            find.descendant(
+              of: page,
+              matching: find.byType(ConnectionFailureNote),
+            ),
+          )
+          .failure;
       expect(
-        wrongError.contains('pairing authentication failed') ||
+        failure is RequestFailure,
+        isTrue,
+        reason: 'The real pairing request must return a structured failure.',
+      );
+      // Keep the actual peer failure separate from its localized presentation.
+      // The raw failure and current codes remain in memory, never in the report.
+      final requestFailure = failure as RequestFailure;
+      final wrongError = requestFailure.message.toLowerCase();
+      final authenticationFailed = wrongError.contains(
+        'pairing authentication failed',
+      );
+      expect(
+        authenticationFailed ||
             wrongError.contains('unexpected end of file') ||
+            wrongError.contains('unexpected eof') ||
             wrongError.contains('early eof') ||
             wrongError.contains(
               'peer closed connection without sending tls close_notify',
@@ -350,8 +401,28 @@ void main() {
             'The wrong six-digit code must reach the real pairing peer '
             'and fail authentication or be closed by that peer.',
       );
+      final String expectedFeedback;
+      if (authenticationFailed) {
+        expectedFeedback = '配对验证未通过。请确认正在使用被控手机当前配对窗口的端口和配对码，重新打开配对窗口后重试。';
+      } else if (requestFailure.code == 'disconnected' ||
+          RegExp(r'\b(eof|end of file)\b').hasMatch(wrongError)) {
+        expectedFeedback = '配对连接在完成前中断，暂时无法确认原因。请确认被控手机的配对窗口仍开启、网络可达；需要重试时，重新打开配对窗口并填写当前端口和配对码。';
+      } else {
+        throw StateError(
+          'The pairing peer failure needs its own localized feedback assertion.',
+        );
+      }
+      expect(formErrors(), [expectedFeedback]);
+      expect(formErrors().single, isNot(contains('码错误')));
+      expect(
+        find.descendant(of: page, matching: find.text('已配对，正在确认连接')),
+        findsNothing,
+      );
+      expect(
+        tester.widget<TextField>(field('配对码')).controller!.text.isEmpty,
+        true,
+      );
       binding.reportData!['wrongCodeRejected'] = true;
-      await fill('配对码', '');
       pairingCode = null;
       await checkpoint('need-fresh-code', () => freshCodeReceived);
 
@@ -426,6 +497,11 @@ void main() {
       await submit();
       await waitForFormRejection();
       await assertAuthRejection(deviceId, 'revokedIdentityRejected');
+      assertAuthorizationFeedback();
+      await tester.ensureVisible(
+        find.descendant(of: page, matching: find.byType(ConnectionFailureNote)),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
       await checkpoint('revoked-rejected', () => rejectionCaptured);
       expect(tester.takeException(), isNull);
     } catch (error, stack) {

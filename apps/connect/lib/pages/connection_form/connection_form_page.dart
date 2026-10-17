@@ -36,7 +36,7 @@ class ConnectionFormPage extends HookWidget {
     final form = useMemoized(() => GlobalKey<FormState>());
     final busy = useState(false);
     final result = useState<Json?>(null);
-    final error = useState<String?>(null);
+    final error = useState<Object?>(null);
     final activeAttempt = useRef<String?>(null);
     final cancelling = useState(false);
     final selectedTransport = useState(ConnectionTransport.tls);
@@ -76,14 +76,17 @@ class ConnectionFormPage extends HookWidget {
       busy.value = true;
       error.value = null;
       try {
+        final currentDeviceId = responseDeviceId(result.value, deviceId);
+        final pairingCode = code.text.trim();
+        if (pairing) code.clear();
         final response = await controller.request(
           pairing ? 'devices.pair' : 'devices.add',
           {
             'address': host.text.trim(),
             'attemptId': attempt,
-            if (deviceId != null) 'deviceId': deviceId,
+            'deviceId': ?currentDeviceId,
             'port': int.parse(portField.text.trim()),
-            if (pairing) 'code': code.text.trim(),
+            if (pairing) 'code': pairingCode,
             if (!pairing) 'transport': effectiveTransport.name,
           },
         );
@@ -122,7 +125,7 @@ class ConnectionFormPage extends HookWidget {
         }
       } catch (e) {
         if (context.mounted && activeAttempt.value == attempt) {
-          error.value = '$e';
+          error.value = e;
         }
       } finally {
         if (context.mounted && activeAttempt.value == attempt) {
@@ -179,9 +182,7 @@ class ConnectionFormPage extends HookWidget {
                         },
                 )
               else
-                Text(
-                  legacyTcp ? '旧版 TCP（USB 授权后开启）' : '现代无线调试（加密）',
-                ),
+                Text(legacyTcp ? '旧版 TCP（USB 授权后开启）' : '现代无线调试（加密）'),
               const SizedBox(height: 20),
             ],
             TextFormField(
@@ -222,10 +223,10 @@ class ConnectionFormPage extends HookWidget {
               ),
             ],
             if (error.value != null)
-              StateNote(
-                error.value!,
-                icon: LucideIcons.circleAlert,
-                color: ConnectTokens.danger,
+              ConnectionFailureNote(
+                failure: error.value!,
+                pairing: pairing,
+                legacyTcp: legacyTcp,
               ),
             const SizedBox(height: 28),
             FilledButton(
@@ -274,7 +275,9 @@ class ConnectionFormPage extends HookWidget {
                   address: host.text,
                   deviceId: responseDeviceId(result.value, deviceId),
                 ).push<void>(context),
-                child: const Text('尚未配对？使用配对码'),
+                child: Text(
+                  _authorizationRejected(error.value) ? '重新配对' : '尚未配对？使用配对码',
+                ),
               ),
             const StateNote('跨网连接需要已有可达网络，例如 VPN。无线调试不会自动提供互联网穿透。'),
           ],
@@ -282,4 +285,60 @@ class ConnectionFormPage extends HookWidget {
       ),
     );
   }
+}
+
+/// Keeps the request failure intact while presenting actionable form feedback.
+class ConnectionFailureNote extends StatelessWidget {
+  const ConnectionFailureNote({
+    super.key,
+    required this.failure,
+    required this.pairing,
+    required this.legacyTcp,
+  });
+
+  final Object failure;
+  final bool pairing;
+  final bool legacyTcp;
+
+  @override
+  Widget build(BuildContext context) => StateNote(
+    _failureMessage(failure, pairing: pairing, legacyTcp: legacyTcp),
+    icon: LucideIcons.circleAlert,
+    color: ConnectTokens.danger,
+  );
+}
+
+bool _authorizationRejected(Object? failure) =>
+    failure is RequestFailure &&
+    (failure.code == 'authorization_required' ||
+        RegExp(
+          r'received fatal alert: (CertificateRequired|BadCertificate|CertificateUnknown|UnknownCA)\b',
+        ).hasMatch(failure.message));
+
+String _failureMessage(
+  Object failure, {
+  required bool pairing,
+  required bool legacyTcp,
+}) {
+  if (!pairing && !legacyTcp && _authorizationRejected(failure)) {
+    return '被控设备未信任此主控的授权身份。请在被控手机的“无线调试”中打开“使用配对码配对设备”，再使用当前显示的配对码重新配对。';
+  }
+  if (!pairing && failure is RequestFailure && failure.code == 'timeout') {
+    return '连接超时。请检查被控设备当前的地址、连接端口和网络后重试。';
+  }
+  if (pairing &&
+      failure is RequestFailure &&
+      failure.message.toLowerCase().contains('pairing authentication failed')) {
+    return '配对验证未通过。请确认正在使用被控手机当前配对窗口的端口和配对码，重新打开配对窗口后重试。';
+  }
+  if (pairing &&
+      failure is RequestFailure &&
+      (failure.code == 'disconnected' ||
+          RegExp(
+            r'\b(eof|end of file)\b',
+            caseSensitive: false,
+          ).hasMatch(failure.message))) {
+    return '配对连接在完成前中断，暂时无法确认原因。请确认被控手机的配对窗口仍开启、网络可达；需要重试时，重新打开配对窗口并填写当前端口和配对码。';
+  }
+  return '$failure';
 }

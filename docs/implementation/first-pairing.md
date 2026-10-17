@@ -62,3 +62,11 @@ rtk proxy env ANDROID_TLS_ENDPOINT=127.0.0.1:<当次宿主转发端口> \
 最终完整 E2E 已连续两轮64秒通过，范围是“系统接口精确撤权后产品拒绝旧身份”，**不能称直接 Settings Forget 路径或量产镜像已通过**。默认自动检查也不执行该设备夹具；完整结果见验收记录。
 
 本次下载的 android16-release 源内容 SHA-256：AdbDebuggingManager `428b0cec9a84ba5c29bb43553fca05f2f127e23f41a39a82f935e918e3e45fd7`、AtomicFile `90e1cc85e92e53e6c257e49156677de354a79d2b6caf65d826cb77d0cffab70e`、IAdbManager `34759f2a5dde1b67874e61d9a1970bdbc1a67c0d14c658213085db6221858ca6`。分支名不是不可变提交；摘要固定本次阅读内容，不声称等同 AVD 内二进制源码。
+
+## 中文错误与重新配对入口复验
+
+实际表单保留结构化原始失败，分别显示未授权、配对验证未通过、连接中断和连接超时的中文指导。配对码提交时立即清空；连接失败重试复用本次设备记录，重新配对沿用同一设备／地址，配对端口与码重新填写。明确配对拒绝不笼统归因于码输入错误；EOF只说明连接中断，不能伪造密码学结论。
+
+公开表单／错误组件16项通过。第一轮真实安全AVD复验发现明确`pairing authentication failed`仍落入英文提示，实际失败日志`/tmp/connect-oct17-connection-feedback.log`保留；补公开组件先红后绿回归后，再跑相同真实系统链路66秒全通过：`/tmp/connect-oct17-connection-feedback-r2.log`、`/tmp/connect-e2e/connection-feedback-r2/result.json`。E2E独立核验raw peer拒绝，再按该类型精确匹配唯一中文；实际点击“重新配对”，核验同设备／地址、空端口／码，错码无GUID，重新开启系统窗口后成功配对／Required TLS，再通过系统接口精确撤权确认旧身份被拒。报告所有必须布尔项为true、hostErrors为空、基线信任保留、当次信任／转发清理完成。
+
+已目视`paired-connected-workspace.png`和`revoked-rejected.png`：真实连接工作台及完整中文拒绝／重新配对入口，没有配对码截图。截图仍只位于上述临时目录。这不替代码过期／切网／后台、直接Settings Forget、量产OEM或全页面设计验收。
