@@ -94,6 +94,9 @@ impl MediaStreams {
         let status = Arc::new(Mutex::new(
             json!({"relayId": id, "generation": generation, "endpoint":initial,"status": "waiting", "packets": 0, "bytes": 0}),
         ));
+        if params["traceFrames"].as_bool() == Some(true) {
+            status.lock().await["frameTrace"] = json!([]);
+        }
         {
             let mut entries = self.entries.lock().await;
             entries.retain(|_, entry| !entry.finished.load(Ordering::Acquire));
@@ -525,6 +528,7 @@ async fn forward_generation(
         track,
     } = ready;
     let mut mux = MatroskaMuxer::new(generation, track).map_err(mux_error)?;
+    let tracing = status.lock().await["frameTrace"].is_array();
     tokio::time::timeout(
         Duration::from_secs(10),
         output.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: video/x-matroska\r\nTransfer-Encoding: chunked\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"),
@@ -534,6 +538,7 @@ async fn forward_generation(
     chunk(&mut output, &mux.take_header()).await?;
     loop {
         let (flags, bytes) = packet;
+        let mux_started_us = tracing.then(super::monotonic_micros);
         let encoded = mux
             .push_packet(
                 flags & ((1 << 61) - 1),
@@ -541,12 +546,26 @@ async fn forward_generation(
                 &bytes,
             )
             .map_err(mux_error)?;
+        let write_started_us = tracing.then(super::monotonic_micros);
         chunk(&mut output, &encoded).await?;
+        let written_us = tracing.then(super::monotonic_micros);
         {
             let mut state = status.lock().await;
             state["status"] = json!("streaming");
             state["packets"] = json!(state["packets"].as_u64().unwrap_or(0) + 1);
             state["bytes"] = json!(state["bytes"].as_u64().unwrap_or(0) + encoded.len() as u64);
+            if let Some(frames) = state.get_mut("frameTrace").and_then(Value::as_array_mut) {
+                if frames.len() == 256 {
+                    frames.remove(0);
+                }
+                frames.push(json!({
+                    "generation": generation,
+                    "ptsUs": (flags & ((1 << 61) - 1)) - mux.source_origin_us().unwrap(),
+                    "muxStartedUs": mux_started_us,
+                    "writeStartedUs": write_started_us,
+                    "writtenUs": written_us,
+                }));
+            }
         }
         let group = packet_group(source, video.is_some(), 64).await?;
         if video.is_some()

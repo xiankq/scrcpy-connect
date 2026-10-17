@@ -489,6 +489,66 @@ async fn running_video(
 }
 
 #[tokio::test]
+async fn frame_diagnostics_are_opt_in_bounded_and_use_the_actual_muxed_pts_and_shared_clock() {
+    for tracing in [false, true] {
+        let streams = MediaStreams::default();
+        let raw = raw_listener().await;
+        let before = interop_core::media::monotonic_micros();
+        let relay = streams
+            .command(
+                "media.open",
+                &json!({
+                    "kind":"video", "codec":"h264", "port":raw.local_addr().unwrap().port(),
+                    "token":TOKEN, "generation":7, "traceFrames":tracing,
+                }),
+            )
+            .await
+            .unwrap();
+        let mut playback = client(&relay, true).await;
+        let mut source = authorized_raw(&raw).await;
+        dimensions(&mut source, 288, 640).await;
+        config(&mut source, false).await;
+        frame(&mut source, 5_000_000, true).await;
+        first_matroska(&mut playback).await;
+        for index in 1..=258 {
+            frame(&mut source, 5_000_000 + index * 1000, false).await;
+            assert!(http_chunk(&mut playback).await.is_some());
+        }
+        let state = tokio::time::timeout(DEADLINE, async {
+            loop {
+                let state = status(&streams, &relay, "streaming").await;
+                if state["packets"] == 259 {
+                    break state;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let after = interop_core::media::monotonic_micros();
+        if tracing {
+            let frames = state["frameTrace"].as_array().unwrap();
+            assert_eq!(frames.len(), 256);
+            for (offset, frame) in frames.iter().enumerate() {
+                assert_eq!(frame["generation"], 7);
+                assert_eq!(frame["ptsUs"], (offset as u64 + 3) * 1000);
+                let mux = frame["muxStartedUs"].as_u64().unwrap();
+                let write = frame["writeStartedUs"].as_u64().unwrap();
+                let written = frame["writtenUs"].as_u64().unwrap();
+                assert!(before <= mux && mux <= write && write <= written && written <= after);
+            }
+        } else {
+            assert!(state.get("frameTrace").is_none());
+        }
+        streams
+            .command("media.close", &json!({"relayId":relay["relayId"]}))
+            .await
+            .unwrap();
+        closed_raw(&mut source).await;
+    }
+}
+
+#[tokio::test]
 async fn consecutive_encoder_sessions_before_a_frame_keep_only_the_latest_configuration() {
     for changed in [false, true] {
         let streams = MediaStreams::default();

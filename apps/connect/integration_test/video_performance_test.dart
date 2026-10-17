@@ -45,9 +45,11 @@ void main() {
   testWidgets(
     'real decoded freshness, first frame, pause and repeated connections',
     (tester) async {
+      const traceFrames = bool.fromEnvironment('CONNECT_PERF_TRACE_FRAMES');
       final rounds = <VideoJson>[];
       binding.reportData = {
         'videoPerformanceComplete': false,
+        if (traceFrames) 'frameCorrelationComplete': false,
         'rounds': rounds,
       };
       Future<VideoJson> request(
@@ -56,7 +58,13 @@ void main() {
       ]) async {
         final result = jsonDecode(
           await core.invoke(
-            requestJson: jsonEncode({'command': command, 'params': params}),
+            requestJson: jsonEncode({
+              'command': command,
+              'params': {
+                ...params,
+                if (traceFrames && command == 'media.open') 'traceFrames': true,
+              },
+            }),
           ),
         ) as VideoJson;
         if (result['ok'] != true) {
@@ -81,13 +89,25 @@ void main() {
         'CONNECT_PERF_DECODER',
         defaultValue: 'platform',
       );
+      const nativeOptions = String.fromEnvironment(
+        'CONNECT_PERF_NATIVE_OPTIONS',
+      );
       final decoderCandidates = switch (decoderPolicy) {
         'platform' => null,
+        'native' => [
+          'AMediaCodec${nativeOptions.isEmpty ? '' : ':$nativeOptions'}',
+          'FFmpeg:thread_type=slice',
+          'dav1d',
+        ],
         'software' => const ['FFmpeg:thread_type=slice', 'dav1d'],
         'software-default' => const ['FFmpeg', 'dav1d'],
         _ => throw ArgumentError.value(decoderPolicy, 'CONNECT_PERF_DECODER'),
       };
       binding.reportData!['decoderPolicy'] = decoderPolicy;
+      if (decoderPolicy == 'native') {
+        binding.reportData!['nativeDecoderOptions'] = nativeOptions;
+      }
+      binding.reportData!['nativeFrameTrace'] = traceFrames;
       var disposed = false;
       final outputs = PortableVideoOutputs(
         core: request,
@@ -96,11 +116,17 @@ void main() {
         playerFactory: () {
           final events = <VideoJson>[];
           decoderEvents = events;
-          final instance = FvpVideoPlayer(videoDecoders: decoderCandidates);
+          final instance = FvpVideoPlayer(
+            videoDecoders: decoderCandidates,
+            traceFrames: traceFrames,
+          );
           // Closed by release along with this player's event stream. Retain
           // native decoder receipts, never infer a selection from priorities.
           instance.events.listen((event) {
-            if (event['category'] == 'decoder.video') events.add({...event});
+            if (event['category'] == 'decoder.video' ||
+                event['category'] == 'video.frameTrace') {
+              events.add({...event});
+            }
           });
           return player = instance;
         },
@@ -177,6 +203,7 @@ void main() {
               'bitRate': 2000000,
             });
             session = stream['sessionId'] as String;
+            evidence['quality'] = stream['quality'];
             evidence['coreStartMs'] = watch.elapsedMilliseconds;
             evidence['coreStartupTimingMs'] = stream['captureStartupTimingMs'];
             if (keepConnection && round > 0) {
@@ -193,13 +220,23 @@ void main() {
             }
             ready = await outputs.start(stream);
             evidence['decoderEvents'] = decoderEvents;
-            if (decoderPolicy != 'platform') {
+            if (decoderPolicy.startsWith('software')) {
               expect(
                 decoderEvents.any(
                   (event) => event['error'] == 0 && event['detail'] == 'FFmpeg',
                 ),
                 true,
                 reason: 'The software comparison requires an actual FFmpeg open receipt.',
+              );
+            }
+            if (decoderPolicy == 'native') {
+              expect(
+                decoderEvents.any(
+                  (event) =>
+                      event['error'] == 0 && event['detail'] == 'AMediaCodec',
+                ),
+                true,
+                reason: 'The native comparison requires an actual AMediaCodec open receipt.',
               );
             }
             evidence['startToDecodedMs'] = watch.elapsedMilliseconds;
@@ -245,6 +282,7 @@ void main() {
             final observation = Stopwatch()..start();
             for (var sample = 0; sample < transitions; sample++) {
               expected = (expected + 1) & 15;
+              final traceBefore = (player as FvpVideoPlayer).frameTrace;
               final watch = Stopwatch()..start();
               await request('session.key', {
                 'sessionId': session,
@@ -270,15 +308,77 @@ void main() {
                 }
                 await Future<void>.delayed(const Duration(milliseconds: 10));
               }
-              (evidence['inputToDecodedMs'] as List<int>).add(
-                watch.elapsedMilliseconds,
-              );
-              (evidence['samples'] as List<VideoJson>).add({
+              final totalMs = watch.elapsedMilliseconds;
+              (evidence['inputToDecodedMs'] as List<int>).add(totalMs);
+              final traceAfter = (player as FvpVideoPlayer).frameTrace;
+              VideoJson? matchedFrame;
+              if (traceAfter != null) {
+                final snapshot = traceAfter['snapshot'] as VideoJson;
+                final pts = snapshot['ptsSeconds'] as num;
+                final decoded = (traceAfter['decoded'] as List)
+                    .cast<VideoJson>()
+                    .where(
+                      (frame) =>
+                          ((frame['ptsSeconds'] as num) - pts).abs() < .000001,
+                    )
+                    .toList();
+                expect(
+                  decoded,
+                  isNotEmpty,
+                  reason: 'Trace must observe the same PTS actually returned by the renderer.',
+                );
+                matchedFrame = decoded.last;
+              }
+              final sampleEvidence = <String, dynamic>{
                 'counter': expected,
                 'controlMs': controlMs,
                 'snapshotMs': reads,
-                'totalMs': watch.elapsedMilliseconds,
-              });
+                'totalMs': totalMs,
+                'traceBefore': ?traceBefore,
+                'traceAfter': ?traceAfter,
+                if (matchedFrame != null)
+                  'decodeToSnapshotUs':
+                      (traceAfter!['snapshot'] as VideoJson)['elapsedUs'] -
+                      matchedFrame['elapsedUs'],
+              };
+              if (matchedFrame != null) {
+                // Read this sample's relay receipt before a long run can evict
+                // it from the bounded native ring. This runs after timing ends.
+                final transferred = await request('media.status', {
+                  'relayId': ready['relayId'],
+                });
+                final pts =
+                    (traceAfter!['snapshot'] as VideoJson)['ptsSeconds'] as num;
+                final matches = (transferred['frameTrace'] as List)
+                    .cast<VideoJson>()
+                    .where(
+                      // MDK's seconds conversion may truncate one microsecond.
+                      (frame) =>
+                          ((frame['ptsUs'] as num) - pts * 1000000).abs() <=
+                          1.1,
+                    )
+                    .toList();
+                expect(matches, hasLength(1));
+                final forwarded = matches.single;
+                final origin = traceAfter['clockOriginUs'] as int;
+                sampleEvidence['relayFrame'] = forwarded;
+                sampleEvidence['relayWriteUs'] =
+                    (forwarded['writtenUs'] as int) -
+                    (forwarded['writeStartedUs'] as int);
+                sampleEvidence['relayToDecodeUs'] =
+                    origin +
+                    (matchedFrame['elapsedUs'] as int) -
+                    (forwarded['writtenUs'] as int);
+                sampleEvidence['inputToRelayUs'] =
+                    (forwarded['muxStartedUs'] as int) -
+                    (traceBefore!['nowElapsedUs'] as int) -
+                    origin;
+                expect(
+                  sampleEvidence['relayToDecodeUs'] as int,
+                  greaterThanOrEqualTo(0),
+                );
+              }
+              (evidence['samples'] as List<VideoJson>).add(sampleEvidence);
             }
             final after = await request('media.status', {
               'relayId': ready['relayId'],
@@ -287,7 +387,22 @@ void main() {
               'elapsedMs': observation.elapsedMilliseconds,
               'packets': (after['packets'] as int) - (before['packets'] as int),
               'bytes': (after['bytes'] as int) - (before['bytes'] as int),
+              'frameTrace': ?after['frameTrace'],
             };
+            const idleMs = int.fromEnvironment('CONNECT_PERF_IDLE_MS');
+            expect(idleMs, inInclusiveRange(0, 10000));
+            if (idleMs > 0) {
+              final idle = Stopwatch()..start();
+              await Future<void>.delayed(Duration(milliseconds: idleMs));
+              final end = await request('media.status', {
+                'relayId': ready['relayId'],
+              });
+              evidence['idleTransferObservation'] = {
+                'elapsedMs': idle.elapsedMilliseconds,
+                'packets': (end['packets'] as int) - (after['packets'] as int),
+                'bytes': (end['bytes'] as int) - (after['bytes'] as int),
+              };
+            }
             final paused = await presentation.request('session.pause', {
               'sessionId': session,
             });
@@ -365,6 +480,7 @@ void main() {
             }
           });
         }
+        if (traceFrames) binding.reportData!['frameCorrelationComplete'] = true;
         final timings = [
           for (final round in rounds)
             ...(round['inputToDecodedMs'] as List<int>),

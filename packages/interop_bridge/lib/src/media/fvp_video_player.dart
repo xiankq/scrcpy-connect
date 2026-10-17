@@ -1,27 +1,44 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:fvp/mdk.dart' as mdk;
 
 import '../interop_exception.dart';
+import 'native_frame_trace.dart';
 import 'video_player_port.dart';
 import 'playback_confirmation.dart';
 
-/// Uses only public fvp APIs. Codec selection remains MDK's actual runtime
+/// Playback uses public fvp APIs. Codec selection remains MDK's actual runtime
 /// decision; videoDecoders is a priority list and is never reported as evidence.
 class FvpVideoPlayer implements VideoPlayerPort {
   /// Explicit priorities support real backend comparisons. The list still is
   /// not evidence of which decoder MDK actually opens; observe decoder.video.
-  factory FvpVideoPlayer({List<String>? videoDecoders}) {
+  factory FvpVideoPlayer({
+    List<String>? videoDecoders,
+    bool traceFrames = false,
+  }) {
     if (_retiring.length >= 8) {
       throw const InteropException('resource_busy', '播放器资源仍在释放，请稍后重新打开画面。');
     }
     return FvpVideoPlayer._(
       videoDecoders == null ? null : List.unmodifiable(videoDecoders),
+      traceFrames,
     );
   }
-  FvpVideoPlayer._(this._videoDecoders);
+  FvpVideoPlayer._(this._videoDecoders, this._traceFrames);
   final List<String>? _videoDecoders;
+  final bool _traceFrames;
+  NativeFrameTrace? _frameTrace;
+  int? _texture;
+
+  /// Diagnostic snapshots and decoded observations share this native clock.
+  VideoJson? get frameTrace {
+    final trace = _frameTrace;
+    return trace == null
+        ? null
+        : {...trace.metrics, 'undecodedBufferMs': _player.buffered()};
+  }
 
   void _initialize() {
     if (_initialized) return;
@@ -170,6 +187,21 @@ class FvpVideoPlayer implements VideoPlayerPort {
     if (texture < 0 || size == null || size.width <= 0 || size.height <= 0) {
       throw const InteropException('decoder_error', '未能创建视频纹理。');
     }
+    _texture = texture;
+    if (_traceFrames) {
+      _frameTrace = NativeFrameTrace(_player.nativeHandle);
+      final parameters = _player.mediaInfo.video!.first.codec;
+      final extra = parameters.extra;
+      _emit({
+        'kind': 'diagnostic',
+        'category': 'video.frameTrace',
+        'enabled': true,
+        'codec': parameters.codec,
+        'reportedBFrames': parameters.bFrames,
+        if (extra != null && extra.length <= 4096)
+          'codecExtraBase64': base64Encode(extra),
+      });
+    }
     return VideoTexture(texture, size.width.round(), size.height.round());
   }
 
@@ -199,6 +231,16 @@ class FvpVideoPlayer implements VideoPlayerPort {
   }) async {
     _check();
     final watch = Stopwatch()..start();
+    final trace = _frameTrace;
+    if (trace != null) {
+      final pixels = await trace.snapshot(
+        texture: _texture!,
+        width: width,
+        height: height,
+      );
+      _check();
+      return pixels;
+    }
     final pixels = await _player.snapshot(width: width, height: height);
     _emit({
       'kind': 'diagnostic',
@@ -215,6 +257,8 @@ class FvpVideoPlayer implements VideoPlayerPort {
 
   Future<VideoJson> _release() async {
     _released = true;
+    _frameTrace?.close();
+    _frameTrace = null;
     if (!_initialized) {
       await _events.close();
       return {

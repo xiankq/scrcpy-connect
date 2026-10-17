@@ -6,6 +6,7 @@ resolution: workspace
 environment:
   sdk: ^3.13.5
 dependencies:
+  ffi: ^2.2.0
   fvp: 0.39.1
   code_assets: ^2.1.0
   flutter:
