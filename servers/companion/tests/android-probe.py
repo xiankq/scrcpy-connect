@@ -102,7 +102,21 @@ try:
     reply = success("notifications.reply", notificationId=own[0]["id"], text="真实 RemoteInput interoperability")
     assert reply["acceptedBySystem"] and reply["delivered"] is None
     if not options.skip_receiver:
-        received = json.loads(line(fixture))
+        try:
+            received = json.loads(line(fixture))
+        except AssertionError:
+            # Preserve receiver/queue evidence before the finally block removes
+            # this run's uniquely tagged fixture. This never changes delivery.
+            dump = adb("shell", "dumpsys", "activity", "broadcasts").stdout.splitlines()
+            selected = set()
+            for index, value in enumerate(dump):
+                if tag in value:
+                    selected.update(range(max(0, index - 4), min(len(dump), index + 12)))
+            print("Receiver timeout for " + tag + "; fixture exit=" + str(fixture.poll()), flush=True)
+            print("\n".join(dump[index] for index in sorted(selected)) or "No matching fixture receiver or queued broadcast was present.", flush=True)
+            log = adb("logcat", "-d", "-t", "500").stdout.splitlines()
+            print("\n".join(value for value in log if "registerReceiverWithFeature" in value), flush=True)
+            raise
         assert received == {"event": "reply.received", "text": "真实 RemoteInput interoperability"}
     assert request("notifications.reply", notificationId=own[1]["id"], text="must not send")["error"]["code"] == "reply_unavailable"
     assert request("notifications.reply", notificationId=own[2]["id"], text="must not bypass auth")["error"]["code"] == "authentication_required"
