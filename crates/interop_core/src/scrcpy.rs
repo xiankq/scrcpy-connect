@@ -82,7 +82,7 @@ fn video_codec(name: &str) -> CoreResult<VideoCodec> {
 }
 
 #[derive(Clone)]
-struct VideoEncoder {
+pub(crate) struct VideoEncoder {
     codec: String,
     name: String,
     hardware: Option<bool>,
@@ -1511,6 +1511,12 @@ wait "$child""#
 
     async fn probe_video_encoders(&self, device: &str) -> CoreResult<Vec<VideoEncoder>> {
         let client = self.client(device).await?;
+        self.encoder_catalog
+            .get(&client, || Self::read_video_encoders(&client))
+            .await
+    }
+
+    async fn read_video_encoders(client: &interop_adb::Client) -> CoreResult<Vec<VideoEncoder>> {
         if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
             return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
         }

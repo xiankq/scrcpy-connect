@@ -420,6 +420,11 @@ impl Client {
     pub fn is_closed(&self) -> bool {
         self.inner.cancellation.is_cancelled()
     }
+    /// Whether both handles share this exact transport. Clones do; reconnects
+    /// do not, even when their device banners match. This is not a liveness test.
+    pub fn same_connection(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
     /// Last transport/protocol failure; excludes service payloads and identity secrets.
     pub fn close_reason(&self) -> Option<String> {
         self.inner.failure.lock().expect("failure mutex").clone()

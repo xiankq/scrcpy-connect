@@ -146,6 +146,9 @@ void main() {
           'CONNECT_PERF_TRANSITIONS',
           defaultValue: 8,
         );
+        const keepConnection = bool.fromEnvironment(
+          'CONNECT_PERF_KEEP_CONNECTION',
+        );
         expect(roundCount, inInclusiveRange(1, 20));
         expect(transitions, inInclusiveRange(2, 100));
         var converted = false;
@@ -160,8 +163,11 @@ void main() {
           late VideoJson ready;
           await real(() async {
             final connected = Stopwatch()..start();
-            await request('devices.connect', {'deviceId': device});
+            if (!keepConnection || round == 0) {
+              await request('devices.connect', {'deviceId': device});
+            }
             evidence['connectMs'] = connected.elapsedMilliseconds;
+            evidence['connectionReused'] = keepConnection && round > 0;
             final watch = Stopwatch()..start();
             final stream = await request('session.start', {
               'deviceId': device,
@@ -173,6 +179,18 @@ void main() {
             session = stream['sessionId'] as String;
             evidence['coreStartMs'] = watch.elapsedMilliseconds;
             evidence['coreStartupTimingMs'] = stream['captureStartupTimingMs'];
+            if (keepConnection && round > 0) {
+              expect(
+                (stream['captureStartupTimingMs'] as VideoJson)['validatedMs'],
+                lessThanOrEqualTo(
+                  const int.fromEnvironment(
+                    'CONNECT_PERF_MAX_WARM_VALIDATION_MS',
+                    defaultValue: 5000,
+                  ),
+                ),
+                reason: 'Repeated capture on an existing connection must meet its validation budget.',
+              );
+            }
             ready = await outputs.start(stream);
             evidence['decoderEvents'] = decoderEvents;
             if (decoderPolicy != 'platform') {
@@ -342,7 +360,9 @@ void main() {
             }
             await request('session.stop', {'sessionId': session});
             session = null;
-            await request('devices.disconnect', {'deviceId': device});
+            if (!keepConnection) {
+              await request('devices.disconnect', {'deviceId': device});
+            }
           });
         }
         final timings = [

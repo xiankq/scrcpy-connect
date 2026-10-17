@@ -5,6 +5,7 @@ mod companion;
 mod delivery;
 mod device;
 pub mod documents;
+mod encoder_catalog;
 mod events;
 mod file_search;
 mod file_tree;
