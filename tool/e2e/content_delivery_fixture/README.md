@@ -40,7 +40,9 @@ rtk adb -s <controller-avd-serial> shell run-as dev.scrcpyconnect.deliveryfixtur
 ```
 
 receipt 的 `status` 应为 `success`，且 `success=true`，再对照原文件的
-`displayName`、`mime`、`bytes` 与 `sha256`。`uriScheme` 必须为
+`displayName`、`intentMime`、`resolvedMime`、`bytes` 与 `sha256`。Intent的类型
+决定Sharesheet匹配，URI解析类型则来自提供方；两者分别核验，不互相覆盖。
+`uriScheme` 必须为
 `content`，`readGrant` 必须为 `true`；后者表示接收 Intent 带有
 `FLAG_GRANT_READ_URI_PERMISSION`，实际打开并读至 EOF 才会成功。
 SHA-256 是实际读到的全部字节的十六进制摘要，不是元数据声明。
@@ -58,3 +60,17 @@ provider 查询或读取异常均失败。fixture 只处理 `ACTION_SEND`，不�
 
 需要复验“缺少 URI”的失败路径时，可通过系统分享发送纯文本至该目标；
 该路径应失败，不能当作内容交付成功证据。不要删除或读取产品应用的内部文件。
+
+## 自动相册原件交付
+
+自动host入口为`apps/connect/test_driver/content_delivery.dart`，目标为
+`integration_test/content_delivery_test.dart`。默认`text`从文件详情取用；
+`image`／`video`必须同时设置host环境变量`CONNECT_E2E_CONTENT_KIND`和
+同名`--dart-define`，再用`CONNECT_E2E_FFMPEG`指定实际host FFmpeg绝对路径。
+该工具只生成测试JPEG／H264 MP4，不是产品依赖。样本由host读取并计算hash，
+源文件只放被控Pictures／Movies下的唯一名称，系统保存仍选择主控Downloads。
+
+媒体流程必须从实际相册网格进入，等待真实缩略图和原件解码；视频还检查播放时钟、
+暂停、拖动定位和静音，然后复用真实取消／保存／系统分享／外部字节及授权核验。
+host同时核验精确MIME；只出现文件名、播放按钮或分享面板不算通过。
+结果和图像仍只在指定`/tmp/`目录，清理不遍历删除其他相册或下载内容。

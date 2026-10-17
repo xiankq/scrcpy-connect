@@ -47,8 +47,13 @@ List<_UiNode> _parseNodes(String xml) {
 }
 
 class _AndroidDelivery {
-  _AndroidDelivery(this.adb, this.controller, this.target, this.output)
-    : runId = List.generate(
+  _AndroidDelivery(
+    this.adb,
+    this.controller,
+    this.target,
+    this.output,
+    this.kind,
+  ) : runId = List.generate(
         16,
         (_) => Random.secure().nextInt(256),
       ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
@@ -57,6 +62,7 @@ class _AndroidDelivery {
   final String controller;
   final String target;
   final Directory output;
+  final String kind;
   final String runId;
   final receipt = <String, dynamic>{};
   bool receiverOwned = false;
@@ -65,9 +71,25 @@ class _AndroidDelivery {
   bool cleanupConfirmed = false;
   String? expectedSha256;
 
-  String get filename => 'connect-delivery-$runId.txt';
-  String get devicePath => '/sdcard/Download/$filename';
-  List<int> get expected => utf8.encode('Connect delivery $runId\n字节核验\n');
+  String get extension => switch (kind) {
+    'image' => 'jpg',
+    'video' => 'mp4',
+    _ => 'txt',
+  };
+  String get mime => switch (kind) {
+    'image' => 'image/jpeg',
+    'video' => 'video/mp4',
+    _ => 'text/plain',
+  };
+  String get filename => 'connect-delivery-$runId.$extension';
+  String get sourcePath =>
+      '/sdcard/${switch (kind) {
+        'image' => 'Pictures',
+        'video' => 'Movies',
+        _ => 'Download',
+      }}/$filename';
+  String get exportPath => '/sdcard/Download/$filename';
+  late final List<int> expected;
 
   Future<ProcessResult> _run(
     String serial,
@@ -156,14 +178,83 @@ class _AndroidDelivery {
   }
 
   Future<void> createSource() async {
-    if (await _exists(target, devicePath) ||
-        await _exists(controller, devicePath)) {
+    if (await _exists(target, sourcePath) ||
+        await _exists(controller, exportPath)) {
       throw StateError(
         'This run’s exact source/export filename already exists.',
       );
     }
     final knownFile = File('${output.path}/$filename');
-    await knownFile.writeAsBytes(expected, flush: true);
+    if (kind == 'text') {
+      await knownFile.writeAsBytes(
+        utf8.encode('Connect delivery $runId\n字节核验\n'),
+        flush: true,
+      );
+    } else {
+      final ffmpeg = Platform.environment['CONNECT_E2E_FFMPEG'];
+      if (ffmpeg == null ||
+          !File(ffmpeg).isAbsolute ||
+          !await File(ffmpeg).exists()) {
+        throw StateError(
+          'Media delivery requires an explicit host FFmpeg tool.',
+        );
+      }
+      final process = await Process.start(ffmpeg, [
+        '-v',
+        'error',
+        '-nostdin',
+        '-n',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc2=size=320x180:rate=15',
+        if (kind == 'image') ...[
+          '-frames:v',
+          '1',
+          '-c:v',
+          'mjpeg',
+          '-q:v',
+          '3',
+        ] else ...[
+          '-t',
+          '6',
+          '-an',
+          '-c:v',
+          'libx264',
+          '-preset',
+          'ultrafast',
+          '-pix_fmt',
+          'yuv420p',
+          '-movflags',
+          '+faststart',
+        ],
+        knownFile.path,
+      ]);
+      final stdout = process.stdout.drain<void>();
+      final stderr = process.stderr.transform(utf8.decoder).join();
+      try {
+        final exit = await process.exitCode.timeout(
+          const Duration(seconds: 30),
+        );
+        await stdout;
+        if (exit != 0) {
+          throw StateError('Host media fixture failed: ${await stderr}');
+        }
+        await stderr;
+      } on TimeoutException {
+        process.kill(ProcessSignal.sigkill);
+        await process.exitCode;
+        await stdout;
+        await stderr;
+        rethrow;
+      }
+    }
+    expected = await knownFile.readAsBytes();
+    if (expected.isEmpty || expected.length >= 2 * 1024 * 1024) {
+      throw StateError(
+        'Delivery fixture exceeds the independent receiver bound.',
+      );
+    }
     final hash = await Process.run('sha256sum', [
       knownFile.path,
     ]).timeout(const Duration(seconds: 10));
@@ -176,7 +267,7 @@ class _AndroidDelivery {
     // be cleaned without touching any other fixture, download or app cache.
     sourceOwned = true;
     exportOwned = true;
-    final push = await _run(target, ['push', knownFile.path, devicePath]);
+    final push = await _run(target, ['push', knownFile.path, sourcePath]);
     if (push.exitCode != 0) {
       throw StateError('Pushing the source fixture failed.');
     }
@@ -184,6 +275,8 @@ class _AndroidDelivery {
     receipt.addAll({
       'runId': runId,
       'filename': filename,
+      'contentKind': kind,
+      'expectedMime': mime,
       'expectedBytes': expected.length,
       'expectedSha256': expectedSha256,
       'sourceBytesVerified': true,
@@ -194,7 +287,7 @@ class _AndroidDelivery {
     final result = await _run(serial, [
       'exec-out',
       'cat',
-      devicePath,
+      serial == target ? sourcePath : exportPath,
     ], binary: true);
     final actual = result.stdout as List<int>;
     final wanted = expected;
@@ -204,7 +297,7 @@ class _AndroidDelivery {
           wanted.length,
           (index) => index,
         ).any((index) => actual[index] != wanted[index])) {
-      throw StateError('Exact UTF8 fixture bytes differ on $serial.');
+      throw StateError('Exact original fixture bytes differ on $serial.');
     }
   }
 
@@ -339,7 +432,7 @@ class _AndroidDelivery {
       'The actual Android Save action was not tappable.',
     );
     await _wait(() async {
-      if (!await _exists(controller, devicePath)) return false;
+      if (!await _exists(controller, exportPath)) return false;
       try {
         await _verifyBytes(controller);
         return true;
@@ -443,8 +536,8 @@ class _AndroidDelivery {
     final value = receiver!;
     if (value['success'] != true ||
         value['displayName'] != filename ||
-        value['mime'] is! String ||
-        (value['mime'] as String).isEmpty ||
+        value['intentMime'] != mime ||
+        value['resolvedMime'] != mime ||
         value['uriScheme'] != 'content' ||
         value['readGrant'] != true ||
         value['bytes'] != expected.length ||
@@ -463,13 +556,13 @@ class _AndroidDelivery {
   Future<void> cleanup() async {
     final failures = <String>[];
     for (final entry in [
-      (serial: controller, owned: exportOwned),
-      (serial: target, owned: sourceOwned),
+      (serial: controller, owned: exportOwned, path: exportPath),
+      (serial: target, owned: sourceOwned, path: sourcePath),
     ]) {
       if (!entry.owned) continue;
       try {
-        await _shell(entry.serial, ['rm', '-f', devicePath]);
-        if (await _exists(entry.serial, devicePath)) {
+        await _shell(entry.serial, ['rm', '-f', entry.path]);
+        if (await _exists(entry.serial, entry.path)) {
           throw StateError('The exact fixture file remains.');
         }
       } catch (error) {
@@ -512,6 +605,11 @@ class _AndroidDelivery {
   void validate(Map<String, dynamic> report) {
     if (report.containsKey('productAcceptanceComplete') ||
         report['fixtureRunId'] != runId ||
+        report['contentKind'] != kind ||
+        (kind != 'text' &&
+            (report['galleryThumbnailLoaded'] != true ||
+                report['actualMediaPreview'] != true)) ||
+        (kind == 'video' && report['videoPlaybackControls'] != true) ||
         report['exportedBytes'] != expected.length ||
         [
           'contentDeliveryComplete',
@@ -544,6 +642,10 @@ Future<void> main() async {
   final adb = Platform.environment['CONNECT_E2E_ADB'];
   final controller = Platform.environment['CONNECT_E2E_DEVICE'];
   final target = Platform.environment['CONNECT_E2E_TARGET'];
+  final kind = Platform.environment['CONNECT_E2E_CONTENT_KIND'] ?? 'text';
+  if (!['text', 'image', 'video'].contains(kind)) {
+    throw StateError('Choose an explicit text/image/video content fixture.');
+  }
   if (adb == null ||
       adb.isEmpty ||
       controller == null ||
@@ -566,6 +668,7 @@ Future<void> main() async {
     controller,
     target,
     await Directory(path).create(recursive: true),
+    kind,
   );
   final errors = <String>[];
   var finished = false;
@@ -659,10 +762,23 @@ Future<void> main() async {
                   case 'saved-product-page':
                     await fixture._capture('content-delivery-saved-product');
                     action = 'saved-product-captured';
+                  case 'media-preview-page':
+                    await fixture._capture('content-delivery-media-preview');
+                    action = 'media-preview-captured';
                   case 'share-product-page':
                     await fixture._capture('content-delivery-share-product');
                     action = 'share-product-captured';
                   case 'shared-product-page':
+                    await File(
+                      '${fixture.output.path}/shared-product-windows.txt',
+                    ).writeAsString(
+                      await fixture._shell(fixture.controller, [
+                        'dumpsys',
+                        'window',
+                        'windows',
+                      ]),
+                      flush: true,
+                    );
                     await fixture._capture('content-delivery-shared-product');
                     action = 'shared-product-captured';
                   case 'awaiting-cleanup':
@@ -670,7 +786,14 @@ Future<void> main() async {
                     action = 'cleanup';
                 }
                 if (action != null) {
-                  await extension({'action': action, 'runId': fixture.runId});
+                  await extension({
+                    'action': action,
+                    'runId': fixture.runId,
+                    if (action == 'fixture') ...{
+                      'contentKind': kind,
+                      'fixtureBytes': base64Encode(fixture.expected),
+                    },
+                  });
                   acknowledged.add(stage);
                   if (action == 'cleanup') return;
                 }

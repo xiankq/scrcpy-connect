@@ -43,7 +43,8 @@ public final class DeliveryFixtureActivity extends Activity {
             receipt.put("success", false);
             receipt.put("receivedAtEpochMillis", System.currentTimeMillis());
             receipt.put("action", value(intent == null ? null : intent.getAction()));
-            receipt.put("mime", value(intent == null ? null : intent.getType()));
+            receipt.put("intentMime", value(intent == null ? null : intent.getType()));
+            receipt.put("resolvedMime", JSONObject.NULL);
             receipt.put("displayName", JSONObject.NULL);
             receipt.put("bytes", 0);
             receipt.put("sha256", JSONObject.NULL);
@@ -69,9 +70,7 @@ public final class DeliveryFixtureActivity extends Activity {
             }
 
             String resolvedMime = getContentResolver().getType(uri);
-            if (resolvedMime != null) {
-                receipt.put("mime", resolvedMime);
-            }
+            receipt.put("resolvedMime", value(resolvedMime));
             try (Cursor cursor = getContentResolver().query(uri,
                     new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
                 if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0)) {

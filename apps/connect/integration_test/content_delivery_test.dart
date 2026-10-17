@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -10,10 +11,14 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/file_details/file_details_page.dart';
+import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
+import 'package:scrcpy_connect/pages/media_preview/media_preview_page.dart';
 import 'package:scrcpy_connect/pages/receive_content/receive_content_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/widgets/media_thumbnail.dart';
+import 'package:video_player/video_player.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
@@ -21,15 +26,30 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
   const port = int.fromEnvironment('CONNECT_E2E_PORT');
+  const kind = String.fromEnvironment(
+    'CONNECT_E2E_CONTENT_KIND',
+    defaultValue: 'text',
+  );
   var stage = 'waiting-fixture';
   String? runId;
   String? hostError;
+  List<int>? fixtureBytes;
   final acknowledgements = <String>{};
   binding.reportData = {'contentDeliveryComplete': false};
   developer.registerExtension('ext.connect.contentDelivery', (_, args) async {
     if (args['action'] == 'fixture' && runId == null) {
       final candidate = args['runId'];
-      if (candidate != null && RegExp(r'^[a-f0-9]{32}$').hasMatch(candidate)) {
+      if (candidate != null &&
+          RegExp(r'^[a-f0-9]{32}$').hasMatch(candidate) &&
+          args['contentKind'] == kind &&
+          args['fixtureBytes'] != null) {
+        final bytes = base64Decode(args['fixtureBytes']!);
+        if (bytes.isEmpty || bytes.length >= 2 * 1024 * 1024) {
+          throw StateError(
+            'Independent fixture is outside the receiver bound.',
+          );
+        }
+        fixtureBytes = bytes;
         runId = candidate;
       }
     }
@@ -48,6 +68,7 @@ void main() {
   ) async {
     expect(address, isNotEmpty);
     expect(port, inInclusiveRange(1, 65535));
+    expect(['text', 'image', 'video'], contains(kind));
     await app.main();
     await waitFor(
       tester,
@@ -94,10 +115,21 @@ void main() {
       () => runId != null,
       reason: 'Host must prepare this isolated original.',
     );
-    final name = 'connect-delivery-$runId.txt';
-    final path = '/sdcard/Download/$name';
-    final expected = utf8.encode('Connect delivery $runId\n字节核验\n');
+    final extension = switch (kind) {
+      'image' => 'jpg',
+      'video' => 'mp4',
+      _ => 'txt',
+    };
+    final root = switch (kind) {
+      'image' => 'Pictures',
+      'video' => 'Movies',
+      _ => 'Download',
+    };
+    final name = 'connect-delivery-$runId.$extension';
+    final path = '/sdcard/$root/$name';
+    final expected = fixtureBytes!;
     binding.reportData!['fixtureRunId'] = runId;
+    binding.reportData!['contentKind'] = kind;
     final initialDevices = objects((await request('devices.list'))['devices']);
     String? deviceId;
     var created = false;
@@ -117,13 +149,110 @@ void main() {
       );
       await request('devices.connect', {'deviceId': deviceId});
       final router = GoRouter.of(tester.element(find.byType(Scaffold).first));
-      router.go(FileDetailsRoute(deviceId: deviceId!, path: path).location);
-      await waitFor(
-        tester,
-        () => find.byType(FileDetailsPage).evaluate().isNotEmpty,
-        reason: 'Actual route must re-read remote file metadata.',
-      );
-      await tester.tap(find.text('取回原文件'));
+      if (kind == 'text') {
+        router.go(FileDetailsRoute(deviceId: deviceId!, path: path).location);
+        await waitFor(
+          tester,
+          () => find.byType(FileDetailsPage).evaluate().isNotEmpty,
+          reason: 'Actual route must re-read remote file metadata.',
+        );
+        await tester.tap(find.text('取回原文件'));
+      } else {
+        router.go(GalleryRoute(deviceId: deviceId!).location);
+        final thumbnail = find.byWidgetPredicate(
+          (widget) => widget is MediaThumbnail && widget.file['path'] == path,
+        );
+        await waitFor(
+          tester,
+          () =>
+              find.byType(GalleryPage).evaluate().isNotEmpty &&
+              thumbnail.evaluate().isNotEmpty,
+          reason: 'Actual gallery must list this remote original.',
+        );
+        await tester.ensureVisible(thumbnail);
+        bool hasDecodedImage(Finder scope) => find
+            .descendant(of: scope, matching: find.byType(RawImage))
+            .evaluate()
+            .any((element) {
+              final render = element.renderObject;
+              return render is RenderImage &&
+                  render.image != null &&
+                  render.image!.width > 0 &&
+                  render.image!.height > 0;
+            });
+        await waitFor(
+          tester,
+          () => hasDecodedImage(thumbnail),
+          reason: 'Actual target thumbnail must decode visible pixels.',
+        );
+        binding.reportData!['galleryThumbnailLoaded'] = true;
+        await tester.tap(thumbnail);
+        await waitFor(
+          tester,
+          () => find.byType(MediaPreviewPage).evaluate().isNotEmpty,
+          reason: 'Tapping the actual grid must open the same original.',
+        );
+        final preview = find.byType(MediaPreviewPage);
+        if (kind == 'image') {
+          await waitFor(
+            tester,
+            () => hasDecodedImage(preview),
+            reason: 'The real full image must decode visible pixels.',
+          );
+        } else {
+          await waitFor(
+            tester,
+            () =>
+                find.byType(VideoPlayer).evaluate().isNotEmpty &&
+                find.byTooltip('播放').evaluate().isNotEmpty,
+            reason: 'Actual MP4 preview must initialize and offer play.',
+          );
+          final player = tester
+              .widget<VideoPlayer>(find.byType(VideoPlayer))
+              .controller;
+          expect(
+            player.value.duration,
+            greaterThanOrEqualTo(const Duration(seconds: 5)),
+          );
+          await tester.tap(find.byTooltip('播放'));
+          await waitFor(
+            tester,
+            () =>
+                player.value.position > const Duration(milliseconds: 300) &&
+                find.byTooltip('暂停').evaluate().isNotEmpty,
+            reason: 'The real preview clock must advance after Play.',
+          );
+          await tester.tap(find.byTooltip('暂停'));
+          await waitFor(
+            tester,
+            () => !player.value.isPlaying,
+            reason: 'Pause must stop actual playback.',
+          );
+          final progress = find.byType(VideoProgressIndicator);
+          final rect = tester.getRect(progress);
+          await tester.tapAt(
+            Offset(rect.left + rect.width * .6, rect.center.dy),
+          );
+          await waitFor(
+            tester,
+            () => player.value.position > const Duration(seconds: 2),
+            reason: 'User scrubbing must seek the real video.',
+          );
+          await tester.tap(find.byTooltip('静音'));
+          await waitFor(
+            tester,
+            () =>
+                player.value.volume == 0 &&
+                find.byTooltip('打开声音').evaluate().isNotEmpty,
+            reason: 'Mute must change the actual preview player.',
+          );
+          binding.reportData!['videoPlaybackControls'] = true;
+        }
+        binding.reportData!['actualMediaPreview'] = true;
+        await tester.pump(const Duration(milliseconds: 300));
+        await checkpoint('media-preview-page', 'media-preview-captured');
+        await tester.tap(find.byTooltip('保存原文件'));
+      }
       await waitFor(
         tester,
         () => find.byType(ReceiveContentPage).evaluate().isNotEmpty,
@@ -192,10 +321,15 @@ void main() {
       router.pop();
       await waitFor(
         tester,
-        () => find.byType(FileDetailsPage).evaluate().isNotEmpty,
+        () => find
+            .byType(kind == 'text' ? FileDetailsPage : MediaPreviewPage)
+            .evaluate()
+            .isNotEmpty,
         reason: 'Return to the same original.',
       );
-      await tester.tap(find.text('交给系统分享'));
+      await tester.tap(
+        kind == 'text' ? find.text('交给系统分享') : find.byTooltip('系统分享'),
+      );
       await waitFor(
         tester,
         () =>
