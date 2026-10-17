@@ -67,3 +67,9 @@ python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-re
 产物另存`/tmp/connect-artifacts/connect-arm64-video-release.apk`，46,740,766字节，SHA-256 `506f80ff966bed5669640c66e397120a0a400b9a3271a5fa319b7f7ae657ffd9`。这是当前源码的ARM产物，未在物理ARM执行，不借用早期x64安装结果宣称当前包已上机。
 
 清理时发现并修正筛选错误：Flutter的release缓存同样可能含`app.dill`，不能仅凭它判断debug目录。本批曾误清旧Dart AOT中间缓存，随后以上述当前release重建恢复有效缓存，旧成品/签名/Rust native hooks未受影响。后续仅按明确构建模式识别过期缓存；无法确认模式的hash目录应保留。实际清理406处、释放3345MiB，重建和热构建后空闲73.8GiB；记录`/tmp/connect-video-latency-cleanup.json`，保留当前release/Gradle/CMake/Rust缓存，不再全clean。
+
+## 连接级启动优化与TCP恢复后的产物
+
+`9542e05`/`25e9bac`后，当前arm64包65.03秒构建（Gradle63.9秒）、同模式`--no-pub`复验4.09秒，两次摘要一致；`/tmp/connect-catalog-release.log`及`/tmp/connect-catalog-release-warm.log`。签名证书仍为同一身份，ZIP完整性、manifest、arm64 ELF及16KB ZIP对齐通过。当前通用视频路径`/tmp/connect-artifacts/connect-arm64-video-release.apk`已更新为46,757,150字节、SHA-256 `f701f9690d5e00c4ee9ae23fcefb8c1e96e5c1f99a5a2540985d4309a3d759fb`；前一批`506f80ff...`包保留在`/tmp/connect-artifacts/connect-arm64-before-tcp-release.apk`。这是新源码的签名ARM产物，未在物理ARM执行。
+
+本批仅按Core日志中的准确路径删除非视频测试可执行文件/对应incremental、旧Android测试二进制和debug APK，实际释放8259MiB，空闲65.0GiB。所有release/native hooks/CMake/Gradle与模式不明的Flutter hash缓存保留，闲置Gradle已停止；没有重新删除Dart AOT缓存。记录`/tmp/connect-catalog-cleanup.json`；scrcpy JAR未改、未重建。

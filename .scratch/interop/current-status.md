@@ -164,3 +164,13 @@ Core对iOS／macOS／Windows MSVC交叉check30.93／17.04／20.31秒通过，非
 两种scrcpy JAR摘要再次核对且未改、未重建；普通Flutter/Rust编译直接嵌入已提交产物，tool/check.sh的重建可复现性验证独立于APK组装，说明补入servers/scrcpy/README.md。主任务继续active：AMediaCodec持续等待约0.35–0.45秒、Core核验、真实TLS/半开/切网恢复、高动态吞吐/并发、共同音画时间基/漂移、物理ARM/功耗与四宿主Flutter整包仍开放，不能用软件路径收益替代这些验收。
 
 本批当前arm64签名release78.42秒通过，同模式热构建4.64秒通过且APK摘要一致；最新原件`/tmp/connect-artifacts/connect-arm64-video-release.apk`，46,740,766字节，SHA-256 `506f80ff966bed5669640c66e397120a0a400b9a3271a5fa319b7f7ae657ffd9`，完整性/manifest/ELF/16KB ZIP对齐/签名检查通过，未冒称物理ARM运行。清理406处释放3345MiB时也误删了旧Dart AOT缓存，已明确记录并补建当前有效缓存，未来不能仅凭app.dill判定debug；原签名、旧成品与Rust缓存未受影响。[完整打包记录](../../docs/implementation/android-packaging.md)。Gradle停止，最终空闲73.8GiB，保留当前release/有效原生缓存及临时证据；五项原有未跟踪文件未动，无push。
+
+## 视频后续：重复打开与无EOF网络丢失
+
+`9542e05`按实际ADB连接身份共享成功的编码器目录，并发合并，失败/取消可重试；关闭或替换连接拒绝旧结果，最多32项且淘汰不关闭连接。真实250ms暖校验门槛先红后绿：第二次378ms→最终52/47/46ms，Core814ms→431/450/440ms，暖启动到解码711/707/739ms；首次1197ms没有改善。每次捕获保留睡眠查询、服务端上传/启动和实际关键帧/解码验证。新连接三轮仍重新探测346/357/360ms，逐轮新像素/暂停恢复/截图/纹理分离及自动卸载均通过。[对照和复现](../../docs/implementation/video-performance.md)。
+
+`25e9bac`在Rust TCP层、TLS前配置keepalive；Android/Linux同时限制未ACK数据等待。Android内核真实socket丢包、peer始终打开的两项原策略16秒失败，最终三项17秒通过，包括健康静止和主动close后真实EOF。正式Runtime+真实TLS协议端夹具原策略25秒未恢复，最终20.84秒整项通过：offline→同ID重连、仅一个设备记录、显式断开后实际EOF和5秒无第三次accept。宿主过滤器权限不足的初试不算目标故障红；专用AVD测试进程su0安装仅自身socket过滤器，不增加产品root要求。协议端夹具不是实际配对adbd，不把这些结果写成Wi-Fi切网、视频活动自动恢复或物理双机长稳通过。
+
+完整Core147 passed/49 ignored（37 suites）、ADB50 passed/13 ignored通过；默认ignored不计设备通过，以上Android故障测试另显式执行。Clippy两包all-target -D warnings8.51秒、严格Flutter分析4.7秒、165输入生成一致性通过；iOS/macOS/Windows Core交叉check通过，不是对应Flutter宿主链接/整包。JAR摘要仍一致、未改未重建；AMediaCodec持续等待、冷启动、真实无线/后台恢复、高动态吞吐/音画同步与物理ARM/功耗继续开放。
+
+最终正式远控页五编码24秒通过，H264全屏及悬浮退出截图已目视；普通main构建13.5秒/安装598ms/R热重启1724ms，设备列表已目视。最终签名arm64包总65.03秒、同模式4.09秒，摘要一致，原签名身份/ZIP/manifest/ELF/16KB ZIP对齐通过；当前`/tmp/connect-artifacts/connect-arm64-video-release.apk`为46,757,150字节，SHA-256 `f701f9690d5e00c4ee9ae23fcefb8c1e96e5c1f99a5a2540985d4309a3d759fb`，前一批成品保留归档，仍无物理ARM执行证据。编译/测试结束后停止Gradle，清理非视频测试程序/对应incremental、旧Android测试二进制及debug APK释放8259MiB，空闲65.0GiB；有效release/native hooks及无法确认模式的Flutter缓存保留，AVD测试二进制已删除。五项原有未跟踪文件未动，无push；[完整回执](../../docs/implementation/video-performance.md)。

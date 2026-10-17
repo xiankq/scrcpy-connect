@@ -75,9 +75,9 @@ flutter drive -d emulator-5554 --no-pub \
 
 ## 未关闭的主任务
 
-- 继续降低持续输入到新像素等待；当前Core启动核验约0.35–0.47秒，也需要单独优化，不能用绕过真实能力/解码验证来换数字。
-- 真实网络故障重连/已授权TLS、Wi-Fi切换和半开ADB传输；本次主动disconnect/connect不等于网络故障自动恢复。
-- 播放器已打开后的失败事件到正式会话失败/资源回收仍有待补齐；不能仅依赖HTTP relay结束。
+- 继续降低平台AMediaCodec持续输入到新像素等待；冷连接Core启动核验仍约0.35秒，同连接暖校验已降至46–52ms，见后续连接级目录优化。不能用绕过真实能力/解码验证来换数字。
+- 真实Wi-Fi切换、实际已配对Android adbd的网络故障恢复、视频活动恢复继续验证；后续真实TCP黑洞/Runtime TLS协议夹具已补，不能扩大为这些场景已通过。
+- 播放器失败传播已由后续生命周期修复补齐，物理MediaCodec崩溃和原生资源释放仍需独立故障实测；不能仅依赖HTTP relay结束。
 - Profile/release、真实ARM硬解、不同ROM/分辨率/帧率、并发文件/声音/玻璃覆盖、输入P95/P99、持续高动态和小时级长稳、温度/功耗、共同音画时钟继续开放。
 
 没有把“数据已收到”“编码首帧已就绪”“snapshot已读取”“实际屏幕已呈现”合并为同一个成功标记。
@@ -142,3 +142,59 @@ Core交叉check：aarch64-apple-ios 8.61秒、aarch64-apple-darwin 3.19秒、x86
 普通lib/main.dart实际构建27.4秒、安装584ms，CLI R热重启2250ms；`/tmp/connect-video-main.log`和`/tmp/connect-video-main-restarted.png`，设备列表空态已目视后detach。两条FRB旧isolate投递告警和启动SurfaceSyncGroup告警仍有，未将其写成启动性能达标。
 
 所有编译/测试/drive/run进程结束后停止本批闲置Gradle daemon，实际清理391处debug/测试暂存/incremental目录及29个过期非视频测试可执行文件，释放11132MiB，余量73.2GiB，记录`/tmp/connect-video-cleanup.json`。保留当前视频反馈循环的测试可执行文件、Rust依赖、native hooks、release/Gradle缓存和必要临时原始证据，避免清理导致下一轮视频验证/打包全量重建。用户原先五项未跟踪测试/examples未修改，未push。
+
+## 同一设备连接再次打开远控
+
+后续同日测量发现，每次捕获都会独立推送官方JAR、运行`list_encoders`并清理，即使正在复用同一ADB传输。`EncoderCatalog`现在按实际`Client`连接身份共享一次成功枚举，不按设备ID、地址或banner复用。并发请求共享初始化；失败或取消可重试，连接关闭时拒绝结果，替换连接重新枚举；最多保留32个最近连接的目录，淘汰不关闭连接。缓存不落盘，不复用捕获进程或会话JAR，每次仍重新检查休眠状态、启动服务端并验证编码关键帧与实际解码像素。
+
+窄回归在未复用实现上实际2失败/2通过，最终6项通过：顺序/clone、并发合并、换传输与关闭、失败/取消重试、探测中关闭、容量淘汰不误断线。`/tmp/connect-encoder-catalog-{red,green}.log`。独立只读review未发现可证正确性问题。
+
+双AVD真实相同连接基准先以250ms暖校验门槛失败：第二次校验378ms、Core启动814ms。保持同门槛后4轮通过，首次冷校验361ms/Core805ms/启动到解码1197ms；后三轮校验52/47/46ms、Core431/450/440ms、启动到解码711/707/739ms。优化的是已连接设备的重复打开，首次冷启动没有改善。16次实际新计数P50/P95为348/557ms，不能把启动收益记为持续解码延迟改善。`/tmp/connect-video-warm-validation-{red,green}.log`，结果在`/tmp/connect-e2e/video-warm-validation-{red,green}/`。
+
+随后默认断开/重连3轮15秒通过，校验346/357/360ms，Core741/808/808ms：新传输仍执行完整探测，未错误复用上一连接。逐轮新像素、暂停恢复、截图、纹理分离及夹具自动卸载均通过，`/tmp/connect-video-catalog-reconnect.log`、`/tmp/connect-e2e/video-catalog-reconnect/result.json`。
+
+在前述图案命令后追加可重测同一连接暖启动；默认不复用连接：
+
+```sh
+--dart-define=CONNECT_PERF_KEEP_CONNECTION=true \
+--dart-define=CONNECT_PERF_ROUNDS=4 \
+--dart-define=CONNECT_PERF_TRANSITIONS=4 \
+--dart-define=CONNECT_PERF_MAX_WARM_VALIDATION_MS=250
+```
+
+## TCP链路丢失且对端没有EOF
+
+AOSP ADB默认启用1秒间隔、10次失败探测。本项目此前仅设置TCP_NODELAY，空闲网络黑洞不会自动变为closed，既有Runtime监控因此无法进入重连。现于Rust`connect_tcp`建立后、TLS包装前设置相同keepalive；Android/Linux另设11秒TCP_USER_TIMEOUT，覆盖有数据未获ACK而走TCP重传的情况。没有添加固定视频帧间隔期限，也没有修改USB、自定义字节transport或普通反向转发socket。[AOSP连接入口](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/socket_spec.cpp#238)、[Unix探测参数](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/sysdeps_unix.cpp#28)、[TCP_USER_TIMEOUT语义](https://kernel.googlesource.com/pub/scm/docs/man-pages/man-pages/+/refs/tags/man-pages-6.13/man/man7/tcp.7#1212)。
+
+回归完成真实ADB握手后，在测试自己接受的TCP socket上安装RET0过滤器，保持该对象打开，丢包发生在TCP处理/ACK之前；不是仍代答ACK的用户态TCP代理，也不是关闭peer制造EOF。宿主SO_ATTACH_FILTER返回EPERM，user namespace也不可用；该次失败属于夹具权限失败，没有当成目标故障红证据。改在专用API36 x64 AVD中执行同一Rust测试二进制，以测试进程`su 0`安装过滤器；产品没有新增root要求，未改宿主或AVD全局防火墙。
+
+真实Android红阶段两个丢包用例16秒后仍在线/OPEN等待，健康静止17秒通过；最终三项17秒全部通过：空闲丢包被识别、未ACK OPEN不依赖120秒操作期限而结束、健康静止仍在线并可主动关闭。`/tmp/connect-tcp-liveness-android-{red,green}.log`。默认宿主运行显式ignore两项需过滤器权限的用例，不能将ignored计为通过；Android实际命令使用`--include-ignored --test-threads=3 --nocapture`。
+
+这些期限检测的是TCP链路/ACK丢失；仍正常ACK却不处理ADB的代理或daemon应用层挂起、真实Wi-Fi切换、ROM后台策略、视频活动自动恢复与物理双机长稳仍需独立验证。Apple/Windows只共享keepalive，尚未声称它们具有Android/Linux的未ACK数据11秒边界。
+
+公开Runtime另使用真实TLS socket和ADB协议端夹具，手动端点、关闭伴随轮询，按公开事件验证offline→同ID connected、设备记录仍仅一个。作为对照临时仅保留原TCP_NODELAY策略构建测试二进制，构建后立即恢复最终源码并逐字节核对；原策略在25秒恢复期限失败，整项30.23秒。最终策略相同夹具20.84秒通过，包含显式disconnect后第二socket实际EOF、autoReconnect=false和额外5秒无第三次accept的断言。`/tmp/connect-tcp-runtime-android-{red,green}.log`。这是Android内核上真实TCP/TLS与正式Runtime恢复链路，协议端不是实际配对的Android adbd，未宣称实体无线配对/切网或已有视频活动恢复通过。
+
+独立review补强了主动close的验收：原先只检查同步取消标志，现保留peer并要求2秒内真实读到EOF。最终Android三项重新通过，`/tmp/connect-tcp-liveness-android-verified.log`。跨包feature组合会改变测试可执行文件哈希，最终执行路径从本次Cargo JSON的`compiler-artifact.executable`读取，不能拿旧文件名代替当前产物。
+
+交叉构建反馈循环（NDK路径按本机安装配置；两个同名测试分别属于两个包）：
+
+```sh
+CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android26-clang" \
+CARGO_BUILD_JOBS=2 cargo test -p interop-adb -p interop-core \
+  --test tcp_liveness --target x86_64-linux-android --no-run \
+  --message-format=json > /tmp/connect-tcp-test-artifacts.jsonl
+```
+
+分别从JSON读取两个executable，推送专用AVD的`/data/local/tmp/`并chmod755。ADB测试以`adb shell su 0 <binary> --include-ignored --test-threads=3 --nocapture`运行；Core测试以`adb shell su 0 env TMPDIR=/data/local/tmp RUST_MIN_STACK=8388608 <binary> --ignored --nocapture`运行。执行结束删除自己推送的二进制；不在普通手机要求root或安装测试APK。
+
+## 本批最终验证与交付
+
+`9542e05`提交连接级目录复用；`25e9bac`提交TCP丢失识别及Runtime恢复回归。完整Core147 passed/49 ignored、37 suites，`/tmp/connect-catalog-core-regression.log`；ADB50 passed/13 ignored，`/tmp/connect-catalog-adb-regression.log`。新增目录6项包含在Core通过数内；有权限条件的Android故障结果由上面的独立显式运行证明，不把default ignored冒记为通过。最终补强的EOF断言在`connect-tcp-liveness-android-verified.log`实际通过。
+
+两包all-target clippy -D warnings8.51秒、cargo fmt、严格Flutter分析4.7秒及165输入生成一致性通过，日志前缀`/tmp/connect-catalog-{clippy,analysis,generated}`。Core iOS/macOS/Windows MSVC交叉check4.08/4.07/4.02秒通过（`/tmp/connect-catalog-check-<ios|macos|windows>.log`），不是三宿主Flutter整包或运行证据。
+
+最终Rust源码的正式RemotePage五编码24秒通过，`mediaAcceptanceComplete=true`，`/tmp/connect-video-catalog-product-five.log`及`/tmp/connect-e2e/video-catalog-product-five/result.json`；H264全屏Settings与悬浮退出截图已目视。普通`lib/main.dart`构建13.5秒/安装598ms、CLI R热重启1724ms，设备列表空态截图已目视后detach（`/tmp/connect-catalog-main.log`、`/tmp/connect-catalog-main-restarted.png`）。DTD发现的IDE实例没有活动App，实际热重启使用本次CLI连接；旧isolate投递和SurfaceSyncGroup启动告警保留，未宣称启动流畅已通过。
+
+最终arm64签名release总65.03秒（Gradle63.9秒），同模式第二次4.09秒，APK摘要相同。当前`/tmp/connect-artifacts/connect-arm64-video-release.apk`为46,757,150字节、SHA-256 `f701f9690d5e00c4ee9ae23fcefb8c1e96e5c1f99a5a2540985d4309a3d759fb`，原签名身份保留；ZIP/manifest/arm64 ELF/16KB ZIP对齐/签名均由脚本复验。前一批视频APK归档为`connect-arm64-before-tcp-release.apk`，未冒称当前ARM包已物理上机。[打包记录](android-packaging.md)。
+
+所有编译与测试结束、闲置Gradle停止后，按本次Core回归日志的准确可执行文件路径清理30个非视频测试程序及对应incremental、一个旧Android测试程序和debug APK，实际释放8259MiB，剩余65.0GiB。保留当前视频反馈循环、依赖、release/native hooks/CMake/Gradle及所有无法确认模式的Flutter缓存，未按app.dill盲删；`/tmp/connect-catalog-cleanup.json`。AVD内自己推送的三个TCP测试二进制已删除，视频夹具包不存在；临时图像和原始日志继续在/tmp，未进入Git。原有五项未跟踪文件修改时间仍在10月17日，未动、未stage，未push。
