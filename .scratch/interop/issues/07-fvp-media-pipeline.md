@@ -64,3 +64,6 @@ A59限定复验：r8目标先拍＋750ms后主控及延迟两端截图，实际3
 `9542e05`补连接级编码器目录：实际暖校验378→46–52ms、暖Core814→431–450ms；4轮同连接真实图案通过，新连接3轮仍重新枚举。6项目录所有权/并发/失败取消/关闭/淘汰回归通过，冷启动未改善。`25e9bac`补TCP存活与Android/Linux未ACK期限：AVD内核丢包peer保持打开的两项先红后绿，健康静止及close实际EOF一并通过；正式Runtime真实TLS协议夹具原策略25秒未恢复、最终整项20.84秒通过，含相同deviceId自动重连与显式disconnect后无再连接。不是代理代ACK、peer EOF或实际配对adbd/Wi-Fi切网/视频活动恢复证据。完整Core147/49 ignored、ADB50/13 ignored、all-target clippy、严格分析、165输入生成一致性及三宿主Core交叉check通过。任务仍开放，详见[重复启动与TCP链路恢复边界](../../../docs/implementation/video-performance.md)。
 
 下一项研究/实施：增加MDK解码帧交付renderer与snapshot的同PTS/同主控单调时钟观测，分清回调前等待和回调后排队；先核对C ABI同步int回调的线程/帧所有权、既有回调和关闭时序，评估Rust有界原生指标路径，不把frame指针异步传Dart或增加Android呈现代码。CCodec output.delay=8仅是上界，现有日志不能认定实际积压8帧；SPS VUI重排序也尚无完整解析证据。Rust当前无主动定时攒包，不代表实际背压已排除。详见[后续分段任务与一手定义](../../../docs/implementation/video-performance.md)。
+
+
+2026-10-18后续：上段同PTS研究已实施，Rust可选onVideo/snapshot/relay共享单调时钟，默认不开启，不新增Android呈现代码；`bf4262a`/`c058957`。候选逐项实验后`a694b78`保留现有JAR参数repeat间隔ceil(1e6/min(maxFps,30))与视频fps=-1；正常路径原生AMediaCodec、固定双AVD H264 640/30/2Mbps 80次新像素P50/P95从359/452到186/241ms，相同200/300门槛先红后绿，四轮实际呈现/暂停恢复/清理通过。最大352ms样本未丢弃。首帧无改善，静态重复增加工作，真实功耗/热、默认高清/高动态、物理硬解、长稳/切网/视频活动恢复和四宿主整包继续开放。不能继续把“平台AMediaCodec仍约350–450ms”作为本已测场景的当前结论，也不能外推所有设备已低延迟。[分段、负面实验、复现及边界](../../../docs/implementation/video-performance.md#原生路径分段与持续交互优化2026-10-18-后续批次)。

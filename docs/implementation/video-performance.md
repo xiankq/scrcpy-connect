@@ -201,6 +201,67 @@ CARGO_BUILD_JOBS=2 cargo test -p interop-adb -p interop-core \
 
 ## 下一段定位：解码输出到呈现
 
+以下为实施前记录；该观测已在后续批次实现，实际结果及仍未关闭的范围见文末。
+
 只读核查发现，现有CCodec日志中H264/HEVC为input.delay=0、output.delay=8，AV1为4。这是Codec2参数上界，不是实测积压8帧，也不能直接换算为毫秒。[AOSP定义](https://android.googlesource.com/platform/frameworks/av/+/cdb38d6e4150efa3918d61c52daca8798b3c593e/media/codec2/core/include/C2Config.h)。Rust HTTP转发每个完整AU经mux后立即写chunk，Matroska每AU一个cluster、PTS减首PTS，没有定时攒包或固定偏移；这仍不能仅凭源码排除实际socket背压。现有SPS parser没有完整VUI重排序字段证据，不能宣称重排序深度为零。
 
 下一项研究/实施任务是补`decoded→renderer→snapshot`真实分段，按generation和同一PTS关联，耗时必须使用统一主控单调时钟。MDK官方onFrame/onVideo位于交付renderer之前；本地固定SDK C头`mdk/c/Player.h`的mdkVideoCallback为同步int返回值和frame in/out指针，不能直接把它当可异步投递Dart的普通事件。fvp0.39.1本地`lib/src/callbacks.cpp::MdkSnapshot`收到frameTime却只把像素发给Dart。接入前需验证回调线程、所有权、清理时序和既有回调是否会被替换；优先评估Rust原生回调/有界指标的跨平台路径，不增加Android平台呈现代码、不做逐帧Dart数据搬运。[MDK回调说明](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs#templateclass-frame-player-onframestdfunctionintframe-inttrack-cb)。本次只读结论，不冒记新增计时已实现或已测得MediaCodec内部延迟；`buffered()`也只代表未解码packet队列。
+
+
+## 原生路径分段与持续交互优化（2026-10-18 后续批次）
+
+`bf4262a`增加可选Rust原生观测，`c058957`补真实Flutter合成面的有界新像素检查。没有新增Android播放代码或重建JAR。正常播放默认关闭观测：不注册逐帧回调、不分配指标环、不逐帧进入Dart。观测开启时按generation/token隔离，原生`onVideo`同步返回并保留原frame，最多256条PTS/主控单调时钟；snapshot仅在回调内复制限定尺寸像素，借用指针不跨回调，关闭先撤销请求，迟到回调不能访问Dart已释放的buffer。MDK C前缀按固定0.39头校验，运行版本拒绝未知主次版本；Android诊断snapshot借用固定fvp的video-output导出，正常播放不依赖该诊断接口。
+
+relay写前/写后、MDK onVideo及native snapshot共用Rust单调时钟，按同一归一化PTS连接。MDK秒值转换允许1.1微秒误差，不跨帧模糊匹配；每次操作立即保存关联，避免等长测结束才读取已淘汰环。该测量分清HTTP写耗时、交付renderer之前的等待和snapshot可读之前的等待，不能把它称为显示面板扫描完成时间。`buffered()`仍仅表示未解码packet。[MDK回调与播放语义](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)。
+
+固定双API36 x64 AVD、H264、maxSize640/maxFps30/2Mbps、音频关闭；每次真实按键驱动被控夹具计数变化并核对主控实际像素。下表除最后两行均开启同PTS观测、2轮共16次；冷操作保留，失败结果不删除。
+
+| 改动 | P50 / P95（ms） | 结论 |
+| --- | --- | --- |
+| 原生基线 | 357 / 586 | relay写后到onVideo中位320ms，onVideo到snapshot约12ms |
+| 仅AMediaCodec low_latency=1 | 355 / 581 | 无有效改善，未设默认 |
+| 仅AMediaCodec surface=0 | 354 / 537 | 无有效改善，未设默认 |
+| 指定c2.android.avc.decoder | 447 / 504 | 无有效改善，未设默认 |
+| FFmpeg slice回退 | 194 / 450 | 有冷尾延迟，不能声称该次P95达标 |
+| 仅repeat间隔33333微秒 | 318 / 405 | 有改善，仍未达门槛 |
+| repeat33333加视频fps=-1 | 181 / 343 | 有效候选，仍有冷尾，扩大到80次复验 |
+| 正常播放基线，4轮80次，观测关闭 | 359 / 452 | 200 / 300预算失败；四轮呈现、暂停恢复均通过 |
+| 正常播放最终候选，4轮80次，观测关闭 | **186 / 241** | 相同200 / 300预算通过；四轮呈现、暂停恢复均通过 |
+
+正常路径结果分别为`/tmp/connect-e2e/video-native-control-80-{baseline,fast}/result.json`，日志`/tmp/connect-video-native-control-80-{baseline,fast}.log`。最终最大样本352ms仍保留，P95通过不等于每次都小于300ms。基线总32秒、候选约15.5秒完成80个串行变化，因此不能直接将这两段的包量/时长视作相同输入负载带宽测试。
+
+最终生产改动只有两处：Rust通过现有`video_codec_options=repeat-previous-frame-after:long=...`将静态重复间隔设为`ceil(1e6 / min(maxFps,30))`微秒，尊重1–29fps的低帧率选择；独立视频Player打开前设置MDK `fps=-1`，尽快呈现解码帧。该Player关闭音轨，独立音源播放器不变。[scrcpy v5.0.1 SurfaceEncoder默认值与自定义覆盖顺序](https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java)、[MDK setFrameRate](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs#void-setframeratefloat-value)。组合试验中relay写后到onVideo中位约130ms、onVideo到snapshot约12ms；不能把全部改善归因于某一个内部队列。
+
+代价是静态重复请求从默认约10次/秒提高至最多约30次/秒，会增加编解码工作。实际编码器可能抑制重复，不保证持续产生30个网络包/秒；2秒静止观察基线6–15包/300–787字节，候选5–12包/280–988字节，不足以推断真实手机功耗或高动态带宽。首帧仍未改善：同4轮基线启动到可读像素997–1256ms，候选1172–1286ms；不能将持续交互收益写成冷首帧收益。
+
+可复现正常路径门槛：沿用前述drive入口，追加以下定义，不启用TRACE_FRAMES。开启观测则追加`CONNECT_PERF_TRACE_FRAMES=true`，不要混合两种snapshot实现的统计作为同路径对照。
+
+```sh
+--dart-define=CONNECT_PERF_ROUNDS=4 \
+--dart-define=CONNECT_PERF_TRANSITIONS=20 \
+--dart-define=CONNECT_PERF_MAX_P50_MS=200 \
+--dart-define=CONNECT_PERF_MAX_P95_MS=300 \
+--dart-define=CONNECT_PERF_IDLE_MS=2000
+```
+
+一次早期80次尝试在40次后发现Flutter截图仍为VIDEO4、目标为VIDEO8，未算完整80次基线。固定SDK的integration_test Android截图先acquire ImageView再等待两帧，可能捕获上一幅合成；现在最多8次、1.5秒观察窗口重新获取，每次像素/耗时与原图全部保留，仍不匹配即失败。没有忽略陈旧画面或放宽交互门槛。最终两次80样本的四轮合成面均第一次即匹配；该重试只修测试取样，未宣称修复所有可能的产品停帧。
+
+捕获的H264 CSD解析为Baseline、pic_order_cnt_type=2、num_reorder_frames=0/max_dec_frame_buffering=1；这是所测码流证据，不能从CCodec output.delay上界反推实际B帧数。指定c2.android.avc.decoder实测output.delay=3，AOSP软件libavc含额外显示延迟；默认AVD宿主另有CUVID初始化失败日志与软件解码路径。不同AVD版本/实现不能混为实体手机硬解，也不通过重写SPS或换JAR掩盖等待。[C2SoftAvcDec](https://android.googlesource.com/platform/frameworks/av/+/refs/heads/android16-release/media/codec2/components/avc/C2SoftAvcDec.cpp#920)、[libavc显示延迟](https://android.googlesource.com/platform/external/libavc/+/refs/heads/android16-release/decoder/ih264d_defs.h#48)。
+
+本批仍开放：默认1280/60/8Mbps与高动态图像吞吐、冷首帧、真实ARM硬解/功耗/热、小时级长稳、真实配对adbd切网及已有视频活动恢复、音画共同时间基、四宿主整包。TCP黑洞局部恢复证据沿用上一节，本批80次没有模拟Wi-Fi故障。
+
+
+### 本批验证边界
+
+Rust bridge17项（含9项原生观测）、真实HTTP媒体16项通过；原生snapshot回归覆盖原frame透传、行拷贝、PTS、容量/超时、关闭/迟到回调和generation隔离。relay关闭观测时不插入frameTrace空字段，开启时有界256条并核对真实mux PTS及写入时钟。最终生产改动后Core lib39 passed/2 ignored、两包all-target clippy -D warnings及cargo fmt通过，Bridge Flutter完整114项通过。严格分析发现有界截图循环缺花括号，修正后4.9秒无问题；165输入生成一致性通过，没有生成文件变化。没有将ignored或命令参数错误计作通过。
+
+Core交叉check iOS/macOS/Windows通过；bridge Android arm64在明确NDK CC/AR后通过。直接在Linux检查其余三个bridge target仍受dart-sys所需宿主C工具链/SDK限制（Windows lib.exe及Apple SDK缺失），失败日志保留在`/tmp/connect-native-trace-check-<target>.log`，不能把Core通过写成四宿主Flutter/bridge整包通过。
+
+最终正式RemotePage五编码约24秒通过，`/tmp/connect-e2e/video-native-final-product-five/result.json`各codec为rendered且mediaAcceptanceComplete=true；H264全屏Settings与浮动退出以及最终图案VIDEO0截图已目视。普通main构建11.6秒/安装588ms，DTD发现并连接本次CLI App，实际热重启1642ms，运行错误工具无错误；`/tmp/connect-native-main-restarted.png`设备列表空态已目视。保留启动跳帧/SurfaceSync及两条FRB旧isolate告警，不当作冷启动流畅证明。
+
+宿主独立检查本批29个精确会话JAR路径均不存在，视频夹具APK已卸载；`/tmp/connect-native-final-remote-cleanup.json`。官方枚举JAR和协作暂停捕获JAR摘要仍分别为764eb6f7…和91606a60…，本批未修改、未重建，普通APK继续嵌入现有产物。
+
+
+最终`a694b78`的arm64签名release构建63.53秒，同模式`--no-pub`复建22.59秒，两次APK摘要一致；该增量耗时高于前批4.09秒，未做额外归因或宣称打包进一步加速。当前产物`/tmp/connect-artifacts/connect-arm64-video-release.apk`，46,773,534字节、SHA-256 `c9cc21d19df2b5d5ca726ad5b182854bbb5721a10fa06de0981e171e6f5a285f`；原签名身份和包结构/16KB对齐检查通过。未在物理ARM运行。[打包记录](android-packaging.md)。
+
+全部构建结束后停止本批闲置Gradle，删除明确debug模式中间产物/重复debug APK及一个被替代Core测试程序，共59处，实际释放1379.4MiB，空闲63.0GiB。保留release、native hooks、CMake、Gradle、当前视频测试及模式不明的Flutter hash缓存；`/tmp/connect-native-final-cleanup.json`。原有五项未跟踪文件未动、未stage，未push；任务07和完整产品目标保持开放。

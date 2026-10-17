@@ -73,3 +73,11 @@ python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-re
 `9542e05`/`25e9bac`后，当前arm64包65.03秒构建（Gradle63.9秒）、同模式`--no-pub`复验4.09秒，两次摘要一致；`/tmp/connect-catalog-release.log`及`/tmp/connect-catalog-release-warm.log`。签名证书仍为同一身份，ZIP完整性、manifest、arm64 ELF及16KB ZIP对齐通过。当前通用视频路径`/tmp/connect-artifacts/connect-arm64-video-release.apk`已更新为46,757,150字节、SHA-256 `f701f9690d5e00c4ee9ae23fcefb8c1e96e5c1f99a5a2540985d4309a3d759fb`；前一批`506f80ff...`包保留在`/tmp/connect-artifacts/connect-arm64-before-tcp-release.apk`。这是新源码的签名ARM产物，未在物理ARM执行。
 
 本批仅按Core日志中的准确路径删除非视频测试可执行文件/对应incremental、旧Android测试二进制和debug APK，实际释放8259MiB，空闲65.0GiB。所有release/native hooks/CMake/Gradle与模式不明的Flutter hash缓存保留，闲置Gradle已停止；没有重新删除Dart AOT缓存。记录`/tmp/connect-catalog-cleanup.json`；scrcpy JAR未改、未重建。
+
+
+## 原生视频持续交互优化后的产物
+
+`a694b78`后，ARM64签名release实际63.53秒构建通过；`/tmp/connect-native-final-release.log`。现有身份不变，ZIP完整性、manifest、arm64 ELF、16KB ZIP对齐及签名均由脚本复验。当前`/tmp/connect-artifacts/connect-arm64-video-release.apk`为46,773,534字节，SHA-256 `c9cc21d19df2b5d5ca726ad5b182854bbb5721a10fa06de0981e171e6f5a285f`。前一批f701f969…包另存`/tmp/connect-artifacts/connect-arm64-before-native-latency-release.apk`。这是当前ARM产物，未在物理ARM手机执行；本批双AVD E2E运行的是x64 debug，不能替代ARM安装测试。两个scrcpy JAR仍沿用既有摘要，没有重建。
+
+
+同模式`--no-pub`复建22.59秒，APK摘要一致；`/tmp/connect-native-final-release-warm.log`。高于前批4.09秒，没有将不同批次增量时间当作继续加速的证据，也没有改签名/降低优化级别换速度。随后停止闲置Gradle并清理明确debug产物，释放1379.4MiB、剩余63.0GiB；release/native hooks/CMake/Gradle和无法判断模式的Flutter缓存保留。
