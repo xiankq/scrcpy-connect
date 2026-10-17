@@ -4,6 +4,7 @@ mod companion;
 mod device;
 pub mod documents;
 mod events;
+mod file_search;
 mod file_tree;
 mod files;
 #[cfg(any(target_os = "linux", target_os = "android"))]

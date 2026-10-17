@@ -29,6 +29,7 @@ pub struct Runtime {
     pub(crate) observations: Mutex<HashMap<String, crate::observation::Observation>>,
     pub(crate) observation_wakeup: Arc<tokio::sync::Notify>,
     pub(crate) transfers: Mutex<HashMap<String, crate::files::Transfer>>,
+    pub(crate) searches: crate::file_search::Searches,
     pub(crate) sharing: Mutex<Option<Arc<crate::sharing::ImportManager>>>,
     pub(crate) documents: crate::documents::CopyManager,
     pub(crate) media: crate::media::http::MediaStreams,
@@ -111,6 +112,7 @@ impl Runtime {
             observations: Mutex::new(HashMap::new()),
             observation_wakeup: Arc::new(tokio::sync::Notify::new()),
             transfers: Mutex::new(HashMap::new()),
+            searches: crate::file_search::Searches::default(),
             sharing: Mutex::new(None),
             documents: crate::documents::CopyManager::default(),
             media: crate::media::http::MediaStreams::default(),
@@ -177,6 +179,7 @@ impl Runtime {
     }
 
     pub(crate) async fn stop_device_activities(&self, id: &str) -> CoreResult<()> {
+        self.searches.cancel_device(id);
         self.observation_connection_changed(id).await;
         for transfer in self
             .transfers
@@ -283,6 +286,9 @@ impl Runtime {
             }
             "device.diagnose" => Box::pin(self.diagnose(required(&params, "deviceId")?)).await,
             "files.list" => Box::pin(self.list_files(&params)).await,
+            "files.search.start" | "files.search.get" | "files.search.cancel" => {
+                self.file_search_command(command, &params).await
+            }
             "files.mkdir" | "files.rename" | "files.delete" => {
                 Box::pin(self.mutate_files(command, &params)).await
             }
