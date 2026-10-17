@@ -155,3 +155,7 @@
 - 重新核查修复批次1660805：实际诊断JSON、画质首次尝试及远控反馈作用域已修复。83应用测试和严格分析通过；新APK真实UI从设备诊断/首次H.265选择到实际mdk.snapshot、全屏/触控/退出20秒通过，completion=true。H.265实际230×512仍明显低清，不算质量通过。真实验收缺配置/缺completion不能静默绿，纯Dart负例退出255，已加入check。全量目标及其余36项账本中的未闭合部分仍继续开放，详见重新核查第8节。
 
 - 持续会话批次：手机主屏＋Settings＋Dialer三个真实会话保留、不可见捕获确认暂停、同ID恢复、精确窗口截图和单独关闭后其他窗口继续使用已通过；40秒UI E2E及8次独立进程核对。按scrcpy独立控制线程顺序修复空虚拟显示START_APP死等，并以被控端最小协作捕获补丁替代整进程SIGSTOP；主控仍使用Rust/Flutter/fvp。后续又锁定并修复配置包后空闲误超时、播放器换代取消恢复、迟到回执倒退和ready覆盖暂停。真实HOME回前台13秒、五编码新建/退出/关闭45秒通过。默认Rust135 passed/43 ignored、应用91、桥接83、严格分析/生成一致性/all-target clippy通过。源码到临时JAR可复现SHA及JVM门禁已接入默认检查。详见重新核查第10节和实施记录；大屏/分屏、主屏应用回退、IME、通知与通话、完整恢复/事件重取、系统文件保存、液态玻璃及四端整包仍未完成。
+
+
+- 2026-10-17事件缺口核验批次：Rust统一sequence/只读event-fenced快照，FRB真实256容量溢出后重新订阅；Bridge合并核验、废弃旧水位、精确播放器清理；App冻结输入/剪贴板、校准同一UUID、已结束窗口不重建、普通页提供失败重试。设置发布/保存回执、forget、分享队列和companion缓存交错均有红→绿回归。连续复验又发现编码session首帧前重置导致旧新CSD混合，真实TCP复现后按session边界修复；终态也不能被迟到resume解除。核心cf35daf、Bridge3ee0318、媒体d7d60d8、应用591d48e。
+- 最终Rust工作区146 passed/43 ignored、all-target clippy、应用全量114加后续远控20定向、Bridge93和严格分析/生成一致性通过。最终APK真实核验连续11/10/10秒三次完整通过，三窗口40秒＋8次独立进程检查、HOME恢复11秒通过，代表图已目视。仅为准备端点/同runtime状态恢复，不是未授权起点、完整断网/进程恢复或全设计通过；会话列表应用包名和白卡材质等继续进入缺口账本。详细命令/失败/边界见 docs/implementation/state-recovery.md、validation.md 和 completion-reassessment.md第11节。

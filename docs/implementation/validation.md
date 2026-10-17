@@ -189,3 +189,42 @@ rtk proxy env CONNECT_E2E_TARGET=emulator-5556 \
 当前默认Rust工作区135 passed/43 ignored、all-target clippy、cargo fmt通过；严格Flutter分析无问题，真实workspace build_runner only-check通过。43项忽略用例须各自实际配置执行；默认通过不替代设备证据。FRB、companion其余产物门禁、旧系统/OEM/物理USB/HAL、四宿主整包、完整恢复、通知和液态玻璃仍开放。
 
 最终应用全量91项、Bridge全量83项均通过，日志`/tmp/connect-session-final-app.log`和`/tmp/connect-session-final-bridge.log`。Rust日志`/tmp/connect-session-final-rust.log`，严格分析与生成日志分别`/tmp/connect-session-final-analysis.log`、`/tmp/connect-session-final-generation.log`。生成检查在隔离工作目录运行真实builder比对，控制器和typed route生成文件已经提交对应源；测试通过不代表上述开放任务完成。
+
+
+## 事件缺口核验与编码会话边界（2026-10-17）
+
+当前范围见 [恢复契约](state-recovery.md) 和 [完整核查第11节](../../.scratch/interop/completion-reassessment.md#11-事件缺口后的状态核验批次)。核心与桥接批次为 `cf35daf` / `3ee0318`，媒体边界 `d7d60d8`，应用 `591d48e`。不以本节关闭全产品目标。
+
+### 默认及交错回归
+
+- 工作区 `cargo test --workspace`：146 passed / 43 ignored / 0 failed，日志 `/tmp/connect-recovery-csd-workspace.log`。all-target clippy `-D warnings` 通过，日志 `/tmp/connect-recovery-csd-clippy.log`。忽略用例需真实 Android/外部工具，未计通过。
+- 应用全量114项通过（`/tmp/connect-recovery-app-complete.log`）；之后新增终态迟到恢复保护，远控20项定向全部通过（`/tmp/connect-recovery-final-remote-tests.log`）。桥接全量93项通过（`/tmp/connect-recovery-bridge-complete.log`）。包含真实生成 provider、覆盖页面返回、冻结触点/按键/剪贴板、核验失败重试、短屏大字保留停止操作；widget 证据不替代实际手机权限或全局读屏验收。
+- 严格全仓 Flutter analyze 通过（`/tmp/connect-recovery-final-analysis.log`），真实 build_runner only-check 通过（`/tmp/connect-recovery-generation-check.log`）。本批无新的FRB导出签名，不以此宣称正式FRB重生成门禁已补齐。
+- 已实际先红后绿：设置发布、forget设置发布、设置保存旧回执、已消费分享的转发、companion旧list回执和已取消缓存、FRB真实256通道溢出及媒体配置边界。具体测试源纳入版本，不依赖临时日志才能复现。
+
+### 真实流程中的失败与修复
+
+首次真实流程在最后重试点击时触发测试监听器 expect 的异步 guard 冲突，改为记录后在测试主流程断言，未削弱实际状态条件。随后曾9秒通过，继续复验却捕获真实媒体故障；没有把这次通过当稳定验收。
+
+失败 `/tmp/connect-recovery-repeat-2.log` 实际报告 `media_mux: AVC requires one SPS and bounded PPS records`；另一次先看到原始媒体 EOF→Core stopped，250ms poll 尚未来得及读取 relay 原因。HTTP真实TCP用例重现 `[session A,CSD A,session B,CSD B,keyframe B]`，旧实现拼接两会话 CSD、重复 SPS，实际失败。新 Dimensions 边界只保留本编码会话的配置；相同配置继续现有 HTTP，不同配置正确切换 generation/CodecPrivate。HTTP13＋mux6通过，未放宽单活动 SPS 约束或配置/半包限制。
+
+### 修复后真实核验
+
+主控5554→被控5556，使用已经准备的转发端点；target secure=0，不能证明未授权首次设置或强制认证。运行目录 `apps/connect`，PATH 包含本机 Rust/Flutter：
+
+```sh
+rtk proxy env CONNECT_E2E_ACCEPTANCE=media \
+  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/recovery-csd-fixed \
+  flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/state_recovery_test.dart -d emulator-5554 \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+  --dart-define=CONNECT_E2E_PORT=15556 \
+  --dart-define=CONNECT_DIAGNOSTICS=true
+```
+
+该流程使用生产 Bridge 的 `state.reconcile`，不声称在 AVD 人为挤满 FRB 队列。FRB溢出由真实容量默认测试独立验证。实际打开远控→两次同ID核验（含并发合并）→MDK真实snapshot→退出保留且捕获暂停→后台核验仍暂停→同ID重开→明确结束→重新检查仍不存在。修复后新APK首次11秒、同APK重复两次各10秒，三次均完整退出0，`stateRecoveryComplete=true/mediaAcceptanceComplete=true/endedSessionNotRecreated=true`，每次独立UUID、两次同ID实际恢复。日志 `/tmp/connect-recovery-csd-fixed.log`、`/tmp/connect-recovery-csd-repeat-{1,2}.log`；回执/图分别在 `/tmp/connect-e2e/recovery-csd-fixed/`、`recovery-csd-repeat-{1,2}/`。
+
+恢复后的全屏画面与已结束状态图已实际目视，退出入口始终保留；结束状态清除旧Texture，标题明确“控制会话已结束”。早期图发现结束状态仍写“正在核验”，已修正并在真实断言中保留；截图等待点击提示消退，只保存在临时目录。本节不是液态玻璃、视觉质量、完整IME或大字读屏总体验收。
+
+
+同一最终代码另回归：主屏＋Settings＋Google Dialer 三个真实会话保留/暂停/恢复/截图/单独关闭，40秒退出0，`sessionWorkspaceComplete=true`，宿主8次独立进程检查均通过；暂停进程为S、不是整进程冻结T，关闭Settings后其余两路存活。日志 `/tmp/connect-recovery-workspace-real.log`，8图及回执 `/tmp/connect-e2e/recovery-session-workspace/`。实际HOME→两秒后台→回前台→新MDK snapshot与健康全屏，11秒退出0，日志 `/tmp/connect-recovery-background-real.log`、图/回执 `/tmp/connect-e2e/recovery-background/`。代表会话列表、恢复全屏与结束状态已目视；列表仍有包名代替友好应用名、材质仍偏白卡，属于A06/A27/A29待补，不能把本次行为通过说成视觉设计完成。
