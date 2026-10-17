@@ -1179,6 +1179,9 @@ impl Runtime {
                 .pull(&RemotePath::new(&task.source)?, &mut output, stamp.size)
                 .await?;
             output.inner.sync_all().await?;
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            let completed_file = output.inner.into_std().await;
+            #[cfg(not(any(target_os = "linux", target_os = "android")))]
             drop(output);
             let after = SourceStamp::from(sync.stat(&RemotePath::new(&task.source)?).await?);
             if count != stamp.size || after != stamp {
@@ -1196,6 +1199,23 @@ impl Runtime {
                 fs::rename(&temp, &destination).await?;
                 "atomicRename"
             } else {
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                {
+                    let from = temp.clone();
+                    let to = destination.clone();
+                    tokio::task::spawn_blocking(move || {
+                        crate::local_publication::publish_file(&completed_file, &from, &to)
+                    })
+                    .await
+                    .map_err(|error| {
+                        CoreError::new(
+                            "result_unknown",
+                            format!("本机提交作业未确认，请核对目标。{error}"),
+                        )
+                    })??;
+                    "atomicRenameNoReplace"
+                }
+                #[cfg(not(any(target_os = "linux", target_os = "android")))]
                 match fs::hard_link(&temp, &destination).await {
                     Ok(()) => {
                         let _ = fs::remove_file(&temp).await;

@@ -268,7 +268,14 @@ async fn actual_push_pull_hash_atomic_conflict_rename_delete_and_preview_cache()
         .unwrap();
     let done = settled(&runtime, pull_id).await;
     assert_eq!(done["status"], "completed", "{done}");
-    assert_eq!(done["saveMode"], "atomicHardLink");
+    assert_eq!(
+        done["saveMode"],
+        if cfg!(any(target_os = "linux", target_os = "android")) {
+            "atomicRenameNoReplace"
+        } else {
+            "atomicHardLink"
+        }
+    );
     let saved = tokio::fs::read(done["localPath"].as_str().unwrap())
         .await
         .unwrap();

@@ -121,11 +121,17 @@ mod unix {
         Ok(unsafe { s.assume_init() })
     }
     fn kind(s: &libc::stat) -> &'static str {
-        match s.st_mode & libc::S_IFMT {
-            libc::S_IFREG => "file",
-            libc::S_IFDIR => "directory",
-            libc::S_IFLNK => "symlink",
-            _ => "unsupported",
+        // Android armv7's stat field and mode_t constants have different
+        // widths. Widen both without truncating platform-specific mode bits.
+        let mode = u64::from(s.st_mode) & u64::from(libc::S_IFMT);
+        if mode == u64::from(libc::S_IFREG) {
+            "file"
+        } else if mode == u64::from(libc::S_IFDIR) {
+            "directory"
+        } else if mode == u64::from(libc::S_IFLNK) {
+            "symlink"
+        } else {
+            "unsupported"
         }
     }
     fn identity(s: &libc::stat) -> Value {
@@ -199,6 +205,9 @@ mod unix {
     }
     fn open(p: &Value, path: &str, flags: i32) -> Result<OwnedFd, DocumentError> {
         let l = location(p, path)?;
+        open_at(&l, flags)
+    }
+    fn open_at(l: &Location, flags: i32) -> Result<OwnedFd, DocumentError> {
         fd(unsafe {
             libc::openat(
                 l.parent.as_raw_fd(),
@@ -339,37 +348,53 @@ mod unix {
             "document.commit" => {
                 let from = text(p, "partPath")?;
                 let to = text(p, "path")?;
-                let file = open(p, from, libc::O_RDONLY)?;
+                let source = location(p, from)?;
+                let file = open_at(&source, libc::O_RDONLY)?;
                 let s = stat(file.as_raw_fd())?;
                 if kind(&s) != "file" || !expected(&s, &p["identity"]) {
                     return Err(fail("source_changed", "暂存文件在提交前发生变化。"));
                 }
-                let _source = location(p, from)?;
-                let descriptor_path = c(&format!("/proc/self/fd/{}", file.as_raw_fd()))?;
                 let destination = location(p, to)?;
-                if unsafe {
-                    libc::linkat(
-                        libc::AT_FDCWD,
-                        descriptor_path.as_ptr(),
-                        destination.parent.as_raw_fd(),
-                        destination.name.as_ptr(),
-                        libc::AT_SYMLINK_FOLLOW,
-                    )
-                } < 0
+                let current = open_at(&source, libc::O_RDONLY)?;
+                if !same(&s, &stat(current.as_raw_fd())?) {
+                    return Err(fail("source_changed", "暂存文件在提交前发生变化。"));
+                }
+                if unsafe { libc::fsync(file.as_raw_fd()) } < 0 {
+                    return Err(os_error());
+                }
+                if crate::local_publication::rename_noreplace(
+                    source.parent.as_raw_fd(),
+                    &source.name,
+                    destination.parent.as_raw_fd(),
+                    &destination.name,
+                )
+                .is_err()
                 {
                     return Err(fail(
                         "cache_conflict",
                         "暂存目标已存在或无法安全提交，未覆盖。",
                     ));
                 }
-                let published = open(p, to, libc::O_RDONLY)?;
-                if !same(&s, &stat(published.as_raw_fd())?) {
+                let verified = (|| -> Result<bool, DocumentError> {
+                    let published = open_at(&destination, libc::O_RDONLY)?;
+                    if !same(&s, &stat(published.as_raw_fd())?)
+                        || !same(&s, &stat(file.as_raw_fd())?)
+                    {
+                        return Ok(false);
+                    }
+                    if unsafe { libc::fsync(destination.parent.as_raw_fd()) } < 0
+                        || unsafe { libc::fsync(source.parent.as_raw_fd()) } < 0
+                    {
+                        return Err(os_error());
+                    }
+                    Ok(true)
+                })();
+                if !matches!(verified, Ok(true)) {
                     return Err(fail(
                         "result_unknown",
-                        "暂存提交后身份无法核对，请检查本机暂存。",
+                        "暂存提交后身份或目录同步无法核对，请检查本机暂存。",
                     ));
                 }
-                remove_identity(p, from, &identity(&s))?;
                 Ok(json!({"committed":true,"identity":identity(&s)}))
             }
             "document.copy" => copy(manager, p),

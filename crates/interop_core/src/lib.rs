@@ -6,6 +6,8 @@ pub mod documents;
 mod events;
 mod file_tree;
 mod files;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+mod local_publication;
 pub mod media;
 mod model;
 mod observation;

@@ -41,6 +41,100 @@ fn copies_exact_bytes_and_publishes_without_replacing_an_existing_file() {
     );
     assert_eq!(fs::read(&target).unwrap(), b"shared document bytes");
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn publishes_without_hard_link_permission_and_keeps_existing_targets() {
+    const CHILD: &str = "INTEROP_DOCUMENT_PUBLICATION_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        // Keep the syscall restriction out of the test runner and other tests.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "publishes_without_hard_link_permission_and_keeps_existing_targets",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    // This reproduces a missing linkat permission, not Android SELinux itself.
+    let mut filter = [
+        libc::sock_filter {
+            code: (libc::BPF_LD | libc::BPF_W | libc::BPF_ABS) as u16,
+            jt: 0,
+            jf: 0,
+            k: 0, // seccomp_data.nr
+        },
+        libc::sock_filter {
+            code: (libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K) as u16,
+            jt: 0,
+            jf: 1,
+            k: libc::SYS_linkat as u32,
+        },
+        libc::sock_filter {
+            code: (libc::BPF_RET | libc::BPF_K) as u16,
+            jt: 0,
+            jf: 0,
+            k: libc::SECCOMP_RET_ERRNO | libc::EPERM as u32,
+        },
+        libc::sock_filter {
+            code: (libc::BPF_RET | libc::BPF_K) as u16,
+            jt: 0,
+            jf: 0,
+            k: libc::SECCOMP_RET_ALLOW,
+        },
+    ];
+    let program = libc::sock_fprog {
+        len: filter.len() as u16,
+        filter: filter.as_mut_ptr(),
+    };
+    assert_eq!(
+        unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1usize, 0usize, 0usize, 0usize) },
+        0
+    );
+    assert_eq!(
+        unsafe { libc::prctl(libc::PR_SET_SECCOMP, libc::SECCOMP_MODE_FILTER, &program) },
+        0
+    );
+    let root = tempfile::tempdir().unwrap();
+    let manager = CopyManager::default();
+    let source = root.path().join("source");
+    let part = root.path().join("part");
+    let target = root.path().join("target");
+    fs::write(&source, b"safe private publication").unwrap();
+    let mut p = params(root.path());
+    p["sourcePath"] = json!(source);
+    p["targetPath"] = json!(part);
+    let copied = manager.request("document.copy", p.clone()).unwrap();
+    assert_eq!(copied["bytes"], 24);
+    assert!(!target.exists());
+    manager
+        .request(
+            "document.commit",
+            json!({"allowedRoots":[root.path()],"partPath":part,"path":target,"identity":copied["identity"]}),
+        )
+        .expect("private document publication must not require hard-link permission");
+    assert_eq!(fs::read(&target).unwrap(), b"safe private publication");
+    assert!(!part.exists());
+
+    let copied = manager.request("document.copy", p).unwrap();
+    let conflict = manager.request(
+        "document.commit",
+        json!({"allowedRoots":[root.path()],"partPath":part,"path":target,"identity":copied["identity"]}),
+    );
+    assert_eq!(conflict.unwrap_err().code, "cache_conflict");
+    assert_eq!(fs::read(&target).unwrap(), b"safe private publication");
+    assert_eq!(fs::read(&part).unwrap(), b"safe private publication");
+}
+
 #[test]
 fn refuses_nonempty_provider_descriptor_without_truncation() {
     let root = tempfile::tempdir().unwrap();
