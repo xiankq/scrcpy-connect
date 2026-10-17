@@ -1,6 +1,7 @@
 //! Device, connection, session and transfer lifecycle owned independently of UI.
 mod audio;
 mod companion;
+mod delivery;
 mod device;
 pub mod documents;
 mod events;

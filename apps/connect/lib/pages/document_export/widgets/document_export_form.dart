@@ -2,6 +2,7 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/document_operation.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/original_file_header.dart';
+import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -14,22 +15,38 @@ class DocumentExportForm extends HookWidget {
     required this.localPath,
     required this.name,
     required this.kind,
+    this.transferId,
     this.partial = false,
   });
   final AppController controller;
   final String localPath;
   final String name;
   final String kind;
+  final String? transferId;
   final bool partial;
   @override
   Widget build(BuildContext context) {
-    final operation = useDocumentOperation(controller);
-    final acknowledgedUnknown = useState(false);
+    final operation = useDocumentOperation(
+      controller,
+      exportSource: {
+        'sourceId': transferId == null ? 'local' : 'transfer:$transferId',
+        'localPath': localPath,
+        'kind': kind,
+      },
+    );
+    final reviewedOperation = useState<String?>(null);
+    final acknowledgedUnknown =
+        operation.recordOperationId != null &&
+        reviewedOperation.value == operation.recordOperationId;
     final result = operation.result;
     final status = value(result ?? {}, 'status');
+    final waiting = operation.busy || status == 'pending';
     final unknown =
         result != null &&
-        !['saved', 'partial', 'cancelled', 'failed'].contains(status);
+        status != 'saved' &&
+        status != 'pending' &&
+        (result['partialDestinationPossible'] == true ||
+            !['partial', 'cancelled', 'failed'].contains(status));
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -42,7 +59,7 @@ class DocumentExportForm extends HookWidget {
           ),
         const Text('选择系统位置保存一份。只有系统确认写入完成后，才显示保存成功。本机暂存仍保留。'),
         const SizedBox(height: 24),
-        if (operation.busy) ...[
+        if (waiting) ...[
           const LinearProgressIndicator(),
           const StateNote('正在等待系统选择或实际写入结果…'),
           TextButton(
@@ -52,6 +69,12 @@ class DocumentExportForm extends HookWidget {
         ],
         if (operation.error != null)
           StateNote(operation.error!, icon: LucideIcons.circleAlert),
+        if (operation.refreshing) const StateNote('正在核验这份原件的系统保存记录…'),
+        if (!operation.loaded || status == 'pending' || unknown)
+          TextButton(
+            onPressed: operation.refreshing ? null : operation.refresh,
+            child: const Text('重新核验系统保存'),
+          ),
         if (result != null)
           ContentPanel(
             child: Column(
@@ -62,6 +85,7 @@ class DocumentExportForm extends HookWidget {
                   'partial' => '部分内容已保存，请核对',
                   'cancelled' => '本次系统保存已取消',
                   'failed' => '本次保存未开始',
+                  'pending' => '上次系统保存尚未结束',
                   _ => '系统保存结果待核对',
                 }, style: Theme.of(context).textTheme.titleLarge),
                 if (status == 'saved') const Text('如保存到了云盘，云端同步结果请在对应应用核对。'),
@@ -89,24 +113,53 @@ class DocumentExportForm extends HookWidget {
         if (unknown)
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
-            value: acknowledgedUnknown.value,
-            onChanged: (v) => acknowledgedUnknown.value = v ?? false,
+            value: acknowledgedUnknown,
+            onChanged: (v) => reviewedOperation.value = v == true
+                ? operation.recordOperationId
+                : null,
             title: const Text('我已在系统文件应用核对，仍需重新保存'),
           ),
-        if (!operation.busy && status != 'saved')
+        if (!waiting && status != 'saved')
           FilledButton(
-            onPressed: unknown && !acknowledgedUnknown.value
+            onPressed:
+                !operation.loaded ||
+                    operation.refreshing ||
+                    (unknown && !acknowledgedUnknown)
                 ? null
                 : () {
-                    acknowledgedUnknown.value = false;
+                    final reviewed = acknowledgedUnknown;
+                    reviewedOperation.value = null;
                     operation.run('documents.export', {
                       'localPath': localPath,
                       'name': name,
                       'kind': kind,
                       'conflict': 'ask',
-                    });
+                    }, reviewed: reviewed);
                   },
             child: Text(result == null ? '选择系统位置并保存' : '重新选择系统位置'),
+          ),
+        if (!waiting && status == 'saved')
+          OutlinedButton(
+            onPressed: !operation.loaded || operation.refreshing
+                ? null
+                : () async {
+                    if (!await confirm(
+                          context,
+                          '再保存一份？',
+                          '已经保存过这份原件。继续会重新选择系统位置并保存额外副本，不会自动覆盖已有内容。',
+                          action: '选择新位置',
+                        ) ||
+                        !context.mounted) {
+                      return;
+                    }
+                    await operation.run('documents.export', {
+                      'localPath': localPath,
+                      'name': name,
+                      'kind': kind,
+                      'conflict': 'ask',
+                    }, additionalCopy: true);
+                  },
+            child: const Text('再保存一份'),
           ),
       ],
     );

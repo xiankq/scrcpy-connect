@@ -21,15 +21,15 @@
 | 05 媒体、声音与资源；R16/R22/R26/R39/R60，C10/C25/C28 | **部分**：共享fvp／MDK五编码、PCM／双设备焦点、HOME／旋转／同UUID恢复；按官方首帧文档修复；真实页选择1080后HEVC486×1080通过实像素门槛 | **未决／未验**：1280低清根因／默认策略、冷启动总耗时、触控到像素P50/P95/P99、同步／丢帧、长期／热／功耗、物理声音／路由。**未实现**：新／非焦点窗口资源降载完整策略；下一步固定设备与场景测端到端延迟和资源不足，保护已有活动 | [07](issues/07-fvp-media-pipeline.md)、[12](issues/12-calls-and-audio-arbitration.md)、[16](issues/16-glass-and-performance-budget.md)、[20](issues/20-android-validation-bench.md) |
 | 06 通知与原应用；R33–R37，C18–C21 | **部分**：免APK listener、持续观察／独立停止、原PI／清除／失效保护、主屏复用；跨页回复有界保护及独立receiver原文count1；API36真实后台OS发布／精确撤回／通知栏点击后当前内容呈现 | **未实现／未验**：完整锁屏／应用认证后重取并重验、拒权／渠道／冷启动／系统停止／OEM及真实来电提醒、真实聊天服务一次接收／进程死亡恢复。下一步实际关闭渠道／撤权与认证完成后重验，不能重放未知回复 | [11](issues/11-notifications-continuation.md)、[14](issues/14-background-and-recovery.md)、[18](issues/18-complete-design-state-coverage.md) |
 | 07 通话；R26/R32/R39，C22–C24 | **部分**：聚合状态与受限提示、危险全局动作明确拒绝，不抢已有活动 | **未实现**：安全绑定具体呼叫的接听／拒接／挂断与真实双向通话音频。**未验**：PSTN／VoIP、同设备多呼叫／多SIM、耳机／麦克风／转手机／结束恢复；下一步固定具体call身份及物理HAL对照，安全拒绝不能算功能完成 | [12](issues/12-calls-and-audio-arbitration.md)、[20](issues/20-android-validation-bench.md) |
-| 08 文件与传输；R28–R30/R38，C11–C14 | **部分**：目录／基础管理、双向传输、三选一远端冲突／本批策略、无覆盖发布、有界跨目录名称／类型搜索与真实页面重验；单项系统保存63字节通过 | **新缺陷**：导出unknown保护只在当前页，离页dispose再进可直接重写（A44）；系统provider冲突仍由Kotlin产品AlertDialog决定（A48），不符合“共享产品逻辑／原生OS适配”的完整边界。**未实现／未验**：浏览分类、批量／目录交付、provider／非seek／云盘／空间／撤权、恢复意图。下一步unknown→离页→再进及迟到回执回归，再覆盖系统目录冲突 | [09](issues/09-file-endpoints-and-recovery.md)、[14](issues/14-background-and-recovery.md)、[19](issues/19-dependency-license-and-updates.md) |
+| 08 文件与传输；R28–R30/R38，C11–C14 | **部分**：目录／基础管理、双向传输、三选一远端冲突／本批策略、无覆盖发布、有界搜索；A44已实施精确原件／操作的持久保存账本，13项Runtime重开／并发／限额／落盘失败及跨页unknown回归通过。双AVD取消→保存→离页重进恢复saved→分享43秒通过，独立63字节／hash／grant及重进截图已核验 | **未验**：Android实际写入中杀进程／unknown恢复及切设备迟到回执；Runtime重开不替代此证据。**未实现／未验**：浏览分类、批量／目录、provider／非seek／云盘／空间／撤权、恢复意图。A48系统provider冲突仍由Kotlin产品AlertDialog决定，未收敛共享职责；下一步覆盖系统目录冲突及真实中断 | [09](issues/09-file-endpoints-and-recovery.md)、[14](issues/14-background-and-recovery.md)、[19](issues/19-dependency-license-and-updates.md) |
 | 09 相册与预览；R31，C15–C17 | **部分**：缩略图／旋转／有界缓存；真实网格JPEG／MP4→原件预览→准备→系统取消／保存／分享，字节／hash／授权／双MIME；视频时钟／暂停／定位／静音 | **未实现／未验**：时间／分页／增量、真实大原件准备进度／取消、批量、全格式／损坏／缓冲／结束／断线／源变化／空间矩阵；无音轨MP4不证明物理音频。下一步大原件中断／离页取消，先验证准备活动与残留 | [10](issues/10-gallery-video-and-content.md)、[09](issues/09-file-endpoints-and-recovery.md)、[18](issues/18-complete-design-state-coverage.md) |
 | 10 剪贴板与分享；R27–R28，C26–C27 | **部分**：文本跟随／固定／隔离与普通主控后台停读、专用页返回正确跟随；外部九模式导入／取消；出站文本／JPEG／MP4真实Sharesheet和独立receiver | **未实现／未验**：图片／文件剪贴板URI授权生命周期；入站内容实际提交指定设备、提交时切焦点不串线、系统本机打开、批量／大原件。下一步外部URI→选A→切到B→独立核验A字节且B不变，并测授权撤回 | [13](issues/13-device-targets-and-sharing.md)、[09](issues/09-file-endpoints-and-recovery.md)、[20](issues/20-android-validation-bench.md) |
-| 11 后台、恢复与活动；R21/R38–R40，C28–C29 | **部分**：不可见视频协作暂停、主动声音／Activity重建、同runtime水位快照校准和过期播放器清理、主标签核验重试；回复跨页保护已有实现 | **未实现／未验**：断网／换网／进程死亡／系统Stop／重启的活动意图与恢复资格；观察／音源／任务完整独立停止。导出未知结果跨页保护仍缺（A44）。下一步活动×中断原因矩阵逐格注入并核对主动停仍停／未知副作用不重放 | [14](issues/14-background-and-recovery.md)、[15](issues/15-identity-trust-and-transports.md)、[20](issues/20-android-validation-bench.md) |
+| 11 后台、恢复与活动；R21/R38–R40，C28–C29 | **部分**：不可见视频协作暂停、主动声音／Activity重建、同runtime水位快照校准和过期播放器清理、主标签核验重试；回复跨页保护；A44系统保存持久账本及重开pending转unknown，真实saved离页重进通过 | **未实现／未验**：断网／换网／进程死亡／系统Stop／重启的完整活动意图与恢复资格；观察／音源／任务完整独立停止。Android写入中杀进程的unknown恢复仍未验。下一步活动×中断原因矩阵逐格注入并核对主动停仍停／未知副作用不重放 | [14](issues/14-background-and-recovery.md)、[15](issues/15-identity-trust-and-transports.md)、[20](issues/20-android-validation-bench.md) |
 | 12 设计、易用性与研究；R01/R41–R50/R52，C01–C32 | **部分**：同一pen **89独立页／12类／26母组件／557实例／153变量**，保存重开核对；新tch6A／qTeGO；浅色／黑中性／小彩色／Lucide、全屏共享组件；实时背景折射已实现并有实际视频截图 | **未实现／未验**：全部状态与实际UI闭环、可打断液态形变、独立光学／视频性能／大字／读屏／高对比／减少动态矩阵、token全覆盖；A45退出约定不一致；OPPO／vivo地区与端角色操作证据。下一步按coverage逐流程补入口→操作→失败→恢复并对照真实UI，89页静态完整性不等于实现验收 | [16](issues/16-glass-and-performance-budget.md)、[17](issues/17-manufacturer-mobile-flows.md)、[18](issues/18-complete-design-state-coverage.md)、[19](issues/19-dependency-license-and-updates.md) |
 
 ## 证据入口与优先顺序
 
-1. **先修可造成退出阻塞／重复写入的断链**：A43／A44／A49，回归失败、挂起、离页重进、迟到回执与系统返回；A43局部红绿通过、同session重进／真实UI仍待验，A44待实施。
+1. **先修可造成退出阻塞／重复写入的断链**：A43／A44／A49，回归失败、挂起、离页重进、迟到回执与系统返回；A43局部红绿通过、同session重进／真实故障仍待验。A44持久账本、跨页unknown及真实saved重进已补，Android实际杀进程unknown故障待验。
 2. **完成本轮在途行为的真实页面验收**：主屏应用回退／中文错误；保留3项widget及真实Runtime证据边界。随后A45内拖状态、A48共享冲突UI、A46 CI门禁，分别回填既有任务。
 3. **继续完整目标**：IME、认证接续、批量内容与入站提交、活动恢复、通话、动态视觉／无障碍／性能、生产密码与四端整包；环境内可做项继续推进，缺物理设备／宿主单独登记。
 
@@ -37,7 +37,7 @@
 | --- | --- |
 | [首次安全配对](../../docs/implementation/first-pairing.md) | 真实产品表单、系统API精确撤权；直接Settings Forget失败原样保留，不称量产安全验收 |
 | [总验收记录](../../docs/implementation/validation.md)、[状态恢复](../../docs/implementation/state-recovery.md) | 命令、失败、完成回执与截图路径；同runtime校准不等于断网／进程恢复 |
-| [内容交付](../../docs/implementation/content-delivery.md)、[搜索](../../docs/implementation/file-search.md) | 单项文本／JPEG／MP4与搜索已有真实结果；A44页内unknown保护边界优先于旧宽泛结论 |
+| [内容交付](../../docs/implementation/content-delivery.md)、[搜索](../../docs/implementation/file-search.md) | 单项文本／JPEG／MP4与搜索已有真实结果；A44新增持久账本与真实saved页面重进，Android杀进程unknown仍未验；首次重进夹具失败未计通过 |
 | [系统提醒](../../docs/implementation/system-notifications.md) | 真实OS投递／撤回／点击；仍保留权限／认证／冷启动等矩阵 |
 | [主屏应用widget](../../apps/connect/test/app_launch_test.dart)、[公开Runtime真实测试](../../crates/interop_core/tests/app_launch_android.rs) | 当前工作区改动；Runtime实际任务在display0，3项widget覆盖UI协议／未知启动不重发，尚无当前UI E2E |
 | [Pencil覆盖](../../designs/prod/coverage.md)、[交互规则](../../designs/prod/interaction-rules.md) | 89页静态结构与产品规则；实际实现和动态验收逐项单独核对 |

@@ -618,6 +618,7 @@ class _AndroidDelivery {
           'actualSharePage',
           'fixtureCleanupAcknowledged',
           'savedProductPageCaptured',
+          'systemSaveReceiptRestored',
           'shareProductPageCaptured',
           'sharedProductPageCaptured',
         ].any((key) => report[key] != true) ||
@@ -762,6 +763,11 @@ Future<void> main() async {
                   case 'saved-product-page':
                     await fixture._capture('content-delivery-saved-product');
                     action = 'saved-product-captured';
+                  case 'restored-save-product-page':
+                    await fixture._capture(
+                      'content-delivery-restored-save-product',
+                    );
+                    action = 'restored-save-captured';
                   case 'media-preview-page':
                     await fixture._capture('content-delivery-media-preview');
                     action = 'media-preview-captured';

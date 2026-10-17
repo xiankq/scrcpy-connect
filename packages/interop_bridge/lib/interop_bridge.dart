@@ -18,6 +18,7 @@ import 'src/media/media_snapshot.dart';
 import 'src/state_recovery.dart';
 import 'src/share_intake.dart';
 import 'src/documents/documents_coordinator.dart';
+import 'src/documents/system_delivery.dart';
 import 'src/interop_exception.dart';
 
 export 'src/interop_exception.dart';
@@ -78,6 +79,15 @@ class InteropBridge {
     core: _invoke,
     platform: _platformRequest,
     isDisposed: () => _disposed,
+  );
+  late final _systemDelivery = SystemDelivery(
+    core: _invoke,
+    write: (params) => _documents.request('documents.export', params),
+    cancelWrite: (id) =>
+        _documents.request('documents.cancel', {'operationId': id}),
+    onChanged: (source) {
+      if (!_disposed) _events.add({'type': 'delivery.changed', 'data': source});
+    },
   );
   String? _eventSubscriptionId;
   StreamSubscription<String>? _coreSubscription;
@@ -573,6 +583,13 @@ class InteropBridge {
           '此平台请使用系统文件路径选择器。',
         );
       }
+      if (command == 'documents.export') return _systemDelivery.save(params);
+      if (command == 'documents.cancel' && params['operationId'] is String) {
+        final cancelled = await _systemDelivery.cancel(
+          params['operationId'] as String,
+        );
+        if (cancelled != null) return cancelled;
+      }
       return _documents.request(command, params);
     }
     if (command == 'files.open') {
@@ -849,6 +866,7 @@ class InteropBridge {
 
   Future<void> _dispose() async {
     _disposed = true;
+    _systemDelivery.close();
     _stateRecovery.dispose();
     await _documents.dispose();
     _mediaIntents.cancelAll();

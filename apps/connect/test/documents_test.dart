@@ -13,6 +13,221 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'a rejected admission restores the actual prior operation before review',
+    (tester) async {
+      var submissions = 0;
+      Json? retry;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'delivery.get') {
+          return {
+            'record': submissions == 0
+                ? null
+                : {
+                    'operationId': 'actual-prior-save',
+                    'status': 'result_unknown',
+                    'result': {
+                      'status': 'result_unknown',
+                      'partialDestinationPossible': true,
+                    },
+                  },
+          };
+        }
+        if (command == 'documents.export') {
+          submissions++;
+          retry = params;
+          throw const RequestFailure('delivery_review_required', '请核对之前的系统保存');
+        }
+        return {};
+      });
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: DocumentExportPage(
+              controller: controller,
+              transferId: 'task',
+              localPath: '/cache/a',
+              name: 'a',
+              kind: 'file',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('选择系统位置并保存'));
+        await tester.pumpAndSettle();
+        expect(submissions, 1);
+        await tester.ensureVisible(find.byType(CheckboxListTile));
+        await tester.tap(find.byType(CheckboxListTile));
+        await tester.pumpAndSettle();
+        final retryButton = find.widgetWithText(FilledButton, '重新选择系统位置');
+        await tester.ensureVisible(retryButton);
+        await tester.tap(retryButton);
+        await tester.pumpAndSettle();
+        expect(retry?['reviewedOperationId'], 'actual-prior-save');
+        expect(submissions, 2);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
+  testWidgets(
+    'a saved original reopens with its receipt and additional copying requires explicit confirmation',
+    (tester) async {
+      Json? submitted;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'delivery.get') {
+          return {
+            'record': {
+              'operationId': 'saved-copy',
+              'status': 'saved',
+              'result': {'status': 'saved', 'name': 'original.png'},
+            },
+          };
+        }
+        if (command == 'documents.export') {
+          submitted = params;
+          return {'status': 'saved'};
+        }
+        return {};
+      });
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: DocumentExportPage(
+              controller: controller,
+              transferId: 'source-task',
+              localPath: '/cache/original.png',
+              name: 'original.png',
+              kind: 'file',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('已保存到系统位置'), findsOneWidget);
+        expect(find.text('选择系统位置并保存'), findsNothing);
+        expect(submitted, isNull);
+        await tester.ensureVisible(find.text('再保存一份'));
+        await tester.tap(find.text('再保存一份'));
+        await tester.pumpAndSettle();
+        expect(submitted, isNull);
+        await tester.tap(find.text('选择新位置'));
+        await tester.pumpAndSettle();
+        expect(submitted?['additionalCopyOfOperationId'], 'saved-copy');
+        expect(submitted?['sourceId'], 'transfer:source-task');
+        expect(submitted?['localPath'], '/cache/original.png');
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
+  testWidgets('failed journal verification never enables a system write', (
+    tester,
+  ) async {
+    var writes = 0;
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      if (command == 'delivery.get') throw StateError('journal unavailable');
+      if (command == 'documents.export') writes++;
+      return {};
+    });
+    try {
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: DocumentExportPage(
+            controller: controller,
+            localPath: '/cache/original',
+            name: 'original',
+            kind: 'file',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('尚未核验上次系统保存结果'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, '选择系统位置并保存'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(writes, 0);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    }
+  });
+  testWidgets(
+    'unknown system save still requires review after leaving and reopening its source',
+    (tester) async {
+      var writes = 0;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'delivery.get') {
+          return {
+            'record': writes == 0
+                ? null
+                : {
+                    'operationId': 'previous-system-write',
+                    'status': 'result_unknown',
+                    'result': {
+                      'status': 'result_unknown',
+                      'partialDestinationPossible': true,
+                    },
+                  },
+          };
+        }
+        if (command == 'documents.export') {
+          writes++;
+          throw StateError('reply lost after provider write');
+        }
+        return {};
+      });
+      Widget page() => RouterTestApp(
+        controller: controller,
+        home: DocumentExportPage(
+          controller: controller,
+          transferId: 'original-task',
+          localPath: '/private/cache/original.png',
+          name: 'original.png',
+          kind: 'file',
+        ),
+      );
+      try {
+        await tester.pumpWidget(page());
+        await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('选择系统位置并保存'));
+        await tester.pumpAndSettle();
+        expect(writes, 1);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(page());
+        await tester.pumpAndSettle();
+        expect(find.text('系统保存结果待核对'), findsOneWidget);
+        final retry = find.widgetWithText(FilledButton, '重新选择系统位置');
+        expect(tester.widget<FilledButton>(retry).onPressed, isNull);
+        expect(writes, 1);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
   testWidgets('a preflight failure reports no save and allows explicit retry', (
     tester,
   ) async {
@@ -46,6 +261,7 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('选择系统位置并保存'));
     await tester.pumpAndSettle();
     expect(find.text('本次保存未开始'), findsOneWidget);
@@ -73,6 +289,20 @@ void main() {
           writes++;
           throw StateError('reply lost after provider write');
         }
+        if (command == 'delivery.get') {
+          return {
+            'record': writes == 0
+                ? null
+                : {
+                    'operationId': 'lost-reply',
+                    'status': 'result_unknown',
+                    'result': {
+                      'status': 'result_unknown',
+                      'partialDestinationPossible': true,
+                    },
+                  },
+          };
+        }
         return {};
       });
       await tester.pumpWidget(
@@ -87,6 +317,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('选择系统位置并保存'));
       await tester.pumpAndSettle();
       expect(find.text('系统保存结果待核对'), findsOneWidget);
@@ -205,6 +436,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('选择系统位置并保存'));
       await tester.pumpAndSettle();
       expect(exported?['localPath'], '/private/cache/Documents');
@@ -247,9 +479,11 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('选择系统位置并保存'));
       await tester.pump();
       await tester.pumpWidget(const SizedBox());
+      expect(exported, isNotNull);
       expect(cancelled?['operationId'], exported?['operationId']);
       pending.complete({'status': 'saved', 'name': 'late'});
       await tester.pump();

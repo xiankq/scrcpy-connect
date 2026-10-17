@@ -47,4 +47,6 @@ Requirements: R28–R30、R38
 
 单项系统保存、共享PFD完成与同页未知核对已有证据；此前“未知结果保护”只覆盖同页。A44：`DocumentExportForm`依赖`useDocumentOperation`页内对象，离页dispose后重进result为空，unknown核对门槛消失，可直接重新写入。下一步以固定原件／操作身份建立有界保护，实际覆盖超时→离页→重进、迟到回执、切设备和用户核对后显式重试；未知结果不得自动重放。
 
+后续A44实施：Rust持久账本先admit再写，固定来源任务／路径／类型，pending重开转unknown；1024原件／16384操作／4MiB限额不静默淘汰，旧回执不能改另一操作。共享Bridge不随页面死亡丢回执，完整结果容量失败仅补最小unknown元数据。页面先只读核验，admission拒绝恢复真实旧ID，saved额外副本需确认。13项Runtime、102项Bridge、相关页面回归通过；双AVD实际取消／保存／离页重进恢复saved／系统分享43秒通过，截图与独立字节/hash/grant见[内容交付](../../../docs/implementation/content-delivery.md)。首次路由时序夹具失败保留，未计通过。Android写入中杀进程／unknown重进、系统目录／provider矩阵及A48仍开放，不关闭任务。
+
 A48：`PlatformDocuments.kt:94`产品冲突AlertDialog及共享协调器523行调用`documents.platform.conflict`仍需迁回共享产品UI／策略。系统provider不保证原子替换的安全限制保留；真实目录同名／取消／离页迟到结果与三选项远端冲突分开验收。批量／目录／provider矩阵与完整恢复继续开放；当前状态见[当前完成度](../current-status.md)。

@@ -32,6 +32,7 @@ pub struct Runtime {
     pub(crate) searches: crate::file_search::Searches,
     pub(crate) sharing: Mutex<Option<Arc<crate::sharing::ImportManager>>>,
     pub(crate) documents: crate::documents::CopyManager,
+    pub(crate) deliveries: crate::delivery::DeliveryJournal,
     pub(crate) media: crate::media::http::MediaStreams,
     pub(crate) qr_attempt: Mutex<Option<(String, tokio_util::sync::CancellationToken)>>,
     pub(crate) device_operations: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
@@ -98,6 +99,7 @@ impl Runtime {
             }
         }
         let events = crate::events::EventBus::new(256);
+        let deliveries = crate::delivery::DeliveryJournal::open(&root).await?;
         let runtime = Arc::new(Self {
             root,
             identity,
@@ -115,6 +117,7 @@ impl Runtime {
             searches: crate::file_search::Searches::default(),
             sharing: Mutex::new(None),
             documents: crate::documents::CopyManager::default(),
+            deliveries,
             media: crate::media::http::MediaStreams::default(),
             qr_attempt: Mutex::new(None),
             device_operations: Mutex::new(HashMap::new()),
@@ -202,6 +205,9 @@ impl Runtime {
     }
 
     pub async fn invoke(self: &Arc<Self>, command: &str, params: Value) -> CoreResult<Value> {
+        if command.starts_with("delivery.") {
+            return self.deliveries.command(command, &params).await;
+        }
         if matches!(command, "media.open" | "media.status" | "media.close") {
             return self.media.command(command, &params).await;
         }

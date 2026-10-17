@@ -288,7 +288,13 @@ void main() {
         tester,
         () =>
             find.byType(ReceiveContentPage).evaluate().isNotEmpty &&
-            find.text('选择系统位置并保存').evaluate().isNotEmpty,
+            find
+                .widgetWithText(FilledButton, '选择系统位置并保存')
+                .evaluate()
+                .any(
+                  (element) =>
+                      (element.widget as FilledButton).onPressed != null,
+                ),
         reason: 'Real queued pull must finish in its own save page.',
       );
       binding.reportData!['actualSavePage'] = true;
@@ -321,15 +327,63 @@ void main() {
       router.pop();
       await waitFor(
         tester,
-        () => find
-            .byType(kind == 'text' ? FileDetailsPage : MediaPreviewPage)
-            .evaluate()
-            .isNotEmpty,
+        () =>
+            find.byType(ReceiveContentPage).evaluate().isEmpty &&
+            find
+                .byType(kind == 'text' ? FileDetailsPage : MediaPreviewPage)
+                .evaluate()
+                .isNotEmpty,
         reason: 'Return to the same original.',
       );
-      await tester.tap(
-        kind == 'text' ? find.text('交给系统分享') : find.byTooltip('系统分享'),
+      ReceiveContentRoute(taskId: transferId)
+          .push<void>(tester.element(find.byType(Scaffold).first));
+      await waitFor(tester, () {
+        final page = find.byType(ReceiveContentPage);
+        if (page.evaluate().length != 1) return false;
+        final route = ModalRoute.of(tester.element(page));
+        return route?.isCurrent == true &&
+            route?.animation?.status == AnimationStatus.completed &&
+            find.text('已保存到系统位置').hitTestable().evaluate().isNotEmpty;
+      }, reason: 'Reopening the same source must restore its durable receipt.');
+      expect(find.text('选择系统位置并保存'), findsNothing);
+      final restored = jsonObject(
+        (await request('delivery.get', {
+          'sourceId': 'transfer:$transferId',
+          'localPath': cache.path,
+          'kind': 'file',
+        }))['record'],
       );
+      expect(restored['status'], 'saved');
+      expect(value(restored, 'operationId'), isNotEmpty);
+      binding.reportData!['systemSaveReceiptRestored'] = true;
+      await tester.pump(const Duration(milliseconds: 300));
+      await checkpoint('restored-save-product-page', 'restored-save-captured');
+      router.pop();
+      await waitFor(
+        tester,
+        () =>
+            find.byType(ReceiveContentPage).evaluate().isEmpty &&
+            find
+                .byType(kind == 'text' ? FileDetailsPage : MediaPreviewPage)
+                .evaluate()
+                .isNotEmpty,
+        reason: 'Receipt review must return to its original content.',
+      );
+      final shareOriginal = kind == 'text'
+          ? find.text('交给系统分享')
+          : find.byTooltip('系统分享');
+      await tester.ensureVisible(shareOriginal);
+      await waitFor(
+        tester,
+        () {
+          final route = ModalRoute.of(tester.element(shareOriginal));
+          return route?.animation?.status == AnimationStatus.completed &&
+              route?.secondaryAnimation?.status == AnimationStatus.dismissed &&
+              shareOriginal.hitTestable().evaluate().isNotEmpty;
+        },
+        reason: 'The original page must be reachable after the receipt page closes.',
+      );
+      await tester.tap(shareOriginal.hitTestable());
       await waitFor(
         tester,
         () =>

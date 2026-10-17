@@ -28,6 +28,7 @@ class DocumentExportPage extends StatelessWidget {
       localPath: localPath,
       name: name,
       kind: kind,
+      transferId: transferId,
       partial: partial,
     ),
   );

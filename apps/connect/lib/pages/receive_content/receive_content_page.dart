@@ -67,6 +67,7 @@ class ReceiveContentPage extends HookConsumerWidget {
               key: ValueKey('$taskId:$localPath'),
               controller: controller,
               localPath: localPath,
+              transferId: taskId,
               name: value(current, 'name', '原文件'),
               kind: current['kind'] == 'directory' ? 'directory' : 'file',
             );
