@@ -27,6 +27,7 @@ List<RouteBase> get $appRoutes => [
   $diagnosticsRoute,
   $filesRoute,
   $fileDetailsRoute,
+  $fileSearchRoute,
   $appsRoute,
   $galleryRoute,
   $mediaPreviewRoute,
@@ -744,6 +745,46 @@ mixin $FileDetailsRoute on GoRouteData {
   String get location => GoRouteData.$location(
     '/devices/${Uri.encodeComponent(_self.deviceId)}/file',
     queryParams: {if (_self.path != '') 'path': _self.path},
+  );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $fileSearchRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/file-search',
+  name: 'file-search',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: FileSearchRoute.$parentNavigatorKey,
+  factory: $FileSearchRoute._fromState,
+);
+
+mixin $FileSearchRoute on GoRouteData {
+  static FileSearchRoute _fromState(GoRouterState state) => FileSearchRoute(
+    deviceId: state.pathParameters['deviceId']!,
+    path: state.uri.queryParameters['path'] ?? '/sdcard',
+    query: state.uri.queryParameters['query'] ?? '',
+  );
+
+  FileSearchRoute get _self => this as FileSearchRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/file-search',
+    queryParams: {
+      if (_self.path != '/sdcard') 'path': _self.path,
+      if (_self.query != '') 'query': _self.query,
+    },
   );
 
   @override

@@ -200,12 +200,27 @@ class FilesPage extends HookWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: query,
-                  decoration: const InputDecoration(
-                    hintText: '搜索当前目录',
-                    prefixIcon: Icon(LucideIcons.search, size: 18),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: query,
+                        decoration: const InputDecoration(
+                          hintText: '搜索当前目录',
+                          prefixIcon: Icon(LucideIcons.search, size: 18),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '搜索子文件夹',
+                      onPressed: () => FileSearchRoute(
+                        deviceId: value(device, 'id'),
+                        path: path.value,
+                        query: query.text,
+                      ).push<void>(context),
+                      icon: const Icon(LucideIcons.folderSearch, size: 20),
+                    ),
+                  ],
                 ),
                 if (busy.value) const LinearProgressIndicator(minHeight: 2),
               ],

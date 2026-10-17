@@ -31,6 +31,7 @@ import 'package:scrcpy_connect/pages/receive_content/receive_content_page.dart';
 import 'package:scrcpy_connect/pages/document_import/document_import_page.dart';
 import 'package:scrcpy_connect/pages/file_details/file_details_page.dart';
 import 'package:scrcpy_connect/pages/files/files_page.dart';
+import 'package:scrcpy_connect/pages/file_search/file_search_page.dart';
 import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
 import 'package:scrcpy_connect/pages/home/home_page.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
@@ -605,6 +606,38 @@ class FileDetailsRoute extends GoRouteData with $FileDetailsRoute {
     }
 
     return _deviceRecord(context, state, deviceId, 'file-details', page);
+  }
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
+@TypedGoRoute<FileSearchRoute>(
+  path: '/devices/:deviceId/file-search',
+  name: 'file-search',
+)
+class FileSearchRoute extends GoRouteData with $FileSearchRoute {
+  const FileSearchRoute({
+    required this.deviceId,
+    this.path = '/sdcard',
+    this.query = '',
+  });
+  final String deviceId;
+  final String path;
+  final String query;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    Widget page(BuildContext context, GoRouterState state, Json device) =>
+        FileSearchPage(
+          key: ValueKey('file-search:${device['id']}:$path:$query'),
+          controller: _controller(context),
+          device: device,
+          initialPath: path,
+          initialQuery: query,
+        );
+    return _deviceRecord(context, state, deviceId, 'file-search', page);
   }
 
   @override
