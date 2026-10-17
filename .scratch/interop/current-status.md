@@ -152,3 +152,15 @@ Core对iOS／macOS／Windows MSVC交叉check30.93／17.04／20.31秒通过，非
 主任务继续active，下一段仍围绕持续交互约0.45秒等待、Core启动核验约0.35–0.47秒、播放器失败传播与真实半开/切网重连开展。低复杂度色块640包不是高动态满负荷吞吐，主动重连不是Wi-Fi故障自动恢复，66秒不是小时级长稳。音画共同时间基/漂移、并发/玻璃负载、物理ARM/ROM/温度/耗电、四宿主Flutter整包继续开放；USB共享选择仍顺延。
 
 `1cc5774`/`d41a26d`分别提交阻塞修复和首帧优化/真实基准。最终Core141 passed /48 ignored（35 suites）、Bridge107、相关应用43通过；严格分析/165输入生成一致性/格式/clippy通过。iOS/macOS/Windows MSVC Core交叉check8.61/3.19/6.59秒通过，非对应宿主Flutter整包。普通main构建27.4秒/安装584ms/R热重启2250ms，设备列表截图已目视后detach；旧isolate及SurfaceSyncGroup告警保留。本批闲置Gradle已停止，清理debug/incremental与过期非视频测试可执行文件实际释放11132MiB，余量73.2GiB，保留视频反馈循环及打包有效缓存，五项原有未跟踪文件未动，无push。
+
+## 视频持续交互：软件回退与正式失败生命周期
+
+`25c2ddc`补齐已打开播放器失败的正式传播，并统一媒体poll的所有权校验。真实Port事件链先红后绿：HTTP还在streaming时播放器已失败、迟到旧relay会误杀新代、重复故障会重复stop；现在按device/generation/relay/texture认领已提交输出，先撤下再并行stop/释放。候选错误事件不越权结束旧输出，正式恢复失败仍终止，不把冻结帧当恢复成功。新增7条及完整Bridge114项通过，相关应用43项通过；严格分析首次发现5处括号风格问题，补齐后4.9秒无问题。
+
+`d0215db`依据真实分段及MDK decoder.video回执，仅优化实时视频FFmpeg回退线程策略，各平台原硬解优先保留。同负载80次默认FFmpeg与slice对照，P50为244→151.5ms、P95为254→245ms；新增P50≤200/P95≤300门槛后，40次默认FFmpeg为243/302ms实际失败，80次最终slice为149/242ms通过。输入回执通常1–4ms、snapshot通常1–2ms；未把snapshot可读称为玻璃到玻璃。fps=-1、async=0、image=1、direct IO无足够收益均撤回；不是叠加猜参数或让所有设备默认软件解码。[各轮原始结果、门禁、回执、复现与边界](../../docs/implementation/video-performance.md)。
+
+正式RemotePage五编码28秒通过，H264全屏Settings及计数VIDEO12代表图已目视；其余图案每轮自动核对。4轮最终性能会话均确认纹理分离，夹具自动卸载/包不存在均true，宿主另验4个精确会话JAR路径均已不存在。普通main构建15.7秒/安装574ms，R热重启2557ms后设备列表截图已目视、detach；FRB旧isolate与SurfaceSyncGroup启动告警仍保留。
+
+两种scrcpy JAR摘要再次核对且未改、未重建；普通Flutter/Rust编译直接嵌入已提交产物，tool/check.sh的重建可复现性验证独立于APK组装，说明补入servers/scrcpy/README.md。主任务继续active：AMediaCodec持续等待约0.35–0.45秒、Core核验、真实TLS/半开/切网恢复、高动态吞吐/并发、共同音画时间基/漂移、物理ARM/功耗与四宿主Flutter整包仍开放，不能用软件路径收益替代这些验收。
+
+本批当前arm64签名release78.42秒通过，同模式热构建4.64秒通过且APK摘要一致；最新原件`/tmp/connect-artifacts/connect-arm64-video-release.apk`，46,740,766字节，SHA-256 `506f80ff966bed5669640c66e397120a0a400b9a3271a5fa319b7f7ae657ffd9`，完整性/manifest/ELF/16KB ZIP对齐/签名检查通过，未冒称物理ARM运行。清理406处释放3345MiB时也误删了旧Dart AOT缓存，已明确记录并补建当前有效缓存，未来不能仅凭app.dill判定debug；原签名、旧成品与Rust缓存未受影响。[完整打包记录](../../docs/implementation/android-packaging.md)。Gradle停止，最终空闲73.8GiB，保留当前release/有效原生缓存及临时证据；五项原有未跟踪文件未动，无push。

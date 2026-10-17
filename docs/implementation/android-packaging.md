@@ -59,3 +59,11 @@ python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-re
 本轮还实际复现了Flutter3.47.6的构建模式注册问题：E2E留下integration_test的Java注册文件，随后`--no-pub` release在51.7秒时因`package dev.flutter.plugins.integration_test does not exist`失败。正常命令重新准备release插件注册后上述38.86秒成功。固定SDK源码`flutter_plugins.dart::injectPlugins`在release过滤dev依赖，`project.dart`的准备流程负责刷新；跳过准备不能假设注册文件仍匹配。更早一次进程以143中断，没有计作通过或签名失败。
 
 打包脚本现在对该明确组合提前拒绝并提示移除`--no-pub`，不手改生成的Java文件、不改Flutter SDK、不把测试插件塞入正式包。公开脚本回归先红后绿，证明拒绝发生在执行Flutter之前；同模式热构建仍可使用`--no-pub`，但在E2E与release之间切换时应使用默认命令。`--no-pub`不是所有状态下的无成本加速开关。
+
+## 视频性能批次的当前产物与缓存
+
+`25c2ddc`/`d0215db`后，当前arm64签名release实际78.42秒通过，同模式`--no-pub`第二次4.64秒通过；两次APK摘要一致。不是把4.64秒解释成冷构建或三ABI构建时间。日志`/tmp/connect-video-latency-release.log`、`/tmp/connect-video-latency-release-warm.log`；ZIP/签名/manifest/完整arm64 ELF/16KB ZIP对齐均由脚本检查，证书身份与此前一致，没有重建scrcpy JAR。
+
+产物另存`/tmp/connect-artifacts/connect-arm64-video-release.apk`，46,740,766字节，SHA-256 `506f80ff966bed5669640c66e397120a0a400b9a3271a5fa319b7f7ae657ffd9`。这是当前源码的ARM产物，未在物理ARM执行，不借用早期x64安装结果宣称当前包已上机。
+
+清理时发现并修正筛选错误：Flutter的release缓存同样可能含`app.dill`，不能仅凭它判断debug目录。本批曾误清旧Dart AOT中间缓存，随后以上述当前release重建恢复有效缓存，旧成品/签名/Rust native hooks未受影响。后续仅按明确构建模式识别过期缓存；无法确认模式的hash目录应保留。实际清理406处、释放3345MiB，重建和热构建后空闲73.8GiB；记录`/tmp/connect-video-latency-cleanup.json`，保留当前release/Gradle/CMake/Rust缓存，不再全clean。

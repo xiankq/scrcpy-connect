@@ -7,6 +7,14 @@ unchanged. This Java code runs only as a temporary service on the **controlled
 Android device**. It does not implement native video on the controller; the
 existing Rust transport and Flutter/MDK presentation remain the media path.
 
+Normal Flutter/Rust builds embed the committed JAR; they do not rebuild it.
+Changes to controller transport, buffering, decoder settings, or UI do not
+require a server rebuild. Rebuild when changing the pinned server source,
+patch, or build toolchain, or when explicitly verifying reproducibility.
+`tool/check.sh` deliberately runs the latter check; it is separate from APK
+assembly. Keep the pause extension when using this artifact: the unmodified
+official JAR does not implement its control type 128.
+
 Rebuild from the repository root:
 
 ```sh
