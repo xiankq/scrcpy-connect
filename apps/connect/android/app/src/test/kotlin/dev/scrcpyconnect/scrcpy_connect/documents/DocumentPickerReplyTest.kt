@@ -31,6 +31,42 @@ object DocumentPickerReplyTest {
         failed.success(mapOf("status" to "cancelled"))
         check(rejected.errors == listOf("permission_denied"))
         check(rejected.values.isEmpty())
-        println("PASS: picker cancel, late completion, failure and exactly-once replies")
+        val completedDescriptor = mutableListOf<String>()
+        DocumentDescriptorCompletion(
+            checkError = {completedDescriptor.add("check")},
+            close = {completedDescriptor.add("close")},
+            closeWithError = {completedDescriptor.add("abort")}
+        ).finish(success = true)
+        check(completedDescriptor == listOf("check", "close", "check"))
+        val abortedDescriptor = mutableListOf<String>()
+        DocumentDescriptorCompletion(
+            checkError = {abortedDescriptor.add("check")},
+            close = {abortedDescriptor.add("close")},
+            closeWithError = {abortedDescriptor.add("abort")}
+        ).finish(success = false)
+        check(abortedDescriptor == listOf("abort"))
+
+        val failedDescriptor = mutableListOf<String>()
+        val peerFailure = IllegalStateException("peer failed before close")
+        val closeFailure = IllegalStateException("close failed")
+        val finalFailure = IllegalStateException("peer failed during close")
+        var checks = 0
+        val reported = runCatching {
+            DocumentDescriptorCompletion(
+                checkError = {
+                    failedDescriptor.add("check")
+                    checks++
+                    throw if (checks == 1) peerFailure else finalFailure
+                },
+                close = {failedDescriptor.add("close"); throw closeFailure},
+                closeWithError = {error("success must still close after a peer error")}
+            ).finish(success = true)
+        }.exceptionOrNull()
+        check(failedDescriptor == listOf("check", "close", "check")) {
+            "A peer failure must not skip descriptor close or the final error check: $failedDescriptor"
+        }
+        check(reported === peerFailure)
+        check(peerFailure.suppressed.toList() == listOf(closeFailure, finalFailure))
+        println("PASS: picker replies and provider descriptor completion signals")
     }
 }

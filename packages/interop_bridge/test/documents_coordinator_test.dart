@@ -146,6 +146,36 @@ class Fixture {
 }
 
 void main() {
+  test(
+    'a rejected source before the picker is failed without a partial save',
+    () async {
+      final f = Fixture();
+      final coordinator = DocumentsCoordinator(
+        platform: f.platform,
+        core: (command, params) async {
+          if (command == 'document.localStat') {
+            throw const InteropException('source_changed', '原文件已变化');
+          }
+          return f.core(command, params);
+        },
+      );
+      final result = await coordinator.request('documents.export', {
+        'operationId': 'preflight-rejected',
+        'localPath': '/cache/outgoing/original',
+        'name': 'original',
+        'kind': 'file',
+      });
+      expect(result['status'], 'failed');
+      expect(result['files'], 0);
+      expect(result['bytes'], 0);
+      expect(result['partialDestinationPossible'], false);
+      expect(
+        f.calls.where((call) => call.$1 == 'documents.platform.picker'),
+        isEmpty,
+      );
+      await coordinator.dispose();
+    },
+  );
   testWidgets(
     'a never responding metadata query times out and releases the operation',
     (tester) async {
@@ -337,6 +367,178 @@ void main() {
       expect(f.calls.where((call) => call.$1 == 'document.copy'), isEmpty);
     },
   );
+
+  test(
+    'a completed save confirms provider success before reporting saved',
+    () async {
+      final f = Fixture()..selected = ['file'];
+      f.node('file', 'saved.txt', size: 0);
+      f.local['/cache/source'] = {'kind': 'file', 'size': 3};
+      final coordinator = DocumentsCoordinator(
+        core: f.core,
+        platform: (command, params) {
+          if (command == 'documents.platform.releaseFd' &&
+              params['outcome'] != 'success') {
+            throw const InteropException(
+              'provider_incomplete',
+              'provider did not receive successful completion',
+            );
+          }
+          return f.platform(command, params);
+        },
+      );
+      final result = await coordinator.request('documents.export', {
+        'localPath': '/cache/source',
+        'kind': 'file',
+      });
+      expect(result['status'], 'saved');
+      expect(result['files'], 1);
+      expect(result['uri'], 'content://fixture/file');
+      await coordinator.dispose();
+    },
+  );
+
+  test(
+    'a failed write aborts its provider lease and preserves the write error',
+    () async {
+      final f = Fixture()
+        ..selected = ['file']
+        ..failClose = true;
+      f.node('file', 'saved.txt', size: 0);
+      f.local['/cache/source'] = {'kind': 'file', 'size': 3};
+      final coordinator = DocumentsCoordinator(
+        core: (command, params) async {
+          if (command == 'document.copy') {
+            f.calls.add((command, params));
+            f.nodes['file']!['size'] = 1;
+            throw const InteropException('write_failed', 'provider stopped', {
+              'bytesCopied': 1,
+              'partialDestinationPossible': true,
+            });
+          }
+          return f.core(command, params);
+        },
+        platform: f.platform,
+      );
+      final result = await coordinator.request('documents.export', {
+        'localPath': '/cache/source',
+        'kind': 'file',
+      });
+      expect(result['status'], 'partial');
+      expect(result['files'], 0);
+      expect(result['bytes'], 1);
+      expect(result['partialDestinationPossible'], isTrue);
+      expect(
+        (result['errors'] as List<Object?>).single,
+        containsPair('code', 'write_failed'),
+      );
+      expect(
+        f.calls
+            .singleWhere((call) => call.$1 == 'documents.platform.releaseFd')
+            .$2['outcome'],
+        'abort',
+      );
+      expect(f.calls.where((call) => call.$1 == 'document.copy'), hasLength(1));
+      expect(
+        f.calls.where((call) => call.$1 == 'documents.platform.delete'),
+        isEmpty,
+      );
+      await coordinator.dispose();
+    },
+  );
+
+  test(
+    'cancelling a write retains possible output without reporting it saved',
+    () async {
+      final f = Fixture()
+        ..selected = ['file']
+        ..failClose = true;
+      f.node('file', 'saved.txt', size: 0);
+      f.local['/cache/source'] = {'kind': 'file', 'size': 3};
+      final copying = Completer<void>();
+      final copied = Completer<DocumentsJson>();
+      final coordinator = DocumentsCoordinator(
+        core: (command, params) {
+          if (command == 'document.copy') {
+            f.calls.add((command, params));
+            copying.complete();
+            return copied.future;
+          }
+          return f.core(command, params);
+        },
+        platform: f.platform,
+      );
+      final job = coordinator.request('documents.export', {
+        'operationId': 'cancel-write',
+        'localPath': '/cache/source',
+        'kind': 'file',
+      });
+      await copying.future;
+      await coordinator.request('documents.cancel', {
+        'operationId': 'cancel-write',
+      });
+      // The bytes may already have reached the provider when cancellation
+      // overtakes the Rust reply. Their save has not been confirmed.
+      f.nodes['file']!['size'] = 3;
+      copied.complete({
+        'bytes': 3,
+        'identity': {'kind': 'file', 'size': 3},
+      });
+      final result = await job;
+      expect(result['status'], 'cancelled');
+      expect(result['files'], 0);
+      expect(result['bytes'], 3);
+      expect(result['partialDestinationPossible'], isTrue);
+      expect(result['cacheRetained'], isTrue);
+      expect(result['uri'], 'content://fixture/file');
+      expect(
+        (result['errors'] as List<Object?>).single,
+        containsPair('code', 'cancelled'),
+      );
+      expect(
+        f.calls
+            .singleWhere((call) => call.$1 == 'documents.platform.releaseFd')
+            .$2['outcome'],
+        'abort',
+      );
+      expect(f.calls.where((call) => call.$1 == 'document.copy'), hasLength(1));
+      expect(
+        f.calls.where((call) => call.$1 == 'documents.platform.delete'),
+        isEmpty,
+      );
+      await coordinator.dispose();
+    },
+  );
+
+  test('a missing provider lease leaves the save result unknown', () async {
+    final f = Fixture()..selected = ['file'];
+    f.node('file', 'saved.txt', size: 0);
+    f.local['/cache/source'] = {'kind': 'file', 'size': 3};
+    final coordinator = DocumentsCoordinator(
+      core: f.core,
+      platform: (command, params) async {
+        if (command == 'documents.platform.releaseFd') {
+          return {'released': false};
+        }
+        return f.platform(command, params);
+      },
+    );
+    final result = await coordinator.request('documents.export', {
+      'localPath': '/cache/source',
+      'kind': 'file',
+    });
+    expect(result['status'], 'resultUnknown');
+    expect(result['files'], 0);
+    expect(result['partialDestinationPossible'], isTrue);
+    expect(result['cacheRetained'], isTrue);
+    expect(result['uri'], 'content://fixture/file');
+    expect(f.calls.where((call) => call.$1 == 'document.copy'), hasLength(1));
+    expect(
+      f.calls.where((call) => call.$1 == 'documents.platform.delete'),
+      isEmpty,
+    );
+    await coordinator.dispose();
+  });
 
   test(
     'provider close failure leaves write receipt unknown and never retries',

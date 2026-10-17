@@ -48,8 +48,11 @@ class PlatformDocuments(private val activity: Activity) {
         if (!method.startsWith("documents.platform.")) return false
         val action = method.removePrefix("documents.platform.")
         if (action == "environment") {
-            result.success(mapOf("cacheDirectory" to activity.cacheDir.canonicalPath,
-                "screenshotsDirectory" to File(activity.filesDir, "screenshots").canonicalPath))
+            // Match path_provider and IncomingShares. Canonicalization can
+            // change Android's /data/user/0 alias to /data/data, breaking the
+            // shared lexical capability root without changing the directory.
+            result.success(mapOf("cacheDirectory" to activity.cacheDir.absolutePath,
+                "screenshotsDirectory" to File(activity.filesDir, "screenshots").absolutePath))
             return true
         }
         val id = params["operationId"] as? String
@@ -64,12 +67,18 @@ class PlatformDocuments(private val activity: Activity) {
         // Lease cleanup remains valid after cancellation. Unknown or already
         // closed leases are idempotent and cannot address another operation.
         if (action == "releaseFd") {
+            val outcome = params["outcome"]
+            if (outcome != "success" && outcome != "abort") {
+                result.error("invalid_argument", "缺少文档流完成状态。", null)
+                return true
+            }
             val lease = params["fdLeaseId"] as? String
             val descriptor = if (op == null) null else synchronized(op) {op.descriptors.remove(lease)}
             if (descriptor == null) {result.success(mapOf("released" to false)); return true}
             worker.execute {
                 try {
-                    descriptor.close()
+                    completeDescriptor(descriptor, outcome == "success" &&
+                        !destroyed && op != null && !op.cancelled.get())
                     main.post {result.success(mapOf("released" to true))}
                 } catch (error: Exception) {
                     main.post {result.error("close_failed", error.message ?: "系统文档流关闭未确认。", null)}
@@ -114,7 +123,7 @@ class PlatformDocuments(private val activity: Activity) {
                             ?: throw Failure("open_failed", "系统没有提供文档描述符。")
                         val lease = UUID.randomUUID().toString()
                         synchronized(op) {
-                            if (op.cancelled.get()) {pfd.close(); throw Failure("cancelled", "操作已取消。")}
+                            if (op.cancelled.get()) {completeDescriptor(pfd, false); throw Failure("cancelled", "操作已取消。")}
                             op.descriptors[lease] = pfd
                         }
                         mapOf("fd" to pfd.fd, "fdLeaseId" to lease, "statSize" to pfd.statSize)
@@ -226,6 +235,13 @@ class PlatformDocuments(private val activity: Activity) {
         }
         throw Failure("directory_read_failed", "文档提供方没有返回目录内容。")
     }
+    private fun completeDescriptor(descriptor: ParcelFileDescriptor, success: Boolean) {
+        DocumentDescriptorCompletion(
+            checkError = descriptor::checkError,
+            close = descriptor::close,
+            closeWithError = {descriptor.closeWithError("文档操作未完成。")}
+        ).finish(success)
+    }
     private fun cancel(op: Operation) {
         op.cancelled.set(true)
         pickers.entries.filter {it.value === op}.toList().forEach {(code, _) ->
@@ -240,13 +256,41 @@ class PlatformDocuments(private val activity: Activity) {
         closer.execute {
             try {op.signal.cancel()} catch (_: Exception) {}
             val fds = synchronized(op) {op.descriptors.values.toList().also {op.descriptors.clear()}}
-            fds.forEach {try {it.close()} catch (_: Exception) {}}
+            fds.forEach {try {completeDescriptor(it, false)} catch (_: Exception) {}}
         }
     }
     fun onDestroy() {
         destroyed = true
         operations.values.toList().forEach(::cancel)
         operations.clear(); pickers.clear(); worker.shutdown(); closer.shutdown()
+    }
+}
+
+/** Platform descriptor signals only; a successful close is not a remote commit ACK. */
+internal class DocumentDescriptorCompletion(
+    private val checkError: () -> Unit,
+    private val close: () -> Unit,
+    private val closeWithError: () -> Unit
+) {
+    fun finish(success: Boolean) {
+        if (!success) {
+            closeWithError()
+            return
+        }
+        var firstFailure: Exception? = null
+        fun attempt(action: () -> Unit) {
+            try {action()} catch (error: Exception) {
+                val first = firstFailure
+                if (first == null) firstFailure = error
+                else if (first !== error) first.addSuppressed(error)
+            }
+        }
+        attempt(checkError)
+        attempt(close)
+        // PFD may cache a peer error while closing its communication FD.
+        // Do not gate this check on canDetectErrors() after close.
+        attempt(checkError)
+        firstFailure?.let {throw it}
     }
 }
 

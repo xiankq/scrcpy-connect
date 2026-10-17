@@ -224,10 +224,10 @@ class DocumentsCoordinator {
       return op.response(
         code == 'result_unknown'
             ? 'resultUnknown'
-            : op.writing
-            ? 'partial'
             : code == 'cancelled'
             ? 'cancelled'
+            : !op.started
+            ? 'failed'
             : 'partial',
       );
     } finally {
@@ -356,6 +356,7 @@ class DocumentsCoordinator {
       'mode': mode,
     });
     DocumentsJson? copiedReceipt;
+    var copyFailed = false;
     try {
       op.check(_disposed || _isDisposed());
       final result = await _core('document.copy', {
@@ -367,20 +368,29 @@ class DocumentsCoordinator {
       });
       op.bytes += _number(result, 'bytes');
       copiedReceipt = result;
+      op.check(_disposed || _isDisposed());
       return result;
     } on InteropException catch (error) {
+      copyFailed = true;
       op.bytes += _number(_map(error.details), 'bytesCopied');
       rethrow;
     } finally {
       try {
-        await _platformCall('documents.platform.releaseFd', {
+        final released = await _platformCall('documents.platform.releaseFd', {
           'operationId': op.id,
           'fdLeaseId': opened['fdLeaseId'],
+          'outcome': copiedReceipt == null || copyFailed || op.cancelled
+              ? 'abort'
+              : 'success',
         }, cancellable: false);
+        if (released['released'] != true) {
+          throw const InteropException('close_failed', '系统文档流已释放，无法确认本次完成。');
+        }
       } catch (_) {
         // Preserve a prior copy failure. A successful write whose provider
         // close failed is not a confirmed save; never retry or delete its URI.
-        if (copiedReceipt != null) {
+        if (copiedReceipt != null && !copyFailed) {
+          op.check(_disposed || _isDisposed());
           if (mode == 'r' && params['targetPath'] is String) {
             try {
               await _core('document.remove', {

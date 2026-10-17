@@ -17,5 +17,6 @@ dart --disable-dart-dev --packages=.dart_tool/package_config.json apps/connect/t
 (cd packages/interop_bridge && flutter test --no-pub)
 npx --yes --package=@google/design.md@0.4.0 designmd lint designs/design.md
 if [[ "${1:-}" == "--android" ]]; then
-  (cd apps/connect && flutter build apk --debug --no-pub --target-platform android-arm64,android-x64)
+  (cd apps/connect && flutter build apk --debug --no-pub --target-platform android-arm,android-arm64,android-x64)
+  python3 apps/connect/android/app/src/test/run_native_ownership_tests.py
 fi

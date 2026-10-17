@@ -40,15 +40,21 @@ if not sdk.is_file() or not flutter.is_file():
 source = android / "app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect"
 test = android / "app/src/test/kotlin/dev/scrcpyconnect/scrcpy_connect/NativeOwnershipTest.kt"
 java = str(Path(os.environ.get("JAVA_HOME", "/usr/lib/jvm/java-21-openjdk-amd64")) / "bin/java")
-with tempfile.TemporaryDirectory(prefix="interop-audio-contracts-") as build:
+with tempfile.TemporaryDirectory(prefix="interop-native-contracts-") as build:
     subprocess.run([java, "-Xmx768m", "-cp", os.pathsep.join(map(str, compiler_jars)),
         "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect", "-jvm-target", "17",
         "-classpath", os.pathsep.join(map(str, [stdlib, sdk, flutter])), "-d", build,
         str(source / "AudioSessionOwnership.kt"), str(source / "NativeLeaseOwnership.kt"), str(test),
-        str(test.with_name("ActivityLeaseTest.kt"))], check=True)
+        str(test.with_name("ActivityLeaseTest.kt")),
+        str(source / "PlatformDocuments.kt"),
+        str(test.parent / "documents/DocumentPickerReplyTest.kt")], check=True)
     # There is deliberately no android.jar or Flutter runtime here. Only the
     # production coordination and hardware ports execute, never framework stubs.
     subprocess.run([java, "-cp", build + os.pathsep + str(stdlib),
         "dev.scrcpyconnect.scrcpy_connect.NativeOwnershipTest"], check=True)
     subprocess.run([java, "-cp", build + os.pathsep + str(stdlib),
         "dev.scrcpyconnect.scrcpy_connect.ActivityLeaseTest"], check=True)
+    # MethodChannel.Result is an interface from the real embedding; the test
+    # invokes only our descriptor callbacks, never Android framework stubs.
+    subprocess.run([java, "-cp", os.pathsep.join([build, str(stdlib), str(flutter)]),
+        "dev.scrcpyconnect.scrcpy_connect.DocumentPickerReplyTest"], check=True)
