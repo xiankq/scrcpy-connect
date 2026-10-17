@@ -52,6 +52,7 @@ List<RouteBase> get $appRoutes => [
   $backgroundRoute,
   $activitiesRoute,
   $dataPreferencesRoute,
+  $mediaCacheRoute,
 ];
 
 RouteBase get $rootRoute => GoRouteData.$route(
@@ -1639,6 +1640,35 @@ mixin $DataPreferencesRoute on GoRouteData {
 
   @override
   String get location => GoRouteData.$location('/settings/data');
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $mediaCacheRoute => GoRouteData.$route(
+  path: '/settings/media-cache',
+  name: 'media-cache',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: MediaCacheRoute.$parentNavigatorKey,
+  factory: $MediaCacheRoute._fromState,
+);
+
+mixin $MediaCacheRoute on GoRouteData {
+  static MediaCacheRoute _fromState(GoRouterState state) =>
+      const MediaCacheRoute();
+
+  @override
+  String get location => GoRouteData.$location('/settings/media-cache');
 
   @override
   void go(BuildContext context) => context.go(location);

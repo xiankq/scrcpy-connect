@@ -36,6 +36,7 @@ import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
 import 'package:scrcpy_connect/pages/home/home_page.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
 import 'package:scrcpy_connect/pages/media_preview/media_preview_page.dart';
+import 'package:scrcpy_connect/pages/media_cache/media_cache_page.dart';
 import 'package:scrcpy_connect/pages/notification_reply/notification_reply_page.dart';
 import 'package:scrcpy_connect/pages/notifications/notifications_page.dart';
 import 'package:scrcpy_connect/pages/qr_pair/qr_pair_page.dart';
@@ -1257,6 +1258,21 @@ class DataPreferencesRoute extends GoRouteData with $DataPreferencesRoute {
     return page(context, state);
   }
 
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
+@TypedGoRoute<MediaCacheRoute>(
+  path: '/settings/media-cache',
+  name: 'media-cache',
+)
+class MediaCacheRoute extends GoRouteData with $MediaCacheRoute {
+  const MediaCacheRoute();
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      MediaCachePage(controller: _controller(context));
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) =>
       _page(state, build(context, state));

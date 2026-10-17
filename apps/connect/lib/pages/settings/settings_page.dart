@@ -88,6 +88,12 @@ class SettingsPage extends HookConsumerWidget {
         ),
         const SectionTitle('本机数据'),
         ActionRow(
+          icon: LucideIcons.hardDrive,
+          title: '媒体暂存',
+          subtitle: '查看空间占用，清理不再使用的预览与原件',
+          onTap: () => const MediaCacheRoute().push<void>(context),
+        ),
+        ActionRow(
           icon: LucideIcons.database,
           title: '设备记录与恢复',
           subtitle: '名称与偏好可以恢复，授权身份留在本机',
