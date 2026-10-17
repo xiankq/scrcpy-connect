@@ -85,6 +85,18 @@ class _Backend {
         return session;
       case 'session.list':
         return {'sessions': sessions};
+      case 'session.pause':
+      case 'session.resume':
+        final session = sessions.singleWhere(
+          (item) => item['sessionId'] == params['sessionId'],
+        );
+        session['status'] = command == 'session.pause' ? 'paused' : 'streaming';
+        session['capturePaused'] = command == 'session.pause';
+        return {
+          ...session,
+          'firstFrameDecoded': true,
+          'evidence': 'mdk.snapshot',
+        };
       case 'session.stop':
         sessions.removeWhere(
           (session) => session['sessionId'] == params['sessionId'],
@@ -170,7 +182,7 @@ void main() {
       expect(backend.starts, 0);
       expect(
         backend.calls
-            .where((call) => call.$1 == 'session.stop')
+            .where((call) => call.$1 == 'session.pause')
             .single
             .$2['sessionId'],
         'first',
@@ -319,13 +331,14 @@ void main() {
   );
 
   testWidgets(
-    'full-screen remote keeps its session across rebuilds and exit stops only its own identity',
+    'full-screen remote keeps its session across rebuilds and return pauses only its own identity',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final backend = _Backend();
       backend.sessions.add({
         'sessionId': 'other-session',
         'deviceId': 'phone',
+        'packageName': 'com.example.other',
         'status': 'streaming',
       });
       final router = await _mountRouter(
@@ -368,17 +381,21 @@ void main() {
       expect(find.byType(DeviceWorkspacePage), findsOneWidget);
       expect(
         backend.calls
-            .where((call) => call.$1 == 'session.stop')
+            .where((call) => call.$1 == 'session.pause')
             .map((call) => call.$2['sessionId']),
         ['session-1'],
       );
-      expect(backend.sessions.single['sessionId'], 'other-session');
+      expect(backend.sessions.map((item) => item['sessionId']).toSet(), {
+        'other-session',
+        'session-1',
+      });
+      expect(backend.calls.where((call) => call.$1 == 'session.stop'), isEmpty);
       await _disposeRouter(tester, router, backend);
     },
   );
 
   testWidgets(
-    'an existing remote route reattaches once while declarative removal closes that session',
+    'an existing remote route reattaches once while declarative removal pauses and retains it',
     (tester) async {
       final backend = _Backend();
       backend.sessions.add({
@@ -400,7 +417,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         backend.calls
-            .where((call) => call.$1 == 'session.stop')
+            .where((call) => call.$1 == 'session.pause')
             .single
             .$2['sessionId'],
         'existing',

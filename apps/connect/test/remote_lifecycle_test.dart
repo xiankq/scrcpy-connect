@@ -115,7 +115,7 @@ void main() {
   );
 
   testWidgets(
-    'exit waits for a queued key-up even after the held-key set has cleared',
+    'return drains queued key-up before pausing and retaining its session',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final semantics = tester.ensureSemantics();
@@ -157,7 +157,7 @@ void main() {
         await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
         await tester.pump();
         expect(
-          commands.where((c) => c.$1 == 'session.stop'),
+          commands.where((c) => c.$1 == 'session.pause'),
           isEmpty,
           reason:
               'The live input queue still owes the original session a key-up.',
@@ -170,12 +170,12 @@ void main() {
               .map((c) => c.$2['action']),
           ['down', 'up'],
         );
-        expect(commands.where((c) => c.$1 == 'session.stop'), hasLength(1));
+        expect(commands.where((c) => c.$1 == 'session.pause'), hasLength(1));
         expect(
           commands.indexWhere(
             (c) => c.$1 == 'session.key' && c.$2['action'] == 'up',
           ),
-          lessThan(commands.indexWhere((c) => c.$1 == 'session.stop')),
+          lessThan(commands.indexWhere((c) => c.$1 == 'session.pause')),
         );
       } finally {
         if (!down.isCompleted) down.complete({});
@@ -186,7 +186,7 @@ void main() {
       }
     },
   );
-  testWidgets('exit releases held keys before stopping its original session', (
+  testWidgets('return releases held keys before pausing its original session', (
     tester,
   ) async {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -222,7 +222,7 @@ void main() {
     expect(keys.every((c) => c.$2['sessionId'] == 'original'), isTrue);
     expect(
       commands.indexOf(keys.last),
-      lessThan(commands.indexWhere((c) => c.$1 == 'session.stop')),
+      lessThan(commands.indexWhere((c) => c.$1 == 'session.pause')),
     );
     await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpWidget(const SizedBox());
@@ -512,18 +512,18 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(commands, ['session.start']);
+      expect(commands.where((c) => c != 'session.list'), ['session.start']);
       await tester.tap(find.text('唤醒手机'));
       await tester.pumpAndSettle();
       expect(find.textContaining('可能点亮被控手机的实体屏幕'), findsOneWidget);
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
-      expect(commands, ['session.start']);
+      expect(commands.where((c) => c != 'session.list'), ['session.start']);
       await tester.tap(find.text('唤醒手机'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('唤醒手机').last);
       await tester.pumpAndSettle();
-      expect(commands.take(3), [
+      expect(commands.where((c) => c != 'session.list').take(3), [
         'session.start',
         'devices.wake',
         'session.start',
@@ -600,11 +600,13 @@ void main() {
     (tester) async {
       final events = StreamController<Json>.broadcast();
       final commands = <(String, Json)>[];
+      final resume = Completer<Json>();
       final controller = createTestController((
         command, [
         params = const {},
       ]) async {
         commands.add((command, params));
+        if (command == 'session.resume') return resume.future;
         return command == 'session.start'
             ? {
                 'sessionId': 'session',
@@ -652,6 +654,7 @@ void main() {
       await tester.tapAt(const Offset(400, 300));
       await tester.pumpAndSettle();
       expect(commands.where((c) => c.$1 == 'session.touch'), hasLength(2));
+      // A stale frame cannot unlock input while the current resume is pending.
       events.add({
         'type': 'session.output.resumed',
         'deviceId': 'phone',
@@ -663,6 +666,16 @@ void main() {
           'width': 200,
           'height': 400,
         },
+      });
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(400, 300));
+      await tester.pumpAndSettle();
+      expect(commands.where((c) => c.$1 == 'session.touch'), hasLength(2));
+      resume.complete({
+        'sessionId': 'session',
+        'firstFrameDecoded': true,
+        'evidence': 'mdk.snapshot',
+        'textureId': 1,
       });
       await tester.pumpAndSettle();
       await tester.tapAt(const Offset(400, 300));

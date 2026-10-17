@@ -147,3 +147,45 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 - `product_flow_test.dart`不再在缺端点时静默成功。正常完整结束才产出`productAcceptanceComplete=true`；通用driver要求该回执，保留独立audio/background/clipboard/documents模式。纯Dart契约`test_driver/integration_test_contract_test.dart`通过，`--missing-product`真实退出255；该检查已接入`tool/check.sh`。新增页面滚动按具体route/scrollable定位、等转换完成，点击未命中即失败。中间失败如实留在临时日志，没有降低健康/像素/对象断言换取通过。
 
 本轮没有运行新的物理设备/四端整包/密码安全或当前共享SAF验收；多窗口、持续通知/认证/后台发布、安全通话、活动恢复/事件重取、完整文件/相册交付等仍是实现工作，不能称仅差测试。
+
+## 保留多窗口与协作捕获暂停（2026-10-17）
+
+范围：手机切换保留会话、窗口级工具/截图与当前共享播放器生命周期。完整前沿见[核查第10节](../../.scratch/interop/completion-reassessment.md#10-持续会话批次实际进展与未完成部分)，并非大屏并排或断线/进程恢复完成。
+
+### 实际失败与修复
+
+- START_APP之前等待首关键帧会卡住空虚拟显示；独立控制actor先发送应用启动后，实际单Settings启动由11.26秒失败变4.25秒通过。
+- 真实主屏持续编码＋Settings启动通过4.74秒，但SIGSTOP暂停主屏＋Settings失败11.89秒。最小临时服务补丁保留Binder/控制线程，视频线程释放实际MediaCodec后在gate等待；同一真实回归5.71秒通过。见[协议/构建依据](../research/cooperative-capture-pause.md)。不把具体Binder死锁机制写成已证实。
+- 新多窗口流程暴露HTTP配置完整但下一帧暂停时10秒误杀。真实TCP回归先失败10.30秒；取消配置组之间总超时，保留半包/首次输入/下一代消费者超时、配置容量限制与取消，12项TCP默认检查通过20.01秒。
+- 恢复旧播放器与新generation提交并发导致取消。新增最小挂起恢复→提交新代测试先失败，改为逻辑会话持有呈现意图和队列，恢复跟随当前代；迟到回执不能覆盖更高generation。播放器18项、呈现协调15项通过。核心另测迟到ready只更新纹理而不覆盖确认暂停及资源状态。
+
+### 真实UI与独立进程核对
+
+在`apps/connect`运行，`PATH`包含本机Rust/Flutter，target5556已将15556转发到5555：
+
+```sh
+rtk proxy env CONNECT_E2E_TARGET=emulator-5556 \
+  CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/session-workspace \
+  flutter drive --driver=test_driver/session_workspace.dart \
+  --target=integration_test/session_workspace_test.dart -d emulator-5554 \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+  --dart-define=CONNECT_E2E_PORT=15556 \
+  --dart-define=CONNECT_DIAGNOSTICS=true
+```
+
+这是已准备端口的隔离双AVD媒体验收，不是未授权首次连接。测试通过真实页面打开主屏、Settings、Google Dialer，各退出后保留session且capturePauseMode=cooperative/captureStateConfirmed=true；从会话列表恢复原Settings，工具截该窗口最后显示帧，明确关闭Settings后恢复原Dialer。driver通过测试端等待的checkpoint，在各状态当时独立检查被控端process/cmdline，而非测试结束才推断截图时的进程。
+
+完整运行退出0、40秒，8个独立检查点均通过：paused服务为S而不是T；Settings关闭后其进程消失，其余两个仍存活；最终Dialer实际Texture及MDK snapshot可用。回执`sessionWorkspaceComplete=true/pausedWindowsVerified=3`，日志`/tmp/connect-session-workspace-cooperative4.log`，JSON/PNG在`/tmp/connect-e2e/session-workspace/`。已目视会话列表、Settings截图和最终全屏Dialer；列表的包名/材质仍有产品呈现改进空间，未称视觉设计完成。
+
+同一扩展下真实HOME/Activity返回13秒通过：增加`CONNECT_E2E_BACKGROUND=1 CONNECT_E2E_DEVICE=emulator-5554`，driver改`test_driver/integration_test.dart`、target改`integration_test/background_resume_test.dart`；回执`mediaAcceptanceComplete=true`，日志`/tmp/connect-cooperative-background.log`，图在`/tmp/connect-e2e/cooperative-background/`。
+
+五编码改target为`integration_test/video_codecs_test.dart`，显式`CONNECT_E2E_ACCEPTANCE=media`，不设置BACKGROUND；45秒通过H264/H265/AV1/VP8/VP9的真实共享渲染。每种离开后确认paused，再只停止当前ID，保证下种编码创建新窗口而非误复用旧设置。日志`/tmp/connect-cooperative-codecs.log`，JSON/PNG在`/tmp/connect-e2e/cooperative-codecs/`；H264/H265图已比较，HEVC低清仍存在，不记视觉质量通过。通用driver默认仍要求product回执；media模式缺/false/错误类型回执同样失败，显式product失败不能被media掩盖，纯Dart契约通过。
+
+### 源码、产物和默认检查
+
+`servers/scrcpy/build.py --check`从固定源归档/补丁重建到忽略目录，实际输出SHA与受控产物一致：`91606a603a49bbea2be37ec500cde44a588483ac3162bc466d23b2f9d840deab`。JVM协议/gate检查通过，二者已接入`tool/check.sh`。CI配置安装JDK21/platform36/build-tools36.0.0；当前仅本机执行，不能称CI已绿。官方vendor JAR保持原样，新增Java仅在被控端临时运行，主控播放器仍为跨平台Flutter/fvp。
+
+当前默认Rust工作区135 passed/43 ignored、all-target clippy、cargo fmt通过；严格Flutter分析无问题，真实workspace build_runner only-check通过。43项忽略用例须各自实际配置执行；默认通过不替代设备证据。FRB、companion其余产物门禁、旧系统/OEM/物理USB/HAL、四宿主整包、完整恢复、通知和液态玻璃仍开放。
+
+最终应用全量91项、Bridge全量83项均通过，日志`/tmp/connect-session-final-app.log`和`/tmp/connect-session-final-bridge.log`。Rust日志`/tmp/connect-session-final-rust.log`，严格分析与生成日志分别`/tmp/connect-session-final-analysis.log`、`/tmp/connect-session-final-generation.log`。生成检查在隔离工作目录运行真实builder比对，控制器和typed route生成文件已经提交对应源；测试通过不代表上述开放任务完成。

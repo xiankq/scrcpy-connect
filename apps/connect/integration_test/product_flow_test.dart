@@ -294,11 +294,20 @@ void main() {
       await waitFor(
         tester,
         () => find.byType(RemotePage).evaluate().isEmpty,
-        reason:
-            'Explicit exit must stop the session and return to the workspace.',
+        reason: 'Return must retain the session and return to the workspace.',
       );
       expect(find.text('打开手机屏幕'), findsOneWidget);
+      final retained = objects(
+        (await controller.request('session.list'))['sessions'],
+      ).singleWhere((item) => item['sessionId'] == session['sessionId']);
+      expect(retained['status'], 'paused');
+      expect(retained['capturePaused'], true);
       await binding.takeScreenshot('workspace-after-remote');
+      // The fixture owns this exact window; returning did not destroy it.
+      await controller.request('session.stop', {
+        'sessionId': session['sessionId'],
+        'keepTask': true,
+      });
       expect(tester.takeException(), isNull);
     } finally {
       WidgetController.hitTestWarningShouldBeFatal = originalHitTestPolicy;

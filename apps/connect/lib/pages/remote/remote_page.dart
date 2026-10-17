@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/router/remote_control_intent.dart';
+import 'package:scrcpy_connect/router/route_observers.dart';
+import 'package:scrcpy_connect/services/session_views.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/remote/widgets/exit_handle.dart';
@@ -20,17 +23,20 @@ class RemotePage extends StatefulWidget {
     this.packageName,
     this.existingSession,
     this.requestKeyboard = false,
+    this.initialAction,
   });
   final AppController controller;
   final Json device;
   final String? packageName;
   final Json? existingSession;
   final bool requestKeyboard;
+  final RemoteControlIntent? initialAction;
   @override
   State<RemotePage> createState() => _RemotePageState();
 }
 
-class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
+class _RemotePageState extends State<RemotePage>
+    with WidgetsBindingObserver, RouteAware {
   Json? session;
   String? error;
   String? errorCode;
@@ -51,6 +57,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   int startAttempt = 0;
   bool lifecyclePaused = false;
   bool adjustmentShown = false;
+  bool initialActionApplied = false;
+  SessionView? view;
+  ModalRoute<dynamic>? observedRoute;
+  bool covered = false;
+  bool presentationVisible = true;
+  bool awaitingResume = false;
+  int visibilityEpoch = 0;
   final remoteMessenger = GlobalKey<ScaffoldMessengerState>();
 
   void trace(String detail) {
@@ -71,6 +84,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       !connecting &&
       !exiting &&
       error == null &&
+      view?.isCurrent == true &&
+      !covered &&
+      presentationVisible &&
+      !awaitingResume &&
       sessionId.isNotEmpty;
 
   Future<void> releaseInputs() {
@@ -139,14 +156,30 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       if (!mounted || exiting || attempt != startAttempt) return;
       controlAvailable = false;
       bindingGeneration++;
+      Json? retained = widget.existingSession;
+      if (retained == null) {
+        final listed = objects(
+          (await controller.request('session.list', {
+            'deviceId': widget.device['id'],
+          }))['sessions'],
+        );
+        final matches = listed.where(
+          (item) =>
+              item['deviceId'] == widget.device['id'] &&
+              item['packageName'] == widget.packageName &&
+              !['stopped', 'failed', 'error'].contains(item['status']),
+        );
+        retained = matches.firstOrNull;
+      }
+      if (!mounted || exiting || attempt != startAttempt) return;
       final result =
-          widget.existingSession ??
+          retained ??
           await controller.request('session.start', {
             'deviceId': widget.device['id'],
             if (widget.packageName != null) 'packageName': widget.packageName,
           });
       if (!mounted || exiting || attempt != startAttempt) {
-        if (widget.existingSession == null) {
+        if (retained == null) {
           final staleId = value(result, 'sessionId', value(result, 'id'));
           if (staleId.isNotEmpty && staleId != sessionId) {
             try {
@@ -169,13 +202,48 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         session = result;
         controlAvailable = sessionId.isNotEmpty && result['textureId'] != null;
         lifecyclePaused = false;
-        connecting = false;
+        connecting = retained != null && result['textureId'] != null;
         paused = result['status'] == 'paused';
         if (widget.requestKeyboard && result['textureId'] != null) ime = true;
         if (result['textureId'] == null) {
           error = value(result, 'reason', '尚未获得设备的实时画面。请检查设备连接和视频能力。');
         }
       });
+      if (sessionId.isEmpty || result['textureId'] == null) return;
+      view = controller.sessionViews.claim(
+        sessionId,
+        visible:
+            result['status'] != 'paused' && result['capturePaused'] != true,
+      );
+      if (retained != null) {
+        await resumeView();
+        if (!mounted || exiting || attempt != startAttempt) return;
+      }
+      if (covered) await pauseView();
+      if (!initialActionApplied &&
+          widget.initialAction != null &&
+          canSendInput) {
+        initialActionApplied = true;
+        final action = widget.initialAction!;
+        switch (action.tool) {
+          case RemoteTool.rotate:
+            await send('session.rotate', {});
+          case RemoteTool.screen:
+            await send('session.screen', {'mode': action.value});
+          case RemoteTool.text:
+            await send('session.text', {'text': action.value});
+          case RemoteTool.key:
+            final code = action.value! as int;
+            heldKeys[code] = (sessionId, bindingGeneration);
+            try {
+              await send('session.key', {'keyCode': code, 'action': 'down'});
+            } finally {
+              heldKeys.remove(code);
+              await send('session.key', {'keyCode': code, 'action': 'up'});
+            }
+        }
+      }
+
       trace('start.bound paused=$paused');
       // The bridge returns this texture only after actual decoded pixels have
       // been read. Earlier output events can precede this page binding.
@@ -223,6 +291,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void onEvent(Json event) {
+    if (event['type'] == 'session.disconnected' && event['data'] is Map) {
+      trace('server.ended reason=${(event['data'] as Map)['reason']}');
+    }
     if (!mounted) return;
     final data = event['data'] is Map<Object?, Object?>
         ? jsonObject(event['data'])
@@ -256,7 +327,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         }
         setState(() {
           session = next;
-          if (next['textureId'] != null) {
+          if (next['textureId'] != null &&
+              presentationVisible &&
+              !awaitingResume &&
+              !covered) {
             paused = false;
             error = null;
           }
@@ -327,25 +401,95 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    trace(
-      'lifecycle state=${state.name} bound=${sessionId.isNotEmpty} lifecyclePaused=$lifecyclePaused',
-    );
-    if (state != AppLifecycleState.resumed) {
-      unawaited(releaseInputs());
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == observedRoute) return;
+    sessionRouteObserver.unsubscribe(this);
+    observedRoute = route;
+    if (route != null) sessionRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() {
+    covered = true;
+    unawaited(pauseView());
+  }
+
+  @override
+  void didPopNext() {
+    covered = false;
+    if (acceptsInput) unawaited(resumeView());
+  }
+
+  Future<void> pauseView() async {
+    final owned = view;
+    if (owned == null || !owned.isCurrent) return;
+    visibilityEpoch++;
+    presentationVisible = false;
+    final releases = releaseInputs();
+    if (mounted) setState(() => paused = true);
+    try {
+      await owned.pause(afterInput: releases);
+    } catch (failure) {
+      if (mounted && !exiting) setState(() => error = remoteFailure(failure));
     }
-    // Inactive can mean a visible system prompt or temporary focus loss.
-    // Only hidden/paused/detached make the capture genuinely invisible.
+  }
+
+  Future<void> resumeView() async {
+    if (sessionId.isEmpty || covered || exiting || !acceptsInput) return;
+    var owned = view;
+    if (owned == null || !owned.isCurrent) {
+      owned = controller.sessionViews.claim(sessionId, visible: false);
+      view = owned;
+    }
+    final epoch = ++visibilityEpoch;
+    presentationVisible = true;
+    awaitingResume = true;
+    setState(() => paused = true);
+    try {
+      final receipt = await owned.resume();
+      if (!mounted ||
+          exiting ||
+          !owned.isCurrent ||
+          covered ||
+          epoch != visibilityEpoch) {
+        return;
+      }
+      if (receipt['firstFrameDecoded'] != true ||
+          receipt['evidence'] != 'mdk.snapshot') {
+        throw const RequestFailure('renderer_not_ready', '尚未确认恢复后的画面，请重新检查。');
+      }
+      setState(() {
+        session = {...?session, ...receipt};
+        paused = false;
+        awaitingResume = false;
+        connecting = false;
+        controlAvailable = session?['textureId'] != null;
+        error = null;
+      });
+    } catch (failure) {
+      if (mounted && !exiting && epoch == visibilityEpoch) {
+        setState(() {
+          connecting = false;
+          error = remoteFailure(failure);
+        });
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) unawaited(releaseInputs());
     if (state == AppLifecycleState.inactive || sessionId.isEmpty) return;
     if (state == AppLifecycleState.resumed) {
       if (!lifecyclePaused) return;
       lifecyclePaused = false;
-      unawaited(send('session.resume', {}));
+      if (!covered) unawaited(resumeView());
     } else {
       if (lifecyclePaused) return;
       lifecyclePaused = true;
-      setState(() => paused = true);
-      unawaited(send('session.pause', {}));
+      unawaited(pauseView());
     }
   }
 
@@ -532,14 +676,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     startAttempt++;
     if (sessionId.isNotEmpty) {
       try {
-        await releaseInputs();
-        await controller.request('session.stop', {
-          'sessionId': sessionId,
-          'keepTask': true,
-        });
+        await view?.release(afterInput: releaseInputs());
         controlAvailable = false;
-      } catch (_) {
-        /* Device task is retained even when transport has already ended. */
+      } catch (failure) {
+        if (mounted) {
+          setState(() {
+            exiting = false;
+            paused = true;
+            error = '暂未能暂停此窗口：${remoteFailure(failure)}';
+          });
+        }
+        return;
       }
     }
     if (mounted) closePage<void>(context);
@@ -549,19 +696,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void dispose() {
     startAttempt++;
     final release = releaseInputs();
-    final ownedSession = sessionId;
-    if (!exiting && ownedSession.isNotEmpty) {
+    final ownedView = view;
+    if (!exiting && ownedView != null) {
       unawaited(
-        release
-            .then(
-              (_) => controller.request('session.stop', {
-                'sessionId': ownedSession,
-                'keepTask': true,
-              }),
-            )
+        ownedView
+            .release(afterInput: release)
             .catchError((Object _) => <String, dynamic>{}),
       );
     }
+    sessionRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     eventSubscription?.cancel();
     inputFocus.dispose();

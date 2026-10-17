@@ -988,14 +988,17 @@ RouteBase get $sessionToolsRoute => GoRouteData.$route(
 );
 
 mixin $SessionToolsRoute on GoRouteData {
-  static SessionToolsRoute _fromState(GoRouterState state) =>
-      SessionToolsRoute(deviceId: state.pathParameters['deviceId']!);
+  static SessionToolsRoute _fromState(GoRouterState state) => SessionToolsRoute(
+    deviceId: state.pathParameters['deviceId']!,
+    sessionId: state.uri.queryParameters['session-id'],
+  );
 
   SessionToolsRoute get _self => this as SessionToolsRoute;
 
   @override
   String get location => GoRouteData.$location(
     '/devices/${Uri.encodeComponent(_self.deviceId)}/tools',
+    queryParams: {if (_self.sessionId != null) 'session-id': _self.sessionId},
   );
 
   @override
@@ -1160,6 +1163,7 @@ mixin $RemoteSessionRoute on GoRouteData {
               _$boolConverter,
             ) ??
             false,
+        $extra: state.extra as RemoteControlIntent?,
       );
 
   RemoteSessionRoute get _self => this as RemoteSessionRoute;
@@ -1173,17 +1177,19 @@ mixin $RemoteSessionRoute on GoRouteData {
   );
 
   @override
-  void go(BuildContext context) => context.go(location);
+  void go(BuildContext context) => context.go(location, extra: _self.$extra);
 
   @override
-  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+  Future<T?> push<T>(BuildContext context) =>
+      context.push<T>(location, extra: _self.$extra);
 
   @override
   void pushReplacement(BuildContext context) =>
-      context.pushReplacement(location);
+      context.pushReplacement(location, extra: _self.$extra);
 
   @override
-  void replace(BuildContext context) => context.replace(location);
+  void replace(BuildContext context) =>
+      context.replace(location, extra: _self.$extra);
 }
 
 RouteBase get $transferDetailsRoute => GoRouteData.$route(

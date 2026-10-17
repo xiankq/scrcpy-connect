@@ -75,6 +75,13 @@ void validateAcceptanceReport(
   Map<String, dynamic> metadata, {
   required Map<String, String> environment,
 }) {
+  final acceptance = environment['CONNECT_E2E_ACCEPTANCE'] ?? 'product';
+  if (acceptance != 'product' && acceptance != 'media') {
+    throw StateError('Unknown acceptance scope: $acceptance');
+  }
+  if (acceptance == 'media' && metadata['mediaAcceptanceComplete'] != true) {
+    throw StateError('The app did not complete scoped media acceptance.');
+  }
   // This driver's default target is the full product flow. Dedicated host
   // fixture modes retain their own completion checks below.
   final fixtureMode = [
@@ -83,7 +90,8 @@ void validateAcceptanceReport(
     'CONNECT_E2E_CLIPBOARD',
     'CONNECT_E2E_DOCUMENTS',
   ].any((key) => environment[key] == '1');
-  if ((!fixtureMode || metadata.containsKey('productAcceptanceComplete')) &&
+  if (((!fixtureMode && acceptance == 'product') ||
+          metadata.containsKey('productAcceptanceComplete')) &&
       metadata['productAcceptanceComplete'] != true) {
     throw StateError('The app did not complete real product acceptance.');
   }

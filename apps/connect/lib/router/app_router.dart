@@ -1,4 +1,6 @@
+import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:flutter/material.dart';
+import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -72,6 +74,7 @@ GoRouter createAppRouter({
   return GoRouter(
     navigatorKey: root,
     restorationScopeId: 'connect-router',
+    observers: [sessionRouteObserver],
     initialLocation: initialLocation,
     routes: typedRoutes(root),
     errorPageBuilder: (context, state) => MaterialPage<void>(
@@ -113,6 +116,7 @@ Widget _remoteView(
   bool keyboard = false,
   String? packageName,
   Json? session,
+  RemoteControlIntent? action,
 }) {
   if (session == null && intent is! RemoteLaunchIntent) {
     return const RouteErrorPage(message: '请从设备工作台明确打开画面。恢复这个位置不会自动创建新的控制会话。');
@@ -126,6 +130,7 @@ Widget _remoteView(
     existingSession: session,
     packageName: packageName,
     requestKeyboard: keyboard,
+    initialAction: action,
   );
 }
 
@@ -758,14 +763,19 @@ class QualityRoute extends GoRouteData with $QualityRoute {
   name: 'session-tools',
 )
 class SessionToolsRoute extends GoRouteData with $SessionToolsRoute {
-  const SessionToolsRoute({required this.deviceId});
+  const SessionToolsRoute({required this.deviceId, this.sessionId});
   final String deviceId;
+  final String? sessionId;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, Json device) =>
-        SessionToolsPage(controller: controller, device: device);
+        SessionToolsPage(
+          controller: controller,
+          device: device,
+          sessionId: sessionId,
+        );
     return _deviceRecord(context, state, deviceId, 'session-tools', page);
   }
 
@@ -862,10 +872,12 @@ class RemoteSessionRoute extends GoRouteData with $RemoteSessionRoute {
     required this.deviceId,
     required this.sessionId,
     this.keyboard = false,
+    this.$extra,
   });
   final String deviceId;
   final String sessionId;
   final bool keyboard;
+  final RemoteControlIntent? $extra;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
@@ -881,6 +893,7 @@ class RemoteSessionRoute extends GoRouteData with $RemoteSessionRoute {
           device,
           session: session,
           keyboard: keyboard,
+          action: $extra,
         ),
       );
     }

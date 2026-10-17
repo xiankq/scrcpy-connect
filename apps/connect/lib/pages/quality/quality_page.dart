@@ -65,7 +65,7 @@ class QualityPage extends HookWidget {
               return value(item, 'reason', '本机没有可用解码器。');
             }
             if (item['decoderStatus'] != 'available' && codecSelectable(item)) {
-              return '可尝试此格式；本机能否播放将在下次打开画面时确认。';
+              return '可尝试此格式；本机能否播放将在新建窗口时确认。';
             }
             if (item['decoderStatus'] != 'available') {
               return '尚未确认本机可用的解码器。${value(item, 'reason')}';
@@ -88,7 +88,7 @@ class QualityPage extends HookWidget {
               if (result['appliesNextSession'] == true) {
                 feedback(
                   context,
-                  value(result, 'reason', '已保存，新的画质会在下次打开画面时生效。'),
+                  value(result, 'reason', '已保存，新建窗口时生效；已保留的窗口需关闭后重新打开。'),
                 );
               }
               refresh();
@@ -182,7 +182,9 @@ class QualityPage extends HookWidget {
           return ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              const StateNote('调整会保存到这台设备，在下次打开屏幕或应用时生效。当前会话继续使用原设置。'),
+              const StateNote(
+                '调整会保存到这台设备，并在新建屏幕或应用窗口时生效。已保留的窗口继续使用原设置；关闭后重新打开即可应用。',
+              ),
               if (applying.value) const LinearProgressIndicator(),
               Text('画质预设', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),

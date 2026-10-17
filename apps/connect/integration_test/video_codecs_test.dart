@@ -209,12 +209,15 @@ void main() {
             reason: '$codec must exit through the real floating control.',
           );
           await tester.pump(const Duration(milliseconds: 400));
+          final retained = objects((await request('session.list'))['sessions'])
+              .singleWhere((s) => value(s, 'sessionId', value(s, 'id')) == id);
+          expect(retained['status'], 'paused');
+          expect(retained['capturePaused'], true);
+          // Each codec requires a new capture, rather than resuming an old one.
+          await request('session.stop', {'sessionId': id, 'keepTask': true});
           expect(
-            objects((await request('session.list'))['sessions']).where(
-              (s) =>
-                  value(s, 'sessionId', value(s, 'id')) == id &&
-                  s['status'] != 'stopped',
-            ),
+            objects((await request('session.list'))['sessions'])
+                .where((s) => value(s, 'sessionId', value(s, 'id')) == id),
             isEmpty,
           );
         }

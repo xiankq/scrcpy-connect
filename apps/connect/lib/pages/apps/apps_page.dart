@@ -78,7 +78,7 @@ class AppsPage extends HookWidget {
                         final accepted = await confirm(
                           context,
                           '继续“${value(app, 'name', value(app, 'packageName'))}”？',
-                          '将接续 ${deviceName(device)} 上的真实应用与登录状态。应用仅支持一个实例时，现有任务可能迁移至此；关闭画面后任务交回手机。',
+                          '将接续 ${deviceName(device)} 上的真实应用与登录状态。应用仅支持一个实例时，现有任务可能迁移至此；返回工作台会保留窗口；关闭窗口后任务交回手机。',
                           action: '打开应用',
                         );
                         if (accepted && context.mounted) {

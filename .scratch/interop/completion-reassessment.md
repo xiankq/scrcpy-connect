@@ -258,3 +258,20 @@
 | [验收历史](../../docs/implementation/validation.md)、[持续目标](goal.md)、[原追溯](requirements-audit.md)、[分级基线](compatibility-matrix.md)、[访谈](interview.md) | A36；以当前源码、入口和后端证据纠正漂移，历史不删除、不冒充当前全面通过 |
 
 本轮只读设计检查没有保存源稿改动。设计未完成项不通过“又多了几页”结项；每一条必须对应实际对象、操作与恢复。所有截图仍在临时目录。
+
+## 10. 持续会话批次：实际进展与未完成部分
+
+2026-10-17，基于`ba6dd49`继续实施。第3–6节保留原发现作为基线；以下证据更新A05/A07的部分前沿，**不关闭完整多窗口、恢复或媒体任务**。
+
+- 离开远控现在释放输入并暂停呈现/捕获，保留同一真实会话；只有明确关闭才停止该session。路由覆盖与系统后台均使用会话级所有权，旧页面的异步释放不能暂停后继页面。恢复失败仍记可能已经开启捕获，离开时必须再次确认暂停。
+- 工具选择精确窗口；截图读取该窗口的实际播放器，暂停时截最后显示帧。旋转、导航、屏幕和键盘操作先进入该窗口全屏，验证恢复后再执行一次；不把普通刷新变成操作重放。截图只承诺App内临时副本及系统分享/打开，A17持久保存仍开放。画质只在新建窗口生效，保留窗口必须关闭重开才能应用新设置。
+- 真实实验先暴露两处核心问题：新虚拟显示在START_APP之前可能无关键帧，原等待顺序导致超时；SIGSTOP冻结整个scrcpy进程会使第二应用启动失败。现在先启动独立控制actor并发送START_APP；暂停改为固定上游源码的最小捕获扩展，在释放MediaCodec/表面后ACK，保留虚拟显示/task及Binder/控制线程。新增Java位于被控端临时服务，不是主控原生播放器；主控仍使用Rust/Flutter/fvp。官方vendor JAR未改。
+- 新临时服务可复现构建SHA为`91606a603a49bbea2be37ec500cde44a588483ac3162bc466d23b2f9d840deab`；源码/补丁/产物比较和JVM协议/gate测试已加入默认检查。当前宿主实际比较通过；CI配置加入JDK21与固定Android SDK工具，尚未声称远端CI执行通过。companion/FRB其余A30门禁仍开放。
+- 持续验收又复现并修复：完整视频配置后合法空闲被10秒超时误杀；恢复与播放器generation替换竞争，旧输出取消导致整个会话失败；迟到旧generation回执回盖新输出；迟到ready把已确认暂停错误标streaming。对应真实TCP、播放器、回执交错和核心session_command回归均已纳入。
+- Android真实页面E2E：主控5554→被控5556，主屏＋Settings＋Google Dialer三个真实会话；离开后全部捕获确认暂停；同ID恢复Settings、暂停截图、只关闭Settings，再同ID恢复Dialer。完整退出0，40秒，`sessionWorkspaceComplete=true`。宿主8个检查点独立读`ps`和`/proc/<pid>/cmdline`，核实三个自有服务存活且暂停期间不是T状态、已关闭Settings进程消失且其余两路存活。日志`/tmp/connect-session-workspace-cooperative4.log`，回执与8张图在`/tmp/connect-e2e/session-workspace/`；代表全屏/会话列表/截图弹层已目视。旧失败图仍在临时目录，不当作成功证据。
+- 当前捕获扩展下真实HOME→两秒后台→Activity前台→新的MDK snapshot回执通过，13秒；五种编码各新建、真实渲染、退出后确认暂停再精确关闭通过，45秒。分别为`/tmp/connect-cooperative-background.log`和`/tmp/connect-cooperative-codecs.log`；五编码只在显式media验收模式接受media回执，不能代替完整产品回执。H.265仍可见低清，A10未关闭。
+- 默认Rust工作区135 passed/43 ignored，all-target clippy与格式通过；严格Flutter分析和真实build_runner only-check通过。被忽略设备测试不是通过，五编码测试仍是媒体范围而非全产品功能完成。应用/Bridge最终全量结果另在实施记录登记。
+
+尚未完成：大屏并排/系统分屏、真实task迁回细节、旧系统主屏回退、完整IME、断线和进程意图恢复、资源降载、物理编码器释放/热功耗、液态材质和所有缺失设计状态。A11–A29等其余功能缺口继续按原表推进。
+
+A24进一步研究已经明确：broadcast容量256溢出后仅发空resync，仍可能交付保留的旧事件；远控与会话列表不重取，播放器不校准。统一恢复不能通过notifications.list/calls.list伪造只读快照（它们可能新建companion），必须使用现存缓存，并解决快照水位/迟到事件、精确所有权与失败待核验。仅刷新设备不构成该项完成。

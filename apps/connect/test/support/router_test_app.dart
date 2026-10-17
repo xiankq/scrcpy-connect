@@ -1,5 +1,7 @@
 import 'test_controller.dart';
 
+import 'package:scrcpy_connect/router/route_observers.dart';
+
 import 'package:scrcpy_connect/pages/add_device/add_device_page.dart';
 import 'package:scrcpy_connect/pages/apps/apps_page.dart';
 import 'package:scrcpy_connect/pages/calls/calls_page.dart';
@@ -56,6 +58,7 @@ class _RouterTestAppState extends State<RouterTestApp> {
   late final root = GlobalKey<NavigatorState>();
   late final router = GoRouter(
     navigatorKey: root,
+    observers: [sessionRouteObserver],
     initialLocation: '/test',
     routes: [
       ...typedRoutes(root),

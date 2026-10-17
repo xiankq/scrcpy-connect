@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/services/session_views.dart';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/services/app_dependencies.dart';
 import 'package:scrcpy_connect/services/app_state.dart';
@@ -80,6 +82,7 @@ String bytes(dynamic input) {
 class AppController extends _$AppController {
   late AppDependencies _dependencies;
   late StreamController<Json> _events;
+  late SessionViews sessionViews;
   final _consumedShareIds = <String>{};
   String? _audioFocusTarget;
   Future<void> _audioFocusQueue = Future<void>.value();
@@ -93,6 +96,8 @@ class AppController extends _$AppController {
   AppState build() {
     final dependencies = ref.watch(appDependenciesProvider);
     _dependencies = dependencies;
+    sessionViews = SessionViews(dependencies.request);
+    final ownedViews = sessionViews;
     final generation = ++_generation;
     _disposed = false;
     _consumedShareIds.clear();
@@ -130,6 +135,7 @@ class AppController extends _$AppController {
       },
     );
     ref.onDispose(() {
+      ownedViews.invalidate();
       if (_generation == generation) _disposed = true;
       unawaited(subscription.cancel());
       unawaited(events.close());

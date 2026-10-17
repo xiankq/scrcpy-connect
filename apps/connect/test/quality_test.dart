@@ -30,7 +30,7 @@ void main() {
             'appliesNextSession': true,
             'needsRestart': true,
             'existingSessionId': 'live-session',
-            'reason': '已保存，下次打开生效；当前会话继续使用原设置。',
+            'reason': '已保存，新建窗口时生效；已保留的窗口需关闭后重新打开。',
           };
         }
         return {
@@ -78,7 +78,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('下次打开'), findsWidgets);
+      expect(find.textContaining('关闭后重新打开'), findsWidgets);
       await tester.tap(find.text('编码格式'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('H.265'));
@@ -280,7 +280,7 @@ void main() {
         find.ancestor(of: find.text('H.265'), matching: find.byType(ListTile)),
       );
       expect(choice.enabled, isTrue);
-      expect(find.textContaining('下次打开画面时确认'), findsWidgets);
+      expect(find.textContaining('新建窗口时确认'), findsWidgets);
       await tester.tap(find.text('H.265'));
       await tester.pumpAndSettle();
       expect(requests.where((r) => r.$1 == 'session.quality').single.$2, {
@@ -289,7 +289,7 @@ void main() {
         'videoEncoder': null,
       });
       expect(find.text('H.265'), findsOneWidget);
-      expect(find.textContaining('下次打开画面时确认'), findsWidgets);
+      expect(find.textContaining('新建窗口时确认'), findsWidgets);
       expect(requests.where((r) => r.$1 == 'session.start'), isEmpty);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

@@ -35,6 +35,28 @@ void main(List<String> arguments) {
   validateAcceptanceReport({
     'productAcceptanceComplete': true,
   }, environment: const {});
+  const media = {'CONNECT_E2E_ACCEPTANCE': 'media'};
+  for (final metadata in <Map<String, dynamic>>[
+    {},
+    {'mediaAcceptanceComplete': false},
+    {'mediaAcceptanceComplete': 'true'},
+    {'productAcceptanceComplete': true},
+  ]) {
+    rejects(metadata, environment: media, reason: 'scoped media acceptance');
+  }
+  validateAcceptanceReport({
+    'mediaAcceptanceComplete': true,
+  }, environment: media);
+  rejects(
+    {'mediaAcceptanceComplete': true, 'productAcceptanceComplete': false},
+    environment: media,
+    reason: 'real product acceptance',
+  );
+  rejects(
+    const {},
+    environment: {'CONNECT_E2E_ACCEPTANCE': 'unknown'},
+    reason: 'Unknown acceptance scope',
+  );
   const background = {'CONNECT_E2E_BACKGROUND': '1'};
   const audio = {'CONNECT_E2E_AUDIO_LIFECYCLE': '1'};
   rejects(
