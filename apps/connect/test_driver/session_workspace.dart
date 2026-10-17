@@ -75,6 +75,30 @@ Future<void> main() async {
         throw StateError('Closed window still has a target process: $id');
       }
     }
+    if (args['name'] == 'session-main-live' ||
+        args['name'] == 'session-primary-app-live') {
+      final activities = await shell(['dumpsys', 'activity', 'activities']);
+      final primary =
+          activities
+              .split('Display #0')
+              .skip(1)
+              .firstOrNull
+              ?.split('Display #')
+              .first ??
+          '';
+      final settingsResumed = const LineSplitter()
+          .convert(primary)
+          .any(
+            (line) =>
+                line.contains('topResumedActivity=') &&
+                line.contains('com.android.settings/'),
+          );
+      if (settingsResumed != (args['name'] == 'session-primary-app-live')) {
+        throw StateError(
+          'Phone-screen continuation must actually change display 0 from HOME to Settings.',
+        );
+      }
+    }
     processChecks.add({
       'checkpoint': args['name'],
       'activeSessionId': active,
@@ -146,6 +170,8 @@ Future<void> main() async {
           .writeAsString(jsonEncode(metadata));
       if (inspectionError != null ||
           metadata['sessionWorkspaceComplete'] != true ||
+          metadata['phoneScreenAppResumed'] != true ||
+          metadata['phoneScreenRenderedApp'] != true ||
           processChecks.length < 7) {
         throw StateError(
           'The real multi-session workflow or independent process checks did not complete.',

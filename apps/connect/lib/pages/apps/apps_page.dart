@@ -2,7 +2,6 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
-import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 import 'package:flutter/material.dart';
@@ -75,17 +74,66 @@ class AppsPage extends HookWidget {
                       title: value(app, 'name', value(app, 'packageName')),
                       subtitle: value(app, 'packageName'),
                       onTap: () async {
-                        final accepted = await confirm(
-                          context,
-                          '继续“${value(app, 'name', value(app, 'packageName'))}”？',
-                          '将接续 ${deviceName(device)} 上的真实应用与登录状态。应用仅支持一个实例时，现有任务可能迁移至此；返回工作台会保留窗口；关闭窗口后任务交回手机。',
-                          action: '打开应用',
+                        final api = int.tryParse(value(device, 'apiLevel'));
+                        final mode = await showModalBottomSheet<String>(
+                          context: context,
+                          backgroundColor: Colors.transparent,
+                          isScrollControlled: true,
+                          builder: (context) => SafeArea(
+                            child: Glass(
+                              padding: const EdgeInsets.all(24),
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text(
+                                      '打开“${value(app, 'name', value(app, 'packageName'))}”',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      '继续 ${deviceName(device)} 上的真实应用与登录状态。',
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      api != null && api < 29
+                                          ? '这台手机不支持独立应用窗口，可在手机屏幕继续使用。'
+                                          : '独立窗口可能迁移应用现有的单实例任务；返回会保留窗口，关闭窗口会保留真实任务。',
+                                    ),
+                                    const SizedBox(height: 20),
+                                    if (api == null || api >= 29)
+                                      FilledButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, 'window'),
+                                        child: const Text('在独立窗口打开'),
+                                      ),
+                                    OutlinedButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, 'phone'),
+                                      child: const Text('在手机屏幕打开'),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text('在手机屏幕打开会切换手机当前的前台应用。'),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('取消'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         );
-                        if (accepted && context.mounted) {
+                        if (mode != null && context.mounted) {
                           openRemoteRoute(
                             context,
                             deviceId: value(device, 'id'),
                             packageName: value(app, 'packageName'),
+                            onPhoneScreen: mode == 'phone',
                           );
                         }
                       },

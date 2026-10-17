@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:flutter/material.dart';
@@ -127,6 +129,70 @@ void main() {
         return active;
       }
 
+      Future<void> waitForSettingsPixels(String id) async {
+        final deadline = DateTime.now().add(const Duration(seconds: 10));
+        var lightContent = false;
+        do {
+          final receipt = await request('session.screenshot', {
+            'sessionId': id,
+          });
+          final file = File(value(receipt, 'localPath'));
+          try {
+            final codec = await ui.instantiateImageCodec(
+              await file.readAsBytes(),
+              targetWidth: 32,
+              targetHeight: 64,
+            );
+            try {
+              final frame = await codec.getNextFrame();
+              try {
+                final pixels = await frame.image.toByteData(
+                  format: ui.ImageByteFormat.rawRgba,
+                );
+                expect(pixels, isNotNull);
+                var bright = 0;
+                var ink = 0;
+                for (var y = 14; y < 50; y++) {
+                  for (var x = 4; x < 28; x++) {
+                    final offset = (y * 32 + x) * 4;
+                    if (pixels!.getUint8(offset) > 180 &&
+                        pixels.getUint8(offset + 1) > 180 &&
+                        pixels.getUint8(offset + 2) > 180) {
+                      bright++;
+                    }
+                    if (pixels.getUint8(offset) < 140 &&
+                        pixels.getUint8(offset + 1) < 140 &&
+                        pixels.getUint8(offset + 2) < 140) {
+                      ink++;
+                    }
+                  }
+                }
+                // The isolated stock target's Settings is light; its HOME
+                // fixture is dark. Pair this pixel check with host observation
+                // of the actual Settings task, not merely a sent receipt.
+                // A white launch surface is not rendered Settings content.
+                lightContent = bright > 24 * 36 * .7 && ink > 12;
+              } finally {
+                frame.image.dispose();
+              }
+            } finally {
+              codec.dispose();
+            }
+          } finally {
+            await file.delete();
+            await file.parent.delete();
+          }
+          if (!lightContent) {
+            await tester.pump(const Duration(milliseconds: 100));
+          }
+        } while (!lightContent && DateTime.now().isBefore(deadline));
+        expect(
+          lightContent,
+          isTrue,
+          reason: 'The controller must render Settings rather than its earlier HOME frame.',
+        );
+      }
+
       Future<void> leave(Json session) async {
         await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
         await waitFor(
@@ -134,9 +200,18 @@ void main() {
           () => find.byType(RemotePage).evaluate().isEmpty,
           reason: 'Return must retain a paused window.',
         );
-        final retained = (await sessions()).singleWhere(
-          (item) => idOf(item) == idOf(session),
-        );
+        Json retained = {};
+        final pauseDeadline = DateTime.now().add(const Duration(seconds: 5));
+        do {
+          retained = (await sessions()).singleWhere(
+            (item) => idOf(item) == idOf(session),
+          );
+          if (retained['status'] == 'paused' &&
+              retained['captureStateConfirmed'] == true) {
+            break;
+          }
+          await tester.pump(const Duration(milliseconds: 100));
+        } while (DateTime.now().isBefore(pauseDeadline));
         expect(retained['status'], 'paused');
         expect(retained['capturePaused'], isTrue);
         expect(retained['captureStateConfirmed'], isTrue);
@@ -194,8 +269,49 @@ void main() {
           find.text('打开手机屏幕'),
         );
         final main = await current(null);
+        for (final action in ['down', 'up']) {
+          await request('session.key', {
+            'sessionId': idOf(main),
+            'keyCode': 3,
+            'action': action,
+          });
+        }
+        await tester.pump(const Duration(milliseconds: 500));
         await screenshot('session-main-live', active: idOf(main));
         await leave(main);
+        await tapPageAction(
+          tester,
+          find.byType(DeviceWorkspacePage),
+          find.text('手机应用'),
+        );
+        await waitFor(
+          tester,
+          () => find.byType(AppsPage).evaluate().isNotEmpty,
+          reason:
+              'Open the real application list for phone-screen continuation.',
+        );
+        await tester.enterText(find.byType(TextField), 'com.android.settings');
+        final settingsApp = find.widgetWithText(
+          ActionRow,
+          'com.android.settings',
+        );
+        await waitFor(
+          tester,
+          () => settingsApp.evaluate().isNotEmpty,
+          reason: 'The target must expose Settings.',
+        );
+        await tester.tap(settingsApp);
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(find.text('在手机屏幕打开'));
+        final continued = await current(null);
+        expect(idOf(continued), idOf(main));
+        expect((await sessions()).map(idOf).toList(), [idOf(main)]);
+        await waitForSettingsPixels(idOf(main));
+        await screenshot('session-primary-app-live', active: idOf(main));
+        binding.reportData!['phoneScreenAppResumed'] = true;
+        binding.reportData!['phoneScreenRenderedApp'] = true;
+        await leave(continued);
+        await backFrom(find.byType(AppsPage));
         for (final package in [
           'com.android.settings',
           'com.google.android.dialer',
@@ -218,7 +334,7 @@ void main() {
           );
           await tester.tap(find.widgetWithText(ActionRow, package));
           await tester.pump(const Duration(milliseconds: 400));
-          await tester.tap(find.text('打开应用'));
+          await tester.tap(find.text('在独立窗口打开'));
           final session = await current(package);
           await screenshot(
             package == 'com.android.settings'

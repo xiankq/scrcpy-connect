@@ -45,3 +45,5 @@ Requirements: R03、R12、R20、R22–R25、R51
 A43已实际红→绿：发现时退出等待`view.release`／`session.pause`，拒绝或挂起均无法离页；改为本地非阻塞退出，输入释放／精确pause仍有序，失败在返回后提示未确认且不stop真实task。`remote_lifecycle_test`与`session_views_test`共32项通过（2秒），后补悬浮退出／系统返回×失败／挂起4组合全过，只pause原sid一次／无stop，返回页显示含设备归属的未确认提示；第一次修复曾触发新Scaffold前Snackbar断言及重复pause，后移反馈并加exiting guard后通过。**仅局部修复**：旧挂起session队列仍可能阻塞同session立即重进，真实故障UI E2E继续验收，A43不关闭。
 
 A45仍待实施：`exit_handle.dart::settle`每次拖动结束均收起，未满足向内拖动保持展开；补左右内／外拖、速度、取消、减少动态、读屏和误触隔离。主屏应用打开／明确同意回退已有3项widget与公开Runtime真实任务观察，本轮真实UI尚未闭环；IME／横屏／大屏并排仍开放。当前状态见[当前完成度](../current-status.md)。
+
+后续A45已通过8项组件回归与25秒真实全屏内拖／退出；A49进程内未知保护、前后台待启动动作和主屏接续已修，真实主屏复用／两应用窗口51秒通过，见[最新验收](../../../docs/implementation/validation.md#真实应用接续与未知启动保护a49)。主屏截图曾抓到HOME与空白启动面，现以实际MDK像素的内容／亮暗门槛加独立display0任务检查，并重新目视Settings内容；早期宽松截图不算视觉通过。旧系统／厂商回退、IME、横屏、大屏、读屏与完整资源策略继续开放。

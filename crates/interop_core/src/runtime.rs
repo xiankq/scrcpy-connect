@@ -321,6 +321,7 @@ impl Runtime {
             | "session.frame"
             | "session.list"
             | "session.rotate"
+            | "session.launch"
             | "session.refresh"
             | "session.pause"
             | "session.resume"

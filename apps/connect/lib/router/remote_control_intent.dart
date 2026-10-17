@@ -1,5 +1,5 @@
 /// A deliberate tool action, held only in memory and never replayed from a URL.
-enum RemoteTool { rotate, screen, key, text }
+enum RemoteTool { rotate, screen, key, text, launchApp }
 
 class RemoteControlIntent {
   const RemoteControlIntent.rotate() : tool = RemoteTool.rotate, value = null;
@@ -10,6 +10,9 @@ class RemoteControlIntent {
   const RemoteControlIntent.text(String text)
     : tool = RemoteTool.text,
       value = text;
+  const RemoteControlIntent.launchApp(String packageName)
+    : tool = RemoteTool.launchApp,
+      value = packageName;
   final RemoteTool tool;
   final Object? value;
 }

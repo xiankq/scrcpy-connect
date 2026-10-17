@@ -13,6 +13,7 @@ Future<void> openRemoteRoute(
   required String deviceId,
   String? sessionId,
   String? packageName,
+  bool onPhoneScreen = false,
   bool requestKeyboard = false,
   RemoteControlIntent? action,
 }) {
@@ -30,6 +31,15 @@ Future<void> openRemoteRoute(
     ).push<void>(context);
   }
   if (packageName != null) {
+    if (onPhoneScreen) {
+      return RemoteRoute(
+        deviceId: deviceId,
+        keyboard: requestKeyboard,
+        $extra: RemoteLaunchIntent(
+          action: RemoteControlIntent.launchApp(packageName),
+        ),
+      ).push<void>(context);
+    }
     return RemoteAppRoute(
       deviceId: deviceId,
       packageName: packageName,

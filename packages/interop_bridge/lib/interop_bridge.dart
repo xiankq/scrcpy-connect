@@ -768,7 +768,10 @@ class InteropBridge {
       final id = result['sessionId'] as String;
       intent?.bind(id);
       if (_disposed || intent?.cancelled == true) {
-        await _invoke('session.stop', {'sessionId': id});
+        await _invoke('session.stop', {
+          'sessionId': id,
+          if (result['packageName'] is String) 'keepLaunchRecord': true,
+        });
         throw const InteropException('cancelled', '已停止本次画面，不会重新启动。');
       }
       try {
@@ -786,13 +789,32 @@ class InteropBridge {
         }
         _monitorVideo(id);
         return {...result, ...texture, 'status': 'connected'};
-      } catch (_) {
+      } catch (error) {
+        final appLaunch = result['packageName'] is String;
         try {
-          await _invoke('session.stop', {'sessionId': id});
+          await _invoke('session.stop', {
+            'sessionId': id,
+            if (appLaunch) 'keepLaunchRecord': true,
+          });
         } catch (_) {
           /* Preserve the original output failure. */
         }
         await _closeVideo(id);
+        if (appLaunch) {
+          throw InteropException(
+            'app_launch_unknown',
+            '应用可能已在手机上打开，请先核对本次记录。',
+            {
+              'sessionId': id,
+              'deviceId': result['deviceId'],
+              'packageName': result['packageName'],
+              'launchOutcome': 'unknown',
+              'failureCode': error is InteropException
+                  ? error.code
+                  : 'video_output_failed',
+            },
+          );
+        }
         rethrow;
       }
     }

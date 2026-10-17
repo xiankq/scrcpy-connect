@@ -220,7 +220,7 @@ pub(crate) struct Session {
     control: mpsc::Sender<ControlRequest>,
     state: Arc<RwLock<Value>>,
     process_closed: Arc<AtomicBool>,
-    process: OwnedProcess,
+    process: Option<OwnedProcess>,
 }
 #[derive(Clone)]
 struct OwnedProcess {
@@ -387,6 +387,15 @@ fn package_name(value: &str) -> CoreResult<&str> {
     Ok(value)
 }
 
+fn unknown_app_launch(state: &Value) -> CoreError {
+    let mut error = CoreError::new(
+        "app_launch_unknown",
+        "应用打开请求已提交，但结果无法确认。应用可能已打开或迁移；请核对手机并明确关闭本次记录后再选择重新打开。",
+    );
+    error.details = state.clone();
+    error
+}
+
 impl Runtime {
     async fn session_resource_busy(&self, busy: crate::resource::ResourceBusy) -> CoreError {
         let mut error: CoreError = busy.into();
@@ -429,11 +438,25 @@ impl Runtime {
     }
 
     pub(crate) async fn start_session(&self, params: &Value) -> CoreResult<Value> {
-        let device = required(params, "deviceId")?;
-        let settings =
-            crate::preferences::quality_settings(&self.store.read().await.settings, Some(device));
-        let settings = quality_patch(&settings, params)?;
-        self.start_session_with_settings(params, &settings).await
+        let result = async {
+            let device = required(params, "deviceId")?;
+            let settings = crate::preferences::quality_settings(
+                &self.store.read().await.settings,
+                Some(device),
+            );
+            let settings = quality_patch(&settings, params)?;
+            self.start_session_with_settings(params, &settings).await
+        }
+        .await;
+        result.map_err(|mut error| {
+            if error.code != "app_launch_unknown" {
+                if !error.details.is_object() {
+                    error.details = json!({});
+                }
+                error.details["launchOutcome"] = json!("not_submitted");
+            }
+            error
+        })
     }
 
     async fn start_session_with_settings(
@@ -450,6 +473,16 @@ impl Runtime {
             .map(package_name)
             .transpose()?
             .map(str::to_owned);
+        if package.is_some() {
+            for session in self.sessions.lock().await.values() {
+                if session.device_id == device_id && session.package == package {
+                    let observed = session.state.read().await;
+                    if observed["launchOutcome"] == "unknown" {
+                        return Err(unknown_app_launch(&observed));
+                    }
+                }
+            }
+        }
         let device = self.device(&device_id).await?;
         if package.is_none() && self.device_sleeping(&device_id).await? == Some(true) {
             return Err(CoreError::new(
@@ -553,6 +586,7 @@ impl Runtime {
             .as_u64()
             .unwrap_or(8_000_000)
             .clamp(500_000, 50_000_000);
+        let mut app_launch_submitted = false;
         let startup = async {
             let mut sync = client.sync(OperationOptions::default()).await?;
             sync.push(
@@ -720,9 +754,36 @@ wait "$child""#
                 )
                 .await;
             });
-            if let Some(package) = &package {
-                let mut bytes = vec![16, package.len() as u8];
-                bytes.extend_from_slice(package.as_bytes());
+            if let Some(package_name) = &package {
+                // Persist the operation identity before a possibly partial write.
+                // START_APP has no application-completion acknowledgement. A
+                // timeout, cancellation or lost write receipt cannot justify replay.
+                let mut sessions = self.sessions.lock().await;
+                for session in sessions.values() {
+                    if session.device_id == device_id && session.package == package {
+                        let observed = session.state.read().await;
+                        if observed["launchOutcome"] == "unknown" {
+                            return Err(unknown_app_launch(&observed));
+                        }
+                    }
+                }
+                state.write().await["launchOutcome"] = json!("unknown");
+                sessions.insert(
+                    id.clone(),
+                    Session {
+                        device_id: device_id.clone(),
+                        package: package.clone(),
+                        cancellation: cancellation.clone(),
+                        control: control_tx.clone(),
+                        state: state.clone(),
+                        process_closed: process_closed.clone(),
+                        process: None,
+                    },
+                );
+                app_launch_submitted = true;
+                drop(sessions);
+                let mut bytes = vec![16, package_name.len() as u8];
+                bytes.extend_from_slice(package_name.as_bytes());
                 request_control(&control_tx, ControlRequest::Send, bytes).await?;
             }
             let (preface, width, height) = read_video_preface(&mut video, initial).await?;
@@ -761,31 +822,66 @@ wait "$child""#
                 OwnedProcess::capture(&client, pid, &remote_jar, format!("{scid:08x}")).await?;
             Ok::<_, CoreError>((control_tx, process_closed, process))
         };
-        let (control, process_closed, process) = tokio::select! {
-            _ = cancellation.cancelled() => return Err(CoreError::new("cancelled", "新的控制会话启动已取消；已有活动保持不变。")),
+        let started = tokio::select! {
+            _ = cancellation.cancelled() => Err(CoreError::new("cancelled", "新的控制会话启动已取消；已有活动保持不变。")),
             result = tokio::time::timeout(Duration::from_secs(20), startup) => result
-                .map_err(|_| CoreError::new("timeout", "控制服务启动超时。"))??,
+                .map_err(|_| CoreError::new("timeout", "控制服务启动超时。"))
+                .and_then(|result| result),
         };
-        if cancellation.is_cancelled() {
-            return Err(CoreError::new(
-                "cancelled",
-                "新的控制会话启动已取消；已有活动保持不变。",
-            ));
-        }
-        let mut result = state.read().await.clone();
+        let started = started.and_then(|result| {
+            if cancellation.is_cancelled() {
+                Err(CoreError::new(
+                    "cancelled",
+                    "新的控制会话启动已取消；已有活动保持不变。",
+                ))
+            } else {
+                Ok(result)
+            }
+        });
+        let (control, process_closed, process) = match started {
+            Ok(started) => started,
+            Err(error) if app_launch_submitted => {
+                cancellation.cancel();
+                let mut observed = state.write().await;
+                observed["status"] = json!("failed");
+                observed["launchOutcome"] = json!("unknown");
+                observed["failureCode"] = json!(error.code);
+                let unknown = unknown_app_launch(&observed);
+                observed["reason"] = json!(unknown.message);
+                return Err(unknown_app_launch(&observed));
+            }
+            Err(error) => return Err(error),
+        };
+        let mut result = {
+            let mut observed = state.write().await;
+            if app_launch_submitted {
+                observed["launchOutcome"] = json!("observed");
+            }
+            observed.clone()
+        };
         result["videoToken"] = json!(return_token);
-        self.sessions.lock().await.insert(
-            id,
-            Session {
-                device_id,
-                package,
-                cancellation,
-                control,
-                state,
-                process_closed,
-                process,
-            },
-        );
+        let mut sessions = self.sessions.lock().await;
+        if app_launch_submitted {
+            // Updating avoids dropping the provisional owner and cancelling
+            // the live control service shared with the completed session.
+            let Some(session) = sessions.get_mut(&id) else {
+                return Err(CoreError::new("cancelled", "本次打开已明确关闭。"));
+            };
+            session.process = Some(process);
+        } else {
+            sessions.insert(
+                id,
+                Session {
+                    device_id,
+                    package,
+                    cancellation,
+                    control,
+                    state,
+                    process_closed,
+                    process: Some(process),
+                },
+            );
+        }
         guard.0 = None;
         Ok(result)
     }
@@ -853,7 +949,7 @@ wait "$child""#
         if command == "session.screenshot" {
             return self.screenshot(params).await;
         }
-        let (id, control, state, package, process, cancellation) = {
+        let (id, control, state, package, process, cancellation, session_device) = {
             let sessions = self.sessions.lock().await;
             let session_id = params["sessionId"].as_str();
             let device_id = params["deviceId"].as_str();
@@ -888,12 +984,29 @@ wait "$child""#
                 session.package.clone(),
                 session.process.clone(),
                 session.cancellation.clone(),
+                session.device_id.clone(),
             )
         };
         if command == "session.stop" {
+            if params["keepLaunchRecord"] == true && package.is_some() {
+                // Renderer setup can fail after an app was opened. Tear down
+                // capture resources while retaining its fixed operation record.
+                cancellation.cancel();
+                let mut observed = state.write().await;
+                observed["status"] = json!("failed");
+                observed["launchOutcome"] = json!("unknown");
+                observed["reason"] = json!(unknown_app_launch(&observed).message);
+                return Ok(observed.clone());
+            }
             self.stop_session(&id).await;
             return Ok(json!({"sessionId":id,"status":"stopped","applicationStopped":false}));
         }
+        let process = process.ok_or_else(|| {
+            CoreError::new(
+                "app_launch_unknown",
+                "应用打开结果未知，请先核对并关闭本次记录。",
+            )
+        })?;
         if command == "session.ready" {
             let texture = params["textureId"]
                 .as_i64()
@@ -1064,9 +1177,37 @@ wait "$child""#
                 ]);
             }
             "session.launch" => {
-                let package = package
-                    .as_deref()
-                    .ok_or_else(|| invalid("当前会话不是应用窗口。"))?;
+                let requested = params
+                    .get("packageName")
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .ok_or_else(|| invalid("应用包名无效。"))
+                            .and_then(package_name)
+                    })
+                    .transpose()?;
+                if let (Some(current), Some(requested)) = (package.as_deref(), requested)
+                    && current != requested
+                {
+                    return Err(invalid(
+                        "独立窗口只能重新打开它所属的应用；其他应用请在手机屏幕或另一个窗口中打开。",
+                    ));
+                }
+                let package = requested
+                    .or(package.as_deref())
+                    .ok_or_else(|| invalid("请指定要在手机屏幕打开的应用。"))?;
+                let sessions = self.sessions.lock().await;
+                for session in sessions.values() {
+                    if session.device_id == session_device
+                        && session.package.as_deref() == Some(package)
+                    {
+                        let observed = session.state.read().await;
+                        if observed["launchOutcome"] == "unknown" {
+                            return Err(unknown_app_launch(&observed));
+                        }
+                    }
+                }
+                drop(sessions);
                 bytes.extend_from_slice(&[16, package.len() as u8]);
                 bytes.extend_from_slice(package.as_bytes());
             }
@@ -1166,8 +1307,9 @@ wait "$child""#
     pub(crate) async fn activities(&self) -> CoreResult<Value> {
         let mut sessions = Vec::new();
         for session in self.sessions.lock().await.values() {
-            if !session.cancellation.is_cancelled() {
-                sessions.push(session.state.read().await.clone());
+            let observed = session.state.read().await;
+            if !session.cancellation.is_cancelled() || observed["launchOutcome"] == "unknown" {
+                sessions.push(observed.clone());
             }
         }
         let transfers = self.list_transfers().await?;
@@ -1842,12 +1984,12 @@ mod tests {
                 control,
                 state: state.clone(),
                 process_closed: Arc::new(AtomicBool::new(true)),
-                process: OwnedProcess {
+                process: Some(OwnedProcess {
                     pid: 0,
                     started: 0,
                     jar: String::new(),
                     scid: String::new(),
-                },
+                }),
             },
         );
         let initial = runtime
@@ -2146,7 +2288,7 @@ mod tests {
             let sessions = runtime.sessions.lock().await;
             let session = &sessions[session_id];
             (
-                session.process.clone(),
+                session.process.clone().expect("started capture process"),
                 session.state.clone(),
                 session.control.clone(),
             )

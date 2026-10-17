@@ -589,3 +589,15 @@ A44实施与运行边界见[内容交付](content-delivery.md)。公开Runtime�
 A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、减少动态及安全区域／尺寸变化。真实产品流程25秒通过，`/tmp/connect-exit-inward-final.log`、`/tmp/connect-e2e/exit-inward-final/result.json`：通过实际连接表单及画质页选择1080，HEVC编码与实际解码486×1080，拖动收起／点击展开／再次收起／向内拖动保持展开／退出后会话暂停保留，严格host回执`inwardExitHandleExpanded:true`。对应截图已目视。实际命令在apps/connect使用`--driver=test_driver/integration_test.dart --target=integration_test/product_flow_test.dart`、`CONNECT_E2E_EXIT_HANDLE=1`及`--dart-define=CONNECT_E2E_VIDEO_MAX_SIZE=1080 --dart-define=CONNECT_E2E_MIN_VIDEO_EDGE=1080`，其余endpoint与内容测试相同。首次`connect-exit-inward-e2e.log`因连接表单尚未完成加载失败，补页面与可命中等待后复验；不是放松选择器／质量要求。
 
 本轮两AVD均使用已准备好的API36/secure=0 legacy TCP目标及host15556→5555。不是首次安全配对、物理USB、OEM、通话音频或全部89页验收。仍有SurfaceSync／跳帧及模拟器GLES／BufferQueue释放日志，不登记为性能或零告警通过。
+
+## 真实应用接续与未知启动保护（A49）
+
+应用列表提供独立窗口／在手机屏幕打开，较旧系统保留主屏路径；手机主屏使用既有会话并发送一次明确包名。Core公开`session.launch`校验包名、设备与窗口归属，不强停应用。独立应用START_APP提交前登记固定身份，后续编码首帧失败／渲染输出失败保留unknown记录并清理捕获；页面只读核验，明确关闭后再打开。状态重核验在无sessionId时仍识别同设备／包名unknown，主屏launch同样拒绝绕过。尚未提交的初始动作若在后台完成启动，会在恢复可输入时提交一次；提交前消费意图，未知回执不能重发。
+
+实际先红后绿的路径包括：重复“重新检查”产生两次start；后台完成start后恢复从未launch；待核验入口漏掉unknown并提供主屏回退；公开Runtime主屏绕行返回`sent:true`（`/tmp/connect-app-launch-primary-bypass-red.log`）。最终应用启动10项、生命周期／会话38项通过。公开Runtime两项真实目标测试16.57秒通过（`/tmp/connect-app-launch-guard-green.log`）：原主屏display0任务变化与同sessionId、无效包名／跨设备拒绝、缺包自然首帧错误后的固定unknown、资源释放、主屏绕行拒绝，以及真实编码帧后通过公开清理指令模拟渲染失败并保留真实任务。该清理模型不是实际Android解码故障，unknown目前仅Runtime内，不覆盖进程重建。
+
+双AVD最终真实产品链路51秒通过，`/tmp/connect-app-primary-content-verified.log`与`/tmp/connect-e2e/app-primary-content-verified/result.json`。实际点击应用列表→在手机屏幕打开，复用原ID；host独立观察display0从HOME变Settings，主控实际MDK像素等待内容而非旧HOME／白色启动面，截图已目视为Settings。再实际打开Settings／Dialer独立窗口，三个窗口保留并暂停、逐UUID恢复／截图／关闭，其他窗口存活；9个checkpoint独立检查实际目标进程，全部非整体冻结T态，关闭的精确进程消失。
+
+失败与验收加严原样保留：第一次`connect-app-primary-and-windows-e2e.log`在本地已离页但异步pause尚未回执时即要求paused而失败，现仅只读轮询原ID至5秒上限，不补发pause。46秒后续流程虽通过，主屏截图仍为旧HOME；51秒第一版像素门槛又把白色启动面当内容。两者不计主屏视觉通过，最终加入内容对比门槛并目视Settings后才登记。该已知stock浅色Settings／深色HOME样本门槛不是通用UI识别器，不外推所有应用。命令仍为apps/connect下`flutter drive --no-pub -d emulator-5554 --driver=test_driver/session_workspace.dart --target=integration_test/session_workspace_test.dart`，host指定ADB／target及capture目录，Flutter指定ADDRESS=10.0.2.2、PORT=15556。
+
+真实副屏失败后的手机回退、旧API／OEM、实际renderer首帧故障、unknown跨进程持久化、多实例和任务迁回完整矩阵继续待验。独立代码审查发现的两项新缺陷修复后复核未再发现确定问题；这不替代上述缺口。

@@ -141,7 +141,8 @@ Widget _remoteView(
     existingSession: session,
     packageName: packageName,
     requestKeyboard: keyboard,
-    initialAction: action,
+    initialAction:
+        action ?? (intent is RemoteLaunchIntent ? intent.action : null),
   );
 }
 

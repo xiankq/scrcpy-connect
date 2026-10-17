@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
+import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/services/session_views.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
@@ -58,6 +59,8 @@ class _RemotePageState extends State<RemotePage>
   bool lifecyclePaused = false;
   bool adjustmentShown = false;
   bool initialActionApplied = false;
+  bool appLaunchUnknown = false;
+  bool appLaunchClosed = false;
   SessionView? view;
   ModalRoute<dynamic>? observedRoute;
   bool covered = false;
@@ -94,6 +97,7 @@ class _RemotePageState extends State<RemotePage>
       presentationVisible &&
       !awaitingResume &&
       !stateUnverified &&
+      !appLaunchUnknown &&
       sessionId.isNotEmpty;
 
   Future<void> releaseInputs() {
@@ -155,6 +159,10 @@ class _RemotePageState extends State<RemotePage>
   }
 
   Future<void> start() async {
+    if (appLaunchUnknown) {
+      await checkAppLaunch();
+      return;
+    }
     if (reconcileOnly || controller.snapshot().reconciliationPending) {
       await reconcileState();
       return;
@@ -169,6 +177,7 @@ class _RemotePageState extends State<RemotePage>
       error = null;
       errorCode = null;
     });
+    var submittedAppStart = false;
     try {
       await releaseInputs();
       if (!mounted || exiting || attempt != startAttempt) return;
@@ -185,11 +194,17 @@ class _RemotePageState extends State<RemotePage>
           (item) =>
               item['deviceId'] == widget.device['id'] &&
               item['packageName'] == widget.packageName &&
-              !['stopped', 'failed', 'error'].contains(item['status']),
+              (item['launchOutcome'] == 'unknown' ||
+                  !['stopped', 'failed', 'error'].contains(item['status'])),
         );
         retained = matches.firstOrNull;
       }
       if (!mounted || exiting || attempt != startAttempt) return;
+      if (retained?['launchOutcome'] == 'unknown') {
+        showUnknownAppLaunch(retained!);
+        return;
+      }
+      submittedAppStart = retained == null && widget.packageName != null;
       final result =
           retained ??
           await controller.request('session.start', {
@@ -217,6 +232,7 @@ class _RemotePageState extends State<RemotePage>
               await controller.request('session.stop', {
                 'sessionId': staleId,
                 'keepTask': true,
+                if (widget.packageName != null) 'keepLaunchRecord': true,
               });
             } catch (_) {
               /* A late response cannot recreate a disposed view. */
@@ -238,6 +254,7 @@ class _RemotePageState extends State<RemotePage>
         paused = result['status'] == 'paused';
         if (widget.requestKeyboard && result['textureId'] != null) ime = true;
         if (result['textureId'] == null) {
+          if (submittedAppStart) appLaunchUnknown = true;
           error = value(result, 'reason', '尚未获得设备的实时画面。请检查设备连接和视频能力。');
         }
       });
@@ -255,29 +272,7 @@ class _RemotePageState extends State<RemotePage>
         if (!mounted || exiting || attempt != startAttempt) return;
       }
       if (covered) await pauseView();
-      if (!initialActionApplied &&
-          widget.initialAction != null &&
-          canSendInput) {
-        initialActionApplied = true;
-        final action = widget.initialAction!;
-        switch (action.tool) {
-          case RemoteTool.rotate:
-            await send('session.rotate', {});
-          case RemoteTool.screen:
-            await send('session.screen', {'mode': action.value});
-          case RemoteTool.text:
-            await send('session.text', {'text': action.value});
-          case RemoteTool.key:
-            final code = action.value! as int;
-            heldKeys[code] = (sessionId, bindingGeneration);
-            try {
-              await send('session.key', {'keyCode': code, 'action': 'down'});
-            } finally {
-              heldKeys.remove(code);
-              await send('session.key', {'keyCode': code, 'action': 'up'});
-            }
-        }
-      }
+      await applyPendingInitialAction();
 
       trace('start.bound paused=$paused');
       // The bridge returns this texture only after actual decoded pixels have
@@ -293,6 +288,139 @@ class _RemotePageState extends State<RemotePage>
           connecting = false;
           error = remoteFailure(e);
           errorCode = remoteFailureCode(e);
+          // Only explicit pre-submission rejections establish that retrying is
+          // safe. Transport, encoder and renderer failures may follow START_APP.
+          final details = e is RequestFailure
+              ? jsonObject(e.details)
+              : <String, dynamic>{};
+          if (submittedAppStart &&
+              details['launchOutcome'] != 'not_submitted' &&
+              !const {
+                'invalid_argument',
+                'unsupported',
+                'resource_busy',
+                'device_asleep',
+                'server_integrity',
+                'encoder_unavailable',
+                'decoder_unavailable',
+                'state_unverified',
+                'authorization_required',
+              }.contains(errorCode)) {
+            appLaunchUnknown = true;
+            if (details['sessionId'] is String) session = details;
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> applyPendingInitialAction() async {
+    final action = widget.initialAction;
+    if (initialActionApplied || action == null || !canSendInput) return;
+    // Consume the intent before submitting any side effect. A missing receipt
+    // leaves an unknown outcome and must never turn a resume into a replay.
+    initialActionApplied = true;
+    switch (action.tool) {
+      case RemoteTool.rotate:
+        await send('session.rotate', {});
+      case RemoteTool.screen:
+        await send('session.screen', {'mode': action.value});
+      case RemoteTool.text:
+        await send('session.text', {'text': action.value});
+      case RemoteTool.launchApp:
+        await send('session.launch', {
+          'deviceId': widget.device['id'],
+          'packageName': action.value,
+        });
+      case RemoteTool.key:
+        final code = action.value! as int;
+        heldKeys[code] = (sessionId, bindingGeneration);
+        try {
+          await send('session.key', {'keyCode': code, 'action': 'down'});
+        } finally {
+          heldKeys.remove(code);
+          await send('session.key', {'keyCode': code, 'action': 'up'});
+        }
+    }
+  }
+
+  void showUnknownAppLaunch(Json record) {
+    setState(() {
+      session = {...record}..remove('textureId');
+      appLaunchUnknown = true;
+      stateUnverified = false;
+      sessionEnded = false;
+      connecting = false;
+      controlAvailable = false;
+      errorCode = 'app_launch_unknown';
+      error = '应用打开请求的结果未知，应用可能已打开或迁移。请在手机核对；检查不会再次打开应用。';
+    });
+  }
+
+  Future<void> checkAppLaunch() async {
+    setState(() => connecting = true);
+    try {
+      final listed = objects(
+        (await controller.request('session.list', {
+          'deviceId': widget.device['id'],
+        }))['sessions'],
+      );
+      if (!mounted || exiting) return;
+      final record = listed
+          .where(
+            (item) => sessionId.isNotEmpty
+                ? value(item, 'sessionId', value(item, 'id')) == sessionId
+                : item['deviceId'] == widget.device['id'] &&
+                      item['packageName'] == widget.packageName,
+          )
+          .firstOrNull;
+      showUnknownAppLaunch(record ?? session ?? {});
+    } catch (failure) {
+      if (mounted && !exiting) {
+        setState(() {
+          connecting = false;
+          error = remoteFailure(failure);
+        });
+      }
+    }
+  }
+
+  Future<void> closeUnknownAppLaunch() async {
+    if (!await confirm(
+          context,
+          '关闭本次打开记录？',
+          '应用可能已在手机运行。仅关闭本次控制会话并保留真实任务；之后可明确选择重新打开，这可能迁移现有任务。',
+          action: '确认关闭',
+        ) ||
+        !mounted) {
+      return;
+    }
+    setState(() => connecting = true);
+    try {
+      if (sessionId.isNotEmpty) {
+        await controller.request('session.stop', {
+          'sessionId': sessionId,
+          'keepTask': true,
+        });
+      }
+      if (!mounted || exiting) return;
+      setState(() {
+        session = null;
+        appLaunchUnknown = false;
+        appLaunchClosed = true;
+        stateUnverified = false;
+        sessionEnded = false;
+        reconcileOnly = false;
+        paused = false;
+        connecting = false;
+        errorCode = null;
+        error = '本次打开记录已关闭，手机上的应用任务已保留。可明确选择重新打开。';
+      });
+    } catch (failure) {
+      if (mounted && !exiting) {
+        setState(() {
+          connecting = false;
+          error = remoteFailure(failure);
         });
       }
     }
@@ -325,6 +453,30 @@ class _RemotePageState extends State<RemotePage>
     }
   }
 
+  Future<void> continueOnPhoneScreen() async {
+    final package = widget.packageName;
+    if (package == null ||
+        appLaunchUnknown ||
+        stateUnverified ||
+        !await confirm(
+          context,
+          '在手机屏幕继续？',
+          '将在手机主屏打开此应用并接续真实任务，可能改变手机当前的前台应用。已打开的独立窗口可在窗口列表管理。',
+          action: '继续打开',
+        ) ||
+        !mounted ||
+        appLaunchUnknown ||
+        stateUnverified) {
+      return;
+    }
+    RemoteRoute(
+      deviceId: value(widget.device, 'id'),
+      $extra: RemoteLaunchIntent(
+        action: RemoteControlIntent.launchApp(package),
+      ),
+    ).pushReplacement(context);
+  }
+
   void onEvent(Json event) {
     if (event['type'] == 'session.disconnected' && event['data'] is Map) {
       trace('server.ended reason=${(event['data'] as Map)['reason']}');
@@ -345,7 +497,11 @@ class _RemotePageState extends State<RemotePage>
       applyReconciledState(data);
       return;
     }
-    if (stateUnverified || (reconcileOnly && view?.isCurrent != true)) return;
+    if (appLaunchUnknown ||
+        stateUnverified ||
+        (reconcileOnly && view?.isCurrent != true)) {
+      return;
+    }
     if (value(event, 'type').startsWith('session.')) {
       trace(
         'event type=${event['type']} status=${value(data, 'status')} bound=${sessionId.isNotEmpty} sessionMatches=${data['sessionId'] == null || data['sessionId'] == sessionId} deviceMatches=${event['deviceId'] == null || event['deviceId'] == widget.device['id']} hasTexture=${data['textureId'] != null} pausedBefore=$paused',
@@ -477,7 +633,26 @@ class _RemotePageState extends State<RemotePage>
     }
     reconciledSequence = sequence is int ? sequence : null;
     reconcileOnly = true;
-    final existing = objects(snapshot['sessions'])
+    final observed = objects(snapshot['sessions']);
+    final unknownApp = widget.packageName == null
+        ? null
+        : observed
+              .where(
+                (item) =>
+                    item['deviceId'] == widget.device['id'] &&
+                    item['packageName'] == widget.packageName &&
+                    item['launchOutcome'] == 'unknown',
+              )
+              .firstOrNull;
+    if (unknownApp != null) {
+      // A page opened during recovery may not have a session ID yet. The
+      // submitted app intent still belongs to this device/package and blocks
+      // opening the same task on another display until explicitly resolved.
+      visibilityEpoch++;
+      showUnknownAppLaunch(unknownApp);
+      return;
+    }
+    final existing = observed
         .where(
           (item) =>
               value(item, 'sessionId', value(item, 'id')) == sessionId &&
@@ -563,7 +738,7 @@ class _RemotePageState extends State<RemotePage>
   }
 
   Future<void> pauseView() async {
-    if (exiting) return;
+    if (exiting || appLaunchUnknown) return;
     final owned = view;
     if (owned == null || !owned.isCurrent) return;
     final epoch = ++visibilityEpoch;
@@ -600,7 +775,8 @@ class _RemotePageState extends State<RemotePage>
   }
 
   Future<void> resumeView() async {
-    if (stateUnverified ||
+    if (appLaunchUnknown ||
+        stateUnverified ||
         sessionId.isEmpty ||
         covered ||
         exiting ||
@@ -642,6 +818,7 @@ class _RemotePageState extends State<RemotePage>
         controlAvailable = session?['textureId'] != null;
         error = null;
       });
+      await applyPendingInitialAction();
     } catch (failure) {
       trace(
         'resume.failed epoch=$epoch current=$visibilityEpoch reason=$failure',
@@ -1002,6 +1179,8 @@ class _RemotePageState extends State<RemotePage>
                               Text(
                                 sessionEnded
                                     ? '控制会话已结束'
+                                    : appLaunchUnknown
+                                    ? '应用打开结果待核对'
                                     : stateUnverified
                                     ? '正在核验会话状态'
                                     : errorCode == 'device_asleep'
@@ -1028,11 +1207,36 @@ class _RemotePageState extends State<RemotePage>
                                   onPressed: connecting ? null : wakeAndStart,
                                   child: const Text('唤醒手机'),
                                 ),
+                              if (widget.packageName != null &&
+                                  error != null &&
+                                  !appLaunchUnknown &&
+                                  !stateUnverified)
+                                FilledButton(
+                                  onPressed: connecting
+                                      ? null
+                                      : continueOnPhoneScreen,
+                                  child: const Text('在手机屏幕继续'),
+                                ),
+                              if (appLaunchUnknown)
+                                FilledButton(
+                                  onPressed: connecting
+                                      ? null
+                                      : closeUnknownAppLaunch,
+                                  child: const Text('关闭本次打开记录'),
+                                ),
                               OutlinedButton(
                                 onPressed: connecting
                                     ? null
+                                    : appLaunchUnknown
+                                    ? checkAppLaunch
                                     : (reconcileOnly ? reconcileState : start),
-                                child: const Text('重新检查'),
+                                child: Text(
+                                  appLaunchUnknown
+                                      ? '只读检查'
+                                      : appLaunchClosed
+                                      ? '重新打开'
+                                      : '重新检查',
+                                ),
                               ),
                             ],
                           ),

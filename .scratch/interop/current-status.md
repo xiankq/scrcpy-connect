@@ -17,7 +17,7 @@
 | 01 设备与首次设置；R02/R19/R53–R54，C01–C05/C30 | **部分**：固定设备列表、连接表单和真实诊断；隔离secure=1 API36上真实表单错码拒绝→PAKE→独立端口TLS→系统接口撤权后旧身份拒绝，两轮64秒 | **未验**：QR／发现／USB、码过期／切网／后台、旧系统USB转无线、量产OEM。直接Settings Forget持久化仍失败；设备最近信息时间、同物理设备USB／无线身份归并及工作台功能分级入口仍未闭合，首次步骤／用时也须实测。**进行中**：中文错误提示已改并有widget证据，尚无本轮真实表单UI验收；下一步从撤权错误页检查可理解提示和可继续路径 | [05](issues/05-ordinary-user-onboarding.md)、[15](issues/15-identity-trust-and-transports.md)、[20](issues/20-android-validation-bench.md) |
 | 02 Rust ADB与信任；R08–R11/R40，C04/C06 | **部分**：独立库不调用外部adb，主要协议／服务、无线互通、Required TLS和发现→表单→Core类型保留及拒明文负例；安全AVD首次正负例已有证据 | **未实现／未决**：完整公开服务契约；README排除typed forward／包管理／delayed ACK／incremental／5037与任务01边界未闭合（A47）。当前TLS provider为alpha且上游明确不供生产，RSA时序风险尚未解除；纯Rust实现不能等同生产安全。**未验**：Wi-Fi2、成熟生产密码链、锁定OEM／重装／四端密钥保护。下一步逐服务给API／参考／差异／关闭条件，区分实现缺失与合理范围 | [01](issues/01-adb-contract-and-wireless.md)、[02](issues/02-pure-rust-crypto-dependencies.md)、[15](issues/15-identity-trust-and-transports.md) |
 | 03 四端与工程；R06–R07/R13–R15/R55–R59 | **部分**：monorepo、FRB、Hooks／生成Riverpod、typed路由与严格分析；Android armv7／arm64／x64整包已有本地通过，生成及部分JVM门禁存在 | **未验**：iOS／macOS／Windows宿主整包和最终链接、平台资格、干净检出。**未实现**：CI调用check.sh不带--android，Android整包与native ownership main未入CI（A46）；FRB／companion／MDK原生产物闭包仍缺。下一步补Android CI明确入口与失败负例，再推进四宿主产物 | [03](issues/03-workspace-bridge-platform-builds.md)、[19](issues/19-dependency-license-and-updates.md) |
-| 04 手机远控与真实应用；R03/R12/R20/R23–R25/R51，C07–C09/C32 | **部分**：全屏、触控、三真实会话保留／切换／精确关闭、窗口工具和可见设备归属。**进行中**：主屏启动应用／副屏失败经明确同意回退，3项widget与公开Runtime真实目标观察已有证据，尚无本轮真实UI闭环；首帧超时后‘重新检查’可能重提真实应用启动（A49，源码发现待动态复现） | **部分修复／进行中**：A43退出pause拒绝／挂起实际先红，非阻塞离页修复后32项生命周期／会话视图回归通过，悬浮退出／系统返回×失败／挂起4组合通过；旧挂起队列可能阻塞同session重进，真实故障UI仍待验。**未实现／未验**：IME焦点／composing／密码／emoji／横屏、真实迁回／多实例、最近／常用与真实应用标签／图标、系统分屏／大屏并排。A45已修向内拖开保持展开／最近侧边／安全区，8项组件与真实产品25秒回归通过；下一步继续挂起／拒绝／系统返回及未知启动不重发的真实故障验收 | [06](issues/06-server-orchestration.md)、[08](issues/08-mobile-input-and-windows.md)、[18](issues/18-complete-design-state-coverage.md) |
+| 04 手机远控与真实应用；R03/R12/R20/R23–R25/R51，C07–C09/C32 | **部分**：全屏、触控、三真实会话保留／切换／精确关闭、窗口工具和可见设备归属。**部分**：主屏应用接续复用原会话，双AVD主屏＋两应用窗口51秒／9个独立进程与任务checkpoint及实际Settings像素／截图通过。A49进程内unknown身份、只读检查、核验入口及主屏绕行阻断已修，10项应用widget／38项生命周期回归与2项真实Runtime通过；副屏失败主屏回退的真实UI、unknown跨进程持久化及实际解码故障仍未验 | **部分修复／进行中**：A43退出pause拒绝／挂起实际先红，非阻塞离页修复后32项生命周期／会话视图回归通过，悬浮退出／系统返回×失败／挂起4组合通过；旧挂起队列可能阻塞同session重进，真实故障UI仍待验。**未实现／未验**：IME焦点／composing／密码／emoji／横屏、真实迁回／多实例、最近／常用与真实应用标签／图标、系统分屏／大屏并排。A45已修向内拖开保持展开／最近侧边／安全区，8项组件与真实产品25秒回归通过；下一步继续挂起／拒绝／系统返回及未知启动不重发的真实故障验收 | [06](issues/06-server-orchestration.md)、[08](issues/08-mobile-input-and-windows.md)、[18](issues/18-complete-design-state-coverage.md) |
 | 05 媒体、声音与资源；R16/R22/R26/R39/R60，C10/C25/C28 | **部分**：共享fvp／MDK五编码、PCM／双设备焦点、HOME／旋转／同UUID恢复；按官方首帧文档修复；真实页选择1080后HEVC486×1080通过实像素门槛 | **未决／未验**：1280低清根因／默认策略、冷启动总耗时、触控到像素P50/P95/P99、同步／丢帧、长期／热／功耗、物理声音／路由。**未实现**：新／非焦点窗口资源降载完整策略；下一步固定设备与场景测端到端延迟和资源不足，保护已有活动 | [07](issues/07-fvp-media-pipeline.md)、[12](issues/12-calls-and-audio-arbitration.md)、[16](issues/16-glass-and-performance-budget.md)、[20](issues/20-android-validation-bench.md) |
 | 06 通知与原应用；R33–R37，C18–C21 | **部分**：免APK listener、持续观察／独立停止、原PI／清除／失效保护、主屏复用；跨页回复有界保护及独立receiver原文count1；API36真实后台OS发布／精确撤回／通知栏点击后当前内容呈现 | **未实现／未验**：完整锁屏／应用认证后重取并重验、拒权／渠道／冷启动／系统停止／OEM及真实来电提醒、真实聊天服务一次接收／进程死亡恢复。下一步实际关闭渠道／撤权与认证完成后重验，不能重放未知回复 | [11](issues/11-notifications-continuation.md)、[14](issues/14-background-and-recovery.md)、[18](issues/18-complete-design-state-coverage.md) |
 | 07 通话；R26/R32/R39，C22–C24 | **部分**：聚合状态与受限提示、危险全局动作明确拒绝，不抢已有活动 | **未实现**：安全绑定具体呼叫的接听／拒接／挂断与真实双向通话音频。**未验**：PSTN／VoIP、同设备多呼叫／多SIM、耳机／麦克风／转手机／结束恢复；下一步固定具体call身份及物理HAL对照，安全拒绝不能算功能完成 | [12](issues/12-calls-and-audio-arbitration.md)、[20](issues/20-android-validation-bench.md) |
@@ -30,7 +30,7 @@
 ## 证据入口与优先顺序
 
 1. **先修可造成退出阻塞／重复写入的断链**：A43／A44／A49，回归失败、挂起、离页重进、迟到回执与系统返回；A43局部红绿通过、同session重进／真实故障仍待验。A44持久账本、跨页unknown及真实saved重进已补，Android实际杀进程unknown故障待验。
-2. **完成本轮在途行为的真实页面验收**：主屏应用回退／中文错误；保留3项widget及真实Runtime证据边界。随后A45内拖状态、A48共享冲突UI、A46 CI门禁，分别回填既有任务。
+2. **继续本轮尚未闭合的真实页面与工程**：主屏接续／多窗口和A45内拖正常流程已有真实通过，副屏失败回退、中文连接错误仍待真实UI。A49的跨进程记录、A48共享冲突UI、A46远端CI及四宿主分别继续，不把局部正常流程外推异常矩阵。
 3. **继续完整目标**：IME、认证接续、批量内容与入站提交、活动恢复、通话、动态视觉／无障碍／性能、生产密码与四端整包；环境内可做项继续推进，缺物理设备／宿主单独登记。
 
 | 证据 | 可复现入口／实际边界 |
@@ -39,7 +39,7 @@
 | [总验收记录](../../docs/implementation/validation.md)、[状态恢复](../../docs/implementation/state-recovery.md) | 命令、失败、完成回执与截图路径；同runtime校准不等于断网／进程恢复 |
 | [内容交付](../../docs/implementation/content-delivery.md)、[搜索](../../docs/implementation/file-search.md) | 单项文本／JPEG／MP4与搜索已有真实结果；A44新增持久账本与真实saved页面重进，Android杀进程unknown仍未验；首次重进夹具失败未计通过 |
 | [系统提醒](../../docs/implementation/system-notifications.md) | 真实OS投递／撤回／点击；仍保留权限／认证／冷启动等矩阵 |
-| [主屏应用widget](../../apps/connect/test/app_launch_test.dart)、[公开Runtime真实测试](../../crates/interop_core/tests/app_launch_android.rs) | 当前工作区改动；Runtime实际任务在display0，3项widget覆盖UI协议／未知启动不重发，尚无当前UI E2E |
+| [主屏应用widget](../../apps/connect/test/app_launch_test.dart)、[公开Runtime真实测试](../../crates/interop_core/tests/app_launch_android.rs) | 10项应用widget／38项生命周期回归；真实Runtime两项及双AVD51秒通过，独立display0／9个进程checkpoint、主屏同ID与实际Settings截图；旧宽松截图不计视觉通过，跨进程unknown与真实失败回退仍未验 |
 | [Pencil覆盖](../../designs/prod/coverage.md)、[交互规则](../../designs/prod/interaction-rules.md) | 89页静态结构与产品规则；实际实现和动态验收逐项单独核对 |
 
 ## 历史与更新规则
