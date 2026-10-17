@@ -31,8 +31,14 @@ Requirements: R07–R16、R43–R44、R50
 
 ## 当前状态
 
+当前完整状态以[当前完成度](../current-status.md)为准；以下按批次保留证据与边界。
+
 2026-10-17重新核查：已有锁文件、生成Dart检查、严格分析、官方设计lint和部分来源摘要。
 
 固定scrcpy捕获扩展已有源码/产物与JVM默认门禁；FRB重生成、companion源到JAR及其JVM统一门禁、MDK逐平台原生下载/摘要/许可闭包（A41）、未跟踪真实测试与安全发布依据仍未闭合。pub锁只固定Dart包，不能冒充MDK原生产物锁定。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
+
+## 本轮持续门禁与职责审计：A46／A48
+
+A46确认CI仅运行不带`--android`的`tool/check.sh`，三ABI APK和native ownership main只有条件／本地证据，没有CI门禁；补明确job及实际失败阻断后再记通过，四宿主与MDK原生摘要／许可闭包继续开放。A48确认provider冲突产品说明及选择仍在`PlatformDocuments.kt`，共享协调器主动调用平台conflict；第16批“原生仅OS适配”是过宽结论，须回迁共享产品层并复验。当前入口：[当前完成度](../current-status.md)。

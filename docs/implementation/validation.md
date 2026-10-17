@@ -560,3 +560,22 @@ Rust默认工作区40套件163通过/47忽略（`/tmp/connect-first-pairing-rust
 最终生成一致性检查通过：build_runner only-check，142输入，11秒（`/tmp/connect-first-pairing-generation.log`）。Android arm/arm64/x64三ABI debug整包102.4秒通过，`/tmp/connect-first-pairing-three-abis.log`。仍没有iOS/macOS/Windows整包证据，不能以Android或跨target check替代。新集成测试未改变应用181项widget基线，本轮未将既往widget结果冒充新增运行；本轮实测为上述两轮产品E2E、真实Runtime负例和所列自动检查。
 
 最后普通lib/main.dart实际安装启动，Impeller(OpenGLES)，按R热重启1,393ms；设备列表空态首屏 `/tmp/connect-first-pairing-main-restarted.png` 已原生目视，未残留本次测试设备记录，随后detach。重启仍有两条FRB旧isolate投递告警，以及启动SurfaceSync/跳帧日志，不声称零运行告警或完整性能通过。本批Core修复/公开负例为914ab41，产品集成测试及宿主fixture为2e3dc5c；既有未跟踪的clipboard/documents/input测试与examples未改、未夹带提交。
+
+## 当前全量复核与异常退出修复
+
+当前结论集中至[完成度](../../.scratch/interop/current-status.md)，U01–U44／R01–R60／C01–C32追溯继续保留。本轮追加A43–A49：退出受暂停回执阻塞、系统保存未知状态离页丢失、内拖展开不保持、Android CI未构包、完整ADB服务边界未决、原生产品冲突弹窗及独立应用未知启动后检查可能重提。除下述退出局部修复，其余未记录通过；A49目前是源码路径发现，未冒充故障实测。
+
+### 退出回归和边界
+
+公开RemotePage／typed路由测试先加入暂停抛错与永不完成两种情况，实际均因页面仍存在而失败。离开本地呈现改为不等待远端pause；输入释放仍在原session有序执行，不强停任务。首版修复曾因在返回页Scaffold就绪前发布Snackbar而失败，并发现重复pause；后置反馈、阻止退出中的重复pause后，remote_lifecycle＋session_views共32项通过。
+
+随后扩展为悬浮退出／系统返回×暂停失败／挂起四组合，全部通过：只退回原页面、只pause原session一次、没有session.stop；失败提示确实在返回页可见并包含设备名。命令：在apps/connect执行 `rtk proxy flutter test --no-pub test/remote_lifecycle_test.dart --plain-name 'remains reachable when capture pause' --reporter expanded`。修复本地提交`0bf9cb1`。
+
+这没有证明同session立即重进成功：旧挂起请求仍可能阻塞SessionViews队列。真实断网／暂停故障的Android E2E、恢复核验和资源收束仍须继续，不把widget请求夹具当真实设备负例。
+
+### 合并检查、主应用和设计
+
+- 合并工作区应用195项测试15秒通过，`/tmp/connect-full-audit-app-tests.log`。包括在途主屏应用／连接错误文案的widget回归；本轮未运行这些新行为的完整UI E2E。
+- 严格分析首次失败于5处新增代码缺少花括号，修正后 `flutter analyze --no-pub --fatal-infos` 无问题；build_runner only-check 143输入10秒通过，Cargo格式及diff检查通过。本轮没有重新执行整个Rust workspace，不沿用上轮结果冒充本轮执行。
+- 普通lib/main.dart实际构建50.4秒、安装并启动，Impeller OpenGLES；CLI实际R热重启1,401ms，设备列表空态 `/tmp/connect-full-audit-main-restarted.png` 已目视，随后detach。仍有两条FRB旧isolate投递警告与SurfaceSync／跳帧日志；不登记为全部页面或低延迟通过。
+- Pencil同一文件同类别行新增应用打开方式tch6A及全屏失败主动继续qTeGO；保存关闭重开核对89页／12类／26母组件／557实例／153变量，无断链／缺变量／顶层重叠。主代理另看两张新页；导出只在`/tmp/app-window-design-reopen/`。设计批次`6d00d71`，静态稿不证明对应UI或全89页视觉验收完成。

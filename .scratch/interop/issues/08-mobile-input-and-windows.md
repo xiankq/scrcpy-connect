@@ -32,8 +32,16 @@ Requirements: R03、R12、R20、R22–R25、R51
 
 ## 当前状态
 
+当前完整状态以[当前完成度](../current-status.md)为准；以下按批次保留证据与边界。
+
 2026-10-17重新核查：全屏、退出拖动吸附、触控及目标中文注入已有证据。
 
 手机三窗口保留/切换/独立关闭与sessionId工具已实现并真实复验；移动IME自动焦点/敏感状态、候选/遮挡、系统分屏/大屏并排仍缺。返回旧设备焦点不恢复会串对象（A38），须覆盖远控及专用页。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
+
+## 本轮生命周期核查：A43／A45
+
+A43已实际红→绿：发现时退出等待`view.release`／`session.pause`，拒绝或挂起均无法离页；改为本地非阻塞退出，输入释放／精确pause仍有序，失败在返回后提示未确认且不stop真实task。`remote_lifecycle_test`与`session_views_test`共32项通过（2秒），后补悬浮退出／系统返回×失败／挂起4组合全过，只pause原sid一次／无stop，返回页显示含设备归属的未确认提示；第一次修复曾触发新Scaffold前Snackbar断言及重复pause，后移反馈并加exiting guard后通过。**仅局部修复**：旧挂起session队列仍可能阻塞同session立即重进，真实故障UI E2E继续验收，A43不关闭。
+
+A45仍待实施：`exit_handle.dart::settle`每次拖动结束均收起，未满足向内拖动保持展开；补左右内／外拖、速度、取消、减少动态、读屏和误触隔离。主屏应用打开／明确同意回退已有3项widget与公开Runtime真实任务观察，本轮真实UI尚未闭环；IME／横屏／大屏并排仍开放。当前状态见[当前完成度](../current-status.md)。

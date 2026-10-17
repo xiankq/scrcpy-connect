@@ -31,8 +31,16 @@ Requirements: R06–R07、R13–R15
 
 ## 当前状态
 
+当前完整状态以[当前完成度](../current-status.md)为准；以下按批次保留证据与边界。
+
 2026-10-17重新核查：monorepo、FRB、生成路由/状态、Android整包和部分跨target check已完成。
 
 手机持续窗口、事件缺口快照和播放器所有权已有新证据；Apple/Windows宿主最终链接/整包、平台资格配置、FRB/companion/MDK一致性门禁与完整活动恢复仍缺。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
+
+## 本轮工程核查：A46／A48
+
+本地Android三ABI整包通过不等于持续门禁：`.github/workflows/check.yml:38`没有传`--android`，所以`tool/check.sh`条件内的APK构建和native ownership main没有CI覆盖（A46）。下一步明确Android CI入口，实际job验证构建／测试失败会阻断。Apple／Windows宿主整包和最终链接仍另行验收。
+
+A48还发现`PlatformDocuments.kt:94`仍用产品AlertDialog决定同名保留／跳过／取消，共享协调器调用`documents.platform.conflict`；应将策略／产品UI归共享Dart，原生保留系统授权／provider／FD适配，并回归离页／取消／迟到结果。当前状态见[当前完成度](../current-status.md)。

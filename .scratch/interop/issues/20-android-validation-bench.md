@@ -31,6 +31,8 @@ Requirements: R03、R17–R18、R20–R22、R39
 
 ## 当前状态
 
+当前完整状态以[当前完成度](../current-status.md)为准；以下按批次保留证据与边界。
+
 2026-10-17再次核查：三独立AVD、共享媒体/文本对象隔离/外部分享导入、手机三窗口保留切换精确关闭、同UUID事件缺口恢复及独立进程检查已有证据。A37/A38/A40负例与真实typed路由回归已纳入；新增双AVD原通知UI回复、独立受管receiver原文/count1及精确清理两轮通过，测试APK临时安装且不进入产品；不把fixture测试冒充安全adbd/真实用户链路。
 
 完整真实UI闭环、故障/旧API/安全授权/物理USB/HAL/热功耗未完成；缺完成回执的验收假绿本轮修复。
@@ -38,3 +40,9 @@ Requirements: R03、R17–R18、R20–R22、R39
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
 
 补实像素1280负例与1080真实页通过；新增主控真实HOME/两条通用OS通知/精确撤回/保留2101/真实SystemUI点击/当前内容呈现18秒，失败与清理回执均留tmp。Flutter174、Rust160默认通过/44忽略，当前证据不代替权限/锁屏/OEM/物理通话或进程恢复。见[运行](../../../docs/implementation/validation.md#画质实像素与主控系统通知)。
+
+## 本轮新增验收边界
+
+新增A43退出pause拒绝／挂起已实际先红后绿，32项生命周期／会话视图回归通过；本地退出局部修复不能覆盖旧挂起队列重进或真实UI E2E。A44导出未知→离页→重进、A45内拖保持展开、A46 Android/native CI门禁及A48真实provider冲突UI继续待实施／验收。主屏应用3项widget及公开Runtime真实目标任务观察已有证据，中文错误提示已有widget，但当前UI完整E2E仍在途。
+
+首次secure=1 AVD码配对／系统接口撤权两轮64秒、JPEG／MP4真实内容交付、有界搜索、系统提醒及共享折射均已有后续证据，不笼统称“全部未验”。量产OEM／真实Settings Forget、物理USB／IME／HAL／热功耗／完整恢复和四宿主整包仍开放；当前权威结论见[当前完成度](../current-status.md)。

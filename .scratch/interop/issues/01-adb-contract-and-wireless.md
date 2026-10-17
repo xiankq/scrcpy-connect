@@ -31,6 +31,8 @@ Requirements: R08–R11
 
 ## 当前状态
 
+当前完整状态以[当前完成度](../current-status.md)为准；以下按批次保留证据与边界。
+
 2026-10-17重新核查：独立ADB库及配对/TLS、压缩、reverse、JDWP已有实现与真实互操作。
 
 公开服务完整契约、版本/Wi-Fi2行为、安全授权负例及恢复矩阵仍未闭合。A37已补Required策略及发现/typed路由/表单/devices.add全链类型；修改已有TLS/GUID记录不能降级，公开Client/Core负例及入口widget通过。安全授权与完整无线兼容矩阵仍开放。
@@ -42,3 +44,7 @@ Requirements: R08–R11
 隔离secure=1 API36 AVD已跑真实app.main/FRB/Rust身份：未配对拒绝→错码拒绝→系统新码PAKE→独立端口Required TLS→系统接口精确撤权→旧身份拒绝及停止重连→精确清理，64秒通过。Core CertificateUnknown误归offline已公开红绿回归并修复。直接Settings Forget因AtomicFile持久化竞争仍失败，未算入上述通过；host夹具固定API36且不成为用户调试/root前提。
 
 任务保持开放：QR/mDNS/过期/切网/切后台/USB/旧系统、量产/OEM/重装/四端身份保护及成熟密码链尚未闭合；普通用户表单仍暴露英文证书原错。完整范围、失败与重跑入口见[首次配对](../../../docs/implementation/first-pairing.md)和[当前差距](../completion-reassessment.md#122-当前差距按完整产品而非单次实验判断)。
+
+## 本轮契约核查：A47
+
+`crates/adb/README.md:148`当前把typed forward、包管理、delayed ACK、incremental install、5037兼容server列为API外；这没有关闭本任务对forward／包管理／条件服务和5037归属的要求。下一步按固定AOSP逐服务给出已有原语／公开API／失败语义／参考用例／未实现与正式边界理由，不把README排除当成用户已经接受的缩scope。首次安全AVD码配对／系统接口撤权已有局部证据，成熟密码链、量产OEM和完整无线矩阵仍开放。当前结论统一见[当前完成度](../current-status.md)，发现证据见[第20节](../completion-reassessment.md#20-本轮当前账本与新增断链2026-10-17)。

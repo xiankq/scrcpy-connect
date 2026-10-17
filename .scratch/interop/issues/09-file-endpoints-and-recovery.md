@@ -31,6 +31,8 @@ Requirements: R28–R30、R38
 
 ## 当前状态
 
+当前完整状态以[当前完成度](../current-status.md)为准；以下按批次保留证据与边界。
+
 2026-10-17重新核查：目录、冲突、取消、部分结果和原子发布已有真实回归。
 
 后续共享SAF单项原件已通过真实系统选择器取消/保存、独立读取63字节和外部分享URI授权/hash核验；固定任务准备页覆盖进度/精确取消/未知结果。普通应用SELinux禁止硬链接导致的发布失败已改用无覆盖原子rename；32位ABI构建错误也已修复。见[交付实现与复现](../../../docs/implementation/content-delivery.md)。
@@ -40,3 +42,9 @@ Requirements: R28–R30、R38
 批量/目录交付、非seek/云provider/撤权/空间矩阵、浏览页分类入口和恢复意图仍缺；有界搜索与单项本地Downloads通过不替代完整端点矩阵。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
+
+## 本轮未知结果与共享职责核查：A44／A48
+
+单项系统保存、共享PFD完成与同页未知核对已有证据；此前“未知结果保护”只覆盖同页。A44：`DocumentExportForm`依赖`useDocumentOperation`页内对象，离页dispose后重进result为空，unknown核对门槛消失，可直接重新写入。下一步以固定原件／操作身份建立有界保护，实际覆盖超时→离页→重进、迟到回执、切设备和用户核对后显式重试；未知结果不得自动重放。
+
+A48：`PlatformDocuments.kt:94`产品冲突AlertDialog及共享协调器523行调用`documents.platform.conflict`仍需迁回共享产品UI／策略。系统provider不保证原子替换的安全限制保留；真实目录同名／取消／离页迟到结果与三选项远端冲突分开验收。批量／目录／provider矩阵与完整恢复继续开放；当前状态见[当前完成度](../current-status.md)。
