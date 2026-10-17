@@ -324,3 +324,112 @@ launcher已经为了断线解冻而读取子进程PID/starttime；现在通过�
 
 
 最终另行显式执行既有真实应用窗口/剪贴板/关闭保留任务测试，4.37秒通过，`/tmp/connect-cold-app-window.log`；它覆盖新并行路径中的START_APP，但不是所有unknown故障/UI迁回验收。随后独立ps和目录检查未发现残留捕获进程或捕获JAR，`/tmp/connect-cold-final-target-inspection.json`。闲置Gradle已停止，清理59处明确debug/过期测试产物，实际释放1373.8MiB、剩余62.6GiB；保留release/native hooks/CMake/Gradle和当前视频测试，`/tmp/connect-cold-cleanup.json`。原先五项未跟踪文件仍未动、未stage、未push，完整目标继续active。
+
+
+## 动态负载下的合作暂停与JAR重建（2026-10-18）
+
+本批由上一批16.667ms repeat试验的暂停超时继续排查，生产repeat仍33.334ms。
+给独立目标增加可选持续变色块，保留中心四位计数采样带；每次暂停后经真实输入
+改变目标计数，恢复必须读到新像素。`CONNECT_PERF_PAUSE_CYCLES`默认1、可设1–50，
+每次保存阶段/暂停/恢复/新像素耗时，已完成cycle也写宿主日志以保留原生崩溃前的进度。
+夹具独立构建/安装/卸载，未加产品原生代码或改变被控免APK要求。
+
+| 真实双API36 x64 AVD，H264 1280/60/8Mbps、AMediaCodec、trace关闭 | 结果 |
+| --- | --- |
+| 原捕获JAR、静态、2轮×10次暂停 | 20次新像素/呈现/清理通过；不能代表动态负载 |
+| 原捕获JAR、动态 | 第5次暂停ACK超时；首次输入1640/1628ms |
+| 原JAR加临时主控探针、动态 | 第6次暂停超时；Capture写约1.255ms后无ACK，未判定根因 |
+| 仅修gate/consumeReset窗口 | 动态仍出现超时，不是完整修复 |
+| 增加有界输出等待及pending退出后的第一次动态 | 主控MDK线程SIGABRT，无最终JSON，不能计通过 |
+| 最终源码动态复跑＋相同APK直接复跑 | 各2轮×10次全部通过，共40次；暂停148–306ms，恢复调用至新像素410–869ms |
+
+原JAR的确定性竞态：gate已打开，codec尚未注册时暂停入队，只能置reset；随后
+consumeReset清除该位，编码器进入encode，队列中的请求无法返回gate。JVM按真实
+调用顺序先红，`isResetRequested`同时检查pending队列后绿。
+但实际动态仍超时，故没有止于第一个理论。超时瞬间raw输出最长写447µs、最后完成包距
+超时约12ms，未发现该层背压。目标超时前约2秒的SIGQUIT栈：control-recv已读下一消息、
+control-send等空队列、video在`dequeueOutputBuffer(-1)`。这支持排查依赖EOS的编码退出，
+不能单凭栈断言Android永远丢EOS，或完全排除其他阶段背压。
+
+第二个回归直接反射调用构建后的真实SurfaceEncoder.encode，codec stand-in不产EOS，
+先确认正常静止输入继续等待，再在读中入队暂停；旧实现确定性失败。最终将dequeue
+等待设为100000µs，完成当前完整packet及releaseOutputBuffer后检查pending请求，
+允许进入原finally清理，再在gate发ACK；未提前确认，也未在普通播放中任意丢P帧。
+恢复仍要求新session/config/关键帧和真实新像素。100ms只约束该次codec读等待，
+不保证socket写、native stop/release或完整暂停在100ms内完成。
+
+仅我们的捕获扩展JAR需要此次重建，SHA-256为
+`b46cd074600c33802dc764df8a9e056271725cb9b51daf4a3494dfffadbbac89`；
+官方v5.0.1 JAR保持`764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536`。
+协议128/序列/ACK语义未变。普通Flutter/Rust构建仍直接嵌入产物；不是每次打包重建Java。
+独立只读review未发现packet边界、资源清理/ACK、display保留的新缺陷；指出100ms不约束
+包写/native清理，以及JVM无EOS用例不覆盖正长度packet。真实压力覆盖实际packet与像素。
+
+原始证据：`/tmp/connect-e2e/video-pause-stress-{baseline,motion,probe,fixed,stack,stack-r2,stack-r3,bounded,bounded-r2,bounded-r3}/`；
+对应`/tmp/connect-video-pause-stress-<同后缀>.log`。`bounded`因崩溃没有result.json，
+驱动finally仍卸载并确认夹具不存在。两个确定性红日志为
+`/tmp/connect-capture-{race,eos}-red.log`，最终JVM绿为`/tmp/connect-capture-eos-green.log`；
+目标栈`/tmp/connect-pause-stack-r3-0.txt`，MDK完整tombstone
+`/tmp/connect-video-pause-native-tombstone.txt`。临时Rust状态探针、Dart延迟/诊断标记均移除。
+
+**开放问题不被复跑通过覆盖**：第一次候选在主控`JNISurfaceTextu`线程SIGABRT，MDK栈
+为0x17951d/0x919ec/0x1631b9（BuildId 901726b6b0358c34d504c453a084538af9c7ef27）。
+同APK随后40次通过，但原生崩溃根因/复现率仍未定位，不能称整体稳定验收通过。
+动态完整首帧2753–3091ms，8次输入新像素1049–1769ms，远超严格预算；本批功能压力
+沿用start5000、P50/P953000ms，`videoPerformanceComplete=true`只对这些门槛成立。
+没有放宽前一批严格1000/200/300ms验收或用四个输入计算可信性能分位数。
+静止3秒期间实际63–74包、约1.17–1.38MB，不等于稳定60fps/8Mbps；目标自身gfx统计
+332帧，中位25ms、P9557ms、7.83% jank，见`/tmp/connect-video-pause-stress-fixed-target-gfxinfo.log`。
+夹具绘制/AVD负载与编码/传输/解码需继续分段，不能把所有动态延迟归咎网络。
+
+复现：先构建独立夹具，设置既有drive要求的ADB/主控/目标/APK环境变量（见夹具README），
+在apps/connect目录使用：
+
+```sh
+rtk proxy env CONNECT_E2E_VIDEO_MOTION=true \
+ CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-pause-stress \
+ flutter drive -d emulator-5554 --no-pub \
+ --driver=test_driver/video_performance.dart \
+ --target=integration_test/video_performance_test.dart \
+ --dart-define=CONNECT_PERF_DECODER=native \
+ --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+ --dart-define=CONNECT_E2E_PORT=25556 \
+ --dart-define=CONNECT_PERF_MAX_SIZE=1280 \
+ --dart-define=CONNECT_PERF_MAX_FPS=60 \
+ --dart-define=CONNECT_PERF_BIT_RATE=8000000 \
+ --dart-define=CONNECT_PERF_ROUNDS=2 \
+ --dart-define=CONNECT_PERF_TRANSITIONS=2 \
+ --dart-define=CONNECT_PERF_PAUSE_CYCLES=10 \
+ --dart-define=CONNECT_PERF_IDLE_MS=3000
+```
+
+同一编译定义的重复测试可用`--use-application-binary=build/app/outputs/flutter-apk/app-debug.apk`
+直接安装运行当前测试APK，免重编译；不要用于改变dart-define的实验。严格性能命令仍按上一节，
+本批不关闭任务07或完整目标。下一批优先复现MDK动态原生崩溃，再分段动态积压/冷首帧。
+
+
+本批实现分批提交：`5a6cfda`为真实压力夹具/恢复新像素与失败回执，`91ae381`为两处
+合作暂停修复/JVM回归/可复现捕获JAR。最终JAR --check及JVM通过，
+`/tmp/connect-pause-jar-check.log`；严格Flutter分析5.8秒无问题，
+`/tmp/connect-pause-analyze.log`。正式RemotePage五编码24秒全部rendered且
+mediaAcceptanceComplete=true，`/tmp/connect-e2e/video-pause-product-five/result.json`；
+H264全屏Settings/浮动退出与动态最终VIDEO8实际截图已目视。真实应用窗口/剪贴板/
+停止保留原任务4.25秒通过，`/tmp/connect-pause-app-window.log`，不外推所有任务迁回。
+
+
+普通main实际构建10.0秒、安装567ms，DTD实际热重启2729ms、运行错误查询无错误；
+`/tmp/connect-pause-main.log`、`/tmp/connect-pause-main-restarted.png`，设备列表已目视后detach。
+仍保留启动SurfaceSync及两条旧isolate投递告警，不把它称为启动流畅通过。
+ARM64签名release 62.74秒完成，签名/ZIP/manifest/ELF/16KB ZIP对齐通过；另直接检查
+APK的libinterop_bridge.so确实嵌入当前b46cd074…完整JAR，x64 debug也单独核对。
+当前`/tmp/connect-artifacts/connect-arm64-video-release.apk`为46,773,534字节，SHA-256
+`5ea20787311dec169eaed3a911b3a1c88eb7139947ff83de6e2190217e1fc9cb`，未物理ARM运行。
+旧9411b4…包保留为`connect-arm64-before-pause-gate-release.apk`。
+
+
+同模式release热构建2.50秒、摘要一致。停止闲置Gradle，清理382处明确debug输出，
+实际释放1488.5MiB、空闲62.5GiB，保留release/native hooks/Gradle/CMake和模式不明的
+Flutter缓存。`/tmp/connect-pause-cleanup.json`及`/tmp/connect-pause-remote-cleanup.json`：
+目标无捕获进程/JAR且夹具已卸载，自己的SIGQUIT/tombstone已复制留证后精确移除。
+MDK x64崩溃二进制`/tmp/connect-pause-libmdk-x64.so`也留存，供后续符号/反汇编定位。
+原五项用户未跟踪文件未修改、未stage，没有push，完整目标仍active。

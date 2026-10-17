@@ -89,3 +89,21 @@ python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-re
 
 
 本批所有构建/测试结束后停止闲置Gradle、清理明确debug及过期测试产物59处，释放1373.8MiB、空闲62.6GiB；保留有效release/native hooks/CMake/Gradle、当前视频测试和模式不明的Flutter缓存。原始证据及最终APK继续放/tmp，没有重新全clean。
+
+
+## 合作暂停修复后的产物
+
+`91ae381`后仅捕获扩展JAR因两项真实暂停缺陷重建；普通APK构建仍直接嵌入提交产物，
+官方scrcpy JAR未改。当前ARM64签名release实际62.74秒、同模式--no-pub复建2.50秒，
+摘要一致，日志`/tmp/connect-pause-release{,-warm}.log`。签名身份仍为原证书，ZIP完整性、
+manifest、arm64 ELF及16KB ZIP对齐通过；另逐字节确认libinterop_bridge.so包含当前
+`b46cd074…`完整捕获JAR，`/tmp/connect-pause-release-artifact.json`。x64 debug也单独确认。
+
+当前`/tmp/connect-artifacts/connect-arm64-video-release.apk`为46,773,534字节，SHA-256
+`5ea20787311dec169eaed3a911b3a1c88eb7139947ff83de6e2190217e1fc9cb`。旧9411b4…包
+另存`connect-arm64-before-pause-gate-release.apk`。未在物理ARM手机运行；本批动态压力
+曾有MDK原生SIGABRT，仍须定位，不能把签名/整包验证或后续40循环成功称为稳定验收。
+
+本批清理382处明确debug输出，实际释放1488.5MiB、空闲62.5GiB，
+`/tmp/connect-pause-cleanup.json`；保留release/native hooks/Gradle/CMake及模式不明的
+Flutter缓存。原始结果、目标线程栈、主控tombstone及对应MDK x64二进制均留/tmp。
