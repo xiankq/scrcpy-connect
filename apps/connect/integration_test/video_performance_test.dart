@@ -187,11 +187,15 @@ void main() {
           'CONNECT_PERF_BIT_RATE',
           defaultValue: 2000000,
         );
+        const snapshotStress = int.fromEnvironment(
+          'CONNECT_PERF_SNAPSHOT_STRESS',
+        );
         expect(roundCount, inInclusiveRange(1, 20));
         expect(transitions, inInclusiveRange(2, 100));
         expect(maxSize, inInclusiveRange(320, 4096));
         expect(maxFps, inInclusiveRange(1, 120));
         expect(bitRate, inInclusiveRange(500000, 50000000));
+        expect(snapshotStress, inInclusiveRange(0, 10000));
         var converted = false;
         final textureKey = GlobalKey();
         for (var round = 0; round < roundCount; round++) {
@@ -298,6 +302,28 @@ void main() {
           );
           await tester.pump();
           await real(() async {
+            // Isolate renderer readback from pause/resume and disposal. Await
+            // every native completion: this deliberately never overlaps calls.
+            if (snapshotStress > 0) {
+              final watch = Stopwatch()..start();
+              for (var index = 0; index < snapshotStress; index++) {
+                final pixels = await player
+                    .snapshot(width: 64, height: 64)
+                    .timeout(const Duration(seconds: 3));
+                expect(pixels, isNotNull);
+                expect(pattern(pixels!.rgba, 64, 64), expected);
+                if ((index + 1) % 100 == 0 || index + 1 == snapshotStress) {
+                  final progress = {
+                    'round': round,
+                    'completed': index + 1,
+                    'elapsedMs': watch.elapsedMilliseconds,
+                  };
+                  evidence['snapshotStress'] = progress;
+                  // Preserve the last completed receipt even after SIGABRT.
+                  debugPrint('VIDEO_SNAPSHOT_STRESS ${jsonEncode(progress)}');
+                }
+              }
+            }
             final before = await request('media.status', {
               'relayId': ready['relayId'],
             });
