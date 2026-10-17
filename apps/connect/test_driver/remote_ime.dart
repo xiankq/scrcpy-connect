@@ -27,6 +27,30 @@ Future<void> main() async {
   final runId = DateTime.now().microsecondsSinceEpoch;
   final remoteDump = '/data/local/tmp/connect-remote-ime-$runId.xml';
   final checks = <Map<String, Object?>>[];
+  final captures = <Map<String, Object?>>[];
+  Future<void> capture(String device, String label) async {
+    final started = DateTime.now().toUtc();
+    final captured = await Process.run(adb, [
+      '-s',
+      device,
+      'exec-out',
+      'screencap',
+      '-p',
+    ], stdoutEncoding: null).timeout(const Duration(seconds: 15));
+    final bytes = captured.stdout as List<int>;
+    if (captured.exitCode != 0 ||
+        bytes.length < 8 ||
+        bytes.take(8).join(',') != '137,80,78,71,13,10,26,10') {
+      throw StateError('Could not capture the actual $label display.');
+    }
+    await File('${directory.path}/$label.png').writeAsBytes(bytes);
+    captures.add({
+      'label': label,
+      'startedAt': started.toIso8601String(),
+      'completedAt': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
   Future<String> shell(List<String> command) async {
     final result = await Process.run(adb, [
       '-s',
@@ -135,28 +159,14 @@ Future<void> main() async {
       );
     }
     if (stage == 'committed-once') {
-      for (final device in {
-        'controller': controller,
-        'target': target,
-      }.entries) {
-        final captured = await Process.run(adb, [
-          '-s',
-          device.value,
-          'exec-out',
-          'screencap',
-          '-p',
-        ], stdoutEncoding: null).timeout(const Duration(seconds: 15));
-        final bytes = captured.stdout as List<int>;
-        if (captured.exitCode != 0 ||
-            bytes.length < 8 ||
-            bytes.take(8).join(',') != '137,80,78,71,13,10,26,10') {
-          throw StateError(
-            'Could not capture the actual ${device.key} display.',
-          );
-        }
-        await File('${directory.path}/${device.key}-committed.png')
-            .writeAsBytes(bytes);
-      }
+      // Establish target pixels first. Accessibility text alone does not prove
+      // that Android has painted, nor that the remote decoder has caught up.
+      await capture(target, 'target-committed');
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+      await capture(controller, 'controller-committed');
+    } else if (stage == 'committed-still-once') {
+      await capture(target, 'target-settled');
+      await capture(controller, 'controller-settled');
     }
     final evidence = <String, Object?>{
       'stage': stage,
@@ -243,6 +253,7 @@ Future<void> main() async {
       await inspection;
       final metadata = {...?data}..remove('screenshots');
       metadata['independentEditTextChecks'] = checks;
+      metadata['displayCaptures'] = captures;
       metadata['inspectionError'] = inspectionError?.toString();
       await File('${directory.path}/result.json')
           .writeAsString(jsonEncode(metadata));
