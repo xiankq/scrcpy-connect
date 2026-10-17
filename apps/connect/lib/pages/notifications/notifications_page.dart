@@ -59,6 +59,12 @@ class NotificationsPage extends HookConsumerWidget {
 
           final notifications = objects(data['notifications'])
               .where((n) => !hidden.value.contains(value(n, 'id')))
+              .where(
+                (n) =>
+                    n['groupSummary'] != true ||
+                    value(n, 'title').trim().isNotEmpty ||
+                    value(n, 'body').trim().isNotEmpty,
+              )
               .toList();
           final state = value(data, 'status', 'unknown');
           if (notifications.isEmpty && state != 'available') {
@@ -113,7 +119,8 @@ class NotificationsPage extends HookConsumerWidget {
                 for (final notification in notifications)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: ContentPanel(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -164,13 +171,25 @@ class NotificationsPage extends HookConsumerWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 14),
-                          Text(
-                            value(notification, 'title'),
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(value(notification, 'body')),
+                          if (value(notification, 'title').isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            Text(
+                              value(notification, 'title'),
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ],
+                          if (value(notification, 'body').isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(value(notification, 'body')),
+                          ],
+                          if (value(notification, 'title').isEmpty &&
+                              value(notification, 'body').isEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              '此通知未提供预览内容',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                           const SizedBox(height: 14),
                           Wrap(
                             spacing: 12,
@@ -226,6 +245,8 @@ class NotificationsPage extends HookConsumerWidget {
                                 ),
                             ],
                           ),
+                          const SizedBox(height: 16),
+                          const Divider(height: 1),
                         ],
                       ),
                     ),

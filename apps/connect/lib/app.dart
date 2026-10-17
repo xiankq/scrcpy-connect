@@ -235,8 +235,8 @@ class ConnectApp extends HookConsumerWidget {
       'system' => ThemeMode.system,
       _ => ThemeMode.light,
     };
-    final lightTheme = useMemoized(() => ConnectTokens.theme(Brightness.light));
-    final darkTheme = useMemoized(() => ConnectTokens.theme(Brightness.dark));
+    final lightTheme = useMemoized(() => _appTheme(Brightness.light));
+    final darkTheme = useMemoized(() => _appTheme(Brightness.dark));
     return MaterialApp.router(
       title: '邻接',
       restorationScopeId: 'connect-app',
@@ -259,3 +259,16 @@ class ConnectApp extends HookConsumerWidget {
     );
   }
 }
+
+ThemeData _appTheme(Brightness brightness) =>
+    ConnectTokens.theme(brightness).copyWith(
+      actionIconTheme: ActionIconThemeData(
+        backButtonIconBuilder: (context) => Transform.flip(
+          flipX: Directionality.of(context) == TextDirection.rtl,
+          child: const Icon(LucideIcons.chevronLeft),
+        ),
+        closeButtonIconBuilder: (_) => const Icon(LucideIcons.x),
+        drawerButtonIconBuilder: (_) => const Icon(LucideIcons.menu),
+        endDrawerButtonIconBuilder: (_) => const Icon(LucideIcons.menu),
+      ),
+    );
