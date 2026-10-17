@@ -165,3 +165,5 @@
 
 
 - 2026-10-17后续实现：fb6b69d补发现/表单/Core的TLS类型与禁止降级；9f8448e统一专用页可见设备归属；ebd9bcb补有界跨页回复/未知提交保护、认证明确拒绝、权威恢复快照和容量回收；06a6c99加入独立受管Android原接收器。回复UI→原RemoteInput→独立原文/count1→离页保护→精确清除→过期route复制实际双AVD两轮约16秒通过，测试APK/通知/本次device已清理，最终轮文字基线恢复确认。旧裸shell receiver两次失败如实保留，未将fixture作为产品APK前提。Rust159默认通过/44忽略、App154、host3后续定向、clippy/严格分析/生成检查通过。最新旧TCP明确选择的产品19秒通过但HEVC仍230×512低清；目标保持active，完整差距与本轮边界见completion-reassessment第12/13节。
+
+- 2026-10-17继续交付：63ad1ca实像素门禁重现HEVC1280低清，真实页选1080后486×1080/21秒通过；0f8ef66共享系统通知及精确所有权，f425e31双AVD系统区发布/撤回/实际点击/内容呈现18秒通过，无被控测试APK、无hostErrors。Flutter174、Rust160默认/44忽略、clippy/严格分析/生成检查通过。原始失败、汇总重复提醒修复、夹具时序问题及AVD进程退出均独立记录；不视作完整恢复或视觉通过。完整差距见completion-reassessment第12.2/14节，目标active。

@@ -36,3 +36,5 @@ Requirements: R03、R17–R18、R20–R22、R39
 完整真实UI闭环、故障/旧API/安全授权/物理USB/HAL/热功耗未完成；缺完成回执的验收假绿本轮修复。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
+
+补实像素1280负例与1080真实页通过；新增主控真实HOME/两条通用OS通知/精确撤回/保留2101/真实SystemUI点击/当前内容呈现18秒，失败与清理回执均留tmp。Flutter174、Rust160默认通过/44忽略，当前证据不代替权限/锁屏/OEM/物理通话或进程恢复。见[运行](../../../docs/implementation/validation.md#画质实像素与主控系统通知)。

@@ -330,3 +330,64 @@ Rust工作区159 passed/44 ignored（`/tmp/connect-context-rust.log`）、all-ta
 
 
 最终另启动普通`lib/main.dart`并实际热重启，返回`Restarted application in 1,363ms`；截图`/tmp/connect-context-hot-restart.png`仅在tmp，随后detach。FRB在旧isolate切换期间仍打印两条投递失败提示，未将启动截图当成资源回收或进程恢复全部通过。
+
+## 画质实像素与主控系统通知
+
+代码批次：`63ad1ca`增加真实产品画质门禁；`0f8ef66`接入共享系统提醒、权限状态和通知所有权，补汇总项元数据。使用当前Android16双AVD，主控5554、目标5556，准备好的旧TCP端点15556；没有把本轮当首次配对授权验收。
+
+### 画质检查
+
+`product_flow_test.dart`增加可选的请求尺寸和实际码流/解码长边门禁。真实画质页选1280，保存及请求都为1280，码流与解码均230×512：`/tmp/connect-resolution-red-verified.log`实际失败，回执productAcceptanceComplete=false。最初重复文本定位失败只算夹具错误，不算产品红。
+
+已有[HEVC专项研究](../research/hevc-emulator-constraints.md)已定位目标软件编码器约束，因此未继续改播放器或统一硬编码HEVC策略。仅通过真实产品页面选择1080，`/tmp/connect-resolution-1080.log`完整21秒通过，码流/解码均486×1080，H265保持所选格式。两份remote-live原图均已目视，文字和线条明显改善；1280的退化仍未通过，不以此关闭完整延迟/资源或所有设备画质。
+
+运行目录`apps/connect`，用普通产品driver；在既有地址/端口/transport定义后增加：
+
+```sh
+--dart-define=CONNECT_E2E_VIDEO_MAX_SIZE=1080 \
+--dart-define=CONNECT_E2E_MIN_VIDEO_EDGE=1080
+```
+
+严格1280负例则两个定义都设1280。结果和图仅在`/tmp/connect-e2e/resolution-{red-verified,1080}/`，未放入designs。
+
+### 系统提醒的红绿与真实缺陷
+
+共享协调器14项、App生命周期1项和host报告5项定向20项通过。覆盖基线/更新/撤回、来电状态、权限及渠道、点击不发远端动作、旧代次、stop/resync、迟到show/dispose、截断容量淘汰、初始化和重复启动回调。独立只读审查发现并修复：
+
+- App只在build中传生命周期，暂停前没有下一帧会漏提醒。公开App widget实际红为expected1/actual[]，日志`/tmp/connect-system-notifications-lifecycle-red.log`；改同步生命周期回调后通过。
+- 1000项截断合并淘汰旧元数据却没有撤回旧OS项。精确重现后补先撤回后淘汰；旧guard移除时的失败及恢复后通过由实施代理记录，主代理复核最终代码和全量结果。
+
+首次真实通知验收不是绿：两条source已发布，但目标Android自动汇总更新被另作提醒，导致点击阶段有多余候选。安全元数据证据在`/tmp/connect-system-notifications-summary-metadata.log`，确有GROUP_SUMMARY/AUTOGROUP_SUMMARY。补`groupSummary`快照字段、共享策略不额外提醒汇总项（原列表和动作仍保留）；新回归先红，expected1/actual2，见`/tmp/connect-system-notifications-summary-red.log`，修复后20项通过`/tmp/connect-system-notifications-summary-green.log`。
+
+临时JAR按源码构建，新SHA256为`4a3082a8c4bcfe2a83293136dae513a0d5f9436bbe4f3db353c7b95341c28960`，已同步Rust校验和构建说明。没有给被控安装APK，也没有新增主控Kotlin通知业务。
+
+首轮失败后后台验收等待Flutter帧阻止finally推进，主代理将该既有主控Activity带回前台后完成精确清理，失败回执保留。验收改为不依赖帧的有期限ack，并在host失败时返回主控帮助清理；下一轮因Activity切换瞬间无resumed记录被过早判失败，改为等待真实稳定前台记录。`system-notifications-real`与`system-notifications-final`回执均false且清理确认，不冒记通过。
+
+### 双AVD实际系统通知
+
+`/tmp/connect-system-notifications-verified.log`17秒完整退出0；独立host记录两条真实远端shell通知→两条主控OS项，标题“设备有新通知”、正文“请打开邻接查看”，没有source正文；精确撤回A，B及既有2101保持；真实SystemUI展开/点击B后进入对应NotificationsPage，B的id/revision、目标前台、远控会话和回复状态不变；最终精确清理源及镜像，hostErrors=[]，systemNotificationsComplete=true。
+
+这条流程通过的是公开系统源通知，未安装测试APK。远端命令“没有尝试执行”的证据来自协调器公开测试；真实E2E独立证明源/任务/前台结果，未声称可从OS日志逐一计数所有不可见命令。权限为该AVD实际允许状态，不代表拒绝/渠道关闭/锁屏/OEM已实测。
+
+第一份opened截图仍在加载帧，未当作内容视觉通过；因此补“实际看到仍有效的source标题且无loading，撤回项消失”的UI门禁后重跑。此时主控AVD从ADB及qemu进程表都已消失，原因未确定；只重启同一interop-controller，未wipe，保留数据，boot_completed=1后继续。该环境退出不算产品进程恢复通过。
+
+完整运行命令，目录`apps/connect`，PATH含本机Rust/Flutter：
+
+```sh
+rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
+  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/system-notifications-content-verified \
+  flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/system_notifications.dart \
+  --target=integration_test/system_notifications_test.dart \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+  --dart-define=CONNECT_E2E_PORT=15556
+```
+
+当前Flutter全量174通过（`/tmp/connect-system-notifications-app-verified.log`），Rust工作区160 passed/44 ignored、37组（`/tmp/connect-system-notifications-rust.log`），最终all-target clippy通过（`/tmp/connect-system-notifications-clippy-final.log`），严格分析无问题（`/tmp/connect-system-notifications-analysis-verified.log`）、生成only-check退出0（`/tmp/connect-system-notifications-generated-check.log`）。前次全量background_test因新增开关出现多个Switch的定位错误已改为具体产品标签；原操作次数和顺序断言保留。
+
+补齐内容门禁后的最终轮`/tmp/connect-system-notifications-content-verified.log`18秒完整退出0，runId为`0e1ae9ba0384e3195d245688ed4be382`；回执systemNotificationsComplete=true、hostErrors=[]及精确清理确认。源B实际标题和正文已在UI出现，源A消失；最终opened及SystemUI截图已原生目视，输出仅在`/tmp/connect-e2e/system-notifications-content-verified/`。该图也明确暴露浅色页状态栏白色图标对比不足、空内容汇总卡及白卡材质，归A27/A29/任务18继续修；没有判整体视觉完成。
+
+实现边界见[主控系统提醒](system-notifications.md)。真实来电系统投递、锁屏、拒权/渠道关闭、冷启动点击和长时/进程停止、系统容量及汇总策略、Windows打包身份与四宿主整包仍开放。完整产品、Glass、输入、文件/相册保存、真实通话和恢复仍未完成。
+
+最后以普通`lib/main.dart`启动并实际发送R，回执`Restarted application in 1,373ms`；原生截图`/tmp/connect-system-notifications-hot-restart.png`已目视，随后detach保留应用。FRB旧isolate切换仍有两条投递失败提示，不以此判所有资源回收/恢复已完成。

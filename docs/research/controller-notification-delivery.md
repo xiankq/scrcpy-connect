@@ -102,3 +102,5 @@ Android普通提醒只需普通发布条件；`USE_FULL_SCREEN_INTENT`、录音�
 4. 来源撤回、断连、resync失败／成功、授权撤销、快速切换设备、更新后旧点击：只校验当前对象，不重放动作；晚回调不能恢复旧owner或发布旧通知。
 5. Windows MSIX身份下show/update/cancel和实际清理；未打包模式明确不承诺撤回。Apple权限关闭、预览及Notification Center表现分别验证。
 6. 关闭应用后不声称仍能接收；系统已有安全提醒的点击可进入应用，失效目标不执行操作。日志、payload、持久化存储不含敏感正文和OTP。
+
+后续实施已采用22.3.2并取得Android构建、公开系统源双AVD发布/撤回/点击证据；本报告前述“未执行”指研究当时，不覆盖后续交付。当前实现与尚未验证矩阵见[实现记录](../implementation/system-notifications.md)及[运行验证](../implementation/validation.md#画质实像素与主控系统通知)。

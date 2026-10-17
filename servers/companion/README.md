@@ -220,3 +220,5 @@ active/idle；安全审查发现它们无法可靠绑定具体通话，产品路
 文字剪贴板基线并移除本次设备记录。日志及截图仅在tmp，完整命令与边界见
 [验证记录](../../docs/implementation/validation.md)。这只证明该合成原接收器实际收到，
 不代表真实聊天应用、消息服务、锁屏/OEM或后台OS提醒已完成。
+
+后续为系统提醒补`groupSummary`安全元数据（公开FLAG_GROUP_SUMMARY）；汇总项仍保留原列表/动作，共享主控不额外提醒。新JAR由上述脚本构建并同步Rust摘要。双AVD无需测试APK即可实际验收系统源通知、主控HOME发布/精确撤回/真实通知栏点击，详见[最新验证](../../docs/implementation/validation.md#画质实像素与主控系统通知)。
