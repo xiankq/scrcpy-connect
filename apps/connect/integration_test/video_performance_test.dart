@@ -203,6 +203,7 @@ void main() {
               'bitRate': 2000000,
             });
             session = stream['sessionId'] as String;
+            evidence['sessionId'] = session;
             evidence['quality'] = stream['quality'];
             evidence['coreStartMs'] = watch.elapsedMilliseconds;
             evidence['coreStartupTimingMs'] = stream['captureStartupTimingMs'];
@@ -420,47 +421,69 @@ void main() {
             converted = true;
           }
           await tester.pump();
-          final screenshot = await binding.takeScreenshot(
-            'video-performance-$round',
-          );
-          final imageCodec = await ui.instantiateImageCodec(
-            Uint8List.fromList(screenshot),
-          );
-          final frame = await imageCodec.getNextFrame();
-          try {
-            final rgba = await frame.image.toByteData();
-            final box =
-                textureKey.currentContext!.findRenderObject()! as RenderBox;
-            final origin = box.localToGlobal(Offset.zero);
-            final scaleX =
-                frame.image.width *
-                tester.view.devicePixelRatio /
-                tester.view.physicalSize.width;
-            final scaleY =
-                frame.image.height *
-                tester.view.devicePixelRatio /
-                tester.view.physicalSize.height;
-            final region = ui.Rect.fromLTWH(
-              origin.dx * scaleX,
-              origin.dy * scaleY,
-              box.size.width * scaleX,
-              box.size.height * scaleY,
+          // Android's integration screenshot helper acquires an ImageView frame
+          // before scheduling/waiting for the next Android frames. A successful
+          // copy can therefore still contain the preceding round's composition.
+          // Require actual new pixels within a bound; retain every stale capture.
+          final surfaceWatch = Stopwatch()..start();
+          final surfaceSamples = <VideoJson>[];
+          evidence['surfaceSamples'] = surfaceSamples;
+          for (var attempt = 0; attempt < 8; attempt++) {
+            final screenshot = await binding
+                .takeScreenshot(
+                  attempt == 0
+                      ? 'video-performance-$round'
+                      : 'video-performance-$round-retry-$attempt',
+                )
+                .timeout(const Duration(seconds: 3));
+            final imageCodec = await ui.instantiateImageCodec(
+              Uint8List.fromList(screenshot),
             );
-            expect(
-              pattern(
+            final frame = await imageCodec.getNextFrame();
+            try {
+              final rgba = await frame.image.toByteData();
+              final box =
+                  textureKey.currentContext!.findRenderObject()! as RenderBox;
+              final origin = box.localToGlobal(Offset.zero);
+              final scaleX =
+                  frame.image.width *
+                  tester.view.devicePixelRatio /
+                  tester.view.physicalSize.width;
+              final scaleY =
+                  frame.image.height *
+                  tester.view.devicePixelRatio /
+                  tester.view.physicalSize.height;
+              final region = ui.Rect.fromLTWH(
+                origin.dx * scaleX,
+                origin.dy * scaleY,
+                box.size.width * scaleX,
+                box.size.height * scaleY,
+              );
+              final actual = pattern(
                 rgba!.buffer.asUint8List(),
                 frame.image.width,
                 frame.image.height,
                 region: region,
-              ),
-              expected,
-              reason: 'The actual Flutter surface must show the newest target pattern.',
-            );
-            evidence['presentedCounter'] = expected;
-          } finally {
-            frame.image.dispose();
-            imageCodec.dispose();
+              );
+              surfaceSamples.add({
+                'counter': actual,
+                'elapsedMs': surfaceWatch.elapsedMilliseconds,
+              });
+              evidence['presentedCounter'] = actual;
+              if (actual == expected) break;
+            } finally {
+              frame.image.dispose();
+              imageCodec.dispose();
+            }
+            if (surfaceWatch.elapsed > const Duration(milliseconds: 1500))
+              break;
+            await tester.pump();
           }
+          expect(
+            evidence['presentedCounter'],
+            expected,
+            reason: 'The actual Flutter surface must show the newest target pattern within the bounded verification.',
+          );
           await tester.pumpWidget(const SizedBox.shrink());
           await tester.pump();
           await real(() async {
