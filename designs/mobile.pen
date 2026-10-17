@@ -2669,6 +2669,22 @@
               "name": "内容变体 / 快捷回复",
               "width": 330,
               "enabled": false
+            },
+            {
+              "id": "AcTwl",
+              "type": "ref",
+              "ref": "i7KAYB",
+              "name": "内容变体 / 应用打开方式",
+              "enabled": false,
+              "width": 330
+            },
+            {
+              "id": "LRUSF",
+              "type": "ref",
+              "ref": "fpyzr",
+              "name": "内容变体 / 独立窗口失败",
+              "enabled": false,
+              "width": 330
             }
           ]
         },
@@ -4283,6 +4299,166 @@
                   "content": "搜索"
                 }
               }
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "i7KAYB",
+          "x": 482,
+          "y": 2800,
+          "name": "面板内容 / 应用打开方式",
+          "reusable": true,
+          "width": 330,
+          "layout": "vertical",
+          "gap": "$space-sm",
+          "children": [
+            {
+              "id": "FWGMk",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "独立应用窗口",
+              "width": "fill_container",
+              "height": 76,
+              "descendants": {
+                "i9kceM": {
+                  "fill": "$accent-violet-soft"
+                },
+                "n4qgqg": {
+                  "icon": "app-window",
+                  "fill": "$accent-violet"
+                },
+                "nyAaN": {
+                  "content": "独立应用窗口"
+                },
+                "r3Anl": {
+                  "content": "接续真实任务，单实例可能迁移"
+                }
+              }
+            },
+            {
+              "id": "SjkIx",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "在手机屏幕打开",
+              "width": "fill_container",
+              "height": 76,
+              "descendants": {
+                "i9kceM": {
+                  "fill": "$accent-mint-soft"
+                },
+                "n4qgqg": {
+                  "icon": "smartphone",
+                  "fill": "$accent-mint"
+                },
+                "nyAaN": {
+                  "content": "在手机屏幕打开"
+                },
+                "r3Anl": {
+                  "content": "会切换手机当前前台应用"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "uCyMb",
+              "name": "独立窗口支持条件",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "独立窗口需 Android 10 及以上；较旧系统仅可在手机屏幕打开。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "id": "DV1Dq",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "取消打开",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "取消"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "fpyzr",
+          "x": 964,
+          "y": 2800,
+          "name": "面板内容 / 独立窗口失败转手机",
+          "reusable": true,
+          "width": 330,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "Y71txC",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "等待明确选择",
+              "width": "fill_container",
+              "height": 76,
+              "descendants": {
+                "i9kceM": {
+                  "fill": "$accent-amber-soft"
+                },
+                "n4qgqg": {
+                  "icon": "circle-alert",
+                  "fill": "$accent-amber"
+                },
+                "nyAaN": {
+                  "content": "尚未切换手机屏幕"
+                },
+                "r3Anl": {
+                  "content": "先确认，再继续；已有手机会话会复用"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "gZqbV",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "在手机屏幕继续",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "在手机屏幕继续"
+                }
+              }
+            },
+            {
+              "id": "G322Pm",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "返回应用列表",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "返回应用列表"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "kXg6R",
+              "name": "结果待核对保护",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "不会自动降级；启动结果待核对时，不会重复打开。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
             }
           ]
         }
@@ -7873,7 +8049,7 @@
                   "fill": "$secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "打开应用会继续手机上的真实任务。部分应用可能移入当前窗口。",
+                  "content": "点选应用后选择打开方式，再继续手机上的真实任务。",
                   "lineHeight": "$line-caption",
                   "fontFamily": "$font-caption",
                   "fontSize": "$size-caption",
@@ -33642,7 +33818,7 @@
                   "content": "此应用当前只支持一个任务"
                 },
                 "zLCqC": {
-                  "content": "在此打开会将手机上正在使用的地图移到互联会话。登录状态和当前内容继续保留。"
+                  "content": "在独立窗口打开可能将手机上正在使用的地图移到互联会话。登录状态与当前内容保留，不创建副本。"
                 }
               }
             },
@@ -33666,7 +33842,7 @@
               "width": "fill_container",
               "descendants": {
                 "gcunj": {
-                  "content": "改用手机屏幕"
+                  "content": "在手机屏幕打开"
                 }
               }
             },
@@ -33694,7 +33870,7 @@
                   "fill": "$secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "关闭互联窗口默认保留任务；实际返回位置按系统和应用支持。",
+                  "content": "在手机屏幕打开会切换手机当前前台应用；关闭窗口默认保留任务。",
                   "lineHeight": "$line-caption",
                   "fontFamily": "$font-caption",
                   "fontSize": "$size-caption",
@@ -34679,7 +34855,7 @@
       "x": 0,
       "y": 6134,
       "name": "分组 / 手机与应用",
-      "width": 4740,
+      "width": 5704,
       "height": 96,
       "fill": "$transparent",
       "layout": "vertical",
@@ -34709,7 +34885,7 @@
           "fill": "$secondary",
           "textGrowth": "fixed-width",
           "width": "fill_container",
-          "content": "沉浸全屏 · 应用任务、会话与就近工具 · 10 页",
+          "content": "沉浸全屏 · 应用打开方式、任务与失败确认 · 12 页",
           "lineHeight": "$line-caption",
           "fontFamily": "$font-caption",
           "fontSize": "$size-caption",
@@ -36672,6 +36848,1798 @@
           "name": "系统手势指示",
           "x": 129,
           "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "tch6A",
+      "x": 4820,
+      "y": 6230,
+      "name": "手机与应用 / 应用打开方式",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "s1b2rQ",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "type": "frame",
+          "id": "c2Jf86",
+          "x": 24,
+          "y": 62,
+          "name": "页面标题",
+          "width": 354,
+          "height": 76,
+          "layout": "vertical",
+          "gap": "$space-xs",
+          "children": [
+            {
+              "type": "frame",
+              "id": "NVdXY",
+              "name": "标题与导航",
+              "width": "fill_container",
+              "height": 44,
+              "gap": "$space-sm",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "U8dSu",
+                  "name": "chevron-left 操作",
+                  "width": 44,
+                  "height": 44,
+                  "fill": [
+                    "$glass",
+                    {
+                      "type": "gradient",
+                      "gradientType": "linear",
+                      "enabled": true,
+                      "rotation": 45,
+                      "size": {
+                        "height": 1
+                      },
+                      "colors": [
+                        {
+                          "color": "$glass-shine",
+                          "position": 0
+                        },
+                        {
+                          "color": "$transparent",
+                          "position": 0.48
+                        },
+                        {
+                          "color": "$glass-reflection",
+                          "position": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "cornerRadius": "$radius-full",
+                  "stroke": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 45,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "$glass-edge",
+                        "position": 0
+                      },
+                      {
+                        "color": "$glass-edge",
+                        "position": 0.28
+                      },
+                      {
+                        "color": "$glass-low-edge",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "strokeWidth": "$space-hairline",
+                  "strokeAlignment": "inner",
+                  "effect": [
+                    {
+                      "type": "background_blur",
+                      "radius": "$glass-blur"
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "$shadow",
+                      "offset": {
+                        "x": 0,
+                        "y": "$glass-shadowOffset"
+                      },
+                      "blur": "$glass-shadowBlur"
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "inner",
+                      "color": "$glass-edge",
+                      "offset": {
+                        "x": 0,
+                        "y": "$space-hairline"
+                      },
+                      "blur": "$space-micro"
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "inner",
+                      "color": "$glass-low-edge",
+                      "offset": {
+                        "x": 0,
+                        "y": -1
+                      },
+                      "blur": "$space-hairline"
+                    }
+                  ],
+                  "layout": "vertical",
+                  "gap": "$space-zero",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "dXKfX",
+                      "name": "chevron-left",
+                      "width": 22,
+                      "height": 22,
+                      "icon": "chevron-left",
+                      "library": "lucide",
+                      "fill": "$text"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "IDjxV",
+                  "name": "手机应用",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "手机应用",
+                  "lineHeight": "$line-title",
+                  "fontFamily": "$font-title",
+                  "fontSize": "$size-title",
+                  "fontWeight": "$weight-title"
+                },
+                {
+                  "type": "frame",
+                  "id": "dpP9x",
+                  "name": "ellipsis 操作",
+                  "width": 44,
+                  "height": 44,
+                  "fill": [
+                    "$glass",
+                    {
+                      "type": "gradient",
+                      "gradientType": "linear",
+                      "enabled": true,
+                      "rotation": 45,
+                      "size": {
+                        "height": 1
+                      },
+                      "colors": [
+                        {
+                          "color": "$glass-shine",
+                          "position": 0
+                        },
+                        {
+                          "color": "$transparent",
+                          "position": 0.48
+                        },
+                        {
+                          "color": "$glass-reflection",
+                          "position": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "cornerRadius": "$radius-full",
+                  "stroke": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 45,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "$glass-edge",
+                        "position": 0
+                      },
+                      {
+                        "color": "$glass-edge",
+                        "position": 0.28
+                      },
+                      {
+                        "color": "$glass-low-edge",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "strokeWidth": "$space-hairline",
+                  "strokeAlignment": "inner",
+                  "effect": [
+                    {
+                      "type": "background_blur",
+                      "radius": "$glass-blur"
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "$shadow",
+                      "offset": {
+                        "x": 0,
+                        "y": "$glass-shadowOffset"
+                      },
+                      "blur": "$glass-shadowBlur"
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "inner",
+                      "color": "$glass-edge",
+                      "offset": {
+                        "x": 0,
+                        "y": "$space-hairline"
+                      },
+                      "blur": "$space-micro"
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "inner",
+                      "color": "$glass-low-edge",
+                      "offset": {
+                        "x": 0,
+                        "y": -1
+                      },
+                      "blur": "$space-hairline"
+                    }
+                  ],
+                  "layout": "vertical",
+                  "gap": "$space-zero",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "iOVmv",
+                      "name": "ellipsis",
+                      "width": 22,
+                      "height": 22,
+                      "icon": "ellipsis",
+                      "library": "lucide",
+                      "fill": "$text"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "ofM0S",
+              "name": "Pixel 9 Pro · 接续手机上的应用",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Pixel 9 Pro · 接续手机上的应用",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "uyNI9",
+          "x": 24,
+          "y": 138,
+          "name": "页面内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "type": "frame",
+              "id": "bcOpi",
+              "name": "搜索",
+              "width": "fill_container",
+              "height": 44,
+              "fill": [
+                "$glass",
+                {
+                  "type": "gradient",
+                  "gradientType": "linear",
+                  "enabled": true,
+                  "rotation": 45,
+                  "size": {
+                    "height": 1
+                  },
+                  "colors": [
+                    {
+                      "color": "$glass-shine",
+                      "position": 0
+                    },
+                    {
+                      "color": "$transparent",
+                      "position": 0.48
+                    },
+                    {
+                      "color": "$glass-reflection",
+                      "position": 1
+                    }
+                  ]
+                }
+              ],
+              "cornerRadius": "$radius-full",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 45,
+                "size": {
+                  "height": 1
+                },
+                "colors": [
+                  {
+                    "color": "$glass-edge",
+                    "position": 0
+                  },
+                  {
+                    "color": "$glass-edge",
+                    "position": 0.28
+                  },
+                  {
+                    "color": "$glass-low-edge",
+                    "position": 1
+                  }
+                ]
+              },
+              "strokeWidth": "$space-hairline",
+              "strokeAlignment": "inner",
+              "effect": [
+                {
+                  "type": "background_blur",
+                  "radius": "$glass-blur"
+                },
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "$shadow",
+                  "offset": {
+                    "x": 0,
+                    "y": "$glass-shadowOffset"
+                  },
+                  "blur": "$glass-shadowBlur"
+                },
+                {
+                  "type": "shadow",
+                  "shadowType": "inner",
+                  "color": "$glass-edge",
+                  "offset": {
+                    "x": 0,
+                    "y": "$space-hairline"
+                  },
+                  "blur": "$space-micro"
+                },
+                {
+                  "type": "shadow",
+                  "shadowType": "inner",
+                  "color": "$glass-low-edge",
+                  "offset": {
+                    "x": 0,
+                    "y": -1
+                  },
+                  "blur": "$space-hairline"
+                }
+              ],
+              "gap": "$space-xs",
+              "padding": [
+                "$space-xs",
+                "$space-md"
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "a9ggqZ",
+                  "name": "search",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "search",
+                  "library": "lucide",
+                  "fill": "$secondary"
+                },
+                {
+                  "type": "text",
+                  "id": "ipAjL",
+                  "name": "搜索手机应用",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "搜索手机应用",
+                  "lineHeight": "$line-label",
+                  "fontFamily": "$font-label",
+                  "fontSize": "$size-label",
+                  "fontWeight": "$weight-label"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "AznUR",
+              "name": "最近使用",
+              "width": "fill_container",
+              "gap": "$space-sm",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "HGLCx",
+                  "name": "最近使用",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "最近使用",
+                  "lineHeight": "$line-heading",
+                  "fontFamily": "$font-heading",
+                  "fontSize": "$size-heading",
+                  "fontWeight": "$weight-heading"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "psj9l",
+              "name": "手机应用快捷入口",
+              "width": "fill_container",
+              "gap": "$space-sm",
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "bd2bD",
+                  "name": "笔记",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "XsVMo",
+                      "name": "笔记 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": [
+                        "$accent-violet-soft",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "cornerRadius": "$radius-md",
+                      "stroke": {
+                        "type": "gradient",
+                        "gradientType": "linear",
+                        "enabled": true,
+                        "rotation": 45,
+                        "size": {
+                          "height": 1
+                        },
+                        "colors": [
+                          {
+                            "color": "$glass-edge",
+                            "position": 0
+                          },
+                          {
+                            "color": "$glass-edge",
+                            "position": 0.28
+                          },
+                          {
+                            "color": "$glass-low-edge",
+                            "position": 1
+                          }
+                        ]
+                      },
+                      "strokeWidth": "$space-hairline",
+                      "strokeAlignment": "inner",
+                      "effect": [
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": "$space-hairline"
+                          },
+                          "blur": "$space-micro"
+                        },
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-low-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": -1
+                          },
+                          "blur": "$space-hairline"
+                        }
+                      ],
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "bNvCj",
+                          "name": "notebook-pen",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "notebook-pen",
+                          "library": "lucide",
+                          "fill": "$accent-violet"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "oz3S2",
+                      "name": "笔记",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "笔记",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "s7iuA",
+                  "name": "消息",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "A2Aci",
+                      "name": "消息 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": [
+                        "$accent-violet-soft",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "cornerRadius": "$radius-md",
+                      "stroke": {
+                        "type": "gradient",
+                        "gradientType": "linear",
+                        "enabled": true,
+                        "rotation": 45,
+                        "size": {
+                          "height": 1
+                        },
+                        "colors": [
+                          {
+                            "color": "$glass-edge",
+                            "position": 0
+                          },
+                          {
+                            "color": "$glass-edge",
+                            "position": 0.28
+                          },
+                          {
+                            "color": "$glass-low-edge",
+                            "position": 1
+                          }
+                        ]
+                      },
+                      "strokeWidth": "$space-hairline",
+                      "strokeAlignment": "inner",
+                      "effect": [
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": "$space-hairline"
+                          },
+                          "blur": "$space-micro"
+                        },
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-low-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": -1
+                          },
+                          "blur": "$space-hairline"
+                        }
+                      ],
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "yuy48",
+                          "name": "message-circle",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "message-circle",
+                          "library": "lucide",
+                          "fill": "$accent-violet"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "SPDFp",
+                      "name": "消息",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "消息",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KVAcJ",
+                  "name": "浏览器",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "MYIAm",
+                      "name": "浏览器 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-md",
+                      "stroke": "$muted",
+                      "strokeWidth": "$space-hairline",
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "QAD0P",
+                          "name": "globe",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "globe",
+                          "library": "lucide",
+                          "fill": "$text"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "u0sJw",
+                      "name": "浏览器",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "浏览器",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "BLPzU",
+                  "name": "音乐",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "R59cTm",
+                      "name": "音乐 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-md",
+                      "stroke": "$muted",
+                      "strokeWidth": "$space-hairline",
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "tK1fv",
+                          "name": "music-2",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "music-2",
+                          "library": "lucide",
+                          "fill": "$text"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Ogv26",
+                      "name": "音乐",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "音乐",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "DDPda",
+              "name": "全部应用",
+              "width": "fill_container",
+              "gap": "$space-sm",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "deWri",
+                  "name": "全部应用",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "全部应用",
+                  "lineHeight": "$line-heading",
+                  "fontFamily": "$font-heading",
+                  "fontSize": "$size-heading",
+                  "fontWeight": "$weight-heading"
+                },
+                {
+                  "type": "text",
+                  "id": "QTOOU",
+                  "name": "按名称",
+                  "fill": "$secondary",
+                  "content": "按名称",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "btetZ",
+              "name": "手机应用快捷入口",
+              "width": "fill_container",
+              "gap": "$space-sm",
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "sf4ku",
+                  "name": "文件",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "wjEPC",
+                      "name": "文件 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": [
+                        "$accent-amber-soft",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "cornerRadius": "$radius-md",
+                      "stroke": {
+                        "type": "gradient",
+                        "gradientType": "linear",
+                        "enabled": true,
+                        "rotation": 45,
+                        "size": {
+                          "height": 1
+                        },
+                        "colors": [
+                          {
+                            "color": "$glass-edge",
+                            "position": 0
+                          },
+                          {
+                            "color": "$glass-edge",
+                            "position": 0.28
+                          },
+                          {
+                            "color": "$glass-low-edge",
+                            "position": 1
+                          }
+                        ]
+                      },
+                      "strokeWidth": "$space-hairline",
+                      "strokeAlignment": "inner",
+                      "effect": [
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": "$space-hairline"
+                          },
+                          "blur": "$space-micro"
+                        },
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-low-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": -1
+                          },
+                          "blur": "$space-hairline"
+                        }
+                      ],
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "sagHq",
+                          "name": "folder",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "folder",
+                          "library": "lucide",
+                          "fill": "$accent-amber"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "t33YGL",
+                      "name": "文件",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "文件",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AuIWz",
+                  "name": "相册",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "S2l2z3",
+                      "name": "相册 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": [
+                        "$accent-coral-soft",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "cornerRadius": "$radius-md",
+                      "stroke": {
+                        "type": "gradient",
+                        "gradientType": "linear",
+                        "enabled": true,
+                        "rotation": 45,
+                        "size": {
+                          "height": 1
+                        },
+                        "colors": [
+                          {
+                            "color": "$glass-edge",
+                            "position": 0
+                          },
+                          {
+                            "color": "$glass-edge",
+                            "position": 0.28
+                          },
+                          {
+                            "color": "$glass-low-edge",
+                            "position": 1
+                          }
+                        ]
+                      },
+                      "strokeWidth": "$space-hairline",
+                      "strokeAlignment": "inner",
+                      "effect": [
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": "$space-hairline"
+                          },
+                          "blur": "$space-micro"
+                        },
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-low-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": -1
+                          },
+                          "blur": "$space-hairline"
+                        }
+                      ],
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "TbOBp",
+                          "name": "images",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "images",
+                          "library": "lucide",
+                          "fill": "$accent-coral"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "nPLjD",
+                      "name": "相册",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "相册",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nfBPz",
+                  "name": "电话",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "f3wjk",
+                      "name": "电话 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": [
+                        "$accent-mint-soft",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "cornerRadius": "$radius-md",
+                      "stroke": {
+                        "type": "gradient",
+                        "gradientType": "linear",
+                        "enabled": true,
+                        "rotation": 45,
+                        "size": {
+                          "height": 1
+                        },
+                        "colors": [
+                          {
+                            "color": "$glass-edge",
+                            "position": 0
+                          },
+                          {
+                            "color": "$glass-edge",
+                            "position": 0.28
+                          },
+                          {
+                            "color": "$glass-low-edge",
+                            "position": 1
+                          }
+                        ]
+                      },
+                      "strokeWidth": "$space-hairline",
+                      "strokeAlignment": "inner",
+                      "effect": [
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": "$space-hairline"
+                          },
+                          "blur": "$space-micro"
+                        },
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-low-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": -1
+                          },
+                          "blur": "$space-hairline"
+                        }
+                      ],
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "LUPuV",
+                          "name": "phone",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "phone",
+                          "library": "lucide",
+                          "fill": "$accent-mint"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "VDKGu",
+                      "name": "电话",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "电话",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "TXri6",
+                  "name": "设置",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "OABUQ",
+                      "name": "设置 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-md",
+                      "stroke": "$muted",
+                      "strokeWidth": "$space-hairline",
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "wEycx",
+                          "name": "settings",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "settings",
+                          "library": "lucide",
+                          "fill": "$text"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "mhg3d",
+                      "name": "设置",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "设置",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "cNT9A",
+              "name": "手机应用快捷入口",
+              "width": "fill_container",
+              "gap": "$space-sm",
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ZeTMp",
+                  "name": "日历",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "doz4N",
+                      "name": "日历 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-md",
+                      "stroke": "$muted",
+                      "strokeWidth": "$space-hairline",
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "W8pD0",
+                          "name": "calendar-days",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "calendar-days",
+                          "library": "lucide",
+                          "fill": "$text"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "J8NUOo",
+                      "name": "日历",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "日历",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "f8vB9b",
+                  "name": "笔记",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "F4yZaO",
+                      "name": "笔记 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": [
+                        "$accent-violet-soft",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "cornerRadius": "$radius-md",
+                      "stroke": {
+                        "type": "gradient",
+                        "gradientType": "linear",
+                        "enabled": true,
+                        "rotation": 45,
+                        "size": {
+                          "height": 1
+                        },
+                        "colors": [
+                          {
+                            "color": "$glass-edge",
+                            "position": 0
+                          },
+                          {
+                            "color": "$glass-edge",
+                            "position": 0.28
+                          },
+                          {
+                            "color": "$glass-low-edge",
+                            "position": 1
+                          }
+                        ]
+                      },
+                      "strokeWidth": "$space-hairline",
+                      "strokeAlignment": "inner",
+                      "effect": [
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": "$space-hairline"
+                          },
+                          "blur": "$space-micro"
+                        },
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-low-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": -1
+                          },
+                          "blur": "$space-hairline"
+                        }
+                      ],
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "YFu8X",
+                          "name": "notebook-pen",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "notebook-pen",
+                          "library": "lucide",
+                          "fill": "$accent-violet"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "OxUsA",
+                      "name": "笔记",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "笔记",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yDeQK",
+                  "name": "消息",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "xubRh",
+                      "name": "消息 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": [
+                        "$accent-violet-soft",
+                        {
+                          "type": "gradient",
+                          "gradientType": "linear",
+                          "enabled": true,
+                          "rotation": 45,
+                          "size": {
+                            "height": 1
+                          },
+                          "colors": [
+                            {
+                              "color": "$glass-shine",
+                              "position": 0
+                            },
+                            {
+                              "color": "$transparent",
+                              "position": 0.48
+                            },
+                            {
+                              "color": "$glass-reflection",
+                              "position": 1
+                            }
+                          ]
+                        }
+                      ],
+                      "cornerRadius": "$radius-md",
+                      "stroke": {
+                        "type": "gradient",
+                        "gradientType": "linear",
+                        "enabled": true,
+                        "rotation": 45,
+                        "size": {
+                          "height": 1
+                        },
+                        "colors": [
+                          {
+                            "color": "$glass-edge",
+                            "position": 0
+                          },
+                          {
+                            "color": "$glass-edge",
+                            "position": 0.28
+                          },
+                          {
+                            "color": "$glass-low-edge",
+                            "position": 1
+                          }
+                        ]
+                      },
+                      "strokeWidth": "$space-hairline",
+                      "strokeAlignment": "inner",
+                      "effect": [
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": "$space-hairline"
+                          },
+                          "blur": "$space-micro"
+                        },
+                        {
+                          "type": "shadow",
+                          "shadowType": "inner",
+                          "color": "$glass-low-edge",
+                          "offset": {
+                            "x": 0,
+                            "y": -1
+                          },
+                          "blur": "$space-hairline"
+                        }
+                      ],
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "oIcXN",
+                          "name": "message-circle",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "message-circle",
+                          "library": "lucide",
+                          "fill": "$accent-violet"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "X8w30",
+                      "name": "消息",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "消息",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qTwLk",
+                  "name": "浏览器",
+                  "width": "fill_container",
+                  "height": 84,
+                  "layout": "vertical",
+                  "gap": "$space-xs",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LP3VL",
+                      "name": "浏览器 图标",
+                      "width": 52,
+                      "height": 52,
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-md",
+                      "stroke": "$muted",
+                      "strokeWidth": "$space-hairline",
+                      "layout": "vertical",
+                      "gap": "$space-sm",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "JtIbv",
+                          "name": "globe",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "globe",
+                          "library": "lucide",
+                          "fill": "$text"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "xDBlz",
+                      "name": "浏览器",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "浏览器",
+                      "lineHeight": "$line-caption",
+                      "textAlign": "center",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ZVk6S",
+              "name": "状态说明",
+              "width": "fill_container",
+              "fill": "$transparent",
+              "cornerRadius": "$radius-md",
+              "gap": "$space-xs",
+              "padding": "$space-sm",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "W5Qnyn",
+                  "name": "app-window",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "app-window",
+                  "library": "lucide",
+                  "fill": "$accent-violet"
+                },
+                {
+                  "type": "text",
+                  "id": "nUaAI",
+                  "name": "打开应用会继续手机上的真实任务。部分应用可能移入当前窗口。",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "点选应用后选择打开方式，不会立即启动。",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "wV0jG",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        },
+        {
+          "type": "frame",
+          "id": "tMIwg",
+          "x": 0,
+          "y": 0,
+          "name": "打开方式遮罩",
+          "width": 402,
+          "height": 874,
+          "fill": "$scrim",
+          "layout": "none"
+        },
+        {
+          "id": "ma1Sd",
+          "type": "ref",
+          "ref": "yLJek",
+          "name": "玻璃底部选择 / 消息",
+          "x": 12,
+          "y": 414,
+          "width": 378,
+          "height": 448,
+          "descendants": {
+            "iXFmW": {
+              "content": "打开「消息」"
+            },
+            "fSBvT": {
+              "content": "Pixel 9 Pro · 选择在哪里继续"
+            },
+            "kECNg": {
+              "enabled": false
+            },
+            "AcTwl": {
+              "enabled": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "qTeGO",
+      "x": 5302,
+      "y": 6230,
+      "name": "手机与应用 / 独立窗口失败转手机屏幕",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$media-ink",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "y6ftAR",
+          "type": "ref",
+          "ref": "JvYLh",
+          "name": "全屏会话 / 独立窗口失败",
+          "x": 0,
+          "y": 0,
+          "descendants": {
+            "oSXnL": {
+              "enabled": true
+            },
+            "HMt4c": {
+              "enabled": true,
+              "x": 12,
+              "y": 414,
+              "width": 378,
+              "height": 448
+            },
+            "HMt4c/iXFmW": {
+              "content": "无法打开独立窗口"
+            },
+            "HMt4c/fSBvT": {
+              "content": "Pixel 9 Pro 的消息窗口未能就绪。在手机屏幕继续会切换手机当前前台应用。"
+            },
+            "HMt4c/kECNg": {
+              "enabled": false
+            },
+            "HMt4c/LRUSF": {
+              "enabled": true
+            },
+            "YfvvN": {
+              "x": 338,
+              "y": 72
+            },
+            "PGEU5": {
+              "enabled": true
+            },
+            "wmxub": {
+              "icon": "circle-alert"
+            },
+            "kDjbk": {
+              "content": "上次画面 · 暂停输入"
+            }
+          }
         }
       ]
     }
