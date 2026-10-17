@@ -1,5 +1,8 @@
 # 视频首帧、持续新像素与阻塞恢复
 
+最新增量见[时钟括号与Surface输入实验](#时钟括号与surface输入实验2026-10-18)：
+已把动态等待范围收窄到目标绘制结束至主控payload读取之间，仍未达到严格性能门槛。
+
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
 ## 测量范围
@@ -789,3 +792,124 @@ Flutter整包或运行证据。Android本批由实际x64测试APK验证，既有
 `/tmp/connect-adb-read-cleanup.json`；保留release、native hooks、Gradle／CMake、未知
 Flutter模式缓存、原始性能／崩溃证据。被控无本批捕获进程，夹具已卸载；原五项用户
 未跟踪文件未纳入提交。任务07与完整目标继续开放。
+
+
+## 时钟括号与Surface输入实验（2026-10-18）
+
+这批是诊断和可撤回配置实验，没有默认帧率／后端变更，也没有重建scrcpy JAR。
+只重建独立目标测试夹具APK，以采集本次所需的双时钟读数；普通产品仍不向被控端安装APK。
+
+### 时钟定义、边界与拒绝条件
+
+`session.clock.probe`仅允许已有逐帧观测会话。Core用与WRTE／relay同一进程本地
+`monotonic_micros()`在ADB exec前、stdout完整EOF后分别采样a／b，固定执行
+`cat /proc/uptime`。包含启动shell、调度、传输和EOF全部开销，不减“shell开销”，
+不假设往返对称。整个操作限2秒、128字节，取消沿既有会话token；严格整数解析拒绝
+截断、错误文本、额外字段和溢出。它不是系统时钟同步服务，默认播放不执行这些命令。
+
+Linux `/proc/uptime`取BOOTTIME并截断到百分之一秒，因此读值u表示[u,u+10000)µs。
+[Linux v6.12实现](https://github.com/torvalds/linux/blob/v6.12/fs/proc/uptime.c)。
+目标夹具在input、onDraw起止分别读取elapsedRealtimeNanos／nanoTime／elapsedRealtimeNanos，
+形成真实调用顺序括号；不把onDraw记录或源PTS当作编码输出完成。
+[elapsedRealtimeNanos](https://developer.android.com/reference/android/os/SystemClock#elapsedRealtimeNanos())
+包含深度休眠，[nanoTime](https://developer.android.com/reference/java/lang/System#nanoTime())
+不包含；[Linux时钟区别](https://www.kernel.org/doc/html/latest/core-api/timekeeping.html)
+也不允许把BOOTTIME和MONOTONIC直接等同。AVD暂停／快照恢复不是已证明的Android休眠等价物。
+
+本轮以θ=target BOOTTIME−controller monotonic、δ=target BOOTTIME−target nanoTime
+为常数的条件模型求交。整数微秒截断余量先加入每个输入区间，再相交：
+
+```text
+θ_i ∈ [u − b − 1, u + 10000 − a + 1]
+δ_i ∈ [bootBefore − nano − 1, bootAfter − nano + 1]
+到达时刻R与目标绘制结束D的差：
+[R − D + θlo − δhi − 1, R − D + θhi − δlo + 1]
+```
+
+每轮输入前、输入循环后各三次probe，计时主体排除probe开销。探针会延长输入前的
+流水线预热，不能将不同测量代码前后的变化当严格单变量性能收益。
+缺失记录、回绕后sequence／counter不匹配、input→draw逆序、各括号逆序、交集为空、
+实际payload／完整包时间不在前后探针之间，均拒绝本轮分析并保存原始数据。
+夹具与主控进程重启、已知休眠／VM暂停／快照恢复／连接或捕获代次变化须另起采样轮；
+**非空交集不证明未暂停、时钟速率相同或没有未观察到的跳变**。没有引入未经证明的ppm界。
+
+源PTS另加“与目标nanoTime同原点、同速率”的假设才可代入同一式子。
+[BufferInfo契约](https://developer.android.com/reference/android/media/MediaCodec.BufferInfo#presentationTimeUs)
+只承诺对应输入时间标签，[pinned Streamer](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/device/Streamer.java)
+只是原样发送它。额外PTS假设不相容时保留draw边界、单列ptsCompatible=false，
+不把它伪装成所有校准失效，也不把正PTS年龄解释成纯编码耗时。
+
+### 实际双AVD与单变量配置
+
+同一持续运行双API36 x64 AVD，默认请求1280／60fps／8Mbps，实际576×1280，
+H264、AMediaCodec实际打开、音频关闭、持续动态夹具。每组两轮16次输入及2次暂停后输入；
+新计数、source PTS关联、18项目标时间线、真实Flutter截图、暂停恢复、停止纹理分离和
+夹具卸载完整。两组均驱动退出1，严格1000／200／300ms门槛失败，未提高门槛。
+
+| 指标 | 现有默认 | 仅Surface输入15fps |
+| --- | --- | --- |
+| 输入→snapshot P50／P95 | 1301／1701ms | 540／1567ms |
+| 完整首帧（两轮） | 3042／2606ms | 2685／2634ms |
+| 绘制结束→首payload，中位界，第1轮 | 961.535–1013.451ms | 563.377–625.829ms |
+| 同上，第2轮 | 957.489–1009.239ms | 161.409–202.680ms |
+| 校准区间宽，第1／2轮 | 51.916／51.750ms | 62.452／41.271ms |
+| 观测trace正PTS间隔中位，第1／2轮 | 47.510／47.078ms | 65.052／65.834ms |
+
+PTS间隔来自保留的有界trace，包含循环前启动／预热部分，不是60fps面板呈现证明，
+也不宣称15fps是重复帧在内的严格总输出上限。两组相同请求配置与解码尺寸；实际目标
+编码器仍是平台默认选择，没有取得固定厂商编码器的物理设备对照。
+默认输入→relay等待仍约1秒，主控首末WRTE已观测payload读取／消费／raw输出短，
+因此把主要范围收窄到目标绘制后、主控首payload读取前；无法单独区分Surface队列、
+编码计算／输出、服务端socket、adbd及更早网络缓冲。源PTS条件中位年龄两轮约
+891–943ms／888–940ms，不据此认定编码耗时。
+
+候选只在Rust启动参数的现有同一个逗号列表追加：
+
+```text
+max_fps=60
+video_codec_options=repeat-previous-frame-after:long=33334,max-fps-to-encoder:float=15
+```
+
+[固定SurfaceEncoder](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java)
+先设置max_fps，再应用codec options，因此覆盖生效；追加第二个video_codec_options
+会替换整份列表，不能这么做。[固定Options](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/Options.java)。
+该版本已设priority=0和latency=1；重复加相同值不算新优化。
+[Android Surface入口限帧契约](https://developer.android.com/reference/android/media/MediaFormat#KEY_MAX_FPS_TO_ENCODER)
+和[AOSP GraphicBufferSource](https://android.googlesource.com/platform/frameworks/av/+/d37e465f355b37efd6f0fac99a42991e5f88a3cb/media/module/bqhelper/GraphicBufferSource.cpp)
+说明过量源帧在入口丢弃。它也会降低后续socket／adbd压力；改善支持负载／排队方向，
+不唯一定位编码器。第1轮仍有1567ms长尾，不能只挑第2轮结果；暂停两轮各一次通过
+也不关闭已存在的MDK snapshot崩溃。候选已精确撤回，不加入默认产品。
+
+原始结果／实际截图／cleanup在`/tmp/connect-e2e/video-clock-{brackets,input15}/`，日志
+`/tmp/connect-video-clock-{brackets,input15}.log`。默认暂停373／176ms、恢复新像素524／638ms；
+候选204／227ms、612／574ms。两个组各18项目标事件完整。默认最终VIDEO2纹理已目视。
+
+复现使用上一节drive命令，加`CONNECT_E2E_VIDEO_TIMELINE=true`、
+`--dart-define=CONNECT_PERF_TRACE_FRAMES=true --dart-define=CONNECT_PERF_TRACE_CLOCK=true`；
+rounds=2、transitions=8、pauseCycles=1、maxSize1280／maxFps60／bitRate8000000，
+decoder=native。候选需临时添加上面唯一codec option，跑完还原；正常工程不保留该覆盖。
+
+Core实际exec/EOF括号与错误响应回归先红后绿，两项通过；Dart区间计算先红后绿，
+另用未来PTS而有效draw括号证明额外假设不覆盖主结论。最终检查及清理另见本批收尾。
+下一项应在Surface／编码输出／adbd边界区分积压，验证兼顾静态响应与动态负载的策略；
+不在已证明短的主控raw／relay段继续增加缓冲参数。
+
+
+本批收尾：代码提交`424c40a`。Core真实协议括号2项通过（0.04秒），日志
+`/tmp/connect-clock-core-final.log`；错误文本／截断／数值溢出均拒绝。Dart区间3项通过，
+`/tmp/connect-clock-bounds-green.log`；未来PTS不覆盖有效draw结论的真实红日志
+`/tmp/connect-clock-pts-assumption-red.log`先得到Expected true／Actual false。
+严格分析4.2秒无问题，`/tmp/connect-clock-bounds-analyze.log`；Core all-target clippy
+1.90秒及fmt通过，`/tmp/connect-clock-{clippy,fmt}-final.log`。最终helper重新分析两组
+原始报告，各16项draw区间／PTS相容检查通过，没有将原报告的性能false改成true。
+iOS／macOS／Windows Rust核心check分别0.97／0.94／0.96秒，
+`/tmp/connect-clock-{ios,macos,windows}.log`，不代表三宿主Flutter整包链接或运行。
+
+普通main在撤回临时15fps覆盖后重新构建55.7秒／安装601ms，实际VM热重载124ms成功、
+运行错误查询无Dart错误，随后detach；设备首页`/tmp/connect-clock-main.png`及两组
+VIDEO2实际纹理已目视。保留SurfaceSync、跳36帧与1441ms原生启动帧告警，未称启动达标。
+本批未生成新的签名ARM包或物理ARM运行证据。两JAR摘要与既有记录一致，完全未重建。
+停止Gradle后删除380处精确debug目录及debug APK／sha1，释放1488.8MiB，空闲60.3GiB；
+保留release／native hooks／Gradle／CMake缓存与原始性能／崩溃资料。
+`/tmp/connect-clock-cleanup.json`记录删除范围；被控独立核验无本批捕获进程，夹具包不存在。
+原五项用户未跟踪文件未动，未push。下一轮继续性能／首帧／稳定性，完整目标仍active。

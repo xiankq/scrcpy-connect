@@ -49,6 +49,14 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 相减；同目标onDraw回调也不是GPU／合成／物理呈现完成。
 [时钟定义、对照与边界](../../../docs/implementation/video-performance.md#目标输入绘制与源pts观测2026-10-18)。
 
+同时开启上述时间线、逐帧观测与`CONNECT_PERF_TRACE_CLOCK=true`，每轮输入循环前后
+各执行三次有界`session.clock.probe`。目标输入／绘制另保留BOOTTIME／nanoTime／BOOTTIME
+读数，驱动在`clockBounds`中保存带量化及往返误差的draw结束→payload区间。
+此分析以本轮连续运行、偏移稳定为条件；非空区间不证明没有VM暂停或时钟变化。
+源PTS同nanoTime时钟域另列假设，不把它当编码完成时间。探针开销在输入计时之外，
+仍会影响预热时间。缺失、逆序或不相容数据会保存报告并使观测验收失败。
+[算法、来源及实际结果](../../../docs/implementation/video-performance.md#时钟括号与surface输入实验2026-10-18)。
+
 从release切回E2E后，先在应用目录执行`flutter pub get --offline`恢复测试插件注册，
 再运行--no-pub drive；没有缓存时使用正常pub get。不要手改生成注册文件。
 默认高清80次、当前仍失败的1秒首帧门槛及原始证据见

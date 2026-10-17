@@ -125,3 +125,14 @@ ADB消费／raw分段已实施：默认关闭、256项上限、source PTS及捕�
 相减未同步时钟。Burst官方仍实验默认关闭，本库缺完整credit支持，待独立实施与A/B，
 没有只改banner。JAR未改，已有MDK崩溃继续开放。
 [实测与观测范围](../../../docs/implementation/video-performance.md#逐wrte接收与消费实测2026-10-18)。
+
+
+时钟括号后续：新增默认关闭的session.clock.probe，整个exec响应前后取同一主控时钟；
+目标夹具BOOTTIME／nanoTime三读数与每轮前后三次probe，按明确常offset条件及量化余量
+求区间，缺失／逆序／空交集拒绝，非空不证明无暂停。原始PTS额外假设单列。
+同双AVD默认动态16次输入，绘制结束→首payload两轮中位界962–1013／957–1009ms；
+主要范围收窄到此段，不能唯一归因编码器。仅Surface输入15fps、固定repeat33334µs
+候选的P50／P95=540／1567ms（默认1301／1701），第二轮draw→payload161–203ms，
+仍有首轮长尾及2.6秒首帧；支持负载／排队方向，候选已撤回，默认60fps和两个JAR不变。
+两组新像素／18项时间线／暂停恢复／呈现／停止／卸载完成，严格性能和MDK崩溃项仍开放。
+[模型、源码依据与真实结果](../../../docs/implementation/video-performance.md#时钟括号与surface输入实验2026-10-18)。
