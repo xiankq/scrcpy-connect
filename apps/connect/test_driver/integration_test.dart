@@ -103,6 +103,10 @@ void validateAcceptanceReport(
       metadata['audioAcceptanceComplete'] != true) {
     throw StateError('The app did not complete shared audio acceptance.');
   }
+  if (environment['CONNECT_E2E_EXIT_HANDLE'] == '1' &&
+      metadata['inwardExitHandleExpanded'] != true) {
+    throw StateError('The app did not complete inward exit handle acceptance.');
+  }
 }
 
 Future<void> triggerBackground(FlutterDriver driver) async {

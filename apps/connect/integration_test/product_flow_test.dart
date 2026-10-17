@@ -5,6 +5,7 @@ import 'package:scrcpy_connect/pages/device_details/device_details_page.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/diagnostics/diagnostics_page.dart';
 import 'package:scrcpy_connect/pages/quality/quality_page.dart';
+import 'package:scrcpy_connect/pages/connection_form/connection_form_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/files/files_page.dart';
@@ -126,8 +127,17 @@ void main() {
       await tester.tap(find.byTooltip('添加设备'));
       await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text('手动填写地址'));
-      await tester.pump(const Duration(milliseconds: 400));
+      await waitFor(
+        tester,
+        () => find.byType(ConnectionFormPage).evaluate().isNotEmpty,
+        reason: 'The actual connection form must finish its route loading.',
+      );
       if (transport == 'tcp') {
+        await waitFor(
+          tester,
+          () => find.text('现代无线调试（加密）').hitTestable().evaluate().isNotEmpty,
+          reason: 'The real transport selector must be reachable.',
+        );
         await tester.tap(find.text('现代无线调试（加密）'));
         await tester.pump(const Duration(milliseconds: 400));
         await tester.tap(find.text('旧版 TCP（USB 授权后开启）').last);
@@ -368,6 +378,22 @@ void main() {
         reason:
             'Tap must expand the collapsed control at $collapsedRect; current hit area is ${tester.getRect(handle)}.',
       );
+      await tester.drag(handle, const Offset(100, 20));
+      await tester.pump(const Duration(milliseconds: 1200));
+      expect(collapsed, findsOneWidget);
+      await tester.drag(collapsed, const Offset(-120, 0));
+      await tester.pump(const Duration(milliseconds: 1200));
+      expect(collapsed, findsNothing);
+      expect(
+        expanded,
+        findsOneWidget,
+        reason: 'Dragging inward must leave the exit button available.',
+      );
+      final inward = tester.getRect(expanded);
+      expect(inward.right, lessThan(viewport.width - 24));
+      await binding.takeScreenshot('remote-handle-inward-expanded');
+      binding.reportData!['inwardExitHandleExpanded'] = true;
+      expectHealthyRemote();
       await tester.tap(expanded);
       await waitFor(
         tester,
@@ -375,9 +401,18 @@ void main() {
         reason: 'Return must retain the session and return to the workspace.',
       );
       expect(find.text('打开手机屏幕'), findsOneWidget);
-      final retained = objects(
-        (await controller.request('session.list'))['sessions'],
-      ).singleWhere((item) => item['sessionId'] == session['sessionId']);
+      Json retained = {};
+      final pauseDeadline = DateTime.now().add(const Duration(seconds: 5));
+      do {
+        retained = objects(
+          (await controller.request('session.list'))['sessions'],
+        ).singleWhere((item) => item['sessionId'] == session['sessionId']);
+        if (retained['status'] == 'paused' &&
+            retained['capturePaused'] == true) {
+          break;
+        }
+        await tester.pump(const Duration(milliseconds: 100));
+      } while (DateTime.now().isBefore(pauseDeadline));
       expect(retained['status'], 'paused');
       expect(retained['capturePaused'], true);
       await tester.pump(const Duration(milliseconds: 500));

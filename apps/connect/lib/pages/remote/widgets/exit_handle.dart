@@ -29,33 +29,40 @@ class _ExitHandleState extends State<ExitHandle>
   bool collapsed = false;
   bool dragging = false;
   bool right = false;
+  bool dragStartedCollapsed = false;
+  double dragStartX = 0;
   Size viewport = Size.zero;
+  Rect dragBounds = Rect.zero;
+  double collapsedRight = 0;
   void activateControl() {
     animation.stop();
     if (!collapsed) {
       widget.onExit();
       return;
     }
-    final insets = MediaQuery.paddingOf(context);
     setState(() {
       collapsed = false;
       dragging = false;
       offset = Offset(
-        right ? viewport.width - 64 : 12,
-        offset.dy.clamp(
-          insets.top + 12,
-          math.max(insets.top + 12, viewport.height - insets.bottom - 64),
+        (right ? dragBounds.right - 12 : dragBounds.left + 12).clamp(
+          dragBounds.left,
+          dragBounds.right,
         ),
+        offset.dy.clamp(dragBounds.top, dragBounds.bottom),
       );
     });
   }
 
   void settle(DragEndDetails detail) {
     dragging = false;
-    final projected = offset.dx + detail.velocity.pixelsPerSecond.dx * .2;
-    right = projected > viewport.width / 2;
+    final movedInward = right ? offset.dx < dragStartX : offset.dx > dragStartX;
+    if (dragStartedCollapsed && movedInward) {
+      setState(() {});
+      return;
+    }
+    right = offset.dx > (dragBounds.left + dragBounds.right) / 2;
     collapsed = true;
-    final target = right ? viewport.width - 44 : 0.0;
+    final target = right ? collapsedRight : dragBounds.left;
     if (MediaQuery.disableAnimationsOf(context)) {
       setState(() {
         offset = Offset(target, offset.dy);
@@ -84,20 +91,26 @@ class _ExitHandleState extends State<ExitHandle>
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       viewport = constraints.biggest;
-      final insets = MediaQuery.paddingOf(context);
-      final dx = offset.dx
-          .clamp(0.0, math.max(0.0, viewport.width - 52))
-          .toDouble();
-      final dy = offset.dy
-          .clamp(
-            insets.top + 12,
-            math.max(insets.top + 12, viewport.height - insets.bottom - 64),
-          )
-          .toDouble();
+      final media = MediaQuery.of(context);
+      final padding = media.padding;
+      final gestures = media.systemGestureInsets;
+      final left = math.max(padding.left, gestures.left);
+      final rightInset = math.max(padding.right, gestures.right);
+      final top = math.max(padding.top, gestures.top) + 12;
+      final bottom = math.max(padding.bottom, gestures.bottom) + 12;
+      dragBounds = Rect.fromLTRB(
+        left,
+        top,
+        math.max(left, viewport.width - rightInset - 52),
+        math.max(top, viewport.height - bottom - 52),
+      );
+      collapsedRight = math.max(left, viewport.width - rightInset - 44);
+      final dx = offset.dx.clamp(dragBounds.left, dragBounds.right).toDouble();
+      final dy = offset.dy.clamp(dragBounds.top, dragBounds.bottom).toDouble();
       return Stack(
         children: [
           Positioned(
-            left: collapsed && right && !dragging ? viewport.width - 44 : dx,
+            left: collapsed && right && !dragging ? collapsedRight : dx,
             top: dy,
             width: collapsed && !dragging ? 44 : 52,
             height: 52,
@@ -113,6 +126,8 @@ class _ExitHandleState extends State<ExitHandle>
                 onPanStart: (_) {
                   animation.stop();
                   setState(() {
+                    dragStartedCollapsed = collapsed;
+                    dragStartX = dx;
                     dragging = true;
                     collapsed = false;
                     offset = Offset(dx, dy);
@@ -121,15 +136,12 @@ class _ExitHandleState extends State<ExitHandle>
                 onPanUpdate: (details) => setState(() {
                   offset = Offset(
                     (offset.dx + details.delta.dx).clamp(
-                      0,
-                      viewport.width - 52,
+                      dragBounds.left,
+                      dragBounds.right,
                     ),
                     (offset.dy + details.delta.dy).clamp(
-                      insets.top + 12,
-                      math.max(
-                        insets.top + 12,
-                        viewport.height - insets.bottom - 64,
-                      ),
+                      dragBounds.top,
+                      dragBounds.bottom,
                     ),
                   );
                 }),

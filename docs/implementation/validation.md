@@ -579,3 +579,13 @@ Rust默认工作区40套件163通过/47忽略（`/tmp/connect-first-pairing-rust
 - 严格分析首次失败于5处新增代码缺少花括号，修正后 `flutter analyze --no-pub --fatal-infos` 无问题；build_runner only-check 143输入10秒通过，Cargo格式及diff检查通过。本轮没有重新执行整个Rust workspace，不沿用上轮结果冒充本轮执行。
 - 普通lib/main.dart实际构建50.4秒、安装并启动，Impeller OpenGLES；CLI实际R热重启1,401ms，设备列表空态 `/tmp/connect-full-audit-main-restarted.png` 已目视，随后detach。仍有两条FRB旧isolate投递警告与SurfaceSync／跳帧日志；不登记为全部页面或低延迟通过。
 - Pencil同一文件同类别行新增应用打开方式tch6A及全屏失败主动继续qTeGO；保存关闭重开核对89页／12类／26母组件／557实例／153变量，无断链／缺变量／顶层重叠。主代理另看两张新页；导出只在`/tmp/app-window-design-reopen/`。设计批次`6d00d71`，静态稿不证明对应UI或全89页视觉验收完成。
+
+## 保存生命周期与退出把手复验（A44／A45）
+
+A44实施与运行边界见[内容交付](content-delivery.md)。公开Runtime账本13项通过（12.59秒）；Bridge全量102项通过；页面相关25项通过，独立审查发现admission拒绝后旧身份丢失、完整回执容量失败卡pending两条恢复路径，均另加真实先红后绿回归。持久化先于provider副作用，容量失败不静默淘汰未知／已保存，最小unknown恢复只写元数据。系统保存本地提交`e75bf60`。
+
+双AVD真实内容交付43秒通过，`/tmp/connect-delivery-journal-final.log`、`/tmp/connect-e2e/delivery-journal-final/result.json`。唯一原件63字节，SHA-256 `24517f80a3808bd472d8c1102db2a28ce93eea535b981e5bdaba66eefb863078`，系统取消／保存、完整离页后重进同一传输恢复saved、系统分享至独立receiver、content URI读授权及精确清理均有回执。重进截图已目视。首次`connect-delivery-journal-e2e.log`因路由时序失败：过渡旧页面误算重进，截图实际为文件详情，下一次分享点击未命中；已以旧页消失／当前路由完成／回执可见／命中门槛修正，不计首次通过。Android真实写入中杀进程和unknown恢复仍未验，公开Runtime重开不冒充该故障链路。
+
+A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、减少动态及安全区域／尺寸变化。真实产品流程25秒通过，`/tmp/connect-exit-inward-final.log`、`/tmp/connect-e2e/exit-inward-final/result.json`：通过实际连接表单及画质页选择1080，HEVC编码与实际解码486×1080，拖动收起／点击展开／再次收起／向内拖动保持展开／退出后会话暂停保留，严格host回执`inwardExitHandleExpanded:true`。对应截图已目视。实际命令在apps/connect使用`--driver=test_driver/integration_test.dart --target=integration_test/product_flow_test.dart`、`CONNECT_E2E_EXIT_HANDLE=1`及`--dart-define=CONNECT_E2E_VIDEO_MAX_SIZE=1080 --dart-define=CONNECT_E2E_MIN_VIDEO_EDGE=1080`，其余endpoint与内容测试相同。首次`connect-exit-inward-e2e.log`因连接表单尚未完成加载失败，补页面与可命中等待后复验；不是放松选择器／质量要求。
+
+本轮两AVD均使用已准备好的API36/secure=0 legacy TCP目标及host15556→5555。不是首次安全配对、物理USB、OEM、通话音频或全部89页验收。仍有SurfaceSync／跳帧及模拟器GLES／BufferQueue释放日志，不登记为性能或零告警通过。

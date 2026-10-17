@@ -35,6 +35,15 @@ void main(List<String> arguments) {
   validateAcceptanceReport({
     'productAcceptanceComplete': true,
   }, environment: const {});
+  rejects(
+    {'productAcceptanceComplete': true},
+    environment: {'CONNECT_E2E_EXIT_HANDLE': '1'},
+    reason: 'inward exit handle acceptance',
+  );
+  validateAcceptanceReport(
+    {'productAcceptanceComplete': true, 'inwardExitHandleExpanded': true},
+    environment: {'CONNECT_E2E_EXIT_HANDLE': '1'},
+  );
   const media = {'CONNECT_E2E_ACCEPTANCE': 'media'};
   for (final metadata in <Map<String, dynamic>>[
     {},
