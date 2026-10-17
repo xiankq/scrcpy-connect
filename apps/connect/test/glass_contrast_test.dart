@@ -12,55 +12,73 @@ void main() {
     (tester) async {
       for (final brightness in Brightness.values) {
         for (final backdrop in [Colors.black, Colors.white]) {
-          final boundary = GlobalKey();
-          final theme = ConnectTokens.theme(brightness);
-          await tester.pumpWidget(
-            MaterialApp(
-              theme: theme,
-              home: Scaffold(
-                backgroundColor: backdrop,
-                body: Center(
-                  child: RepaintBoundary(
-                    key: boundary,
-                    child: const Glass(
-                      radius: 999,
-                      child: SizedBox(width: 100, height: 100),
+          for (final size in [const Size(100, 100), const Size(354, 72)]) {
+            final boundary = GlobalKey();
+            final theme = ConnectTokens.theme(brightness);
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: theme,
+                home: Scaffold(
+                  backgroundColor: backdrop,
+                  body: Center(
+                    child: RepaintBoundary(
+                      key: boundary,
+                      child: Glass(
+                        radius: 999,
+                        child: SizedBox(width: size.width, height: size.height),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-          await tester.pumpAndSettle();
-          late Color pixel;
-          await tester.runAsync(() async {
-            final image =
-                await (boundary.currentContext!.findRenderObject()!
-                        as RenderRepaintBoundary)
-                    .toImage();
-            final data = (await image.toByteData(
-              format: ui.ImageByteFormat.rawRgba,
-            ))!;
-            final offset =
-                ((image.height ~/ 2) * image.width + image.width ~/ 2) * 4;
-            pixel = Color.fromARGB(
-              data.getUint8(offset + 3),
-              data.getUint8(offset),
-              data.getUint8(offset + 1),
-              data.getUint8(offset + 2),
             );
-            image.dispose();
-          });
-          final visible = Color.alphaBlend(pixel, backdrop).computeLuminance();
-          final foreground = theme.colorScheme.onSurface.computeLuminance();
-          final contrast =
-              (math.max(visible, foreground) + .05) /
-              (math.min(visible, foreground) + .05);
-          expect(
-            contrast,
-            greaterThanOrEqualTo(4.5),
-            reason: '$brightness over $backdrop must remain legible.',
-          );
+            await tester.pumpAndSettle();
+            final pixels = <Color>[];
+            await tester.runAsync(() async {
+              final image =
+                  await (boundary.currentContext!.findRenderObject()!
+                          as RenderRepaintBoundary)
+                      .toImage();
+              final data = (await image.toByteData(
+                // Color.alphaBlend expects straight-alpha RGB. rawRgba is
+                // premultiplied and would apply transparency a second time.
+                format: ui.ImageByteFormat.rawStraightRgba,
+              ))!;
+              // Include the left/right navigation labels, rather than proving
+              // contrast only at the brightest point in a wide control.
+              for (final x in [1 / 6, .5, 5 / 6]) {
+                final offset =
+                    ((image.height ~/ 2) * image.width +
+                        (image.width * x).floor()) *
+                    4;
+                pixels.add(
+                  Color.fromARGB(
+                    data.getUint8(offset + 3),
+                    data.getUint8(offset),
+                    data.getUint8(offset + 1),
+                    data.getUint8(offset + 2),
+                  ),
+                );
+              }
+              image.dispose();
+            });
+            for (final pixel in pixels) {
+              final visible = Color.alphaBlend(
+                pixel,
+                backdrop,
+              ).computeLuminance();
+              final foreground = theme.colorScheme.onSurface.computeLuminance();
+              final contrast =
+                  (math.max(visible, foreground) + .05) /
+                  (math.min(visible, foreground) + .05);
+              expect(
+                contrast,
+                greaterThanOrEqualTo(4.5),
+                reason:
+                    '$brightness $size over $backdrop must remain legible across the controls.',
+              );
+            }
+          }
         }
       }
     },

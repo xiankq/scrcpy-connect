@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:scrcpy_connect/pages/device_workspace/device_workspace_page.dart';
 import 'package:scrcpy_connect/pages/device_details/device_details_page.dart';
 import 'package:scrcpy_connect/app.dart';
@@ -81,6 +83,9 @@ void main() {
     defaultValue: 'tls',
   );
   const minimumVideoEdge = int.fromEnvironment('CONNECT_E2E_MIN_VIDEO_EDGE');
+  const requireShaderGlass = bool.fromEnvironment(
+    'CONNECT_E2E_REQUIRE_SHADER_GLASS',
+  );
   const requestedVideoEdge = int.fromEnvironment(
     'CONNECT_E2E_VIDEO_MAX_SIZE',
     defaultValue: 1280,
@@ -278,6 +283,15 @@ void main() {
         findsNothing,
       );
       final surface = tester.getRect(find.byType(Texture));
+      binding.reportData!['shaderImageFiltersSupported'] =
+          ui.ImageFilter.isShaderFilterSupported;
+      if (requireShaderGlass) {
+        expect(
+          ui.ImageFilter.isShaderFilterSupported,
+          isTrue,
+          reason: 'This visual run requires the real backdrop shader backend.',
+        );
+      }
       final viewport = tester.getRect(remote);
       expect(surface.width, lessThanOrEqualTo(viewport.width));
       expect(surface.height, lessThanOrEqualTo(viewport.height));
@@ -333,7 +347,10 @@ void main() {
         of: find.byType(ExitHandle),
         matching: find.byType(GestureDetector),
       );
-      await tester.drag(handle, Offset(viewport.width * .72, 100));
+      await tester.drag(
+        handle,
+        Offset(viewport.width * .72, viewport.height * .5),
+      );
       await tester.pump(const Duration(milliseconds: 1200));
       final collapsed = find.bySemanticsLabel(RegExp('展开退出按钮，'));
       expect(collapsed, findsOneWidget);
@@ -363,6 +380,7 @@ void main() {
       ).singleWhere((item) => item['sessionId'] == session['sessionId']);
       expect(retained['status'], 'paused');
       expect(retained['capturePaused'], true);
+      await tester.pump(const Duration(milliseconds: 500));
       await binding.takeScreenshot('workspace-after-remote');
       // The fixture owns this exact window; returning did not destroy it.
       await controller.request('session.stop', {

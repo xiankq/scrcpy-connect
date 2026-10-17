@@ -1,6 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart' as liquid;
 
 /// Semantic values mapped directly from designs/design.md.
 abstract final class ConnectTokens {
@@ -14,6 +16,14 @@ abstract final class ConnectTokens {
   static const mint = Color(0xff25745c);
   static const danger = Color(0xffd34f60);
   static const radius = 26.0;
+  static const glass = Color(0x66ffffff);
+  static const glassDark = Color(0x952b2831);
+  static const glassBlur = 20.0;
+  static const glassRefractionIndex = 1.02;
+  static const glassRefractionWidth = 16.0;
+  static const glassDispersion = 0.0;
+  static const glassMagnification = 1.0;
+  static const glassSaturation = 1.0;
   static const glassPanel = Color(0xb8ffffff);
   static const glassPanelDark = Color(0xe8202023);
   static const glassShine = Color(0x66ffffff);
@@ -95,6 +105,13 @@ abstract final class ConnectTokens {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
+        systemOverlayStyle: dark
+            ? SystemUiOverlayStyle.light.copyWith(
+                statusBarColor: Colors.transparent,
+              )
+            : SystemUiOverlayStyle.dark.copyWith(
+                statusBarColor: Colors.transparent,
+              ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -166,13 +183,68 @@ class Glass extends StatelessWidget {
         solid ||
         GlassPreferences.reduced(context) ||
         MediaQuery.highContrastOf(context);
-    final base = dark ? ConnectTokens.glassPanelDark : ConnectTokens.glassPanel;
-    final shine = dark
-        ? ConnectTokens.glassShineDark
-        : ConnectTokens.glassShine;
-    final reflection = dark
-        ? ConnectTokens.glassReflectionDark
-        : ConnectTokens.glassReflection;
+    final base = dark ? ConnectTokens.glassDark : ConnectTokens.glass;
+    final content = DecoratedBox(
+      decoration: BoxDecoration(
+        color: opaque ? Theme.of(context).colorScheme.surface : null,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: dark ? const Color(0x73ffffff) : const Color(0xf2ffffff),
+        ),
+        gradient: opaque
+            ? null
+            : RadialGradient(
+                radius: 1,
+                transform: const _GlassProtectionTransform(),
+                // Protect foreground content at the center while the rim
+                // retains the more transparent control material. Both layers
+                // use the same tokens over refracted and frosted backdrops.
+                colors: dark
+                    ? [
+                        ConnectTokens.glassPanelDark,
+                        ConnectTokens.glassReflectionDark,
+                      ]
+                    : [ConnectTokens.glassPanel, ConnectTokens.glassReflection],
+              ),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Padding(padding: padding, child: child),
+      ),
+    );
+    final Widget surface;
+    if (opaque) {
+      // Accessibility preferences remove the optical work, rather than only
+      // hiding a running shader behind an opaque decoration.
+      surface = content;
+    } else if (ImageFilter.isShaderFilterSupported) {
+      surface = liquid.LiquidGlassLens(
+        style: liquid.LiquidGlassStyle(
+          shape: liquid.LiquidGlassShape.roundedRectangle(cornerRadius: radius),
+          refractionIndex: ConnectTokens.glassRefractionIndex,
+          refractionWidth: ConnectTokens.glassRefractionWidth,
+          dispersion: ConnectTokens.glassDispersion,
+          magnification: ConnectTokens.glassMagnification,
+          saturation: ConnectTokens.glassSaturation,
+          blur: ConnectTokens.glassBlur,
+          color: base,
+          // The mapped decoration provides the rim; avoid an additional
+          // package-default lighting treatment. No touch, motion, adaptive
+          // sampling, or captured-background view is installed here.
+          specular: const liquid.LiquidGlassLight.specular(thickness: 0),
+          glow: const liquid.LiquidGlassLight.glow(thickness: 0),
+        ),
+        child: content,
+      );
+    } else {
+      surface = BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: ConnectTokens.glassBlur,
+          sigmaY: ConnectTokens.glassBlur,
+        ),
+        child: ColoredBox(color: base, child: content),
+      );
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -186,39 +258,26 @@ class Glass extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: opaque ? 0 : 20,
-            sigmaY: opaque ? 0 : 20,
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: opaque ? Theme.of(context).colorScheme.surface : null,
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: dark ? const Color(0x73ffffff) : const Color(0xf2ffffff),
-              ),
-              gradient: opaque
-                  ? null
-                  : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      // A decoration gradient replaces its color fill. Blend
-                      // each reflection onto the mapped panel first so the
-                      // material keeps its intended opacity over live media.
-                      colors: [
-                        Color.alphaBlend(shine, base),
-                        Color.alphaBlend(reflection, base),
-                      ],
-                    ),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: Padding(padding: padding, child: child),
-            ),
-          ),
-        ),
+        child: surface,
       ),
+    );
+  }
+}
+
+// Keep protection elliptical on wide navigation and narrow handles. Scaling
+// from the shortest side makes the falloff relative to the whole surface.
+class _GlassProtectionTransform extends GradientTransform {
+  const _GlassProtectionTransform();
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
+    if (bounds.shortestSide <= 0) return null;
+    final sx = bounds.width / bounds.shortestSide;
+    final sy = bounds.height / bounds.shortestSide;
+    return Matrix4.diagonal3Values(sx, sy, 1)..setTranslationRaw(
+      bounds.center.dx * (1 - sx),
+      bounds.center.dy * (1 - sy),
+      0,
     );
   }
 }

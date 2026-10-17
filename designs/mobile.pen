@@ -12585,11 +12585,17 @@
               "id": "VIt67",
               "name": "消息 · 李明",
               "width": "fill_container",
-              "fill": "$surface",
-              "cornerRadius": "$radius-lg",
+              "fill": "$transparent",
+              "stroke": "$muted",
+              "strokeWidth": {
+                "bottom": 1
+              },
               "layout": "vertical",
               "gap": "$space-sm",
-              "padding": "$space-md",
+              "padding": [
+                "$space-md",
+                "$space-zero"
+              ],
               "children": [
                 {
                   "type": "frame",
@@ -12689,11 +12695,17 @@
               "id": "eXUUb",
               "name": "邮件 · 工作邮箱",
               "width": "fill_container",
-              "fill": "$surface",
-              "cornerRadius": "$radius-lg",
+              "fill": "$transparent",
+              "stroke": "$muted",
+              "strokeWidth": {
+                "bottom": 1
+              },
               "layout": "vertical",
               "gap": "$space-sm",
-              "padding": "$space-md",
+              "padding": [
+                "$space-md",
+                "$space-zero"
+              ],
               "children": [
                 {
                   "type": "frame",
@@ -12793,11 +12805,17 @@
               "id": "hByjV",
               "name": "日历",
               "width": "fill_container",
-              "fill": "$surface",
-              "cornerRadius": "$radius-lg",
+              "fill": "$transparent",
+              "stroke": "$muted",
+              "strokeWidth": {
+                "bottom": 1
+              },
               "layout": "vertical",
               "gap": "$space-sm",
-              "padding": "$space-md",
+              "padding": [
+                "$space-md",
+                "$space-zero"
+              ],
               "children": [
                 {
                   "type": "frame",
@@ -35462,6 +35480,26 @@
     "pairing-qr-size": {
       "type": "number",
       "value": 176
+    },
+    "glass-refractionIndex": {
+      "type": "number",
+      "value": 1.02
+    },
+    "glass-refractionWidth": {
+      "type": "number",
+      "value": 16
+    },
+    "glass-dispersion": {
+      "type": "number",
+      "value": 0
+    },
+    "glass-magnification": {
+      "type": "number",
+      "value": 1
+    },
+    "glass-saturation": {
+      "type": "number",
+      "value": 1
     }
   },
   "fileToken": "a093725f-869e-4791-abe1-22c1bab505db"

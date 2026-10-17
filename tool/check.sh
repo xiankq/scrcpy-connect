@@ -12,6 +12,7 @@ cargo test --workspace
 flutter analyze --no-pub --fatal-infos
 python3 tool/check_analyzer_plugin.py
 (cd apps/connect && flutter test --no-pub)
+(cd packages/design_system && flutter test --no-pub)
 dart --disable-dart-dev --packages=.dart_tool/package_config.json apps/connect/test_driver/integration_test_contract_test.dart
 (cd packages/interop_bridge && flutter test --no-pub)
 npx --yes --package=@google/design.md@0.4.0 designmd lint designs/design.md
