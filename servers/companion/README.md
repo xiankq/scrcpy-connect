@@ -148,9 +148,13 @@ SHA-256；修改源码后需重新构建并同步 `SERVER_SHA`。测试 Fixture 
 当前产品 JAR 的 SHA-256 为
 `0026e5af2db8558b2ba1eebac22c84303e20d3ee1a7b184bc683f808cf3889bb`。
 
-上述观察生命周期的新增路径已通过无 Android 的 Runtime／真实 actor 提交回归，
-并重建 JAR；本次尚未执行 Android 端 listener 停止、重连恢复和 OEM 验证。
-下列既有 AVD 证据属于此前功能验证，不作为本次生命周期变更的设备端验收。
+上述观察生命周期已通过 Runtime／真实 actor 提交回归，并重建 JAR。
+2026-10-17随后在API36目标AVD执行 `observation_android`：无需页面查询即收到live观察，
+stop后共享helper剪贴板仍可get/set、列表与断线重连均不恢复观察，显式start后再次收到真实通知；
+11.10秒通过。精确清除本次唯一tag、恢复原文字剪贴板并断开测试连接。
+首轮因目标没有文字ClipData而在写入前明确失败，准备隔离AVD文字基线后复验；
+不是产品故障或被跳过的通过。OEM、主控后台OS通知与通话音频未因此验收。
+下列其余既有AVD证据仍按各自功能和版本边界记录。
 
 ```sh
 bash servers/companion/build.sh
@@ -161,6 +165,11 @@ python3 servers/companion/tests/android-probe.py \
 INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
 ANDROID_ADB="$ANDROID_ADB" ANDROID_TARGET_SERIAL=emulator-5556 \
 cargo test -p interop-core --test companion_android -- --ignored --nocapture --test-threads=1
+
+# 要求隔离AVD已存在文字剪贴板；用例完成后精确恢复该文字。
+INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
+ANDROID_ADB="$ANDROID_ADB" ANDROID_TARGET_SERIAL=emulator-5556 \
+cargo test -p interop-core --test observation_android -- --ignored --nocapture
 
 INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
 cargo test -p interop-core --test companion_clipboard -- --ignored --nocapture --test-threads=1

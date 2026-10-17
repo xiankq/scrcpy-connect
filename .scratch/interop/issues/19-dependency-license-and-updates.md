@@ -33,6 +33,6 @@ Requirements: R07–R16、R43–R44、R50
 
 2026-10-17重新核查：已有锁文件、生成Dart检查、严格分析、官方设计lint和部分来源摘要。
 
-FRB重生成、companion源到JAR、JVM统一门禁、未跟踪真实测试和安全发布依据仍未闭合。
+固定scrcpy捕获扩展已有源码/产物与JVM默认门禁；FRB重生成、companion源到JAR及其JVM统一门禁、MDK逐平台原生下载/摘要/许可闭包（A41）、未跟踪真实测试与安全发布依据仍未闭合。pub锁只固定Dart包，不能冒充MDK原生产物锁定。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

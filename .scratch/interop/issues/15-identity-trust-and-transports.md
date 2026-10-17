@@ -33,6 +33,6 @@ Requirements: R04–R05、R10、R40
 
 2026-10-17重新核查：本机身份和元数据恢复分离已测；USB/连接取消租约已实现。
 
-安全adbd授权/撤权、多路径身份、四端私钥保护/备份排除和物理USB仍待闭环。
+安全adbd授权/撤权、多路径身份、四端私钥保护/备份排除和物理USB仍待闭环。A37要求区分legacy TCP/USB和现代TLS，所有现代发现/已配对/重连入口拒绝明文CNXN/AUTH，并验证零公钥/签名外发；正向互通不等于防降级。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

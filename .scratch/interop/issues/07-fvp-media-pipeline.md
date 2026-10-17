@@ -35,6 +35,6 @@ fvp/MDK 是否能满足 scrcpy 实时流低延迟、音画同步和 Flutter 渲�
 
 2026-10-17重新核查：当前共享fvp五codec、PCM、旋转/HOME/焦点有真实证据，旧自写播放器已删除。
 
-实际画质页、总延迟/同步/资源/物理播放尚未验收；HEVC低清不算质量通过。
+首次画质选择已修复并通过真实页面；总延迟/同步/资源/物理播放尚未验收，HEVC低清不算质量通过，MDK原生产物闭包仍缺（A41）。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

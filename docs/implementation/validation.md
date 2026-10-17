@@ -67,7 +67,7 @@ CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e flutter drive \
 - 四ABI助手由`servers/helpers/build.py`构建，清单同时锁定源文件与每个产物SHA256；Android 16目标实际验证目录、链接、路径转义、并发无覆盖，以及共享存储。不是依赖系统`mv -n`的假原子实现。
 - 原生USB选择器在系统授权前即登记待取消请求，按generation丢弃晚到广播；FD授权使用一次性lease，Rust复制后释放Java FD。物理USB缺设备，不能由编译/代码回归推定实物通过。
 - 通话聚合状态无法保证具体call身份：真实快速替换来电负例证实旧观察ID不可靠。产品拒绝全局接听/挂断动作，展示`call_targeting_unavailable`与远控入口。安全逐通话控制仍是未完成项。
-- 通知快捷回复原PendingIntent已被系统接受，但测试接收器未证明应用送达；界面明确“系统已接受，送达未知”，保留草稿并禁止一键重发。
+- 通知快捷回复原PendingIntent已被系统接受，但测试接收器未证明应用送达；界面明确“系统已接受，送达未知”。草稿及禁止一键重发只在该回复页仍存活时成立：离页重进会丢失Hook状态，不能据此宣布跨导航/重建保护完成，见重新核查A40。
 
 多次端到端发现并修复的错误不能由某次进程退出0掩盖：早期一轮退出0的截图实际包含Missing video token，已修复暂停结果被误当新媒体启动；后一轮健康断言捕获首帧后暂停竞态。最终product_flow与下述真实HOME后台回归均通过，健康截图已逐一检查。
 
@@ -228,3 +228,54 @@ rtk proxy env CONNECT_E2E_ACCEPTANCE=media \
 
 
 同一最终代码另回归：主屏＋Settings＋Google Dialer 三个真实会话保留/暂停/恢复/截图/单独关闭，40秒退出0，`sessionWorkspaceComplete=true`，宿主8次独立进程检查均通过；暂停进程为S、不是整进程冻结T，关闭Settings后其余两路存活。日志 `/tmp/connect-recovery-workspace-real.log`，8图及回执 `/tmp/connect-e2e/recovery-session-workspace/`。实际HOME→两秒后台→回前台→新MDK snapshot与健康全屏，11秒退出0，日志 `/tmp/connect-recovery-background-real.log`、图/回执 `/tmp/connect-e2e/recovery-background/`。代表会话列表、恢复全屏与结束状态已目视；列表仍有包名代替友好应用名、材质仍偏白卡，属于A06/A27/A29待补，不能把本次行为通过说成视觉设计完成。
+
+## 再次逐指令审计及新增回归
+
+本次稳定审计基准 `48c5003`。完整差距和每次可见用户输入对应见[重新核查第12节](../../.scratch/interop/completion-reassessment.md#12-再次逐指令复核当前交付远未完成)，新增A37–A42；不把工作转述为“只剩补测试”。已有77页独立分行/组件、Flutter工程化和删除旧自写播放器仍然成立；液态材质、完整状态、通知/通话/内容/恢复与四宿主交付仍未完成。
+
+### TLS策略与真实协议负例
+
+`8a91df6`引入独立于TLS配置的`TlsPolicy`。公开Client两项降级负例先实际失败，随后Required拒绝明文CNXN/AUTH且不发送RSA签名/公钥；真实TLS1.3正例、Optional legacy AUTH/CNXN及缺配置零握手共5项通过。Core恢复配对记录原先实际返回connected=true，修复后tls/GUID记录拒绝并且零设备服务请求。ADB默认49 passed/11 ignored，Core策略/连接生命周期7 passed/2 ignored；固定独立BoringSSL Required互通1项通过。现代新发现服务到Flutter表单仍有类型丢失路径，A37整体未关闭；安全adbd/撤权、生产密码成熟度及证书绑定也没有因此通过。
+
+### 免APK持续观察的真实端点
+
+`df2af2d`将设备持久观察意图与共享helper分开。连接成功自动建立通知/来电观察；stop真实注销listener并清除动作，保留剪贴板/媒体用途；代际隔离迟到数据，断线保留意图，显式停止不因列表/重连复活。新JAR SHA256为`0026e5af2db8558b2ba1eebac22c84303e20d3ee1a7b184bc683f808cf3889bb`。
+
+API36目标`emulator-5556`、转发`127.0.0.1:15556`执行：
+
+```sh
+rtk proxy env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
+  ANDROID_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  ANDROID_TARGET_SERIAL=emulator-5556 \
+  cargo test -p interop-core --test observation_android -- \
+  --ignored --exact connection_observes_without_page_queries_and_explicit_stop_survives_reconnect --nocapture
+```
+
+1项11.10秒通过，日志`/tmp/connect-reaudit-observation-real-ready.log`。独立生成唯一shell通知，核对不查询页面即可live、stop后clipboard allowStart=false读写仍有效、只读list不能重启、断线/重连仍stopped、显式start后真实Binder新通知事件；正常及失败路径精确清理/断开。首轮`/tmp/connect-reaudit-observation-real.log`在任何剪贴板写入前因没有文字ClipData明确失败，随后隔离AVD建立`observation acceptance baseline`文字基线，复验结束恢复该文字。不能声称首次失败也通过或已经精确恢复无ClipData。用例前置条件和清理已写入源码，现有未跟踪操作示例未擅自纳入Git。
+
+同一新版JAR的原通知快照/更新/旧引用拒绝/远端清除真实回归1项3.28秒通过，日志`/tmp/connect-reaudit-notification-real.log`。不包含后台OS通知投递、锁屏/认证续接、回复实际应用送达、OEM或安全逐call控制/双向音频。
+
+### 返回焦点、主标签核验和实际APK
+
+`a117976`修复Remote路由返回/恢复时的当前设备焦点，旧/被覆盖窗口的迟到恢复不能抢焦点；专用页如Files/Workspace返回仍需统一设备上下文，A38不关闭。两条焦点回归先红后绿，日志`/tmp/connect-focus-{red,green}.log`。
+
+设置/传输实际typed主标签接入核验提示。有效红为`/tmp/connect-tabs-recovery-red-verified.log`；320×640、2倍字号下重试、停止精确原活动/取消原批次均实际点击通过，绿日志`/tmp/connect-tabs-recovery-green-final.log`。最初fixture漏接事件的两轮结果未当作有效红绿。两个相关文件27项通过；合并App全量120项通过，`/tmp/connect-reaudit-app-tests.log`。严格分析首次捕获测试finally缺大括号，修正后`/tmp/connect-reaudit-analysis-final.log`无问题。
+
+当前Rust workspace157 passed/43 ignored、all-target clippy通过（`/tmp/connect-reaudit-workspace.log`、`/tmp/connect-reaudit-clippy.log`）；该次默认执行启动后才新增`observation_android`，因此其opt-in设备结果以上面单独执行为准，不伪加为默认通过。build_runner only-check退出0，`/tmp/connect-reaudit-generated.log`。
+
+合并APK重新构建安装，controller5554→target5556真实产品流程19秒通过：`productAcceptanceComplete=true`、`pageSelectedCodec=h265`，日志`/tmp/connect-reaudit-product-real.log`；结果和6张图仅在`/tmp/connect-e2e/complete-reaudit-current/`。诊断、实际全屏/侧边退出图已目视；实际码流仍230×512且低清，A10画质未通过。该流程使用准备好的legacy TCP端点，未验证现代首次配对、密码安全或全部产品功能。
+
+
+### 显式观察入口与逐事件来电展示
+
+`1236987`：通知/通话页的明确核验操作改为`observation.start`后只读刷新；页面打开与事件刷新不会重启已停止观察，starting仍显示未核验。Bridge在事件缺口pending期间阻止start，允许stop/status/list和真正只读列表。四种unknown/stopped页面组合先红后绿，重复点击只发一次start；Bridge门禁7项通过，日志`/tmp/connect-observation-gate-green.log`。
+
+A42原先使用lastEvent触发来电，连续calls.incoming→observation.changed→settings.changed会丢提示，`/tmp/connect-incoming-stream-red.log`实际失败；改逐事件订阅后绿色。后台前已排队的回调必须被生命周期代次废弃，不能因后台→前台抢先恢复而弹出旧来电；有效红为`/tmp/connect-incoming-background-red-verified.log`。同帧、去重、未知来源、后台晚回调和销毁重挂载等communication11项通过，`/tmp/connect-incoming-stream-all.log`。这些是widget证据，不冒充真实PSTN来电或后台OS投递。
+
+最终应用全量126项与Bridge全量93项通过，日志`/tmp/connect-reaudit-final-app.log`、`/tmp/connect-reaudit-final-bridge.log`；六个修改Dart文件格式检查零变更。生成检查`/tmp/connect-reaudit-final-generated.log`成功，随后app.dart只改无注解的事件订阅，不涉及生成输入。
+
+
+该最终代码的严格全仓分析无问题（`/tmp/connect-reaudit-final-analysis.log`），最新APK重新构建安装后双AVD产品流程18秒退出0，`productAcceptanceComplete=true/pageSelectedCodec=h265`；日志`/tmp/connect-reaudit-final-product.log`，6图及回执在`/tmp/connect-e2e/reaudit-final-observation/`。实际再次目视全屏远控和返回工作台；前者仍230×512低清，后者仍偏白卡，继续判画质/液态材质未通过。该流程未加入真实来电及后台OS通知，不能把相应widget回归推定成设备端验收。
+
+
+最后按Flutter工具要求启动普通`lib/main.dart`并实际发送`R`，回执`Restarted application in 1,375ms`；原生截图`/tmp/connect-reaudit-hot-restart.png`已目视为正常浅色设备列表空态，随后detach保留应用。重启阶段FRB打印两次旧Dart消息投递失败提示；不以此次启动截图证明全部热重启资源回收或完整恢复生命周期。

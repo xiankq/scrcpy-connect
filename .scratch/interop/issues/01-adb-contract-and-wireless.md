@@ -33,6 +33,6 @@ Requirements: R08–R11
 
 2026-10-17重新核查：独立ADB库及配对/TLS、压缩、reverse、JDWP已有实现与真实互操作。
 
-公开服务完整契约、版本/Wi-Fi2行为、安全授权负例及恢复矩阵仍未闭合。
+公开服务完整契约、版本/Wi-Fi2行为、安全授权负例及恢复矩阵仍未闭合。本次另发现A37：配置TLS不等于必须TLS，现代端点需零凭据拒绝明文CNXN/AUTH，发现/保存/恢复/重连全链保留安全类型。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。

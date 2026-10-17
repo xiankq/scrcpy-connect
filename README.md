@@ -39,6 +39,6 @@ flutter build apk --debug --target-platform android-x64
 
 ## 设计与验收
 
-[持续目标](.scratch/interop/goal.md)逐项追踪 57 项需求；[产品说明](designs/prod/README.md)说明功能取舍；[视觉规范](designs/design.md)与 `designs/mobile.pen` 保存设计源。预览图和 E2E 资产放系统临时目录，不收进 Git。
+[持续目标](.scratch/interop/goal.md)逐项追踪会话要求；[当前完整差距](.scratch/interop/completion-reassessment.md#12-再次逐指令复核当前交付远未完成)区分实现、证据和剩余工作；[产品说明](designs/prod/README.md)说明功能取舍；[视觉规范](designs/design.md)与 `designs/mobile.pen` 保存设计源。预览图和 E2E 资产放系统临时目录，不收进 Git。
 
 `tool/check.sh` 执行 Rust 格式／Clippy／默认测试、Flutter 分析／组件测试和固定官方 DESIGN.md NPM 校验。真实 AVD、无线配对、媒体、文件及故障测试需要对应环境和显式测试参数，方法与证据见验收记录。跨 target 的 Rust 检查与各宿主整包链接分别记录。

@@ -18,7 +18,12 @@
 | [scrcpy、媒体与服务端](scrcpy-media-and-server.md) | 固定 scrcpy 协议、JAR 生命周期、独立应用窗口、fvp/MDK 输入、PTS、音频、录制与并发 |
 | [首帧与客户端状态等待](scrcpy-first-frame-and-latency.md) | 官方静止补帧、播放器阻塞对照、五codec/后台/旋转与真实退出回归 |
 | [共享媒体封装与播放器](cross-platform-media-pipeline.md) | 纯Rust Matroska、PTS、鉴权HTTP、fvp公开接口与各平台验收边界 |
+| [协作暂停捕获](cooperative-capture-pause.md) | 固定scrcpy源码的捕获扩展、停止编码与保留task、ACK/代际边界、可复现构建与真实多窗口 |
 | [Flutter/Rust 平台运行时](flutter-rust-platform-runtime.md) | Android 后台与权限、FRB/Riverpod 生命周期、USB 句柄、workspace、文件与输入 |
+| [Flutter工程工具链](flutter-engineering-toolchain.md) | typed路由、生成Riverpod、build_runner、官方lint和生成一致性 |
+| [系统分享信任与所有权](android-share-trust.md) | 外部URI/grant、导入/取消、持久源、Activity/engine边界与实际分享驱动 |
+| [目标端缩略图](media-thumbnail-pipeline.md) | JPEG/视频帧、EXIF/旋转、有界作业、缓存/取消和真实端验证 |
+| [主控系统通知投递](controller-notification-delivery.md) | 跨端插件固定版本、权限/通道、普通来电提醒、系统历史隐私与Windows包身份限制；尚未实现完整投递 |
 | [设计系统与工具链](design-system-and-toolchain.md) | Google DESIGN.md、液态玻璃候选比较、Lucide、厂商交互参照、Pencil 无头路径 |
 | [Apple Liquid Glass 重设计依据](apple-liquid-glass-redesign.md) | HIG、WWDC25/26 的材质、导航、媒体与无障碍原则，以及中性色的设计应用 |
 | [手机输入与剪贴板](mobile-input-and-clipboard.md) | 普通主控 App 与远端 shell 权限区别、中文 IME、图片/文件 URI、厂商体验证据 |

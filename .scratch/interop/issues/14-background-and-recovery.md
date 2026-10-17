@@ -33,6 +33,6 @@ Requirements: R21、R38–R39
 
 2026-10-17重新核查：真实HOME视频/声音、同进程Activity重建和主动停/未知结果保护已有证据。
 
-瞬断/进程恢复只恢复连接，缺持续活动意图；state.resync、长期后台/系统Stop仍缺。
+state.resync已补事件水位/快照屏障、播放器/输入/剪贴板校准并真实双机重复通过；不能等同断网或进程恢复。瞬断/进程缺持续活动意图，长期后台/系统Stop仍缺；embedded设置/传输主标签漏核验重试（A39），通知回复离页会丢未知保护（A40）。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
