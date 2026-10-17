@@ -632,3 +632,82 @@ cargo fmt通过；原始日志`/tmp/connect-source-clock-final-analyze.log`及
 实际释放1488.5MiB、空闲61.4GiB，`/tmp/connect-source-clock-cleanup.json`；保留
 release、native hooks、Gradle／CMake及未知模式的Flutter缓存。被控无本批捕获
 进程，夹具已卸载，原五项用户未跟踪文件未改。完整目标与任务07继续开放。
+
+## ADB消费、raw转发与解码后端对照（2026-10-18）
+
+新增`session.start(traceFrames:true)`诊断，正常不开启。`run_video`记录原始source PTS、
+首字节已交给scrcpy消费后／完整包读完／raw写入开始及完成的主控Rust单调微秒值。
+最多256条，配置包不占条目；captureSegment随新尺寸标记递增，初始预缓冲首帧不计，
+不等于renderer generation。关闭时不采逐帧时钟、不建立记录数组或新增逐帧写锁，
+仍有一次启动读锁、flags解析与条件判断。没有增加Dart逐包传输、原生日志或改码流。
+
+真实内存ADB路由→`run_video`→认证raw TCP回归，分开的第一字节WRTE与后续WRTE之间
+保留20ms等待；修复前因无收据超时，修复后验证时序、原始转发字节、分段、配置包排除、
+256条上限及正常不开启。`cargo test -p interop-core --lib video_transport_`共4项通过，
+10.30秒，含已有截断期限／静止／取消测试。日志
+`/tmp/connect-transport-trace-{red,green}.log`及`/tmp/connect-transport-regression.log`。
+
+**边界：**[Frame::read](../../crates/adb/src/protocol.rs)收齐整个WRTE payload才返回，
+reader路由后[AdbStream::read](../../crates/adb/src/client.rs)才交付其中字节。
+`adbStreamReadUs`只是交出首字节之后的scrcpy拼包跨度；同WRTE先前接收／排队不在其中，
+跨WRTE时后续包等待才可能可见。此字段不能称完整网络接收时间。最初两次收据名为
+`adbReadUs`，最终代码改名明确边界，值的定义未变。下一接缝应测ADB头收齐后的payload
+读取以及路由至消费，仍只能称Transport等待，不能自动归因物理无线。
+
+### 同环境后端对照
+
+这三次运行都在恢复后同一主控QEMU276588／原目标进程，不能与恢复前数据混为配对。
+动态夹具、目标时间线、1280／60fps／8Mbps请求、实际576×1280、2轮各8次输入及1次暂停，
+保持1000ms首帧、200／300ms输入P50／P95预算。仅将测试decoder从native换software，
+实际成功事件分别为AMediaCodec与FFmpeg；默认产品后端未变。
+
+| 指标 | AMediaCodec | FFmpeg slice对照 |
+| --- | ---: | ---: |
+| 报告P50／P95 | 1310／1699ms | 1098／1549ms |
+| 完整首像素 | 3636／2814ms | 2102／1848ms |
+| 输入→relay中位 | 1064.190ms | 1067.421ms |
+| relay→onVideo中位 | 233.155ms | 4.025ms |
+| onVideo→snapshot中位 | 26.678ms | 20.813ms |
+| AdbStream消费跨度中位／最大 | 0.012／42.355ms | 0.014／10.793ms |
+| raw写中位／最大 | 0.049／0.073ms | 0.053／0.269ms |
+| 完整包读完→relay中位／最大 | 0.123／0.210ms | 0.139／0.380ms |
+
+每次16项新像素同PTS匹配、18项目标输入绘制关联、2次暂停恢复、实际Flutter截图和
+纹理分离均完成，夹具自动卸载；`frameCorrelationComplete`／`targetTimelineComplete`
+为true，但`videoPerformanceComplete=false`、startup／input预算false。驱动退出1是
+明确保留的严格失败，不能把功能循环完成称性能通过。没有在本批复现MDK崩溃，也没有
+关闭既有崩溃项。解码端存在独立开销，但替换解码器未消除主要上游等待；尚不确定是
+编码输出、adbd／Transport、控制注入前或其它排队。
+
+原始结果`/tmp/connect-e2e/video-transport-{stage,software}/result.json`、对应
+`/tmp/connect-video-transport-{stage,software}.log`。复现沿用前节drive入口，设置
+`CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_VIDEO_TIMELINE=true`及
+`CONNECT_PERF_TRACE_FRAMES=true`、MAX_SIZE1280、MAX_FPS60、BIT_RATE8000000、
+ROUNDS2、TRANSITIONS8、PAUSE_CYCLES1、MAX_START_MS1000、MAX_P50_MS200、MAX_P95_MS300，
+只将`CONNECT_PERF_DECODER=native`换为`software`；原始JSON优先于临时汇总。
+
+只读复核指出raw写完成的future恢复前下游已可能解码。最终Dart在计时结束后最多1秒
+重读期望PTS的收据；仅缺失重试，重复仍失败，不用假值或负数截零补齐时序。
+严格Flutter分析4.8秒无问题，Core all-target clippy -D warnings 5.32秒与fmt通过，
+`/tmp/connect-transport-final-analyze.log`、`/tmp/connect-transport-clippy.log`。
+正常生产播放参数、官方及捕获扩展JAR均未改／重建；旧ARM64 release未更新，新增诊断
+只由本批x64测试APK实际运行。服务端重建条件见[构建规则](../../servers/scrcpy/README.md)。
+
+最终有界等待／字段命名版再跑同样AMediaCodec配置2轮，16次同PTS与18项目标时间线
+完整匹配，两次暂停、Flutter计数9／2呈现与卸载确认完成；P50／P95=1259／1968ms，
+首帧3256／2862ms，原严格预算仍失败，未省略最大样本。完整包读完→relay中位0.132ms，
+raw写0.051ms，输入→relay1025.218ms，relay→onVideo270.623ms，与前述段落方向一致。
+`/tmp/connect-e2e/video-transport-final/result.json`与
+`/tmp/connect-video-transport-final.log`；这是最终代码功能／观测复跑，不是性能绿。
+前两组最终计数2实图已目视；集成测试使用专用播放器页面，不冒充正式远控页全流程。
+
+代码提交`b2c2993`。普通main热构建9.2秒、安装620ms；DTD的IDE实例未发现CLI App，
+VM Service改用WebSocket连接后实际热重载241ms成功、Dart运行错误查询无错误，已detach。
+最初误用HTTP URI的工具连接被拒绝，不算热重载通过；后续成功有实际回执。设备首页
+`/tmp/connect-transport-main.png`与三组最终计数2图片已目视；仍有SurfaceSync及
+1421ms启动帧原生告警，不把无Dart异常当启动流畅度通过。
+
+停止闲置Gradle后清理382处明确debug输出，释放1488.6MiB、空闲61.0GiB，收据
+`/tmp/connect-transport-cleanup.json`；保留release、native hooks、Gradle／CMake、
+未知Flutter模式缓存和性能／崩溃原始证据。被控无本批捕获进程且夹具不存在，原五项
+用户未跟踪文件未动。此次没有改默认画质、后端或scrcpy JAR，完整目标与任务07继续开放。

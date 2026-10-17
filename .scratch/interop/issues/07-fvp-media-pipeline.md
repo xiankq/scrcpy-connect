@@ -107,3 +107,12 @@ relay前中位仍1012ms；15fps对照降到227ms，总报告P50／P95=566／911m
 不把15fps实验设为所有设备默认。严格分析、16项HTTP、Core all-target clippy通过，
 采集失败保留主错误／完整报告的真实负面验证通过。下一步测Rust ADB读取／raw输出
 至relay，继续区分编码与传输；不必为这些主控观测重建JAR，MDK崩溃继续开放。
+
+ADB消费／raw分段已实施：默认关闭、256项上限、source PTS及捕获分段标识；真实
+分段ADB路由回归先红后绿，同组4项通过。恢复后同环境60fps动态AMediaCodec与FFmpeg
+各16次新像素／2次暂停完成，报告P50／P95分别1310／1699、1098／1549ms，严格失败。
+完整包读完→relay中位0.123／0.139ms，relay→onVideo为233.155／4.025ms，输入→relay
+仍均约1067ms。默认后端不变；主要上游等待未解决。AdbStream只交付已收齐WRTE，
+当前读时钟看不到首包先前接收／排队，下一项补实际packet reader及路由／消费分段，
+不能据此排除ADB或物理网络。只读review的收据发布竞争已补有界等待；两个JAR未改。
+最终同版复跑、原始命令／证据／时钟边界见[当前传输记录](../../../docs/implementation/video-performance.md#adb消费raw转发与解码后端对照2026-10-18)。
