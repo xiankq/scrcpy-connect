@@ -43,7 +43,19 @@ pub struct ConnectOptions {
     pub request_authorization: bool,
     pub public_key_comment: String,
     pub tls: Option<crate::wireless::TlsConfig>,
+    /// Whether STLS is optional or mandatory for this endpoint.
+    pub tls_policy: TlsPolicy,
     pub operations: OperationOptions,
+}
+
+/// Transport security policy, independent of whether a TLS provider is configured.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TlsPolicy {
+    /// Legacy TCP/USB may use AUTH or an unauthenticated CNXN. STLS still needs `tls`.
+    #[default]
+    Optional,
+    /// Modern wireless endpoints must complete STLS/TLS before CNXN or AUTH.
+    Required,
 }
 impl Default for ConnectOptions {
     fn default() -> Self {
@@ -52,6 +64,7 @@ impl Default for ConnectOptions {
             request_authorization: false,
             public_key_comment: "interop-adb".into(),
             tls: None,
+            tls_policy: TlsPolicy::Optional,
             operations: OperationOptions::default(),
         }
     }
@@ -129,6 +142,11 @@ impl Client {
         transport: T,
         options: ConnectOptions,
     ) -> Result<Self> {
+        if options.tls_policy == TlsPolicy::Required && options.tls.is_none() {
+            return Err(Error::InvalidArgument(
+                "required TLS policy needs a TLS configuration",
+            ));
+        }
         if let (Some(identity), Some(tls)) = (&options.identity, &options.tls)
             && !tls.matches_identity(identity)?
         {
@@ -157,6 +175,15 @@ impl Client {
                 loop {
                     // Before negotiation ADB restricts payloads to 4 KiB. New peers may omit checksums.
                     let frame = Frame::read(&mut transport, 4096, true).await?;
+                    if options.tls_policy == TlsPolicy::Required
+                        && !upgraded
+                        && matches!(frame.command, protocol::CNXN | protocol::AUTH)
+                    {
+                        return Err(Error::Protocol(
+                            "TLS is required for this ADB endpoint; refusing plaintext CNXN/AUTH"
+                                .into(),
+                        ));
+                    }
                     match frame.command {
                         protocol::CNXN => {
                             if frame.arg0 < protocol::LEGACY_VERSION || frame.arg1 == 0 {

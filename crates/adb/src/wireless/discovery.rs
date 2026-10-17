@@ -1,6 +1,6 @@
 //! DNS-SD discovery. Platform code must obtain local-network/multicast permission.
 //! Manual socket connections do not depend on discovery being available.
-use crate::{Client, ConnectOptions, Error, OperationOptions, Result};
+use crate::{Client, ConnectOptions, Error, OperationOptions, Result, TlsPolicy};
 use mdns_sd::{Receiver, ResolvedService, ScopedIp, ServiceDaemon, ServiceEvent};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -112,6 +112,12 @@ impl Discovery {
                 "wireless reconnect requires explicit TLS configuration",
             ));
         }
+        // This API selects only modern `_adb-tls-connect` services. A spoofed
+        // discovery record must not downgrade its connection to legacy AUTH.
+        let options = ConnectOptions {
+            tls_policy: TlsPolicy::Required,
+            ..options.clone()
+        };
         crate::error::bounded(
             options.operations.timeout,
             &options.operations.cancellation,

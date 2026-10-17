@@ -5,7 +5,7 @@ use crate::{
     model::{Device, now, required},
 };
 use interop_adb::{
-    Client, ConnectOptions, OperationOptions,
+    Client, ConnectOptions, OperationOptions, TlsPolicy,
     wireless::{
         self, QrPairing, TlsConfig,
         discovery::{Discovery, DiscoveryEvent, Service, ServiceKind},
@@ -254,6 +254,7 @@ impl Runtime {
         Ok(ConnectOptions {
             identity: Some(self.identity.clone()),
             tls: Some(self.tls_config().await?),
+            tls_policy: TlsPolicy::Optional,
             request_authorization: true,
             public_key_comment: "interop-controller".into(),
             operations: operations(60, token),
@@ -404,6 +405,9 @@ impl Runtime {
         let attempt = async {
             let mut options = self.connect_options(token.clone()).await?;
             options.request_authorization = request_authorization;
+            if device.transport != "usb" && (device.transport == "tls" || device.guid.is_some()) {
+                options.tls_policy = TlsPolicy::Required;
+            }
             let client = if device.transport == "usb" {
                 self.connect_usb_record(&device, options).await?
             } else {

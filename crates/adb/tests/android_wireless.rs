@@ -2,7 +2,7 @@
 //! endpoints and a private temporary code file; credentials are never logged.
 //! Official adb may forward sockets for the harness, never for product code.
 use interop_adb::{
-    Client, ConnectOptions, Identity, OperationOptions,
+    Client, ConnectOptions, Identity, OperationOptions, TlsPolicy,
     wireless::{self, TlsConfig},
 };
 use std::time::Duration;
@@ -58,6 +58,7 @@ async fn android_rejects_wrong_code_pairs_rust_identity_and_accepts_tls_reconnec
             ConnectOptions {
                 identity: Some(identity.clone()),
                 tls: Some(tls.clone()),
+                tls_policy: TlsPolicy::Required,
                 request_authorization: false,
                 operations: options.clone(),
                 ..Default::default()
@@ -119,6 +120,7 @@ async fn android_tls_reconnect_and_shell_with_persisted_rust_identity() {
             ConnectOptions {
                 identity: Some(identity.clone()),
                 tls: Some(tls.clone()),
+                tls_policy: TlsPolicy::Required,
                 request_authorization: false,
                 operations: options.clone(),
                 ..Default::default()
@@ -147,6 +149,7 @@ async fn android_unpaired_identity_cannot_open_tls_transport() {
         ConnectOptions {
             identity: Some(identity),
             tls: Some(tls),
+            tls_policy: TlsPolicy::Required,
             request_authorization: false,
             operations: OperationOptions {
                 timeout: Duration::from_secs(10),

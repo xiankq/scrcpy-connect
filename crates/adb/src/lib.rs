@@ -12,7 +12,9 @@ pub mod sync;
 pub mod usb;
 pub mod wireless;
 
-pub use client::{AdbStream, Client, ConnectOptions, DeviceInfo, OperationOptions, Transport};
+pub use client::{
+    AdbStream, Client, ConnectOptions, DeviceInfo, OperationOptions, TlsPolicy, Transport,
+};
 pub use error::{Error, Result};
 pub use identity::Identity;
 pub use processes::JdwpTracker;

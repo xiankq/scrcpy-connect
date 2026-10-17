@@ -96,7 +96,20 @@ zero-length packets are preserved. iOS compiles the TCP core and reports USB
 unavailable. Platform USB access/driver entitlements still apply.
 
 For modern wireless debugging, `wireless::pair` runs TLS-bound AOSP SPAKE2 pairing;
-`ConnectOptions::tls` enables STLS/TLS connection with the same host identity.
+`ConnectOptions::tls` configures STLS/TLS with the same host identity; it alone
+does not require encryption. Set `tls_policy: TlsPolicy::Required` for a modern
+wireless endpoint. This rejects plaintext CNXN and AUTH before sending a
+signature or public key, and rejects missing TLS configuration before sending
+the initial handshake. `TlsPolicy::Optional` is the default for legacy TCP/USB
+compatibility and may accept plaintext AUTH/CNXN. `Discovery::reconnect_next`
+always requires TLS for its selected `_adb-tls-connect` services.
+
+This follows the fixed AOSP TLS negotiation path: adbd sends STLS as the first
+response in TLS mode even when host authorization is disabled, and AUTH does
+not provide a fallback for a TLS transport. See
+[`adb.cpp`](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/adb.cpp).
+The required policy prevents plaintext downgrade; it does not add server
+certificate pinning or change ADB's self-signed certificate verification model.
 Pairing and connection ports differ. The supplied RustCrypto TLS provider is
 explicitly experimental; applications must deliberately call
 `TlsConfig::experimental_rustcrypto` or supply their own reviewed provider.

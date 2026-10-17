@@ -2,7 +2,7 @@
 //! official BoringSSL source, then set ADB_BORINGSSL_FIXTURE to its absolute path.
 //! These are ignored by default because the product has no native crypto dependency.
 use interop_adb::{
-    Client, ConnectOptions, Identity, OperationOptions,
+    Client, ConnectOptions, Identity, OperationOptions, TlsPolicy,
     wireless::{self, TlsConfig},
 };
 use std::{
@@ -95,6 +95,7 @@ async fn stls_upgrades_existing_adb_transport_to_tls13_and_waits_for_cnxn() {
         ConnectOptions {
             identity: Some(identity),
             tls: Some(tls),
+            tls_policy: TlsPolicy::Required,
             operations: OperationOptions {
                 timeout: Duration::from_secs(10),
                 ..Default::default()
