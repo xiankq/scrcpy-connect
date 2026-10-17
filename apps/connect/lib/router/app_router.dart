@@ -8,6 +8,7 @@ import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/router/route_repository.dart';
 import 'package:scrcpy_connect/router/record_route.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
+import 'package:scrcpy_connect/widgets/visible_device_focus.dart';
 
 import 'package:scrcpy_connect/pages/activities/activities_page.dart';
 import 'package:scrcpy_connect/pages/add_device/add_device_page.dart';
@@ -105,7 +106,14 @@ Widget _deviceRecord(
     identity: identity,
     preserveContent: ['remote', 'remote-app', 'remote-session'].contains(name),
     load: () => _records(context).device(deviceId),
-    builder: (context, device) => build(context, state, device),
+    builder: (context, device) =>
+        ['remote', 'remote-app', 'remote-session'].contains(name)
+        ? build(context, state, device)
+        : VisibleDeviceFocus(
+            controller: _controller(context),
+            deviceId: value(device, 'id'),
+            child: build(context, state, device),
+          ),
   );
 }
 

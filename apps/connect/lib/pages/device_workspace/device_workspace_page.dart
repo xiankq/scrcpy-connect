@@ -7,11 +7,10 @@ import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class DeviceWorkspacePage extends HookConsumerWidget {
+class DeviceWorkspacePage extends ConsumerWidget {
   const DeviceWorkspacePage({
     super.key,
     required this.controller,
@@ -26,17 +25,6 @@ class DeviceWorkspacePage extends HookConsumerWidget {
     );
     ref.watch(appControllerProvider.select((state) => state.devices));
     final current = controller.currentDevice(device);
-    useEffect(() {
-      var active = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (active &&
-            context.mounted &&
-            ModalRoute.of(context)?.isCurrent != false) {
-          controller.focusDevice(value(device, 'id')).ignore();
-        }
-      });
-      return () => active = false;
-    }, [device['id']]);
     return PageFrame(
       title: deviceName(current),
       subtitle: statusText(value(current, 'status')),
