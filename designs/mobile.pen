@@ -34220,7 +34220,7 @@
       "x": 0,
       "y": 7248,
       "name": "分组 / 文件与传输",
-      "width": 4258,
+      "width": 7632,
       "height": 96,
       "fill": "$transparent",
       "layout": "vertical",
@@ -34250,7 +34250,7 @@
           "fill": "$secondary",
           "textGrowth": "fixed-width",
           "width": "fill_container",
-          "content": "目录、管理、发送与逐项结果 · 9 页",
+          "content": "目录、管理、发送、原文件准备与系统保存分享 · 16 页",
           "lineHeight": "$line-caption",
           "fontFamily": "$font-caption",
           "fontSize": "$size-caption",
@@ -34475,6 +34475,1048 @@
           "fontFamily": "$font-caption",
           "fontSize": "$size-caption",
           "fontWeight": "$weight-caption"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "ERONu",
+      "x": 4338,
+      "y": 7344,
+      "name": "文件与传输 / 原文件准备中",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "z8ZwvL",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "gaSHq",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "保存原文件 / 固定手机 A",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "保存原文件"
+            },
+            "jRKTF": {
+              "content": "手机 A → 本机暂存"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "iJtLo",
+          "x": 24,
+          "y": 138,
+          "name": "原文件准备内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "gPLuR",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "森林片段.mp4 / 固定来源",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "file",
+                  "fill": "$accent-amber"
+                },
+                "nyAaN": {
+                  "content": "森林片段.mp4"
+                },
+                "r3Anl": {
+                  "content": "来源：手机 A · DCIM / Camera"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "T5qiA",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "正在准备原文件",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "download",
+                  "fill": "$accent-amber"
+                },
+                "jkfuF": {
+                  "content": "正在准备原文件"
+                },
+                "zLCqC": {
+                  "content": "原文件完整取回前，不会保存或分享不完整内容。"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "v55zK",
+              "name": "真实字节进度 / 40%",
+              "width": "fill_container",
+              "height": 8,
+              "fill": "$muted",
+              "cornerRadius": "$radius-full",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "latlp",
+                  "x": 0,
+                  "y": 0,
+                  "name": "已取回 10,485,760 字节",
+                  "width": 141.6,
+                  "height": 8,
+                  "fill": "$primary",
+                  "cornerRadius": "$radius-full",
+                  "layout": "none"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "SJsZx",
+              "name": "真实已完成与总字节",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "10,485,760 / 26,214,400 字节",
+              "lineHeight": "$line-numeric",
+              "fontFamily": "$font-numeric",
+              "fontSize": "$size-numeric",
+              "fontWeight": "$weight-numeric"
+            },
+            {
+              "type": "text",
+              "id": "S1HHi",
+              "name": "离页继续与详情入口说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "离开本页后传输可继续。在传输中心查看同一任务，无需重新取回。",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "id": "eAZNQ",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "取消本次传输",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "取消本次传输"
+                }
+              }
+            },
+            {
+              "id": "sISIn",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "查看本次传输详情",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "查看本次传输详情"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "EVGBh",
+              "name": "重新核验原文件",
+              "fill": "$text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "重新核验原文件",
+              "lineHeight": "$line-label",
+              "textAlign": "center",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            }
+          ]
+        },
+        {
+          "id": "IFfo3",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "uhuiJ",
+      "x": 4820,
+      "y": 7344,
+      "name": "文件与传输 / 原文件准备好可系统保存",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "I83EdG",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "ASRVa",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "固定手机 A / 保存原文件",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "保存原文件"
+            },
+            "jRKTF": {
+              "content": "手机 A → 本机暂存"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "kdd4w",
+          "x": 24,
+          "y": 138,
+          "name": "原文件保存与分享内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "uIjtT",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "森林片段.mp4 / 固定来源",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "file",
+                  "fill": "$accent-amber"
+                },
+                "nyAaN": {
+                  "content": "森林片段.mp4"
+                },
+                "r3Anl": {
+                  "content": "来源：手机 A · DCIM / Camera"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "kAhe6",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "原文件已准备好",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "file-check",
+                  "fill": "$accent-amber"
+                },
+                "jkfuF": {
+                  "content": "原文件已准备好"
+                },
+                "zLCqC": {
+                  "content": "已完整取回到本机暂存。选择系统位置保存一份，本机暂存仍保留。"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "jp76c",
+              "name": "保存与分享真实结果说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "只有系统确认写入完成后，才显示保存成功。",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "id": "tgKIQ",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "选择系统位置并保存",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "选择系统位置并保存"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "IcWPy",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Gfe22",
+      "x": 5302,
+      "y": 7344,
+      "name": "文件与传输 / 系统保存已取消",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "wQeIc",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "xSliU",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "固定手机 A / 保存原文件",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "保存原文件"
+            },
+            "jRKTF": {
+              "content": "手机 A → 本机暂存"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "xA5tm",
+          "x": 24,
+          "y": 138,
+          "name": "原文件保存与分享内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "PpNSB",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "森林片段.mp4 / 固定来源",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "file",
+                  "fill": "$accent-amber"
+                },
+                "nyAaN": {
+                  "content": "森林片段.mp4"
+                },
+                "r3Anl": {
+                  "content": "来源：手机 A · DCIM / Camera"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "Ynqge",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "本次系统保存已取消",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "circle-x",
+                  "fill": "$accent-amber"
+                },
+                "jkfuF": {
+                  "content": "本次系统保存已取消"
+                },
+                "zLCqC": {
+                  "content": "已取消系统位置选择。本机暂存仍保留，可重新选择系统位置。"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "yyydF",
+              "name": "保存与分享真实结果说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "这只取消本次保存，不会删除手机 A 上的原文件。",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "id": "obtI2",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "重新选择系统位置",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "重新选择系统位置"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "FRgtf",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "mcRQa",
+      "x": 5784,
+      "y": 7344,
+      "name": "文件与传输 / 已保存到系统位置",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "BbNQh",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "lF23d",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "固定手机 A / 保存原文件",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "保存原文件"
+            },
+            "jRKTF": {
+              "content": "手机 A → 本机暂存"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "zKB4B",
+          "x": 24,
+          "y": 138,
+          "name": "原文件保存与分享内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "kpbdk",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "森林片段.mp4 / 固定来源",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "file",
+                  "fill": "$accent-amber"
+                },
+                "nyAaN": {
+                  "content": "森林片段.mp4"
+                },
+                "r3Anl": {
+                  "content": "来源：手机 A · DCIM / Camera"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "Dz1Qc",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "已保存到系统位置",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "circle-check",
+                  "fill": "$accent-mint"
+                },
+                "jkfuF": {
+                  "content": "已保存到系统位置"
+                },
+                "zLCqC": {
+                  "content": "系统已确认写入完成。\n系统名称：森林片段.mp4"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "CpiIb",
+              "name": "系统保存数量与字节",
+              "fill": "$text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "1 个文件 · 26,214,400 字节",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "type": "text",
+              "id": "Suz6Z",
+              "name": "保存与分享真实结果说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "本机暂存仍保留。如保存到云盘，同步状态请在对应应用确认。",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            }
+          ]
+        },
+        {
+          "id": "fUDFH",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "vSjZS",
+      "x": 6266,
+      "y": 7344,
+      "name": "文件与传输 / 保存未开始就失败",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "lIPXU",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "AGZrV",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "固定手机 A / 保存原文件",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "保存原文件"
+            },
+            "jRKTF": {
+              "content": "手机 A → 本机暂存"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "l1p7c0",
+          "x": 24,
+          "y": 138,
+          "name": "原文件保存与分享内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "G8fQm",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "森林片段.mp4 / 固定来源",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "file",
+                  "fill": "$accent-amber"
+                },
+                "nyAaN": {
+                  "content": "森林片段.mp4"
+                },
+                "r3Anl": {
+                  "content": "来源：手机 A · DCIM / Camera"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "xopJY",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "本次保存未开始",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "circle-alert",
+                  "fill": "$danger"
+                },
+                "jkfuF": {
+                  "content": "本次保存未开始"
+                },
+                "zLCqC": {
+                  "content": "源文件已变化，系统保存尚未开始。请重新核验原文件后再试。"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "T0rAx",
+              "name": "系统保存数量与字节",
+              "fill": "$text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "0 个文件 · 0 字节",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "type": "text",
+              "id": "CQknx",
+              "name": "保存与分享真实结果说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "未写入系统位置。本机暂存未被删除；核验后可重试。",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "id": "lRykW",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "重新选择系统位置",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "重新选择系统位置"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "xeVBN",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "pSoci",
+      "x": 6748,
+      "y": 7344,
+      "name": "文件与传输 / 系统保存结果待核对",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "ywn6x",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "YwUX0",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "固定手机 A / 保存原文件",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "保存原文件"
+            },
+            "jRKTF": {
+              "content": "手机 A → 本机暂存"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "mxtJB",
+          "x": 24,
+          "y": 138,
+          "name": "原文件保存与分享内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "MTBfA",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "森林片段.mp4 / 固定来源",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "file",
+                  "fill": "$accent-amber"
+                },
+                "nyAaN": {
+                  "content": "森林片段.mp4"
+                },
+                "r3Anl": {
+                  "content": "来源：手机 A · DCIM / Camera"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "Eewns",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "系统保存结果待核对",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "circle-alert",
+                  "fill": "$accent-amber"
+                },
+                "jkfuF": {
+                  "content": "系统保存结果待核对"
+                },
+                "zLCqC": {
+                  "content": "系统未确认写入结果，目标位置可能已留下内容。已有结果不会自动重复写入。"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "kuf5q",
+              "name": "保存与分享真实结果说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "请先在系统文件应用核对实际内容。本机暂存仍保留。",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "type": "frame",
+              "id": "tNkzR",
+              "name": "核对后才允许再次保存 / 未勾选",
+              "metadata": {
+                "type": "interaction",
+                "checked": false
+              },
+              "width": "fill_container",
+              "gap": "$space-sm",
+              "padding": [
+                "$space-sm",
+                "$space-zero"
+              ],
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "TEl20",
+                  "name": "未勾选核对",
+                  "width": 22,
+                  "height": 22,
+                  "icon": "square",
+                  "library": "lucide",
+                  "fill": "$text"
+                },
+                {
+                  "type": "text",
+                  "id": "CmeU5",
+                  "name": "核对确认",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "我已在系统文件应用核对，仍需重新保存",
+                  "lineHeight": "$line-label",
+                  "fontFamily": "$font-label",
+                  "fontSize": "$size-label",
+                  "fontWeight": "$weight-label"
+                }
+              ]
+            },
+            {
+              "id": "yj7ZK",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "重新选择系统位置 / 等待勾选核对",
+              "fill": "$tint",
+              "stroke": "$muted",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "重新选择系统位置",
+                  "fill": "$secondary"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "HIE2J",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "cdQol",
+      "x": 7230,
+      "y": 7344,
+      "name": "文件与传输 / 原文件可分享",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "AKQZL",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "MzQ3W",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "分享原文件 / 固定手机 A",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "分享原文件"
+            },
+            "jRKTF": {
+              "content": "手机 A → 本机暂存"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "O45LDR",
+          "x": 24,
+          "y": 138,
+          "name": "原文件保存与分享内容",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "zqCxs",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "森林片段.mp4 / 固定来源",
+              "width": "fill_container",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "file",
+                  "fill": "$accent-amber"
+                },
+                "nyAaN": {
+                  "content": "森林片段.mp4"
+                },
+                "r3Anl": {
+                  "content": "来源：手机 A · DCIM / Camera"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "LTnWc",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "原文件已准备好",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "share-2",
+                  "fill": "$accent-amber"
+                },
+                "jkfuF": {
+                  "content": "原文件已准备好"
+                },
+                "zLCqC": {
+                  "content": "原文件副本已完整取回。本机暂存仍保留，可交给系统选择的应用。"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "N7vt8",
+              "name": "保存与分享真实结果说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "系统分享返回只表示交接状态。最终发送或保存结果，请在接收应用确认。",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "id": "W89GPl",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "交给系统分享",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "交给系统分享"
+                }
+              }
+            },
+            {
+              "id": "HWXhQ",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "查看本次传输详情",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "查看本次传输详情"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "IV6Ly",
+              "name": "重新核验原文件",
+              "fill": "$text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "重新核验原文件",
+              "lineHeight": "$line-label",
+              "textAlign": "center",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            }
+          ]
+        },
+        {
+          "id": "s8PIcW",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
         }
       ]
     }
