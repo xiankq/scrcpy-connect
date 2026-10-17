@@ -8,17 +8,159 @@ use interop_adb::{
     Client, ConnectOptions, OperationOptions, TlsPolicy,
     wireless::{
         self, QrPairing, TlsConfig,
-        discovery::{Discovery, DiscoveryEvent, Service, ServiceKind},
+        discovery::{CONNECT_SERVICE, Discovery, DiscoveryEvent, Service, ServiceKind},
     },
 };
 use serde_json::{Value, json};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet, hash_map::Entry},
     net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
 use tokio_util::sync::CancellationToken;
+
+type DiscoveredServices = Arc<tokio::sync::RwLock<DiscoveredState>>;
+
+const MAX_DISCOVERED_SERVICES_PER_GUID: usize = 8;
+
+#[derive(Default)]
+struct DiscoveredDevice {
+    generation: u64,
+    observed: bool,
+    services: HashMap<String, Service>,
+}
+
+#[derive(Default)]
+struct DiscoveredState {
+    devices: HashMap<String, DiscoveredDevice>,
+    revision: u64,
+}
+
+impl DiscoveredState {
+    fn sync_trusted(&mut self, trusted: HashSet<String>) {
+        self.devices.retain(|guid, _| trusted.contains(guid));
+        for guid in trusted {
+            if let Entry::Vacant(entry) = self.devices.entry(guid) {
+                // Rebuilding a forgotten GUID must never reuse its old epoch.
+                self.revision += 1;
+                entry.insert(DiscoveredDevice {
+                    generation: self.revision,
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    fn observe(&mut self, event: DiscoveryEvent) -> Option<String> {
+        let instance = match &event {
+            DiscoveryEvent::Resolved(service) if service.kind == ServiceKind::Connect => {
+                service.instance.clone()
+            }
+            DiscoveryEvent::Removed { fullname } => fullname
+                .strip_suffix(CONNECT_SERVICE)?
+                .trim_end_matches('.')
+                .to_owned(),
+            _ => return None,
+        };
+        // Only persisted non-USB GUIDs get state. Prefer an exact identity over
+        // interpreting its name as another GUID's conflict suffix.
+        let guid = if self.devices.contains_key(&instance) {
+            instance
+        } else {
+            self.devices
+                .keys()
+                .find(|guid| matches_guid(&instance, guid))?
+                .clone()
+        };
+        let device = self.devices.get_mut(&guid)?;
+        match event {
+            DiscoveryEvent::Resolved(service) => {
+                if device.services.get(&service.fullname) == Some(&service) {
+                    return None;
+                }
+                if !device.services.contains_key(&service.fullname)
+                    && device.services.len() == MAX_DISCOVERED_SERVICES_PER_GUID
+                {
+                    if service.instance != guid {
+                        return None;
+                    }
+                    // Conflict aliases cannot crowd out the exact GUID.
+                    let alias = device
+                        .services
+                        .iter()
+                        .find(|(_, answer)| answer.instance != guid)
+                        .map(|(fullname, _)| fullname.clone())?;
+                    device.services.remove(&alias);
+                }
+                device.services.insert(service.fullname.clone(), service);
+            }
+            DiscoveryEvent::Removed { fullname } => {
+                if device.services.remove(&fullname).is_none() && device.observed {
+                    return None;
+                }
+            }
+        }
+        // One GUID-level marker suppresses cached endpoints after a goodbye;
+        // no per-fullname tombstones survive removal. Every accepted change or
+        // eviction advances the epoch, including same-endpoint reannouncements.
+        device.observed = true;
+        self.revision += 1;
+        device.generation = self.revision;
+        Some(guid)
+    }
+
+    fn generation(&self, guid: &str) -> u64 {
+        self.devices.get(guid).map_or(0, |device| device.generation)
+    }
+
+    fn endpoints(&self, guid: &str) -> Option<Vec<SocketAddr>> {
+        let device = self.devices.get(guid)?;
+        if !device.observed {
+            return None;
+        }
+        let mut endpoints = device
+            .services
+            .values()
+            .flat_map(|service| service.endpoints.iter().copied())
+            .collect::<Vec<_>>();
+        endpoints.sort();
+        endpoints.dedup();
+        Some(endpoints)
+    }
+}
+
+struct DiscoveredAttempt {
+    services: DiscoveredServices,
+    guid: String,
+    endpoints: Option<Vec<SocketAddr>>,
+    generation: u64,
+}
+
+impl DiscoveredAttempt {
+    async fn is_current(&self) -> bool {
+        self.services.read().await.generation(&self.guid) == self.generation
+    }
+}
+
+fn discovery_changed() -> CoreError {
+    CoreError::new(
+        "discovery_changed",
+        "设备网络地址已更新，将使用最新地址重连。",
+    )
+}
+
+fn authorization_failed(error: &CoreError) -> bool {
+    error.code == "authorization_required"
+        || [
+            "CertificateRequired",
+            "BadCertificate",
+            "CertificateUnknown",
+            "UnknownCA",
+        ]
+        .iter()
+        .any(|reason| error.message.contains(reason))
+}
 
 fn operations(seconds: u64, cancellation: CancellationToken) -> OperationOptions {
     OperationOptions {
@@ -366,19 +508,20 @@ impl Runtime {
         }
         result
     }
-    async fn connect_device_with_authorization(
-        &self,
-        id: &str,
-        request_authorization: bool,
-    ) -> CoreResult<Value> {
-        self.connect_device_with_token(id, request_authorization, CancellationToken::new())
-            .await
-    }
     async fn connect_device_with_token(
         &self,
         id: &str,
         request_authorization: bool,
         token: CancellationToken,
+    ) -> CoreResult<Value> {
+        Box::pin(self.connect_device_with_candidates(id, request_authorization, token, None)).await
+    }
+    async fn connect_device_with_candidates(
+        &self,
+        id: &str,
+        request_authorization: bool,
+        token: CancellationToken,
+        discovered: Option<DiscoveredAttempt>,
     ) -> CoreResult<Value> {
         if token.is_cancelled() {
             return Err(CoreError::new("cancelled", "连接已取消。"));
@@ -405,7 +548,13 @@ impl Runtime {
             if let Some(previous) = pending.insert(id.into(), token.clone()) {
                 previous.cancel();
             }
-            if record.transport != "usb" && record.port == 0 {
+            if record.transport != "usb"
+                && record.port == 0
+                && discovered
+                    .as_ref()
+                    .and_then(|answer| answer.endpoints.as_ref())
+                    .is_none_or(Vec::is_empty)
+            {
                 pending.remove(id);
                 return Err(CoreError::new(
                     "connection_port_required",
@@ -418,32 +567,96 @@ impl Runtime {
             record.clone()
         };
         self.changed_devices().await?;
-        let attempt = async {
+        let mut attempt = async {
             let mut options = self.connect_options(token.clone()).await?;
             options.request_authorization = request_authorization;
             if device.transport != "usb" && (device.transport == "tls" || device.guid.is_some()) {
                 options.tls_policy = TlsPolicy::Required;
             }
-            let client = if device.transport == "usb" {
-                self.connect_usb_record(&device, options).await?
+            let (client, connected_endpoint) = if device.transport == "usb" {
+                (self.connect_usb_record(&device, options).await?, None)
+            } else if let Some((discovered, endpoints)) = discovered.as_ref().and_then(|answer| {
+                answer
+                    .endpoints
+                    .as_ref()
+                    .map(|endpoints| (answer, endpoints))
+            }) {
+                // Modern discovery never weakens the persisted trust policy.
+                options.tls_policy = TlsPolicy::Required;
+                // An unreachable interface must not consume the entire retry
+                // window before another advertised address can be attempted.
+                options.operations.timeout = Duration::from_secs(5);
+                let mut result = Err(CoreError::new("unreachable", "当前发现地址均不可达。"));
+                for address in endpoints {
+                    if token.is_cancelled() {
+                        return Err(CoreError::new("cancelled", "连接已取消。"));
+                    }
+                    if !discovered.is_current().await {
+                        return Err(discovery_changed());
+                    }
+                    match Client::connect_tcp(*address, options.clone()).await {
+                        Ok(client) => {
+                            result = Ok((client, Some(*address)));
+                            break;
+                        }
+                        Err(interop_adb::Error::Cancelled) => {
+                            return Err(CoreError::new("cancelled", "连接已取消。"));
+                        }
+                        Err(error) => {
+                            // An obsolete socket's rejection must not disable
+                            // automatic retries for the replacement endpoint.
+                            if !discovered.is_current().await {
+                                return Err(discovery_changed());
+                            }
+                            let error = CoreError::from(error);
+                            if authorization_failed(&error) {
+                                return Err(error);
+                            }
+                            result = Err(error);
+                        }
+                    }
+                }
+                result?
             } else {
-                Client::connect_tcp(endpoint(&device.address, device.port), options).await?
+                (
+                    Client::connect_tcp(endpoint(&device.address, device.port), options).await?,
+                    None,
+                )
             };
             let info = metadata(&client, token.clone()).await;
-            self.attach_client(id, client, info, &token).await
+            self.attach_client(
+                id,
+                client,
+                info,
+                &token,
+                connected_endpoint,
+                discovered.as_ref(),
+            )
+            .await
         }
         .await;
-        if let Err(error) = &attempt {
+        if attempt.is_err() {
             let pending = self.device_operations.lock().await;
             if !token.is_cancelled() || pending.get(id).is_some_and(CancellationToken::is_cancelled)
             {
                 let mut store = self.store.write().await;
+                // Take the discovery guard after waiting for the publication
+                // locks: an old socket's rejection cannot revoke retries for a
+                // newer answer that arrived during those waits.
+                let services = if let Some(discovered) = &discovered {
+                    let services = discovered.services.read().await;
+                    if services.generation(&discovered.guid) != discovered.generation
+                        && !token.is_cancelled()
+                    {
+                        attempt = Err(discovery_changed());
+                    }
+                    Some(services)
+                } else {
+                    None
+                };
+                let error = attempt.as_ref().expect_err("failed connection attempt");
                 if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
-                    let unauthorized = error.code == "authorization_required"
-                        || error.message.contains("CertificateRequired")
-                        || error.message.contains("BadCertificate")
-                        || error.message.contains("CertificateUnknown")
-                        || error.message.contains("UnknownCA");
+                    let unauthorized = authorization_failed(error);
                     record.status = if unauthorized {
                         "unauthorized"
                     } else {
@@ -455,6 +668,7 @@ impl Runtime {
                         record.auto_reconnect = false;
                     }
                 }
+                drop(services);
             }
             drop(pending);
             self.changed_devices().await?;
@@ -467,6 +681,8 @@ impl Runtime {
         client: Client,
         info: Metadata,
         token: &CancellationToken,
+        connected_endpoint: Option<SocketAddr>,
+        discovered: Option<&DiscoveredAttempt>,
     ) -> CoreResult<Value> {
         let _pending = self.device_operations.lock().await;
         if token.is_cancelled() {
@@ -481,6 +697,19 @@ impl Runtime {
         }
         let device = {
             let mut store = self.store.write().await;
+            // Keep the generation check atomic with the record/client update.
+            // Even a cached attempt has a baseline, and withdraw/reannounce at
+            // the same address is a new generation rather than the old answer.
+            let _services = if let Some(discovered) = discovered {
+                let services = discovered.services.read().await;
+                if services.generation(&discovered.guid) != discovered.generation {
+                    client.close();
+                    return Err(discovery_changed());
+                }
+                Some(services)
+            } else {
+                None
+            };
             let record = store
                 .devices
                 .iter_mut()
@@ -511,6 +740,11 @@ impl Runtime {
             }
             if info.serial.is_some() {
                 record.serial = info.serial;
+            }
+            if let Some(endpoint) = connected_endpoint {
+                record.address = address_of(endpoint);
+                record.port = endpoint.port();
+                record.transport = "tls".into();
             }
             record.battery = info.battery;
             record.status = "connected".into();
@@ -1092,7 +1326,8 @@ impl Runtime {
             record.transport = "usb".into();
             record.id.clone()
         };
-        self.attach_client(&id, client, info, token).await
+        self.attach_client(&id, client, info, token, None, None)
+            .await
     }
     async fn connect_usb_record(
         &self,
@@ -1430,6 +1665,7 @@ impl Runtime {
         tokio::spawn(async move {
             let mut backoff = HashMap::<String, (u32, Instant)>::new();
             let mut reconnecting = HashMap::<String, tokio::task::JoinHandle<()>>::new();
+            let services = DiscoveredServices::default();
             let discovery = Discovery::new().ok();
             loop {
                 tokio::time::sleep(Duration::from_secs(2)).await;
@@ -1477,10 +1713,21 @@ impl Runtime {
                         let _ = runtime.changed_devices().await;
                     }
                 }
+                let trusted = runtime
+                    .store
+                    .read()
+                    .await
+                    .devices
+                    .iter()
+                    .filter(|device| device.transport != "usb")
+                    .filter_map(|device| device.guid.clone())
+                    .filter(|guid| !guid.is_empty())
+                    .collect();
+                services.write().await.sync_trusted(trusted);
                 if let Some(discovery) = &discovery {
                     let options = operations(1, CancellationToken::new());
                     for _ in 0..8 {
-                        let Ok(Ok(DiscoveryEvent::Resolved(service))) = tokio::time::timeout(
+                        let Ok(Ok(event)) = tokio::time::timeout(
                             Duration::from_millis(5),
                             discovery.next(&options),
                         )
@@ -1488,31 +1735,19 @@ impl Runtime {
                         else {
                             break;
                         };
-                        if service.kind != ServiceKind::Connect {
-                            continue;
-                        }
-                        let Some(endpoint) = service.endpoints.first().copied() else {
-                            continue;
+                        let changed = {
+                            let mut services = services.write().await;
+                            let Some(guid) = services.observe(event) else {
+                                continue;
+                            };
+                            guid
                         };
-                        let mut changed = false;
-                        for record in &mut runtime.store.write().await.devices {
-                            if record
-                                .guid
-                                .as_ref()
-                                .is_some_and(|guid| matches_guid(&service.instance, guid))
+                        for record in &runtime.store.read().await.devices {
+                            if record.guid.as_deref() == Some(changed.as_str())
                                 && record.transport != "usb"
                             {
-                                let address = address_of(endpoint);
-                                if record.address != address || record.port != endpoint.port() {
-                                    record.address = address;
-                                    record.port = endpoint.port();
-                                    backoff.remove(&record.id);
-                                    changed = true;
-                                }
+                                backoff.remove(&record.id);
                             }
-                        }
-                        if changed {
-                            let _ = runtime.changed_devices().await;
                         }
                     }
                 }
@@ -1522,11 +1757,7 @@ impl Runtime {
                     .await
                     .devices
                     .iter()
-                    .filter(|d| {
-                        d.auto_reconnect
-                            && d.status == "offline"
-                            && (d.transport == "usb" || d.port != 0)
-                    })
+                    .filter(|d| d.auto_reconnect && d.status == "offline")
                     .cloned()
                     .collect::<Vec<_>>();
                 for device in records {
@@ -1536,6 +1767,37 @@ impl Runtime {
                     if backoff
                         .get(&device.id)
                         .is_some_and(|(_, deadline)| Instant::now() < *deadline)
+                    {
+                        continue;
+                    }
+                    let discovered = if device.transport != "usb" {
+                        if let Some(guid) = &device.guid {
+                            let answers = services.read().await;
+                            Some(DiscoveredAttempt {
+                                services: services.clone(),
+                                guid: guid.clone(),
+                                endpoints: answers.endpoints(guid),
+                                generation: answers.generation(guid),
+                            })
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    if discovered
+                        .as_ref()
+                        .and_then(|answer| answer.endpoints.as_ref())
+                        .is_some_and(Vec::is_empty)
+                    {
+                        continue;
+                    }
+                    if device.transport != "usb"
+                        && device.port == 0
+                        && discovered
+                            .as_ref()
+                            .and_then(|answer| answer.endpoints.as_ref())
+                            .is_none()
                     {
                         continue;
                     }
@@ -1557,7 +1819,13 @@ impl Runtime {
                     reconnecting.insert(
                         device.id,
                         tokio::spawn(async move {
-                            let _ = owner.connect_device_with_authorization(&id, false).await;
+                            let _ = Box::pin(owner.connect_device_with_candidates(
+                                &id,
+                                false,
+                                CancellationToken::new(),
+                                discovered,
+                            ))
+                            .await;
                         }),
                     );
                 }
