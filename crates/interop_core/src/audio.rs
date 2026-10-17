@@ -179,7 +179,25 @@ fn should_forward_pcm(data: &Value) -> bool {
 
 impl Runtime {
     pub(crate) async fn stop_device_audio(&self, device: &str) {
-        self.audio_sources.lock().await.remove(device);
+        let _ = self
+            .audio_command("audio.stop", &json!({"deviceId":device}))
+            .await;
+    }
+
+    pub(crate) async fn audio_activity_sources(&self) -> Vec<Value> {
+        let mut sources = Vec::new();
+        for source in self.audio_sources.lock().await.values() {
+            let data = source.state.read().await;
+            if !source.cancellation.is_cancelled()
+                && matches!(
+                    data["status"].as_str(),
+                    Some("starting" | "playing" | "paused")
+                )
+            {
+                sources.push(data.clone());
+            }
+        }
+        sources
     }
 
     pub(crate) async fn audio_command(&self, command: &str, params: &Value) -> CoreResult<Value> {
@@ -196,14 +214,31 @@ impl Runtime {
         }
         if command == "audio.stop" {
             let mut sources = self.audio_sources.lock().await;
-            if let Some(source) = sources.get(&device_id)
-                && let Some(id) = params["sourceId"].as_str()
-                && source.state.read().await["sourceId"] != id
-            {
-                return Err(CoreError::new("source_changed", "设备音源已重新连接。"));
-            }
+            let stopped = if let Some(source) = sources.get(&device_id) {
+                let mut data = source.state.write().await;
+                if params["sourceId"]
+                    .as_str()
+                    .is_some_and(|id| data["sourceId"] != id)
+                {
+                    return Err(CoreError::new("source_changed", "设备音源已重新连接。"));
+                }
+                data["status"] = json!("stopped");
+                data["nativeAttached"] = json!(false);
+                Some(data.clone())
+            } else {
+                None
+            };
             sources.remove(&device_id);
-            return Ok(json!({"deviceId":device_id,"status":"stopped"}));
+            // Publish removal while the registry guard is still held, so an
+            // event-fenced activity snapshot cannot miss this state change.
+            let source_id = stopped.as_ref().map_or_else(
+                || params["sourceId"].clone(),
+                |data| data["sourceId"].clone(),
+            );
+            if let Some(data) = stopped {
+                emit(&self.events, "audio.updated", &device_id, data);
+            }
+            return Ok(json!({"deviceId":device_id,"sourceId":source_id,"status":"stopped"}));
         }
         let (state, cancellation) = {
             let sources = self.audio_sources.lock().await;
@@ -322,6 +357,12 @@ impl Runtime {
                     cancellation: cancellation.clone(),
                     state: state.clone(),
                 },
+            );
+            emit(
+                &self.events,
+                "audio.updated",
+                device_id,
+                state.read().await.clone(),
             );
         }
         let jar = format!("/data/local/tmp/interop-audio-{id}.jar");

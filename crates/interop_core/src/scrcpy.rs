@@ -1474,6 +1474,13 @@ wait "$child""#
                 activities.push(json!({"id":format!("observation:{id}"),"deviceId":id,"deviceName":device_name(id),"name":"通知与来电观察","status":observation["phase"],"canStop":true,"stopImpact":"仅停止这台设备的通知与来电观察；剪贴板和媒体处理保持运行。"}));
             }
         }
+        for source in self.audio_activity_sources().await {
+            let device = source["deviceId"].as_str().unwrap_or_default();
+            let source_id = source["sourceId"].as_str().unwrap_or_default();
+            activities.push(json!({"id":format!("audio:{source_id}"),"deviceId":device,"sourceId":source_id,
+                "deviceName":device_name(device),"name":"设备声音","status":source["status"],"canStop":true,
+                "stopImpact":"仅停止这台设备的这一代音源；设备连接、控制会话、通知与来电观察及其他设备音源保持运行。"}));
+        }
         Ok(json!({"activities":activities,"sessions":sessions,"transfers":transfers["transfers"]}))
     }
 

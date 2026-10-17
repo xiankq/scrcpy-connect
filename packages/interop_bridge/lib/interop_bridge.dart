@@ -37,6 +37,7 @@ class InteropBridge {
   final _videoMonitors = <String, Timer>{};
   final _videoPolling = <String>{};
   final _audioSources = <String, Map<String, dynamic>>{};
+  final _audioClosings = <String, Future<void>>{};
   final _mediaIntents = MediaIntents();
   bool _disposed = false;
   Future<void>? _disposing;
@@ -330,7 +331,24 @@ class InteropBridge {
     }
   }
 
-  Future<void> _closeAudio(String id) async {
+  Future<void> _closeAudio(String id) {
+    if (_audioClosings[id] case final pending?) return pending;
+    final closing = _releaseAudio(id);
+    _audioClosings[id] = closing;
+    void finished() {
+      if (identical(_audioClosings[id], closing)) _audioClosings.remove(id);
+    }
+
+    unawaited(
+      closing.then<void>(
+        (_) => finished(),
+        onError: (Object _, StackTrace _) => finished(),
+      ),
+    );
+    return closing;
+  }
+
+  Future<void> _releaseAudio(String id) async {
     _audioSources.remove(id);
     await _audioOutputs.stop(id);
   }
@@ -493,13 +511,10 @@ class InteropBridge {
       _mediaIntents.stopAudioDevice(params['deviceId'] as String);
     } else if (['devices.disconnect', 'devices.forget'].contains(command)) {
       _mediaIntents.stopDevice('${params['deviceId']}');
-    } else if (command == 'activities.stop' && params['id'] is String) {
-      final id = params['id'] as String;
+    } else if (command == 'activities.stop' && params['activityId'] is String) {
+      final id = params['activityId'] as String;
       if (id.startsWith('session:')) {
         _mediaIntents.stop(id.substring(8), audio: false);
-      }
-      if (id.startsWith('audio:')) {
-        _mediaIntents.stop(id.substring(6), audio: true);
       }
       if (id.startsWith('connection:')) {
         _mediaIntents.stopDevice(id.substring(11));
@@ -842,6 +857,20 @@ class InteropBridge {
     }
     if (command == 'audio.stop') {
       for (final id in stoppingAudioIds) {
+        await _closeAudio(id);
+      }
+    }
+    if (command == 'activities.stop' &&
+        result['status'] == 'stopped' &&
+        result['sourceId'] is String &&
+        result['deviceId'] is String &&
+        params['activityId'] == 'audio:${result['sourceId']}') {
+      final id = result['sourceId'] as String;
+      final source = _audioSources[id];
+      if (source == null || source['deviceId'] == result['deviceId']) {
+        // The core receipt binds this stop to one capture generation. Cancel
+        // that pending intent and await its local Player release before reply.
+        _mediaIntents.stop(id, audio: true);
         await _closeAudio(id);
       }
     }

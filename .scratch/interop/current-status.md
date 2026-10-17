@@ -24,13 +24,13 @@
 | 08 文件与传输；R28–R30/R38，C11–C14 | **部分**：目录／基础管理、双向传输、三选一远端冲突／本批策略、无覆盖发布、有界搜索；A44已实施精确原件／操作的持久保存账本，13项Runtime重开／并发／限额／落盘失败及跨页unknown回归通过。双AVD取消→保存→离页重进恢复saved→分享43秒通过，独立63字节／hash／grant及重进截图已核验 | **未验**：Android实际写入中杀进程／unknown恢复及切设备迟到回执；Runtime重开不替代此证据。**部分**：已有批量选择、目录扫描／导入／导出与批次进度代码，最终交付和异常闭环未验。**未实现／未验**：浏览分类完整体验、provider／非seek／云盘／空间／撤权、恢复意图及外部分享打断系统选择器（A55）。A48系统provider冲突已迁到共享协调器与Flutter页面，按operation／conflict身份决定并支持本次后续策略；多USB设备选择仍由Kotlin产品AlertDialog决定。系统目录冲突真实E2E最终r5完整3分02秒通过并核验文件／零成果标题，前几轮夹具及第四轮目视发现的误报均保留记录；下一步继续实际中断与USB共享选择 | [09](issues/09-file-endpoints-and-recovery.md)、[14](issues/14-background-and-recovery.md)、[19](issues/19-dependency-license-and-updates.md) |
 | 09 相册与预览；R31，C15–C17 | **部分**：缩略图／旋转／单项大小和并发限制；真实网格JPEG／MP4→原件预览→准备→系统取消／保存／分享，字节／hash／授权／双MIME；视频时钟／暂停／定位／静音 | **未实现／未验**：总磁盘预算／淘汰／清理及活动原件保护（A51）；A53本批已接动态共享目录扫描、权限空DONE复核、部分结果、冻结快照分页和mtime；10项公开Runtime协议fixture、7项公开页面测试及真实105原件双AVD85秒链路已通过；目视新发现A57已补共享调度／精确取消／有限重试，9项公开测试及真实15＋21张可见网格解码通过，完整异常／长稳仍待验，持续增量／其他用户和卷等仍独立说明；持续增量及实际大原件准备进度／取消、批量、全格式／损坏／缓冲／结束／断线／源变化／空间矩阵；无音轨MP4不证明物理音频。下一步大原件中断／离页取消，先验证准备活动与残留 | [10](issues/10-gallery-video-and-content.md)、[09](issues/09-file-endpoints-and-recovery.md)、[18](issues/18-complete-design-state-coverage.md) |
 | 10 剪贴板与分享；R27–R28，C26–C27 | **部分**：文本跟随／固定／隔离与普通主控后台停读、专用页返回正确跟随；外部九模式导入／取消；出站文本／JPEG／MP4真实Sharesheet和独立receiver | **未实现／未验**：图片／文件剪贴板URI授权生命周期；入站内容实际提交指定设备、提交时切焦点不串线、系统本机打开、批量／大原件。下一步外部URI→选A→切到B→独立核验A字节且B不变，并测授权撤回 | [13](issues/13-device-targets-and-sharing.md)、[09](issues/09-file-endpoints-and-recovery.md)、[20](issues/20-android-validation-bench.md) |
-| 11 后台、恢复与活动；R21/R38–R40，C28–C29 | **部分**：不可见视频协作暂停、主动声音／Activity重建、同runtime水位快照校准和过期播放器清理、主标签核验重试；回复跨页保护；A44系统保存持久账本及重开pending转unknown，真实saved离页重进通过 | **未实现／未验**：断网／换网／进程死亡／系统Stop／重启的完整活动意图与恢复资格；音源尚未列入当前活动或独立停止分派（A23）；观察已有独立停止，任务仍需按具体活动核对。Android写入中杀进程的unknown恢复仍未验。下一步活动×中断原因矩阵逐格注入并核对主动停仍停／未知副作用不重放 | [14](issues/14-background-and-recovery.md)、[15](issues/15-identity-trust-and-transports.md)、[20](issues/20-android-validation-bench.md) |
+| 11 后台、恢复与活动；R21/R38–R40，C28–C29 | **部分**：不可见视频协作暂停、主动声音／Activity重建、同runtime水位快照校准和过期播放器清理、主标签核验重试；回复跨页保护；A44系统保存持久账本及重开pending转unknown，真实saved离页重进通过 | **未实现／未验**：断网／换网／进程死亡／系统Stop／重启的完整活动意图与恢复资格；A23已接设备音源活动投影、精确sourceId独立停止与本地Player释放；真实播放→确认停止→连接／观察保留9秒通过。任务仍需按具体活动核对。Android写入中杀进程的unknown恢复仍未验。下一步活动×中断原因矩阵逐格注入并核对主动停仍停／未知副作用不重放 | [14](issues/14-background-and-recovery.md)、[15](issues/15-identity-trust-and-transports.md)、[20](issues/20-android-validation-bench.md) |
 | 12 设计、易用性与研究；R01/R41–R50/R52，C01–C32 | **部分**：同一pen **93独立页／12类／26母组件／588实例／153变量**，保存重开核对；新tch6A／qTeGO；浅色／黑中性／小彩色／Lucide、全屏共享组件；实时背景折射已实现并有实际视频截图 | **未实现／未验**：全部状态与实际UI闭环、可打断液态形变、独立光学／视频性能／大字／读屏／高对比／减少动态矩阵、token全覆盖；A45内拖已通过组件与真实远控验收，TalkBack／完整无障碍仍未验；OPPO／vivo地区与端角色操作证据，Apple自身连续互通官方流程研究（A54）已补，实操未验；当前实际依赖的逐库契约／版本差异未闭合（A56）。下一步按coverage逐流程补入口→操作→失败→恢复并对照真实UI；相册范围面板短内容高度／灰色材质仍有实际视觉差距，93页静态完整性不等于实现验收 | [16](issues/16-glass-and-performance-budget.md)、[17](issues/17-manufacturer-mobile-flows.md)、[18](issues/18-complete-design-state-coverage.md)、[19](issues/19-dependency-license-and-updates.md) |
 
 ## 证据入口与优先顺序
 
 1. **按用户最新要求渐进交付**：每批完成一条可用产品链路及对应必要验收，再推进下一条；尚未覆盖的边界明确留账，不围绕同一项反复扩展细节。新增明确的数据安全／重复副作用或崩溃问题优先处理，普通视觉细化不长期阻塞功能推进。
-2. **下一批顺序**：A23活动列表的音源独立停止→入站分享准确提交指定设备→远控IME→通话分级能力。各批保留精确对象、操作结果及失败出口；物理设备或其他宿主专属证据单独登记。
+2. **下一批顺序**：A23活动列表的音源独立停止已完成本批链路，继续入站分享准确提交指定设备→远控IME→通话分级能力。各批保留精确对象、操作结果及失败出口；物理设备或其他宿主专属证据单独登记。
 3. **按风险验收并阶段汇总**：局部改动先跑相应公开边界回归和可运行真实链路；完整工程门禁用于阶段汇总／依赖与打包变更，不把每个低影响细节都展开成新一轮全量测试。A43／A44／A49恢复、A48 USB共享选择、A51缓存、动态视觉／无障碍／性能、生产密码与四宿主等未闭合项继续按原任务推进。
 
 | 证据 | 可复现入口／实际边界 |
@@ -91,3 +91,11 @@ A54已补[Apple自身连续互通工作流](../../docs/research/apple-continuity
 新锁版Rust核心对iOS／macOS／Windows交叉check分别4.24／4.18／8.26秒通过（`/tmp/connect-mdns-safe-core-cross-checks.log`），不是对应宿主Flutter链接或整包。普通main实际构建15.2秒、安装881ms、R热重启2,929ms，`/tmp/connect-gallery-mdns-main.log`；设备列表空态截图`/tmp/connect-gallery-mdns-main-restarted.png`已目视后detach，保留两条FRB旧isolate告警，不以首页代全页／光学／无障碍／性能验收。
 
 本批仍无任何领域整体完成；十二领域与二十原任务继续开放。原先未跟踪的clipboard／documents／input测试与examples没有夹带提交，没有push。
+
+## 渐进交付：设备声音独立停止（A23）
+
+设备声音按精确sourceId出现在当前活动，确认只停止该音源，Core发状态事件并移除捕获，本地fvp输出释放完成才回复；旧活动不能停止替代音源。Bridge同时纠正activities.stop参数名，合并事件与请求并发触发的同音源close。公开Runtime两设备协议fixture与Flutter活动页／音频输出窄回归通过；播放状态中文漏映射先红后绿修复。
+
+真实主控＋被控AVD第三轮9秒通过（`/tmp/connect-audio-activities-r3.log`、`/tmp/connect-e2e/audio-activities-r3/result.json`）：实际PCM及fvp时钟前进，页面确认停止后Core源和本地输出均消失，连接／通知来电观察及基线媒体保留，精确清理全部true。播放／确认／停止后三张截图已目视。首轮误把异步starting当终态、第二轮普通main构建遗留的测试插件注册缺失均未计通过；离线pub get恢复自动注册后通过，无生产原生代码改动。
+
+只验收本批链路，不冒称物理声音、双向通话、进程死亡恢复或新一轮完整门禁。前一批三ABI留存APK和全门禁属于A23之前的源码。本批通过后即推进入站分享，剩余活动中断矩阵继续保留。

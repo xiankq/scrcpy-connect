@@ -261,6 +261,24 @@ impl Runtime {
 
     pub(crate) async fn stop_activity(self: &Arc<Self>, params: &Value) -> CoreResult<Value> {
         let id = required(params, "activityId")?;
+        if let Some(source_id) = id.strip_prefix("audio:") {
+            let source = self
+                .audio_activity_sources()
+                .await
+                .into_iter()
+                .find(|source| source["sourceId"] == source_id)
+                .ok_or_else(|| {
+                    CoreError::new("not_found", "此音源活动已结束或已被新一代音源替换。")
+                })?;
+            // Bind to the observed device, then atomically recheck the source
+            // generation inside audio.stop before removing its current owner.
+            return self
+                .audio_command(
+                    "audio.stop",
+                    &json!({"deviceId":source["deviceId"],"sourceId":source_id}),
+                )
+                .await;
+        }
         if let Some(id) = id.strip_prefix("observation:") {
             return self
                 .observation_command("observation.stop", &json!({"deviceId":id}))

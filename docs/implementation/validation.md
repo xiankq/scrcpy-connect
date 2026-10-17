@@ -659,3 +659,13 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 最终普通main实际构建15.2秒、安装881ms，CLI R热重启2,929ms，日志`/tmp/connect-gallery-mdns-main.log`；截图`/tmp/connect-gallery-mdns-main-restarted.png`已目视，设备列表固定首屏／浅色黑主动作／紫色小元素和玻璃导航可见，随后detach。仍有两条FRB旧isolate投递告警；这是普通入口检查，不代表完整视觉或性能。相册范围面板的短内容空白／灰色材质层次已记为实际视觉待改。
 
 普通main部署覆盖同路径APK，第一次留存副本缺armv7，独立ELF校验明确拒绝，未记为三架构产物。detach后以同一源码另建三ABI APK，44.9秒通过，`/tmp/connect-gallery-three-abis-retained.log`；立即复制并独立核对六个Flutter／Rust ELF。有效保留物`/tmp/connect-gallery-verified-apk-bo5dw7zs/app-debug.apk`，250013986字节，SHA-256 `2df5e735d8e5027139f250e6526ad1f7f62a7238e4c0d40e21c7e00a94118a7d`；回执`/tmp/connect-gallery-apk-receipt.json`。这是临时调试包，不是发布签名／其余宿主产物，不进Git。
+
+## 渐进交付：活动页独立停止设备声音（A23，2026-10-18）
+
+公开Runtime双设备ADB协议fixture验证精确音源活动、停止保留B、旧sourceId不误停替代源；它不替代真实Android。Flutter活动页确认／精确activityId与既有PortableAudioOutputs共23项通过；新增中文播放状态断言先红后绿。相关5文件严格分析无问题。
+
+真实运行：在apps/connect执行`rtk proxy env PATH=<toolchain> ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/audio-activities-r3 flutter drive -d emulator-5554 --no-pub --driver=test_driver/audio_activities.dart --target=integration_test/audio_activities_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556`。第三轮9秒通过，构建10.3秒／安装856ms，日志`/tmp/connect-audio-activities-r3.log`。严格driver要求8个结果全部true及3张截图；回执`/tmp/connect-e2e/audio-activities-r3/result.json`满足。实际PCM、fvp准备／播放与时钟前进后，活动页确认停止，Core源及精确本地输出消失，连接／观察及基线媒体保留，finally清理完整。播放／确认／停止后截图已目视。
+
+首轮在observation.start返回starting时错误要求终态；改只读轮询后继续。第二轮MissingPluginException发生于截图：先前普通main的自动GeneratedPluginRegistrant排除了dev测试插件，而--no-pub没有重新生成；执行离线flutter pub get恢复自动注册后第三轮通过。没有手改注册器或生产Kotlin，没有把失败计通过。
+
+本批按用户要求只跑对应窄检查与这一条实际链路，前批完整门禁／三ABI APK不可冒称A23的门禁或产物。物理音频输出、真实多源同时播放后只停一台、后台／进程恢复及通话仍独立待验。
