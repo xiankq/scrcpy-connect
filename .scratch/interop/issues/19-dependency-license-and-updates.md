@@ -42,3 +42,12 @@ Requirements: R07–R16、R43–R44、R50
 ## 本轮持续门禁与职责审计：A46／A48
 
 A46确认CI仅运行不带`--android`的`tool/check.sh`，三ABI APK和native ownership main只有条件／本地证据，没有CI门禁；补明确job及实际失败阻断后再记通过，四宿主与MDK原生摘要／许可闭包继续开放。A48确认provider冲突产品说明及选择仍在`PlatformDocuments.kt`，共享协调器主动调用平台conflict；第16批“原生仅OS适配”是过宽结论，须回迁共享产品层并复验。当前入口：[当前完成度](../current-status.md)。
+
+
+## 本次逐指令复核补回的关闭条件
+
+- [ ] A56：形成当前直接依赖→锁版→一手API／源码→使用契约→四端条件→实际验收映射，覆盖file_picker13.1.0、share_plus13.3.1、open_filex5.0.0、qr_flutter4.1.0、path_provider2.1.6、FRB hooks2.13.0／code_assets2.1.0等，不仅列候选库名称。
+- [ ] mdns-sd研究0.21.5与实际0.17.2差异有明确处置；协议fuzz有可运行入口及回归种子。此要求不授权无依据升级依赖。
+- [ ] 修正会诱导回归的当前指导：ADR构建状态、页面计数、离页与显式关闭、播放器所有权及SAF返回已有URI反例；研究索引必须能找到提供方专项。
+
+源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。

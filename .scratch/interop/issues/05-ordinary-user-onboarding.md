@@ -47,3 +47,13 @@ Requirements: R02–R05、R10、R19、R37、R53–R54
 隔离secure=1 API36 AVD已跑真实app.main/FRB/Rust身份：未配对拒绝→错码拒绝→系统新码PAKE→独立端口Required TLS→系统接口精确撤权→旧身份拒绝及停止重连→精确清理，64秒通过。Core CertificateUnknown误归offline已公开红绿回归并修复。直接Settings Forget因AtomicFile持久化竞争仍失败，未算入上述通过；host夹具固定API36且不成为用户调试/root前提。
 
 任务保持开放：QR/mDNS/过期/切网/切后台/USB/旧系统、量产/OEM/重装/四端身份保护及成熟密码链尚未闭合；普通用户表单仍暴露英文证书原错。完整范围、失败与重跑入口见[首次配对](../../../docs/implementation/first-pairing.md)和[当前差距](../completion-reassessment.md#122-当前差距按完整产品而非单次实验判断)。
+
+
+## 本次逐指令复核补回的关闭条件
+
+- [ ] A52：普通用户路径覆盖备用地址／多网卡及真实切网重连，不让第一个不可达地址掩盖可达设备。
+- [ ] A48：多USB设备选择在Flutter共享界面完成；取消／Activity重建／迟到授权只归属原尝试，两个系统授权步骤仍由实际系统事实推进。
+
+源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。
+
+在途中文错误提示尚需同步first_pairing真实E2E：保留实际RequestFailure的peer拒绝证据并独立断言中文界面，不能仅放宽文案判据；实际点击重新配对、同设备／空端口和空码、fresh code与Required TLS正例分别核对。

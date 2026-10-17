@@ -46,3 +46,12 @@ Requirements: R06–R07、R13–R15
 A48还发现`PlatformDocuments.kt:94`仍用产品AlertDialog决定同名保留／跳过／取消，共享协调器调用`documents.platform.conflict`；应将策略／产品UI归共享Dart，原生保留系统授权／provider／FD适配，并回归离页／取消／迟到结果。当前状态见[当前完成度](../current-status.md)。
 
 后续A46配置已显式调用`./tool/check.sh --android`，并加入此前未执行的audio JVM runner、实际APK三ABI Flutter／Rust ELF与manifest核验、成功产物留存。三ABI构建106.8秒、4组native main检查通过；首个包检查误把apkanalyzer数值枚举当成错误，依据固定API36 SDK和官方常量修正后，原Android脚本分支重新构建11.1秒并全部通过。损坏arm64 Rust ELF头的独立负例被精确拒绝。远端CI未运行、分支保护未配置；Apple／Windows整包和原生产物闭包不据此关闭，详见[验收](../../../docs/implementation/validation.md)。
+
+
+## 本次逐指令复核补回的关闭条件
+
+- [ ] A48扩展：共享层接管多USB设备选择及系统目录冲突的产品状态／UI，原生只做枚举、授权与句柄；不把目标临时JAR或测试fixture APK混同用户前提。
+- [ ] A56：实际直接依赖的固定API／系统条件和四端编译闭包逐项对应，FRB hooks／code_assets及媒体原生产物不以Dart锁文件代替。
+- [ ] 当前实施指导同步离页保留／协作暂停、显式关闭才stop与共享呈现所有权；Android已构建，其他宿主未验，不能沿用ADR的旧状态。
+
+源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。

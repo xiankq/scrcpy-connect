@@ -50,3 +50,12 @@ Requirements: R28–R30、R38
 后续A44实施：Rust持久账本先admit再写，固定来源任务／路径／类型，pending重开转unknown；1024原件／16384操作／4MiB限额不静默淘汰，旧回执不能改另一操作。共享Bridge不随页面死亡丢回执，完整结果容量失败仅补最小unknown元数据。页面先只读核验，admission拒绝恢复真实旧ID，saved额外副本需确认。13项Runtime、102项Bridge、相关页面回归通过；双AVD实际取消／保存／离页重进恢复saved／系统分享43秒通过，截图与独立字节/hash/grant见[内容交付](../../../docs/implementation/content-delivery.md)。首次路由时序夹具失败保留，未计通过。Android写入中杀进程／unknown重进、系统目录／provider矩阵及A48仍开放，不关闭任务。
 
 A48：`PlatformDocuments.kt:94`产品冲突AlertDialog及共享协调器523行调用`documents.platform.conflict`仍需迁回共享产品UI／策略。系统provider不保证原子替换的安全限制保留；真实目录同名／取消／离页迟到结果与三选项远端冲突分开验收。批量／目录／provider矩阵与完整恢复继续开放；当前状态见[当前完成度](../current-status.md)。
+
+
+## 本次逐指令复核补回的关闭条件
+
+- [ ] A51：总媒体磁盘预算／淘汰／清理保护在途原件、有效URI租约和未知系统保存原件；真实超预算、空间满与重启核算。
+- [ ] A55：真实系统保存／目录picker等待时接收外部ACTION_SEND，核对原操作取消或unknown、回执归属、无挂起／误写、lease释放与新分享继续。
+- [ ] A48：系统目录同名冲突回到共享产品层，明确不能安全替换的目标；保留本批应用策略、取消与迟到结果验证。已有批量选择／目录扫描及导入导出代码，验收不得笼统记整项未实现，也不能凭入口算最终交付通过。
+
+源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。

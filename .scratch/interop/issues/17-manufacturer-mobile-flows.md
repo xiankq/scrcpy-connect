@@ -36,3 +36,10 @@ Requirements: R01–R03、R12、R17、R33–R37
 OPPO/vivo国内手机流程、地区版本、首次/后台/失败操作证据尚需补充。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
+
+
+## 本次逐指令复核补回的关闭条件
+
+- [ ] A54：补Apple自身iPhone Mirroring、Universal Clipboard等官方操作流程，区别于小米iOS客户端和HIG视觉研究；提取入口／条件／动作／结果／失败恢复，再映射专用页与原应用分工。原“已有苹果调查”不代表此项已完成。
+
+源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。
