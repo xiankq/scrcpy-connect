@@ -433,3 +433,94 @@ Flutter缓存。`/tmp/connect-pause-cleanup.json`及`/tmp/connect-pause-remote-c
 目标无捕获进程/JAR且夹具已卸载，自己的SIGQUIT/tombstone已复制留证后精确移除。
 MDK x64崩溃二进制`/tmp/connect-pause-libmdk-x64.so`也留存，供后续符号/反汇编定位。
 原五项用户未跟踪文件未修改、未stage，没有push，完整目标仍active。
+
+## MDK截图崩溃与动态上游分段（2026-10-18）
+
+本批不改生产播放参数，也不重建任何JAR。官方JAR仍为`764eb6f7…`，捕获扩展仍为
+`b46cd074…`。普通Flutter／Rust构建直接嵌入受控产物；修改被控服务端源码／补丁／
+固定工具链或明确复现构建时才重建，详见[构建规则](../../servers/scrcpy/README.md)。
+
+### 同栈崩溃已重复，尚未修复
+
+先用原配置连续3轮各20次动态暂停／恢复，60次均完成，暂停149–343ms、恢复到新像素
+467–850ms；完整首帧3096／2634／3030ms。原始`video-native-crash-baseline/result.json`
+仍是宽功能门槛，不是严格1000／200／300ms通过。
+
+为缩小触发范围，测试增加`CONNECT_PERF_SNAPSHOT_STRESS`（0–10,000，默认关闭）：
+在输入／暂停前连续读取64×64实际像素，逐次等完成并断言计数器，每100次输出进度。
+连续动态但计数不变时2,000次串行截图全部通过，34.475秒；随后输入、暂停和实际
+Flutter合成画面核对也完成，`/tmp/connect-e2e/video-snapshot-stress/result.json`。
+这只否定“高频串行截图必然失败”，不证明截图线程安全或崩溃已消失。
+
+对旧完整tombstone与精确x64二进制反汇编，SHA-256仍为
+`72e5f6370f98a3a09755004a0c6be1c01d688c79d7b1f0a5cce3a2e7d49c8ad3`，
+BuildId为`901726b6b0358c34d504c453a084538af9c7ef27`：
+
+- `.eh_frame`确认`VideoRenderer::redraw`实际范围`0x1612f2..0x16309b`。
+  它从与`VideoRenderer::snapshot`共用的96字节队列项取出完成回调，
+  在`0x162ae8`创建独立线程，入口`0x1630d4`。
+- 线程读取参数`+0x30`的回调，空值分支到`0x1631b5`，经`0x919db`加载
+  `bad_function_call was thrown in -fno-exceptions mode`，最终`0x179519`主动abort。
+  实际回溯返回地址为`0x17951d / 0x919ec / 0x1631b9`。
+- 真正主线程在Looper poll；崩溃新线程继承`JNISurfaceTextu`名称。不能从线程名
+  直接归因GL或AVD。普通addr2line的最近导出`SubtitleDecoder`／`cryptograph`也
+  不是这些地址的真实函数归属。其他线程无release／destroy正在执行的证据。
+
+随后只将动态帧率上限60改30、保留1280／8Mbps并打开已有同PTS trace的对照，
+进程20秒时再次SIGABRT，相同三地址和BuildId。旧实验使用fvp公开snapshot，本次
+使用Rust C snapshot；两条路径都传入有效完成回调，均进入MDK renderer快照队列。
+因此已指向两者共用的MDK内部空回调路径，仍未证明空值的产生机制、ABI、队列
+竞争或生命周期中的具体原因。没有通过修改本机pub缓存、换全局软解或删除像素
+断言掩盖问题；目前没有可靠修复。30fps该次没有最终JSON，不能计算性能结论。
+
+新增现场`/tmp/connect-video-dynamic-trace-30-tombstone.txt`为625,837字节，核对
+pid3986／tid4462与BuildId；日志`/tmp/connect-video-dynamic-trace-30.log`，宿主
+`cleanup.json`确认夹具卸载。旧现场与原二进制继续保留在临时目录。
+[MDK snapshot契约](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs#void-snapshotsnapshotrequest-request-snapshotcallback-cb-void-vo_opaque--nullptr)
+说明请求会调度renderer重绘，完成回调在独立线程执行；本批二进制证据比线程名称更具体，
+不把已有Changelog中的其他snapshot修复当成本次缺陷已解决。
+
+### 动态延迟主要出现在relay之前
+
+60fps动态、1280／8Mbps、实际576×1280、实际AMediaCodec，两轮16次实际新计数器
+全部完成同PTS关联，`/tmp/connect-e2e/video-dynamic-trace/result.json`：
+
+| 同一帧的主控单调时钟段 | 中位 | 范围 |
+| --- | ---: | ---: |
+| 发送操作前→该新像素帧到relay mux入口 | 1002.024ms | 808.981–1187.199ms |
+| relay HTTP写入 | 0.051ms | 0.032–11.939ms |
+| relay写后→onVideo交付renderer之前 | 262.107ms | 174.815–368.868ms |
+| onVideo→snapshot可读 | 35.260ms | 14.432–213.592ms |
+
+输入到新像素P50／P95为1290／1434ms，完整首帧3007／2411ms。逐段中位不能直接
+相加还原总量分位数；快照读回／轮询与真实视频推进重叠，也不能从总量减掉累计
+snapshot耗时来宣称“净延迟”。本对照开启trace会切换snapshot实现，不能冒充正常
+关闭观测路径的直接优化对照。最明确的下一步是上游采集／编码／ADB分段，非继续
+只调MDK缓冲：Rust逐包转发没有主动按时长囤帧，但这不排除内核、adbd或codec队列。
+当前证据不能把上述1秒具体归因于网络、目标绘制或编码。两条JAR保持不变。
+
+30fps相同测试APK原样复跑（`--use-application-binary`，未重编译或换参数）完成两轮
+16次同PTS关联，`/tmp/connect-e2e/video-dynamic-trace-30-r2/result.json`，P50／P95为
+1335／1613ms；输入→relay中位1035.756ms、HTTP写0.053ms、relay→onVideo220.213ms、
+onVideo→snapshot30.700ms。没有明显改善上游主要等待，不更改默认帧率。首次同栈
+崩溃继续计失败；后一次通过不能证明30fps修复了稳定性。下一项为独立测试夹具记录
+目标实际按键／绘制单调时钟，并保留原始源PTS，核对各时钟定义后再关联；不直接相减
+两个设备的时钟，也不为此增加主控Android媒体代码。
+
+本批同PTS对照复现沿用上节完整环境与drive入口，设置
+`CONNECT_PERF_TRACE_FRAMES=true`、`CONNECT_PERF_ROUNDS=2`、
+`CONNECT_PERF_TRANSITIONS=8`、`CONNECT_PERF_PAUSE_CYCLES=1`、
+`CONNECT_PERF_MAX_SIZE=1280`、`CONNECT_PERF_BIT_RATE=8000000`，仅以
+`CONNECT_PERF_MAX_FPS=60`／`30`分别编译；动态夹具环境变量始终为true。
+
+`c65105e`提交串行截图隔离测试及说明。严格Flutter分析5.1秒无问题，
+`/tmp/connect-native-crash-analyze.log`；普通main构建10.5秒／安装607ms，实际DTD
+热重载成功（131ms，0库变化），已detach。设备首页截图
+`/tmp/connect-native-crash-main.png`及最终动态计数2截图已目视。启动仍有SurfaceSync
+与跳帧告警，不能据此称首帧／流畅度达标。生产播放源码／JAR均未改，未重复构建相同
+release，也不把旧release说成包含新测试入口。
+
+停止闲置Gradle后清理382处明确debug输出，实际释放1488.5MiB、空闲61.8GiB，
+`/tmp/connect-native-crash-cleanup.json`。保留release、native hooks、Gradle／CMake
+缓存、未知模式的Flutter缓存与临时崩溃证据。新tombstone已复制核对后精确移除设备
+对应文件；目标检查无本批捕获进程，夹具不存在。原五项用户未跟踪文件未修改。

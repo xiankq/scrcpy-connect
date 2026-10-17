@@ -90,3 +90,12 @@ A59限定复验：r8目标先拍＋750ms后主控及延迟两端截图，实际3
 
 - [ ] MDK动态原生崩溃锁定复现率、cycle/renderer状态、可符号化栈或源码边界；保留
   `/tmp/connect-video-pause-native-tombstone.txt`，不凭AVD环境归因，也不全局强制软解掩盖。
+
+后续定位：匹配BuildId的反汇编证实renderer snapshot队列空完成回调进入线程后
+`bad_function_call`主动abort；动态30fps同PTS对照再次出现相同地址／BuildId，
+此次Rust C snapshot与原fvp snapshot共用MDK内部链路。仍未锁定空回调产生机制，
+没有可靠修复，复现率也未闭合，所以上项继续未勾选。60次动态暂停及2,000次无暂停
+串行截图通过不覆盖崩溃。60fps动态16次关联的输入→relay中位1002ms，relay→onVideo
+262ms；30fps重跑对应1036／220ms，未改善主要上游等待，不更改生产帧率。
+下一步独立夹具目标输入／绘制时钟与原始源PTS关联，先核对时钟定义再分段。
+[现场、复现参数与失败记录](../../../docs/implementation/video-performance.md#mdk截图崩溃与动态上游分段2026-10-18)。
