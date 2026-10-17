@@ -9,6 +9,7 @@ mod events;
 mod file_search;
 mod file_tree;
 mod files;
+mod gallery_index;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod local_publication;
 pub mod media;

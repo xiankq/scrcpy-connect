@@ -30,6 +30,7 @@ pub struct Runtime {
     pub(crate) observation_wakeup: Arc<tokio::sync::Notify>,
     pub(crate) transfers: Mutex<HashMap<String, crate::files::Transfer>>,
     pub(crate) searches: crate::file_search::Searches,
+    pub(crate) gallery_scans: crate::gallery_index::GalleryScans,
     pub(crate) sharing: Mutex<Option<Arc<crate::sharing::ImportManager>>>,
     pub(crate) documents: crate::documents::CopyManager,
     pub(crate) deliveries: crate::delivery::DeliveryJournal,
@@ -117,6 +118,7 @@ impl Runtime {
             observation_wakeup: Arc::new(tokio::sync::Notify::new()),
             transfers: Mutex::new(HashMap::new()),
             searches: crate::file_search::Searches::default(),
+            gallery_scans: crate::gallery_index::GalleryScans::default(),
             sharing: Mutex::new(None),
             documents: crate::documents::CopyManager::default(),
             deliveries,
@@ -186,6 +188,7 @@ impl Runtime {
 
     pub(crate) async fn stop_device_activities(&self, id: &str) -> CoreResult<()> {
         self.searches.cancel_device(id);
+        self.gallery_scans.cancel_device(id);
         self.observation_connection_changed(id).await;
         for transfer in self
             .transfers
@@ -307,6 +310,7 @@ impl Runtime {
                 Box::pin(self.transfer_command(command, &params)).await
             }
             "media.list" => Box::pin(self.list_media(&params)).await,
+            "media.scan.cancel" => self.gallery_command(command, &params).await,
             "media.preview" => Box::pin(self.preview_media(&params)).await,
             "media.thumbnail" => Box::pin(self.thumbnail_media(&params)).await,
             "media.thumbnail.cancel" => Box::pin(self.cancel_thumbnail_media(&params)).await,

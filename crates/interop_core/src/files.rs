@@ -1540,66 +1540,8 @@ impl Runtime {
         )
     }
 
-    pub(crate) async fn list_media(&self, p: &Value) -> CoreResult<Value> {
-        let id = required(p, "deviceId")?;
-        let client = self.client(id).await?;
-        // Enumerate known roots first: shell `test -d` conflates a missing
-        // root with denied metadata and would silently omit inaccessible media.
-        let entries = Box::pin(client.sync(OperationOptions::default()))
-            .await?
-            .list(&RemotePath::new("/sdcard")?, 10_000)
-            .await?;
-        let mut roots = Vec::new();
-        for name in ["DCIM", "Pictures", "Movies"] {
-            if let Some(entry) = entries.iter().find(|entry| entry.name == name.as_bytes()) {
-                if entry.stat.mode & 0o170000 != 0o040000 {
-                    return Err(CoreError::new(
-                        "media_list_incomplete",
-                        "媒体根目录已被替换或是符号链接；没有跟随或省略它。",
-                    ));
-                }
-                roots.push(format!("/sdcard/{name}"));
-            }
-        }
-        if roots.is_empty() {
-            return Ok(json!({"items":[],"complete":true,"truncated":false}));
-        }
-        let command = format!(
-            "find {} -type f -print0",
-            roots
-                .iter()
-                .map(|root| quote(root))
-                .collect::<CoreResult<Vec<_>>>()?
-                .join(" ")
-        );
-        let output = client
-            .shell(&command, 16 * 1024 * 1024, OperationOptions::default())
-            .await?;
-        if output.exit_code != Some(0) || !output.stderr.is_empty() {
-            return Err(CoreError::new(
-                "media_list_incomplete",
-                "设备未能完整列出媒体；没有把部分结果当作完整列表。",
-            ));
-        }
-        let mut items = Vec::new();
-        for bytes in output.stdout.split(|b| *b == 0).filter(|b| !b.is_empty()) {
-            let path = std::str::from_utf8(bytes).map_err(|_| {
-                CoreError::new(
-                    "filename_encoding",
-                    "媒体目录包含当前接口不能表示的文件名；没有悄然省略它们。",
-                )
-            })?;
-            if mime(path).starts_with("image/") || mime(path).starts_with("video/") {
-                if items.len() == 25_000 {
-                    return Err(CoreError::new(
-                        "media_list_limit",
-                        "媒体列表超过当前有界列表容量；分页尚未完成，没有截断后冒充完整列表。",
-                    ));
-                }
-                items.push(json!({"name":path.rsplit('/').next(),"path":path,"mime":mime(path)}));
-            }
-        }
-        Ok(json!({"items":items,"complete":true,"truncated":false}))
+    pub(crate) async fn list_media(self: &Arc<Self>, p: &Value) -> CoreResult<Value> {
+        self.gallery_command("media.list", p).await
     }
     async fn thumbnail_rpc(
         self: &Arc<Self>,
