@@ -14,6 +14,8 @@ import 'src/media_intent.dart';
 import 'src/media/portable_video.dart';
 import 'src/media/portable_audio.dart';
 import 'src/media/video_presentation.dart';
+import 'src/media/media_snapshot.dart';
+import 'src/state_recovery.dart';
 import 'src/share_intake.dart';
 import 'src/documents/documents_coordinator.dart';
 import 'src/interop_exception.dart';
@@ -52,6 +54,20 @@ class InteropBridge {
     core: _invoke,
     pauseOutput: _videoOutputs.pause,
     resumeOutput: _videoOutputs.resume,
+  );
+  late final _stateRecovery = StateRecovery(
+    read: (current) => readMediaSnapshot(
+      read: () => _invoke('state.snapshot', {}),
+      videos: _textures,
+      audios: _audioSources,
+      closeVideo: _closeVideo,
+      closeAudio: _closeAudio,
+      current: current,
+    ),
+    emit: (event) {
+      if (!_disposed) _events.add(event);
+    },
+    isDisposed: () => _disposed,
   );
   late final _shareIntake = ShareIntake(
     core: _invoke,
@@ -156,6 +172,7 @@ class InteropBridge {
   void _handleCoreEvent(Map<String, dynamic> event) {
     // Transport heartbeats detect a dead Dart port; they are not product state.
     if (_disposed || event['type'] == 'runtime.heartbeat') return;
+    if (!_stateRecovery.accept(event)) return;
     _events.add(event);
     final data = event['data'] is Map
         ? Map<String, dynamic>.from(event['data'] as Map)
@@ -169,7 +186,12 @@ class InteropBridge {
       final id = data['sessionId'];
       if (id is String) unawaited(_closeVideo(id));
     } else if (event['type'] == 'audio.updated' &&
-        (data['status'] == 'stopped' || data['status'] == 'failed')) {
+        const [
+          'stopped',
+          'failed',
+          'error',
+          'closed',
+        ].contains(data['status'])) {
       final id = data['sourceId'];
       if (id is String) unawaited(_closeAudio(id));
     }
@@ -474,6 +496,21 @@ class InteropBridge {
   }) async {
     if (_disposed || intent?.cancelled == true) {
       throw const InteropException('cancelled', '已停止本次打开，不会重新启动画面或声音。');
+    }
+    if (command == 'state.reconcile') return _stateRecovery.refresh();
+    if (_stateRecovery.pending && needsVerifiedState(command, params)) {
+      throw const InteropException('state_unverified', '正在重新核验设备状态，完成后再操作。');
+    }
+    // Refreshing projections after a gap must not create a new helper. A
+    // deliberate user verification may opt in with allowStart=true.
+    if (_stateRecovery.hasSnapshot &&
+        const [
+          'notifications.list',
+          'calls.list',
+          'clipboard.get',
+        ].contains(command) &&
+        !params.containsKey('allowStart')) {
+      params = {...params, 'allowStart': false};
     }
     final stoppingAudioIds = command == 'audio.stop'
         ? _audioSources.keys
@@ -793,6 +830,7 @@ class InteropBridge {
 
   Future<void> _dispose() async {
     _disposed = true;
+    _stateRecovery.dispose();
     await _documents.dispose();
     _mediaIntents.cancelAll();
     final pending = _mediaIntents.active.toList();
