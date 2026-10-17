@@ -130,7 +130,9 @@ def verify_apk(apk, expected_abis=None):
             for library in ("libflutter.so", "libapp.so", "libinterop_bridge.so"):
                 name = f"lib/{abi}/{library}"
                 if library == "libapp.so" and name not in names:
-                    continue  # Debug uses a Dart kernel instead of AOT.
+                    if "assets/flutter_assets/kernel_blob.bin" in names:
+                        continue  # Debug uses a Dart kernel instead of AOT.
+                    raise ValueError(f"Release APK lacks its Dart AOT library: {name}")
                 with archive.open(name) as binary:
                     header = binary.read(20)
                 elf_class, machine = headers[abi]
@@ -150,7 +152,8 @@ def verify_apk(apk, expected_abis=None):
     receipt = {
         "apk": str(apk), "bytes": apk.stat().st_size, "sha256": digest,
         "abis": abis, "package": package, "signatureVerified": True,
-        "zipIntegrityVerified": True, "alignmentVerified": True,
+        "zipIntegrityVerified": True, "zipAlignmentVerified": True,
+        "zipNativePageAlignmentBytes": 16384,
         "signerCertificates": [line for line in signature.splitlines() if "certificate SHA-256 digest:" in line],
     }
     print(json.dumps(receipt, ensure_ascii=False, indent=2))

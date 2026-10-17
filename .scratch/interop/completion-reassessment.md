@@ -663,6 +663,6 @@ A53代码批次`513fb38`已提交。当前代码完整门禁`/tmp/connect-galler
 
 ## 26. 用户默认打包反馈发现A60及修复
 
-A60：release无key.properties仍输出未签名成功包，独立APK验证和真实PackageManager安装精确复现NO_CERTIFICATES。另发现单ABI包混入无Flutter／Rust的插件架构。现本机持久签名、编译前签名门禁、实际ABI过滤、Gradle任务缓存及公开打包验证工具已交付。真实默认三ABI构建／签名／ZIP／manifest／ELF／16KB对齐／首次安装／启动／同签名更新通过；同源重复打包墙钟10.760秒。日志、摘要与边界见[打包验证](../../docs/implementation/android-packaging.md)。未检查用户原APK和量产安装器日志；不把该复现冒称所有“包信息为空”的根因。
+A60：release无key.properties仍输出未签名成功包，独立APK验证和真实PackageManager安装精确复现NO_CERTIFICATES。另发现单ABI包混入无Flutter／Rust的插件架构。现本机持久签名、编译前签名门禁、实际ABI过滤、Gradle任务缓存及公开打包验证工具已交付。真实默认三ABI构建／签名／ZIP／manifest／ELF／16KB ZIP对齐／首次安装／启动／同签名更新通过；同源重复打包墙钟10.760秒。日志、摘要与边界见[打包验证](../../docs/implementation/android-packaging.md)。未检查用户原APK和量产安装器日志；不把该复现冒称所有“包信息为空”的根因。
 
 A59限定复验已确认目标绘制后主控两次截图均显示你好🙂，r8流程31秒通过，旧空查询差异未复现；未改生产播放器，不以此关闭端到端延迟、持续帧遥测或全编码长期矩阵。[原文与时序](../../docs/implementation/mobile-ime.md)。

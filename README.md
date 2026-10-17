@@ -56,7 +56,7 @@ python3 tool/android.py build
 python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-release.apk
 ```
 
-验证包括 ZIP 完整性、签名、16KB 对齐、包名／启动入口和实际 Flutter／Rust ELF 架构。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[实测与限制](docs/implementation/android-packaging.md)。
+验证包括 ZIP 完整性、签名、16KB ZIP 对齐、包名／启动入口和实际 Flutter／Rust ELF 架构。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[实测与限制](docs/implementation/android-packaging.md)。
 
 ## 设计与验收
 

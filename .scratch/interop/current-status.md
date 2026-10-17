@@ -120,8 +120,12 @@ A59后续：第八轮目标先截图、750ms后主控截图、延迟再次两端
 
 ## 渐进交付：默认release安装与打包速度（A60）
 
-用户默认`flutter build apk`安装失败反馈已复现：无签名仍构建成功，独立apksigner拒绝／PackageManager报INSTALL_PARSE_FAILED_NO_CERTIFICATES。现配置本机持久私密签名、无配置编译前拒绝、单ABI插件过滤及Gradle任务缓存，新增可重复初始化／构建／独立验证入口。x64 50.2MB／通用三ABI128.9MB均通过ZIP／签名／包名入口／ELF／16KB对齐，三ABI默认命令73.468秒，同源重复10.760秒；不是冷编译10秒承诺。实际第三AVD首次安装＋冷启动正常设备页＋同签名更新成功，本次安装已卸载且多余AVD关闭，主控原数据未动。[可复现入口、原始失败、命令与边界](../../docs/implementation/android-packaging.md)。尚无物理arm64执行／商店分发证据，其他四宿主和全部产品门禁不因此通过。
+用户默认`flutter build apk`安装失败反馈已复现：无签名仍构建成功，独立apksigner拒绝／PackageManager报INSTALL_PARSE_FAILED_NO_CERTIFICATES。现配置本机持久私密签名、无配置编译前拒绝、单ABI插件过滤及Gradle任务缓存，新增可重复初始化／构建／独立验证入口。x64 50.2MB／通用三ABI128.9MB均通过ZIP／签名／包名入口／ELF／16KB ZIP对齐，三ABI默认命令73.468秒，同源重复10.760秒；不是冷编译10秒承诺。实际第三AVD首次安装＋冷启动正常设备页＋同签名更新成功，本次安装已卸载且多余AVD关闭，主控原数据未动。[可复现入口、原始失败、命令与边界](../../docs/implementation/android-packaging.md)。尚无物理arm64执行／商店分发证据，其他四宿主和全部产品门禁不因此通过。
 
 ## 渐进交付：正式通话页接续真实画面
 
 新增两份正式页面／宿主E2E，r3 16秒通过，严格分析无问题。正式通话页观察→实际来电提醒→选择查看→正式打开当前系统界面→全屏真实解码，独立InCallActivity与同一TC@7／原号码持续ringing，四checkpoint及清理恢复全部true。两端实截图已目视，含目标首次沉浸提示，未冒称提示遮住的呼叫标题可见；仍未实现逐呼叫动作／双向音频。[命令、两次前序失败与范围](../../docs/implementation/current-call-ui.md)。
+
+本批最终普通lib/main.dart实际构建14.8秒／安装526ms、R热重启4,401ms，`/tmp/connect-packaging-main.log`；重启设备列表截图`/tmp/connect-packaging-main-restarted.png`已目视后detach。保留两条FRB旧isolate投递告警和启动跳帧，不称性能达标。最终arm64原件46,625,578字节／SHA-256 82bafbe09f8ca803e45204f3b49696e1946c04931ee4ff4135890986d5057cc2，独立签名／ZIP／manifest／ELF／ZIP页对齐通过，留存`/tmp/connect-artifacts/connect-arm64-release.apk`；三ABI原件同目录保留供安装。实际执行仅x64，物理arm64仍未验。R61／R62已回填统一目标与规格，不缩减既有62需求／32流程。
+
+本批实际清理完成：终止临时第三AVD并卸载实验release，普通main detach后清除过期中间产物／debug包／Kotlin／incremental，仅保留最终arm64 APK（build共45MiB）、必要临时证据和复用缓存；磁盘余量78GiB。保留用户原有未跟踪测试／examples，未push。下一批仍为A51媒体预算／活动原件保护及USB共享选择，不展开新的输入／通话边界矩阵。

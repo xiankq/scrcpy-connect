@@ -8,13 +8,13 @@
 
 设备列表固定首屏、所有设备平等；设备记录、配对信任、连接、控制会话与传输任务分开。被控无root、无额外APK，仅要求系统调试授权，允许临时JAR。主控始终不开调试，不跳过信任或认证。最新版ADB/scrcpy文档与固定源码对照实现，服务端可复用，自行编排完整生命周期。
 
-功能与取舍完整遵循spec、prod/scope、R01–R60、32项流程与本会话最新纠正：设备管理/发现/配对/手动地址/USB、全屏投控和真实应用任务、文件/相册手动取用、传输冲突与恢复、实时通知与原应用、分级通话/声音、剪贴板对象、后台与中断恢复。录屏、自动备份、独立短信/联系人/相机/终端、自动编辑回写保持退出范围。
+功能与取舍完整遵循spec、prod/scope、R01–R62、32项流程与本会话最新纠正：设备管理/发现/配对/手动地址/USB、全屏投控和真实应用任务、文件/相册手动取用、传输冲突与恢复、实时通知与原应用、分级通话/声音、剪贴板对象、后台与中断恢复。录屏、自动备份、独立短信/联系人/相机/终端、自动编辑回写保持退出范围。
 
 默认浅色，黑色/中性色为主题色，彩色图标小元素、液态玻璃导航/控制、Lucide优先，视觉值来自designs/design.md。移动远控全屏保留源画面比例，唯一常驻本机控件为可拖动、左右吸附收起且可访问的退出；所有异常/面板也保持全屏。原77页设计是输入，缺失状态要在实际交互中补齐，并回补Pencil共享组件；当前已增至93页，不因此视为全部流程已完成。
 
 ## 权威输入
 
-- [总规格](spec.md)、[R01–R60](requirements-audit.md)、[兼容矩阵](compatibility-matrix.md)、[访谈](interview.md)。本会话最新明确指令优先于历史记录。
+- [总规格](spec.md)、[R01–R62](requirements-audit.md)、[兼容矩阵](compatibility-matrix.md)、[访谈](interview.md)。本会话最新明确指令优先于历史记录。
 - [产品说明](../../designs/prod/README.md)、[32条流程](../../designs/prod/coverage.md)、[页面与转换](../../designs/prod/user-flows.md)、[交互规则](../../designs/prod/interaction-rules.md)。
 - [视觉规范](../../designs/design.md)、[Pencil源文件](../../designs/mobile.pen)，不得作为文本读写pen。
 - [词表](../../GLOSSARY.md)、[ADR](../../docs/adr/)、[全部研究与来源](../../docs/research/README.md)、[20项研究/验证任务](issues/README.md)。历史未采用候选不自动恢复产品范围。
@@ -111,6 +111,8 @@
 | R59 | Flutter/Rust为主体，减少自维护Android代码和未来多端重复适配 | 播放、分享规划和文档复制已迁共享层；必要OS端口保留，四端仍待实际整包 | 旧自写decoder/PCM循环已删除；共享fvp/MDK及DocumentsCoordinator/Rust复制；保留的Kotlin端口处理PFD完成／错误信号和OS路径，非文件业务 |
 
 | R60 | 首帧拿不到/慢时先查scrcpy开发者文档 | 已核对官方静止补帧/源码并修复播放器等待，当前五codec实际通过；总延迟/画质仍缺 | docs/research/scrcpy-first-frame-and-latency.md；重新核查A10 |
+| R61 | 调试后清理垃圾数据，避免磁盘满 | 按批清理过期中间产物、临时夹具与多余实验AVD；保留必要证据／复用缓存 | 每批实际清理记录与磁盘余量，不删除活跃任务输出 |
+| R62 | 优化默认flutter build apk速度、解决安装包信息为空并拟好签名 | 已复现旧未签名release，补持久私密签名／早拒绝／单ABI过滤／缓存和包校验；真实三ABI安装启动更新及增量10.760秒通过 | docs/implementation/android-packaging.md；物理arm64执行／商店发布仍未验 |
 
 ## 执行记录
 
@@ -181,3 +183,5 @@
 - 本轮工程收尾：142输入生成一致性、Android arm/arm64/x64整包102.4秒通过；普通main热重启1,393ms、设备列表空态已目视并detach。914ab41为Core授权状态修复，2e3dc5c为完整真实配对/系统接口撤权E2E；主控仅网络访问被控，host工具不成为产品依赖。FRB旧isolate告警、表单原始英文错误及其他第12.2节差距仍保留。
 
 - 2026-10-17当前账本整理：不重造U／R／C或20任务，将12领域权威状态集中到[current-status](current-status.md)，A43–A49回填既有任务；Pencil89页／12类／26母组件／557实例／153变量属于静态证据。当前退出断链修复与主屏应用／中文错误验收进行中；生产密码链、四宿主整包、输入／通话／恢复／批量／大屏／性能／视觉等仍开放，目标active。
+
+2026-10-18后续渐进批次：A59时序复验确认主控两次实际新文字像素；正式通话页→提醒→当前系统界面→全屏原通话像素16秒链路通过，危险逐call动作与双向声音仍未实现。用户新增R61／R62：默认未签名release成功包的真实安装NO_CERTIFICATES已复现并修复，本机私密持久签名、独立包校验、真实安装／启动／同签名更新、三ABI包与热构建10.760秒通过。[当前范围](current-status.md)及[打包证据](../../docs/implementation/android-packaging.md)为准，完整目标仍active。

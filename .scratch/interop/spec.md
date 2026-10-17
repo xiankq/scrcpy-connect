@@ -143,3 +143,7 @@ scrcpy 服务端固定版本并验证协议匹配；优先保持官方能力边�
 导航采用go_router_builder生成typed route与StatefulShellRoute；状态采用riverpod_generator生成Notifier及不可变state，build_runner统一生成。成员包继承根analysis_options，启用Flutter基础lint、严格类型与官方Riverpod analyzer plugin；CI必须实际检出违规、检查生成源过期，不能仅声明包名。生成文件与根锁文件入库，构建缓存不入库。工程证据见[导航实现](../../docs/implementation/flutter-navigation.md)和[工具链研究](../../docs/research/flutter-engineering-toolchain.md)。
 
 Flutter/Rust为共享实现主体。Rust承担ADB、持续活动、导入/传输、容量/取消/恢复/持久化和媒体协议；Dart承担页面/共享交互编排、生成状态与跨端渲染组件。Android适配仅调用系统Intent/URI/FD、USB权限、前台服务、媒体焦点等实际OS能力并报告事实。原生层不独立复制任务、租约、重试和产品策略。已经实现的2176行Kotlin需逐块迁出共享职责；替换媒体路径必须保留真实PTS、渲染/输入尺寸、后台、焦点与重建验收，不能用删除Kotlin或搬成JNI冒称完成。
+
+## 2026-10-18工程交付补充
+
+按用户新增要求，打包必须产出可解析、签名有效且所声明ABI完整的安装包；沿用本机可更换的持久身份配置，私钥／密码不入Git。默认flutter build apk及日常单架构入口分别实测首构与重复构建耗时，不以debug冒充release优化，不将静态包核验替代实际安装启动。调试按批清理过期中间产物、夹具和额外模拟器，预览及证据在临时目录，必要证据与复用缓存保留并检查磁盘余量。[追溯R61／R62](requirements-audit.md)、[本批真实证据](../../docs/implementation/android-packaging.md)。
