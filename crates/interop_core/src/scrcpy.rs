@@ -571,6 +571,9 @@ impl Runtime {
         let state = Arc::new(RwLock::new(
             json!({"sessionId":id,"id":id,"deviceId":device_id,"name":package.as_deref().unwrap_or("手机屏幕"),"packageName":package,"status":"starting","createdAt":now(),"codec":selected_codec.name,"mime":selected_codec.mime,"videoEncoder":selected_encoder,"encoderSelection":if selected_encoder.is_some(){"explicit"}else{"platformDefault"},"quality":current_quality(settings),"audio":false,"apiLevel":device.api_level}),
         ));
+        if params["traceFrames"].as_bool() == Some(true) {
+            state.write().await["transportTrace"] = json!([]);
+        }
         let cleanup_cancel = cancellation.clone();
         let cleanup_client = client.clone();
         let cleanup_path = remote_jar.clone();
@@ -1905,6 +1908,10 @@ async fn run_video(
         events,
         device,
     } = context;
+    let tracing = state.read().await["transportTrace"].is_array();
+    // The startup preface is already buffered. Number only subsequent capture
+    // segments here; this counter is not the renderer generation identifier.
+    let mut capture_segment = 1u64;
     let operation = async {
         let output = accept_media(&listener, &token).await?;
         output.set_nodelay(true)?;
@@ -1929,6 +1936,9 @@ async fn run_video(
             // a unit starts, bound its entire header/session/payload delivery:
             // the downstream relay cannot see a fragment buffered here.
             video.read_exact(&mut header[..1]).await?;
+            // AdbStream delivers complete WRTE payloads. This clock excludes
+            // the first WRTE's earlier transport receive and queue wait.
+            let first_byte_us = tracing.then(crate::media::monotonic_micros);
             let complete = async {
                 video.read_exact(&mut header[1..]).await?;
                 if let Some(dimensions) = session_dimensions(&header)? {
@@ -1947,6 +1957,7 @@ async fn run_video(
                 .await
                 .map_err(|_| CoreError::new("video_timeout", "视频数据包未及时发送完整。"))??;
             if let Some((width, height)) = dimensions {
+                capture_segment = capture_segment.saturating_add(1);
                 let forward = {
                     let mut data = state.write().await;
                     data["width"] = json!(width);
@@ -1962,14 +1973,35 @@ async fn run_video(
                 }
                 continue;
             }
+            let read_completed_us = tracing.then(crate::media::monotonic_micros);
             {
                 let data = state.read().await;
                 if data["status"] == "paused" || data["awaitingSession"] == true {
                     continue;
                 }
             }
+            let write_started_us = tracing.then(crate::media::monotonic_micros);
             output.write_all(&header).await?;
             output.write_all(&bytes).await?;
+            let written_us = tracing.then(crate::media::monotonic_micros);
+            let flags = u64::from_be_bytes(header[..8].try_into().expect("video header"));
+            if let Some(first_byte_us) = first_byte_us.filter(|_| flags & (1 << 62) == 0) {
+                let mut data = state.write().await;
+                if let Some(frames) = data.get_mut("transportTrace").and_then(Value::as_array_mut) {
+                    if frames.len() == 256 {
+                        frames.remove(0);
+                    }
+                    frames.push(json!({
+                        "captureSegment": capture_segment,
+                        "sourcePtsUs": flags & ((1 << 61) - 1),
+                        "bytes": bytes.len(),
+                        "firstByteUs": first_byte_us,
+                        "readCompletedUs": read_completed_us,
+                        "writeStartedUs": write_started_us,
+                        "writtenUs": written_us,
+                    }));
+                }
+            }
         }
         #[allow(unreachable_code)]
         Ok::<(), CoreError>(())
@@ -2207,6 +2239,10 @@ mod tests {
 
     impl VideoTransportFixture {
         async fn start() -> Self {
+            Self::with_trace(false).await
+        }
+
+        async fn with_trace(tracing: bool) -> Self {
             use interop_adb::{
                 DeviceInfo,
                 protocol::{self, Frame},
@@ -2245,6 +2281,9 @@ mod tests {
             let state = Arc::new(RwLock::new(json!({
                 "sessionId":"fixture", "status":"streaming", "textureId":1,
             })));
+            if tracing {
+                state.write().await["transportTrace"] = json!([]);
+            }
             let token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
             let running = tokio::spawn(run_video(
                 listener,
@@ -2332,6 +2371,98 @@ mod tests {
                 "other device services remain usable"
             );
             self.client.close();
+        }
+    }
+
+    #[tokio::test]
+    async fn video_transport_trace_correlates_fragmented_packets_and_bounds_each_capture_segment() {
+        for tracing in [false, true] {
+            let mut fixture = VideoTransportFixture::with_trace(tracing).await;
+            let packet = |pts: u64| {
+                [
+                    pts.to_be_bytes().as_slice(),
+                    1u32.to_be_bytes().as_slice(),
+                    &[0x65],
+                ]
+                .concat()
+            };
+            let before = crate::media::monotonic_micros();
+            let first = packet(5_000_000);
+            fixture.deliver(first[..1].to_vec()).await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            fixture.deliver(first[1..].to_vec()).await;
+            let mut bytes = [0; 13];
+            fixture.output.read_exact(&mut bytes).await.unwrap();
+            assert_eq!(bytes.as_slice(), first);
+            // The peer's ADB ACK does not prove run_video has published its
+            // completed socket write. Await that actual receipt explicitly.
+            if tracing {
+                let frames = tokio::time::timeout(Duration::from_secs(1), async {
+                    loop {
+                        let state = fixture.state.read().await;
+                        if state["transportTrace"].as_array().unwrap().len() == 1 {
+                            break state["transportTrace"].clone();
+                        }
+                        drop(state);
+                        tokio::task::yield_now().await;
+                    }
+                })
+                .await
+                .unwrap();
+                let frame = &frames[0];
+                assert_eq!(frame["sourcePtsUs"], 5_000_000);
+                assert_eq!(frame["captureSegment"], 1);
+                let first = frame["firstByteUs"].as_u64().unwrap();
+                let read = frame["readCompletedUs"].as_u64().unwrap();
+                let write = frame["writeStartedUs"].as_u64().unwrap();
+                let written = frame["writtenUs"].as_u64().unwrap();
+                assert!(before <= first && first <= read && read <= write && write <= written);
+                assert!(
+                    read - first >= 10_000,
+                    "the real split ADB payload was held for 20ms"
+                );
+            }
+            let marker = [
+                0x8000_0000u32.to_be_bytes(),
+                288u32.to_be_bytes(),
+                640u32.to_be_bytes(),
+            ]
+            .concat();
+            fixture.deliver(marker.clone()).await;
+            let mut metadata = [0; 12];
+            fixture.output.read_exact(&mut metadata).await.unwrap();
+            assert_eq!(metadata.as_slice(), marker);
+            for index in 1..=258 {
+                fixture.deliver(packet(5_000_000 + index * 1000)).await;
+                fixture.output.read_exact(&mut bytes).await.unwrap();
+            }
+            // Codec configuration is forwarded but must not masquerade as a
+            // source-PTS frame or consume a slot in the bounded frame trace.
+            fixture.deliver(packet(1 << 62)).await;
+            fixture.output.read_exact(&mut bytes).await.unwrap();
+            fixture.deliver(packet(5_259_000)).await;
+            fixture.output.read_exact(&mut bytes).await.unwrap();
+            if tracing {
+                let frames = tokio::time::timeout(Duration::from_secs(1), async {
+                    loop {
+                        let state = fixture.state.read().await;
+                        let frames = state["transportTrace"].as_array().unwrap();
+                        if frames.last().is_some_and(|f| f["sourcePtsUs"] == 5_259_000) {
+                            break frames.clone();
+                        }
+                        drop(state);
+                        tokio::task::yield_now().await;
+                    }
+                })
+                .await
+                .unwrap();
+                assert_eq!(frames.len(), 256);
+                assert_eq!(frames[0]["sourcePtsUs"], 5_004_000);
+                assert!(frames.iter().all(|f| f["captureSegment"] == 2));
+            } else {
+                assert!(fixture.state.read().await.get("transportTrace").is_none());
+            }
+            fixture.stop().await;
         }
     }
 

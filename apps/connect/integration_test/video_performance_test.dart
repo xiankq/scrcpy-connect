@@ -62,7 +62,9 @@ void main() {
               'command': command,
               'params': {
                 ...params,
-                if (traceFrames && command == 'media.open') 'traceFrames': true,
+                if (traceFrames &&
+                    (command == 'media.open' || command == 'session.start'))
+                  'traceFrames': true,
               },
             }),
           ),
@@ -424,6 +426,51 @@ void main() {
                     (forwarded['muxStartedUs'] as int) -
                     (traceBefore!['nowElapsedUs'] as int) -
                     origin;
+                // The downstream reader may finish before the upstream
+                // write_all future resumes and publishes its receipt. Wait
+                // only for diagnostics, after the measured interval ends.
+                final receiptWait = Stopwatch()..start();
+                late List<VideoJson> rawFrames;
+                do {
+                  final transport = await request('session.list');
+                  final capture = (transport['sessions'] as List)
+                      .cast<VideoJson>()
+                      .singleWhere((entry) => entry['sessionId'] == session);
+                  rawFrames = (capture['transportTrace'] as List)
+                      .cast<VideoJson>()
+                      .where(
+                        (frame) =>
+                            frame['sourcePtsUs'] == forwarded['sourcePtsUs'],
+                      )
+                      .toList();
+                  if (rawFrames.isNotEmpty ||
+                      receiptWait.elapsed >= const Duration(seconds: 1)) {
+                    break;
+                  }
+                  await Future<void>.delayed(const Duration(milliseconds: 2));
+                } while (true);
+                expect(rawFrames, hasLength(1));
+                final raw = rawFrames.single;
+                sampleEvidence['transportFrame'] = raw;
+                // The first complete ADB WRTE is buffered before AdbStream
+                // delivers its first byte; this is not total wire receive time.
+                sampleEvidence['adbStreamReadUs'] =
+                    (raw['readCompletedUs'] as int) -
+                    (raw['firstByteUs'] as int);
+                sampleEvidence['rawWriteUs'] =
+                    (raw['writtenUs'] as int) - (raw['writeStartedUs'] as int);
+                sampleEvidence['readToRelayUs'] =
+                    (forwarded['muxStartedUs'] as int) -
+                    (raw['readCompletedUs'] as int);
+                // A socket reader may run before the writer resumes after
+                // write_all. Preserve this signed overlap rather than clamp.
+                sampleEvidence['rawWrittenToRelayUs'] =
+                    (forwarded['muxStartedUs'] as int) -
+                    (raw['writtenUs'] as int);
+                expect(
+                  sampleEvidence['readToRelayUs'] as int,
+                  greaterThanOrEqualTo(0),
+                );
                 expect(
                   sampleEvidence['relayToDecodeUs'] as int,
                   greaterThanOrEqualTo(0),
@@ -433,7 +480,7 @@ void main() {
               debugPrint(
                 'VIDEO_INPUT_SAMPLE ${jsonEncode({
                   'round': round,
-                  for (final key in const ['fixtureSequence', 'counter', 'controlMs', 'totalMs', 'relayFrame', 'inputToRelayUs', 'relayToDecodeUs', 'decodeToSnapshotUs']) key: sampleEvidence[key],
+                  for (final key in const ['fixtureSequence', 'counter', 'controlMs', 'totalMs', 'relayFrame', 'transportFrame', 'inputToRelayUs', 'relayToDecodeUs', 'decodeToSnapshotUs', 'adbStreamReadUs', 'rawWriteUs', 'readToRelayUs', 'rawWrittenToRelayUs']) key: sampleEvidence[key],
                 })}',
               );
             }
