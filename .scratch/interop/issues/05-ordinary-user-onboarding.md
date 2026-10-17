@@ -41,3 +41,9 @@ Requirements: R02–R05、R10、R19、R37、R53–R54
 ## 设备与连接修订进展（2026-10-16）
 
 已补设备列表固定首屏及状态、设备管理、发现/手动地址/码与二维码/端口校验、配对后未连、两端USB授权及旧系统条件稿；并补文件、视频、通知异常、画质与多设备等代表状态。当前77页、12类、23母组件，已有Frame及剩余项见[产品覆盖表](../../../designs/prod/coverage.md)。这只完成本轮静态补画，不关闭任务：首次双机连接、协议、权限、运行与剩余状态仍待验证。
+
+## 首次配对后续（2026-10-17）
+
+隔离secure=1 API36 AVD已跑真实app.main/FRB/Rust身份：未配对拒绝→错码拒绝→系统新码PAKE→独立端口Required TLS→系统接口精确撤权→旧身份拒绝及停止重连→精确清理，64秒通过。Core CertificateUnknown误归offline已公开红绿回归并修复。直接Settings Forget因AtomicFile持久化竞争仍失败，未算入上述通过；host夹具固定API36且不成为用户调试/root前提。
+
+任务保持开放：QR/mDNS/过期/切网/切后台/USB/旧系统、量产/OEM/重装/四端身份保护及成熟密码链尚未闭合；普通用户表单仍暴露英文证书原错。完整范围、失败与重跑入口见[首次配对](../../../docs/implementation/first-pairing.md)和[当前差距](../completion-reassessment.md#122-当前差距按完整产品而非单次实验判断)。

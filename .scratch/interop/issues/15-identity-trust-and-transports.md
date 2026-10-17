@@ -36,3 +36,9 @@ Requirements: R04–R05、R10、R40
 安全adbd授权/撤权、多路径身份、四端私钥保护/备份排除和物理USB仍待闭环。A37已将legacy TCP/USB和现代TLS分开，Required及发现/表单/保存/恢复路径保留TLS，明文CNXN/AUTH零凭据拒绝有公开负例；正向互通和这些负例仍不等于生产信任矩阵完成。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
+
+## 首次配对后续（2026-10-17）
+
+隔离secure=1 API36 AVD已跑真实app.main/FRB/Rust身份：未配对拒绝→错码拒绝→系统新码PAKE→独立端口Required TLS→系统接口精确撤权→旧身份拒绝及停止重连→精确清理，64秒通过。Core CertificateUnknown误归offline已公开红绿回归并修复。直接Settings Forget因AtomicFile持久化竞争仍失败，未算入上述通过；host夹具固定API36且不成为用户调试/root前提。
+
+任务保持开放：QR/mDNS/过期/切网/切后台/USB/旧系统、量产/OEM/重装/四端身份保护及成熟密码链尚未闭合；普通用户表单仍暴露英文证书原错。完整范围、失败与重跑入口见[首次配对](../../../docs/implementation/first-pairing.md)和[当前差距](../completion-reassessment.md#122-当前差距按完整产品而非单次实验判断)。

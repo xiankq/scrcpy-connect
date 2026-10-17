@@ -49,8 +49,8 @@
 
 | ID | 验收需求 | 实施/验收状态 | 证据 |
 | --- | --- | --- | --- |
-| R01 | 参考小米桌面与iOS、OPPO/vivo/苹果等成熟互联，完整规划，常规取舍由代理负责 | 既有竞品研究与规划完成；实现持续验收 | docs/research/manufacturer-*与prod/scope；运行功能逐项回填 |
-| R02 | 面向普通用户，首次尽量无感、日常简单，不让用户输命令 | 引导/表单/扫码路径已实现；普通用户可用性仍待验 | product_flow真实手动连接；首次系统调试授权仍不能由普通App跳过 |
+| R01 | 参考小米桌面与iOS、OPPO/vivo/苹果等成熟互联，完整规划，常规取舍由代理负责 | 已有一手研究和规划；OPPO/vivo具体流程证据仍缺，实现持续推进 | docs/research/manufacturer-*与prod/scope；运行功能逐项回填 |
+| R02 | 面向普通用户，首次尽量无感、日常简单，不让用户输命令 | 引导/表单/扫码路径已有；真实码配对/TLS/系统接口撤权两轮通过，普通用户可用性未完成 | product_flow真实手动连接；首次系统调试授权仍不能由普通App跳过 |
 | R03 | Android手机控手机优先；平板与桌面扩展 | 手机双机全屏操作/后台恢复/五codec渲染通过；平板静态验收 | product_flow/background_resume/video_codecs；平板widget截图 |
 | R04 | 被控无需额外APK/no root，系统调试授权，允许临时JAR | 真实被控端通过；Android主控部分通过 | 固定5.0.1 JAR与真实adbd/虚拟display测试；无APK/root |
 | R05 | 主控始终不要求调试，不提供本机ADB增强 | 已实现；Android普通权限路径 | 主控仅网络、USB授权、媒体播放；测试调试只部署使用 |
@@ -58,9 +58,9 @@
 | R07 | 四端都必须实际可编译，区别运行支持 | 部分检查；整包受宿主限制 | ADB四target、core三target check；FRB Apple/Windows链接缺SDK/MSVC |
 | R08 | 尽量整个ADB依赖链纯Rust；未默认接受原生密码后端 | 纯Rust协议已实现；发布安全未验收 | RustCrypto experimental与RSA时序风险未解除 |
 | R09 | 独立、完整Rust ADB主机库，不依赖外部adb可执行文件 | 主要协议、reverse/JDWP及压缩已真实通过；完整性继续审查 | 44默认测试；官方adbd三压缩/LST2/reverse；81e3bd2 |
-| R10 | 参考最新版ADB无线；USB/局域网及已有可达跨网，不依赖账号云/中继/自动穿透 | 现代无线实际通过；USB编译未实物验收 | 真实PAKE/TLS及重连；手动TCP；USB系统授权/FD导入与取消路径 |
+| R10 | 参考最新版ADB无线；USB/局域网及已有可达跨网，不依赖账号云/中继/自动穿透 | 现代无线实际通过；USB编译未实物验收 | 真实PAKE/TLS及重连；隔离secure=1 AVD中错误码、新/撤权身份拒绝与精确清理两轮64秒；USB仍无物理证据 |
 | R11 | 复用scrcpy server JAR但自行实现主控流程 | 已实测 | crates/interop_core/tests/scrcpy_device.rs；实际SPS/PPS/IDR与主控首帧 |
-| R12 | 最新版单应用启动、独立显示、多实例按实际支持 | 真实被控端通过；主控应用页待完整E2E | scrcpy_device：Settings虚拟display、应用枚举、任务保留 |
+| R12 | 最新版单应用启动、独立显示、多实例按实际支持 | 手机主屏与两应用入口/保留/切换实测；旧系统/拒副屏回退及多实例矩阵未完成 | scrcpy_device及session_workspace_test：真实三窗口40秒/独立进程检查；A06继续开放 |
 | R13 | Rust/Flutter，Flutter主要UI与呈现，FRB供Dart调用 | Android运行已通过；流程继续验收 | FRB2.13.0，真实主控启动/共享fvp Texture与PCM |
 | R14 | monorepo | 已实现并构建 | Cargo/Dart workspace及首个Android APK |
 | R15 | Flutter Hooks/Riverpod等主流方案 | 已实现并验证 | Flutter hooks/riverpod；widget及实际Android界面 |
@@ -69,11 +69,11 @@
 | R18 | 按功能分级；被控Android5+基础、现代系统无线/声音分别支持 | 能力分级已实现；仅API36运行证据 | API等级与实际错误分开；旧API/OEM矩阵待验 |
 | R19 | 设备优先首页/工作台、全局传输、设备信息与连接诊断 | 首屏/部分文件和诊断真实页已通过；能力/最近状态仍未投影 | A04修复真实页证据；A25保持开放 |
 | R20 | 多设备、多控制会话、传输并行；手机切换/分屏、大屏并排 | 手机主屏＋两应用保留/同ID切换/精确关闭已真实通过；系统分屏/大屏并排与资源降载缺实现 | 三窗口40秒、8次独立进程检查；重新核查第10–12节 |
-| R21 | 后台连接/通知/传输继续，暂停不可见视频，主动音频保持，回前台恢复 | HOME视频/声音与同进程Activity重建通过；长后台/进程回收待验 | background_resume及audio_lifecycle：默认停声/主动续声/OS媒体FGS；新Activity/同PID/同音源；连接/通知/传输长时仍待验 |
+| R21 | 后台连接/通知/传输继续，暂停不可见视频，主动音频保持，回前台恢复 | HOME视频/声音/Activity重建及后台OS提醒通过；长时/断网/进程活动恢复仍缺 | background_resume及audio_lifecycle：默认停声/主动续声/OS媒体FGS；新Activity/同PID/同音源；连接/通知/传输长时仍待验 |
 | R22 | 默认低延迟；清晰度/帧率/码率/编码器及三档预设 | 五编码、首次画质选择及显式1080下实际486×1080已通过；1280回退与总延迟仍缺 | 实施记录的实像素门禁与24秒真实流程；A10继续开放，不以局部耗时冒充交互延迟 |
 | R23 | 不引入查看模式、直接操作；保留主动实体屏幕开关，与锁定分开 | 直接触控真实通过；实体屏开关仍待专门验收 | product_flow真实点击；无查看模式；不绕过锁屏 |
 | R24 | 真实应用任务/登录态；单实例迁移说明，多实例按实际能力 | 三个真实窗口保留/切换/关闭已实测；旧系统/拒副屏的主屏应用回退、最近常用仍缺 | session_workspace_test；A05/A06和任务迁回/多实例矩阵仍开放 |
-| R25 | 关闭窗口默认与任务去向依据scrcpy，由代理定默认 | 已按scrcpy设置并实测 | vd_destroy_content=false；停止会话后任务保留，迁移/多实例按实际系统 |
+| R25 | 关闭窗口默认与任务去向依据scrcpy，由代理定默认 | 默认保留真实任务已实测；迁回/多实例细节仍待验 | vd_destroy_content=false；停止会话后任务保留，迁移/多实例按实际系统 |
 | R26 | 声音按设备只播一次；多设备默认单路，可固定/主动混音 | 双设备同时播放及外部焦点实测通过；物理听感待验 | 真实双AVD音源/去重；外部AudioManager临时loss/手动暂停保留/gain/永久loss终止旧ID/新ID重新开启 |
 | R27 | 剪贴板跟随当前设备，可固定，其他后台设备不覆盖 | 文本三AVD与后台停读已有证据；远控／专用页返回焦点已修；非文本与完整多机并行仍缺 | A38公开路由与实际协调器follow/fixed六项回归；图片文件剪贴板未完成 |
 | R28 | 文本/图片/文件、系统分享、本机打开；内容和目标可辨 | 入站导入/取消九模式，出站文本/JPEG/MP4实际接收已通过；入站提交至设备与本机打开仍待验 | 真实Sharesheet→独立接收器读取content授权、原字节/hash；Intent与URI解析MIME分别核验；[当前内容交付](../../docs/implementation/content-delivery.md) |
@@ -84,11 +84,11 @@
 | R33 | 短信只通知与远控原应用，不做收件箱/写库/短信业务页 | 范围与UI已落实；通知原应用路径真实被控端通过 | 无独立SMS业务页；原通知PendingIntent/手机应用入口 |
 | R34 | 其他消息/邮箱/日历等完整业务也进入原应用，非每类重建一页 | 原应用路由和同设备主屏会话复用已做；认证后重验与不能定位路径仍缺 | notifications.open真实PI/Settings接续；Remote.start查既有session；A12 |
 | R35 | 实时通知同步手机；清除/打开/原通知快捷回复，旧动作重验 | 自动持续观察、独立stop、跨页回复保护与后台OS提醒已实现和实测；认证、真实消息服务、OEM／进程死亡仍缺 | 独立receiver原文/count1、真实HOME后通知投递／精确撤回／SystemUI点击呈现；见重新核查13–15节，不扩大为真实聊天服务送达 |
-| R36 | 长期通知历史移出范围，替代Q27旧可选历史 | 实现中未持久化通知正文或历史 | companion内存快照；生产无历史归档页面 |
+| R36 | 长期通知历史移出范围，替代Q27旧可选历史 | 产品不提供长期通知归档；系统通知可能由OS留存 | companion内存快照、无历史页面；不推断OS永不落盘 |
 | R37 | 唤醒仅打开远控，不强制实体亮屏，需认证走手机解锁 | power_on=false，休眠隔离实测不自动开屏；显式wake通过 | sleeping_target_requires_explicit_wake；不声称验证密码/生物认证矩阵 |
 | R38 | 按原因/操作恢复，主动停保持停，未知发送/拨号/删除不重放 | 同runtime核验／同UUID及跨页回复未知保护已实现；瞬断／进程意图恢复仍缺，系统保存未知不重写已补 | state_recovery_test、回复独立receiver及文档公开回归；A22继续开放，不声明持久化恢复已完成 |
 | R39 | 资源不足保护已有重要活动和当前操作，先降新/非焦点负载 | 原子启动预留及保留旧活动通过；共享MDK资源错误分类及降低新窗口负载待补 | resource_admission默认5+真实guard1；旧Native1100降负载路径已停止使用，不以字符串猜测重放应用；实际硬件耗尽未验 |
-| R40 | 主控身份本机保管不自动迁移；元数据独立恢复，换机重新授权 | 已实现并测试 | preferences_lifecycle三项，包括USB/待连接无线0端口恢复；不含私钥不恢复授权 |
+| R40 | 主控身份本机保管不自动迁移；元数据独立恢复，换机重新授权 | 元数据分离已测，真实系统接口撤权已测；四端保护/重装未完成 | preferences_lifecycle三项，包括USB/待连接无线0端口恢复；不含私钥不恢复授权 |
 | R41 | Apple/iOS Liquid Glass理念，官方网页研究；最新要求加强玻璃透色、亮边与控制层次 | 共享实时折射与opaque绕过已实现，真实视频/退出操作通过；可打断形变、光学与动态性能完整验收仍缺 | 固定easy5.0.0、实际shader能力、黑白背景磨砂路径采样≥4.5及径向保护修复；不以静态截图代替光学／性能 |
 | R42 | 黑色/中性色是主题色，默认浅色，深色可选；允许图标/小元素彩色，否定深绿按钮 | 默认浅色/黑色主题/彩色Lucide已实现 | 真实启动图、浅深与低透明度widget截图；无厚重深绿按钮 |
 | R43 | Lucide优先，无适配才Iconify | Flutter返回／关闭／菜单已统一Lucide；其余平台runner与完整控件外观仍待核对 | lucide_icons_flutter、RTL返回及真实浅色通知页；启动矢量link-2 |
@@ -98,17 +98,17 @@
 | R47 | 移除previews和designs根README；导出临时；源素材可保留 | 已完成并遵循 | 仓库无previews；本轮所有截图均/tmp |
 | R48 | 在ADR/技术文档与画布间解释产品，不讲库与代码路线 | 产品说明层已建立，随行为持续同步 | designs/prod/ 与产品流程/交互规则 |
 | R49 | 不做录屏/备份；自动回写、相机、硬件共享、开发面板等移出 | 范围已落实；持续审计 | 应用未提供录屏/备份/独立短信等退出能力 |
-| R50 | grill-me/grill-with-docs形成研究与文档；事实代理查、常规不重复问 | 既有研究/访谈完成；实现证据持续回填 | docs/research与20研究/验收任务；常规技术取舍自主推进 |
+| R50 | grill-me/grill-with-docs形成研究与文档；事实代理查、常规不重复问 | 既有研究/访谈已落盘；研究和实现证据持续补齐 | docs/research与20研究/验收任务；常规技术取舍自主推进 |
 | R51 | 远控沉浸全屏，像直接使用远端手机；悬浮退出可拖动并吸附侧边隐藏 | 真实全屏、触控、吸附展开退出与后台恢复已通过 | product_flow_test和background_resume_test；截图目视无卡片/错误覆盖 |
 | R52 | 善用共享组件与实例，重复远控底层/控件/面板通过母组件统一更新 | Pencil已使用连接组件；Flutter共享组件已落地，视觉目标仍未完成 | 24母组件/545实例引用；design_system共用glass/按钮/导航，原文件头、系统保存表单与搜索条件复用 |
 | R53 | 固定设备列表，所有设备平等，不存在备用手机角色 | 首屏实际通过 | /tmp/connect-avd/startup.png；生产无假设备/备用角色 |
-| R54 | 完整连接表单、设备管理与关联流程，按类型优化当前页面 | 手动连接/文件/单会话通过；未授权双机起点、完整系统授权与USB转无线闭环未完成 | product_flow_test；配对/二维码/USB表单及owned取消widget；物理USB未验 |
+| R54 | 完整连接表单、设备管理与关联流程，按类型优化当前页面 | 未授权起点的码→TLS→系统接口撤权两轮通过；QR/USB/设置Forget及USB转无线仍未完成 | product_flow_test；配对/二维码/USB表单及owned取消widget；物理USB未验 |
 | R55 | 每个页面独立文件，Dart页面文件统一以_page.dart结尾 | 已实现并回归 | 当前42页面目录/42独立_page.dart；181应用测试与真实路由／搜索／系统交付通过 |
 | R56 | 采用go_router管理业务页面与返回、替换、系统分享路由 | typed生成路由已实现并回归 | go_router_builder三tab shell/ID参数/恢复；远控root全屏及真实HOME返回通过 |
 | R57 | 多文件夹架构，lib下直接pages及少量共享目录 | 已实现并回归 | lib/pages/<页面>/<页面>_page.dart；共享widgets/services/router另放，不增加features/core/app嵌套 |
 
 | R58 | 使用go_router_builder、riverpod_generator、build_runner及官方lint，防止工程和架构退化 | 生成迁移、严格分析、181项应用测试及真实媒体／系统交付／文件搜索已有证据；完整产物闭包仍缺 | typed shell/导航、深冻结Notifier、Riverpod插件负例、workspace生成一致性；FRB/JAR/MDK及四宿主门禁见A30/A41 |
-| R59 | Flutter/Rust为主体，减少自维护Android代码和未来多端重复适配 | 播放、分享规划和文档复制已迁共享层；必要OS端口保留，四端仍待实际整包 | 旧自写decoder/PCM循环已删除；共享fvp/MDK及DocumentsCoordinator/Rust复制；本轮Kotlin仅PFD完成／错误信号和OS路径，非文件业务 |
+| R59 | Flutter/Rust为主体，减少自维护Android代码和未来多端重复适配 | 播放、分享规划和文档复制已迁共享层；必要OS端口保留，四端仍待实际整包 | 旧自写decoder/PCM循环已删除；共享fvp/MDK及DocumentsCoordinator/Rust复制；保留的Kotlin端口处理PFD完成／错误信号和OS路径，非文件业务 |
 
 | R60 | 首帧拿不到/慢时先查scrcpy开发者文档 | 已核对官方静止补帧/源码并修复播放器等待，当前五codec实际通过；总延迟/画质仍缺 | docs/research/scrcpy-first-frame-and-latency.md；重新核查A10 |
 
@@ -175,3 +175,7 @@
 - 2026-10-17相册后续：c9f6ef7将同一真实E2E扩展至相册网格/缩略图/原件JPEG及MP4，并补独立review发现的Intent MIME被URI解析类型覆盖的验收缺口。分别记录和严格核验双MIME后，JPEG42秒/MP443秒/文本39秒全过，8840/323934/63原字节/hash与授权准确；视频实际播放时钟、暂停、用户定位、静音通过；外部文件及自有receiver精确清理。实际预览和结果截图已目视，window dump及转场后状态栏正常证据保留。严格分析、137输入生成一致性和格式检查通过。此批产品实现/依赖未变，不以小样本及无音轨视频代替全格式、大原件、物理音频、索引分页、批量和异常矩阵；完整剩余以completion-reassessment12.2/17节为准，目标active。
 
 - 2026-10-17搜索后续：f0913d6补有界跨目录名称/类型搜索与真实adbd兼容，8cdc8d9固定设备/范围专页及迟到取消/旧读取保护，df29d05公开产品E2E，9e167bb补同文件同类别行3搜索状态和共享组件。真实权限/链接/非法编码/上限/取消/根目录用例通过；双AVD实际文件页→搜索→文档筛选→同名来源→详情重验→精确清理最终11秒通过，完成截图已目视。根回退与旧快照真实红绿、首次定位失败/旧绘制帧均保留。App181、Rust163/46忽略、clippy/严格分析/141输入生成检查/格式与Android三ABI158.9秒通过，普通main实际R重启1,414ms；FRB及模拟器告警仍记录。Pencil保存重开87页/12类/24母组件/545实例/153变量，预览只放tmp。任务09/18仍开放，完整剩余以completion-reassessment12.2/18节为准，目标active。
+
+- 2026-10-17首次配对后续：新增公开Runtime真实负例，重现并修复CertificateUnknown被误归offline及继续重连；隔离secure=1 API36双AVD实际app.main/FRB/Rust身份表单走未配对拒绝、错码拒绝、真实PAKE、独立端口Required TLS、系统精确撤权、旧身份再次拒绝和精确清理，连续两轮各64秒通过。直接Settings Forget因AtomicFile写入重命名失败仍未过，系统接口夹具不能替代该路径或量产验证。主控不新增调试/root前提，被控不装APK；默认Rust163/47忽略，真实新负例另显式执行，严格分析/clippy/fmt通过。已目视连接工作台与拒绝页，原始英文错误和朴素白卡仍是产品缺口；QR/USB/旧系统、过期/网络/后台、量产/OEM/重装/成熟密码链/四端保护及其余12领域保持开放，目标active。
+
+- 本轮工程收尾：142输入生成一致性、Android arm/arm64/x64整包102.4秒通过；普通main热重启1,393ms、设备列表空态已目视并detach。914ab41为Core授权状态修复，2e3dc5c为完整真实配对/系统接口撤权E2E；主控仅网络访问被控，host工具不成为产品依赖。FRB旧isolate告警、表单原始英文错误及其他第12.2节差距仍保留。

@@ -520,3 +520,43 @@ API36/x86_64双AVD，主控emulator-5554，目标emulator-5556，既有host转�
 普通lib/main.dart另实际构建启动并按R热重启1,414ms；设备列表首屏`/tmp/connect-file-search-main-restarted.png`已原生目视，随后detach保留运行。第一次CLI未分配TTY而无法发送R，退出该CLI后重开TTY才实际完成，不把初次启动当热重启证据。重启仍记录两条FRB旧isolate投递警告。
 
 运行仍有SurfaceSync/跳帧/IME inactive等模拟器日志，不声称零警告或达到性能指标。目录/批量系统交付、浏览分类、provider/空间/撤权矩阵、可恢复传输意图、完整设计状态及其他第12.2节完整目标继续开放。
+
+## 首次真实配对、强制 TLS 与系统撤权
+
+本批针对完整核查 A02/A03/A34：不再只从预配端口开始。环境/安全边界、系统源码与重跑入口见[首次配对实现](first-pairing.md)。主控5554使用普通产品 app.main/FRB/Rust身份，被控5558仅开调试；host不执行 adb pair，不导入产品身份、不安装被控APK。宿主SDKadb仅协调测试系统界面与动态网络转发，不进入产品运行依赖。
+
+原API36镜像secure=0的失败仍保留。本批隔离第三AVD的可写覆盖层使ro.adb.secure=1，重启后实际shell UID2000；SDK原镜像未改，前两台认证设置不变。该环境是userdebug/orange，不能替代量产锁定/OEM安全验收。仅启动参数-prop已实测被忽略，不能当设置成功。系统监听端口从实际设置读取，不依赖本镜像为空的service.adb.tls.port。
+
+### 已修复的真实产品缺陷
+
+新身份访问真实TLS listener时，Android发出CertificateUnknown。Core原把它记成offline并保留自动重连；公开Runtime实际回归先红（`/tmp/connect-first-trust-core-status-red.log`），补入授权拒绝分类后绿（`/tmp/connect-first-trust-core-green.log`，3.50秒）：unauthorized、autoReconnect=false、GUID未建立，仍保留原始证书拒绝理由。此前`devices.add`返回结构用错导致的unwrap失败单列为夹具错误，不能冒充产品red。
+
+### 失败、环境与独立系统实验
+
+| 日志（均/tmp/） | 实际范围与失败，不记通过 |
+| --- | --- |
+| connect-first-pairing-product.log | 约103秒；真实未配对拒绝通过，表单切换和系统配对弹窗定位错误；不含完整错码/配对/撤权 |
+| connect-first-pairing-product-fixed.log | 约55秒；无线调试页晚到帧未识别，准备失败；错误路径清理握手通过 |
+| connect-first-pairing-product-navigation.log | typed路由过渡中定位旧表单，点击失去目标；未扩大成产品配对失败 |
+| connect-first-pairing-product-auth.log | 约133秒；未配对拒绝/错误码/真实配对/Required TLS均通过；Rust全测同时运行期间发生宿主OOM、主控被杀，另一AVD挂起后SIGSEGV。kernel journal及独立终端核对，随后保留userdata重启，未记产品或撤权通过 |
+| connect-first-pairing-product-verified.log | 约52秒；到TLS通过，系统Forget后元数据清除没有在主判据完成；命名verified不等于通过 |
+| connect-first-pairing-product-final.log | 约151秒；到TLS通过，系统撤权持久化及清理失败，本次记录删除/转发清理已执行；命名final不等于通过 |
+| connect-first-pairing-system-interface.log | 约131秒；到TLS通过，主控连接工作台已目视；host要求指纹独占文本节点，但系统将标签与指纹合并；详情标题不在无障碍树，又导致返回定位失败。属于夹具失败，设备记录及转发仍精确清理 |
+
+系统直接Forget的实际日志出现AtomicFile重命名失败，授权文件一度移除本次公钥、元数据却残留，重启恢复了公钥。对照AOSP AtomicFile及AdbDebuggingManager，设置返回读取与异步持久化冲突得到支持；没有声称已修复Android框架或所有时序。
+
+独立最小实验：只针对上述本次新增身份，关闭设置后调用API36 IAdbManager.unpairDevice（事务7），确认产品公钥与元数据同时消失、基线宿主保留；不编辑key文件。host driver因此固定API36、取唯一产品详情指纹、停止设置进程后精确撤权，先等待真实授权/元数据清除再重新进入设置。清理同时检查配对条目和内存中的基线公钥；缺一不通过。此系统接口操作仅为宿主夹具，不成为主控调试/root要求；直接Forget路径仍是失败。
+
+工作台截图在仍连接的专用握手点，拒绝截图也由宿主回执再继续；不在码输入阶段截图。结果不含配对码、VM参数、私钥或公钥原文，host命令失败只记录固定类型和本文件栈位置。独立只读review未发现新增证据误报、所有权或清理问题；review本身不算运行。
+
+### 最终两轮产品证据
+
+`/tmp/connect-first-pairing-system-revocation.log` 与 `/tmp/connect-first-pairing-system-repeat.log` 均64秒退出0。对应结果目录 `/tmp/connect-e2e/first-pairing-system-revocation/`、`first-pairing-system-repeat/`；两轮firstPairingComplete、initialUnpairedRejected、wrongCodeRejected、realPairingCompleted、requiredTlsConnected、revokedIdentityRejected、ownedRecordRemoved、fixtureCleanupAcknowledged全true，hostErrors=[]，OS精确撤权/基线保留/自有信任消失/转发移除全true。初次及撤权后的实际错误都为CertificateUnknown，不能用一般网络失败替代。
+
+主控实际已连接工作台及撤权拒绝表单已原生目视。未发现这两张图中的重叠，但表单仍显示原始英文证书异常、内容卡仍偏白；**不算普通用户错误说明、液态风格或全部页面视觉通过**。Pencil未改，87页/12类/24母组件545实例保持原状态。
+
+Rust默认工作区40套件163通过/47忽略（`/tmp/connect-first-pairing-rust-workspace.log`）；新真实负例另显式执行过，不将默认忽略算通过。相关all-target测试clippy、fmt检查与严格Flutter分析已通过。系统设置Forget失败、实验密码后端、量产/OEM/USB/QR/mDNS/过期/网络与后台变化、重装/四端私钥保护仍开放；不以本轮64秒链路关闭01/05/15或完整目标。
+
+最终生成一致性检查通过：build_runner only-check，142输入，11秒（`/tmp/connect-first-pairing-generation.log`）。Android arm/arm64/x64三ABI debug整包102.4秒通过，`/tmp/connect-first-pairing-three-abis.log`。仍没有iOS/macOS/Windows整包证据，不能以Android或跨target check替代。新集成测试未改变应用181项widget基线，本轮未将既往widget结果冒充新增运行；本轮实测为上述两轮产品E2E、真实Runtime负例和所列自动检查。
+
+最后普通lib/main.dart实际安装启动，Impeller(OpenGLES)，按R热重启1,393ms；设备列表空态首屏 `/tmp/connect-first-pairing-main-restarted.png` 已原生目视，未残留本次测试设备记录，随后detach。重启仍有两条FRB旧isolate投递告警，以及启动SurfaceSync/跳帧日志，不声称零运行告警或完整性能通过。本批Core修复/公开负例为914ab41，产品集成测试及宿主fixture为2e3dc5c；既有未跟踪的clipboard/documents/input测试与examples未改、未夹带提交。
