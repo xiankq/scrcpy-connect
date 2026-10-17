@@ -15,6 +15,96 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final systemBack in [false, true]) {
+    for (final hanging in [false, true]) {
+      testWidgets(
+        '${systemBack ? "system back" : "exit button"} remains reachable when capture pause ${hanging ? 'hangs' : 'fails'}',
+        (tester) async {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          final semantics = tester.ensureSemantics();
+          final pending = Completer<Json>();
+          final commands = <(String, Json)>[];
+          final controller = createTestController((
+            command, [
+            params = const {},
+          ]) async {
+            commands.add((command, params));
+            if (command == 'session.start') {
+              return {
+                'sessionId': 'original',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+              };
+            }
+            if (command == 'session.pause') {
+              if (hanging) return pending.future;
+              throw const RequestFailure(
+                'disconnected',
+                'capture pause failed',
+              );
+            }
+            return {};
+          });
+          try {
+            await tester.pumpWidget(
+              RouterTestApp(
+                controller: controller,
+                devices: const [
+                  {'id': 'phone', 'name': '测试手机'},
+                ],
+                home: Builder(
+                  builder: (context) => Scaffold(
+                    body: TextButton(
+                      onPressed: () =>
+                          openRemoteRoute(context, deviceId: 'phone'),
+                      child: const Text('返回的原页面'),
+                    ),
+                  ),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('返回的原页面'));
+            await tester.pumpAndSettle();
+            if (systemBack) {
+              await tester.binding.handlePopRoute();
+            } else {
+              await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+            }
+            await tester.pumpAndSettle();
+            expect(find.text('返回的原页面'), findsOneWidget);
+            if (!hanging) {
+              expect(
+                find.textContaining('已退出 测试手机 的画面，暂停窗口尚未确认'),
+                findsOneWidget,
+              );
+            }
+            expect(
+              find.byType(RemotePage),
+              findsNothing,
+              reason: 'Leaving presentation must not depend on a remote acknowledgement.',
+            );
+            expect(
+              commands
+                  .where((c) => c.$1 == 'session.pause')
+                  .map((c) => c.$2['sessionId']),
+              ['original'],
+            );
+            expect(commands.where((c) => c.$1 == 'session.stop'), isEmpty);
+          } finally {
+            if (!pending.isCompleted) pending.complete({});
+            await tester.pumpAndSettle();
+            await tester.pumpWidget(const SizedBox());
+            controller.dispose();
+            semantics.dispose();
+          }
+        },
+      );
+    }
+  }
   for (final lateResume in [false, true]) {
     testWidgets(
       'returning from device B restores A focus${lateResume ? ' despite a late B resume' : ''}',

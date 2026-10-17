@@ -563,6 +563,7 @@ class _RemotePageState extends State<RemotePage>
   }
 
   Future<void> pauseView() async {
+    if (exiting) return;
     final owned = view;
     if (owned == null || !owned.isCurrent) return;
     final epoch = ++visibilityEpoch;
@@ -854,22 +855,37 @@ class _RemotePageState extends State<RemotePage>
       exiting = true;
     });
     startAttempt++;
+    final feedback = ScaffoldMessenger.maybeOf(context);
+    final deviceLabel = deviceName(widget.device);
+    final left = Completer<void>();
     if (sessionId.isNotEmpty) {
-      try {
-        await view?.release(afterInput: releaseInputs());
-        controlAvailable = false;
-      } catch (failure) {
-        if (mounted) {
-          setState(() {
-            exiting = false;
-            paused = true;
-            error = '暂未能暂停此窗口：${remoteFailure(failure)}';
-          });
-        }
-        return;
+      // Input release and pause stay ordered for this exact session. Leaving
+      // local presentation must not wait for a remote acknowledgement.
+      final cleanup = view?.release(afterInput: releaseInputs());
+      controlAvailable = false;
+      if (cleanup != null) {
+        unawaited(
+          cleanup.catchError((Object failure) async {
+            await left.future;
+            if (feedback?.mounted == true) {
+              feedback!.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '已退出 $deviceLabel 的画面，暂停窗口尚未确认：${remoteFailure(failure)}。可在控制会话中核对。',
+                  ),
+                ),
+              );
+            }
+            return <String, dynamic>{};
+          }),
+        );
       }
     }
+    // Let PopScope publish the local exit state before popping the route.
+    await WidgetsBinding.instance.endOfFrame;
     if (mounted) closePage<void>(context);
+    await WidgetsBinding.instance.endOfFrame;
+    left.complete();
   }
 
   @override
