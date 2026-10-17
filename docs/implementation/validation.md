@@ -467,3 +467,21 @@ rtk proxy env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/glass-product-final \
 最后普通lib/main.dart实际构建启动，日志确认Impeller(OpenGLES)。Dart MCP发现IDE的DTD但没有关联此CLI启动的App，hot_restart工具因此拒绝；随后直接向本次flutter run发送R，实际`Restarted application in 1,378ms`。`/tmp/connect-glass-hot-restart.png`设备列表/浅色系统栏/共享悬浮导航已原生目视，随后detach。两条FRB旧isolate投递失败警告仍存在，不能将热重启局部成功扩大为全部生命周期资源已无缺陷。
 
 普通`lib/main.dart`随后在emulator-5554实际重新安装运行，按R热重启完成（1,401ms），设备列表首屏截图`/tmp/connect-content-delivery-main-restarted.png`已目视。FRB在热重启时记录两条Fail to post message警告；未将其写成无运行告警或进程恢复通过。
+
+## 相册JPEG与MP4实际交付复验
+
+针对上一节仅文本的边界，扩展同一公开页面/E2E流程：host FFmpeg7.0.2生成320×180 JPEG及6秒、15fps、无音轨H264 MP4，分别放入被控Pictures/Movies下唯一名称；从实际相册网格点击该原件，等待缩略图/原件真实解码，再执行系统选择器取消、保存和实际Sharesheet。没有将文件详情直跳冒充相册入口，也没有通过调用播放器方法代替点击播放/暂停/进度/静音控件。
+
+JPEG初次43秒、MP4初次44秒通过。独立只读review发现接收器用URI解析MIME覆盖Intent MIME，可能掩盖分享目标匹配错误；现分别记录`intentMime`与`resolvedMime`并严格检查两者。修正后完整重跑，不沿用旧回执：
+
+| 样本与最终日志 | 实际结果 | 原字节与SHA-256 |
+| --- | --- | --- |
+| JPEG，`/tmp/connect-gallery-image-mime-verified.log`，42秒 | 真实网格/缩略图/原件、取消/保存/外部分享；Intent及解析均image/jpeg | 8840；`662f90ce3844cc6195ae0876158c417992554097e5831c76d14c4e2813859662` |
+| MP4，`/tmp/connect-gallery-video-mime-verified.log`，43秒 | 真实网格/缩略图/播放器；播放时钟前进、暂停、用户定位至2秒后、静音；取消/保存/分享；两者均video/mp4 | 323934；`e3be91817d465fe87a368ff79a949e467fc684255fcd65d0ef9b4e0b55fbe474` |
+| UTF-8，`/tmp/connect-content-text-mime-verified.log`，39秒 | 默认文件详情链路回归；真实取消/保存/分享；两者均text/plain | 63；hash随唯一runId生成，见对应result.json |
+
+最终结果目录分别为`/tmp/connect-e2e/gallery-image-mime-verified/`、`gallery-video-mime-verified/`和`content-text-mime-verified/`。三次`contentDeliveryComplete:true`、`hostErrors:[]`，本机实际导出字节一致，独立接收器实际读到相同字节/hash、content URI及read grant，精确源/导出文件消失及自有接收器卸载均确认。媒体回执还必须含`galleryThumbnailLoaded`/`actualMediaPreview`，视频必须含`videoPlaybackControls`；缺少判据失败。
+
+图片/视频预览及保存/分享结果已原生目视。返回系统分享后曾捕获偏浅状态栏图标；额外记录实际`shared-product-windows.txt`，生产窗口明确`apr=LIGHT_STATUS_BARS LIGHT_NAVIGATION_BARS`，系统转场结束后的产品截图图标正常。没有把瞬时截图推断成已定位的业务错误，也没有为此增加原生样式代码；完整动态/对比/无障碍矩阵仍开放。
+
+只扩展测试源与独立接收器，产品实现/依赖及Pencil页面数未再变化。FFmpeg仅host测试工具；JPEG/无音轨MP4的小样本成功不证明物理声音、全格式、HEIF/HEVC/动态照片、超2MiB、长原件准备/取消/空间满/撤权、索引分页或批量能力。当前剩余工作已同步goal、任务10/13及第12.2节。

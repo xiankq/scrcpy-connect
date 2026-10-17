@@ -45,4 +45,10 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   --dart-define=CONNECT_E2E_PORT=15556
 ```
 
-运行结果、失败与复验记录见[实施验收](validation.md)。当前整体验收仍需批量取用、目录／提供方矩阵、图片／视频实际交付、长原件预览活动和进程重建后的任务意图恢复；本页不将这些标为完成。系统目标／测试 APK 的精确清理由 host 确认；用户语义要求保留的私有暂存没有通过清空应用数据去掩盖。
+运行结果、失败与复验记录见[实施验收](validation.md)。单项文本、JPEG及MP4的实际系统交付已有证据；当前整体验收仍需批量取用、目录／提供方矩阵、长原件预览活动、媒体异常组合和进程重建后的任务意图恢复。系统目标／测试 APK 的精确清理由 host 确认；用户语义要求保留的私有暂存没有通过清空应用数据去掩盖。
+
+## 相册入口的验收变体
+
+同一真实流程支持`text`、`image`、`video`三种明确样本。媒体测试须同时设置host环境`CONNECT_E2E_CONTENT_KIND=image`（或`video`）和Flutter参数`--dart-define=CONNECT_E2E_CONTENT_KIND=image`，并将`CONNECT_E2E_FFMPEG`指定为host FFmpeg绝对路径。工具只生成320×180 JPEG或6秒H264 MP4临时样本，不是产品运行依赖。host独立读取样本、计算hash并核验导出；严格检查接收MIME，不只比长度。
+
+媒体变体从真实相册网格进入：目标缩略图必须解码出像素，原件预览也必须加载；视频检查真实时钟前进、暂停、拖动定位和静音。之后仍经过实际系统选择器取消/保存、Sharesheet接收及字节/hash/grant核验。被控唯一源分别位于Pictures/Movies，主控导出位于Downloads，两处路径单独拥有和精确清理。此变体不证明超2MiB原件、所有媒体格式、媒体索引分页或云提供方能力。

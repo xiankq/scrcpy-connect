@@ -33,8 +33,8 @@ Requirements: R26–R28
 
 2026-10-17重新核查：文本剪贴板跟随固定/隔离、音源焦点、外部分享九模式导入已实测。
 
-后续出站单项系统分享已通过实际Sharesheet、独立receiver读取content URI授权及原始63字节/hash核验；回到产品只声明交给选中应用，不伪称已向他人发送。固定任务跨设备焦点变化有公开路由回归。
+后续出站单项系统分享已通过实际Sharesheet、独立receiver读取content URI授权及原始字节/hash核验；样本从文本扩展到真实相册JPEG/MP4，Intent MIME与URI解析MIME分别校验。回到产品只声明交给选中应用，不伪称已向他人发送。固定任务跨设备焦点变化有公开路由回归。
 
-图片文件剪贴板、外部入站分享实际提交/本机打开、目标固定的重启验收仍缺。A38已补共享可见设备声明及Remote独立资格，Workspace/Files/Gallery返回、late lookup、恢复与root覆盖六项公开路由回归通过，follow回原设备、fixed不变；不改在途任务目标。批量/媒体交付及实际多AVD完整并行/混音仍需验证。
+图片文件剪贴板、外部入站分享实际提交/本机打开、目标固定的重启验收仍缺。A38已补共享可见设备声明及Remote独立资格，Workspace/Files/Gallery返回、late lookup、恢复与root覆盖六项公开路由回归通过，follow回原设备、fixed不变；不改在途任务目标。批量/大原件/其他媒体组合及实际多AVD完整并行/混音仍需验证。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
