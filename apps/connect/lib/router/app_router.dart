@@ -27,6 +27,7 @@ import 'package:scrcpy_connect/pages/devices/devices_page.dart';
 import 'package:scrcpy_connect/pages/diagnostics/diagnostics_page.dart';
 import 'package:scrcpy_connect/pages/discovery/discovery_page.dart';
 import 'package:scrcpy_connect/pages/document_export/document_export_page.dart';
+import 'package:scrcpy_connect/pages/receive_content/receive_content_page.dart';
 import 'package:scrcpy_connect/pages/document_import/document_import_page.dart';
 import 'package:scrcpy_connect/pages/file_details/file_details_page.dart';
 import 'package:scrcpy_connect/pages/files/files_page.dart';
@@ -999,6 +1000,32 @@ class DocumentExportRoute extends GoRouteData with $DocumentExportRoute {
     }
 
     return page(context, state);
+  }
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
+@TypedGoRoute<ReceiveContentRoute>(
+  path: '/transfers/:taskId/receive',
+  name: 'receive-content',
+)
+class ReceiveContentRoute extends GoRouteData with $ReceiveContentRoute {
+  const ReceiveContentRoute({required this.taskId, this.share = false});
+  final String taskId;
+  final bool share;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    final controller = _controller(context);
+    final records = _records(context);
+    return RecordRoute(
+      identity: 'receive:$taskId:$share',
+      load: () => records.transfer(taskId),
+      builder: (_, task) =>
+          ReceiveContentPage(controller: controller, task: task, share: share),
+    );
   }
 
   @override

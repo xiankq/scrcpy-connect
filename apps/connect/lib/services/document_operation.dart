@@ -28,7 +28,19 @@ class DocumentOperation extends ChangeNotifier {
       });
       if (!disposed && operationId == id) result = data;
     } catch (failure) {
-      if (!disposed && operationId == id) error = '$failure';
+      if (!disposed && operationId == id) {
+        error = '$failure';
+        // A missing reply cannot prove that the provider did not write.
+        // Require review before a user starts another export.
+        if (command == 'documents.export') {
+          result = {
+            'status': 'result_unknown',
+            'name': params['name'],
+            'cacheRetained': true,
+            'partialDestinationPossible': true,
+          };
+        }
+      }
     } finally {
       if (!disposed && operationId == id) {
         operationId = null;

@@ -47,6 +47,11 @@ Future<void> retrieveFile(
     'destinationScope': privateCache ? 'privateCache' : 'localPath',
   });
   if (result == null || !context.mounted) return;
+  final transferId = value(result, 'transferId');
+  if (privateCache && transferId.isNotEmpty) {
+    ReceiveContentRoute(taskId: transferId, share: share).push<void>(context);
+    return;
+  }
   final local = value(result, 'localPath', value(result, 'path'));
   if (share && local.isNotEmpty && result['status'] == 'completed') {
     try {

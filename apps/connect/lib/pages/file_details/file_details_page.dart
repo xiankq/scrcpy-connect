@@ -24,10 +24,13 @@ class FileDetailsPage extends StatelessWidget {
     child: ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const FeatureIcon(
-          LucideIcons.file,
-          color: ConnectTokens.amber,
-          size: 72,
+        const Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: FeatureIcon(
+            LucideIcons.file,
+            color: ConnectTokens.amber,
+            size: 72,
+          ),
         ),
         const SizedBox(height: 24),
         Text(

@@ -13,6 +13,95 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('a preflight failure reports no save and allows explicit retry', (
+    tester,
+  ) async {
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      if (command == 'documents.export') {
+        return {
+          'status': 'failed',
+          'files': 0,
+          'directories': 0,
+          'bytes': 0,
+          'partialDestinationPossible': false,
+          'errors': [
+            {'message': '原文件已变化'},
+          ],
+        };
+      }
+      return {};
+    });
+    await tester.pumpWidget(
+      RouterTestApp(
+        controller: controller,
+        theme: ConnectTokens.theme(Brightness.light),
+        home: DocumentExportPage(
+          controller: controller,
+          localPath: '/private/cache/file',
+          name: 'file',
+          kind: 'file',
+        ),
+      ),
+    );
+    await tester.tap(find.text('选择系统位置并保存'));
+    await tester.pumpAndSettle();
+    expect(find.text('本次保存未开始'), findsOneWidget);
+    expect(find.text('部分内容已保存，请核对'), findsNothing);
+    expect(find.text('系统保存结果待核对'), findsNothing);
+    expect(find.byType(CheckboxListTile), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '重新选择系统位置'))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+  testWidgets(
+    'a lost export reply requires review before another system write',
+    (tester) async {
+      var writes = 0;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'documents.export') {
+          writes++;
+          throw StateError('reply lost after provider write');
+        }
+        return {};
+      });
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          theme: ConnectTokens.theme(Brightness.light),
+          home: DocumentExportPage(
+            controller: controller,
+            localPath: '/private/cache/original.png',
+            name: 'original.png',
+            kind: 'file',
+          ),
+        ),
+      );
+      await tester.tap(find.text('选择系统位置并保存'));
+      await tester.pumpAndSettle();
+      expect(find.text('系统保存结果待核对'), findsOneWidget);
+      expect(find.text('已保存到系统位置'), findsNothing);
+      final retry = find.widgetWithText(FilledButton, '重新选择系统位置');
+      expect(tester.widget<FilledButton>(retry).onPressed, isNull);
+      await tester.ensureVisible(find.byType(CheckboxListTile));
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(retry).onPressed, isNotNull);
+      expect(writes, 1);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
   testWidgets(
     'partial directory import requires review before sending its cached subset as one batch',
     (tester) async {

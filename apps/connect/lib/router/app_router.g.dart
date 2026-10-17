@@ -41,6 +41,7 @@ List<RouteBase> get $appRoutes => [
   $remoteSessionRoute,
   $transferDetailsRoute,
   $documentExportRoute,
+  $receiveContentRoute,
   $documentImportRoute,
   $incomingShareRoute,
   $shareDirectoryRoute,
@@ -1270,6 +1271,49 @@ mixin $DocumentExportRoute on GoRouteData {
     queryParams: {
       if (_self.partial != false) 'partial': _self.partial.toString(),
     },
+  );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $receiveContentRoute => GoRouteData.$route(
+  path: '/transfers/:taskId/receive',
+  name: 'receive-content',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: ReceiveContentRoute.$parentNavigatorKey,
+  factory: $ReceiveContentRoute._fromState,
+);
+
+mixin $ReceiveContentRoute on GoRouteData {
+  static ReceiveContentRoute _fromState(GoRouterState state) =>
+      ReceiveContentRoute(
+        taskId: state.pathParameters['taskId']!,
+        share:
+            _$convertMapValue(
+              'share',
+              state.uri.queryParameters,
+              _$boolConverter,
+            ) ??
+            false,
+      );
+
+  ReceiveContentRoute get _self => this as ReceiveContentRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/transfers/${Uri.encodeComponent(_self.taskId)}/receive',
+    queryParams: {if (_self.share != false) 'share': _self.share.toString()},
   );
 
   @override
