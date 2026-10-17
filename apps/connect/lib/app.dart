@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -14,17 +16,11 @@ class ConnectApp extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(appControllerProvider.notifier);
-    final appDevices = ref.watch(
-      appControllerProvider.select((state) => state.devices),
-    );
     final appSettings = ref.watch(
       appControllerProvider.select((state) => state.settings),
     );
     final appPendingShares = ref.watch(
       appControllerProvider.select((state) => state.pendingShares),
-    );
-    final appLastEvent = ref.watch(
-      appControllerProvider.select((state) => state.lastEvent),
     );
     final appEventRevision = ref.watch(
       appControllerProvider.select((state) => state.eventRevision),
@@ -63,81 +59,104 @@ class ConnectApp extends HookConsumerWidget {
       [appPendingShares.length, appEventRevision, lifecycle, shareCycle.value],
     );
     final presentedCall = useRef<String?>(null);
-    useEffect(() {
-      final event = appLastEvent;
-      if (event == null ||
-          !['calls.incoming', 'call.incoming'].contains(event['type']) ||
-          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
-        return null;
+    final callPresentationEpoch = useRef(0);
+    useOnAppLifecycleStateChange((previous, current) {
+      if (current != AppLifecycleState.resumed) {
+        callPresentationEpoch.value++;
       }
-      final data = jsonObject(event['data']);
-      final call = data['id'] != null
-          ? data
-          : objects(data['calls'])
-                .where((call) => call['state'] == 'ringing')
-                .firstOrNull;
-      if (call == null || data['live'] == false) return null;
-      final id = value(call, 'id');
-      final key = '${event['deviceId']}:$id';
-      if (id.isEmpty || presentedCall.value == key) return null;
-      final matches = appDevices.where((d) => d['id'] == event['deviceId']);
-      if (matches.isEmpty) return null;
-      presentedCall.value = key;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final context = navigator.currentContext;
-        if (context == null || !context.mounted) return;
-        final device = matches.first;
-        showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          builder: (context) => SafeArea(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const FeatureIcon(
-                      LucideIcons.phoneIncoming,
-                      color: ConnectTokens.mint,
-                      size: 64,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      value(call, 'name', value(call, 'number', '当前来电')),
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text('${deviceName(device)} 有来电'),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        CallsRoute(deviceId: value(device, 'id'))
-                            .push<void>(navigator.currentContext!);
-                      },
-                      child: const Text('查看来电与声音'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        openRemoteRoute(
-                          navigator.currentContext!,
-                          deviceId: value(device, 'id'),
-                        );
-                      },
-                      child: const Text('在手机上处理'),
-                    ),
-                    const StateNote('新的来电不会自动接听或抢占现有通话。'),
-                  ],
+    });
+    useEffect(() {
+      var active = true;
+      final subscription = controller.eventStream().listen((event) {
+        if (!['calls.incoming', 'call.incoming'].contains(event['type']) ||
+            WidgetsBinding.instance.lifecycleState !=
+                AppLifecycleState.resumed) {
+          return;
+        }
+        final data = jsonObject(event['data']);
+        final call = data['id'] != null
+            ? data
+            : objects(data['calls'])
+                  .where((call) => call['state'] == 'ringing')
+                  .firstOrNull;
+        if (call == null || data['live'] == false) return;
+        final id = value(call, 'id');
+        final key = '${event['deviceId']}:$id';
+        if (id.isEmpty || presentedCall.value == key) return;
+        final matches = controller.snapshot().devices.where(
+          (d) => d['id'] == event['deviceId'],
+        );
+        if (matches.isEmpty) return;
+        presentedCall.value = key;
+        final epoch = callPresentationEpoch.value;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final context = navigator.currentContext;
+          if (!active) return;
+          if (epoch != callPresentationEpoch.value ||
+              WidgetsBinding.instance.lifecycleState !=
+                  AppLifecycleState.resumed ||
+              context == null ||
+              !context.mounted) {
+            if (presentedCall.value == key) presentedCall.value = null;
+            return;
+          }
+          final device = matches.first;
+          showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            builder: (context) => SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const FeatureIcon(
+                        LucideIcons.phoneIncoming,
+                        color: ConnectTokens.mint,
+                        size: 64,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        value(call, 'name', value(call, 'number', '当前来电')),
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      Text('${deviceName(device)} 有来电'),
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          CallsRoute(deviceId: value(device, 'id'))
+                              .push<void>(navigator.currentContext!);
+                        },
+                        child: const Text('查看来电与声音'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          openRemoteRoute(
+                            navigator.currentContext!,
+                            deviceId: value(device, 'id'),
+                          );
+                        },
+                        child: const Text('在手机上处理'),
+                      ),
+                      const StateNote('新的来电不会自动接听或抢占现有通话。'),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
+          );
+        });
       });
-      return null;
-    }, [appEventRevision]);
+      return () {
+        active = false;
+        presentedCall.value = null;
+        unawaited(subscription.cancel());
+      };
+    }, [controller, navigator]);
     final mode = switch (appSettings['appearance']) {
       'dark' => ThemeMode.dark,
       'system' => ThemeMode.system,

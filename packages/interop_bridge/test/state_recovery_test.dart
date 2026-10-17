@@ -20,16 +20,15 @@ StateJson snapshot(int sequence) => {
 };
 
 void main() {
-  test('unverified state blocks new input and lazy service startup but permits exact release and stop', () {
+  test('unverified state blocks new input and observation startup but permits exact release and stop', () {
     for (final command in [
       'session.start',
       'session.resume',
       'session.text',
       'apps.launch',
       'audio.start',
-      'notifications.list',
+      'observation.start',
       'notifications.reply',
-      'calls.list',
       'clipboard.set',
     ]) {
       expect(needsVerifiedState(command, {}), isTrue, reason: command);
@@ -41,6 +40,11 @@ void main() {
       'devices.disconnect',
       'transfers.cancel',
       'session.list',
+      'observation.list',
+      'observation.status',
+      'observation.stop',
+      'notifications.list',
+      'calls.list',
     ]) {
       expect(needsVerifiedState(command, {}), isFalse, reason: command);
     }

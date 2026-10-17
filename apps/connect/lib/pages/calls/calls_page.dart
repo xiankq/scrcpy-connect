@@ -6,6 +6,7 @@ import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -18,6 +19,7 @@ class CallsPage extends HookConsumerWidget {
     final appEventRevision = ref.watch(
       appControllerProvider.select((state) => state.eventRevision),
     );
+    final starting = useState(false);
     return PageFrame(
       title: '来电与通话',
       subtitle: deviceName(device),
@@ -33,7 +35,27 @@ class CallsPage extends HookConsumerWidget {
           child: const Text('在手机上继续处理'),
         ),
         builder: (context, data, refresh) {
+          Future<void> verify() async {
+            if (starting.value) return;
+            starting.value = true;
+            try {
+              final result = await perform(
+                context,
+                controller,
+                'observation.start',
+                {'deviceId': device['id']},
+              );
+              if (context.mounted && result != null) refresh();
+            } finally {
+              if (context.mounted) starting.value = false;
+            }
+          }
+
           final calls = objects(data['calls']);
+          final state = value(data, 'status', 'unknown');
+          final verified =
+              data['live'] == true &&
+              (state == 'available' || state == 'limited');
           return ListView(
             padding: const EdgeInsets.all(24),
             children: [
@@ -62,10 +84,18 @@ class CallsPage extends HookConsumerWidget {
                 ),
               ),
               if (calls.isEmpty)
-                const EmptyContent(
+                EmptyContent(
                   icon: LucideIcons.phone,
-                  title: '没有可控制的当前通话',
-                  message: '主动拨号、联系人与通话记录请进入手机的原电话应用。',
+                  title: state == 'stopped'
+                      ? '来电观察已停止'
+                      : verified
+                      ? '没有可控制的当前通话'
+                      : '通话状态尚未核验',
+                  message: state == 'stopped'
+                      ? '已停止同步此设备的通知与来电。需要时可主动启用观察。'
+                      : verified
+                      ? '主动拨号、联系人与通话记录请进入手机的原电话应用。'
+                      : '尚未核实手机当前通话；启动观察后仍需等待实时状态。',
                 ),
               for (final call in calls)
                 Padding(
@@ -215,16 +245,8 @@ class CallsPage extends HookConsumerWidget {
                 label: const Text('在手机上继续处理'),
               ),
               TextButton(
-                onPressed: () async {
-                  final result = await perform(
-                    context,
-                    controller,
-                    'calls.list',
-                    {'deviceId': device['id'], 'allowStart': true},
-                  );
-                  if (context.mounted && result != null) refresh();
-                },
-                child: const Text('刷新通话状态'),
+                onPressed: starting.value ? null : verify,
+                child: Text(state == 'stopped' ? '启用通知与来电观察' : '重新核验通话'),
               ),
               const StateNote(
                 '新的来电不会自动接听、抢占麦克风或结束已有通话。无法可靠针对某次呼叫操作时，请使用原手机界面。',

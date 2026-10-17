@@ -25,6 +25,7 @@ class NotificationsPage extends HookConsumerWidget {
       appControllerProvider.select((state) => state.eventRevision),
     );
     final hidden = useState<Set<String>>({});
+    final starting = useState(false);
     return PageFrame(
       title: '实时通知',
       subtitle: deviceName(device),
@@ -41,13 +42,19 @@ class NotificationsPage extends HookConsumerWidget {
         ),
         builder: (context, data, refresh) {
           Future<void> verify() async {
-            final result = await perform(
-              context,
-              controller,
-              'notifications.list',
-              {'deviceId': device['id'], 'allowStart': true},
-            );
-            if (context.mounted && result != null) refresh();
+            if (starting.value) return;
+            starting.value = true;
+            try {
+              final result = await perform(
+                context,
+                controller,
+                'observation.start',
+                {'deviceId': device['id']},
+              );
+              if (context.mounted && result != null) refresh();
+            } finally {
+              if (context.mounted) starting.value = false;
+            }
           }
 
           final notifications = objects(data['notifications'])
@@ -59,7 +66,8 @@ class NotificationsPage extends HookConsumerWidget {
               icon: LucideIcons.bellOff,
               title: switch (state) {
                 'needsSetup' => '通知访问需要设置',
-                'unknown' || 'checking' => '通知状态尚未核验',
+                'stopped' => '通知观察已停止',
+                'unknown' || 'checking' || 'starting' => '通知状态尚未核验',
                 _ => '通知同步受限',
               },
               message: value(data, 'reason', '这台设备尚未提供可靠的通知访问。你可以在手机原应用中处理。'),
@@ -71,7 +79,10 @@ class NotificationsPage extends HookConsumerWidget {
                         openRemoteRoute(context, deviceId: value(device, 'id')),
                     child: const Text('在手机上查看'),
                   ),
-                  TextButton(onPressed: verify, child: const Text('重新核验通知')),
+                  TextButton(
+                    onPressed: starting.value ? null : verify,
+                    child: Text(state == 'stopped' ? '启用通知与来电观察' : '重新核验通知'),
+                  ),
                 ],
               ),
             );
@@ -82,7 +93,7 @@ class NotificationsPage extends HookConsumerWidget {
               title: '没有当前通知',
               message: '这里只显示仍有效的通知，不建立长期通知档案。',
               action: TextButton(
-                onPressed: verify,
+                onPressed: starting.value ? null : verify,
                 child: const Text('刷新当前通知'),
               ),
             );
