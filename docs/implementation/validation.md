@@ -615,3 +615,21 @@ CI保留既有`host-checks`身份，显式调用`./tool/check.sh --android`，�
 解析修正后最后重新执行**整条**`rtk proxy env PATH=<Rust/Flutter/Node及系统路径> CARGO_BUILD_JOBS=2 ANDROID_HOME=/home/xiankq/Android/Sdk ./tool/check.sh --android`，实际退出0，`/tmp/connect-lifecycle-all-gates-final.log`。同一轮生成143输入／10秒、应用212项16秒、设计系统3项、Bridge102项、Rust176／49 ignored和其余门禁全部通过，三ABI增量构建2,384ms，随后4组native main及实际manifest／ELF通过。此前npx缺失和错误数值枚举解析的两次失败日志仍保留，未合并包装成首次整条通过。
 
 最后普通`lib/main.dart`实际构建11.3秒、安装启动，CLI按R热重启1,417ms，设备列表空态`/tmp/connect-lifecycle-main-restarted.png`已目视，随后detach。默认浅色／黑色主动作、紫色小图标、玻璃底部导航与固定设备首页可见；不以此替代全部设计状态或独立光学验收。仍有两条FRB旧isolate投递警告与启动SurfaceSync／跳帧日志，未称零运行告警。
+
+## 本次逐指令审计后的实际实施
+
+当前权威状态仍是[当前完成度](../../.scratch/interop/current-status.md)，12领域／20原任务均未整体关闭；逐条U01–U44／R01–R60／C01–C32及新增A50–A56见[重新核查](../../.scratch/interop/completion-reassessment.md#23-审计后的实际修复与当前边界)。下面证据更新前面的历史缺口，不把局部通过外推成完整产品。
+
+- `68cec63`：A52可信GUID发现候选、Required TLS及更新／撤销／ABA代际屏障；七项真实DNS-SD／TLS最终89.08秒通过，cached旧连接发布实际先红后绿。每GUID八个活动服务，仅信任记录缓存，无无界墓碑；首次配对快速发现仍取首地址，物理切网／Wi-Fi2等仍缺。[细节](wireless-reconnect.md)。
+- `6abdedc`／`c08178d`：A49／A50私有持久启动操作与主屏独立UUID、断开／Runtime重建待核验、队列取消许可；四项真实Android公开Runtime50.17秒通过，包含真实START_APP丢ACK／前序ACK阻塞、精确取消后无旧启动、写盘失败／设备级关闭。49项页面／生命周期／视图回归通过，核对和关闭不被key-up／pointer-cancel／pause回执挂住。Runtime重建不是Android现场杀进程，真实decoder／副屏回退UI仍缺。[细节](app-launch-recovery.md)。
+- `041452c`：A48系统目录冲突共享Flutter页／协调器，精确操作和冲突ID、当前批次策略／取消／离页。真实系统文件选择和独立文件核验最终r5全3分02秒通过；目视第四轮发现零成果误报后，先红后绿并再次实际复验。此前入口／回执夹具错误不计通过。USB产品选择、provider及中断矩阵仍缺。[细节](content-delivery.md#共享系统目录冲突与零成果结果a48)。
+- `99491be`：A54十二个Apple官方正文来源，补自身互通与FaceTime移动端获允远控，区分事实／产品决定／代理建议；没有Apple实操，不增加已排除功能。[研究](../research/apple-continuity-workflows.md)。
+- `82a8fb8`：中文配对错误与实际重新配对入口，公开16项通过；首轮真实链路捕获auth失败仍英文，补准确分支／公开红绿后完整66秒通过，`/tmp/connect-oct17-connection-feedback-r2.log`及`/tmp/connect-e2e/connection-feedback-r2/result.json`。实际rawpeer拒绝与中文呈现分开校验；fresh码／Required TLS／系统接口精确撤权／独立清理均成功，hostErrors为空。已目视工作台和撤权中文截图，不拍配对码。直接Settings Forget和量产设备仍未验。[细节](first-pairing.md#中文错误与重新配对入口复验)。
+
+整条`tool/check.sh --android`r2退出0：`/tmp/connect-oct17-all-gates-r2.log`，应用229／Bridge106／设计3、Rust176passed／58ignored，146输入生成、严格分析／clippy、可复现capture JAR／JVM、负例lint、三ABI APK／四组native／实际manifest和ELF通过。首轮因Rust if-let格式失败，格式修正后整条重跑，不隐藏失败。新中文auth分支在此后修改，因此该r2不能冒充最终当前代码门禁；r3和普通main复验待追加。DESIGN0错误／31警告／1信息、Java8和既有Kotlin断言警告保留。
+
+iOS／macOS／Windows Rust核心交叉check分别5.92／4.56／4.36秒通过，`/tmp/connect-oct17-core-cross-checks.log`；没有三宿主Flutter链接／整包证据。本批源稿仍89页，无仓库pen修改，导出全部在临时目录。IME／通话音频／AV同步／资源降载、缓存／相册、入站指定设备提交、后台恢复、完整ADB／生产密码及动态视觉／性能／无障碍等目标继续开放。
+
+中文分支后最终当前代码**完整r3退出0**，`/tmp/connect-oct17-all-gates-r3.log`：应用230／Bridge106／设计3，Rust176passed／58ignored，146输入生成一致、200文件格式零修改、严格分析／clippy／插件负例、capture JAR／JVM、driver契约与DESIGN检查通过；三ABI APK24.9秒、四组native与实际打包manifest／ELF通过。默认ignored仍不计通过，真实DNS-SD／TLS七项和真实应用故障四项由上面的独立命令证明。其他三平台仍只有Rust核心cross-check，不变成完整宿主产物。
+
+最后普通`lib/main.dart`实际构建16.4秒、安装683ms、CLI R热重启1,982ms，`/tmp/connect-oct17-main-final.log`。截图`/tmp/connect-oct17-main-restarted.png`已目视：设备列表固定首屏、浅色／黑色主动作、紫色小元素与玻璃底导航可见，随后detach。DTD可发现IDE实例但无active app，因此实际重启在本次CLI完成；两条FRB旧isolate及SurfaceSync／启动跳帧仍有，不称性能／零告警或全页面设计通过。未push，原先未跟踪的clipboard／documents／input与examples未夹带提交。

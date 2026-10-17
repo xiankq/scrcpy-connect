@@ -40,6 +40,10 @@ OPPO/vivo国内手机流程、地区版本、首次/后台/失败操作证据尚
 
 ## 本次逐指令复核补回的关闭条件
 
-- [ ] A54：补Apple自身iPhone Mirroring、Universal Clipboard等官方操作流程，区别于小米iOS客户端和HIG视觉研究；提取入口／条件／动作／结果／失败恢复，再映射专用页与原应用分工。原“已有苹果调查”不代表此项已完成。
+- [x] A54资料部分：补Apple自身iPhone Mirroring、Universal Clipboard等官方操作流程，区别于小米iOS客户端和HIG视觉研究；提取入口／条件／动作／结果／失败恢复，再映射专用页与原应用分工。本次资料已补，Apple实操及其他厂商证据仍按下文开放。
 
 源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。
+
+## A54资料交付后的边界
+
+本地提交`99491be`已补[Apple自身连续互通流程](../../../docs/research/apple-continuity-workflows.md)，十二个官方正文来源，分别记录Mac镜像、通知、Handoff、剪贴板、AirDrop、通话／短信及FaceTime手机／iPad获允远控。区分官方事实、本会话已定范围和代理建议；不增加录屏、备份或短信中心。没有Apple实操，OPPO／vivo国内具体入口与失败恢复证据仍缺，任务保持开放。

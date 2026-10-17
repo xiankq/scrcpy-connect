@@ -868,9 +868,7 @@ wait "$child""#
             }
             Err(error) => return Err(error),
         };
-        if app_launch_submitted
-            && let Err(error) = self.app_opens.finish(&id, None).await
-        {
+        if app_launch_submitted && let Err(error) = self.app_opens.finish(&id, None).await {
             cancellation.cancel();
             let mut observed = state.write().await;
             observed["status"] = json!("failed");

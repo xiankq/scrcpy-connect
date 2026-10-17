@@ -46,3 +46,16 @@ Requirements: R28、R31
 - [ ] A51：实现媒体总磁盘预算、淘汰及可理解清理入口，保护准备中／已分享授权／待核对保存的原件。连续不同媒体超预算、活动pin、空间不足及重启核算有真实结果。
 
 源码、研究及本轮证据边界见[重新核查第22节](../completion-reassessment.md#22-用户再次要求逐指令逐文档逐设计核查)；当前状态以[权威入口](../current-status.md)为准。新增检查项尚未通过，不因写入任务自动关闭。
+
+## A53只读复核补充：范围与空结果必须可证实
+
+公开Runtime的`media.list`最终进入`crates/interop_core/src/files.rs::list_media`，只从/sdcard挑DCIM／Pictures／Movies，无这些目录或扫描成功均返回无scope的complete=true。Flutter `lib/pages/gallery/gallery_page.dart`仅看items为空就称相册无内容；Download、自定义目录、根部媒体和Android/media可能全部遗漏。有限扩展名识别也不等同系统媒体库。
+
+另有权限空列表风险：`file_search.rs`已明确记录部分adbd会将opendir(EACCES)返回空DONE，并在遍历前核验read／execute权限；media.list缺该保护。已有find非零／stderr、非法UTF8、16MiB输出／25,000项上限的显式失败应保留，不能扩大扫描后忽略错误。此处为源码证据，未伪造真实AVD权限负例。
+
+- [ ] 研究并落盘公开scope／excluded／partial／issues与当前用户及卷边界；complete只指明确范围，空与非空页都呈现限制，不能称全手机无相片。此项最小修复不代表完成A53。
+- [ ] 覆盖共享存储动态目录及根部媒体，含Download／自定义目录／Android/media；私有目录、其他卷／用户及符号链接有明确边界。用有界逐目录枚举保留可访问结果与逐目录失败；拒绝访问不能混成空。
+- [ ] 时间来源、稳定分页快照、同时间戳排序／源变化／增量对账契约及实现；不能只对预先截断数组分页。
+- [ ] 公开Runtime真实样本验证上述目录，区分空／不存在／拒权／源变化／链接／非法编码／限额；真实页面验证部分与范围提示、重试及原应用入口。原media_thumbnail_android仅断言complete/truncated，不能替代范围验收。
+
+任务保持开放；对应A51总缓存和活动原件保护也继续独立推进。
