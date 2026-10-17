@@ -11326,276 +11326,27 @@
           "y": 16
         },
         {
-          "type": "frame",
-          "id": "atP9F",
+          "id": "u9EJh",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "相册 / 固定设备与刷新",
           "x": 24,
           "y": 62,
-          "name": "页面标题",
-          "width": 354,
-          "height": 76,
-          "layout": "vertical",
-          "gap": "$space-xs",
-          "children": [
-            {
-              "type": "frame",
-              "id": "mwRKZ",
-              "name": "标题与导航",
-              "width": "fill_container",
-              "height": 44,
-              "gap": "$space-sm",
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "frame",
-                  "id": "iuMzg",
-                  "name": "chevron-left 操作",
-                  "width": 44,
-                  "height": 44,
-                  "fill": [
-                    "$glass",
-                    {
-                      "type": "gradient",
-                      "gradientType": "linear",
-                      "enabled": true,
-                      "rotation": 45,
-                      "size": {
-                        "height": 1
-                      },
-                      "colors": [
-                        {
-                          "color": "$glass-shine",
-                          "position": 0
-                        },
-                        {
-                          "color": "$transparent",
-                          "position": 0.48
-                        },
-                        {
-                          "color": "$glass-reflection",
-                          "position": 1
-                        }
-                      ]
-                    }
-                  ],
-                  "cornerRadius": "$radius-full",
-                  "stroke": {
-                    "type": "gradient",
-                    "gradientType": "linear",
-                    "enabled": true,
-                    "rotation": 45,
-                    "size": {
-                      "height": 1
-                    },
-                    "colors": [
-                      {
-                        "color": "$glass-edge",
-                        "position": 0
-                      },
-                      {
-                        "color": "$glass-edge",
-                        "position": 0.28
-                      },
-                      {
-                        "color": "$glass-low-edge",
-                        "position": 1
-                      }
-                    ]
-                  },
-                  "strokeWidth": "$space-hairline",
-                  "strokeAlignment": "inner",
-                  "effect": [
-                    {
-                      "type": "background_blur",
-                      "radius": "$glass-blur"
-                    },
-                    {
-                      "type": "shadow",
-                      "shadowType": "outer",
-                      "color": "$shadow",
-                      "offset": {
-                        "x": 0,
-                        "y": "$glass-shadowOffset"
-                      },
-                      "blur": "$glass-shadowBlur"
-                    },
-                    {
-                      "type": "shadow",
-                      "shadowType": "inner",
-                      "color": "$glass-edge",
-                      "offset": {
-                        "x": 0,
-                        "y": "$space-hairline"
-                      },
-                      "blur": "$space-micro"
-                    },
-                    {
-                      "type": "shadow",
-                      "shadowType": "inner",
-                      "color": "$glass-low-edge",
-                      "offset": {
-                        "x": 0,
-                        "y": -1
-                      },
-                      "blur": "$space-hairline"
-                    }
-                  ],
-                  "layout": "vertical",
-                  "gap": "$space-zero",
-                  "justifyContent": "center",
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "icon",
-                      "id": "Y1Su0",
-                      "name": "chevron-left",
-                      "width": 22,
-                      "height": 22,
-                      "icon": "chevron-left",
-                      "library": "lucide",
-                      "fill": "$text"
-                    }
-                  ]
-                },
-                {
-                  "type": "text",
-                  "id": "TnmHE",
-                  "name": "相册",
-                  "fill": "$text",
-                  "textGrowth": "fixed-width",
-                  "width": "fill_container",
-                  "content": "相册",
-                  "lineHeight": "$line-title",
-                  "fontFamily": "$font-title",
-                  "fontSize": "$size-title",
-                  "fontWeight": "$weight-title"
-                },
-                {
-                  "type": "frame",
-                  "id": "DjVOs",
-                  "name": "ellipsis 操作",
-                  "width": 44,
-                  "height": 44,
-                  "fill": [
-                    "$glass",
-                    {
-                      "type": "gradient",
-                      "gradientType": "linear",
-                      "enabled": true,
-                      "rotation": 45,
-                      "size": {
-                        "height": 1
-                      },
-                      "colors": [
-                        {
-                          "color": "$glass-shine",
-                          "position": 0
-                        },
-                        {
-                          "color": "$transparent",
-                          "position": 0.48
-                        },
-                        {
-                          "color": "$glass-reflection",
-                          "position": 1
-                        }
-                      ]
-                    }
-                  ],
-                  "cornerRadius": "$radius-full",
-                  "stroke": {
-                    "type": "gradient",
-                    "gradientType": "linear",
-                    "enabled": true,
-                    "rotation": 45,
-                    "size": {
-                      "height": 1
-                    },
-                    "colors": [
-                      {
-                        "color": "$glass-edge",
-                        "position": 0
-                      },
-                      {
-                        "color": "$glass-edge",
-                        "position": 0.28
-                      },
-                      {
-                        "color": "$glass-low-edge",
-                        "position": 1
-                      }
-                    ]
-                  },
-                  "strokeWidth": "$space-hairline",
-                  "strokeAlignment": "inner",
-                  "effect": [
-                    {
-                      "type": "background_blur",
-                      "radius": "$glass-blur"
-                    },
-                    {
-                      "type": "shadow",
-                      "shadowType": "outer",
-                      "color": "$shadow",
-                      "offset": {
-                        "x": 0,
-                        "y": "$glass-shadowOffset"
-                      },
-                      "blur": "$glass-shadowBlur"
-                    },
-                    {
-                      "type": "shadow",
-                      "shadowType": "inner",
-                      "color": "$glass-edge",
-                      "offset": {
-                        "x": 0,
-                        "y": "$space-hairline"
-                      },
-                      "blur": "$space-micro"
-                    },
-                    {
-                      "type": "shadow",
-                      "shadowType": "inner",
-                      "color": "$glass-low-edge",
-                      "offset": {
-                        "x": 0,
-                        "y": -1
-                      },
-                      "blur": "$space-hairline"
-                    }
-                  ],
-                  "layout": "vertical",
-                  "gap": "$space-zero",
-                  "justifyContent": "center",
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "icon",
-                      "id": "U5VgNo",
-                      "name": "ellipsis",
-                      "width": 22,
-                      "height": 22,
-                      "icon": "ellipsis",
-                      "library": "lucide",
-                      "fill": "$text"
-                    }
-                  ]
-                }
-              ]
+          "descendants": {
+            "aFRxw": {
+              "content": "相册"
             },
-            {
-              "type": "text",
-              "id": "tU1oI",
-              "name": "Pixel 9 Pro · 手机上的照片与视频",
-              "fill": "$secondary",
-              "textGrowth": "fixed-width",
-              "width": "fill_container",
-              "content": "Pixel 9 Pro · 手机上的照片与视频",
-              "lineHeight": "$line-caption",
-              "fontFamily": "$font-caption",
-              "fontSize": "$size-caption",
-              "fontWeight": "$weight-caption"
+            "eVp4v": {
+              "enabled": true,
+              "name": "刷新 · 新建检查结果"
+            },
+            "eVp4v/alBho": {
+              "icon": "refresh-cw"
+            },
+            "jRKTF": {
+              "content": "Pixel 9 Pro · 本次检查的照片与视频"
             }
-          ]
+          }
         },
         {
           "type": "frame",
@@ -11633,7 +11384,7 @@
                       "id": "QekU4",
                       "name": "全部照片",
                       "fill": "$on-primary",
-                      "content": "全部照片",
+                      "content": "全部媒体",
                       "lineHeight": "$line-caption",
                       "fontFamily": "$font-caption",
                       "fontSize": "$size-caption",
@@ -11687,7 +11438,7 @@
                       "id": "BKuGc",
                       "name": "截屏",
                       "fill": "$text",
-                      "content": "截屏",
+                      "content": "照片",
                       "lineHeight": "$line-caption",
                       "fontFamily": "$font-caption",
                       "fontSize": "$size-caption",
@@ -11713,7 +11464,7 @@
                   "fill": "$text",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "今天",
+                  "content": "文件修改时间 · 今天",
                   "lineHeight": "$line-heading",
                   "fontFamily": "$font-heading",
                   "fontSize": "$size-heading",
@@ -11910,63 +11661,6 @@
                       "layout": "none"
                     }
                   ]
-                },
-                {
-                  "type": "frame",
-                  "id": "eb0FB",
-                  "name": "照片行",
-                  "width": "fill_container",
-                  "gap": "$space-xxs",
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "Ckl3M",
-                      "name": "手机照片 10",
-                      "clip": true,
-                      "width": 115,
-                      "height": 112,
-                      "fill": {
-                        "type": "image",
-                        "enabled": true,
-                        "url": "assets/sample-architecture.jpg",
-                        "mode": "cover"
-                      },
-                      "cornerRadius": "$radius-sm",
-                      "layout": "none"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "Owj3v",
-                      "name": "手机照片 11",
-                      "clip": true,
-                      "width": 115,
-                      "height": 112,
-                      "fill": {
-                        "type": "image",
-                        "enabled": true,
-                        "url": "assets/sample-forest.jpg",
-                        "mode": "cover"
-                      },
-                      "cornerRadius": "$radius-sm",
-                      "layout": "none"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "naYrR",
-                      "name": "手机照片 12",
-                      "clip": true,
-                      "width": 115,
-                      "height": 112,
-                      "fill": {
-                        "type": "image",
-                        "enabled": true,
-                        "url": "assets/sample-lake.jpg",
-                        "mode": "cover"
-                      },
-                      "cornerRadius": "$radius-sm",
-                      "layout": "none"
-                    }
-                  ]
                 }
               ]
             },
@@ -11997,13 +11691,25 @@
                   "fill": "$secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "照片来自手机；保存或分享时才取回文件。",
+                  "content": "按文件修改时间排序，并非拍摄时间。保存或分享时才取回原文件。",
                   "lineHeight": "$line-caption",
                   "fontFamily": "$font-caption",
                   "fontSize": "$size-caption",
                   "fontWeight": "$weight-caption"
                 }
               ]
+            },
+            {
+              "id": "KcJKL",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "加载更多 · 9 / 18 项",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "加载更多 · 已显示 9 / 18 项"
+                }
+              }
             }
           ]
         },
@@ -12122,7 +11828,7 @@
               "fill": "$secondary",
               "textGrowth": "fixed-width",
               "width": "fill_container",
-              "content": "手机中的 18 项",
+              "content": "本次找到 18 项",
               "lineHeight": "$line-label",
               "fontFamily": "$font-label",
               "fontSize": "$size-label",
@@ -24608,7 +24314,7 @@
                       "id": "L3s7mJ",
                       "name": "全部照片",
                       "fill": "$on-primary",
-                      "content": "全部照片",
+                      "content": "全部媒体",
                       "lineHeight": "$line-caption",
                       "fontFamily": "$font-caption",
                       "fontSize": "$size-caption",
@@ -24662,7 +24368,7 @@
                       "id": "OwQJk",
                       "name": "截屏",
                       "fill": "$text",
-                      "content": "截屏",
+                      "content": "照片",
                       "lineHeight": "$line-caption",
                       "fontFamily": "$font-caption",
                       "fontSize": "$size-caption",
@@ -24688,7 +24394,7 @@
                   "fill": "$text",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "今天",
+                  "content": "文件修改时间 · 今天",
                   "lineHeight": "$line-heading",
                   "fontFamily": "$font-heading",
                   "fontSize": "$size-heading",
@@ -34943,7 +34649,7 @@
       "x": 0,
       "y": 8362,
       "name": "分组 / 相册与内容",
-      "width": 2330,
+      "width": 4258,
       "height": 96,
       "fill": "$transparent",
       "layout": "vertical",
@@ -34973,7 +34679,7 @@
           "fill": "$secondary",
           "textGrowth": "fixed-width",
           "width": "fill_container",
-          "content": "图片与视频预览 · 手动取用和格式回退 · 5 页",
+          "content": "检查、部分可读与分页 · 图片视频预览与手动取用 · 9 页",
           "lineHeight": "$line-caption",
           "fontFamily": "$font-caption",
           "fontSize": "$size-caption",
@@ -38638,6 +38344,1069 @@
             },
             "kDjbk": {
               "content": "上次画面 · 暂停输入"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "KFfP4",
+      "x": 2410,
+      "y": 8458,
+      "name": "相册与内容 / 正在检查手机相册",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "b1usR",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "DIJer",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "相册 / 固定设备",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "相册"
+            },
+            "eVp4v": {
+              "enabled": false,
+              "name": "刷新 · 重新检查并更新相册"
+            },
+            "eVp4v/alBho": {
+              "icon": "refresh-cw"
+            },
+            "jRKTF": {
+              "content": "Pixel 9 Pro · 当前用户的主共享存储"
+            }
+          }
+        },
+        {
+          "id": "uwc1Q",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        },
+        {
+          "type": "frame",
+          "id": "Nsfje",
+          "x": 24,
+          "y": 154,
+          "name": "本次相册检查",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "Yzwuw",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "相册检查进度",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "loader-circle",
+                  "fill": "$accent-coral"
+                },
+                "jkfuF": {
+                  "content": "正在检查照片与视频"
+                },
+                "zLCqC": {
+                  "content": "完成后显示本次结果。检查期间不展示尚未整理好的内容。"
+                }
+              }
+            },
+            {
+              "id": "PlK6c",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "已检查 42 个文件夹",
+              "width": "fill_container",
+              "height": 72,
+              "descendants": {
+                "i9kceM": {
+                  "fill": "$accent-coral-soft"
+                },
+                "n4qgqg": {
+                  "icon": "folders",
+                  "fill": "$accent-coral"
+                },
+                "nyAaN": {
+                  "content": "已检查 42 个文件夹"
+                },
+                "r3Anl": {
+                  "content": "已检查 1,280 项"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "IFGOW",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "正在检查 Download / 旅行",
+              "width": "fill_container",
+              "height": 72,
+              "descendants": {
+                "i9kceM": {
+                  "fill": "$accent-coral-soft"
+                },
+                "n4qgqg": {
+                  "icon": "folder-search",
+                  "fill": "$accent-coral"
+                },
+                "nyAaN": {
+                  "content": "正在检查 Download / 旅行"
+                },
+                "r3Anl": {
+                  "content": "检查范围与未读项目可随时查看"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "jLQTR",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "查看检查范围",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "查看检查范围"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "Y2LMIl",
+              "name": "检查提示",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "按文件扩展名识别照片与视频，不读取拍摄时间。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "id": "NO86W",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "停止本次检查",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "停止本次检查"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "m0B7dZ",
+              "name": "停止范围",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "只停止这次相册检查，设备连接、传输与手机控制继续。返回工作台也会取消这次检查。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "x4oRdN",
+      "x": 2892,
+      "y": 8458,
+      "name": "相册与内容 / 部分范围可读与稳定分页",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "xf8oD",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "Pjm8o",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "相册 / 固定设备",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "相册"
+            },
+            "eVp4v": {
+              "enabled": true,
+              "name": "刷新 · 重新检查并更新相册"
+            },
+            "eVp4v/alBho": {
+              "icon": "refresh-cw"
+            },
+            "jRKTF": {
+              "content": "Pixel 9 Pro · 当前用户的主共享存储"
+            }
+          }
+        },
+        {
+          "id": "nKGZF",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        },
+        {
+          "type": "frame",
+          "id": "RCWmI",
+          "x": 24,
+          "y": 154,
+          "name": "本次相册检查",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "D8lSn",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "部分可读状态",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "folder-lock",
+                  "fill": "$accent-coral"
+                },
+                "jkfuF": {
+                  "content": "部分文件夹无法读取"
+                },
+                "zLCqC": {
+                  "content": "本次可访问范围找到 18 项。已找到的照片与视频仍可浏览、保存或分享。"
+                }
+              }
+            },
+            {
+              "id": "aM6Xu",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "查看检查范围与未读项目",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "查看检查范围与未读项目"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "V8vs0",
+              "name": "冻结结果与排序",
+              "fill": "$text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "本次检查结果 · 按文件修改时间从新到旧",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "type": "frame",
+              "id": "ipxgj",
+              "name": "本次已检查范围的照片",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$space-xxs",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "htNfc",
+                  "name": "照片行",
+                  "width": "fill_container",
+                  "gap": "$space-xxs",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "N1mqV",
+                      "name": "手机照片 1",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-architecture.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "aWY1e",
+                      "name": "手机照片 2",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-forest.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "k3mXV",
+                      "name": "手机照片 3",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-lake.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "x4ASU",
+                  "name": "照片行",
+                  "width": "fill_container",
+                  "gap": "$space-xxs",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "N5fb9",
+                      "name": "手机照片 4",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-forest.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QTmlQ",
+                      "name": "手机照片 5",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-lake.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "i0k0y",
+                      "name": "手机照片 6",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-architecture.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "q4fEOx",
+              "name": "分页状态",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "已显示 6 / 18 项 · 继续加载保持本次顺序",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "id": "Jcj5B",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "加载更多 · 还有 12 项",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "加载更多 · 还有 12 项"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "GOPwL",
+              "name": "刷新语义",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "新照片不会插入这次列表。点击右上角刷新，重新检查并建立新结果。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "s4p7JF",
+      "x": 3374,
+      "y": 8458,
+      "name": "相册与内容 / 已停止且已检查范围为空",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "S3VkC",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "pKigb",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "相册 / 固定设备",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "相册"
+            },
+            "eVp4v": {
+              "enabled": true,
+              "name": "刷新 · 重新检查并更新相册"
+            },
+            "eVp4v/alBho": {
+              "icon": "refresh-cw"
+            },
+            "jRKTF": {
+              "content": "Pixel 9 Pro · 当前用户的主共享存储"
+            }
+          }
+        },
+        {
+          "id": "UuVfg",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        },
+        {
+          "type": "frame",
+          "id": "oXKq1",
+          "x": 24,
+          "y": 154,
+          "name": "本次相册检查",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "CpRkx",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "停止后有限范围为空",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "circle-stop",
+                  "fill": "$accent-coral"
+                },
+                "jkfuF": {
+                  "content": "已停止这次检查"
+                },
+                "zLCqC": {
+                  "content": "已检查范围未找到照片或视频。仍有文件夹未检查，不能据此判断整部手机没有内容。"
+                }
+              }
+            },
+            {
+              "id": "GUXJW",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "已检查 42 个文件夹",
+              "width": "fill_container",
+              "height": 72,
+              "descendants": {
+                "i9kceM": {
+                  "fill": "$accent-coral-soft"
+                },
+                "n4qgqg": {
+                  "icon": "folder-check",
+                  "fill": "$accent-coral"
+                },
+                "nyAaN": {
+                  "content": "已检查 42 个文件夹"
+                },
+                "r3Anl": {
+                  "content": "共检查 1,280 项"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "kGNB5",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "还有文件夹未检查",
+              "width": "fill_container",
+              "height": 72,
+              "descendants": {
+                "i9kceM": {
+                  "fill": "$accent-coral-soft"
+                },
+                "n4qgqg": {
+                  "icon": "folder-clock",
+                  "fill": "$accent-coral"
+                },
+                "nyAaN": {
+                  "content": "还有文件夹未检查"
+                },
+                "r3Anl": {
+                  "content": "Download / 旅行 等待检查"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "Wlc7Z",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "查看检查范围与未读项目",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "查看检查范围与未读项目"
+                }
+              }
+            },
+            {
+              "id": "SGddI",
+              "type": "ref",
+              "ref": "QXIw5",
+              "name": "重新检查",
+              "width": "fill_container",
+              "descendants": {
+                "mpPvv": {
+                  "content": "重新检查"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "Lyl76",
+              "name": "主动恢复",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "重新检查会建立一份新的结果。返回后不会自动继续这次检查，也不会影响其他活动。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "UwGyp",
+      "x": 3856,
+      "y": 8458,
+      "name": "相册与内容 / 检查范围与未读项目抽屉",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "none",
+      "children": [
+        {
+          "id": "wHmrQ",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 24,
+          "y": 16
+        },
+        {
+          "id": "N2N48Q",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "相册 / 固定设备",
+          "x": 24,
+          "y": 62,
+          "descendants": {
+            "aFRxw": {
+              "content": "相册"
+            },
+            "eVp4v": {
+              "enabled": true,
+              "name": "刷新 · 重新检查并更新相册"
+            },
+            "eVp4v/alBho": {
+              "icon": "refresh-cw"
+            },
+            "jRKTF": {
+              "content": "Pixel 9 Pro · 当前用户的主共享存储"
+            }
+          }
+        },
+        {
+          "id": "ZmAlo",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858
+        },
+        {
+          "type": "frame",
+          "id": "H0fdkQ",
+          "x": 24,
+          "y": 154,
+          "name": "本次相册检查",
+          "width": 354,
+          "layout": "vertical",
+          "gap": "$space-md",
+          "children": [
+            {
+              "id": "rjASi",
+              "type": "ref",
+              "ref": "x5m8En",
+              "name": "部分可读状态",
+              "width": "fill_container",
+              "descendants": {
+                "le5cv": {
+                  "icon": "folder-lock",
+                  "fill": "$accent-coral"
+                },
+                "jkfuF": {
+                  "content": "部分文件夹无法读取"
+                },
+                "zLCqC": {
+                  "content": "本次可访问范围找到 18 项。已找到的照片与视频仍可浏览、保存或分享。"
+                }
+              }
+            },
+            {
+              "id": "t9hvet",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "查看检查范围与未读项目",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "查看检查范围与未读项目"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "gnryj",
+              "name": "冻结结果与排序",
+              "fill": "$text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "本次检查结果 · 按文件修改时间从新到旧",
+              "lineHeight": "$line-label",
+              "fontFamily": "$font-label",
+              "fontSize": "$size-label",
+              "fontWeight": "$weight-label"
+            },
+            {
+              "type": "frame",
+              "id": "zSnZ2",
+              "name": "本次已检查范围的照片",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$space-xxs",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "uMi8e",
+                  "name": "照片行",
+                  "width": "fill_container",
+                  "gap": "$space-xxs",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "kTvSB",
+                      "name": "手机照片 1",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-architecture.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TVG7k",
+                      "name": "手机照片 2",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-forest.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JXE9P",
+                      "name": "手机照片 3",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-lake.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "EfTKA",
+                  "name": "照片行",
+                  "width": "fill_container",
+                  "gap": "$space-xxs",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "g5vQAa",
+                      "name": "手机照片 4",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-forest.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ahm3B",
+                      "name": "手机照片 5",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-lake.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LPnxf",
+                      "name": "手机照片 6",
+                      "clip": true,
+                      "width": 115,
+                      "height": 112,
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/sample-architecture.jpg",
+                        "mode": "cover"
+                      },
+                      "cornerRadius": "$radius-sm",
+                      "layout": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "lRFHO",
+              "name": "分页状态",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "已显示 6 / 18 项 · 继续加载保持本次顺序",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            },
+            {
+              "id": "cPdhY",
+              "type": "ref",
+              "ref": "anf55",
+              "name": "加载更多 · 还有 12 项",
+              "width": "fill_container",
+              "descendants": {
+                "gcunj": {
+                  "content": "加载更多 · 还有 12 项"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "rpAkX",
+              "name": "刷新语义",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "新照片不会插入这次列表。点击右上角刷新，重新检查并建立新结果。",
+              "lineHeight": "$line-caption",
+              "fontFamily": "$font-caption",
+              "fontSize": "$size-caption",
+              "fontWeight": "$weight-caption"
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "ooVrn",
+          "x": 0,
+          "y": 0,
+          "name": "范围抽屉遮罩",
+          "fill": "$scrim",
+          "width": 402,
+          "height": 874
+        },
+        {
+          "id": "wMlbW",
+          "type": "ref",
+          "ref": "yLJek",
+          "name": "检查范围 / 玻璃抽屉",
+          "x": 12,
+          "y": 282,
+          "width": 378,
+          "height": 580,
+          "descendants": {
+            "iXFmW": {
+              "content": "本次检查范围"
+            },
+            "fSBvT": {
+              "content": "Pixel 9 Pro · 部分可读\n已找到 18 项，未读范围不判空。"
+            },
+            "kECNg": {
+              "type": "frame",
+              "id": "vwp7a",
+              "name": "范围与未读项目",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$space-xs",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "YRpqF",
+                  "name": "已检查范围标题",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "已检查的可访问范围",
+                  "lineHeight": "$line-label",
+                  "fontFamily": "$font-label",
+                  "fontSize": "$size-label",
+                  "fontWeight": "$weight-label"
+                },
+                {
+                  "type": "text",
+                  "id": "Ir8vw",
+                  "name": "已检查范围内容",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "当前用户的主共享存储：DCIM、Pictures、Download、自定义文件夹与 Android/media。",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                },
+                {
+                  "type": "text",
+                  "id": "fXDXn",
+                  "name": "未读项目标题",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "未读项目 · 2 个文件夹",
+                  "lineHeight": "$line-label",
+                  "fontFamily": "$font-label",
+                  "fontSize": "$size-label",
+                  "fontWeight": "$weight-label"
+                },
+                {
+                  "type": "text",
+                  "id": "pS1be",
+                  "name": "未读项目内容",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Android/media/旅行 · 无法读取\nPictures/共享 · 无法读取",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                },
+                {
+                  "type": "text",
+                  "id": "jzRTl",
+                  "name": "不在本次范围标题",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "不在本次范围",
+                  "lineHeight": "$line-label",
+                  "fontFamily": "$font-label",
+                  "fontSize": "$size-label",
+                  "fontWeight": "$weight-label"
+                },
+                {
+                  "type": "text",
+                  "id": "mF7vU",
+                  "name": "不在本次范围内容",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Android/data、Android/obb、其他用户和存储卷；不跟随文件夹中的符号链接。",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                },
+                {
+                  "id": "k2CjI",
+                  "type": "ref",
+                  "ref": "anf55",
+                  "name": "关闭范围",
+                  "width": "fill_container",
+                  "descendants": {
+                    "gcunj": {
+                      "content": "关闭范围"
+                    }
+                  }
+                }
+              ]
+            },
+            "c2HqbH": {
+              "enabled": false
+            },
+            "Wr2gJ": {
+              "enabled": false
+            },
+            "QheqQ": {
+              "enabled": false
+            },
+            "uhHgr": {
+              "enabled": false
+            },
+            "AcTwl": {
+              "enabled": false
+            },
+            "LRUSF": {
+              "enabled": false
             }
           }
         }
