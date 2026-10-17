@@ -431,4 +431,39 @@ rtk proxy env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/glass-product-final \
 
 最终验收进一步把退出位置下移、返回后等待转场再截图，`/tmp/connect-glass-product-verified.log`24秒退出0，回执仍为真实486×1080与shader能力true；`/tmp/connect-e2e/glass-product-verified/`展开/收起/工作台已原生目视，没有目标ANR弹窗或前述斜纹。Pencil保存后重新打开对象核对77页、12类别、23母组件、470ref，通知页没有报告裁切，新增折射率1.02及透明列表行仍在。单元/视觉对照与独立只读review未发现剩余有证据的本批实现缺陷；不扩大为全产品无缺陷。
 
+## 原文件系统保存与外部分享交付
+
+继续核对完整目标时，单项取回只进入全局传输中心，未直接完成用户原本的保存/分享意图。现增加固定任务的原件准备页：核验权威任务、设备和方向，保留进度/冲突/精确取消；就绪后复用系统保存表单或主动调用Sharesheet。切换当前设备不改变在途原件来源。保存与分享分别陈述完成点，结果未知需先核对再重试。实现、提供方边界和可复现命令见[内容交付](content-delivery.md)及[固定AOSP研究](../research/provider-output-streams.md)。
+
+### 红绿与真实缺陷
+
+- 新增公开页面/协调器回归先暴露保存回执丢失可直接重试、选择器前失败误标部分保存、固定来源任务丢失等问题；修正后App178项、Bridge98项通过。失败/取消不清除用户原件，未知结果不自动重放。
+- 提供方完成改为显式success/abort；真实PFD执行checkError、close、再次checkError并收束首错。共享层保留原复制异常、检查lease回执，迟到取消不能被成功回执覆盖。原生runner实际执行3个JVM main，包括真实PlatformDocuments完成顺序测试；仅Gradle编译不是该测试通过的依据。
+- 首轮三ABI构建发现armv7的mode类型不一致，统一宽度后通过。最终`flutter build apk --debug --no-pub --target-platform android-arm,android-arm64,android-x64`104.9秒退出0，日志`/tmp/connect-content-delivery-android-abis.log`。
+- 首轮普通Android应用取回失败；SELinux拒绝私有app_data_file硬链接。`/tmp/connect-content-delivery-publication-red.log`6秒通过公开任务状态明确定位Permission denied。Linux子进程拒绝linkat的公开CopyManager回归也先红；共用raw renameat2(RENAME_NOREPLACE)后绿。已有目标原子拒绝，成功后核验身份并同步；不采用覆盖式rename降级。
+- 缓存发布修好后，系统保存仍在选择器前失败：path_provider为`/data/user/0/.../cache`，能力环境使用canonical后的`/data/data/.../cache`。改用一致absolutePath；没有放宽私有根检查。临时路径诊断日志已从源码删除。选择器前失败现显示“本次保存未开始”，允许用户主动重试。
+- 夹具也出现过编译引用错误、DocumentsUI抽屉定位失败和Sharesheet折叠导致接收器不可见，均保留失败结果；它们不算产品通过。host改为实际可访问节点/面板边界操作，外部命令超时会终止并等待进程，安装尝试也纳入精确清理责任。
+
+### 实际Android交付与视觉
+
+测试源为`integration_test/content_delivery_test.dart`、`test_driver/content_delivery.dart`及controller-only独立接收器`tool/e2e/content_delivery_fixture/`。接收器无额外权限，只凭真实Intent content URI及read grant读取并计算SHA-256；不安装在被控设备或进入产品。源/导出文件采用唯一runId，host独立读取系统保存位置，再清除本次精确文件与自有接收器；不清空应用数据来伪造取消语义。
+
+第一次完整38秒通过，`/tmp/connect-content-delivery-verified.log`、结果目录`/tmp/connect-e2e/content-delivery-verified/`；但“保存后”截图仍是系统文件页，不登记为产品结果页视觉通过。补阶段确认和返回后截屏门禁，再次39秒退出0，日志`/tmp/connect-content-delivery-visual-verified.log`，结果目录`/tmp/connect-e2e/content-delivery-visual-verified/`：
+
+- runId `7ce135daa5ed16bd1133d5967b910a26`，真实UTF-8原件63字节，SHA-256 `db82ab8b8a76e2b5d7cdf8a78dbfab0d6bbd154d2e1dd0b7669e847a7fa44c1b`。
+- 真实文件详情→取回→原件准备；取消实际系统选择器后缓存仍可用；再次实际选择Downloads保存，host读取的字节/hash一致。
+- 实际Sharesheet选择独立接收器，回执`ACTION_SEND`、`text/plain`、`content`、`readGrant:true`，实际63字节/hash一致。返回产品只显示交给系统选择的应用，不承诺接收器后续发送或云同步。
+- `savedProductPageCaptured`、`shareProductPageCaptured`、`sharedProductPageCaptured`均true。实际保存结果/分享结果产品截图已经原生目视：长文件名可换行，小琥珀图标不再伸展成整宽色带，没有回归深绿主按钮；系统DocumentsUI蓝色不是产品主题。该检查不替代完整动画/性能/无障碍验收。
+- `contentDeliveryComplete:true`、`hostErrors:[]`、`exactFilesAbsent:true`、`ownedReceiverUninstalled:true`；所有必要产品与OS回执纳入最终结果，缺项失败。
+
+额外实际adbd回归`actual_push_pull_hash_atomic_conflict_rename_delete_and_preview_cache`11.22秒通过，包含8MiB、并发同名目标、保留两份、hash和预览；该host测试不替代普通Android应用SELinux验收。Rust workspace161通过/44忽略、37套件，相关clippy无警告；App178、Bridge98、原生3个实际main、严格分析与生成检查通过。独立只读review未发现有证据的本批缺陷。
+
+仍观察到SurfaceSyncGroup等待、跳帧及PFD缺少comm channel日志；不能推断提供方远端提交ACK或达到延迟指标。此次只覆盖API36模拟器、单项UTF-8文本和本机Downloads；被控AVD已准备legacy TCP且secure=0，不代表首次安全配对。批量/目录、图片/视频大原件、非seek/云provider、写入中取消/空间满/撤权、进程死亡任务恢复和完整四宿主整包仍开放。
+
+### Pencil与产品说明
+
+同一mobile.pen的文件/传输类别行新增7种独立状态，使用既有母组件：ERONu、uhuiJ、Gfe22、mcRQa、vSjZS、pSoci、cdQol。对象API保存重开核验84页（82手机/2大屏）、12类、23母组件/513实例、153变量，无断链/顶层重叠；预览只在`/tmp/connect-content-delivery-design/`。7页均已目视，prod只描述产品规则，不引入库或代码路线。静态代表状态不等同可点击原型或全部84页实现一致，任务18保持开放。
+
 最后普通lib/main.dart实际构建启动，日志确认Impeller(OpenGLES)。Dart MCP发现IDE的DTD但没有关联此CLI启动的App，hot_restart工具因此拒绝；随后直接向本次flutter run发送R，实际`Restarted application in 1,378ms`。`/tmp/connect-glass-hot-restart.png`设备列表/浅色系统栏/共享悬浮导航已原生目视，随后detach。两条FRB旧isolate投递失败警告仍存在，不能将热重启局部成功扩大为全部生命周期资源已无缺陷。
+
+普通`lib/main.dart`随后在emulator-5554实际重新安装运行，按R热重启完成（1,401ms），设备列表首屏截图`/tmp/connect-content-delivery-main-restarted.png`已目视。FRB在热重启时记录两条Fail to post message警告；未将其写成无运行告警或进程恢复通过。

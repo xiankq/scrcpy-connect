@@ -33,6 +33,8 @@ Requirements: R28–R30、R38
 
 2026-10-17重新核查：目录、冲突、取消、部分结果和原子发布已有真实回归。
 
-当前共享SAF系统端点、文件分类/搜索和恢复意图仍缺；旧Native SAF不能替代。
+后续共享SAF单项原件已通过真实系统选择器取消/保存、独立读取63字节和外部分享URI授权/hash核验；固定任务准备页覆盖进度/精确取消/未知结果。普通应用SELinux禁止硬链接导致的发布失败已改用无覆盖原子rename；32位ABI构建错误也已修复。见[交付实现与复现](../../../docs/implementation/content-delivery.md)。
+
+批量/目录交付、非seek/云provider/撤权/空间矩阵、文件分类/搜索和恢复意图仍缺；单项本地Downloads通过不替代完整端点矩阵。
 
 任务保持开放；`ready-for-agent`表示有明确工作可继续，不表示从未实施。逐需求与32流程见[完整重新核查](../completion-reassessment.md)，当前后端证据见[验收记录](../../../docs/implementation/validation.md)。
