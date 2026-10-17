@@ -19,7 +19,7 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
-    sync::{Mutex, RwLock, broadcast, mpsc, oneshot},
+    sync::{Mutex, RwLock, mpsc, oneshot},
     time::Instant,
 };
 
@@ -348,7 +348,7 @@ struct CancelOnDrop(Option<CancellationToken>);
 struct SessionContext {
     cancellation: CancellationToken,
     state: Arc<RwLock<Value>>,
-    events: broadcast::Sender<Value>,
+    events: crate::events::EventBus,
     device: String,
 }
 impl Drop for CancelOnDrop {
@@ -365,7 +365,7 @@ fn options(token: &CancellationToken) -> OperationOptions {
         cancellation: token.clone(),
     }
 }
-fn event(events: &broadcast::Sender<Value>, kind: &str, device: &str, data: Value) {
+fn event(events: &crate::events::EventBus, kind: &str, device: &str, data: Value) {
     let _ = events.send(json!({"type":kind,"deviceId":device,"data":data,"timestamp":now()}));
 }
 fn invalid(message: &str) -> CoreError {
@@ -1645,7 +1645,7 @@ async fn run_control(
     mut stream: AdbStream,
     mut requests: mpsc::Receiver<ControlRequest>,
     cancellation: CancellationToken,
-    events: broadcast::Sender<Value>,
+    events: crate::events::EventBus,
     device: String,
     state: Arc<RwLock<Value>>,
 ) {

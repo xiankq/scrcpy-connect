@@ -20,7 +20,7 @@ pub struct Runtime {
     pub(crate) identity: Identity,
     pub(crate) store: RwLock<Store>,
     pub(crate) connections: Mutex<HashMap<String, Client>>,
-    pub(crate) events: broadcast::Sender<Value>,
+    pub(crate) events: crate::events::EventBus,
     pub(crate) persistence: Mutex<()>,
     pub(crate) sessions: Mutex<HashMap<String, crate::scrcpy::Session>>,
     pub(crate) resource_admission: crate::resource::ResourceAdmission,
@@ -94,7 +94,7 @@ impl Runtime {
                 device.auto_reconnect = false;
             }
         }
-        let (events, _) = broadcast::channel(256);
+        let events = crate::events::EventBus::new(256);
         let runtime = Arc::new(Self {
             root,
             identity,
@@ -241,6 +241,7 @@ impl Runtime {
             .await;
         }
         match command {
+            "state.snapshot" => Box::pin(self.state_snapshot()).await,
             "devices.list" => Ok(json!({"devices":self.store.read().await.devices})),
             "devices.add" => Box::pin(self.add_device(&params)).await,
             "devices.connect" => {

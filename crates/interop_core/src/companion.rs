@@ -16,7 +16,7 @@ use std::{
     sync::{Arc, Mutex as StdMutex, OnceLock, Weak},
     time::Duration,
 };
-use tokio::sync::{RwLock, broadcast, mpsc, oneshot, watch};
+use tokio::sync::{RwLock, mpsc, oneshot, watch};
 
 const SERVER: &[u8] = include_bytes!("../../../servers/companion/companion.jar");
 const SERVER_SHA: &str = "719e57e3317d91d0858aa722f86770275d3af6130ad2ff0cd4334a5f7722b828";
@@ -28,6 +28,11 @@ struct Request {
     action: bool,
     result: oneshot::Sender<CoreResult<Value>>,
 }
+struct Pending {
+    command: String,
+    action: bool,
+    result: oneshot::Sender<CoreResult<Value>>,
+}
 pub(crate) struct Companion {
     cancellation: CancellationToken,
     requests: mpsc::Sender<Request>,
@@ -35,6 +40,10 @@ pub(crate) struct Companion {
     stopped: watch::Receiver<bool>,
 }
 impl Companion {
+    pub(crate) fn is_active(&self) -> bool {
+        !self.cancellation.is_cancelled()
+    }
+
     pub(crate) async fn capability_state(&self) -> Value {
         self.state.read().await.clone()
     }
@@ -60,7 +69,7 @@ fn operations(token: &CancellationToken) -> OperationOptions {
         cancellation: token.clone(),
     }
 }
-fn event(events: &broadcast::Sender<Value>, kind: &str, device: &str, data: Value) {
+fn event(events: &crate::events::EventBus, kind: &str, device: &str, data: Value) {
     let _ = events.send(json!({"type":kind,"deviceId":device,"data":data,"timestamp":now()}));
 }
 async fn read_message(stream: &mut AdbStream, line: &mut Vec<u8>) -> CoreResult<Value> {
@@ -150,7 +159,7 @@ impl Companion {
     async fn start(
         client: Client,
         device: String,
-        events: broadcast::Sender<Value>,
+        events: crate::events::EventBus,
         cancellation: CancellationToken,
     ) -> CoreResult<Arc<Self>> {
         if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
@@ -344,16 +353,89 @@ async fn drain_process(mut shell: ShellSession, cancellation: &CancellationToken
         }
     }
 }
+
+// The socket actor commits both observations and RPC cache refreshes here.
+// Callers receive their receipt only after its cache update is fenced, so a
+// delayed caller cannot overwrite a later message from the same socket.
+async fn commit_message(
+    response: Value,
+    pending: &mut HashMap<String, Pending>,
+    state: &RwLock<Value>,
+    events: &crate::events::EventBus,
+    device: &str,
+) -> CoreResult<()> {
+    if let Some(kind) = response["event"].as_str() {
+        let section = match kind {
+            "notifications.changed" => Some("notifications"),
+            "calls.changed" | "calls.incoming" => Some("calls"),
+            _ => None,
+        };
+        if let Some(section) = section {
+            let data = response["data"].clone();
+            let mut state = state.write().await;
+            state[section] = data.clone();
+            event(events, kind, device, data);
+        } else if matches!(kind, "clipboard.changed" | "clipboard.unavailable") {
+            let available = kind == "clipboard.changed";
+            let mut state = state.write().await;
+            state["clipboard"] = json!({"status":if available {"available"}else{"limited"},"live":available,"reason":response["data"]["reason"]});
+            event(events, kind, device, response["data"].clone());
+        } else if kind == "companion.error" {
+            return Err(CoreError::new(
+                "companion_error",
+                response["reason"].as_str().unwrap_or("互联服务出错。"),
+            ));
+        }
+    } else {
+        let id = response["requestId"]
+            .as_str()
+            .ok_or_else(|| CoreError::new("protocol_error", "互联服务缺少请求标识。"))?;
+        let request = pending
+            .remove(id)
+            .ok_or_else(|| CoreError::new("protocol_error", "互联服务返回未知请求。"))?;
+        let result = if let Some(error) = response.get("error") {
+            Err(CoreError::new(
+                error["code"].as_str().unwrap_or("companion_error"),
+                error["message"].as_str().unwrap_or("互联动作失败。"),
+            ))
+        } else {
+            Ok(response["result"].clone())
+        };
+        let section = match request.command.as_str() {
+            "notifications.list" => Some("notifications"),
+            "calls.list" => Some("calls"),
+            _ => None,
+        };
+        if let (Some(section), Ok(data)) = (section, &result) {
+            let mut state = state.write().await;
+            state[section] = data.clone();
+            events.note_state_change();
+        } else if matches!(request.command.as_str(), "clipboard.get" | "clipboard.set") {
+            let capability = match &result {
+                Ok(_) => json!({"status":"available","live":true}),
+                Err(error) => {
+                    json!({"status":"limited","live":false,"reason":error.message,"code":error.code})
+                }
+            };
+            let mut state = state.write().await;
+            state["clipboard"] = capability;
+            events.note_state_change();
+        }
+        let _ = request.result.send(result);
+    }
+    Ok(())
+}
+
 async fn run(
     mut stream: AdbStream,
     mut line: Vec<u8>,
     mut requests: mpsc::Receiver<Request>,
     state: Arc<RwLock<Value>>,
     cancellation: CancellationToken,
-    events: broadcast::Sender<Value>,
+    events: crate::events::EventBus,
     device: String,
 ) {
-    let mut pending = HashMap::<String, (bool, oneshot::Sender<CoreResult<Value>>)>::new();
+    let mut pending = HashMap::<String, Pending>::new();
     let result:CoreResult<()>=async {loop {tokio::select! {
         _=cancellation.cancelled()=>return Ok(()),
         request=requests.recv()=>{
@@ -364,26 +446,12 @@ async fn run(
             let mut bytes=serde_json::to_vec(&request.payload)?;
             if bytes.len()>MAX_MESSAGE-1024 {let _=request.result.send(Err(CoreError::new("invalid_argument","互联服务请求超过消息限制。")));continue;}
             bytes.push(b'\n');
-            pending.insert(id,(request.action,request.result));
+            let command=request.payload["command"].as_str().unwrap_or_default().to_owned();
+            pending.insert(id,Pending {command,action:request.action,result:request.result});
             tokio::time::timeout(RPC_TIMEOUT,stream.write_all(&bytes)).await.map_err(|_|CoreError::new("timeout","互联服务写入超时。"))??;
         },
         response=read_message(&mut stream,&mut line)=>{
-            let response=response?;
-            if let Some(kind)=response["event"].as_str() {
-                let section=match kind {"notifications.changed"=>Some("notifications"),"calls.changed"|"calls.incoming"=>Some("calls"),_=>None};
-                if let Some(section)=section {let data=response["data"].clone();state.write().await[section]=data.clone();event(&events,kind,&device,data);}
-                else if matches!(kind,"clipboard.changed"|"clipboard.unavailable") {
-                    let available=kind=="clipboard.changed";
-                    state.write().await["clipboard"]=json!({"status":if available {"available"}else{"limited"},"live":available,"reason":response["data"]["reason"]});
-                    event(&events,kind,&device,response["data"].clone());
-                }
-                else if kind=="companion.error" {return Err(CoreError::new("companion_error",response["reason"].as_str().unwrap_or("互联服务出错。")));}
-            } else {
-                let id=response["requestId"].as_str().ok_or_else(||CoreError::new("protocol_error","互联服务缺少请求标识。"))?;
-                let Some((_,sender))=pending.remove(id) else {return Err(CoreError::new("protocol_error","互联服务返回未知请求。"));};
-                let result=if let Some(error)=response.get("error") {Err(CoreError::new(error["code"].as_str().unwrap_or("companion_error"),error["message"].as_str().unwrap_or("互联动作失败。")))}else{Ok(response["result"].clone())};
-                let _=sender.send(result);
-            }
+            commit_message(response?,&mut pending,&state,&events,&device).await?;
         }
     }}}.await;
     cancellation.cancel();
@@ -392,15 +460,16 @@ async fn run(
         .err()
         .map(|e| e.message)
         .unwrap_or_else(|| "互联服务已停止。".into());
-    for (_, (action, sender)) in pending {
-        let _ = sender.send(Err(rpc_error(action, &reason)));
+    for (_, request) in pending {
+        let _ = request.result.send(Err(rpc_error(request.action, &reason)));
     }
     while let Ok(request) = requests.try_recv() {
         let _ = request
             .result
             .send(Err(CoreError::new("disconnected", reason.clone())));
     }
-    *state.write().await = json!({"notifications":{"notifications":[],"status":"unknown","live":false,"reason":reason},"calls":{"calls":[],"status":"unknown","audioStatus":"unknown","live":false,"reason":reason},"clipboard":{"status":"unknown","live":false,"reason":reason}});
+    let mut state = state.write().await;
+    *state = json!({"notifications":{"notifications":[],"status":"unknown","live":false,"reason":reason},"calls":{"calls":[],"status":"unknown","audioStatus":"unknown","live":false,"reason":reason},"clipboard":{"status":"unknown","live":false,"reason":reason}});
     event(
         &events,
         "companion.stopped",
@@ -439,75 +508,87 @@ impl Runtime {
         params: &Value,
     ) -> CoreResult<Value> {
         let id = required(params, "deviceId")?;
-        let client = self.client(id).await?;
-        // Serialize startup for this device only. Stop never waits on another
-        // device's startup, and can cancel ours through device_operations.
-        let lock = startup_lock(&format!("{}:{id}", self.root.display()))?;
-        let startup = lock.lock().await;
-        let companion = {
+        let companion = if params["allowStart"] == false {
             let existing = self
                 .companions
                 .lock()
                 .await
                 .get(id)
-                .filter(|companion| !companion.cancellation.is_cancelled())
+                .filter(|companion| companion.is_active())
                 .cloned();
-            if let Some(companion) = existing {
-                companion
-            } else {
-                let token = CancellationToken::new();
-                let companion = {
-                    {
-                        let mut operations = self.device_operations.lock().await;
-                        if self.device(id).await?.status != "connected" {
-                            return Err(CoreError::new(
-                                "cancelled",
-                                "设备正在断开，互联服务启动已取消。",
-                            ));
-                        }
-                        operations.insert(format!("companion:{id}"), token.clone());
-                    }
-                    self.emit("companion.starting", Some(id), json!({"status":"starting"}));
-                    Box::pin(Companion::start(
-                        client,
-                        id.into(),
-                        self.events.clone(),
-                        token.clone(),
-                    ))
-                    .await?
-                };
-                let _operations = self.device_operations.lock().await;
-                if token.is_cancelled() || self.device(id).await?.status != "connected" {
-                    return Err(CoreError::new(
-                        "cancelled",
-                        "设备正在断开，互联服务启动已取消。",
-                    ));
+            match existing {
+                Some(companion) => companion,
+                None => {
+                    return match command {
+                        "notifications.list" => Ok(
+                            json!({"deviceId":id,"notifications":[],"status":"unknown","live":false,"reason":"尚未建立实时通知观察。"}),
+                        ),
+                        "calls.list" => Ok(
+                            json!({"deviceId":id,"calls":[],"status":"unknown","audioStatus":"unknown","live":false,"reason":"尚未建立通话观察。"}),
+                        ),
+                        _ => Err(CoreError::new(
+                            "observation_required",
+                            "请先明确启动此设备的实时观察。",
+                        )),
+                    };
                 }
-                self.companions
+            }
+        } else {
+            let client = self.client(id).await?;
+            // Serialize startup for this device only. Stop never waits on another
+            // device's startup, and can cancel ours through device_operations.
+            let lock = startup_lock(&format!("{}:{id}", self.root.display()))?;
+            let startup = lock.lock().await;
+            let companion = {
+                let existing = self
+                    .companions
                     .lock()
                     .await
-                    .insert(id.into(), companion.clone());
-                companion
-            }
-        };
-        drop(startup);
-        let response = companion.request(command, params).await;
-        if matches!(command, "clipboard.get" | "clipboard.set") {
-            let capability = match &response {
-                Ok(_) => json!({"status":"available","live":true}),
-                Err(error) => {
-                    json!({"status":"limited","live":false,"reason":error.message,"code":error.code})
+                    .get(id)
+                    .filter(|companion| !companion.cancellation.is_cancelled())
+                    .cloned();
+                if let Some(companion) = existing {
+                    companion
+                } else {
+                    let token = CancellationToken::new();
+                    let companion = {
+                        {
+                            let mut operations = self.device_operations.lock().await;
+                            if self.device(id).await?.status != "connected" {
+                                return Err(CoreError::new(
+                                    "cancelled",
+                                    "设备正在断开，互联服务启动已取消。",
+                                ));
+                            }
+                            operations.insert(format!("companion:{id}"), token.clone());
+                        }
+                        self.emit("companion.starting", Some(id), json!({"status":"starting"}));
+                        Box::pin(Companion::start(
+                            client,
+                            id.into(),
+                            self.events.clone(),
+                            token.clone(),
+                        ))
+                        .await?
+                    };
+                    let _operations = self.device_operations.lock().await;
+                    if token.is_cancelled() || self.device(id).await?.status != "connected" {
+                        return Err(CoreError::new(
+                            "cancelled",
+                            "设备正在断开，互联服务启动已取消。",
+                        ));
+                    }
+                    self.companions
+                        .lock()
+                        .await
+                        .insert(id.into(), companion.clone());
+                    companion
                 }
             };
-            companion.state.write().await["clipboard"] = capability;
-        }
-        let mut result = response?;
-        if command == "notifications.list" {
-            companion.state.write().await["notifications"] = result.clone();
-        }
-        if command == "calls.list" {
-            companion.state.write().await["calls"] = result.clone();
-        }
+            drop(startup);
+            companion
+        };
+        let mut result = companion.request(command, params).await?;
         result["deviceId"] = json!(id);
         if let Some(calls) = result["calls"].as_array_mut() {
             let device = self.device(id).await?;
@@ -543,6 +624,139 @@ impl Runtime {
         // No established helper means this only cancels in-flight startup.
         if let Some(token) = token {
             token.cancel();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn cached_companion() -> (
+        tempfile::TempDir,
+        Arc<Runtime>,
+        String,
+        Arc<Companion>,
+        mpsc::Receiver<Request>,
+    ) {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let device = runtime
+            .invoke("devices.add", json!({"address":"127.0.0.1","port":9}))
+            .await
+            .unwrap()["deviceId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let (requests, receiver) = mpsc::channel(32);
+        let (_, stopped) = watch::channel(false);
+        let companion = Arc::new(Companion {
+            cancellation: CancellationToken::new(),
+            requests,
+            state: Arc::new(RwLock::new(json!({
+                "notifications":{"notifications":[{"id":"actionable"}],"status":"available","live":true},
+                "calls":{"calls":[{"id":"ongoing"}],"status":"available","live":true},
+                "clipboard":{"status":"available","live":true}
+            }))),
+            stopped,
+        });
+        runtime
+            .companions
+            .lock()
+            .await
+            .insert(device.clone(), companion.clone());
+        (directory, runtime, device, companion, receiver)
+    }
+
+    #[tokio::test]
+    async fn cancelled_helper_snapshot_never_exposes_actionable_cached_data() {
+        let (_directory, runtime, device, companion, _requests) = cached_companion().await;
+        companion.cancellation.cancel();
+        let snapshot = runtime.invoke("state.snapshot", json!({})).await.unwrap();
+        let cached = &snapshot["companions"][0];
+        assert_eq!(cached["deviceId"], device);
+        for (section, collection) in [("notifications", "notifications"), ("calls", "calls")] {
+            assert_eq!(cached["state"][section]["status"], "unknown");
+            assert_eq!(cached["state"][section]["live"], false);
+            assert_eq!(cached["state"][section][collection], json!([]));
+        }
+        assert_eq!(cached["state"]["clipboard"]["live"], false);
+        assert_eq!(
+            runtime
+                .invoke(
+                    "clipboard.get",
+                    json!({"deviceId":device,"allowStart":false})
+                )
+                .await
+                .unwrap_err()
+                .code,
+            "observation_required"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_list_receipt_cannot_overwrite_a_newer_observed_change() {
+        let (_directory, runtime, device, companion, mut requests) = cached_companion().await;
+        for (command, section) in [
+            ("notifications.list", "notifications"),
+            ("calls.list", "calls"),
+        ] {
+            let owner = runtime.clone();
+            let id = device.clone();
+            let invocation = tokio::spawn(async move {
+                owner
+                    .invoke(command, json!({"deviceId":id,"allowStart":false}))
+                    .await
+            });
+            let request = requests.recv().await.unwrap();
+            let old = json!({section:[],"status":"available","live":true});
+            let newer = json!({section:[{"id":"newer"}],"status":"available","live":true});
+            // Use the real actor commit boundary without an Android socket:
+            // receive the RPC result, then a newer observation, before the
+            // caller resumes its oneshot.
+            let request_id = request.payload["requestId"].as_str().unwrap().to_owned();
+            let mut pending = HashMap::from([(
+                request_id.clone(),
+                Pending {
+                    command: command.into(),
+                    action: request.action,
+                    result: request.result,
+                },
+            )]);
+            let before = runtime.events.cursor();
+            let mut events = runtime.subscribe();
+            commit_message(
+                json!({"requestId":request_id,"result":old}),
+                &mut pending,
+                &companion.state,
+                &runtime.events,
+                &device,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                runtime.events.cursor().state_revision,
+                before.state_revision + 1
+            );
+            assert_eq!(runtime.events.cursor().sequence, before.sequence);
+            assert!(
+                events.try_recv().is_err(),
+                "query refreshes must not retrigger UI queries"
+            );
+            assert_eq!(companion.state.read().await[section], old);
+            commit_message(
+                json!({"event":format!("{section}.changed"),"data":newer}),
+                &mut pending,
+                &companion.state,
+                &runtime.events,
+                &device,
+            )
+            .await
+            .unwrap();
+            assert_eq!(events.try_recv().unwrap()["data"], newer);
+            invocation.await.unwrap().unwrap();
+            let snapshot = runtime.invoke("state.snapshot", json!({})).await.unwrap();
+            assert_eq!(snapshot["companions"][0]["state"][section], newer);
         }
     }
 }

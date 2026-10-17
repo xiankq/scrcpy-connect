@@ -104,6 +104,21 @@ impl ImportManager {
             .events
             .send(json!({"type":"share.received","data":value}));
     }
+    fn forward_current(&self, event: &Value, output: &crate::events::EventBus) {
+        let state = lock(&self.state);
+        let current = event["data"]["shareId"]
+            .as_str()
+            .and_then(|id| state.batches.get(id))
+            .filter(|batch| batch.visible);
+        // Import events use a separate bounded queue. Give the runtime's
+        // sequence to the current projection under its guard, not to stale
+        // content captured before that queue was drained.
+        let event = match current {
+            Some(batch) => json!({"type":"share.received","data":state.view(batch)}),
+            None => json!({"type":"state.resync","data":{"source":"sharing"}}),
+        };
+        let _ = output.send(event);
+    }
     pub fn command(&self, command: &str, p: &Value) -> CoreResult<Value> {
         let id = || {
             p["shareId"]
@@ -487,13 +502,21 @@ impl Runtime {
             let manager = ImportManager::open(root, cache, Limits::default())?;
             let mut events = manager.subscribe();
             let output = self.events.clone();
+            let source = Arc::downgrade(&manager);
             tokio::spawn(async move {
                 loop {
                     match events.recv().await {
                         Ok(event) => {
-                            let _ = output.send(event);
+                            let Some(manager) = source.upgrade() else {
+                                break;
+                            };
+                            manager.forward_current(&event, &output);
                         }
-                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(broadcast::error::RecvError::Lagged(_)) => {
+                            events = events.resubscribe();
+                            let _ = output
+                                .send(json!({"type":"state.resync","data":{"source":"sharing"}}));
+                        }
                         Err(_) => break,
                     }
                 }

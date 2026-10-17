@@ -128,9 +128,13 @@ impl Runtime {
             "settings.update" => {
                 let mut store = self.store.write().await;
                 store.settings = validated_settings(&store.settings, params)?;
-                let result = store.settings.clone();
                 drop(store);
                 self.persist().await?;
+                // Persistence may wait behind another writer. Publish while
+                // holding a fresh read guard so a late receipt cannot regress
+                // a newer in-memory state already observed by a snapshot.
+                let store = self.store.read().await;
+                let result = store.settings.clone();
                 self.emit("settings.changed", None, result.clone());
                 Ok(result)
             }
@@ -306,5 +310,54 @@ mod tests {
         assert!(validated_settings(&original, &json!({"appearance":"dark","maxFps":0})).is_err());
         assert_eq!(original["appearance"], "light");
         assert!(validated_settings(&original, &json!({"backgroundKeepAlive":"yes"})).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_delayed_persistence_receipt_cannot_publish_old_settings_after_a_snapshot() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let mut events = runtime.subscribe();
+        let barrier = runtime.persistence.lock().await;
+        let update = |appearance: &'static str| {
+            let runtime = runtime.clone();
+            tokio::spawn(async move {
+                runtime
+                    .invoke("settings.update", json!({"appearance":appearance}))
+                    .await
+                    .unwrap()
+            })
+        };
+        let first = update("dark");
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while runtime.invoke("settings.get", Value::Null).await.unwrap()["appearance"] != "dark"
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let second = update("system");
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while runtime.invoke("settings.get", Value::Null).await.unwrap()["appearance"]
+                != "system"
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let snapshot = runtime.invoke("state.snapshot", Value::Null).await.unwrap();
+        assert_eq!(snapshot["settings"]["appearance"], "system");
+        drop(barrier);
+        first.await.unwrap();
+        second.await.unwrap();
+        for _ in 0..2 {
+            let event = events.recv().await.unwrap();
+            assert!(event["sequence"].as_u64().unwrap() > snapshot["sequence"].as_u64().unwrap());
+            assert_eq!(
+                event["data"]["appearance"], "system",
+                "A late event must project the current committed in-memory state"
+            );
+        }
     }
 }

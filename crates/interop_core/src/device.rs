@@ -26,6 +26,80 @@ fn operations(seconds: u64, cancellation: CancellationToken) -> OperationOptions
         cancellation,
     }
 }
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn delayed_forget_cannot_publish_old_settings_after_a_snapshot() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let device = runtime
+            .invoke("devices.add", json!({"address":"127.0.0.1","port":9}))
+            .await
+            .unwrap()["deviceId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let mut events = runtime.subscribe();
+        let barrier = runtime.persistence.lock().await;
+        let owner = runtime.clone();
+        let forgetting = tokio::spawn(async move {
+            owner
+                .invoke("devices.forget", json!({"deviceId":device}))
+                .await
+                .unwrap()
+        });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !runtime.invoke("devices.list", Value::Null).await.unwrap()["devices"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let owner = runtime.clone();
+        let updating = tokio::spawn(async move {
+            owner
+                .invoke("settings.update", json!({"appearance":"dark"}))
+                .await
+                .unwrap()
+        });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while runtime.invoke("settings.get", Value::Null).await.unwrap()["appearance"] != "dark"
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let snapshot = runtime.invoke("state.snapshot", Value::Null).await.unwrap();
+        assert_eq!(snapshot["settings"]["appearance"], "dark");
+        assert_eq!(snapshot["devices"], json!([]));
+
+        drop(barrier);
+        forgetting.await.unwrap();
+        updating.await.unwrap();
+        let mut settings_events = 0;
+        while let Ok(event) = events.try_recv() {
+            if event["type"] == "settings.changed" {
+                settings_events += 1;
+                assert!(
+                    event["sequence"].as_u64().unwrap() > snapshot["sequence"].as_u64().unwrap()
+                );
+                assert_eq!(
+                    event["data"]["appearance"], "dark",
+                    "late forget publication must use current settings"
+                );
+            }
+        }
+        assert_eq!(settings_events, 2);
+    }
+}
 fn host(params: &Value) -> CoreResult<String> {
     let value = required(params, "address")?.trim();
     if value.is_empty()
@@ -430,7 +504,12 @@ impl Runtime {
         };
         drop(_pending);
         self.changed_devices().await?;
-        self.emit("device.changed", Some(id), json!(device));
+        {
+            let store = self.store.read().await;
+            if let Some(current) = store.devices.iter().find(|device| device.id == id) {
+                self.emit("device.changed", Some(id), json!(current));
+            }
+        }
         Ok(json!({"connected":true,"deviceId":id,"device":device}))
     }
     pub(crate) async fn disconnect_device(&self, id: &str, forget: bool) -> CoreResult<Value> {
@@ -451,7 +530,7 @@ impl Runtime {
         if let Some(client) = self.connections.lock().await.remove(id) {
             client.close();
         }
-        let changed_settings = if forget {
+        if forget {
             let mut store = self.store.write().await;
             store.devices.retain(|d| d.id != id);
             if let Some(quality) = store.settings["deviceQuality"].as_object_mut() {
@@ -463,13 +542,13 @@ impl Runtime {
             if store.settings["clipboardDevice"] == id {
                 store.settings["clipboardDevice"] = Value::Null;
             }
-            Some(store.settings.clone())
-        } else {
-            None
-        };
+        }
         self.changed_devices().await?;
-        if let Some(settings) = changed_settings {
-            self.emit("settings.changed", None, settings);
+        if forget {
+            // Persistence can wait behind newer settings writes. Publish the
+            // current projection under its guard, never a pre-wait clone.
+            let store = self.store.read().await;
+            self.emit("settings.changed", None, store.settings.clone());
         }
         Ok(json!({"deviceId":id,"disconnected":true,"forgotten":forget}))
     }

@@ -133,6 +133,9 @@ pub(super) async fn pump_events(
         let event = match message {
             Ok(Ok(event)) => event,
             Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+                // Drop retained events before the caller loads a snapshot.
+                // Events arriving while it handles the marker remain queued.
+                receiver = receiver.resubscribe();
                 json!({"type":"state.resync","data":{}})
             }
             Ok(Err(broadcast::error::RecvError::Closed)) => break,
@@ -260,6 +263,76 @@ mod tests {
         assert_eq!(sent[0]["type"], "runtime.heartbeat");
         assert_eq!(sent[0]["data"], json!({}));
         assert!(observers.0.entries().is_empty());
+    }
+
+    #[tokio::test]
+    async fn lagged_observer_discards_old_events_and_keeps_new_events_isolated() {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let observers = registry(2);
+            let paused_id = observers.open().unwrap();
+            let active_id = observers.open().unwrap();
+            let paused = observers.listen(paused_id).unwrap().unwrap();
+            let active = observers.listen(active_id).unwrap().unwrap();
+            let active_token = active.token.clone();
+            let (sender, paused_receiver) = broadcast::channel(256);
+            let active_receiver = sender.subscribe();
+            let (active_output, mut active_events) = tokio::sync::mpsc::unbounded_channel();
+            let active_task = tokio::spawn(async move {
+                pump_events(
+                    active_receiver,
+                    &active.token,
+                    Duration::from_secs(60),
+                    |event| {
+                        active_output
+                            .send(serde_json::from_str::<Value>(&event).unwrap())
+                            .is_ok()
+                    },
+                )
+                .await;
+            });
+
+            // Keep one observer consuming while the other accumulates more
+            // than the real Core broadcast capacity without being polled.
+            for sequence in 1..=300 {
+                sender
+                    .send(json!({"type":"device.changed","sequence":sequence,"data":{}}))
+                    .unwrap();
+                let event = active_events.recv().await.unwrap();
+                assert_eq!(event["sequence"], sequence);
+            }
+
+            let mut resumed_events = Vec::new();
+            pump_events(
+                paused_receiver,
+                &paused.token,
+                Duration::from_secs(60),
+                |event| {
+                    let event: Value = serde_json::from_str(&event).unwrap();
+                    let resync = event["type"] == "state.resync";
+                    resumed_events.push(event);
+                    if resync && resumed_events.len() == 1 {
+                        // Events published while the caller handles the marker
+                        // must still reach this observer after resynchronizing.
+                        sender
+                            .send(json!({"type":"device.changed","sequence":301,"data":{}}))
+                            .unwrap();
+                    }
+                    resync
+                },
+            )
+            .await;
+            drop(paused);
+
+            assert_eq!(resumed_events.len(), 2);
+            assert_eq!(resumed_events[0]["type"], "state.resync");
+            assert_eq!(resumed_events[1]["sequence"], 301);
+            assert!(!active_token.is_cancelled());
+            assert_eq!(active_events.recv().await.unwrap()["sequence"], 301);
+            observers.cancel(active_id);
+            active_task.await.unwrap();
+        })
+        .await
+        .expect("event observers should finish without waiting for a heartbeat");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

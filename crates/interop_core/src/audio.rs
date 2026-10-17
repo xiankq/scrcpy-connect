@@ -18,7 +18,7 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
-    sync::{Mutex, RwLock, broadcast},
+    sync::{Mutex, RwLock},
     time::Instant,
 };
 
@@ -45,7 +45,7 @@ fn options(token: &CancellationToken) -> OperationOptions {
         cancellation: token.clone(),
     }
 }
-fn emit(events: &broadcast::Sender<Value>, kind: &str, device: &str, data: Value) {
+fn emit(events: &crate::events::EventBus, kind: &str, device: &str, data: Value) {
     let _ = events.send(json!({"type":kind,"deviceId":device,"data":data,"timestamp":now()}));
 }
 
@@ -508,7 +508,7 @@ async fn forward_audio(
     mut audio: AdbStream,
     cancellation: CancellationToken,
     state: Arc<RwLock<Value>>,
-    events: broadcast::Sender<Value>,
+    events: crate::events::EventBus,
     device: String,
 ) {
     let operation = async {
