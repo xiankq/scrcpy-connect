@@ -561,6 +561,9 @@ async fn forward_generation(
                 frames.push(json!({
                     "generation": generation,
                     "ptsUs": (flags & ((1 << 61) - 1)) - mux.source_origin_us().unwrap(),
+                    // Retain the remote media clock for target-side lab
+                    // correlation. It is not this process's monotonic clock.
+                    "sourcePtsUs": flags & ((1 << 61) - 1),
                     "muxStartedUs": mux_started_us,
                     "writeStartedUs": write_started_us,
                     "writtenUs": written_us,

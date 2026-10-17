@@ -532,6 +532,9 @@ async fn frame_diagnostics_are_opt_in_bounded_and_use_the_actual_muxed_pts_and_s
             for (offset, frame) in frames.iter().enumerate() {
                 assert_eq!(frame["generation"], 7);
                 assert_eq!(frame["ptsUs"], (offset as u64 + 3) * 1000);
+                // Preserve the source clock independently of the generation's
+                // zero-based mux PTS. Neither is the controller's wall clock.
+                assert_eq!(frame["sourcePtsUs"], 5_000_000 + (offset as u64 + 3) * 1000);
                 let mux = frame["muxStartedUs"].as_u64().unwrap();
                 let write = frame["writeStartedUs"].as_u64().unwrap();
                 let written = frame["writtenUs"].as_u64().unwrap();
