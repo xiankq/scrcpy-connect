@@ -28,6 +28,19 @@ failed sync operations close their affected stream rather than reuse uncertain
 protocol state. Callers should drop a sync object when abandoning an in-progress
 operation.
 
+For opt-in receive diagnostics, `AdbStream::set_read_trace_clock` accepts a quick,
+non-reentrant monotonic microsecond clock. `read_trace()` returns only the latest
+WRTE receipt: payload read start/completion, routing and first consumption in
+that same clock domain. It keeps constant storage and does not change byte or
+ACK handling. Partial reads from one WRTE retain its sequence and first-consumed
+time; several service packets can share that receipt. Reception begins after
+the ADB header, so it excludes earlier device, kernel and transport buffering.
+Replacing or disabling the clock drops stale diagnostics, including queued
+receipts, while retaining data. A payload already in flight may finish one call
+to its old clock before its receipt is discarded. With no subscriptions, new
+WRTEs do not sample clocks or take an additional route lock; an atomic check and
+the optional metadata fields remain.
+
 `shell` preserves stdout/stderr bytes and shell_v2 exit status; legacy shell has
 no exit status. `shell_session` exposes raw/PTY stdin, close-stdin, terminal resize
 and cancellation-safe incremental output events. `cmd` quotes each argument;

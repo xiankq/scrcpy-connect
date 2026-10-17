@@ -6,6 +6,7 @@ mod error;
 mod identity;
 mod processes;
 pub mod protocol;
+mod read_trace;
 mod reverse;
 mod services;
 pub mod sync;
@@ -19,6 +20,7 @@ pub use client::{
 pub use error::{Error, Result};
 pub use identity::Identity;
 pub use processes::JdwpTracker;
+pub use read_trace::ReadTrace;
 pub use reverse::{ReverseBinding, ReverseMapping, ReverseSocket};
 pub use services::{RebootTarget, RemoteSocket, ShellEvent, ShellMode, ShellOutput, ShellSession};
 pub use tokio_util::sync::CancellationToken;

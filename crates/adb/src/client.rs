@@ -2,12 +2,13 @@ use crate::{
     Error, Identity, Result,
     error::bounded,
     protocol::{self, Frame},
+    read_trace::{ReceivedPayload, Subscription},
 };
 use std::{
     collections::{HashMap, HashSet},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicU32, AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -81,8 +82,9 @@ pub struct DeviceInfo {
 struct Route {
     remote: u32,
     awaiting_ack: bool,
-    data: mpsc::Sender<Vec<u8>>,
+    data: mpsc::Sender<ReceivedPayload>,
     ack: mpsc::Sender<u32>,
+    trace: Option<Subscription>,
 }
 type Routes = Arc<Mutex<HashMap<u32, Route>>>;
 
@@ -93,6 +95,7 @@ struct Inner {
     next_id: AtomicU32,
     cancellation: CancellationToken,
     failure: Arc<Mutex<Option<String>>>,
+    traced_routes: Arc<AtomicUsize>,
     reverses: Arc<crate::reverse::Registry>,
 }
 impl Inner {
@@ -301,6 +304,7 @@ impl Client {
             next_id: AtomicU32::new(1),
             cancellation: cancellation.clone(),
             failure: failure.clone(),
+            traced_routes: Arc::new(AtomicUsize::new(0)),
             reverses: Default::default(),
         });
         let writer_failure = failure.clone();
@@ -324,9 +328,27 @@ impl Client {
         let skip_checksum = inner.info.version >= protocol::VERSION;
         let read_failure = failure.clone();
         let read_inner = Arc::downgrade(&inner);
+        let traced_routes = inner.traced_routes.clone();
         tokio::spawn(async move {
             loop {
-                let frame = tokio::select! { _ = read_cancel.cancelled() => break, frame = Frame::read(&mut reader, max_payload, skip_checksum) => match frame { Ok(frame) => frame, Err(error) => { *read_failure.lock().expect("failure mutex") = Some(format!("transport read: {error}")); break; } } };
+                let receive = Frame::read_observed(
+                    &mut reader,
+                    max_payload,
+                    skip_checksum,
+                    |command, remote, local| {
+                        if command != protocol::WRTE || traced_routes.load(Ordering::Relaxed) == 0 {
+                            return None;
+                        }
+                        read_routes
+                            .lock()
+                            .expect("route mutex poisoned")
+                            .get(&local)
+                            .filter(|route| route.remote != 0 && route.remote == remote)
+                            .and_then(|route| route.trace.as_ref())
+                            .map(|trace| trace.clock.clone())
+                    },
+                );
+                let (frame, timing) = tokio::select! { _ = read_cancel.cancelled() => break, frame = receive => match frame { Ok(frame) => frame, Err(error) => { *read_failure.lock().expect("failure mutex") = Some(format!("transport read: {error}")); break; } } };
                 if frame.command == protocol::OPEN {
                     if let Some(inner) = read_inner.upgrade() {
                         accept_reverse(inner, frame);
@@ -366,7 +388,36 @@ impl Client {
                                     // AOSP's EOF/error path flushes a final packet even
                                     // while an earlier WRTE awaits ACK. Preserve that
                                     // bounded tail instead of rejecting valid shells.
-                                    if route.data.try_send(frame.payload).is_err() {
+                                    let trace = timing.and_then(|timing| {
+                                        let subscription = route.trace.as_mut()?;
+                                        if !Arc::ptr_eq(
+                                            &subscription.clock.token,
+                                            &timing.clock.token,
+                                        ) {
+                                            return None;
+                                        }
+                                        subscription.sequence =
+                                            subscription.sequence.saturating_add(1);
+                                        Some((
+                                            crate::ReadTrace {
+                                                sequence: subscription.sequence,
+                                                payload_bytes: frame.payload.len(),
+                                                payload_started_us: timing.started_us,
+                                                payload_read_us: timing.read_us,
+                                                routed_us: (timing.clock.read)(),
+                                                first_consumed_us: 0,
+                                            },
+                                            timing.clock,
+                                        ))
+                                    });
+                                    if route
+                                        .data
+                                        .try_send(ReceivedPayload {
+                                            bytes: frame.payload,
+                                            timing: trace,
+                                        })
+                                        .is_err()
+                                    {
                                         invalid = true;
                                     }
                                 }
@@ -473,6 +524,7 @@ impl Client {
                     awaiting_ack: true,
                     data: data_tx,
                     ack: ack_tx,
+                    trace: None,
                 },
             );
         }
@@ -483,6 +535,8 @@ impl Client {
             data,
             ack,
             buffer: Vec::new(),
+            read_trace: None,
+            trace_token: None,
             offset: 0,
             pending_ack: false,
             options,
@@ -549,6 +603,7 @@ fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
                 awaiting_ack: false,
                 data: data_tx,
                 ack: ack_tx,
+                trace: None,
             },
         );
     }
@@ -559,6 +614,8 @@ fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
         data,
         ack,
         buffer: Vec::new(),
+        read_trace: None,
+        trace_token: None,
         offset: 0,
         pending_ack: false,
         options: OperationOptions {
@@ -684,9 +741,11 @@ pub struct AdbStream {
     inner: Arc<Inner>,
     local: u32,
     remote: u32,
-    data: mpsc::Receiver<Vec<u8>>,
+    data: mpsc::Receiver<ReceivedPayload>,
     ack: mpsc::Receiver<u32>,
     buffer: Vec<u8>,
+    read_trace: Option<crate::ReadTrace>,
+    trace_token: Option<Arc<()>>,
     offset: usize,
     pending_ack: bool,
     options: OperationOptions,
@@ -695,6 +754,24 @@ pub struct AdbStream {
 }
 
 impl AdbStream {
+    /// Enable or disable bounded, per-WRTE receive timing for this stream.
+    /// The clock must return monotonic microseconds in the caller's domain.
+    /// It must be quick and must not call back into this client. Changing the
+    /// clock discards pending diagnostics, never pending stream bytes.
+    pub fn set_read_trace_clock(&mut self, clock: Option<fn() -> u64>) -> Result<()> {
+        let mut routes = self.inner.routes.lock().expect("route mutex poisoned");
+        let route = routes.get_mut(&self.local).ok_or(Error::Closed)?;
+        route.trace = clock.map(|clock| Subscription::new(clock, self.inner.traced_routes.clone()));
+        self.trace_token = route.trace.as_ref().map(|trace| trace.clock.token.clone());
+        self.read_trace = None;
+        Ok(())
+    }
+
+    /// The receipt for the WRTE that supplied the most recent nonempty read.
+    pub fn read_trace(&self) -> Option<crate::ReadTrace> {
+        self.read_trace
+    }
+
     async fn send(&self, frame: Frame) -> Result<()> {
         tokio::select! { _ = self.inner.cancellation.cancelled() => Err(Error::Closed), result = self.inner.writer.send(frame) => result.map_err(|_| Error::Closed) }
     }
@@ -740,7 +817,20 @@ impl AdbStream {
                 }
                 match self.data.recv().await {
                     Some(bytes) => {
-                        self.buffer = bytes;
+                        self.buffer = bytes.bytes;
+                        if !self.buffer.is_empty() {
+                            self.read_trace = bytes
+                                .timing
+                                .filter(|(_, clock)| {
+                                    self.trace_token
+                                        .as_ref()
+                                        .is_some_and(|token| Arc::ptr_eq(token, &clock.token))
+                                })
+                                .map(|(mut trace, clock)| {
+                                    trace.first_consumed_us = (clock.read)();
+                                    trace
+                                });
+                        }
                         self.offset = 0;
                         self.pending_ack = true;
                     }

@@ -36,6 +36,17 @@ impl Frame {
         limit: usize,
         skip_checksum: bool,
     ) -> Result<Self> {
+        Self::read_observed(reader, limit, skip_checksum, |_, _, _| None)
+            .await
+            .map(|(frame, _)| frame)
+    }
+
+    pub(crate) async fn read_observed<R: AsyncRead + Unpin>(
+        reader: &mut R,
+        limit: usize,
+        skip_checksum: bool,
+        observe: impl FnOnce(u32, u32, u32) -> Option<crate::read_trace::TraceClock>,
+    ) -> Result<(Self, Option<crate::read_trace::PayloadTiming>)> {
         let mut header = [0; 24];
         reader.read_exact(&mut header).await?;
         let word = |offset| {
@@ -55,16 +66,29 @@ impl Frame {
             ));
         }
         let mut payload = vec![0; length];
+        let clock = observe(command, word(4), word(8));
+        let started_us = clock.as_ref().map(|clock| (clock.read)());
         reader.read_exact(&mut payload).await?;
+        let timing =
+            clock
+                .zip(started_us)
+                .map(|(clock, started_us)| crate::read_trace::PayloadTiming {
+                    started_us,
+                    read_us: (clock.read)(),
+                    clock,
+                });
         if !skip_checksum && checksum(&payload) != word(16) {
             return Err(Error::Protocol("invalid frame checksum".into()));
         }
-        Ok(Self {
-            command,
-            arg0: word(4),
-            arg1: word(8),
-            payload,
-        })
+        Ok((
+            Self {
+                command,
+                arg0: word(4),
+                arg1: word(8),
+                payload,
+            },
+            timing,
+        ))
     }
 
     pub async fn write<W: AsyncWrite + Unpin>(&self, writer: &mut W) -> Result<()> {

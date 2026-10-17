@@ -1895,6 +1895,19 @@ async fn read_video_preface(
     })?
 }
 
+fn adb_read_timing(trace: Option<interop_adb::ReadTrace>) -> Value {
+    trace.map_or(Value::Null, |trace| {
+        json!({
+            "sequence": trace.sequence,
+            "bytes": trace.payload_bytes,
+            "payloadStartedUs": trace.payload_started_us,
+            "payloadReadUs": trace.payload_read_us,
+            "routedUs": trace.routed_us,
+            "firstConsumedUs": trace.first_consumed_us,
+        })
+    })
+}
+
 async fn run_video(
     listener: TcpListener,
     token: String,
@@ -1913,6 +1926,9 @@ async fn run_video(
     // segments here; this counter is not the renderer generation identifier.
     let mut capture_segment = 1u64;
     let operation = async {
+        if tracing {
+            video.set_read_trace_clock(Some(crate::media::monotonic_micros))?;
+        }
         let output = accept_media(&listener, &token).await?;
         output.set_nodelay(true)?;
         let (mut native_reader, mut output) = output.into_split();
@@ -1939,6 +1955,7 @@ async fn run_video(
             // AdbStream delivers complete WRTE payloads. This clock excludes
             // the first WRTE's earlier transport receive and queue wait.
             let first_byte_us = tracing.then(crate::media::monotonic_micros);
+            let first_adb_read = tracing.then(|| video.read_trace()).flatten();
             let complete = async {
                 video.read_exact(&mut header[1..]).await?;
                 if let Some(dimensions) = session_dimensions(&header)? {
@@ -1974,6 +1991,7 @@ async fn run_video(
                 continue;
             }
             let read_completed_us = tracing.then(crate::media::monotonic_micros);
+            let last_adb_read = tracing.then(|| video.read_trace()).flatten();
             {
                 let data = state.read().await;
                 if data["status"] == "paused" || data["awaitingSession"] == true {
@@ -1999,6 +2017,8 @@ async fn run_video(
                         "readCompletedUs": read_completed_us,
                         "writeStartedUs": write_started_us,
                         "writtenUs": written_us,
+                        "firstAdbRead": adb_read_timing(first_adb_read),
+                        "lastAdbRead": adb_read_timing(last_adb_read),
                     }));
                 }
             }
@@ -2417,6 +2437,26 @@ mod tests {
                 let write = frame["writeStartedUs"].as_u64().unwrap();
                 let written = frame["writtenUs"].as_u64().unwrap();
                 assert!(before <= first && first <= read && read <= write && write <= written);
+                let first_adb = &frame["firstAdbRead"];
+                let last_adb = &frame["lastAdbRead"];
+                assert_eq!(first_adb["sequence"], 1);
+                assert_eq!(first_adb["bytes"], 1);
+                assert_eq!(last_adb["sequence"], 2);
+                assert_eq!(last_adb["bytes"], 12);
+                for receipt in [first_adb, last_adb] {
+                    assert!(
+                        receipt["payloadStartedUs"].as_u64().unwrap()
+                            <= receipt["payloadReadUs"].as_u64().unwrap()
+                    );
+                    assert!(
+                        receipt["payloadReadUs"].as_u64().unwrap()
+                            <= receipt["routedUs"].as_u64().unwrap()
+                    );
+                    assert!(
+                        receipt["routedUs"].as_u64().unwrap()
+                            <= receipt["firstConsumedUs"].as_u64().unwrap()
+                    );
+                }
                 assert!(
                     read - first >= 10_000,
                     "the real split ADB payload was held for 20ms"
