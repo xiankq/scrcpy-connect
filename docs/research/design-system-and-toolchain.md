@@ -1,6 +1,20 @@
 # 设计系统、液态玻璃与 Pencil 工具链调研
 
-调研日期：2026-10-16（Asia/Shanghai）。用途：为继续访谈提供事实，不冻结渲染器或组件库选型。以下保留各轮修订记录；当前Pencil结构以末尾设备列表与流程补齐复核为准。
+调研日期：2026-10-16，补核2026-10-17（Asia/Shanghai）。以下保留各轮修订记录；当前材质实施以本节后的固定版本决策为准，早期候选表不表示当前实现状态。
+
+## 2026-10-17固定版本实施：共享实时折射
+
+选用 `liquid_glass_easy: 5.0.0`，封装于 `packages/design_system` 的既有 `Glass`，不在各页面扩散库API。它只有Flutter/Dart依赖及shader资源，无新原生业务层；standalone lens使用engine提供的背景shader采样，不启用`LiquidGlassView`和自适应截图。当前颜色、光学参数及局部文字保护来自`designs/design.md`和Pencil implementation tokens。[固定发布版](https://pub.dev/packages/liquid_glass_easy/versions/5.0.0)、[发布归档](https://pub.dev/api/archives/liquid_glass_easy-5.0.0.tar.gz)
+
+需要纠正旧平台推断：本机Flutter3.47.6；官方3.47文档明确macOS/Linux/Windows已默认启用Impeller，因此不能以“Windows必定Skia”硬编码关闭折射。实现以`ImageFilter.isShaderFilterSupported`检测后端；该检测仅表示API能力，不保证任意GPU已成功绘制。Android/iOS/macOS/Windows共用Dart/shader依赖路径，四宿主整包仍须分别验收。[官方Impeller平台说明](https://docs.flutter.dev/perf/impeller#availability)
+
+固定归档源码核对：`render_liquid_glass_lens.dart`的layer在`addToScene`同步当前变换、调用`pushBackdropFilter`，避免滚动仅移动retained layer时采样坐标陈旧；背景先模糊再折射，`liquid_glass.frag`处理GLES采样Y方向。Windows/Linux有单独desktop shader。`LiquidGlassView`的自适应颜色路径存在`toImage/toByteData`，本项目不进入。对比的widgets1.13.0部分控件会逐帧`toImageSync`，fresnel0.1.0引入SwiftUI平台视图及26SDK符号，这两条路径未采用。
+
+普通列表仍是内容层；玻璃只承载悬浮导航、退出和工具/上下文控制。降低透明度、highContrast与显式solid完全绕过滤镜与折射；不支持的后端保留模糊材质。当前没有为所有控件新增touch/motion或自动形变，因此尚不能宣称可打断液态形变已交付。shader尚未加载或资源加载失败时，固定版本库保留相同child的磨砂fallback；GPU pipeline创建失败不自动向Dart回报，仍需实机日志与画面验证。
+
+fvp当前使用Flutter Texture而非PlatformView，engine会将外部纹理绘制到canvas，具备被后方控制层采样的源码路径。这是可实施性依据，实际动态视频、旋转、前后台、GPU预算和硬件兼容的结论须看[运行验收](../implementation/validation.md)，不能仅以源码判通过。含lens的滚动内容还需避免Android stretch overscroll将背景隔离；目前远控退出与主导航位于滚动内容外。
+
+本次规范lint为0errors/31warnings：10项玻璃扩展属性（原5项加5项折射参数）不在官方标准组件子token集合，21项颜色未在标准components引用。扩展属性及Pencil实际引用保留，不隐藏警告；0errors不表示像素和动态性能通过。
 
 ## 已确认的事实
 

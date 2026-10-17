@@ -391,3 +391,44 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 实现边界见[主控系统提醒](system-notifications.md)。真实来电系统投递、锁屏、拒权/渠道关闭、冷启动点击和长时/进程停止、系统容量及汇总策略、Windows打包身份与四宿主整包仍开放。完整产品、Glass、输入、文件/相册保存、真实通话和恢复仍未完成。
 
 最后以普通`lib/main.dart`启动并实际发送R，回执`Restarted application in 1,373ms`；原生截图`/tmp/connect-system-notifications-hot-restart.png`已目视，随后detach保留应用。FRB旧isolate切换仍有两条投递失败提示，不以此判所有资源回收/恢复已完成。
+
+## 共享光学材质与通知页视觉复验
+
+2026-10-17后续修复只涉及共享Flutter材质、主题/图标、通知呈现及验证入口，不增加Android原生业务。`design_system.Glass`固定easy5.0.0，支持后端使用真正背景shader，未启用View/逐帧截图；无支持时磨砂fallback，高对比/降低透明度/solid完全跳过滤镜。光学值同步design.md/Pencil，文字保护使用两色椭圆渐退，保留外沿透色。当前未实现所有控制的可打断形变，也未证明四宿主整包或GPU预算。
+
+### 测试暴露的问题与修复
+
+- 通知空汇总回归在旧页真实失败（expected0/actual1），修后普通通知、正文受限通知与有内容汇总仍保留，快捷回复和原手机入口继续可达。
+- 共享组件新增夹具首次tap0/expected3，是空GestureDetector默认deferToChild未命中；改明确opaque。随后发现SemanticsHandle需在testBody结束前dispose，改try/finally。没有为过测试删除语义断言。
+- 增加Lucide默认返回时曾使用Icon不存在的`matchTextDirection`参数，`/tmp/connect-glass-notifications.log`构建失败，未作为E2E通过；已改Transform.flip处理RTL并保留BackButton行为/tooltip，严格分析与后续实际构建通过。
+- 三段保护渐变出现一条斜线；17stop平滑版本反而出现多条斜纹，图像在`/tmp/connect-e2e/glass-product-smooth/`。**反证否定“只是中间色标导数折痕”的解释**。保留lens/shader/blur，仅换两色椭圆渐变后，`glass-product-final`退出及工作台图均未见这些线。当前只确认此绘制路径消除症状，未定位engine/GPU内部原因。
+- 扩大对比测试到圆形及354×72长导航的左/中/右后，旧rawRgba读法报4.32356。SDK明确rawRgba预乘alpha；传给Color.alphaBlend会重复预乘。改rawStraightRgba后同样4.5门槛通过，未修改颜色来掩盖夹具问题。这仅证明widget后端磨砂路径在黑白均匀背景的采样点，不声称覆盖所有Impeller动态视频与任意背景。
+
+### 双AVD结果和边界
+
+启动前两台AVD均不在ADB和进程表，原主控日志有ColorBuffer错误，未确定退出根因；原userdata重新启动，无wipe。目标启动阶段events日志记录SystemUI KeyguardService等待20018ms的ANR，早于产品验收；首轮收起截图确实带该系统对话框，因此没有当作视觉通过。后续流程目标对话框已消失。不能将这些环境事件当成产品进程恢复或Glass稳定性结论。
+
+真实产品运行命令在apps/connect，PATH含Rust/Flutter，两台API36/x86_64：
+
+```sh
+rtk proxy env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/glass-product-final \
+  flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/integration_test.dart \
+  --target=integration_test/product_flow_test.dart \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+  --dart-define=CONNECT_E2E_PORT=15556 \
+  --dart-define=CONNECT_E2E_TRANSPORT=tcp \
+  --dart-define=CONNECT_E2E_VIDEO_MAX_SIZE=1080 \
+  --dart-define=CONNECT_E2E_MIN_VIDEO_EDGE=1000 \
+  --dart-define=CONNECT_E2E_REQUIRE_SHADER_GLASS=true
+```
+
+`/tmp/connect-glass-product-final.log`23秒退出0，shaderImageFiltersSupported=true、H.265真实encoded/decoded486×1080，全屏/输入/拖拽/收起/展开/退出与暂停原会话通过；退出按钮和工作台图已原生目视，无前述斜线或黑块。支持位加源码调用和截图不等于已独立测量折射像素或首帧/输入P95。日志仍有模拟器GLES无效纹理格式及释放后BufferQueue abandoned，没有谎称零图形告警或性能通过。
+
+`/tmp/connect-glass-notifications-verified.log`20秒系统通知完整通过，runId=b7cf13dff7c45de14e86a99d5f2afa3d。source/镜像精确清理，hostErrors=[]；实际SystemUI点击后当前内容呈现，浅色状态栏图标深色、Lucide返回、空汇总不占位、连续行与原手机动作已目视。该运行发生在换椭圆保护层前，通知页逻辑/主题为同一版本；未将它当成最终材质证明。
+
+当前App175通过（`/tmp/connect-glass-app-final.log`），设计系统3项通过，严格分析及生成only-check通过。默认`tool/check.sh`已纳入设计系统测试。Google官方lint0errors/31warnings：10项光学扩展、21项颜色未被标准components引用；Pencil静态引用不在该CLI扫描范围。源文件仍77页/12类/23母组件；a7A57连续通知行和新增光学tokens已通过对象API保存，预览仅`/tmp/connect-glass-source-preview/`。本次没有再逐像素验收全部77页，也不关闭完整设计/输入/文件/通话/恢复及四宿主任务。
+
+最终验收进一步把退出位置下移、返回后等待转场再截图，`/tmp/connect-glass-product-verified.log`24秒退出0，回执仍为真实486×1080与shader能力true；`/tmp/connect-e2e/glass-product-verified/`展开/收起/工作台已原生目视，没有目标ANR弹窗或前述斜纹。Pencil保存后重新打开对象核对77页、12类别、23母组件、470ref，通知页没有报告裁切，新增折射率1.02及透明列表行仍在。单元/视觉对照与独立只读review未发现剩余有证据的本批实现缺陷；不扩大为全产品无缺陷。
+
+最后普通lib/main.dart实际构建启动，日志确认Impeller(OpenGLES)。Dart MCP发现IDE的DTD但没有关联此CLI启动的App，hot_restart工具因此拒绝；随后直接向本次flutter run发送R，实际`Restarted application in 1,378ms`。`/tmp/connect-glass-hot-restart.png`设备列表/浅色系统栏/共享悬浮导航已原生目视，随后detach。两条FRB旧isolate投递失败警告仍存在，不能将热重启局部成功扩大为全部生命周期资源已无缺陷。
