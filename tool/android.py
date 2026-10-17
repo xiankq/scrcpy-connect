@@ -163,6 +163,10 @@ def verify_apk(apk, expected_abis=None):
 def build_apk(args):
     if args.mode == "release" and not (ANDROID / "key.properties").exists():
         raise ValueError("No release signing identity. Run: python3 tool/android.py init-signing")
+    registrant = ANDROID / "app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
+    if (args.mode == "release" and args.no_pub and registrant.exists()
+            and "dev.flutter.plugins.integration_test.IntegrationTestPlugin" in registrant.read_text()):
+        raise ValueError("Stale integration-test plugin registration. Omit --no-pub so Flutter regenerates release registration.")
     flutter = shutil.which("flutter")
     if flutter is None:
         raise ValueError("Add Flutter to PATH.")
@@ -185,7 +189,7 @@ def main():
     build = commands.add_parser("build", help="Build and verify; defaults to release for an arm64 phone.")
     build.add_argument("--abi", choices=PLATFORMS, default="arm64")
     build.add_argument("--mode", choices=("debug", "release"), default="release")
-    build.add_argument("--no-pub", action="store_true", help="Skip dependency resolution after a successful pub get.")
+    build.add_argument("--no-pub", action="store_true", help="Reuse registration for the same build mode; omit after integration tests.")
     verify = commands.add_parser("verify", help="Check a final APK's ZIP, manifest, signature and native binaries.")
     verify.add_argument("apk", type=Path)
     args = parser.parse_args()

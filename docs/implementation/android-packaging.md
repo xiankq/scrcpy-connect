@@ -51,3 +51,11 @@ python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-re
 一手依据：[Flutter Android发布与签名](https://docs.flutter.dev/deployment/android)、[Gradle构建缓存](https://docs.gradle.org/9.3.1/userguide/build_cache.html)、[Android apksigner](https://developer.android.com/tools/apksigner)。实际Flutter默认ABI行为另按本机固定3.47.6的`FlutterPlugin.kt::configureAbiWithoutSplits`源码核查，未改SDK源。
 
 最终清理已执行：普通main构建／R热重启并detach后，移除过期Gradle／Flutter中间产物、debug APK、Kotlin状态与Rust incremental；build目录仅保留最终arm64 APK及其摘要，实际45MiB，磁盘剩余78GiB。原先未跟踪的用户测试／examples未改动。复用native hooks 3.2GiB与Gradle缓存保留，不将必要缓存当垃圾全删；被删输出下次会按需恢复，10.760秒是清理前同源热构建实测。
+
+## 媒体缓存批次后的实际release复验
+
+新增缓存实现后，`python3 tool/android.py build`实际38.86秒（Gradle37.0秒）通过，当前arm64产物46,740,766字节，SHA-256 `a948e13cbd98c3552e4462415e9e964505b16c60d54e6e85c919be18242865e0`。签名证书仍为上述同一身份；ZIP完整性／16KB ZIP对齐／manifest／完整arm64 ELF均由工具复验。原件另存 `/tmp/connect-artifacts/connect-arm64-cache-release.apk`，与前一批A60原件区分；该包没有在物理arm64手机执行，不复用旧通用包的x64安装证据冒称当前ARM执行。
+
+本轮还实际复现了Flutter3.47.6的构建模式注册问题：E2E留下integration_test的Java注册文件，随后`--no-pub` release在51.7秒时因`package dev.flutter.plugins.integration_test does not exist`失败。正常命令重新准备release插件注册后上述38.86秒成功。固定SDK源码`flutter_plugins.dart::injectPlugins`在release过滤dev依赖，`project.dart`的准备流程负责刷新；跳过准备不能假设注册文件仍匹配。更早一次进程以143中断，没有计作通过或签名失败。
+
+打包脚本现在对该明确组合提前拒绝并提示移除`--no-pub`，不手改生成的Java文件、不改Flutter SDK、不把测试插件塞入正式包。公开脚本回归先红后绿，证明拒绝发生在执行Flutter之前；同模式热构建仍可使用`--no-pub`，但在E2E与release之间切换时应使用默认命令。`--no-pub`不是所有状态下的无成本加速开关。
