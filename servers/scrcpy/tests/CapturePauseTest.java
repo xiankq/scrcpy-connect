@@ -2,6 +2,9 @@ import com.genymobile.scrcpy.control.ControlMessage;
 import com.genymobile.scrcpy.control.ControlMessageReader;
 import com.genymobile.scrcpy.control.ControlProtocolException;
 import com.genymobile.scrcpy.video.CaptureControl;
+import com.genymobile.scrcpy.video.SurfaceEncoder;
+import com.genymobile.scrcpy.device.Streamer;
+import com.genymobile.scrcpy.Options;
 
 import android.media.MediaCodec;
 
@@ -10,6 +13,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class CapturePauseTest {
     private static void check(boolean value, String message) {
@@ -74,9 +78,79 @@ public final class CapturePauseTest {
         check(order.toString().equals("PR"), "capture ACKs must preserve command order");
     }
 
+    private static void pauseDuringEncoderRecreation() throws Exception {
+        CaptureControl control = new CaptureControl();
+        // Real SurfaceEncoder order: the gate opens, createMediaCodec runs,
+        // reset reasons are consumed, then the started codec is registered.
+        check(control.awaitCaptureEnabled(), "initial gate must open");
+        CountDownLatch paused = new CountDownLatch(1);
+        control.setCapturePaused(true, paused::countDown);
+        int reasons = control.consumeReset();
+        check((reasons & CaptureControl.RESET_REASON_CAPTURE_STATE_CHANGED) != 0,
+                "the racing request must have reached this encoder iteration");
+        MediaCodec codec = new MediaCodec();
+        control.setRunningMediaCodec(codec);
+        check(codec.eosRequests == 0, "no codec existed when pause was requested");
+        check(paused.getCount() == 1, "a pending pause must not ACK before cleanup");
+        check(control.isResetRequested(),
+                "a pause queued after the gate must prevent encode even after consumeReset");
+        control.setRunningMediaCodec(null);
+        AtomicBoolean result = new AtomicBoolean();
+        Thread encoder = enterGate(control, result);
+        try {
+            check(paused.await(2, TimeUnit.SECONDS), "cleanup must lead to the pending pause ACK");
+            check(encoder.isAlive(), "pause ACK must leave the encoder parked");
+            control.setCapturePaused(false, () -> {});
+            encoder.join(2000);
+            check(!encoder.isAlive() && result.get(), "a later resume must reopen the gate");
+        } finally {
+            control.reset(CaptureControl.RESET_REASON_TERMINATED);
+            encoder.join(2000);
+        }
+    }
+
     private static ControlMessage read(long sequence, int value) throws Exception {
         byte[] bytes = ByteBuffer.allocate(10).put((byte) 128).putLong(sequence).put((byte) value).array();
         return new ControlMessageReader(new ByteArrayInputStream(bytes)).read();
+    }
+
+    private static void pendingPauseDoesNotDependOnOutputEos() throws Exception {
+        SurfaceEncoder encoder = new SurfaceEncoder(null, null, new Options());
+        java.lang.reflect.Field field = SurfaceEncoder.class.getDeclaredField("captureControl");
+        field.setAccessible(true);
+        CaptureControl control = (CaptureControl) field.get(encoder);
+        MediaCodec codec = new MediaCodec();
+        control.setRunningMediaCodec(codec);
+        java.lang.reflect.Method encode = SurfaceEncoder.class.getDeclaredMethod("encode", MediaCodec.class, Streamer.class);
+        encode.setAccessible(true);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread thread = new Thread(() -> {
+            try {
+                encode.invoke(encoder, codec, null);
+            } catch (Throwable error) {
+                failure.set(error);
+            }
+        });
+        thread.setDaemon(true);
+        thread.start();
+        try {
+            check(codec.reading.await(2, TimeUnit.SECONDS), "real encode loop must start reading output");
+            thread.join(200);
+            check(thread.isAlive() && failure.get() == null,
+                    "a healthy static capture must keep waiting between output buffers");
+            CountDownLatch ack = new CountDownLatch(1);
+            control.setCapturePaused(true, ack::countDown);
+            thread.join(500);
+            check(!thread.isAlive(), "pending pause must leave encode without waiting for output EOS");
+            check(failure.get() == null, "encode must return normally: " + failure.get());
+            check(codec.lastTimeoutUs > 0 && codec.lastTimeoutUs <= 100000,
+                    "output wait must be bounded even when no frames arrive");
+            check(ack.getCount() == 1, "leaving encode is not a cleanup/pause ACK");
+        } finally {
+            codec.emitEos = true;
+            thread.join(2000);
+            control.setRunningMediaCodec(null);
+        }
     }
 
     private static void wireProtocol() throws Exception {
@@ -105,6 +179,8 @@ public final class CapturePauseTest {
         pausedGateThenResume();
         terminationWakesGate();
         queuedRequestsStayOrdered();
+        pauseDuringEncoderRecreation();
+        pendingPauseDoesNotDependOnOutputEos();
         System.out.println("Capture pause protocol/gate JVM checks passed");
     }
 }

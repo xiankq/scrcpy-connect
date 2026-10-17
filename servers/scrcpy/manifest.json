@@ -3,8 +3,8 @@
   "upstreamCommit": "a60891aea193d92e7e5c3942700eca63f9d19a5f",
   "sourceUrl": "https://codeload.github.com/Genymobile/scrcpy/tar.gz/refs/tags/v5.0.1",
   "sourceSha256": "a24b996ac23d0f674d3237c00b39a97829d8acbe9e1657a6c216fd51ea488ee5",
-  "patchSha256": "bb78d60dfac9ceb43784681563b48af1745a7e6b26a80bffeaa87fb57bf23381",
-  "serverSha256": "91606a603a49bbea2be37ec500cde44a588483ac3162bc466d23b2f9d840deab",
+  "patchSha256": "b62928c7e96a27efcaae58ff2d8a500eab751fd3d7549149363c0347c8a088b2",
+  "serverSha256": "b46cd074600c33802dc764df8a9e056271725cb9b51daf4a3494dfffadbbac89",
   "controlExtension": {
     "type": 128,
     "payload": "sequence:u64be,paused:u8(0|1)",

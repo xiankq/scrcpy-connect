@@ -45,7 +45,15 @@ namespace with clipboard requests and correlate outstanding capture requests
 separately. Official, unpatched servers do not accept this extension.
 
 The controller enqueues a capture request without waiting. The video encoder
-uses its existing EOS/reset mechanism to leave the encode loop. It detaches the
+signals EOS through its existing reset mechanism. It also bounds each output
+wait to 100ms and checks pending capture requests after releasing the current
+complete output packet, so delayed or absent output EOS cannot keep it in the
+encode loop indefinitely. Ordinary capture without a pending request continues
+waiting across output timeouts. A pause may discard the encoder's remaining
+unread output; resume starts a new session/configuration and keyframe, rather
+than continuing those old references. The 100ms limit applies to the codec read
+wait, not socket writes, cleanup, or the complete pause acknowledgement.
+It detaches the
 capture surface, stops GL work and the codec, releases the **MediaCodec
 instance** and input surface, then processes requests at its pause gate. Only
 then does it enqueue a pause ACK. A resume ACK means the gate is open, not that
@@ -53,6 +61,13 @@ decoded pixels exist; the host must still require the resumed session/config
 and a newly decoded frame before enabling input. Failures before the gate do
 not produce ACKs. The official sender's bounded queue may drop an ACK, in which
 case the host must treat timeout as unconfirmed rather than successful.
+
+Pending capture requests also count as a reset even after `consumeReset()`.
+A pause can arrive after the gate opens, while a replacement codec is being
+created and no running codec exists to receive EOS. Consuming reset reasons
+must not let the encoder enter `encode()` with that request still queued.
+The encoder instead completes cleanup and returns to the gate to acknowledge
+it. This race is covered by the JVM test before any real-device stress run.
 
 Releasing the encoder is distinct from closing the persistent application
 session. The session's resource-admission slot remains reserved while paused;
@@ -73,6 +88,7 @@ and device audio can continue to use the official JAR.
 
 The JVM tests cover the control wire, ACK ordering, pause/resume gating,
 display-property reset retention, and termination wakeup using a small codec
-stand-in. They do not validate Android Binder, virtual-display lifecycle,
+stand-in, including a pause during codec recreation after the gate opens.
+They do not validate Android Binder, virtual-display lifecycle,
 hardware encoder release, or decoded frame delivery; those require device
 integration tests.

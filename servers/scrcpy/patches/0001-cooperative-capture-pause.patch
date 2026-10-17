@@ -67,7 +67,7 @@
  
  public class CaptureControl {
  
-@@ -9,7 +11,60 @@
+@@ -9,13 +11,73 @@
      public static final int RESET_REASON_CLIENT_RESET = 1 << 2;
      public static final int RESET_REASON_CLIENT_RESIZED = 1 << 3;
  
@@ -128,7 +128,21 @@
  
      // Current instance of MediaCodec to "interrupt" on reset
      private MediaCodec runningMediaCodec;
-@@ -27,6 +82,10 @@
+ 
+     public synchronized boolean isResetRequested() {
+-        return reset != 0;
++        // A request may arrive after the gate opens but before consumeReset(),
++        // while no running codec exists to receive EOS. Its pending queue must
++        // still prevent encode() until cleanup reaches the gate again.
++        return reset != 0 || !captureRequests.isEmpty();
++    }
++
++    public synchronized boolean hasPendingCaptureRequests() {
++        return !captureRequests.isEmpty();
+     }
+ 
+     public synchronized int consumeReset() {
+@@ -27,6 +89,10 @@
      public synchronized void reset(int reason) {
          assert reason != 0;
          reset |= reason;
@@ -141,7 +155,15 @@
                  runningMediaCodec.signalEndOfInputStream();
 --- a/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java
 +++ b/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java
-@@ -94,6 +94,9 @@
+@@ -30,6 +30,7 @@
+ 
+     private static final int DEFAULT_I_FRAME_INTERVAL = 10; // seconds
+     private static final int REPEAT_FRAME_DELAY_US = 100_000; // repeat after 100ms
++    private static final int CAPTURE_CONTROL_POLL_US = 100_000;
+     private static final String KEY_MAX_FPS_TO_ENCODER = "max-fps-to-encoder";
+ 
+     // Keep the values in descending order
+@@ -94,6 +95,9 @@
          // Do not constrain by the declared video encoder capabilities before encoding actually fails
          videoConstraints = new VideoConstraints(maxSize, alignment, null);
  
@@ -151,7 +173,7 @@
          capture.init(captureControl, videoConstraints);
  
          try {
-@@ -104,6 +107,12 @@
+@@ -104,6 +108,12 @@
              int retainedResetReasons = 0;
  
              do {
@@ -164,7 +186,7 @@
                  int resetReasons = captureControl.consumeReset();
                  if ((resetReasons & CaptureControl.RESET_REASON_TERMINATED) != 0) {
                      break;
-@@ -127,8 +136,9 @@
+@@ -127,8 +137,9 @@
                      mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
                      surface = mediaCodec.createInputSurface();
  
@@ -175,7 +197,7 @@
  
                      mediaCodec.start();
                      mediaCodecStarted = true;
-@@ -176,15 +186,23 @@
+@@ -176,15 +187,23 @@
                              // ignore (just in case)
                          }
                      }
@@ -202,6 +224,26 @@
          }
      }
  
+@@ -254,7 +273,9 @@
+ 
+         boolean eos;
+         do {
+-            int outputBufferId = codec.dequeueOutputBuffer(bufferInfo, -1);
++            // Cooperative pause must not depend on the codec eventually emitting
++            // EOS. Finish this complete output packet, then release at the gate.
++            int outputBufferId = codec.dequeueOutputBuffer(bufferInfo, CAPTURE_CONTROL_POLL_US);
+             try {
+                 eos = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+                 // On EOS, there might be data or not, depending on bufferInfo.size
+@@ -274,7 +295,7 @@
+                     codec.releaseOutputBuffer(outputBufferId, false);
+                 }
+             }
+-        } while (!eos);
++        } while (!eos && !captureControl.hasPendingCaptureRequests());
+     }
+ 
+     private static MediaCodec createMediaCodec(Codec codec, String encoderName) throws IOException, ConfigurationException {
 --- a/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java
 +++ b/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java
 @@ -176,6 +176,15 @@
