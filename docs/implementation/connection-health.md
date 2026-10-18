@@ -79,3 +79,75 @@ LLDB模块缓存，另按精确清单删除472项debug输出／26个非视频测
 11871.9MiB，空闲52.35GiB。保留release、有效Flutter／Rust依赖、视频／health测试、
 Gradle／CMake／SDK缓存及/tmp原始证据。清理清单
 `/tmp/connect-{decoder-tool-cleanup,health-target-final-cleanup,application-health-cleanup}.json`。
+
+
+## 实际adbd与可见视频的应用停转故障（2026-10-18）
+
+`test_driver/video_recovery.dart` 新增 `CONNECT_E2E_RECOVERY_FAULT=blackhole`，默认
+EOF模式保留。测试proxy提取到support：只对故障注入时的唯一旧连接保持读取并
+丢弃双向数据，不主动destroy或注入EOF，不保存ADB内容；新连接正常转发。
+每次转发flush保留背压，注入唤醒旧flush等待后继续排空，最多遗留已排队的那个chunk。
+这是应用层停转，不是内核丢TCP ACK、真实无线漫游、adbd内部挂起或所有半开场景。
+
+真实TCP自测四场景通过（独立Dart，不启动Flutter/native hooks）：双向字节丢弃且
+旧两端保持打开、新连接正常；controller先EOF后再建立新连接；默认EOF仍关闭旧
+pair；两秒内关闭黑洞与释放监听端口。另验证cleanup生成的EOF不能满足验收。
+`/tmp/connect-blackhole-proxy-root.log`。复现：
+
+```sh
+rtk proxy /home/xiankq/flutter/bin/dart \
+ apps/connect/test_driver/support/adb_fault_proxy_tcp_test.dart
+```
+
+Driver在清理前保存故障回执并要求两个方向实际drop均大于0，注入关闭计数0，两个
+读取方向仍活动；旧连接必须由controller方向首先EOF结束，当时尚未accept新连接，
+再要求新连接真正连到上游。cleanup不能补足这些证据。原正式RemotePage测试保留
+30秒恢复期限、真实新session／首像素、Flutter计数0→1、主动停止后不重建等断言。
+
+首轮实际adbd试验在19440ms恢复新会话并完成像素0→1，但静态源没有新视频输出，
+只有controller108字节被丢弃，upstream0；严格driver正确拒绝，整体exit1保留。
+原件 `/tmp/connect-e2e/video-application-stall/`。此后仅在黑洞注入后通过独立实验ADB
+改变本轮独占fixture计数，等待实际视频字节进入旧连接的discard，再重发同fixture
+Intent还原计数0；不靠降低双向drop要求来取得通过。该动作仅属于测试夹具，产品
+不会安装fixture或依赖外部分发adb。带挑战的首次复验32秒完整exit0：19850ms恢复新session、实际Flutter图案0→1；
+旧连接controller108／upstream6724字节实际丢弃，注入关闭操作0，controller先EOF，
+当时accept仍1，其后socket2连接真实adbd，errors为空。实际入站drop等待52ms。
+主动停止后没有再捕获，fixture卸载／缺席、设置恢复、代理退出均确认。
+`/tmp/connect-e2e/video-application-stall-frames/`，日志
+`/tmp/connect-blackhole-recovery-frames.log`。该recoveryMs从host故障ack后开始，
+故障注入／夹具挑战时刻另存proxy-events，不能把两个起点混用。最后补fixture挑战
+完成门禁后正复跑最终代码与默认EOF模式；尚非物理Wi-Fi或长期稳定性通过。
+
+
+最终源码再次完整通过：19082ms出现新session及真实图案0→1，drop108／6659字节，
+实际入站drop等待53ms；挑战完成、EOF方向、关闭计数与accept次序均满足，fault
+errors为空，所有清理true。故障注入至旧controllerEOF17768ms、至新adbd连接
+17784ms另存，不混用host ack后的首像素计时。默认EOF对照14秒完整通过，恢复
+1603ms，同样保留新会话／新像素及清理；说明提取proxy后原断线能力仍可用。
+原件 `/tmp/connect-e2e/video-application-stall-{verified,eof-control}/`，日志
+`/tmp/connect-blackhole-{recovery-verified,eof-control}.log`。
+
+```sh
+# 在apps/connect，先按video-performance.md准备双AVD/fixture和25556转发。
+rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+ CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
+ CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
+ CONNECT_E2E_RECOVERY_FAULT=blackhole \
+ CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-application-stall-new \
+ FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
+ /home/xiankq/flutter/bin/flutter drive -d emulator-5554 \
+ --driver=test_driver/video_recovery.dart --target=integration_test/video_recovery_test.dart
+```
+
+去掉FAULT环境变量并换新证据目录即默认EOF控制。本轮三个driver文件Dart分析无问题，
+真实TCP四场景完整通过。没有生产代码或JAR变化，不重打同一release；既有完整目标、
+高动态预算、物理无线漫游／应用任务恢复／小时级长稳和MDK内部截图崩溃仍开放。
+
+
+代码提交 `3771d44`。只读review未发现新增可证缺陷。普通main最终构建7.5秒、安装
+540ms、MCP热重载130ms成功，无Dart错误，空设备首页和实际恢复VIDEO1均目视。
+Skipped31frames／SurfaceSync1000ms／1404ms启动帧告警仍保留，不计启动流畅通过。
+本批capture／encoder临时JAR和被控捕获进程扫描为空，fixture缺席；核对名称后关闭
+两AVD、移除forward、停止Gradle。精确清理394项debug输出1486.0MiB，空闲42.0GiB，
+保留release／有效缓存／原始证据和五项原有未跟踪文件。回执为
+`/tmp/connect-application-stall-{target-cleanup,avd-stop,debug-cleanup}.json`。

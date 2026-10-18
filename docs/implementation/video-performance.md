@@ -1859,3 +1859,41 @@ fmt 及 Core iOS／macOS／Windows check 通过，不等于未来端 Flutter 整
 插件未注册，去掉 --no-pub 重新生成插件后通过，没有放宽断言。普通main全屏触控、
 拖拽吸附退出也实际验证。两份JAR未改／未重建。完整证据与失败边界见
 [冷启动记录](video-cold-start.md)。
+
+
+## 最新普通调度持续动态图案复核（2026-10-18）
+
+`f331dfd`／`dd334a3` 后先复核现状，不把旧 integration binding／同步 codec 的动态
+结果直接视为当前默认值。双 API36 x64 AVD 冷启、SwiftShader、各3072MiB，普通
+Driver、正式default（Android async codec），H2641280／60／8Mbps、burst关闭，
+`CONNECT_E2E_VIDEO_MOTION=true`。无逐帧或系统追踪。未修改产品、预算、帧率或 JAR。
+
+两次均未完成第一轮实际窗口检查，不能生成输入分布：
+
+- `/tmp/connect-e2e/dynamic-normal-default/`：start请求3709ms完成，控制端
+  `adb screencap` 在独立3秒窗口没有返回。host发送TERM、确认exit−15并有界排空；
+  没有任何实际窗口PNG，不能把它叫Texture缺失或MDK截图原生崩溃。
+- 同配置热重启后的 `dynamic-normal-default-r2/`：core1012ms、首像素2429ms，
+  输出verified1399ms。真实控制端PNG约2289ms返回，但余下718ms不足以完成App内
+  PNG验证，组合3秒门槛失败；未进入输入循环。保存PNG已目视为远端持续动态图案
+  VIDEO0／166。实际呈现不等于本轮完整性能通过，2429ms已超过1000ms首帧预算。
+
+两次App输出释放／设备移除、driver关闭、fixture卸载／缺席和最终目标截图均确认。
+原始progress保留start响应与失败阶段；result不伪造P50／P95或完整round。相应日志
+`/tmp/connect-dynamic-normal-default{-r2}-host.log` 与
+`/tmp/connect-dynamic-normal-default-app.log`。失败保留，不抬高门槛求绿。
+
+只读复核现有代码：WRTE消费后即ACK、run_video逐包转发，未发现可解释旧一秒等待
+的新转发缺陷；此前303个源PTS／CCodec完成／host匹配和2vCPU runnable等待仍支持
+优先看目标负载。不能由本轮不足的窗口数据算持续输入延迟，也不能把模拟器CPU
+或宿主图形代理问题直接外推物理手机。下项独立验证实际adbd连接停止应用数据但
+保持TCP打开时，当前失活检测与可见主屏自动恢复是否闭合。
+
+
+独立连接验证已完成：`3771d44`在实际adbd旧连接保持TCP但双向discard、无注入EOF时，
+两组正式RemotePage自动恢复新session／实际图案0→1（19850／19082ms），默认EOF
+控制1603ms也通过。两个方向真实drop及controller先EOF、随后新accept均在cleanup
+前核验；首组静态入站0的失败保留，后续只增加fixture画面挑战。并非物理Wi-Fi漫游
+或长期稳定性。[故障边界、命令、回执与清理](connection-health.md#实际adbd与可见视频的应用停转故障2026-10-18)。
+下一项先分开动态输入取样与慢窗口抓取，在诊断模式保留严格失败以取得当前分布；
+没有本轮动态输入数据前，不从静态通过外推完整性能，也不重复盲调ADB缓冲。

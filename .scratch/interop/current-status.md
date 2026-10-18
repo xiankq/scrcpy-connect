@@ -2,6 +2,27 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 本轮：普通调度持续动态复核与应用停转验收（2026-10-18）
+
+
+当前结论：`3771d44` 新增真实应用停转故障验收，双向drop／无注入EOF的两组正式视频恢复通过（19.850／19.082秒），默认EOF恢复1.603秒；真实TCP四场景、严格Dart分析及只读review通过。高动态性能仍未通过，新普通调度动态首像素2429ms且窗口抓取校验超过3秒，尚无本轮输入分布。完整目标保持active。
+
+本轮收尾：普通main恢复构建7.5秒、安装540ms、MCP热重载130ms成功，无Dart运行错误，空设备首页及恢复后VIDEO1均目视；Skipped31frames／SurfaceSync1000ms／1404ms启动帧仍保留，不计流畅度通过。目标捕获／枚举JAR与捕获进程扫描为空、fixture缺席；两AVD核对名称后关闭，forward移除、Gradle停止。清理394项明确debug输出1486.0MiB，空闲42.0GiB，保留release／有效缓存／原始证据，原有五项未跟踪文件未改。回执 `/tmp/connect-application-stall-{target-cleanup,avd-stop,debug-cleanup}.json`。下一项把持续输入取样和慢窗口抓取分段，诊断运行也保留严格失败，以补齐当前动态分布，再决定目标队列或呈现的改进；不复跑已被否定的ADB缓冲参数。
+
+上一轮 `f331dfd`／`dd334a3` 为 progress。当前先重跑最新默认异步解码、普通 Driver 调度、1280／60／8Mbps 的持续动态夹具；旧动态数据包含已修复前的调度／解码差异，不能直接视为现状。保留原门槛、实际窗口、暂停恢复与清理断言，先测量再决定编码／传输／呈现改动。两份 JAR 输入不变，不因主控侧实验重建；原有五项未跟踪文件不改。
+
+普通调度持续动态首跑未完成：start请求完成约3709ms，随后的实际控制端 adb screencap 在独立3秒窗口中没有返回，host有界终止该进程并确认退出／排空；未进入输入循环，不产生P50/P95。App／fixture清理均确认，`/tmp/connect-e2e/dynamic-normal-default/`保留失败。不能将其称解码首帧或截图原生崩溃；同配置复跑以区别冷宿主／持续图形负载。
+
+动态同配置r2仍未进入输入循环：实际首像素2429ms、core1012ms／输出verified1399ms；adb截图约2289ms已返回，但余下718ms不足以完成App内PNG验证，3秒组合门槛失败。实际PNG已目视显示动态远端画面，不能归为“没有Texture”或视为性能通过。两次均完整清理；保持失败记录、不改预算，先继续独立应用停转后的真实视频恢复验证。
+
+稳定性下一项：扩展既有真实视频恢复driver，默认EOF保持不变；blackhole模式仅对唯一旧ADB连接丢弃双向数据并继续排空，不主动关闭socket，新连接正常转发。拟以真实TCP回归锁定没有注入EOF、实际drop、controller先关闭与新accept次序，再跑实际adbd／正式RemotePage。尚未计通过，不把它称物理Wi-Fi切换或内核丢TCP ACK。
+
+实际应用停转首跑：正式RemotePage约19440ms恢复新session，真实像素0→1、主动停止、设备／fixture／代理清理完成；但严格driver拒绝，因为只丢到controller→upstream108字节，静态画面upstream→controller为0。`/tmp/connect-e2e/video-application-stall/`保留exit1，不计完整通过。接下来只增强故障夹具：黑洞注入后经独立ADB使本轮独占图案变化一次，等实际旧连接丢到视频字节，再重置同fixture计数0，证明双向停转；不放宽回执，不改产品。
+
+带实际画面变化的应用停转E2E首组32秒完整exit0：约19850ms恢复新session，Flutter计数0→1；旧连接实际drop为controller108／upstream6724字节，注入关闭操作0，controller首EOF时尚无新accept，此后新连接连到实际adbd，回执errors为空。fixture改变／复位均成功，52ms取得实际入站drop；停止／设备／设置／fixture／代理清理均确认。原件 `/tmp/connect-e2e/video-application-stall-frames/`。最后增加fixture挑战完成的显式门禁后正在复跑，不将已通过组替代最终源码验证；生产源码和两个JAR均未改。
+
+最终driver版应用停转完整通过（约31秒用例）：19082ms恢复新session，图案0→1、停止后不重建、完整清理；双向drop108／6659字节，53ms取得入站drop，注入close0／controller先EOF／newaccept顺序均满足，faultEvidenceErrors为空。故障注入至旧controllerEOF17768ms、至新adbd连接17784ms，和从host ack起算的19082ms首像素回执分别保留。原件 `/tmp/connect-e2e/video-application-stall-verified/`。同版默认EOF控制14秒完整通过，恢复1603ms，清理确认，`video-application-stall-eof-control/`。三driver文件严格分析无问题、真实TCP四场景通过；无产品或JAR改动，不重打相同release。
+
 ## 当前视频性能增量（2026-10-18）
 
 当前结论：`f331dfd` 已实现默认主屏 H264 自动编码器的冷目录直启，已有不支持目录／其他 codec／指定编码器／独立应用仍严格预检。关闭诊断的普通 Driver 3 轮 60 次输入严格通过：首像素 903／877／875ms，输入 P50／P95=147／225ms；66 次实际窗口、暂停恢复及释放清理完成。首组冷样本 1102ms 保留，不称所有冷启动稳定达标。

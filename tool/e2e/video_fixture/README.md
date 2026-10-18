@@ -100,3 +100,11 @@ flutter drive -d emulator-5554 --no-pub \
 adbd重连；验证新session、真实解码、Flutter合成新图案和停止语义。它拒绝覆盖已有
 fixture安装，结束后卸载自己的fixture、恢复Settings并关闭代理。result.json、
 proxy-events.json、cleanup.json及截图仅存/tmp；EOF代理不代替物理无线切网验收。
+
+
+真实视频恢复driver支持`CONNECT_E2E_RECOVERY_FAULT=blackhole`：只丢弃本轮旧ADB
+连接的双向数据、保持TCP，等待主控自行失活处理与重新连接。黑洞注入后独立实验ADB
+使独占fixture产生一帧，再还原计数0，严格要求两个方向实际丢字节；这不会进入产品。
+默认不设置该变量仍为EOF断线。清理前验证controller先结束旧连接及新accept顺序，
+原30秒自动恢复、新session、真实Flutter图案0→1和停止后不重建断言均保留。
+完整命令、失败覆盖和证据见[连接健康验收](../../../docs/implementation/connection-health.md#实际adbd与可见视频的应用停转故障2026-10-18)。

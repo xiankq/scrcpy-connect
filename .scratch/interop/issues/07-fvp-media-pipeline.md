@@ -376,3 +376,16 @@ fmt 及 Core iOS／macOS／Windows check 通过，不等于未来端 Flutter 整
 插件未注册，去掉 --no-pub 重新生成插件后通过，没有放宽断言。普通main全屏触控、
 拖拽吸附退出也实际验证。两份JAR未改／未重建。完整证据与失败边界见
 [冷启动记录](../../../docs/implementation/video-cold-start.md)。
+
+
+最新普通调度动态复核（2026-10-18）：默认异步decoder1280／60／8Mbps持续变色首跑
+和复跑均未完成首轮窗口3秒校验，后者真实首像素2429ms、actualPNG已目视；尚无本轮
+输入分布，不能把旧动态P95直接视为当前值，也不能以静态预算通过关闭此项。失败与
+清理保留，见[最新动态记录](../../../docs/implementation/video-performance.md#最新普通调度持续动态图案复核2026-10-18)。
+
+稳定性补证：实际adbd旧连接保持TCP但双向discard、不注入EOF，当前正式RemotePage
+两次完整恢复新session／图案0→1（19850／19082ms），旧连接controller自行先EOF、
+新连接正常、主动停止不重启和fixture／设置／代理清理均确认。首个静态源没有入站
+字节的测试被严格拒绝，随后仅用实验夹具产生新帧并复位，保留双向drop门禁。默认EOF
+控制1603ms恢复通过，真实TCP四场景及Dart分析通过；无生产源码／JAR变化。不是物理
+Wi-Fi切网或长稳证明，详见[应用停转记录](../../../docs/implementation/connection-health.md#实际adbd与可见视频的应用停转故障2026-10-18)。
