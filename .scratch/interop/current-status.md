@@ -2,6 +2,49 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 本轮：旧连接清理与新视频启动的交错（2026-10-18）
+
+上一轮a0d40d2／d20fb6a／6a7b808为progress：有限静态输入改善，候选首帧失败，
+生产JAR未采用。本轮转向连接稳定性，修复旧连接清理按deviceId误取消替代连接
+新视频启动、或覆盖新connected记录的竞态。真实Client／Duplex与资源准入接缝
+固定交错，原实现3.84秒红；仅串行化的初修在caller丢弃cleanup future时2.27秒
+再红。最终同设备发布等待完整旧收尾，cleanup_pending跨caller取消保留，由新调用者
+或monitor继续；全局gate表不等待设备锁，空闲完成项可回收。
+
+实际收尾检查另发现初修过早close底层Client，妨碍companion媒体shutdown与JAR
+删除；中间版本两个辅助JAR均核验摘要后手工清除，不冒称自动清理。最终先撤下
+应用连接入口，由DetachedConnection guard保留旧传输供已有owner收尾，正常／失败／
+caller取消均先关闭精确旧Client，再释放同设备gate。5组／6种交错回归覆盖同设备
+等待／其他设备可发布、过期scan、新caller／monitor补清理、取消disconnect实际EOF。
+最终Core lib85 passed／6 ignored，应用失活3、设备生命周期5／2 ignored、状态快照2、
+TLS策略4通过，共99 passed／8 ignored；条件忽略不作设备通过。严格all-target
+clippy通过，初次filter_map布尔then风格失败已修正；只读review核对锁序和Drop顺序
+通过。最终三宿主Core交叉check：iOS2.307／macOS2.431／Windows MSVC2.330秒，
+非对应宿主Flutter整包。日志与回执前缀`/tmp/connect-connection-cleanup-`。
+
+中间版本双API36／2vCPU／2048MB SwiftShader AVD正式RemotePage真实adbd EOF恢复
+14秒完整exit0，1476ms新session、实际像素0→1、主动stop后不重建；proxy接受2／
+切断1、fault errors空，fixture卸载／缺席、设置／driver／proxy清理true，VIDEO1已目视。
+APK ed6dbb35…完整含原生产捕获JAR，有限重复候选缺席，构建70.8秒／安装600ms。
+原件`/tmp/connect-e2e/connection-cleanup-recovery/`不覆盖。关闭顺序修正后的最终
+源码在独立`connection-cleanup-recovery-final`14秒完整exit0：1722ms新session、
+实际像素0→1、主动停止不重建、proxy接受2／切断1、fault errors空及全部fixture／
+proxy／driver清理true。最终恢复VIDEO1已目视；APK2c99f6ec…完整含原生产捕获JAR，
+构建58.6秒／安装1749ms。结束检查仅一份故障前6.011秒创建的helper JAR残留，核验
+摘要／无活进程后手工精确清除；恢复后的正常断开未留第二份。异常断网后的辅助
+JAR回收仍为任务06缺口，不能把driver卸载fixture当成所有远端产物自动清理通过。
+
+普通main最终构建8.6秒／安装636ms，APK26c5a915…，MCP热重载成功、无Dart错误，
+设备首页已目视。Skipped32frames／SurfaceSync1000ms／1436ms启动帧仍保留，不计
+冷启动流畅通过。DTD断开、CLI detach、Gradle停止，5个精确forward清除、两自有
+AVD核名关闭且PID消失；本轮临时进程／JAR／fixture最终缺席，历史音频／文件目录
+保留。删除11项重复debug产物1463.3MiB，空闲33.69GiB；实测APK／原始证据／
+release与有效缓存保留，原五项用户文件不动。回执`/tmp/connect-connection-cleanup-
+{target-cleanup,avd-stop,debug-cleanup,main-final-receipt,final-jar-cleanup}.json`。
+本轮未重建JAR或改变画质，三份生产JAR摘要不变；首帧、动态预算、物理Wi-Fi及
+长稳继续开放，完整目标active。
+实现与五组回归提交b11b944；设备证据、清理和任务06回收缺口另批提交。
+
 ## 本轮：源队列与输入服务时间（2026-10-18）
 
 上一轮0463b3a／2bcea93／6e19bd6为progress：完成实际分配与完整Flutter对照，排除

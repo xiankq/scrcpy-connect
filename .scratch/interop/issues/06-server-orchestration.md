@@ -57,3 +57,17 @@ Requirements: R04、R11–R12、R24–R25
 私有操作账本已实现，断开不再删除 unknown；Runtime 重建转为只读核对，主屏 START_APP 独立记录并进入 Bridge 恢复屏障。真实 Android 四项 50.17 秒通过，排队 START_APP 被关闭后迟到 ACK 不能再发送；写盘失败保持当前内存门禁。页面 49 项窄回归涵盖 unknown 晚于断开事件、输入释放挂起和精确关闭，不等待旧 ACK。
 
 这更新上述“仅 Runtime 内”的历史限制，不代表 Android 杀进程现场或完整任务已关闭；见[本批边界](../../../docs/implementation/app-launch-recovery.md)。
+
+
+## 2026-10-18连接替代与异常断网产物回收
+
+旧Client清理与新Client发布已按设备串行化，取消中断的收尾由下一caller／monitor
+继续；显式disconnect先撤销入口，保留旧传输供已有owner确认媒体关闭及删除文件，
+之后关闭精确旧Client。真实准入红绿、99项连接相关回归及正式RemotePage EOF恢复
+14秒／1722ms／新像素0→1通过，未改JAR；见[连接清理证据](../../../docs/implementation/connection-health.md#旧连接清理与恢复后新会话的顺序2026-10-18)。
+
+- [ ] 异常断网后的companion JAR自动回收：最终E2E留下一个故障前6.011秒创建的
+  精确临时路径，无活进程，已核验摘要后手工清除。恢复后的正常断开未留下第二份。
+  需要按已确认设备身份、已部署路径归属记录待清理项，并在恢复后取得明确结果；
+  不按glob删除其他会话文件、不关闭新helper、不重放通知／通话等动作。覆盖网络
+  丢失、进程退出、caller取消及后续重连；无进程或fixture卸载不能替代文件回收证据。

@@ -1,5 +1,77 @@
 # ADB 应用失活检测与恢复
 
+## 旧连接清理与恢复后新会话的顺序（2026-10-18）
+
+旧monitor在connections锁下移除closed Client，随后释放锁、按deviceId写offline并
+异步停止活动。手动重连可在此期间发布新Client，旧清理会覆盖新状态或通过
+resource_admission.cancel_device取消新视频启动。真实Client／Duplex transport与
+真实资源准入的回归，用现有observations锁固定交错，原行为3.84秒失败，明确记录
+“old teardown cancelled video admitted on the replacement Client”。没有模拟一套
+新的连接状态机，也没有把该测试称作完整实际编码器竞态复现。
+
+现在每台设备独立串行化连接发布、旧连接清理及显式disconnect；全局gate表仅短暂
+访问，不持它等待设备锁。monitor在同设备约束下，以store→connections锁顺序
+重新核对closed状态、撤下旧连接并更新offline，再完成原活动清理和持久化；陈旧
+扫描不能处理健康替代Client。attach也在发布前补完已关闭连接的清理，避免手动
+重连抢在下一次monitor之前。显式disconnect先原子撤下Client，阻止清理期间仍通过
+旧连接准入新活动；
+DetachedConnection guard保留精确旧传输，供已有媒体owner确认shutdown并删除临时
+文件。正常、失败或caller取消退出时，均先关闭该旧Client，再释放同设备gate；
+主动停止的现有语义保留。
+
+初版仅串行化仍不够：caller超时可在旧Client已移除、活动尚未清理时丢弃future，
+后一连接便误以为无旧工作。新增取消回归2.27秒再红。最终以cleanup_pending保留
+未完成收尾，直到活动清理及持久化成功才清除；新attach先补清理，monitor也继续
+没有调用者的遗留清理。空闲且完成的gate在后续访问中移除，等待者或未完成项保留。
+不在取消时安排可能晚到而越权清理新活动的无约束任务。
+
+五组回归覆盖：旧monitor清理与新视频启动、显式断开期间同设备等待／
+另一设备可发布、手动替换提前清理／过期扫描、新caller接续取消清理、monitor在
+无新caller时继续收尾，以及disconnect caller取消仍关闭精确旧传输。定向全部通过；
+最终Core lib85 passed／6 ignored，应用失活3、设备生命周期5／2 ignored、state snapshot2、TLS策略4通过，总99 passed／
+8 ignored；条件忽略不作设备通过。严格all-target clippy通过，只读review未发现
+新确定缺陷。第一次filter_map布尔then风格检查失败已按建议修正。
+
+```sh
+rtk proxy cargo test -p interop-core --lib connection_cleanup_tests -- --nocapture
+rtk proxy cargo test -p interop-core --lib --test application_liveness \
+ --test device_lifecycle --test tls_connection_policy --test state_snapshot -- --nocapture
+rtk proxy cargo clippy -p interop-core --all-targets -- -D warnings
+```
+
+红绿与最终检查日志前缀`/tmp/connect-connection-cleanup-{red,green,cancel-red,transport-unit,
+final2-regression,transport-clippy}.log`。Core对aarch64-apple-ios、x86_64-apple-darwin、
+x86_64-pc-windows-msvc交叉check2.307／2.431／2.330秒通过；非三宿主Flutter链接。
+
+最终双API36／2vCPU／2048MB SwiftShader AVD，正式RemotePage+Rust+真实adbd的
+EOF恢复14秒完整exit0：host故障ack后1722ms获得新session，实际Flutter图案0→1，
+主动stop后不再捕获；proxy接受2／切断1、fault errors空，fixture卸载／缺席、
+Settings恢复、driver／proxy退出均确认。恢复后的VIDEO1全屏及悬浮退出已目视。
+命令沿用下文默认EOF测试，目录换为`/tmp/connect-e2e/connection-cleanup-recovery-final`；
+构建58.6秒／安装1749ms，实测APK
+`/tmp/connect-artifacts/connection-cleanup-recovery-final-debug.apk`，SHA256
+`2c99f6ecacdbfd15400f976ed888a5770e15b124494ed8a6884bbb23ae523ee9`。
+核对native库完整嵌入原生产捕获JAR、有限重复候选缺席，没有重建JAR。
+
+关闭时机修正前的中间E2E也通过（1476ms恢复，ed6dbb35…），原件保留在
+`connection-cleanup-recovery`。收尾发现当时有两个helper JAR残留，逐一核验后手工
+删除；不能把该次driver通过当成辅助媒体正常退出与文件清理通过。最终源码只
+剩一份mtime早于故障6.011秒的helper JAR，无活进程，核验摘要后手工精确清除；
+恢复后的正常断开没有留下第二份。异常断网后的JAR自动回收仍需任务06补齐，
+不能把fixture卸载或无进程当作已无远端文件。
+
+普通main最终构建8.6秒／安装636ms，APK26c5a915…完整含原生产JAR；MCP热重载
+成功、无Dart错误、设备首页及最终恢复画面已目视。启动Skipped32frames、
+SurfaceSync1000ms和1436ms帧告警保留。DTD／CLI断开、Gradle停止，五个精确
+forward清除、自有两AVD核名关闭且PID消失。远端本轮产物最终缺席（包含上述手工
+补清），11项debug重复副本1463.3MiB清除、空闲33.69GiB，保留实测APK、证据、
+release及有效缓存。回执前缀`/tmp/connect-connection-cleanup-`见当前完成度。
+
+这是可控EOF兼容和真实新像素证据，不是物理Wi-Fi漫游或小时级长稳证明。停止时
+EGL_BAD_SURFACE、BufferQueue abandoned及MediaCodec状态日志仍保留，不以该次
+通过关闭既有MDK snapshot原生崩溃。首帧、高动态低延迟等继续沿[性能任务](video-performance.md)
+推进；本批没有改变质量或解码默认值，也没有声称端到端延迟改善。
+
 2026-10-18，代码`8c55b84`。TCP仍确认数据而adbd不再处理ADB消息时，原监控只查
 `Client::is_closed()`，连接不会关闭，既有自动重连也无法开始。真实TCP/TLS夹具保留
 首个socket并持续消费TLS字节、停止回复ADB，40秒恢复门槛实际失败；整项44.84秒。

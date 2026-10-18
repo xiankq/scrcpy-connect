@@ -33,6 +33,15 @@ fvp/MDK 是否能满足 scrcpy 实时流低延迟、音画同步和 Flutter 渲�
 
 ## 当前状态
 
+2026-10-18恢复稳定性：修复旧Client清理按deviceId误取消替代连接新视频启动的竞态。
+真实准入接缝先红后绿，另补caller取消中断cleanup的红例；同设备发布等待完整旧
+收尾，未完成清理由下一caller或monitor继续。5组交错回归、连接相关99项通过，
+8项条件忽略；严格clippy及三宿主Core交叉check通过。正式RemotePage真实adbd
+EOF恢复14秒完整通过，1722ms出现新session、实际像素0→1和主动停止不重建，
+fixture／proxy清理true；一份故障前辅助JAR手工补清，自动回收任务06仍开放。
+JAR及画质不变，不据此关闭首帧／动态预算、MDK内部崩溃、物理无线
+或长稳。[边界与复现](../../../docs/implementation/connection-health.md#旧连接清理与恢复后新会话的顺序2026-10-18)。
+
 2026-10-18有限重复增量：AOSP实际异步虚拟显示与JNI链路排除未经证实的FIFO／
 旧Java callback积压前提；[源码核查](../../../docs/research/surface-texture-queue-semantics.md)
 记录原生10次重复预算。bounded-input真实模块先红后绿，9组行为回归、暂停JVM、
