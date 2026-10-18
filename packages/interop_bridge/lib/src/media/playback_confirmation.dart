@@ -21,9 +21,12 @@ class PlaybackConfirmation<T> {
   final _operations = <Future<PlaybackReceipt>>{};
   bool _closed = false;
 
-  Future<PlaybackReceipt> set(T target) {
+  Future<PlaybackReceipt> set(
+    T target, {
+    Future<void> Function()? onRequested,
+  }) {
     if (_closed) return Future.error(_cancelled());
-    final operation = _set(target);
+    final operation = _set(target, onRequested);
     _operations.add(operation);
     unawaited(
       operation.then<void>(
@@ -34,7 +37,10 @@ class PlaybackConfirmation<T> {
     return operation;
   }
 
-  Future<PlaybackReceipt> _set(T target) async {
+  Future<PlaybackReceipt> _set(
+    T target,
+    Future<void> Function()? onRequested,
+  ) async {
     final done = Completer<void>();
     _waiters.add(done);
     var queries = 0, maxQueryMs = 0;
@@ -60,7 +66,13 @@ class PlaybackConfirmation<T> {
     try {
       _request(target);
       check();
-      await done.future.timeout(_timeout);
+      // Only a successfully submitted native request may refresh its source.
+      // Drain both waits on failure; a failed refresh must not leave queries
+      // touching the handle after its caller retires the player.
+      await Future.wait<void>([
+        done.future.timeout(_timeout),
+        if (onRequested != null) Future<void>.sync(onRequested),
+      ]);
       if (_closed) throw _cancelled();
       return PlaybackReceipt(queries, maxQueryMs);
     } finally {

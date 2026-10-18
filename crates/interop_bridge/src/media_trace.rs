@@ -559,7 +559,9 @@ pub unsafe extern "C" fn trace_snapshot(
 }
 
 /// 0=pending, >0=tightly packed native RGBA/BGRA byte count; consumes on success.
-/// -1=closed/unknown/consumed, -2=failed, -3=capacity, -4=5s pending deadline.
+/// -1=closed/unknown/consumed, -2=failed, -3=capacity, -4=pending beyond 5s.
+/// -4 is nonterminal: a caller timeout cannot cancel an MDK snapshot. Keep its
+/// admission and callback token until actual completion or explicit trace close.
 /// A capacity error preserves the result for a subsequent sufficiently sized poll.
 /// # Safety
 /// `out` must be writable for `capacity` bytes when a result is copied.
@@ -592,7 +594,7 @@ pub unsafe extern "C" fn trace_poll(token: u64, request: u64, out: *mut u8, capa
         }
         match status {
             SnapshotState::Pending if submitted.elapsed() < SNAPSHOT_TIMEOUT => return 0,
-            SnapshotState::Pending => TIMED_OUT,
+            SnapshotState::Pending => return TIMED_OUT,
             SnapshotState::Failed => FAILED,
             SnapshotState::Ready(pixels) => {
                 if out.is_null() || (capacity as usize) < pixels.len() {
@@ -948,7 +950,7 @@ mod tests {
     }
 
     #[test]
-    fn timed_out_snapshot_releases_admission_and_ignores_late_old_response() {
+    fn timed_out_snapshot_keeps_native_admission_until_actual_callback() {
         let fixture = Fixture::new();
         let (old, late) = fixture.snapshot(2, 2);
         registry()
@@ -959,11 +961,18 @@ mod tests {
             .unwrap()
             .submitted = Instant::now() - SNAPSHOT_TIMEOUT;
         let mut out = [0; 16];
-        assert_eq!(
-            unsafe { trace_poll(fixture.token, old, out.as_mut_ptr(), 16) },
-            TIMED_OUT
-        );
-        let (new, fresh) = fixture.snapshot(2, 2);
+        for _ in 0..2 {
+            assert_eq!(
+                unsafe { trace_poll(fixture.token, old, out.as_mut_ptr(), 16) },
+                TIMED_OUT
+            );
+            assert_eq!(
+                unsafe { trace_snapshot(fixture.handle(), fixture.token, 0, 2, 2) },
+                0,
+                "Caller timeout cannot cancel MDK's pending snapshot"
+            );
+        }
+        assert_eq!(fixture.player.snapshots.lock().unwrap().len(), 1);
         let mut pixels = [42u8; 16];
         let mut result = SnapshotRequest {
             data: pixels.as_mut_ptr(),
@@ -974,15 +983,17 @@ mod tests {
         };
         unsafe { late.cb.unwrap()(&mut result, 1.0, late.opaque) };
         assert_eq!(
-            unsafe { trace_poll(fixture.token, new, out.as_mut_ptr(), 16) },
-            0
+            unsafe { trace_poll(fixture.token, old, out.as_mut_ptr(), 16) },
+            16
         );
+        assert_eq!(out, pixels);
+        let (new, fresh) = fixture.snapshot(2, 2);
+        assert_ne!(old, new);
         unsafe { fresh.cb.unwrap()(&mut result, 2.0, fresh.opaque) };
         assert_eq!(
             unsafe { trace_poll(fixture.token, new, out.as_mut_ptr(), 16) },
             16
         );
-        assert_eq!(out, pixels);
         assert_eq!(fixture.metrics()["snapshot"]["requestId"], new);
         assert_eq!(fixture.metrics()["snapshot"]["ptsSeconds"], 2.0);
     }

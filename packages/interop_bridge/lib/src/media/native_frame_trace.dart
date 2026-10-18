@@ -102,9 +102,14 @@ final class NativeFrameTrace {
     try {
       final request = _snapshot(_player, _token, renderer, width, height);
       if (request == 0) throw StateError('Native snapshot request rejected.');
-      final watch = Stopwatch()..start();
       while (!_closed) {
         final length = _poll(_token, request, _pixels, _pixelCapacity);
+        if (length == -4) {
+          // The owner bounds its caller's wait. No native cancellation/drain
+          // receipt exists, so retain this slot and the player until callback.
+          await Future<void>.delayed(const Duration(milliseconds: 16));
+          continue;
+        }
         if (length < 0) throw StateError('Native snapshot failed: $length');
         if (length > 0) {
           if (length != width * height * 4 || length > _pixelCapacity) {
@@ -115,13 +120,6 @@ final class NativeFrameTrace {
             height,
             Uint8List.fromList(_pixels.asTypedList(length)),
           );
-        }
-        // Rust polls reclaim a missing callback after five seconds. If even
-        // that contract fails, revoke the trace so no orphan request can block
-        // all subsequent snapshots on this player.
-        if (watch.elapsed > const Duration(seconds: 6)) {
-          close();
-          throw TimeoutException('Native diagnostic snapshot timed out.');
         }
         await Future<void>.delayed(const Duration(milliseconds: 1));
       }
@@ -134,8 +132,9 @@ final class NativeFrameTrace {
   void close() {
     if (_closed) return;
     _closed = true;
-    // Rust owns callback storage. Revoking the token makes late native calls
-    // harmless; these Dart-owned output buffers never reach a native callback.
+    // The owner drains snapshots before closing. Token revocation protects Rust
+    // storage from late calls; it does not cancel/drain MDK's renderer worker.
+    // These Dart-owned output buffers never reach a native callback.
     _close(_player, _token);
     calloc.free(_pixels);
     calloc.free(_json);

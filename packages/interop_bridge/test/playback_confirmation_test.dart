@@ -121,4 +121,62 @@ void main() {
       await changes.close();
     },
   );
+
+  for (final synchronous in [true, false]) {
+    test(
+      'failed request hook drains confirmation (sync=$synchronous)',
+      () async {
+        final changes = StreamController<String>.broadcast();
+        final calls = <String>[];
+        var actual = false;
+        final owner = PlaybackConfirmation<String>(
+          changes: changes.stream,
+          request: (_) => calls.add('native'),
+          query: (_) => actual,
+        );
+        final failure = StateError('refresh failed');
+        var settled = false;
+        final pending = owner
+            .set(
+              'paused',
+              onRequested: () {
+                calls.add('refresh');
+                if (synchronous) throw failure;
+                return Future<void>.error(failure);
+              },
+            )
+            .whenComplete(() => settled = true);
+        final rejected = expectLater(pending, throwsA(same(failure)));
+        await Future<void>.delayed(Duration.zero);
+        expect(calls, ['native', 'refresh']);
+        expect(
+          settled,
+          false,
+          reason: 'Failed refresh cannot release pending native queries.',
+        );
+        actual = true;
+        changes.add('paused');
+        await rejected;
+        await owner.close();
+        await changes.close();
+      },
+    );
+  }
+
+  test('submission failure never invokes the refresh hook', () async {
+    final changes = StreamController<String>.broadcast();
+    var refreshed = false;
+    final owner = PlaybackConfirmation<String>(
+      changes: changes.stream,
+      request: (_) => throw StateError('native submission failed'),
+      query: (_) => false,
+    );
+    await expectLater(
+      owner.set('paused', onRequested: () async => refreshed = true),
+      throwsStateError,
+    );
+    expect(refreshed, false);
+    await owner.close();
+    await changes.close();
+  });
 }

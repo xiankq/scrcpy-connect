@@ -8,6 +8,7 @@ import '../interop_exception.dart';
 import 'native_frame_trace.dart';
 import 'video_player_port.dart';
 import 'playback_confirmation.dart';
+import 'video_player_operations.dart';
 
 /// Playback uses public fvp APIs. Codec selection remains MDK's actual runtime
 /// decision; videoDecoders is a priority list and is never reported as evidence.
@@ -132,6 +133,7 @@ class FvpVideoPlayer implements VideoPlayerPort {
   Future<int>? _creatingTexture;
   final _events = StreamController<VideoJson>.broadcast();
   final _subscriptions = <StreamSubscription<dynamic>>[];
+  final _operations = VideoPlayerOperations();
   bool _released = false;
   bool _initialized = false;
   Future<VideoJson>? _releaseFuture;
@@ -187,6 +189,7 @@ class FvpVideoPlayer implements VideoPlayerPort {
     }
     _check();
     final size = await _player.textureSize;
+    _check();
     if (texture < 0 || size == null || size.width <= 0 || size.height <= 0) {
       throw const InteropException('decoder_error', '未能创建视频纹理。');
     }
@@ -209,12 +212,18 @@ class FvpVideoPlayer implements VideoPlayerPort {
   }
 
   @override
-  Future<void> setPaused(bool paused) async {
+  Future<void> setPaused(bool paused, {Future<void> Function()? onRequested}) =>
+      _operations.run(() => _setPaused(paused, onRequested));
+
+  Future<void> _setPaused(
+    bool paused,
+    Future<void> Function()? onRequested,
+  ) async {
     _check();
     final target = paused
         ? mdk.PlaybackState.paused
         : mdk.PlaybackState.playing;
-    final receipt = await _confirmation.set(target);
+    final receipt = await _confirmation.set(target, onRequested: onRequested);
     _check();
     _emit({
       'kind': 'diagnostic',
@@ -228,7 +237,10 @@ class FvpVideoPlayer implements VideoPlayerPort {
   }
 
   @override
-  Future<VideoPixels?> snapshot({
+  Future<VideoPixels?> snapshot({required int width, required int height}) =>
+      _operations.run(() => _snapshot(width: width, height: height));
+
+  Future<VideoPixels?> _snapshot({
     required int width,
     required int height,
   }) async {
@@ -260,9 +272,9 @@ class FvpVideoPlayer implements VideoPlayerPort {
 
   Future<VideoJson> _release() async {
     _released = true;
-    _frameTrace?.close();
-    _frameTrace = null;
+    final drained = _operations.close();
     if (!_initialized) {
+      await drained;
       await _events.close();
       return {
         'resourceAllocated': false,
@@ -271,37 +283,39 @@ class FvpVideoPlayer implements VideoPlayerPort {
         'nativeDeleteConfirmed': false,
       };
     }
-    // Cancel and drain native state queries before any handle can be deleted.
-    await _confirmation.close();
+    // Cancel native state queries immediately. Snapshot callbacks have no public
+    // cancellation API: keep their handles alive until actual result delivery.
+    final queriesClosed = _confirmation.close();
     var stopped = false;
-    final stoppedEvent = Completer<void>();
-    final subscription = _player.onStateChanged.listen((event) {
-      if (event.newValue == mdk.PlaybackState.stopped &&
-          !stoppedEvent.isCompleted) {
-        stoppedEvent.complete();
-      }
-    });
-    try {
-      _player.state = mdk.PlaybackState.stopped;
-      if (!stopped) {
+    final cleanup = () async {
+      await drained;
+      await queriesClosed;
+      _frameTrace?.close();
+      _frameTrace = null;
+      final stoppedEvent = Completer<void>();
+      final subscription = _player.onStateChanged.listen((event) {
+        if (event.newValue == mdk.PlaybackState.stopped &&
+            !stoppedEvent.isCompleted) {
+          stoppedEvent.complete();
+        }
+      });
+      try {
+        _player.state = mdk.PlaybackState.stopped;
         try {
           await stoppedEvent.future.timeout(const Duration(seconds: 2));
           stopped = true;
         } on TimeoutException {
           /* Requested state is not a callback receipt. */
         }
+      } finally {
+        await subscription.cancel();
+        for (final observer in _subscriptions) {
+          await observer.cancel();
+        }
+        await _events.close();
       }
-    } finally {
-      await subscription.cancel();
-      for (final observer in _subscriptions) {
-        await observer.cancel();
-      }
-      await _events.close();
-    }
-    // Never delete a handle while createTexture still uses it. Failed prepare
-    // may also leave textureSize pending: keep that cleanup observable and
-    // admission-bounded instead of inventing a private-handle cancellation API.
-    final cleanup = () async {
+      // Never delete while native readback or createTexture still uses the
+      // handle. A stalled callback remains admission-bounded in _retiring.
       try {
         await _creatingTexture;
       } catch (_) {

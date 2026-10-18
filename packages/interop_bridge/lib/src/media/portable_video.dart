@@ -216,7 +216,7 @@ class PortableVideoOutputs {
       var appliedPaused = false;
       while (appliedPaused != candidate.playback.paused) {
         appliedPaused = candidate.playback.paused;
-        await _await(candidate, candidate.player.setPaused(appliedPaused));
+        await _await(candidate, _setPaused(candidate, appliedPaused));
       }
       _check(candidate);
       _pending.remove(id);
@@ -280,30 +280,28 @@ class PortableVideoOutputs {
     _check(entry);
     // A previous request may have timed out before its state callback. Ask
     // the player to confirm even an apparently unchanged requested state.
-    final changing = _await(
-      entry,
-      entry.player.setPaused(paused),
-      operationTimeout,
-    );
-    // A static stream may have no next packet to let the reader acknowledge
-    // pause. RESET_VIDEO refreshes this same encoder, without app/input side
-    // effects. The caller must keep capture running until local pause ACK.
-    unawaited(
-      changing.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
-    );
-    if (paused) {
-      await _await(
-        entry,
-        core('session.refresh', {'sessionId': entry.id}),
-        operationTimeout,
-      );
-    }
-    await changing;
+    await _await(entry, _setPaused(entry, paused), operationTimeout);
     _check(entry);
     if (!paused) await _verifyFrame(entry);
     _check(entry);
     return {..._receipt(entry), 'paused': paused, 'applied': true};
   }
+
+  Future<void> _setPaused(_Output entry, bool paused) => entry.player.setPaused(
+    paused,
+    onRequested: paused
+        ? () async {
+            // A queued pause must reach MDK before RESET_VIDEO supplies the
+            // packet needed by a static reader. Never refresh a retired owner.
+            _check(entry);
+            await _await(
+              entry,
+              core('session.refresh', {'sessionId': entry.id}),
+              operationTimeout,
+            );
+          }
+        : null,
+  );
 
   Future<void> _verifyFrame(_Output entry) async {
     final pixels = await _pixels(entry, 32, 32);

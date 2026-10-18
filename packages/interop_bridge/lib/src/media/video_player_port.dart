@@ -12,7 +12,10 @@ typedef VideoPlayerFactory = VideoPlayerPort Function();
 abstract interface class VideoPlayerPort {
   Stream<VideoJson> get events;
   Future<VideoTexture> open(String url);
-  Future<void> setPaused(bool paused);
+
+  /// [onRequested] runs after native submission, before awaiting confirmation.
+  /// A static source may need a fresh packet to acknowledge a pending pause.
+  Future<void> setPaused(bool paused, {Future<void> Function()? onRequested});
   Future<VideoPixels?> snapshot({required int width, required int height});
   Future<VideoJson> release();
 }
