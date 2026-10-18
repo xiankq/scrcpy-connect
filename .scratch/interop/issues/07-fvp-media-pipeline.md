@@ -357,3 +357,22 @@ P50/P95=277/392→153/204→273/389ms。显式AMediaCodec:async=1有成功async�
 encoder／独立应用窗口保留strict probe，已有不支持目录仍拒绝，unknown不能伪造
 available，睡眠、实际像素、资源和unknown账本门禁不能削弱。当前仅完成只读审查，
 尚未实施或取得该路径收益；首帧与本任务保持开放。
+
+
+默认主屏直启后续（2026-10-18，`f331dfd`）：精确连接 catalog.peek 不启动探测也不等
+进行中的初始化；默认主屏／有效 H264／未指定编码器在目录未知时直接尝试实际捕获，
+已有不支持目录仍拒绝，其他 codec／named encoder／独立应用仍严格预检。未知能力
+没有改成 available，质量选项仍实际枚举。真实首个 SEND 红回归先失败后通过，完整
+Core180 passed／49 ignored；另真实 Android app-launch／unknown 四项通过，clippy／
+fmt 及 Core iOS／macOS／Windows check 通过，不等于未来端 Flutter 整包通过。
+
+同参数直启→强制枚举→返回直启三组首帧为1102/927/782→1044/1041/1070→896/935/941ms。
+首组1102ms失败保留。最终正式default关闭追踪，3轮60次输入严格通过：首像素
+903/877/875ms、P50/P95=147/225ms，66次真实窗口与暂停恢复／释放／清理完成。
+双API36 x64 AVD／debug结果，不是物理ARM／Wi-Fi／持续60fps或面板延迟证明。
+
+原样正式 RemotePage 五编码23秒通过，实际像素、Texture、原生截图、悬浮退出、
+暂停／停止清理断言均保留。首跑47秒像素超时仍保留；随后两次是已过首帧后截图
+插件未注册，去掉 --no-pub 重新生成插件后通过，没有放宽断言。普通main全屏触控、
+拖拽吸附退出也实际验证。两份JAR未改／未重建。完整证据与失败边界见
+[冷启动记录](../../../docs/implementation/video-cold-start.md)。

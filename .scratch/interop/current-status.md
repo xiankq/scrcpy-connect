@@ -4,6 +4,49 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+当前结论：`f331dfd` 已实现默认主屏 H264 自动编码器的冷目录直启，已有不支持目录／其他 codec／指定编码器／独立应用仍严格预检。关闭诊断的普通 Driver 3 轮 60 次输入严格通过：首像素 903／877／875ms，输入 P50／P95=147／225ms；66 次实际窗口、暂停恢复及释放清理完成。首组冷样本 1102ms 保留，不称所有冷启动稳定达标。
+
+正式 RemotePage 五编码重新生成插件注册后，原测试未改、原像素／Texture／截图／退出及清理断言未放宽，23 秒完整通过：H264／H265／AV1／VP8／VP9 均 rendered，mediaAcceptanceComplete=true。目录 `/tmp/connect-e2e/auto-capture-product-five-plugins/`。首次 47 秒超时仍保留；r2/r3 是约 6 秒截图插件缺失，不能并记成三次首帧超时。普通 main 实际连接、全屏 Settings、远端触控、拖拽吸附／展开退出及设备移除也已走通。以上为 x64 AVD／debug，尚非物理 ARM、真实 Wi-Fi 切网、小时级长稳或全部场景性能验收。
+
+本轮签名 arm64 release 60.38 秒完成，46,920,990 字节，SHA-256 `64c5cf58d20ef6eaa45c12a630c14dd0f7bad8b4789898404dbc469972278a14`，稳定证书、manifest、ZIP 完整性、16KB 对齐及 arm64 ELF 验证通过。保留 `/tmp/connect-artifacts/connect-arm64-direct-capture-release.apk`，尚未在物理 ARM 设备安装运行。捕获／枚举 JAR 与对应进程扫描为空，fixture 已卸载；其他旧 companion／audio-fixture 命名文件不属于此处捕获清理证明，未批量删除。回执 `/tmp/connect-auto-capture-{release-receipt,target-cleanup}.json`。
+
+本轮收尾：普通 main 恢复构建7.6秒，MCP热重载128ms成功、无Dart运行错误，设备首页空态目视确认；启动Skipped32frames、SurfaceSync1000ms及1505ms长帧告警保留，不计应用冷启动流畅度通过。五codec原图均目视，H265明显低清仅计可播放，不计画质通过。两台本轮AVD核对名称后关闭，Gradle停止、forward移除；精确debug白名单394项／1506.9MiB已清，空闲42.25GiB。release、有效构建缓存与原始证据保留，原有五项未跟踪文件未修改。下一项继续高动态上游积压与截图原生崩溃，以及活动视频断网恢复，不以本组静态夹具通过关闭完整目标。
+
+以下为逐轮过程记录，当前结论以上段及最新收尾为准。
+
+继续默认主屏冷启动：上一轮15c8919／dfd1763为progress，首帧1142/1064/1000ms仍
+失败。当前验证主屏／有效H264／自动编码器在目录未知时直接捕获；不是把未知标成
+可用。已有不支持目录、非默认codec、named encoder、独立应用窗口保留严格验证。
+先补真实ADB SEND路径回归，再测默认及独立应用失败／清理，最后关闭追踪扩量；
+目前尚无新性能收益或直启验收，JAR输入未改，沿用已有产物。
+默认首个SEND路径回归在旧实现实际失败，确认先上传interop-encoders；新实现已补
+精确连接只读peek及默认直启，Core lib67 passed/2 ignored、clippy all-targets通过。
+回归保留strict探测／清理，并覆盖有效偏好／覆盖、休眠不上传、不支持缓存仍拒绝，
+peek进行中不等待／连接关闭与替换。只读review未发现新增缺陷。正跑真实应用unknown
+四项及双AVD性能，当前仍不能宣布首帧达标。
+完整Core回归180 passed/49 ignored（37 suites），另外真实Android应用启动四项
+45.26秒通过；ignored不当设备通过。默认直启首组3轮30输入，validated44/44/45ms、
+Core471/481/438ms、首像素1102/927/782ms，P50/P95=141/214ms。36次窗口、3次暂停
+恢复／释放及清理确认；首个新AVD样本仍超1000ms、整体exit1。正在只把
+requires_enumeration强制true构建对照APK，再恢复候选重复；不将冷绘制波动抹掉。
+强制枚举对照首帧1044/1041/1070ms、validated252/272/269ms，P50/P95=137/243ms；
+同样36窗口及暂停／释放／清理完成、严格exit1。现已恢复候选源码并构建返回组；
+正式RemotePage直接请求session.start，枚举仅在质量页显式请求，故不是只优化基准
+的旁路。候选Core iOS/macOS/Windows交叉check均通过，不代表对应Flutter整包。
+返回直启组3轮30输入首次严格exit0：首像素896/935/941ms、validated50/51/49ms，
+输入P50/P95=144/267ms，36次实际窗口、暂停恢复／释放及App／fixture清理均确认。
+结果/tmp/connect-e2e/auto-capture-return/。首组1102ms冷样本仍保留，不能据返回组
+通过宣称所有冷启动已达标；正在关闭追踪扩到60输入并补正式RemotePage五编码回归。
+最终生产default、关闭native及系统追踪，3轮60输入严格exit0：首像素903/877/875ms，
+输入P50/P95=147/225ms；validated46/44/44ms，Core400/447/433ms，连接另计49/51/51ms。
+66次实际窗口、3次暂停恢复／释放及App／fixture清理确认；原件
+/tmp/connect-e2e/auto-capture-final-60/。不是面板扫描或物理ARM／release性能，不删除
+首组1102ms失败。源码已提交f331dfd；正在正式RemotePage五编码回归。
+正式五编码首跑失败：H264在47秒用例中等待像素／Texture超时，结果无任何codec
+成功项、mediaAcceptanceComplete缺失；/tmp/connect-e2e/auto-capture-product-five/
+及对应日志保留，不计五编码通过。正恢复普通main以区分实际播放与集成绑定调度、
+Surface初始化及状态残留，尚未归因于某一项，不以benchmark绿替代正式功能验收。
+
 本轮继续首帧专项，未宣称完成：先用新启动的双AVD重复现有默认路径，再验证冷编码器
 枚举和正常清理合并为一次shell是否减少启动往返；上传失败、超时、调用方取消的独立
 清理所有权仍须保留。输出阶段约0.44秒另按既有原始追踪排查，不重试已否定的参数。

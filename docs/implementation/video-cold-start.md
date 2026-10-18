@@ -1,8 +1,8 @@
 # 冷启动往返与首次原生绘制
 
 2026-10-18。持续输入已使用显式异步解码；本批转向冷首帧。正常编码器枚举和临时
-JAR 清理合为同一个 shell，减少每个新 ADB 连接的一次串行服务往返。完整首帧
-1000ms 门槛仍开放，不能用一次低于门槛的样本替代全组验收。
+JAR 清理合为同一个 shell，减少每个新 ADB 连接的一次串行服务往返。默认主屏直启后，普通 Driver 的关闭追踪三轮已通过完整首帧 1000ms 门槛；
+首个冷样本与其他场景仍保留失败边界，不能外推所有冷启动。
 
 ## 同配置 A/B/A
 
@@ -190,7 +190,108 @@ Gradle／CMake／SDK缓存。收尾记录为`/tmp/connect-startup-shell-{avd-shu
 已知错误配置导致真实任务迁移。睡眠检查、资源和账本门禁、实际wire／尺寸／关键帧
 及本机解码验证均保留；`session.quality.options`及保存质量设置仍实际枚举。
 
-该候选尚未实施或实测，不能承诺减少250–350ms。需补默认直启和strict路径真实协议
+在合并清理的上一批验收时，该候选尚未实施或实测，不能承诺减少250–350ms。需补默认直启和strict路径真实协议
 测试、已知不支持／未知不伪造、取消／错误清理及独立应用unknown回归，再跑新连接
 首像素。主屏失败仍会分配进程／编码器等资源，不能称完全没有副作用；独立应用
 START_APP提交后的unknown与禁止重放规则不改。
+
+## 默认主屏直接捕获实施（2026-10-18）
+
+后续按上述窄边界实施：`EncoderCatalog.peek`仅取同精确Client的成功目录快照，
+不创建条目、不等待正在初始化的OnceCell、不改变失败／取消后的unknown；连接前后
+检查关闭。默认主屏按合并偏好／覆盖后的有效参数判断，已知不支持仍拒绝；其他
+选择与独立应用窗口完整预检。不是绕过metadata、关键帧、播放确认或实际像素。
+正式`RemotePage`直接请求`session.start`，质量选项只在质量页显式请求；共享Core
+改动同时影响产品，不是只修改benchmark。
+
+真实首个sync SEND路径回归在旧实现失败：默认首先上传interop-encoders JAR。
+修复后Core lib67 passed／2 ignored，完整Core180 passed／49 ignored（37 suites），
+clippy all-targets和fmt通过。回归覆盖默认先捕获、有效偏好及覆盖、严格格式／名称／
+应用预检、休眠拒绝且不上传、不支持缓存拒绝，以及peek进行中／失败／取消／连接
+替换和关闭。Linux／macOS mock shell测试仍只算host测试。真实Android应用启动
+四项45.26秒通过，含排队关闭、主屏回执丢失与重建不重放、独立应用关键帧前后未知
+结果保护；它们由host Rust Runtime连实际adbd执行，不冒称Android Flutter整包测试。
+红日志`/tmp/connect-auto-capture-red.log`，Core完整回归和真实目标日志分别为
+`/tmp/connect-auto-capture-core-full.log`及`/tmp/connect-auto-capture-app-launch-tests.log`。
+
+同一双AVD／SwiftShader、Flutter debug、H2641280／60／8Mbps、burst关闭，3新连接
+各10输入，native trace开启／系统追踪关闭，比较新分支、强制枚举、恢复新分支。
+强制枚举只将`requires_enumeration`设true，不改编码器／播放器／参数；对照APK
+安装并启动后恢复候选源码，不在该APK中热加载新的Rust二进制。所有组先结束编译
+和其他测试，再运行性能host。每组36次实际窗口、3次暂停恢复／释放及清理完成。
+
+| 路径 | validated ms | Core启动 ms | 首像素 ms | 输入P50/P95 ms |
+| --- | --- | --- | --- | --- |
+| 直启，首组 | 44 / 44 / 45 | 471 / 481 / 438 | 1102 / 927 / 782 | 141 / 214 |
+| 强制枚举对照 | 252 / 272 / 269 | 529 / 597 / 627 | 1044 / 1041 / 1070 | 137 / 243 |
+| 返回直启 | 50 / 51 / 49 | 463 / 470 / 464 | 896 / 935 / 941 | 144 / 267 |
+
+首组新AVD首帧1102ms失败，原始样本保留，不能只挑另外两轮。对照三轮均超1000ms。
+每组输入预算通过，前两组完整严格命令exit1，返回直启组首次严格exit0。校验阶段缩短不等于端到端减少相同毫秒：
+冷捕获上传和首次渲染仍波动，首组输出625/446/343ms，对照506/444/442ms。计时从
+控制会话启动到snapshot实际像素可读，连接耗时另存connectMs，不是面板扫描延迟。
+原始回执在`/tmp/connect-e2e/auto-capture-{first,control}/`，App／host日志为
+`/tmp/connect-auto-capture-<组名>-{app,host}.log`，返回组目录为`auto-capture-return`。
+返回组输出424/464/476ms，Core约0.46秒；不是已经消除首次绘制成本。改动提交
+`f331dfd`，关闭追踪扩量已完成（见下段）。候选Core iOS／macOS／Windows MSVC交叉check
+分别1.81／1.41／1.36秒通过，仅证明Core编译，不是对应宿主Flutter整包。
+
+最终生产default、关闭native和系统追踪，3轮60输入严格exit0：首像素
+903/877/875ms，输入P50/P95=147/225ms，两个预算均通过。validated46/44/44ms、
+Core400/447/433ms、输出495/429/441ms；连接另计49/51/51ms。66次实际窗口、3次
+暂停恢复／释放及App／fixture清理确认，实际decoder每轮为AMediaCodec。原件为
+`/tmp/connect-e2e/auto-capture-final-60/result.json`，日志为
+`/tmp/connect-auto-capture-final-{app,host}.log`。这不与trace开启30输入组作等条件
+百分比对照，不删除首组1102ms失败，也不代表物理ARM、release或所有冷启动均达标。
+
+
+### 正式页面回归与失败类型
+
+`video_codecs_test.dart` 原样执行，重新生成 Flutter 插件注册后 23 秒完整通过，H264、
+H265、AV1、VP8、VP9 均有真实 `mdk.snapshot`、Texture、原生截图、浮动退出、暂停与
+停止清理，`mediaAcceptanceComplete=true`。命令如下（此处不要带 `--no-pub`，从普通
+main 切回集成测试时需要重新生成原生 integration_test 注册）：
+
+```sh
+rtk proxy env FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
+ CONNECT_E2E_ACCEPTANCE=media \
+ CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/auto-capture-product-five-plugins \
+ /home/xiankq/flutter/bin/flutter drive -d emulator-5554 \
+ --driver=test_driver/integration_test.dart --target=integration_test/video_codecs_test.dart \
+ --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556
+```
+
+此前首跑等待像素／Texture 超时 47 秒，证据保留在 `auto-capture-product-five/`。
+r2/r3 完整日志显示实际上已通过首帧断言，约 6 秒在截图 API 抛
+`MissingPluginException(convertFlutterSurfaceToImage)`，并非再次首帧超时。没有改测试
+条件或生产调度；去掉 `--no-pub` 后同测试通过。首次超时的根因尚未锁定，不能把
+插件问题归为三次解码失败，也不能用最终通过删除原失败。
+
+普通 main 另实际通过手动连接表单、全屏 Settings、点击进入远端 Network 页面、
+浮动退出拖拽侧边隐藏／展开与返回、断开并移除设备。原图及回执为
+`/tmp/connect-auto-capture-main-{remote,network,collapsed}.png` 与
+`/tmp/connect-auto-capture-main-ui-receipt.json`。它是额外的正常调度真实交互证据。五编码原图已逐张目视，H265 仍明显低清，
+此次只证明格式可播放，不能计为五编码画质验收或硬件解码性能通过。
+
+AVD 日志仍有 GL internal format 告警，成功路径同样存在，不据此归因首次超时。
+停止后仍可见 Surface 释放告警，当前逻辑清理与 texture detach／dispose 回执不证明
+MDK 原生对象完成删除（`nativeDeleteConfirmed=false`）。高动态原生崩溃、长期资源、
+真实无线与物理 ARM/profile 测量继续开放。本轮没有服务端改动，两份 JAR 均未重建。
+
+
+本轮签名 arm64 release 在 60.38 秒完成，46,920,990 字节，稳定证书、manifest、ZIP
+完整性、16KB 对齐与 arm64 ELF 校验通过。保留产物为
+`/tmp/connect-artifacts/connect-arm64-direct-capture-release.apk`，SHA-256：
+`64c5cf58d20ef6eaa45c12a630c14dd0f7bad8b4789898404dbc469972278a14`。
+该产物尚非物理 ARM 运行验收。回执 `/tmp/connect-auto-capture-release-receipt.json`。
+捕获／编码器枚举命名空间 JAR 与相关进程扫描为空，视频 fixture 已卸载、临时 UI XML
+已删除，`/tmp/connect-auto-capture-target-cleanup.json` 保留扫描结果；目标上其他旧
+companion／audio-fixture 文件未批量删除，不将捕获清理表述为整个临时目录为空。
+
+
+普通 main 最终恢复构建7.6秒，MCP热重载128ms成功、无Dart错误，空设备首页目视确认。
+启动仍有Skipped32frames、SurfaceSync1000ms与1505ms长帧，不能称App启动流畅度通过。
+按名称核对后关闭本轮两AVD、移除forward并停止Gradle；精确清理394项debug输出
+1506.9MiB，空闲42.25GiB，有效缓存、release和原始证据保留。回执为
+`/tmp/connect-auto-capture-{avd-stop,debug-cleanup}.json`，原有五项未跟踪文件未改。
+下项继续高动态上游积压／原生截图崩溃及活动视频的真实断网恢复，完整任务仍开放。

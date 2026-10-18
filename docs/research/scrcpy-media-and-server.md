@@ -178,6 +178,11 @@ ADB stream → Rust 解协议 → 裸 elementary stream 或重新封装的流 �
 
 ## 2026-10-17 多编码与设备级质量实施验收
 
+以下是该日实施事实。2026-10-18默认主屏H264自动编码器的冷目录策略已调整为
+直接尝试实际捕获，不把unknown标成available；已知不支持及非默认格式／named
+encoder／独立应用窗口继续预检。质量选项和设置保存仍枚举验证。实际范围、失败
+样本及后续验收见[冷启动实施](../implementation/video-cold-start.md#默认主屏直接捕获实施2026-10-18)。
+
 Rust core 现使用自己的 ADB 连接运行校验过 SHA 的官方 5.0.1 JAR，传入 `list_encoders=true`，解析设备返回的 `--video-codec` / `--video-encoder`，不按 Android 版本硬编码支持状态。枚举解析遵循固定提交的 [LogUtils](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/util/LogUtils.java)。编码器名称限制为 1–256 个 ASCII 字母、数字、点、下划线或连字符，传给远端 shell 前还会引用整个参数；枚举不兼容的 codec / encoder 组合在启动前拒绝。
 
 `session.quality.options{deviceId?}` 返回五种 codec、MIME、实际 encoder 列表与 `unknown/available/unavailable`、原因。没有设备或探测失败时不返回 `available=true`；已枚举也仅证明设备报告了 encoder，不保证其参数、当前资源或本机 decoder 可配置成功。五种 wire ID 分别为 `h264`、`h265`、`\0av1`、`\0vp8`、`\0vp9`，core 对请求与实际四字节 ID 作一致性校验；默认保持 H.264。[固定 VideoCodec](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/video/VideoCodec.java)
