@@ -9,7 +9,7 @@ use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -369,15 +369,35 @@ impl Drop for Session {
     }
 }
 enum ControlRequest {
-    Launch(
-        Vec<u8>,
-        crate::app_open::LaunchPermit,
-        oneshot::Sender<CoreResult<Value>>,
-    ),
-    Send(Vec<u8>, oneshot::Sender<CoreResult<Value>>),
-    ClipboardGet(oneshot::Sender<CoreResult<Value>>),
-    ClipboardSet(String, bool, oneshot::Sender<CoreResult<Value>>),
-    Capture(bool, oneshot::Sender<CoreResult<Value>>),
+    Launch(Vec<u8>, crate::app_open::LaunchPermit, ControlReply),
+    Send(Vec<u8>, ControlReply),
+    ClipboardSet(String, bool, ControlReply),
+    Capture(bool, ControlReply),
+}
+impl ControlRequest {
+    fn reply(&self) -> &ControlReply {
+        match self {
+            Self::Launch(_, _, reply)
+            | Self::Send(_, reply)
+            | Self::ClipboardSet(_, _, reply)
+            | Self::Capture(_, reply) => reply,
+        }
+    }
+}
+// The same deadline travels through queue admission, the ADB write receipt,
+// and any protocol acknowledgement. An expired input is never submitted later.
+struct ControlReply {
+    deadline: Instant,
+    sender: oneshot::Sender<CoreResult<Value>>,
+}
+impl ControlReply {
+    fn is_closed(&self) -> bool {
+        self.sender.is_closed() || Instant::now() >= self.deadline
+    }
+
+    fn send(self, result: CoreResult<Value>) -> Result<(), CoreResult<Value>> {
+        self.sender.send(result)
+    }
 }
 struct CancelOnDrop(Option<CancellationToken>);
 struct SessionContext {
@@ -1259,12 +1279,9 @@ wait "$child""#
             // Verify our exact process identity without freezing its Binder,
             // display or controller threads. Cooperative capture has its own ACK.
             process.signal(&client, false).await?;
-            let (reply, receiver) = oneshot::channel();
-            control
-                .send(ControlRequest::Capture(pausing, reply))
-                .await
-                .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
-            let receipt = receive_reply(receiver).await?;
+            let receipt =
+                send_control_request(&control, |reply| ControlRequest::Capture(pausing, reply))
+                    .await?;
             if receipt["capturePaused"] != pausing || receipt["confirmed"] != true {
                 return Err(CoreError::new(
                     "capture_unconfirmed",
@@ -1441,17 +1458,18 @@ wait "$child""#
         if !matches!(command, "clipboard.get" | "clipboard.set") {
             return Err(invalid("剪贴板操作无效。"));
         }
-        let text = if command == "clipboard.set" {
-            let text = params["text"]
-                .as_str()
-                .ok_or_else(|| invalid("剪贴板内容无效。"))?;
-            if text.len() > CLIPBOARD_MAX {
-                return Err(invalid("剪贴板文字过长。"));
-            }
-            Some(text)
-        } else {
-            None
-        };
+        // scrcpy GET_CLIPBOARD may legally send no response for an empty or
+        // unreadable clipboard. The companion correlates each read and reports
+        // that state explicitly, while preserving its allowStart policy.
+        if command == "clipboard.get" {
+            return self.companion_command(command, params).await;
+        }
+        let text = params["text"]
+            .as_str()
+            .ok_or_else(|| invalid("剪贴板内容无效。"))?;
+        if text.len() > CLIPBOARD_MAX {
+            return Err(invalid("剪贴板文字过长。"));
+        }
         let control = self
             .sessions
             .lock()
@@ -1466,15 +1484,7 @@ wait "$child""#
         let Some(control) = control else {
             return self.companion_command(command, params).await;
         };
-        if let Some(text) = text {
-            return clipboard_set(&control, text.to_owned(), false).await;
-        }
-        let (reply, receiver) = oneshot::channel();
-        control
-            .send(ControlRequest::ClipboardGet(reply))
-            .await
-            .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
-        receive_reply(receiver).await
+        clipboard_set(&control, text.to_owned(), false).await
     }
 
     pub(crate) async fn list_apps(&self, params: &Value) -> CoreResult<Value> {
@@ -1897,32 +1907,48 @@ async fn request_control<F>(
     bytes: Vec<u8>,
 ) -> CoreResult<Value>
 where
-    F: FnOnce(Vec<u8>, oneshot::Sender<CoreResult<Value>>) -> ControlRequest,
+    F: FnOnce(Vec<u8>, ControlReply) -> ControlRequest,
 {
-    let (reply, receiver) = oneshot::channel();
-    sender
-        .send(constructor(bytes, reply))
-        .await
-        .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
-    receive_reply(receiver).await
+    send_control_request(sender, |reply| constructor(bytes, reply)).await
 }
-async fn receive_reply(receiver: oneshot::Receiver<CoreResult<Value>>) -> CoreResult<Value> {
-    tokio::time::timeout(Duration::from_secs(6), receiver)
-        .await
-        .map_err(|_| CoreError::new("timeout", "设备未及时响应控制请求。"))?
-        .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?
+
+async fn send_control_request<F>(
+    sender: &mpsc::Sender<ControlRequest>,
+    constructor: F,
+) -> CoreResult<Value>
+where
+    F: FnOnce(ControlReply) -> ControlRequest,
+{
+    let deadline = Instant::now() + Duration::from_secs(6);
+    let (reply, receiver) = oneshot::channel();
+    tokio::time::timeout_at(deadline, async {
+        sender
+            .send(constructor(ControlReply {
+                deadline,
+                sender: reply,
+            }))
+            .await
+            .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
+        receiver
+            .await
+            .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?
+    })
+    .await
+    .map_err(|_| control_timeout())?
+}
+
+fn control_timeout() -> CoreError {
+    CoreError::new("timeout", "设备未及时响应控制请求。")
 }
 async fn clipboard_set(
     sender: &mpsc::Sender<ControlRequest>,
     text: String,
     paste: bool,
 ) -> CoreResult<Value> {
-    let (reply, receiver) = oneshot::channel();
-    sender
-        .send(ControlRequest::ClipboardSet(text, paste, reply))
-        .await
-        .map_err(|_| CoreError::new("disconnected", "控制连接已结束。"))?;
-    receive_reply(receiver).await
+    send_control_request(sender, |reply| {
+        ControlRequest::ClipboardSet(text, paste, reply)
+    })
+    .await
 }
 
 fn session_dimensions(header: &[u8; 12]) -> CoreResult<Option<(u32, u32)>> {
@@ -2160,15 +2186,16 @@ async fn run_control(
 ) {
     let mut incoming = Vec::new();
     let mut buffer = [0; 4096];
-    let mut gets: VecDeque<oneshot::Sender<CoreResult<Value>>> = VecDeque::new();
-    let mut sets: HashMap<u64, oneshot::Sender<CoreResult<Value>>> = HashMap::new();
-    let mut captures: HashMap<u64, (bool, oneshot::Sender<CoreResult<Value>>)> = HashMap::new();
+    let mut sets: HashMap<u64, ControlReply> = HashMap::new();
+    let mut captures: HashMap<u64, (bool, ControlReply)> = HashMap::new();
     let mut sequence = 1u64;
     loop {
         tokio::select! {
             _ = cancellation.cancelled() => break,
             request = requests.recv() => {
                 let Some(request) = request else { break; };
+                if request.reply().is_closed() { continue; }
+                let deadline = request.reply().deadline;
                 let (bytes, immediate) = match request {
                     ControlRequest::Launch(bytes, permit, reply) => {
                         if !permit.claim() {
@@ -2179,6 +2206,7 @@ async fn run_control(
                             biased;
                             _ = permit.cancelled() => Err(CoreError::new("cancelled", "本次应用打开已关闭。")),
                             _ = cancellation.cancelled() => Err(CoreError::new("disconnected", "控制连接已结束。")),
+                            _ = tokio::time::sleep_until(deadline) => Err(control_timeout()),
                             result = stream.write_all(&bytes) => result.map_err(CoreError::from),
                         };
                         let abort = result.is_err() || permit.is_cancelled();
@@ -2188,7 +2216,6 @@ async fn run_control(
                         continue;
                     }
                     ControlRequest::Send(bytes, reply) => (bytes, Some(reply)),
-                    ControlRequest::ClipboardGet(reply) => { gets.retain(|reply| !reply.is_closed()); if gets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; } gets.push_back(reply); (vec![8,0], None) },
                     ControlRequest::Capture(paused, reply) => {
                         captures.retain(|_, (_, reply)| !reply.is_closed());
                         if captures.len() >= 8 {
@@ -2203,13 +2230,23 @@ async fn run_control(
                         (bytes, None)
                     }
                     ControlRequest::ClipboardSet(text, paste, reply) => {
-                        sets.retain(|_,reply| !reply.is_closed()); if sets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; }
+                        sets.retain(|_, reply| !reply.is_closed());
+                        if sets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; }
                         sequence = sequence.wrapping_add(1).max(1); let mut bytes = vec![9]; bytes.extend_from_slice(&sequence.to_be_bytes()); bytes.push(u8::from(paste)); bytes.extend_from_slice(&(text.len() as u32).to_be_bytes()); bytes.extend_from_slice(text.as_bytes()); sets.insert(sequence,reply); (bytes,None)
                     }
                 };
-                let result = stream.write_all(&bytes).await.map_err(CoreError::from);
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation.cancelled() => Err(CoreError::new("disconnected", "控制连接已结束。")),
+                    _ = tokio::time::sleep_until(deadline) => Err(control_timeout()),
+                    result = stream.write_all(&bytes) => result.map_err(CoreError::from),
+                };
+                let abort = result.is_err();
                 if let Some(reply) = immediate { let _ = reply.send(result.map(|()| json!({"sent":true}))); }
-                else if result.is_err() { break; }
+                // A partial or unacknowledged write cannot safely be retried.
+                // Dropping this stream closes its route, while the Client keeps
+                // serving unrelated streams on the same device connection.
+                if abort { break; }
             },
             result = stream.read(&mut buffer) => {
                 let Ok(count) = result else { break; }; if count == 0 { break; }
@@ -2225,7 +2262,6 @@ async fn run_control(
                     if incoming.len() < needed { break; }
                     if incoming[0] == 0 {
                         let Ok(text) = std::str::from_utf8(&incoming[5..needed]) else { cancellation.cancel(); break; };
-                        if let Some(reply) = gets.pop_front() { let _ = reply.send(Ok(json!({"text":text}))); }
                         event(&events,"clipboard.changed",&device,json!({"text":text,"sessionId":state.read().await["sessionId"]}));
                     } else if incoming[0] == 1 {
                         let sequence = u64::from_be_bytes(incoming[1..9].try_into().expect("control sequence"));
@@ -2238,6 +2274,17 @@ async fn run_control(
                 }
             }
         }
+    }
+    for reply in sets
+        .into_values()
+        .chain(captures.into_values().map(|(_, reply)| reply))
+    {
+        let error = if Instant::now() >= reply.deadline {
+            control_timeout()
+        } else {
+            CoreError::new("disconnected", "控制连接已结束。")
+        };
+        let _ = reply.send(Err(error));
     }
     cancellation.cancel();
 }
@@ -2836,6 +2883,369 @@ mod tests {
         fixture.finish_probe(encoder,
             b"List of video encoders:\n --video-codec=h264 --video-encoder=c2.fixture.avc (hw)\n").await;
         fixture.client.close();
+    }
+
+    struct ControlTransportFixture {
+        peer: tokio::io::DuplexStream,
+        client: interop_adb::Client,
+        local: u32,
+        control: mpsc::Sender<ControlRequest>,
+        cancellation: CancellationToken,
+        running: tokio::task::JoinHandle<()>,
+    }
+
+    impl ControlTransportFixture {
+        async fn start() -> Self {
+            use interop_adb::{
+                DeviceInfo,
+                protocol::{self, Frame},
+            };
+            let (transport, mut peer) = tokio::io::duplex(64 * 1024);
+            let client = interop_adb::Client::from_negotiated_transport(
+                transport,
+                DeviceInfo {
+                    version: protocol::VERSION,
+                    max_payload: 64 * 1024,
+                    banner: "device::".into(),
+                    features: HashSet::new(),
+                },
+            )
+            .unwrap();
+            let cancellation = CancellationToken::new();
+            let opening_client = client.clone();
+            let opening_options = options(&cancellation);
+            let opening = tokio::spawn(async move {
+                opening_client
+                    .open("localabstract:control-fixture", opening_options)
+                    .await
+                    .unwrap()
+            });
+            let open = Frame::read(&mut peer, 64 * 1024, true).await.unwrap();
+            assert_eq!(open.command, protocol::OPEN);
+            Frame::new(protocol::OKAY, 77, open.arg0, Vec::new())
+                .write(&mut peer)
+                .await
+                .unwrap();
+            let stream = opening.await.unwrap();
+            let (control, requests) = mpsc::channel(64);
+            let running = tokio::spawn(run_control(
+                stream,
+                requests,
+                cancellation.clone(),
+                crate::events::EventBus::new(8),
+                "fixture-device".into(),
+                Arc::new(RwLock::new(json!({"sessionId":"fixture"}))),
+            ));
+            Self {
+                peer,
+                client,
+                local: open.arg0,
+                control,
+                cancellation,
+                running,
+            }
+        }
+
+        async fn read(&mut self) -> interop_adb::protocol::Frame {
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                interop_adb::protocol::Frame::read(&mut self.peer, 64 * 1024, true),
+            )
+            .await
+            .expect("ADB peer frame")
+            .unwrap()
+        }
+
+        async fn assert_healthy_service(&mut self) {
+            use interop_adb::protocol::{self, Frame};
+            assert!(!self.client.is_closed(), "only the control session may end");
+            let client = self.client.clone();
+            let opening = tokio::spawn(async move {
+                client
+                    .open("localabstract:healthy-fixture", OperationOptions::default())
+                    .await
+                    .unwrap()
+            });
+            let open = self.read().await;
+            assert_eq!(open.command, protocol::OPEN);
+            Frame::new(protocol::OKAY, 88, open.arg0, Vec::new())
+                .write(&mut self.peer)
+                .await
+                .unwrap();
+            let mut healthy = opening.await.unwrap();
+            let writing = tokio::spawn(async move {
+                healthy.write_all(b"healthy").await.unwrap();
+                healthy
+            });
+            let write = self.read().await;
+            assert_eq!(
+                (write.command, write.arg0, write.payload.as_slice()),
+                (protocol::WRTE, open.arg0, b"healthy".as_slice())
+            );
+            Frame::new(protocol::OKAY, 88, open.arg0, Vec::new())
+                .write(&mut self.peer)
+                .await
+                .unwrap();
+            let mut healthy = writing.await.unwrap();
+            Frame::new(protocol::WRTE, 88, open.arg0, b"reply".to_vec())
+                .write(&mut self.peer)
+                .await
+                .unwrap();
+            let mut reply = [0; 5];
+            healthy.read_exact(&mut reply).await.unwrap();
+            assert_eq!(&reply, b"reply");
+            drop(healthy);
+            let receipt = self.read().await;
+            assert_eq!((receipt.command, receipt.arg0), (protocol::OKAY, open.arg0));
+            let closed = self.read().await;
+            assert_eq!((closed.command, closed.arg0), (protocol::CLSE, open.arg0));
+        }
+    }
+
+    #[tokio::test]
+    async fn control_unacknowledged_write_expires_without_replaying_queued_input() {
+        use interop_adb::protocol::{self, Frame};
+        let mut fixture = ControlTransportFixture::start().await;
+        let sender = fixture.control.clone();
+        let first =
+            tokio::spawn(
+                async move { request_control(&sender, ControlRequest::Send, vec![17]).await },
+            );
+        let write = fixture.read().await;
+        assert_eq!(
+            (write.command, write.arg0, write.payload),
+            (protocol::WRTE, fixture.local, vec![17])
+        );
+        // Keep the same Client useful while the control WRTE never gets OKAY.
+        fixture.assert_healthy_service().await;
+        let sender = fixture.control.clone();
+        let queued = tokio::spawn(async move {
+            request_control(&sender, ControlRequest::Send, vec![4, 0]).await
+        });
+        assert_eq!(first.await.unwrap().unwrap_err().code, "timeout");
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .expect("a timed-out control write must end its actor and discard queued input")
+            .unwrap();
+        assert!(queued.await.unwrap().is_err());
+        // The only later control-route frame is CLSE, never the queued input.
+        let closed = fixture.read().await;
+        assert_eq!(
+            (closed.command, closed.arg0),
+            (protocol::CLSE, fixture.local)
+        );
+        Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        let closed = fixture.read().await;
+        assert_eq!(
+            (closed.command, closed.arg0),
+            (protocol::CLSE, fixture.local),
+            "a late write ACK cannot resurrect the closed route or replay input"
+        );
+        fixture.assert_healthy_service().await;
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn control_stop_cancels_wait_for_write_ack() {
+        use interop_adb::protocol;
+        let mut fixture = ControlTransportFixture::start().await;
+        let sender = fixture.control.clone();
+        let writing =
+            tokio::spawn(
+                async move { request_control(&sender, ControlRequest::Send, vec![17]).await },
+            );
+        assert_eq!(fixture.read().await.command, protocol::WRTE);
+        fixture.cancellation.cancel();
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .expect("stopping a session must cancel its pending write receipt")
+            .unwrap();
+        assert!(writing.await.unwrap().is_err());
+        assert_eq!(fixture.read().await.command, protocol::CLSE);
+        fixture.assert_healthy_service().await;
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn control_queue_admission_is_inside_request_deadline() {
+        let (control, mut requests) = mpsc::channel(1);
+        let (reply, _receiver) = oneshot::channel();
+        control
+            .send(ControlRequest::Send(
+                vec![17],
+                ControlReply {
+                    deadline: Instant::now() + Duration::from_secs(6),
+                    sender: reply,
+                },
+            ))
+            .await
+            .unwrap();
+        let started = Instant::now();
+        let result = tokio::time::timeout(
+            Duration::from_millis(6500),
+            request_control(&control, ControlRequest::Send, vec![4, 0]),
+        )
+        .await
+        .expect("a full queue must not extend the six-second request deadline");
+        assert_eq!(result.unwrap_err().code, "timeout");
+        assert!(started.elapsed() < Duration::from_millis(6500));
+        requests.recv().await.unwrap();
+        assert!(
+            requests.try_recv().is_err(),
+            "timed-out admission must not enqueue input later"
+        );
+    }
+
+    #[tokio::test]
+    async fn control_actor_discards_expired_and_cancelled_queued_input() {
+        use interop_adb::protocol::{self, Frame};
+        let mut fixture = ControlTransportFixture::start().await;
+        let sender = fixture.control.clone();
+        let first =
+            tokio::spawn(
+                async move { request_control(&sender, ControlRequest::Send, vec![17]).await },
+            );
+        assert_eq!(fixture.read().await.command, protocol::WRTE);
+        let (reply, _receiver) = oneshot::channel();
+        fixture
+            .control
+            .send(ControlRequest::Send(
+                vec![4, 0],
+                ControlReply {
+                    deadline: Instant::now() - Duration::from_millis(1),
+                    sender: reply,
+                },
+            ))
+            .await
+            .unwrap();
+        let (reply, receiver) = oneshot::channel();
+        drop(receiver);
+        fixture
+            .control
+            .send(ControlRequest::Send(
+                vec![4, 1],
+                ControlReply {
+                    deadline: Instant::now() + Duration::from_secs(6),
+                    sender: reply,
+                },
+            ))
+            .await
+            .unwrap();
+        Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        first.await.unwrap().unwrap();
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(50),
+                Frame::read(&mut fixture.peer, 64 * 1024, true)
+            )
+            .await
+            .is_err(),
+            "closed or expired callers must never inject their queued input"
+        );
+        fixture.cancellation.cancel();
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(fixture.read().await.command, protocol::CLSE);
+        fixture.assert_healthy_service().await;
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn control_missing_protocol_reply_keeps_session_and_sequence_identity() {
+        use interop_adb::protocol::{self, Frame};
+        let mut cases = Vec::new();
+        for kind in [9, 128] {
+            cases.push(tokio::spawn(async move {
+                let mut fixture = ControlTransportFixture::start().await;
+                let sender = fixture.control.clone();
+                let request = tokio::spawn(async move {
+                    send_control_request(&sender, |reply| match kind {
+                        9 => ControlRequest::ClipboardSet("old".into(), false, reply),
+                        128 => ControlRequest::Capture(true, reply),
+                        _ => unreachable!(),
+                    })
+                    .await
+                });
+                let write = fixture.read().await;
+                assert_eq!(write.command, protocol::WRTE);
+                assert_eq!(write.payload[0], kind);
+                let old_sequence = write.payload[1..9].to_vec();
+                Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
+                    .write(&mut fixture.peer)
+                    .await
+                    .unwrap();
+                assert_eq!(request.await.unwrap().unwrap_err().code, "timeout");
+                assert!(
+                    !fixture.running.is_finished(),
+                    "missing protocol ACK must not end a healthy session"
+                );
+                assert!(!fixture.cancellation.is_cancelled());
+                fixture.assert_healthy_service().await;
+
+                let sender = fixture.control.clone();
+                let mut next = tokio::spawn(async move {
+                    send_control_request(&sender, |reply| match kind {
+                        9 => ControlRequest::ClipboardSet("new".into(), false, reply),
+                        128 => ControlRequest::Capture(false, reply),
+                        _ => unreachable!(),
+                    })
+                    .await
+                });
+                let write = fixture.read().await;
+                assert_eq!(write.command, protocol::WRTE);
+                let next_sequence = write.payload[1..9].to_vec();
+                assert_ne!(old_sequence, next_sequence);
+                Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
+                    .write(&mut fixture.peer)
+                    .await
+                    .unwrap();
+                let mut old_ack = vec![1];
+                old_ack.extend_from_slice(&old_sequence);
+                Frame::new(protocol::WRTE, 77, fixture.local, old_ack)
+                    .write(&mut fixture.peer)
+                    .await
+                    .unwrap();
+                assert_eq!(fixture.read().await.command, protocol::OKAY);
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(50), &mut next)
+                        .await
+                        .is_err(),
+                    "a late protocol ACK must not satisfy a newer request"
+                );
+                let mut next_ack = vec![1];
+                next_ack.extend_from_slice(&next_sequence);
+                Frame::new(protocol::WRTE, 77, fixture.local, next_ack)
+                    .write(&mut fixture.peer)
+                    .await
+                    .unwrap();
+                assert_eq!(fixture.read().await.command, protocol::OKAY);
+                let receipt = next.await.unwrap().unwrap();
+                if kind == 9 {
+                    assert_eq!(receipt["applied"], true);
+                } else {
+                    assert_eq!(receipt["capturePaused"], false);
+                    assert_eq!(receipt["confirmed"], true);
+                }
+                fixture.cancellation.cancel();
+                tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(fixture.read().await.command, protocol::CLSE);
+                fixture.client.close();
+            }));
+        }
+        for case in cases {
+            case.await.unwrap();
+        }
     }
 
     // Exercise the actual ADB route and run_video, rather than only a packet

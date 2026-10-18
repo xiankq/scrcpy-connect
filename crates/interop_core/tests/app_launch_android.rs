@@ -362,10 +362,30 @@ async fn closed_queued_app_open_cannot_execute_after_an_earlier_write_recovers()
         0,
         "a closed queued intent must never become a late START_APP"
     );
+    assert!(
+        invoke_runtime(
+            &runtime,
+            "session.launch",
+            json!({"sessionId":sid,"packageName":"com.android.settings"}),
+        )
+        .await
+        .is_err(),
+        "an unconfirmed control write terminates its old session"
+    );
+    // Recover only the phone screen. The old queued application intent stays
+    // closed; opening an application again requires a new explicit request.
+    let replacement = invoke_runtime(
+        &runtime,
+        "session.start",
+        json!({"deviceId":device,"maxSize":640,"maxFps":15}),
+    )
+    .await
+    .unwrap();
+    let replacement_id = replacement["sessionId"].as_str().unwrap();
     let sent = invoke_runtime(
         &runtime,
         "session.launch",
-        json!({"sessionId":sid,"packageName":"com.android.settings"}),
+        json!({"sessionId":replacement_id,"packageName":"com.android.settings"}),
     )
     .await
     .unwrap();
@@ -375,9 +395,13 @@ async fn closed_queued_app_open_cannot_execute_after_an_earlier_write_recovers()
         1,
         "the later explicit open is the only submitted START_APP"
     );
-    invoke_runtime(&runtime, "session.stop", json!({"sessionId":sid}))
-        .await
-        .unwrap();
+    invoke_runtime(
+        &runtime,
+        "session.stop",
+        json!({"sessionId":replacement_id}),
+    )
+    .await
+    .unwrap();
     invoke_runtime(&runtime, "devices.forget", json!({"deviceId":device}))
         .await
         .unwrap();
