@@ -321,3 +321,71 @@ Android运行时request-sync／drop-input-frames属于MediaCodec.setParameters�
 scrcpy没有对应公开控制，不能伪装为启动MediaFormat option；编码器flush行为
 未定义，不用于清积压。[官方MediaCodec](https://developer.android.com/reference/android/media/MediaCodec#States)。
 现有priority／latency／repeat配置与先前失败调参结论保持不变，不重复盲调。
+
+
+## 同JAR双分配实测与首帧SDK选项（2026-10-18）
+
+目标AVD新生命周期、既有捕获JAR、按具体捕获PID过滤CCodec／MediaCodec系统日志，
+三次均实际看到两次c2.android.avc.encoder创建：
+
+| raw诊断 | 第一次allocate→Created ms | 第二次 ms | 两次Created间隔 ms |
+| --- | --- | --- | --- |
+| 2def2d8cc62c | 78 | 7 | 39 |
+| 12c75b20f31a | 3 | 1 | 34 |
+| 19ab34757fa4 | 11 | 5 | 33 |
+
+间隔包含能力查询、capture.init及释放，不是纯冗余成本，也不是收益上界；首次78ms
+不能当成保留同一codec就能全部节省的耗时。第一临时脚本误等静态流后续媒体包而超时，
+仅用其系统分配日志，不计成功首帧测量。修正为收到首个完整媒体包即结束，后两次完成；
+无解码／实际像素验收，不能与正式E2E首帧直接比较。三次后续明确复核进程、fixture和
+JAR均无残留；第二次即时cleanup的captureAbsent=false保留原值，另存稍后复核true。
+原始目录`/tmp/connect-codec-allocation-<表中ID>/`含codec.log、result.json及复核文件。
+
+当前证据不足以为此改变暂停所有权／重建JAR。若以后优化，须保证初始未暂停时复用
+探测codec，而进入任何暂停ACK门前先在编码线程释放；保留codec后capture.init异常
+也必须纳入finally。仅移除首次release会让初始暂停ACK时仍占codec，违反现有契约。
+该候选不能解释关键帧之后数百毫秒等待，先处理后者。
+
+MDK公开`prepare(0)`回调表示媒体信息就绪，不能当首帧已显示；`onFrame/onVideo`
+先于renderer接收，snapshot另经渲染／读回。`setBufferRange`的max不是固定延迟保证。
+[Player APIs](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)。
+全局`videoout.buffer_frames`限制renderer缓存帧数，正整数；`profiler.gpu`控制GPU
+时间采样。锁定fvp Android JNI_OnLoad主动设为1，因此实验在其初始化后请求0；
+未读回SDK内部值，只报告请求。两项都影响进程内其他播放器，不能作为每个会话的
+随意开关。[Global Options](https://github.com/wang-bin/mdk-sdk/wiki/Global-Options)、
+[锁定源码](../../third_party/fvp/android/fvp_plugin.cpp)。
+实际五组对照没有满足原严格性能预算，两个实验均不进入产品默认；首个32×32验证
+截图指标与时钟读取括界已保留，详见[实际结果](../implementation/video-performance.md#首个验证画面的观测与隔离对照2026-10-18)。
+
+## drop-input-frames不等于保留最新帧（2026-10-18）
+
+固定Android16框架av提交`4b2111885ff934799e70eddae2527a9848c3be29`只读核查：
+公开`PARAMETER_KEY_SUSPEND`接受1／0暂停及恢复Surface输入，但API允许参数静默失败。
+[API契约](https://developer.android.com/reference/android/media/MediaCodec#PARAMETER_KEY_SUSPEND)。
+GBS成功路径中，MediaCodec.setParameters同步等待消息，CCodec调用Surface wrapper，
+再同步进入GBS mutex处理；顺序1→0不会简单合并成最后一个0。
+[MediaCodec setParameters](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/libstagefright/MediaCodec.cpp#7580)、
+[CCodec分发](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/CCodec.cpp#2648)。
+
+但GBS::setSuspend(true)调用releaseAllAvailableBuffers_l，丢弃的是全部待输入buffer，
+包括最新变化；清理不更新仅在正常送入路径更新的mLatestBuffer。若源在最终变化后
+静止，恢复可能继续重复旧像素或无输出，PTS递增也不能证明像素更新；请求关键帧不能
+保证重新取得已经丢掉的最终画面。CONFIG之后、首个实际关键帧之前pulse还可能丢掉
+静态启动唯一输入。
+[GBS清理与重复源](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/module/bqhelper/GraphicBufferSource.cpp#1234)。
+
+已进入C2NodeImpl workList／fence／component queue的工作不会被清掉，编码器内部、
+输出、socket及主控缓存也不受此开关清理。GBS acquire失败会退出清理循环仍返OK，
+CCodec忽略wrapper配置错误，另一C2InputSurfaceWrapper::configure路径仍是TODO；
+Java调用返回不能证明所有设备已清队列。
+[C2Node工作](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/C2NodeImpl.cpp#115)、
+[替代wrapper](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/CCodec.cpp#205)。
+
+因此不实施无条件逐输出pulse，不为该设想修改现有补丁或重建JAR。若后续确需诊断，
+只能隔离候选JAR、记录摘要、先试一次成功交付且释放后的非CONFIG／非EOS输出；
+同编码会话先有关键帧，参数顺序1→0，不加sleep／flush／time-offset。已有暂停／reset
+则跳过，不持CaptureControl锁；恢复0失败须清理终止实验，不能吞异常继续或降级尺寸。
+同步调用本身会增加暂停等待，必须重验ACK前资源释放与竞态。
+硬门禁包括动态→唯一终值→完全静止、单次变化后静止、静态冷启、旋转、暂停恢复；
+最终真实像素必须原样到达，不能靠事后refresh掩盖。之后才比较A/B/A新像素、CPU、
+吞吐、首帧与失败数。此处是源码否定与实验边界，未声称已做pulse实机实验或性能改善。

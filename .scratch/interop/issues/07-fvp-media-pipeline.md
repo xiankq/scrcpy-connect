@@ -217,8 +217,8 @@ App275项通过，严格分析/clippy/fmt通过。
 通过关闭历史MDK内部空std::function；还需worker收尾、真实长期故障与物理设备证据。
 [代码路径、红绿、实际样本及复跑](../../../docs/implementation/video-performance.md#截图生命周期与暂停提交顺序2026-10-18)。
 
-- [ ] 补fvp公开snapshot失败结果null的独立真实回归及可复现依赖层修复；当前源码
-  无条件解引用，MDK锁定头允许null，尚未触发/修复，不能与历史worker空function混因。
+- [x] 补fvp公开snapshot失败结果null的独立真实回归及可复现依赖层修复；后续已由
+  仓库内补丁及源边界红绿闭合，Android链路另验，不能与历史worker空function混因。
   [一手依据及边界](../../../docs/research/scrcpy-first-frame-performance.md#snapshot交付关闭与失败结果边界2026-10-18)。
 
 
@@ -244,3 +244,21 @@ Android静态10pause及动态200串行截图＋10pause、新像素／实际图�
 首页已目视；394项debug输出已清理、缓存及release保留。新独立首帧候选为暂停
 补丁的初始重复编码器分配，先量化而不贸然改JAR；不解释关键帧后输出等待或
 稳态源年龄，见上述研究。代码提交7cbf010，本任务及完整目标继续开放。
+
+
+2026-10-18首验证截图分段：E2E在后续readback覆盖前保留32×32验证snapshot指标，
+用启动Stopwatch前后包围读取；计时点提前避免2–6ms观测开销。新增GPU／renderer
+buffer隔离实验参数，默认不覆盖SDK。五组15会话／30次正常新像素／15次暂停恢复、
+实际Texture、停止分离与清理完成；所有严格1000/200/300命令仍exit1。
+默认→buffer1→默认、GPU0与buffer1复跑未形成可保留的整体性能收益，生产Fvp逐字节
+恢复、两JAR不变。首个已观测同PTS onVideo→snapshot约0.21–0.37秒，含调度、渲染
+和读回，不称面板延迟。下一步定位这段主控等待，并独立处理目标软件编码积压。
+[完整对照、复现和边界](../../../docs/implementation/video-performance.md#首个验证画面的观测与隔离对照2026-10-18)。
+
+同JAR目标codec日志三次确认双创建，Created间隔39/34/33ms含必需初始化，不能当
+纯可节省成本；先不改变暂停门或重建JAR。固定Android16还确认drop-input-frames
+清全部GBS待输入，可能丢最终静态变化，且不清已送入组件工作；不盲加生产pulse。
+[源码与实际分配证据](../../../docs/research/scrcpy-first-frame-performance.md#同jar双分配实测与首帧sdk选项2026-10-18)。
+普通main热重载成功、无Dart运行错误、首页已目视并detach；启动卡顿告警继续开放。
+Gradle停止、394项debug输出清理1484.6MiB，保留有效缓存及release。目标15个session
+JAR与捕获进程确认无残留后正常关闭，主控保留首页。完整目标和本任务继续开放。

@@ -1,7 +1,7 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量见[fvp失败截图结果与仓库内补丁](#fvp失败截图结果与仓库内补丁2026-10-18)：
-依赖空结果处理先红后绿，真实静态与动态截图完成，严格首帧／输入延迟仍未达标。
+最新增量见[首个验证画面的观测与隔离对照](#首个验证画面的观测与隔离对照2026-10-18)：
+保留首个snapshot的同PTS时序，五组15个真实会话完成；严格首帧／输入延迟仍未达标。
 
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
@@ -1520,3 +1520,88 @@ SDK／Flutter哈希缓存及所有证据保留。目标AVD保持关闭，下一�
 现有暂停补丁使正常首启create／release／create，先在同一JAR量化，再决定是否
 调整暂停门及重建补丁JAR；尚无收益证据，不能解释关键帧后输出等待和稳态源年龄。
 本批两JAR均不变。
+
+
+## 首个验证画面的观测与隔离对照（2026-10-18）
+
+生产播放器、码率与严格预算保持不变，两个scrcpy JAR均未修改或重建。目标AVD因上一批
+宿主OOM后重新启动；本批先记录内存，再在同一目标生命周期完成下列五组，每组3轮、
+每轮2次正常输入及1次暂停恢复。请求1280/60/8Mbps，实际576×1280/H264/AMediaCodec，
+静态计数器夹具，trace开启，ADB burst关闭。不能和旧目标AVD直接比较归因。
+
+入口在`outputs.start`返回后、64×64图案检查覆盖指标之前，保存第一次32×32验证截图
+对应的native trace，并以Dart启动Stopwatch包围指标读取。独立review发现旧位置让
+`startToDecodedMs`包含本次读取的2–6ms；最终代码先记录计时，再读指标。为公平比较，
+下表全部用已保留的`startupFrameTrace.watchBeforeUs // 1000`，原始JSON未改写。
+
+| 设置／顺序 | 读取前启动到可读像素ms（3轮） | 输出verified ms | 同PTS onVideo→32×32回调µs | 6次正常输入P50/P95 ms |
+| --- | --- | --- | --- | --- |
+| A0 默认 | 1318 / 1221 / 1111 | 712 / 444 / 439 | 289236 / 290804 / 330370 | 182 / 310 |
+| B1 buffer_frames=1 | 1043 / 1076 / 1053 | 426 / 407 / 397 | 220106 / 258636 / 257820 | 212 / 226 |
+| A1 恢复默认 | 1144 / 1147 / 1155 | 477 / 435 / 484 | 249249 / 287710 / 374063 | 194 / 306 |
+| 单独请求profiler.gpu=0 | 1199 / 1126 / 1137 | 484 / 503 / 466 | 212783 / 324597 / 324908 | 235 / 329 |
+| B2 buffer_frames=1复跑 | 1137 / 1122 / 1032 | 427 / 415 / 398 | 232843 / 230423 / 246877 | 211 / 261 |
+
+五组全部因原1000/200/300预算exit1，不能算性能通过。共15次会话、30次正常新像素、
+15次暂停恢复、Texture实际图案、停止／分离／夹具卸载完成。首轮A0有较大的主控首次
+解码开销，不能把它与B1的差别全算作buffer设置收益；buffer1短组输出较小，但两次
+输入P50均超过200ms，且全局设置会影响其他播放器，因此不保留产品默认改动。
+B1曾临时在生产初始化处设置，随后按原字节恢复；B2使用最终隔离测试入口复现。
+GPU参数仅记录requested，未读回SDK内部状态；本组没有显示收益，也不改产品配置。
+
+**时钟与像素边界。** native事件E的Dart启动时刻条件括界为：
+
+```text
+[watchBeforeUs + E.elapsedUs - metrics.nowElapsedUs,
+ watchAfterUs  + E.elapsedUs - metrics.nowElapsedUs]
+```
+
+同PTS回调差使用同一个native时钟，无须取跨时钟中点。onVideo观测在prepare及texture
+之后才注册，是首次已观测回调，不能宣称最早解码时刻。该段包含调度、渲染、fence和
+readback，不能称纯GPU或面板延迟，也不能从回调数量推断队列深度。B1首轮截图PTS为
+0.033333，必须匹配它对应的回调，不能错用首个PTS0。本批各首截图对应PTS在保留窗口
+均仅一项，但未来重复PTS仍须识别，不能默认唯一。32×32验证成功说明像素数据可读；
+实际计数器内容由随后64×64断言及Flutter截图共同验证，不能单用trace证明内容正确。
+
+复现公共命令（已有fixture APK、目标TCP转发25556；debug控制端与隔离测试adbd）：
+
+```bash
+cd apps/connect
+PATH=/home/xiankq/.cargo/bin:/home/xiankq/flutter/bin:/usr/local/bin:/usr/bin:/bin \
+ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 \
+FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
+CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+CONNECT_E2E_TARGET=emulator-5556 CONNECT_E2E_DEVICE=emulator-5554 \
+CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
+CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-startup-observed-baseline \
+flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/video_performance.dart \
+  --target=integration_test/video_performance_test.dart \
+  --dart-define=CONNECT_PERF_DECODER=native \
+  --dart-define=CONNECT_PERF_ADB_BURST=false \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556 \
+  --dart-define=CONNECT_PERF_MAX_SIZE=1280 --dart-define=CONNECT_PERF_MAX_FPS=60 \
+  --dart-define=CONNECT_PERF_BIT_RATE=8000000 --dart-define=CONNECT_PERF_ROUNDS=3 \
+  --dart-define=CONNECT_PERF_TRANSITIONS=2 --dart-define=CONNECT_PERF_PAUSE_CYCLES=1 \
+  --dart-define=CONNECT_PERF_MAX_START_MS=1000 --dart-define=CONNECT_PERF_MAX_P50_MS=200 \
+  --dart-define=CONNECT_PERF_MAX_P95_MS=300 --dart-define=CONNECT_PERF_TRACE_FRAMES=true
+```
+
+单独对照追加`CONNECT_PERF_GPU_PROFILER=0`或`CONNECT_PERF_RENDER_BUFFER_FRAMES=1`
+的`--dart-define`，并更换capture目录；两项默认值-1／0均不覆盖SDK配置，进程隔离，
+不是用户设置或会话级全局竞争入口。B1历史临时补丁不必恢复，B2才是最终可复现方式。
+严格分析无问题，指定文件format及diff检查通过；生产代码未改，未重复全仓测试。
+
+原始证据：`/tmp/connect-e2e/`下`video-startup-observed-baseline`、
+`video-startup-buffer-one`、`video-startup-observed-return`、
+`video-startup-gpu-profiler-off`、`video-startup-buffer-one-repeat`，各有result、PNG和
+cleanup。汇总`/tmp/connect-startup-observed-summary.json`；对应宿主drive日志为
+`/tmp/connect-<目录名>.log`。A0实际Flutter VIDEO3图案已目视。
+
+主控main已恢复、热重载成功、Dart无运行错误，设备首页已目视并detach；启动
+Skipped34frames／SurfaceSync1000ms仍开放。15个session捕获JAR逐一确认不存在、
+目标无捕获进程，再正常关闭目标AVD释放内存；主控保留首页。停止Gradle后按已有
+精确清单清理394项debug输出1484.6MiB，空闲50.0GiB；release、有效编译缓存和原始
+证据保留。清理记录`/tmp/connect-startup-observed-cleanup.json`及
+`/tmp/connect-startup-observed-target-cleanup.json`，资源记录
+`/tmp/connect-codec-allocation-resources.jsonl`。后续双机测量须重启目标并恢复TCP转发。
