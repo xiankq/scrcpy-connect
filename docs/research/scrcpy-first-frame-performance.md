@@ -110,6 +110,49 @@ guest wall clock与主控monotonic仍不能直接相减。classic adbd发WRTE后
 捕获实例。应独立验证能否在不破坏初始暂停、资源释放及错误重试的前提下移除重复创建，
 不能未经实测就重建JAR或宣称可节省多少首帧时间。该开销不解释持续运行中每次输入的等待。
 
+## 软件AVC可调参数边界（2026-10-18）
+
+本轮独立只读一手核查固定Android16 frameworks/av
+`4b2111885ff934799e70eddae2527a9848c3be29`、frameworks/base
+`99b01a65cc4c104933788b3143285ab6bae65827`、libavc
+`82092580f1dafe88defd88f873016b585bbd9e52`。实际AVD枚举只有
+`c2.android.avc.encoder`和其OMX别名，原件`/tmp/connect-capture-encoders.txt`；
+Perfetto实际回调名进一步确认本次使用c2.android.avc.encoder。
+没有把系统二进制与对应AOSP构建逐字节等同。
+
+**已证源码：complexity不是这个组件的快速档入口。**C2SoftAvcEnc及其BaseParams
+没有complexity参数；软件AVC XML不含complexity limit，Java能力默认range=[0,0]。
+组件固定mEncSpeed=IVE_NORMAL，并传入libavc的u4_enc_speed_preset。原生libavc虽有
+FAST／HIGH_SPEED／FASTEST，但没有经该组件的MediaFormat complexity暴露，数值方向
+也不等同SDK的“较低复杂度通常较快”。不能加入`complexity=0`后宣称ultrafast，
+重建scrcpy JAR也不能修改设备系统编码器实现。
+[C2参数](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/components/avc/C2SoftAvcEnc.cpp#80)、
+[默认IVE_NORMAL](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/components/avc/C2SoftAvcEnc.h#50)、
+[预设传入](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/components/avc/C2SoftAvcEnc.cpp#760)、
+[Java默认范围](https://android.googlesource.com/platform/frameworks/base/+/99b01a65cc4c104933788b3143285ab6bae65827/media/java/android/media/MediaCodecInfo.java#4075)、
+[软件AVC XML](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/libstagefright/data/media_codecs_sw.xml#329)、
+[libavc快速档](https://android.googlesource.com/platform/external/libavc/+/82092580f1dafe88defd88f873016b585bbd9e52/encoder/ih264e_utils.c#1176)。
+
+**通用mapper不等于组件支持：**operating-rate是资源规划提示、priority=0是realtime
+意图，latency是可选的输入帧数要求，均不是通用Surface队列深度控制。CCodec有这些
+映射，但该软件AVC组件没有消费对应参数；工作looper本来已用ANDROID_PRIORITY_VIDEO。
+scrcpy已有priority=0／latency=1，重复添加不增加已证机制。KEY_LOW_LATENCY仅用于
+解码，KEY_NUM_SLOTS应用设置被忽略。
+[SDK契约](https://android.googlesource.com/platform/frameworks/base/+/99b01a65cc4c104933788b3143285ab6bae65827/media/java/android/media/MediaFormat.java#1143)、
+[CCodec mapper](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/CCodecConfig.cpp#613)、
+[SimpleC2优先级](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/components/base/SimpleC2Component.cpp#1055)。
+
+`max-fps-to-encoder`确实在GBS交组件前调用FrameDropper，按相邻媒体时间间隔丢帧，
+有2ms jitter容差；它不检查当前帧墙钟年龄，不撤回已经提交的旧帧。降低输入上限是
+实际减载策略，但不等于维持60fps或自动清空队列。该软件AVC默认B帧0；其CBR映射
+IVE_RC_CBR_NON_LOW_DELAY，不能把“改CBR”直接叫开启libavc低延迟。
+[FrameDropper](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/module/bqhelper/FrameDropper.cpp#36)、
+[GBS丢帧](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/module/bqhelper/GraphicBufferSource.cpp#719)、
+[CBR映射](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/components/avc/C2SoftAvcEnc.cpp#1351)。
+
+实际目标侧Perfetto／同PTS结果见[后续实施记录](../implementation/video-performance.md)。
+源码不证明所有OEM行为；本轮不为这些未支持旋钮修改默认编码选项或重建JAR。
+
 ## MDK snapshot官方修复与替代接口核查（2026-10-18）
 
 官方fvp最新发布仍0.39.1、MDK为0.39.0。MDK 0.39.0的snapshot条目涉及JPEG编码失败，

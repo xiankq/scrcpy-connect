@@ -4,6 +4,30 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+最新目标侧分段：同目标AVD、既有JAR、宿主快速排空采集8秒Perfetto，303个实际
+`CCodecBufferChannel::onWorkDone(c2.android.avc.encoder#252@ts=...)`逐项匹配收到的原始PTS，
+这些已捕获回调无匹配缺项或trace data-loss（原始媒体466包，非全帧完整性证明）。条件源年龄在该回调前全体中位299.213ms、最后1/3为590.659ms；
+后者回调→宿主首payload中位区间−5.496至41.228ms（负下界来自校准不确定性）。
+原始BOOTTIME／MONOTONIC snapshot差约−0.191至−0.052µs，非严格同步括号；仍保留
+源PTS同MONOTONIC和连续运行假设，不叫纯编码CPU或Android呈现时延。
+C2Node逐次fence等待最长7.405ms、queue调用11.187ms，本次主要年龄已在CCodec完成回调
+之前，不能据此唯一断言具体队列占用。可复跑分析器及三项时钟／缺失数据校验已补，
+原始`/tmp/connect-raw-drain-fbf1db6ec385/`。软件AVC没有通过complexity暴露libavc快速档，
+不添加无效旋钮；冷阶段并行方案仍在验证，完整目标和严格性能门槛保持开放。
+
+冷阶段候选四轮真实Android新像素完成：校验中位399→281ms，完整首像素
+1244.5→1097ms，仍超1000ms；16次正常输入及4次暂停恢复／停止／卸载每组均通过。
+宿主默认2MiB栈真实应用窗口在HEAD与候选均复现stack overflow／SIGABRT；GDB
+定位嵌套启动状态重复内联，生产入口Box::pin后Future由40512B降为160B，同一真实
+应用窗口测试已通过，未调整线程栈。最终代码四轮Android复测首像素1247/1198/1166/1074ms（中位1182ms），校验中位330ms；
+16次正常新像素及4次暂停／恢复／呈现／停止／卸载完成。输入P50/P95=190/310ms，
+首帧及输入P95仍超严格门槛，命令exit1，不能写成全通过。Core lib48通过2忽略、
+all-target严格clippy、fmt及只读review通过；Core iOS/macOS/Windows交叉check通过
+（非三宿主Flutter整包）。普通main恢复，热重载127ms／无Dart错误，设备首页已目视。
+Gradle已停止，精确debug产物清理436项，释放5730.4MiB，空闲52.3GiB，保留缓存及
+release／原始证据；目标无捕获进程且夹具已卸载。两项官方探测JAR按摘要及本批崩溃
+时间关联精确清理，另一个较早、归属未明的探测JAR保留，不扩大删除。
+
 最新传输批次：Rust ADB新增默认关闭的`delayed_ack`完整字节信用流控，
 Core设置`adbBurstMode`仅影响新连接，连接／诊断回执保留实际协商状态；不重建JAR。
 完整ADB测试72通过／13忽略、Core153通过／49忽略，工作区all-target严格clippy及fmt通过。

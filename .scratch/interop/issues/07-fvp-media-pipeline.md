@@ -148,3 +148,23 @@ Burst默认继续关闭，不是完整视频性能修复。宿主无解码快速
 旋钮的已证方案。MDK当前发布无对应snapshot空回调修复；onFrame→VideoFrame.to为
 待验候选，不降低实际像素门禁。两个JAR未改、未重建，任务继续开放。
 [真实对照、范围和复现](../../../docs/implementation/video-performance.md#可选adb-burst与宿主排空诊断2026-10-18)。
+
+
+目标Perfetto新证据：303项CCodec输出回调与接收PTS精确关联，trace无data-loss；
+全体／最后1/3条件源年龄中位299.213／590.659ms，主要年龄已在回调前，包含采集／
+队列／计算／IPC与调度，不等于纯编码CPU。Clock snapshot非正式误差括号，原PTS
+时钟假设保留。新增可复跑离线分析器和三项校验，拒绝缺失事件关联；软件AVC不支持
+MediaFormat complexity快速档的固定一手源码已核实，不添加无效参数。
+冷阶段电源查询与实际编码器枚举安全join、限4项有主探测清理；捕获JAR仍顺序上传。
+静态双AVD四轮对照校验399→281ms、完整首像素1244.5→1097ms，严格预算仍失败。
+HEAD与候选默认栈真实应用窗口均复现SIGABRT；生产入口Box::pin后40512→160B，
+同测试默认2MiB栈通过，无线程栈／测试调用方绕过。最终lib48通过2忽略及clippy通过。
+最终Android四轮16次正常新像素／4次暂停恢复及呈现停止卸载完成；首像素中位
+1182ms、输入P50/P95=190/310ms，严格门槛仍失败，未重跑挑样本。两个JAR未改未重建，
+动态输入长延迟及MDK崩溃继续开放。
+[目标侧分段](../../../docs/implementation/video-performance.md#目标ccodec完成边界与源年龄2026-10-18)、
+[冷阶段对照与栈修复](../../../docs/implementation/video-performance.md#冷启动探测并行与默认栈修复2026-10-18)。
+
+最终Core iOS/macOS/Windows交叉check与fmt通过；普通main热重载127ms及无Dart
+运行错误，首页已目视。Gradle停止后清理debug产物释放5730.4MiB，保留缓存/release
+及原始证据。代码`c121a51`、分析器`8201485`，完整目标继续active。

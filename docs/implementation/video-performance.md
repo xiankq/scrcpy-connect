@@ -1053,3 +1053,133 @@ SurfaceSync／跳37帧／1504ms启动帧告警仍在，不称应用启动性能�
 保留release／native hooks／Gradle／CMake／Rust依赖与incremental、当前视频／ADB／
 网络稳定性测试程序及原始性能／崩溃证据，没有使用全仓clean。
 原五项用户未跟踪文件未动、未stage、未push；完整目标继续active。
+
+## 目标CCodec完成边界与源年龄（2026-10-18）
+
+为区分上一批宿主快速排空仍约半秒的年龄，本批在同目标emulator-5556、既有捕获JAR、
+H264 1280／60／8Mbps／repeat33334µs动态夹具下，用目标自带Perfetto采8秒
+gfx／video／hal／sched／sync，16MiB ring。仅实验collector与独立fixture，不增加产品
+root或APK要求。临时raw-drain脚本在codec头后启动`perfetto -D -t 8s -b 16mb`，
+继续排空12秒；采集完精确pull并删除自己的远端trace，关闭连接、删除自己的JAR和卸载
+fixture。非Android呈现测量，Perfetto开销也保留在样本，不与无观测基线混称性能收益。
+
+原始`/tmp/connect-raw-drain-fbf1db6ec385/`含result.json、capture.perfetto-trace与
+codec-work-verified.json；`/tmp/connect-capture-perfetto.log`。466个媒体包全部保留，
+后半233个的条件PTS→宿主首header中位界515.579–562.307ms，header→整包中位11µs。
+官方工具v58.2-add693d8b／RPC14，下载helper内置校验摘要的预编译产物，
+没有添加应用依赖。[官方分析工具](https://perfetto.dev/docs/analysis/trace-processor)。
+
+实际trace在该唯一捕获进程14802上给出303个
+`CCodecBufferChannel::onWorkDone(c2.android.avc.encoder#252@ts=...)`，全部与原始
+收到的媒体PTS精确匹配，无重复／匹配缺失，trace data-loss为0。303项是8秒trace内
+已捕获回调的匹配集合，原始466包包含trace时间窗外媒体，不能据此证明全部源帧完整。
+由此确认实际编码器名称；
+另行官方JAR枚举仅有该软件AVC及其OMX别名，`/tmp/connect-capture-encoders.txt`。
+并未把AVD系统二进制与固定AOSP源码逐字节认定相同。
+
+| 303项实际同PTS关联 | 结果 |
+| --- | --- |
+| 源buffer PTS→CCodec workDone，全体中位 | 299.213ms |
+| 同上，固定最后1/3的101项中位 | 590.659ms |
+| workDone→宿主首header，最后1/3中位条件界 | −5.496至41.228ms |
+| C2Node单次fence wait，310项平均／最大 | 0.117／7.405ms |
+| C2Node queue调用，310项平均／最大 | 0.991／11.187ms |
+| video dequeueOutputBuffer，303项平均／最大 | 23.023／78.678ms |
+
+source→workDone使用目标Perfetto的BOOTTIME事件时刻和source MONOTONIC PTS，按
+同trace完整clock snapshots的BOOT−MONO中位−0.132µs换算；各snapshot差范围
+−0.191至−0.052µs。**相继clock读取不是严格同时采样或正式误差括号**，报告明确保留
+源PTS同MONOTONIC及本轮连续运行假设。逐项PTS相等也不能单独证明该假设。
+workDone→宿主header另沿用raw receipt的完整往返与10ms量化时钟区间，负下界来自
+校准不确定性，不解释为实际负耗时。初段因启动collector未立即消费而有host额外等待，
+全部原始匹配保留，后段统计不是剔除慢样本来过性能门禁。
+
+主要年龄在本次CCodec完成回调处理前已经存在；该边界包含采集、Surface／组件队列、
+编码计算、IPC和回调调度，不能叫纯编码CPU。单次C2Node fence／queue没有数百毫秒
+阻塞，但没有证明所有上游队列占用或唯一根因，也不能外推Android实际呈现路径。
+这改变下一项排查优先级：继续看输入与组件在途工作，避免重复盲调ADB／MDK缓冲。
+没有降低60fps默认或重建JAR。
+
+可复跑分析器筛唯一nice-name进程，拒绝缺钟／offset变化超过1ms、trace丢失、重复PTS
+和采集区间内没有收到的帧；额外区间外事件单独计数。时钟与数据完整性三项校验通过，
+`/tmp/connect-codec-trace-tests.log`；对本次真实回执删除一项中间媒体帧，实际拒绝
+`CCodec event inside capture has no matching received frame`，没有生成假完整结果。
+
+```sh
+python3 tool/e2e/video_fixture/analyze_codec_trace.py \
+  --trace-processor /tmp/connect-trace-processor \
+  --receipt /tmp/connect-raw-drain-fbf1db6ec385/result.json \
+  --trace /tmp/connect-raw-drain-fbf1db6ec385/capture.perfetto-trace \
+  --output /tmp/connect-raw-drain-fbf1db6ec385/codec-work-verified.json
+```
+
+软件编码器参数的独立一手核查排除了无效complexity快速档、将通用mapper当组件实现、
+将CBR叫低延迟等假设。[固定源码与边界](../research/scrcpy-first-frame-performance.md#软件avc可调参数边界2026-10-18)。
+
+
+## 冷启动探测并行与默认栈修复（2026-10-18）
+
+主屏启动的只读电源查询与真实编码器枚举改为join，并等待两者完成后按原电源错误优先级
+处理；仍验证真实编码器列表，不在不兼容时提交应用启动。独立应用启动不新增电源查询。
+编码器探测持有最多4项的全局许可后启动有主人的任务，调用方取消时仍执行原有清理；
+各ADB操作有既有截止时间。进程退出／runtime shutdown不在此保证内，Sync失败也不
+代表远端SEND已经完成。因此捕获JAR上传仍在验证后顺序执行，没有冒险并行远端写入。
+
+真实wire gate先在旧顺序实现上因无法越过电源门控而红，最终覆盖：门控期间完整内置
+JAR SEND/DATA/DONE与枚举、休眠拒绝、真实编码器不兼容拒绝、调用方取消后清理、
+电源拒绝仍等待失败探测清理。没有把同一门控红误写成每个清理缺陷都独立复现。
+
+同双AVD、静态真实像素夹具、Classic、H2641280/60/8Mbps（实际576×1280），
+关闭帧跟踪及clock/timeline，HEAD与候选分别4次新连接：
+
+| 指标 | HEAD | 并行候选（栈修复前） |
+| --- | --- | --- |
+| validatedMs四轮 | 408/414/390/358 | 281/281/273/327 |
+| validatedMs中位 | 399ms | 281ms |
+| Core启动中位 | 758.5ms | 648ms |
+| 完整首像素四轮 | 1604/1174/1226/1263ms | 1158/1032/1123/1071ms |
+| 完整首像素中位 | 1244.5ms | 1097ms |
+| 正常输入P50/P95 | 229/467ms | 217/398ms |
+
+每组16次正常及4次暂停后的新像素、Flutter呈现、停止纹理分离和fixture卸载完成；
+两组**均因严格首帧／输入预算失败而exit1**。输入差异不归因为仅冷阶段的优化，静态
+结果也不与此前动态场景混比。nativeDeleteConfirmed仍false，MDK既有截图崩溃未关闭。
+原始`/tmp/connect-e2e/video-prepare-{baseline,candidate}/result.json`，日志
+`/tmp/connect-video-prepare-{baseline,candidate}.log`，两组最终截图均已目视。
+
+补验发现宿主默认2MiB线程栈的真实应用窗口测试SIGABRT；HEAD同一精确测试也红，
+不是探测job新引入。GDB显示启动handshake状态在入口嵌套async frame重复内联，
+叠加命令poll栈后溢出。仅在生产start_session→start_session_with_settings边界
+Box::pin，仍在原task中await，入口Future由40512B降到160B。未加大线程栈，
+未改测试调用方。尺寸回归红绿及默认栈真实Settings窗口／剪贴板／停止保留任务测试
+通过；尺寸断言本身不声称测得poll栈上限。日志`/tmp/connect-prepare-app-{head-baseline,
+red-repro,box-session}.log`及`/tmp/connect-prepare-session-frame-{red,green}.log`。
+最终Core lib48通过／2真机忽略，all-target严格clippy通过，分别
+`/tmp/connect-prepare-stack-{lib-green,clippy}.log`。独立只读review无需修复问题。
+
+最终栈修复后同配置再跑4轮：validatedMs=378/366/271/294（中位330ms），
+Core总阶段783/723/675/649ms（中位699ms），完整首像素1247/1198/1166/1074ms
+（中位1182ms）。P50/P95=190/310ms；首帧与输入P95仍超1000/300ms门槛，
+驱动exit1，`videoPerformanceComplete=false`。16次正常新像素、4次暂停／恢复、
+Flutter呈现计数5/10/15/4、停止纹理分离及卸载均完成，最终截图已目视，
+nativeDeleteConfirmed仍false。结果波动意味着不能把此前约148ms改善写成稳定保证。
+本次启动误用了无效输出环境变量，驱动按默认路径写入，结束后完整移至
+`/tmp/connect-e2e/video-prepare-final/`保存，不影响运行参数或测量；日志
+`/tmp/connect-video-prepare-final.log`。没有重跑挑好样本或放宽门槛。
+
+Core iOS/macOS/Windows交叉check分别1.86/1.89/2.09秒通过，fmt通过；
+`/tmp/connect-prepare-{ios,macos,windows,fmt}.log`，不等于三宿主Flutter整包。
+普通main恢复后VM热重载127ms成功、无Dart运行错误，设备首页截图已目视并detach；
+`/tmp/connect-prepare-main.{log,png}`。日志仍有跳35帧与1380ms启动帧告警，
+不宣称普通应用启动已通过性能要求。
+停止Gradle，清理436项精确debug输出及本批非视频测试执行文件／.d，释放5730.4MiB，
+空闲52.3GiB；`/tmp/connect-prepare-cleanup.json`。保留release/profile、native hooks、
+Gradle/CMake、Rust依赖与incremental、视频／ADB／网络／会话回归程序及原始证据。
+两个既有JAR的SHA256复核与基线相同，本批完全未重建。五项用户未跟踪文件未改未stage。
+代码`c121a51`，离线分析及校验`8201485`；完整目标继续active。
+
+远端独立检查`/tmp/connect-prepare-target-inspection.json`确认无本批捕获进程／fixture。
+发现3项官方encoder探测JAR：其中mtime1792281852/1870的两项与HEAD崩溃/GDB
+时段吻合且摘要为官方SERVER，按这项时间关联推断精确删除；日志未打印UUID，
+不把归属写成直接证明。较早mtime1792272590的一项没有归属证据，保留。
+`/tmp/connect-prepare-remote-cleanup.json`。有主探测清理不承诺进程SIGABRT后仍执行。
