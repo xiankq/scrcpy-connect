@@ -19,7 +19,7 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
-    sync::{Mutex, RwLock, mpsc, oneshot},
+    sync::{Mutex, RwLock, Semaphore, mpsc, oneshot},
     time::Instant,
 };
 
@@ -31,6 +31,9 @@ const CAPTURE_SERVER_SHA: &str =
     include_str!("../../../servers/scrcpy/interop-scrcpy-server.sha256");
 const MAX_PACKET: usize = 16 * 1024 * 1024;
 const CLIPBOARD_MAX: usize = (1 << 18) - 14;
+// Acquire before spawning: repeatedly cancelled catalog initializers cannot
+// leave an unbounded number of detached probe uploads/processes behind.
+static ENCODER_PROBE_JOBS: Semaphore = Semaphore::const_new(4);
 
 #[derive(Clone, Copy)]
 struct VideoCodec {
@@ -470,7 +473,10 @@ impl Runtime {
                 Some(device),
             );
             let settings = quality_patch(&settings, params)?;
-            self.start_session_with_settings(params, &settings).await
+            // This startup state includes the complete media/process handshake.
+            // Keep it out of the session entry's nested async frames: debug
+            // builds otherwise exhaust a standard 2 MiB caller thread stack.
+            Box::pin(self.start_session_with_settings(params, &settings)).await
         }
         .await;
         result.map_err(|mut error| {
@@ -516,12 +522,6 @@ impl Runtime {
             }
         }
         let device = self.device(&device_id).await?;
-        if package.is_none() && self.device_sleeping(&device_id).await? == Some(true) {
-            return Err(CoreError::new(
-                "device_asleep",
-                "手机当前处于系统休眠，尚未提供画面。可在手机上唤醒，或明确选择唤醒手机；这可能点亮实体屏幕，仍需使用手机自身的锁屏解锁。",
-            ));
-        }
         if package.is_some() && device.api_level.is_some_and(|level| level < 29) {
             return Err(CoreError::new(
                 "unsupported",
@@ -544,7 +544,27 @@ impl Runtime {
             Ok(reservation) => reservation,
             Err(busy) => return Err(self.session_resource_busy(busy).await),
         };
-        let encoders = self.probe_video_encoders(&device_id).await?;
+        // The read-only power query and encoder enumeration are independent.
+        // Join both to completion, including the probe's existing cleanup,
+        // before rejecting sleep or a failed compatibility check. A real app
+        // launch retains its existing behavior without a power query.
+        let (sleeping, encoders) = tokio::join!(
+            async {
+                if package.is_none() {
+                    self.device_sleeping(&device_id).await
+                } else {
+                    Ok(None)
+                }
+            },
+            self.probe_video_encoders(&device_id),
+        );
+        if sleeping? == Some(true) {
+            return Err(CoreError::new(
+                "device_asleep",
+                "手机当前处于系统休眠，尚未提供画面。可在手机上唤醒，或明确选择唤醒手机；这可能点亮实体屏幕，仍需使用手机自身的锁屏解锁。",
+            ));
+        }
+        let encoders = encoders?;
         validate_encoder_selection(settings, &encoders)?;
         startup_timing.insert(
             "validatedMs".into(),
@@ -1563,6 +1583,26 @@ wait "$child""#
     }
 
     async fn read_video_encoders(client: &interop_adb::Client) -> CoreResult<Vec<VideoEncoder>> {
+        let permit = tokio::time::timeout(Duration::from_secs(15), ENCODER_PROBE_JOBS.acquire())
+            .await
+            .map_err(|_| CoreError::new("timeout", "等待设备编码器探测空位超时。"))?
+            .expect("encoder probe semaphore stays open");
+        let client = client.clone();
+        tokio::spawn(async move {
+            let _permit = permit;
+            // Own the operation through its cleanup even if the requesting
+            // startup/catalog future is dropped. Every ADB operation below has
+            // a deadline; this does not claim that a failed sync upload has a
+            // remote completion acknowledgement.
+            Self::read_video_encoders_owned(&client).await
+        })
+        .await
+        .map_err(|error| CoreError::new("encoder_probe", error.to_string()))?
+    }
+
+    async fn read_video_encoders_owned(
+        client: &interop_adb::Client,
+    ) -> CoreResult<Vec<VideoEncoder>> {
         if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
             return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
         }
@@ -2251,6 +2291,237 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn session_start_entry_keeps_capture_state_out_of_inline_frame() {
+        let fixture = ColdStartFixture::new().await;
+        let params = json!({"deviceId":"cold-device", "packageName":"com.android.settings"});
+        let inline_bytes = std::mem::size_of_val(&fixture.runtime.start_session(&params));
+        assert!(
+            inline_bytes <= 4096,
+            "session entry inlines {inline_bytes} bytes; keep the capture handshake out of nested entry frames"
+        );
+        fixture.client.close();
+    }
+
+    struct ColdStartFixture {
+        _root: tempfile::TempDir,
+        runtime: Arc<Runtime>,
+        client: interop_adb::Client,
+        peer: tokio::io::DuplexStream,
+    }
+
+    impl ColdStartFixture {
+        async fn new() -> Self {
+            use interop_adb::{DeviceInfo, protocol};
+            let root = tempfile::tempdir().unwrap();
+            let runtime = Runtime::initialize(root.path()).await.unwrap();
+            runtime.store.write().await.devices.push(
+                serde_json::from_value(json!({"id":"cold-device", "name":"Phone",
+                    "address":"fixture", "port":5555, "transport":"tcp", "status":"online",
+                    "apiLevel":35, "observationWanted":false}))
+                .unwrap(),
+            );
+            let (transport, peer) = tokio::io::duplex(256 * 1024);
+            let client = interop_adb::Client::from_negotiated_transport(
+                transport,
+                DeviceInfo {
+                    version: protocol::VERSION,
+                    max_payload: 64 * 1024,
+                    banner: "device::cold-start".into(),
+                    features: HashSet::new(),
+                },
+            )
+            .unwrap();
+            runtime
+                .connections
+                .lock()
+                .await
+                .insert("cold-device".into(), client.clone());
+            Self {
+                _root: root,
+                runtime,
+                client,
+                peer,
+            }
+        }
+
+        fn start(&self) -> tokio::task::JoinHandle<CoreResult<Value>> {
+            let runtime = self.runtime.clone();
+            tokio::spawn(async move {
+                runtime
+                    .start_session(&json!({"deviceId":"cold-device"}))
+                    .await
+            })
+        }
+
+        async fn frame(&mut self) -> interop_adb::protocol::Frame {
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                interop_adb::protocol::Frame::read(&mut self.peer, 64 * 1024, true),
+            )
+            .await
+            .expect("startup must make progress while the power query is gated")
+            .unwrap()
+        }
+
+        async fn send(&mut self, command: u32, local: u32, payload: Vec<u8>) {
+            interop_adb::protocol::Frame::new(command, local + 100, local, payload)
+                .write(&mut self.peer)
+                .await
+                .unwrap();
+        }
+
+        // Complete the real sync SEND/DATA/DONE exchange, not a fake probe future.
+        // Keep dumpsys open until the encoder process itself has been requested.
+        async fn gate_encoder_process(&mut self) -> (u32, u32) {
+            use interop_adb::protocol;
+            let mut power = None;
+            let mut sync_bytes = Vec::new();
+            let mut uploaded = 0;
+            loop {
+                let frame = self.frame().await;
+                match frame.command {
+                    protocol::OPEN => {
+                        let service = String::from_utf8_lossy(&frame.payload);
+                        self.send(protocol::OKAY, frame.arg0, Vec::new()).await;
+                        if service.contains("dumpsys power") {
+                            power = Some(frame.arg0);
+                        } else if service.starts_with("sync:") {
+                            assert!(power.is_some(), "screen sleep check was opened");
+                        } else if service.contains("list_encoders=true") {
+                            assert_eq!(
+                                uploaded,
+                                SERVER.len(),
+                                "the actual bundled probe JAR was uploaded"
+                            );
+                            return (power.expect("sleep query stays gated"), frame.arg0);
+                        } else {
+                            panic!("unexpected startup service: {service}");
+                        }
+                    }
+                    protocol::WRTE => {
+                        self.send(protocol::OKAY, frame.arg0, Vec::new()).await;
+                        sync_bytes.extend_from_slice(&frame.payload);
+                        while sync_bytes.len() >= 8 {
+                            let id: [u8; 4] = sync_bytes[..4].try_into().unwrap();
+                            let word =
+                                u32::from_le_bytes(sync_bytes[4..8].try_into().unwrap()) as usize;
+                            if id == *b"DONE" {
+                                sync_bytes.drain(..8);
+                                self.send(protocol::WRTE, frame.arg0, b"OKAY\0\0\0\0".to_vec())
+                                    .await;
+                                continue;
+                            }
+                            if sync_bytes.len() < 8 + word {
+                                break;
+                            }
+                            match &id {
+                                b"SEND" => assert!(
+                                    String::from_utf8_lossy(&sync_bytes[8..8 + word])
+                                        .starts_with("/data/local/tmp/interop-encoders-")
+                                ),
+                                b"DATA" => uploaded += word,
+                                _ => panic!("unexpected sync request: {id:?}"),
+                            }
+                            sync_bytes.drain(..8 + word);
+                        }
+                    }
+                    protocol::OKAY | protocol::CLSE => {}
+                    other => panic!("unexpected ADB frame: {other}"),
+                }
+            }
+        }
+
+        async fn finish_shell(&mut self, local: u32, output: &[u8]) {
+            use interop_adb::protocol;
+            if !output.is_empty() {
+                self.send(protocol::WRTE, local, output.to_vec()).await;
+            }
+            self.send(protocol::CLSE, local, Vec::new()).await;
+        }
+
+        async fn finish_probe(&mut self, encoder: u32, output: &[u8]) {
+            use interop_adb::protocol;
+            self.finish_shell(encoder, output).await;
+            loop {
+                let frame = self.frame().await;
+                if frame.command == protocol::OPEN {
+                    let service = String::from_utf8_lossy(&frame.payload);
+                    assert!(
+                        service.starts_with("shell:rm -f -- '/data/local/tmp/interop-encoders-"),
+                        "only the encoder probe is cleaned up: {service}"
+                    );
+                    self.send(protocol::OKAY, frame.arg0, Vec::new()).await;
+                    self.finish_shell(frame.arg0, &[]).await;
+                    break;
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cold_screen_start_overlaps_power_query_and_real_encoder_probe() {
+        let mut fixture = ColdStartFixture::new().await;
+        let startup = fixture.start();
+        let (power, encoder) = fixture.gate_encoder_process().await;
+        fixture.finish_probe(encoder,
+            b"List of video encoders:\n --video-codec=h264 --video-encoder=c2.fixture.avc (hw)\n").await;
+        assert!(
+            !startup.is_finished(),
+            "sleep rejection is still required after a successful probe"
+        );
+        fixture.finish_shell(power, b"Asleep\n").await;
+        let error = startup.await.unwrap().unwrap_err();
+        assert_eq!(error.code, "device_asleep");
+        assert_eq!(error.details["launchOutcome"], "not_submitted");
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn cold_screen_start_still_validates_actual_encoder_catalog() {
+        let mut fixture = ColdStartFixture::new().await;
+        let startup = fixture.start();
+        let (power, encoder) = fixture.gate_encoder_process().await;
+        fixture.finish_shell(power, b"Awake\n").await;
+        fixture.finish_probe(encoder,
+            b"List of video encoders:\n --video-codec=h265 --video-encoder=c2.fixture.hevc (hw)\n").await;
+        let error = startup.await.unwrap().unwrap_err();
+        assert_eq!(error.code, "encoder_unavailable");
+        assert_eq!(error.details["launchOutcome"], "not_submitted");
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn cold_screen_sleep_rejection_waits_for_probe_failure_cleanup() {
+        let mut fixture = ColdStartFixture::new().await;
+        let mut startup = fixture.start();
+        let (power, encoder) = fixture.gate_encoder_process().await;
+        fixture.finish_shell(power, b"Asleep\n").await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(30), &mut startup)
+                .await
+                .is_err(),
+            "sleep rejection must join the outstanding probe"
+        );
+        fixture.finish_probe(encoder, b"probe failed\n").await;
+        let error = startup.await.unwrap().unwrap_err();
+        assert_eq!(error.code, "device_asleep");
+        assert_eq!(error.details["launchOutcome"], "not_submitted");
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn cold_screen_probe_finishes_cleanup_after_startup_caller_is_dropped() {
+        let mut fixture = ColdStartFixture::new().await;
+        let startup = fixture.start();
+        let (_power, encoder) = fixture.gate_encoder_process().await;
+        startup.abort();
+        assert!(startup.await.unwrap_err().is_cancelled());
+        fixture.finish_probe(encoder,
+            b"List of video encoders:\n --video-codec=h264 --video-encoder=c2.fixture.avc (hw)\n").await;
+        fixture.client.close();
+    }
 
     // Exercise the actual ADB route and run_video, rather than only a packet
     // parser: the HTTP relay cannot see bytes buffered by this upstream hop.
