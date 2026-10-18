@@ -1,5 +1,66 @@
 # ADB 应用失活检测与恢复
 
+## Companion 断线回收（2026-10-18）
+
+实现6fb5c33。原helper进程退出后的删除命令使用同一Client；传输已经断开时，
+进程虽消失，远端临时JAR仍会残留。新增实际Android回归直接启动原companion，
+保留独立检查连接，关闭其真实ADB Client，不发送media.shutdown或主动disconnect。
+原实现6.88秒失败：`process_exited=true automatic_jar_cleanup=false`；测试随后仅
+补清自己的精确路径。最早red.log是按Java类名查进程的错误夹具，不算有效复现。
+
+现在由Rust生成远端shell launcher，不修改companion或scrcpy JAR。后台子进程
+使用exec成为真实app_process；launcher保留自身job，正常结束或HUP／INT／TERM时
+终止并等待该job，之后才删除唯一部署路径。正常退出码、stdout READY、RPC认证
+保留；不信号保存的裸PID，不按文件glob删除。host原有精确路径删除作为兜底保留。
+
+[adbd shell_v2](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/daemon/shell_service.cpp#579)
+在协议FD结束时向shell发送HUP，而不是遍历子进程。不能只把Java放后台后假设它
+也会收到信号。[mksh jobs.c](https://android.googlesource.com/platform/external/mksh/+/android-16.0.0_r1/src/jobs.c)
+的builtin jobs先移除已完成job，再以%1发TERM／CONT，保存的child只用于builtin wait，
+不用于生产信号发送。等待完成前不启动清理用外部程序，避免新job占位。
+
+额外STOP用例曾暴露先`exit 129`再依赖EXIT trap的失败路径：
+[mksh exit](https://android.googlesource.com/platform/external/mksh/+/android-16.0.0_r1/src/funcs.c#2156)
+会先检查stopped jobs并输出警告；stderr已断开时可能SIGPIPE终止，尚未执行EXIT。
+SIGPIPE是源码支持的解释，不是本次内核信号实测。最终signal trap直接调用cleanup，
+忽略进一步信号，TERM后CONT恢复停止的job，再wait；wait的stderr丢弃以避免断管。
+没有采用等待前台child的no-op HUP，或向整个进程组发信号的候选。
+
+```sh
+INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:25556 rtk proxy cargo test -p interop-core \
+  --lib companion::deployment_tests -- --ignored --nocapture --test-threads=1
+rtk proxy cargo test -p interop-core --lib --test application_liveness \
+  --test device_lifecycle --test tls_connection_policy --test state_snapshot -- --nocapture
+rtk proxy cargo clippy -p interop-core --all-targets -- -D warnings
+```
+
+设备端须是隔离且已授权的Android，25556为本机到adbd的明确forward。两项实际
+设备用例最终4.18秒通过，覆盖原Java服务的真实传输丢失，以及实际mksh的exit0、
+exit7、普通断线、STOP后断线。退出trap在child结束前确认JAR仍在，自动删除后检查
+标记；成功场景没有fallback。测试失败兜底逐次验证PID starttime与唯一fixture argv，
+归属消失才删精确jar／marker／pid；check和signal仍非原子，不作为生产身份承诺。
+99项相关回归通过、10项条件忽略，设备用例另行显式通过；严格clippy及Core三宿主
+交叉check通过，不代表iOS／macOS／Windows的Flutter整包链接或运行验收。
+日志／回执前缀`/tmp/connect-companion-exit-`，早期候选失败原件保留。
+
+正式Flutter RemotePage在双API36／2vCPU SwiftShader AVD真实EOF恢复14秒完整通过，
+1483ms得到新session、实际像素0→1、主动停止不重建；proxy接受2／切断1、fault
+errors空、fixture卸载及缺席／Settings恢复／driver与proxy关闭均确认。恢复后全屏
+VIDEO1及悬浮退出已目视。原件`/tmp/connect-e2e/companion-launcher-recovery/`，
+实测APK`/tmp/connect-artifacts/companion-launcher-recovery-debug.apk`，SHA256
+`3c457ebc5e54f332a45c581e552405b4b37c9811fd60e86b05f93e470e8fefa4`，
+构建70.5秒／安装629ms。实际x86_64桥接库完整含原生产捕获／companion JAR；
+三份生产JAR摘要不变，没有重建，也没有改变视频质量／解码参数。
+
+结束时本批helper／launcher／捕获JAR和进程缺席，成功场景无需人工补清。两份已在
+上一轮回执中的音频fixture JAR和历史文件目录保留；不宣称远端临时目录完全空。
+Gradle停止、两个精确forward清除、自有AVD核名关闭且PID消失；删除两份与实测包
+摘要相同的APK副本共230.3MiB，空闲32.67GiB，保留有效缓存和可复用中间输出。
+
+覆盖范围是launcher已启动后的收尾。上传中断、wrapper SIGKILL、断电与跨重连的
+待清理账本仍开放。已有MediaCodec／BufferQueue／GL停止告警原样保留；本次不关闭
+MDK snapshot崩溃、首帧／动态预算、物理无线或小时级长稳，也没有声称延迟改善。
+
 ## 旧连接清理与恢复后新会话的顺序（2026-10-18）
 
 旧monitor在connections锁下移除closed Client，随后释放锁、按deviceId写offline并

@@ -33,6 +33,14 @@ fvp/MDK 是否能满足 scrcpy 实时流低延迟、音画同步和 Flutter 渲�
 
 ## 当前状态
 
+2026-10-18辅助部署收尾：6fb5c33修复ADB已断时helper进程退出但JAR留存；由Rust
+生成远端launcher等待自有子进程后删除精确路径。原Java真实断线先红后绿，实际
+mksh的正常／失败退出和普通／STOP断线通过，正式Flutter远控EOF恢复14秒／1483ms／
+新像素0→1通过，成功场景自有JAR／进程无残留；未改或重建任何生产JAR。99项
+相关回归通过、10项条件忽略，新增两项设备测试实际通过，严格clippy及三宿主Core
+check通过。[证据与边界](../../../docs/implementation/connection-health.md)。上传中断／SIGKILL／
+断电后的待清理账本仍属任务06；本批不宣称首帧、动态预算或物理长稳已通过。
+
 2026-10-18恢复稳定性：修复旧Client清理按deviceId误取消替代连接新视频启动的竞态。
 真实准入接缝先红后绿，另补caller取消中断cleanup的红例；同设备发布等待完整旧
 收尾，未完成清理由下一caller或monitor继续。5组交错回归、连接相关99项通过，

@@ -2,6 +2,45 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 本轮：辅助JAR随远端进程退出回收（2026-10-18）
+
+实现提交6fb5c33。真实companion／实际Client.close／独立ADB检查连接，在原实现
+6.88秒复现“进程已退出、JAR仍在”，日志`/tmp/connect-companion-exit-red2.log`。
+更早red.log仅是测试错误地按Java类名查进程的夹具失败，不计真实复现，已修正为
+只读PID／NAME，不读取含认证token的argv。Rust生成远端shell launcher，在adbd
+关闭传输后仍终止并等待自身子进程，再精确删除本次JAR；保留原正常退出码、
+READY与RPC认证。所有生产JAR源码／产物均未改，三份摘要一致，没有重建JAR。
+
+实际Android mksh验证exit0、exit7、普通HUP断线及STOP后断线；child在退出前确认
+JAR仍在，随后自动删除。STOP候选曾留下测试孤儿，查源码后把signal trap改为直接
+cleanup，避免先exit触发stopped-job诊断；原红例经唯一脚本归属核验后手工精确收尾，
+不计自动通过。最终两项设备测试4.18秒通过、无fallback；默认99项核心／连接回归
+通过，10项条件忽略，新增两项Android用例是另行实际运行。严格all-target clippy、
+iOS／macOS／Windows Core交叉check通过；非三宿主Flutter整包。只读review未发现
+生产launcher新确定问题；测试失败兜底核对starttime／唯一argv路径，每次信号分别
+检查，退出后才清精确路径，但不宣称其check／signal为原子生产身份保证。
+
+双API36／2vCPU SwiftShader AVD的正式Flutter RemotePage真实adbd EOF恢复，14秒
+完整exit0，1483ms获得新session、实际像素0→1，主动stop后不重建；proxy接受2／
+切断1、fault errors空，fixture卸载／缺席、设置／driver／proxy清理true，恢复VIDEO1
+已目视。原件`/tmp/connect-e2e/companion-launcher-recovery/`。构建70.5秒／安装629ms，
+实测APK`/tmp/connect-artifacts/companion-launcher-recovery-debug.apk`，SHA256
+`3c457ebc5e54f332a45c581e552405b4b37c9811fd60e86b05f93e470e8fefa4`；实际
+x86_64桥接库完整含原生产捕获和companion JAR。最终自有helper／launcher／捕获
+JAR及进程缺席，未手工补清这些成功场景；上一轮已存在的两份音频fixture JAR及
+历史文件目录保留，不能说整个/data/local/tmp为空。
+
+Gradle停止，两个精确forward移除，两自有AVD核名关闭且PID消失；只删与实测APK
+摘要一致的两个重复APK共230.3MiB，空闲32.67GiB，保留可复用中间输出、有效缓存、
+release、实测包、原始证据及原五项用户文件。回执／日志前缀`/tmp/connect-companion-
+exit-`及`/tmp/connect-companion-launcher-recovery-`。本轮无Dart界面改动、未另建普通
+main包；正式远控界面及实际像素已验收。停止时已有MediaCodec／BufferQueue／GL
+告警保留，不据此关闭MDK内部崩溃。
+
+本批仅覆盖launcher已运行后的收尾；上传中断、wrapper SIGKILL、断电及重连待清理
+账本仍属任务06缺口。首帧／动态视频预算、物理Wi-Fi与长稳继续开放；没有降低
+质量或宣称性能提升，完整目标active。
+
 ## 本轮：旧连接清理与新视频启动的交错（2026-10-18）
 
 上一轮a0d40d2／d20fb6a／6a7b808为progress：有限静态输入改善，候选首帧失败，

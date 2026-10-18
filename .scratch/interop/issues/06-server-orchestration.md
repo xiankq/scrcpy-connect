@@ -66,8 +66,15 @@ Requirements: R04、R11–R12、R24–R25
 之后关闭精确旧Client。真实准入红绿、99项连接相关回归及正式RemotePage EOF恢复
 14秒／1722ms／新像素0→1通过，未改JAR；见[连接清理证据](../../../docs/implementation/connection-health.md#旧连接清理与恢复后新会话的顺序2026-10-18)。
 
-- [ ] 异常断网后的companion JAR自动回收：最终E2E留下一个故障前6.011秒创建的
-  精确临时路径，无活进程，已核验摘要后手工清除。恢复后的正常断开未留下第二份。
-  需要按已确认设备身份、已部署路径归属记录待清理项，并在恢复后取得明确结果；
-  不按glob删除其他会话文件、不关闭新helper、不重放通知／通话等动作。覆盖网络
-  丢失、进程退出、caller取消及后续重连；无进程或fixture卸载不能替代文件回收证据。
+- [x] launcher运行后的companion断网回收：6fb5c33以Rust生成远端收尾脚本，等待
+  自有job退出再删除精确JAR，不重建服务端。真实Java／Client.close先红后绿；实际
+  mksh的exit0／exit7／普通断线／STOP后断线均通过，child确认退出前JAR仍在。
+  正式Flutter RemotePage EOF恢复14秒／1483ms／新像素0→1通过，成功场景结束时
+  helper／捕获JAR和进程缺席、无手工补清。三份JAR摘要不变。
+- [ ] 剩余异常部署回收：上传中断、launcher尚未运行、wrapper SIGKILL、断电及
+  启动caller取消等仍需按已确认设备身份和已部署路径记录待清理项，恢复后取得
+  明确结果；不按glob删除其他会话文件、不关闭新helper、不重放动作。已退出或
+  fixture卸载不能替代文件回收证据；本轮有限覆盖不关闭整个任务。
+
+99项相关回归及严格clippy通过，10项条件忽略；新增两项Android测试另行实际通过，
+三宿主Core交叉check不是Flutter整包。详见[断线回收及证据](../../../docs/implementation/connection-health.md)。
