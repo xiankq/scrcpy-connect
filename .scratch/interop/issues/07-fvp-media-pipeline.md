@@ -338,3 +338,22 @@ P50/P95=277/392→153/204→273/389ms。显式AMediaCodec:async=1有成功async�
 首次测试注册残留导致的release失败保留，已改用既有打包入口完成。普通main实际
 恢复并MCP热重载119ms、无Dart错误、首页已目视；启动长帧继续开放。两AVD正常
 关闭、Gradle停止，394项debug输出1506.8MiB清理，保留有效缓存、release及证据。
+
+## 冷首帧本批进展（2026-10-18）
+
+15c8919合并冷编码器枚举及正常清理的shell，原退出码、失败与caller abort清理保留。
+真实wire／实际shell先红后绿，Core lib61 passed／2 ignored、clippy／fmt及Core三端
+交叉check通过。A/B/A validated中位354→269→311ms，样本重叠，不承诺固定收益。
+最终生产default关闭追踪60输入P50/P95=148/221ms通过输入预算；首帧
+1142/1064/1000ms仍失败、整体exit1。66窗口、暂停恢复／释放及清理完成。
+
+原生采样缩至首次renderer／模拟器图形代理初始化，未交付该段播放优化，不把27个
+首窗栈样本当真机瓶颈证明。新arm64签名包及普通main恢复／热重载通过；394项debug
+输出1486MiB清理、AVD关闭，保留有效缓存及原始失败。一个早于本批的旧probe JAR
+另经摘要／时间／无进程核对后精确清理。JAR源码／产物未改、未重建。
+[复现、对照、采样、构建和清理回执](../../../docs/implementation/video-cold-start.md)。
+
+下一步验证默认主屏H264自动编码器在目录未知时直接捕获；非默认codec／named
+encoder／独立应用窗口保留strict probe，已有不支持目录仍拒绝，unknown不能伪造
+available，睡眠、实际像素、资源和unknown账本门禁不能削弱。当前仅完成只读审查，
+尚未实施或取得该路径收益；首帧与本任务保持开放。

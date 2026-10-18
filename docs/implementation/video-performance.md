@@ -1828,3 +1828,15 @@ Python分析器独立review发现跨会话误配、重复decoded及错身份统�
 修复并8项全绿；不把不完整覆盖伪装成有效配对。首个新marker运行的PTS唯一性失败
 保留，清理后才重测。Bridge19项Rust／123项Flutter、严格分析和clippy／fmt通过。
 首帧、真实无线、物理硬解／profile／热及长稳均继续开放，完整目标未完成。
+
+## 冷启动清理往返与首次绘制（2026-10-18）
+
+`15c8919`把冷编码器枚举和正常JAR清理合为一次shell，保留原退出码及失败／取消
+的owned fallback。真实wire边界和实际shell先红后绿，Core lib61 passed／2 ignored，
+clippy／fmt及Core三未来端交叉check通过。A/B/A validated中位354→269→311ms，存在
+样本重叠，不承诺固定收益。最终关闭追踪60输入148/221ms通过输入预算，首帧
+1142/1064/1000ms仍失败；66次真实窗口及暂停／释放／清理完成。
+
+Perfetto与原生栈把首次输出额外开销缩至renderer／模拟器图形代理初始化；首窗口
+27个栈样本不足以断言宿主shader编译耗时或真机瓶颈。服务端与JAR未改、未重建。
+[完整对照、清理边界、CPU观测、签名产物和下一步候选](video-cold-start.md)。

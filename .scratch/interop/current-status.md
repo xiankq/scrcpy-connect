@@ -4,6 +4,55 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+本轮继续首帧专项，未宣称完成：先用新启动的双AVD重复现有默认路径，再验证冷编码器
+枚举和正常清理合并为一次shell是否减少启动往返；上传失败、超时、调用方取消的独立
+清理所有权仍须保留。输出阶段约0.44秒另按既有原始追踪排查，不重试已否定的参数。
+上一段末尾“校验约0.24–0.31秒”不是最终默认组数值；最终默认组validated实际为
+312/350/313ms，Core为734/715/673ms，首帧1197/1157/1122ms。当前未改服务端源码、
+补丁、版本或工具链，沿用已提交JAR，不因主控侧性能实验重建。新实验尚无收益结论。
+新双AVD基线3轮2输入首帧1587/1176/1222ms、validated413/303/354ms；合并候选为
+1068/988/1147ms、validated263/269/276ms。每组12次实际窗口、3次暂停／恢复／释放及
+App／fixture清理确认，整体严格均exit1。基线包含首次模拟器冷负载，不能将差值
+全部归因于一个shell；正在切回旧流程复核。旧wire边界5项及真实shell删除测试先红，
+新Core lib61 passed/2 ignored、clippy通过，另有只读review未发现新增问题。
+既有异步输出Perfetto中，onVideo(PTS0)至首swap之前，renderer实际CPU Running约
+131/132/135ms，首swap55/71/106ms；尚无CPU栈，不能直接称shader编译，正在补采样。
+旧流程返回组首帧1261/1088/1148ms、validated365/231/311ms，方向支持候选但存在重叠，
+不把中位354→269→311ms当固定收益承诺。返回组6输入P50/P95=163/398ms，仍保留失败。
+另复核renderer首个视频输出窗口CPU约131–135ms，而紧邻后两次通常1–3ms；此处首
+swap是该视频输出之后的第一笔，不是线程生命周期首swap。正采同钟Perfetto与
+simpleperf原生栈，诊断样本不参与候选收益统计。恢复候选源码后还需无追踪扩量复测。
+候选生产default关闭native及系统追踪，最终3轮60输入P50/P95=148/221ms，输入预算
+通过；首帧1142/1064/1000ms，完整首帧仍失败、严格exit1。validated264/316/272ms，
+66次实际窗口检查、3次暂停恢复／释放及App／fixture清理确认。结果在
+/tmp/connect-e2e/startup-shell-final-60/，不把它与前组trace开启的6输入作控制对照。
+新30秒原生CPU采样719样本无丢失，整体renderer热点主要在模拟器GL状态查询及
+QemuPipe同步读写；正按首输出窗口与实际clock_snapshot转换过滤，尚不能据此称真机
+同样受限或已找到shader编译问题。详见[本批证据](../../docs/implementation/video-cold-start.md)。
+`15c8919`已提交合并清理。采样按同线程首release→swap过滤为27样本（7/13/7），
+含GL2Encoder::updateProgramInfoAfterLink及GL shader／uniform／状态查询，经QemuPipe
+同步读写；由clock_snapshot校正MONOTONIC与trace时间，偏移49–124ns，最近样本距
+边界431934ns。样本有限，不把代理调用解释为宿主shader编译耗时或真机瓶颈。
+Core iOS/macOS/Windows交叉check全部通过；只证明Core构建，非四宿主Flutter整包。
+更新签名arm64 release60.40秒完成，签名／manifest／ZIP完整性／16KB对齐／arm64
+ELF检查通过，身份不变；原件/tmp/connect-artifacts/connect-arm64-cold-start-release.apk，
+46920990字节，SHA-256=d7b15c2e31dcb4d8526e2385e11368332e6bcf152f23a636c0ddbba580b040f6。
+尚无物理ARM运行证据。正恢复普通main并清理本批调试输出，保留有效缓存和原始证据。
+普通main已恢复并MCP热重载成功、无Dart错误，设备列表空态目视通过；启动Skipped39
+frames及SurfaceSync1000ms告警保留，不称应用启动流畅通过。目标本批15个捕获JAR、
+进程及fixture确认无残留；额外扫描发现1个早于本批的官方枚举JAR，mtime为
+2026-10-17T21:29:50Z（本批首次实验03:17:40Z），摘要为固定官方JAR。保留首次失败
+清理回执，确认无scrcpy进程后仅删除该精确旧路径，复扫为空；不是本批正常清理遗漏
+的证据。最终回执/tmp/connect-startup-shell-target-cleanup-final.json。新trace、配置及
+采样远端副本已删除，host原始证据保留。
+本轮收尾：普通main构建8.4秒／安装599ms、热重载123ms；两AVD核对名称后正常关闭，
+Gradle停止、仅清理精确debug白名单394项／1486.0MiB，空闲49.67GiB；release及有效
+缓存保留，五项原有未跟踪文件未修改。整体目标仍active。下一段优先实测默认主屏
+H264自动编码器在冷目录未知时直接捕获的窄路径：固定scrcpy默认不先list_encoders；
+不能伪造available，已有明确不支持的目录仍拒绝，非默认codec／named encoder／
+独立应用窗口保留strict probe、睡眠与未知启动账本保护。本段只完成只读契约审查，
+尚未实施或取得该直启路径收益；不能重复削弱现有验证来换取门槛通过。
+
 上一轮连接健康修复与实际解码路径确认已提交，判为progress。本轮双AVD冷启后，
 普通Driver原生默认3轮30输入首帧1552/1152/1114ms、P50/P95=283/439ms，严格门槛
 仍失败；36次实际窗口检查、3次暂停恢复／释放及App／fixture清理确认。同步60秒
