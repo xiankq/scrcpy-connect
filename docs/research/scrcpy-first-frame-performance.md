@@ -189,3 +189,32 @@ MDK releases/latest网页缓存曾误指0.38.0，本轮以releases.atom及0.39.0
 [R14]: https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/src/main/java/com/genymobile/scrcpy/device/Streamer.java
 [R15]: https://github.com/Genymobile/scrcpy/blob/v5.0.1/app/src/frame_buffer.c
 [R16]: https://github.com/Genymobile/scrcpy/blob/v5.0.1/app/src/screen.c
+
+
+## MDK帧转换读回的可行边界（2026-10-18）
+
+独立只读核对fvp0.39.1随包MDK0.39.0固定头（本地
+`android/mdk-sdk/include/mdk/{VideoFrame,Player,c/VideoFrame,c/Player}.h`），
+与[官方Player回调说明](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs#templateclass-frame-player-onframestdfunctionintframe-inttrack-cb)及
+[官方AMediaCodec说明](https://github.com/wang-bin/mdk-sdk/wiki/Decoders#amediacodec)。
+Context7精确查询无匹配，未由其缺失结果推断能力。
+
+- C `VideoFrameAPI.to`在c/VideoFrame.h:115；C++ VideoFrame.h:223–234说明成功
+  总在host内存、失败invalid、不支持压缩输入输出，相同格式尺寸可能返回当前帧。
+  C++封装将返回值构造成拥有对象（:126、333–334），析构:128–130使用
+  `mdkVideoFrameAPI_delete(&p)`，候选严格照此回收转换句柄；原输入借用不回收。
+- C没有clone；ref/unref/delete导出:142起。ref为引用计数句柄，不能推出像素深拷贝
+  或GPU线程安全。onDestroy只有c/VideoFrame.h:118无注释声明，不能拿来当deleter。
+- Player.h:1059–1080的onFrame specialization attach借用输入、同步filter、detach
+  写回。c/Player.h:301说明onVideo位于renderer前。可在同步作用域尝试单次转换、
+  复制有界像素并保留原frame指针/return0；不得停止/销毁播放器或把借用指针传worker。
+- C RGBA枚举为9、C++为10；官方C++封装明确减1。必须核对格式、尺寸、plane、
+  data、stride；EOS帧可能句柄有效但无数据（VideoFrame.h:133）。
+- AMediaCodec默认surface=1，copy=1在Surface模式忽略，surface=0才是ByteBuffer
+  host输出。Player.h:698仍标记非host frame TODO；没有找到Surface→to支持承诺。
+  候选失败不能自动换surface=0或全局软解。Apple/Windows输出路径也须独立验证。
+- onVideo位于renderer前，即使转换成功也仅证明解码帧像素可读，不能当作呈现完成。
+  转换会阻塞当次回调，时钟开销和Flutter合成画面必须另验；没有公开承诺其不影响
+  原Surface资源。回调线程/跨track串行/注销drain也无保证，需保留token/Arc撤销。
+
+这些事实支持一个默认关闭的临时候选实验，不等于MDK renderer快照崩溃已修复。

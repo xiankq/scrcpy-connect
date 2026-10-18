@@ -1183,3 +1183,84 @@ Gradle/CMake、Rust依赖与incremental、视频／ADB／网络／会话回归�
 时段吻合且摘要为官方SERVER，按这项时间关联推断精确删除；日志未打印UUID，
 不把归属写成直接证明。较早mtime1792272590的一项没有归属证据，保留。
 `/tmp/connect-prepare-remote-cleanup.json`。有主探测清理不承诺进程SIGABRT后仍执行。
+
+
+## 读帧候选否定与真实网络恢复（2026-10-18）
+
+本轮原路径动态1280/60/8Mbps、Classic、AMediaCodec、trace开启，2轮各200次
+串行64×64截图及10次暂停：400次截图、8次正常新像素、20次暂停恢复、同PTS关联
+和Flutter合成计数14/12全部完成，本次没有崩溃。首帧3146/2766ms，输入P50/P95
+1360/1478ms，严格1000/200/300门槛失败，exit1；不能覆盖既有两次同栈MDK崩溃。
+`/tmp/connect-e2e/video-readback-baseline/result.json`、
+`/tmp/connect-video-readback-baseline.log`。
+
+固定头及官方文档核查支持一个临时next-frame转换实验：同步onVideo中只在有单次
+请求时to(C RGBA=9)，核对尺寸/格式/data/stride并复制限定像素，delete转换句柄，
+原借用frame保持不变、return0，不调用renderer snapshot，也不切换Surface/软解。
+真实AVD首帧转换返回有效尺寸，但64×64四点均[0,0,0,255]，独立计数器期望0实际
+为null，测试立即失败，不能把有buffer／更短首次返回当成成功。
+`/tmp/connect-e2e/video-frame-conversion/result.json`、
+`/tmp/connect-video-frame-conversion.log`。该次失败不能证明所有Surface配置永远不能
+转换，但足以拒绝当前候选。它尚未到Flutter合成面检查，不声称原renderer仍正确。
+候选完整补丁仅存`/tmp/connect-frame-conversion-candidate.patch`，三个修改源码按原
+字节恢复并git diff逐一核对为0；未提交实验代码、DEBUG或新ABI，默认播放参数和
+两个JAR不变。研究边界见[固定MDK帧转换](../research/scrcpy-first-frame-performance.md#mdk帧转换读回的可行边界2026-10-18)。
+
+随后转向真实视频断网恢复，避免沿一条未验证读帧路线继续叠设置。新host driver在
+127.0.0.1:25557透明代理到既有25556→真实adbd，双向Socket.addStream保持背压；
+仅关闭本测试唯一活动ADB连接两端，不解析/保存ADB字节，不杀adbd或改全局网络。
+独立静态图案fixture仍只用于实验，产品被控端无需额外APK。完整App通过生产
+router/controller/shared Player打开显式主屏；driver有ready/cut/ack、accept编号及
+时刻、结果和所有权清理，缺证据即失败。不能将此TCP EOF故障叫物理Wi-Fi切换。
+
+首个运行遗漏RemoteLaunchIntent停在路由保护页，属于夹具错误，不当产品红。修正
+后的`video-recovery-red-r2`实际从合成面识别图案0，切断socket1后1.237秒新accept，
+设备offline→connecting→connected，但30秒内无新视频会话，任务失败、完整清理。
+证实设备自动重连与视频自动恢复是两个不同门槛。首修复候选
+`video-recovery-green`又因旧SessionView向已结束输出发pause产生未处理RequestFailure
+而红，不能计通过；据此补本地已结束绑定撤销，而非忽略整个E2E异常。
+
+生产修复保留已观看主屏的短时恢复意图；设备autoReconnect的offline→connected后，
+只在当前可见前台、状态已核验且用户未停止时重建主屏，分配新sessionId并重新验证
+首帧。widget.existingSession不被当成可复活身份，原工具initialAction不重放。
+独立应用/unknown启动仍走核验，不能再次START_APP。明确session.stop、设备断开/
+忘记及activities.stop两个相关入口在等待回执前同步撤销意图；恢复list前后检查
+可见性，已提交结果迟到时清理精确新ID，不绑定回界面。已结束SessionView只撤销
+本地owner与排队权限，不发送无效pause，也不误删同ID successor。
+
+新widget最初主屏/retained两项红；background测试自身在暂停期间dispose后恢复
+造成Ref错误，修正测试清理顺序，不当产品修复。只读review另4项问题中，旧输出
+清理已由真实E2E复现；补5条精准回归实际红后绿：清理、停止前/后提交、后台跨await
+与成功reconcile后再断线。最终相关52项通过，完整App275项46秒通过，
+`/tmp/connect-remote-recovery-final-unit.log`、`/tmp/connect-recovery-app-suite.log`。
+
+首个最终运行`video-recovery-final`已3.028秒恢复新session并完成合成图案0→1，
+但测试把App根组件先卸载再调清理API，Bridge已关闭，整条exit1；该次不算通过。
+修正夹具先清理设备/偏好再卸载根组件，并把complete移至清理之后，生产实现不变。
+随后`video-recovery-verified`完整17秒、exit0：恢复3.965秒，新sessionId、真实
+mdk.snapshot首帧、合成图案[0,0,1]、停止2秒无新活动、两次socket接受与一次切断、
+fixture卸载/缺席、Settings恢复、代理结束全部确认。
+`/tmp/connect-e2e/video-recovery-verified/{result,proxy-events,cleanup}.json`，
+`/tmp/connect-video-recovery-verified.log`，最终全屏VIDEO1及浮动退出截图已目视。
+这是EOF断线+重新捕获并重新解码，不是保留原sessionId或任意应用任务自动重放。
+静态恢复时间不替代严格动态输入/冷首帧预算。
+
+同版第二次`video-recovery-verified-r2`亦17秒、exit0，恢复3831ms，合成[0,0,1]，
+新session/2次accept/1次cut/停止/夹具缺席/Settings及代理清理全部确认。
+`/tmp/connect-e2e/video-recovery-verified-r2/`和同名日志。最终App全量275通过、
+相关52项通过，严格分析无问题；只读复核修复后无新可证问题。全部命令与失败原件
+保留，不能把这些成功覆盖先前MDK崩溃或严格性能失败。
+
+普通main已恢复，实际VM热重载148ms、无Dart运行错误，首页截图已目视后detach。
+`/tmp/connect-recovery-main.{log,png}`；仍有跳34帧、SurfaceSync1000ms和1522ms
+启动帧告警，不称普通启动流畅已达标。最终fixture两文件严格分析与格式检查通过。
+Gradle停止后精确清理382项debug目录/APK，释放1489.4MiB，空闲51.6GiB；
+`/tmp/connect-recovery-cleanup.json`。保留host Flutter测试native asset、native hooks、
+release/profile、Gradle/CMake、Rust依赖/incremental及原始证据，避免下一轮全量重编。
+目标独立PID/NAME检查无捕获进程，fixture缺席；按本批所有已存回执sessionId查验
+未发现残留capture JAR，没有扩大删除旧文件。
+`/tmp/connect-recovery-{target-inspection,remote-cleanup}.json`。
+两个JAR摘要与基线完全相同，未重建。五项用户未跟踪文件未改未stage，完整目标active。
+
+代码`39f62ca`、真实E2E和使用说明`9c42aff`；未push。下一项继续动态上游采集/编码
+排队与MDK安全读帧，独立应用任务接续及物理无线切换须另取实际证据。

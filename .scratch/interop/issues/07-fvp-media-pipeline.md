@@ -168,3 +168,18 @@ HEAD与候选默认栈真实应用窗口均复现SIGABRT；生产入口Box::pin�
 最终Core iOS/macOS/Windows交叉check与fmt通过；普通main热重载127ms及无Dart
 运行错误，首页已目视。Gradle停止后清理debug产物释放5730.4MiB，保留缓存/release
 及原始证据。代码`c121a51`、分析器`8201485`，完整目标继续active。
+
+
+MDK默认Surface下单次onVideo→to(RGBA)真实候选返回全黑图，实际图案断言失败，
+完整撤回，不切软解或删除像素门槛。原动态路径400截图/20暂停/8新像素完成未崩溃，
+但首帧3146/2766ms、输入P50/P95=1360/1478ms仍严格失败；历史MDK崩溃继续开放。
+转向视频断网：新增真实adbd透明TCP切断E2E，原实现设备重连后30秒无视频，确实红；
+修复当前可见主屏的恢复意图，明确停止/后台/unknown/迟到提交不自动重放。旧绑定
+本地撤销，不向已结束输出发pause。新5项缺陷回归先红后绿，最终相关52项、App275项
+和严格分析通过。真实双AVD两次完整exit0，3.965/3.831秒恢复新session和实际图案0→1，
+停止/卸载/代理清理完成。仅可控TCP EOF，不冒称物理无线切网/长稳或完整性能通过。
+两个JAR完全未改未重建。[读帧否定及真实恢复](../../../docs/implementation/video-performance.md#读帧候选否定与真实网络恢复2026-10-18)。
+
+代码`39f62ca`、真实恢复E2E`9c42aff`。普通main热重载148ms无Dart错误并目视；
+清理382项debug输出释放1489.4MiB，保留缓存及release。目标无捕获进程/fixture，
+已知本批session无残留JAR，原始证明仍在/tmp，完整目标active。
