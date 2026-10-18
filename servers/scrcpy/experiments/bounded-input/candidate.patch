@@ -1,0 +1,730 @@
+--- a/server/src/main/java/com/genymobile/scrcpy/opengl/OpenGLRunner.java
++++ b/server/src/main/java/com/genymobile/scrcpy/opengl/OpenGLRunner.java
+@@ -2,6 +2,7 @@
+ 
+ import com.genymobile.scrcpy.model.Size;
+ import com.genymobile.scrcpy.util.Threads;
++import com.genymobile.scrcpy.video.BoundedInputFlow;
+ 
+ import android.graphics.SurfaceTexture;
+ import android.opengl.EGL14;
+@@ -36,6 +37,11 @@
+     private int textureId;
+ 
+     private boolean stopped;
++    private BoundedInputFlow inputFlow;
++
++    public void setInputFlow(BoundedInputFlow inputFlow) {
++        this.inputFlow = inputFlow;
++    }
+ 
+     public OpenGLRunner(OpenGLFilter filter, float[] overrideTransformMatrix) {
+         this.filter = filter;
+@@ -167,21 +173,38 @@
+ 
+         filter.init();
+ 
++        if (inputFlow != null) {
++            inputFlow.attach(handler, frame -> renderTexture(outputSize, frame.presentationTimeUs * 1000));
++        }
++
+         surfaceTexture.setOnFrameAvailableListener(surfaceTexture -> {
+             if (stopped) {
+                 // Make sure to never render after resources have been released
+                 return;
+             }
+ 
+-            render(outputSize);
++            if (inputFlow == null) {
++                render(outputSize);
++            } else {
++                try {
++                    // Always acquire latest, even while both encoder credits are busy.
++                    surfaceTexture.updateTexImage();
++                    inputFlow.onSource(surfaceTexture.getTimestamp());
++                } catch (Throwable throwable) {
++                    inputFlow.fail(throwable); // Keep the handler alive for cleanup.
++                }
++            }
+         }, handler);
+     }
+ 
+     private void render(Size outputSize) {
++        surfaceTexture.updateTexImage();
++        renderTexture(outputSize, surfaceTexture.getTimestamp());
++    }
++
++    private void renderTexture(Size outputSize, long presentationTimeNs) {
+         GLES20.glViewport(0, 0, outputSize.getWidth(), outputSize.getHeight());
+         GLUtils.checkGlError();
+-
+-        surfaceTexture.updateTexImage();
+ 
+         float[] matrix;
+         if (overrideTransformMatrix != null) {
+@@ -193,40 +216,63 @@
+ 
+         filter.draw(textureId, matrix);
+ 
+-        EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, surfaceTexture.getTimestamp());
+-        EGL14.eglSwapBuffers(eglDisplay, eglSurface);
++        if (!EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, presentationTimeNs)) {
++            throw new IllegalStateException("eglPresentationTimeANDROID failed");
++        }
++        if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
++            throw new IllegalStateException("eglSwapBuffers failed");
++        }
+     }
+ 
+     public void stopAndRelease() {
+         final Semaphore sem = new Semaphore(0);
+ 
++        final Throwable[] failure = {null};
+         handler.post(() -> {
+-            stopped = true;
+-            surfaceTexture.setOnFrameAvailableListener(null, handler);
+-
+-            filter.release();
+-
+-            int[] textures = {textureId};
+-            GLES20.glDeleteTextures(1, textures, 0);
+-            GLUtils.checkGlError();
+-
+-            EGL14.eglDestroySurface(eglDisplay, eglSurface);
+-            EGL14.eglDestroyContext(eglDisplay, eglContext);
+-            EGL14.eglTerminate(eglDisplay);
+-            eglDisplay = EGL14.EGL_NO_DISPLAY;
+-            eglContext = EGL14.EGL_NO_CONTEXT;
+-            eglSurface = EGL14.EGL_NO_SURFACE;
+-            surfaceTexture.release();
+-            inputSurface.release();
+-
+-            sem.release();
++            try {
++                stopped = true;
++                if (surfaceTexture != null) {
++                    surfaceTexture.setOnFrameAvailableListener(null, handler);
++                }
++                try {
++                    filter.release();
++                } finally {
++                    // Init may have failed partway through; still release every attached resource.
++                    if (textureId != 0) {
++                        int[] textures = {textureId};
++                        GLES20.glDeleteTextures(1, textures, 0);
++                    }
++                    if (eglDisplay != null && eglDisplay != EGL14.EGL_NO_DISPLAY) {
++                        EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT);
++                        if (eglSurface != null && eglSurface != EGL14.EGL_NO_SURFACE) {
++                            EGL14.eglDestroySurface(eglDisplay, eglSurface);
++                        }
++                        if (eglContext != null && eglContext != EGL14.EGL_NO_CONTEXT) {
++                            EGL14.eglDestroyContext(eglDisplay, eglContext);
++                        }
++                        EGL14.eglTerminate(eglDisplay);
++                    }
++                    if (surfaceTexture != null) {
++                        surfaceTexture.release();
++                    }
++                    if (inputSurface != null) {
++                        inputSurface.release();
++                    }
++                    eglDisplay = EGL14.EGL_NO_DISPLAY;
++                    eglContext = EGL14.EGL_NO_CONTEXT;
++                    eglSurface = EGL14.EGL_NO_SURFACE;
++                }
++            } catch (Throwable throwable) {
++                failure[0] = throwable;
++            } finally {
++                sem.release(); // A GL exception must never strand the encoder's cleanup wait.
++            }
+         });
+ 
+-        try {
+-            sem.acquire();
+-        } catch (InterruptedException e) {
+-            // Behave as if this method call was synchronous
+-            Thread.currentThread().interrupt();
++        // Preserve interrupt status, but never report cleanup before the GL resources are released.
++        sem.acquireUninterruptibly();
++        if (failure[0] != null) {
++            throw new IllegalStateException("OpenGL cleanup failed", failure[0]);
+         }
+     }
+ }
+--- /dev/null
++++ b/server/src/main/java/com/genymobile/scrcpy/video/BoundedInputFlow.java
+@@ -0,0 +1,111 @@
++package com.genymobile.scrcpy.video;
++
++import android.os.Handler;
++
++import java.io.IOException;
++
++/** Android bridge: every ledger, source, timer and credit operation runs on the GL handler. */
++public final class BoundedInputFlow implements EncoderInputFlow {
++    private final long repeatUs;
++    private final float maxFps;
++    private Handler handler;
++    private volatile LatestInputWindow window;
++    private volatile boolean closed;
++    private volatile Throwable failure;
++
++    public BoundedInputFlow(long repeatUs, float maxFps) {
++        this.repeatUs = repeatUs;
++        this.maxFps = maxFps;
++    }
++
++    public void attach(Handler glHandler, LatestInputWindow.Submitter submitter) {
++        handler = glHandler;
++        window = new LatestInputWindow(System::nanoTime, new LatestInputWindow.Scheduler() {
++            @Override
++            public void post(Runnable task, long delayNs) {
++                if (!handler.postDelayed(task, (delayNs + 999_999) / 1_000_000)) {
++                    fail(new IllegalStateException("GL handler rejected input drain"));
++                }
++            }
++
++            @Override
++            public void cancel(Runnable task) {
++                handler.removeCallbacks(task);
++            }
++        }, frame -> {
++            if (closed) {
++                throw new IllegalStateException("Input generation closed before swap");
++            }
++            submitter.submit(frame);
++        }, repeatUs, maxFps);
++        if (closed) {
++            window.close();
++        }
++    }
++
++    public void onSource(long sourceTimestampNs) {
++        if (!closed) {
++            window.onSource(sourceTimestampNs);
++        }
++    }
++
++    @Override
++    public void activate() {
++        post(() -> window.activate());
++    }
++
++    @Override
++    public void validateOutput(int flags, int size) throws IOException {
++        if ((flags & LatestInputWindow.PARTIAL) != 0) {
++            throw new IOException("bounded-input rejects partial encoder output");
++        }
++        checkFailure();
++    }
++
++    @Override
++    public void onOutputReleased(long ptsUs, int flags, int size) {
++        post(() -> window.complete(ptsUs, flags, size));
++    }
++
++    private void post(Runnable action) {
++        if (!closed && !handler.post(() -> {
++            if (!closed) {
++                try {
++                    action.run();
++                } catch (Throwable throwable) {
++                    fail(throwable);
++                }
++            }
++        })) {
++            fail(new IllegalStateException("GL handler rejected input operation"));
++        }
++    }
++
++    public void fail(Throwable throwable) {
++        failure = throwable;
++        close();
++    }
++
++    @Override
++    public void checkFailure() throws IOException {
++        LatestInputWindow state = window;
++        Throwable error = failure != null ? failure : (state == null ? null : state.getFailure());
++        if (error != null) {
++            throw new IOException("bounded-input GL/input failure", error);
++        }
++        // This snapshot also bounds a swap which stopped servicing the GL timer.
++        long deadline = state == null ? 0 : state.getStallDeadlineNs();
++        if (!closed && deadline != 0 && System.nanoTime() >= deadline) {
++            throw new IOException("bounded-input encoder input stalled for 3 seconds");
++        }
++    }
++
++    @Override
++    public void close() {
++        closed = true; // Revoke output callbacks and pre-swap guards immediately.
++        Handler glHandler = handler;
++        if (glHandler != null) {
++            glHandler.post(() -> window.close());
++        }
++    }
++}
+--- /dev/null
++++ b/server/src/main/java/com/genymobile/scrcpy/video/EncoderInputFlow.java
+@@ -0,0 +1,14 @@
++package com.genymobile.scrcpy.video;
++
++import java.io.IOException;
++
++/** Per-codec input lifetime. Adapters which do not opt in retain a no-op flow. */
++public interface EncoderInputFlow {
++    EncoderInputFlow NONE = new EncoderInputFlow() { };
++
++    default void activate() { }
++    default void validateOutput(int flags, int size) throws IOException { }
++    default void onOutputReleased(long ptsUs, int flags, int size) { }
++    default void checkFailure() throws IOException { }
++    default void close() { }
++}
+--- /dev/null
++++ b/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java
+@@ -0,0 +1,212 @@
++package com.genymobile.scrcpy.video;
++
++import java.util.LinkedHashMap;
++import java.util.Map;
++import java.util.function.LongSupplier;
++
++/** One GL-thread-confined generation. No Android dependency and no credit waits. */
++public final class LatestInputWindow {
++    public static final int CONFIG = 2;
++    public static final int EOS = 4;
++    public static final int PARTIAL = 8;
++    public static final long STALL_NS = 3_000_000_000L;
++
++    public interface Scheduler {
++        void post(Runnable task, long delayNs);
++        void cancel(Runnable task);
++    }
++
++    public interface Submitter {
++        void submit(Frame frame) throws Exception;
++    }
++
++    public static final class Frame {
++        public final long sourceTimestampNs;
++        public final long presentationTimeUs;
++        public final boolean repeat;
++        public final long reservedAtNs;
++
++        private Frame(long sourceTimestampNs, long presentationTimeUs, boolean repeat, long now) {
++            this.sourceTimestampNs = sourceTimestampNs;
++            this.presentationTimeUs = presentationTimeUs;
++            this.repeat = repeat;
++            this.reservedAtNs = now;
++        }
++    }
++
++    private final LongSupplier clock;
++    private final Scheduler scheduler;
++    private final Submitter submitter;
++    private final long repeatNs;
++    private final long minIntervalNs;
++    private final Map<Long, Frame> ledger = new LinkedHashMap<>();
++    private final Runnable drain = this::drain;
++    private boolean active;
++    private boolean closed;
++    private boolean hasSource;
++    private boolean pending;
++    private boolean scheduled;
++    private long scheduledAtNs;
++    private long sourceTimestampNs;
++    private long lastPtsUs = -1;
++    private long lastSubmitNs;
++    private long nextInputNs;
++    // Read-only snapshots for the encoder's 100 ms failure poll; ledger stays on GL.
++    private volatile long stallDeadlineNs;
++    private volatile Throwable failure;
++
++    public LatestInputWindow(LongSupplier clock, Scheduler scheduler, Submitter submitter, long repeatUs, float maxFps) {
++        if (repeatUs < 0 || repeatUs > Long.MAX_VALUE / 1000 || !Float.isFinite(maxFps) || maxFps < 0) {
++            throw new IllegalArgumentException("Invalid bounded input cadence");
++        }
++        this.clock = clock;
++        this.scheduler = scheduler;
++        this.submitter = submitter;
++        this.repeatNs = repeatUs * 1000;
++        this.minIntervalNs = maxFps > 0 ? Math.max(1, (long) Math.ceil(1_000_000_000d / maxFps)) : 0;
++    }
++
++    public void activate() {
++        if (closed) {
++            return;
++        }
++        active = true;
++        request(clock.getAsLong());
++    }
++
++    public void onSource(long timestampNs) {
++        if (closed) {
++            return;
++        }
++        sourceTimestampNs = timestampNs;
++        hasSource = true;
++        pending = true;
++        if (active) {
++            request(clock.getAsLong());
++        }
++    }
++
++    /** Called only after a complete packet was delivered and its output buffer released. */
++    public void complete(long ptsUs, int flags, int size) {
++        if (closed) {
++            return;
++        }
++        if ((flags & PARTIAL) != 0) {
++            fail(new IllegalStateException("Partial encoder output is unsupported"));
++            return;
++        }
++        if ((flags & CONFIG) != 0 || size == 0) {
++            return; // Config and empty EOS do not consume a media input.
++        }
++        if (ledger.remove(ptsUs) == null) {
++            fail(new IllegalStateException("Unknown or duplicate media output PTS: " + ptsUs));
++            return;
++        }
++        updateDeadline();
++        request(clock.getAsLong()); // Final pending frame needs no new source callback.
++    }
++
++    public void checkStall(long now) {
++        if (!closed && stallDeadlineNs != 0 && now >= stallDeadlineNs) {
++            fail(new IllegalStateException("Bounded encoder input stalled for 3 seconds"));
++        }
++    }
++
++    private void drain() {
++        scheduled = false;
++        if (closed) {
++            return;
++        }
++        long now = clock.getAsLong();
++        checkStall(now);
++        if (closed || !active || !hasSource) {
++            return;
++        }
++        long due = pending ? nextInputNs : (repeatNs == 0 ? Long.MAX_VALUE : Math.max(nextInputNs, lastSubmitNs + repeatNs));
++        if (ledger.size() < 2 && now >= due) {
++            boolean repeat = !pending;
++            long ptsUs = Math.max(lastPtsUs + 1, (repeat ? now : sourceTimestampNs) / 1000);
++            Frame frame = new Frame(sourceTimestampNs, ptsUs, repeat, now);
++            lastPtsUs = ptsUs;
++            pending = false;
++            lastSubmitNs = now;
++            nextInputNs = now + minIntervalNs;
++            // Reserve before swap: a synchronous output can retire this exact input.
++            ledger.put(ptsUs, frame);
++            updateDeadline();
++            try {
++                submitter.submit(frame);
++            } catch (Throwable throwable) {
++                fail(throwable); // Revoke the generation, never fabricate a credit.
++                return;
++            }
++        }
++        scheduleNext();
++    }
++
++    private void scheduleNext() {
++        if (closed) {
++            return;
++        }
++        long next = stallDeadlineNs == 0 ? Long.MAX_VALUE : stallDeadlineNs;
++        if (ledger.size() < 2 && hasSource) {
++            long inputDue = pending ? nextInputNs : (repeatNs == 0 ? Long.MAX_VALUE : Math.max(nextInputNs, lastSubmitNs + repeatNs));
++            next = Math.min(next, inputDue);
++        }
++        if (next != Long.MAX_VALUE) {
++            request(next);
++        }
++    }
++
++    private void updateDeadline() {
++        stallDeadlineNs = ledger.isEmpty() ? 0 : ledger.values().iterator().next().reservedAtNs + STALL_NS;
++    }
++
++    private void request(long atNs) {
++        if (closed || (scheduled && scheduledAtNs <= atNs)) {
++            return;
++        }
++        if (scheduled) {
++            scheduler.cancel(drain);
++        }
++        scheduled = true;
++        scheduledAtNs = atNs;
++        scheduler.post(drain, Math.max(0, atNs - clock.getAsLong()));
++    }
++
++    public void fail(Throwable throwable) {
++        if (!closed) {
++            failure = throwable;
++            close();
++        }
++    }
++
++    public void close() {
++        closed = true;
++        active = false;
++        pending = false;
++        hasSource = false;
++        if (scheduled) {
++            scheduler.cancel(drain);
++            scheduled = false;
++        }
++        ledger.clear();
++        stallDeadlineNs = 0;
++    }
++
++    public Throwable getFailure() {
++        return failure;
++    }
++
++    public long getStallDeadlineNs() {
++        return stallDeadlineNs;
++    }
++
++    public int inFlight() {
++        return ledger.size();
++    }
++
++    public boolean isClosed() {
++        return closed;
++    }
++}
+--- a/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java
++++ b/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java
+@@ -49,6 +49,7 @@
+ 
+     private AffineMatrix transform;
+     private OpenGLRunner glRunner;
++    private BoundedInputFlow inputFlow;
+ 
+     public ScreenCapture(VirtualDisplayListener vdListener, Options options) {
+         this.vdListener = vdListener;
+@@ -103,6 +104,15 @@
+ 
+         transform = filter.getInverseTransform();
+         videoSize = filter.getOutputSize().constrain(videoConstraints);
++    }
++
++    @Override
++    public EncoderInputFlow createEncoderInputFlow(long repeatUs, float maxFps) throws IOException {
++        if (displayId != 0 || transform != null) {
++            throw new IOException("bounded-input requires the main display without crop/rotation/angle filters");
++        }
++        inputFlow = new BoundedInputFlow(repeatUs, maxFps);
++        return inputFlow;
+     }
+ 
+     @Override
+@@ -127,6 +137,12 @@
+         } else {
+             // If there is no filter, the display must be rendered at target video size directly
+             inputSize = videoSize;
++            if (inputFlow != null) {
++                // Keep constrained videoSize at the source side of the identity bridge.
++                glRunner = new OpenGLRunner(new AffineOpenGLFilter(AffineMatrix.IDENTITY));
++                glRunner.setInputFlow(inputFlow);
++                surface = glRunner.start(inputSize, videoSize, surface);
++            }
+         }
+ 
+         try {
+@@ -176,6 +192,7 @@
+ 
+     @Override
+     public void stop() {
++        inputFlow = null;
+         // Drop only the mirror; the physical source display stays alive.
+         if (display != null) {
+             SurfaceControl.destroyDisplay(display);
+--- a/server/src/main/java/com/genymobile/scrcpy/video/SurfaceCapture.java
++++ b/server/src/main/java/com/genymobile/scrcpy/video/SurfaceCapture.java
+@@ -52,6 +52,11 @@
+      */
+     public abstract void start(Surface surface) throws IOException;
+ 
++    /** Default seam for capture adapters which do not manage encoder input. */
++    public EncoderInputFlow createEncoderInputFlow(long repeatUs, float maxFps) throws IOException {
++        return EncoderInputFlow.NONE;
++    }
++
+     /**
+      * Stop the capture.
+      */
+--- a/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java
++++ b/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java
+@@ -57,6 +57,9 @@
+     private final CaptureControl captureControl = new CaptureControl();
+ 
+     private VideoConstraints videoConstraints;
++    private EncoderInputFlow inputFlow = EncoderInputFlow.NONE;
++    private long boundedRepeatUs = REPEAT_FRAME_DELAY_US;
++    private float boundedMaxFps;
+ 
+     public SurfaceEncoder(SurfaceCapture capture, Streamer streamer, Options options) {
+         this.capture = capture;
+@@ -74,7 +77,22 @@
+     private void streamCapture() throws IOException, ConfigurationException {
+         Codec codec = streamer.getCodec();
+         MediaCodec mediaCodec = createMediaCodec(codec, encoderName);
++        if (Build.VERSION.SDK_INT != 36 || !(capture instanceof ScreenCapture) || !"video/avc".equals(codec.getMimeType())
++                || !"c2.android.avc.encoder".equals(mediaCodec.getName())) {
++            mediaCodec.release();
++            throw new IOException("bounded-input supports only API36 main-display H264 c2.android.avc.encoder");
++        }
+         MediaFormat format = createFormat(codec.getMimeType(), videoBitRate, maxFps, codecOptions);
++        // Capture cadence after codecOptions, then remove native GBS input generators/droppers.
++        // MediaFormat.getNumber handles both int and long codec-option representations on API36.
++        boundedRepeatUs = format.getNumber(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER).longValue();
++        boundedMaxFps = format.containsKey(KEY_MAX_FPS_TO_ENCODER) ? format.getNumber(KEY_MAX_FPS_TO_ENCODER).floatValue() : 0;
++        if (boundedRepeatUs < 0 || boundedRepeatUs > Long.MAX_VALUE / 1000 || !Float.isFinite(boundedMaxFps) || boundedMaxFps < 0) {
++            mediaCodec.release();
++            throw new IOException("bounded-input rejects invalid repeat/max-fps codec options");
++        }
++        format.removeKey(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER);
++        format.removeKey(KEY_MAX_FPS_TO_ENCODER);
+ 
+         MediaCodecInfo.VideoCapabilities caps;
+         int alignment;
+@@ -113,6 +131,9 @@
+                 }
+                 if (mediaCodec == null) {
+                     mediaCodec = createMediaCodec(codec, encoderName);
++                    if (!"c2.android.avc.encoder".equals(mediaCodec.getName())) {
++                        throw new IOException("bounded-input encoder changed between generations");
++                    }
+                 }
+                 int resetReasons = captureControl.consumeReset();
+                 if ((resetReasons & CaptureControl.RESET_REASON_TERMINATED) != 0) {
+@@ -134,6 +155,7 @@
+                 boolean mediaCodecStarted = false;
+                 boolean captureStarted = false;
+                 try {
++                    inputFlow = capture.createEncoderInputFlow(boundedRepeatUs, boundedMaxFps);
+                     mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                     surface = mediaCodec.createInputSurface();
+ 
+@@ -143,6 +165,7 @@
+ 
+                     mediaCodec.start();
+                     mediaCodecStarted = true;
++                    inputFlow.activate();
+ 
+                     // Set the MediaCodec instance to "interrupt" (by signaling an EOS) on reset
+                     captureControl.setRunningMediaCodec(mediaCodec);
+@@ -169,30 +192,36 @@
+                         throw e;
+                     }
+                     Ln.e("Capture/encoding error: " + e.getClass().getName() + ": " + e.getMessage());
+-                    if (!prepareRetry(caps, size)) {
+-                        throw e;
+-                    }
+-                    // Keep the current resetReasons flags for the retry
+-                    retainedResetReasons = resetReasons;
+-                    alive = true;
++                    // An isolated candidate must not hide a stall via retry or smaller video.
++                    throw e;
+                 } finally {
++                    // Revoke this generation before detach/codec release and before pause ACK.
++                    inputFlow.close();
++                    inputFlow = EncoderInputFlow.NONE;
+                     captureControl.setRunningMediaCodec(null);
+-                    if (captureStarted) {
+-                        capture.stop();
+-                    }
+-                    if (mediaCodecStarted) {
++                    try {
++                        if (captureStarted) {
++                            capture.stop();
++                        }
++                    } finally {
+                         try {
+-                            mediaCodec.stop();
+-                        } catch (IllegalStateException e) {
+-                            // ignore (just in case)
++                            if (mediaCodecStarted) {
++                                try {
++                                    mediaCodec.stop();
++                                } catch (IllegalStateException e) {
++                                    // ignore (just in case)
++                                }
++                            }
++                        } finally {
++                            try {
++                                mediaCodec.release();
++                                mediaCodec = null;
++                            } finally {
++                                if (surface != null) {
++                                    surface.release();
++                                }
++                            }
+                         }
+-                    }
+-                    // A paused session must relinquish its encoder allocation.
+-                    // stop()/reset() alone are not the resource-release contract.
+-                    mediaCodec.release();
+-                    mediaCodec = null;
+-                    if (surface != null) {
+-                        surface.release();
+                     }
+                 }
+             } while (alive);
+@@ -273,28 +302,34 @@
+ 
+         boolean eos;
+         do {
+-            // Cooperative pause must not depend on the codec eventually emitting
+-            // EOS. Finish this complete output packet, then release at the gate.
++            inputFlow.checkFailure();
++            // Ignore stale BufferInfo values on INFO_TRY_AGAIN_LATER/format changes.
+             int outputBufferId = codec.dequeueOutputBuffer(bufferInfo, CAPTURE_CONTROL_POLL_US);
++            eos = outputBufferId >= 0 && (bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
++            boolean delivered = false;
+             try {
+-                eos = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+-                // On EOS, there might be data or not, depending on bufferInfo.size
+-                if (outputBufferId >= 0 && bufferInfo.size > 0) {
+-                    boolean isConfig = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0;
+-                    if (!isConfig) {
+-                        // If this is not a config packet, then it contains a frame
+-                        firstFrameSent = true;
+-                        consecutiveErrors = 0;
+-                    }
+-
+-                    ByteBuffer codecBuffer = codec.getOutputBuffer(outputBufferId);
+-                    streamer.writePacket(codecBuffer, bufferInfo);
++                if (outputBufferId >= 0) {
++                    inputFlow.validateOutput(bufferInfo.flags, bufferInfo.size);
++                    if (bufferInfo.size > 0) {
++                        ByteBuffer codecBuffer = codec.getOutputBuffer(outputBufferId);
++                        streamer.writePacket(codecBuffer, bufferInfo);
++                        delivered = true;
++                        if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
++                            firstFrameSent = true;
++                            consecutiveErrors = 0;
++                        }
++                    }
+                 }
+             } finally {
+                 if (outputBufferId >= 0) {
+                     codec.releaseOutputBuffer(outputBufferId, false);
+-                }
+-            }
++                    // No credit if writePacket or releaseOutputBuffer failed.
++                    if (delivered) {
++                        inputFlow.onOutputReleased(bufferInfo.presentationTimeUs, bufferInfo.flags, bufferInfo.size);
++                    }
++                }
++            }
++            inputFlow.checkFailure();
+         } while (!eos && !captureControl.hasPendingCaptureRequests());
+     }
+ 

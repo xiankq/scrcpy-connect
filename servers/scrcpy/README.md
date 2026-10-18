@@ -92,3 +92,26 @@ stand-in, including a pause during codec recreation after the gate opens.
 They do not validate Android Binder, virtual-display lifecycle,
 hardware encoder release, or decoded frame delivery; those require device
 integration tests.
+
+
+## Isolated candidate builds
+
+Experimental patches never replace the committed capture JAR. Build into a new
+absolute directory outside the repository; an existing directory is rejected
+so previous evidence cannot be overwritten:
+
+```sh
+rtk proxy python3 servers/scrcpy/build.py --candidate bounded-input \
+  --output-dir /tmp/connect-bounded-input-build
+rtk proxy python3 servers/scrcpy/test.py --candidate bounded-input \
+  --build-dir /tmp/connect-bounded-input-build
+rtk proxy python3 -B servers/scrcpy/test_build.py -v
+```
+
+The external directory contains extracted pinned sources, classes, DEX, JAR,
+SHA-256 and manifest including the candidate patch digest. Omitting
+`--candidate` with a new `--output-dir` builds the unchanged baseline through
+the same isolated path. Neither form changes `.build/` sources or production
+artifacts. `--check` remains a separate production reproducibility operation.
+Candidate state tests and real device results are separate gates: compiling a
+patch does not establish video latency or lifecycle correctness.

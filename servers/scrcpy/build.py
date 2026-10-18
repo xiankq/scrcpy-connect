@@ -20,6 +20,25 @@ URL = "https://codeload.github.com/Genymobile/scrcpy/tar.gz/refs/tags/v5.0.1"
 SOURCE_SHA = "a24b996ac23d0f674d3237c00b39a97829d8acbe9e1657a6c216fd51ea488ee5"
 PATCH = ROOT / "patches/0001-cooperative-capture-pause.patch"
 BUILD = ROOT / ".build"
+CANDIDATES = ("bounded-input",)
+
+
+def select_output(options):
+    """Keep experimental source, intermediates and artifacts outside the repo."""
+    if options.candidate and options.output_dir is None:
+        raise ValueError("--candidate requires --output-dir in a new directory outside the repository")
+    if options.check and options.output_dir is not None:
+        raise ValueError("--check cannot be combined with --output-dir")
+    if options.output_dir is None:
+        return BUILD, ROOT
+    output = options.output_dir.expanduser().resolve()
+    if output.is_relative_to(ROOT.parents[1]):
+        raise ValueError("--output-dir must be outside the repository")
+    # Never remove or overwrite an existing caller-owned directory, including
+    # an old candidate whose bytes might already be part of an experiment.
+    if output.exists():
+        raise ValueError("--output-dir must not already exist")
+    return output, output
 
 
 def sha(path):
@@ -33,30 +52,48 @@ def run(*args, cwd=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Rebuild and compare without replacing committed artifacts")
+    parser.add_argument("--candidate", choices=CANDIDATES, help="Build an isolated experimental patch, never the production artifact")
+    parser.add_argument("--output-dir", type=Path, help="New external directory for isolated sources, intermediates and artifacts")
     options = parser.parse_args()
+    try:
+        build, output = select_output(options)
+    except ValueError as error:
+        parser.error(str(error))
+    patches = [PATCH]
+    if options.candidate:
+        patches.append(ROOT / "experiments" / options.candidate / "candidate.patch")
+    for patch in patches:
+        if not patch.is_file():
+            raise SystemExit(f"Missing source patch: {patch}")
     sdk = Path(os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or Path.home() / "Android/Sdk")
     platform = sdk / "platforms/android-36"
     tools = sdk / "build-tools/36.0.0"
     for required in [platform / "android.jar", platform / "framework.aidl", tools / "aidl", tools / "d8"]:
         if not required.exists():
             raise SystemExit(f"Missing Android SDK 36 prerequisite: {required}")
-    BUILD.mkdir(exist_ok=True)
-    archive = BUILD / "scrcpy-v5.0.1.tar.gz"
+    build.mkdir(parents=True, exist_ok=options.output_dir is None)
+    archive = build / "scrcpy-v5.0.1.tar.gz"
+    cached_archive = BUILD / archive.name
+    if archive != cached_archive and cached_archive.is_file():
+        if sha(cached_archive) != SOURCE_SHA:
+            raise SystemExit(f"Upstream archive SHA mismatch: {cached_archive}")
+        shutil.copyfile(cached_archive, archive)
     if not archive.exists():
-        with urllib.request.urlopen(URL) as response, archive.open("wb") as output:
-            shutil.copyfileobj(response, output)
+        with urllib.request.urlopen(URL) as response, archive.open("wb") as archive_output:
+            shutil.copyfileobj(response, archive_output)
     if sha(archive) != SOURCE_SHA:
         raise SystemExit(f"Upstream archive SHA mismatch: {archive}")
-    source = BUILD / "scrcpy-5.0.1"
+    source = build / "scrcpy-5.0.1"
     if source.exists():
         shutil.rmtree(source)
     with tarfile.open(archive) as downloaded:
-        downloaded.extractall(BUILD, filter="data")
-    run("patch", "--batch", "--fuzz=0", "-p1", "-i", PATCH, cwd=source)
+        downloaded.extractall(build, filter="data")
+    for patch in patches:
+        run("patch", "--batch", "--fuzz=0", "-p1", "-i", patch, cwd=source)
 
-    classes = BUILD / "classes"
-    generated = BUILD / "generated"
-    dex = BUILD / "dex"
+    classes = build / "classes"
+    generated = build / "generated"
+    dex = build / "dex"
     for directory in [classes, generated, dex]:
         if directory.exists():
             shutil.rmtree(directory)
@@ -76,7 +113,7 @@ def main():
     run(tools / "d8", "--min-api", "21", "--classpath", platform / "android.jar", "--output", dex,
         *sorted(classes.rglob("*.class")))
 
-    artifact = (BUILD / "rebuilt-server.jar") if options.check else (ROOT / "interop-scrcpy-server.jar")
+    artifact = (build / "rebuilt-server.jar") if options.check else (output / "interop-scrcpy-server.jar")
     # Fixed metadata makes the output reproducible with the same JDK/SDK inputs.
     with zipfile.ZipFile(artifact, "w", compression=zipfile.ZIP_STORED) as jar:
         for file in sorted(dex.glob("*.dex")):
@@ -96,6 +133,8 @@ def main():
         "androidBuildTools": "36.0.0",
         "javaCompiler": subprocess.check_output(["javac", "-version"], text=True, stderr=subprocess.STDOUT).strip(),
     }
+    if options.candidate:
+        manifest["candidate"] = {"name": options.candidate, "patchSha256": sha(patches[1])}
     if options.check:
         recorded = json.loads((ROOT / "manifest.json").read_text())
         # Compiler identity is diagnostic. The rebuilt bytes must still match
@@ -107,8 +146,8 @@ def main():
             raise SystemExit("Committed capture server does not match its pinned sources")
         print(f"Verified reproducible capture server: {digest}")
         return
-    (ROOT / "interop-scrcpy-server.sha256").write_text(digest + "\n")
-    (ROOT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (output / "interop-scrcpy-server.sha256").write_text(digest + "\n")
+    (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"Built {artifact}: {digest}")
 
 

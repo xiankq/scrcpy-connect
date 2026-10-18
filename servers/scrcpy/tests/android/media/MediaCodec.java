@@ -12,6 +12,7 @@ public final class MediaCodec {
     public static final class BufferInfo {
         public int flags;
         public int size;
+        public long presentationTimeUs;
     }
 
     // Deliberately do not produce EOS on signalEndOfInputStream. A pending
