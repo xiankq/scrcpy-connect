@@ -5,140 +5,21 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
-/// A byte-transparent fault point in the controller's actual ADB transport.
-/// Socket.addStream propagates backpressure; no ADB payload is inspected/saved.
-class _AdbProxy {
-  _AdbProxy(this.upstreamPort);
-
-  final int upstreamPort;
-  final events = <Map<String, Object?>>[];
-  final _pairs = <_SocketPair>{};
-  final _tasks = <Future<void>>{};
-  ServerSocket? _server;
-  StreamSubscription<Socket>? _subscription;
-  bool _closed = false;
-  int accepts = 0;
-  int? cutAcceptCount;
-
-  void _event(String kind, [Map<String, Object?> details = const {}]) {
-    events.add({
-      'kind': kind,
-      'at': DateTime.now().toUtc().toIso8601String(),
-      'acceptCount': accepts,
-      ...details,
-    });
-  }
-
-  Future<void> start() async {
-    _server = await ServerSocket.bind(
-      InternetAddress.loopbackIPv4,
-      25557,
-      shared: false,
-    ).timeout(const Duration(seconds: 10));
-    _event('listening', {'port': 25557, 'upstreamPort': upstreamPort});
-    _subscription = _server!.listen((socket) {
-      if (_closed) {
-        socket.destroy();
-        return;
-      }
-      final pair = _SocketPair(++accepts, socket);
-      _pairs.add(pair);
-      _event('accept', {'socketId': pair.id});
-      final task = _forward(pair);
-      _tasks.add(task);
-      unawaited(task.then((_) => _tasks.remove(task)));
-    }, onError: (Object error) => _event('listener-error'));
-  }
-
-  Future<void> _forward(_SocketPair pair) async {
-    try {
-      final upstream = await Socket.connect(
-        InternetAddress.loopbackIPv4,
-        upstreamPort,
-        timeout: const Duration(seconds: 10),
-      );
-      pair.upstream = upstream;
-      if (pair.closed || _closed) {
-        upstream.destroy();
-        return;
-      }
-      _event('upstream-connected', {'socketId': pair.id});
-      Future<void> pipe(Socket source, Socket destination) async {
-        try {
-          await destination.addStream(source);
-        } catch (_) {
-          if (!pair.closed) _event('pipe-error', {'socketId': pair.id});
-        } finally {
-          // EOF or an error in either direction terminates the same ADB pair.
-          pair.close();
-        }
-      }
-
-      await Future.wait([
-        pipe(pair.controller, upstream),
-        pipe(upstream, pair.controller),
-      ]);
-    } catch (_) {
-      if (!pair.closed) _event('upstream-error', {'socketId': pair.id});
-    } finally {
-      pair.close();
-      _pairs.remove(pair);
-      _event('closed', {'socketId': pair.id});
-    }
-  }
-
-  void cutTransport() {
-    if (cutAcceptCount != null) throw StateError('Transport already cut.');
-    final active = _pairs.where((pair) => !pair.closed).toList();
-    if (active.length != 1 || active.single.upstream == null) {
-      throw StateError('Expected exactly one connected controller ADB socket.');
-    }
-    cutAcceptCount = accepts;
-    _event('cut-transport', {'socketId': active.single.id});
-    active.single.close();
-  }
-
-  bool get reconnected =>
-      cutAcceptCount != null &&
-      events.any(
-        (event) =>
-            event['kind'] == 'upstream-connected' &&
-            (event['socketId']! as int) > cutAcceptCount!,
-      );
-
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-    // Destroy before awaiting the listener so no blocked pipe delays shutdown.
-    for (final pair in _pairs) {
-      pair.close();
-    }
-    await _server?.close().timeout(const Duration(seconds: 5));
-    await _subscription?.cancel().timeout(const Duration(seconds: 5));
-    await Future.wait(_tasks.toList()).timeout(const Duration(seconds: 15));
-    _event('stopped');
-  }
-}
-
-class _SocketPair {
-  _SocketPair(this.id, this.controller);
-
-  final int id;
-  final Socket controller;
-  Socket? upstream;
-  bool closed = false;
-
-  void close() {
-    if (closed) return;
-    closed = true;
-    controller.destroy();
-    upstream?.destroy();
-  }
-}
+import 'support/adb_fault_proxy.dart';
 
 Future<void> main() async {
   const package = 'dev.scrcpyconnect.videofixture';
   final environment = Platform.environment;
+  final faultName = environment['CONNECT_E2E_RECOVERY_FAULT'] ?? 'eof';
+  final AdbRecoveryFault fault;
+  switch (faultName) {
+    case 'eof':
+      fault = AdbRecoveryFault.eof;
+    case 'blackhole':
+      fault = AdbRecoveryFault.blackhole;
+    default:
+      throw StateError('CONNECT_E2E_RECOVERY_FAULT must be eof or blackhole.');
+  }
   final adb = environment['CONNECT_E2E_ADB'];
   final target = environment['CONNECT_E2E_TARGET'];
   final controller = environment['CONNECT_E2E_DEVICE'];
@@ -205,7 +86,7 @@ Future<void> main() async {
   if (await fixtureExists()) {
     throw StateError('Refusing to replace an existing fixture installation.');
   }
-  final proxy = _AdbProxy(upstreamPort);
+  final proxy = AdbFaultProxy(upstreamPort);
   FlutterDriver? driver;
   Future<void>? polling;
   var finished = false;
@@ -213,6 +94,7 @@ Future<void> main() async {
   var cleanupFinished = false;
   Object? pollingError;
   Object? primaryError;
+  Map<String, Object?>? faultChallenge;
   final cleanup = <String, Object?>{};
 
   Future<void> cleanUp() async {
@@ -305,7 +187,7 @@ Future<void> main() async {
               .callServiceExtension(
                 'ext.connect.videoRecovery',
                 isolateId: connected.appIsolate.id,
-                args: ready ? null : {'ready': 'true'},
+                args: ready ? null : {'ready': 'true', 'fault': fault.name},
               )
               .timeout(const Duration(seconds: 10));
           if (finished) return;
@@ -313,8 +195,45 @@ Future<void> main() async {
           final checkpoint = response.json?['checkpoint'];
           if (checkpoint is Map && checkpoint['name'] == 'cut-transport') {
             if (!cut) {
-              proxy.cutTransport();
+              proxy.injectFault(fault);
               cut = true;
+              if (fault == AdbRecoveryFault.blackhole) {
+                // A static encoder need not emit anything during the fault.
+                // Change only our owned fixture through the independent lab
+                // ADB connection, then restore its initial oracle before ack.
+                // Require a real discarded upstream frame, not just a filter.
+                faultChallenge = {
+                  'counterChanged': false,
+                  'counterRestored': false,
+                };
+                await command(['shell', 'input', 'keyevent', '20']);
+                faultChallenge!['counterChanged'] = true;
+                final waiting = Stopwatch()..start();
+                while (((proxy.faultEvidence['droppedBytes']
+                                as Map)['upstream-to-controller']
+                            as int) ==
+                        0 &&
+                    waiting.elapsed < const Duration(seconds: 3)) {
+                  await Future<void>.delayed(const Duration(milliseconds: 25));
+                }
+                faultChallenge!['discardWaitMs'] = waiting.elapsedMilliseconds;
+                final restored = await command([
+                  'shell',
+                  'am',
+                  'start',
+                  '-W',
+                  '-n',
+                  '$package/.VideoPatternActivity',
+                  '--ez',
+                  'motion',
+                  'false',
+                ]);
+                if (restored.contains('Error') ||
+                    restored.contains('Exception')) {
+                  throw StateError('Cannot restore the owned fixture counter.');
+                }
+                faultChallenge!['counterRestored'] = true;
+              }
               await writeJson('proxy-events', proxy.events);
             }
             await connected.serviceClient
@@ -355,8 +274,22 @@ Future<void> main() async {
         await polling;
         final report = {...?data}..remove('screenshots');
         report['proxyAcceptCount'] = proxy.accepts;
-        report['proxyCutAcceptCount'] = proxy.cutAcceptCount;
+        report['proxyCutAcceptCount'] = proxy.faultAcceptCount;
         report['proxyReconnected'] = proxy.reconnected;
+        report['proxyFault'] = fault.name;
+        report['proxyFaultChallenge'] = faultChallenge;
+        // Snapshot and validate before cleanup: closing the proxy must never
+        // manufacture the old controller's EOF or satisfy recovery acceptance.
+        report['proxyFaultEvidence'] = proxy.faultEvidence;
+        final evidenceErrors = proxy.recoveryEvidenceErrors();
+        if (fault == AdbRecoveryFault.blackhole &&
+            (faultChallenge?['counterChanged'] != true ||
+                faultChallenge?['counterRestored'] != true)) {
+          evidenceErrors.add(
+            'Blackhole fixture frame challenge did not complete.',
+          );
+        }
+        report['proxyFaultEvidenceErrors'] = evidenceErrors;
         report['pollingError'] = pollingError?.toString();
         // Save the failing app result before acceptance checks and cleanup.
         await writeJson('result', report);
@@ -365,8 +298,8 @@ Future<void> main() async {
         if (report['videoRecoveryComplete'] != true) {
           throw StateError('Actual video recovery did not complete.');
         }
-        if (!proxy.reconnected) {
-          throw StateError('No new actual controller ADB transport after cut.');
+        if (evidenceErrors.isNotEmpty) {
+          throw StateError(evidenceErrors.join(' '));
         }
         if (cleanup['uninstalled'] != true ||
             cleanup['absent'] != true ||
