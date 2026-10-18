@@ -75,3 +75,22 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 保留全部匹配及固定最后1/3统计。时钟snapshot是相继读取、并非严格误差括号；
 该结果不是纯编码耗时或主控实际呈现延迟，不能代替真实新像素E2E。
 校验：`python3 -m unittest discover -s tool/e2e/video_fixture -p test_analyze_codec_trace.py`。
+
+
+真实视频断网恢复使用`apps/connect/test_driver/video_recovery.dart`和
+`integration_test/video_recovery_test.dart`。沿用上述ADB/双设备/fixture环境，
+设置`CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-recovery`，在apps/connect运行：
+
+```sh
+flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/video_recovery.dart \
+  --target=integration_test/video_recovery_test.dart \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+  --dart-define=CONNECT_E2E_PORT=25557
+```
+
+主机25557端口须空闲；代理上游默认127.0.0.1:25556，可用
+`CONNECT_E2E_UPSTREAM_PORT`覆盖。driver只关闭本次活动ADB socket，继续接受真实
+adbd重连；验证新session、真实解码、Flutter合成新图案和停止语义。它拒绝覆盖已有
+fixture安装，结束后卸载自己的fixture、恢复Settings并关闭代理。result.json、
+proxy-events.json、cleanup.json及截图仅存/tmp；EOF代理不代替物理无线切网验收。
