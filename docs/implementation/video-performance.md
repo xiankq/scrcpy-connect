@@ -1,7 +1,7 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量见[编码器对照与目标调度](#编码器对照与目标调度2026-10-18)：
-动态AVC/VP8/VP8-CBR实际新像素对照均未达到严格门槛，默认编码及JAR保持不变。
+最新增量见[截图生命周期与暂停提交顺序](#截图生命周期与暂停提交顺序2026-10-18)：
+修复主控截图/状态/释放时序，完成静态、动态及真实EOF恢复复验，严格性能仍开放。
 
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
@@ -1369,3 +1369,78 @@ SELECT state,ROUND(SUM(d)/1e6,3) milliseconds FROM x GROUP BY state;
 Android debug输出，释放1493.4MiB、空闲51.3GiB；保留release/native hooks/Rust/
 Gradle/CMake、Flutter hash缓存和全部原始证据。记录`/tmp/connect-video-codec-cleanup.json`。
 目标无捕获进程/fixture，本批6个session逐项确认无遗留捕获JAR。
+
+
+## 截图生命周期与暂停提交顺序（2026-10-18）
+
+历史MDK renderer空`std::function`崩溃继续开放。本批处理审计中可证明的主控生命周期
+问题，没有把它们认定为历史原生崩溃根因，也没有重建JAR或改默认编码/解码路径。
+
+- Fvp的snapshot与setPaused通过同一个最多8项的操作队列。关闭立即拒绝新工作和
+  尚未进入底层的排队工作，在途snapshot真实结果交付后才stop/detach/dispose。
+  3秒未完成时返回`disposeDeferred`、`textureDetached=false`、`disposeRequested=false`，
+  后台cleanup仍占已有最多8项retiring配额；不会因调用者超时释放原生handle。
+- Rust诊断poll的`-4`改为非终态：超过5秒仍保留request/slot/token。Dart降低轮询
+  频率继续等待实际callback，调用者期限由owner控制。没有MDK取消/排空回执时，
+  不再删除请求并允许新snapshot。真实C ABI夹具原行为确实允许第二请求，回归先红
+  后绿，覆盖迟到callback交付、消费和此后的新请求。
+- textureSize的最后一次await后补关闭检查，防止release之后迟到open重新注册trace。
+- 首个串行候选改变了静态暂停顺序：Portable原先在调用setPaused后立即refresh，
+  排队时底层pause尚未提交。生产gate+Portable调用路径回归确实红，记录到
+  `session.refresh`抢在阻塞snapshot之前。最终新增`onRequested`：
+  PlaybackConfirmation在native request成功返回后执行hook；Portable先确认旧owner
+  仍有效才刷新同一encoder。状态确认和hook以all-settled方式结束，提交失败不刷新，
+  同步/异步hook失败也不提前释放仍运行的查询。已暂停候选reattach沿用同一路径。
+
+操作边界5项测试覆盖snapshot→pause串行、调用者超时后仍占用、close拒绝排队/新操作、
+原错误传播和队列上限。Rust槽位回归、Portable抢跑回归均有原始红日志：
+`/tmp/connect-snapshot-admission-red.log`、`/tmp/connect-snapshot-refresh-red.log`；
+边界直通语义的4项失败保留在`/tmp/connect-snapshot-operations-red.log`，不是MDK崩溃
+复现。最终完整Bridge Dart123项、Rust17项通过，完整App275项86秒通过；
+Bridge all-target严格clippy、fmt和严格Dart分析通过（修正一处测试大括号lint后复跑）。
+只读review发现上述refresh回归并复核最终修复，未发现新的可证问题。
+
+真实Android沿用双API36 AVD、576×1280、请求60fps/8Mbps、AMediaCodec和严格
+首像素1000ms/输入P50 200ms/P95 300ms门槛：
+
+| 运行 | 已完成循环 | 首像素ms | 输入P50/P95 ms | 结论 |
+| --- | --- | --- | --- | --- |
+| 原普通fvp公开snapshot，动态 | 30次暂停恢复、2次输入 | 2839 | 1240 / 1737 | 无崩溃，严格exit1 |
+| 串行初候选，动态（提交hook修复前） | 30次暂停恢复、2次输入 | 2437 | 1229 / 1854 | 仅中间证据，严格exit1 |
+| 最终普通snapshot，静态 | 10次暂停恢复、2次输入 | 1269 | 232 / 294 | 全部新像素/呈现/停止/清理完成，严格exit1 |
+| 最终动态trace，200次串行snapshot | 10次暂停恢复、2次输入 | 2659 | 1234 / 1455 | 同PTS/新像素/呈现/停止/清理完成，严格exit1 |
+
+静态组暂停146–295ms、恢复至新像素316–550ms，实际Flutter图案12；运行与主机App
+测试有时间重叠，不能用于性能差异归因。动态两组图案0及fixture卸载确认完成。
+原始目录`/tmp/connect-e2e/video-snapshot-lifecycle-{baseline,candidate}/`和
+`/tmp/connect-e2e/video-snapshot-static-verified/`，同名`/tmp/connect-video-*.log`。
+这些有限次数无崩溃不证明历史原生问题已解决。
+最终动态组200次串行截图4319ms，暂停175–294ms、恢复至新像素451–618ms；
+`frameCorrelationComplete=true`、Flutter图案12及fixture卸载均确认，截图已目视。
+原件`/tmp/connect-e2e/video-snapshot-trace-verified/`；保留所有慢样本，未降低门槛。
+
+复跑沿用上一节命令：ROUNDS=1、TRANSITIONS=2、PAUSE_CYCLES=10，codec=h264、
+encoder=c2.android.avc.encoder、TRACE_FRAMES=false、MOTION=false。动态诊断压力
+另设MOTION=true、TRACE_FRAMES=true、SNAPSHOT_STRESS=200；保持严格预算不变。
+调用者Future完成只是结果交付证据，不能证明闭源MDK worker已完成所有收尾。
+永久无callback时保留有界退役资源并报告未释放，不能凭超时伪造nativeDeleteConfirmed。
+
+既有目标trace额外按进程累计CPU：media.swcodec6592.332ms、动态图案夹具2270.984ms、
+SurfaceFlinger2202.809ms、ranchu composer1618.948ms、捕获进程370.357ms。
+此为同一8秒记录中的线程运行时间合计，包含真实采集、合成和编码负载，非各进程的
+墙钟时延；不据此将所有动态等待归因于ADB，也不通过削弱动态图案来宣称优化成功。
+
+
+最终再跑真实ADB EOF视频恢复，17秒exit0：3534ms恢复到新session，真实Flutter
+计数0→1，主动停止后不重建，代理接受2次/切断1次，fixture卸载、Settings恢复及
+代理退出全部确认。证明新的截图/释放顺序仍能完成可控EOF后恢复；不外推物理
+无线切网或小时级长稳。证据`/tmp/connect-e2e/video-snapshot-recovery-verified/`、
+`/tmp/connect-video-snapshot-recovery-verified.log`，恢复截图已由图案断言验收。
+
+
+普通main恢复：构建14.1秒/安装569ms，实际热重载125ms成功、无Dart运行错误，
+设备首页与恢复后VIDEO1已目视后detach。SurfaceSync1000ms启动告警仍在，未计
+启动流畅度通过。Gradle停止后清理395项明确Android debug输出及本批Rust测试
+可执行文件，释放1670.1MiB、空闲51.0GiB；保留release、native hooks/Rust/Gradle/
+CMake/Flutter有效缓存及全部原始证据。记录`/tmp/connect-snapshot-cleanup.json`。
+目标无捕获进程/fixture，逐一确认本批6个session捕获JAR不存在；两个JAR摘要未变。

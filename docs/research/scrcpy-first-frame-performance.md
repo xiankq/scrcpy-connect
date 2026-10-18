@@ -251,3 +251,23 @@ AMediaCodec解码和新像素证据见[性能记录](../implementation/video-per
 这只支持控制变量的候选实验，不保证当前系统二进制逐字对应固定AOSP源码，也不证明
 VP8在其他设备更快。相同8Mbps不等于相同画质；最终选择还需文本/照片/运动质量、
 带宽和功耗验证。不能仅凭软件编码模拟器结果改变所有设备的默认策略。
+
+## snapshot交付、关闭与失败结果边界（2026-10-18）
+
+MDK0.39.0本地锁定SDK `include/mdk/Player.h:403–416`允许snapshot失败时回调
+request为空，完成回调运行在独立线程。调用只调度renderer重绘；不可见surface可能
+不重绘。因此调用者超时/撤销诊断token不是MDK请求取消或worker排空证据。
+[官方snapshot调度说明](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs#void-snapshotsnapshotrequest-request-snapshotcallback-cb-void-vo_opaque--nullptr)。
+
+当前本地fvp0.39.1 `lib/src/callbacks.cpp:693–694`及官方v0.39.1相同方法均在构造
+typed-data前无条件解引用`ret->stride/height/data`；该方法也没有使用其它状态回调
+的CallbackGuard。MDK失败契约与此存在明确缺口，但本批没有触发null故障或修补
+依赖；它与历史renderer内部空std::function不是同一栈，不能混为已证根因。
+[固定版本MdkSnapshot](https://github.com/wang-bin/fvp/blob/v0.39.1/lib/src/callbacks.cpp#L637-L688)。
+
+本批主控修复串行snapshot/播放状态、关闭后排队拒绝与在途请求退役；诊断超时保留
+native槽位，并以成功native提交后的hook刷新静止源。结果交付仍不能证明MDK内部
+worker已完成回调后收尾。完整红绿及静态/动态/恢复证据见
+[生命周期记录](../implementation/video-performance.md#截图生命周期与暂停提交顺序2026-10-18)。
+后续需单独构造null失败回调验证，并通过可复现的依赖补丁/替代实现处理，不能只改
+本机pub缓存或把这些有限次数无崩溃写成整个播放器稳定性完成。

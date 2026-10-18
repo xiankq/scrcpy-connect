@@ -202,3 +202,27 @@ CBR改变不能仅归因speed值，临时Rust参数已按原字节恢复；不�
 性能入口严格分析/格式检查通过；普通main热重载120ms无Dart错误并目视。
 Gradle停止后清理394项debug输出释放1493.4MiB，保留缓存/release及原始证据；
 目标无捕获进程/fixture，6项session捕获JAR已确认清理。完整目标继续active。
+
+截图生命周期后续：新增最多8项的播放器操作队列，串行snapshot与播放状态；关闭
+拒绝后续/排队操作，实际结果交付后才stop/detach/dispose，超时仅报告deferred并
+继续占退役配额。Rust诊断-4超时保留native槽位，真实C ABI回归先红后绿；补
+textureSize await后的关闭检查。review发现初队列会让refresh抢在native pause前，
+生产Portable+gate回归确实红；最终onRequested放在成功native提交后，双分支均
+结束才解除占用，提交失败不刷新，已暂停候选也沿用。完整Bridge Dart123、Rust17、
+App275项通过，严格分析/clippy/fmt通过。
+
+最终双AVD静态普通snapshot10次暂停恢复、动态trace200次串行截图+10次暂停恢复，
+实际图案12/同PTS/呈现/停止/卸载均完成且目视，本次无崩溃；严格性能仍exit1，
+静态首帧1269ms、动态2659ms，动态输入P50/P95=1234/1455ms。不能用本次有限
+通过关闭历史MDK内部空std::function；还需worker收尾、真实长期故障与物理设备证据。
+[代码路径、红绿、实际样本及复跑](../../../docs/implementation/video-performance.md#截图生命周期与暂停提交顺序2026-10-18)。
+
+- [ ] 补fvp公开snapshot失败结果null的独立真实回归及可复现依赖层修复；当前源码
+  无条件解引用，MDK锁定头允许null，尚未触发/修复，不能与历史worker空function混因。
+  [一手依据及边界](../../../docs/research/scrcpy-first-frame-performance.md#snapshot交付关闭与失败结果边界2026-10-18)。
+
+
+最终真实ADB EOF恢复17秒exit0、3534ms新session及VIDEO1，停止后无重建，代理/夹具/
+Settings清理确认；普通main热重载125ms无Dart错误并目视。清理395项debug/本批测试
+可执行文件释放1670.1MiB，保留有效缓存/release/原始证据；目标无本批进程或JAR。
+完整目标active，严格延迟、历史MDK崩溃和上述null失败回调继续开放。

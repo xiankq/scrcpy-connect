@@ -4,6 +4,34 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+本轮转向仍开放的原生截图稳定性：普通fvp公开snapshot、动态1280/60/8Mbps
+完成30次暂停恢复及实际Flutter图案0，本次无崩溃；首像素2839ms，输入P50/P95
+1240/1737ms，保留严格门槛exit1，清理已确认。不能据此关闭历史崩溃。
+只读审计确认截图与播放状态/释放未统一排队，诊断snapshot超时会删除仍在途的
+请求并重开槽位。Rust真实C ABI槽位回归先红后绿，Dart操作边界4条红后5条通过；
+新增有界队列统一snapshot/播放状态，关闭拒绝新操作并将真实stop/detach/dispose
+推迟到在途结果交付，3秒后仅报disposeDeferred并保留退役配额。诊断-4改非终态，
+不因调用者超时重开native槽位；textureSize await后补关闭检查。
+只读review发现初候选会让refresh先于排队的native pause，新生产调用路径回归确实
+红；已增加原生提交后的onRequested hook，并等待状态确认与刷新双分支结束，
+失败提交不触发刷新。完整Bridge Dart123项、Rust17项、完整App275项（86秒）通过，
+严格Dart分析修正1处大括号后无问题，Bridge all-target clippy及fmt通过。
+最终普通snapshot静态真实10次暂停/恢复/新像素/呈现/停止/卸载完成，首帧1269ms、
+2次输入232/294ms，严格门槛exit1；与App主机测试时间重叠，不用于性能差异归因。
+最终动态trace实际200次串行截图（4319ms）及10次暂停恢复完成，暂停175–294ms、
+恢复至新像素451–618ms，同PTS关联/Flutter图案12/停止/卸载确认完成，本次无崩溃；
+首帧2659ms、输入P50/P95=1234/1455ms，仍严格exit1。两组图案12均已目视，
+历史MDK空std::function崩溃继续开放。最终真实ADB EOF恢复17秒exit0通过，3534ms
+恢复新session及实际图案0→1，主动停止不重建，接受2次/切断1次，夹具/代理清理完成；
+仅证明可控TCP EOF与新释放顺序可共存，非物理无线切网/小时级长稳。
+另核实锁定fvp公开snapshot失败路径仍无null结果保护，而MDK头允许失败回调null；
+这是独立的依赖缺陷，尚未触发实机故障或提交依赖层修复，不等同历史worker空回调。
+普通main已恢复，构建14.1秒/安装569ms、热重载125ms、无Dart错误，首页及恢复后
+VIDEO1已目视后detach。SurfaceSync1000ms启动告警仍在，不计流畅度验收通过。
+Gradle停止后清理395项明确debug输出/本批Rust测试可执行文件，释放1670.1MiB，
+空闲51.0GiB；release/有效缓存/原始证据保留。目标无捕获进程/fixture，本批6个
+session逐项确认无捕获JAR残留，完整目标继续active。
+
 本轮回到动态源年龄：性能入口补显式codec/encoder实验参数（默认仍H264），
 同双AVD1280/60/8Mbps、同AMediaCodec、trace开启且无额外截图压力对比软件AVC/VP8。
 AVC基线两轮16次正常新像素、暂停恢复、实际Flutter呈现与夹具清理完成；实际解码
