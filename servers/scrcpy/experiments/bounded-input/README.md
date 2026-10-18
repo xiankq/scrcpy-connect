@@ -2,7 +2,10 @@
 
 此目录是被控手机上 scrcpy Java 捕获服务的实验补丁。它改变被控端真实的
 SurfaceTexture／GL／MediaCodec 输入路径；没有增加主控 Android 媒体实现。
-候选尚不能据此宣称性能改善或替换生产 JAR。
+当前候选采用双项启动、单项稳定输入。旧固定双项候选已有限定 AVD 输入改善证据，
+当前变体的同参数源时钟诊断A/B/A输入P50／P95为691／852→581／810→686／925ms，
+P50有限改善、首帧无稳定收益且整体预算失败，不能替换生产 JAR；原件与限定条件见
+[视频性能记录](../../../../docs/implementation/video-performance.md)。
 
 `candidate.patch` 以 scrcpy 5.0.1 **已应用**
 `../../patches/0001-cooperative-capture-pause.patch` 后的受控源码为基线，使用
@@ -23,7 +26,8 @@ JAR／摘要不覆盖；构建工具应使用独立候选输出目录并记录�
   输入流。激活前仍可取得最新源纹理，但不执行编码 Surface swap。
 - `LatestInputWindow` 无 Android 依赖，ledger／pending／credit／调度均由单一
   GL handler 操作。每次 frameAvailable 都 updateTexImage，最新源可覆盖 pending；
-  缺少 credit 时不等待。最多两条实际输入 reservation，swap 前登记精确 PTS。
+  缺少 credit 时不等待。首次有效媒体输出前最多两条实际输入 reservation，之后
+  缩为一条；bootstrap 剩余项退完前不能准入新输入。swap 前登记精确 PTS。
 - 新源按原 SurfaceTexture timestamp 建立媒体 PTS；重复帧和 PTS 碰撞使用严格
   单调的新编码 PTS。每项 reservation 同时保存原始 `sourceTimestampNs`、实际
   `presentationTimeUs`、`repeat` 和提交时刻。重复绘制不会刷新源 timestamp。
@@ -31,7 +35,10 @@ JAR／摘要不覆盖；构建工具应使用独立候选输出目录并记录�
   全部应用后读取并移除，避免 GBS 自行重复／丢弃已登记的输入。GL 模块按照读取
   的间隔执行重复和限帧：SurfaceEncoder 未覆盖时重复为 100000µs，当前 Core
   传入的 33334µs 会覆盖它。0 关闭重复；非法负数／非有限帧率明确拒绝。
-- 静态首帧尚无输出时，重复期限到达可以使用第二个 credit。只要有在途输入，
+- 静态首帧尚无输出时，重复期限到达可以使用第二个 credit；CONFIG／空 EOS 不
+  激活缩窗。成功退还真实媒体 reservation 才进入单项稳定状态，不随回调次序扩大。
+  静态终值继续主动 drain；codec 若持续需要第二项，则明确 stall，绝不回退扩大。
+  只要有在途输入，
   最老 reservation 3 秒未完成即失败；GL timer 和 encode 的 100ms 轮询快照均
   可检查。空 ledger 的正常静止不会失败，不增加窗口来绕开 codec 不输出。
 - 只有完整 packet 写入 Streamer 且 releaseOutputBuffer 成功才按精确媒体 PTS
@@ -47,10 +54,11 @@ JAR／摘要不覆盖；构建工具应使用独立候选输出目录并记录�
 ## 离线验证
 
 `LatestInputWindowTest.java` 是独立纯 Java 行为测试，编译时只需要补丁中的
-`LatestInputWindow.java`。它覆盖六组场景：两项占满后只保留最新 pending 和无新事件
+`LatestInputWindow.java`。它覆盖七组场景：双项启动缩为单项后只保留最新 pending 和无新事件
 终帧、激活窗口与限帧、静态重复与有界 stall、CONFIG／EOS／精确乱序输出／重复／
 未知／partial、早于 swap 返回的同步 output 和 swap 失败、close 穿越 reservation
-以及旧 timer／output 的代际隔离。测试使用可控时钟和单任务 scheduler，断言真实
+以及旧 timer／output 的代际隔离、稳定状态静态重复与唯一终值。测试使用可控时钟和
+单任务 scheduler，断言真实
 提交帧／PTS／pending 行为，没有复制模块的状态转移算法。
 
 现有 `CapturePauseTest` 继续使用 `encode(MediaCodec, Streamer)` 原反射签名。

@@ -247,7 +247,7 @@
 +}
 --- /dev/null
 +++ b/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,221 @@
 +package com.genymobile.scrcpy.video;
 +
 +import java.util.LinkedHashMap;
@@ -292,6 +292,7 @@
 +    private final Map<Long, Frame> ledger = new LinkedHashMap<>();
 +    private final Runnable drain = this::drain;
 +    private boolean active;
++    private boolean hasMediaOutput;
 +    private boolean closed;
 +    private boolean hasSource;
 +    private boolean pending;
@@ -352,6 +353,7 @@
 +            fail(new IllegalStateException("Unknown or duplicate media output PTS: " + ptsUs));
 +            return;
 +        }
++        hasMediaOutput = true;
 +        updateDeadline();
 +        request(clock.getAsLong()); // Final pending frame needs no new source callback.
 +    }
@@ -360,6 +362,13 @@
 +        if (!closed && stallDeadlineNs != 0 && now >= stallDeadlineNs) {
 +            fail(new IllegalStateException("Bounded encoder input stalled for 3 seconds"));
 +        }
++    }
++
++    private int inputLimit() {
++        // Preserve the initial codec bootstrap, then bound steady-state age.
++        // A codec requiring two inputs continuously fails through the stall
++        // guard; do not silently expand the window or lose its terminal frame.
++        return hasMediaOutput ? 1 : 2;
 +    }
 +
 +    private void drain() {
@@ -373,7 +382,7 @@
 +            return;
 +        }
 +        long due = pending ? nextInputNs : (repeatNs == 0 ? Long.MAX_VALUE : Math.max(nextInputNs, lastSubmitNs + repeatNs));
-+        if (ledger.size() < 2 && now >= due) {
++        if (ledger.size() < inputLimit() && now >= due) {
 +            boolean repeat = !pending;
 +            long ptsUs = Math.max(lastPtsUs + 1, (repeat ? now : sourceTimestampNs) / 1000);
 +            Frame frame = new Frame(sourceTimestampNs, ptsUs, repeat, now);
@@ -399,7 +408,7 @@
 +            return;
 +        }
 +        long next = stallDeadlineNs == 0 ? Long.MAX_VALUE : stallDeadlineNs;
-+        if (ledger.size() < 2 && hasSource) {
++        if (ledger.size() < inputLimit() && hasSource) {
 +            long inputDue = pending ? nextInputNs : (repeatNs == 0 ? Long.MAX_VALUE : Math.max(nextInputNs, lastSubmitNs + repeatNs));
 +            next = Math.min(next, inputDue);
 +        }

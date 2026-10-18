@@ -91,10 +91,11 @@ public final class LatestInputWindowTest {
         h.source(500_000);
         check(h.frames.size() == 2 && h.window.inFlight() == 2, "two actual inputs maximum");
         h.output(0); // There is deliberately no later source callback.
+        check(h.frames.size() == 2 && h.window.inFlight() == 1, "first output reduces the window without admitting another input");
+        h.output(1);
         check(h.frames.size() == 3, "output alone actively drains final pending input");
         check(h.frames.get(2).sourceTimestampNs == 500_000, "only latest pending source survives");
         check(!h.frames.get(2).repeat, "final update is a source input");
-        h.output(1);
         h.output(2);
         check(h.window.inFlight() == 0, "all exact outputs retired");
         h.advance(LatestInputWindow.STALL_NS * 2);
@@ -141,7 +142,9 @@ public final class LatestInputWindowTest {
         h.output(1); // A larger PTS does not retire the older input.
         check(h.window.inFlight() == 1, "out-of-order output retires one exact PTS");
         h.source(300_000);
-        check(h.window.inFlight() == 2 && h.frames.size() == 3, "one output permits exactly one new input");
+        check(h.window.inFlight() == 1 && h.frames.size() == 2, "older bootstrap reservation occupies the reduced window");
+        h.output(0);
+        check(h.window.inFlight() == 1 && h.frames.size() == 3, "retiring the old input admits only the latest pending input");
         h.window.complete(h.frames.get(1).presentationTimeUs, 0, 12);
         check(h.window.getFailure() != null && h.window.isClosed(), "duplicate output revokes generation");
 
@@ -162,6 +165,28 @@ public final class LatestInputWindowTest {
         eos.source(100_000);
         eos.window.complete(eos.frames.get(0).presentationTimeUs, LatestInputWindow.EOS, 12);
         check(eos.window.inFlight() == 0 && eos.window.getFailure() == null, "media-bearing EOS retires its exact input");
+    }
+
+    private static void steadyStaticRepeat() {
+        Harness h = new Harness(33_334, 60);
+        h.window.activate();
+        h.source(100_000);
+        h.advance(33_334_000);
+        check(h.frames.size() == 2, "bootstrap can use its second credit");
+        h.output(0);
+        h.advance(33_334_000);
+        check(h.frames.size() == 2, "first output must not enlarge the steady window");
+        h.output(1);
+        check(h.frames.size() == 3 && h.window.inFlight() == 1, "static repeat progresses after bootstrap drains");
+        check(h.frames.get(2).repeat && h.frames.get(2).sourceTimestampNs == 100_000, "steady repeat keeps source age");
+        h.source(600_000);
+        h.source(700_000);
+        h.advance(33_334_000);
+        check(h.frames.size() == 3, "pending sources cannot bypass one live reservation");
+        h.output(2);
+        check(h.frames.size() == 4 && h.frames.get(3).sourceTimestampNs == 700_000, "single-window output drains the unique latest terminal update");
+        h.advance(LatestInputWindow.STALL_NS);
+        check(h.window.getFailure() != null && h.window.isClosed(), "steady input still has the bounded stall guard");
     }
 
     private static void synchronousOutputAndSwapFailure() {
@@ -212,9 +237,10 @@ public final class LatestInputWindowTest {
         boundedLatestAndFinalFrame();
         activationAndCadence();
         staticRepeatAndStall();
+        steadyStaticRepeat();
         exactOutputAccounting();
         synchronousOutputAndSwapFailure();
         closeAndGenerationIsolation();
-        System.out.println("LatestInputWindowTest: 6 behavioral scenarios passed");
+        System.out.println("LatestInputWindowTest: 7 behavioral scenarios passed");
     }
 }
