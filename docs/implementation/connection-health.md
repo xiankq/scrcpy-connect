@@ -151,3 +151,75 @@ Skipped31frames／SurfaceSync1000ms／1404ms启动帧告警仍保留，不计启
 两AVD、移除forward、停止Gradle。精确清理394项debug输出1486.0MiB，空闲42.0GiB，
 保留release／有效缓存／原始证据和五项原有未跟踪文件。回执为
 `/tmp/connect-application-stall-{target-cleanup,avd-stop,debug-cleanup}.json`。
+
+
+## 单个控制流失活，设备连接仍健康（2026-10-18）
+
+活动视频或文件查询会持续保活Client，因此连接健康探针不能发现某条控制WRTE
+永远不回OKAY。旧实现先等待64项控制队列，再开始6秒reply期限；actor实际write
+没有短期限，超时旧输入在ACK终于恢复后仍可能被送出。真实Frame/Duplex回归在
+旧实现中确认队列满超过6.5秒、调用超时后actor不退出。
+
+ControlReply现在携带一个绝对6秒期限，覆盖入队、实际写入及调用等回执；出队拒绝
+已过期或调用者已撤销的请求。实际write在会话取消或此期限到达时结束，关闭精确
+控制route并取消本会话，保留共享Client和其他设备活动。中止后的晚到OKAY不能复活
+route，输入不会重放。应用启动继续遵守LaunchPermit单次提交和unknown账本；恢复
+主屏后，打开应用需要新的明确操作，不重放旧排队意图。
+
+该期限不是“任何协议无回复都断远控”。Set/Capture的协议ACK按sequence关联，调用
+超时只返回错误；旧sequence不能满足新请求，actor不因等待应用层回复关闭健康视频。
+原因之一是[官方GET_CLIPBOARD](https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/src/main/java/com/genymobile/scrcpy/control/Controller.java)
+在无可读文本时可以合法不回消息，且没有request ID；取消后删除旧FIFO槽会把旧文本
+分配给新读取。故clipboard.get统一复用现有companion的带编号RPC，返回明确的
+hasText／权限状态；不引入新的服务端源码，不重建scrcpy或companion JAR。
+
+读取仍尊重allowStart：Bridge完成状态核验后默认false，不因后台刷新新建helper；
+剪贴板页的主动获取显式true。无helper时自动同步可能limited，主动获取后可使用
+现有helper；自动协调器仍需后续内容事件、前后台切换或重新开关才能再次核验，
+不能把这个产品行为说成自动恢复已完整。通知／通话观察不因剪贴板读取被开启。
+
+真实Android选择性故障只丢控制OKAY，其他frame继续转发；这与旧hold_key代理
+阻塞整个toward_host循环不同。最终验证：Core lib80 passed/6 ignored、5项control真实Frame定向、严格all-target
+clippy及改动Rust格式通过。Android4项应用打开与未知结果59.29秒、2项无会话
+剪贴板与断线11.39秒均通过；新增控制故障最终11.85秒通过，实际1个key、三次
+files.list均在控制route关闭前成功，视频17378→70158字节，CLSE后共享Client
+仍可用。主动helper启动／false门禁／两次跨通道剪贴板新文本及通知通话观察停止
+也实测通过。初次新增测试未关闭默认观察，helper提前启动使false门禁断言失败；
+保留该红日志，补observation.stop后单独复跑最终新增测试通过，不隐藏失败。
+
+```sh
+rtk proxy cargo test -p interop-core --lib
+rtk proxy cargo test -p interop-core control_ --lib -- --nocapture
+rtk proxy cargo clippy -p interop-core --all-targets -- -D warnings
+rtk proxy env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=25556 \
+ INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:25556 cargo test -p interop-core \
+ --test app_launch_android --test companion_clipboard --test control_stall_android \
+ -- --ignored --nocapture --test-threads=1
+```
+
+最终host日志`/tmp/connect-control-deadline-verified-lib.log`与
+`/tmp/connect-control-deadline-clippy.log`；Android前六项及夹具红在
+`/tmp/connect-control-deadline-verified-android.log`，修正夹具后的最终第七项在
+`/tmp/connect-control-deadline-verified-stall-android.log`。这些是API36 AVD与真实
+adbd/生产Runtime协议证据，不替代物理Wi-Fi/ARM/小时级稳定性或视频延迟预算。
+
+
+最终普通main构建69.9秒，APK`/tmp/connect-artifacts/control-deadline-main-debug.apk`，
+SHA256 `89527f9ad91e5a9c536f7067039f13ca76b8c123b1ce0580e29c0b00296b5eb2`。
+原生产捕获JAR完整在库中，隔离候选缺席，vendor／capture／companion三个JAR摘要
+未变、未重建。MCP实际热重载成功、无Dart错误；从手动TCP表单进入全屏Settings，
+主控触摸进入Network & internet、悬浮退出并移除测试设备，主控画面和目标
+Settings.SubSettings顶层任务均观察到。代表图前缀
+`/tmp/connect-control-deadline-main-{remote-ready,after-input,final}.png`；最初过渡图
+保留但不当ready证据，目标uiautomator的null root不算成功层级断言。
+Skipped34frames／SurfaceSync1000ms／1297ms长帧警告不计性能通过。
+
+清理发现74份不同于当前摘要的历史辅助JAR；自有target核实无进程后逐一精确清除，
+为完成旧文件清理另一次启动后也已关闭。捕获进程、JAR、fixture及forward均缺席；
+DTD断开、CLI detach、Gradle停止，两自有AVD及清理专用target PID全部消失。
+22项大debug副本2680.3MiB删除，空闲37.91GiB，保留实测APK/raw、release与有效缓存。
+回执`/tmp/connect-control-deadline-{target-cleanup,avd-stop,debug-cleanup}.json`。
+本批不声称改善冷首帧或高负载画面延迟；普通Driver提前挂载A/B/A见
+[视频性能](video-performance.md#普通driver提前挂载纹理的单变量复验2026-10-18)。
+
+控制修复及真实Android回归提交`1356a0c`；基准默认解码优先级修正`1421374`。

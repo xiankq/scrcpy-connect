@@ -2,7 +2,7 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
-## 本轮：普通调度下的提前纹理挂载复验（2026-10-18，进行中）
+## 本轮：普通调度复验与控制流单独失活（2026-10-18）
 
 上一轮7c76b2a／004908a／647c1bf已补齐实际播放器完整帧关联，但未取得性能通过。
 本轮先针对冷首帧：现有实现等待32×32有效像素才把Texture交给页面；过去提前
@@ -28,7 +28,41 @@ ADB Frame回归及控制请求绝对期限，只结束精确会话；主代理�
 首版修复的真实API36 adbd选择性故障用例8.69秒通过：实际只发1个键、同Client三次
 files.list全部成功，视频11997→57307字节，精确控制CLSE，结束后文件查询仍成功。
 日志`/tmp/connect-control-stall-android.log`。review另锁定已取消ClipboardGet被retain
-移除后旧文本错配新请求的真实红例，修复保留FIFO响应槽；最终回归及独立review进行中。
+移除后旧文本错配新请求的真实红例。进一步核对官方Controller：无文本可以合法
+不回复；协议ACK也可能已缓冲却被后续write阻挡。因此撤回“pending协议回复超时
+终止会话”的扩大策略，只约束实际ADB写交付。GET改用现有companion的requestId
+路径（无会话已使用，明确空值／权限），不保留永久busy的无编号响应槽、不改JAR。
+保留allowStart:false不新建helper的策略，主动获取true之后可继续false读取；自动同步
+在helper未启动时会受限，需主动核验，不能说它会绕过既有恢复授权。最终回归进行中。
+
+最终Core lib80 passed/6 ignored，5组control真实Frame定向通过，严格all-target
+clippy与三改动Rust文件format通过。最终Android：4项应用未知结果／排队／真实任务
+场景59.29秒、2项无会话剪贴板／断线11.39秒全部通过；新增故障场景初次因测试
+默认观察提前启动helper，严格false门禁断言实际红，显式observation.stop修正夹具
+后11.85秒完整通过。活动主屏false不启动helper、true明确启动、两次scrcpy SET→
+companion GET新文本、通知/通话观察仍停止均通过；只发1键，三次文件查询在route
+关闭前完成，视频17378→70158字节，控制CLSE且共享Client继续可用。原件
+`/tmp/connect-control-deadline-verified-{lib,android,stall-android}.log`。
+性能基准默认decoderPolicy改为default（生产优先级），显式native保留作对照；
+此前本轮所有A/B/A已显式default，不改变记录。Dart定向分析与format通过。
+普通main最终构建69.9秒，APK89527f9a…完整嵌入原生产捕获JAR、候选缺席；三份
+生产JAR摘要未变、未重建。MCP热重载成功／无Dart错误；实际手动TCP表单连接、
+全屏Settings、主控触摸进入Network & internet、悬浮退出、移除本轮设备记录均完成
+并目视，目标topResumed为Settings.SubSettings。首张过渡旧页面不作远控通过，
+另存ready／after-input／final图；目标uiautomator返回null root，不伪造层级断言。
+Skipped34frames、SurfaceSync1000ms及1297ms启动长帧保留，不称启动流畅已过。
+
+目标捕获进程／当前JAR／fixture清理确认；发现74份历史不同摘要companion临时JAR，
+核实自有AVD无相关进程后按精确路径一并清除。清理首次严格断言发现旧摘要文件，
+为完整清理仅重启自有target一次，最终无JAR残留、再次关闭且PID消失。forward移除，
+CLI detach／DTD断开／Gradle停止、两自有AVD均已核名关闭。精确清理22项大debug
+副本2680.3MiB，空闲37.91GiB，保留release／实测APK／原始证据及有效编译缓存。
+回执`/tmp/connect-control-deadline-{main-receipt,target-cleanup,avd-stop,debug-cleanup}.json`。
+本轮有实际控制稳定性修复；完整目标仍active，视频质量／首帧／高负载预算未通过，
+AVD结果不代替物理ARM／无线漫游或长稳。下一步继续源采集／编码等待与主控冷呈现，
+不再重复提前挂载微调。原五项用户文件保持不动。
+分批提交：d16adf2（普通调度对照记录）、1356a0c（控制交付期限及真实Android回归）、
+1421374（基准默认采用生产解码优先级）。
 
 ## 本轮：实际Rust／Flutter链路的完整帧关联（2026-10-18）
 
