@@ -1,9 +1,8 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量：已修复[ADB应用失活恢复](connection-health.md)，并确认实际默认解码器
-已使用[异步AImageReader](../research/scrcpy-first-frame-performance.md#实际aimagereader异步路径确认2026-10-18)。
-[普通调度基准与解码路径对照](#普通调度基准与解码路径对照2026-10-18)仍是最近的可比性能数据；
-本轮调试器只辨路径，平台默认延迟仍未达严格预算。
+最新增量：[Android显式异步解码](android-decoder-async.md)已通过A/B/A验证并进入
+生产默认。关闭诊断后60次输入P50/P95=138/295ms，输入预算通过；首帧1197/1157/
+1122ms仍超过1000，完整性能任务继续开放。连接稳定性增量见[应用失活恢复](connection-health.md)。
 
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
@@ -1810,3 +1809,22 @@ CMake／SDK缓存及原始证据，记录`/tmp/connect-normal-binding-cleanup.js
 候选。[探针原始证据与回调错误边界](../research/scrcpy-first-frame-performance.md#实际aimagereader异步路径确认2026-10-18)。
 不从调试器期间的首帧推导收益，继续拆解原生输入／输出和图像获取等待；默认播放
 策略和JAR均未修改。本任务及整体目标保持开放。
+
+
+## Android显式异步输出（2026-10-18）
+
+`53bcf10`补实际系统时钟的onVideo标记及保守离线配对，`24379bb`将Android默认
+首选改为AMediaCodec:async=1。同参数A/B/A的输入P50/P95为277/392→153/204→273/389ms，
+workDone→onVideo中位147.174→20.841→133.510ms；每组30/30输入系统标记关联。
+显式选项有真实async成功日志／467次输出callback；此前AImage异步acquire不是
+codec异步证明。未猜测固定SDK缺省选择的内部原因，未改JAR。
+
+最终共享default配置、关闭诊断，60次输入138/295ms通过200/300ms预算，首帧
+1197/1157/1122ms仍未过1000，完整严格exit1。66次实际窗口检查、3次暂停恢复／
+释放和清理完成；真实RemotePage五编码功能通过，不能当五编码延迟或物理ARM证明。
+[完整场景、失败、命令、源码与原始证据](android-decoder-async.md)。
+
+Python分析器独立review发现跨会话误配、重复decoded及错身份统计，4项实际红后
+修复并8项全绿；不把不完整覆盖伪装成有效配对。首个新marker运行的PTS唯一性失败
+保留，清理后才重测。Bridge19项Rust／123项Flutter、严格分析和clippy／fmt通过。
+首帧、真实无线、物理硬解／profile／热及长稳均继续开放，完整目标未完成。

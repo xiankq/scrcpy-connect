@@ -107,3 +107,19 @@ manifest、arm64 ELF及16KB ZIP对齐通过；另逐字节确认libinterop_bridg
 本批清理382处明确debug输出，实际释放1488.5MiB、空闲62.5GiB，
 `/tmp/connect-pause-cleanup.json`；保留release/native hooks/Gradle/CMake及模式不明的
 Flutter缓存。原始结果、目标线程栈、主控tombstone及对应MDK x64二进制均留/tmp。
+
+
+## 显式异步解码后的arm64包（2026-10-18）
+
+`24379bb`改为Android显式AMediaCodec async，`53bcf10`增加optin系统观测。首次集成
+测试后直接`flutter build apk --release --target-platform android-arm64 --no-pub`在76.2秒
+因GeneratedPluginRegistrant引用release未带入的integration_test而失败，未交付该结果。
+既有tool/android.py的no-pub保护已覆盖此状态；随后用其普通build入口重新生成注册，
+47.36秒完成（Gradle45.9秒）。两次准备状态不同，不据此报告打包加速。
+
+新原件`/tmp/connect-artifacts/connect-arm64-decoder-async-release.apk`，46920990字节，
+SHA-256 `fc6db347d819e42abaa630b452f5a7f32edab8b82b2ed37b6ed39aa951f9d022`。同一证书身份，签名／manifest／
+ZIP完整性／16KB对齐／完整arm64 ELF检查均通过。日志
+`/tmp/connect-decoder-async-release{,-fixed}.log`、回执
+`/tmp/connect-decoder-async-release-receipt.json`。这是实际ARM包构建验证，未上物理ARM，
+不拿x64 debug的五编码及输入性能E2E替代ARM运行。两个scrcpy JAR未变、未重建。

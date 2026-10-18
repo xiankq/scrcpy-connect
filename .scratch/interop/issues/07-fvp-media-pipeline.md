@@ -317,3 +317,24 @@ Dart错误；启动长帧仍有。两JAR未改未重建。fixture／会话捕获
 工具确认清理，Gradle停止、两AVD正常关闭；精确清理约11.6GiB输出，保留有效缓存、
 release和/tmp证据。原生默认延迟、真实ARM／profile、实际无线切网、视频活动恢复
 及长稳仍未完成，本任务与完整目标继续开放。
+
+
+2026-10-18系统解码边界与保留优化：53bcf10补optin Android ATrace onVideo标记和
+明确PID／token／唯一PTS的分析器；独立review的4项实际红已修复，8项测试全绿。
+三组30/30系统标记A/B/A显示workDone→onVideo147.174→20.841→133.510ms，输入
+P50/P95=277/392→153/204→273/389ms。显式AMediaCodec:async=1有成功async日志及
+467次输出callback，不把AImage异步获取或可更新文档缺省值当运行证明。
+
+24379bb保留Android显式codec异步，软件回退／其他平台不变。最终生产default且
+关闭诊断，3轮60输入P50/P95=138/295ms通过200/300；首帧1197/1157/1122仍失败，
+严格整体exit1。66次实际窗口、暂停恢复／释放、清理均确认；五编码RemotePage
+24秒功能回归全rendered，Bridge19 Rust／123 Flutter、严格分析、clippy／fmt通过。
+不以x64 debug证明ARM功耗／profile或五编码速度。
+[实际配置、生效证据、失败、复现及限制](../../../docs/implementation/android-decoder-async.md)。
+首帧1000ms、无线切网、活动恢复、物理ARM及长稳继续开放，任务和目标未完成。
+
+签名arm64 release47.36秒构建并通过签名／manifest／16KB对齐／ELF检查，原件
+`/tmp/connect-artifacts/connect-arm64-decoder-async-release.apk`，未在物理ARM运行。
+首次测试注册残留导致的release失败保留，已改用既有打包入口完成。普通main实际
+恢复并MCP热重载119ms、无Dart错误、首页已目视；启动长帧继续开放。两AVD正常
+关闭、Gradle停止，394项debug输出1506.8MiB清理，保留有效缓存、release及证据。

@@ -4,6 +4,70 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+上一轮连接健康修复与实际解码路径确认已提交，判为progress。本轮双AVD冷启后，
+普通Driver原生默认3轮30输入首帧1552/1152/1114ms、P50/P95=283/439ms，严格门槛
+仍失败；36次实际窗口检查、3次暂停恢复／释放及App／fixture清理确认。同步60秒
+video/gfx/hal/sync系统追踪（首个配置路径被SELinux拒绝，改perfetto-configs成功）
+取得455个唯一queue/workDone对；首两次输入在录制前，其余28个按PTS及codec匹配，
+组件合段中位4.586ms，而同PTS relay→onVideo中位153.703ms。两者只比较区间长度，
+Rust相对时钟不能直接减系统绝对时钟；正补optin Android ATrace onVideo短标记以
+区分组件完成后的等待，未改默认播放参数或JAR，尚无性能收益或新增验收通过。
+原始追踪、JSON与截图均在/tmp/connect-decoder-boundary*及/tmp/connect-e2e/decoder-boundary-r1。
+新ATrace版本首次R2在第一次input因snapshot PTS不能唯一对应native回调而拒绝，
+不计成功样本；App／fixture清理确认，正在保留失败后复跑。分析器独立review找出
+跨token重复PTS可复用旧pair、重复decoded取min和错身份先入统计，4项实际红后修复；
+8项回归全绿并只读复核闭合，显式本次PID、唯一decoded与marker及pair独占后才纳入。
+R3复跑3轮30输入完成，首帧1150/1137/1189ms、P50/P95=277/392ms，严格仍失败；
+36次真实窗口、3次暂停／释放与清理完成。系统marker覆盖30/30输入，显式PID4367、
+token及PTS唯一关联；queue→workDone中位3.600ms、workDone→onVideo中位147.174ms，
+同PTS relay→onVideo中位151.589ms。主要额外等待已定位在组件完成之后，不能再把
+它笼统归为AVD codec处理慢；SDK回调／输出调度／图像交付仍合在后一段，尚非单独
+fence等待证明。工具require-markers真实exit0只表示覆盖完整，严格性能仍exit1。
+系统标记与保守分析器已提交53bcf10（Bridge19项、Python8项／clippy／fmt通过，
+Android arm64 check通过；Apple／Windows bridge整包仍在既有宿主SDK依赖处失败）。
+进一步实测同onVideo线程有同步dequeueOutputBuffer且无输出async callback事件，
+正在单变量benchmark显式async=1并检查实际系统路径；AImage异步获取不能当codec
+异步证明。生产默认未改，不将文档默认值当生效证据。
+显式async=1三会话取得3条真实async日志和467条onOutputBufferAvailable，无持续
+同步dequeue；30/30系统marker配对，组件完成→onVideo中位20.841ms（原147.174），
+relay→onVideo34.123ms（原151.589）。输入P50/P95=153/204ms（原277/392），但首帧
+1170/1107/1165ms仍超1000，整体严格exit1，未宣称全门槛通过；36次窗口及暂停／释放
+清理通过。关闭后media.metrics operation-mode=1可能受stop清async flag再flush影响，
+不作为运行期同步证据，实际async日志／事件为依据。正切回原参数进行A/B/A复核。
+A/B/A返回原生缺省后P50/P95=273/389ms，首帧1227/1150/1154ms；30/30标记，
+workDone→onVideo中位133.510ms，relay→onVideo140.512ms，劣化可重复。故已将生产
+Android默认显式AMediaCodec:async=1，原软件回退及其它平台优先级保留；当前正跑
+真实RemotePage五编码及正式default路径无trace扩量，尚不宣称最终验收通过。
+共享播放器变更经MCP热重载成功、无Dart错误，未改服务端／JAR。
+真实RemotePage五编码24秒通过：H264/H265/AV1/VP8/VP9全部rendered，悬浮退出后
+capture暂停、逐session停止与设置恢复检查通过，mediaAcceptanceComplete=true；
+不是五编码性能验收。结果/tmp/connect-e2e/decoder-async-product-five/result.json。
+全workspace严格Dart分析无问题；正在关闭trace的生产default路径3轮60输入复测。
+最终生产default、关闭native trace及系统追踪，3轮60次输入P50/P95=138/295ms，
+首帧1197/1157/1122ms；输入预算通过、首帧仍失败，整体严格exit1。
+每轮实际decoder=AMediaCodec；66次窗口检查、3次暂停／停止分离、App与fixture清理
+确认。结果/tmp/connect-e2e/decoder-async-default-60/result.json；不是物理ARM或发布
+模式性能。Bridge Flutter123项通过。正在构建更新后的签名arm64 release并恢复普通main。
+生产配置及隔离候选已提交24379bb；系统观测及配对工具提交53bcf10。
+首次release在集成测试后直接--no-pub，76.2秒因GeneratedPluginRegistrant仍引用
+release未包含的integration_test而失败；这是模式切换准备问题，非Rust/ATrace链接。
+失败日志保留，正先离线pub准备再复建，未将失败APK宣称可交付。
+改用现有tool/android.py build后47.36秒完成（Gradle45.9秒），签名、manifest、
+ZIP完整性／16KB对齐及完整arm64 ELF检查通过，证书身份不变。新原件
+/tmp/connect-artifacts/connect-arm64-decoder-async-release.apk，46920990字节，SHA-256=fc6db347d819e42abaa630b452f5a7f32edab8b82b2ed37b6ed39aa951f9d022。
+这是ARM构建证据，未在物理ARM运行；x64 debug E2E独立记录。普通main正在恢复。
+普通main已实际恢复：构建16.9秒／安装692ms，MCP热重载119ms成功、无Dart运行
+错误；设备首页空态已目视并detach，未留下新增设备记录。启动Skipped34frames及
+SurfaceSync1000ms告警保留，不计应用冷启动流畅通过。代表图/tmp/connect-decoder-async-main-before.png。
+目标捕获JAR／进程／fixture确认无残留，远端本批trace与配置删除，Gradle停止，
+两AVD正常关闭。按精确debug白名单清理394项、1506.8MiB，空闲50.18GiB；
+release、有效Flutter／Rust／Gradle／CMake／SDK缓存及/tmp原始证据保留，原五项未
+跟踪文件未修改。完整产品目标及视频任务继续开放。下一步拆首帧Core约0.7秒
+（含校验约0.24–0.31秒）和输出约0.4秒，不能用此次持续输入改善代替首帧达标。
+收尾增加分析器空结果门禁：有效空rounds会使all(empty)误通过的单元先红，现9项
+回归通过；实际R2缺rounds报告也改为明确拒绝而非KeyError，R3完整30输入仍exit0，
+数值不变。提交0e7198b，只改宿主分析工具，不改变已验证APK内容。
+
 上一轮普通调度基准与扩量对照已提交，判为progress。本轮继续实际decoder路径定位，
 并新增真实TCP/TLS的ADB应用失活回归：对端保留socket且消费TLS字节，但不回复ADB
 请求；实际40秒未恢复、整项44.84秒红。现补空闲10秒sync: OPEN、3秒期限、两次

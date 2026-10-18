@@ -486,3 +486,30 @@ MediaCodec输入到输出、图像获取到onVideo两段，用有界追踪量测
 来辨路径，不能充当低开销逐帧计时。默认解码器、Fvp策略和两个scrcpy JAR均未改。
 连接层另已补上[ADB应用失活恢复](../implementation/connection-health.md)，它关闭
 健康socket下的无响应缺口，不代表平台延迟、实际无线切网或长稳已验收。
+
+
+## Codec异步默认值必须以运行路径验证（2026-10-18）
+
+AImageReader异步获取已经启用，仍不能说明codec本身使用async callback。新增同
+系统时钟标记后，三轮30输入的组件queue→workDone中位3.600ms，但其后到onVideo
+为147.174ms。相同线程持续同步dequeue、没有异步输出事件，促成显式async=1实验；
+该参数有3条成功async日志及467条输出callback，后一段降至20.841ms，返回缺省又
+升至133.510ms。输入P50/P95相应277/392→153/204→273/389ms，首帧仍失败。
+[完整A/B/A与无诊断默认扩量](../implementation/android-decoder-async.md)。
+
+[官方MDK文档](https://github.com/wang-bin/mdk-sdk/wiki/Decoders#amediacodec)当前写
+codec async默认1，但固定SDK公开头／Changelog无法解释此次实际缺省选择；项目
+源码没有主动async=0覆盖，不把未知内部条件写成已查明。显式配置已进入生产
+Android优先级，保留原软件回退与其他平台。不重复此前async=0实验，也不把已启用
+AImage acquire再当新的优化候选。
+
+固定Android16[MediaCodec实现](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/libstagefright/MediaCodec.cpp#6032)
+的异步模式拒绝同步dequeue、实际输出走onOutputBufferAvailable。关闭后指标mode=1
+并不可靠地表示运行期同步：stop/release的setState清异步flag，之后flush重新更新
+指标。这解释了本次关闭后的metrics与真实async日志不一致，不拿静态dump覆盖
+运行事件。另查output.delay=8用于slot分配，不能等同reorder深度。
+
+新的ATrace仅在已有诊断trace注册后、系统isEnabled时发出，采用固定栈缓冲和成对
+调用，非Android不调用。[NDK系统追踪契约](https://developer.android.com/ndk/reference/group/tracing)。
+所有比较在各自单调时钟内算区间；PTS只做唯一键，不减远端时间或猜Rust起点。
+该结果促成主控配置修复，服务端源码、补丁、版本和工具链均未变，仍无需重建JAR。
