@@ -23,6 +23,10 @@ const SERVER_SHA: &str = "77007b4fb29e51296a448e669178f43c775854b3f4665ea5af4441
 const MAX_MESSAGE: usize = 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(20);
 
+#[cfg(test)]
+#[path = "companion/deployment_tests.rs"]
+mod deployment_tests;
+
 struct Request {
     payload: Value,
     action: bool,
@@ -130,6 +134,37 @@ async fn ready(shell: &mut ShellSession) -> CoreResult<()> {
         format!("互联服务未能启动：{}", String::from_utf8_lossy(&stderr)),
     ))
 }
+// adbd sends HUP to its shell, not its descendants. Keep that shell alive to
+// reap our child and remove only this deployment even when the host is gone.
+fn managed_shell_command(remote_jar: &str, command: &str) -> CoreResult<String> {
+    Ok(format!(
+        r#"run_companion() {{ {command}; }}
+cleanup() {{
+    result=$1
+    trap - EXIT
+    trap '' HUP INT TERM
+    # Refresh job state before signalling: completed children may already be
+    # reaped. Never signal a saved numeric PID that could have been reused.
+    jobs %1 >/dev/null 2>&1
+    kill -TERM %1 2>/dev/null
+    kill -CONT %1 2>/dev/null
+    wait "${{child:-$!}}" 2>/dev/null
+    rm -f -- {path}
+    exit "$result"
+}}
+# Call cleanup directly: mksh's exit builtin can warn about stopped jobs
+# before running EXIT, and a closed stderr could then kill it with SIGPIPE.
+trap 'cleanup $?' EXIT
+trap 'cleanup 129' HUP
+trap 'cleanup 130' INT
+trap 'cleanup 143' TERM
+run_companion <&0 &
+child=$!
+wait "$child"
+exit "$?""#,
+        path = quote(remote_jar)?
+    ))
+}
 fn rpc_error(action: bool, message: &str) -> CoreError {
     if action {
         CoreError::new(
@@ -189,12 +224,15 @@ impl Companion {
             if count != SERVER.len() as u64 {
                 return Err(CoreError::new("server_integrity", "互联服务未完整上传。"));
             }
-            let command = format!(
-                "CLASSPATH={} app_process / com.interop.companion.Main {} {}",
-                quote(&remote_jar)?,
-                socket_name,
-                secret
-            );
+            let command = managed_shell_command(
+                &remote_jar,
+                &format!(
+                    "CLASSPATH={} exec app_process / com.interop.companion.Main {} {}",
+                    quote(&remote_jar)?,
+                    socket_name,
+                    secret
+                ),
+            )?;
             let mut shell = client
                 .shell_session(&command, ShellMode::Raw, 65536, operations(&cancellation))
                 .await?;
