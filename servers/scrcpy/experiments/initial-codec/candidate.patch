@@ -1,0 +1,218 @@
+--- a/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java
++++ b/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java
+@@ -69,49 +69,60 @@
+         this.downsizeOnError = options.getDownsizeOnError();
+         this.minSizeAlignment = options.getMinSizeAlignment();
+         this.ignoreVideoEncoderConstraints = options.getIgnoreVideoEncoderConstraints();
++        // Bind before the controller threads start, independently of capture
++        // resource initialization, so early pause/reset requests are retained.
++        capture.setCaptureControl(captureControl);
+     }
+ 
+     private void streamCapture() throws IOException, ConfigurationException {
+         Codec codec = streamer.getCodec();
+-        MediaCodec mediaCodec = createMediaCodec(codec, encoderName);
+-        MediaFormat format = createFormat(codec.getMimeType(), videoBitRate, maxFps, codecOptions);
+-
+-        MediaCodecInfo.VideoCapabilities caps;
+-        int alignment;
+-        if (ignoreVideoEncoderConstraints) {
+-            caps = null;
+-            alignment = 1;
+-        } else {
+-            caps = mediaCodec.getCodecInfo().getCapabilitiesForType(codec.getMimeType()).getVideoCapabilities();
+-            assert caps != null; // caps cannot be null for a video codec
+-            alignment = Math.max(caps.getWidthAlignment(), caps.getHeightAlignment());
+-            Ln.d("Video codec size alignment requirement: " + alignment + "px");
+-        }
+-        if (alignment < minSizeAlignment) {
+-            alignment = minSizeAlignment;
+-            Ln.d("Actual video size alignment: " + alignment + "px");
+-        }
+-
+-        // Do not constrain by the declared video encoder capabilities before encoding actually fails
+-        videoConstraints = new VideoConstraints(maxSize, alignment, null);
+-
+-        // The capability probe must not retain an allocation at the initial gate.
+-        mediaCodec.release();
+-        mediaCodec = null;
+-        capture.init(captureControl, videoConstraints);
+-
++        MediaCodec mediaCodec = null;
++        boolean captureInitialized = false;
+         try {
++            // The header is independent of the encoder allocation. Keep the
++            // stream identifiable even if capture is paused before it starts.
++            streamer.writeVideoHeader();
++            if (!captureControl.awaitCaptureEnabled()) {
++                return;
++            }
++            // Reuse the capability probe for the first capture. The initial
++            // gate must run before allocation: a pause ACK promises no codec.
++            mediaCodec = createMediaCodec(codec, encoderName);
++            MediaFormat format = createFormat(codec.getMimeType(), videoBitRate, maxFps, codecOptions);
++
++            MediaCodecInfo.VideoCapabilities caps;
++            int alignment;
++            if (ignoreVideoEncoderConstraints) {
++                caps = null;
++                alignment = 1;
++            } else {
++                caps = mediaCodec.getCodecInfo().getCapabilitiesForType(codec.getMimeType()).getVideoCapabilities();
++                assert caps != null; // caps cannot be null for a video codec
++                alignment = Math.max(caps.getWidthAlignment(), caps.getHeightAlignment());
++                Ln.d("Video codec size alignment requirement: " + alignment + "px");
++            }
++            if (alignment < minSizeAlignment) {
++                alignment = minSizeAlignment;
++                Ln.d("Actual video size alignment: " + alignment + "px");
++            }
++
++            // Do not constrain by the declared video encoder capabilities before encoding actually fails
++            videoConstraints = new VideoConstraints(maxSize, alignment, null);
++
++            // release() also cleans up an init() which only partially succeeds.
++            captureInitialized = true;
++            capture.init(captureControl, videoConstraints);
+             boolean alive;
+ 
+-            streamer.writeVideoHeader();
+-
+             int retainedResetReasons = 0;
+ 
+             do {
+-                if (!captureControl.awaitCaptureEnabled()) {
+-                    break;
+-                }
+                 if (mediaCodec == null) {
++                    // Later iterations arrive only after the previous codec
++                    // has been released, including pending pause requests.
++                    if (!captureControl.awaitCaptureEnabled()) {
++                        break;
++                    }
+                     mediaCodec = createMediaCodec(codec, encoderName);
+                 }
+                 int resetReasons = captureControl.consumeReset();
+@@ -177,22 +188,30 @@
+                     alive = true;
+                 } finally {
+                     captureControl.setRunningMediaCodec(null);
+-                    if (captureStarted) {
+-                        capture.stop();
+-                    }
+-                    if (mediaCodecStarted) {
++                    try {
++                        if (captureStarted) {
++                            capture.stop();
++                        }
++                    } finally {
+                         try {
+-                            mediaCodec.stop();
+-                        } catch (IllegalStateException e) {
+-                            // ignore (just in case)
++                            if (mediaCodecStarted) {
++                                try {
++                                    mediaCodec.stop();
++                                } catch (IllegalStateException e) {
++                                    // ignore (just in case)
++                                }
++                            }
++                        } finally {
++                            try {
++                                // Pause is acknowledged only after release.
++                                mediaCodec.release();
++                            } finally {
++                                mediaCodec = null;
++                                if (surface != null) {
++                                    surface.release();
++                                }
++                            }
+                         }
+-                    }
+-                    // A paused session must relinquish its encoder allocation.
+-                    // stop()/reset() alone are not the resource-release contract.
+-                    mediaCodec.release();
+-                    mediaCodec = null;
+-                    if (surface != null) {
+-                        surface.release();
+                     }
+                 }
+             } while (alive);
+@@ -202,7 +221,9 @@
+                     mediaCodec.release();
+                 }
+             } finally {
+-                capture.release();
++                if (captureInitialized) {
++                    capture.release();
++                }
+             }
+         }
+     }
+--- a/server/src/main/java/com/genymobile/scrcpy/video/SurfaceCapture.java
++++ b/server/src/main/java/com/genymobile/scrcpy/video/SurfaceCapture.java
+@@ -18,8 +18,13 @@
+      * Called once before the first capture starts.
+      */
+     public final void init(CaptureControl captureControl, VideoConstraints videoConstraints) throws ConfigurationException, IOException {
++        setCaptureControl(captureControl);
++        init(videoConstraints);
++    }
++
++    /** Bind before starting controller/encoder threads; allocates no capture resources. */
++    public final void setCaptureControl(CaptureControl captureControl) {
+         this.captureControl = captureControl;
+-        init(videoConstraints);
+     }
+ 
+     public CaptureControl getCaptureControl() {
+--- a/server/src/main/java/com/genymobile/scrcpy/video/NewDisplayCapture.java
++++ b/server/src/main/java/com/genymobile/scrcpy/video/NewDisplayCapture.java
+@@ -66,6 +66,7 @@
+ 
+     private VirtualDisplay virtualDisplay;
+     private Size videoSize;
++    private Size pendingInitialResize; // latest request before resources are initialized
+     private Size displaySize; // the logical size of the display (including rotation)
+     private Size physicalSize; // the physical size of the display (without rotation)
+ 
+@@ -91,7 +92,7 @@
+     }
+ 
+     @Override
+-    protected void init(VideoConstraints videoConstraints) {
++    protected synchronized void init(VideoConstraints videoConstraints) {
+         setVideoConstraints(videoConstraints); // synchronized
+ 
+         displaySize = newDisplay.getSize();
+@@ -111,6 +112,10 @@
+             }
+             if (dpi == 0) {
+                 dpi = 160;
++            }
++            if (pendingInitialResize != null) {
++                displaySize = pendingInitialResize.constrain(videoConstraints, false);
++                pendingInitialResize = null;
+             }
+         } else if (displaySize == null || dpi == 0) {
+             DisplayInfo displayInfo = ServiceManager.getDisplayManager().getDisplayInfo(0);
+@@ -333,11 +338,18 @@
+         return initialDpi * num / den;
+     }
+ 
+-    public void requestResize(int width, int height) {
++    public synchronized void requestResize(int width, int height) {
+         if (!flexDisplay) {
+             throw new IllegalStateException("Cannot resize a non-flex display");
+         }
+ 
++        // Initial pause may postpone init(). Keep only the latest requested
++        // size until constraints and the debouncer are available. init() and
++        // this method share the lock, so no request falls between both states.
++        if (debouncer == null) {
++            pendingInitialResize = new Size(width, height);
++            return;
++        }
+         VideoConstraints constraints = getVideoConstraints(); // synchronized
+         Size newSize = new Size(width, height).constrain(constraints, false);
+         if (Ln.isEnabled(Ln.Level.VERBOSE)) {

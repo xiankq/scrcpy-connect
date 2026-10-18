@@ -9,7 +9,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--build-dir", type=Path, default=ROOT / ".build")
-parser.add_argument("--candidate", choices=("bounded-input",))
+parser.add_argument("--candidate", choices=("bounded-input", "initial-codec"))
 options = parser.parse_args()
 BUILD = options.build_dir.resolve()
 TEST_CLASSES = BUILD / "test-classes"
@@ -31,7 +31,10 @@ TEST_CLASSES.mkdir(exist_ok=True)
 subprocess.run(["javac", "-cp", f"{CLASSES}:{ANDROID}", "-d", str(TEST_CLASSES), str(GATE),
                 *[str(p) for p in sorted((ROOT / "tests").rglob("*.java"))]], check=True)
 subprocess.run(["java", "-ea", "-cp", f"{TEST_CLASSES}:{CLASSES}:{ANDROID}", "CapturePauseTest"], check=True, timeout=15)
-if options.candidate:
+if options.candidate == "bounded-input":
     test = ROOT / "experiments" / options.candidate / "LatestInputWindowTest.java"
     subprocess.run(["javac", "-cp", str(CLASSES), "-d", str(TEST_CLASSES), str(test)], check=True)
     subprocess.run(["java", "-ea", "-cp", f"{TEST_CLASSES}:{CLASSES}", "LatestInputWindowTest"], check=True, timeout=15)
+elif options.candidate == "initial-codec":
+    subprocess.run(["java", "-ea", "-cp", f"{TEST_CLASSES}:{CLASSES}:{ANDROID}", "InitialCodecTest"], check=True, timeout=15)
+    subprocess.run(["java", "-ea", "-cp", f"{TEST_CLASSES}:{CLASSES}:{ANDROID}", "NewDisplayInitialResizeTest"], check=True, timeout=15)

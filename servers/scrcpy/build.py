@@ -20,7 +20,7 @@ URL = "https://codeload.github.com/Genymobile/scrcpy/tar.gz/refs/tags/v5.0.1"
 SOURCE_SHA = "a24b996ac23d0f674d3237c00b39a97829d8acbe9e1657a6c216fd51ea488ee5"
 PATCH = ROOT / "patches/0001-cooperative-capture-pause.patch"
 BUILD = ROOT / ".build"
-CANDIDATES = ("bounded-input",)
+CANDIDATES = ("bounded-input", "initial-codec")
 
 
 def select_output(options):

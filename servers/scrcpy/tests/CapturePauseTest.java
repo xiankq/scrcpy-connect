@@ -3,10 +3,14 @@ import com.genymobile.scrcpy.control.ControlMessageReader;
 import com.genymobile.scrcpy.control.ControlProtocolException;
 import com.genymobile.scrcpy.video.CaptureControl;
 import com.genymobile.scrcpy.video.SurfaceEncoder;
+import com.genymobile.scrcpy.video.SurfaceCapture;
+import com.genymobile.scrcpy.video.VideoConstraints;
+import com.genymobile.scrcpy.model.Size;
 import com.genymobile.scrcpy.device.Streamer;
 import com.genymobile.scrcpy.Options;
 
 import android.media.MediaCodec;
+import android.view.Surface;
 
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
@@ -115,7 +119,30 @@ public final class CapturePauseTest {
     }
 
     private static void pendingPauseDoesNotDependOnOutputEos() throws Exception {
-        SurfaceEncoder encoder = new SurfaceEncoder(null, null, new Options());
+        SurfaceCapture capture = new SurfaceCapture() {
+            @Override
+            protected void init(VideoConstraints constraints) {
+            }
+
+            @Override
+            public void start(Surface surface) {
+            }
+
+            @Override
+            public void release() {
+            }
+
+            @Override
+            public Size getSize() {
+                return new Size(640, 480);
+            }
+
+            @Override
+            protected boolean applyNewVideoConstraints(VideoConstraints constraints) {
+                return false;
+            }
+        };
+        SurfaceEncoder encoder = new SurfaceEncoder(capture, null, new Options());
         java.lang.reflect.Field field = SurfaceEncoder.class.getDeclaredField("captureControl");
         field.setAccessible(true);
         CaptureControl control = (CaptureControl) field.get(encoder);
