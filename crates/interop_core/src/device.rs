@@ -143,6 +143,32 @@ impl DiscoveredAttempt {
     }
 }
 
+/// Keep the first-pairing browser alive through TLS and metadata publication.
+/// Its updates use the same epoch checks as ordinary trusted reconnection.
+struct PairingDiscovery {
+    services: DiscoveredServices,
+    guid: String,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl PairingDiscovery {
+    async fn attempt(&self) -> DiscoveredAttempt {
+        let answers = self.services.read().await;
+        DiscoveredAttempt {
+            services: self.services.clone(),
+            guid: self.guid.clone(),
+            endpoints: answers.endpoints(&self.guid),
+            generation: answers.generation(&self.guid),
+        }
+    }
+}
+
+impl Drop for PairingDiscovery {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
 fn discovery_changed() -> CoreError {
     CoreError::new(
         "discovery_changed",
@@ -242,6 +268,10 @@ mod recovery_tests {
         assert_eq!(settings_events, 2);
     }
 }
+#[cfg(test)]
+#[path = "device/pairing_tests.rs"]
+mod pairing_tests;
+
 fn host(params: &Value) -> CoreResult<String> {
     let value = required(params, "address")?.trim();
     if value.is_empty()
@@ -527,6 +557,55 @@ impl Runtime {
         token: CancellationToken,
         discovered: Option<DiscoveredAttempt>,
     ) -> CoreResult<Value> {
+        if !token.is_cancelled()
+            && let Ok(client) = self.client(id).await
+        {
+            return Ok(
+                json!({"connected":!client.is_closed(),"deviceId":id,"device":self.device(id).await?,"adbBurstActive":client.burst_mode()}),
+            );
+        }
+        self.register_connection_operation(id, request_authorization, &token)
+            .await?;
+        self.connect_registered_candidates(id, request_authorization, token, discovered)
+            .await
+    }
+
+    async fn register_connection_operation(
+        &self,
+        id: &str,
+        request_authorization: bool,
+        token: &CancellationToken,
+    ) -> CoreResult<()> {
+        let mut pending = self.device_operations.lock().await;
+        let store = self.store.read().await;
+        let record = store
+            .devices
+            .iter()
+            .find(|d| d.id == id)
+            .ok_or_else(|| CoreError::new("not_found", "设备记录已不存在。"))?;
+        if token.is_cancelled()
+            || (!request_authorization && (!record.auto_reconnect || record.status != "offline"))
+        {
+            return Err(CoreError::new(
+                "cancelled",
+                "连接已取消或已有连接正在处理。",
+            ));
+        }
+        if let Some(previous) = pending.insert(id.into(), token.clone()) {
+            previous.cancel();
+        }
+        Ok(())
+    }
+
+    /// The caller already owns the device-operation slot. Retrying discovered
+    /// addresses must not replace/cancel that same operation's token.
+    async fn connect_registered_candidates(
+        &self,
+        id: &str,
+        request_authorization: bool,
+        token: CancellationToken,
+        discovered: Option<DiscoveredAttempt>,
+    ) -> CoreResult<Value> {
         if token.is_cancelled() {
             return Err(CoreError::new("cancelled", "连接已取消。"));
         }
@@ -536,21 +615,21 @@ impl Runtime {
             );
         }
         let device = {
-            let mut pending = self.device_operations.lock().await;
+            let _pending = self.device_operations.lock().await;
             let mut store = self.store.write().await;
             let record = store
                 .devices
                 .iter_mut()
                 .find(|d| d.id == id)
                 .ok_or_else(|| CoreError::new("not_found", "设备记录已不存在。"))?;
-            if !request_authorization && (!record.auto_reconnect || record.status != "offline") {
+            if token.is_cancelled()
+                || (!request_authorization
+                    && (!record.auto_reconnect || record.status != "offline"))
+            {
                 return Err(CoreError::new(
                     "cancelled",
                     "自动重连已取消或已有连接正在处理。",
                 ));
-            }
-            if let Some(previous) = pending.insert(id.into(), token.clone()) {
-                previous.cancel();
             }
             if record.transport != "usb"
                 && record.port == 0
@@ -559,7 +638,6 @@ impl Runtime {
                     .and_then(|answer| answer.endpoints.as_ref())
                     .is_none_or(Vec::is_empty)
             {
-                pending.remove(id);
                 return Err(CoreError::new(
                     "connection_port_required",
                     "配对已完成，请填写无线调试页面上的连接端口，无需再次配对。",
@@ -860,6 +938,19 @@ impl Runtime {
             .and_then(Value::as_str)
             .map(str::to_owned)
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        if attempt_id.is_empty()
+            || attempt_id.len() > 200
+            || attempt_id.contains('\0')
+            || self
+                .store
+                .read()
+                .await
+                .devices
+                .iter()
+                .any(|device| device.id == attempt_id)
+        {
+            return Err(CoreError::new("invalid_argument", "配对尝试标识无效。"));
+        }
         let token = CancellationToken::new();
         if let Some(old) = self
             .device_operations
@@ -896,8 +987,11 @@ impl Runtime {
             }
             Err(error) => Err(error),
         };
-        if !token.is_cancelled() {
-            self.device_operations.lock().await.remove(&attempt_id);
+        {
+            let mut pending = self.device_operations.lock().await;
+            if !token.is_cancelled() {
+                pending.remove(&attempt_id);
+            }
         }
         result
     }
@@ -968,24 +1062,61 @@ impl Runtime {
                 json!({"paired":true,"deviceId":id,"device":self.device(&id).await?,"connected":true}),
             );
         }
-        let connect_endpoint = tokio::select! { biased; _=token.cancelled()=>None, result=self.find_connect_endpoint(&guid)=>result };
-        let connected = if let Some(endpoint) = connect_endpoint {
-            let mut store = self.store.write().await;
-            if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
-                record.address = address_of(endpoint);
-                record.port = endpoint.port();
-            }
-            drop(store);
-            self.connect_device_with_token(&id, true, token.child_token())
-                .await
-                .is_ok()
+        // Explicit disconnect/replacement must cancel discovery too, before a
+        // socket exists. Keep that same operation through candidate retries.
+        let registered = self
+            .register_connection_operation(&id, true, token)
+            .await
+            .is_ok();
+        let discovery = if registered {
+            self.find_connect_endpoints(&guid, token).await
         } else {
+            None
+        };
+        let discovered_service = discovery.is_some();
+        let mut attempted_connection = false;
+        let connected = if let Some(discovery) = discovery {
+            let mut connected = false;
+            for _ in 0..3 {
+                let attempt = discovery.attempt().await;
+                if attempt.endpoints.as_ref().is_none_or(Vec::is_empty) {
+                    break;
+                }
+                attempted_connection = true;
+                let result = self
+                    .connect_registered_candidates(&id, true, token.clone(), Some(attempt))
+                    .await;
+                connected = result.is_ok();
+                if !result
+                    .as_ref()
+                    .is_err_and(|error| error.code == "discovery_changed")
+                    || token.is_cancelled()
+                {
+                    break;
+                }
+            }
+            connected
+        } else {
+            false
+        };
+        if !attempted_connection {
+            let pending = self.device_operations.lock().await;
             let mut store = self.store.write().await;
-            if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
+            // A cancelled old form cannot overwrite a newer operation's state.
+            let replaced = token.is_cancelled()
+                && pending
+                    .get(&id)
+                    .is_some_and(|current| !current.is_cancelled());
+            if !replaced
+                && let Some(record) = store.devices.iter_mut().find(|d| d.id == id)
+                && record.status != "connected"
+            {
                 record.auto_reconnect = !token.is_cancelled();
                 record.reason = Some(
                     if token.is_cancelled() {
                         "配对已完成；后续连接已取消，授权身份仍保留。"
+                    } else if discovered_service {
+                        "配对已完成；连接服务已更新或撤销，将等待有效地址重连。"
                     } else {
                         "配对已完成；未发现连接服务，请填写无线调试页面的连接端口，无需重新配对。"
                     }
@@ -993,29 +1124,66 @@ impl Runtime {
                 );
             }
             drop(store);
+            drop(pending);
             self.changed_devices().await?;
-            false
-        };
+        }
+        {
+            let mut pending = self.device_operations.lock().await;
+            if !token.is_cancelled() {
+                pending.remove(&id);
+            }
+        }
+        let device = self.device(&id).await?;
         Ok(
-            json!({"paired":true,"deviceId":id,"device":self.device(&id).await?,"connected":connected,"connectionPortRequired":!connected && self.device(&id).await?.port == 0}),
+            json!({"paired":true,"deviceId":id,"device":device,"connected":connected,"connectionPortRequired":!connected && !discovered_service && device.port == 0}),
         )
     }
-    async fn find_connect_endpoint(&self, guid: &str) -> Option<SocketAddr> {
+    async fn find_connect_endpoints(
+        &self,
+        guid: &str,
+        token: &CancellationToken,
+    ) -> Option<PairingDiscovery> {
         let discovery = Discovery::new().ok()?;
-        let options = operations(5, CancellationToken::new());
+        let services = DiscoveredServices::default();
+        services
+            .write()
+            .await
+            .sync_trusted(HashSet::from([guid.to_owned()]));
+        let options = operations(5, token.clone());
         tokio::time::timeout(Duration::from_secs(5), async {
             loop {
-                if let DiscoveryEvent::Resolved(service) = discovery.next(&options).await.ok()?
-                    && service.kind == ServiceKind::Connect
-                    && matches_guid(&service.instance, guid)
+                let event = discovery.next(&options).await.ok()?;
+                let mut answers = services.write().await;
+                answers.observe(event);
+                if answers
+                    .endpoints(guid)
+                    .is_some_and(|endpoints| !endpoints.is_empty())
                 {
-                    return service.endpoints.first().copied();
+                    break Some(());
                 }
             }
         })
         .await
         .ok()
-        .flatten()
+        .flatten()?;
+        let observed = services.clone();
+        let options = operations(60, token.child_token());
+        let task = tokio::spawn(async move {
+            loop {
+                match discovery.next(&options).await {
+                    Ok(event) => {
+                        observed.write().await.observe(event);
+                    }
+                    Err(interop_adb::Error::Timeout) => continue,
+                    Err(_) => break,
+                }
+            }
+        });
+        Some(PairingDiscovery {
+            services,
+            guid: guid.to_owned(),
+            task,
+        })
     }
     pub(crate) async fn qr_pairing(self: &Arc<Self>) -> CoreResult<Value> {
         let qr = QrPairing::generate();
