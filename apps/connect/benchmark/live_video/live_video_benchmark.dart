@@ -58,7 +58,8 @@ class LiveVideoBenchmark {
   );
   static const decoderPolicy = String.fromEnvironment(
     'CONNECT_PERF_DECODER',
-    defaultValue: 'native',
+    // Match the production priority list unless comparing a specific backend.
+    defaultValue: 'default',
   );
 
   final texture = ValueNotifier<VideoTexture?>(null);
