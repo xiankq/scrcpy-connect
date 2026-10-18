@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fvp/mdk.dart' as mdk;
 import 'package:integration_test/integration_test.dart';
 import 'package:interop_bridge/src/media/fvp_video_player.dart';
 import 'package:interop_bridge/src/media/portable_video.dart';
@@ -124,6 +125,26 @@ void main() {
         binding.reportData!['nativeDecoderOptions'] = nativeOptions;
       }
       binding.reportData!['nativeFrameTrace'] = traceFrames;
+      // Global SDK experiments belong to this isolated test process, not the
+      // product's player factory or a per-session setting that could race other
+      // players. Defaults preserve the plugin's existing global configuration.
+      const gpuProfiler = int.fromEnvironment(
+        'CONNECT_PERF_GPU_PROFILER',
+        defaultValue: -1,
+      );
+      const renderBufferFrames = int.fromEnvironment(
+        'CONNECT_PERF_RENDER_BUFFER_FRAMES',
+      );
+      expect(gpuProfiler, anyOf(-1, 0, 1));
+      expect(renderBufferFrames, greaterThanOrEqualTo(0));
+      if (gpuProfiler >= 0) {
+        mdk.setGlobalOption('profiler.gpu', gpuProfiler);
+      }
+      if (renderBufferFrames > 0) {
+        mdk.setGlobalOption('videoout.buffer_frames', renderBufferFrames);
+      }
+      binding.reportData!['gpuProfilerRequested'] = gpuProfiler;
+      binding.reportData!['renderBufferFramesRequested'] = renderBufferFrames;
       var disposed = false;
       final outputs = PortableVideoOutputs(
         core: request,
@@ -281,6 +302,22 @@ void main() {
               );
             }
             ready = await outputs.start(stream);
+            // Stop this milestone before optional diagnostic reads add work.
+            evidence['startToDecodedMs'] = watch.elapsedMilliseconds;
+            if (traceFrames) {
+              // Bound the native observation clock against this startup watch.
+              // Keep the first verification snapshot before the next readback
+              // replaces it; decoded callbacks registered after prepare may
+              // omit earlier frames, so these are first-observed callbacks.
+              final beforeUs = watch.elapsedMicroseconds;
+              final trace = (player as FvpVideoPlayer).frameTrace;
+              final afterUs = watch.elapsedMicroseconds;
+              evidence['startupFrameTrace'] = {
+                'watchBeforeUs': beforeUs,
+                'watchAfterUs': afterUs,
+                'metrics': trace,
+              };
+            }
             evidence['decoderEvents'] = decoderEvents;
             if (decoderPolicy.startsWith('software')) {
               expect(
@@ -301,7 +338,6 @@ void main() {
                 reason: 'The native comparison requires an actual AMediaCodec open receipt.',
               );
             }
-            evidence['startToDecodedMs'] = watch.elapsedMilliseconds;
             evidence['decodedWidth'] = ready['decodedWidth'];
             evidence['decodedHeight'] = ready['decodedHeight'];
             evidence['outputStartupTimingMs'] = ready['outputStartupTimingMs'];
