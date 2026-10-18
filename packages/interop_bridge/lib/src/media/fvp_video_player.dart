@@ -66,7 +66,14 @@ class FvpVideoPlayer implements VideoPlayerPort {
     final decoders =
         _videoDecoders ??
         switch (defaultTargetPlatform) {
-          TargetPlatform.android => const ['AMediaCodec', software, 'dav1d'],
+          // The fixed SDK used synchronous output when this option was absent.
+          // Explicit async output removes that queue on supported Android APIs;
+          // AImageReader's async acquisition is a separate setting.
+          TargetPlatform.android => const [
+            'AMediaCodec:async=1',
+            software,
+            'dav1d',
+          ],
           TargetPlatform.iOS ||
           TargetPlatform.macOS => const ['VT', software, 'dav1d'],
           TargetPlatform.windows => const [

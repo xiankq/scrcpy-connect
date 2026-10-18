@@ -68,6 +68,7 @@ class LiveVideoBenchmark {
         traceFrames: traceFrames,
         videoDecoders: switch (decoderPolicy) {
           'native' => const ['AMediaCodec'],
+          'native-async' => const ['AMediaCodec:async=1'],
           'software' => const ['FFmpeg:thread_type=slice'],
           _ => null,
         },
@@ -184,7 +185,12 @@ class LiveVideoBenchmark {
       'Invalid quality.',
     );
     _require(
-      const ['native', 'software', 'default'].contains(decoderPolicy),
+      const [
+        'native',
+        'native-async',
+        'software',
+        'default',
+      ].contains(decoderPolicy),
       'Unknown decoder policy.',
     );
     await RustLib.init();
@@ -299,7 +305,7 @@ class LiveVideoBenchmark {
       'decodedHeight': ready['decodedHeight'],
       'decoderEvents': [..._decoderEvents],
     });
-    if (decoderPolicy == 'native') {
+    if (decoderPolicy == 'native' || decoderPolicy == 'native-async') {
       _require(
         _decoderEvents.any(
           (e) =>
