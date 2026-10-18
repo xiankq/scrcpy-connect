@@ -2,6 +2,73 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 本轮：普通Driver源端时钟关联与单项稳定输入（2026-10-18）
+
+上一轮c1ec73e／1aeb17b为progress：补齐首帧同PTS分段，确认软件解码缩短AVD
+首帧但稳定输入无对应收益。当前继续同一有界候选的普通Driver反馈循环，复用
+session.clock.probe与独立fixture的输入／首次draw日志，补同PTS raw transport
+关联和前后时钟区间；区分控制到达、目标draw和draw后媒体阶段。主控诊断默认
+关闭，不重建JAR；原有五项用户未跟踪文件不动。完整目标仍active，未通过性能预算。
+
+新增traceClock、每个真实key的全局fixtureSequence、同sourcePts唯一raw receipt、前后
+各3次已有clock probe；host按唯一run收集fixture日志并在卸载前持久化，读写失败仍
+继续清理。多轮／回绕／暂停键／Activity重置及区间守卫9项测试通过；定向Dart分析
+初次两项lint已修正，复跑无问题。只读review未发现有证据的新增缺陷。
+
+三轮24输入源端诊断完整：P50／P95=691／852ms，27个真实key的input／首次draw唯一
+配对、三个round时钟区间有效（宽54.706／71.936／86.219ms），30张窗口计数正确、
+暂停恢复／停止／App与fixture自动清理确认。严格exit1，性能门槛仍未通过。
+目标input→drawStart中位0.463ms、draw callback0.632ms；drawEnd→raw接收完成的
+条件下／上界中位310.819／390.331ms，24个样本下界均≥217.334ms，不能把问题仅
+归于主控decoder。raw接收完成→relay写入中位0.255ms、relay→onVideo98ms、
+onVideo→snapshot128.957ms。各段中位不能相加代替同帧全链路，源码PTS兼容只是
+额外条件；负控制到达下界保留，不当负实际延迟。源文件
+`/tmp/connect-e2e/source-clock-bounded/`，分段 `/tmp/connect-source-clock-stages.json`。
+本诊断未改生产或重建JAR。诊断关闭的普通Driver已完成1轮2输入：真实窗口／暂停／
+停止／清理确认，clockBounds与target-timeline文件缺席；P50／P95=524／678ms，严格
+exit1，不把短组当性能改善。代码15f795b已提交。
+
+源端下一候选实际修改LatestInputWindow：每代首个有效媒体output前允许2项，之后
+只保留1项；CONFIG／空EOS不激活缩窗、两项bootstrap退完才准新输入，不回退扩大。
+七组状态测试在旧二窗实现实际红：首output后错误又准入第三帧；原暂停JVM仍通过。
+正在仓库外独立构建新候选，再验证唯一静止终帧及暂停旋转；这次因真正修改服务端
+才重建隔离JAR，生产两份不替换。若codec持续依赖两项而触发stall，按失败撤回。
+
+新候选独立构建SHA1a3d2c82…，原暂停JVM及七组状态测试绿；只读review未发现新增
+确定问题。实际FFmpeg解码smoke七阶段通过：静态冷启0、唯一变化1、完全静止3.5秒
+媒体32→136仍为1、动态→唯一终值1、暂停恢复2、旋转0／横屏操作1；pauseACK后
+媒体静止、server exit0、进程／JAR／fixture／独立forward／旋转设置清理确认。
+原件 `/tmp/connect-e2e/bounded-input-steady-one-smoke/`。只证明当前编码器的持续单
+在途可推进，不是Flutter端性能。隔离工作树换入新三产物，开始同参数源端Driver B组。
+
+B组三轮24输入完成：P50／P95=581／810ms，首像素2563／2381／2554ms，30张窗口
+正确、9张超过3秒；所有时钟区间有效、27键日志完整，暂停恢复／停止／自动清理
+确认。drawEnd→raw条件下／上界中位290.802／367.212ms，原A1为310.819／390.331ms。
+仅此小幅差异不足确定优化，正在直接重装同一旧候选APK做A2返回组；不重编译或热
+重启基准，不把trace诊断当生产性能绿灯。B嵌入JAR1a3d2c82…，APKf5d17513…，
+完整字节核对旧候选和生产捕获JAR均缺席。
+
+A2返回完成：P50／P95=686／925ms、首像素2551／2553／2890ms，30张正确、15张
+迟到；三个有效时钟区间宽72.493／54.052／91.272ms，27键唯一，暂停恢复／停止／
+自动清理确认。A/B/A的drawEnd→raw条件下／上界中位310.819／390.331→290.802／
+367.212→328.236／401.090ms，输入P50相对两侧下降约15–16%，收益有限，首帧
+无稳定收益、三组严格exit1。保留新变体为隔离候选，不替换生产JAR；ARM／无线／
+长稳资格仍开放。回执`/tmp/connect-source-window-aba.json`；下一步先恢复普通main、
+实际热重载和视觉核查，再清理本轮大debug副本／自有AVD。原有五项文件不动。
+
+收尾：普通main构建21.2秒，native库含完整原生产JAR、旧／新候选均缺席；MCP实际
+热重载成功、无Dart运行错误，首页及A/B/A三张VIDEO1窗口目视正常。仍有Skipped33
+frames，不称冷启动流畅度通过。两份生产JAR摘要未变；目标捕获／枚举文件及进程
+为空，fixture缺席、精确serial forward移除；CLI detach、DTD断开、Gradle停止，两
+自有AVD核名后关闭且PID消失。清理23项大debug副本2737.2MiB，空闲40.11GiB；
+保留实测APK／raw证据、release及有效Rust／Flutter／Gradle／CMake／MDK缓存。
+回执`/tmp/connect-source-window-{main-receipt,production-jars,target-cleanup,avd-stop,
+debug-cleanup}.json`。新源端诊断和实验为progress，完整目标仍active；下一轮优先
+分开验证源端合成／采集／编码的剩余等待与首帧主控呈现，不能只凭该小幅收益
+替换生产默认，也不能把AVD静态存活外推真实Wi-Fi长稳。
+代码提交：15f795b（源时钟诊断）、acc96c5（单项稳定输入隔离实验）。
+
+
 ## 本轮：首帧主控阶段归因（2026-10-18）
 
 读取上一轮匹配A/B/A实际分段，候选B的playing→verified为1322／1226／1102ms，

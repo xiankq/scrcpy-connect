@@ -300,3 +300,33 @@ rtk proxy env VM_SERVICE_URL='<本次App的实际VM service URI>' \
 首页与三组VIDEO1窗口均目视；root和隔离工作树的debug白名单788项清理2871.6MiB，
 空闲42.96GiB。保留两份生产JAR及release、有效缓存、候选工作树和必要原始证据；
 AVD／Gradle／forward均停止或清除，不因工具改动重打同源release。
+
+## 双项启动、单项稳定输入的后续实验
+
+普通Driver新增源端input／首次draw与前后时钟区间的唯一关联后，原固定双项候选
+24次新计数drawEnd→raw接收完成的条件下界均≥217.334ms，中位下／上界
+310.819／390.331ms。目标input→drawStart中位0.463ms，说明仍须研究绘制后的
+合成／采集／编码；不能根据主控onVideo回调把全部等待归于decoder。
+区间依赖固定偏移、无休眠／时钟跳变，draw callback结束不代表合成结束。
+
+当前实验补丁保留首个有效媒体output前最多2项以支持静态codec bootstrap，之后
+缩到1项。精确媒体PTS归还credit后才缩窗，CONFIG／空EOS不缩窗，两项启动输入
+全部退还后才准入后续输入；保留主动终帧drain和3秒stall，不扩大窗口兜底。
+七组状态测试的新断言在旧二项实现实际红、新实现绿，暂停JVM测试也绿。
+
+因此实际重建一次隔离JAR（SHA1a3d2c82…），两份生产JAR不动。真实H264解码验证
+静态唯一变化后完全静止3.5秒仍持续输出且终值正确，暂停恢复／旋转／停止通过；
+`/tmp/connect-e2e/bounded-input-steady-one-smoke/`。该smoke证明当前软件codec可
+持续单项推进，不代表所有codec支持，也不作为Flutter性能证明。
+
+同普通Driver／质量／默认async=1／traceFrames及traceClock、各3轮24输入的
+固定双项→新变体→固定双项返回：P50／P95=691／852→581／810→686／925ms。
+drawEnd→raw条件下／上界中位310.819／390.331→290.802／367.212→328.236／
+401.090ms，各组区间仍重叠。输入P50约下降15–16%，首帧无稳定收益，严格性能
+预算仍失败；30张窗口每组均正确，迟到16→9→15。三组暂停恢复／停止／自动清理
+确认。原件`/tmp/connect-e2e/source-{clock-bounded,window-steady-one,window-two-return}/`，
+汇总`/tmp/connect-source-window-aba.json`，完整产物和复现配置见
+[视频性能记录](../implementation/video-performance.md#普通driver源端绘制关联与单项稳定输入实验)。
+
+新变体仅保留在实验目录及隔离工作树，不推广生产。实际ARM硬编／Wi-Fi／小时长稳
+和其他codec资格仍待验证，普通主控侧优化继续复用已有生产JAR。

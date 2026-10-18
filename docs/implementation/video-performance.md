@@ -1,10 +1,91 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量：[Android显式异步解码](android-decoder-async.md)已通过A/B/A验证并进入
-生产默认。关闭诊断后60次输入P50/P95=138/295ms，输入预算通过；首帧1197/1157/
-1122ms仍超过1000，完整性能任务继续开放。连接稳定性增量见[应用失活恢复](connection-health.md)。
+最新增量：普通Driver源时钟诊断与隔离服务端输入窗口实验见下一节；原双项→稳定
+单项→双项返回输入P50／P95为691／852→581／810→686／925ms，首帧无稳定收益，
+整体预算失败，生产JAR不替换。权威完成度见[当前状态](../../.scratch/interop/current-status.md)。
+[Android显式异步解码](android-decoder-async.md)仍为生产默认；早期关闭诊断的60次
+输入138／295ms属于当时测试路径，不能覆盖后续普通Driver的失败证据。
+连接稳定性增量见[应用失活恢复](connection-health.md)。
 
-2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
+2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。
+仅实际改动被控捕获服务的隔离实验重建JAR，主控调优复用既有产物。
+[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方vendor文件和当前视频依赖的既有暂停补丁产物。
+
+## 普通Driver源端绘制关联与单项稳定输入实验
+
+`15f795b`在默认关闭的`CONNECT_PERF_TRACE_CLOCK`下复用既有`session.clock.probe`，
+不修改服务协议。每个真实输入（包括暂停中的输入）使用全局fixtureSequence，
+host在卸载独立fixture前保存唯一run的input／首次draw日志。每轮前后各3次时钟
+往返，为目标uptime和主控Rust单调时钟建立区间；快照PTS必须唯一关联onVideo、
+relay和原始transport receipt，日志缺失、重复、Activity重置均失败。
+
+此模型以区间而非点估计表达跨端时间，依赖校准期间偏移固定、无休眠／时钟跳变。
+媒体PTS兼容是额外检查，不能把draw callback结束等同合成／编码完成。主控输入
+时刻是在Dart invoke前观测，包含后续派发开销，允许条件下界为负；各段中位数
+不能相加代替某一帧的全链路。traceFrames或traceClock开启均标记diagnosticOnly，
+即使单项预算通过也不能把此组记作生产性能验收。
+
+同原固定双项候选的3轮24输入：输入P50／P95=691／852ms，首像素3758／2647／
+2906ms；27个真实key唯一匹配，三个时钟区间宽54.706／71.936／86.219ms。目标
+input→drawStart中位0.463ms、draw callback0.632ms；首次新计数drawEnd→raw接收
+完成的条件下／上界中位310.819／390.331ms，24样本下界均≥217.334ms。raw接收
+完成→relay写入开始中位0.255ms，relay写入开始→onVideo98ms，onVideo→snapshot
+128.957ms。剩余等待包含源合成／采集／编码，不支持只追主控解码器的归因。
+
+原件`/tmp/connect-e2e/source-clock-bounded/`及`/tmp/connect-source-clock-stages.json`。
+30张实际窗口计数正确、16张超3秒，暂停恢复／停止／自动清理确认；严格exit1。
+新增源报告3项、已有时钟3项及首帧3项共9项测试通过，定向Dart分析无问题。
+诊断关闭另跑1轮2输入：无target-timeline文件／clockBounds，4张实际窗口正确、
+暂停恢复／停止／清理确认，输入524／678ms、严格exit1；不与不同样本数trace组
+比较收益。原件`/tmp/connect-e2e/source-clock-off/`。
+
+源端实验因此将LatestInputWindow改为首个有效媒体output前最多2项，之后最多1项。
+仅精确匹配reservation的媒体output才缩窗，CONFIG／空EOS不缩窗；保留静态重复、
+唯一终值主动drain和3秒stall，不隐式扩容回退。新增状态断言在旧实现实际失败，
+独立新JAR及CapturePause／7组状态测试通过。新JAR摘要
+`1a3d2c82eefe420a36eab816f0557234141afa9c86763b92bc472dfdd3aeb881`，
+构建于`/tmp/connect-bounded-input-steady-one-build/`；这次确实改了被控服务实现，
+所以需要构建实验JAR。普通主控调优仍复用既有JAR，两份生产产物均未替换。
+
+独立真实H264解码smoke通过静态冷启、唯一变化后完全静止3.5秒（媒体32→136，
+终值仍1）、动态→静态终值、暂停恢复、旋转及横屏输入。pauseACK后媒体静止，
+server正常exit0，进程／远端JAR／fixture／独立forward及旋转设置均清理。
+`/tmp/connect-e2e/bounded-input-steady-one-smoke/`包含实际编码与解码证据；它不测
+Flutter延迟。此候选仍只支持API36／主屏H264／c2.android.avc.encoder，不外推ARM。
+
+将完整新JAR嵌入隔离APK（SHA`f5d1751380dcac4e9e51f46cdcfa705678bc6a82688d6509e1512a9d1ea49aae`），
+核对旧候选与生产捕获JAR完整字节均缺席；A1／A2使用完全相同旧候选APK，
+SHA`3f212e9646ccfb93cb7c7b341931ca774580810109d88d8b08124b5536435663`。
+普通Driver／默认async=1、H2641280／60／8Mbps、traceFrames及traceClock开启，
+3轮×8输入，同一双2vCPU／2048MB SwiftShader AVD；计时期间无编译或额外trace。
+
+| 顺序 | 输入P50／P95 ms | 首像素3次 ms | drawEnd→raw条件下／上界中位 ms | 正确窗口／迟到 |
+| --- | --- | --- | --- | --- |
+| A1 固定双项 | 691／852 | 3758／2647／2906 | 310.819／390.331 | 30／16 |
+| B 启动双项、稳定单项 | 581／810 | 2563／2381／2554 | 290.802／367.212 | 30／9 |
+| A2 固定双项返回 | 686／925 | 2551／2553／2890 | 328.236／401.090 | 30／15 |
+
+每组24输入、27键日志完整、3个时钟区间有效、所有实际窗口计数正确；暂停恢复／
+停止／App及fixture自动清理确认。三组严格exit1，收集期限15秒仍保留3秒窗口预算。
+输入P50相对两侧降低约15–16%，P95仅有限改善；源后段条件区间重叠，不承诺该段
+确定缩短多少。首帧无稳定收益，继续保留隔离，不修改生产默认。relay→onVideo
+中位98.000→88.023→97.149ms，onVideo→snapshot128.957→130.217→131.335ms；
+后者包含呈现调度及readback，不能称纯GPU耗时。新候选仍有draw后数百毫秒等待。
+原件`/tmp/connect-e2e/source-{clock-bounded,window-steady-one,window-two-return}/`，
+汇总`/tmp/connect-source-window-aba.json`。
+
+复现时在前述普通Driver构建与运行两处同时追加：
+`--dart-define=CONNECT_PERF_TRACE_FRAMES=true --dart-define=CONNECT_PERF_TRACE_CLOCK=true`；
+host另设`CONNECT_E2E_VIDEO_TIMELINE=true`，保留唯一输出目录。预编译APK直接安装
+运行，不用热重启重编译混入其他defines。该诊断不替代关闭追踪后的生产验收。
+
+收尾普通main构建21.2秒，实际native库含完整生产捕获JAR，旧／新候选均缺席，
+两份生产摘要未变。MCP实际热重载成功、无Dart运行错误，首页及三组VIDEO1窗口
+目视核对；Skipped33frames警告仍保留。两自有AVD核名关闭、PID消失，精确forward
+移除，fixture与捕获进程／文件缺席，CLI／DTD／Gradle已停止。清理23项debug大
+副本2737.2MiB，空闲40.11GiB，保留release、实测APK／原始证据及有效编译缓存。
+回执`/tmp/connect-source-window-{main-receipt,production-jars,target-cleanup,avd-stop,
+debug-cleanup}.json`。此批是诊断与隔离实验进展，完整性能目标保持开放。
 
 ## 测量范围
 
