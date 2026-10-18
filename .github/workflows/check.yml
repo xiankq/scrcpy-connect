@@ -47,7 +47,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-debug-apk
-          path: apps/connect/build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 7
 
@@ -58,13 +58,13 @@ jobs:
         include:
           - platform: ios
             runner: macos-15
-            artifact: apps/connect/build/verified/ios-release.tar.gz
+            artifact: build/verified/ios-release.tar.gz
           - platform: macos
             runner: macos-15
-            artifact: apps/connect/build/verified/macos-release.tar.gz
+            artifact: build/verified/macos-release.tar.gz
           - platform: windows
             runner: windows-2025-vs2026
-            artifact: apps/connect/build/verified/windows-release.zip
+            artifact: build/verified/windows-release.zip
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4

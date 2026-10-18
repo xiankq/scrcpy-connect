@@ -41,7 +41,6 @@
 复现首帧回归（目标已开启TCP调试并保持已知可见Settings界面，主控不需要产品内调试权限）：
 
 ```sh
-cd apps/connect
 rtk proxy flutter pub get --enforce-lockfile
 rtk proxy flutter drive -d emulator-5554 --no-pub \
   --driver=test_driver/fvp_probe.dart \

@@ -27,7 +27,7 @@ Android Developers API 页面为 2026-10-17 在线版本，下面同时使用固
 | --- | --- |
 | `packages/interop_bridge/lib/src/documents/documents_coordinator.dart:661`，`_writeFile` | 查询同一 document ID、非目录/虚拟文档、已知大小必须为零、具备写能力，然后用 `rw` |
 | 同文件 `:346`，`_copy` | `document.copy` 后才释放 lease；复制成功而释放报错时返回 `result_unknown`，不重试、不删除目标 |
-| `apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/PlatformDocuments.kt:110` | 只允许 `r`、`rw`，保留 PFD 所有权，向 Rust 借出整数 FD |
+| `android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/PlatformDocuments.kt:110` | 只允许 `r`、`rw`，保留 PFD 所有权，向 Rust 借出整数 FD |
 | 同文件 `:66`、`:229` | `releaseFd` 仅 `close()`；取消也仅 `close()`；没有 `checkError()` 或 `closeWithError()` |
 | `crates/interop_core/src/documents/mod.rs:432` | `fstat` 要求目标为大小零的普通文件，然后 `lseek(0)`；`:499` 要求 `fsync` 成功 |
 | 同文件 `:211` | Rust 对借用 FD 做 `F_DUPFD_CLOEXEC`，设置非阻塞；原 PFD 应在复制真正结束后才关闭 |

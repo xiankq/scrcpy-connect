@@ -15,7 +15,7 @@
 
 宿主 driver 用 VM service extension 协调步骤；码不进入 extension 响应、报告或截图。初始拒绝阶段不截图，避免晚到的截图拍到后续配对码。工作台截图发生在实际连接仍保持的 `need-connected-capture` 等待点；撤权拒绝截图也通过专用握手等待完成，两者均不含码。报告中的证书错误只用于证明真实拒绝原因。
 
-工作目录 `apps/connect`，PATH 含 Rust/Flutter，目标已按下面条件准备；图片/日志仍只在 tmp：
+工作目录 仓库根目录，PATH 含 Rust/Flutter，目标已按下面条件准备；图片/日志仍只在 tmp：
 
 ```sh
 rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \

@@ -10,7 +10,7 @@ import sys
 import tarfile
 
 ROOT = Path(__file__).resolve().parent.parent
-APP = ROOT / "apps/connect"
+APP = ROOT
 
 
 def pe_machine(path):

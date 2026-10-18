@@ -20,6 +20,22 @@
 *.keystore
 *.jks
 
+# Flutter application and editor outputs (the application lives at the root).
+*.iml
+*.ipr
+*.iws
+.idea/
+/coverage/
+/.pub/
+/.pub-cache/
+/.widget_preview/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# Pinned build-time design tooling.
+**/node_modules/
+
 # Vendored plugin source is tracked; downloaded SDKs and native outputs are not.
 /third_party/fvp/**/.cxx/
 /third_party/fvp/**/mdk-sdk/

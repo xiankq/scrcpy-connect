@@ -25,7 +25,7 @@ Flutter每页拥有一个固定设备的检查，展示检查／停止、已显�
 
 ## 真实Android入口与保留边界
 
-从apps/connect运行，下列仅为测试宿主部署／对照使用adb，产品仍经FRB和自有Rust库：
+从仓库根目录运行，下列仅为测试宿主部署／对照使用adb，产品仍经FRB和自有Rust库：
 
 ```sh
 rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \

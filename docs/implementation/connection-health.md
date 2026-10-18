@@ -229,7 +229,7 @@ pair；两秒内关闭黑洞与释放监听端口。另验证cleanup生成的EOF
 
 ```sh
 rtk proxy /home/xiankq/flutter/bin/dart \
- apps/connect/test_driver/support/adb_fault_proxy_tcp_test.dart
+ test_driver/support/adb_fault_proxy_tcp_test.dart
 ```
 
 Driver在清理前保存故障回执并要求两个方向实际drop均大于0，注入关闭计数0，两个
@@ -261,7 +261,7 @@ errors为空，所有清理true。故障注入至旧controllerEOF17768ms、至�
 `/tmp/connect-blackhole-{recovery-verified,eof-control}.log`。
 
 ```sh
-# 在apps/connect，先按video-performance.md准备双AVD/fixture和25556转发。
+# 在仓库根目录，先按video-performance.md准备双AVD/fixture和25556转发。
 rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
  CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \

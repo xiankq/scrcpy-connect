@@ -415,7 +415,7 @@ r1/r2初始严格颜色不匹配，r3颜色比例可识别但首个操作无变�
 
 最终r5完整66秒通过：6轮新连接/会话、120次精确新计数、6次暂停恢复、6张实际Flutter截图和6次确认纹理分离。输入到解码像素P50=446ms、最近秩P95=452ms、P99=569ms、最大571ms；启动到解码首像素1189/1119/1121/1028/1212/1244ms。主控每轮单调计时的媒体观测区间共50451ms、640包/535040容器字节，这是低复杂度色块负载，不是高运动带宽或满负荷帧率测试。`videoPerformanceComplete`和`fixtureCleanupConfirmed`均true，cleanup的uninstalled/absent均true。`/tmp/connect-video-performance-r5.log`、`/tmp/connect-e2e/video-performance-r5/`；不是小时级长稳，也不把主动重连误称自动故障恢复。
 
-可重复运行（工作目录apps/connect，先从仓库根构建夹具）：
+可重复运行（工作目录仓库根目录，先从仓库根构建夹具）：
 
 ```sh
 python3 tool/e2e/video_fixture/build.py
@@ -745,7 +745,7 @@ control-send等空队列、video在`dequeueOutputBuffer(-1)`。这支持排查�
 夹具绘制/AVD负载与编码/传输/解码需继续分段，不能把所有动态延迟归咎网络。
 
 复现：先构建独立夹具，设置既有drive要求的ADB/主控/目标/APK环境变量（见夹具README），
-在apps/connect目录使用：
+在仓库根目录使用：
 
 ```sh
 rtk proxy env CONNECT_E2E_VIDEO_MOTION=true \
@@ -1657,7 +1657,7 @@ CBR候选仅在Rust构造scrcpy参数后、显式encoder参数前，对VP8追加
 `/tmp/connect-vp8-cbr-candidate.patch`；该候选未胜过本次默认VP8，不进入生产默认。
 固定AOSP的真实码控/CPUUSED分支和限制见[一手研究](../research/scrcpy-first-frame-performance.md#vp8实时编码与公开码控参数2026-10-18)。
 
-复跑H264基线（apps/connect，沿用本文前面的双AVD/fixture构建及25556转发条件）：
+复跑H264基线（仓库根目录，沿用本文前面的双AVD/fixture构建及25556转发条件）：
 
 ```sh
 CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
@@ -1925,7 +1925,6 @@ readback，不能称纯GPU或面板延迟，也不能从回调数量推断队列
 复现公共命令（已有fixture APK、目标TCP转发25556；debug控制端与隔离测试adbd）：
 
 ```bash
-cd apps/connect
 PATH=/home/xiankq/.cargo/bin:/home/xiankq/flutter/bin:/usr/local/bin:/usr/bin:/bin \
 ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 \
 FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
@@ -2045,7 +2044,7 @@ JAR逐项确认不存在，匹配捕获JAR与捕获进程均为空；证明
 
 ## 普通调度基准与解码路径对照（2026-10-18）
 
-`afa4943`新增独立开发入口`apps/connect/benchmark/live_video_performance.dart`及host
+`afa4943`新增独立开发入口`benchmark/live_video_performance.dart`及host
 `test_driver/live_video_performance.dart`，不改普通产品入口或既有集成门禁。入口先调用
 `enableFlutterDriverExtension`构造`_DriverBinding`；它使用普通Scheduler／Renderer／
 Widgets混入，没有Live测试绑定的draw/pump循环，回执记录实际binding和模式。
@@ -2106,7 +2105,7 @@ host进程超时先TERM再必要的KILL、确认退出并有界排空管道。�
 的证明；超出15秒恢复窗口仍按未知失败。App清理并发与释放分支另经只读复核。
 
 复现：专用双AVD启动、目标tcpip5555和宿主25556转发建立，构建独立fixture后，在
-apps/connect运行（ADB与APK为测试宿主工具，不进入产品分发）：
+仓库根目录运行（ADB与APK为测试宿主工具，不进入产品分发）：
 
 ```sh
 CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \

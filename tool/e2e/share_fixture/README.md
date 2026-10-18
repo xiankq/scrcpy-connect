@@ -58,7 +58,6 @@ The product's real pending batch, file bytes and live Flutter route are the
 acceptance signal. The nine-mode run is:
 
 ```sh
-cd apps/connect
 rtk proxy env CONNECT_E2E_DEVICE=emulator-5554 \
   CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   flutter drive -d emulator-5554 --no-pub \

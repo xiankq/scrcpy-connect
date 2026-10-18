@@ -13,7 +13,7 @@ actually destroys the Activity. Changing the settings database alone does not
 change the runtime flag; see [AOSP implementation](https://android.googlesource.com/platform/frameworks/base/+/2f5bb9c5ff88/services/core/java/com/android/server/am/ActivityManagerService.java).
 This is a testing mechanism, not a permission or debugging requirement for users.
 
-For an isolated controller, run from `apps/connect` after ensuring the target is
+For an isolated controller, run from 仓库根目录 after ensuring the target is
 authorized and reachable:
 
 ```sh

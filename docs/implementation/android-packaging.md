@@ -43,10 +43,10 @@ python3 tool/android.py init-signing
 python3 tool/android.py build                 # arm64 release + 完整APK检查
 python3 tool/android.py build --abi universal # 三架构通用包
 python3 tool/android.py build --abi x64       # Android模拟器
-python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-release.apk
+python3 tool/android.py verify build/app/outputs/flutter-apk/app-release.apk
 ```
 
-直接在apps/connect运行`flutter build apk`也使用相同签名与过滤。不要每次clean；清理调试过期build／Kotlin状态，保留仍复用的native hooks和Gradle缓存，最终安装包与必要验证证据可保留于/tmp。本批不把构建过程写入产品页面，也不上传私钥。
+直接在仓库根目录运行`flutter build apk`也使用相同签名与过滤。不要每次clean；清理调试过期build／Kotlin状态，保留仍复用的native hooks和Gradle缓存，最终安装包与必要验证证据可保留于/tmp。本批不把构建过程写入产品页面，也不上传私钥。
 
 一手依据：[Flutter Android发布与签名](https://docs.flutter.dev/deployment/android)、[Gradle构建缓存](https://docs.gradle.org/9.3.1/userguide/build_cache.html)、[Android apksigner](https://developer.android.com/tools/apksigner)。实际Flutter默认ABI行为另按本机固定3.47.6的`FlutterPlugin.kt::configureAbiWithoutSplits`源码核查，未改SDK源。
 

@@ -1,7 +1,7 @@
 # 当前目录与模块职责
 
 本文描述当前工作区的实现。需求和约束见根目录 GLOSSARY.md 与 docs/adr/；
-功能完成度仍以 `.scratch/interop/current-status.md` 为入口。
+功能完成度与验证边界见[验收记录](validation.md)。
 历史验收文档记录其当时提交，不自动构成当前实现或当前测试通过的证据。
 
 ## 依赖方向
@@ -11,7 +11,8 @@ Flutter 页面通过 AppDependencies 调用 Dart InteropBridge；后者通过 FR
 主控系统能力通过平台适配实现；被控设备的临时 JAR/helper 集中在 servers。
 媒体字节通过本机流传输交给播放器，不在 JSON 事件通道中逐帧复制。
 
-保留 apps、packages、crates、servers、third_party、tool 的顶层结构。
+Flutter应用直接位于仓库根目录，`lib/`、`test/`、`integration_test/`和各平台runner平铺；
+独立的packages、crates、servers、third_party、tool仍按职责保留。
 Flutter pages 下每页独立目录，私有绘制组件就近放置；共享 services、widgets、
 router 保持浅层。新目录应对应独立职责或构建目标。
 
@@ -50,7 +51,7 @@ Device 的 TransportKind 明确区分 tcp、wireless、tls、usb，保存、导�
 ## 生成与交付
 
 - `tool/protocol_codegen.py --check`：共享命令契约生成结果。
-- `tool/generate.py --check`：临时隔离目录中真实生成并比对 FRB，检查 Dart builder 输出。
+- `tool/generate.py --check`：官方DESIGN.md解析模型生成Dart token并比较；临时隔离目录中真实生成并比对FRB，检查Dart builder输出。
 - `servers/companion/build.py --check`：临时重建 Java/DEX/JAR，检查源码、构建输入与产物清单。
 - helper 的 Rust 默认测试：源码、lockfile、脚本和四 ABI 产物摘要。
 - fvp 的 MDK 正式版本与平台摘要：`third_party/fvp/cmake/mdk-release.json`。
@@ -59,6 +60,8 @@ Device 的 TransportKind 明确区分 tcp、wireless、tls、usb，保存、导�
 
 四端 CI 配置存在不等于本轮远程作业已通过。平台功能支持状态、真机/OEM、媒体
 性能、后台回收及生产密码提供器需要各自证据；本次结构重构不替代这些验收。
+
+根目录迁移、官方DESIGN.md解析生成与保留fvp副本的依据见[工具链实施](repository-tooling.md)。
 
 ## 后续维护
 

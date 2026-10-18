@@ -32,7 +32,7 @@ rtk proxy env ANDROID_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 
 此前两轮不算通过：r1模拟器37.2.12的gsm list仅回OK，原驱动误认为没有来电；改为实际Telecom单呼叫身份＋Telephony原号码／状态，后续每点保持同一身份。r2真实产品来电sheet覆盖通话页，直接点底层按钮被hit-test拒绝；测试改为操作产品真实“查看来电与声音”入口，没有透过遮挡点按钮或关闭产品提示机制。
 
-复现（apps/connect目录，目标必须隔离且无现有通话，端口按当前实际转发设置）：
+复现（仓库根目录，目标必须隔离且无现有通话，端口按当前实际转发设置）：
 
 ```sh
 rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \

@@ -40,7 +40,7 @@ Flutter 承担主要页面与任务归属；共享 Dart 协调树规划、数量
 
 ```sh
 rtk proxy python3 tool/e2e/content_delivery_fixture/build.py
-# 工作目录 apps/connect；PATH 包含 Rust 和 Flutter。
+# 工作目录 仓库根目录；PATH 包含 Rust 和 Flutter。
 rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/content-delivery \
@@ -85,7 +85,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 
 IncomingSharePage让用户明确选接收设备，提交前捕获该设备和目录；全局焦点变化不会改收件设备。2026-10-18三AVD14秒通过一条PNG链路；独立host确认A字节／hash、B同路径不存在和consume后不重提，未改生产实现。
 
-先构建并仅在主控安装tool/e2e/share_fixture的APK。工作目录apps/connect，PATH包含Flutter／Rust，ANDROID_HOME指向SDK；目标端5556／5558分别开放已授权测试TCP及hostforward15556／15558。运行：
+先构建并仅在主控安装tool/e2e/share_fixture的APK。工作目录仓库根目录，PATH包含Flutter／Rust，ANDROID_HOME指向SDK；目标端5556／5558分别开放已授权测试TCP及hostforward15556／15558。运行：
 
 ```sh
 rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \

@@ -30,7 +30,7 @@ Context7 已查询 `/maikub/flutter_local_notifications`，但索引和 `master`
 
 Android 还需要应用开启 core library desugaring，配置 `com.android.tools:desugar_jdk_libs:2.1.4`；即时 `show` 也不能省略这个构建要求。稳定版 README 建议 AGP 至少使用其自身的 **8.11.1**。README文字仍写 compileSdk 最低35，而同页示例及实际 Gradle 使用36；采用36作为本项目候选基线，不能把这个文档差异当成已证明35能编译。[22.3.2 Gradle 设置](https://pub.dev/packages/flutter_local_notifications/versions/22.3.2#gradle-setup)、[实际 Gradle](https://github.com/MaikuB/flutter_local_notifications/blob/flutter_local_notifications-v22.3.2/flutter_local_notifications/android/build.gradle)
 
-本项目只读核对：`apps/connect/pubspec.yaml` 为 Dart ^3.13.5；Android应用已有Java/JVM17、AGP9.1.0，并使用当前本地 Flutter 的默认 compileSdk36/minSdk24/targetSdk36。应用尚无 desugaring 配置；接入时仍需改构建配置并实际构建验证，不能宣称现在已兼容插件。iOS当前 AppDelegate 也没有设置 UNUserNotificationCenter delegate；按插件官方设置需加一处 delegate 连接，使用当前 UIScene/implicit-engine 生命周期验证点击回调。macOS和Windows工程存在，但本次没有构建。[本地应用 Gradle](../../apps/connect/android/app/build.gradle.kts)、[本地插件版本](../../apps/connect/android/settings.gradle.kts)、[本地 iOS AppDelegate](../../apps/connect/ios/Runner/AppDelegate.swift)、[官方 iOS 设置](https://pub.dev/packages/flutter_local_notifications/versions/22.3.2#ios-setup)
+本项目只读核对：`pubspec.yaml` 为 Dart ^3.13.5；Android应用已有Java/JVM17、AGP9.1.0，并使用当前本地 Flutter 的默认 compileSdk36/minSdk24/targetSdk36。应用尚无 desugaring 配置；接入时仍需改构建配置并实际构建验证，不能宣称现在已兼容插件。iOS当前 AppDelegate 也没有设置 UNUserNotificationCenter delegate；按插件官方设置需加一处 delegate 连接，使用当前 UIScene/implicit-engine 生命周期验证点击回调。macOS和Windows工程存在，但本次没有构建。[本地应用 Gradle](../../android/app/build.gradle.kts)、[本地插件版本](../../android/settings.gradle.kts)、[本地 iOS AppDelegate](../../ios/Runner/AppDelegate.swift)、[官方 iOS 设置](https://pub.dev/packages/flutter_local_notifications/versions/22.3.2#ios-setup)
 
 ## 可直接使用的 Dart API
 
@@ -60,7 +60,7 @@ Android13/API33+ 的普通通知需要 `POST_NOTIFICATIONS`；拒绝后普通通
 
 Apple用户可随时修改授权和展示类型；首次请求后再调用不一定重弹系统对话框，应读取状态并提供设置入口。provisional授权只安静进入Notification Center历史，不是无历史投递方案。[Apple官方授权说明](https://developer.apple.com/documentation/usernotifications/asking-permission-to-use-notifications)
 
-插件负责调用本机通知系统，**不会让已死亡的主控进程继续接收Rust观察事件，也不提供永久后台运行**。本地通知点击可以启动应用，与进程死亡期间仍能观察被控设备是两回事。不得为了通知发布自动开启设备连接／helper／控制会话；后台接收仍服从已有后台保持和观察意图。[插件入口实现](https://github.com/MaikuB/flutter_local_notifications/blob/flutter_local_notifications-v22.3.2/flutter_local_notifications/lib/src/flutter_local_notifications_plugin.dart)、[当前进程引擎说明](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt)
+插件负责调用本机通知系统，**不会让已死亡的主控进程继续接收Rust观察事件，也不提供永久后台运行**。本地通知点击可以启动应用，与进程死亡期间仍能观察被控设备是两回事。不得为了通知发布自动开启设备连接／helper／控制会话；后台接收仍服从已有后台保持和观察意图。[插件入口实现](https://github.com/MaikuB/flutter_local_notifications/blob/flutter_local_notifications-v22.3.2/flutter_local_notifications/lib/src/flutter_local_notifications_plugin.dart)、[当前进程引擎说明](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt)
 
 ## 锁屏、敏感正文与不落盘
 
@@ -90,7 +90,7 @@ Android普通提醒只需普通发布条件；`USE_FULL_SCREEN_INTENT`、录音�
 | --- | --- | --- |
 | 共享Dart + 原版22.3.2 | 四端发布／点击的现成实现；通用安全正文不需要publicVersion。 | **优先。** Android只补必要Gradle配置／资源，Apple接delegate，Windows验证MSIX。不是零原生依赖，但不新增整套应用Kotlin通知实现。 |
 | 极小插件扩展 | 若产品确实要求“解锁后有正文、锁屏自定义安全版本”，在插件Android DTO／映射／builder加结构化publicVersion。 | 候选，尚未实施或验证。优先上游PR或受控最小patch；不得允许任意Intent／任意通知动作。仍无法保证正文不落系统历史。 |
-| 复用现有平台通道独立实现 | Android现有 `ConnectionService` 已能发布通知，理论上可另加show/cancel和路由。 | 不推荐作四端主路径：当前仅前台服务固定通知，无实时对象／冷启动路由合同；iOS/macOS/Windows还要各写实现。现有 `ProcessFlutterHost` 多数平台方法在无Activity时拒绝，后台发布还需改进程级分派。即使Android代码少，也会重复插件生命周期职责。[现有服务](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ConnectionService.kt)、[现有通道](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt) |
+| 复用现有平台通道独立实现 | Android现有 `ConnectionService` 已能发布通知，理论上可另加show/cancel和路由。 | 不推荐作四端主路径：当前仅前台服务固定通知，无实时对象／冷启动路由合同；iOS/macOS/Windows还要各写实现。现有 `ProcessFlutterHost` 多数平台方法在无Activity时拒绝，后台发布还需改进程级分派。即使Android代码少，也会重复插件生命周期职责。[现有服务](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ConnectionService.kt)、[现有通道](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt) |
 
 ## 尚待实际验证的验收点
 

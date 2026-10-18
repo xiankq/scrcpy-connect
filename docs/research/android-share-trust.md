@@ -17,11 +17,11 @@ recorded below.
 
 | Layer | Current responsibility | Source |
 | --- | --- | --- |
-| Android `IncomingShares` | Validate incoming intents/grants; keep pending URI metadata; query/open a provider with cancellation; lend and close original asset FDs | [IncomingShares.kt](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/IncomingShares.kt) |
+| Android `IncomingShares` | Validate incoming intents/grants; keep pending URI metadata; query/open a provider with cancellation; lend and close original asset FDs | [IncomingShares.kt](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/IncomingShares.kt) |
 | Dart `ShareIntake` | Configure the app cache root, deduplicate concurrent delivery by share ID, open each source, await Rust adoption, then consume native pending metadata and release originals | [share_intake.dart](../../packages/interop_bridge/lib/src/share_intake.dart) |
 | Rust `ImportManager` and `Policy` | Reserve capacity, adopt sources, copy bytes, publish readiness, persist ownership, prevent duplicate task publication and reconcile durable transfers | [sharing/mod.rs](../../crates/interop_core/src/sharing/mod.rs), [policy.rs](../../crates/interop_core/src/sharing/policy.rs) |
 | Rust `Source` | Validate exactly one FD/path, duplicate borrowed Android/Linux FDs, apply asset offset/length and validate source metadata | [source.rs](../../crates/interop_core/src/sharing/source.rs) |
-| Process Flutter host | Keep one engine and platform/event channels; route Activity-dependent operations to the current weak Activity reference | [ProcessFlutterHost.kt](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt) |
+| Process Flutter host | Keep one engine and platform/event channels; route Activity-dependent operations to the current weak Activity reference | [ProcessFlutterHost.kt](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt) |
 
 `sharing.platform.*` methods belong to the Android adapter; `sharing.*` methods
 belong to Rust. They are different ownership boundaries. A successful
@@ -42,7 +42,7 @@ from using the receiver's own privileges to read its private provider. The
 adapter takes streams from `EXTRA_STREAM`, falling back to `ClipData` when that
 list is empty, and deduplicates URIs. Both input list counts are bounded at 32;
 native pending metadata is bounded at eight batches. See
-[IncomingShares.accept](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/IncomingShares.kt).
+[IncomingShares.accept](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/IncomingShares.kt).
 
 On API 35+, MainActivity captures `initialCaller` for its initial intent or
 `currentCaller` while handling `onNewIntent`. A missing caller, denied check or
@@ -54,7 +54,7 @@ provider ownership checks remain, without equivalent caller attribution.
 [ComponentCaller reference](https://developer.android.com/reference/android/app/ComponentCaller#checkContentUriPermission(android.net.Uri,%20int)),
 [Activity caller API](https://developer.android.com/reference/android/app/Activity#getCurrentCaller()).
 
-The source resource [filepaths.xml](../../apps/connect/android/app/src/main/res/xml/filepaths.xml)
+The source resource [filepaths.xml](../../android/app/src/main/res/xml/filepaths.xml)
 restricts outgoing FileProvider paths to `files/screenshots`, `files/media`,
 `cache/documents`, `cache/outgoing` and `cache/share_plus`. It exposes no root,
 whole files directory, whole cache directory or `cache/incoming` journal. Android
@@ -75,7 +75,7 @@ observed; this check does not reserve descriptor capacity for queued opens. A se
 one-worker/eight-queue executor dispatches `CancellationSignal.cancel()`.
 Activity destruction cancels that Activity's pending opens and closes its
 originals. These are platform resource bounds, not Rust cache admission.
-[IncomingShares.open/releaseOwner](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/IncomingShares.kt).
+[IncomingShares.open/releaseOwner](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/IncomingShares.kt).
 
 Dart opens the source descriptors **before** calling Rust `sharing.import`.
 Therefore the current implementation does not guarantee cache admission before
@@ -170,8 +170,8 @@ The incoming-share observer itself belongs to the process host, so
 releasing an old Activity's URI opens does not unbind that observer. A new Dart
 bridge configures intake and pulls native pending metadata, covering events
 published before its event subscription was ready.
-[MainActivity.kt](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/MainActivity.kt),
-[ProcessFlutterHost.kt](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt),
+[MainActivity.kt](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/MainActivity.kt),
+[ProcessFlutterHost.kt](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt),
 [InteropBridge](../../packages/interop_bridge/lib/interop_bridge.dart).
 
 This does not make multiple native Activities interchangeable views. With the
@@ -211,7 +211,7 @@ bring the sender itself to the top and deliver that mode. Text+image then passed
 this is evidence for the combined fixture correction, not an isolated proof
 that either change alone fixes all external-app task arrangements. See
 [sender](../../tool/e2e/share_fixture/src/dev/scrcpyconnect/sharefixture/ShareFixtureActivity.java)
-and [driver](../../apps/connect/test_driver/incoming_share.dart).
+and [driver](../../test_driver/incoming_share.dart).
 
 An intermediate full run passed the first four modes, then found that its intended
 `no-grant` input arrived ready. Android 16's
@@ -237,8 +237,8 @@ descriptor is handed to the asynchronous Rust operation, only the exact lease
 acknowledgement releases that original. This prevents a late old Activity cleanup
 from closing another Activity's resources. The E2E owner reports JVM contracts
 and complete Kotlin compilation passed; physical USB remains unverified.
-[NativeLeaseOwnership.kt](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/NativeLeaseOwnership.kt),
-[DiscoveryNetwork.kt](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/DiscoveryNetwork.kt).
+[NativeLeaseOwnership.kt](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/NativeLeaseOwnership.kt),
+[DiscoveryNetwork.kt](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/DiscoveryNetwork.kt).
 
 Audio players now live in Dart `PortableAudioOutputs`/`FvpAudioPlayer` in that
 retained engine. `NativeAudioRuntime` owns OS focus leases, visibility and media
@@ -251,7 +251,7 @@ confirmed playing state, source PCM packets and an advancing native clock;
 receipts explicitly do not claim verified speaker samples.
 [portable_audio.dart](../../packages/interop_bridge/lib/src/media/portable_audio.dart),
 [fvp_audio_player.dart](../../packages/interop_bridge/lib/src/media/fvp_audio_player.dart),
-[NativeAudioRuntime.kt](../../apps/connect/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/NativeAudioRuntime.kt).
+[NativeAudioRuntime.kt](../../android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/NativeAudioRuntime.kt).
 
 There is no `audio.attach` adoption of old native players. A Dart isolate restart
 loses its player objects and one-use streams; bridge initialization retires
@@ -290,16 +290,16 @@ are coverage inventory, not a new execution result from this documentation edit.
 
 ```sh
 rtk proxy cargo +stable test -p interop-core --test share_import
-rtk proxy python3 apps/connect/android/app/src/test/run_native_ownership_tests.py
-rtk proxy python3 apps/connect/android/app/src/test/run_audio_contract_tests.py
+rtk proxy python3 android/app/src/test/run_native_ownership_tests.py
+rtk proxy python3 android/app/src/test/run_audio_contract_tests.py
 rtk proxy python3 tool/e2e/share_fixture/build.py
 # From packages/interop_bridge:
 rtk proxy flutter test test/share_intake_test.dart
 ```
 
 The real-device target is
-[incoming_share_test.dart](../../apps/connect/integration_test/incoming_share_test.dart)
-with [its external driver](../../apps/connect/test_driver/incoming_share.dart).
+[incoming_share_test.dart](../../integration_test/incoming_share_test.dart)
+with [its external driver](../../test_driver/incoming_share.dart).
 Its nine modes are text, image, multi, alias, no-grant, self-sentinel, too-many,
 oversize and slow. A complete run must verify exact provider bytes, errors with
 no published files, typed Flutter presentation and cancellation cleanup. The final

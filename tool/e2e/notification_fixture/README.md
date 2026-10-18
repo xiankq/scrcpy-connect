@@ -123,7 +123,7 @@ the controller. The test requires a readable text baseline before writing and
 restores that text; it does not claim restoration of arbitrary ClipData/MIME or
 an originally empty clipboard.
 
-From `apps/connect`, with Flutter on PATH:
+From 仓库根目录, with Flutter on PATH:
 
 ```sh
 rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \

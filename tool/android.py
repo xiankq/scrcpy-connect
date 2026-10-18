@@ -15,7 +15,7 @@ import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
-APP = ROOT / "apps/connect"
+APP = ROOT
 ANDROID = APP / "android"
 PLATFORMS = {
     "arm64": ("android-arm64", ["arm64-v8a"]),

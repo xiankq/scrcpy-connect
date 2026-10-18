@@ -21,7 +21,7 @@ class InvalidNotifier extends Notifier<int> {
 
 def main():
     # A system-temp file would not inherit the workspace's plugin or imports.
-    with tempfile.TemporaryDirectory(prefix="lint_smoke_", dir=ROOT / "apps/connect/test") as directory:
+    with tempfile.TemporaryDirectory(prefix="lint_smoke_", dir=ROOT / "test") as directory:
         fixture = Path(directory) / "lint_smoke.dart"
         fixture.write_text(SOURCE, encoding="utf-8")
         result = subprocess.run(

@@ -72,7 +72,7 @@ container.dispose();
 
 直接依赖锁定 `riverpod_annotation 4.0.7`、`riverpod_generator 4.0.9`、`go_router_builder 4.5.0` 与 `build_runner 2.16.2`。build_runner 2.17.1 使用 build 5，而当前两个 generator 使用 build 4，因此不能随意升级这组依赖。
 
-从 workspace 根运行 `dart run build_runner build --workspace`；验证生成文件使用 `dart run build_runner build --workspace --only-check`。生成文件应与源码一起保留。`apps/connect/build.yaml` 只为生成文件忽略 go_router_builder 对 nullable Object extra 产生的冗余 cast；手写代码保留严格类型分析。
+从 workspace 根运行 `dart run build_runner build --workspace`；验证生成文件使用 `dart run build_runner build --workspace --only-check`。生成文件应与源码一起保留。`build.yaml` 只为生成文件忽略 go_router_builder 对 nullable Object extra 产生的冗余 cast；手写代码保留严格类型分析。
 
 官方 `riverpod_lint 3.1.9` 通过 workspace 根 analysis plugin 启用，app 继承根 analysis options，不使用旧 custom_lint 插件配置。Flutter hooks 暂无已确认的一方独立 lint；不引入与当前 analyzer 14 不兼容的第三方 custom_lint 插件。
 
