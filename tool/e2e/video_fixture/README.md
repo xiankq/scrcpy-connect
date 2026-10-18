@@ -14,6 +14,12 @@ Android View 更新计数器并绘制新图；主控从实际解码 RGBA 和已�
 `apps/connect/integration_test/video_performance_test.dart`可通过
 `CONNECT_PERF_MAX_SIZE`、`CONNECT_PERF_MAX_FPS`、`CONNECT_PERF_BIT_RATE`
 选择码流配置；默认640/30/2000000保留既有基准。结果记录实际解码尺寸。
+`CONNECT_PERF_CODEC`可选h264/h265/av1/vp8/vp9（默认h264）；
+`CONNECT_PERF_ENCODER`可显式指定目标枚举中的匹配编码器（默认空，交给平台）。
+结果分别记录请求值、Core画质回执及实际`video.frameTrace`/`decoder.video`事件；
+实际codec观测需开启`CONNECT_PERF_TRACE_FRAMES`，解码器以`decoder.video`为准，
+不能仅凭请求值宣称实际使用了某解码器。
+这两个参数仅扩展性能测试入口，不改变产品默认；codec/encoder对照不需要重建JAR。
 `CONNECT_PERF_MAX_START_MS`与`CONNECT_PERF_MAX_POST_KEYFRAME_MS`分别约束完整首像素
 和首关键帧后的Core启动工作；P50/P95门槛沿用独立参数。结果保留每项预算判定，
 整体完成仍要求全部通过。该四块计数器不能作为高动态图像吞吐/稳定60fps的证明。

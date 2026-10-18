@@ -206,6 +206,11 @@ void main() {
           'CONNECT_PERF_BIT_RATE',
           defaultValue: 2000000,
         );
+        const videoCodec = String.fromEnvironment(
+          'CONNECT_PERF_CODEC',
+          defaultValue: 'h264',
+        );
+        const videoEncoder = String.fromEnvironment('CONNECT_PERF_ENCODER');
         const snapshotStress = int.fromEnvironment(
           'CONNECT_PERF_SNAPSHOT_STRESS',
         );
@@ -214,6 +219,9 @@ void main() {
         expect(maxSize, inInclusiveRange(320, 4096));
         expect(maxFps, inInclusiveRange(1, 120));
         expect(bitRate, inInclusiveRange(500000, 50000000));
+        expect(videoCodec, isIn(['h264', 'h265', 'av1', 'vp8', 'vp9']));
+        binding.reportData!['requestedVideoCodec'] = videoCodec;
+        binding.reportData!['requestedVideoEncoder'] = videoEncoder;
         expect(snapshotStress, inInclusiveRange(0, 10000));
         var converted = false;
         final textureKey = GlobalKey();
@@ -245,7 +253,8 @@ void main() {
             final watch = Stopwatch()..start();
             final stream = await request('session.start', {
               'deviceId': device,
-              'videoCodec': 'h264',
+              'videoCodec': videoCodec,
+              if (videoEncoder.isNotEmpty) 'videoEncoder': videoEncoder,
               'maxSize': maxSize,
               'maxFps': maxFps,
               'bitRate': bitRate,
