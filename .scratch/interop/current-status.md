@@ -4,6 +4,35 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+本轮已修补公开snapshot的null失败结果：校验官方pub归档SHA-256后，将不含示例／
+SDK／构建产物的fvp0.39.1源码置于third_party/fvp，根path override统一两处依赖，
+保留许可证／原API及全部平台源码；仅五份MdkSnapshot副本增加null保护，空结果
+发送空Uint8List以完成原Dart Future。真实源函数体回归在官方原版SIGSEGV exit-11，
+修补后未知handle／null／带stride成功结果通过，另经真实Dart_PostCObject及
+ReceivePort确认空与非空Uint8List交付；不是MDK renderer实机崩溃复现。
+严格全仓Dart分析无问题。Android实际CMake输入来自vendor；APK libfvp已改变、
+libmdk仍为72e5…9c8ad3，两个scrcpy JAR摘要不变，未重建JAR。
+静态普通snapshot完成10次暂停恢复／新像素／Flutter图案12／停止分离／卸载，
+首帧1469ms、两次输入188/381ms；动态普通snapshot完成200次串行截图4447ms
+和10次暂停恢复／新像素／图案12／停止分离／卸载，首帧2901ms、两次输入
+1319/1377ms。两组仍严格exit1，不计性能达标；动态命令误传TRACE而真实开关为
+TRACE_FRAMES，回执nativeFrameTrace=false，故不声称同PTS trace验证。历史MDK
+空std::function崩溃仍开放；本修补不是其根因结论。真实ADB EOF恢复17秒exit0：
+3521ms恢复新session、实际图案0→1、主动停止不重建，代理2次accept／1次切断，
+夹具／代理／偏好清理均确认；不扩大为真实无线切网／小时级稳定性已验证。
+完整Bridge Dart123项通过；静态与动态实际Flutter图案12均已目视。
+恢复普通main时assembleDebug611.3秒后安装因设备离线失败；内核09:17:25明确
+OOM杀掉目标QEMU6377（RSS约9.1GiB），随后两台AVD均已离线。此前E2E已结束且
+清理完成；环境故障单独记录，主控日志另有signal11，不能推断唯一因果。停止
+Gradle后仅冷启主控，复用已构建main APK安装1584ms；热重载成功、Dart无运行错误。
+只读源码核查还确认暂停补丁使正常首启也create→release→create编码器；先保留为
+待量化的首帧候选，未测真实收益前不改JAR，不能解释关键帧后722ms或稳态源年龄。
+普通main设备首页已目视并detach；目标AVD暂留关闭，后续同场景测量需重启目标
+并恢复25556转发，同时记录宿主内存／AVD RSS，不能与长寿命旧AVD直接作收益归因。
+本批精确清理394项已有清单中的debug输出，移除1484.6MiB，空闲50.4GiB；
+release／native hooks／Rust／Gradle／CMake／已校验SDK／Flutter哈希缓存及证据保留。
+代码提交7cbf010，完整目标及严格性能门槛保持active／未完成。
+
 本轮转向仍开放的原生截图稳定性：普通fvp公开snapshot、动态1280/60/8Mbps
 完成30次暂停恢复及实际Flutter图案0，本次无崩溃；首像素2839ms，输入P50/P95
 1240/1737ms，保留严格门槛exit1，清理已确认。不能据此关闭历史崩溃。
@@ -25,7 +54,8 @@
 恢复新session及实际图案0→1，主动停止不重建，接受2次/切断1次，夹具/代理清理完成；
 仅证明可控TCP EOF与新释放顺序可共存，非物理无线切网/小时级长稳。
 另核实锁定fvp公开snapshot失败路径仍无null结果保护，而MDK头允许失败回调null；
-这是独立的依赖缺陷，尚未触发实机故障或提交依赖层修复，不等同历史worker空回调。
+这是独立的依赖缺陷；上批当时尚未触发或修补，现已由上文仓库内补丁及源边界
+红绿回归补齐，但仍不等同历史worker空回调。
 普通main已恢复，构建14.1秒/安装569ms、热重载125ms、无Dart错误，首页及恢复后
 VIDEO1已目视后detach。SurfaceSync1000ms启动告警仍在，不计流畅度验收通过。
 Gradle停止后清理395项明确debug输出/本批Rust测试可执行文件，释放1670.1MiB，

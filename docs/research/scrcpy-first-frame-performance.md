@@ -271,3 +271,53 @@ worker已完成回调后收尾。完整红绿及静态/动态/恢复证据见
 [生命周期记录](../implementation/video-performance.md#截图生命周期与暂停提交顺序2026-10-18)。
 后续需单独构造null失败回调验证，并通过可复现的依赖补丁/替代实现处理，不能只改
 本机pub缓存或把这些有限次数无崩溃写成整个播放器稳定性完成。
+
+
+## fvp空结果故障与可复现交付（2026-10-18）
+
+**已证：**核验pub.dev fvp0.39.1归档SHA-256为
+`2f4607e07748856dbe268a3b968efe973c27f85ea4e7621c4209783a6dad26a0`，
+其callbacks.cpp与本地锁定包一致（`d31142…623e`），不能用GitHub tag源码行数
+代替pub发布包身份。将真实MdkSnapshot函数体、真实callbacks.h枚举与Dart_CObject
+头放入最小宿主探针，仅在MDK callback边界注入契约允许的null，原版exit-11。
+这是空指针解引用的确定性源边界复现，非历史renderer空std::function实机复现。
+[官方pub归档](https://pub.dev/api/archives/fvp-0.39.1.tar.gz)。
+
+**已实施：**仓库内third_party/fvp保留上游许可证／Dart API／全部平台源码，
+省略示例和SDK／生成／构建数据。根path override使应用与Bridge共同使用该版本，
+lockfile正常记录path，不以原hosted摘要冒充修补源码身份。五份原生副本统一在
+ret为null时发送空Uint8List；既有player.dart把空数据转换为null完成Future。
+仅提前return会留下永久pending请求，因此不采用。回归同时检查有效带stride缓冲
+及未知handle，并通过真实Dart VM NativeApi.postCObject／ReceivePort确认空和
+填充typed data可交付。见[来源与补丁](../../third_party/fvp/CONNECT_PATCHES.md)、
+[可执行回归](../../tool/fvp_snapshot_regression.py)。
+
+**边界：**该修补没有改变MDK renderer二进制，也没有证明结果交付时worker已排空；
+历史空回调崩溃继续开放。Android真实设备链路结果另记[视频性能](../implementation/video-performance.md)。
+原生SDK的nightly默认下载／CocoaPods版本范围与四平台整包构建仍需独立闭合，
+不因fork源码进入仓库就宣称A41或四端验收通过。scrcpy两个JAR均未修改或重建。
+
+
+## 暂停补丁的正常首启重复分配候选（2026-10-18）
+
+**已证（源码／现有中间产物）：**固定5.0.1正常Server.start进入SurfaceEncoder的
+streamCapture：先createMediaCodec读取capabilities，补丁随后无条件release并置null，
+初始CaptureControl.paused=false时门立即放行，再次create后configure／创建Surface／
+capture.start／codec.start。即使ignoreVideoEncoderConstraints=true也仍走两次创建。
+[已追踪补丁](../../servers/scrcpy/patches/0001-cooperative-capture-pause.patch)、
+[上游固定实现](https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java)。
+只读javap对已有.build/classes也看到create／release／置null／await门／再create的
+对应顺序，但并非此次重建或反编译当前DEX的新证明。现有CapturePauseTest覆盖门
+与真实encode循环，未运行streamCapture，不能锁定或量化双分配。
+
+**需验证：**保留同一JAR，先在真实冷启动以CCodec／MediaCodec日志或Perfetto核对
+两次分配释放及跨度；当前log_level=warn不会输出两次Using video encoder，缺少
+该行不能否定源码路径。原目标AVD随后宿主OOM退出，未获得新的系统codec切片，
+不填造耗时或收益。若量化证实值得消除冗余，需要调整服务端暂停门所有权与测试，
+届时才按正常流程重建补丁JAR；不能保留暂停时编码器分配来换首帧数字。
+
+两次分配都发生在首关键帧之前，不能解释本批关键帧后输出722ms或稳态源年龄。
+Android运行时request-sync／drop-input-frames属于MediaCodec.setParameters，当前
+scrcpy没有对应公开控制，不能伪装为启动MediaFormat option；编码器flush行为
+未定义，不用于清积压。[官方MediaCodec](https://developer.android.com/reference/android/media/MediaCodec#States)。
+现有priority／latency／repeat配置与先前失败调参结论保持不变，不重复盲调。

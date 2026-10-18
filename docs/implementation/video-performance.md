@@ -1,7 +1,7 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量见[截图生命周期与暂停提交顺序](#截图生命周期与暂停提交顺序2026-10-18)：
-修复主控截图/状态/释放时序，完成静态、动态及真实EOF恢复复验，严格性能仍开放。
+最新增量见[fvp失败截图结果与仓库内补丁](#fvp失败截图结果与仓库内补丁2026-10-18)：
+依赖空结果处理先红后绿，真实静态与动态截图完成，严格首帧／输入延迟仍未达标。
 
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
@@ -1444,3 +1444,79 @@ SurfaceFlinger2202.809ms、ranchu composer1618.948ms、捕获进程370.357ms。
 可执行文件，释放1670.1MiB、空闲51.0GiB；保留release、native hooks/Rust/Gradle/
 CMake/Flutter有效缓存及全部原始证据。记录`/tmp/connect-snapshot-cleanup.json`。
 目标无捕获进程/fixture，逐一确认本批6个session捕获JAR不存在；两个JAR摘要未变。
+
+
+## fvp失败截图结果与仓库内补丁（2026-10-18）
+
+延续前批NULL结果调查，已校验官方pub归档摘要并引入仓库内fvp0.39.1源码补丁。
+仅五份MdkSnapshot源副本同步增加空结果判断，原Dart处理仍把空Uint8List完成为null；
+不修改本机pub缓存、不引入新的Android呈现代码、不重建scrcpy JAR。路径依赖由根
+pubspec统一覆盖，来源／许可证／归档SHA及SDK边界保留在
+[CONNECT_PATCHES.md](../../third_party/fvp/CONNECT_PATCHES.md)。
+
+可执行的真实源边界红绿命令（宿主C++20与Dart，不包含MDK renderer）：
+
+```sh
+python3 tool/fvp_snapshot_regression.py --package-root /tmp/connect-fvp-official-0.39.1
+python3 tool/fvp_snapshot_regression.py
+```
+
+原版实际SIGSEGV（内部exit-11、脚本exit1）；修补后检查未知handle拒绝、空结果一次
+完成、48字节含stride缓冲按原行为投递，exit0。再经动态库进入真实Dart VM，以
+NativeApi.postCObject与ReceivePort确认空和填充Uint8List交付，不只测试C++假接收器。
+原始日志`/tmp/connect-fvp-fork-regression-{red,green}.log`。全仓严格Dart分析无问题，
+`pub get --enforce-lockfile`通过。只读review未发现额外可证问题。
+
+实际Android CMake compilation input为仓库vendor callbacks.cpp；本批APK中的
+libfvp.so SHA为`e4b997e9e27ae5116a0bacf219acb338c981fa29b7d2ead13b0dae8bfd653bae`，
+libmdk.so仍为`72e5f6370f98a3a09755004a0c6be1c01d688c79d7b1f0a5cce3a2e7d49c8ad3`。
+复用现有SDK归档并校验`70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`，
+本次构建通过环境FVP_DEPS_SHA256固定；并非已解决所有生产构建的SDK锁定。更换
+插件源码路径后的首次assembleDebug43.9秒，未重新下载SDK或构建JAR。
+
+仍为相同双AVD、1280/60/8Mbps、H264及AMediaCodec，实际576×1280：
+
+| 普通公开snapshot路径 | 静态 | 持续动态 |
+| --- | ---: | ---: |
+| 首像素ms | 1469 | 2901 |
+| 两次输入新像素ms（样本量2） | 188 / 381 | 1377 / 1319 |
+| 串行压力截图 | 无额外压力 | 200次，4447ms |
+| 暂停／恢复及新像素 | 10次完成 | 10次完成 |
+| 实际Flutter最终计数 | 12 | 12 |
+| 停止／texture分离／卸载 | 完成 | 完成 |
+| 1000／200／300严格总门槛 | exit1失败 | exit1失败 |
+
+结果及截图在`/tmp/connect-e2e/video-fvp-fork-{static,dynamic}/`，日志在
+`/tmp/connect-video-fvp-fork-{static,dynamic}.log`。动态命令误用了不存在的
+CONNECT_PERF_TRACE，真正开关为CONNECT_PERF_TRACE_FRAMES，实际回执
+nativeFrameTrace=false；这批证明普通公开snapshot压力链路，不声称trace／同PTS
+分段通过。不把无崩溃的一次短测试称历史MDK空std::function已修好，也不据此
+声称首帧或稳态延迟有收益。每组仅两次输入不是生产P95分布。
+
+同版本真实TCP EOF／正式页面自动恢复17秒exit0：3521ms出现新session，Flutter
+图案0→1；主动停止后无重建，代理accept2次／切断1次，夹具卸载／代理关闭／
+设置恢复均确认。证据`/tmp/connect-e2e/video-fvp-fork-recovery/`和
+`/tmp/connect-video-fvp-fork-recovery.log`。仍不包括真实配对无线切网、半开新场景或
+小时级长稳。NULL补丁只关闭依赖可证明的失败处理缺口，首帧／动态源年龄及
+原MDK renderer内部空回调继续开放。
+
+
+本批完整Bridge Dart123项通过，静态与动态Flutter图案12均已目视。恢复普通main
+时发生实验宿主故障：assembleDebug最终611.3秒完成，但安装时报emulator-5554
+不存在。内核09:17:25 OOM记录明确杀死目标QEMU6377，anon-rss9558884kB；
+主控emulator日志随后报告signal11。两AVD均退出，不能将其记为App原生崩溃或
+依据时间相近推断唯一因果。前述E2E在09:06前已结束且清理确认，原证据保留。
+已停止Gradle，仅冷启主控AVD恢复普通App，不为环境重启重新构建JAR；后续
+持续试验需监测宿主可用内存和AVD RSS，不在内存压力期间做性能归因。
+
+
+普通main最终以已构建APK复用安装1584ms、热重载成功、无Dart错误，设备首页已
+目视后detach。代码提交`7cbf010`。已按前批明确debug路径清单清理394项本批输出，
+移除1484.6MiB、空闲50.4GiB；release／有效Gradle／CMake／Rust／native hooks／
+SDK／Flutter哈希缓存及所有证据保留。目标AVD保持关闭，下一轮需重新启动并恢复
+25556转发，先监测宿主／AVD RSS；不能将新冷启AVD与旧长寿命AVD直接作优化归因。
+
+新增独立首帧研究候选见[重复编码器分配](../research/scrcpy-first-frame-performance.md#暂停补丁的正常首启重复分配候选2026-10-18)：
+现有暂停补丁使正常首启create／release／create，先在同一JAR量化，再决定是否
+调整暂停门及重建补丁JAR；尚无收益证据，不能解释关键帧后输出等待和稳态源年龄。
+本批两JAR均不变。

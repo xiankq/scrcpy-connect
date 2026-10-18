@@ -226,3 +226,21 @@ App275项通过，严格分析/clippy/fmt通过。
 Settings清理确认；普通main热重载125ms无Dart错误并目视。清理395项debug/本批测试
 可执行文件释放1670.1MiB，保留有效缓存/release/原始证据；目标无本批进程或JAR。
 完整目标active，严格延迟、历史MDK崩溃和上述null失败回调继续开放。
+
+
+2026-10-18公开snapshot失败补丁：已按官方pub归档摘要引入最小仓库内fvp0.39.1
+源码fork，五平台副本仅增加null结果→空Uint8List完成，保留原API／许可证及
+跨平台入口。源边界原版SIGSEGV先红、修补后null／正常stride／未知handle绿；
+另经真实Dart VM确认空和非空typed data投递。完整Bridge123项／严格分析通过。
+Android静态10pause及动态200串行截图＋10pause、新像素／实际图案12／停止
+分离／卸载完成；首帧1469/2901ms，输入两样本188/381和1377/1319ms，严格
+1000/200/300仍exit1。实际frame trace=false，不宣称同PTS分段。真实ADB EOF
+恢复17秒exit0，3521ms新session及图案0→1，主动停止不重建，所有夹具清理确认。
+历史MDK renderer空std::function、动态源年龄、原生SDK闭包及四端整包仍开放。
+随后宿主OOM杀目标AVD／主控模拟器signal11，普通App恢复单独处理；不混为
+本次依赖空结果故障。两JAR不变，详见[本批证据](../../../docs/implementation/video-performance.md#fvp失败截图结果与仓库内补丁2026-10-18)。
+
+普通main随后仅主控冷启、复用已构建APK恢复，热重载及Dart运行错误检查通过，
+首页已目视；394项debug输出已清理、缓存及release保留。新独立首帧候选为暂停
+补丁的初始重复编码器分配，先量化而不贸然改JAR；不解释关键帧后输出等待或
+稳态源年龄，见上述研究。代码提交7cbf010，本任务及完整目标继续开放。
