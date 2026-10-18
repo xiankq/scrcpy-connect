@@ -66,3 +66,12 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 再运行--no-pub drive；没有缓存时使用正常pub get。不要手改生成注册文件。
 默认高清80次、当前仍失败的1秒首帧门槛及原始证据见
 [视频性能记录](../../../docs/implementation/video-performance.md)。
+
+`analyze_codec_trace.py`离线分析目标Perfetto中的CCodec `onWorkDone(...@ts=...)`，
+与独立宿主raw-drain回执的原始PTS关联；不操作设备或下载工具。
+需要官方`trace_processor query`，输入示例和本次原件见
+[目标侧分段记录](../../../docs/implementation/video-performance.md#目标ccodec完成边界与源年龄2026-10-18)。
+分析器按唯一进程名筛选，拒绝trace data-loss、PTS歧义／接收缺项和时钟不相容，
+保留全部匹配及固定最后1/3统计。时钟snapshot是相继读取、并非严格误差括号；
+该结果不是纯编码耗时或主控实际呈现延迟，不能代替真实新像素E2E。
+校验：`python3 -m unittest discover -s tool/e2e/video_fixture -p test_analyze_codec_trace.py`。
