@@ -1,39 +1,19 @@
 --- a/server/src/main/java/com/genymobile/scrcpy/opengl/OpenGLRunner.java
 +++ b/server/src/main/java/com/genymobile/scrcpy/opengl/OpenGLRunner.java
-@@ -2,6 +2,7 @@
- 
- import com.genymobile.scrcpy.model.Size;
- import com.genymobile.scrcpy.util.Threads;
+@@ -4,0 +5 @@
 +import com.genymobile.scrcpy.video.BoundedInputFlow;
- 
- import android.graphics.SurfaceTexture;
- import android.opengl.EGL14;
-@@ -36,6 +37,11 @@
-     private int textureId;
- 
-     private boolean stopped;
+@@ -38,0 +40,5 @@
 +    private BoundedInputFlow inputFlow;
 +
 +    public void setInputFlow(BoundedInputFlow inputFlow) {
 +        this.inputFlow = inputFlow;
 +    }
- 
-     public OpenGLRunner(OpenGLFilter filter, float[] overrideTransformMatrix) {
-         this.filter = filter;
-@@ -167,21 +173,38 @@
- 
-         filter.init();
- 
+@@ -169,0 +176,4 @@
 +        if (inputFlow != null) {
 +            inputFlow.attach(handler, frame -> renderTexture(outputSize, frame.presentationTimeUs * 1000));
 +        }
 +
-         surfaceTexture.setOnFrameAvailableListener(surfaceTexture -> {
-             if (stopped) {
-                 // Make sure to never render after resources have been released
-                 return;
-             }
- 
+@@ -176 +186,11 @@
 -            render(outputSize);
 +            if (inputFlow == null) {
 +                render(outputSize);
@@ -46,26 +26,16 @@
 +                    inputFlow.fail(throwable); // Keep the handler alive for cleanup.
 +                }
 +            }
-         }, handler);
-     }
- 
-     private void render(Size outputSize) {
+@@ -180,0 +201,5 @@
 +        surfaceTexture.updateTexImage();
 +        renderTexture(outputSize, surfaceTexture.getTimestamp());
 +    }
 +
 +    private void renderTexture(Size outputSize, long presentationTimeNs) {
-         GLES20.glViewport(0, 0, outputSize.getWidth(), outputSize.getHeight());
-         GLUtils.checkGlError();
+@@ -183,2 +207,0 @@
 -
 -        surfaceTexture.updateTexImage();
- 
-         float[] matrix;
-         if (overrideTransformMatrix != null) {
-@@ -193,40 +216,63 @@
- 
-         filter.draw(textureId, matrix);
- 
+@@ -196,2 +219,6 @@
 -        EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, surfaceTexture.getTimestamp());
 -        EGL14.eglSwapBuffers(eglDisplay, eglSurface);
 +        if (!EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, presentationTimeNs)) {
@@ -74,13 +44,9 @@
 +        if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
 +            throw new IllegalStateException("eglSwapBuffers failed");
 +        }
-     }
- 
-     public void stopAndRelease() {
-         final Semaphore sem = new Semaphore(0);
- 
+@@ -202,0 +230 @@
 +        final Throwable[] failure = {null};
-         handler.post(() -> {
+@@ -204,19 +232,38 @@
 -            stopped = true;
 -            surfaceTexture.setOnFrameAvailableListener(null, handler);
 -
@@ -138,8 +104,7 @@
 +            } finally {
 +                sem.release(); // A GL exception must never strand the encoder's cleanup wait.
 +            }
-         });
- 
+@@ -225,5 +272,4 @@
 -        try {
 -            sem.acquire();
 -        } catch (InterruptedException e) {
@@ -149,9 +114,6 @@
 +        sem.acquireUninterruptibly();
 +        if (failure[0] != null) {
 +            throw new IllegalStateException("OpenGL cleanup failed", failure[0]);
-         }
-     }
- }
 --- /dev/null
 +++ b/server/src/main/java/com/genymobile/scrcpy/video/BoundedInputFlow.java
 @@ -0,0 +1,111 @@
@@ -500,18 +462,9 @@
 +}
 --- a/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java
 +++ b/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java
-@@ -49,6 +49,7 @@
- 
-     private AffineMatrix transform;
-     private OpenGLRunner glRunner;
+@@ -51,0 +52 @@
 +    private BoundedInputFlow inputFlow;
- 
-     public ScreenCapture(VirtualDisplayListener vdListener, Options options) {
-         this.vdListener = vdListener;
-@@ -103,6 +104,15 @@
- 
-         transform = filter.getInverseTransform();
-         videoSize = filter.getOutputSize().constrain(videoConstraints);
+@@ -105,0 +107,9 @@
 +    }
 +
 +    @Override
@@ -521,66 +474,36 @@
 +        }
 +        inputFlow = new BoundedInputFlow(repeatUs, maxFps);
 +        return inputFlow;
-     }
- 
-     @Override
-@@ -127,6 +137,12 @@
-         } else {
-             // If there is no filter, the display must be rendered at target video size directly
-             inputSize = videoSize;
+@@ -129,0 +140,6 @@
 +            if (inputFlow != null) {
 +                // Keep constrained videoSize at the source side of the identity bridge.
 +                glRunner = new OpenGLRunner(new AffineOpenGLFilter(AffineMatrix.IDENTITY));
 +                glRunner.setInputFlow(inputFlow);
 +                surface = glRunner.start(inputSize, videoSize, surface);
 +            }
-         }
- 
-         try {
-@@ -176,6 +192,7 @@
- 
-     @Override
-     public void stop() {
+@@ -178,0 +195 @@
 +        inputFlow = null;
-         // Drop only the mirror; the physical source display stays alive.
-         if (display != null) {
-             SurfaceControl.destroyDisplay(display);
 --- a/server/src/main/java/com/genymobile/scrcpy/video/SurfaceCapture.java
 +++ b/server/src/main/java/com/genymobile/scrcpy/video/SurfaceCapture.java
-@@ -52,6 +52,11 @@
-      */
-     public abstract void start(Surface surface) throws IOException;
- 
+@@ -54,0 +55,5 @@
 +    /** Default seam for capture adapters which do not manage encoder input. */
 +    public EncoderInputFlow createEncoderInputFlow(long repeatUs, float maxFps) throws IOException {
 +        return EncoderInputFlow.NONE;
 +    }
 +
-     /**
-      * Stop the capture.
-      */
 --- a/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java
 +++ b/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java
-@@ -57,6 +57,9 @@
-     private final CaptureControl captureControl = new CaptureControl();
- 
-     private VideoConstraints videoConstraints;
+@@ -59,0 +60,3 @@
 +    private EncoderInputFlow inputFlow = EncoderInputFlow.NONE;
 +    private long boundedRepeatUs = REPEAT_FRAME_DELAY_US;
 +    private float boundedMaxFps;
- 
-     public SurfaceEncoder(SurfaceCapture capture, Streamer streamer, Options options) {
-         this.capture = capture;
-@@ -74,7 +77,22 @@
-     private void streamCapture() throws IOException, ConfigurationException {
-         Codec codec = streamer.getCodec();
-         MediaCodec mediaCodec = createMediaCodec(codec, encoderName);
+@@ -76,0 +80,5 @@
 +        if (Build.VERSION.SDK_INT != 36 || !(capture instanceof ScreenCapture) || !"video/avc".equals(codec.getMimeType())
 +                || !"c2.android.avc.encoder".equals(mediaCodec.getName())) {
 +            mediaCodec.release();
 +            throw new IOException("bounded-input supports only API36 main-display H264 c2.android.avc.encoder");
 +        }
-         MediaFormat format = createFormat(codec.getMimeType(), videoBitRate, maxFps, codecOptions);
+@@ -77,0 +86,10 @@
 +        // Capture cadence after codecOptions, then remove native GBS input generators/droppers.
 +        // MediaFormat.getNumber handles both int and long codec-option representations on API36.
 +        boundedRepeatUs = format.getNumber(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER).longValue();
@@ -591,39 +514,15 @@
 +        }
 +        format.removeKey(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER);
 +        format.removeKey(KEY_MAX_FPS_TO_ENCODER);
- 
-         MediaCodecInfo.VideoCapabilities caps;
-         int alignment;
-@@ -113,6 +131,9 @@
-                 }
-                 if (mediaCodec == null) {
-                     mediaCodec = createMediaCodec(codec, encoderName);
+@@ -115,0 +134,3 @@
 +                    if (!"c2.android.avc.encoder".equals(mediaCodec.getName())) {
 +                        throw new IOException("bounded-input encoder changed between generations");
 +                    }
-                 }
-                 int resetReasons = captureControl.consumeReset();
-                 if ((resetReasons & CaptureControl.RESET_REASON_TERMINATED) != 0) {
-@@ -134,6 +155,7 @@
-                 boolean mediaCodecStarted = false;
-                 boolean captureStarted = false;
-                 try {
+@@ -136,0 +158 @@
 +                    inputFlow = capture.createEncoderInputFlow(boundedRepeatUs, boundedMaxFps);
-                     mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-                     surface = mediaCodec.createInputSurface();
- 
-@@ -143,6 +165,7 @@
- 
-                     mediaCodec.start();
-                     mediaCodecStarted = true;
+@@ -145,0 +168 @@
 +                    inputFlow.activate();
- 
-                     // Set the MediaCodec instance to "interrupt" (by signaling an EOS) on reset
-                     captureControl.setRunningMediaCodec(mediaCodec);
-@@ -169,30 +192,36 @@
-                         throw e;
-                     }
-                     Ln.e("Capture/encoding error: " + e.getClass().getName() + ": " + e.getMessage());
+@@ -172,6 +195,2 @@
 -                    if (!prepareRetry(caps, size)) {
 -                        throw e;
 -                    }
@@ -632,11 +531,11 @@
 -                    alive = true;
 +                    // An isolated candidate must not hide a stall via retry or smaller video.
 +                    throw e;
-                 } finally {
+@@ -178,0 +198,3 @@
 +                    // Revoke this generation before detach/codec release and before pause ACK.
 +                    inputFlow.close();
 +                    inputFlow = EncoderInputFlow.NONE;
-                     captureControl.setRunningMediaCodec(null);
+@@ -180,4 +202,5 @@
 -                    if (captureStarted) {
 -                        capture.stop();
 -                    }
@@ -646,7 +545,7 @@
 +                            capture.stop();
 +                        }
 +                    } finally {
-                         try {
+@@ -185,3 +208,16 @@
 -                            mediaCodec.stop();
 -                        } catch (IllegalStateException e) {
 -                            // ignore (just in case)
@@ -666,7 +565,7 @@
 +                                    surface.release();
 +                                }
 +                            }
-                         }
+@@ -189,7 +224,0 @@
 -                    }
 -                    // A paused session must relinquish its encoder allocation.
 -                    // stop()/reset() alone are not the resource-release contract.
@@ -674,21 +573,15 @@
 -                    mediaCodec = null;
 -                    if (surface != null) {
 -                        surface.release();
-                     }
-                 }
-             } while (alive);
-@@ -273,28 +302,34 @@
- 
-         boolean eos;
-         do {
+@@ -276,2 +305,2 @@
 -            // Cooperative pause must not depend on the codec eventually emitting
 -            // EOS. Finish this complete output packet, then release at the gate.
 +            inputFlow.checkFailure();
 +            // Ignore stale BufferInfo values on INFO_TRY_AGAIN_LATER/format changes.
-             int outputBufferId = codec.dequeueOutputBuffer(bufferInfo, CAPTURE_CONTROL_POLL_US);
+@@ -278,0 +308,2 @@
 +            eos = outputBufferId >= 0 && (bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
 +            boolean delivered = false;
-             try {
+@@ -280,12 +311,11 @@
 -                eos = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
 -                // On EOS, there might be data or not, depending on bufferInfo.size
 -                if (outputBufferId >= 0 && bufferInfo.size > 0) {
@@ -712,10 +605,7 @@
 +                            consecutiveErrors = 0;
 +                        }
 +                    }
-                 }
-             } finally {
-                 if (outputBufferId >= 0) {
-                     codec.releaseOutputBuffer(outputBufferId, false);
+@@ -296,2 +326,7 @@
 -                }
 -            }
 +                    // No credit if writePacket or releaseOutputBuffer failed.
@@ -725,6 +615,3 @@
 +                }
 +            }
 +            inputFlow.checkFailure();
-         } while (!eos && !captureControl.hasPendingCaptureRequests());
-     }
- 
