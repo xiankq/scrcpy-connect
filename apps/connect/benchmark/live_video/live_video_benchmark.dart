@@ -53,6 +53,9 @@ class LiveVideoBenchmark {
   );
   static const traceFrames = bool.fromEnvironment('CONNECT_PERF_TRACE_FRAMES');
   static const traceClock = bool.fromEnvironment('CONNECT_PERF_TRACE_CLOCK');
+  static const tracePackets = bool.fromEnvironment(
+    'CONNECT_PERF_TRACE_PACKETS',
+  );
   static const decoderPolicy = String.fromEnvironment(
     'CONNECT_PERF_DECODER',
     defaultValue: 'native',
@@ -127,6 +130,8 @@ class LiveVideoBenchmark {
         'setup' => await _setup(),
         'start' => await _start(),
         'input' => await _input(),
+        'archive.seal' => await _archiveSeal(),
+        'archive.read' => await _archiveRead(command),
         'pause' => await _pause(),
         'surface' => await _surface(command),
         'stop' => await _stop(),
@@ -162,6 +167,7 @@ class LiveVideoBenchmark {
             if (traceFrames &&
                 (command == 'session.start' || command == 'media.open'))
               'traceFrames': true,
+            if (tracePackets && command == 'media.open') 'tracePackets': true,
           },
         }),
       ),
@@ -173,6 +179,10 @@ class LiveVideoBenchmark {
   Future<VideoJson> _setup() async {
     _require(!_initialized && !_disposed, 'Setup may run once.');
     _require(!traceClock || traceFrames, 'Clock bounds require frame tracing.');
+    _require(
+      !tracePackets || (traceClock && traceFrames && roundCount == 1),
+      'Packet archives require one clock-traced round.',
+    );
     _require(
       roundCount > 0 &&
           roundCount <= 20 &&
@@ -236,6 +246,7 @@ class LiveVideoBenchmark {
       'transitions': transitions,
       'traceFrames': traceFrames,
       if (traceClock) 'clockBracketsRequested': true,
+      if (tracePackets) 'packetArchiveRequested': true,
       'decoderPolicy': decoderPolicy,
       'recoveredPriorDevices': existing.length,
       'quality': {'maxSize': maxSize, 'maxFps': maxFps, 'bitRate': bitRate},
@@ -458,6 +469,15 @@ class LiveVideoBenchmark {
           'Expected one transport receipt for source PTS.',
         );
         sample['transportFrame'] = raw.single;
+        if (tracePackets) {
+          // Save the bounded transport window after this timed observation.
+          // The archive's earliest new-counter frame may precede the snapshot.
+          final sessions = await _request('session.list');
+          final capture = (sessions['sessions'] as List)
+              .cast<VideoJson>()
+              .singleWhere((s) => s['sessionId'] == _session);
+          sample['transportWindow'] = capture['transportTrace'];
+        }
       }
     }
     inputs.add(sample);
@@ -490,6 +510,26 @@ class LiveVideoBenchmark {
       );
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+  }
+
+  Future<VideoJson> _archiveSeal() async {
+    final active = _round();
+    _require(
+      tracePackets &&
+          (active['inputs'] as List).length == transitions &&
+          !active.containsKey('pause'),
+      'Seal after measured inputs and before pause.',
+    );
+    return _request('media.trace.seal', {'relayId': _ready!['relayId']});
+  }
+
+  Future<VideoJson> _archiveRead(VideoJson command) async {
+    _require(tracePackets, 'Packet archive was not requested.');
+    return _request('media.trace.read', {
+      'relayId': _ready!['relayId'],
+      'offset': command['offset'],
+      'limit': 65536,
+    });
   }
 
   Future<VideoJson> _pause() async {
@@ -687,6 +727,7 @@ class LiveVideoBenchmark {
       'videoPerformanceComplete': startup && p50 <= maxP50Ms && p95 <= maxP95Ms,
       'decoderPolicy': decoderPolicy,
       if (traceClock) 'clockBracketsRequested': true,
+      if (tracePackets) 'packetArchiveRequested': true,
       'binding': WidgetsBinding.instance.runtimeType.toString(),
       'framePolicy': 'normal-driver-binding',
       'startupBudgetMet': startup,

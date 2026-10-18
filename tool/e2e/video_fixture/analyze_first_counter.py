@@ -92,12 +92,20 @@ def main():
         raise ValueError("capture failed")
     media = [p for p in capture["packets"] if not p["config"]]
     origin = media[0]["sourcePtsUs"]
-    decoded = subprocess.run([args.ffmpeg, "-nostdin", "-hide_banner", "-xerror", "-threads", "1",
-                              "-i", str(directory / "capture.mkv"), "-vf", "scale=64:64,format=rgba,showinfo",
+    frames, log = decode_frames(directory / "capture.mkv", args.ffmpeg, origin)
+    (directory / "decode.log").write_text(log)
+    report = correlate(capture, json.loads((directory / "target-timeline.json").read_text()), run, frames)
+    (directory / "decoded-frames.json").write_text(json.dumps(frames, indent=2))
+    (directory / "first-counter.json").write_text(json.dumps(report, indent=2))
+    print(json.dumps(report, indent=2))
+
+
+def decode_frames(path, ffmpeg, origin):
+    decoded = subprocess.run([ffmpeg, "-nostdin", "-hide_banner", "-xerror", "-threads", "1",
+                              "-i", str(path), "-vf", "scale=64:64,format=rgba,showinfo",
                               "-fps_mode", "passthrough", "-f", "rawvideo", "pipe:1"],
                              capture_output=True, timeout=90, check=True)
     log = decoded.stderr.decode()
-    (directory / "decode.log").write_text(log)
     if "config in time_base: 1/1000000" not in log:
         raise ValueError("unexpected decoded timestamp timebase")
     observed = re.findall(r"\bn:\s*(\d+)\s+pts:\s*(-?\d+)\s+pts_time:", log)
@@ -116,10 +124,7 @@ def main():
             if red > 150:
                 counter |= 1 << bit
         frames.append({"sourcePtsUs": origin + int(pts), "counter": counter})
-    report = correlate(capture, json.loads((directory / "target-timeline.json").read_text()), run, frames)
-    (directory / "decoded-frames.json").write_text(json.dumps(frames, indent=2))
-    (directory / "first-counter.json").write_text(json.dumps(report, indent=2))
-    print(json.dumps(report, indent=2))
+    return frames, log
 
 
 if __name__ == "__main__":

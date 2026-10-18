@@ -304,7 +304,14 @@ Future<void> main() async {
       if (decoded is! Map<String, dynamic>) {
         throw StateError('App $command response is not a JSON object.');
       }
-      entry['response'] = decoded;
+      if (command == 'archive.read' && decoded['data'] is Map) {
+        entry['response'] = {
+          'ok': decoded['ok'],
+          'data': {...decoded['data'] as Map}..remove('bytesBase64'),
+        };
+      } else {
+        entry['response'] = decoded;
+      }
       if (decoded['ok'] != true || decoded['data'] is! Map<String, dynamic>) {
         throw StateError('App rejected $command; see its saved response.');
       }
@@ -526,6 +533,58 @@ Future<void> main() async {
         for (var transition = 1; transition <= transitions; transition++) {
           final input = await request('input');
           await surface('round-$round-input-$transition', input);
+        }
+        if (setup['packetArchiveRequested'] == true) {
+          await phase('exporting complete packet archive');
+          final metadata = await request('archive.seal');
+          final length = metadata['bytes'];
+          if (metadata['complete'] != true ||
+              length is! int ||
+              length < 1 ||
+              length > 32 * 1024 * 1024 ||
+              metadata['frames'] is! List) {
+            throw StateError('Incomplete packet archive metadata.');
+          }
+          final directory = await output.createTemp('round-$round-archive-');
+          final file = File('${directory.path}/capture.mkv');
+          final sink = await file.open(mode: FileMode.writeOnly);
+          try {
+            var offset = 0;
+            while (offset < length) {
+              final page = await request(
+                'archive.read',
+                arguments: {'offset': offset},
+              );
+              final bytes = base64Decode(page['bytesBase64'] as String);
+              if (page['offset'] != offset ||
+                  bytes.isEmpty ||
+                  bytes.length > 65536 ||
+                  page['bytes'] != bytes.length ||
+                  page['nextOffset'] != offset + bytes.length ||
+                  offset + bytes.length > length ||
+                  page['eof'] != (offset + bytes.length == length)) {
+                throw StateError('Invalid or incomplete packet archive page.');
+              }
+              await sink.writeFrom(bytes);
+              offset += bytes.length;
+            }
+            await sink.flush();
+          } finally {
+            await sink.close();
+          }
+          await File('${directory.path}/archive.json')
+              .writeAsString(jsonEncode(metadata), flush: true);
+          final archives =
+              report.putIfAbsent('packetArchives', () => <Object>[]) as List;
+          archives.add({
+            'round': round - 1,
+            'directory': directory.uri.pathSegments
+                .where((s) => s.isNotEmpty)
+                .last,
+            'bytes': length,
+            'frames': (metadata['frames'] as List).length,
+            'complete': true,
+          });
         }
         final pause = await request('pause');
         if (pause['paused'] != true && pause['pauseConfirmed'] != true) {
