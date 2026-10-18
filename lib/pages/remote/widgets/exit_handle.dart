@@ -112,8 +112,10 @@ class _ExitHandleState extends State<ExitHandle>
           Positioned(
             left: collapsed && right && !dragging ? collapsedRight : dx,
             top: dy,
-            width: collapsed && !dragging ? 44 : 52,
-            height: 52,
+            width: collapsed && !dragging
+                ? DesignTokens.componentRemoteExitHitWidth
+                : DesignTokens.componentRemoteExitSize,
+            height: DesignTokens.componentRemoteExitHitHeight,
             child: Semantics(
               container: true,
               label: collapsed
@@ -155,15 +157,18 @@ class _ExitHandleState extends State<ExitHandle>
                       ? (right ? Alignment.centerRight : Alignment.centerLeft)
                       : Alignment.center,
                   child: Glass(
-                    radius: 999,
+                    variant: GlassVariant.clear,
+                    radius: DesignTokens.roundedFull,
                     child: SizedBox(
-                      width: collapsed && !dragging ? 12 : 52,
-                      height: 52,
+                      width: collapsed && !dragging
+                          ? DesignTokens.componentRemoteExitPeekWidth
+                          : DesignTokens.componentRemoteExitSize,
+                      height: DesignTokens.componentRemoteExitHitHeight,
                       child: collapsed && !dragging
                           ? Center(
                               child: Container(
                                 width: 3,
-                                height: 20,
+                                height: DesignTokens.spacingMd,
                                 decoration: BoxDecoration(
                                   color: Theme.of(context)
                                       .textTheme
@@ -173,7 +178,10 @@ class _ExitHandleState extends State<ExitHandle>
                                 ),
                               ),
                             )
-                          : const Icon(LucideIcons.x, size: 23),
+                          : const Icon(
+                              LucideIcons.x,
+                              size: DesignTokens.componentIconFeatureSize,
+                            ),
                     ),
                   ),
                 ),

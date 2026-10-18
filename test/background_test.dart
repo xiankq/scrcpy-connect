@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
+
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/background/background_page.dart';
@@ -32,7 +34,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(commands.where((c) => c.$1 == 'background.request'), isEmpty);
-      await tester.tap(find.widgetWithText(SwitchListTile, '允许后台保持'));
+      await tester.tap(find.widgetWithText(ConnectSwitchRow, '允许后台保持'));
       await tester.pumpAndSettle();
       final requests = commands
           .where((c) => c.$1 == 'background.request')
@@ -47,7 +49,7 @@ void main() {
         lessThan(commands.indexWhere((c) => c.$1 == 'background.request')),
       );
       expect(commands.where((c) => c.$1 == 'background.status'), hasLength(2));
-      await tester.tap(find.widgetWithText(SwitchListTile, '允许后台保持'));
+      await tester.tap(find.widgetWithText(ConnectSwitchRow, '允许后台保持'));
       await tester.pumpAndSettle();
       expect(commands.lastWhere((c) => c.$1 == 'background.request').$2, {
         'enabled': false,

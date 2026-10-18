@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -10,6 +11,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:design_system/design_system.dart';
 
 class QrPairPage extends HookWidget {
   const QrPairPage({super.key, required this.controller});
@@ -130,13 +132,13 @@ class QrPairPage extends HookWidget {
     final pairedDevice = paired?['device'];
     return PageFrame(
       title: '扫码配对',
-      child: ListView(
-        padding: const EdgeInsets.all(24),
+      child: GroupedListView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
           Text('用被控手机扫描', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 12),
+          const SizedBox(height: DesignTokens.spacingSm),
           const Text('在被控手机的无线调试设置中，选择“使用二维码配对设备”。二维码有效期为两分钟。'),
-          const SizedBox(height: 32),
+          const SizedBox(height: DesignTokens.spacingXl),
           if (busy.value) const Center(child: CircularProgressIndicator()),
           if (!busy.value &&
               attempt.value != null &&
@@ -144,10 +146,10 @@ class QrPairPage extends HookWidget {
             Center(
               child: Container(
                 color: Colors.white,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
                 child: QrImageView(
                   data: value(data.value!, 'payload'),
-                  size: 176,
+                  size: DesignTokens.componentPairingQrSize,
                 ),
               ),
             )
@@ -157,8 +159,8 @@ class QrPairPage extends HookWidget {
             Center(
               child: Image.memory(
                 base64Decode(value(data.value!, 'imageBase64')),
-                width: 176,
-                height: 176,
+                width: DesignTokens.componentPairingQrSize,
+                height: DesignTokens.componentPairingQrSize,
               ),
             )
           else if (!busy.value && message.value == null)

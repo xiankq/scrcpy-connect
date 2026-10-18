@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -41,13 +42,13 @@ class BackgroundPage extends HookConsumerWidget {
 
     return PageFrame(
       title: '后台与连接',
-      child: ListView(
-        padding: const EdgeInsets.all(24),
+      child: GroupedListView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
-          SwitchListTile.adaptive(
+          ConnectSwitchRow(
             contentPadding: EdgeInsets.zero,
             title: const Text('允许后台保持'),
-            subtitle: const Text('在系统允许时，维持已经开启的连接与活动'),
+
             value: appSettings['backgroundKeepAlive'] == true,
             onChanged: changing.value
                 ? null
@@ -82,7 +83,7 @@ class BackgroundPage extends HookConsumerWidget {
                     value(data, 'title', '系统后台条件'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: DesignTokens.spacingSm),
                   Text(value(data, 'reason', '后台运行取决于系统授权、电量策略与活动类型。')),
                   if (data['canRequest'] == true)
                     TextButton(
@@ -102,19 +103,19 @@ class BackgroundPage extends HookConsumerWidget {
             ),
           ),
           const SectionTitle('系统提醒'),
-          SwitchListTile.adaptive(
+          ConnectSwitchRow(
             contentPadding: EdgeInsets.zero,
             title: const Text('远端通知提醒'),
-            subtitle: const Text('离开邻接后提醒有新通知，正文在应用中查看'),
+
             value: appSettings['notificationAlerts'] != false,
             onChanged: changing.value
                 ? null
                 : (value) => updateAlert('notificationAlerts', value),
           ),
-          SwitchListTile.adaptive(
+          ConnectSwitchRow(
             contentPadding: EdgeInsets.zero,
             title: const Text('远端来电提醒'),
-            subtitle: const Text('仅提醒并进入通话页，不自动接听或开启麦克风'),
+
             value: appSettings['callAlerts'] != false,
             onChanged: changing.value
                 ? null
@@ -128,7 +129,7 @@ class BackgroundPage extends HookConsumerWidget {
           if (alertStatus.callChannelEnabled == false)
             const StateNote('远端来电提醒渠道已关闭，请在系统设置中开启。'),
           Wrap(
-            spacing: 12,
+            spacing: DesignTokens.spacingSm,
             children: [
               if (alertStatus.canRequest)
                 OutlinedButton(
@@ -156,28 +157,10 @@ class BackgroundPage extends HookConsumerWidget {
             ],
           ),
           const SectionTitle('离开前台后'),
-          const ActionRow(
-            icon: LucideIcons.link,
-            title: '连接与通知',
-            subtitle: '仅按已启用的活动和实际系统资格保持',
-          ),
-          const ActionRow(
-            icon: LucideIcons.arrowUpDown,
-            title: '文件传输',
-            subtitle: '显示实际进度；中断后检查内容和恢复资格',
-            color: ConnectTokens.amber,
-          ),
-          const ActionRow(
-            icon: LucideIcons.pause,
-            title: '不可见画面',
-            subtitle: '暂停视频，回到前台后等待新画面',
-          ),
-          const ActionRow(
-            icon: LucideIcons.audioLines,
-            title: '声音与通话',
-            subtitle: '后台声音需主动开启；通话按实际链路保持',
-            color: ConnectTokens.mint,
-          ),
+          const ActionRow(icon: LucideIcons.link, title: '连接与通知'),
+          const ActionRow(icon: LucideIcons.arrowUpDown, title: '文件传输'),
+          const ActionRow(icon: LucideIcons.pause, title: '不可见画面'),
+          const ActionRow(icon: LucideIcons.audioLines, title: '声音与通话'),
           const StateNote(
             '系统停止、强行结束或回收应用后，不保证活动仍在进行。再次打开会核验状态；用户主动停止的活动保持停止，未知结果的回复、删除和拨号不会自动重复。',
           ),

@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -33,7 +34,6 @@ class SessionsPage extends HookWidget {
     final event = useStream(stream);
     return PageFrame(
       title: '控制会话',
-      subtitle: deviceName(device),
       child: CommandView(
         controller: controller,
         command: 'session.list',
@@ -60,8 +60,8 @@ class SessionsPage extends HookWidget {
               ),
             );
           }
-          return ListView(
-            padding: const EdgeInsets.all(24),
+          return GroupedListView(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
             children: [
               const StateNote('返回工作台会保留窗口并暂停不可见画面。关闭窗口会把应用任务交回手机，不会强制停止应用。'),
               for (final session in sessions)
@@ -74,7 +74,11 @@ class SessionsPage extends HookWidget {
                         ),
                         icon: LucideIcons.appWindow,
                         title: value(session, 'name', '手机屏幕'),
-                        subtitle: statusText(value(session, 'status')),
+                        trailing: Text(
+                          sessionStatusText(value(session, 'status')),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+
                         onTap: () async {
                           await openRemoteRoute(
                             context,

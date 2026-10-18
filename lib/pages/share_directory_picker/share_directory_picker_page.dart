@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
@@ -5,6 +6,7 @@ import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:design_system/design_system.dart';
 
 class ShareDirectoryPickerPage extends HookWidget {
   const ShareDirectoryPickerPage({
@@ -23,11 +25,10 @@ class ShareDirectoryPickerPage extends HookWidget {
     );
     return PageFrame(
       title: '选择目标目录',
-      subtitle: deviceName(device),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
             child: Row(
               children: [
                 IconButton(
@@ -65,23 +66,13 @@ class ShareDirectoryPickerPage extends HookWidget {
                 return Column(
                   children: [
                     Expanded(
-                      child: ListView(
+                      child: GroupedListView(
                         children: [
                           for (final directory in directories)
                             ListTile(
                               leading: const Icon(LucideIcons.folder),
                               title: Text(value(directory, 'name')),
-                              subtitle:
-                                  directory['path'] is! String ||
-                                      directory['canOpen'] == false
-                                  ? Text(
-                                      value(
-                                        directory,
-                                        'reason',
-                                        '文件名无法解析为有效路径。',
-                                      ),
-                                    )
-                                  : null,
+
                               trailing: const Icon(LucideIcons.chevronRight),
                               onTap:
                                   directory['path'] is! String ||
@@ -91,7 +82,7 @@ class ShareDirectoryPickerPage extends HookWidget {
                             ),
                           if (directories.isEmpty)
                             const Padding(
-                              padding: EdgeInsets.all(24),
+                              padding: EdgeInsets.all(DesignTokens.spacingMd),
                               child: Text('此目录没有子文件夹'),
                             ),
                         ],
@@ -100,7 +91,7 @@ class ShareDirectoryPickerPage extends HookWidget {
                     SafeArea(
                       top: false,
                       child: Padding(
-                        padding: const EdgeInsets.all(24),
+                        padding: const EdgeInsets.all(DesignTokens.spacingMd),
                         child: SizedBox(
                           width: double.infinity,
                           child: FilledButton(

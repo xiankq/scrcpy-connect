@@ -2,10 +2,13 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:scrcpy_connect/pages/remote/remote_page.dart';
+import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
@@ -45,15 +48,17 @@ void main() {
       ).read(appControllerProvider.notifier);
       active = controller;
       final originalBackground =
-          controller.snapshot().settings['backgroundAudio'] == true;
+          controller.snapshot().settings['backgroundKeepAlive'] == true;
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)
               .timeout(const Duration(seconds: 35));
       String? deviceId;
       String? sourceId;
+      NavigatorState? remoteNavigator;
+      final ownedSessions = <String>{};
       try {
-        await controller.updateSetting('backgroundAudio', false);
+        await controller.updateSetting('backgroundKeepAlive', false);
         final added = await request('devices.add', {
           'address': address,
           'port': int.parse(port),
@@ -62,7 +67,42 @@ void main() {
         deviceId = responseDeviceId(added);
         expect(deviceId, isNotEmpty);
         await request('devices.connect', {'deviceId': deviceId});
-        final started = await request('audio.start', {'deviceId': deviceId});
+        await controller.refreshDevices();
+        final baselineSessions = objects(
+          (await request('session.list'))['sessions'],
+        ).map((s) => value(s, 'sessionId')).toSet();
+        unawaited(
+          RemoteRoute(deviceId: deviceId!)
+              .push<void>(tester.element(find.byType(Scaffold).first)),
+        );
+        await waitFor(
+          tester,
+          () => find.byType(RemotePage).evaluate().isNotEmpty,
+          reason: 'The remote page owns automatic device sound.',
+        );
+        remoteNavigator = Navigator.of(
+          tester.element(find.byType(RemotePage)),
+          rootNavigator: true,
+        );
+        final deadline = DateTime.now().add(const Duration(seconds: 40));
+        Json? started;
+        while (DateTime.now().isBefore(deadline)) {
+          started = objects((await request('audio.sources'))['sources'])
+              .where(
+                (s) => s['deviceId'] == deviceId && s['status'] == 'playing',
+              )
+              .firstOrNull;
+          if (started != null) break;
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        expect(started, isNotNull);
+        started = started!;
+        ownedSessions.addAll(
+          objects((await request('session.list'))['sessions'])
+              .map((s) => value(s, 'sessionId'))
+              .toSet()
+              .difference(baselineSessions),
+        );
         sourceId = value(started, 'sourceId');
         activeSource = sourceId;
         expect(sourceId, isNotEmpty);
@@ -160,7 +200,7 @@ void main() {
           native = await request('audio.status', {'sourceId': sourceId});
           expect(native['playState'], 'playing');
           expect(native['backgroundPaused'], isFalse);
-          await controller.updateSetting('backgroundAudio', true);
+          await controller.updateSetting('backgroundKeepAlive', true);
           stage = 'background-playing';
           await waitFor(
             tester,
@@ -170,7 +210,7 @@ void main() {
           );
           native = await request('audio.status', {'sourceId': sourceId});
           expect(native['playState'], 'playing');
-          await controller.updateSetting('backgroundAudio', false);
+          await controller.updateSetting('backgroundKeepAlive', false);
         }
         stage = 'complete';
         await request('audio.stop', {
@@ -188,6 +228,13 @@ void main() {
         expect(tester.takeException(), isNull);
       } finally {
         activeSource = null;
+        if (remoteNavigator?.canPop() == true) {
+          remoteNavigator!.pop();
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        for (final sessionId in ownedSessions) {
+          await request('session.stop', {'sessionId': sessionId});
+        }
         if (deviceId != null && deviceId.isNotEmpty) {
           await controller
               .request('audio.stop', {
@@ -197,7 +244,10 @@ void main() {
               })
               .timeout(const Duration(seconds: 10));
         }
-        await controller.updateSetting('backgroundAudio', originalBackground);
+        await controller.updateSetting(
+          'backgroundKeepAlive',
+          originalBackground,
+        );
       }
       expect(tester.takeException(), isNull);
       binding.reportData ??= {};

@@ -54,7 +54,7 @@ class MediaThumbnail extends HookConsumerWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(DesignTokens.spacingXs),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -70,8 +70,9 @@ class MediaThumbnail extends HookConsumerWidget {
                         imageFailure ?? '缩略图未能显示：${result.error ?? '未收到可用缩略图'}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(fontSize: 11),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: DesignTokens.typographyMicroFontSize,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -80,7 +81,7 @@ class MediaThumbnail extends HookConsumerWidget {
                       onPressed: () => retry.value++,
                       icon: const Icon(
                         LucideIcons.refreshCw,
-                        size: 18,
+                        size: DesignTokens.componentIconActionSize,
                         color: ConnectTokens.coral,
                       ),
                       padding: EdgeInsets.zero,

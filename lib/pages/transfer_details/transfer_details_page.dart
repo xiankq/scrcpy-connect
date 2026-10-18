@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/transfer_details/widgets/conflict_panel.dart';
@@ -59,21 +60,21 @@ class TransferDetailsPage extends HookConsumerWidget {
                     ? value(current, 'id', value(current, 'transferId'))
                     : null,
               );
-              return ListView(
-                padding: const EdgeInsets.all(24),
+              return GroupedListView(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
                 children: [
                   Text(
                     value(current, 'name', '文件传输'),
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: DesignTokens.spacingSm),
                   Text(statusText(status)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: DesignTokens.spacingXs),
                   Text(
                     '${value(current, 'sourceLabel', value(current, 'source'))}\n→ ${value(current, 'destinationLabel', value(current, 'destination'))}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: DesignTokens.spacingMd),
                   if (current['kind'] == 'directory' && status == 'finalizing')
                     const StateNote('目录结构已建立，仍在核验所选内容。请等待批次实际结果。'),
                   if (value(current, 'exportReason').isNotEmpty)
@@ -86,8 +87,11 @@ class TransferDetailsPage extends HookConsumerWidget {
                           ? LucideIcons.circleCheck
                           : LucideIcons.circleAlert,
                       title: value(item, 'name'),
-                      subtitle:
-                          '${statusText(value(item, 'status'))}${value(item, 'error').isEmpty ? '' : ' · ${value(item, 'error')}'}',
+                      trailing: Text(
+                        statusText(value(item, 'status')),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+
                       color: item['status'] == 'completed'
                           ? ConnectTokens.mint
                           : ConnectTokens.amber,
@@ -183,10 +187,13 @@ class TransferDetailsPage extends HookConsumerWidget {
                           'files.open',
                           {'localPath': value(current, 'localPath')},
                         ),
-                        icon: const Icon(LucideIcons.externalLink, size: 18),
+                        icon: const Icon(
+                          LucideIcons.externalLink,
+                          size: DesignTokens.componentIconActionSize,
+                        ),
                         label: const Text('用本机应用打开'),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: DesignTokens.spacingSm),
                       OutlinedButton.icon(
                         onPressed: () async {
                           try {
@@ -207,7 +214,10 @@ class TransferDetailsPage extends HookConsumerWidget {
                             }
                           }
                         },
-                        icon: const Icon(LucideIcons.share2, size: 18),
+                        icon: const Icon(
+                          LucideIcons.share2,
+                          size: DesignTokens.componentIconActionSize,
+                        ),
                         label: const Text('系统分享'),
                       ),
                     ],
@@ -221,7 +231,7 @@ class TransferDetailsPage extends HookConsumerWidget {
                       ),
                       icon: LucideIcons.circleAlert,
                     ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: DesignTokens.spacingMd),
                   TextButton(onPressed: refresh, child: const Text('重新检查结果')),
                 ],
               );

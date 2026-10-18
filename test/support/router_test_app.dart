@@ -74,7 +74,11 @@ class _RouterTestAppState extends State<RouterTestApp> {
   @override
   Widget build(BuildContext context) => TestProviderScope(
     controller: widget.controller,
-    child: MaterialApp.router(routerConfig: router, theme: widget.theme),
+    child: MaterialApp.router(
+      routerConfig: router,
+      theme: widget.theme,
+      debugShowCheckedModeBanner: false,
+    ),
   );
 }
 

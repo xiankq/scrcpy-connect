@@ -47,8 +47,6 @@ List<RouteBase> get $appRoutes => [
   $incomingShareRoute,
   $shareDirectoryRoute,
   $appearanceRoute,
-  $clipboardRoute,
-  $audioRoute,
   $backgroundRoute,
   $activitiesRoute,
   $dataPreferencesRoute,
@@ -1496,63 +1494,6 @@ mixin $AppearanceRoute on GoRouteData {
 
   @override
   String get location => GoRouteData.$location('/settings/appearance');
-
-  @override
-  void go(BuildContext context) => context.go(location);
-
-  @override
-  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
-
-  @override
-  void pushReplacement(BuildContext context) =>
-      context.pushReplacement(location);
-
-  @override
-  void replace(BuildContext context) => context.replace(location);
-}
-
-RouteBase get $clipboardRoute => GoRouteData.$route(
-  path: '/settings/clipboard',
-  name: 'clipboard',
-  hasOverriddenOnExit: false,
-  parentNavigatorKey: ClipboardRoute.$parentNavigatorKey,
-  factory: $ClipboardRoute._fromState,
-);
-
-mixin $ClipboardRoute on GoRouteData {
-  static ClipboardRoute _fromState(GoRouterState state) =>
-      const ClipboardRoute();
-
-  @override
-  String get location => GoRouteData.$location('/settings/clipboard');
-
-  @override
-  void go(BuildContext context) => context.go(location);
-
-  @override
-  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
-
-  @override
-  void pushReplacement(BuildContext context) =>
-      context.pushReplacement(location);
-
-  @override
-  void replace(BuildContext context) => context.replace(location);
-}
-
-RouteBase get $audioRoute => GoRouteData.$route(
-  path: '/settings/audio',
-  name: 'audio',
-  hasOverriddenOnExit: false,
-  parentNavigatorKey: AudioRoute.$parentNavigatorKey,
-  factory: $AudioRoute._fromState,
-);
-
-mixin $AudioRoute on GoRouteData {
-  static AudioRoute _fromState(GoRouterState state) => const AudioRoute();
-
-  @override
-  String get location => GoRouteData.$location('/settings/audio');
 
   @override
   void go(BuildContext context) => context.go(location);

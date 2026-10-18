@@ -37,10 +37,25 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     var devices = <Json>[];
-    final controller = createTestController(
-      (command, [params = const {}]) async =>
-          command == 'devices.list' ? {'devices': devices} : {},
-    );
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      if (command == 'devices.list') return {'devices': devices};
+      if (command == 'device.info') {
+        final matches = devices.where(
+          (device) => device['id'] == params['deviceId'],
+        );
+        if (matches.isNotEmpty) {
+          return {
+            ...matches.first,
+            'androidVersion': '15',
+            'address': '192.168.1.8',
+          };
+        }
+      }
+      return {};
+    });
     await controller.initialize();
     final boundary = GlobalKey();
     await tester.pumpWidget(
@@ -73,6 +88,18 @@ void main() {
     await tester.tap(find.byTooltip('添加设备'));
     await tester.pumpAndSettle();
     await capture('add-device');
+    await tester.tap(find.text('无线连接'));
+    await tester.pumpAndSettle();
+    await capture('wireless-guide');
+    await tester.scrollUntilVisible(find.text('使用 IP 与端口连接'), 200);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('使用 IP 与端口连接'));
+    await tester.pumpAndSettle();
+    await capture('legacy-tcp-form');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('手动填写地址'));
     await tester.pumpAndSettle();
     await capture('connection-form');
@@ -83,6 +110,11 @@ void main() {
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
     await capture('settings');
+    await tester.tap(find.text('外观'));
+    await tester.pumpAndSettle();
+    await capture('appearance');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('设备').last);
     devices = [
       {
@@ -108,14 +140,37 @@ void main() {
     await capture('workspace-fixture');
     await tester.pageBack();
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('测试手机 A详情'));
+    await tester.pumpAndSettle();
+    await capture('device-settings-top-fixture');
+    await tester.scrollUntilVisible(find.text('自动同步剪贴板'), 160);
+    await tester.pumpAndSettle();
+    await capture('device-settings-fixture');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await controller.updateSetting('appearance', 'dark');
     await tester.pumpAndSettle();
     await capture('devices-dark-fixture');
-    await controller.updateSetting('reduceTransparency', true);
-    await tester.pumpAndSettle();
-    await capture('devices-opaque-fixture');
     tester.view.physicalSize = const Size(1194, 834);
     await tester.pumpAndSettle();
     await capture('tablet-devices-fixture');
+    tester.view.physicalSize = const Size(280, 620);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpAndSettle();
+    await capture('narrow-large-text-devices-fixture');
+    await tester.tap(find.byTooltip('添加设备'));
+    await tester.pumpAndSettle();
+    await capture('narrow-large-text-add-device');
+    await tester.tap(find.text('无线连接'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('使用 IP 与端口连接'), 200);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('使用 IP 与端口连接'));
+    await tester.pumpAndSettle();
+    await capture('narrow-large-text-legacy-form');
+    tester.view.physicalSize = const Size(620, 280);
+    await tester.pumpAndSettle();
+    await capture('landscape-large-text-legacy-form');
   });
 }

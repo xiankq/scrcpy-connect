@@ -39,7 +39,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       const authoritative = <String, dynamic>{
         'appearance': 'system',
-        'backgroundAudio': true,
+        'backgroundKeepAlive': true,
       };
       if (update == 'state.resynced') {
         events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
@@ -56,7 +56,7 @@ void main() {
       } else {
         events.add({'type': update, 'data': authoritative});
       }
-      saving.complete({'appearance': 'dark', 'backgroundAudio': false});
+      saving.complete({'appearance': 'dark', 'backgroundKeepAlive': false});
       await pending;
       expect(notifier.snapshot().settings, authoritative);
       container.dispose();
@@ -77,20 +77,20 @@ void main() {
       final notifier = container.read(appControllerProvider.notifier);
       final savingFirst = notifier.updateSetting('appearance', 'dark');
       await Future<void>.delayed(Duration.zero);
-      final savingSecond = notifier.updateSetting('backgroundAudio', true);
+      final savingSecond = notifier.updateSetting('backgroundKeepAlive', true);
       first.complete({'appearance': 'dark'});
       await savingFirst;
       expect(notifier.snapshot().settings, {'appearance': 'dark'});
       await Future<void>.delayed(Duration.zero);
       expect(requests, [
         {'appearance': 'dark'},
-        {'backgroundAudio': true},
+        {'backgroundKeepAlive': true},
       ]);
-      second.complete({'backgroundAudio': true});
+      second.complete({'backgroundKeepAlive': true});
       await savingSecond;
       expect(notifier.snapshot().settings, {
         'appearance': 'dark',
-        'backgroundAudio': true,
+        'backgroundKeepAlive': true,
       });
       container.dispose();
     },

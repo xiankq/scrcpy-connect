@@ -27,7 +27,7 @@ class _Backend {
   final events = StreamController<Json>.broadcast(sync: true);
   final lookups = <String, Future<Json>>{};
   final sessions = <String, Json>{};
-  String? audioDevice;
+  final audioDevices = <String>{};
   late final controller = createTestController(request, events: events.stream)
     ..loading = false
     ..devices = _devices;
@@ -51,19 +51,20 @@ class _Backend {
       case 'audio.sources':
         return {
           'sources': [
-            if (audioDevice != null)
+            for (final device in audioDevices)
               {
-                'sourceId': 'source-$audioDevice',
-                'deviceId': audioDevice,
+                'sourceId': 'source-$device',
+                'deviceId': device,
                 'status': 'playing',
               },
           ],
         };
       case 'audio.start':
-        audioDevice = value(params, 'deviceId');
-        return {'status': 'playing', 'sourceId': 'source-$audioDevice'};
+        final device = value(params, 'deviceId');
+        audioDevices.add(device);
+        return {'status': 'playing', 'sourceId': 'source-$device'};
       case 'audio.stop':
-        audioDevice = null;
+        audioDevices.remove(value(params, 'deviceId'));
         return {};
       case 'settings.update':
         return params;
@@ -79,6 +80,8 @@ class _Backend {
           'firstFrameDecoded': true,
           'evidence': 'mdk.snapshot',
         };
+      case 'session.list':
+        return {'sessions': sessions.values.toList()};
       case 'session.resume':
         return sessions[value(params, 'sessionId')]!;
       default:
@@ -144,9 +147,9 @@ void main() {
     },
   );
 
-  for (final mode in ['follow', 'fixed']) {
+  for (final syncB in [true, false]) {
     testWidgets(
-      'files and gallery restore focus while $mode clipboard and audio keep their intended device',
+      'files and gallery restore focus with device B clipboard sync $syncB and no remote audio',
       (tester) async {
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.resumed,
@@ -163,13 +166,13 @@ void main() {
           }
           return null;
         });
-        final backend = _Backend()..audioDevice = 'c';
+        final backend = _Backend();
         backend.controller.settings = {
-          'audioMode': mode,
-          'audioDevices': ['c'],
-          'clipboardSync': true,
-          'clipboardMode': mode,
-          'clipboardDevice': 'c',
+          'deviceSettings': {
+            'a': {'clipboardSync': true},
+            'b': {'clipboardSync': syncB},
+            'c': {'clipboardSync': false},
+          },
         };
         final router = await _mount(
           tester,
@@ -179,44 +182,43 @@ void main() {
         try {
           testContainer(backend.controller).read(clipboardCoordinatorProvider);
           await tester.pumpAndSettle();
-          expect(backend.audioDevice, mode == 'follow' ? 'a' : 'c');
+          expect(local, 'a baseline');
           final filesA = tester.element(find.byType(FilesPage));
           unawaited(const GalleryRoute(deviceId: 'b').push<void>(filesA));
           await tester.pumpAndSettle();
           expect(backend.controller.snapshot().focusedDeviceId, 'b');
-          expect(backend.audioDevice, mode == 'follow' ? 'b' : 'c');
+          expect(local, syncB ? 'b baseline' : 'a baseline');
+          backend.events.add({
+            'type': 'clipboard.changed',
+            'deviceId': 'b',
+            'data': {'text': 'visible B content'},
+          });
+          await tester.pumpAndSettle();
+          expect(local, syncB ? 'visible B content' : 'a baseline');
           await tester.tap(find.byType(BackButton));
           await tester.pumpAndSettle();
           expect(tester.element(find.byType(FilesPage)), same(filesA));
           expect(backend.controller.snapshot().focusedDeviceId, 'a');
-          final target = mode == 'follow' ? 'a' : 'c';
-          expect(backend.audioDevice, target);
-          expect(
-            backend.calls.where((call) => call.$1 == 'clipboard.get').last.$2,
-            {'deviceId': target},
-          );
+          expect(local, 'a baseline');
           backend.events.add({
             'type': 'clipboard.changed',
             'deviceId': 'b',
             'data': {'text': 'hidden B content'},
           });
           await tester.pumpAndSettle();
-          expect(local, 'local baseline');
+          expect(local, 'a baseline');
           backend.events.add({
             'type': 'clipboard.changed',
-            'deviceId': target,
-            'data': {'text': 'intended device content'},
+            'deviceId': 'a',
+            'data': {'text': 'visible A content'},
           });
           await tester.pumpAndSettle();
-          expect(local, 'intended device content');
-          if (mode == 'fixed') {
-            expect(
-              backend.calls.where((call) => call.$1.startsWith('audio.')),
-              isEmpty,
-            );
-            expect(backend.controller.settings['audioDevices'], ['c']);
-            expect(backend.controller.settings['clipboardDevice'], 'c');
-          }
+          expect(local, 'visible A content');
+          expect(
+            backend.calls.where((call) => call.$1 == 'audio.start'),
+            isEmpty,
+          );
+          expect(backend.audioDevices, isEmpty);
           expect(tester.takeException(), isNull);
         } finally {
           await _dispose(tester, router, backend);
@@ -255,14 +257,10 @@ void main() {
   });
 
   testWidgets(
-    'same-frame reconciliation rearms visible audio and waits through background recovery',
+    'ordinary pages keep audio off across reconciliation and background recovery',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      final backend = _Backend()..audioDevice = 'c';
-      backend.controller.settings = {
-        'audioMode': 'follow',
-        'audioDevices': ['c'],
-      };
+      final backend = _Backend();
       final router = await _mount(
         tester,
         backend,
@@ -285,14 +283,10 @@ void main() {
         });
       }
 
-      int audioChecks() =>
-          backend.calls.where((call) => call.$1 == 'audio.sources').length;
       try {
-        final initialChecks = audioChecks();
         reconcile(1);
         await tester.pumpAndSettle();
-        expect(audioChecks(), initialChecks + 1);
-        expect(backend.audioDevice, 'a');
+        expect(backend.audioDevices, isEmpty);
         unawaited(
           const GalleryRoute(deviceId: 'b')
               .push<void>(tester.element(find.byType(FilesPage))),
@@ -303,10 +297,8 @@ void main() {
         );
         tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
         tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-        final beforeBackground = audioChecks();
         reconcile(2);
         await tester.pumpAndSettle();
-        expect(audioChecks(), beforeBackground);
         expect(backend.controller.snapshot().focusedDeviceId, 'b');
         tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
         tester.binding.handleAppLifecycleStateChanged(
@@ -316,13 +308,16 @@ void main() {
           AppLifecycleState.resumed,
         );
         await tester.pumpAndSettle();
-        expect(audioChecks(), beforeBackground + 1);
         expect(backend.controller.snapshot().focusedDeviceId, 'b');
-        expect(backend.audioDevice, 'b');
+        expect(backend.audioDevices, isEmpty);
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
         expect(backend.controller.snapshot().focusedDeviceId, 'a');
-        expect(backend.audioDevice, 'a');
+        expect(backend.audioDevices, isEmpty);
+        expect(
+          backend.calls.where((call) => call.$1 == 'audio.start'),
+          isEmpty,
+        );
         expect(tester.takeException(), isNull);
       } finally {
         if (tester.binding.lifecycleState == AppLifecycleState.paused) {

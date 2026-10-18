@@ -49,7 +49,10 @@ class CommandView extends HookWidget {
           children: [
             OutlinedButton.icon(
               onPressed: () => retry.value++,
-              icon: const Icon(LucideIcons.refreshCw, size: 18),
+              icon: const Icon(
+                LucideIcons.refreshCw,
+                size: DesignTokens.componentIconActionSize,
+              ),
               label: const Text('重新检查'),
             ),
             ?alternative,

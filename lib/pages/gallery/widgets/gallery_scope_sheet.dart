@@ -18,16 +18,16 @@ class GalleryScopeSheet extends StatelessWidget {
     final issues = objects(snapshot['issues']);
     return SafeArea(
       child: Glass(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
         child: SizedBox(
           height: MediaQuery.sizeOf(context).height * .8,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('本次检查范围', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
+              const SizedBox(height: DesignTokens.spacingSm),
               Text('${deviceName(device)} · ${snapshot['total'] ?? 0} 项结果'),
-              const SizedBox(height: 12),
+              const SizedBox(height: DesignTokens.spacingSm),
               Expanded(
                 child: CustomScrollView(
                   slivers: [
@@ -69,7 +69,7 @@ class GalleryScopeSheet extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DesignTokens.spacingSm),
               OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('关闭范围'),

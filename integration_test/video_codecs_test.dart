@@ -45,8 +45,8 @@ void main() {
       binding.reportData ??= {};
       binding.reportData!['videoCodecResults'] = results;
       try {
-        await controller.updateSetting('clipboardSync', false);
-        await controller.updateSetting('audioDevices', []);
+        await controller.updateSetting('deviceSettings', <String, dynamic>{});
+
         deviceId = responseDeviceId(
           await request('devices.add', {
             'address': address,
@@ -271,14 +271,8 @@ void main() {
         }
         await cleanup(
           () => controller.updateSetting(
-            'audioDevices',
-            originalSettings['audioDevices'] ?? [],
-          ),
-        );
-        await cleanup(
-          () => controller.updateSetting(
-            'clipboardSync',
-            originalSettings['clipboardSync'] == true,
+            'deviceSettings',
+            jsonObject(originalSettings['deviceSettings']),
           ),
         );
         semantics.dispose();

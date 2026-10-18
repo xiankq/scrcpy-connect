@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:design_system/design_system.dart';
 
 class StateNote extends StatelessWidget {
   const StateNote(
@@ -13,16 +14,16 @@ class StateNote extends StatelessWidget {
   final Color? color;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12),
+    padding: const EdgeInsets.symmetric(vertical: DesignTokens.spacingSm),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(
           icon,
-          size: 19,
+          size: DesignTokens.componentIconActionSize,
           color: color ?? Theme.of(context).textTheme.bodySmall?.color,
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: DesignTokens.spacingXs),
         Expanded(
           child: Text(message, style: Theme.of(context).textTheme.bodySmall),
         ),

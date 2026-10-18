@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
+import 'package:scrcpy_connect/pages/remote/remote_page.dart';
+import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/main.dart' as app;
@@ -61,6 +64,9 @@ void main() {
         tester.element(find.byType(ConnectApp)),
       ).read(appControllerProvider.notifier);
       final original = {...controller!.snapshot().settings};
+      final ownedSessions = <String>{};
+      NavigatorState? remoteNavigator;
+      var openPages = 0;
       Future<void> host(String phase) async {
         stage = phase;
         await waitFor(
@@ -80,8 +86,8 @@ void main() {
           reason:
               'This isolated E2E must not stop a pre-existing sound source.',
         );
-        await controller!.updateSetting('clipboardSync', false);
-        await controller!.updateSetting('backgroundAudio', true);
+        await controller!.updateSetting('deviceSettings', <String, dynamic>{});
+        await controller!.updateSetting('backgroundKeepAlive', true);
         await host('prepare');
         final devices = <String>[];
         for (final endpoint in [port, secondPort]) {
@@ -98,10 +104,49 @@ void main() {
           devices.add(id);
         }
         expect(devices[0], isNot(devices[1]));
-        await controller!.updateSetting('audioMode', 'mix');
-        await controller!.updateSetting('audioDevices', devices);
+        await controller!.refreshDevices();
         for (var i = 0; i < devices.length; i++) {
-          final source = await request('audio.start', {'deviceId': devices[i]});
+          final before = objects((await request('session.list'))['sessions'])
+              .map((s) => value(s, 'sessionId'))
+              .toSet();
+          final context = i == 0
+              ? tester.element(find.byType(Scaffold).first)
+              : tester.element(find.byType(RemotePage));
+          unawaited(RemoteRoute(deviceId: devices[i]).push<void>(context));
+          openPages++;
+          await waitFor(
+            tester,
+            () => find.byType(RemotePage).evaluate().isNotEmpty,
+            reason: 'Device audio belongs to an actual open remote page.',
+          );
+          remoteNavigator = Navigator.of(
+            tester.element(find.byType(RemotePage)),
+            rootNavigator: true,
+          );
+          final deadline = DateTime.now().add(const Duration(seconds: 40));
+          Json? source;
+          while (DateTime.now().isBefore(deadline)) {
+            source = objects((await request('audio.sources'))['sources'])
+                .where(
+                  (s) =>
+                      s['deviceId'] == devices[i] && s['status'] == 'playing',
+                )
+                .firstOrNull;
+            if (source != null) break;
+            await tester.pump(const Duration(milliseconds: 300));
+          }
+          expect(
+            source,
+            isNotNull,
+            reason: 'Opening a remote page must start its device sound.',
+          );
+          source = source!;
+          ownedSessions.addAll(
+            objects((await request('session.list'))['sessions'])
+                .map((s) => value(s, 'sessionId'))
+                .toSet()
+                .difference(before),
+          );
           expect(source['status'], 'playing');
           owned['${i + 1}'] = value(source, 'sourceId');
           sourceDevices[value(source, 'sourceId')] = devices[i];
@@ -161,6 +206,14 @@ void main() {
         stage = 'complete';
         expect(tester.takeException(), isNull);
       } finally {
+        while (openPages > 0 && remoteNavigator?.canPop() == true) {
+          remoteNavigator!.pop();
+          openPages--;
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        for (final sessionId in ownedSessions) {
+          await request('session.stop', {'sessionId': sessionId});
+        }
         for (final sourceId in owned.values.toList()) {
           try {
             await request('audio.stop', {
@@ -171,12 +224,7 @@ void main() {
             /* Reclaimed source IDs must not stop their replacement. */
           }
         }
-        for (final key in [
-          'audioMode',
-          'audioDevices',
-          'backgroundAudio',
-          'clipboardSync',
-        ]) {
+        for (final key in ['backgroundKeepAlive', 'deviceSettings']) {
           if (original.containsKey(key)) {
             await controller!.updateSetting(key, original[key]);
           }

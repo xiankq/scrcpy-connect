@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -19,16 +20,18 @@ class AppsPage extends HookWidget {
     useListenable(query);
     return PageFrame(
       title: '手机应用',
-      subtitle: deviceName(device),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
             child: TextField(
               controller: query,
               decoration: const InputDecoration(
                 hintText: '搜索应用',
-                prefixIcon: Icon(LucideIcons.search, size: 18),
+                prefixIcon: Icon(
+                  LucideIcons.search,
+                  size: DesignTokens.componentIconActionSize,
+                ),
               ),
             ),
           ),
@@ -65,78 +68,97 @@ class AppsPage extends HookWidget {
                   );
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  padding: const EdgeInsets.fromLTRB(
+                    DesignTokens.spacingMd,
+                    0,
+                    DesignTokens.spacingMd,
+                    DesignTokens.spacingMd,
+                  ),
                   itemCount: apps.length,
                   itemBuilder: (context, i) {
                     final app = apps[i];
-                    return ActionRow(
-                      icon: LucideIcons.appWindow,
-                      title: value(app, 'name', value(app, 'packageName')),
-                      subtitle: value(app, 'packageName'),
-                      onTap: () async {
-                        final api = int.tryParse(value(device, 'apiLevel'));
-                        final mode = await showModalBottomSheet<String>(
-                          context: context,
-                          backgroundColor: Colors.transparent,
-                          isScrollControlled: true,
-                          builder: (context) => SafeArea(
-                            child: Glass(
-                              padding: const EdgeInsets.all(24),
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Text(
-                                      '打开“${value(app, 'name', value(app, 'packageName'))}”',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      '继续 ${deviceName(device)} 上的真实应用与登录状态。',
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      api != null && api < 29
-                                          ? '这台手机不支持独立应用窗口，可在手机屏幕继续使用。'
-                                          : '独立窗口可能迁移应用现有的单实例任务；返回会保留窗口，关闭窗口会保留真实任务。',
-                                    ),
-                                    const SizedBox(height: 20),
-                                    if (api == null || api >= 29)
-                                      FilledButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, 'window'),
-                                        child: const Text('在独立窗口打开'),
+                    return GroupedItem(
+                      index: i,
+                      count: apps.length,
+                      child: ActionRow(
+                        icon: LucideIcons.appWindow,
+                        title: value(app, 'name', value(app, 'packageName')),
+
+                        onTap: () async {
+                          final api = int.tryParse(value(device, 'apiLevel'));
+                          final mode = await showModalBottomSheet<String>(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true,
+                            builder: (context) => SafeArea(
+                              child: Glass(
+                                padding: const EdgeInsets.all(
+                                  DesignTokens.spacingMd,
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Text(
+                                        '打开“${value(app, 'name', value(app, 'packageName'))}”',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge,
                                       ),
-                                    OutlinedButton(
-                                      onPressed: () =>
-                                          Navigator.pop(context, 'phone'),
-                                      child: const Text('在手机屏幕打开'),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    const Text('在手机屏幕打开会切换手机当前的前台应用。'),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('取消'),
-                                    ),
-                                  ],
+                                      const SizedBox(
+                                        height: DesignTokens.spacingSm,
+                                      ),
+                                      Text(
+                                        '继续 ${deviceName(device)} 上的真实应用与登录状态。',
+                                      ),
+                                      const SizedBox(
+                                        height: DesignTokens.spacingSm,
+                                      ),
+                                      Text(
+                                        api != null && api < 29
+                                            ? '这台手机不支持独立应用窗口，可在手机屏幕继续使用。'
+                                            : '独立窗口可能迁移应用现有的单实例任务；返回会保留窗口，关闭窗口会保留真实任务。',
+                                      ),
+                                      const SizedBox(
+                                        height: DesignTokens.spacingMd,
+                                      ),
+                                      if (api == null || api >= 29)
+                                        FilledButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context, 'window'),
+                                          child: const Text('在独立窗口打开'),
+                                        ),
+                                      OutlinedButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, 'phone'),
+                                        child: const Text('在手机屏幕打开'),
+                                      ),
+                                      const SizedBox(
+                                        height: DesignTokens.spacingXs,
+                                      ),
+                                      const Text('在手机屏幕打开会切换手机当前的前台应用。'),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('取消'),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                        if (mode != null && context.mounted) {
-                          openRemoteRoute(
-                            context,
-                            deviceId: value(device, 'id'),
-                            packageName: value(app, 'packageName'),
-                            onPhoneScreen: mode == 'phone',
                           );
-                        }
-                      },
+                          if (mode != null && context.mounted) {
+                            openRemoteRoute(
+                              context,
+                              deviceId: value(device, 'id'),
+                              packageName: value(app, 'packageName'),
+                              onPhoneScreen: mode == 'phone',
+                            );
+                          }
+                        },
+                      ),
                     );
                   },
                 );

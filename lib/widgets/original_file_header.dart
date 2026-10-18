@@ -3,15 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class OriginalFileHeader extends StatelessWidget {
-  const OriginalFileHeader({
-    super.key,
-    required this.name,
-    required this.subtitle,
-    this.kind = 'file',
-  });
+  const OriginalFileHeader({super.key, required this.name, this.kind = 'file'});
 
   final String name;
-  final String subtitle;
   final String kind;
 
   @override
@@ -22,7 +16,7 @@ class OriginalFileHeader extends StatelessWidget {
         kind == 'directory' ? LucideIcons.folder : LucideIcons.file,
         color: ConnectTokens.amber,
       ),
-      const SizedBox(width: 16),
+      const SizedBox(width: DesignTokens.spacingMd),
       Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -34,13 +28,6 @@ class OriginalFileHeader extends StatelessWidget {
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],

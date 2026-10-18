@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -31,7 +32,13 @@ class ConnectionFormPage extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final host = useTextEditingController(text: address);
-    final portField = useTextEditingController(text: port);
+    final portField = useTextEditingController(
+      text: port.isNotEmpty
+          ? port
+          : transport == ConnectionTransport.tcp
+          ? '5555'
+          : '',
+    );
     final code = useTextEditingController();
     final form = useMemoized(() => GlobalKey<FormState>());
     final busy = useState(false);
@@ -141,8 +148,8 @@ class ConnectionFormPage extends HookWidget {
       title: pairing ? '使用配对码' : '手动连接',
       child: Form(
         key: form,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
+        child: GroupedListView(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
           children: [
             Text(
               pairing
@@ -152,7 +159,7 @@ class ConnectionFormPage extends HookWidget {
                   : '填写无线调试主页面的信息',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: DesignTokens.spacingSm),
             Text(
               pairing
                   ? '配对端口与日常连接端口不同。配对码过期后，请在被控手机重新打开配对窗口。'
@@ -161,31 +168,44 @@ class ConnectionFormPage extends HookWidget {
                   : '使用已经配对的地址及连接端口，连接必须加密。首次连接需要先配对。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: DesignTokens.spacingSectionTitle),
             if (!pairing) ...[
               if (transport == null && deviceId == null)
                 DropdownButtonFormField<ConnectionTransport>(
                   initialValue: selectedTransport.value,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: '连接方式'),
                   items: const [
                     DropdownMenuItem(
                       value: ConnectionTransport.tls,
-                      child: Text('现代无线调试（加密）'),
+                      child: Text(
+                        '现代无线调试（加密）',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: ConnectionTransport.tcp,
-                      child: Text('旧版 TCP（USB 授权后开启）'),
+                      child: Text(
+                        '旧版 TCP（USB 授权后开启）',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                   onChanged: busy.value
                       ? null
                       : (next) {
-                          if (next != null) selectedTransport.value = next;
+                          if (next != null) {
+                            selectedTransport.value = next;
+                            if (next == ConnectionTransport.tcp &&
+                                portField.text.isEmpty) {
+                              portField.text = '5555';
+                            }
+                          }
                         },
                 )
               else
                 Text(legacyTcp ? '旧版 TCP（USB 授权后开启）' : '现代无线调试（加密）'),
-              const SizedBox(height: 20),
+              const SizedBox(height: DesignTokens.spacingMd),
             ],
             TextFormField(
               controller: host,
@@ -197,7 +217,7 @@ class ConnectionFormPage extends HookWidget {
                 hintText: '192.168.1.8',
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: DesignTokens.spacingMd),
             TextFormField(
               controller: portField,
               validator: validatePort,
@@ -213,7 +233,7 @@ class ConnectionFormPage extends HookWidget {
               ),
             ),
             if (pairing) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: DesignTokens.spacingMd),
               TextFormField(
                 controller: code,
                 enabled: !busy.value,
@@ -230,13 +250,13 @@ class ConnectionFormPage extends HookWidget {
                 pairing: pairing,
                 legacyTcp: legacyTcp,
               ),
-            const SizedBox(height: 28),
+            const SizedBox(height: DesignTokens.spacingSectionTitle),
             FilledButton(
               onPressed: busy.value ? null : submit,
               child: busy.value
                   ? const SizedBox(
-                      width: 20,
-                      height: 20,
+                      width: DesignTokens.spacingMd,
+                      height: DesignTokens.spacingMd,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : Text(pairing ? '配对并检查连接' : '连接设备'),
@@ -255,9 +275,9 @@ class ConnectionFormPage extends HookWidget {
                       '已配对，正在确认连接',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: DesignTokens.spacingXs),
                     const Text('如果未自动发现连接服务，请填写无线调试主页面的连接端口，无需再次配对。'),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: DesignTokens.spacingMd),
                     OutlinedButton(
                       onPressed: () => ConnectionFormRoute(
                         address: host.text,
@@ -269,7 +289,7 @@ class ConnectionFormPage extends HookWidget {
                   ],
                 ),
               ),
-            const SizedBox(height: 20),
+            const SizedBox(height: DesignTokens.spacingMd),
             if (!pairing && !legacyTcp)
               TextButton(
                 onPressed: () => ConnectionFormRoute(

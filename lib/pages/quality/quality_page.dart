@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
@@ -11,6 +11,23 @@ import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:design_system/design_system.dart';
+
+String qualityValueLabel(String field, dynamic input) {
+  final raw = input?.toString() ?? '';
+  final number = num.tryParse(raw);
+  if (number == null) return raw.isEmpty ? '由设备协商' : raw;
+  String compact(num value) => value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toString();
+  if (number <= 0) return field == 'maxFps' ? '不限帧率' : '自动';
+  return switch (field) {
+    'maxSize' => '${compact(number)} px',
+    'maxFps' => '${compact(number)} fps',
+    'bitRate' => '${compact(number / 1000000)} Mbps',
+    _ => raw,
+  };
+}
 
 class QualityPage extends HookWidget {
   const QualityPage({
@@ -24,8 +41,7 @@ class QualityPage extends HookWidget {
   Widget build(BuildContext context) {
     final applying = useState(false);
     return PageFrame(
-      title: '画质与声音',
-      subtitle: deviceName(device),
+      title: '画质',
       child: CommandView(
         controller: controller,
         command: 'session.quality.options',
@@ -107,28 +123,33 @@ class QualityPage extends HookWidget {
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.sizeOf(context).height * .8,
                 ),
-                child: ListView(
+                child: GroupedListView(
                   shrinkWrap: true,
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(
+                    bottom: DesignTokens.spacingMd,
+                  ),
                   children: [
                     Padding(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(DesignTokens.spacingMd),
                       child: Text(
                         title,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
                     for (final item in options)
-                      ListTile(
-                        title: Text(value(item, 'label', value(item, 'name'))),
-                        subtitle: value(item, 'reason').isEmpty
-                            ? null
-                            : Text(value(item, 'reason')),
-                        enabled: item['available'] == true,
-                        trailing: selected == item['value']
-                            ? const Icon(LucideIcons.check)
-                            : null,
-                        onTap: () => Navigator.pop(context, item),
+                      Tooltip(
+                        message: value(item, 'reason'),
+                        child: ListTile(
+                          title: Text(
+                            value(item, 'label', value(item, 'name')),
+                          ),
+
+                          enabled: item['available'] == true,
+                          trailing: selected == item['value']
+                              ? const Icon(LucideIcons.check)
+                              : null,
+                          onTap: () => Navigator.pop(context, item),
+                        ),
                       ),
                   ],
                 ),
@@ -179,15 +200,15 @@ class QualityPage extends HookWidget {
             }
           }
 
-          return ListView(
-            padding: const EdgeInsets.all(24),
+          return GroupedListView(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
             children: [
               const StateNote(
                 '调整会保存到这台设备，并在新建屏幕或应用窗口时生效。已保留的窗口继续使用原设置；关闭后重新打开即可应用。',
               ),
               if (applying.value) const LinearProgressIndicator(),
               Text('画质预设', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
+              const SizedBox(height: DesignTokens.spacingSm),
               for (final preset in objects(data['presets']))
                 ChoiceRow<String>(
                   contentPadding: EdgeInsets.zero,
@@ -200,11 +221,6 @@ class QualityPage extends HookWidget {
                       ? null
                       : (v) => apply({'preset': v}),
                   title: Text(value(preset, 'name')),
-                  subtitle: Text(
-                    !available
-                        ? '请先选择双方可用的编码格式。'
-                        : value(preset, 'reason', value(preset, 'description')),
-                  ),
                 ),
               const SectionTitle('详细选项'),
               for (final field in const [
@@ -215,8 +231,11 @@ class QualityPage extends HookWidget {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(field.$2),
-                  subtitle: Text(value(current, field.$1, '由设备协商')),
-                  trailing: const Icon(LucideIcons.chevronRight, size: 18),
+
+                  trailing: Text(
+                    qualityValueLabel(field.$1, current[field.$1]),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   onTap: applying.value
                       ? null
                       : () async {
@@ -242,17 +261,27 @@ class QualityPage extends HookWidget {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('编码格式'),
-                subtitle: Text(
-                  value(codec, 'name', codecId.isEmpty ? '尚未获得设置' : codecId),
+
+                trailing: Text(
+                  value(codec, 'name', codecId),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-                trailing: const Icon(LucideIcons.chevronRight, size: 18),
                 onTap: applying.value || codecs.isEmpty ? null : chooseCodec,
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('视频编码器'),
-                subtitle: Text(value(current, 'videoEncoder', '自动选择')),
-                trailing: const Icon(LucideIcons.chevronRight, size: 18),
+
+                trailing: SizedBox(
+                  width: DesignTokens.componentSidebarWidth / 2,
+                  child: Text(
+                    value(current, 'videoEncoder', '自动'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
                 onTap: applying.value || codec.isEmpty ? null : chooseEncoder,
               ),
               if (!available || codec['decoderStatus'] != 'available')
@@ -266,18 +295,8 @@ class QualityPage extends HookWidget {
                   ActionRow(
                     icon: LucideIcons.monitor,
                     title: value(stream, 'name', '手机屏幕'),
-                    subtitle:
-                        '实际码流 ${value(stream, 'width', '?')} × ${value(stream, 'height', '?')} · ${value(stream, 'codec').toUpperCase()}\n'
-                        '本次请求上限 ${value(stream, 'requestedMaxSize', '?')}；设备可能按屏幕与编码能力调整。',
                   ),
               ],
-              const SectionTitle('设备声音'),
-              ActionRow(
-                icon: LucideIcons.audioLines,
-                title: '选择设备音源',
-                subtitle: '同一手机的多个窗口只播放一份声音',
-                onTap: () => AudioRoute().push<void>(context),
-              ),
             ],
           );
         },

@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/file_row_title.dart';
 import 'package:design_system/design_system.dart';
 
 import 'dart:convert';
@@ -66,12 +68,16 @@ class FileSearchPage extends HookWidget {
 
     return PageFrame(
       title: '搜索文件',
-      subtitle: deviceName(device),
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+              padding: const EdgeInsets.fromLTRB(
+                DesignTokens.spacingMd,
+                DesignTokens.spacingXs,
+                DesignTokens.spacingLg,
+                DesignTokens.spacingSm,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -83,9 +89,11 @@ class FileSearchPage extends HookWidget {
                   ),
                   if (initialPath != '/sdcard')
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: DesignTokens.spacingSm,
+                      ),
                       child: Glass(
-                        radius: 26,
+                        radius: DesignTokens.roundedLg,
                         child: Row(
                           children: [
                             for (final entire in [false, true])
@@ -120,7 +128,7 @@ class FileSearchPage extends HookWidget {
                       ),
                     )
                   else
-                    const SizedBox(height: 12),
+                    const SizedBox(height: DesignTokens.spacingSm),
                   TextField(
                     controller: query,
                     maxLength: 256,
@@ -132,12 +140,15 @@ class FileSearchPage extends HookWidget {
                       hintText: '输入文件名',
                       errorText: tooLong ? '搜索内容太长，请缩短文件名。' : null,
                       counterText: '',
-                      prefixIcon: const Icon(LucideIcons.search, size: 18),
+                      prefixIcon: const Icon(
+                        LucideIcons.search,
+                        size: DesignTokens.componentIconActionSize,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: DesignTokens.spacingSm),
                   Wrap(
-                    spacing: 8,
+                    spacing: DesignTokens.spacingXs,
                     children: [
                       for (final entry in _filters.entries)
                         ChoiceChip(
@@ -155,7 +166,7 @@ class FileSearchPage extends HookWidget {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: DesignTokens.spacingSm),
                   Row(
                     children: [
                       Expanded(
@@ -163,12 +174,15 @@ class FileSearchPage extends HookWidget {
                           onPressed: canSearch && !operation.starting
                               ? search
                               : null,
-                          icon: const Icon(LucideIcons.search, size: 18),
+                          icon: const Icon(
+                            LucideIcons.search,
+                            size: DesignTokens.componentIconActionSize,
+                          ),
                           label: const Text('搜索'),
                         ),
                       ),
                       if (operation.running && !operation.starting) ...[
-                        const SizedBox(width: 12),
+                        const SizedBox(width: DesignTokens.spacingSm),
                         OutlinedButton(
                           onPressed: operation.stopping
                               ? null
@@ -180,13 +194,15 @@ class FileSearchPage extends HookWidget {
                   ),
                   if (operation.running)
                     const Padding(
-                      padding: EdgeInsets.only(top: 12),
+                      padding: EdgeInsets.only(top: DesignTokens.spacingSm),
                       child: LinearProgressIndicator(minHeight: 2),
                     ),
                   if (dirty) const StateNote('条件已修改，点击搜索更新结果。'),
                   if (result != null)
                     Padding(
-                      padding: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.only(
+                        top: DesignTokens.spacingSm,
+                      ),
                       child: Text(
                         '${switch (status) {
                           'completed' => '已完成搜索',
@@ -222,10 +238,15 @@ class FileSearchPage extends HookWidget {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              padding: const EdgeInsets.fromLTRB(
+                DesignTokens.spacingMd,
+                0,
+                DesignTokens.spacingMd,
+                DesignTokens.spacingMd,
+              ),
               sliver: SliverList.separated(
                 itemCount: entries.length + 1,
-                separatorBuilder: (_, _) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const SizedBox.shrink(),
                 itemBuilder: (context, index) {
                   if (index == entries.length) {
                     return Column(
@@ -246,20 +267,13 @@ class FileSearchPage extends HookWidget {
                           ExpansionTile(
                             key: ValueKey('$status:${issues.length}'),
                             tilePadding: EdgeInsets.zero,
-                            leading: const Icon(
-                              LucideIcons.info,
-                              color: ConnectTokens.amber,
-                            ),
+                            leading: const Icon(LucideIcons.info),
                             trailing: const Icon(
                               LucideIcons.chevronDown,
-                              size: 18,
+                              size: DesignTokens.componentIconActionSize,
                             ),
                             title: const Text('搜索范围与跳过项'),
-                            subtitle: Text(
-                              issues.isEmpty
-                                  ? '按文件名搜索，打开时重新核验'
-                                  : '${issues.length} 处范围或内容需要核对',
-                            ),
+
                             initiallyExpanded: issues.isNotEmpty,
                             children: [
                               if (value(result, 'limitation').isNotEmpty)
@@ -279,38 +293,51 @@ class FileSearchPage extends HookWidget {
                   final file = entries[index];
                   final path = value(file, 'path');
                   final folder = file['isDirectory'] == true;
-                  final parent = path.lastIndexOf('/') > 0
-                      ? path.substring(0, path.lastIndexOf('/'))
-                      : '/';
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
-                    leading: FeatureIcon(
-                      folder ? LucideIcons.folder : LucideIcons.file,
-                      color: ConnectTokens.amber,
-                      size: 44,
+                  return GroupedItem(
+                    index: index,
+                    count: entries.length,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: DesignTokens.spacingTight,
+                          ),
+                          leading: FeatureIcon(
+                            folder ? LucideIcons.folder : LucideIcons.file,
+                            color: ConnectTokens.amber,
+
+                            size: DesignTokens.componentIconButtonSize,
+                          ),
+                          title: FileRowTitle(
+                            name: value(file, 'name'),
+                            path: value(file, 'path'),
+                            size: folder ? null : bytes(file['size']),
+                          ),
+
+                          onTap: !fileCanOpen(file)
+                              ? null
+                              : () {
+                                  if (folder) {
+                                    FilesRoute(
+                                      deviceId: value(device, 'id'),
+                                      path: path,
+                                    ).push<void>(context);
+                                  } else {
+                                    FileDetailsRoute(
+                                      deviceId: value(device, 'id'),
+                                      path: path,
+                                    ).push<void>(context);
+                                  }
+                                },
+                        ),
+                        if (!fileCanOpen(file))
+                          StateNote(
+                            fileUnavailableReason(file),
+                            icon: LucideIcons.circleAlert,
+                          ),
+                      ],
                     ),
-                    title: Text(value(file, 'name')),
-                    subtitle: Text(
-                      fileCanOpen(file)
-                          ? '$parent\n${folder ? '文件夹' : bytes(file['size'])}'
-                          : fileUnavailableReason(file),
-                    ),
-                    isThreeLine: true,
-                    onTap: !fileCanOpen(file)
-                        ? null
-                        : () {
-                            if (folder) {
-                              FilesRoute(
-                                deviceId: value(device, 'id'),
-                                path: path,
-                              ).push<void>(context);
-                            } else {
-                              FileDetailsRoute(
-                                deviceId: value(device, 'id'),
-                                path: path,
-                              ).push<void>(context);
-                            }
-                          },
                   );
                 },
               ),

@@ -204,10 +204,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('设置').last);
       await tester.pumpAndSettle();
-      expect(find.text('外观与易用性'), findsOneWidget);
+      expect(find.text('外观'), findsOneWidget);
       await tester.restartAndRestore();
       await tester.pumpAndSettle();
-      expect(find.text('外观与易用性'), findsOneWidget);
+      expect(find.text('外观'), findsOneWidget);
       expect(backend.starts, 0);
       await tester.pumpWidget(const SizedBox());
       backend.controller.dispose();

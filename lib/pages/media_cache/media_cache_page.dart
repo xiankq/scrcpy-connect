@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -39,27 +40,27 @@ class MediaCachePage extends HookWidget {
           final protected = bytes('protectedBytes');
           final reclaimable = bytes('reclaimableBytes');
           final reserved = bytes('reservedBytes');
-          return ListView(
-            padding: const EdgeInsets.all(24),
+          return GroupedListView(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
             children: [
               ContentPanel(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(DesignTokens.spacingMd),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(
                         LucideIcons.hardDrive,
-                        color: ConnectTokens.violet,
+                        color: ConnectTokens.amber,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: DesignTokens.spacingMd),
                       Text(
                         '已用 ${_size(used)}',
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: DesignTokens.spacingXs),
                       Text('暂存预算 ${_size(budget)}'),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: DesignTokens.spacingMd),
                       Semantics(
                         label: '暂存使用比例',
                         value: budget > 0
@@ -78,14 +79,14 @@ class MediaCachePage extends HookWidget {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(LucideIcons.shieldCheck),
                 title: const Text('受保护'),
-                subtitle: const Text('预览、准备、保存或分享中的内容'),
+
                 trailing: Text(_size(protected)),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(LucideIcons.brushCleaning),
                 title: const Text('可回收'),
-                subtitle: const Text('暂时不再使用，可在需要时重新获取'),
+
                 trailing: Text(_size(reclaimable)),
               ),
               if (reserved > 0)
@@ -93,10 +94,10 @@ class MediaCachePage extends HookWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(LucideIcons.download),
                   title: const Text('正在准备'),
-                  subtitle: const Text('为尚未完成的内容预留'),
+
                   trailing: Text(_size(reserved)),
                 ),
-              const SizedBox(height: 24),
+              const SizedBox(height: DesignTokens.spacingLg),
               FilledButton.icon(
                 onPressed: busy.value || reclaimable == 0
                     ? null
@@ -141,10 +142,10 @@ class MediaCachePage extends HookWidget {
                 label: Text(busy.value ? '正在清理' : '清理可回收暂存'),
               ),
               if (outcome.value != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: DesignTokens.spacingMd),
                 StateNote(outcome.value!),
               ],
-              const SizedBox(height: 24),
+              const SizedBox(height: DesignTokens.spacingLg),
               const StateNote(
                 '这里只管理互联媒体预览和接收原件的暂存，不会删除手机上的原件或你已保存的文件。\n\n交给其他应用的原件会继续保留，避免分享尚未读取完成时被清理。',
               ),

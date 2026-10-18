@@ -104,8 +104,8 @@ void main() {
       String? deviceId;
       var created = false;
       try {
-        await controller.updateSetting('clipboardSync', false);
-        await controller.updateSetting('audioDevices', []);
+        await controller.updateSetting('deviceSettings', <String, dynamic>{});
+
         final added = await request('devices.add', {
           'address': const String.fromEnvironment(
             'CONNECT_E2E_ADDRESS',
@@ -251,12 +251,8 @@ void main() {
           await request('devices.forget', {'deviceId': deviceId});
         }
         await controller.updateSetting(
-          'clipboardSync',
-          initialSettings['clipboardSync'],
-        );
-        await controller.updateSetting(
-          'audioDevices',
-          initialSettings['audioDevices'],
+          'deviceSettings',
+          jsonObject(initialSettings['deviceSettings']),
         );
         // Removing the production app closes its bridge/provider container.
         // Restore owned runtime state before that teardown, not afterwards.

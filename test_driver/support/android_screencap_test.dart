@@ -1,5 +1,5 @@
 // Standalone protocol regression; no Flutter runner or native build is needed.
-// Run: dart apps/connect/test_driver/support/android_screencap_test.dart
+// Run: dart test_driver/support/android_screencap_test.dart
 import 'dart:io';
 import 'dart:typed_data';
 

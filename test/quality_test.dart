@@ -211,8 +211,8 @@ void main() {
           reason: '$label lacks a confirmed encoder and decoder intersection.',
         );
       }
-      expect(find.text('本机没有可用解码器。'), findsOneWidget);
-      expect(find.text('尚未完成目标编码器探测。'), findsOneWidget);
+      expect(find.byTooltip('本机没有可用解码器。'), findsOneWidget);
+      expect(find.byTooltip('尚未完成目标编码器探测。'), findsOneWidget);
       await tester.ensureVisible(find.text('VP9'));
       await tester.tap(find.text('VP9'));
       await tester.pumpAndSettle();
@@ -280,7 +280,15 @@ void main() {
         find.ancestor(of: find.text('H.265'), matching: find.byType(ListTile)),
       );
       expect(choice.enabled, isTrue);
-      expect(find.textContaining('新建窗口时确认'), findsWidgets);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              (widget is Tooltip &&
+                  (widget.message?.contains('新建窗口时确认') ?? false)) ||
+              (widget is Text && (widget.data?.contains('新建窗口时确认') ?? false)),
+        ),
+        findsWidgets,
+      );
       await tester.tap(find.text('H.265'));
       await tester.pumpAndSettle();
       expect(requests.where((r) => r.$1 == 'session.quality').single.$2, {
@@ -289,7 +297,15 @@ void main() {
         'videoEncoder': null,
       });
       expect(find.text('H.265'), findsOneWidget);
-      expect(find.textContaining('新建窗口时确认'), findsWidgets);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              (widget is Tooltip &&
+                  (widget.message?.contains('新建窗口时确认') ?? false)) ||
+              (widget is Text && (widget.data?.contains('新建窗口时确认') ?? false)),
+        ),
+        findsWidgets,
+      );
       expect(requests.where((r) => r.$1 == 'session.start'), isEmpty);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

@@ -126,8 +126,8 @@ void main() {
       }
 
       try {
-        await controller.updateSetting('clipboardSync', false);
-        await controller.updateSetting('audioDevices', []);
+        await controller.updateSetting('deviceSettings', <String, dynamic>{});
+
         deviceId = responseDeviceId(
           await request('devices.add', {
             'address': address,
@@ -303,12 +303,8 @@ void main() {
           try {
             await controller.focusDevice(initialFocus);
             await controller.updateSetting(
-              'audioDevices',
-              initialSettings['audioDevices'] ?? [],
-            );
-            await controller.updateSetting(
-              'clipboardSync',
-              initialSettings['clipboardSync'] == true,
+              'deviceSettings',
+              jsonObject(initialSettings['deviceSettings']),
             );
           } finally {
             try {

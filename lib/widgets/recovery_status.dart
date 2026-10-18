@@ -41,9 +41,17 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
     final failed = error != null;
     final reason = error?.trim();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      padding: const EdgeInsets.fromLTRB(
+        DesignTokens.spacingMd,
+        DesignTokens.spacingSm,
+        DesignTokens.spacingLg,
+        0,
+      ),
       child: ContentPanel(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.spacingMd,
+          vertical: DesignTokens.spacingXs,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +71,10 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
             if (failed)
               OutlinedButton.icon(
                 onPressed: _retrying ? null : _retry,
-                icon: const Icon(LucideIcons.refreshCw, size: 18),
+                icon: const Icon(
+                  LucideIcons.refreshCw,
+                  size: DesignTokens.componentIconActionSize,
+                ),
                 label: const Text('重新核验'),
               ),
           ],

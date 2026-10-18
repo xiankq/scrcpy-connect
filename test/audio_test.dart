@@ -1,116 +1,260 @@
-import 'support/test_controller.dart';
+import 'dart:async';
 
-import 'package:scrcpy_connect/pages/source_preferences/source_preferences_page.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
-import 'support/router_test_app.dart';
+import 'support/test_controller.dart';
 
-import 'package:design_system/design_system.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
+class _AudioFixture {
+  final calls = <(String, Json)>[];
+  final sources = <String, Json>{};
+  final sessions = <Json>[
+    {'sessionId': 'a-screen', 'deviceId': 'a', 'status': 'streaming'},
+    {'sessionId': 'a-app', 'deviceId': 'a', 'status': 'streaming'},
+    {'sessionId': 'b-screen', 'deviceId': 'b', 'status': 'streaming'},
+  ];
+  final events = StreamController<Json>.broadcast(sync: true);
+  final pendingStarts = <String, Completer<Json>>{};
+  final failingDevices = <String>{};
+  late final controller =
+      createTestController((command, [params = const {}]) async {
+          calls.add((command, Map.of(params)));
+          final device = value(params, 'deviceId');
+          if (command == 'audio.sources') {
+            return {'sources': sources.values.toList()};
+          }
+          if (command == 'session.list') return {'sessions': sessions};
+          if (command == 'audio.start') {
+            if (failingDevices.contains(device)) {
+              throw StateError('unsupported $device');
+            }
+            final source = sources[device] = {
+              'deviceId': device,
+              'sourceId': 'source-$device',
+              'status': 'playing',
+            };
+            return pendingStarts[device]?.future ?? source;
+          }
+          if (command == 'audio.stop') {
+            if (params['sourceId'] == null ||
+                sources[device]?['sourceId'] == params['sourceId']) {
+              sources.remove(device);
+            }
+            return {};
+          }
+          return {};
+        }, events: events.stream)
+        ..devices = [
+          {'id': 'a', 'status': 'connected'},
+          {'id': 'b', 'status': 'connected'},
+        ];
+
+  Future<void> dispose() async {
+    controller.dispose();
+    await events.close();
+  }
+}
+
+Future<void> _flush(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+}
 
 void main() {
-  test('device focus cannot enable sound without prior user intent', () async {
-    final requests = <String>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
-      requests.add(command);
-      return {};
-    });
-    await controller.focusDevice('phone');
-    expect(requests, isEmpty);
-    controller.dispose();
-  });
-
-  test(
-    'follow serially stops the previous source and reuses the current one',
-    () async {
-      final requests = <(String, Json)>[];
-      var current = 'first';
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        requests.add((command, params));
-        if (command == 'audio.sources') {
-          return {
-            'sources': [
-              {
-                'sourceId': 'source-$current',
-                'deviceId': current,
-                'status': 'playing',
-              },
-            ],
-          };
-        }
-        if (command == 'audio.start') {
-          current = value(params, 'deviceId');
-          return {'sourceId': 'source-$current', 'status': 'playing'};
-        }
-        return {};
-      });
-      controller.settings = {
-        'audioMode': 'follow',
-        'audioDevices': ['first'],
-      };
-      await controller.focusDevice('second');
-      expect(requests.map((r) => r.$1), [
-        'audio.sources',
-        'audio.stop',
-        'audio.start',
-        'settings.update',
-      ]);
-      expect(requests[1].$2, {'deviceId': 'first', 'sourceId': 'source-first'});
-      expect(controller.settings['audioDevices'], ['second']);
-      await controller.focusDevice('second');
-      expect(requests.where((r) => r.$1 == 'audio.start'), hasLength(1));
-      controller.settings = {...controller.settings, 'audioMode': 'mix'};
-      final count = requests.length;
-      await controller.focusDevice('third');
-      expect(requests, hasLength(count));
-      controller.dispose();
+  testWidgets(
+    'connected devices and ordinary device focus never enable sound',
+    (tester) async {
+      final fixture = _AudioFixture();
+      await fixture.controller.focusDevice('a');
+      await fixture.controller.focusDevice('b');
+      await _flush(tester);
+      expect(fixture.calls, isEmpty);
+      expect(fixture.sources, isEmpty);
+      await fixture.dispose();
     },
   );
 
   testWidgets(
-    'an unconfirmed audio start never claims playing or saves intent',
+    'opened remote pages mix device sound and deduplicate same-device windows',
     (tester) async {
-      final requests = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        requests.add((command, params));
-        return switch (command) {
-          'audio.sources' => {'sources': <Json>[]},
-          'audio.start' => {'status': 'starting', 'reason': '尚未收到设备声音'},
-          _ => {},
-        };
-      });
-      controller.devices = [
-        {'id': 'phone', 'name': '手机', 'status': 'connected'},
-      ];
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: SourcePreferencesPage(controller: controller),
-        ),
+      final fixture = _AudioFixture();
+      final closeA = fixture.controller.claimRemoteDeviceView('a');
+      final closeAppA = fixture.controller.claimRemoteDeviceView('a');
+      final closeB = fixture.controller.claimRemoteDeviceView('b');
+      await _flush(tester);
+      expect(fixture.sources.keys, unorderedEquals(['a', 'b']));
+      expect(
+        fixture.calls.where((call) => call.$1 == 'audio.start'),
+        hasLength(2),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('播放此设备声音'));
-      await tester.pumpAndSettle();
-      expect(requests.where((r) => r.$1 == 'audio.start').single.$2, {
-        'deviceId': 'phone',
+      await fixture.controller.focusDevice('b');
+      await _flush(tester);
+      expect(fixture.sources.keys, unorderedEquals(['a', 'b']));
+      closeA();
+      await _flush(tester);
+      expect(fixture.sources.keys, unorderedEquals(['a', 'b']));
+      closeAppA();
+      closeAppA();
+      await _flush(tester);
+      expect(fixture.sources.keys, ['b']);
+      expect(fixture.calls.where((call) => call.$1 == 'audio.stop').single.$2, {
+        'deviceId': 'a',
       });
-      expect(requests.where((r) => r.$1 == 'settings.update'), isEmpty);
-      expect(find.text('正在播放'), findsNothing);
-      expect(find.text('尚未收到设备声音'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
+      closeB();
+      await _flush(tester);
+      expect(fixture.sources, isEmpty);
+      expect(fixture.calls.where((call) => call.$1 == 'session.stop'), isEmpty);
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets(
+    'a page waiting for its first session starts sound after capture becomes available',
+    (tester) async {
+      final fixture = _AudioFixture();
+      fixture.sessions.clear();
+      final close = fixture.controller.claimRemoteDeviceView('a');
+      await _flush(tester);
+      expect(fixture.sources, isEmpty);
+      fixture.sessions.add({
+        'sessionId': 'new-a',
+        'deviceId': 'a',
+        'status': 'streaming',
+      });
+      fixture.events.add({
+        'type': 'session.updated',
+        'deviceId': 'a',
+        'data': fixture.sessions.single,
+      });
+      await _flush(tester);
+      expect(fixture.sources.keys, ['a']);
+      close();
+      await _flush(tester);
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets(
+    'closing the last page during a pending start discards and cleans up its late source',
+    (tester) async {
+      final fixture = _AudioFixture();
+      final pending = fixture.pendingStarts['a'] = Completer<Json>();
+      final close = fixture.controller.claimRemoteDeviceView('a');
+      await _flush(tester);
+      expect(
+        fixture.calls.where((call) => call.$1 == 'audio.start'),
+        hasLength(1),
+      );
+      close();
+      pending.complete({
+        'deviceId': 'a',
+        'sourceId': 'source-a',
+        'status': 'playing',
+      });
+      await _flush(tester);
+      expect(fixture.sources, isEmpty);
+      expect(
+        fixture.calls.where((call) => call.$1 == 'audio.stop'),
+        isNotEmpty,
+      );
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets(
+    'lost sessions stop device sound while another open device continues',
+    (tester) async {
+      final fixture = _AudioFixture();
+      final closeA = fixture.controller.claimRemoteDeviceView('a');
+      final closeB = fixture.controller.claimRemoteDeviceView('b');
+      await _flush(tester);
+      fixture.sessions.removeWhere((session) => session['deviceId'] == 'a');
+      fixture.events.add({
+        'type': 'session.disconnected',
+        'deviceId': 'a',
+        'data': {'sessionId': 'a-screen', 'deviceId': 'a', 'status': 'stopped'},
+      });
+      await _flush(tester);
+      expect(fixture.sources.keys, ['b']);
+      closeA();
+      closeB();
+      await _flush(tester);
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets('closing playing B stops it while A startup is still pending', (
+    tester,
+  ) async {
+    final fixture = _AudioFixture();
+    final pending = fixture.pendingStarts['a'] = Completer<Json>();
+    final closeA = fixture.controller.claimRemoteDeviceView('a');
+    final closeB = fixture.controller.claimRemoteDeviceView('b');
+    await _flush(tester);
+    expect(fixture.sources['b']?['status'], 'playing');
+    closeB();
+    await _flush(tester);
+    expect(fixture.sources.containsKey('b'), isFalse);
+    expect(pending.isCompleted, isFalse);
+    closeA();
+    await _flush(tester);
+    expect(
+      fixture.calls.where(
+        (call) => call.$1 == 'audio.stop' && call.$2['deviceId'] == 'a',
+      ),
+      isNotEmpty,
+    );
+    expect(pending.isCompleted, isFalse);
+    pending.complete({
+      'deviceId': 'a',
+      'sourceId': 'source-a',
+      'status': 'playing',
+    });
+    await _flush(tester);
+    expect(fixture.sources, isEmpty);
+    await fixture.dispose();
+  });
+
+  testWidgets('unsupported device audio leaves another opened device playing', (
+    tester,
+  ) async {
+    final fixture = _AudioFixture()..failingDevices.add('a');
+    final closeA = fixture.controller.claimRemoteDeviceView('a');
+    final closeB = fixture.controller.claimRemoteDeviceView('b');
+    await _flush(tester);
+    expect(fixture.sources.keys, ['b']);
+    expect(fixture.controller.audioError, contains('unsupported a'));
+    closeA();
+    closeB();
+    await _flush(tester);
+    await fixture.dispose();
+  });
+
+  testWidgets(
+    'device preference writes merge against the latest queued settings',
+    (tester) async {
+      final fixture = _AudioFixture();
+      final first = fixture.controller.updateDeviceSetting(
+        'a',
+        'clipboardSync',
+        true,
+      );
+      final second = fixture.controller.updateDeviceSetting(
+        'a',
+        'showNavigationBar',
+        false,
+      );
+      final third = fixture.controller.updateDeviceSetting(
+        'b',
+        'clipboardSync',
+        true,
+      );
+      await Future.wait([first, second, third]);
+      expect(fixture.controller.settings['deviceSettings'], {
+        'a': {'clipboardSync': true, 'showNavigationBar': false},
+        'b': {'clipboardSync': true},
+      });
+      await fixture.dispose();
     },
   );
 }

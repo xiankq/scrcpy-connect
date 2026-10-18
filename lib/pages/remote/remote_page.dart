@@ -16,6 +16,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -57,6 +58,7 @@ class _RemotePageState extends State<RemotePage>
   final connectionRecovery = RemoteConnectionRecovery();
   bool restoringConnection = false;
   final remoteMessenger = GlobalKey<ScaffoldMessengerState>();
+  late final void Function() releaseDeviceView;
 
   void trace(String detail) {
     if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
@@ -122,6 +124,9 @@ class _RemotePageState extends State<RemotePage>
   @override
   void initState() {
     super.initState();
+    releaseDeviceView = controller.claimRemoteDeviceView(
+      value(widget.device, 'id'),
+    );
     // IMEs can finish composition without changing text; onChanged misses it.
     text.addListener(textChanged);
     inputFocus.addListener(inputFocusChanged);
@@ -834,20 +839,34 @@ class _RemotePageState extends State<RemotePage>
     if (!canSendInput) {
       return;
     }
-    var point = sourcePoint(event.localPosition, viewport, source);
+    final point = sourcePoint(event.localPosition, viewport, source);
     if (action == 'down') {
       if (point == null) return;
       activePointers.add(event.pointer);
     }
     if (!activePointers.contains(event.pointer)) return;
-    // A pointer that began inside the source remains captured at its boundary.
-    point ??= sourcePoint(event.localPosition, viewport, source, clamp: true)!;
+    if (point == null) {
+      // End the remote gesture at its last valid position, then ignore this
+      // physical pointer until it lifts. Re-entry must not create a new drag.
+      final previous = pointerPositions.remove(event.pointer);
+      activePointers.remove(event.pointer);
+      if (previous != null) {
+        unawaited(
+          send(InteropCommand.sessionTouch, {
+            ...previous,
+            'action': 'cancel',
+            'pressure': 0,
+          }),
+        );
+      }
+      return;
+    }
     final params = <String, dynamic>{
       'action': action,
       'pointerId': event.pointer,
-      'x': point.dx.round(),
-      'y': point.dy.round(),
-      'pressure': event.pressure,
+      'x': point.dx.round().clamp(0, source.width.round() - 1),
+      'y': point.dy.round().clamp(0, source.height.round() - 1),
+      'pressure': action == 'up' || action == 'cancel' ? 0 : event.pressure,
       'screenWidth': source.width.round(),
       'screenHeight': source.height.round(),
     };
@@ -943,7 +962,7 @@ class _RemotePageState extends State<RemotePage>
       }
       return KeyEventResult.handled;
     }
-    if (!canSendInput || ime) return KeyEventResult.ignored;
+    if (!canSendInput || (ime && code != 4)) return KeyEventResult.ignored;
     if (code != null) {
       if (event is KeyRepeatEvent && !heldKeys.containsKey(code)) {
         return KeyEventResult.ignored;
@@ -964,8 +983,19 @@ class _RemotePageState extends State<RemotePage>
     return KeyEventResult.ignored;
   }
 
+  void pressNavigationKey(int code) {
+    if (!canSendInput) return;
+    unawaited(
+      send(InteropCommand.sessionKey, {'keyCode': code, 'action': 'down'}),
+    );
+    unawaited(
+      send(InteropCommand.sessionKey, {'keyCode': code, 'action': 'up'}),
+    );
+  }
+
   Future<void> leave() async {
     if (presentation.exiting) return;
+    releaseDeviceView();
     setState(() {
       presentation.leave();
     });
@@ -1004,6 +1034,7 @@ class _RemotePageState extends State<RemotePage>
 
   @override
   void dispose() {
+    releaseDeviceView();
     presentation.invalidateStart();
     final release = releaseInputs();
     final ownedView = view;
@@ -1041,19 +1072,77 @@ class _RemotePageState extends State<RemotePage>
       child: PopScope(
         canPop: presentation.exiting,
         onPopInvokedWithResult: (popped, _) {
-          if (!popped) unawaited(leave());
+          if (!popped) pressNavigationKey(4);
         },
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          resizeToAvoidBottomInset: true,
-          body: Focus(
-            autofocus: true,
-            focusNode: keyboardFocus,
-            onKeyEvent: key,
-            onFocusChange: (focused) {
-              if (!focused) unawaited(releaseInputs());
-            },
-            child: Stack(
+        child: Focus(
+          autofocus: true,
+          focusNode: keyboardFocus,
+          onKeyEvent: key,
+          onFocusChange: (focused) {
+            if (!focused) unawaited(releaseInputs());
+          },
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            resizeToAvoidBottomInset: true,
+            bottomNavigationBar: Consumer(
+              builder: (context, ref, _) {
+                final showNavigationBar = ref.watch(
+                  appControllerProvider.select(
+                    (state) =>
+                        jsonObject(
+                          jsonObject(state.settings['deviceSettings'])[value(
+                            widget.device,
+                            'id',
+                          )],
+                        )['showNavigationBar'] !=
+                        false,
+                  ),
+                );
+                if (!showNavigationBar) return const SizedBox.shrink();
+                return SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    height: DesignTokens.componentPageHeaderHeight,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          tooltip: '返回',
+                          onPressed: canSendInput
+                              ? () => pressNavigationKey(4)
+                              : null,
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '主屏幕',
+                          onPressed: canSendInput
+                              ? () => pressNavigationKey(3)
+                              : null,
+                          icon: const Icon(
+                            Icons.circle_outlined,
+                            color: Colors.white,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '最近任务',
+                          onPressed: canSendInput
+                              ? () => pressNavigationKey(187)
+                              : null,
+                          icon: const Icon(
+                            Icons.crop_square,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            body: Stack(
               children: [
                 Positioned.fill(
                   child: LayoutBuilder(
@@ -1101,89 +1190,91 @@ class _RemotePageState extends State<RemotePage>
                 if (presentation.error != null || presentation.paused)
                   Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Glass(
-                        solid: true,
-                        padding: const EdgeInsets.all(24),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 360),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                presentation.paused
-                                    ? LucideIcons.pause
-                                    : LucideIcons.monitorOff,
-                                size: 32,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                presentation.sessionEnded
-                                    ? '控制会话已结束'
-                                    : presentation.appLaunchUnknown
-                                    ? '应用打开结果待核对'
-                                    : presentation.stateUnverified
-                                    ? '正在核验会话状态'
-                                    : presentation.errorCode == 'device_asleep'
-                                    ? '手机处于休眠状态'
-                                    : presentation.paused
-                                    ? '画面已暂停'
-                                    : '暂时无法打开实时画面',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                presentation.error ?? '等待连接恢复后的首帧。',
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 20),
-                              if (presentation.errorCode == 'resource_busy')
-                                FilledButton(
-                                  onPressed: () =>
-                                      ActivitiesRoute().push<void>(context),
-                                  child: const Text('管理当前活动'),
+                      padding: const EdgeInsets.all(DesignTokens.spacingXl),
+                      child: SingleChildScrollView(
+                        child: ContentPanel(
+                          padding: const EdgeInsets.all(DesignTokens.spacingLg),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 360),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  presentation.paused
+                                      ? LucideIcons.pause
+                                      : LucideIcons.monitorOff,
+                                  size: DesignTokens.componentIconLargeSize,
                                 ),
-                              if (presentation.errorCode == 'device_asleep')
-                                FilledButton(
+                                const SizedBox(height: DesignTokens.spacingMd),
+                                Text(
+                                  presentation.sessionEnded
+                                      ? '控制会话已结束'
+                                      : presentation.appLaunchUnknown
+                                      ? '应用打开结果待核对'
+                                      : presentation.stateUnverified
+                                      ? '正在核验会话状态'
+                                      : presentation.errorCode ==
+                                            'device_asleep'
+                                      ? '手机处于休眠状态'
+                                      : presentation.paused
+                                      ? '画面已暂停'
+                                      : '暂时无法打开实时画面',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: DesignTokens.spacingXs),
+                                Text(
+                                  presentation.error ?? '等待连接恢复后的首帧。',
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: DesignTokens.spacingMd),
+                                if (presentation.errorCode == 'resource_busy')
+                                  FilledButton(
+                                    onPressed: () =>
+                                        ActivitiesRoute().push<void>(context),
+                                    child: const Text('管理当前活动'),
+                                  ),
+                                if (presentation.errorCode == 'device_asleep')
+                                  FilledButton(
+                                    onPressed: presentation.connecting
+                                        ? null
+                                        : wakeAndStart,
+                                    child: const Text('唤醒手机'),
+                                  ),
+                                if (widget.packageName != null &&
+                                    presentation.error != null &&
+                                    !presentation.appLaunchUnknown &&
+                                    !presentation.stateUnverified)
+                                  FilledButton(
+                                    onPressed: presentation.connecting
+                                        ? null
+                                        : continueOnPhoneScreen,
+                                    child: const Text('在手机屏幕继续'),
+                                  ),
+                                if (presentation.appLaunchUnknown)
+                                  FilledButton(
+                                    onPressed: presentation.connecting
+                                        ? null
+                                        : closeUnknownAppLaunch,
+                                    child: const Text('关闭本次打开记录'),
+                                  ),
+                                OutlinedButton(
                                   onPressed: presentation.connecting
                                       ? null
-                                      : wakeAndStart,
-                                  child: const Text('唤醒手机'),
+                                      : presentation.appLaunchUnknown
+                                      ? checkAppLaunch
+                                      : (presentation.reconcileOnly
+                                            ? reconcileState
+                                            : start),
+                                  child: Text(
+                                    presentation.appLaunchUnknown
+                                        ? '只读检查'
+                                        : presentation.appLaunchClosed
+                                        ? '重新打开'
+                                        : '重新检查',
+                                  ),
                                 ),
-                              if (widget.packageName != null &&
-                                  presentation.error != null &&
-                                  !presentation.appLaunchUnknown &&
-                                  !presentation.stateUnverified)
-                                FilledButton(
-                                  onPressed: presentation.connecting
-                                      ? null
-                                      : continueOnPhoneScreen,
-                                  child: const Text('在手机屏幕继续'),
-                                ),
-                              if (presentation.appLaunchUnknown)
-                                FilledButton(
-                                  onPressed: presentation.connecting
-                                      ? null
-                                      : closeUnknownAppLaunch,
-                                  child: const Text('关闭本次打开记录'),
-                                ),
-                              OutlinedButton(
-                                onPressed: presentation.connecting
-                                    ? null
-                                    : presentation.appLaunchUnknown
-                                    ? checkAppLaunch
-                                    : (presentation.reconcileOnly
-                                          ? reconcileState
-                                          : start),
-                                child: Text(
-                                  presentation.appLaunchUnknown
-                                      ? '只读检查'
-                                      : presentation.appLaunchClosed
-                                      ? '重新打开'
-                                      : '重新检查',
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

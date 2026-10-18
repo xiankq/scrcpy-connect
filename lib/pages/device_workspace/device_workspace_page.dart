@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/device_workspace/widgets/device_hero.dart';
@@ -27,7 +28,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
     final current = controller.currentDevice(device);
     return PageFrame(
       title: deviceName(current),
-      subtitle: statusText(value(current, 'status')),
+
       actions: [
         IconButton(
           tooltip: '设备详情',
@@ -37,8 +38,8 @@ class DeviceWorkspacePage extends ConsumerWidget {
           icon: const Icon(LucideIcons.ellipsis),
         ),
       ],
-      child: ListView(
-        padding: const EdgeInsets.all(24),
+      child: GroupedListView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
           DeviceHero(controller: controller, device: current),
           if (appAudioError != null)
@@ -50,7 +51,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                 ActionRow(
                   icon: LucideIcons.layoutGrid,
                   title: '手机应用',
-                  subtitle: '接续原有任务，打开独立应用窗口',
+
                   onTap: () =>
                       AppsRoute(deviceId: value(current, 'id'))
                           .push<void>(context),
@@ -58,8 +59,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                 ActionRow(
                   icon: LucideIcons.folder,
                   title: '文件管理',
-                  subtitle: '浏览目录、取回与发送文件',
-                  color: ConnectTokens.amber,
+
                   onTap: () => FilesRoute(
                     deviceId: value(current, 'id'),
                     path: '/sdcard',
@@ -68,8 +68,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                 ActionRow(
                   icon: LucideIcons.images,
                   title: '手机相册',
-                  subtitle: '查看照片和视频，手动保存原文件',
-                  color: ConnectTokens.coral,
+
                   onTap: () =>
                       GalleryRoute(deviceId: value(current, 'id'))
                           .push<void>(context),
@@ -84,7 +83,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                 ActionRow(
                   icon: LucideIcons.bell,
                   title: '实时通知',
-                  subtitle: '处理当前通知，进入手机原应用',
+
                   onTap: () =>
                       NotificationsRoute(deviceId: value(current, 'id'))
                           .push<void>(context),
@@ -92,8 +91,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                 ActionRow(
                   icon: LucideIcons.phone,
                   title: '来电与通话',
-                  subtitle: '通话控制与双向语音分别检查',
-                  color: ConnectTokens.mint,
+
                   onTap: () =>
                       CallsRoute(deviceId: value(current, 'id'))
                           .push<void>(context),
@@ -105,7 +103,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
           ActionRow(
             icon: LucideIcons.panelsTopLeft,
             title: '当前控制会话',
-            subtitle: '切换画面或暂停不可见会话',
+
             onTap: () =>
                 SessionsRoute(deviceId: value(current, 'id'))
                     .push<void>(context),
@@ -113,14 +111,14 @@ class DeviceWorkspacePage extends ConsumerWidget {
           ActionRow(
             icon: LucideIcons.slidersHorizontal,
             title: '屏幕与输入工具',
-            subtitle: '截图、实体屏幕、导航与剪贴板',
+
             onTap: () =>
                 SessionToolsRoute(deviceId: value(current, 'id'))
                     .push<void>(context),
           ),
           ActionRow(
             icon: LucideIcons.gauge,
-            title: '画质与声音',
+            title: '画质',
             onTap: () =>
                 QualityRoute(deviceId: value(current, 'id'))
                     .push<void>(context),
@@ -132,7 +130,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                 CapabilitiesRoute(deviceId: value(current, 'id'))
                     .push<void>(context),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: DesignTokens.spacingLg),
         ],
       ),
     );

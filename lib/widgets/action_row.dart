@@ -7,28 +7,68 @@ class ActionRow extends StatelessWidget {
     super.key,
     required this.icon,
     required this.title,
-    this.subtitle,
     this.onTap,
-    this.color = ConnectTokens.violet,
+    this.color,
     this.trailing,
   });
   final IconData icon;
   final String title;
-  final String? subtitle;
   final VoidCallback? onTap;
-  final Color color;
+  final Color? color;
   final Widget? trailing;
+  Color _iconColor(BuildContext context) {
+    if (color != null) return ConnectTokens.accent(context, color!);
+    final accent = switch (icon) {
+      LucideIcons.folder ||
+      LucideIcons.folderOpen ||
+      LucideIcons.file ||
+      LucideIcons.hardDrive ||
+      LucideIcons.download ||
+      LucideIcons.upload ||
+      LucideIcons.usb ||
+      LucideIcons.fileInput ||
+      LucideIcons.fileOutput => ConnectTokens.amber,
+      LucideIcons.images ||
+      LucideIcons.image ||
+      LucideIcons.camera => ConnectTokens.coral,
+      LucideIcons.phone || LucideIcons.phoneIncoming => ConnectTokens.mint,
+      _ => ConnectTokens.blue,
+    };
+    return ConnectTokens.accent(context, accent);
+  }
+
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-    leading: FeatureIcon(icon, color: color),
-    title: Text(title, style: Theme.of(context).textTheme.titleMedium),
-    subtitle: subtitle == null
-        ? null
-        : Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-    trailing:
-        trailing ??
-        (onTap == null ? null : const Icon(LucideIcons.chevronRight, size: 19)),
-    onTap: onTap,
+  Widget build(BuildContext context) => Stack(
+    children: [
+      ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: DesignTokens.spacingXxs,
+        ),
+        leading: Icon(
+          icon,
+          color: _iconColor(context),
+          size: DesignTokens.componentIconSize,
+        ),
+        title: Text(title, style: Theme.of(context).textTheme.bodyLarge),
+        trailing:
+            trailing ??
+            (onTap == null
+                ? null
+                : const Icon(
+                    LucideIcons.chevronRight,
+                    size: DesignTokens.componentIconSmallSize,
+                  )),
+        onTap: onTap,
+      ),
+      PositionedDirectional(
+        start: DesignTokens.componentIconSize + DesignTokens.componentRowGap,
+        end: DesignTokens.spacingZero,
+        bottom: DesignTokens.spacingZero,
+        child: Divider(
+          height: DesignTokens.spacingHairline,
+          thickness: DesignTokens.spacingHairline,
+        ),
+      ),
+    ],
   );
 }

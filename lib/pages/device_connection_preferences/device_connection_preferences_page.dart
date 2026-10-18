@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -6,6 +7,7 @@ import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:design_system/design_system.dart';
 
 class DeviceConnectionPreferencesPage extends StatelessWidget {
   const DeviceConnectionPreferencesPage({
@@ -18,15 +20,14 @@ class DeviceConnectionPreferencesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => PageFrame(
     title: '连接偏好',
-    subtitle: deviceName(device),
-    child: ListView(
-      padding: const EdgeInsets.all(24),
+    child: GroupedListView(
+      padding: const EdgeInsets.all(DesignTokens.spacingMd),
       children: [
         const StateNote('切换连接路径可能重建会话。未确认结果的发送、删除与回复不会自动重试。'),
         ActionRow(
           icon: LucideIcons.wifi,
           title: '编辑无线连接地址',
-          subtitle: value(device, 'address', '未记录'),
+
           onTap: () => ConnectionFormRoute(
             address: value(device, 'address'),
             deviceId: value(device, 'id'),
@@ -40,7 +41,7 @@ class DeviceConnectionPreferencesPage extends StatelessWidget {
         ActionRow(
           icon: LucideIcons.radio,
           title: '检查 USB 转无线',
-          subtitle: '仅适用于已经通过 USB 授权的设备',
+
           onTap: () async {
             final result = await perform(
               context,

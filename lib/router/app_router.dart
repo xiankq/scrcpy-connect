@@ -17,7 +17,6 @@ import 'package:scrcpy_connect/pages/apps/apps_page.dart';
 import 'package:scrcpy_connect/pages/background/background_page.dart';
 import 'package:scrcpy_connect/pages/calls/calls_page.dart';
 import 'package:scrcpy_connect/pages/capabilities/capabilities_page.dart';
-import 'package:scrcpy_connect/pages/clipboard/clipboard_page.dart';
 import 'package:scrcpy_connect/pages/connection_form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/data_preferences/data_preferences_page.dart';
 import 'package:scrcpy_connect/pages/device_connection_preferences/device_connection_preferences_page.dart';
@@ -47,7 +46,6 @@ import 'package:scrcpy_connect/pages/session_tools/session_tools_page.dart';
 import 'package:scrcpy_connect/pages/sessions/sessions_page.dart';
 import 'package:scrcpy_connect/pages/settings/settings_page.dart';
 import 'package:scrcpy_connect/pages/share_directory_picker/share_directory_picker_page.dart';
-import 'package:scrcpy_connect/pages/source_preferences/source_preferences_page.dart';
 import 'package:scrcpy_connect/pages/transfer_details/transfer_details_page.dart';
 import 'package:scrcpy_connect/pages/transfers/transfers_page.dart';
 import 'package:scrcpy_connect/pages/usb_guide/usb_guide_page.dart';
@@ -1167,40 +1165,6 @@ class AppearanceRoute extends GoRouteData with $AppearanceRoute {
     final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state) =>
         AppearancePage(controller: controller);
-    return page(context, state);
-  }
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
-}
-
-@TypedGoRoute<ClipboardRoute>(path: '/settings/clipboard', name: 'clipboard')
-class ClipboardRoute extends GoRouteData with $ClipboardRoute {
-  const ClipboardRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
-  @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    Widget page(BuildContext _, GoRouterState state) =>
-        ClipboardPage(controller: controller);
-    return page(context, state);
-  }
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
-}
-
-@TypedGoRoute<AudioRoute>(path: '/settings/audio', name: 'audio')
-class AudioRoute extends GoRouteData with $AudioRoute {
-  const AudioRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
-  @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    Widget page(BuildContext _, GoRouterState state) =>
-        SourcePreferencesPage(controller: controller);
     return page(context, state);
   }
 

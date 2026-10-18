@@ -180,7 +180,12 @@ class ConnectApp extends HookConsumerWidget {
             builder: (context) => SafeArea(
               child: SingleChildScrollView(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  padding: const EdgeInsets.fromLTRB(
+                    DesignTokens.spacingLg,
+                    0,
+                    DesignTokens.spacingLg,
+                    DesignTokens.spacingLg,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -189,12 +194,12 @@ class ConnectApp extends HookConsumerWidget {
                         color: ConnectTokens.mint,
                         size: 64,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: DesignTokens.spacingMd),
                       Text(
                         value(call, 'name', value(call, 'number', '当前来电')),
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: DesignTokens.spacingTight),
                       Text('${deviceName(device)} 有来电'),
                       const SizedBox(height: 20),
                       FilledButton(
@@ -245,17 +250,6 @@ class ConnectApp extends HookConsumerWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: mode,
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          disableAnimations:
-              appSettings['reduceMotion'] == true ||
-              MediaQuery.disableAnimationsOf(context),
-        ),
-        child: GlassPreferences(
-          reduceTransparency: appSettings['reduceTransparency'] == true,
-          child: child!,
-        ),
-      ),
     );
   }
 }

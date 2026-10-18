@@ -258,6 +258,11 @@ void main() {
         250,
         scrollable: listScroll,
       );
+      await Scrollable.ensureVisible(
+        tester.element(find.text('确认提交')),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('确认提交'));
       await tester.pumpAndSettle();
       expect(requests.where((r) => r.$1 == 'files.push').single.$2, {

@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/document_operation.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -46,20 +47,23 @@ class DocumentImportPage extends HookWidget {
         '${destination.endsWith('/') ? destination.substring(0, destination.length - 1) : destination}/$name';
     return PageFrame(
       title: '发送本机文件夹',
-      subtitle: deviceName(device),
-      child: ListView(
-        padding: const EdgeInsets.all(24),
+      child: GroupedListView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
-          const FeatureIcon(
-            LucideIcons.folderUp,
-            color: ConnectTokens.amber,
-            size: 64,
+          const Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FeatureIcon(
+              LucideIcons.folderUp,
+              color: ConnectTokens.amber,
+
+              size: DesignTokens.componentFeatureIconSize,
+            ),
           ),
-          const SizedBox(height: 20),
-          Text('选择要发送的文件夹', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 12),
+          const SizedBox(height: DesignTokens.spacingMd),
+          Text('选择要发送的文件夹', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: DesignTokens.spacingSm),
           const Text('系统只授权读取你选择的文件夹。内容先取回本机暂存，核对后再发送到设备；保留目录结构与空目录。'),
-          const SizedBox(height: 24),
+          const SizedBox(height: DesignTokens.spacingMd),
           if (operation.busy) ...[
             const LinearProgressIndicator(),
             const StateNote('正在等待系统选择或读取实际内容…'),

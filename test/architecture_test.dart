@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  final lib = Directory(
-    Directory('lib').existsSync() ? 'lib' : 'apps/connect/lib',
-  );
+  final lib = Directory('lib');
   test('each product page has its own shallow directory and one page file', () {
     final pages = Directory('${lib.path}/pages');
     final pageFiles = pages

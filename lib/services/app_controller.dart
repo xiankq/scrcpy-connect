@@ -66,6 +66,10 @@ String statusText(String status) => switch (status) {
   'skipped' => '已跳过',
   'ready' => '画面可用',
   'active' => '进行中',
+  'ringing' => '来电响铃',
+  'dialing' => '正在拨号',
+  'holding' => '已保持通话',
+  'ended' => '已结束',
   'starting' => '正在启动',
   'playing' => '正在播放',
   'stopped' => '已停止',
@@ -76,6 +80,11 @@ String statusText(String status) => switch (status) {
   'partialFailure' => '部分传输失败',
   'completedWithSkips' => '部分内容已跳过',
   _ => '状态待核验',
+};
+String sessionStatusText(String status) => switch (status) {
+  'running' => '运行中',
+  'active' => '使用中',
+  _ => statusText(status),
 };
 String bytes(dynamic input) {
   final n = num.tryParse('$input') ?? 0;
@@ -90,11 +99,36 @@ class AppController extends _$AppController {
   late AppDependencies _dependencies;
   late StreamController<Json> _events;
   late SessionViews _sessionViews;
-  SessionView claimSessionView(String sessionId, {required bool visible}) =>
-      _sessionViews.claim(sessionId, visible: visible);
+  SessionView claimSessionView(String sessionId, {required bool visible}) {
+    final view = _sessionViews.claim(sessionId, visible: visible);
+    _scheduleDeviceAudio();
+    return view;
+  }
+
+  /// A page owns device sound even while another route covers its surface.
+  /// Releasing the last page stops that device's one shared output source.
+  void Function() claimRemoteDeviceView(String deviceId) {
+    final token = Object();
+    _remoteDeviceViews[token] = deviceId;
+    _scheduleDeviceAudio();
+    return () {
+      if (_remoteDeviceViews.remove(token) == null) return;
+      if (!_remoteDeviceViews.containsValue(deviceId)) {
+        _stopDeviceAudio(deviceId);
+      }
+      _scheduleDeviceAudio();
+    };
+  }
+
   final _consumedShareIds = <String>{};
-  String? _audioFocusTarget;
-  Future<void> _audioFocusQueue = Future<void>.value();
+  final _remoteDeviceViews = <Object, String>{};
+  final _managedAudioSources = <String, String>{};
+  final _audioDeviceWork = <String, Future<void>>{};
+  final _audioStops = <String, Future<void>>{};
+  final _audioDeviceEpochs = <String, int>{};
+  final _audioFailures = <String, String>{};
+  Future<void> _deviceAudioQueue = Future<void>.value();
+  bool _deviceAudioScheduled = false;
   Future<void> _settingsQueue = Future<void>.value();
   bool _disposed = true;
   int _generation = 0;
@@ -112,6 +146,12 @@ class AppController extends _$AppController {
     final ownedViews = _sessionViews;
     final generation = ++_generation;
     _disposed = false;
+    _deviceAudioQueue = Future<void>.value();
+    _deviceAudioScheduled = false;
+    _audioDeviceWork.clear();
+    _audioStops.clear();
+    _audioDeviceEpochs.clear();
+    _audioFailures.clear();
     _consumedShareIds.clear();
     final events = StreamController<Json>.broadcast(sync: true);
     _events = events;
@@ -142,7 +182,6 @@ class AppController extends _$AppController {
           _settingsRequest++;
           _settingsEpoch++;
           _shareRequest++;
-          _audioFocusTarget = null;
           next = next.copyWith(
             reconciliationPending: true,
             reconciliationError: () => event['type'] == 'state.resync.failed'
@@ -216,6 +255,10 @@ class AppController extends _$AppController {
         state = next;
         // Bound pages must see the calibrated state while handling this event.
         events.add(frozen);
+        if (value(event, 'type').startsWith('session.') ||
+            ['state.resynced', 'devices.changed'].contains(event['type'])) {
+          _scheduleDeviceAudio();
+        }
         if (value(event, 'type').startsWith('device')) {
           unawaited(refreshDevices());
         }
@@ -228,7 +271,22 @@ class AppController extends _$AppController {
     );
     ref.onDispose(() {
       ownedViews.invalidate();
-      if (_generation == generation) _disposed = true;
+      if (_generation == generation) {
+        _disposed = true;
+        _remoteDeviceViews.clear();
+        final devices = {
+          ..._managedAudioSources.keys,
+          ..._audioDeviceWork.keys,
+        };
+        _managedAudioSources.clear();
+        for (final device in devices) {
+          unawaited(
+            dependencies
+                .request('audio.stop', {'deviceId': device})
+                .catchError((Object _) => <String, dynamic>{}),
+          );
+        }
+      }
       unawaited(subscription.cancel());
       unawaited(events.close());
       final close = dependencies.close;
@@ -479,6 +537,7 @@ class AppController extends _$AppController {
         loading: false,
         deviceError: () => null,
       );
+      _scheduleDeviceAudio();
     } catch (error) {
       if (_current(generation) && requestId == _deviceRequest) {
         state = state.copyWith(loading: false, deviceError: () => '$error');
@@ -519,74 +578,209 @@ class AppController extends _$AppController {
     return operation;
   }
 
-  void rememberAudioDevices(List<Object?> ids) {
-    if (isDisposed()) return;
-    // A successful user stop must not be undone by focus when saving fails.
-    state = state.copyWith(settings: {...state.settings, 'audioDevices': ids});
-  }
-
-  void cancelAudioFollow() {
-    _audioFocusTarget = null;
-    if (!isDisposed() && state.audioError != null) {
-      state = state.copyWith(audioError: () => null);
-    }
-  }
-
-  Future<void> focusDevice(String? id) {
+  Future<void> updateDeviceSetting(String deviceId, String key, Object? next) {
     final generation = _generation;
-    if (!_current(generation)) return Future<void>.value();
+    _settingsRequest++;
+    final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
+      if (!_current(generation)) return;
+      final epoch = _settingsEpoch;
+      final settings = jsonObject(state.settings['deviceSettings']);
+      final devices = <String, dynamic>{
+        ...settings,
+        deviceId: {...jsonObject(settings[deviceId]), key: next},
+      };
+      final result = await execute(InteropCommand.settingsUpdate, {
+        'deviceSettings': devices,
+      });
+      if (_current(generation) && epoch == _settingsEpoch) {
+        state = state.copyWith(
+          settings: {...state.settings, 'deviceSettings': devices, ...result},
+        );
+      }
+    });
+    _settingsQueue = operation;
+    return operation;
+  }
+
+  Future<void> focusDevice(String? id) async {
+    if (isDisposed()) return;
     if (state.focusedDeviceId != id) {
       state = state.copyWith(focusedDeviceId: () => id);
     }
-    _audioFocusTarget = id;
-    if (id == null) return Future<void>.value();
-    _audioFocusQueue = _audioFocusQueue.then((_) async {
-      bool intended() =>
-          _current(generation) &&
-          !state.reconciliationPending &&
-          _audioFocusTarget == id &&
-          value(state.settings, 'audioMode', 'follow') == 'follow' &&
-          state.settings['audioDevices'] is List<Object?> &&
-          (state.settings['audioDevices'] as List<Object?>).isNotEmpty;
-      if (!intended()) return;
-      try {
-        final sources = objects(
-          (await execute(InteropCommand.audioSources))['sources'],
-        );
-        if (!intended()) return;
-        if (sources.any(
-          (source) => source['deviceId'] == id && source['status'] == 'playing',
-        )) {
-          return;
-        }
-        for (final source in sources.where(
-          (source) =>
-              source['deviceId'] != id &&
-              ['playing', 'starting', 'paused'].contains(source['status']),
-        )) {
-          if (!intended()) return;
-          await execute(InteropCommand.audioStop, {
-            'deviceId': source['deviceId'],
-            'sourceId': source['sourceId'] ?? source['id'],
-          });
-        }
-        if (!intended()) return;
-        final result = await execute(InteropCommand.audioStart, {
-          'deviceId': id,
+  }
+
+  void _scheduleDeviceAudio() {
+    if (isDisposed() || _deviceAudioScheduled || !_hasDeviceAudioWork) return;
+    _deviceAudioScheduled = true;
+    final generation = _generation;
+    Future<void>.microtask(() {
+      _deviceAudioScheduled = false;
+      if (!_current(generation)) return;
+      _deviceAudioQueue = _deviceAudioQueue
+          .catchError((Object _) {})
+          .then((_) => _syncDeviceAudio(generation));
+    });
+  }
+
+  bool get _hasDeviceAudioWork =>
+      _remoteDeviceViews.isNotEmpty ||
+      _managedAudioSources.isNotEmpty ||
+      _audioDeviceWork.isNotEmpty ||
+      _audioStops.isNotEmpty;
+
+  bool _wantsDeviceAudio(String device, int generation, [int? epoch]) =>
+      _current(generation) &&
+      !state.reconciliationPending &&
+      (epoch == null || (_audioDeviceEpochs[device] ?? 0) == epoch) &&
+      _remoteDeviceViews.containsValue(device) &&
+      state.devices.any(
+        (record) => record['id'] == device && record['status'] == 'connected',
+      );
+
+  /// Device stop also cancels the bridge's pending start intent synchronously.
+  /// It must never wait behind any device's player startup or ready receipt.
+  void _stopDeviceAudio(String device, {String? sourceId}) {
+    _audioDeviceEpochs[device] = (_audioDeviceEpochs[device] ?? 0) + 1;
+    _audioDeviceWork.remove(device);
+    if (_audioStops.containsKey(device)) return;
+    final generation = _generation;
+    var stopped = false;
+    late final Future<void> stopping;
+    stopping = _dependencies
+        .request('audio.stop', {'deviceId': device, 'sourceId': ?sourceId})
+        .then<void>((_) {
+          stopped = true;
+          if (!_current(generation)) return;
+          if (sourceId == null || _managedAudioSources[device] == sourceId) {
+            _managedAudioSources.remove(device);
+          }
+          _audioFailures.remove(device);
+          _publishAudioFailures();
+        })
+        .catchError((Object error) {
+          if (_current(generation)) {
+            _audioFailures[device] = '$error';
+            _publishAudioFailures();
+          }
+        })
+        .whenComplete(() {
+          if (identical(_audioStops[device], stopping)) {
+            _audioStops.remove(device);
+          }
+          if (stopped && _current(generation)) _scheduleDeviceAudio();
         });
-        if (!intended()) return;
-        if (result['status'] != 'playing') {
-          throw StateError(value(result, 'reason', '尚未确认设备声音开始播放。'));
+    _audioStops[device] = stopping;
+  }
+
+  void _publishAudioFailures() {
+    if (isDisposed() || state.reconciliationPending) return;
+    state = state.copyWith(
+      audioError: () => _audioFailures.isEmpty
+          ? null
+          : '设备声音未能播放：${_audioFailures.values.join('；')}',
+    );
+  }
+
+  Future<void> _syncDeviceAudio(int generation) async {
+    if (!_current(generation) ||
+        state.reconciliationPending ||
+        !_hasDeviceAudioWork) {
+      return;
+    }
+    try {
+      final sources = objects(
+        (await execute(InteropCommand.audioSources))['sources'],
+      );
+      if (!_current(generation) || state.reconciliationPending) return;
+      final sessions = _remoteDeviceViews.isEmpty
+          ? <Json>[]
+          : objects((await execute(InteropCommand.sessionList))['sessions']);
+      if (!_current(generation) || state.reconciliationPending) return;
+      final wanted = _remoteDeviceViews.values
+          .where(
+            (device) =>
+                _wantsDeviceAudio(device, generation) &&
+                sessions.any(
+                  (session) =>
+                      session['deviceId'] == device &&
+                      [
+                        'streaming',
+                        'active',
+                        'ready',
+                        'paused',
+                        'starting',
+                      ].contains(session['status']),
+                ),
+          )
+          .toSet();
+      final active = <String>{};
+      for (final source in sources) {
+        if (!['playing', 'starting', 'paused'].contains(source['status'])) {
+          continue;
         }
-        await updateSetting('audioDevices', [id]);
-        if (intended()) state = state.copyWith(audioError: () => null);
-      } catch (error) {
-        if (intended()) {
-          state = state.copyWith(audioError: () => '声音切换未完成：$error');
+        final device = value(source, 'deviceId');
+        final sourceId = value(source, 'sourceId', value(source, 'id'));
+        if (wanted.contains(device)) {
+          active.add(device);
+          _managedAudioSources[device] = sourceId;
+        } else if (!_audioStops.containsKey(device)) {
+          _stopDeviceAudio(device, sourceId: sourceId);
         }
       }
-    });
-    return _audioFocusQueue;
+      for (final device in wanted.difference(active)) {
+        if (_audioDeviceWork.containsKey(device)) continue;
+        final epoch = _audioDeviceEpochs[device] ?? 0;
+        late final Future<void> work;
+        work = _startDeviceAudio(device, generation, epoch).whenComplete(() {
+          if (identical(_audioDeviceWork[device], work)) {
+            _audioDeviceWork.remove(device);
+          }
+          if (_current(generation) &&
+              (_audioDeviceEpochs[device] ?? 0) != epoch) {
+            _scheduleDeviceAudio();
+          }
+        });
+        _audioDeviceWork[device] = work;
+      }
+      _publishAudioFailures();
+    } catch (error) {
+      if (_current(generation) && !state.reconciliationPending) {
+        state = state.copyWith(audioError: () => '设备声音未能播放：$error');
+      }
+    }
+  }
+
+  Future<void> _startDeviceAudio(
+    String device,
+    int generation,
+    int epoch,
+  ) async {
+    final dependencies = _dependencies;
+    try {
+      await _audioStops[device];
+      if (!_wantsDeviceAudio(device, generation, epoch)) return;
+      final source = await execute(InteropCommand.audioStart, {
+        'deviceId': device,
+      });
+      final sourceId = value(source, 'sourceId', value(source, 'id'));
+      if (!_wantsDeviceAudio(device, generation, epoch)) {
+        await dependencies.request('audio.stop', {
+          'deviceId': device,
+          'sourceId': sourceId,
+        });
+        return;
+      }
+      _managedAudioSources[device] = sourceId;
+      if (!['playing', 'paused'].contains(source['status'])) {
+        throw StateError(value(source, 'reason', '尚未确认设备声音开始播放。'));
+      }
+      _audioFailures.remove(device);
+    } catch (error) {
+      if (_wantsDeviceAudio(device, generation, epoch)) {
+        _audioFailures[device] = '$error';
+      }
+    }
+    if (_current(generation)) _publishAudioFailures();
   }
 
   Json currentDevice(Json original) => state.devices.firstWhere(

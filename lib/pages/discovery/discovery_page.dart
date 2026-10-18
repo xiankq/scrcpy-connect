@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -46,24 +47,17 @@ class DiscoveryPage extends StatelessWidget {
             ),
           );
         }
-        return ListView(
-          padding: const EdgeInsets.all(24),
+        return GroupedListView(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
           children: [
             const StateNote('发现设备不表示已经获得授权。请核对设备并完成配对。'),
             ...list.map((d) {
               final endpoints = objects(d['endpoints']);
               final endpoint = endpoints.isEmpty ? d : endpoints.first;
-              final trusted = d['trusted'] == true || d['paired'] == true;
               final pairingService = d['kind'] == 'pairing';
               return ActionRow(
                 icon: LucideIcons.smartphone,
                 title: value(d, 'name', value(d, 'instance', '附近 Android 设备')),
-                subtitle:
-                    '${value(endpoint, 'address')}:${value(endpoint, 'port')} · ${trusted
-                        ? '已有信任'
-                        : pairingService
-                        ? '等待配对'
-                        : '等待核验授权'}',
                 onTap: () => ConnectionFormRoute(
                   pairing: pairingService,
                   transport: pairingService

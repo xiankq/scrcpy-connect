@@ -1,7 +1,7 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -32,7 +32,6 @@ class SessionToolsPage extends HookWidget {
     final selected = useState(sessionId);
     return PageFrame(
       title: '屏幕与输入工具',
-      subtitle: deviceName(device),
       child: CommandView(
         controller: controller,
         command: 'session.list',
@@ -46,15 +45,15 @@ class SessionToolsPage extends HookWidget {
               )
               .toList();
           if (selected.value == null) {
-            return ListView(
-              padding: const EdgeInsets.all(24),
+            return GroupedListView(
+              padding: const EdgeInsets.all(DesignTokens.spacingMd),
               children: [
                 const StateNote('选择要操作的窗口。截图和输入只会作用于所选会话。'),
                 for (final session in sessions)
                   ActionRow(
                     icon: LucideIcons.appWindow,
                     title: value(session, 'name', '手机屏幕'),
-                    subtitle: statusText(value(session, 'status')),
+
                     onTap: () => selected.value = value(
                       session,
                       'sessionId',
@@ -95,17 +94,14 @@ class SessionToolsPage extends HookWidget {
     );
   }
 
-  Widget tools(BuildContext context, Json session) => ListView(
-    padding: const EdgeInsets.all(24),
+  Widget tools(BuildContext context, Json session) => GroupedListView(
+    padding: const EdgeInsets.all(DesignTokens.spacingMd),
     children: [
       StateNote('当前窗口：${value(session, 'name', '手机屏幕')}。操作屏幕或输入时会进入该窗口的全屏画面。'),
       ActionRow(
         icon: LucideIcons.camera,
         title: '截取当前画面',
-        subtitle: session['status'] == 'paused'
-            ? '窗口已暂停，将截取最后显示的画面'
-            : '截取所选窗口的画面',
-        color: ConnectTokens.coral,
+
         onTap: () async {
           final result = await perform(
             context,
@@ -122,7 +118,12 @@ class SessionToolsPage extends HookWidget {
                 builder: (context) => SafeArea(
                   child: SingleChildScrollView(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      padding: const EdgeInsets.fromLTRB(
+                        DesignTokens.spacingMd,
+                        0,
+                        DesignTokens.spacingMd,
+                        DesignTokens.spacingMd,
+                      ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -130,17 +131,17 @@ class SessionToolsPage extends HookWidget {
                             '截图已生成',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: DesignTokens.spacingMd),
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxHeight: 260),
                             child: Image.file(File(path), fit: BoxFit.contain),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: DesignTokens.spacingSm),
                           Text(
                             '图片暂存在本App内。通过系统分享交给其他应用，清理或卸载本App可能移除这份副本。',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: DesignTokens.spacingMd),
                           FilledButton.icon(
                             onPressed: () => perform(
                               context,
@@ -150,11 +151,11 @@ class SessionToolsPage extends HookWidget {
                             ),
                             icon: const Icon(
                               LucideIcons.externalLink,
-                              size: 18,
+                              size: DesignTokens.componentIconActionSize,
                             ),
                             label: const Text('用本机应用打开'),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: DesignTokens.spacingSm),
                           OutlinedButton.icon(
                             onPressed: () async {
                               try {
@@ -167,7 +168,10 @@ class SessionToolsPage extends HookWidget {
                                 }
                               }
                             },
-                            icon: const Icon(LucideIcons.share2, size: 18),
+                            icon: const Icon(
+                              LucideIcons.share2,
+                              size: DesignTokens.componentIconActionSize,
+                            ),
                             label: const Text('系统分享'),
                           ),
                         ],
@@ -217,7 +221,7 @@ class SessionToolsPage extends HookWidget {
       ActionRow(
         icon: LucideIcons.keyboard,
         title: '使用本机键盘',
-        subtitle: '打开全屏画面，再点选远端输入框',
+
         onTap: () => openRemoteRoute(
           context,
           deviceId: value(device, 'id'),
@@ -226,7 +230,7 @@ class SessionToolsPage extends HookWidget {
         ),
       ),
       Wrap(
-        spacing: 8,
+        spacing: DesignTokens.spacingXs,
         children: [
           for (final option in const [(4, '返回'), (3, '主屏幕'), (187, '最近任务')])
             OutlinedButton(
@@ -240,11 +244,11 @@ class SessionToolsPage extends HookWidget {
             ),
         ],
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: DesignTokens.spacingSm),
       ActionRow(
         icon: LucideIcons.keyboard,
         title: '发送文字',
-        subtitle: '敏感或受保护的输入框可能不允许粘贴',
+
         onTap: () async {
           final text = await askText(
             context,
@@ -262,11 +266,6 @@ class SessionToolsPage extends HookWidget {
             );
           }
         },
-      ),
-      ActionRow(
-        icon: LucideIcons.clipboard,
-        title: '剪贴板',
-        onTap: () => ClipboardRoute().push<void>(context),
       ),
     ],
   );

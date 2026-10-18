@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -81,23 +82,27 @@ class UsbGuidePage extends HookWidget {
 
     return PageFrame(
       title: 'USB 连接与授权',
-      child: ListView(
-        padding: const EdgeInsets.all(24),
+      child: GroupedListView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
-          const FeatureIcon(
-            LucideIcons.usb,
-            color: ConnectTokens.amber,
-            size: 72,
+          const Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FeatureIcon(
+              LucideIcons.usb,
+              color: ConnectTokens.amber,
+
+              size: DesignTokens.componentFeatureIconSize,
+            ),
           ),
-          const SizedBox(height: 24),
-          Text('用数据线连接两台设备', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 16),
+          const SizedBox(height: DesignTokens.spacingMd),
+          Text('用数据线连接两台设备', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: DesignTokens.spacingMd),
           const Text('请使用支持数据传输的数据线。本机需要支持 USB 主机角色。'),
           const SectionTitle('在本机确认'),
           const Text('连接后，允许本应用访问 USB 设备。此权限不要求本机开启调试。'),
           const SectionTitle('在被控手机确认'),
           const Text('开启开发者选项与 USB 调试，在手机系统弹窗中允许此主控的调试授权。请核对授权对象。'),
-          const SizedBox(height: 24),
+          const SizedBox(height: DesignTokens.spacingMd),
           FilledButton(
             onPressed: busy.value ? null : () => check(),
             child: Text(busy.value ? '正在检查实际授权…' : '已连接，检查授权'),
@@ -141,9 +146,7 @@ class UsbGuidePage extends HookWidget {
                     ActionRow(
                       icon: LucideIcons.smartphone,
                       title: value(d, 'serial', deviceName(d)),
-                      subtitle: d['status'] != null
-                          ? statusText(value(d, 'status'))
-                          : 'USB ${value(d, 'vendorId')}:${value(d, 'productId')} · ${d['permission'] == true ? '系统访问已允许，等待连接核验' : '连接时请求系统访问'}',
+
                       onTap: d['status'] == 'connected'
                           ? () =>
                                 WorkspaceRoute(deviceId: value(d, 'id'))

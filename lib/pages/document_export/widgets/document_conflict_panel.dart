@@ -165,9 +165,9 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('存在同名项目', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
+          const SizedBox(height: DesignTokens.spacingXs),
           Text(value(pending, 'name')),
-          const SizedBox(height: 8),
+          const SizedBox(height: DesignTokens.spacingXs),
           const Text('此位置暂不支持替换同名内容；已有文件会保留。'),
           const Text('保留两份会使用新名称。本机暂存会保留；取消不会删除已保存的项目。'),
           CheckboxListTile(
@@ -180,8 +180,8 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
           ),
           if (_error != null) StateNote(_error!),
           Wrap(
-            spacing: 12,
-            runSpacing: 8,
+            spacing: DesignTokens.spacingSm,
+            runSpacing: DesignTokens.spacingXs,
             children: [
               FilledButton(
                 onPressed: busy ? null : () => _resolve('keepBoth'),

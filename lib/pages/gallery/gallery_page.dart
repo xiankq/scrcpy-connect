@@ -50,7 +50,7 @@ class GalleryPage extends HookWidget {
 
     return PageFrame(
       title: '手机相册',
-      subtitle: deviceName(device),
+
       actions: [
         IconButton(
           tooltip: '重新检查相册',
@@ -76,7 +76,12 @@ class GalleryPage extends HookWidget {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                padding: const EdgeInsets.fromLTRB(
+                  DesignTokens.spacingMd,
+                  DesignTokens.spacingXs,
+                  DesignTokens.spacingLg,
+                  DesignTokens.spacingSm,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -91,7 +96,7 @@ class GalleryPage extends HookWidget {
                             },
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: DesignTokens.spacingXs),
                     Text(
                       scan.scanning
                           ? '已检查 ${data['visitedDirectories'] ?? 0} 个文件夹、${data['visitedEntries'] ?? 0} 项'
@@ -99,7 +104,7 @@ class GalleryPage extends HookWidget {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     if (scan.scanning) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: DesignTokens.spacingSm),
                       const LinearProgressIndicator(minHeight: 2),
                       TextButton(
                         onPressed: scan.scanId == null || scan.stopping
@@ -117,21 +122,19 @@ class GalleryPage extends HookWidget {
                     ],
                     if (scan.result != null)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Glass(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: DesignTokens.spacingSm,
+                        ),
+                        child: ContentPanel(
+                          padding: EdgeInsets.zero,
                           child: ListTile(
-                            leading: const Icon(
-                              LucideIcons.info,
-                              color: ConnectTokens.coral,
-                            ),
+                            leading: const Icon(LucideIcons.info),
                             trailing: const Icon(
                               LucideIcons.chevronUp,
-                              size: 18,
+                              size: DesignTokens.componentIconActionSize,
                             ),
                             title: const Text('相册范围与未读项目'),
-                            subtitle: Text(
-                              '当前用户的共享存储 · ${data['issueCount'] ?? 0} 处未完整检查',
-                            ),
+
                             onTap: () => showModalBottomSheet<void>(
                               context: context,
                               backgroundColor: Colors.transparent,
@@ -170,7 +173,10 @@ class GalleryPage extends HookWidget {
                                         .toList(),
                                   )
                                 : null,
-                            icon: const Icon(LucideIcons.download, size: 18),
+                            icon: const Icon(
+                              LucideIcons.download,
+                              size: DesignTokens.componentIconActionSize,
+                            ),
                             label: const Text('保存原文件'),
                           ),
                         ],
@@ -196,12 +202,14 @@ class GalleryPage extends HookWidget {
                 ),
               ),
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.spacingMd,
+              ),
               sliver: SliverGrid.builder(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 160,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
+                  crossAxisSpacing: DesignTokens.spacingXs,
+                  mainAxisSpacing: DesignTokens.spacingXs,
                 ),
                 itemCount: media.length,
                 itemBuilder: (context, i) {
@@ -212,7 +220,9 @@ class GalleryPage extends HookWidget {
                     selected: selected.value.contains(path),
                     button: true,
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(
+                        DesignTokens.roundedMd,
+                      ),
                       onTap: !fileCanOpen(file)
                           ? null
                           : () {
@@ -230,14 +240,18 @@ class GalleryPage extends HookWidget {
                               }
                             },
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(
+                          DesignTokens.roundedMd,
+                        ),
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
                             if (!fileCanOpen(file))
                               Container(
                                 color: Theme.of(context).colorScheme.surface,
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(
+                                  DesignTokens.spacingSm,
+                                ),
                                 child: Center(
                                   child: Text(
                                     fileUnavailableReason(file),
@@ -260,7 +274,7 @@ class GalleryPage extends HookWidget {
                                 child: Icon(
                                   LucideIcons.play,
                                   color: Colors.white,
-                                  size: 20,
+                                  size: DesignTokens.componentIconActionSize,
                                 ),
                               ),
                             if (selected.value.contains(path))
@@ -282,14 +296,16 @@ class GalleryPage extends HookWidget {
             if (scan.nextOffset != null)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(DesignTokens.spacingMd),
                   child: OutlinedButton(
                     onPressed: scan.paging ? null : scan.loadMore,
                     child: Text(scan.paging ? '正在加载' : '加载更多'),
                   ),
                 ),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            const SliverToBoxAdapter(
+              child: SizedBox(height: DesignTokens.spacingLg),
+            ),
           ],
         ),
       ),

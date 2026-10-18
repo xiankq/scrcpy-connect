@@ -122,7 +122,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('设置'));
       await tester.pumpAndSettle();
-      expect(find.text('外观与易用性'), findsOneWidget);
+      expect(find.text('外观'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -197,7 +197,7 @@ void main() {
       expect(calls.where((call) => call.startsWith('session.')), isEmpty);
       await tester.tap(find.text('添加设备').last);
       await tester.pumpAndSettle();
-      expect(find.text('选择连接方式'), findsOneWidget);
+      expect(find.text('无线连接'), findsOneWidget);
       expect(find.text('手动填写地址'), findsOneWidget);
     },
   );
@@ -318,6 +318,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      final frame = tester.getRect(find.byType(Texture));
       final one = await tester.startGesture(
         const Offset(400, 300),
         pointer: 101,
@@ -331,7 +332,10 @@ void main() {
       await two.cancel();
       await tester.pumpAndSettle();
       expect(touches.first['x'], 100);
-      expect(touches.first['y'], 200);
+      expect(
+        touches.first['y'],
+        ((300 - frame.top) / frame.height * 400).round(),
+      );
       expect(touches.first['screenWidth'], 200);
       expect(touches.first['screenHeight'], 400);
       expect(

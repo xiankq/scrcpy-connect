@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -37,10 +38,8 @@ class ReceiveContentPage extends HookConsumerWidget {
     final busy = useState(false);
     final shareResult = useState<String?>(null);
     final taskId = value(task, 'id', value(task, 'transferId'));
-    final source = transferView(controller, task);
     return PageFrame(
       title: share ? '分享原文件' : '保存原文件',
-      subtitle: value(source, 'sourceLabel'),
       child: CommandView(
         controller: controller,
         command: 'transfers.get',
@@ -100,15 +99,14 @@ class ReceiveContentPage extends HookConsumerWidget {
                 'finalizing',
                 'cancelling',
               ].contains(status);
-              return ListView(
-                padding: const EdgeInsets.all(24),
+              return GroupedListView(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
                 children: [
                   OriginalFileHeader(
                     name: value(current, 'name', '原文件'),
                     kind: value(current, 'kind', 'file'),
-                    subtitle: '来源：${value(source, 'sourceLabel')}',
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: DesignTokens.spacingLg),
                   ContentPanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +118,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                             ConnectTokens.amber,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: DesignTokens.spacingSm),
                         Text(
                           pending
                               ? '正在准备原文件'
@@ -129,21 +127,44 @@ class ReceiveContentPage extends HookConsumerWidget {
                               : statusText(status),
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
+                        const SizedBox(height: DesignTokens.spacingSm),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(value(current, 'sourceLabel')),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: DesignTokens.spacingSm,
+                              ),
+                              child: Icon(
+                                LucideIcons.arrowRight,
+                                size: DesignTokens.componentIconSmallSize,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                value(current, 'destinationLabel'),
+                                textAlign: TextAlign.end,
+                              ),
+                            ),
+                          ],
+                        ),
                         if (pending) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: DesignTokens.spacingSm),
                           const Text('原文件完整取回前，不会保存或分享不完整内容。'),
                         ],
                       ],
                     ),
                   ),
                   if (pending) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: DesignTokens.spacingMd),
                     LinearProgressIndicator(
                       value: total > 0
                           ? (completed / total).clamp(0, 1).toDouble()
                           : null,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: DesignTokens.spacingXs),
                     Text(
                       '${bytes(completed)} / ${total > 0 ? bytes(total) : '大小待核验'}',
                     ),
@@ -249,7 +270,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                   ],
                   if (ready && share && current['kind'] == 'directory')
                     const StateNote('文件夹请先保存到系统位置，再从文件应用中选择需要分享的内容。'),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: DesignTokens.spacingMd),
                   TextButton(
                     onPressed: () =>
                         TransferDetailsRoute(taskId: taskId)

@@ -217,7 +217,7 @@ void main() {
       await tapPageAction(
         tester,
         find.byType(DeviceWorkspacePage),
-        find.text('画质与声音'),
+        find.text('画质'),
       );
       await waitFor(
         tester,
@@ -302,7 +302,11 @@ void main() {
           reason: 'This visual run requires the real backdrop shader backend.',
         );
       }
-      final viewport = tester.getRect(remote);
+      final viewport = tester.getRect(
+        find
+            .ancestor(of: find.byType(Texture), matching: find.byType(Listener))
+            .first,
+      );
       expect(surface.width, lessThanOrEqualTo(viewport.width));
       expect(surface.height, lessThanOrEqualTo(viewport.height));
       expect(
@@ -317,6 +321,51 @@ void main() {
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
       ).read(appControllerProvider.notifier);
+      for (final tooltip in ['返回', '主屏幕', '最近任务']) {
+        final button = find.descendant(
+          of: remote,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is IconButton && widget.tooltip == tooltip,
+          ),
+        );
+        expect(button, findsOneWidget);
+        expect(tester.widget<IconButton>(button).onPressed, isNotNull);
+      }
+      binding.reportData!['defaultNavigationButtonsPresent'] = true;
+      await binding.handlePopRoute();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        remote,
+        findsOneWidget,
+        reason: 'System Back must control the target while retaining the remote route.',
+      );
+      expectHealthyRemote();
+      final exitRect = tester.getRect(
+        find.descendant(
+          of: find.byType(ExitHandle),
+          matching: find.byType(GestureDetector),
+        ),
+      );
+      final letterbox = [
+        if (surface.left - viewport.left > 2)
+          Offset((viewport.left + surface.left) / 2, viewport.center.dy),
+        if (viewport.right - surface.right > 2)
+          Offset((surface.right + viewport.right) / 2, viewport.center.dy),
+        if (surface.top - viewport.top > 2)
+          Offset(viewport.center.dx, (viewport.top + surface.top) / 2),
+        if (viewport.bottom - surface.bottom > 2)
+          Offset(viewport.center.dx, (surface.bottom + viewport.bottom) / 2),
+      ].where((point) => !exitRect.contains(point)).firstOrNull;
+      expect(
+        letterbox,
+        isNotNull,
+        reason:
+            'This fixture must expose a real letterbox area outside the video.',
+      );
+      await tester.tapAt(letterbox!);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(remote, findsOneWidget);
+      expectHealthyRemote();
       final sessions = objects(
         (await controller.request('session.list'))['sessions'],
       );
@@ -326,6 +375,14 @@ void main() {
       expect(session['codec'], 'h265');
       expect(session['firstFrameDecoded'], isTrue);
       expect(session['evidence'], 'mdk.snapshot');
+      expect(session['capturePaused'], isNot(true));
+      binding.reportData!['systemBackRetainsStreamingRemote'] = true;
+      binding.reportData!['letterboxTapRetainsStreamingRemote'] = true;
+      binding.reportData!['letterboxTap'] = {
+        'x': letterbox.dx,
+        'y': letterbox.dy,
+      };
+      await binding.takeScreenshot('remote-after-system-back-and-letterbox');
       binding.reportData!['pageSelectedCodec'] = session['codec'];
       binding.reportData!['actualStreamWidth'] = session['width'];
       binding.reportData!['actualStreamHeight'] = session['height'];
@@ -408,13 +465,38 @@ void main() {
           (await controller.request('session.list'))['sessions'],
         ).singleWhere((item) => item['sessionId'] == session['sessionId']);
         if (retained['status'] == 'paused' &&
-            retained['capturePaused'] == true) {
+            retained['presentationOnly'] == true &&
+            retained['capturePaused'] == false) {
           break;
         }
         await tester.pump(const Duration(milliseconds: 100));
       } while (DateTime.now().isBefore(pauseDeadline));
       expect(retained['status'], 'paused');
-      expect(retained['capturePaused'], true);
+      expect(retained['presentationOnly'], true);
+      expect(retained['capturePaused'], false);
+      binding.reportData!['exitPausesOnlyLocalPresentation'] = true;
+      final remoteDeviceId = value(session, 'deviceId');
+      expect(remoteDeviceId, isNotEmpty);
+      List<Json> activeAudio = [];
+      final audioDeadline = DateTime.now().add(const Duration(seconds: 5));
+      do {
+        activeAudio =
+            objects((await controller.request('audio.sources'))['sources'])
+                .where(
+                  (source) =>
+                      source['deviceId'] == remoteDeviceId &&
+                      ['playing', 'starting'].contains(source['status']),
+                )
+                .toList();
+        if (activeAudio.isEmpty) break;
+        await tester.pump(const Duration(milliseconds: 100));
+      } while (DateTime.now().isBefore(audioDeadline));
+      expect(
+        activeAudio,
+        isEmpty,
+        reason: 'A retained paused session must not keep device audio playing after its page closes.',
+      );
+      binding.reportData!['closedRemoteStopsDeviceAudio'] = true;
       await tester.pump(const Duration(milliseconds: 500));
       await binding.takeScreenshot('workspace-after-remote');
       // The fixture owns this exact window; returning did not destroy it.

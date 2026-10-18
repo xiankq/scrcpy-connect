@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/widgets/state_note.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/file_row_title.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -112,7 +115,7 @@ class FilesPage extends HookWidget {
 
     return PageFrame(
       title: '文件管理',
-      subtitle: deviceName(device),
+
       actions: [
         IconButton(
           tooltip: '新建文件夹',
@@ -165,7 +168,12 @@ class FilesPage extends HookWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+            padding: const EdgeInsets.fromLTRB(
+              DesignTokens.spacingMd,
+              DesignTokens.spacingXs,
+              DesignTokens.spacingLg,
+              DesignTokens.spacingSm,
+            ),
             child: Column(
               children: [
                 Row(
@@ -182,7 +190,10 @@ class FilesPage extends HookWidget {
                               path.value = parent.isEmpty ? '/' : parent;
                               selected.value = {};
                             },
-                      icon: const Icon(LucideIcons.arrowUp, size: 20),
+                      icon: const Icon(
+                        LucideIcons.arrowUp,
+                        size: DesignTokens.componentIconActionSize,
+                      ),
                     ),
                     Expanded(
                       child: Text(
@@ -195,11 +206,14 @@ class FilesPage extends HookWidget {
                     IconButton(
                       tooltip: '刷新目录',
                       onPressed: () => revision.value++,
-                      icon: const Icon(LucideIcons.refreshCw, size: 18),
+                      icon: const Icon(
+                        LucideIcons.refreshCw,
+                        size: DesignTokens.componentIconActionSize,
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: DesignTokens.spacingXs),
                 Row(
                   children: [
                     Expanded(
@@ -207,7 +221,10 @@ class FilesPage extends HookWidget {
                         controller: query,
                         decoration: const InputDecoration(
                           hintText: '搜索当前目录',
-                          prefixIcon: Icon(LucideIcons.search, size: 18),
+                          prefixIcon: Icon(
+                            LucideIcons.search,
+                            size: DesignTokens.componentIconActionSize,
+                          ),
                         ),
                       ),
                     ),
@@ -218,7 +235,10 @@ class FilesPage extends HookWidget {
                         path: path.value,
                         query: query.text,
                       ).push<void>(context),
-                      icon: const Icon(LucideIcons.folderSearch, size: 20),
+                      icon: const Icon(
+                        LucideIcons.folderSearch,
+                        size: DesignTokens.componentIconActionSize,
+                      ),
                     ),
                   ],
                 ),
@@ -280,7 +300,9 @@ class FilesPage extends HookWidget {
                   children: [
                     if (selected.value.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DesignTokens.spacingMd,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
@@ -333,9 +355,14 @@ class FilesPage extends HookWidget {
                       child: RefreshIndicator(
                         onRefresh: () async => refresh(),
                         child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                          padding: const EdgeInsets.fromLTRB(
+                            DesignTokens.spacingMd,
+                            0,
+                            DesignTokens.spacingMd,
+                            DesignTokens.spacingMd,
+                          ),
                           itemCount: entries.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          separatorBuilder: (_, _) => const SizedBox.shrink(),
                           itemBuilder: (context, i) {
                             final entry = entries[i];
                             final entryPath = value(entry, 'path');
@@ -351,119 +378,142 @@ class FilesPage extends HookWidget {
                               selected.value = next;
                             }
 
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 6,
-                              ),
-                              leading: selected.value.isNotEmpty
-                                  ? Checkbox(
-                                      value: selected.value.contains(entryPath),
-                                      onChanged: manageable
-                                          ? (_) => toggle()
-                                          : null,
-                                    )
-                                  : FeatureIcon(
-                                      folder
-                                          ? LucideIcons.folder
-                                          : LucideIcons.file,
-                                      color: ConnectTokens.amber,
-                                      size: 44,
+                            return GroupedItem(
+                              index: i,
+                              count: entries.length,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: DesignTokens.spacingTight,
                                     ),
-                              title: Text(value(entry, 'name')),
-                              subtitle: Text(
-                                !openable || !manageable
-                                    ? fileUnavailableReason(entry)
-                                    : folder
-                                    ? '文件夹'
-                                    : bytes(entry['size']),
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              onLongPress: manageable ? toggle : null,
-                              onTap: !openable && !manageable
-                                  ? null
-                                  : () {
-                                      if (selected.value.isNotEmpty) {
-                                        toggle();
-                                      } else if (folder && openable) {
-                                        path.value = entryPath;
-                                        query.clear();
-                                      } else if (openable) {
-                                        FileDetailsRoute(
-                                          deviceId: value(device, 'id'),
-                                          path: value(entry, 'path'),
-                                        ).push<void>(context);
-                                      }
-                                    },
-                              trailing: PopupMenuButton<String>(
-                                tooltip: '文件操作',
-                                enabled: openable || manageable,
-                                onSelected: (action) async {
-                                  switch (action) {
-                                    case 'select':
-                                      toggle();
-                                    case 'rename':
-                                      final name = await askText(
-                                        context,
-                                        title: '重命名',
-                                        initial: value(entry, 'name'),
-                                      );
-                                      if (name != null && context.mounted) {
-                                        if (name.contains('/') ||
-                                            name == '.' ||
-                                            name == '..') {
-                                          feedback(context, '名称不能包含路径分隔符');
-                                          return;
+                                    leading: selected.value.isNotEmpty
+                                        ? Checkbox(
+                                            value: selected.value.contains(
+                                              entryPath,
+                                            ),
+                                            onChanged: manageable
+                                                ? (_) => toggle()
+                                                : null,
+                                          )
+                                        : FeatureIcon(
+                                            folder
+                                                ? LucideIcons.folder
+                                                : LucideIcons.file,
+                                            color: ConnectTokens.amber,
+
+                                            size: DesignTokens
+                                                .componentIconButtonSize,
+                                          ),
+                                    title: FileRowTitle(
+                                      tooltipTriggerMode:
+                                          TooltipTriggerMode.manual,
+                                      name: value(entry, 'name'),
+                                      path: value(entry, 'path'),
+                                      size: folder
+                                          ? null
+                                          : bytes(entry['size']),
+                                    ),
+
+                                    onLongPress: manageable ? toggle : null,
+                                    onTap: !openable && !manageable
+                                        ? null
+                                        : () {
+                                            if (selected.value.isNotEmpty) {
+                                              toggle();
+                                            } else if (folder && openable) {
+                                              path.value = entryPath;
+                                              query.clear();
+                                            } else if (openable) {
+                                              FileDetailsRoute(
+                                                deviceId: value(device, 'id'),
+                                                path: value(entry, 'path'),
+                                              ).push<void>(context);
+                                            }
+                                          },
+                                    trailing: PopupMenuButton<String>(
+                                      tooltip: '文件操作',
+                                      enabled: openable || manageable,
+                                      onSelected: (action) async {
+                                        switch (action) {
+                                          case 'select':
+                                            toggle();
+                                          case 'rename':
+                                            final name = await askText(
+                                              context,
+                                              title: '重命名',
+                                              initial: value(entry, 'name'),
+                                            );
+                                            if (name != null &&
+                                                context.mounted) {
+                                              if (name.contains('/') ||
+                                                  name == '.' ||
+                                                  name == '..') {
+                                                feedback(
+                                                  context,
+                                                  '名称不能包含路径分隔符',
+                                                );
+                                                return;
+                                              }
+                                              await mutate('files.rename', {
+                                                'path': entryPath,
+                                                'name': name,
+                                              });
+                                            }
+                                          case 'delete':
+                                            if (await confirm(
+                                                  context,
+                                                  '删除“${value(entry, 'name')}”？',
+                                                  '将从 ${deviceName(device)} 删除此${folder ? '文件夹及其内容' : '文件'}，无法在本应用撤销。',
+                                                  action: '删除',
+                                                  danger: true,
+                                                ) &&
+                                                context.mounted) {
+                                              await mutate('files.delete', {
+                                                'paths': [entryPath],
+                                              });
+                                            }
+                                          case 'download':
+                                            if (context.mounted) {
+                                              await retrieveFile(
+                                                context,
+                                                controller,
+                                                device,
+                                                entry,
+                                              );
+                                            }
                                         }
-                                        await mutate('files.rename', {
-                                          'path': entryPath,
-                                          'name': name,
-                                        });
-                                      }
-                                    case 'delete':
-                                      if (await confirm(
-                                            context,
-                                            '删除“${value(entry, 'name')}”？',
-                                            '将从 ${deviceName(device)} 删除此${folder ? '文件夹及其内容' : '文件'}，无法在本应用撤销。',
-                                            action: '删除',
-                                            danger: true,
-                                          ) &&
-                                          context.mounted) {
-                                        await mutate('files.delete', {
-                                          'paths': [entryPath],
-                                        });
-                                      }
-                                    case 'download':
-                                      if (context.mounted) {
-                                        await retrieveFile(
-                                          context,
-                                          controller,
-                                          device,
-                                          entry,
-                                        );
-                                      }
-                                  }
-                                },
-                                itemBuilder: (_) => [
-                                  PopupMenuItem(
-                                    enabled: manageable,
-                                    value: 'select',
-                                    child: Text('选择'),
+                                      },
+                                      itemBuilder: (_) => [
+                                        PopupMenuItem(
+                                          enabled: manageable,
+                                          value: 'select',
+                                          child: Text('选择'),
+                                        ),
+                                        PopupMenuItem(
+                                          enabled: manageable,
+                                          value: 'rename',
+                                          child: Text('重命名'),
+                                        ),
+                                        PopupMenuItem(
+                                          enabled: openable,
+                                          value: 'download',
+                                          child: Text('取回本机'),
+                                        ),
+                                        PopupMenuItem(
+                                          enabled: manageable,
+                                          value: 'delete',
+                                          child: Text('删除'),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  PopupMenuItem(
-                                    enabled: manageable,
-                                    value: 'rename',
-                                    child: Text('重命名'),
-                                  ),
-                                  PopupMenuItem(
-                                    enabled: openable,
-                                    value: 'download',
-                                    child: Text('取回本机'),
-                                  ),
-                                  PopupMenuItem(
-                                    enabled: manageable,
-                                    value: 'delete',
-                                    child: Text('删除'),
-                                  ),
+                                  if (!openable && !manageable)
+                                    StateNote(
+                                      fileUnavailableReason(entry),
+                                      icon: LucideIcons.circleAlert,
+                                    ),
                                 ],
                               ),
                             );

@@ -10,8 +10,8 @@ import 'package:flutter/widgets.dart';
 
 part 'clipboard_coordinator.g.dart';
 
-/// Coordinates one explicitly enabled clipboard object while this application
-/// is in the foreground. Existing values form a baseline rather than a write.
+/// Synchronizes the current device while foreground access is available.
+/// Every activation first takes the device clipboard as the local value.
 class ClipboardCoordinator with WidgetsBindingObserver {
   ClipboardCoordinator(this.controller) {
     WidgetsBinding.instance.addObserver(this);
@@ -31,7 +31,6 @@ class ClipboardCoordinator with WidgetsBindingObserver {
   bool _disposed = false;
   bool _pollQueued = false;
   bool _remoteQueued = false;
-  bool _conflict = false;
   bool _reconciling = false;
   final Set<int> _activations = {};
   bool get _foreground =>
@@ -44,7 +43,20 @@ class ClipboardCoordinator with WidgetsBindingObserver {
       _foreground &&
       _target == target &&
       _generation == generation &&
-      controller.snapshot().settings['clipboardSync'] == true;
+      controller.snapshot().focusedDeviceId == target &&
+      controller.snapshot().devices.any(
+        (device) => device['id'] == target && device['status'] == 'connected',
+      ) &&
+      _enabled(target);
+
+  bool _enabled(String? device) =>
+      device != null &&
+      jsonObject(
+            jsonObject(
+              controller.snapshot().settings['deviceSettings'],
+            )[device],
+          )['clipboardSync'] ==
+          true;
 
   void _enqueue(Future<void> Function() work) {
     final generation = _generation;
@@ -64,25 +76,21 @@ class ClipboardCoordinator with WidgetsBindingObserver {
       _suspendForVerification(controller.snapshot().reconciliationError);
       return;
     }
-    final enabled = controller.snapshot().settings['clipboardSync'] == true;
-    final mode = value(
-      controller.snapshot().settings,
-      'clipboardMode',
-      'follow',
-    );
-    final candidate = mode == 'fixed'
-        ? value(controller.snapshot().settings, 'clipboardDevice')
-        : controller.snapshot().focusedDeviceId;
+    final candidate = controller.snapshot().focusedDeviceId;
+    final enabled = _enabled(candidate);
     final connected =
         candidate != null &&
         candidate.isNotEmpty &&
         controller.snapshot().devices.any(
           (d) => d['id'] == candidate && d['status'] == 'connected',
         );
-    final configuration = '$enabled:$mode:$candidate:$connected:$_foreground';
+    final configuration = '$enabled:$candidate:$connected:$_foreground';
     if (_disposed || configuration == _configuration) return;
     _configuration = configuration;
     final generation = ++_generation;
+    _queue = Future<void>.value();
+    _pollQueued = false;
+    _remoteQueued = false;
     _pendingRemote = null;
     _timer?.cancel();
     _timer = null;
@@ -92,7 +100,6 @@ class ClipboardCoordinator with WidgetsBindingObserver {
       _pendingRemote = null;
       _local = null;
       _remote = null;
-      _conflict = false;
     }
     _target = target;
     if (!enabled) {
@@ -117,8 +124,7 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     _pendingRemote = null;
     _local = null;
     _remote = null;
-    _conflict = false;
-    if (controller.snapshot().settings['clipboardSync'] == true) {
+    if (_enabled(controller.snapshot().focusedDeviceId)) {
       controller.updateClipboardState(
         'waitingVerification',
         reason ?? '正在核验设备状态，剪贴板同步已暂停。',
@@ -148,8 +154,6 @@ class ClipboardCoordinator with WidgetsBindingObserver {
   Future<void> _activate(String target, int generation) async {
     if (!_active(target, generation)) return;
     try {
-      final local = await _readLocal(target, generation);
-      if (!_active(target, generation)) return;
       final result = await controller
           .execute(InteropCommand.clipboardGet, {'deviceId': target})
           .timeout(const Duration(seconds: 25));
@@ -158,26 +162,9 @@ class ClipboardCoordinator with WidgetsBindingObserver {
         throw StateError(value(result, 'reason', '尚未获得设备的文字剪贴板。'));
       }
       final remote = result['text'] as String;
-      if (!_initialized) {
-        _local = local;
-        _remote = remote;
-        _initialized = true;
-      } else {
-        final localChanged = local != _local;
-        final remoteChanged = remote != _remote;
-        if (localChanged && remoteChanged && local != remote) {
-          _local = local;
-          _remote = remote;
-          _markConflict();
-        } else if (localChanged && local != null && local != remote) {
-          await _sendLocal(target, generation, local);
-        } else if (remoteChanged && local != remote) {
-          await _writeLocal(target, generation, remote);
-        } else {
-          _local = local;
-          _remote = remote;
-        }
-      }
+      await _writeLocal(target, generation, remote);
+      if (!_active(target, generation)) return;
+      _initialized = true;
       if (!_active(target, generation) || !_initialized) return;
       _watching();
       _timer?.cancel();
@@ -216,13 +203,25 @@ class ClipboardCoordinator with WidgetsBindingObserver {
         }
         await _sendLocal(target, generation, current);
       } finally {
-        _pollQueued = false;
+        if (generation == _generation) _pollQueued = false;
       }
     });
   }
 
   void _event(Json event) {
     if (_disposed) return;
+    if (event['type'] == 'device.disconnect.requested' &&
+        event['deviceId'] == _target) {
+      _generation++;
+      _target = null;
+      _configuration = '';
+      _initialized = false;
+      _pendingRemote = null;
+      _timer?.cancel();
+      _timer = null;
+      controller.updateClipboardState('waitingDevice');
+      return;
+    }
     if (event['type'] == 'state.resync' ||
         event['type'] == 'state.resync.failed') {
       _suspendForVerification(controller.snapshot().reconciliationError);
@@ -285,19 +284,13 @@ class ClipboardCoordinator with WidgetsBindingObserver {
           final remote = _pendingRemote!;
           _pendingRemote = null;
           if (remote == _remote) continue;
-          final local = await _readLocal(target, generation);
-          if (!_active(target, generation)) return;
-          if (local != _local && local != remote) {
-            _local = local;
-            _remote = remote;
-            _markConflict();
-          } else {
-            await _writeLocal(target, generation, remote);
-          }
+          await _writeLocal(target, generation, remote);
         }
       } finally {
-        _remoteQueued = false;
-        if (_pendingRemote != null) _scheduleRemote();
+        if (generation == _generation) {
+          _remoteQueued = false;
+          if (_pendingRemote != null) _scheduleRemote();
+        }
       }
     });
   }
@@ -317,7 +310,6 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     if (result['applied'] != true) {
       throw StateError(value(result, 'reason', '设备尚未确认剪贴板写入结果，请主动核对。'));
     }
-    _conflict = false;
     _watching();
   }
 
@@ -328,21 +320,10 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     controller.recordClipboardWrite();
     await Clipboard.setData(ClipboardData(text: text));
     if (!_active(target, generation)) return;
-    _conflict = false;
     _watching();
   }
 
-  void _markConflict() {
-    _conflict = true;
-    controller.updateClipboardState(
-      'needsReview',
-      '两端剪贴板都已变化，尚未自动覆盖。请主动选择发送或获取。',
-    );
-  }
-
-  void _watching() {
-    if (!_conflict) controller.updateClipboardState('watching');
-  }
+  void _watching() => controller.updateClipboardState('watching');
 
   void _failed(Object error) {
     _timer?.cancel();

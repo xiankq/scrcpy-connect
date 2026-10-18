@@ -58,10 +58,10 @@ class VideoPreview extends HookWidget {
       return const Center(child: CircularProgressIndicator.adaptive());
     }
     return ColoredBox(
-      color: const Color(0xff111114),
-      child: Column(
+      color: DesignTokens.colorMediaInk,
+      child: Stack(
         children: [
-          Expanded(
+          Positioned.fill(
             child: Center(
               child: AspectRatio(
                 aspectRatio: player.value.aspectRatio,
@@ -69,52 +69,58 @@ class VideoPreview extends HookWidget {
               ),
             ),
           ),
-          Glass(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                VideoProgressIndicator(
-                  player,
-                  allowScrubbing: true,
-                  colors: VideoProgressColors(
-                    playedColor: Theme.of(context).colorScheme.primary,
-                    bufferedColor: Theme.of(context).colorScheme.primary
-                        .withValues(alpha: .24),
-                    backgroundColor: Theme.of(context).colorScheme.primary
-                        .withValues(alpha: .08),
+          Positioned(
+            left: DesignTokens.spacingMd,
+            right: DesignTokens.spacingMd,
+            bottom: DesignTokens.spacingMd,
+            child: Glass(
+              variant: GlassVariant.clear,
+              padding: const EdgeInsets.all(DesignTokens.spacingMd),
+              child: Column(
+                children: [
+                  VideoProgressIndicator(
+                    player,
+                    allowScrubbing: true,
+                    colors: VideoProgressColors(
+                      playedColor: Theme.of(context).colorScheme.primary,
+                      bufferedColor: Theme.of(context).colorScheme.primary
+                          .withValues(alpha: .24),
+                      backgroundColor: Theme.of(context).colorScheme.primary
+                          .withValues(alpha: .08),
+                    ),
                   ),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: player.value.isPlaying ? '暂停' : '播放',
-                      onPressed: () => player.value.isPlaying
-                          ? player.pause()
-                          : player.play(),
-                      icon: Icon(
-                        player.value.isPlaying
-                            ? LucideIcons.pause
-                            : LucideIcons.play,
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: player.value.isPlaying ? '暂停' : '播放',
+                        onPressed: () => player.value.isPlaying
+                            ? player.pause()
+                            : player.play(),
+                        icon: Icon(
+                          player.value.isPlaying
+                              ? LucideIcons.pause
+                              : LucideIcons.play,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        '${player.value.position.inMinutes}:${(player.value.position.inSeconds % 60).toString().padLeft(2, '0')} / ${player.value.duration.inMinutes}:${(player.value.duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                      Expanded(
+                        child: Text(
+                          '${player.value.position.inMinutes}:${(player.value.position.inSeconds % 60).toString().padLeft(2, '0')} / ${player.value.duration.inMinutes}:${(player.value.duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: player.value.volume == 0 ? '打开声音' : '静音',
-                      onPressed: () =>
-                          player.setVolume(player.value.volume == 0 ? 1 : 0),
-                      icon: Icon(
-                        player.value.volume == 0
-                            ? LucideIcons.volumeX
-                            : LucideIcons.volume2,
+                      IconButton(
+                        tooltip: player.value.volume == 0 ? '打开声音' : '静音',
+                        onPressed: () =>
+                            player.setVolume(player.value.volume == 0 ? 1 : 0),
+                        icon: Icon(
+                          player.value.volume == 0
+                              ? LucideIcons.volumeX
+                              : LucideIcons.volume2,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],

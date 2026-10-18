@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/activities/activities_page.dart';
+import 'package:scrcpy_connect/pages/remote/remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -60,10 +63,10 @@ void main() {
       Json? originalObservation;
       var connectedByTest = false;
       var observationStarted = false;
+      NavigatorState? remoteNavigator;
+      final ownedSessions = <String>{};
       try {
-        await controller.updateSetting('audioDevices', []);
-        await controller.updateSetting('audioMode', 'mix');
-        await controller.updateSetting('clipboardSync', false);
+        await controller.updateSetting('deviceSettings', <String, dynamic>{});
         deviceId = responseDeviceId(
           await request('devices.add', {
             'address': address,
@@ -109,7 +112,39 @@ void main() {
           isEmpty,
           reason: 'The test may only stop an audio source it created.',
         );
-        final started = await request('audio.start', {'deviceId': deviceId});
+        await controller.refreshDevices();
+        unawaited(
+          RemoteRoute(deviceId: deviceId!)
+              .push<void>(tester.element(find.byType(Scaffold).first)),
+        );
+        await waitFor(
+          tester,
+          () => find.byType(RemotePage).evaluate().isNotEmpty,
+          reason: 'The actual remote page must own automatic device sound.',
+        );
+        remoteNavigator = Navigator.of(
+          tester.element(find.byType(RemotePage)),
+          rootNavigator: true,
+        );
+        final audioDeadline = DateTime.now().add(const Duration(seconds: 40));
+        Json? started;
+        while (DateTime.now().isBefore(audioDeadline)) {
+          started = objects((await request('audio.sources'))['sources'])
+              .where(
+                (s) => s['deviceId'] == deviceId && s['status'] == 'playing',
+              )
+              .firstOrNull;
+          if (started != null) break;
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        expect(started, isNotNull);
+        started = started!;
+        ownedSessions.addAll(
+          objects((await request('session.list'))['sessions'])
+              .map((s) => value(s, 'sessionId'))
+              .toSet()
+              .difference(baselineSessions),
+        );
         sourceId = value(started, 'sourceId');
         expect(sourceId, isNotEmpty);
         expect(baselineSources, isNot(contains(sourceId)));
@@ -148,11 +183,7 @@ void main() {
         final row = find.byWidgetPredicate(
           (widget) =>
               widget is ActionRow &&
-              widget.title == '设备声音' &&
-              widget.subtitle?.startsWith(
-                    '${value(audioActivity, 'deviceName')} · ',
-                  ) ==
-                  true,
+              widget.title == '${value(audioActivity, 'deviceName')} · 设备声音',
         );
         await tester.pump(const Duration(milliseconds: 500));
         await tester.scrollUntilVisible(
@@ -240,6 +271,13 @@ void main() {
         );
         expect(tester.takeException(), isNull);
       } finally {
+        while (remoteNavigator?.canPop() == true) {
+          remoteNavigator!.pop();
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        for (final sessionId in ownedSessions) {
+          await request('session.stop', {'sessionId': sessionId});
+        }
         if (sourceId != null && deviceId != null) {
           final sources = objects((await request('audio.sources'))['sources']);
           if (sources.any((s) => s['sourceId'] == sourceId)) {
@@ -261,7 +299,7 @@ void main() {
             }
           }
         }
-        for (final key in ['audioMode', 'audioDevices', 'clipboardSync']) {
+        for (final key in ['deviceSettings']) {
           if (originalSettings.containsKey(key)) {
             await controller.updateSetting(key, originalSettings[key]);
           }

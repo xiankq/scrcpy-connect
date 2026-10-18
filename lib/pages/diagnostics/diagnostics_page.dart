@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -19,7 +20,6 @@ class DiagnosticsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => PageFrame(
     title: '连接诊断',
-    subtitle: deviceName(device),
     child: CommandView(
       controller: controller,
       command: 'device.diagnose',
@@ -88,8 +88,8 @@ class DiagnosticsPage extends StatelessWidget {
                 : '请重新检查本机状态，并在被控手机完成需要的授权。恢复设备名称不会恢复授权。',
           },
         ];
-        return ListView(
-          padding: const EdgeInsets.all(24),
+        return GroupedListView(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
           children: [
             if (!usb && value(current, 'address').isNotEmpty)
               StateNote(
@@ -101,15 +101,17 @@ class DiagnosticsPage extends StatelessWidget {
                     ? LucideIcons.circleCheck
                     : LucideIcons.circleAlert,
                 title: value(check, 'name'),
-                subtitle: value(check, 'message', value(check, 'reason')),
+
                 color: check['ok'] == true
                     ? ConnectTokens.mint
                     : ConnectTokens.amber,
               ),
+            for (final check in checks.where((check) => check['ok'] != true))
+              StateNote(value(check, 'message')),
             if (value(current, 'reason').isNotEmpty)
               StateNote(value(current, 'reason')),
             for (final note in strings(data['notes'])) StateNote(note),
-            const SizedBox(height: 20),
+            const SizedBox(height: DesignTokens.spacingMd),
             FilledButton(onPressed: refresh, child: const Text('重新检查')),
             if (unauthorized)
               TextButton(
@@ -118,7 +120,7 @@ class DiagnosticsPage extends StatelessWidget {
                 ).push<void>(context),
                 child: const Text('重新授权'),
               ),
-            const SizedBox(height: 10),
+            const SizedBox(height: DesignTokens.spacingXs),
             OutlinedButton(
               onPressed: () => ConnectionFormRoute(
                 address: value(current, 'address'),

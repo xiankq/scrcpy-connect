@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
@@ -155,15 +156,15 @@ class IncomingSharePage extends HookConsumerWidget {
       },
       child: PageFrame(
         title: '发送到设备',
-        subtitle: '来自系统分享',
+
         actions: [
           TextButton(
             onPressed: busy.value ? null : cancel,
             child: Text(locked ? '关闭' : '取消'),
           ),
         ],
-        child: ListView(
-          padding: const EdgeInsets.all(24),
+        child: GroupedListView(
+          padding: const EdgeInsets.all(DesignTokens.spacingMd),
           children: [
             const StateNote('明确选择本次接收设备。切换当前操作设备不会改变已提交任务的目标。'),
             if (importing) ...[
@@ -173,7 +174,7 @@ class IncomingSharePage extends HookConsumerWidget {
             for (final message in strings(share['errors']))
               StateNote(message, icon: LucideIcons.circleAlert),
             if (files.isNotEmpty) ...[
-              SwitchListTile.adaptive(
+              ConnectSwitchRow(
                 contentPadding: EdgeInsets.zero,
                 title: Text('传入 ${files.length} 个文件'),
                 value: includeFiles.value,
@@ -182,24 +183,20 @@ class IncomingSharePage extends HookConsumerWidget {
                     : (v) => includeFiles.value = v,
               ),
               for (final file in files)
-                ActionRow(
-                  icon: LucideIcons.file,
-                  title: value(file, 'name'),
-                  subtitle: bytes(file['size']),
-                ),
+                ActionRow(icon: LucideIcons.file, title: value(file, 'name')),
             ],
             if (text.isNotEmpty) ...[
-              SwitchListTile.adaptive(
+              ConnectSwitchRow(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('写入设备剪贴板'),
-                subtitle: const Text('在手机应用里手动粘贴和确认'),
+
                 value: includeText.value,
                 onChanged: busy.value || locked
                     ? null
                     : (v) => includeText.value = v,
               ),
               ContentPanel(child: SelectableText(text)),
-              const SizedBox(height: 20),
+              const SizedBox(height: DesignTokens.spacingMd),
             ],
             const SectionTitle('接收设备'),
             if (devices.isEmpty)
@@ -212,7 +209,6 @@ class IncomingSharePage extends HookConsumerWidget {
                     ? null
                     : (v) => deviceId.value = v,
                 title: Text(deviceName(device)),
-                subtitle: const Text('已连接'),
               ),
             if (includeFiles.value && files.isNotEmpty) ...[
               const SectionTitle('目标目录'),
@@ -224,7 +220,7 @@ class IncomingSharePage extends HookConsumerWidget {
                   helperText: '同名文件会在传输中心等待你确认',
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DesignTokens.spacingSm),
               OutlinedButton.icon(
                 onPressed: selected == null || busy.value || locked
                     ? null
@@ -237,7 +233,10 @@ class IncomingSharePage extends HookConsumerWidget {
                           path.text = directory;
                         }
                       },
-                icon: const Icon(LucideIcons.folderOpen, size: 18),
+                icon: const Icon(
+                  LucideIcons.folderOpen,
+                  size: DesignTokens.componentIconActionSize,
+                ),
                 label: const Text('浏览设备目录'),
               ),
             ],
@@ -249,7 +248,7 @@ class IncomingSharePage extends HookConsumerWidget {
             if (copied.value) const StateNote('文字已写入指定设备剪贴板。'),
             if (error.value != null)
               StateNote(error.value!, icon: LucideIcons.circleAlert),
-            const SizedBox(height: 20),
+            const SizedBox(height: DesignTokens.spacingMd),
             FilledButton(
               onPressed: canSubmit ? submit : null,
               child: Text(
@@ -262,7 +261,7 @@ class IncomingSharePage extends HookConsumerWidget {
             ),
             if (busy.value)
               const Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(DesignTokens.spacingMd),
                 child: LinearProgressIndicator(),
               ),
           ],

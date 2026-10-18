@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:interop_bridge/src/interop_exception.dart';
 import 'package:interop_bridge/src/media/portable_audio.dart';
+import 'package:interop_bridge/src/media/portable_video.dart';
 import 'package:interop_bridge/src/rust/api.dart' as core;
 import 'package:interop_bridge/src/rust/frb_generated.dart';
 import 'package:path_provider/path_provider.dart';
@@ -26,7 +27,7 @@ void main() {
     binding.reportData = {'fvpAudioLifecycle': report};
     final emitted = <AudioJson>[];
     var disposed = false;
-    String? device, source;
+    String? device, source, session;
     AudioJson? stream;
     Future<AudioJson> request(String method, AudioJson params) async {
       final envelope = jsonDecode(
@@ -48,6 +49,11 @@ void main() {
             ? Map<String, dynamic>.from(raw)
             : <String, dynamic>{};
       },
+      emit: emitted.add,
+      isDisposed: () => disposed,
+    );
+    final video = PortableVideoOutputs(
+      core: request,
       emit: emitted.add,
       isDisposed: () => disposed,
     );
@@ -86,6 +92,14 @@ void main() {
         });
         device = (added['device'] as AudioJson)['id'] as String;
         await request('devices.connect', {'deviceId': device});
+        final capture = await request('session.start', {
+          'deviceId': device,
+          'maxSize': 640,
+          'maxFps': 30,
+        });
+        session = capture['sessionId'] as String;
+        final rendered = await video.start(capture);
+        await request('session.ready', {...capture, ...rendered});
         stream = await request('audio.start', {'deviceId': device});
         source = stream!['sourceId'] as String;
         final ready = await outputs.start(stream!);
@@ -156,6 +170,10 @@ void main() {
     } finally {
       await tester.runAsync(() async {
         await outputs.dispose();
+        await video.dispose();
+        if (session != null) {
+          await request('session.stop', {'sessionId': session});
+        }
         disposed = true;
         await subscription.cancel();
         if (source != null) {

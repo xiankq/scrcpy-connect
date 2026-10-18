@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/document_operation.dart';
 import 'package:scrcpy_connect/services/media_cache_lease.dart';
@@ -67,18 +68,18 @@ class DocumentExportForm extends HookWidget {
           ? StateNote('无法保留这份暂存：${cacheLease.error}。请返回原设备重新取回。')
           : const Center(child: CircularProgressIndicator.adaptive());
     }
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    return GroupedListView(
+      padding: const EdgeInsets.all(DesignTokens.spacingMd),
       children: [
-        OriginalFileHeader(name: name, kind: kind, subtitle: '已取回的本机副本'),
-        const SizedBox(height: 24),
+        OriginalFileHeader(name: name, kind: kind),
+        const SizedBox(height: DesignTokens.spacingLg),
         if (partial)
           const StateNote(
             '这是已核验但不完整的本机暂存。请核对缺失项目，系统保存不会补齐尚未取回的内容。',
             icon: LucideIcons.circleAlert,
           ),
         const Text('选择系统位置保存一份。只有系统确认写入完成后，才显示保存成功。本机暂存仍保留。'),
-        const SizedBox(height: 24),
+        const SizedBox(height: DesignTokens.spacingLg),
         if (waiting) ...[
           const LinearProgressIndicator(),
           const StateNote('正在等待系统选择或实际写入结果…'),

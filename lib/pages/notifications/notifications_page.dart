@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
@@ -28,7 +29,6 @@ class NotificationsPage extends HookConsumerWidget {
     final starting = useState(false);
     return PageFrame(
       title: '实时通知',
-      subtitle: deviceName(device),
       child: CommandView(
         refreshKey: appEventRevision,
         controller: controller,
@@ -106,8 +106,8 @@ class NotificationsPage extends HookConsumerWidget {
           }
           return RefreshIndicator(
             onRefresh: verify,
-            child: ListView(
-              padding: const EdgeInsets.all(24),
+            child: GroupedListView(
+              padding: const EdgeInsets.all(DesignTokens.spacingMd),
               children: [
                 if (data['status'] == 'limited' &&
                     value(data, 'reason').isNotEmpty)
@@ -118,16 +118,20 @@ class NotificationsPage extends HookConsumerWidget {
                 const StateNote('通知来自被控手机；清除不等于已读。涉及认证时请在手机真实界面完成。'),
                 for (final notification in notifications)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.only(
+                      bottom: DesignTokens.spacingMd,
+                    ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: DesignTokens.spacingMd,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
                               const FeatureIcon(LucideIcons.messageSquare),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: DesignTokens.spacingSm),
                               Expanded(
                                 child: Text(
                                   value(notification, 'appName', '手机通知'),
@@ -172,27 +176,27 @@ class NotificationsPage extends HookConsumerWidget {
                             ],
                           ),
                           if (value(notification, 'title').isNotEmpty) ...[
-                            const SizedBox(height: 14),
+                            const SizedBox(height: DesignTokens.spacingSm),
                             Text(
                               value(notification, 'title'),
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ],
                           if (value(notification, 'body').isNotEmpty) ...[
-                            const SizedBox(height: 6),
+                            const SizedBox(height: DesignTokens.spacingTight),
                             Text(value(notification, 'body')),
                           ],
                           if (value(notification, 'title').isEmpty &&
                               value(notification, 'body').isEmpty) ...[
-                            const SizedBox(height: 6),
+                            const SizedBox(height: DesignTokens.spacingTight),
                             Text(
                               '此通知未提供预览内容',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
-                          const SizedBox(height: 14),
+                          const SizedBox(height: DesignTokens.spacingSm),
                           Wrap(
-                            spacing: 12,
+                            spacing: DesignTokens.spacingSm,
                             children: [
                               OutlinedButton(
                                 onPressed: () async {
@@ -245,7 +249,7 @@ class NotificationsPage extends HookConsumerWidget {
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: DesignTokens.spacingMd),
                           const Divider(height: 1),
                         ],
                       ),

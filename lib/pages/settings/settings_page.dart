@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/widgets/root_page_header.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -25,20 +27,17 @@ class SettingsPage extends HookConsumerWidget {
     final appSettingsError = ref.watch(
       appControllerProvider.select((state) => state.settingsError),
     );
-    final appSettings = ref.watch(
-      appControllerProvider.select((state) => state.settings),
-    );
-    final body = ListView(
+    final body = GroupedListView(
       padding: EdgeInsets.fromLTRB(
-        24,
-        embedded ? 30 : 12,
-        24,
-        embedded ? 120 : 24,
+        DesignTokens.spacingMd,
+        embedded ? DesignTokens.spacingZero : DesignTokens.spacingSm,
+        DesignTokens.spacingMd,
+        embedded ? 120 : DesignTokens.spacingLg,
       ),
       children: [
         if (embedded) ...[
-          Text('设置', style: Theme.of(context).textTheme.displaySmall),
-          const SizedBox(height: 24),
+          const RootPageHeader(title: '设置'),
+          const SizedBox(height: DesignTokens.spacingSm),
         ],
         if (appSettingsError != null) StateNote('偏好尚未读取：$appSettingsError'),
         ContentPanel(
@@ -46,23 +45,8 @@ class SettingsPage extends HookConsumerWidget {
             children: [
               ActionRow(
                 icon: LucideIcons.sunMoon,
-                title: '外观与易用性',
-                subtitle: '浅色、深色、透明度与动态效果',
+                title: '外观',
                 onTap: () => AppearanceRoute().push<void>(context),
-              ),
-              ActionRow(
-                icon: LucideIcons.audioLines,
-                title: '设备音源',
-                subtitle: '跟随当前设备、固定音源或主动混音',
-                onTap: () => AudioRoute().push<void>(context),
-              ),
-              ActionRow(
-                icon: LucideIcons.clipboard,
-                title: '剪贴板同步',
-                subtitle: appSettings['clipboardSync'] == true
-                    ? '已开启 · 仅同步选定设备'
-                    : '默认关闭 · 可主动发送与获取',
-                onTap: () => ClipboardRoute().push<void>(context),
               ),
             ],
           ),
@@ -74,13 +58,11 @@ class SettingsPage extends HookConsumerWidget {
               ActionRow(
                 icon: LucideIcons.radio,
                 title: '后台与连接',
-                subtitle: '按系统许可维持已启用的活动',
                 onTap: () => BackgroundRoute().push<void>(context),
               ),
               ActionRow(
                 icon: LucideIcons.activity,
                 title: '当前活动',
-                subtitle: '分别查看连接、画面、传输、声音与通话',
                 onTap: () => ActivitiesRoute().push<void>(context),
               ),
             ],
@@ -90,17 +72,16 @@ class SettingsPage extends HookConsumerWidget {
         ActionRow(
           icon: LucideIcons.hardDrive,
           title: '媒体暂存',
-          subtitle: '查看空间占用，清理不再使用的预览与原件',
+
           onTap: () => const MediaCacheRoute().push<void>(context),
         ),
         ActionRow(
           icon: LucideIcons.database,
           title: '设备记录与恢复',
-          subtitle: '名称与偏好可以恢复，授权身份留在本机',
+
           onTap: () => DataPreferencesRoute().push<void>(context),
         ),
-        const SizedBox(height: 24),
-        const StateNote('邻接 · 让手边的屏幕接续另一台手机。\n被控手机免安装，本机无需开启调试。'),
+        const SizedBox(height: DesignTokens.spacingLg),
         TextButton(
           onPressed: () async {
             try {

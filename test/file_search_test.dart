@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/pages/file_details/file_details_page.dart';
+
 import 'support/test_controller.dart';
 import 'support/router_test_app.dart';
 
@@ -144,7 +146,19 @@ void main() {
     ]) async {
       switch (command) {
         case 'files.list':
-          return {'entries': <Json>[]};
+          return {
+            'entries': [
+              if (params['path'] == '/sdcard/Download/工作' ||
+                  params['path'] == '/sdcard/Download/生活')
+                {
+                  'name': '报告.pdf',
+                  'path': '${params['path']}/报告.pdf',
+                  'size': 1200,
+                  'isDirectory': false,
+                  'canOpen': true,
+                },
+            ],
+          };
         case 'device.info':
           return {'id': 'phone', 'name': '我的手机'};
         case 'files.search.start':
@@ -171,6 +185,14 @@ void main() {
                 'name': '报告.pdf',
                 'path': '/sdcard/Download/工作/报告.pdf',
                 'size': 1200,
+                'isDirectory': false,
+                'canOpen': true,
+                'canManage': true,
+              },
+              {
+                'name': '报告.pdf',
+                'path': '/sdcard/Download/生活/报告.pdf',
+                'size': 2300,
                 'isDirectory': false,
                 'canOpen': true,
                 'canManage': true,
@@ -205,8 +227,22 @@ void main() {
       'query': '报告',
       'filter': 'all',
     });
-    expect(find.text('报告.pdf'), findsOneWidget);
-    expect(find.textContaining('/sdcard/Download/工作'), findsOneWidget);
+    expect(find.text('报告.pdf'), findsNWidgets(2));
+    for (final directory in ['工作', '生活']) {
+      final path = '/sdcard/Download/$directory/报告.pdf';
+      expect(find.byTooltip(path), findsOneWidget);
+      await tester.tap(find.byTooltip(path));
+      await tester.pumpAndSettle();
+      expect(find.byType(FileDetailsPage), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is SelectableText && widget.data == path,
+        ),
+        findsOneWidget,
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
     expect(find.textContaining('已完成搜索'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

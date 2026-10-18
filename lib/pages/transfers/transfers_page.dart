@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/root_page_header.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_batch_panel.dart';
@@ -45,9 +46,15 @@ class TransfersPage extends HookConsumerWidget {
         return RefreshIndicator(
           onRefresh: () async => refresh(),
           child: ListView.separated(
-            padding: EdgeInsets.fromLTRB(24, 12, 24, embedded ? 120 : 24),
+            padding: EdgeInsets.fromLTRB(
+              DesignTokens.spacingMd,
+              DesignTokens.spacingSm,
+              DesignTokens.spacingLg,
+              embedded ? 120 : DesignTokens.spacingLg,
+            ),
             itemCount: batches.length + tasks.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 16),
+            separatorBuilder: (_, _) =>
+                const SizedBox(height: DesignTokens.spacingMd),
             itemBuilder: (context, i) {
               if (i < batches.length) {
                 return TransferBatchPanel(
@@ -58,7 +65,7 @@ class TransfersPage extends HookConsumerWidget {
               }
               final task = transferView(controller, tasks[i - batches.length]);
               return InkWell(
-                borderRadius: BorderRadius.circular(26),
+                borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
                 onTap: () => TransferDetailsRoute(
                   taskId: value(task, 'id', value(task, 'transferId')),
                 ).push<void>(context),
@@ -76,7 +83,7 @@ class TransfersPage extends HookConsumerWidget {
                                 : LucideIcons.download,
                             color: ConnectTokens.amber,
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: DesignTokens.spacingSm),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,17 +101,20 @@ class TransfersPage extends HookConsumerWidget {
                               ],
                             ),
                           ),
-                          const Icon(LucideIcons.chevronRight, size: 18),
+                          const Icon(
+                            LucideIcons.chevronRight,
+                            size: DesignTokens.componentIconActionSize,
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: DesignTokens.spacingMd),
                       Text(
                         statusText(value(task, 'status')),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       if (num.tryParse('${task['totalBytes']}')
                           case final total? when total > 0) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: DesignTokens.spacingXs),
                         LinearProgressIndicator(
                           value:
                               ((num.tryParse('${task['completedBytes']}') ??
@@ -115,7 +125,7 @@ class TransfersPage extends HookConsumerWidget {
                           minHeight: 3,
                           borderRadius: BorderRadius.circular(3),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: DesignTokens.spacingTight),
                         Text(
                           '${bytes(task['completedBytes'])} / ${bytes(total)}',
                           style: Theme.of(context).textTheme.bodySmall,
@@ -148,21 +158,19 @@ class TransfersPage extends HookConsumerWidget {
                 child: const RecoveryStatus(),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '传输',
-                        style: Theme.of(context).textTheme.displaySmall,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '刷新任务',
-                      onPressed: () => revision.value++,
-                      icon: const Icon(LucideIcons.refreshCw),
-                    ),
-                  ],
+                padding: const EdgeInsets.fromLTRB(
+                  DesignTokens.spacingMd,
+                  DesignTokens.spacingZero,
+                  DesignTokens.spacingMd,
+                  DesignTokens.spacingXs,
+                ),
+                child: RootPageHeader(
+                  title: '传输',
+                  action: GlassIconButton(
+                    tooltip: '刷新任务',
+                    onPressed: () => revision.value++,
+                    icon: const Icon(LucideIcons.refreshCw),
+                  ),
                 ),
               ),
               Expanded(child: content),

@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -34,40 +35,49 @@ class ActivitiesPage extends HookConsumerWidget {
               action: TextButton(onPressed: refresh, child: const Text('重新检查')),
             );
           }
-          return ListView(
-            padding: const EdgeInsets.all(24),
+          return GroupedListView(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
             children: [
               for (final activity in activities)
                 ActionRow(
                   icon: LucideIcons.activity,
-                  title: value(activity, 'name'),
-                  subtitle:
-                      '${value(activity, 'deviceName')} · ${value(activity, 'statusLabel', statusText(value(activity, 'status')))}',
-                  trailing: TextButton(
-                    onPressed: activity['canStop'] == false
-                        ? null
-                        : () async {
-                            if (await confirm(
+                  title: [
+                    value(activity, 'deviceName'),
+                    value(activity, 'name'),
+                  ].where((label) => label.isNotEmpty).join(' · '),
+
+                  trailing: Tooltip(
+                    message: value(
+                      activity,
+                      'statusLabel',
+                      statusText(value(activity, 'status')),
+                    ),
+                    child: TextButton(
+                      onPressed: activity['canStop'] == false
+                          ? null
+                          : () async {
+                              if (await confirm(
+                                    context,
+                                    '停止“${value(activity, 'name')}”？',
+                                    value(
+                                      activity,
+                                      'stopImpact',
+                                      '主动停止后不会自动恢复该活动。其他设备的活动保持各自状态。',
+                                    ),
+                                    action: '停止活动',
+                                  ) &&
+                                  context.mounted) {
+                                await perform(
                                   context,
-                                  '停止“${value(activity, 'name')}”？',
-                                  value(
-                                    activity,
-                                    'stopImpact',
-                                    '主动停止后不会自动恢复该活动。其他设备的活动保持各自状态。',
-                                  ),
-                                  action: '停止活动',
-                                ) &&
-                                context.mounted) {
-                              await perform(
-                                context,
-                                controller,
-                                'activities.stop',
-                                {'activityId': activity['id']},
-                              );
-                              refresh();
-                            }
-                          },
-                    child: const Text('停止'),
+                                  controller,
+                                  'activities.stop',
+                                  {'activityId': activity['id']},
+                                );
+                                refresh();
+                              }
+                            },
+                      child: const Text('停止'),
+                    ),
                   ),
                 ),
             ],

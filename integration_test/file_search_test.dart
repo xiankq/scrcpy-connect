@@ -167,11 +167,12 @@ void main() {
         await binding.takeScreenshot('file-search-documents');
         // Match the authoritative path shown to the user, independently of byte
         // formatting, then let the real route look the file up again.
-        final row = find.byWidgetPredicate(
-          (widget) =>
-              widget is ListTile &&
-              widget.subtitle is Text &&
-              ((widget.subtitle! as Text).data ?? '').startsWith('$root/工作\n'),
+        final row = find.ancestor(
+          of: find.byWidgetPredicate(
+            (widget) =>
+                widget is Tooltip && widget.message == '$root/工作/报告.txt',
+          ),
+          matching: find.byType(ListTile),
         );
         expect(
           row,

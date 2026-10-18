@@ -1,4 +1,3 @@
-import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -6,7 +5,7 @@ import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -97,8 +96,7 @@ void main() {
       }
 
       try {
-        await controller.updateSetting('clipboardSync', false);
-        await controller.updateSetting('audioDevices', []);
+        await controller.updateSetting('deviceSettings', <String, dynamic>{});
         final a = responseDeviceId(
           await request('devices.add', {
             'address': address,
@@ -121,18 +119,15 @@ void main() {
         await controller.refreshDevices();
         await host('prepare', 'prepared');
         await Clipboard.setData(ClipboardData(text: '$runId-local-baseline'));
-        await controller.updateSetting('clipboardMode', 'follow');
         await controller.focusDevice(a);
-        await controller.updateSetting('clipboardSync', true);
+        await controller.updateDeviceSetting(a, 'clipboardSync', true);
+        await controller.updateDeviceSetting(b, 'clipboardSync', true);
         await waitFor(
           tester,
           () => controller.snapshot().clipboardState == 'watching',
           reason: 'The actual selected target and local clipboard must establish a live baseline.',
         );
-        ClipboardRoute().push<void>(
-          tester.element(find.byType(Scaffold).first),
-        );
-        await tester.pump(const Duration(milliseconds: 400));
+        await expectLocal('$runId-baseline-a');
         await Clipboard.setData(ClipboardData(text: '$runId-local-a'));
         await expectRemote(a, '$runId-local-a');
         expect(await remote(b), '$runId-baseline-b');
@@ -146,10 +141,11 @@ void main() {
           reason: 'The external Binder event must not echo back as a new device write.',
         );
         await controller.focusDevice(b);
+        await expectLocal('$runId-baseline-b');
         await waitFor(
           tester,
           () => controller.snapshot().clipboardState == 'watching',
-          reason: 'Follow mode must rebase on the independently connected second target.',
+          reason: 'Switching operation devices must take the second target clipboard.',
         );
         await Clipboard.setData(ClipboardData(text: '$runId-local-b'));
         await expectRemote(b, '$runId-local-b');
@@ -158,14 +154,13 @@ void main() {
         await tester.pump(const Duration(milliseconds: 1200));
         await expectLocal('$runId-local-b');
         expect(await remote(b), '$runId-local-b');
-        await controller.updateSetting('clipboardDevice', a);
-        await controller.updateSetting('clipboardMode', 'fixed');
+        await controller.focusDevice(a);
+        await expectLocal('$runId-unselected-a');
         await waitFor(
           tester,
           () => controller.snapshot().clipboardState == 'watching',
-          reason: 'Fixed mode must select the first real target.',
+          reason: 'Returning to the first device must synchronize its current value.',
         );
-        await controller.focusDevice(b);
         await Clipboard.setData(ClipboardData(text: '$runId-fixed-a'));
         await expectRemote(a, '$runId-fixed-a');
         expect(await remote(b), '$runId-local-b');
@@ -179,7 +174,7 @@ void main() {
         await binding.convertFlutterSurfaceToImage();
         await tester.pump(const Duration(milliseconds: 300));
         await binding.takeScreenshot('clipboard-after-real-background');
-        await controller.updateSetting('clipboardSync', false);
+        await controller.updateDeviceSetting(a, 'clipboardSync', false);
         final disabledReads = controller.snapshot().clipboardReadCount;
         final disabledWrites = controller.snapshot().clipboardWriteCount;
         await Clipboard.setData(ClipboardData(text: '$runId-disabled-local'));
@@ -191,24 +186,12 @@ void main() {
         stage = 'complete';
         expect(tester.takeException(), isNull);
       } finally {
-        await controller.updateSetting('clipboardSync', false);
+        await controller.updateSetting('deviceSettings', <String, dynamic>{});
         await Clipboard.setData(ClipboardData(text: originalLocal?.text ?? ''));
-        await controller.updateSetting(
-          'clipboardMode',
-          originalSettings['clipboardMode'] ?? 'follow',
-        );
-        await controller.updateSetting(
-          'clipboardDevice',
-          originalSettings['clipboardDevice'],
-        );
         await controller.focusDevice(originalFocused);
         await controller.updateSetting(
-          'audioDevices',
-          originalSettings['audioDevices'] ?? [],
-        );
-        await controller.updateSetting(
-          'clipboardSync',
-          originalSettings['clipboardSync'] == true,
+          'deviceSettings',
+          jsonObject(originalSettings['deviceSettings']),
         );
       }
     },

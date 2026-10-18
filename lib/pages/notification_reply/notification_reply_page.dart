@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 
 import 'dart:async';
@@ -12,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:design_system/design_system.dart';
 
 class NotificationReplyPage extends HookConsumerWidget {
   const NotificationReplyPage({
@@ -46,19 +48,16 @@ class NotificationReplyPage extends HookConsumerWidget {
     final guarded = !reply.canEdit || localOnly;
     return PageFrame(
       title: '快捷回复',
-      subtitle: value(notification, 'appName').isEmpty
-          ? deviceName(device)
-          : '${deviceName(device)} · ${value(notification, 'appName')}',
-      child: ListView(
-        padding: const EdgeInsets.all(24),
+      child: GroupedListView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
           Text(
             value(notification, 'title'),
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: DesignTokens.spacingSm),
           Text(value(notification, 'body')),
-          const SizedBox(height: 24),
+          const SizedBox(height: DesignTokens.spacingLg),
           TextField(
             controller: draft,
             enabled: !busy,
@@ -82,7 +81,7 @@ class NotificationReplyPage extends HookConsumerWidget {
           if (reply.expired) const StateNote('这条通知已更新或结束，旧回复动作不能再使用。已保留草稿。'),
           if (localOnly && !reply.expired)
             const StateNote('当前无法核验这条通知，以下仅为本机保留的回复。'),
-          const SizedBox(height: 20),
+          const SizedBox(height: DesignTokens.spacingMd),
           if (!guarded || busy)
             FilledButton(
               onPressed: busy || pending || capacityError.value != null
@@ -114,7 +113,10 @@ class NotificationReplyPage extends HookConsumerWidget {
                 await Clipboard.setData(ClipboardData(text: draft.text));
                 if (context.mounted) feedback(context, '已复制保留的回复内容');
               },
-              icon: const Icon(LucideIcons.copy, size: 18),
+              icon: const Icon(
+                LucideIcons.copy,
+                size: DesignTokens.componentIconActionSize,
+              ),
               label: const Text('复制保留内容'),
             ),
           ],

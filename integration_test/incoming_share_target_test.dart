@@ -138,10 +138,7 @@ void main() {
       try {
         // Focus has real clipboard/audio effects; restore these preferences below.
         await tester.runAsync(
-          () => controller.updateSetting('clipboardSync', false),
-        );
-        await tester.runAsync(
-          () => controller.updateSetting('audioDevices', []),
+          () => controller.updateSetting('deviceSettings', <String, dynamic>{}),
         );
         expect(
           objects((await request('sharing.pending'))['shares']),
@@ -419,16 +416,8 @@ void main() {
             await restore(() async {
               await tester.runAsync(
                 () => controller.updateSetting(
-                  'audioDevices',
-                  originalSettings['audioDevices'] ?? [],
-                ),
-              );
-            });
-            await restore(() async {
-              await tester.runAsync(
-                () => controller.updateSetting(
-                  'clipboardSync',
-                  originalSettings['clipboardSync'] == true,
+                  'deviceSettings',
+                  jsonObject(originalSettings['deviceSettings']),
                 ),
               );
             });

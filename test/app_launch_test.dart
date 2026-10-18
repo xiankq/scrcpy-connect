@@ -556,7 +556,7 @@ void main() {
     'unknown independent app launch is checked without replay across page entry',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      final calls = <String>[];
+      final calls = <(String, Json)>[];
       var listed = false;
       const unknown = {
         'sessionId': 'unknown-open',
@@ -569,7 +569,7 @@ void main() {
         command, [
         params = const {},
       ]) async {
-        calls.add(command);
+        calls.add((command, params));
         if (command == 'session.start') {
           listed = true;
           throw const RequestFailure(
@@ -599,22 +599,27 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.textContaining(RegExp('只读检查|重新检查')));
         await tester.pumpAndSettle();
-        expect(calls.where((c) => c == 'session.start'), hasLength(1));
-        expect(calls.where((c) => c == 'session.list'), hasLength(2));
-        expect(calls.where((c) => c == 'session.resume'), isEmpty);
+        expect(calls.where((c) => c.$1 == 'session.start'), hasLength(1));
+        expect(
+          calls.where(
+            (c) => c.$1 == 'session.list' && c.$2['deviceId'] == 'phone',
+          ),
+          hasLength(2),
+        );
+        expect(calls.where((c) => c.$1 == 'session.resume'), isEmpty);
         expect(find.text('在手机屏幕继续'), findsNothing);
         await tester.pumpWidget(const SizedBox());
         await tester.pumpWidget(page(const ValueKey('second')));
         await tester.pumpAndSettle();
         expect(find.text('只读检查'), findsOneWidget);
-        expect(calls.where((c) => c == 'session.start'), hasLength(1));
+        expect(calls.where((c) => c.$1 == 'session.start'), hasLength(1));
         await tester.tap(find.text('关闭本次打开记录'));
         await tester.pumpAndSettle();
-        expect(calls.where((c) => c == 'session.stop'), isEmpty);
+        expect(calls.where((c) => c.$1 == 'session.stop'), isEmpty);
         await tester.tap(find.text('确认关闭'));
         await tester.pumpAndSettle();
-        expect(calls.where((c) => c == 'session.stop'), hasLength(1));
-        expect(calls.where((c) => c == 'session.start'), hasLength(1));
+        expect(calls.where((c) => c.$1 == 'session.stop'), hasLength(1));
+        expect(calls.where((c) => c.$1 == 'session.start'), hasLength(1));
         expect(find.text('重新打开'), findsOneWidget);
       } finally {
         await tester.pumpWidget(const SizedBox());
@@ -683,7 +688,12 @@ void main() {
         expect(find.text('只读检查'), findsOneWidget);
         await tester.tap(find.text('只读检查'));
         await tester.pumpAndSettle();
-        expect(calls.where((c) => c.$1 == 'session.list'), hasLength(1));
+        expect(
+          calls.where(
+            (c) => c.$1 == 'session.list' && c.$2['deviceId'] == 'phone',
+          ),
+          hasLength(1),
+        );
         expect(
           calls.where(
             (c) => [

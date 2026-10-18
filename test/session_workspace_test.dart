@@ -237,6 +237,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         await tester.scrollUntilVisible(find.text('主屏幕'), 250);
+        await Scrollable.ensureVisible(
+          tester.element(find.text('主屏幕')),
+          alignment: .5,
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.text('主屏幕'));
         for (var attempt = 0; attempt < 20; attempt++) {
           await tester.pump(const Duration(milliseconds: 50));

@@ -63,7 +63,7 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
       (state) => state.reconciliationPending,
     );
     // Preserve a resync marker even when its successful receipt arrives before
-    // the next frame: the same visible device must then rearm audio follow.
+    // the next frame: the same visible device must then regain clipboard focus.
     ref.listen(recovery, (_, pending) {
       if (pending) _invalidate();
     });
@@ -86,8 +86,8 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
             ModalRoute.of(context)?.isCurrent != true) {
           return;
         }
-        // No equality shortcut: resync clears the controller's audio follow
-        // intent independently of the retained public focusedDeviceId.
+        // Reassert the visible device after verification, even when the
+        // retained public focus still names the same device.
         unawaited(controller.focusDevice(deviceId));
       });
     }

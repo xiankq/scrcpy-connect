@@ -62,8 +62,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('手机 A · 正在播放'), findsOneWidget);
-      expect(find.text('手机 B · 正在播放'), findsOneWidget);
+      expect(find.text('手机 A · 设备声音'), findsOneWidget);
+      expect(find.text('手机 B · 设备声音'), findsOneWidget);
+      expect(find.byTooltip('正在播放'), findsNWidgets(2));
       final rowA = find.ancestor(
         of: find.textContaining('手机 A'),
         matching: find.byType(ActionRow),
@@ -78,7 +79,8 @@ void main() {
       expect(lists, greaterThan(1));
       expect(find.textContaining('手机 A'), findsNothing);
       expect(find.textContaining('手机 B'), findsOneWidget);
-      expect(find.text('设备声音'), findsOneWidget);
+      expect(find.text('手机 B · 设备声音'), findsOneWidget);
+      expect(find.byTooltip('正在播放'), findsOneWidget);
       expect(
         requests.where(
           (r) =>

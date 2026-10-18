@@ -30,7 +30,7 @@ class TransferBatchPanel extends HookWidget {
                 : '取回到本机',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: DesignTokens.spacingXs),
           Text(
             '${batch['fileCount'] ?? 0} 个文件 · ${batch['directoryCount'] ?? 0} 个文件夹',
           ),
@@ -38,7 +38,7 @@ class TransferBatchPanel extends HookWidget {
             statusText(value(batch, 'status')),
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: DesignTokens.spacingXs),
           Text(
             '已完成 ${batch['completed'] ?? 0} / ${batch['itemCount'] ?? 0} 项 · 失败 ${batch['failed'] ?? 0} · 跳过 ${batch['skipped'] ?? 0}',
             style: Theme.of(context).textTheme.bodySmall,

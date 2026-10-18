@@ -66,8 +66,8 @@ void main() {
           .where((e) => value(e, 'type').startsWith('session.'))
           .listen(observed.add);
       try {
-        await controller.updateSetting('clipboardSync', false);
-        await controller.updateSetting('audioDevices', []);
+        await controller.updateSetting('deviceSettings', <String, dynamic>{});
+
         await host('prepare', 'prepared');
         final deviceId = responseDeviceId(
           await request('devices.add', {
@@ -215,12 +215,8 @@ void main() {
           }
         } finally {
           await controller.updateSetting(
-            'audioDevices',
-            originalSettings['audioDevices'] ?? [],
-          );
-          await controller.updateSetting(
-            'clipboardSync',
-            originalSettings['clipboardSync'] == true,
+            'deviceSettings',
+            jsonObject(originalSettings['deviceSettings']),
           );
           semantics.dispose();
         }

@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -12,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:design_system/design_system.dart';
 
 class DataPreferencesPage extends StatelessWidget {
   const DataPreferencesPage({super.key, required this.controller});
@@ -19,17 +21,17 @@ class DataPreferencesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => PageFrame(
     title: '设备记录与恢复',
-    child: ListView(
-      padding: const EdgeInsets.all(24),
+    child: GroupedListView(
+      padding: const EdgeInsets.all(DesignTokens.spacingMd),
       children: [
         Text('授权身份留在本机', style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 16),
+        const SizedBox(height: DesignTokens.spacingMd),
         const Text('名称与偏好不等于连接许可。重装或更换主控后，即使恢复了设备记录，也需要在被控手机上重新授权。'),
         const SectionTitle('本机记录'),
         ActionRow(
           icon: LucideIcons.fileOutput,
           title: '导出设备名称与偏好',
-          subtitle: '不包含主控授权身份或实时通知',
+
           onTap: () async {
             final result = await perform(
               context,
@@ -64,7 +66,7 @@ class DataPreferencesPage extends StatelessWidget {
         ActionRow(
           icon: LucideIcons.fileInput,
           title: '恢复名称与偏好',
-          subtitle: '恢复后的记录将重新检查授权',
+
           onTap: () async {
             Json? result;
             try {

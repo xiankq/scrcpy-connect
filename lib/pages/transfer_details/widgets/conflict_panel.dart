@@ -14,7 +14,7 @@ class ConflictPanel extends HookWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('目标中已有同名内容', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
+          const SizedBox(height: DesignTokens.spacingXs),
           const Text('选择如何处理此次冲突。替换可能覆盖目标中已有的内容。'),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,

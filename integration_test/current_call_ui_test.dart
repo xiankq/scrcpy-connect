@@ -112,8 +112,8 @@ void main() {
       }
 
       try {
-        await controller.updateSetting('clipboardSync', false);
-        await controller.updateSetting('audioDevices', []);
+        await controller.updateSetting('deviceSettings', <String, dynamic>{});
+
         deviceId = responseDeviceId(
           await request('devices.add', {
             'address': address,
@@ -326,7 +326,7 @@ void main() {
           });
         }
         await clean('settings', () async {
-          for (final key in ['audioDevices', 'clipboardSync']) {
+          for (final key in ['deviceSettings']) {
             await controller.updateSetting(key, initialSettings[key]);
             expect(controller.snapshot().settings[key], initialSettings[key]);
           }

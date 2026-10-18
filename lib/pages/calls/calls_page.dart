@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -24,7 +25,6 @@ class CallsPage extends HookConsumerWidget {
     final callUiFailure = useState<String?>(null);
     return PageFrame(
       title: '来电与通话',
-      subtitle: deviceName(device),
       child: CommandView(
         refreshKey: appEventRevision,
         controller: controller,
@@ -81,8 +81,8 @@ class CallsPage extends HookConsumerWidget {
             }
           }
 
-          return ListView(
-            padding: const EdgeInsets.all(24),
+          return GroupedListView(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
             children: [
               ContentPanel(
                 child: Column(
@@ -92,7 +92,7 @@ class CallsPage extends HookConsumerWidget {
                       '通话与声音',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: DesignTokens.spacingXs),
                     Text(
                       '通话控制：${statusText(value(data, 'controlStatus', value(data, 'status', 'unknown')))}',
                     ),
@@ -152,21 +152,22 @@ class CallsPage extends HookConsumerWidget {
                         const FeatureIcon(
                           LucideIcons.userRound,
                           color: ConnectTokens.mint,
-                          size: 80,
+
+                          size: DesignTokens.componentEmptyContentIconSize,
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: DesignTokens.spacingMd),
                         Text(
                           value(call, 'name', value(call, 'number', '当前通话')),
                           style: Theme.of(context).textTheme.headlineMedium,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: DesignTokens.spacingXs),
                         Text(
-                          '${value(call, 'deviceName', deviceName(device))} · ${value(call, 'state')}',
+                          '${value(call, 'deviceName', deviceName(device))} · ${statusText(value(call, 'state'))}',
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: DesignTokens.spacingLg),
                         Wrap(
-                          spacing: 16,
-                          runSpacing: 12,
+                          spacing: DesignTokens.spacingMd,
+                          runSpacing: DesignTokens.spacingSm,
                           alignment: WrapAlignment.center,
                           children: [
                             if (call['canAnswer'] == true)
@@ -203,8 +204,8 @@ class CallsPage extends HookConsumerWidget {
                                 },
                                 icon: const Icon(
                                   LucideIcons.phone,
-                                  color: ConnectTokens.mint,
-                                  size: 18,
+
+                                  size: DesignTokens.componentIconActionSize,
                                 ),
                                 label: const Text('接听'),
                               ),
@@ -212,7 +213,12 @@ class CallsPage extends HookConsumerWidget {
                                 call['canHangup'] == true)
                               FilledButton.icon(
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: ConnectTokens.danger,
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .errorContainer,
+                                  foregroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .onErrorContainer,
                                 ),
                                 onPressed: () async {
                                   await perform(
@@ -229,9 +235,10 @@ class CallsPage extends HookConsumerWidget {
                                   );
                                   refresh();
                                 },
-                                icon: const Icon(
+                                icon: Icon(
                                   LucideIcons.phoneOff,
-                                  size: 18,
+                                  color: Theme.of(context).colorScheme.error,
+                                  size: DesignTokens.componentIconActionSize,
                                 ),
                                 label: Text(
                                   call['canReject'] == true ? '拒接' : '挂断',
@@ -283,11 +290,14 @@ class CallsPage extends HookConsumerWidget {
                     ),
                   ),
                 ),
-              const SizedBox(height: 24),
+              const SizedBox(height: DesignTokens.spacingLg),
               FilledButton.icon(
                 onPressed: () =>
                     openRemoteRoute(context, deviceId: value(device, 'id')),
-                icon: const Icon(LucideIcons.smartphone, size: 18),
+                icon: const Icon(
+                  LucideIcons.smartphone,
+                  size: DesignTokens.componentIconActionSize,
+                ),
                 label: const Text('在手机上继续处理'),
               ),
               TextButton(
