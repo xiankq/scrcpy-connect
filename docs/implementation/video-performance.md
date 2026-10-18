@@ -1,7 +1,7 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量见[截图提交时间与测试帧调度边界](#截图提交时间与测试帧调度边界2026-10-18)：
-分清原生请求及回调等待，并用普通App核对持续绘制测试负载；严格性能仍未达标。
+最新增量见[普通调度基准与解码路径对照](#普通调度基准与解码路径对照2026-10-18)：
+补齐普通Driver绑定下的首帧、新像素及实际窗口验收；平台默认路径仍未达严格性能预算。
 
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
@@ -1683,3 +1683,107 @@ JAR逐项确认不存在，匹配捕获JAR与捕获进程均为空；证明
 精确清理394项debug输出1484.6MiB，空闲49.6GiB，保留release／有效缓存／原始证据。
 资源及清理记录`/tmp/connect-early-texture-resources.jsonl`、
 `/tmp/connect-early-texture-cleanup.json`，当前无在线AVD，下轮需冷启并恢复25556转发。
+
+## 普通调度基准与解码路径对照（2026-10-18）
+
+`afa4943`新增独立开发入口`apps/connect/benchmark/live_video_performance.dart`及host
+`test_driver/live_video_performance.dart`，不改普通产品入口或既有集成门禁。入口先调用
+`enableFlutterDriverExtension`构造`_DriverBinding`；它使用普通Scheduler／Renderer／
+Widgets混入，没有Live测试绑定的draw/pump循环，回执记录实际binding和模式。
+它仍有Driver服务扩展和测试messenger，不将其类名写成`WidgetsFlutterBinding`，
+也不把此debug基准等同于完整产品UI、profile或release。
+
+连接、捕获、媒体、输入和暂停走真实Rust ADB／PortableVideoOutputs／FvpVideoPlayer／
+VideoPresentation。Flutter只在Texture分配和移除时更新widget；视频不逐帧setState。
+每次真实按键后，先等待64×64 snapshot识别新的4 bit计数，再由host经ADB截取主控
+实际窗口PNG，传回App按Texture实际矩形验证。窗口抓取在输入计时之外，不调用
+`RepaintBoundary.toImage`、WidgetTester pump或主动重画Texture；允许最多3秒／8次
+实际窗口检查，旧计数不能通过。它测量输入到解码像素可读上界，窗口检查是另外的
+正确性要求，仍非逐帧面板扫描延迟。实际截图也会消耗资源，不能称基准零干扰。
+
+与前批相同双API36 x64 AVD、Flutter3.47.6 debug、H264／1280／60fps／8Mbps、
+burst关闭、原生trace开启。严格门槛保持首帧≤1000ms、输入P50≤200ms／P95≤300ms。
+首帧从`session.start`前到真实首像素验证后读取，不含Flutter进程启动及此前的
+`devices.connect`；另存core、output和首次widget帧耗时。输入样本不剔除冷操作。
+
+| 路径／每组3会话 | 输入数 | 首帧 ms | 输入P50／P95 ms | 严格结果 |
+| --- | ---: | --- | --- | --- |
+| 原生首次运行 | 6 | 1564 / 1108 / 1139 | 268 / 481 | 失败，另有清理错误 |
+| 原生修正后复测 | 6 | 979 / 1168 / 1146 | 303 / 449 | 失败 |
+| FFmpeg slice初测 | 6 | 837 / 908 / 890 | 85 / 231 | 通过 |
+| FFmpeg slice扩量 | 60 | 947 / 837 / 886 | 108 / 153 | 通过 |
+| 原生扩量 | 60 | 1184 / 1148 / 1196 | 256 / 359 | 失败 |
+
+原生必须收到实际`decoder.video=AMediaCodec`，软件必须收到`FFmpeg`；候选列表不当
+运行证据。两个扩量组共132次实际窗口检查、6次暂停恢复、6次停止纹理分离及自动
+fixture／设备记录清理均完成。原生输出首帧仍慢，不能把软件通过写成产品默认路径
+已经达标；本批没有改变生产解码优先级。AVD的goldfish MediaCodec路径不是实体
+手机硬解，高分辨率动态内容的吞吐、功耗、热和真实无线仍待验证。
+
+同PTS匹配relay与native回调，并以共享Rust单调时钟计算：
+
+| 扩量段，60次 | 原生 min／median／max ms | 软件 min／median／max ms |
+| --- | --- | --- |
+| relay开始write→onVideo | 69.078 / 134.373 / 218.592 | 0.552 / 1.414 / 14.198 |
+| onVideo→相同PTS snapshot回调 | 13.073 / 42.870 / 174.428 | 6.630 / 32.678 / 132.675 |
+
+第一段含socket消费、demux、decoder输入输出和原生图像获取，不叫纯解码时间；第二段
+含请求时机、调度、渲染和读回，不叫纯GPU时间。小样本先用了`writtenUs`；消费者可
+在write Future完成前已收到包，扩量统一从`writeStartedUs`描述该边界，不删除负值
+以制造收益。控制回执两组通常1ms、最大3ms／2ms；继续定位平台播放器路径。
+
+首次运行误用`devices.remove`，`deviceRemoved=false`；原失败结果完整保留。之后
+改用真实`devices.forget`，反查列表确认没有本轮记录；数据目录与普通产品分开，
+残留记录默认阻止新测，仅显式`CONNECT_PERF_RECOVER_RECORDS=true`才清理本基准
+目录。原生复测显式开启该选项时实际既有记录数0，不宣称执行了旧记录恢复。
+首次释放未确认状态在远端await前保存，不能被重试的空输出列表洗成成功；启动失败
+保守保留未确认。host超时不等于App操作取消，清理会排在实际操作后、拒绝新业务。
+公开SDK仍不能确认原生delete完成，`nativeDeleteConfirmed=false`保持原义。
+
+host进程超时先TERM再必要的KILL、确认退出并有界排空管道。安装前保存尝试状态；
+结果未知时有界查询，只在白名单包路径且安装APK与本轮fixture字节完全一致时认领
+卸载，未知结果仍使验收失败。三个/tmp宿主探针通过：忽略TERM、安装已提交但回执
+卡死后同APK清理、不同APK拒绝删除。这不是目标设备断网或Android安装事务可取消
+的证明；超出15秒恢复窗口仍按未知失败。App清理并发与释放分支另经只读复核。
+
+复现：专用双AVD启动、目标tcpip5555和宿主25556转发建立，构建独立fixture后，在
+apps/connect运行（ADB与APK为测试宿主工具，不进入产品分发）：
+
+```sh
+CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
+CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
+CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-normal-binding-native-60 \
+FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
+flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/live_video_performance.dart \
+  --target=benchmark/live_video_performance.dart \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
+  --dart-define=CONNECT_E2E_PORT=25556 \
+  --dart-define=CONNECT_PERF_DECODER=native \
+  --dart-define=CONNECT_PERF_ROUNDS=3 \
+  --dart-define=CONNECT_PERF_TRANSITIONS=20 \
+  --dart-define=CONNECT_PERF_MAX_SIZE=1280 \
+  --dart-define=CONNECT_PERF_MAX_FPS=60 \
+  --dart-define=CONNECT_PERF_BIT_RATE=8000000 \
+  --dart-define=CONNECT_PERF_MAX_START_MS=1000 \
+  --dart-define=CONNECT_PERF_MAX_P50_MS=200 \
+  --dart-define=CONNECT_PERF_MAX_P95_MS=300 \
+  --dart-define=CONNECT_PERF_TRACE_FRAMES=true
+```
+
+仅将decoder改成`software`、证据目录改成新目录即可对照；`default`使用正式候选优先级。
+每次必须使用新证据目录以保留失败数据。本入口固定burst关闭、每轮一次暂停恢复，
+不支持旧集成入口的PAUSE_CYCLES等参数。上述五组原始结果分别为
+`/tmp/connect-e2e/video-normal-binding-{baseline,final,software,software-60,native-60}/`，
+对应`/tmp/connect-video-normal-binding-<组名>.log`。每组有逐命令progress、实际PNG、
+result及cleanup；不是仓库版本资产。
+
+完整workspace严格Dart分析通过。普通main恢复构建25.5秒／安装588ms，工具热重载
+169ms成功、无Dart运行错误，设备首页已目视后detach；启动Skipped34frames与
+SurfaceSync1000ms告警仍在，不计流畅度通过。代表原生新图案VIDEO9也已目视。
+15个已知session JAR逐项确认不存在，另查捕获JAR／进程与fixture均为空，证明保留
+`/tmp/connect-normal-binding-{session-cleanup,target-cleanup}.json`。两个scrcpy JAR
+摘要与前批一致，未构建服务端。停止Gradle并正常关闭两台AVD，按已有精确清单清理
+394项debug输出1484.9MiB，空闲48.74GiB；保留release、有效Flutter／Rust／Gradle／
+CMake／SDK缓存及原始证据，记录`/tmp/connect-normal-binding-cleanup.json`。

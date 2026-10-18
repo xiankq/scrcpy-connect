@@ -4,6 +4,31 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+上一轮已提交native计时并定位Live调度偏差，判为progress。本轮新增独立的普通
+Driver binding基准，沿用实际Rust ADB／共享PortableVideoOutputs／真实Texture，
+不构造Live测试绑定；host经ADB抓实际窗口，在延迟计时之外检查图案。首轮三会话
+和12次窗口检查完成，但严格性能失败，且清理误用devices.remove；原失败证据保留。
+现已改用devices.forget，保留首次未确认释放状态，host超时后App清理等待在途操作，
+adb客户端超时会终止／排空；安装结果未知仅按APK字节证明归属后卸载，未知仍失败。
+修正后原生AMediaCodec三轮首帧979/1168/1146ms、输入P50/P95=303/449ms，严格失败；
+单变量FFmpeg slice三轮837/908/890ms、85/231ms，严格通过，两组窗口／暂停／清理均
+完成。扩到各60次后，原生首帧1184/1148/1196ms、P50/P95=256/359ms，严格失败；
+软件首帧947/837/886ms、108/153ms，严格通过，两组共132次实际窗口检查／6次暂停
+恢复／6次释放和自动清理均通过。默认播放策略未改，不能宣称物理硬解或真机达标。
+同PTS同主控时钟的relay开始写→onVideo中位134.373ms与1.414ms；这包含socket消费、
+demux及decoder路径，不是纯解码耗时。此前小样本用write完成时刻，消费可先于write
+Future完成，所以扩量统一用writeStartedUs描述该边界，不裁掉负值再统计。
+新入口及host严格分析通过；宿主三项故障探针验证强制终止、未知安装的同APK认领
+与不同APK拒删，App清理并发及释放状态已独立只读复核。15个已知会话JAR逐项无
+残留，额外全局捕获JAR／进程和fixture均为空；两个JAR摘要未变，未构建服务端。
+普通main构建25.5秒／安装588ms，热重载169ms成功，无Dart运行错误，设备首页已
+目视后detach；启动Skipped34frames和SurfaceSync1000ms告警仍有，不计启动流畅通过。
+完整workspace严格Dart分析无问题；新基准提交`afa4943`，默认入口／播放策略未改。
+停止Gradle并正常关闭两台AVD，精确清理394项debug输出1484.9MiB，余量48.74GiB；
+release、有效Flutter／Rust／Gradle／CMake／SDK缓存及/tmp原始证据保留。
+下一步继续拆解平台decoder输入／输出与图像获取等待，并补真实ARM／profile证据；
+网络层黑洞已有期限，adbd仍ACK但不处理请求的应用失活仍待主动探测与恢复验证。
+
 上一批五组对照与提交判为progress，严格性能仍开放。本轮先补native snapshot提交
 时间，区分onVideo之前／之后提交及实际callback等待，再隔离测试纹理提前消费；
 同时只读核查静止视频下TCP半开／网络黑洞健康检查。尚无新的优化收益或验收通过。

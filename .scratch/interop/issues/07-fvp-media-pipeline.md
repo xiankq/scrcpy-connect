@@ -276,3 +276,24 @@ JAR与捕获进程确认无残留后正常关闭，主控保留首页。完整�
 普通main热重载成功／无Dart错误；测试设备记录、fixture、12个session JAR及捕获
 进程确认清理，设备首页已目视。AVD内存增长后正常关闭两台模拟器，Gradle停止，
 清理394项debug输出1484.6MiB，保留release及有效缓存。本任务与完整目标继续开放。
+
+2026-10-18普通Driver调度增量（代码`afa4943`）：新增独立benchmark入口，真实
+Rust ADB／共享输出／Texture沿用正式实现，不构造Live测试绑定。每次输入后先验证
+新计数，再由host实际窗口PNG检查呈现；不主动重画Texture，截图计时与输入分开。
+首轮性能和设备记录清理均失败，已修正devices.forget、未确认释放保留、在途命令后
+清理与宿主adb超时终止；失败数据不改写。三个宿主故障探针及独立只读复核完成。
+
+1280/60/8Mbps扩量各60次：AMediaCodec首帧1184/1148/1196ms，P50/P95=256/359ms，
+原1000/200/300严格预算失败；FFmpeg slice首帧947/837/886ms、108/153ms通过。
+两组共132次真实窗口检查、6次暂停恢复和6次释放／自动清理均完成。软件通过不能
+当默认播放路径或物理硬解已验收；生产默认未改，继续开放本任务。
+同PTS共享时钟relay开始write→onVideo中位134.373/1.414ms，含socket消费和demux，
+不称纯解码耗时。进一步候选需先确认实际AImageReader及SDK选项，不重复旧负面调参。
+[基准、命令及全部原始证据](../../../docs/implementation/video-performance.md#普通调度基准与解码路径对照2026-10-18)、
+[候选前提与依据](../../../docs/research/scrcpy-first-frame-performance.md#普通driver调度与后续decoder定位2026-10-18)。
+
+完整Dart严格分析无问题；普通main恢复、热重载成功、无Dart错误、设备首页已目视。
+15个session JAR逐项无残留，另查fixture／捕获JAR和进程均为空；两个服务端摘要未变，
+没有重建JAR。Gradle停止、两AVD正常关闭，394项debug输出1484.9MiB精确清理，
+保留release及有效缓存，当前无在线AVD。真实ARM／profile、平台decoder持续延迟、
+adbd应用失活的主动探测、实际无线切网及长稳仍未关闭。

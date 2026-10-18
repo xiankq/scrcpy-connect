@@ -414,3 +414,39 @@ scheduleEngineFrame，经Shell到默认Engine.ScheduleFrame(true)，请求重建
 采集，实际负载明显不同，但场景／时段不匹配，不报告优化百分比。需用正常
 WidgetsFlutterBinding运行入口、连续实际Texture和真实计数器验证补齐性能验收。
 [两类实测及原始证据](../implementation/video-performance.md#截图提交时间与测试帧调度边界2026-10-18)。
+
+## 普通Driver调度与后续decoder定位（2026-10-18）
+
+上述正常调度缺口现由独立`benchmark/live_video_performance.dart`补齐；实际绑定是
+`_DriverBinding`，使用普通Scheduler／Renderer／Widgets混入及测试messenger，没有
+Live draw/pump循环。它不是类名为WidgetsFlutterBinding的完整产品App；不将框架
+内部仍import flutter_test误写成使用LiveTestWidgetsBinding。
+[固定版本Driver绑定源码](https://github.com/flutter/flutter/blob/5fc346839b5d0eef006ed8404392afb4dfae428d/packages/flutter_driver/lib/src/extension/extension.dart#L36)。
+真实Rust／共享播放器、逐次新图案及host实际窗口PNG已跑通；在相同1280/60/8Mbps
+下每路60次，原生严格失败、FFmpeg slice通过，具体预算、计时范围和清理见
+[完整实测](../implementation/video-performance.md#普通调度基准与解码路径对照2026-10-18)。
+这补了反馈循环，没有证明实体手机默认硬解性能，也没有替换产品默认解码器。
+
+同PTS、同主控单调时钟显示relay开始write→onVideo中位原生134.373ms、软件1.414ms。
+共享Matroska即时mux和HTTP写路径已有TCP_NODELAY、每包即write，固定攒包解释因此
+更弱；但该段仍含socket消费、demux、decoder与图像获取，不能叫纯硬解等待。
+使用write完成时刻可能出现微小负值，因为消费者可以在写Future完成前处理已收到
+的包；选择writeStartedUs描述边界，不能删除负值后再比较。
+
+2026-10-18再次核对官方Decoders与本机SDK Changelog：AMediaCodec的`async=1`已是
+默认，codec异步与AImage的异步acquire不是同一个选项。既有async=0、image=1、
+surface=0、low_latency=1、avioflags=direct等负面实验不重复。
+仅保留两个有条件的后续候选：若先证实当前实际使用AImageReader、固定SDK识别选项
+且基线尚未启用，再分别测`acquire=latest+async`或`reuse=1`；每次只改一项。
+前一组合依据官方“值中包含async”的说明，尚未验证固定二进制接受该组合；配置
+被传入不能算生效证据。后一项用于EGLImage复用，亦不承诺当前路径适用。
+[AMediaCodec参数](https://github.com/wang-bin/mdk-sdk/wiki/Decoders#amediacodec)、
+[全局EGLImage选项](https://github.com/wang-bin/mdk-sdk/wiki/Global-Options)。
+若onVideo提前而等待移到snapshot／呈现，总延迟无改善便撤回；不只优化一个回调
+数字。尚未确认这些前提，故本批没有为它们再改Fvp或加入生产默认。
+
+scrcpy开发文档仍明确用重复前帧解决静态画面启动无帧，当前参数已经启用；本轮
+主控诊断和解码对照没有改变服务端源码、补丁、版本或编译工具链，不需要重建JAR。
+两个JAR摘要再次一致。只有这些输入变化或刻意做可复现构建核验时才重建，不把
+Flutter播放参数修改附带变成服务端重编译。
+[官方采集机制](https://github.com/Genymobile/scrcpy/blob/master/doc/develop.md#screen-video-encoding)。
