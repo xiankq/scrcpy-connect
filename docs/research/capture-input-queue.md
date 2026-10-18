@@ -120,3 +120,46 @@ rtk proxy python3 -B -m unittest discover -s tool/e2e/video_fixture \
 九条离线测试通过；CLI拒绝覆盖原始证据。分析器拒绝data-loss、进程歧义、未闭合或
 越出父slice、重复／逆序acquire、无来源release及slot状态冲突；按墙钟间隔加权，
 不使用PTS或跨时钟相减。源侧隔离候选需要下一轮实际验证，不能将本次测量当修复。
+
+## 下一批隔离候选的最小实施约束
+
+只读设计以当前受控源码为准，首个候选限定API36主屏H264／`c2.android.avc.encoder`，
+请求画质1280／60／8Mbps不变，最多两个实际输入。以下尚未实施、构建或设备验证。
+
+- `ScreenCapture.start()`无filter时强制经过identity GL桥；保留当前videoSize，不能
+  顺带扩大源纹理到完整物理分辨率。`OpenGLRunner`复用现有SurfaceTexture／EGL。
+- 独立纯Java状态模块管理最新pending、最多两项ledger与单一drain任务。GL handler
+  继续updateTexImage取得最新源帧，无credit也不等待；pending可以覆盖。输出credit
+  到达后主动drain，确保唯一终帧不依赖下一次frameAvailable。
+- 每次codec重建取得独立输入流，`codec.start()`成功后激活；不能在现有capture.start
+  先于codec.start的窗口提前swap。登记PTS在swap前，失败撤销整代，不伪造输出。
+- `SurfaceEncoder.encode()`成功交付完整媒体packet及releaseOutputBuffer后按精确PTS
+  删除一条ledger；CONFIG／重复／未知PTS不误还credit。首个候选拒绝partial-frame与
+  无法对应的媒体PTS，不用最大PTS批量释放。`SurfaceCapture`接缝默认无操作，其他
+  capture adapter保持原行为。
+- 原生`repeat-previous-frame-after=33334`会在GBS内部自行生成输入，绕过GL ledger；
+  候选必须关闭原生repeat，将原33.334ms重复策略交给同一个credit模块。限帧也在该
+  模块按原60fps请求执行，避免GBS静默丢掉已记账输入造成credit永不归还。
+- 静态首帧没有输出时，可按重复期限用尚存credit提交保留纹理的第二帧。满两个仍无
+  输出则有界失败，不自动扩窗／降画质／隐式回退。仅ledger非空检查stall；不得将
+  正常静止的空ledger判失败。
+- 重复提交有独立单调编码PTS；ledger同时保留原始SurfaceTexture timestamp、实际
+  编码PTS和repeat标记。源PTS因重复而冲突时显式映射，源年龄仍按原始源时间算，
+  不把重绘后编码时间更新当优化。真实输入→像素／实际窗口门槛不变。
+- 暂停／旋转／stop先关闭这一代输入流，撤销timer／drain／旧output，再沿现有顺序
+  capture.stop→codec.stop/release→Surface释放→pause ACK。GL handler不等待credit，
+  但未实际完成底层清理也不能提前ACK。旋转重建全套状态，不跨代保留待提交纹理。
+
+[官方SurfaceTexture生命周期](https://source.android.com/docs/core/graphics/arch-st)
+支持在所属GL上下文调用updateTexImage并释放旧buffer的接缝；不代表桥的性能已通过。
+
+受控补丁叠加当前暂停补丁，在独立工作树／临时构建目录生成候选JAR／SHA／manifest，
+保留两份补丁摘要；实际Driver路径由Rust静态嵌入，候选APK也必须在隔离工作树嵌入
+候选JAR及对应SHA。仅将文件push到目标不能证明正式路径使用它；原生产产物不覆盖。
+
+最小状态测试覆盖：两项占满后多次变化只提交最新pending、无后续事件的终帧、静态
+第二帧bootstrap与满窗stall、CONFIG／重复／未知／partial、output早于swap返回、
+swap失败、暂停穿过reserve窗口、关闭后旧timer／output无效。继续执行原CapturePause
+测试，并补真实encode接缝。实际设备先验证静态冷启、动态→唯一终值→完全静止、
+暂停恢复、旋转及stop，再做同负载普通Driver A/B/A和slot追踪。GL成本与失败原件
+保留；实际新像素改善和输入驻留收窄均有证据后，才考虑产品默认。

@@ -61,6 +61,12 @@ forward精确按serial删除后缺席，两台自有AVD核对名称关闭且PID�
 视频／连接反馈程序、有效构建缓存及原始证据，五项用户原未跟踪文件未改、未stage，
 无push。回执`/tmp/connect-pair-candidates-{target-cleanup,forward-cleanup,avd-stop,
 build-cleanup}.json`。下一项是隔离采集提交候选，不能无界阻塞GL或丢失唯一静态终帧。
+只读设计进一步确认原生repeat-previous-frame-after会绕过GL提交ledger；隔离候选
+必须由同一模块管理静态重复与限帧，精确输出PTS归还credit，并保留原始源时间戳，
+不把重绘PTS变新冒称源年龄改善。限定主屏API36 H264／c2.android.avc.encoder、窗口2，
+无输出时有界失败；先纯Java状态／生命周期回归，再实际终帧／旋转／暂停及A/B/A。
+这是下一批实施约束，尚未构建或测过候选，生产JAR保持不变。
+
 
 
 ## 本轮：高动态窗口取样路径（2026-10-18）
