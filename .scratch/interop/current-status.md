@@ -2,6 +2,47 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 本轮：首帧主控阶段归因（2026-10-18）
+
+读取上一轮匹配A/B/A实际分段，候选B的playing→verified为1322／1226／1102ms，
+明显大于prepare7／9／16ms；上传后metadata约724／734／740ms。先补普通Driver首帧
+snapshot／onVideo／relay的唯一PTS关联，再用同一候选短组诊断。已有正常输入关联
+可复用；trace开关会改变snapshot实现，因此与无trace性能组分开记录。主控实验不
+重建或替换JAR，生产输入保持不变；全局目标active，尚无新增性能收益。
+
+首组trace已完成1轮8输入，P50／P95=654／891ms、首像素3868ms，10张真实窗口
+计数吻合，暂停恢复／停止／App与fixture清理确认；严格exit1，预算未通过。
+首次32×32实际图片PTS0唯一配对：relay→onVideo775.718ms、onVideo→snapshot
+920.412ms、snapshot请求→回调1553.208ms。稳定输入两段范围40.752–225.502／
+92.538–253.096ms，不把首帧等同稳定队列。原件 `/tmp/connect-e2e/first-frame-stages/`。
+三组时钟／歧义／倒序测试、定向Dart分析通过。review指出诊断查询推迟挂Texture，
+已移到widgetFrameMs记录后才构建r2并测量；初始APK未跑性能组。主控阶段仍未优化，
+开始同候选trace的default→software→default短组，保持质量／8输入／普通Driver及
+严格预算，不将调试追踪结果当无追踪生产性能，不据此先改变生产后端或重建JAR。
+
+`c1ec73e`补齐普通Driver首个已验证画面的同PTS分段。短组default→software→default
+均1轮8输入、trace开启、1280／60／8M及同候选JAR，实际decoder为AMediaCodec／
+FFmpeg／AMediaCodec。完整首像素3868→1878→2725ms，output verified1772→451→
+1358ms；首帧onVideo→snapshot920.412→336.262→983.494ms，软件路径缩短此AVD的
+首帧等待，但稳定输入P50／P95为654／891→630／879→647／812ms，仍不达标。
+稳定relay→onVideo中位103.967→6.923→114.459ms，解码后→snapshot中位144.494→
+111.191→119.547ms；软件组在解码侧更快并未形成对应端到端输入收益，剩余源端及
+呈现不能凭这些中位数相加归因。三组各10张窗口计数正确、暂停恢复／停止／自动
+清理确认，全部严格exit1。原件 `/tmp/connect-e2e/first-frame-stages{,-software,
+-default-return}/`，匹配回执 `/tmp/connect-first-frame-stages-aba.json`。没有生产修改
+或JAR重建；本轮为诊断进展，不是性能修复验收。
+
+收尾：普通main构建21.2秒／安装971ms，实际native库含完整原捕获JAR、不含候选；
+MCP热重载124ms成功、无Dart运行错误，设备首页目视正常。仍有Skipped33frames及
+SurfaceSync1000ms警告，不称启动流畅度通过。两生产JAR摘要未变；目标捕获／枚举
+文件与进程为空、fixture缺席，forward按精确serial移除，两自有AVD核名关闭且PID
+消失；CLI detach／DTD断开／Gradle停止。清理24项大体积debug副本及未测初始APK，
+共2841.5MiB，空闲41.91GiB；保留小型Gradle编译／资源产物及有效Rust／Flutter／
+CMake／MDK缓存，兼顾后续打包速度。原有五项用户未跟踪文件未改／未stage。
+回执 `/tmp/connect-first-stage-{main-receipt,production-jars,target-cleanup,avd-stop,
+debug-cleanup}.json`。下一项在普通Driver中复用既有目标draw／clock区间测量，关联
+已验证新计数到源采集／relay；保留重复PTS与跨端时钟假设，不先改JAR或盲调默认参数。
+
 ## 本轮：隔离的有界采集候选（2026-10-18）
 
 当前结论：`ca6adf5`／`e24bf87`实现并验证隔离候选，匹配参数A/B/A输入P50／P95为

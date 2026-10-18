@@ -1905,3 +1905,74 @@ Driver、正式default（Android async codec），H2641280／60／8Mbps、burst�
 [高动态取样、资源对照与原件](video-dynamic-measurement.md)，本节“尚无分布”是当时
 状态，当前完成度以该后续和权威状态页为准。SDK后续正式版本与snapshot修复的
 [核查](../research/mdk-sdk-snapshot-followup.md)没有提供已验证的升级修复候选。
+
+
+## 有界采集候选的首帧主控分段（2026-10-18）
+
+`c1ec73e`为普通Driver补齐**首次32×32验证图片**的relay／onVideo／snapshot关联。
+它不是最早解码回调或首次显示的证明；trace在prepare和texture创建后才注册，缺失
+早期callback必须保留缺失。先保存该次snapshot metadata，待Texture自然挂载并记录
+widgetFrameMs后才查询media.status，避免诊断查询推迟挂载或污染两项启动计时。
+后续64×64新计数与真实窗口截图检查保持，未更改严格预算。
+
+每次PTS只能唯一匹配一个decoded callback及一个relay包，允许既有1µs浮点截断。
+PTS仅为帧身份，不当时钟。三段使用：
+
+- relay→onVideo：clockOriginUs + decoded.elapsedUs − relay.writeStartedUs；
+- onVideo→snapshot：snapshot.elapsedUs − decoded.elapsedUs；
+- snapshot请求→回调：snapshot.elapsedUs − snapshot.submittedElapsedUs。
+
+消费者可能先于write Future完成，因此不使用writtenUs代替writeStartedUs。
+缺失、歧义、非有限PTS或时间倒序输出complete=false，不挑最近帧，不把缺失记成0。
+三组定向测试及Dart分析通过；新增测试最初因helper尚未实现编译失败，不能把该失败
+写成产品慢帧红测。只读review发现初始接入会推迟挂载，修正后才测r2；初始APK虽
+构建／启动，但没有运行性能组，不能纳入结果。
+
+保持同一34294a6a…有界候选JAR、两个API36 AVD各2vCPU／2048MB／SwiftShader、H264
+1280／60／8Mbps、动态fixture、普通_DriverBinding、trace开启、每组1轮8次输入，
+只切换default→software→default。default使用正式Android async=1优先级；实际
+decoder.video分别AMediaCodec／FFmpeg／AMediaCodec。返回组直接重装同一份default
+APK，无热重启重编译。所有setup字段及样本数逐项核对，计时前停止Gradle且没有并行构建。
+
+| 观测 | default A1 | software B | default A2 |
+| --- | ---: | ---: | ---: |
+| Core累计关键帧ms | 2069 | 1411 | 1345 |
+| output playing累计ms | 193 | 124 | 190 |
+| output verified累计ms | 1772 | 451 | 1358 |
+| 完整首像素ms | 3868 | 1878 | 2725 |
+| 首验证帧relay→onVideo ms | 775.718 | 50.614 | 317.448 |
+| 首验证帧onVideo→snapshot ms | 920.412 | 336.262 | 983.494 |
+| 首snapshot请求→回调ms | 1553.208 | 318.887 | 1110.283 |
+| 输入P50／P95 ms | 654／891 | 630／879 | 647／812 |
+| 输入同帧relay→onVideo中位ms | 103.967 | 6.923 | 114.459 |
+| 输入同帧onVideo→snapshot中位ms | 144.494 | 111.191 | 119.547 |
+| 真实窗口有效／超过3秒 | 10／5 | 10／2 | 10／4 |
+
+三组均完成暂停／新像素恢复／停止、App清理和独立fixture卸载；严格exit1，
+videoPerformanceComplete=false。源图案每个窗口计数正确，各组一张实际原始RGBA
+无损转PNG作目视检查；不是同一动画帧的画质对照。原件：
+`/tmp/connect-e2e/first-frame-stages/`、`first-frame-stages-software/`、
+`first-frame-stages-default-return/`，匹配回执`/tmp/connect-first-frame-stages-aba.json`。
+实际测量APK保留在`/tmp/connect-artifacts/first-frame-stages-r2-debug.apk`和
+`first-frame-stages-software-debug.apk`，均验证native库内完整候选JAR字节，未重建JAR。
+
+**结论与下一项：**软件后端在本次AVD上缩短解码及首帧图像交付等待，但稳定输入
+没有相应端到端改善。不能把onVideo→snapshot全算成GPU工作，也不能将各阶段中位
+相加解释完整输入。首snapshot提交早于所配onVideo，排除了Dart等decode后迟发请求；
+native callback时间先于像素复制／Dart轮询，也不支持删除应用层等待来节省同量级。
+本批不改生产decoder选择，不据模拟器软件实现推断实体Android硬解性能。继续定位
+剩余源端draw／采集→媒体写出和主控图像交付的实际关联；不重复已否定的probe、
+提前Texture、buffer_frames及AImage async参数，不因主控实验重建JAR。此轮是诊断
+进展，仍未通过1000ms首帧、200／300ms输入及3秒实际窗口预算。trace会切换snapshot
+实现，因此不能把本组与上轮关闭trace的有界输入A/B/A混成同一性能对照。
+
+
+收尾普通main构建21.2秒、安装971ms，APK确认完整原捕获JAR且候选缺席；MCP热重载
+124ms／无Dart运行错误，设备首页目视正常。Skipped33frames与SurfaceSync1000ms告警
+仍保留，不称启动流畅度合格。两生产JAR摘要不变，目标捕获／枚举JAR与进程为空，
+fixture缺席，精确forward移除，自有两AVD核名关闭、PID消失。CLI／DTD／Gradle结束。
+清理24项大体积debug输出与未测初始APK共2841.5MiB，空闲41.91GiB；保留实际测量
+APK／原件、小型Gradle编译与资源产物以及有效Rust／Flutter／CMake／MDK缓存。
+原有五项用户未跟踪文件未改／未stage。下一任务是在普通Driver复用已有目标draw及
+前后clock probes，将已验证新计数与源采集→relay关联；必须保留跨端区间和重复PTS
+假设。此任务尚未运行，不用研究计划替代源端延迟结论。
