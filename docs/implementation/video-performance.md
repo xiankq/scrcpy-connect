@@ -1,6 +1,8 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量：普通Driver源时钟诊断与隔离服务端输入窗口实验见下一节；原双项→稳定
+最新增量：实际Rust／Flutter完整编码前缀已逐帧验证，见下一节；8输入中7项snapshot
+选中最早新计数帧，input→firstRaw中位335.226ms，首帧与整体输入预算仍失败。
+生产JAR不替换。此前普通Driver源时钟诊断与隔离服务端输入窗口实验：原双项→稳定
 单项→双项返回输入P50／P95为691／852→581／810→686／925ms，首帧无稳定收益，
 整体预算失败，生产JAR不替换。权威完成度见[当前状态](../../.scratch/interop/current-status.md)。
 [Android显式异步解码](android-decoder-async.md)仍为生产默认；早期关闭诊断的60次
@@ -10,6 +12,82 @@
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。
 仅实际改动被控捕获服务的隔离实验重建JAR，主控调优复用既有产物。
 [产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方vendor文件和当前视频依赖的既有暂停补丁产物。
+
+## 实际播放器完整帧前缀与最早新像素
+
+在已有`media.open`中显式启用`traceFrames:true, tracePackets:true`，默认关闭。
+只为视频分配一份进程级诊断档案，最多32MiB编码body／8192帧；不增加第二消费者，
+不在计时路径写文件，不增加录屏页面。保留现有Matroska头及完整发送chunk的body，
+每帧保留sourcePts、重基PTS和既有Rust单调观测。音频／无逐帧观测请求明确拒绝。
+
+`media.trace.seal(relayId)`封存完整前缀并返回字节数、代次及帧索引；继续播放。
+封存与append共用锁，竞争时最后刚发送的一帧可能整体被排除，不会留下半帧或
+中间缺口。未封存跨代／PTS重复或原点变化／容量超限将档案标失败并释放数据，
+不影响播放。`media.trace.read(relayId,offset,limit)`只读已封存档案，每次1–65536
+字节，返回Base64／nextOffset／eof，可重试；对应媒体关闭后不可读取。
+
+普通Driver新编译开关`CONNECT_PERF_TRACE_PACKETS=true`要求同开traceFrames及
+traceClock、仅1轮；8次输入和实际窗口结束后才封存和分页导出。Host将MKV及索引
+放到/tmp唯一子目录，progress不保存Base64。每个计时输入之后另保存当时256条
+raw transport窗口，离线最早新计数帧必须找到该窗口中精确唯一sourcePTS receipt。
+不依赖全局ring保留整段，也不通过媒体PTS直接减主控时钟。
+
+7组档案状态／预算／所有权测试通过；真实TCP／HTTP集成验证档案与实际发送body
+逐字节相同且封存后继续播放，HTTP全17项通过。Rust clippy／定向Dart分析通过。
+离线复用微秒时基解码，新增3组最早包／回调缺席／证据错误测试，同目录20项通过。
+只读review未发现确定缺陷；不把未观察到的onVideo补成丢帧或呈现事件。
+
+实际双2vCPU／2048MB／API36 SwiftShader AVD、普通Driver／默认AMediaCodec async1、
+H2641280／60／8Mbps、既有单项候选1a3d2c82…；隔离APK562f7984…内核对完整
+候选字节且生产捕获JAR缺席，未重建JAR。实际输出576×1280，381个包与381个解码帧
+精确PTS全序列匹配，档案7185539字节，8次输入及暂停键日志完整、时钟区间68.849ms。
+10张实际窗口全部计数正确、3张超3秒，暂停恢复／停止／App及fixture自动清理确认。
+首像素3522ms，输入P50／P95=642／855ms；严格exit1，所有诊断禁止当生产性能绿灯。
+
+| 同一实际输入对应的观测 | 中位 ms | 范围 ms |
+| --- | --- | --- |
+| invoke前观测→最早新计数raw完整接收 | 335.226 | 194.466–495.020 |
+| 首次draw结束→最早raw条件下界 | 248.652 | 123.792–297.038 |
+| 首次draw结束→最早raw条件上界 | 317.501 | 192.641–365.887 |
+| 最早raw→首个onVideo | 133.274 | 71.946–333.103 |
+| 首个onVideo→选中snapshot | 126.461 | 76.823–172.568 |
+
+7/8次snapshot选中的就是最早新计数帧；另1次选中后一帧，raw晚123.745ms。
+所有8次最早帧onVideo均实际观察到。raw接收后的两段也可逐输入相加核对，但表中
+各段中位不能相加替代总分位数。draw跨端区间仍依赖无休眠／VM暂停／时钟跳变和
+固定偏移，不把draw回调等同合成结束；onVideo→snapshot不是纯GPU耗时或物理屏
+扫描时刻。最早raw帧的WRTE payload完成→raw中位0.030ms，payload开始→raw
+1.313ms；前者不解释上游源端等待，后者不一定是精确帧在线路开始。
+
+同一档案首尾mux跨度36.098秒、380个间隔平均10.527包/秒，body平均1.592Mbps、
+最大mux间隔317.329ms。请求60fps／8Mbps没有被写成实际已达吞吐；此为AVD限定
+软件编码／模拟图形负载结果，仍需真实ARM与无线资格。该组没有比较优化收益。
+结论：此前快照选帧边界已补齐，当前实际路径确实同时存在首次draw之后和主控解码
+呈现的等待；不能直接套入宿主直收156ms，也不应只换decoder或盲改ADB读buffer。
+
+原件`/tmp/connect-e2e/product-packet-diagnostic/`包含实际窗口、完整MKV／帧索引、
+逐帧计数、目标日志、早帧与raw／onVideo／snapshot关联。APK回执
+`/tmp/connect-product-packet-apk.json`，构建日志`/tmp/connect-product-packet-build.log`。
+隔离debug构建80.4秒，测量前停止Gradle，无并行编译；生产两份JAR不替换。
+
+普通main恢复构建70.6秒，实际native库含完整原生产捕获JAR，两种候选均缺席；
+MCP实际热重载成功、无Dart运行错误，首页／实际VIDEO1窗口／最早解码帧均目视。
+Skipped32frames及SurfaceSync1000ms警告仍保留。两生产摘要未变，目标进程／文件／
+fixture及精确forward均清理，两自有AVD核名关闭且PID消失，CLI／DTD／Gradle已
+停止。清理22项大debug副本2680.2MiB，空闲39.37GiB，保留有效编译缓存、release、
+测量APK和原件；回执`/tmp/connect-product-packet-{main-receipt,cleanup,debug-cleanup}.json`。
+本轮为同路径归因进展，不声称优化收益或完整任务完成。
+
+复现沿用前述普通Driver命令，构建与预编译APK运行两处同时设置default／1轮／8输入，
+追加`CONNECT_PERF_TRACE_FRAMES=true`、`CONNECT_PERF_TRACE_CLOCK=true`及
+`CONNECT_PERF_TRACE_PACKETS=true`三个dart-define。Host同开
+`CONNECT_E2E_VIDEO_TIMELINE=true`并使用新/tmp输出目录；结束后执行：
+
+```sh
+rtk proxy python3 -B tool/e2e/video_fixture/analyze_player_archive.py \
+  --run /tmp/connect-e2e/product-packet-diagnostic \
+  --ffmpeg '<宿主FFmpeg可执行文件>'
+```
 
 ## 普通Driver源端绘制关联与单项稳定输入实验
 

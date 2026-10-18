@@ -141,3 +141,12 @@ work队列长度。`--output`必须是新文件，避免覆盖原始证据。
 不能当产品延迟验收或与产品组直接相减。命令、实际308包／帧及限制见
 [最早新计数帧核查](../../../docs/implementation/video-performance.md#最早新计数帧与快照选帧的区别)。
 校验：`python3 -B -m unittest discover -s tool/e2e/video_fixture -p test_analyze_first_counter.py -v`。
+
+同一实际Rust／Flutter播放路径的核查使用`CONNECT_PERF_TRACE_PACKETS=true`（同时
+启用traceFrames／traceClock，单轮）。它限量保留实际HTTP发送的完整Matroska前缀，
+8次输入及实际窗口结束后才封存和导出，默认不开启，不增加产品录屏入口。
+`analyze_player_archive.py --run <本次/tmp目录> --ffmpeg <宿主FFmpeg>`要求381包这类
+完整序列逐项PTS／新计数匹配，再关联各输入保存的raw窗口和onVideo／snapshot。
+没有早帧回调时明确缺席，不补造呈现；最早包和快照选中包可以不同。完整结果、
+32MiB／单档案限制及命令见[实际播放器前缀](../../../docs/implementation/video-performance.md#实际播放器完整帧前缀与最早新像素)。
+校验：`python3 -B -m unittest discover -s tool/e2e/video_fixture -p test_analyze_player_archive.py -v`。

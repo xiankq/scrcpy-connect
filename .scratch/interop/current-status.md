@@ -2,7 +2,54 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
-## 本轮：源端最早新计数帧核查（2026-10-18，进行中）
+## 本轮：实际Rust／Flutter链路的完整帧关联（2026-10-18，进行中）
+
+上一轮1fd7590／bb8bacf为progress：完整宿主直收证明最早计数帧必须与snapshot选帧
+区分，但未包含产品Rust／Flutter。当前在现有Matroska HTTP发送路径增加默认关闭、
+全进程单份／32MiB硬限的诊断内存前缀：保留播放器实际接收的完整头及完整chunk，
+测量结束后封存／分页导出，不新增录屏入口或主控平台代码，不重建JAR。使用同一
+普通Driver、目标质量与新计数oracle，关联最早包／raw receipt／onVideo／snapshot。
+所有档案诊断仍不作为生产性能通过。完整目标active，保持原五项用户文件不动。
+
+实现全进程单档案、32MiB数据／8192帧限制、唯一递增PTS／固定原点／单代校验，
+封存只截取完整已发送前缀、继续播放，64KiB幂等读取。7组模块测试和实际TCP／HTTP
+逐字节前缀／封存后继续播放回归通过，同HTTP全17项通过；Rust clippy与Dart定向
+分析通过。Python复用精确微秒解码，增加实际raw窗口／早帧／快照关联3组测试，
+同目录20项通过。只读review未发现确定缺陷，保留seal竞争可排除最后一帧的边界。
+
+实际普通Driver单轮8输入完成：同H2641280／60／8M与既有单项候选，APK562f7984…
+完整嵌入JAR1a3d2c82…、不含生产捕获JAR；未重建JAR。381包／381帧精确PTS完整，
+档案7185539字节，8键及暂停键日志完整、时钟区间68.849ms；10张真实窗口全部
+正确、3张超3秒，暂停恢复／停止／App和fixture清理确认。首像素3522ms，输入
+P50／P95=642／855ms，严格exit1，诊断不作生产通过。
+
+最早新计数帧与snapshot选中帧7/8相同；另1项选中后一帧、raw晚123.745ms。
+同帧input→firstRaw中位335.226ms（194.466–495.020）；首次drawEnd→firstRaw
+条件下／上界中位248.652／317.501ms。firstRaw→首个onVideo中位133.274ms，
+首onVideo→snapshot126.461ms，全部8项早帧回调真实观察到。原始WRTE payload
+完成→raw中位0.030ms，payload开始→raw中位1.313ms，不是精确帧在线路起点。
+各段中位不相加，不称纯编码／GPU时间或物理屏延迟。由同一实际接收序列确认
+源绘制之后和主控解码呈现都有余量，不能把宿主直收156ms直接代入或只换decoder。
+原件`/tmp/connect-e2e/product-packet-diagnostic/`，APK回执
+`/tmp/connect-product-packet-apk.json`与构建日志`/tmp/connect-product-packet-build.log`；隔离debug构建
+80.4秒，测量前Gradle停止，无编译重叠。当前恢复普通main，之后做实际热重载和清理。
+档案first→last mux累计36.098秒，380个间隔平均10.527包/秒、body平均1.592Mbps，
+最大mux间隔317.329ms；它是本次AVD的发送观测，不把请求60fps／8Mbps当实际吞吐。
+
+收尾：普通main构建70.6秒（本次Rust改动需重新编译），实际native库完整含原生产
+JAR、旧／新候选均缺席；MCP热重载成功／无Dart运行错误，设备首页、VIDEO1真实
+窗口和最早解码帧目视通过。仍有Skipped32frames与SurfaceSync1000ms警告，不能称
+冷启动流畅度已过。两生产JAR摘要未变，目标文件／进程／fixture为空，精确serial
+forward移除；CLI detach、DTD断开、Gradle停止，自有AVD核名关闭且PID消失。
+清理22项大debug副本2680.2MiB、空闲39.37GiB，保留测量APK／原件、release和
+有效Rust／Flutter／Gradle／CMake／MDK缓存。回执
+`/tmp/connect-product-packet-{main-receipt,cleanup,debug-cleanup}.json`。
+Rust诊断7c76b2a及同链路关联代码已分批提交；完整目标仍active。本轮未声称优化
+收益。下一轮应针对已确认的源端绘制后等待与主控呈现分别做单变量优化，优先用
+现有系统trace拆开采集等待和编码推进；保留相同质量和本次最早新计数反馈循环，
+不再仅靠snapshot选帧或请求fps推断瓶颈，不重复无新证据的ADB缓冲尝试。
+
+## 本轮：源端最早新计数帧核查（2026-10-18）
 
 上一轮15f795b／acc96c5／2fee0dd为progress，有源时钟诊断和单项稳定输入有限收益。
 只读复核发现重要归因边界：现有drawEnd→raw关联的是快照选中的新计数帧，未证明
