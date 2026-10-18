@@ -617,7 +617,7 @@ void main() {
                     for (final key in const [
                       'status',
                       'capturePaused',
-                      'captureStateConfirmed',
+                      'presentationOnly',
                       'awaitingSession',
                     ])
                       key: snapshot[key],
@@ -628,9 +628,9 @@ void main() {
                 rethrow;
               }
               sample['pauseMs'] = watch.elapsedMilliseconds;
-              expect(paused['capturePaused'], true);
-              expect(paused['captureStateConfirmed'], true);
-              // Change the independent target while capture is stopped. A
+              expect(paused['capturePaused'], false);
+              expect(paused['presentationOnly'], true);
+              // Change the independent target while presentation is paused. A
               // resumed callback or an old snapshot cannot satisfy freshness.
               sample['stage'] = 'changeWhilePaused';
               expected = (expected + 1) & 15;

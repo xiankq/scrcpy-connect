@@ -175,7 +175,8 @@ void main() {
                 }
                 expect(paused['paused'], true);
                 expect(paused['applied'], true);
-                expect(paused['capturePaused'], true);
+                expect(paused['capturePaused'], false);
+                expect(paused['presentationOnly'], true);
                 resumed = await presentation.request('session.resume', {
                   'sessionId': activeSession,
                 });

@@ -26,9 +26,6 @@ use tokio::{
 pub(crate) const SERVER: &[u8] = include_bytes!("../../../servers/vendor/scrcpy-server-v5.0.1");
 pub(crate) const SERVER_SHA: &str =
     "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536";
-const CAPTURE_SERVER: &[u8] = include_bytes!("../../../servers/scrcpy/interop-scrcpy-server.jar");
-const CAPTURE_SERVER_SHA: &str =
-    include_str!("../../../servers/scrcpy/interop-scrcpy-server.sha256");
 const MAX_PACKET: usize = 16 * 1024 * 1024;
 const CLIPBOARD_MAX: usize = (1 << 18) - 14;
 // Acquire before spawning: repeatedly cancelled catalog initializers cannot
@@ -263,26 +260,6 @@ fn launch_identity(bytes: &[u8]) -> CoreResult<(u32, u64)> {
     parsed.ok_or_else(|| CoreError::new("process_identity", "服务进程启动标识缺失或无效。"))
 }
 
-#[cfg(test)]
-fn process_stat(bytes: &[u8]) -> CoreResult<(char, u64)> {
-    let text = std::str::from_utf8(bytes)
-        .map_err(|_| CoreError::new("process_identity", "服务进程标识无效。"))?;
-    // comm is parenthesized and may itself contain spaces or parentheses.
-    let (_, fields) = text
-        .rsplit_once(") ")
-        .ok_or_else(|| CoreError::new("process_identity", "服务进程状态无效。"))?;
-    let fields = fields.split_ascii_whitespace().collect::<Vec<_>>();
-    let state = fields
-        .first()
-        .and_then(|v| v.chars().next())
-        .ok_or_else(|| CoreError::new("process_identity", "服务进程状态缺失。"))?;
-    let started = fields
-        .get(19)
-        .and_then(|v| v.parse().ok())
-        .ok_or_else(|| CoreError::new("process_identity", "服务进程启动标识缺失。"))?;
-    Ok((state, started))
-}
-
 impl OwnedProcess {
     async fn capture(
         client: &interop_adb::Client,
@@ -300,14 +277,13 @@ impl OwnedProcess {
             jar: jar.to_owned(),
             scid,
         };
-        process.signal(client, false).await?;
+        process.verify(client).await?;
         Ok(process)
     }
 
-    async fn signal(&self, client: &interop_adb::Client, pause: bool) -> CoreResult<()> {
-        // Revalidate in the signaling shell, including the kernel start time,
+    async fn verify(&self, client: &interop_adb::Client) -> CoreResult<()> {
+        // Revalidate in the shell, including the kernel start time,
         // rather than retaining a numeric PID across independent shell calls.
-        // The launcher also keeps a parent alive to CONT on stdin EOF.
         // app_process rewrites argv[0]; explicitly give it a unique nice-name
         // containing both our private JAR path and SCID, then match that whole arg.
         let identity = quote(&format!("\ninterop.scrcpy:{}:{}\n", self.scid, self.jar))?;
@@ -328,19 +304,10 @@ $cmd
   case "$cmd" in *{identity}*) ;; *) return 1 ;; esac
 }}
 identity || {{ printf 'identity-mismatch\n'; exit 41; }}
-kill -{signal} "$p" || exit 42
-i=0
-while [ "$i" -lt 30 ]; do
-  identity || exit 41
-  case "$state" in {states}) printf 'verified:%s\n' "$state"; exit 0 ;; esac
-  i=$((i+1))
-  sleep 0.01
-done
+case "$state" in R|S|D|I) printf 'verified:%s\n' "$state"; exit 0 ;; esac
 exit 43"#,
             pid = self.pid,
             started = self.started,
-            signal = if pause { "STOP" } else { "CONT" },
-            states = if pause { "T|t" } else { "R|S|D|I" }
         );
         let output = client
             .shell(
@@ -356,8 +323,8 @@ exit 43"#,
             || !output.stdout.starts_with(b"verified:")
         {
             return Err(CoreError::new(
-                "process_control",
-                "无法确认本会话服务进程的暂停或恢复状态。",
+                "process_identity",
+                "无法确认本会话服务进程的身份。",
             ));
         }
         Ok(())
@@ -372,15 +339,13 @@ enum ControlRequest {
     Launch(Vec<u8>, crate::app_open::LaunchPermit, ControlReply),
     Send(Vec<u8>, ControlReply),
     ClipboardSet(String, bool, ControlReply),
-    Capture(bool, ControlReply),
 }
 impl ControlRequest {
     fn reply(&self) -> &ControlReply {
         match self {
-            Self::Launch(_, _, reply)
-            | Self::Send(_, reply)
-            | Self::ClipboardSet(_, _, reply)
-            | Self::Capture(_, reply) => reply,
+            Self::Launch(_, _, reply) | Self::Send(_, reply) | Self::ClipboardSet(_, _, reply) => {
+                reply
+            }
         }
     }
 }
@@ -555,7 +520,7 @@ impl Runtime {
                 "独立应用窗口需要 Android 10 或更新版本。",
             ));
         }
-        if format!("{:x}", Sha256::digest(CAPTURE_SERVER)) != CAPTURE_SERVER_SHA.trim() {
+        if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
             return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
         }
         let id = uuid::Uuid::new_v4().to_string();
@@ -690,10 +655,10 @@ impl Runtime {
             let mut sync = client.sync(OperationOptions::default()).await?;
             sync.push(
                 &RemotePath::new(&remote_jar)?,
-                &mut &CAPTURE_SERVER[..],
+                &mut &SERVER[..],
                 0o600,
                 now().min(u32::MAX as u64) as u32,
-                CAPTURE_SERVER.len() as u64,
+                SERVER.len() as u64,
             )
             .await?;
             drop(sync);
@@ -717,9 +682,7 @@ impl Runtime {
             if package.is_some() {
                 command.push_str(" new_display=1080x1920 vd_system_decorations=false");
             }
-            // Keep a shell parent reading its own stdin. EOF resumes a stopped
-            // child before waiting, so an unplugged controller cannot strand a
-            // frozen service. starttime guards the cleanup signal against reuse.
+            // Keep the launcher's stdin open while reporting the child identity.
             command = format!(
                 r#"{command} </dev/null &
 child=$!
@@ -729,17 +692,8 @@ set -- $rest
 shift 19 || exit 40
 started=$1
 case "$started" in ''|*[!0-9]*) exit 40 ;; esac
-resume_child() {{
-  IFS= read -r stat < /proc/$child/stat || return
-  rest=${{stat##*) }}
-  set -- $rest
-  shift 19 || return
-  [ "$1" = "$started" ] && kill -CONT "$child" 2>/dev/null
-}}
-trap resume_child EXIT HUP INT TERM
 printf '__INTEROP_PID__%s:%s\n' "$child" "$started"
 while IFS= read -r keepalive; do :; done
-resume_child
 wait "$child""#
             );
             let mut process = client.exec(&command, options(&cancellation)).await?;
@@ -1196,7 +1150,7 @@ wait "$child""#
             self.stop_session(&id).await;
             return Ok(json!({"sessionId":id,"status":"stopped","applicationStopped":false}));
         }
-        let process = process.ok_or_else(|| {
+        let _process = process.ok_or_else(|| {
             CoreError::new(
                 "app_launch_unknown",
                 "应用打开结果未知，请先核对并关闭本次记录。",
@@ -1216,17 +1170,12 @@ wait "$child""#
                 .ok_or_else(|| invalid("渲染纹理无效。"))?;
             let mut data = state.write().await;
             data["textureId"] = json!(texture);
-            // A replacement renderer may finish after capture was paused.
-            // Its texture evidence does not resume the remote source.
-            let capture_paused = data["capturePaused"] == true;
-            data["status"] = json!(if capture_paused {
-                "paused"
-            } else {
-                "streaming"
-            });
+            // A replacement renderer must preserve a local presentation pause.
+            let paused = data["status"] == "paused";
+            data["status"] = json!(if paused { "paused" } else { "streaming" });
             self.resource_admission.set_status(
                 &format!("session:{id}"),
-                if capture_paused {
+                if paused {
                     ResourceStatus::Paused
                 } else {
                     ResourceStatus::Streaming
@@ -1267,27 +1216,13 @@ wait "$child""#
             return Ok(json!({"sessionId":id,"refreshRequested":true}));
         }
         if matches!(command, "session.pause" | "session.resume") {
-            let device_id = {
+            {
                 let data = state.read().await;
                 if data["textureId"].is_null() {
                     return Err(CoreError::new("renderer_not_ready", "实时渲染尚未就绪。"));
                 }
-                data["deviceId"].as_str().expect("device id").to_owned()
-            };
-            let pausing = command.ends_with("pause");
-            let client = self.client(&device_id).await?;
-            // Verify our exact process identity without freezing its Binder,
-            // display or controller threads. Cooperative capture has its own ACK.
-            process.signal(&client, false).await?;
-            let receipt =
-                send_control_request(&control, |reply| ControlRequest::Capture(pausing, reply))
-                    .await?;
-            if receipt["capturePaused"] != pausing || receipt["confirmed"] != true {
-                return Err(CoreError::new(
-                    "capture_unconfirmed",
-                    "设备未确认捕获状态。",
-                ));
             }
+            let pausing = command.ends_with("pause");
             if cancellation.is_cancelled() {
                 return Err(CoreError::new("disconnected", "控制会话已结束。"));
             }
@@ -1301,10 +1236,9 @@ wait "$child""#
                     ResourceStatus::Streaming
                 },
             );
-            data["presentationOnly"] = json!(false);
-            data["capturePaused"] = json!(pausing);
-            data["captureStateConfirmed"] = json!(true);
-            data["capturePauseMode"] = json!("cooperative");
+            // Official scrcpy keeps capturing; only local presentation pauses.
+            data["presentationOnly"] = json!(true);
+            data["capturePaused"] = json!(false);
             data["awaitingSession"] = json!(!pausing);
             self.emit("session.updated", data["deviceId"].as_str(), data.clone());
             let result = data.clone();
@@ -2187,7 +2121,6 @@ async fn run_control(
     let mut incoming = Vec::new();
     let mut buffer = [0; 4096];
     let mut sets: HashMap<u64, ControlReply> = HashMap::new();
-    let mut captures: HashMap<u64, (bool, ControlReply)> = HashMap::new();
     let mut sequence = 1u64;
     loop {
         tokio::select! {
@@ -2216,19 +2149,6 @@ async fn run_control(
                         continue;
                     }
                     ControlRequest::Send(bytes, reply) => (bytes, Some(reply)),
-                    ControlRequest::Capture(paused, reply) => {
-                        captures.retain(|_, (_, reply)| !reply.is_closed());
-                        if captures.len() >= 8 {
-                            let _ = reply.send(Err(CoreError::new("busy", "捕获状态请求较多，请稍后重试。")));
-                            continue;
-                        }
-                        sequence = sequence.wrapping_add(1).max(1);
-                        let mut bytes = vec![128];
-                        bytes.extend_from_slice(&sequence.to_be_bytes());
-                        bytes.push(u8::from(paused));
-                        captures.insert(sequence, (paused, reply));
-                        (bytes, None)
-                    }
                     ControlRequest::ClipboardSet(text, paste, reply) => {
                         sets.retain(|_, reply| !reply.is_closed());
                         if sets.len() >= 16 { let _ = reply.send(Err(CoreError::new("busy","剪贴板请求较多，请稍后重试。"))); continue; }
@@ -2266,19 +2186,13 @@ async fn run_control(
                     } else if incoming[0] == 1 {
                         let sequence = u64::from_be_bytes(incoming[1..9].try_into().expect("control sequence"));
                         if let Some(reply) = sets.remove(&sequence) { let _ = reply.send(Ok(json!({"applied":true}))); }
-                        else if let Some((paused, reply)) = captures.remove(&sequence) {
-                            let _ = reply.send(Ok(json!({"capturePaused":paused,"confirmed":true})));
-                        }
                     }
                     incoming.drain(..needed);
                 }
             }
         }
     }
-    for reply in sets
-        .into_values()
-        .chain(captures.into_values().map(|(_, reply)| reply))
-    {
+    for reply in sets.into_values() {
         let error = if Instant::now() >= reply.deadline {
             control_timeout()
         } else {
@@ -3161,91 +3075,74 @@ mod tests {
     #[tokio::test]
     async fn control_missing_protocol_reply_keeps_session_and_sequence_identity() {
         use interop_adb::protocol::{self, Frame};
-        let mut cases = Vec::new();
-        for kind in [9, 128] {
-            cases.push(tokio::spawn(async move {
-                let mut fixture = ControlTransportFixture::start().await;
-                let sender = fixture.control.clone();
-                let request = tokio::spawn(async move {
-                    send_control_request(&sender, |reply| match kind {
-                        9 => ControlRequest::ClipboardSet("old".into(), false, reply),
-                        128 => ControlRequest::Capture(true, reply),
-                        _ => unreachable!(),
-                    })
-                    .await
-                });
-                let write = fixture.read().await;
-                assert_eq!(write.command, protocol::WRTE);
-                assert_eq!(write.payload[0], kind);
-                let old_sequence = write.payload[1..9].to_vec();
-                Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
-                    .write(&mut fixture.peer)
-                    .await
-                    .unwrap();
-                assert_eq!(request.await.unwrap().unwrap_err().code, "timeout");
-                assert!(
-                    !fixture.running.is_finished(),
-                    "missing protocol ACK must not end a healthy session"
-                );
-                assert!(!fixture.cancellation.is_cancelled());
-                fixture.assert_healthy_service().await;
+        let mut fixture = ControlTransportFixture::start().await;
+        let sender = fixture.control.clone();
+        let request = tokio::spawn(async move {
+            send_control_request(&sender, |reply| {
+                ControlRequest::ClipboardSet("old".into(), false, reply)
+            })
+            .await
+        });
+        let write = fixture.read().await;
+        assert_eq!(write.command, protocol::WRTE);
+        assert_eq!(write.payload[0], 9);
+        let old_sequence = write.payload[1..9].to_vec();
+        Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        assert_eq!(request.await.unwrap().unwrap_err().code, "timeout");
+        assert!(
+            !fixture.running.is_finished(),
+            "missing protocol ACK must not end a healthy session"
+        );
+        assert!(!fixture.cancellation.is_cancelled());
+        fixture.assert_healthy_service().await;
 
-                let sender = fixture.control.clone();
-                let mut next = tokio::spawn(async move {
-                    send_control_request(&sender, |reply| match kind {
-                        9 => ControlRequest::ClipboardSet("new".into(), false, reply),
-                        128 => ControlRequest::Capture(false, reply),
-                        _ => unreachable!(),
-                    })
-                    .await
-                });
-                let write = fixture.read().await;
-                assert_eq!(write.command, protocol::WRTE);
-                let next_sequence = write.payload[1..9].to_vec();
-                assert_ne!(old_sequence, next_sequence);
-                Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
-                    .write(&mut fixture.peer)
-                    .await
-                    .unwrap();
-                let mut old_ack = vec![1];
-                old_ack.extend_from_slice(&old_sequence);
-                Frame::new(protocol::WRTE, 77, fixture.local, old_ack)
-                    .write(&mut fixture.peer)
-                    .await
-                    .unwrap();
-                assert_eq!(fixture.read().await.command, protocol::OKAY);
-                assert!(
-                    tokio::time::timeout(Duration::from_millis(50), &mut next)
-                        .await
-                        .is_err(),
-                    "a late protocol ACK must not satisfy a newer request"
-                );
-                let mut next_ack = vec![1];
-                next_ack.extend_from_slice(&next_sequence);
-                Frame::new(protocol::WRTE, 77, fixture.local, next_ack)
-                    .write(&mut fixture.peer)
-                    .await
-                    .unwrap();
-                assert_eq!(fixture.read().await.command, protocol::OKAY);
-                let receipt = next.await.unwrap().unwrap();
-                if kind == 9 {
-                    assert_eq!(receipt["applied"], true);
-                } else {
-                    assert_eq!(receipt["capturePaused"], false);
-                    assert_eq!(receipt["confirmed"], true);
-                }
-                fixture.cancellation.cancel();
-                tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
-                    .await
-                    .unwrap()
-                    .unwrap();
-                assert_eq!(fixture.read().await.command, protocol::CLSE);
-                fixture.client.close();
-            }));
-        }
-        for case in cases {
-            case.await.unwrap();
-        }
+        let sender = fixture.control.clone();
+        let mut next = tokio::spawn(async move {
+            send_control_request(&sender, |reply| {
+                ControlRequest::ClipboardSet("new".into(), false, reply)
+            })
+            .await
+        });
+        let write = fixture.read().await;
+        assert_eq!(write.command, protocol::WRTE);
+        let next_sequence = write.payload[1..9].to_vec();
+        assert_ne!(old_sequence, next_sequence);
+        Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        let mut old_ack = vec![1];
+        old_ack.extend_from_slice(&old_sequence);
+        Frame::new(protocol::WRTE, 77, fixture.local, old_ack)
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        assert_eq!(fixture.read().await.command, protocol::OKAY);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), &mut next)
+                .await
+                .is_err(),
+            "a late protocol ACK must not satisfy a newer request"
+        );
+        let mut next_ack = vec![1];
+        next_ack.extend_from_slice(&next_sequence);
+        Frame::new(protocol::WRTE, 77, fixture.local, next_ack)
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        assert_eq!(fixture.read().await.command, protocol::OKAY);
+        let receipt = next.await.unwrap().unwrap();
+        assert_eq!(receipt["applied"], true);
+        fixture.cancellation.cancel();
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(fixture.read().await.command, protocol::CLSE);
+        fixture.client.close();
     }
 
     // Exercise the actual ADB route and run_video, rather than only a packet
@@ -3593,7 +3490,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn renderer_ready_preserves_capture_pause_after_generation_replacement() {
+    async fn renderer_ready_preserves_presentation_pause_after_generation_replacement() {
         let directory = tempfile::tempdir().unwrap();
         let runtime = Runtime::initialize(directory.path()).await.unwrap();
         let cancellation = CancellationToken::new();
@@ -3610,7 +3507,7 @@ mod tests {
             "sessionId":"fixture", "deviceId":"device", "status":"starting",
             "width":1080, "height":1920,
         })));
-        let (control, _requests) = mpsc::channel(1);
+        let (control, mut requests) = mpsc::channel(1);
         // The ready boundary only consumes renderer evidence: no device or
         // remote process is started by this fixture.
         runtime.sessions.lock().await.insert(
@@ -3643,16 +3540,18 @@ mod tests {
             ResourceStatus::Streaming
         );
 
-        // The capture ACK arrives before a pending generation's ready receipt.
-        {
-            let mut snapshot = state.write().await;
-            snapshot["status"] = json!("paused");
-            snapshot["capturePaused"] = json!(true);
-            snapshot["captureStateConfirmed"] = json!(true);
-        }
-        runtime
-            .resource_admission
-            .set_status("session:fixture", ResourceStatus::Paused);
+        // Local presentation pauses before a pending generation's ready receipt.
+        let paused = runtime
+            .session_command("session.pause", &json!({"sessionId":"fixture"}))
+            .await
+            .unwrap();
+        assert_eq!(paused["status"], "paused");
+        assert_eq!(paused["presentationOnly"], true);
+        assert_eq!(paused["capturePaused"], false);
+        assert!(
+            requests.try_recv().is_err(),
+            "pause must not send a remote control message"
+        );
         let delayed = runtime
             .session_command(
                 "session.ready",
@@ -3667,19 +3566,28 @@ mod tests {
         assert_eq!(delayed["decodedHeight"], 360);
         assert_eq!(delayed["decoderName"], "replacement");
         assert_eq!(delayed["status"], "paused");
-        assert_eq!(delayed["capturePaused"], true);
-        assert_eq!(delayed["captureStateConfirmed"], true);
+        assert_eq!(delayed["capturePaused"], false);
+        assert_eq!(delayed["presentationOnly"], true);
         let activity = &runtime.resource_admission.activities()[0];
         assert_eq!(activity.status, ResourceStatus::Paused);
         assert!(activity.can_resume);
         assert!(!activity.can_pause);
 
-        // A subsequent acknowledged resume still accepts renderer updates.
-        {
-            let mut snapshot = state.write().await;
-            snapshot["status"] = json!("streaming");
-            snapshot["capturePaused"] = json!(false);
-        }
+        // A subsequent local resume still accepts renderer updates.
+        let reset = async {
+            let request = requests.recv().await.unwrap();
+            let ControlRequest::Send(bytes, reply) = request else {
+                panic!("resume must use the official RESET_VIDEO request");
+            };
+            assert_eq!(bytes, vec![17]);
+            let _ = reply.send(Ok(json!({"sent":true})));
+        };
+        let resume_params = json!({"sessionId":"fixture"});
+        let (resumed, ()) = tokio::join!(
+            runtime.session_command("session.resume", &resume_params),
+            reset
+        );
+        assert_eq!(resumed.unwrap()["capturePaused"], false);
         let resumed = runtime
             .session_command(
                 "session.ready",
@@ -3938,187 +3846,6 @@ mod tests {
         assert!(launch_identity(&[0xff]).is_err());
     }
 
-    #[test]
-    fn process_stat_uses_starttime_after_the_parenthesized_command() {
-        let mut fields = vec!["0"; 20];
-        fields[0] = "T";
-        fields[19] = "12345";
-        let stat = format!("99 (name with ) parens) {}", fields.join(" "));
-        assert_eq!(process_stat(stat.as_bytes()).unwrap(), ('T', 12345));
-        assert!(process_stat(b"99 invalid").is_err());
-    }
-
-    #[tokio::test]
-    #[ignore = "requires real Android adbd; pauses only this test-owned capture process"]
-    async fn real_capture_process_stops_resumes_and_unfreezes_on_socket_close() {
-        use std::sync::atomic::AtomicU64;
-        let address = std::env::var("INTEROP_ADBD_ADDRESS").unwrap_or_else(|_| "127.0.0.1".into());
-        let port: u16 = std::env::var("INTEROP_ADBD_PORT")
-            .expect("set INTEROP_ADBD_PORT")
-            .parse()
-            .unwrap();
-        let root = tempfile::tempdir().unwrap();
-        let runtime = Runtime::initialize(root.path()).await.unwrap();
-        let device = runtime
-            .invoke("devices.add", json!({"address":address,"port":port}))
-            .await
-            .unwrap();
-        let id = device["deviceId"].as_str().unwrap();
-        runtime
-            .invoke("devices.connect", json!({"deviceId":id}))
-            .await
-            .unwrap();
-        let session = runtime
-            .start_session(&json!({"deviceId":id}))
-            .await
-            .unwrap();
-        let session_id = session["sessionId"].as_str().unwrap();
-        let (process, state, control) = {
-            let sessions = runtime.sessions.lock().await;
-            let session = &sessions[session_id];
-            (
-                session.process.clone().expect("started capture process"),
-                session.state.clone(),
-                session.control.clone(),
-            )
-        };
-        let client = runtime.client(id).await.unwrap();
-        eprintln!("test-owned capture jar: {}", process.jar);
-        let mut socket = tokio::net::TcpStream::connect((
-            "127.0.0.1",
-            session["videoPort"].as_u64().unwrap() as u16,
-        ))
-        .await
-        .unwrap();
-        socket
-            .write_all(session["videoToken"].as_str().unwrap().as_bytes())
-            .await
-            .unwrap();
-        socket.write_all(b"\n").await.unwrap();
-        let count = Arc::new(AtomicU64::new(0));
-        let reader_count = count.clone();
-        let reader = tokio::spawn(async move {
-            loop {
-                let mut header = [0; 12];
-                if socket.read_exact(&mut header).await.is_err() {
-                    break;
-                }
-                if header[0] & 0x80 != 0 {
-                    continue;
-                }
-                let length = u32::from_be_bytes(header[8..].try_into().unwrap()) as usize;
-                assert!(length <= MAX_PACKET);
-                let mut bytes = vec![0; length];
-                if socket.read_exact(&mut bytes).await.is_err() {
-                    break;
-                }
-                reader_count.fetch_add(1, Ordering::SeqCst);
-            }
-        });
-        tokio::time::timeout(Duration::from_secs(5), async {
-            while count.load(Ordering::SeqCst) < 2 {
-                tokio::time::sleep(Duration::from_millis(10)).await
-            }
-        })
-        .await
-        .unwrap();
-        // The process identity mismatch must not signal even this owned server.
-        let mut mismatched = process.clone();
-        mismatched.started += 1;
-        assert!(mismatched.signal(&client, true).await.is_err());
-        process.signal(&client, true).await.unwrap();
-        let stat = client
-            .shell(
-                &format!("cat /proc/{}/stat", process.pid),
-                4096,
-                OperationOptions::default(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(process_stat(&stat.stdout).unwrap().0, 'T');
-        tokio::time::sleep(Duration::from_millis(250)).await;
-        let frozen = count.load(Ordering::SeqCst);
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        assert_eq!(
-            count.load(Ordering::SeqCst),
-            frozen,
-            "frames continued after capture process stopped"
-        );
-        process.signal(&client, false).await.unwrap();
-        state.write().await["awaitingSession"] = json!(true);
-        request_control(&control, ControlRequest::Send, vec![17])
-            .await
-            .unwrap();
-        tokio::time::timeout(Duration::from_secs(5), async {
-            while count.load(Ordering::SeqCst) <= frozen {
-                tokio::time::sleep(Duration::from_millis(10)).await
-            }
-        })
-        .await
-        .unwrap();
-        process.signal(&client, true).await.unwrap();
-        // Close the actual transport while the child is stopped. The remote
-        // launcher must observe stdin EOF and resume it for normal socket cleanup.
-        client.close();
-        reader.abort();
-        let inspection =
-            interop_adb::Client::connect_tcp((address.as_str(), port), Default::default())
-                .await
-                .unwrap();
-        tokio::time::timeout(Duration::from_secs(8), async {
-            loop {
-                let stat = inspection
-                    .shell(
-                        &format!("cat /proc/{}/stat", process.pid),
-                        4096,
-                        OperationOptions::default(),
-                    )
-                    .await
-                    .unwrap();
-                if let Ok((process_state, started)) = process_stat(&stat.stdout) {
-                    if started != process.started || !matches!(process_state, 'T' | 't') {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(50)).await
-            }
-        })
-        .await
-        .expect("capture was stranded stopped after disconnect");
-        tokio::time::timeout(Duration::from_secs(8), async {
-            loop {
-                let stat = inspection
-                    .shell(
-                        &format!("cat /proc/{}/stat", process.pid),
-                        4096,
-                        OperationOptions::default(),
-                    )
-                    .await
-                    .unwrap();
-                if process_stat(&stat.stdout).map_or(true, |(state, started)| {
-                    started != process.started || state == 'Z'
-                }) {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
-        })
-        .await
-        .expect("test-owned capture process did not finish normal socket cleanup");
-        runtime.stop_session(session_id).await;
-        let cleanup = inspection
-            .shell(
-                &format!("rm -f -- {}", quote(&process.jar).unwrap()),
-                4096,
-                OperationOptions::default(),
-            )
-            .await
-            .unwrap();
-        assert!(cleanup.exit_code.is_none_or(|code| code == 0));
-        inspection.close();
-    }
     #[test]
     fn session_headers_have_dimensions_in_the_last_eight_bytes() {
         let mut bytes = [0; 12];

@@ -6,8 +6,6 @@ python3 tool/generate.py --check
 dart format --output=none --set-exit-if-changed apps/connect/lib apps/connect/test apps/connect/integration_test apps/connect/test_driver packages
 cargo fmt --all --check
 python3 tool/fvp_snapshot_regression.py
-python3 servers/scrcpy/build.py --check
-python3 servers/scrcpy/test.py
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 flutter analyze --no-pub --fatal-infos

@@ -2,7 +2,7 @@ typedef SessionJson = Map<String, dynamic>;
 typedef SessionRequest = Future<SessionJson> Function(String, [SessionJson]);
 
 /// A view borrows a persistent control session; it never owns its lifetime.
-/// Per-session ordering drains old input before another view resumes capture.
+/// Per-session ordering drains old input before another view resumes display.
 class SessionViews {
   SessionViews(this.request);
   final SessionRequest request;
@@ -38,8 +38,7 @@ class SessionViews {
     for (final entry in _owners.entries) {
       final session = current[entry.key]!;
       entry.value._revision++;
-      entry.value._visible =
-          session['capturePaused'] != true && session['status'] != 'paused';
+      entry.value._visible = session['status'] != 'paused';
     }
   }
 
@@ -63,8 +62,8 @@ class SessionViews {
           succeeded = true;
           return <String, dynamic>{};
         }
-        // Resume may unfreeze capture before its renderer receipt fails.
-        // Treat that partial outcome as live until a pause is acknowledged.
+        // Resume may display frames before its renderer receipt fails.
+        // Treat that partial outcome as visible until local pause succeeds.
         if (visible) view._visible = true;
         final receipt = await request(
           visible ? 'session.resume' : 'session.pause',

@@ -552,9 +552,8 @@ class LiveVideoBenchmark {
     });
     sample['pauseMs'] = watch.elapsedMilliseconds;
     _require(
-      paused['capturePaused'] == true &&
-          paused['captureStateConfirmed'] == true,
-      'Capture pause not acknowledged.',
+      paused['status'] == 'paused' && paused['presentationOnly'] == true,
+      'Presentation pause not confirmed.',
     );
     _expected = (_expected + 1) & 15;
     _inputSequence++;
@@ -572,7 +571,7 @@ class LiveVideoBenchmark {
     sample['resumeMs'] = watch.elapsedMilliseconds;
     _require(
       resumed['capturePaused'] == false && resumed['firstFrameDecoded'] == true,
-      'Capture resume not verified.',
+      'Presentation resume not verified.',
     );
     await _waitPixels(_expected);
     sample.addAll({
@@ -580,7 +579,7 @@ class LiveVideoBenchmark {
       'resumeToFreshMs': watch.elapsedMilliseconds,
       'expectedCounter': _expected,
       'pauseConfirmed': true,
-      'capturePausedAck': true,
+      'presentationPaused': true,
       'captureResumedAck': true,
     });
     return sample;

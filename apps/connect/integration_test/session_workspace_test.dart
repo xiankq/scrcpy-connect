@@ -206,16 +206,14 @@ void main() {
           retained = (await sessions()).singleWhere(
             (item) => idOf(item) == idOf(session),
           );
-          if (retained['status'] == 'paused' &&
-              retained['captureStateConfirmed'] == true) {
+          if (retained['status'] == 'paused') {
             break;
           }
           await tester.pump(const Duration(milliseconds: 100));
         } while (DateTime.now().isBefore(pauseDeadline));
         expect(retained['status'], 'paused');
-        expect(retained['capturePaused'], isTrue);
-        expect(retained['captureStateConfirmed'], isTrue);
-        expect(retained['capturePauseMode'], 'cooperative');
+        expect(retained['capturePaused'], isFalse);
+        expect(retained['presentationOnly'], isTrue);
         expect(retained['textureId'], isNotNull);
       }
 
@@ -348,7 +346,7 @@ void main() {
         expect(ownedIds, hasLength(3));
         expect((await sessions()).map(idOf).toSet(), ownedIds.toSet());
         expect(
-          (await sessions()).every((item) => item['capturePaused'] == true),
+          (await sessions()).every((item) => item['status'] == 'paused'),
           isTrue,
         );
         await tapPageAction(
@@ -393,7 +391,7 @@ void main() {
         expect(
           (await sessions())
               .where((item) => idOf(item) != settingsId)
-              .every((item) => item['capturePaused'] == true),
+              .every((item) => item['status'] == 'paused'),
           isTrue,
         );
         await screenshot('workspace-settings-resumed', active: settingsId);

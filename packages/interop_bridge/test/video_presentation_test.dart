@@ -210,14 +210,18 @@ void main() {
   });
 
   test(
-    'capture stays running until local pause ACK and queued resume waits',
+    'presentation pause waits for local ACK and serializes queued resume',
     () async {
       final calls = <String>[];
       final paused = Completer<void>();
       final owner = VideoPresentation(
         core: (command, params) async {
           calls.add('$command:${params['sessionId']}');
-          return {'capturePaused': command == 'session.pause'};
+          return {
+            'capturePaused': false,
+            'presentationOnly': true,
+            'status': command == 'session.pause' ? 'paused' : 'streaming',
+          };
         },
         pauseOutput: (id) async {
           calls.add('local.pause:$id');
@@ -234,7 +238,10 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(calls, ['local.pause:A']);
       paused.complete();
-      expect((await pause)['capturePaused'], true);
+      final pausedReceipt = await pause;
+      expect(pausedReceipt['capturePaused'], false);
+      expect(pausedReceipt['presentationOnly'], true);
+      expect(pausedReceipt['paused'], true);
       expect((await resume)['capturePaused'], false);
       expect(calls, [
         'local.pause:A',

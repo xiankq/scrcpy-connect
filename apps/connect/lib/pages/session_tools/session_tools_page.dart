@@ -102,7 +102,7 @@ class SessionToolsPage extends HookWidget {
       ActionRow(
         icon: LucideIcons.camera,
         title: '截取当前画面',
-        subtitle: session['capturePaused'] == true
+        subtitle: session['status'] == 'paused'
             ? '窗口已暂停，将截取最后显示的画面'
             : '截取所选窗口的画面',
         color: ConnectTokens.coral,

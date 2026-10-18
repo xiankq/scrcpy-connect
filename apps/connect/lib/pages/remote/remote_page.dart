@@ -277,8 +277,7 @@ class _RemotePageState extends State<RemotePage>
       if (sessionId.isEmpty || result['textureId'] == null) return;
       view = controller.claimSessionView(
         sessionId,
-        visible:
-            result['status'] != 'paused' && result['capturePaused'] != true,
+        visible: result['status'] != 'paused',
       );
       if (retained == null) {
         focusVisibleDevice();

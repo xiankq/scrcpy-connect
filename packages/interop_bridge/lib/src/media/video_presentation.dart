@@ -41,8 +41,8 @@ VideoJson mergeVideoOutputReceipt(VideoJson? current, VideoJson receipt) {
   return {...?current, ...receipt};
 }
 
-/// Coordinates the local consumer and the existing remote capture process.
-/// Pausing capture first would starve the local reader's state acknowledgement.
+/// Coordinates local presentation with core forwarding state.
+/// The official server continues capturing while presentation is paused.
 class VideoPresentation {
   VideoPresentation({
     required this.core,
@@ -88,7 +88,7 @@ class VideoPresentation {
     final operation = (_tails[session] ?? Future<void>.value()).then((_) async {
       final request = {...params, 'sessionId': session};
       if (command == 'session.resume') {
-        // Core resumes capture and requests a fresh encoder session before MDK
+        // Core resumes forwarding and requests a fresh encoder session before MDK
         // is asked to confirm playing and actual decoded pixels.
         final remote = await core(command, request);
         final local = await resumeOutput(session);
@@ -100,7 +100,7 @@ class VideoPresentation {
         return {...remote, ...local};
       } catch (_) {
         // A failed request may still have changed the asynchronous player.
-        // Keep the remote source running and restore the consumer if possible.
+        // Restore the consumer if possible.
         try {
           await resumeOutput(session);
         } catch (_) {
