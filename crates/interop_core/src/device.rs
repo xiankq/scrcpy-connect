@@ -188,6 +188,19 @@ fn authorization_failed(error: &CoreError) -> bool {
         .any(|reason| error.message.contains(reason))
 }
 
+/// Remove admission first, but keep the exact old transport alive while its
+/// media owners acknowledge shutdown and delete their temporary artifacts.
+/// A cancelled disconnect must still close this detached Client.
+struct DetachedConnection(Option<Client>);
+
+impl Drop for DetachedConnection {
+    fn drop(&mut self) {
+        if let Some(client) = &self.0 {
+            client.close();
+        }
+    }
+}
+
 fn operations(seconds: u64, cancellation: CancellationToken) -> OperationOptions {
     OperationOptions {
         timeout: Duration::from_secs(seconds),
@@ -268,6 +281,10 @@ mod recovery_tests {
         assert_eq!(settings_events, 2);
     }
 }
+#[cfg(test)]
+#[path = "device/connection_cleanup_tests.rs"]
+mod connection_cleanup_tests;
+
 #[cfg(test)]
 #[path = "device/pairing_tests.rs"]
 mod pairing_tests;
@@ -757,6 +774,58 @@ impl Runtime {
         }
         attempt
     }
+    /// Serialize only one device's publication and teardown. The map lock is
+    /// released before waiting. The boolean retains interrupted cleanup until
+    /// another owner completes it; idle completed entries are pruned.
+    async fn connection_transition(&self, id: &str) -> tokio::sync::OwnedMutexGuard<bool> {
+        let gate = {
+            let mut gates = self.connection_transitions.lock().await;
+            gates.retain(|_, gate| {
+                Arc::strong_count(gate) > 1
+                    || gate
+                        .try_lock()
+                        .map_or(true, |cleanup_pending| *cleanup_pending)
+            });
+            gates.entry(id.into()).or_default().clone()
+        };
+        gate.lock_owned().await
+    }
+
+    async fn retire_closed_connection(&self, id: &str) -> CoreResult<()> {
+        let mut transition = self.connection_transition(id).await;
+        self.retire_closed_connection_locked(id, &mut transition)
+            .await
+    }
+
+    async fn retire_closed_connection_locked(
+        &self,
+        id: &str,
+        cleanup_pending: &mut tokio::sync::OwnedMutexGuard<bool>,
+    ) -> CoreResult<()> {
+        {
+            // Match attach_client's store -> connections lock order. Recheck
+            // after acquiring the transition: a stale monitor list is not
+            // authority to remove a healthy replacement or write it offline.
+            let mut store = self.store.write().await;
+            let mut connections = self.connections.lock().await;
+            if connections.get(id).is_some_and(Client::is_closed) {
+                **cleanup_pending = true;
+                connections.remove(id);
+                if let Some(record) = store.devices.iter_mut().find(|device| device.id == id) {
+                    record.status = "offline".into();
+                    record.reason =
+                        Some("设备连接已中断，活动已停止；将按重连设置恢复连接。".into());
+                }
+            }
+        }
+        if **cleanup_pending {
+            self.stop_device_activities(id).await?;
+            self.changed_devices().await?;
+            **cleanup_pending = false;
+        }
+        Ok(())
+    }
+
     async fn attach_client(
         &self,
         id: &str,
@@ -766,6 +835,11 @@ impl Runtime {
         connected_endpoint: Option<SocketAddr>,
         discovered: Option<&DiscoveredAttempt>,
     ) -> CoreResult<Value> {
+        // A connected record admits new video, audio and helper work. Finish
+        // the old connection's device-wide cleanup before publishing it.
+        let mut transition = self.connection_transition(id).await;
+        self.retire_closed_connection_locked(id, &mut transition)
+            .await?;
         let _pending = self.device_operations.lock().await;
         if token.is_cancelled() {
             client.close();
@@ -852,23 +926,24 @@ impl Runtime {
         Ok(json!({"connected":true,"deviceId":id,"device":device,"adbBurstActive":burst_active}))
     }
     pub(crate) async fn disconnect_device(&self, id: &str, forget: bool) -> CoreResult<Value> {
+        let mut cleanup_pending = self.connection_transition(id).await;
         self.device(id).await?;
-        {
+        let _detached = DetachedConnection({
             let mut pending = self.device_operations.lock().await;
             if let Some(token) = pending.remove(id) {
                 token.cancel();
             }
             let mut store = self.store.write().await;
+            let mut connections = self.connections.lock().await;
+            *cleanup_pending = true;
             if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
                 record.auto_reconnect = false;
                 record.status = "offline".into();
                 record.reason = None;
             }
-        }
+            connections.remove(id)
+        });
         self.stop_device_activities(id).await?;
-        if let Some(client) = self.connections.lock().await.remove(id) {
-            client.close();
-        }
         if forget {
             let mut store = self.store.write().await;
             store.devices.retain(|d| d.id != id);
@@ -890,6 +965,7 @@ impl Runtime {
             let store = self.store.read().await;
             self.emit("settings.changed", None, store.settings.clone());
         }
+        *cleanup_pending = false;
         Ok(json!({"deviceId":id,"disconnected":true,"forgotten":forget}))
     }
     pub(crate) async fn discover_devices(&self) -> CoreResult<Value> {
@@ -1857,7 +1933,7 @@ impl Runtime {
                         backoff.remove(&record.id);
                     }
                 }
-                let closed = runtime
+                let mut closed = runtime
                     .connections
                     .lock()
                     .await
@@ -1865,32 +1941,25 @@ impl Runtime {
                     .filter(|(_, client)| client.is_closed())
                     .map(|(id, _)| id.clone())
                     .collect::<Vec<_>>();
+                // A caller may be cancelled after removing its Client but
+                // before cleanup completes. Resume such orphaned work even
+                // when no new connection attempt arrives.
+                closed.extend(
+                    runtime
+                        .connection_transitions
+                        .lock()
+                        .await
+                        .iter()
+                        .filter(|(_, gate)| {
+                            Arc::strong_count(gate) == 1
+                                && gate.try_lock().is_ok_and(|pending| *pending)
+                        })
+                        .map(|(id, _)| id.clone()),
+                );
+                closed.sort();
+                closed.dedup();
                 for id in closed {
-                    let removed = {
-                        let mut connections = runtime.connections.lock().await;
-                        if connections.get(&id).is_some_and(Client::is_closed) {
-                            connections.remove(&id);
-                            true
-                        } else {
-                            false
-                        }
-                    };
-                    if removed {
-                        if let Some(record) = runtime
-                            .store
-                            .write()
-                            .await
-                            .devices
-                            .iter_mut()
-                            .find(|d| d.id == id)
-                        {
-                            record.status = "offline".into();
-                            record.reason =
-                                Some("设备连接已中断，活动已停止；将按重连设置恢复连接。".into());
-                        }
-                        let _ = runtime.stop_device_activities(&id).await;
-                        let _ = runtime.changed_devices().await;
-                    }
+                    let _ = runtime.retire_closed_connection(&id).await;
                 }
                 let trusted = runtime
                     .store
