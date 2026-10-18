@@ -247,7 +247,7 @@
 +}
 --- /dev/null
 +++ b/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java
-@@ -0,0 +1,221 @@
+@@ -0,0 +1,240 @@
 +package com.genymobile.scrcpy.video;
 +
 +import java.util.LinkedHashMap;
@@ -260,6 +260,7 @@
 +    public static final int EOS = 4;
 +    public static final int PARTIAL = 8;
 +    public static final long STALL_NS = 3_000_000_000L;
++    private static final int REPEAT_LIMIT = 10;
 +
 +    public interface Scheduler {
 +        void post(Runnable task, long delayNs);
@@ -299,6 +300,7 @@
 +    private boolean scheduled;
 +    private long scheduledAtNs;
 +    private long sourceTimestampNs;
++    private int repeatsRemaining;
 +    private long lastPtsUs = -1;
 +    private long lastSubmitNs;
 +    private long nextInputNs;
@@ -381,9 +383,16 @@
 +        if (closed || !active || !hasSource) {
 +            return;
 +        }
-+        long due = pending ? nextInputNs : (repeatNs == 0 ? Long.MAX_VALUE : Math.max(nextInputNs, lastSubmitNs + repeatNs));
++        long due = inputDue();
 +        if (ledger.size() < inputLimit() && now >= due) {
 +            boolean repeat = !pending;
++            // Match GraphicBufferSource's finite static-repeat lifetime. New
++            // callbacks cannot extend it until their latest image is submitted.
++            if (repeat) {
++                repeatsRemaining--;
++            } else {
++                repeatsRemaining = REPEAT_LIMIT;
++            }
 +            long ptsUs = Math.max(lastPtsUs + 1, (repeat ? now : sourceTimestampNs) / 1000);
 +            Frame frame = new Frame(sourceTimestampNs, ptsUs, repeat, now);
 +            lastPtsUs = ptsUs;
@@ -403,13 +412,23 @@
 +        scheduleNext();
 +    }
 +
++    private long inputDue() {
++        if (pending) {
++            return nextInputNs;
++        }
++        if (repeatNs == 0 || repeatsRemaining == 0) {
++            return Long.MAX_VALUE;
++        }
++        return Math.max(nextInputNs, lastSubmitNs + repeatNs);
++    }
++
 +    private void scheduleNext() {
 +        if (closed) {
 +            return;
 +        }
 +        long next = stallDeadlineNs == 0 ? Long.MAX_VALUE : stallDeadlineNs;
 +        if (ledger.size() < inputLimit() && hasSource) {
-+            long inputDue = pending ? nextInputNs : (repeatNs == 0 ? Long.MAX_VALUE : Math.max(nextInputNs, lastSubmitNs + repeatNs));
++            long inputDue = inputDue();
 +            next = Math.min(next, inputDue);
 +        }
 +        if (next != Long.MAX_VALUE) {

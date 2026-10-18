@@ -11,6 +11,7 @@ public final class LatestInputWindowTest {
         long due;
         Runnable retiredTask;
         int maxQueued;
+        int tasksRun;
         final List<LatestInputWindow.Frame> frames = new ArrayList<>();
         LatestInputWindow window;
         boolean failSwap;
@@ -55,6 +56,7 @@ public final class LatestInputWindowTest {
                 check(count++ < 100, "no drain spin or recursive repeat");
                 Runnable next = task;
                 task = null;
+                tasksRun++;
                 next.run();
             }
         }
@@ -189,6 +191,95 @@ public final class LatestInputWindowTest {
         check(h.window.getFailure() != null && h.window.isClosed(), "steady input still has the bounded stall guard");
     }
 
+    private static void finiteRepeatBootstrapAndIdleWakeup() {
+        Harness h = new Harness(33_334, 60);
+        h.window.activate();
+        h.source(100_000);
+        h.advance(33_334_000);
+        check(h.frames.size() == 2 && h.frames.get(1).repeat, "bootstrap consumes the first repeat of the ten-repeat budget");
+        h.output(0);
+        check(h.window.inFlight() == 1 && h.frames.size() == 2, "bootstrap output preserves the one-input steady limit");
+        h.output(1);
+        for (int repeat = 2; repeat <= 10; repeat++) {
+            h.advance(33_334_000);
+            check(h.frames.size() == repeat + 1, "each remaining repeat submits once at its deadline");
+            LatestInputWindow.Frame frame = h.frames.get(repeat);
+            check(frame.repeat && frame.sourceTimestampNs == 100_000, "finite repeats preserve the original source timestamp");
+            check(frame.presentationTimeUs == h.now / 1000, "finite repeats use their exact monotonic submission PTS");
+            h.output(repeat);
+        }
+        check(h.frames.size() == 11 && h.window.inFlight() == 0, "one source produces exactly ten repeats with exact output retirement");
+        check(h.task == null && h.window.getStallDeadlineNs() == 0, "exhausted repeats leave no drain, timer, or stall ledger");
+        int idleTasks = h.tasksRun;
+        h.advance(LatestInputWindow.STALL_NS * 20);
+        check(h.frames.size() == 11 && h.tasksRun == idleTasks && h.task == null, "long static idle performs no work after the repeat quota");
+        check(!h.window.isClosed() && h.window.getFailure() == null, "long idle with an empty ledger remains healthy");
+
+        long resumedSourceNs = h.now + 1_234_000;
+        h.source(resumedSourceNs);
+        LatestInputWindow.Frame resumed = h.frames.get(11);
+        check(h.frames.size() == 12 && !resumed.repeat && resumed.sourceTimestampNs == resumedSourceNs,
+                "a unique source after idle actively submits without another callback");
+        check(resumed.presentationTimeUs == resumedSourceNs / 1000, "idle wakeup preserves the new source's exact PTS");
+        h.output(11);
+        for (int repeat = 1; repeat <= 10; repeat++) {
+            h.advance(33_334_000);
+            check(h.frames.size() == 12 + repeat, "new submitted source receives a fresh ten-repeat budget");
+            LatestInputWindow.Frame frame = h.frames.get(11 + repeat);
+            check(frame.repeat && frame.sourceTimestampNs == resumedSourceNs, "fresh-budget repeats keep the resumed source timestamp");
+            check(frame.presentationTimeUs == h.now / 1000, "fresh-budget repeats retain exact PTS");
+            h.output(11 + repeat);
+        }
+        check(h.frames.size() == 22 && h.task == null && h.window.inFlight() == 0, "the fresh budget also stops after ten repeats");
+    }
+
+    private static void exhaustedRepeatDrainsPendingSource() {
+        Harness h = new Harness(33_334, 60);
+        h.window.activate();
+        h.source(100_000);
+        h.output(0);
+        for (int repeat = 1; repeat <= 10; repeat++) {
+            h.advance(33_334_000);
+            check(h.frames.size() == repeat + 1 && h.frames.get(repeat).repeat, "consume exactly one repeat per returned credit");
+            if (repeat < 10) {
+                h.output(repeat);
+            }
+        }
+        check(h.window.inFlight() == 1 && h.task != null && h.window.getStallDeadlineNs() == h.now + LatestInputWindow.STALL_NS,
+                "zero repeat quota retains the stall watch while the final repeat is live");
+        long latestSourceNs = h.now + 1_000_000;
+        h.source(latestSourceNs - 100_000);
+        h.source(latestSourceNs);
+        check(h.frames.size() == 11 && h.window.inFlight() == 1, "source callbacks cannot replenish or bypass a live final repeat");
+        h.advance(33_334_000);
+        h.output(10); // No source callback follows the final repeat's exact output.
+        LatestInputWindow.Frame source = h.frames.get(11);
+        check(h.frames.size() == 12 && !source.repeat && source.sourceTimestampNs == latestSourceNs,
+                "zero repeat quota still actively drains the latest pending source on output");
+        check(source.presentationTimeUs == latestSourceNs / 1000, "pending source retains its exact PTS");
+        h.output(11);
+        for (int repeat = 1; repeat <= 10; repeat++) {
+            h.advance(33_334_000);
+            check(h.frames.size() == 12 + repeat, "the actual pending-source submission starts one fresh budget");
+            h.output(11 + repeat);
+        }
+        check(h.task == null && h.window.inFlight() == 0, "coalesced source callbacks do not accumulate repeat budgets");
+
+        Harness stalled = new Harness(33_334, 60);
+        stalled.window.activate();
+        stalled.source(100_000);
+        stalled.output(0);
+        for (int repeat = 1; repeat <= 10; repeat++) {
+            stalled.advance(33_334_000);
+            if (repeat < 10) {
+                stalled.output(repeat);
+            }
+        }
+        stalled.advance(LatestInputWindow.STALL_NS);
+        check(stalled.window.isClosed() && stalled.window.getFailure() != null && stalled.frames.size() == 11 && stalled.task == null,
+                "an unretired final repeat still fails at the three-second stall deadline");
+    }
+
     private static void synchronousOutputAndSwapFailure() {
         Harness h = new Harness(0, 0);
         h.synchronousOutput = true;
@@ -238,9 +329,11 @@ public final class LatestInputWindowTest {
         activationAndCadence();
         staticRepeatAndStall();
         steadyStaticRepeat();
+        finiteRepeatBootstrapAndIdleWakeup();
+        exhaustedRepeatDrainsPendingSource();
         exactOutputAccounting();
         synchronousOutputAndSwapFailure();
         closeAndGenerationIsolation();
-        System.out.println("LatestInputWindowTest: 7 behavioral scenarios passed");
+        System.out.println("LatestInputWindowTest: 9 behavioral scenarios passed");
     }
 }

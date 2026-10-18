@@ -2,8 +2,12 @@
 
 此目录是被控手机上 scrcpy Java 捕获服务的实验补丁。它改变被控端真实的
 SurfaceTexture／GL／MediaCodec 输入路径；没有增加主控 Android 媒体实现。
-当前候选采用双项启动、单项稳定输入。旧固定双项候选已有限定 AVD 输入改善证据，
-当前变体的同参数源时钟诊断A/B/A输入P50／P95为691／852→581／810→686／925ms，
+当前候选采用双项启动、单项稳定输入，以及每个实际提交源帧最多10次静态重复。
+静止预算耗尽后不再提交重复帧或安排空的GL drain，仍等待新源和有效控制请求；
+编码线程原有100ms故障／暂停轮询保留，不把它称为设备零消耗。
+此前无限repeat单项版本JAR为1a3d2c82…，不是当前有限重复版本6af942a5…。
+旧固定双项候选已有限定 AVD 输入改善证据，
+旧单项变体的同参数源时钟诊断A/B/A输入P50／P95为691／852→581／810→686／925ms，
 P50有限改善、首帧无稳定收益且整体预算失败，不能替换生产 JAR；原件与限定条件见
 [视频性能记录](../../../../docs/implementation/video-performance.md)。
 
@@ -31,6 +35,10 @@ JAR／摘要不覆盖；构建工具应使用独立候选输出目录并记录�
 - 新源按原 SurfaceTexture timestamp 建立媒体 PTS；重复帧和 PTS 碰撞使用严格
   单调的新编码 PTS。每项 reservation 同时保存原始 `sourceTimestampNs`、实际
   `presentationTimeUs`、`repeat` 和提交时刻。重复绘制不会刷新源 timestamp。
+- 重复预算只在实际源帧reservation时重置为10，bootstrap重复也消耗该预算；
+  重复reservation时递减，同步输出能观察一致状态。仅收到源callback不会叠加预算。
+  预算为0但仍有pending时优先排空最新源；最后一个重复仍在途时继续3秒stall监视，
+  精确输出返还credit后可主动提交终值。空ledger／无pending／预算耗尽后静止不失败。
 - 原 `repeat-previous-frame-after` 与 `max-fps-to-encoder` 在自定义 codecOptions
   全部应用后读取并移除，避免 GBS 自行重复／丢弃已登记的输入。GL 模块按照读取
   的间隔执行重复和限帧：SurfaceEncoder 未覆盖时重复为 100000µs，当前 Core
@@ -54,10 +62,11 @@ JAR／摘要不覆盖；构建工具应使用独立候选输出目录并记录�
 ## 离线验证
 
 `LatestInputWindowTest.java` 是独立纯 Java 行为测试，编译时只需要补丁中的
-`LatestInputWindow.java`。它覆盖七组场景：双项启动缩为单项后只保留最新 pending 和无新事件
+`LatestInputWindow.java`。它覆盖九组场景：双项启动缩为单项后只保留最新 pending 和无新事件
 终帧、激活窗口与限帧、静态重复与有界 stall、CONFIG／EOS／精确乱序输出／重复／
 未知／partial、早于 swap 返回的同步 output 和 swap 失败、close 穿越 reservation
-以及旧 timer／output 的代际隔离、稳定状态静态重复与唯一终值。测试使用可控时钟和
+以及旧 timer／output 的代际隔离、稳定状态静态重复与唯一终值、10次预算／长静止
+无任务／再次新源、最终repeat阻挡时的pending终值与stall。测试使用可控时钟和
 单任务 scheduler，断言真实
 提交帧／PTS／pending 行为，没有复制模块的状态转移算法。
 
@@ -66,6 +75,12 @@ JAR／摘要不覆盖；构建工具应使用独立候选输出目录并记录�
 候选编译和测试由仓库构建／测试入口在独立目录统一运行；本目录不提供第二套构建器。
 
 ## 设备验收边界
+
+有限重复版本6af942a5…实际API36静止／新源／动态终值／暂停恢复／旋转共8阶段
+通过。关闭诊断的普通Driver静态A/B/A，完成组各24次输入，P50/P95为201/290→
+149/236→196/295ms；候选首帧仍有1036ms而失败。原返回组窗口超时单列保留，
+最后一组为同APK独立重试，不覆盖失败或放宽门槛。候选未替换生产，完整证据与
+适用边界见[性能记录](../../../../docs/implementation/video-performance.md#有限静态重复输入改善候选仍未通过完整首帧预算)。
 
 纯 Java 测试不能证明实际 codec PTS、GL 开销、槽位驻留或用户可见性能。真实编码
 接缝应另测 packet 完整写入、releaseOutputBuffer 失败、100ms failure poll 和暂停
