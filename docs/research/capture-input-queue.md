@@ -163,3 +163,140 @@ swap失败、暂停穿过reserve窗口、关闭后旧timer／output无效。继�
 测试，并补真实encode接缝。实际设备先验证静态冷启、动态→唯一终值→完全静止、
 暂停恢复、旋转及stop，再做同负载普通Driver A/B/A和slot追踪。GL成本与失败原件
 保留；实际新像素改善和输入驻留收窄均有证据后，才考虑产品默认。
+
+
+## 隔离候选首次实施与服务端验证
+
+`servers/scrcpy/experiments/bounded-input/candidate.patch`已实现上述限定候选，三新增
+模块及四个原类接缝。独立构建入口不接受仓库内或已存在输出目录；七条保护回归通过，
+其中下载分支的输出变量遮蔽在本轮检查中修正并加入实际输出控制流测试。该下载测试
+使用临时SDK／编译器替身，只验证目录／ZIP输出，不冒称编译Java。
+
+```sh
+rtk proxy python3 -B servers/scrcpy/test_build.py -v
+rtk proxy python3 servers/scrcpy/build.py --output-dir /tmp/connect-bounded-input-baseline-build
+rtk proxy python3 servers/scrcpy/test.py --build-dir /tmp/connect-bounded-input-baseline-build
+rtk proxy python3 servers/scrcpy/build.py --candidate bounded-input \
+  --output-dir /tmp/connect-bounded-input-candidate-build
+rtk proxy python3 servers/scrcpy/test.py --candidate bounded-input \
+  --build-dir /tmp/connect-bounded-input-candidate-build
+```
+
+实际基线独立重建SHA仍为b46cd074…、CapturePause通过；候选SHA-256
+`34294a6a21ef57f0ecdb74b8ed418bdd2e05198eea553446c7b5c7e44911fc6b`，原CapturePause及
+六组纯Java行为通过。编译器source/target8废弃警告保留。外部manifest同时记录基础
+补丁和候选补丁摘要；生产vendor／捕获JAR未覆盖。
+
+目标AVD两vCPU／SwiftShader，实际宿主ADB部署、双socket scrcpy协议／控制与H264
+完整数据包，经临时固定imageio-ffmpeg0.6.0所带FFmpeg7.0.2离线解码核对：
+
+| 场景 | 真实解码计数 | session／尺寸 |
+| --- | --- | --- |
+| 静态冷启 | 0 | 1／576×1280 |
+| 仅一次静态变化 | 1 | 1／576×1280 |
+| 持续动态后关闭动画、唯一终值静止 | 1 | 1／576×1280 |
+| 暂停期间变化后恢复 | 2 | 2／576×1280 |
+| 旋转重建（夹具Activity重新创建） | 0 | 3／1280×576 |
+| 横屏继续操作 | 1 | 3／1280×576 |
+
+pauseACK后先排空300ms再观察300ms媒体计数不变，服务端正常exit0；唯一进程／JAR／
+fixture／forward移除、系统旋转设置恢复均确认。原件
+`/tmp/connect-e2e/bounded-input-smoke/`含脚本副本／SHA、server.log、各阶段完整H264、
+实际解码64×64图像、FFmpeg摘要和result.json。复跑命令使用新输出目录：
+
+```sh
+rtk proxy python3 -B /tmp/connect-e2e/bounded-input-smoke/driver.py \
+  --jar /tmp/connect-bounded-input-candidate-build/interop-scrcpy-server.jar \
+  --out /tmp/connect-e2e/bounded-input-smoke-replay
+```
+
+这是临时单目标服务端实验，固定测试机名emulator-5556和lab工具路径，不作为产品
+依赖／通用安装脚本。所有实际像素来自编码输出；FFmpeg离线解码结果不能当实时
+Flutter窗口或首帧／输入延迟，未称性能收益。下一步在隔离工作树嵌入候选APK，
+核对实际native库确含候选JAR字节，再跑原普通Driver和真实窗口。
+
+
+补丁现改为无上下文diff，避免diff语法中的空白context触发Git空白检查。独立r2构建
+及JVM重跑通过，候选JAR与首次字节完全相同；只读review未发现确定的新问题。
+当前正式Driver基线APK的`lib/x86_64/libinterop_bridge.so`已查到完整原JAR字节，
+回执`/tmp/connect-bounded-input-baseline-apk-receipt.json`。候选APK在独立工作树编译，
+不以另推文件或只检查摘要字符串代替实际嵌入验证。
+
+
+## 普通Driver A/B/A与候选slot复核
+
+基线debug构建34.5秒、隔离候选97.5秒，计时前均已结束并停止Gradle。两份APK的
+`lib/x86_64/libinterop_bridge.so`分别含完整原／候选JAR字节，候选库没有原捕获JAR；
+保存`/tmp/connect-bounded-input-{baseline,candidate}-apk-receipt.json`。同两vCPU／
+SwiftShader AVD、持续动态图案、H2641280／60／8Mbps、默认async=1、普通Driver，
+三轮八输入，实际setup／decoderPolicy／画质／样本数逐项核对后结果如下：
+
+| 顺序 | 输入P50／P95 ms | 首像素3次 ms | 实际窗口匹配／迟到 |
+| --- | --- | --- | --- |
+| A1 原JAR | 1722／1984 | 3124／2419／2218 | 30／25 |
+| B 候选 | 666／927 | 2780／2544／2399 | 30／13 |
+| A2-final 原JAR | 1700／2080 | 1879／1992／2297 | 30／21 |
+
+每组24次真实输入、暂停恢复／停止／App与fixture清理确认；结果分别在
+`/tmp/connect-e2e/bounded-input-{a1,b,a2-final}/`，匹配回执
+`/tmp/connect-bounded-input-aba-matched.json`。候选有输入改善，但仍超过200／300ms，
+首帧没有改善，窗口预算依旧3秒，全部严格exit1／performanceComplete=false。诊断
+收集期限15秒不放宽成功判定；不能据此替换生产默认或称完整性能验收通过。
+
+返回A2首跑在第二轮一次输入超过3秒而失败，第一轮8个输入和全部原件／清理保留。
+A2-r2错误使用R热重启，丢失原预编译APK的Dart defines，实际native decoder／每轮4次
+输入，12输入1999／2411ms被排除，不混入匹配对照。最终直接重装同一基线APK、显式
+保留default／3轮／8次编译参数后才取得上表A2-final。使用预编译APK时，后续热重启
+仍须显式传递同一Dart defines；不能只凭APK文件名假定正在运行的配置。
+
+独立一轮候选追踪的外围脚本错误要求JAR路径仍可读取而assert失败，宿主流程被
+中断。固定上游`CleanUp.unlinkSelf()`在cleanup启动时删除自身路径，缺席不是会话
+已退出；未取得运行时文件摘要，也不以该探针当失败的产品连接。保持同一会话，
+另行采8秒／32MB gfx／video／hal／sched／sync并精确pull与清除远端文件：
+
+- 进程`interop.scrcpy:5d181b8c:/data/local/tmp/interop-scrcpy-07e90112-5f35-49fe-be0c-e4d9ba3c7f25.jar`，pid14115。
+- trace SHA-256 `da2d59511b35077b93533384ef421a045b5092caaf33471a53d479dfd0529aa2`。
+- 严格分析data-loss0、唯一进程，379事件／95 acquire／94 release／93完整周期，
+  观察到同时acquired范围0–2；末墙钟1/3持有2个79.213%、1个20.737%、0个0.050%。
+- 后段34个完整周期中位128.621ms、范围55.524–244.493ms。宿主中断后无继续输入／
+  实际窗口循环，播放器仍运行；该数值不能和先前1318.763ms当同负载定量比。
+- `/tmp/connect-e2e/bounded-input-b-trace/`保存原trace、严格完整分析及身份回执。
+  该次宿主没有完成性能组，重新连接同一Driver发cleanup，输出／设备断开／移除
+  全部确认；再精确卸载fixture并返回Settings。`manual-cleanup.json`明确记录恢复，
+  不将其写成自动finally成功；没有因外围观察异常重启实际会话。
+
+候选仍是明确限定API36／主屏H264软件编码器的实验补丁。后续先处理首帧额外开销和
+剩余解码／呈现等待，再做其他codec／硬编支持与真实ARM／Wi-Fi／功耗资格验证，
+不把此处局部输入改善外推为所有设备支持。普通发布仍使用原捕获JAR。
+
+
+复现普通Driver需在`apps/connect`构建并保留每组APK，候选步骤在隔离工作树执行，
+先复制外部构建的JAR／SHA／manifest，原工作树不替换。构建与运行均显式传同一配置：
+
+```sh
+rtk proxy flutter build apk --debug --target-platform=android-x64 \
+  --target=benchmark/live_video_performance.dart \
+  --dart-define=CONNECT_PERF_DECODER=default \
+  --dart-define=CONNECT_PERF_ROUNDS=3 --dart-define=CONNECT_PERF_TRANSITIONS=8
+rtk proxy flutter run --no-pub --use-application-binary=/tmp/connect-artifacts/bounded-input-candidate-debug.apk \
+  --target=benchmark/live_video_performance.dart --print-dtd -d emulator-5554 \
+  --dart-define=CONNECT_PERF_DECODER=default \
+  --dart-define=CONNECT_PERF_ROUNDS=3 --dart-define=CONNECT_PERF_TRANSITIONS=8
+rtk proxy env VM_SERVICE_URL='<本次App的实际VM service URI>' \
+  CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
+  CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
+  CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_SCREEN_CAPTURE=raw \
+  CONNECT_E2E_DIAGNOSTIC_SURFACE_MS=15000 \
+  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/bounded-input-new-group \
+  dart --packages=../../.dart_tool/package_config.json test_driver/live_video_performance.dart
+```
+
+先按既有夹具入口启动两台AVD并设置目标TCP5555及host25556 forward。A1／A2换回
+`bounded-input-baseline-debug.apk`，每次安装后核对setup；目标质量保持1280／60／8M。
+`/tmp/connect-bounded-input-aba-matched.json`保存本次配置一致性证据。计时期间不编译
+或跑trace；最终恢复普通main并复核实际native库含原JAR、候选缺席，再做MCP热重载
+及首页视觉检查。当前main构建36.8秒、安装1145ms、热重载118ms／无Dart错误，实际
+首页与三组VIDEO1窗口均目视；root和隔离工作树的debug白名单788项清理2871.6MiB，
+空闲42.96GiB。保留两份生产JAR及release、有效缓存、候选工作树和必要原始证据；
+AVD／Gradle／forward均停止或清除，不因工具改动重打同源release。
