@@ -2,6 +2,24 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 本轮：高动态窗口取样路径（2026-10-18）
+
+当前结论：`6547f2c`实现原始实际窗口取样和强制失败的扩展诊断。限定2→4→2vCPU三组各3轮24输入全部完成，P50／P95分别1866／2202、1584／1865、1793／2145ms；各30次窗口计数匹配，迟到21／30／20次，暂停恢复、停止与App／fixture清理确认。全部严格exit1，没有生产性能收益，也未证明唯一瓶颈；新启动目标返回组首跑输入超时另保留。当前持续动态分布已取得，不再沿用上一轮“尚无当前输入分布”的缺口；首帧、高动态低延迟、native崩溃及完整目标仍未完成。两个JAR未改、未重建。[结果、失败与复现](../../docs/implementation/video-dynamic-measurement.md)。
+
+默认路径兼容已实际通过：不设置raw／扩展期限，静态夹具3轮24输入、30个PNG实际窗口完整exit0，首像素921／903／828ms、输入157／210ms，所有硬窗口预算及暂停恢复／清理通过；`/tmp/connect-e2e/raw-window-default-png-control/`。这仅确认新工具保留默认严格路径，不外推为持续动态图案通过。4文件严格分析、格式、协议回归及只读review通过；本批不改产品源码，不重打相同release。
+
+本批收尾：普通main实际构建8.4秒、安装1133ms，MCP热重载137ms成功／无Dart运行错误，空设备列表真实截图已目视。启动Skipped35frames／SurfaceSync1000ms／1445ms长帧告警仍保留，不称启动流畅度通过。目标捕获／枚举JAR与捕获进程扫描为空、fixture缺席。结束本轮CLI、停止Gradle，两台自有AVD核对名称后关闭且PID消失，forward关闭后缺席；未指定serial的remove尝试exit1不计成功。精确白名单清理394项debug输出1486MiB，空闲40.87GiB，保留release／有效缓存和必要原始证据。回执 `/tmp/connect-raw-window-{target-cleanup,avd-stop,forward-cleanup,debug-cleanup}.json`。原有五项未跟踪文件未改／未stage，无push。后续继续源采集／编码与relay、呈现分段及实际ARM／无线证据，不重复已被否定的ADB参数，也不继续增加AVD资源当修复。
+
+上一轮3771d44／58aed15为progress。为取得当前普通调度的持续动态输入分布，先隔离实际窗口PNG压缩／校验成本：同3秒门槛增加可选screencap原始RGBA路径，旧PNG保留；按AOSP格式校验16字节头、RGBA8888、精确长度及实际Texture矩形和精确计数，继续保存原始实际窗口字节，不跳过呈现检查。尚无收益或本轮输入分布结论；不改生产参数／JAR，原有五项未跟踪文件不动。
+
+原始路径首次动态仍红：raw抓取／落盘1961ms、base64编码118ms、验证请求1256ms，3411ms组合窗口超时；App／fixture清理确认，原件 `/tmp/connect-e2e/dynamic-raw-window/`。没有本轮输入分布，不宣称去掉PNG已解决。下一步只加显式诊断继续模式：收集期限独立延长但硬门槛仍3秒、逐次记录迟到，诊断整次始终videoPerformanceComplete=false，保留完整真实窗口／输入／暂停／释放证据，避免反复卡在首张而丢失数据。
+
+原始窗口诊断已完成3轮24输入，P50／P95=1866／2202ms，首像素2229／1978／2549ms，30次实际窗口计数、3次暂停恢复／释放与App／fixture清理均确认；21个窗口超过硬3秒预算。measurementLoopComplete=true但diagnosticOnly=true／videoPerformanceComplete=false、严格exit1。原件 `/tmp/connect-e2e/dynamic-raw-diagnostic/`。仅收集期限允许15秒、硬门槛和最终判定未放宽；没有生产收益。下一项限定目标2→4→2vCPU资源对照，保持同一画质／动态画面／主控配置，不能据增加模拟器资源称产品优化。
+
+官方SDK核查完成：最新正式MDK仍0.39.0（2026-09-30）、fvp仍0.39.1（2026-10-15），没有可直接安排的后续正式升级版本；旧snapshot／async修复都已在当前基线或之前，不能当作当前renderer空回调的已证修复。保留显式async=1及已有NULL／生命周期补丁，历史native崩溃继续开放；[版本核查与来源](../../docs/research/mdk-sdk-snapshot-followup.md)已落盘，不盲目换latest。
+
+4vCPU组3轮24输入完成，P50／P95=1584／1865ms，30窗口全部匹配但全部迟于3秒，整体仍严格exit1。返回2vCPU首跑首像素4243ms、第一次输入未在3秒内出现，未完成分布，App／fixture清理确认；保留 `/tmp/connect-e2e/dynamic-raw-return2cpu/`，不能据候选一组认定因果。返回组保持参数复跑一次，以分别记录新启动目标的失败和暖运行分布。直接启动qemu曾因其动态库路径缺失而退出，改用同参数的官方emulator启动器后boot／cpu0-1已核实；不将该启动失败当视频性能数据。
+
 ## 本轮：普通调度持续动态复核与应用停转验收（2026-10-18）
 
 
