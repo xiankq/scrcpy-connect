@@ -2192,3 +2192,44 @@ APK／原件、小型Gradle编译与资源产物以及有效Rust／Flutter／CMa
 原有五项用户未跟踪文件未改／未stage。下一任务是在普通Driver复用已有目标draw及
 前后clock probes，将已验证新计数与源采集→relay关联；必须保留跨端区间和重复PTS
 假设。此任务尚未运行，不用研究计划替代源端延迟结论。
+
+
+## 普通Driver提前挂载纹理的单变量复验（2026-10-18）
+
+旧实验只在fullyLive负载下成立，因此重新用普通Driver复核。实验仅在隔离树
+`PortableVideoOutputs._prepare`校验合法纹理后发独立allocated事件，由benchmark在
+启用时挂载；不提前返回ready，不删32×32有效像素、64×64新计数或真实窗口断言。
+一次编译、同一个APK通过setup参数切换A/B/A，生产代码未采用候选。
+
+构建21.2秒，APK`/tmp/connect-artifacts/early-normal-driver-debug.apk`，SHA256
+`d5bc7f2f1e8fb40e40f50bf3aca560ea695bd1dd56ff7c949978386c81f9ec53`。
+嵌入完整既有1a3d2c82…候选JAR、生产捕获JAR缺席；不重建JAR。各组1轮8输入、
+H2641280/60/8M、实际576×1280／AMediaCodec async1、traceFrames/Clock/Packets开启。
+两个API36无头AVD均2vCPU/2048MB/SwiftShader；测量期间无编译，Gradle已停止。
+
+| 普通调度 | A1默认 | B提前挂载 | A2返回默认 |
+| --- | ---: | ---: | ---: |
+| 全启动可读像素ms | 5740 | 3005 | 2779 |
+| Core启动ms | 3899 | 1465 | 1415 |
+| 输出验证ms | 1823 | 1051 | 1349 |
+| playing→验证ms | 1565 | 640 | 1117 |
+| 首onVideo→snapshot ms | 911.391 | 604.303 | 910.278 |
+| 正常输入P50/P95 ms | 828/1214 | 661/822 | 608/700 |
+| ready前实际挂载 | false | true | false |
+| 完整档案帧数 | 219 | 357 | 359 |
+| 正确窗口／超过3秒 | 10/3 | 10/4 | 10/3 |
+
+每组暂停恢复、停止、App/fixture/driver清理及目标时间线完整，离线逐帧精确PTS
+关联全部通过。最早计数帧input→raw中位578.212／364.263／287.157ms；raw→onVideo
+113.263／124.375／147.699ms，onVideo→snapshot147.402／127.267／137.464ms。
+这些不同样本中位不相加或拿来推断纯模块耗时。A1有明显源启动冷开销；B虽然缩短
+播放器验证阶段，完整首帧和稳定输入未优于返回组，因此不改变生产挂载默认，不将
+这个短组说成确定端到端优化。三组严格exit1，trace仍不作生产性能验收。
+
+原件`/tmp/connect-e2e/early-normal-{a1,b,a2}/`；逐组host/app/analysis日志前缀
+`/tmp/connect-early-normal-`，汇总`/tmp/connect-early-normal-summary.json`。完整
+实验Dart源码、相对当时生产源码补丁、driver/host及摘要回执在
+`/tmp/connect-early-normal-source/`；候选运行后已将隔离树两项Dart输入恢复生产原文。
+真实B组VIDEO1窗口已目视，图片`/tmp/connect-early-normal-window.png`，未进入Git。
+本次不再沿单一挂载方式追加微调，转向已复现的控制流单独失活及排队旧指令问题，
+其修复与真实Android回归见[连接健康](connection-health.md)。
