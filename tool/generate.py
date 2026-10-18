@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate FRB and Dart outputs; --check regenerates FRB in an isolated tree."""
+"""Generate design tokens, FRB and Dart builders; --check never rewrites outputs."""
 
 import argparse
 import os
@@ -58,11 +58,11 @@ def generate_frb(check):
         for name in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml",
                      "flutter_rust_bridge.yaml", "pubspec.yaml", "pubspec.lock"):
             shutil.copy2(ROOT / name, isolated / name)
-        for name in ("crates", "packages", "apps", "servers", "protocol"):
+        for name in ("crates", "packages", "lib", "servers", "protocol", "third_party"):
             if not (ROOT / name).exists():
                 continue
             shutil.copytree(ROOT / name, isolated / name,
-                            ignore=shutil.ignore_patterns("target", "build", ".git", ".gradle", "ephemeral", "Pods", ".dart_tool"))
+                            ignore=shutil.ignore_patterns("target", "build", ".git", ".gradle", "ephemeral", "Pods", ".dart_tool", ".cxx", "mdk-sdk*", ".fvp-mdk-*"))
         (isolated / ".dart_tool").mkdir()
         for name in ("package_config.json", "package_graph.json"):
             source = ROOT / ".dart_tool" / name
@@ -80,11 +80,15 @@ def main():
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     try:
+        design = ["node", "tool/design_tokens/generate.mjs"]
+        if args.check:
+            design.append("--check")
+        subprocess.run(design, cwd=ROOT, check=True)
         generate_frb(args.check)
         command = ["dart", "run", "build_runner", "build", "--workspace"]
         if args.check:
             command.append("--only-check")
-        return subprocess.run(command, cwd=ROOT / "apps/connect").returncode
+        return subprocess.run(command, cwd=ROOT).returncode
     except (ValueError, subprocess.CalledProcessError) as error:
         print(error, file=sys.stderr)
         return 1

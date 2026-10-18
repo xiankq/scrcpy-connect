@@ -2,30 +2,32 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 flutter pub get --enforce-lockfile
+npm ci --ignore-scripts --prefix tool/design_tokens
 python3 tool/protocol_codegen.py --check
 python3 tool/generate.py --check
 python3 servers/companion/build.py --check
 python3 -m unittest discover -s tool -p 'test_*.py'
+npm test --prefix tool/design_tokens
 python3 tool/check_native_deps.py
-dart format --output=none --set-exit-if-changed apps/connect/lib apps/connect/test apps/connect/integration_test apps/connect/test_driver packages
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver packages
 cargo fmt --all --check
 python3 tool/fvp_snapshot_regression.py
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 flutter analyze --no-pub --fatal-infos
 python3 tool/check_analyzer_plugin.py
-(cd apps/connect && flutter test --no-pub)
+flutter test --no-pub
 (cd packages/design_system && flutter test --no-pub)
-dart --disable-dart-dev --packages=.dart_tool/package_config.json apps/connect/test_driver/integration_test_contract_test.dart
+dart --disable-dart-dev --packages=.dart_tool/package_config.json test_driver/integration_test_contract_test.dart
 (cd packages/interop_bridge && flutter test --no-pub)
-npx --yes --package=@google/design.md@0.4.0 designmd lint designs/design.md
+npm run lint --prefix tool/design_tokens
 if [[ "${1:-}" == "--android" ]]; then
-  (cd apps/connect && flutter build apk --debug --no-pub --target-platform android-arm,android-arm64,android-x64)
-  python3 tool/android.py verify apps/connect/build/app/outputs/flutter-apk/app-debug.apk
+  flutter build apk --debug --no-pub --target-platform android-arm,android-arm64,android-x64
+  python3 tool/android.py verify build/app/outputs/flutter-apk/app-debug.apk
   # These Kotlin tests have JVM main entrypoints, not JUnit annotations;
   # Gradle's testDebugUnitTest alone does not execute their assertions.
-  python3 apps/connect/android/app/src/test/run_native_ownership_tests.py
-  python3 apps/connect/android/app/src/test/run_audio_contract_tests.py
+  python3 android/app/src/test/run_native_ownership_tests.py
+  python3 android/app/src/test/run_audio_contract_tests.py
   python3 - <<'PY'
 import os
 from pathlib import Path
@@ -33,7 +35,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 import zipfile
 
-apk = Path("apps/connect/build/app/outputs/flutter-apk/app-debug.apk")
+apk = Path("build/app/outputs/flutter-apk/app-debug.apk")
 with zipfile.ZipFile(apk) as archive:
     # Check the packaged binaries, including ELF architecture, rather than
     # trusting the Flutter target-platform argument or build intermediates.
