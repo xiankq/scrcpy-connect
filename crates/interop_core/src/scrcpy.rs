@@ -35,6 +35,13 @@ const CLIPBOARD_MAX: usize = (1 << 18) - 14;
 // leave an unbounded number of detached probe uploads/processes behind.
 static ENCODER_PROBE_JOBS: Semaphore = Semaphore::const_new(4);
 
+fn encoder_probe_command(path: &str) -> CoreResult<String> {
+    let path = quote(path)?;
+    Ok(format!(
+        "CLASSPATH={path} app_process / com.genymobile.scrcpy.Server 5.0.1 list_encoders=true cleanup=true log_level=info; interop_probe_status=$?; rm -f -- {path}; exit \"$interop_probe_status\""
+    ))
+}
+
 #[derive(Clone, Copy)]
 struct VideoCodec {
     name: &'static str,
@@ -1610,31 +1617,52 @@ wait "$child""#
             "/data/local/tmp/interop-encoders-{}.jar",
             uuid::Uuid::new_v4()
         );
+        let mut shell_completed = false;
         let result = async {
-            let operation = OperationOptions { timeout: Duration::from_secs(15), ..Default::default() };
+            let operation = OperationOptions {
+                timeout: Duration::from_secs(15),
+                ..Default::default()
+            };
             let mut sync = client.sync(operation.clone()).await?;
-            sync.push(&RemotePath::new(&path)?, &mut &SERVER[..], 0o600,
-                now().min(u32::MAX as u64) as u32, SERVER.len() as u64).await?;
+            sync.push(
+                &RemotePath::new(&path)?,
+                &mut &SERVER[..],
+                0o600,
+                now().min(u32::MAX as u64) as u32,
+                SERVER.len() as u64,
+            )
+            .await?;
             drop(sync);
-            let command = format!("CLASSPATH={} app_process / com.genymobile.scrcpy.Server 5.0.1 list_encoders=true cleanup=true log_level=info", quote(&path)?);
+            let command = encoder_probe_command(&path)?;
             let output = client.shell(&command, 256 * 1024, operation).await?;
+            // EXIT (shell_v2) or EOF (legacy) arrives after the same shell has
+            // attempted rm. As before, rm is best effort, not proof of absence.
+            shell_completed = true;
             if output.exit_code.is_some_and(|code| code != 0) {
-                return Err(CoreError::new("encoder_probe", "设备编码器枚举失败；尚未确认所选格式可用。"));
+                return Err(CoreError::new(
+                    "encoder_probe",
+                    "设备编码器枚举失败；尚未确认所选格式可用。",
+                ));
             }
             let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
             text.push_str(&String::from_utf8_lossy(&output.stderr));
             parse_encoders(&text)
-        }.await;
-        let _ = client
-            .shell(
-                &format!("rm -f -- {}", quote(&path)?),
-                4096,
-                OperationOptions {
-                    timeout: Duration::from_secs(3),
-                    ..Default::default()
-                },
-            )
-            .await;
+        }
+        .await;
+        if !shell_completed {
+            // Failed uploads and incomplete shells still need an independent
+            // cleanup attempt, owned by the probe job through its deadline.
+            let _ = client
+                .shell(
+                    &format!("rm -f -- {}", quote(&path)?),
+                    4096,
+                    OperationOptions {
+                        timeout: Duration::from_secs(3),
+                        ..Default::default()
+                    },
+                )
+                .await;
+        }
         result
     }
 
@@ -2309,10 +2337,15 @@ mod tests {
         runtime: Arc<Runtime>,
         client: interop_adb::Client,
         peer: tokio::io::DuplexStream,
+        shell_v2: bool,
     }
 
     impl ColdStartFixture {
         async fn new() -> Self {
+            Self::with_shell_v2(false).await
+        }
+
+        async fn with_shell_v2(shell_v2: bool) -> Self {
             use interop_adb::{DeviceInfo, protocol};
             let root = tempfile::tempdir().unwrap();
             let runtime = Runtime::initialize(root.path()).await.unwrap();
@@ -2329,7 +2362,11 @@ mod tests {
                     version: protocol::VERSION,
                     max_payload: 64 * 1024,
                     banner: "device::cold-start".into(),
-                    features: HashSet::new(),
+                    features: if shell_v2 {
+                        HashSet::from(["shell_v2".into()])
+                    } else {
+                        HashSet::new()
+                    },
                 },
             )
             .unwrap();
@@ -2343,6 +2380,7 @@ mod tests {
                 runtime,
                 client,
                 peer,
+                shell_v2,
             }
         }
 
@@ -2434,22 +2472,60 @@ mod tests {
         }
 
         async fn finish_shell(&mut self, local: u32, output: &[u8]) {
+            self.finish_shell_status(local, output, 0).await;
+        }
+
+        async fn finish_shell_status(&mut self, local: u32, output: &[u8], status: u8) {
             use interop_adb::protocol;
             if !output.is_empty() {
-                self.send(protocol::WRTE, local, output.to_vec()).await;
+                let bytes = if self.shell_v2 {
+                    let mut bytes = vec![1];
+                    bytes.extend_from_slice(&(output.len() as u32).to_le_bytes());
+                    bytes.extend_from_slice(output);
+                    bytes
+                } else {
+                    output.to_vec()
+                };
+                self.send(protocol::WRTE, local, bytes).await;
+            }
+            if self.shell_v2 {
+                self.send(protocol::WRTE, local, vec![3, 1, 0, 0, 0, status])
+                    .await;
             }
             self.send(protocol::CLSE, local, Vec::new()).await;
         }
 
         async fn finish_probe(&mut self, encoder: u32, output: &[u8]) {
-            use interop_adb::protocol;
             self.finish_shell(encoder, output).await;
+            self.assert_no_open().await;
+        }
+
+        async fn assert_no_open(&mut self) {
+            use interop_adb::protocol;
+            // Drain ACK/close traffic, but a completed probe must not open a
+            // second shell. This observes the actual ADB service boundary.
+            while let Ok(frame) = tokio::time::timeout(
+                Duration::from_millis(30),
+                protocol::Frame::read(&mut self.peer, 64 * 1024, true),
+            )
+            .await
+            {
+                assert_ne!(
+                    frame.unwrap().command,
+                    protocol::OPEN,
+                    "a completed encoder probe must clean up in its own shell"
+                );
+            }
+        }
+
+        async fn finish_fallback_cleanup(&mut self) {
+            use interop_adb::protocol;
             loop {
                 let frame = self.frame().await;
                 if frame.command == protocol::OPEN {
                     let service = String::from_utf8_lossy(&frame.payload);
                     assert!(
-                        service.starts_with("shell:rm -f -- '/data/local/tmp/interop-encoders-"),
+                        service.contains(":rm -f -- '/data/local/tmp/interop-encoders-"),
                         "only the encoder probe is cleaned up: {service}"
                     );
                     self.send(protocol::OKAY, frame.arg0, Vec::new()).await;
@@ -2458,6 +2534,86 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn cold_screen_probe_shell_v2_completes_without_another_cleanup_shell() {
+        let mut fixture = ColdStartFixture::with_shell_v2(true).await;
+        let startup = fixture.start();
+        let (power, encoder) = fixture.gate_encoder_process().await;
+        fixture.finish_shell(power, b"Asleep\n").await;
+        fixture.finish_probe(encoder,
+            b"List of video encoders:\n --video-codec=h264 --video-encoder=c2.fixture.avc (hw)\n").await;
+        assert_eq!(startup.await.unwrap().unwrap_err().code, "device_asleep");
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn cold_screen_probe_truncated_shell_v2_still_owns_fallback_cleanup() {
+        use interop_adb::protocol;
+        let mut fixture = ColdStartFixture::with_shell_v2(true).await;
+        let startup = fixture.start();
+        let (power, encoder) = fixture.gate_encoder_process().await;
+        fixture.finish_shell(power, b"Asleep\n").await;
+        // A shell EOF without its EXIT packet is not normal completion.
+        fixture.send(protocol::CLSE, encoder, Vec::new()).await;
+        fixture.finish_fallback_cleanup().await;
+        assert_eq!(startup.await.unwrap().unwrap_err().code, "device_asleep");
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn cold_screen_probe_nonzero_shell_v2_rejects_even_valid_catalog() {
+        let mut fixture = ColdStartFixture::with_shell_v2(true).await;
+        let startup = fixture.start();
+        let (power, encoder) = fixture.gate_encoder_process().await;
+        fixture.finish_shell(power, b"Awake\n").await;
+        fixture.finish_shell_status(encoder,
+            b"List of video encoders:\n --video-codec=h264 --video-encoder=c2.fixture.avc (hw)\n", 7).await;
+        fixture.assert_no_open().await;
+        assert_eq!(startup.await.unwrap().unwrap_err().code, "encoder_probe");
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn cold_screen_probe_incomplete_shell_cleans_up_after_caller_abort() {
+        use interop_adb::protocol;
+        let mut fixture = ColdStartFixture::with_shell_v2(true).await;
+        let startup = fixture.start();
+        let (_power, encoder) = fixture.gate_encoder_process().await;
+        startup.abort();
+        assert!(startup.await.unwrap_err().is_cancelled());
+        fixture.send(protocol::CLSE, encoder, Vec::new()).await;
+        fixture.finish_fallback_cleanup().await;
+        fixture.client.close();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn encoder_probe_shell_removes_its_jar_without_masking_process_exit() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("app_process");
+        std::fs::write(&executable, "#!/bin/sh\nprintf 'probe output\\n'\nexit 7\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let jar = root.path().join("probe's quoted jar");
+        std::fs::write(&jar, b"fixture").unwrap();
+        let output = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(encoder_probe_command(jar.to_str().unwrap()).unwrap())
+            .env("PATH", format!("{}:/usr/bin:/bin", root.path().display()))
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(7),
+            "cleanup must preserve probe failure"
+        );
+        assert_eq!(output.stdout, b"probe output\n");
+        assert!(
+            !jar.exists(),
+            "normal shell completion must attempt JAR cleanup"
+        );
     }
 
     #[tokio::test]
