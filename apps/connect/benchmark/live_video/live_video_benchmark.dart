@@ -12,6 +12,7 @@ import 'package:interop_bridge/src/rust/frb_generated.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'android_screencap.dart';
+import 'frame_trace_stages.dart';
 import 'pixel_pattern.dart';
 
 /// Agent-runnable measurement of the production ADB/media adapters with normal
@@ -290,9 +291,11 @@ class LiveVideoBenchmark {
       rethrow;
     }
     evidence['startToDecodedMs'] = watch.elapsedMilliseconds;
+    VideoJson? startupTrace;
     if (traceFrames) {
       final before = watch.elapsedMicroseconds;
       final trace = _player!.frameTrace;
+      startupTrace = trace;
       final after = watch.elapsedMicroseconds;
       evidence['startupFrameTrace'] = {
         'watchBeforeUs': before,
@@ -338,6 +341,19 @@ class LiveVideoBenchmark {
       const Duration(seconds: 3),
     );
     evidence['widgetFrameMs'] = watch.elapsedMilliseconds;
+    if (traceFrames) {
+      // The saved trace identifies the first 32x32 verified image, even after
+      // counter snapshots replace it. Query only after mounting the Texture and
+      // recording both startup durations, so diagnostics do not delay either.
+      // Missing/ambiguous early callbacks stay explicit, never nearest-paired.
+      final status = await _request('media.status', {
+        'relayId': ready['relayId'],
+      });
+      evidence['startupFrameStages'] = frameTraceStages(
+        startupTrace,
+        (status['frameTrace'] as List).cast<VideoJson>(),
+      );
+    }
     await _waitPixels(_expected);
     evidence['initialCounter'] = _expected;
     return {...evidence, 'expectedCounter': _expected};
