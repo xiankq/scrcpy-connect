@@ -47,8 +47,20 @@ impl Frame {
         skip_checksum: bool,
         observe: impl FnOnce(u32, u32, u32) -> Option<crate::read_trace::TraceClock>,
     ) -> Result<(Self, Option<crate::read_trace::PayloadTiming>)> {
+        Self::read_observed_progress(reader, limit, skip_checksum, observe, || {}).await
+    }
+
+    /// Internal transport progress hook. Every nonempty read, including a
+    /// partial header or payload, counts as activity before frame validation.
+    pub(crate) async fn read_observed_progress<R: AsyncRead + Unpin>(
+        reader: &mut R,
+        limit: usize,
+        skip_checksum: bool,
+        observe: impl FnOnce(u32, u32, u32) -> Option<crate::read_trace::TraceClock>,
+        mut progress: impl FnMut(),
+    ) -> Result<(Self, Option<crate::read_trace::PayloadTiming>)> {
         let mut header = [0; 24];
-        reader.read_exact(&mut header).await?;
+        read_exact_progress(reader, &mut header, &mut progress).await?;
         let word = |offset| {
             u32::from_le_bytes(header[offset..offset + 4].try_into().expect("header word"))
         };
@@ -68,7 +80,7 @@ impl Frame {
         let mut payload = vec![0; length];
         let clock = observe(command, word(4), word(8));
         let started_us = clock.as_ref().map(|clock| (clock.read)());
-        reader.read_exact(&mut payload).await?;
+        read_exact_progress(reader, &mut payload, &mut progress).await?;
         let timing =
             clock
                 .zip(started_us)
@@ -114,6 +126,22 @@ impl Frame {
         writer.flush().await?;
         Ok(())
     }
+}
+
+async fn read_exact_progress<R: AsyncRead + Unpin>(
+    reader: &mut R,
+    mut bytes: &mut [u8],
+    progress: &mut impl FnMut(),
+) -> std::io::Result<()> {
+    while !bytes.is_empty() {
+        let count = reader.read(bytes).await?;
+        if count == 0 {
+            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        progress();
+        bytes = &mut bytes[count..];
+    }
+    Ok(())
 }
 
 fn checksum(bytes: &[u8]) -> u32 {

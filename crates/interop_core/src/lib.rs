@@ -3,6 +3,7 @@ mod app_open;
 mod audio;
 mod clock_probe;
 mod companion;
+mod connection_health;
 mod delivery;
 mod device;
 pub mod documents;

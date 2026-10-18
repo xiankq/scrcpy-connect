@@ -28,6 +28,13 @@ failed sync operations close their affected stream rather than reuse uncertain
 protocol state. Callers should drop a sync object when abandoning an in-progress
 operation.
 
+`Client::is_closed()` reports an observed close/cancellation, not proof that the
+remote daemon is responsive. `inbound_activity()` provides an opaque snapshot:
+compare only for equality on the same connection. It advances on nonempty reads,
+including partial headers and payloads; it is neither a validated-frame count nor
+a timestamp. The library does not start application health probes. The product
+Core uses this signal to probe idle connections without interrupting active reads.
+
 `ConnectOptions::burst_mode` opts into AOSP's experimental `delayed_ack` byte-credit
 flow control; it defaults to `false`. Both peers must advertise support, and
 `Client::burst_mode()` reports the actual negotiated mode. Without mutual support

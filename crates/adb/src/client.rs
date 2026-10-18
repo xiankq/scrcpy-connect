@@ -107,6 +107,7 @@ struct Inner {
     cancellation: CancellationToken,
     failure: Arc<Mutex<Option<String>>>,
     traced_routes: Arc<AtomicUsize>,
+    inbound_activity: Arc<AtomicUsize>,
     reverses: Arc<crate::reverse::Registry>,
 }
 impl Inner {
@@ -340,6 +341,7 @@ impl Client {
             cancellation: cancellation.clone(),
             failure: failure.clone(),
             traced_routes: Arc::new(AtomicUsize::new(0)),
+            inbound_activity: Arc::new(AtomicUsize::new(0)),
             reverses: Default::default(),
         });
         let writer_failure = failure.clone();
@@ -369,9 +371,10 @@ impl Client {
         let read_failure = failure.clone();
         let read_inner = Arc::downgrade(&inner);
         let traced_routes = inner.traced_routes.clone();
+        let inbound_activity = inner.inbound_activity.clone();
         tokio::spawn(async move {
             loop {
-                let receive = Frame::read_observed(
+                let receive = Frame::read_observed_progress(
                     &mut reader,
                     max_payload,
                     skip_checksum,
@@ -386,6 +389,11 @@ impl Client {
                             .filter(|route| route.remote != 0 && route.remote == remote)
                             .and_then(|route| route.trace.as_ref())
                             .map(|trace| trace.clock.clone())
+                    },
+                    || {
+                        // One relaxed increment per nonempty transport read,
+                        // including partial frames. No clocks or per-byte work.
+                        inbound_activity.fetch_add(1, Ordering::Relaxed);
                     },
                 );
                 let (frame, timing) = tokio::select! { _ = read_cancel.cancelled() => break, frame = receive => match frame { Ok(frame) => frame, Err(error) => { *read_failure.lock().expect("failure mutex") = Some(format!("transport read: {error}")); break; } } };
@@ -568,6 +576,13 @@ impl Client {
     }
     pub fn is_closed(&self) -> bool {
         self.inner.cancellation.is_cancelled()
+    }
+    /// Opaque activity snapshot for this connection. Compare only for equality:
+    /// a change means a nonempty inbound byte read, including partial headers
+    /// and payloads, regardless of stream. Frame validation remains independent.
+    /// The wrapping counter has no time or cross-connection meaning.
+    pub fn inbound_activity(&self) -> usize {
+        self.inner.inbound_activity.load(Ordering::Relaxed)
     }
     /// Whether both handles share this exact transport. Clones do; reconnects
     /// do not, even when their device banners match. This is not a liveness test.

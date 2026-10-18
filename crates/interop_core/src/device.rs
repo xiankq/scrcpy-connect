@@ -1670,6 +1670,7 @@ impl Runtime {
     pub(crate) fn spawn_connection_monitor(self: &Arc<Self>) {
         let weak = Arc::downgrade(self);
         tokio::spawn(async move {
+            let mut health = crate::connection_health::ConnectionHealth::default();
             let mut backoff = HashMap::<String, (u32, Instant)>::new();
             let mut reconnecting = HashMap::<String, tokio::task::JoinHandle<()>>::new();
             let services = DiscoveredServices::default();
@@ -1679,6 +1680,9 @@ impl Runtime {
                 let Some(runtime) = weak.upgrade() else {
                     break;
                 };
+                // Health work never awaits a service response under this lock
+                // or blocks another device's monitoring/reconnection.
+                health.tick(&*runtime.connections.lock().await);
                 reconnecting.retain(|_, task| !task.is_finished());
                 for record in &runtime.store.read().await.devices {
                     if record.status == "connected" {
