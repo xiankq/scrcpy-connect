@@ -6,12 +6,33 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 pub(crate) fn defaults() -> Value {
-    json!({"appearance":"light","reduceTransparency":false,"reduceMotion":false,
-        "backgroundConnection":true,"backgroundKeepAlive":true,"backgroundAudio":false,
+    json!({"appearance":"light",
+        "backgroundConnection":true,"backgroundKeepAlive":true,
         "notificationAlerts":true,"callAlerts":true,"adbBurstMode":false,
-        "audioMode":"follow","audioDevices":[],"clipboardEnabled":false,"clipboardTarget":"current",
-        "clipboardSync":false,"clipboardMode":"follow","clipboardDevice":null,
+        "deviceSettings":{},
         "qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":8_000_000,"videoCodec":"h264","videoEncoder":null,"deviceQuality":{}})
+}
+
+const REMOVED_SETTINGS: [&str; 10] = [
+    "backgroundAudio",
+    "reduceTransparency",
+    "reduceMotion",
+    "audioMode",
+    "audioDevices",
+    "clipboardEnabled",
+    "clipboardTarget",
+    "clipboardSync",
+    "clipboardMode",
+    "clipboardDevice",
+];
+
+/// Retired global source choices must not survive restart or metadata restore.
+pub(crate) fn remove_retired_settings(settings: &mut Value) {
+    if let Some(settings) = settings.as_object_mut() {
+        for key in REMOVED_SETTINGS {
+            settings.remove(key);
+        }
+    }
 }
 
 pub(crate) const QUALITY_KEYS: [&str; 6] = [
@@ -84,23 +105,23 @@ fn validated_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
     for (key, value) in values {
         let valid = match key.as_str() {
             "appearance" => matches!(value.as_str(), Some("light" | "dark" | "system")),
-            "reduceTransparency"
-            | "reduceMotion"
-            | "backgroundConnection"
+            "backgroundConnection"
             | "backgroundKeepAlive"
-            | "backgroundAudio"
             | "notificationAlerts"
             | "callAlerts"
-            | "adbBurstMode"
-            | "clipboardEnabled"
-            | "clipboardSync" => value.is_boolean(),
-            "audioMode" => matches!(value.as_str(), Some("follow" | "fixed" | "mix" | "single")),
-            "audioDevices" => value.as_array().is_some_and(|a| {
-                a.len() <= 32 && a.iter().all(|v| v.as_str().is_some_and(|s| s.len() <= 128))
+            | "adbBurstMode" => value.is_boolean(),
+            "deviceSettings" => value.as_object().is_some_and(|map| {
+                map.len() <= 256
+                    && map.iter().all(|(id, settings)| {
+                        uuid::Uuid::parse_str(id).is_ok()
+                            && settings.as_object().is_some_and(|settings| {
+                                settings.iter().all(|(key, value)| {
+                                    matches!(key.as_str(), "clipboardSync" | "showNavigationBar")
+                                        && value.is_boolean()
+                                })
+                            })
+                    })
             }),
-            "clipboardMode" => matches!(value.as_str(), Some("follow" | "fixed")),
-            "clipboardDevice" => value.is_null() || value.as_str().is_some_and(|s| s.len() <= 128),
-            "clipboardTarget" => value.as_str().is_some_and(|s| s.len() <= 128),
             "qualityPreset" | "videoCodec" | "videoEncoder" | "maxSize" | "maxFps"
             | "videoBitRate" => quality_value(key, value),
             "deviceQuality" => value.as_object().is_some_and(|map| {
@@ -164,10 +185,13 @@ impl Runtime {
                     .as_array()
                     .filter(|a| a.len() <= 256)
                     .ok_or_else(|| CoreError::new("invalid_data", "设备列表无效或过长。"))?;
-                let mut settings = validated_settings(&defaults(), &metadata["settings"])?;
+                let mut imported_settings = metadata["settings"].clone();
+                remove_retired_settings(&mut imported_settings);
+                let mut settings = validated_settings(&defaults(), &imported_settings)?;
                 // Restored devices receive new identities; old per-device quality keys
                 // must not silently attach to a different authorization record.
                 settings["deviceQuality"] = json!({});
+                settings["deviceSettings"] = json!({});
                 let mut restored = Vec::new();
                 for entry in entries {
                     let transport = TransportKind::parse(required(entry, "transport")?)
@@ -265,6 +289,66 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn device_preferences_accept_only_boolean_device_scoped_controls() {
+        let id = uuid::Uuid::new_v4().to_string();
+        let settings = validated_settings(
+            &defaults(),
+            &json!({"deviceSettings":{
+                id.clone(): {"clipboardSync":true,"showNavigationBar":false}
+            }}),
+        )
+        .unwrap();
+        assert_eq!(settings["deviceSettings"][&id]["clipboardSync"], true);
+        assert_eq!(settings["deviceSettings"][&id]["showNavigationBar"], false);
+        for invalid in [
+            json!({"deviceSettings":{"not-an-identity":{"clipboardSync":true}}}),
+            json!({"deviceSettings":{id.clone():{"clipboardSync":"yes"}}}),
+            json!({"deviceSettings":{id.clone():{"audioMode":"fixed"}}}),
+            json!({"clipboardSync":true}),
+            json!({"audioDevices":[]}),
+            json!({"backgroundAudio":true}),
+        ] {
+            assert!(validated_settings(&defaults(), &invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn retiring_global_choices_preserves_explicit_device_settings() {
+        let mut settings = json!({
+            "audioMode":"fixed", "audioDevices":["a"], "backgroundAudio":true,
+            "clipboardSync":true, "clipboardMode":"fixed", "clipboardDevice":"a",
+            "reduceMotion":true, "reduceTransparency":true,
+            "deviceSettings":{"a":{"clipboardSync":false,"showNavigationBar":true}},
+            "appearance":"dark"
+        });
+        remove_retired_settings(&mut settings);
+        assert_eq!(
+            settings,
+            json!({
+                "deviceSettings":{"a":{"clipboardSync":false,"showNavigationBar":true}},
+                "appearance":"dark"
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn restored_device_identities_do_not_inherit_clipboard_or_navigation_preferences() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        let result = runtime.invoke("settings.import", json!({"metadata":{
+            "format":"scrcpy-connect-metadata","version":1,
+            "devices":[{"name":"Phone","address":"phone.local","port":5555,"transport":"tcp"}],
+            "settings":{"deviceSettings":{id:{"clipboardSync":true,"showNavigationBar":false}},
+                "audioMode":"fixed","audioDevices":[],"clipboardMode":"fixed","clipboardSync":true}
+        }})).await.unwrap();
+        assert_eq!(result["restored"], 1);
+        let settings = runtime.invoke("settings.get", Value::Null).await.unwrap();
+        assert_eq!(settings["deviceSettings"], json!({}));
+        assert!(settings.get("clipboardSync").is_none());
+        assert!(settings.get("audioDevices").is_none());
+    }
     #[test]
     fn invalid_patch_never_partially_changes_settings() {
         let original = defaults();

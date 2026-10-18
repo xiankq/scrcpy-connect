@@ -40,15 +40,14 @@ async fn device_ids_survive_storage_and_equal_addresses_never_merge_records() {
     assert_eq!(device["address"], "192.0.2.7");
     assert_eq!(device["port"], 37001);
     assert_eq!(device["status"], "offline");
-    restored.invoke("settings.update",json!({"deviceQuality":{&id:{"videoCodec":"h265"}},"audioDevices":[&id],"clipboardMode":"fixed","clipboardDevice":&id})).await.unwrap();
+    restored.invoke("settings.update",json!({"deviceQuality":{&id:{"videoCodec":"h265"}},"deviceSettings":{&id:{"clipboardSync":true,"showNavigationBar":false}}})).await.unwrap();
     restored
         .invoke("devices.forget", json!({"deviceId":&id}))
         .await
         .unwrap();
     let settings = restored.invoke("settings.get", json!({})).await.unwrap();
     assert!(settings["deviceQuality"].get(&id).is_none());
-    assert_eq!(settings["audioDevices"], json!([]));
-    assert!(settings["clipboardDevice"].is_null());
+    assert!(settings["deviceSettings"].get(&id).is_none());
 }
 
 #[tokio::test]

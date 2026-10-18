@@ -23,7 +23,7 @@ pub struct Runtime {
     pub(crate) encoder_catalog: crate::encoder_catalog::EncoderCatalog,
     pub(crate) events: crate::events::EventBus,
     pub(crate) persistence: Mutex<()>,
-    pub(crate) activities: crate::activities::ActivityOwner,
+    pub(crate) activities: Arc<crate::activities::ActivityOwner>,
     pub(crate) companions: Mutex<HashMap<String, Arc<crate::companion::Companion>>>,
     pub(crate) observations: Mutex<HashMap<String, crate::observation::Observation>>,
     pub(crate) observation_wakeup: Arc<tokio::sync::Notify>,
@@ -78,6 +78,7 @@ impl Runtime {
                 "设备记录版本较新，请更新应用。",
             ));
         }
+        crate::preferences::remove_retired_settings(&mut store.settings);
         let defaults = crate::preferences::defaults();
         let settings = store
             .settings
@@ -112,7 +113,7 @@ impl Runtime {
             encoder_catalog: crate::encoder_catalog::EncoderCatalog::default(),
             events,
             persistence: Mutex::new(()),
-            activities: crate::activities::ActivityOwner::default(),
+            activities: Arc::new(crate::activities::ActivityOwner::default()),
             companions: Mutex::new(HashMap::new()),
             observations: Mutex::new(HashMap::new()),
             observation_wakeup: Arc::new(tokio::sync::Notify::new()),

@@ -25,6 +25,12 @@ async fn real_audio_only_capture_and_known_tone() {
         .invoke("devices.connect", json!({"deviceId":id}))
         .await
         .unwrap();
+    // Device audio belongs to an opened control session. This source-capture
+    // test does not fabricate a renderer-ready receipt for that session.
+    let session = runtime
+        .invoke("session.start", json!({"deviceId":id}))
+        .await
+        .unwrap();
     let source = runtime
         .invoke("audio.start", json!({"deviceId":id}))
         .await
@@ -176,6 +182,10 @@ async fn real_audio_only_capture_and_known_tone() {
             .unwrap()
             .is_empty()
     );
+    runtime
+        .invoke("session.stop", json!({"sessionId":session["sessionId"]}))
+        .await
+        .unwrap();
     if fixture.is_some() {
         fixture_client
             .shell(

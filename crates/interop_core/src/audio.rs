@@ -27,6 +27,19 @@ pub(crate) struct AudioSource {
     state: Arc<RwLock<Value>>,
 }
 impl AudioSource {
+    pub(crate) fn new(cancellation: CancellationToken, state: Arc<RwLock<Value>>) -> Self {
+        Self {
+            cancellation,
+            state,
+        }
+    }
+    pub(crate) async fn stop(&self) -> Value {
+        let mut state = self.state.write().await;
+        state["status"] = json!("stopped");
+        state["nativeAttached"] = json!(false);
+        self.cancellation.cancel();
+        state.clone()
+    }
     pub(crate) async fn snapshot(&self, active_only: bool) -> Option<Value> {
         let state = self.state.read().await;
         (!active_only
@@ -314,6 +327,19 @@ impl Runtime {
     }
 
     async fn start_audio(&self, device_id: &str) -> CoreResult<Value> {
+        if !self
+            .activities
+            .sessions
+            .lock()
+            .await
+            .values()
+            .any(|session| session.owns_device_audio(device_id))
+        {
+            return Err(CoreError::new(
+                "session_required",
+                "请先打开这台设备的远控画面或应用窗口。",
+            ));
+        }
         let client = self.client(device_id).await?;
         let device = self.device(device_id).await?;
         if device.api_level.is_some_and(|api| api < 30) {
@@ -332,6 +358,18 @@ impl Runtime {
             json!({"sourceId":id,"deviceId":device_id,"name":device.name,"status":"starting","codec":"pcm_s16le","sampleRate":48000,"channels":2,"bytesPerSample":2,"volume":1.0,"muted":false,"createdAt":now(),"nativeAttached":false,"audibleContentVerified":false,"captureSource":"output","callAudioSupported":false}),
         ));
         {
+            // Serialize page-backed capture admission with the last session's
+            // removal. A device connection alone never admits sound playback.
+            let sessions = self.activities.sessions.lock().await;
+            if !sessions
+                .values()
+                .any(|session| session.owns_device_audio(device_id))
+            {
+                return Err(CoreError::new(
+                    "session_required",
+                    "请先打开这台设备的远控画面或应用窗口。",
+                ));
+            }
             let mut sources = self.activities.audio_sources.lock().await;
             if let Some(existing) = sources
                 .get(device_id)
@@ -349,10 +387,7 @@ impl Runtime {
             }
             sources.insert(
                 device_id.to_owned(),
-                AudioSource {
-                    cancellation: cancellation.clone(),
-                    state: state.clone(),
-                },
+                AudioSource::new(cancellation.clone(), state.clone()),
             );
             emit(
                 &self.events,
@@ -527,6 +562,24 @@ impl Runtime {
     }
 }
 
+pub(crate) async fn stop_unowned_audio(
+    activities: &crate::activities::ActivityOwner,
+    events: &crate::events::EventBus,
+    device: &str,
+) {
+    let sessions = activities.sessions.lock().await;
+    if sessions
+        .values()
+        .any(|session| session.owns_device_audio(device))
+    {
+        return;
+    }
+    let mut sources = activities.audio_sources.lock().await;
+    if let Some(source) = sources.remove(device) {
+        emit(events, "audio.updated", device, source.stop().await);
+    }
+}
+
 fn pcm_packet_size(header: &[u8; 12]) -> CoreResult<usize> {
     let flags = u64::from_be_bytes(header[..8].try_into().expect("audio header"));
     let length = u32::from_be_bytes(header[8..].try_into().expect("audio header")) as usize;
@@ -596,6 +649,21 @@ async fn forward_audio(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn audio_requires_a_control_session_before_starting_device_work() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let added = runtime
+            .invoke("devices.add", json!({"address":"127.0.0.1","port":5555}))
+            .await
+            .unwrap();
+        let error = runtime
+            .invoke("audio.start", json!({"deviceId":added["deviceId"]}))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "session_required");
+        assert!(runtime.activities.audio_sources.lock().await.is_empty());
+    }
     fn shared_receipt() -> Value {
         json!({"backend":"fvp","applied":true,"revision":7,"playState":"paused","focusPaused":true,
             "mediaInfoReady":true,"playingConfirmed":true,"sourcePcmReceived":true,"playbackClockAdvanced":true,

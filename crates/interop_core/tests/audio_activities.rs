@@ -48,6 +48,7 @@ impl Peer {
             .unwrap();
             let mut sync = HashMap::<u32, Vec<u8>>::new();
             let mut ending = HashSet::new();
+            let mut media = HashMap::<String, (bool, usize)>::new();
             while let Ok(frame) = Frame::read(&mut socket, 1024 * 1024, false).await {
                 let id = frame.arg0;
                 if frame.command == protocol::OPEN {
@@ -66,6 +67,16 @@ impl Peer {
                             reply.push(1);
                             reply.extend((text.len() as u32).to_le_bytes());
                             reply.extend(text.as_bytes());
+                        } else if service.contains("dumpsys power") || service.contains("verified:")
+                        {
+                            let text = if service.contains("verified:") {
+                                "verified:12345\n"
+                            } else {
+                                "Awake\n"
+                            };
+                            reply.push(1);
+                            reply.extend((text.len() as u32).to_le_bytes());
+                            reply.extend(text.as_bytes());
                         }
                         reply.extend([3, 1, 0, 0, 0, 0]);
                         if !send(&mut socket, protocol::WRTE, id, reply).await {
@@ -73,8 +84,31 @@ impl Peer {
                         }
                         ending.insert(id);
                     } else if service.starts_with("localabstract:scrcpy_") {
+                        let (audio_only, opens) = media
+                            .get_mut(service.trim_end_matches('\0'))
+                            .expect("launched capture socket");
+                        *opens += 1;
+                        if !*audio_only && *opens > 1 {
+                            continue; // The second connection is the control channel.
+                        }
                         let mut audio = vec![0; 65];
-                        audio.extend([0, b'r', b'a', b'w']);
+                        audio.extend(if *audio_only {
+                            [0, b'r', b'a', b'w']
+                        } else {
+                            *b"h264"
+                        });
+                        if !*audio_only {
+                            audio.extend(0x8000_0000u32.to_be_bytes());
+                            audio.extend(720u32.to_be_bytes());
+                            audio.extend(1280u32.to_be_bytes());
+                            audio.extend((1u64 << 61).to_be_bytes());
+                            audio.extend(4u32.to_be_bytes());
+                            audio.extend([0, 0, 0, 1]);
+                            if !send(&mut socket, protocol::WRTE, id, audio).await {
+                                return;
+                            }
+                            continue;
+                        }
                         // A bounded PCM packet stays available for an actual
                         // output adapter; activity tests never fake audio.ready.
                         audio.extend(0u64.to_be_bytes());
@@ -85,6 +119,20 @@ impl Peer {
                         }
                     } else {
                         assert!(service.starts_with("exec:CLASSPATH="), "{service}");
+                        let scid = &service.split_once("scid=").unwrap().1[..8];
+                        let audio_only = service.contains("video=false");
+                        media.insert(format!("localabstract:scrcpy_{scid}"), (audio_only, 0));
+                        if !audio_only
+                            && !send(
+                                &mut socket,
+                                protocol::WRTE,
+                                id,
+                                b"__INTEROP_PID__123:12345\n".to_vec(),
+                            )
+                            .await
+                        {
+                            return;
+                        }
                     }
                 } else if frame.command == protocol::WRTE {
                     if !send(&mut socket, protocol::OKAY, id, vec![]).await {
@@ -143,6 +191,12 @@ impl Peer {
             .unwrap();
         runtime
             .invoke("devices.connect", json!({"deviceId":device}))
+            .await
+            .unwrap();
+        // Audio ownership requires an opened control session. This wire peer
+        // models its process/video/control handshake without claiming decoding.
+        runtime
+            .invoke("session.start", json!({"deviceId":device}))
             .await
             .unwrap();
         device

@@ -197,7 +197,9 @@ class InteropBridge {
       // Retire orphaned captures rather than adopting an unverified playback.
       await bridge._retireUnownedAudio();
       final settings = await bridge._invoke('settings.get', const {});
-      await bridge._audioOutputs.policy(settings['backgroundAudio'] == true);
+      await bridge._audioOutputs.policy(
+        settings['backgroundKeepAlive'] == true,
+      );
       _active = bridge;
       return bridge;
     } catch (_) {
@@ -676,7 +678,11 @@ class InteropBridge {
       }
     }
     if (command == 'settings.get' || command == 'settings.update') {
-      await _audioOutputs.policy(result['backgroundAudio'] == true);
+      await _audioOutputs.policy(result['backgroundKeepAlive'] == true);
+    }
+    if (command == 'settings.import') {
+      final settings = await _invoke('settings.get', const {});
+      await _audioOutputs.policy(settings['backgroundKeepAlive'] == true);
     }
     if (command == 'session.quality.options') {
       final local = await _videoCapabilities();

@@ -238,6 +238,9 @@ pub(crate) struct Session {
 }
 
 impl Session {
+    pub(crate) fn owns_device_audio(&self, device: &str) -> bool {
+        self.device_id == device && !self.cancellation.is_cancelled()
+    }
     pub(crate) async fn activity_snapshot(&self) -> Option<Value> {
         let state = self.state.read().await;
         (!self.cancellation.is_cancelled() || state["launchOutcome"] == "unknown")
@@ -612,6 +615,7 @@ impl Runtime {
         let cleanup_state = state.clone();
         let cleanup_events = self.events.clone();
         let cleanup_device = device_id.clone();
+        let cleanup_activities = Arc::downgrade(&self.activities);
         tokio::spawn(async move {
             cleanup_cancel.cancelled().await;
             reservation.stopping();
@@ -632,6 +636,17 @@ impl Runtime {
                     &cleanup_device,
                     data.clone(),
                 );
+            }
+            // Video/control can fail while ADB and output-audio remain live.
+            // Reclaim sound when no remaining session owns this device, even
+            // when the failed session stays as an unresolved application record.
+            if let Some(cleanup_activities) = cleanup_activities.upgrade() {
+                crate::audio::stop_unowned_audio(
+                    &cleanup_activities,
+                    &cleanup_events,
+                    &cleanup_device,
+                )
+                .await;
             }
             let cleanup = format!("rm -f -- {}", quote(&cleanup_path).expect("generated path"));
             let _ = cleanup_client
@@ -1028,13 +1043,23 @@ wait "$child""#
     }
 
     async fn stop_session(&self, id: &str) {
-        let process_closed = self
-            .activities
-            .sessions
-            .lock()
-            .await
-            .remove(id)
-            .map(|session| session.process_closed.clone());
+        let process_closed = {
+            let mut sessions = self.activities.sessions.lock().await;
+            if let Some(session) = sessions.remove(id) {
+                let device = session.device_id.clone();
+                let closed = session.process_closed.clone();
+                drop(session);
+                if !sessions
+                    .values()
+                    .any(|session| session.owns_device_audio(&device))
+                {
+                    self.stop_device_audio(&device).await;
+                }
+                Some(closed)
+            } else {
+                None
+            }
+        };
         if let Some(closed) = process_closed {
             let _ = tokio::time::timeout(Duration::from_secs(3), async {
                 while !closed.load(Ordering::Acquire) {
@@ -2234,6 +2259,67 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn failed_last_session_reclaims_audio_but_preserves_other_windows_and_devices() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let first = CancellationToken::new();
+        let second = CancellationToken::new();
+        let audio_a = CancellationToken::new();
+        let audio_b = CancellationToken::new();
+        for (id, cancellation) in [
+            ("failed-app", first.clone()),
+            ("live-screen", second.clone()),
+        ] {
+            let (control, _requests) = mpsc::channel(1);
+            runtime.activities.sessions.lock().await.insert(
+                id.into(),
+                Session {
+                    device_id: "a".into(),
+                    package: None,
+                    cancellation,
+                    control,
+                    state: Arc::new(RwLock::new(json!({"sessionId":id,"status":"streaming"}))),
+                    process_closed: Arc::new(AtomicBool::new(true)),
+                    process: None,
+                },
+            );
+        }
+        for (device, cancellation) in [("a", audio_a.clone()), ("b", audio_b.clone())] {
+            runtime.activities.audio_sources.lock().await.insert(device.into(), crate::audio::AudioSource::new(
+                cancellation, Arc::new(RwLock::new(json!({"deviceId":device,"sourceId":device,"status":"playing","nativeAttached":true})))
+            ));
+        }
+        first.cancel();
+        crate::audio::stop_unowned_audio(&runtime.activities, &runtime.events, "a").await;
+        assert!(
+            !audio_a.is_cancelled(),
+            "another window still owns this device sound"
+        );
+        second.cancel();
+        let mut events = runtime.subscribe();
+        crate::audio::stop_unowned_audio(&runtime.activities, &runtime.events, "a").await;
+        assert!(audio_a.is_cancelled());
+        assert!(!audio_b.is_cancelled());
+        assert!(
+            !runtime
+                .activities
+                .audio_sources
+                .lock()
+                .await
+                .contains_key("a")
+        );
+        assert_eq!(
+            runtime.activities.sessions.lock().await.len(),
+            2,
+            "failure records may remain without owning audio"
+        );
+        let stopped = events.recv().await.unwrap();
+        assert_eq!(stopped["type"], "audio.updated");
+        assert_eq!(stopped["data"]["status"], "stopped");
+        assert_eq!(stopped["data"]["nativeAttached"], false);
+    }
 
     #[tokio::test]
     async fn monitor_retires_another_device_while_a_session_waits_for_process_shutdown() {

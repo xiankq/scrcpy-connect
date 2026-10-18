@@ -926,11 +926,8 @@ impl Runtime {
             if let Some(quality) = store.settings["deviceQuality"].as_object_mut() {
                 quality.remove(id);
             }
-            if let Some(audio) = store.settings["audioDevices"].as_array_mut() {
-                audio.retain(|value| value.as_str() != Some(id));
-            }
-            if store.settings["clipboardDevice"] == id {
-                store.settings["clipboardDevice"] = Value::Null;
+            if let Some(settings) = store.settings["deviceSettings"].as_object_mut() {
+                settings.remove(id);
             }
         }
         self.changed_devices().await?;

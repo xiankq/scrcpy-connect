@@ -2,6 +2,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:interop_bridge/src/media_intent.dart';
 
 void main() {
+  test('closing a device page cancels its unbound audio start before player attachment', () {
+    final intents = MediaIntents();
+    final old = intents.begin('A', audio: true);
+    final other = intents.begin('B', audio: true);
+    intents.stopAudioDevice('A');
+    expect(old.cancelled, isTrue);
+    expect(other.cancelled, isFalse);
+    final reopened = intents.begin('A', audio: true);
+    old.bind('late-old-source');
+    expect(old.cancelled, isTrue);
+    expect(reopened.cancelled, isFalse);
+  });
   test('a stop before startup returns its ID still prevents native attach and retry', () {
     final intents = MediaIntents();
     final pending = intents.begin('device-A', audio: false);
