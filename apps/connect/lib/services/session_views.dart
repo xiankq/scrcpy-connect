@@ -101,6 +101,15 @@ class SessionView {
   int _revision = 0;
   bool get isCurrent => !_released && identical(_views._owners[id], this);
 
+  /// Revoke only this local binding after its transport/session has ended.
+  /// Unlike release, this cannot pause a removed session or retain its owner
+  /// after a failed remote cleanup. Queued old visibility work loses admission.
+  void abandonEndedSession() {
+    _released = true;
+    _revision++;
+    if (identical(_views._owners[id], this)) _views._owners.remove(id);
+  }
+
   Future<SessionJson> resume({Future<void>? afterInput}) => _released
       ? Future.value({})
       : _views._visibility(this, true, afterInput: afterInput);

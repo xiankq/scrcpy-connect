@@ -9,6 +9,8 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/remote_input.dart';
 
+import 'remote_connection_recovery.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -73,6 +75,8 @@ class _RemotePageState extends State<RemotePage>
   bool reconcileOnly = false;
   int stateEpoch = 0;
   int? reconciledSequence;
+  final connectionRecovery = RemoteConnectionRecovery();
+  bool restoringConnection = false;
   final remoteMessenger = GlobalKey<ScaffoldMessengerState>();
 
   void trace(String detail) {
@@ -164,16 +168,18 @@ class _RemotePageState extends State<RemotePage>
     }
   }
 
-  Future<void> start() async {
+  Future<void> start({bool recoveringConnection = false}) async {
     if (appLaunchUnknown) {
       await checkAppLaunch();
       return;
     }
-    if (reconcileOnly || controller.snapshot().reconciliationPending) {
+    if ((!recoveringConnection && reconcileOnly) ||
+        controller.snapshot().reconciliationPending) {
       await reconcileState();
       return;
     }
     final attempt = ++startAttempt;
+    restoringConnection = recoveringConnection;
     final recoveryEpoch = stateEpoch;
     trace(
       'start.begin lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
@@ -187,9 +193,10 @@ class _RemotePageState extends State<RemotePage>
     try {
       await releaseInputs();
       if (!mounted || exiting || attempt != startAttempt) return;
+      if (deferConnectionStart(recoveringConnection)) return;
       controlAvailable = false;
       bindingGeneration++;
-      Json? retained = widget.existingSession;
+      Json? retained = recoveringConnection ? null : widget.existingSession;
       if (retained == null) {
         final listed = objects(
           (await controller.request('session.list', {
@@ -206,6 +213,7 @@ class _RemotePageState extends State<RemotePage>
         retained = matches.firstOrNull;
       }
       if (!mounted || exiting || attempt != startAttempt) return;
+      if (deferConnectionStart(recoveringConnection)) return;
       if (retained?['launchOutcome'] == 'unknown') {
         showUnknownAppLaunch(retained!);
         return;
@@ -252,6 +260,7 @@ class _RemotePageState extends State<RemotePage>
       );
       setState(() {
         session = result;
+        if (recoveringConnection) reconcileOnly = false;
         controlAvailable = sessionId.isNotEmpty && result['textureId'] != null;
         presentationVisible = true;
         awaitingResume = false;
@@ -280,6 +289,9 @@ class _RemotePageState extends State<RemotePage>
       }
       if (covered) await pauseView();
       await applyPendingInitialAction();
+      if (widget.packageName == null && !appLaunchUnknown) {
+        connectionRecovery.viewed();
+      }
 
       trace('start.bound paused=$paused');
       // The bridge returns this texture only after actual decoded pixels have
@@ -318,7 +330,29 @@ class _RemotePageState extends State<RemotePage>
           }
         });
       }
+    } finally {
+      if (attempt == startAttempt) restoringConnection = false;
     }
+  }
+
+  bool get connectionStartAllowed =>
+      mounted &&
+      !exiting &&
+      !covered &&
+      acceptsInput &&
+      !lifecyclePaused &&
+      widget.packageName == null &&
+      !appLaunchUnknown &&
+      !stateUnverified &&
+      !sessionEnded &&
+      !controller.snapshot().reconciliationPending &&
+      ModalRoute.of(context)?.isCurrent != false;
+
+  bool deferConnectionStart(bool recovering) {
+    if (!recovering || connectionStartAllowed) return false;
+    connectionRecovery.defer();
+    setState(() => connecting = false);
+    return true;
   }
 
   Future<void> applyPendingInitialAction() async {
@@ -524,6 +558,32 @@ class _RemotePageState extends State<RemotePage>
     final data = event['data'] is Map<Object?, Object?>
         ? jsonObject(event['data'])
         : <String, dynamic>{};
+    if ((event['type'] == 'session.stop.requested' &&
+            data['sessionId'] == sessionId) ||
+        (event['type'] == 'device.disconnect.requested' &&
+            event['deviceId'] == widget.device['id'])) {
+      connectionRecovery.stop();
+      if (restoringConnection) {
+        // A late list/start receipt must not undo a stop accepted while the
+        // replacement has not yet acquired its new session identity.
+        startAttempt++;
+        restoringConnection = false;
+        setState(() => connecting = false);
+      }
+      return;
+    }
+    if (event['type'] == 'devices.changed' && widget.packageName == null) {
+      final device = objects(data['devices'])
+          .where((d) => d['id'] == widget.device['id'])
+          .firstOrNull;
+      if (device != null) {
+        connectionRecovery.observe(
+          value(device, 'status'),
+          autoReconnect: device['autoReconnect'] == true,
+        );
+        recoverConnection();
+      }
+    }
     if (event['type'] == 'state.resync') {
       markStateUnknown();
       return;
@@ -773,7 +833,23 @@ class _RemotePageState extends State<RemotePage>
   @override
   void didPopNext() {
     covered = false;
-    if (acceptsInput) unawaited(resumeView());
+    if (connectionRecovery.pending) {
+      recoverConnection();
+    } else if (acceptsInput) {
+      unawaited(resumeView());
+    }
+  }
+
+  void recoverConnection() {
+    if (!connectionStartAllowed || connecting || !connectionRecovery.take()) {
+      return;
+    }
+    // Consume the recovery intent synchronously before an asynchronous startup,
+    // and never replay a tool action from the original route launch.
+    initialActionApplied = true;
+    view?.abandonEndedSession();
+    view = null;
+    unawaited(start(recoveringConnection: true));
   }
 
   Future<void> pauseView() async {
@@ -878,7 +954,11 @@ class _RemotePageState extends State<RemotePage>
     if (state == AppLifecycleState.resumed) {
       if (!lifecyclePaused) return;
       lifecyclePaused = false;
-      if (!covered) unawaited(resumeView());
+      if (connectionRecovery.pending) {
+        recoverConnection();
+      } else if (!covered) {
+        unawaited(resumeView());
+      }
     } else {
       if (lifecyclePaused) return;
       lifecyclePaused = true;

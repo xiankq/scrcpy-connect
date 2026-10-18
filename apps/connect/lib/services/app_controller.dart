@@ -243,8 +243,36 @@ class AppController extends _$AppController {
   bool isDisposed() => _disposed || !ref.mounted;
   AppState snapshot() => state;
   Stream<Json> eventStream() => _events.stream;
-  Future<Json> request(String command, [Json params = const {}]) =>
-      _dependencies.request(command, params);
+  Future<Json> request(String command, [Json params = const {}]) {
+    // Publish user stop intent before its acknowledgement. A transport failure
+    // may otherwise race the stop and make a visible page recreate the stream.
+    // Bridge-internal failed-output cleanup bypasses this public UI entry.
+    final activity = command == 'activities.stop' ? params['activityId'] : null;
+    final sessionStop = command == 'session.stop'
+        ? params['sessionId']
+        : activity is String && activity.startsWith('session:')
+        ? activity.substring(8)
+        : null;
+    final deviceStop =
+        ['devices.disconnect', 'devices.forget'].contains(command)
+        ? params['deviceId']
+        : activity is String && activity.startsWith('connection:')
+        ? activity.substring(11)
+        : null;
+    if (!_events.isClosed && sessionStop is String) {
+      _events.add({
+        'type': 'session.stop.requested',
+        'data': {'sessionId': sessionStop},
+      });
+    } else if (!_events.isClosed && deviceStop is String) {
+      _events.add({
+        'type': 'device.disconnect.requested',
+        'deviceId': deviceStop,
+        'data': <String, dynamic>{},
+      });
+    }
+    return _dependencies.request(command, params);
+  }
 
   static NotificationReplyKey notificationReplyKey(
     String deviceId,

@@ -4,6 +4,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/session_views.dart';
 
 void main() {
+  test('ended transport revokes queued old visibility without touching a successor', () async {
+    final commands = <String>[];
+    final gate = Completer<void>();
+    final views = SessionViews((command, [params = const {}]) async {
+      commands.add('$command:${params['sessionId']}');
+      return {};
+    });
+    final old = views.claim('old', visible: true);
+    final pending = old.pause(afterInput: gate.future);
+    old.abandonEndedSession();
+    final successor = views.claim('old', visible: false);
+    old.abandonEndedSession();
+    gate.complete();
+    await pending;
+    await old.resume();
+    await old.release();
+    expect(commands, isEmpty);
+    expect(old.isCurrent, false);
+    expect(successor.isCurrent, true);
+    await successor.resume();
+    expect(commands, ['session.resume:old']);
+  });
   test(
     'leaving during unknown state still pauses its exact live owner as cleanup',
     () async {
