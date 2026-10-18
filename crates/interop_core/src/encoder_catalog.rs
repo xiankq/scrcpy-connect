@@ -16,6 +16,26 @@ struct Entry {
 }
 
 impl EncoderCatalog {
+    /// Read successful enumeration for this connection without starting or
+    /// waiting for a probe. Unknown, failed, and in-progress probes are `None`.
+    pub(crate) async fn peek(&self, client: &Client) -> CoreResult<Option<Vec<VideoEncoder>>> {
+        if client.is_closed() {
+            return Err(CoreError::new("disconnected", "设备连接已结束。"));
+        }
+        let encoders = {
+            let entries = self.entries.lock().await;
+            entries
+                .iter()
+                .find(|entry| entry.client.same_connection(client))
+                .map(|entry| entry.encoders.clone())
+        };
+        let result = encoders.and_then(|encoders| encoders.get().cloned());
+        if client.is_closed() {
+            return Err(CoreError::new("disconnected", "设备连接已结束。"));
+        }
+        Ok(result)
+    }
+
     pub(crate) async fn get<F, R>(&self, client: &Client, load: F) -> CoreResult<Vec<VideoEncoder>>
     where
         F: FnOnce() -> R,
@@ -83,6 +103,8 @@ mod tests {
     async fn encoder_catalog_reuses_sequential_and_cloned_connection_calls() {
         let catalog = EncoderCatalog::default();
         let (client, _peer) = connection();
+        assert!(catalog.peek(&client).await.unwrap().is_none());
+        assert!(catalog.entries.lock().await.is_empty());
         let calls = AtomicUsize::new(0);
         for connection in [client.clone(), client.clone(), client.clone()] {
             catalog
@@ -92,6 +114,7 @@ mod tests {
                 })
                 .await
                 .unwrap();
+            assert!(catalog.peek(&connection).await.unwrap().unwrap().is_empty());
         }
         client.close();
         assert_eq!(
@@ -132,6 +155,7 @@ mod tests {
         let (next, _next_peer) = connection();
         let calls = AtomicUsize::new(0);
         for client in [&old, &next] {
+            assert!(catalog.peek(client).await.unwrap().is_none());
             catalog
                 .get(client, || async {
                     calls.fetch_add(1, Ordering::SeqCst);
@@ -139,8 +163,10 @@ mod tests {
                 })
                 .await
                 .unwrap();
+            assert!(catalog.peek(client).await.unwrap().unwrap().is_empty());
         }
         old.close();
+        assert_eq!(catalog.peek(&old).await.err().unwrap().code, "disconnected");
         let result = catalog
             .get(&old, || async {
                 panic!("closed transport must not enumerate")
@@ -163,17 +189,28 @@ mod tests {
             })
             .await;
         assert_eq!(failed.err().unwrap().code, "encoder_probe");
-        assert!(
-            tokio::time::timeout(
-                Duration::from_millis(5),
-                catalog.get(&client, || async {
-                    calls.fetch_add(1, Ordering::SeqCst);
-                    std::future::pending().await
-                })
-            )
-            .await
-            .is_err()
-        );
+        assert!(catalog.peek(&client).await.unwrap().is_none());
+        {
+            let (started, ready) = tokio::sync::oneshot::channel();
+            let loading = catalog.get(&client, || async {
+                calls.fetch_add(1, Ordering::SeqCst);
+                started.send(()).unwrap();
+                std::future::pending().await
+            });
+            tokio::pin!(loading);
+            tokio::select! {
+                _ = ready => {},
+                _ = &mut loading => panic!("fixture probe must stay pending"),
+            }
+            assert!(
+                tokio::time::timeout(Duration::from_millis(100), catalog.peek(&client))
+                    .await
+                    .expect("peek must not wait for an in-progress probe")
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        assert!(catalog.peek(&client).await.unwrap().is_none());
         catalog
             .get(&client, || async {
                 calls.fetch_add(1, Ordering::SeqCst);
@@ -183,6 +220,23 @@ mod tests {
             .unwrap();
         client.close();
         assert_eq!(calls.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn encoder_catalog_peek_rechecks_connection_after_waiting_for_catalog() {
+        let catalog = EncoderCatalog::default();
+        let (client, _peer) = connection();
+        let entries = catalog.entries.lock().await;
+        let peek = catalog.peek(&client);
+        tokio::pin!(peek);
+        std::future::poll_fn(|cx| {
+            assert!(peek.as_mut().poll(cx).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+        client.close();
+        drop(entries);
+        assert_eq!(peek.await.err().unwrap().code, "disconnected");
     }
 
     #[tokio::test]

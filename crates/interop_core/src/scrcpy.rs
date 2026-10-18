@@ -551,10 +551,15 @@ impl Runtime {
             Ok(reservation) => reservation,
             Err(busy) => return Err(self.session_resource_busy(busy).await),
         };
-        // The read-only power query and encoder enumeration are independent.
-        // Join both to completion, including the probe's existing cleanup,
-        // before rejecting sleep or a failed compatibility check. A real app
-        // launch retains its existing behavior without a power query.
+        // Like scrcpy's normal startup, default H264 screen capture can try the
+        // platform-selected encoder directly. Unknown is not an availability
+        // claim: actual metadata, keyframe and local decoding still gate ready.
+        // Keep strict preflight for explicit choices and real application tasks
+        // (START_APP may migrate a task before the first encoded frame).
+        let requires_enumeration =
+            package.is_some() || selected_codec.name != "h264" || selected_encoder.is_some();
+        // Join any real probe through cleanup before rejecting sleep. A cached
+        // catalog remains authoritative when the default path does not probe.
         let (sleeping, encoders) = tokio::join!(
             async {
                 if package.is_none() {
@@ -563,7 +568,13 @@ impl Runtime {
                     Ok(None)
                 }
             },
-            self.probe_video_encoders(&device_id),
+            async {
+                if requires_enumeration {
+                    self.probe_video_encoders(&device_id).await.map(Some)
+                } else {
+                    self.encoder_catalog.peek(&client).await
+                }
+            },
         );
         if sleeping? == Some(true) {
             return Err(CoreError::new(
@@ -571,8 +582,9 @@ impl Runtime {
                 "手机当前处于系统休眠，尚未提供画面。可在手机上唤醒，或明确选择唤醒手机；这可能点亮实体屏幕，仍需使用手机自身的锁屏解锁。",
             ));
         }
-        let encoders = encoders?;
-        validate_encoder_selection(settings, &encoders)?;
+        if let Some(encoders) = encoders? {
+            validate_encoder_selection(settings, &encoders)?;
+        }
         startup_timing.insert(
             "validatedMs".into(),
             json!(startup_clock.elapsed().as_millis() as u64),
@@ -2385,12 +2397,15 @@ mod tests {
         }
 
         fn start(&self) -> tokio::task::JoinHandle<CoreResult<Value>> {
+            // These preflight/cleanup regressions deliberately select a named
+            // encoder. Automatic default-screen capture is tested separately.
+            self.start_with(json!({"videoEncoder":"c2.fixture.avc"}))
+        }
+
+        fn start_with(&self, mut params: Value) -> tokio::task::JoinHandle<CoreResult<Value>> {
             let runtime = self.runtime.clone();
-            tokio::spawn(async move {
-                runtime
-                    .start_session(&json!({"deviceId":"cold-device"}))
-                    .await
-            })
+            params["deviceId"] = json!("cold-device");
+            tokio::spawn(async move { runtime.start_session(&params).await })
         }
 
         async fn frame(&mut self) -> interop_adb::protocol::Frame {
@@ -2408,6 +2423,49 @@ mod tests {
                 .write(&mut self.peer)
                 .await
                 .unwrap();
+        }
+
+        // Inspect the actual first SEND. Closing the transport rejects the
+        // incomplete upload, so these policy tests never start a remote JVM.
+        async fn first_upload(
+            &mut self,
+            startup: tokio::task::JoinHandle<CoreResult<Value>>,
+        ) -> (String, CoreError) {
+            use interop_adb::protocol;
+            let mut bytes = Vec::new();
+            let path = loop {
+                let frame = self.frame().await;
+                match frame.command {
+                    protocol::OPEN => {
+                        let service = String::from_utf8_lossy(&frame.payload);
+                        assert!(service.contains("dumpsys power") || service.starts_with("sync:"));
+                        self.send(protocol::OKAY, frame.arg0, Vec::new()).await;
+                        if service.contains("dumpsys power") {
+                            self.finish_shell(frame.arg0, b"Awake\n").await;
+                        }
+                    }
+                    protocol::WRTE => {
+                        self.send(protocol::OKAY, frame.arg0, Vec::new()).await;
+                        bytes.extend_from_slice(&frame.payload);
+                        if bytes.len() >= 8 {
+                            assert_eq!(&bytes[..4], b"SEND");
+                            let len = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+                            if bytes.len() >= 8 + len {
+                                break String::from_utf8(bytes[8..8 + len].to_vec()).unwrap();
+                            }
+                        }
+                    }
+                    protocol::OKAY | protocol::CLSE => {}
+                    other => panic!("unexpected first-upload frame: {other}"),
+                }
+            };
+            self.client.close();
+            let error = tokio::time::timeout(Duration::from_secs(1), startup)
+                .await
+                .expect("closed transport must fail startup")
+                .unwrap()
+                .unwrap_err();
+            (path, error)
         }
 
         // Complete the real sync SEND/DATA/DONE exchange, not a fake probe future.
@@ -2534,6 +2592,107 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn cold_default_screen_uploads_capture_without_encoder_enumeration() {
+        let mut fixture = ColdStartFixture::new().await;
+        let startup = fixture.start_with(json!({}));
+        let (path, error) = fixture.first_upload(startup).await;
+        assert!(
+            path.starts_with("/data/local/tmp/interop-scrcpy-"),
+            "unexpected SEND: {path}"
+        );
+        assert_eq!(error.details["launchOutcome"], "not_submitted");
+    }
+
+    #[tokio::test]
+    async fn cold_explicit_format_encoder_and_app_keep_real_preflight() {
+        for params in [
+            json!({"videoCodec":"h265"}),
+            json!({"videoEncoder":"c2.fixture.avc"}),
+            json!({"packageName":"com.android.settings"}),
+        ] {
+            let mut fixture = ColdStartFixture::new().await;
+            let startup = fixture.start_with(params);
+            let (path, error) = fixture.first_upload(startup).await;
+            assert!(
+                path.starts_with("/data/local/tmp/interop-encoders-"),
+                "unexpected SEND: {path}"
+            );
+            assert_eq!(error.details["launchOutcome"], "not_submitted");
+        }
+    }
+
+    #[tokio::test]
+    async fn cold_capture_policy_uses_effective_preferences_and_overrides() {
+        for (settings, params, capture) in [
+            (json!({"videoCodec":"h265"}), json!({}), false),
+            (json!({"videoEncoder":"c2.fixture.avc"}), json!({}), false),
+            (
+                json!({"videoCodec":"h265","videoEncoder":"c2.fixture.hevc"}),
+                json!({"videoCodec":"h264","videoEncoder":null}),
+                true,
+            ),
+        ] {
+            let mut fixture = ColdStartFixture::new().await;
+            for (key, value) in settings.as_object().unwrap() {
+                fixture.runtime.store.write().await.settings[key] = value.clone();
+            }
+            let startup = fixture.start_with(params);
+            let (path, _) = fixture.first_upload(startup).await;
+            assert_eq!(
+                path.starts_with("/data/local/tmp/interop-scrcpy-"),
+                capture,
+                "unexpected SEND: {path}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn cold_default_screen_rejects_sleep_without_upload_or_wake() {
+        use interop_adb::protocol;
+        let mut fixture = ColdStartFixture::new().await;
+        let startup = fixture.start_with(json!({}));
+        let frame = fixture.frame().await;
+        assert_eq!(frame.command, protocol::OPEN);
+        assert!(String::from_utf8_lossy(&frame.payload).contains("dumpsys power"));
+        fixture.send(protocol::OKAY, frame.arg0, Vec::new()).await;
+        fixture.finish_shell(frame.arg0, b"Asleep\n").await;
+        let result = tokio::time::timeout(Duration::from_secs(1), startup).await;
+        if result.is_err() {
+            fixture.client.close();
+        }
+        let error = result
+            .expect("sleep rejection must not wait for a cold probe")
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.code, "device_asleep");
+        assert_eq!(error.details["launchOutcome"], "not_submitted");
+        fixture.assert_no_open().await;
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn cold_default_screen_respects_known_unsupported_catalog() {
+        use interop_adb::protocol;
+        let mut fixture = ColdStartFixture::new().await;
+        fixture.runtime.encoder_catalog.get(&fixture.client, || async {
+            parse_encoders("List of video encoders:\n --video-codec=h265 --video-encoder=c2.fixture.hevc (hw)\n")
+        }).await.unwrap();
+        let startup = fixture.start_with(json!({}));
+        let frame = fixture.frame().await;
+        assert_eq!(frame.command, protocol::OPEN);
+        fixture.send(protocol::OKAY, frame.arg0, Vec::new()).await;
+        fixture.finish_shell(frame.arg0, b"Awake\n").await;
+        let error = tokio::time::timeout(Duration::from_secs(1), startup)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.code, "encoder_unavailable");
+        fixture.assert_no_open().await;
+        fixture.client.close();
     }
 
     #[tokio::test]
