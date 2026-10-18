@@ -1,18 +1,96 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量：首次MediaCodec分配复用候选在源端15次实测确认2→1，但完整Flutter
-A/B/A没有稳定首帧收益，不采用生产，见下一节。实际Rust／Flutter完整编码前缀已逐帧验证；8输入中7项snapshot
-选中最早新计数帧，input→firstRaw中位335.226ms，首帧与整体输入预算仍失败。
-生产JAR不替换。此前普通Driver源时钟诊断与隔离服务端输入窗口实验：原双项→稳定
-单项→双项返回输入P50／P95为691／852→581／810→686／925ms，首帧无稳定收益，
-整体预算失败，生产JAR不替换。权威完成度见[当前状态](../../.scratch/interop/current-status.md)。
-[Android显式异步解码](android-decoder-async.md)仍为生产默认；早期关闭诊断的60次
-输入138／295ms属于当时测试路径，不能覆盖后续普通Driver的失败证据。
-连接稳定性增量见[应用失活恢复](connection-health.md)。
+最新增量：隔离bounded-input将无限静态重复改为每个实际源帧最多10次；关闭诊断的
+普通Driver静态对照，候选输入P50/P95为149/236ms，两侧完成基线201/290、196/295ms。
+候选仍有一次首帧1036ms，未通过完整预算，**生产JAR不替换**。原返回组窗口超时
+单独保留，独立重试不覆盖失败。源队列核查也排除了未经证实的FIFO／旧Java回调
+堆积前提，见下一节。权威完成度见[当前状态](../../.scratch/interop/current-status.md)。
+[Android显式异步解码](android-decoder-async.md)仍为生产默认；旧测试路径的通过不
+覆盖后续普通Driver失败。连接稳定性增量见[应用失活恢复](connection-health.md)。
 
-2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。
-仅实际改动被控捕获服务的隔离实验重建JAR，主控调优复用既有产物。
-[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方vendor文件和当前视频依赖的既有暂停补丁产物。
+2026-10-18。按用户优先级推进视频性能、首帧和连接稳定性；USB等工作顺延。
+只有实际修改被控捕获服务的隔离实验重建JAR，Rust／Flutter调优复用既有产物。
+[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方vendor和
+当前视频依赖的暂停补丁产物；本轮候选也不覆盖这两份文件。
+
+## 有限静态重复：输入改善，候选仍未通过完整首帧预算
+
+2026-10-18。先核对固定Android16源码中的实际SurfaceTexture调用链：正常虚拟显示
+在首帧前启用async；待消费项可替换，替换触发onFrameReplaced而JNI未转发成Java
+frameAvailable。不能从acquireBuffer的队头注释推断这里有FIFO旧帧积压，也不据此
+新增回调线程。updateTexImage没有公开空队列结果，不能用相同timestamp丢弃源帧；
+编码输入EGLSurface的swapInterval也不能直接改成0，否则可能破坏精确PTS credit。
+这些是有边界的AOSP源码结论，不代替厂商运行证据，完整一手链接及链路见
+[源队列核查](../research/surface-texture-queue-semantics.md)。
+
+其中GraphicBufferSource的静态重复预算为10；旧bounded-input却在唯一steady
+credit上无限重复。本轮只修改LatestInputWindow：实际提交源帧时重置10次预算，
+重复reservation先扣预算，再提交；bootstrap重复同样扣除。只有pending新源才可在
+预算耗尽后继续drain，最后一条repeat在途仍有3秒stall期限，精确输出返还credit后
+主动排空终值。没有pending、ledger为空且预算耗尽时不再安排空drain；编码线程
+原有100ms故障／暂停轮询保持，不能称为整机零开销。GL桥接、codec、画质和窗口
+bootstrap2→steady1均未变，未叠加initial-codec或主控提前挂载。
+
+真实模块基线先红：静止预算耗尽后仍有timer／提交；候选9组行为回归、既有暂停
+JVM及15组Python测试通过。新增回归包含10次额度、长静止无任务、唯一新源恢复、
+最后重复阻挡时的pending终值及stall，不复制模块算法。只读review未发现确定缺陷。
+复现见[候选说明](../../servers/scrcpy/experiments/bounded-input/README.md)。
+
+实际API36生命周期共8阶段：源1+10媒体帧后静止4.5秒不再增长；静止后的唯一新
+计数、动态终值、暂停恢复及新计数、旋转和旋转输入均正确。最终进程／临时JAR／
+动态forward／fixture／设置清理通过。原件`/tmp/connect-finite-repeat-lifecycle/`。
+此源端测试通过官方ADB与宿主解码，不代替完整Flutter验收。
+
+两台API36／2vCPU／2048MB SwiftShader AVD；普通Driver、default解码（生产优先
+AMediaCodec）、同H2641280／60／8M，实际576×1280。先完成构建并停止Gradle再计时。
+每次真实按键后识别新计数，另验实际全屏窗口；不改1000ms首帧、200/300ms输入
+P50/P95、3000ms窗口预算。静态fixture关闭motion，不外推高运动吞吐。
+
+先开帧／时钟／完整档案诊断，每组1轮8输入：
+
+| 观测（ms，帧数除外） | 无限A1 | 有限B | 无限A2 |
+| --- | ---: | ---: | ---: |
+| 首有效像素 | 1386 | 1333 | 1037 |
+| 输入P50／P95 | 188／294 | 149／224 | 209／322 |
+| input→最早raw中位 | 84.0405 | 60.409 | 88.143 |
+| 完整解码关联帧数 | 604 | 145 | 615 |
+
+三份档案全部精确PTS关联，最早计数帧选中5/8、7/8、6/8，最早onVideo均观察到。
+30个实际窗口目标状态最终正确，共32次尝试；A2一次超3秒。各组严格exit1，诊断
+不作资格通过。运行时长不同，帧／字节减少不直接当带宽、CPU或功耗改善比例。
+原件`/tmp/connect-e2e/finite-repeat-product-{a1,b,a2}`，汇总
+`/tmp/connect-finite-repeat-summary.json`。
+
+随后关闭全部帧／时钟／档案诊断，同质量各3轮×8输入，窗口采集与判定均保持3秒：
+
+| 观测（ms） | 无限A1 | 有限B | 无限A2独立重试 |
+| --- | ---: | ---: | ---: |
+| 三轮首有效像素 | 1024／930／996 | 1036／927／945 | 878／963／924 |
+| 输入P50／P95（各24次） | 201／290 | 149／236 | 196／295 |
+| 实际窗口尝试／正确目标状态 | 30／30 | 31／30 | 30／30 |
+| 严格进程退出 | 1 | 1 | 0 |
+
+两侧完整基线支持此限定静态输入改善；B首轮1036ms使videoPerformanceComplete仍false。
+只有返回重试这一个静态组通过，不把它转成候选或完整视频资格。各完整组暂停／
+恢复ACK、新计数、逻辑stop及App／driver／fixture清理通过；nativeDeleteConfirmed
+仍false，不把disposeRequested称为原生删除完成。B的实际VIDEO1全屏窗口已目视。
+
+原始返回A2未完成：首个窗口3秒采集／验证超时、0次计时输入，保留
+`finite-repeat-normal-a2`。首次完整raw捕获843ms、Base64编码188ms、应用验证939ms；
+第二次捕获829ms、编码73ms后，验证请求只剩77.631ms而超时。第二张原始实际窗口
+已显示正确VIDEO0并目视，因此该失败证明全窗口验证链未在预算内完成，不能直接
+认定播放器没渲染或原生崩溃。未改源码、APK或门槛，在新目录做独立重试并单列；
+失败原件不被替换。原件`/tmp/connect-e2e/finite-repeat-normal-{a1,b,a2,a2-retry}`，
+汇总`/tmp/connect-finite-repeat-normal-summary.json`。
+
+候选JAR为6af942a529a94e9dc86cc7da5287535e20de913eb9bc75faa1737234a57d4c1d；
+无限基线为1a3d2c82…。四个实测APK逐一核验完整内嵌JAR及互斥，不仅检查文件名；
+回执`/tmp/connect-finite-repeat-{apks,baseline}.json`。诊断APK构建96.9／54.1秒，
+关闭诊断候选／基线29.1／54.2秒；编译开关变化没有再次重建JAR。
+候选仍仅接受API36、主屏、无GL filter、H264／c2.android.avc.encoder，未证明ARM、
+无线、动态、热／功耗或小时级长稳；生产捕获b46cd074…、vendor764eb6f7…和companion
+77007b4f…保持。下一步针对主控首呈现及实际源／credit等待，保留静态收益证据，
+不继续死扣同一重复预算，也不以该候选替换当前生产JAR。
 
 ## 首次编码器分配复用：源端减少一次，完整首帧未通过
 

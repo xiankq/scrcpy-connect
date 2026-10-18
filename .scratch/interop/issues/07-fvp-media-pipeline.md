@@ -33,6 +33,15 @@ fvp/MDK 是否能满足 scrcpy 实时流低延迟、音画同步和 Flutter 渲�
 
 ## 当前状态
 
+2026-10-18有限重复增量：AOSP实际异步虚拟显示与JNI链路排除未经证实的FIFO／
+旧Java callback积压前提；[源码核查](../../../docs/research/surface-texture-queue-semantics.md)
+记录原生10次重复预算。bounded-input真实模块先红后绿，9组行为回归、暂停JVM、
+15组Python及实际8阶段生命周期通过。关闭诊断普通Driver各24次静态输入，P50/P95
+201/290→149/236→196/295ms；B首帧仍有1036ms，未通过完整预算，不覆盖生产JAR。
+原返回A2窗口验证超时、0次计时输入单独保留，表中返回值来自同APK独立重试；
+正确第二张raw不能反推整个验证链已按时完成。动态／ARM／无线／长稳仍开放，
+下一步转向主控首呈现及源／credit服务归因。详见[有限重复完整证据](../../../docs/implementation/video-performance.md#有限静态重复输入改善候选仍未通过完整首帧预算)。
+
 2026-10-18首次分配候选：真实SurfaceEncoder及NewDisplay回归先红后绿，源端15次
 证实分配2→1，但普通Flutter A/B/A首像素2433／2356／2223ms、输入P50
 1819／1715／1714ms，无稳定收益，保持隔离、不覆盖生产JAR。全部窗口正确，三份
