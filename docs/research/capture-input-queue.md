@@ -305,8 +305,8 @@ AVD／Gradle／forward均停止或清除，不因工具改动重打同源release
 
 普通Driver新增源端input／首次draw与前后时钟区间的唯一关联后，原固定双项候选
 24次新计数drawEnd→raw接收完成的条件下界均≥217.334ms，中位下／上界
-310.819／390.331ms。目标input→drawStart中位0.463ms，说明仍须研究绘制后的
-合成／采集／编码；不能根据主控onVideo回调把全部等待归于decoder。
+310.819／390.331ms。目标input→drawStart中位0.463ms。后续核查发现此raw包是
+snapshot选中的新计数帧，未证明它是最早的新计数包，不能唯一归因于源端或decoder。
 区间依赖固定偏移、无休眠／时钟跳变，draw callback结束不代表合成结束。
 
 当前实验补丁保留首个有效媒体output前最多2项以支持静态codec bootstrap，之后
@@ -330,3 +330,17 @@ drawEnd→raw条件下／上界中位310.819／390.331→290.802／367.212→328
 
 新变体仅保留在实验目录及隔离工作树，不推广生产。实际ARM硬编／Wi-Fi／小时长稳
 和其他codec资格仍待验证，普通主控侧优化继续复用已有生产JAR。
+
+## 完整编码序列核查选择偏差
+
+为避免把较晚snapshot选帧当最早源包，新增完整raw packet ledger→生产Matroska
+转封装→逐帧解码／精确PTS／新计数关联。修正后的r2实录308包与308帧完全对应，
+8键／首次draw完整，输入→最早新计数raw包中位156.400ms，首次drawEnd→该包
+条件下／上界中位113.375／161.004ms；时钟区间47.629ms。原件
+`/tmp/connect-e2e/first-counter-raw-steady-one-r2/`。未重建JAR，仍为1a3d2c82…。
+
+该实验由宿主直接forward接收，主控AVD空闲，未包含产品Rust复用和Flutter负载。
+因此不能与普通Driver581ms作减法或断言余量属于某个模块；它说明最早帧与snapshot
+选中帧必须分开验证，下一步在同一实际产品路径保留完整媒体序列，而非继续凭选中
+raw帧的较晚时间修改源队列。复现和工具验收见
+[完整帧记录](../implementation/video-performance.md#最早新计数帧与快照选帧的区别)。

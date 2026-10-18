@@ -130,3 +130,14 @@ proxy-events.json、cleanup.json及截图仅存/tmp；EOF代理不代替物理�
 work队列长度。`--output`必须是新文件，避免覆盖原始证据。
 [当前默认路径实际追踪、命令与限制](../../../docs/research/capture-input-queue.md)。
 校验：`python3 -B -m unittest discover -s tool/e2e/video_fixture -p test_analyze_capture_slots.py -v`。
+
+`capture_first_counter.py`是另一条宿主raw-drain诊断：在专用目标上复用指定JAR，
+保存完整H264包／源PTS／接收时刻、8次真实输入与首次draw日志及前后时钟括界。
+它拒绝覆盖已有同名fixture安装；目标必须是已授权实验设备。测量后用
+`cargo run -p interop-core --example remux_capture_packets -- <目录>`通过生产mux
+转成保留微秒PTS的MKV，再由`analyze_first_counter.py`调用宿主FFmpeg逐帧识别。
+要求完整唯一的一包一帧、计数连续、时钟区间有效且采集／清理最终成功；始终选最早
+含新计数的包，不能用后来的snapshot选帧代替。宿主直收未包含Rust／Flutter路径，
+不能当产品延迟验收或与产品组直接相减。命令、实际308包／帧及限制见
+[最早新计数帧核查](../../../docs/implementation/video-performance.md#最早新计数帧与快照选帧的区别)。
+校验：`python3 -B -m unittest discover -s tool/e2e/video_fixture -p test_analyze_first_counter.py -v`。

@@ -30,7 +30,8 @@ relay和原始transport receipt，日志缺失、重复、Activity重置均失�
 input→drawStart中位0.463ms、draw callback0.632ms；首次新计数drawEnd→raw接收
 完成的条件下／上界中位310.819／390.331ms，24样本下界均≥217.334ms。raw接收
 完成→relay写入开始中位0.255ms，relay写入开始→onVideo98ms，onVideo→snapshot
-128.957ms。剩余等待包含源合成／采集／编码，不支持只追主控解码器的归因。
+128.957ms。这里关联的是快照选中的新计数帧，未证明它是最早包含新计数的包；
+不能据此唯一归因于源合成／采集／编码，后续完整帧核查见下一节。
 
 原件`/tmp/connect-e2e/source-clock-bounded/`及`/tmp/connect-source-clock-stages.json`。
 30张实际窗口计数正确、16张超3秒，暂停恢复／停止／自动清理确认；严格exit1。
@@ -86,6 +87,62 @@ host另设`CONNECT_E2E_VIDEO_TIMELINE=true`，保留唯一输出目录。预编�
 副本2737.2MiB，空闲40.11GiB，保留release、实测APK／原始证据及有效编译缓存。
 回执`/tmp/connect-source-window-{main-receipt,production-jars,target-cleanup,avd-stop,
 debug-cleanup}.json`。此批是诊断与隔离实验进展，完整性能目标保持开放。
+
+## 最早新计数帧与快照选帧的区别
+
+`_waitPixels()`成功后才读取snapshot PTS。此时选中的帧可能晚于最早已含新计数的
+编码帧，因此前节drawEnd→raw区间本身不是“源端最早新像素延迟”。这不影响原
+输入到snapshot总计时或有限A/B/A收益，但会改变下一步归因，不能继续盲目缩窗。
+
+新增`tool/e2e/video_fixture/capture_first_counter.py`在独立授权目标上复用现有JAR，
+连续保存完整H264包、精确PTS、文件偏移和宿主单调接收时刻。独立fixture记录每次
+真实输入／首次draw，前后各3次`/proc/uptime`往返建立带10ms量化的时钟区间。
+`remux_capture_packets`使用生产MatroskaMuxer保留微秒PTS；FFmpeg离线逐帧解码，
+分析器要求完整的一包一帧、唯一精确PTS、计数连续且无重置，再选择计数第一次
+出现的包。缺帧／重复／失败清理／错误校准不能输出完整报告。
+
+首次实录251包与251帧、8键完整，时钟区间49.991ms。review发现旧工具在清理前
+设置complete，分析器也未检查最终清理状态；修正为measurementComplete和最终
+complete分离，并逐项拒绝reader／server／cleanup失败，各清理步骤独立容错。
+初组原件保留于`/tmp/connect-e2e/first-counter-raw-steady-one/`，最终用修正版本
+重新采集r2，不把初组当最终工具验收。
+
+r2：308个完整媒体包对应308帧，8次计数和17条fixture事件完整、时钟区间47.629ms。
+输入→最早新计数raw包中位156.400ms（110.144–248.309），首次drawEnd→该包条件
+下／上界中位113.375／161.004ms。质量保持1280／60／8Mbps、576×1280实际输出、
+同单项候选1a3d2c82…；双API36／2vCPU／2048MB SwiftShader AVD，主控AVD空闲。
+宿主通过官方ADB forward直接接收，**没有经过产品Rust复用／Flutter解码呈现**。
+因此不能从581ms减去156ms宣称某个模块耗时，也不能当实际产品或无线性能通过；
+后续必须在同一实际产品路径留完整编码序列，才能比较最早raw包与snapshot选中包。
+
+五组新增分析回归及同目录全部17项通过（含已有证据禁止覆盖），Rust示例编译／format／clippy通过。
+r2采集结束13.6秒后才启动clippy；自动清理确认reader退出、server正常exit0、
+远端进程／JAR／fixture及动态forward缺席。原件
+`/tmp/connect-e2e/first-counter-raw-steady-one-r2/`包含完整流／逐包索引、MKV、
+解码日志、逐帧PTS／计数、目标日志及首次计数报告。没有改动或重建任何JAR。
+
+工具提交1fd7590。首次新计数帧59已离线导出目视，VIDEO1与色块正确，图片保存在
+/tmp。没有Flutter或生产Rust路径改动，未重打同源APK；两生产JAR摘要不变。自有
+AVD核名关闭且PID消失，目标进程／文件／fixture／forward缺席，空闲39.98GiB。
+保留小型原始证据与有效缓存，无新增Android大debug副本；
+`/tmp/connect-first-counter-cleanup.json`记录收尾。本轮为归因证据，不是性能修复。
+
+复现需启动专用目标AVD，现有候选路径按实际构建目录替换；每次使用新输出目录：
+
+```sh
+rtk proxy python3 -B tool/e2e/video_fixture/capture_first_counter.py \
+  --adb /home/xiankq/Android/Sdk/platform-tools/adb --target emulator-5556 \
+  --jar /tmp/connect-bounded-input-steady-one-build/interop-scrcpy-server.jar \
+  --fixture /tmp/connect-video-fixture/video-fixture.apk \
+  --out /tmp/connect-e2e/first-counter-replay
+rtk proxy cargo run -p interop-core --example remux_capture_packets -- \
+  /tmp/connect-e2e/first-counter-replay
+rtk proxy python3 -B tool/e2e/video_fixture/analyze_first_counter.py \
+  --capture /tmp/connect-e2e/first-counter-replay --ffmpeg '<宿主FFmpeg可执行文件>'
+```
+
+转封装与解码都在测量结束后进行；工具拒绝覆盖已有MKV。被控端安装的fixture仅为
+独立实验工具，不属于产品。禁止对用户已有同名fixture安装覆盖。
 
 ## 测量范围
 

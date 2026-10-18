@@ -2,6 +2,38 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 本轮：源端最早新计数帧核查（2026-10-18，进行中）
+
+上一轮15f795b／acc96c5／2fee0dd为progress，有源时钟诊断和单项稳定输入有限收益。
+只读复核发现重要归因边界：现有drawEnd→raw关联的是快照选中的新计数帧，未证明
+最早包含新计数的编码帧也同样晚。因此先保持现有候选JAR及质量，连续保存完整
+H264包／PTS／接收时刻，离线逐帧识别最早新计数，再决定是否需要源端追踪补丁。
+暂不重建JAR或继续缩输入窗口。旧双项trace的queue／acquire／release仅作上下文，
+宿主当时已中断，不与新普通Driver作同负载定量比较。目标仍active、性能预算未通过。
+
+已新增宿主raw-drain、生产MatroskaMuxer离线转封装示例及完整帧PTS／像素分析器，
+不改生产协议／播放器／JAR。首次实录251包／251帧、8键17条fixture日志，区间
+49.991ms；review发现早complete假阳性与清理异常中断，已修复最终成功契约和
+独立清理，补失败回归。r2重新实录308包／308帧、8键17日志、时钟区间47.629ms，
+全部唯一PTS及最早新计数关联通过；input→firstRaw中位156.400ms（110.144–
+248.309），drawEnd→firstRaw条件下／上界中位113.375／161.004ms。源端原件
+`/tmp/connect-e2e/first-counter-raw-steady-one-r2/`；未重建JAR（仍1a3d2c82…），
+实际2vCPU／API36／2048MB双AVD、同1280／60／8M动态图案，主控AVD空闲，媒体
+由宿主官方ADB forward直收，不含产品Rust复用／Flutter解码呈现。因此不能与前组
+581ms相减归因，或当产品性能通过；但明确旧快照选帧数据尚不能证明最早源包晚
+300ms。下一步应在实际Rust／Flutter路径保存同一完整帧序列，比较最早包与选中帧。
+五组新分析回归及同目录全部17项通过（含已有证据禁止覆盖）、Rust示例编译／format／clippy通过；review
+复核两项修正后未发现新增确定问题。采集自动确认reader退出、server exit0、远端
+进程／JAR／fixture／独立forward清理。r2测量结束13.6秒后才启动clippy，无编译重叠。
+
+工具代码1fd7590已提交。首个新计数帧59离线导出并目视为VIDEO1／正确色块，图片
+仍在/tmp；未修改Flutter或生产Rust路径，不重打同源APK或重复热重载。两份生产JAR
+摘要未变，目标文件／进程／fixture／forward均缺席，两自有AVD核名关闭且PID消失。
+无新大体积Android构建副本，保留约21MiB原始流／MKV／日志和有效编译缓存，空闲
+39.98GiB；清理回执`/tmp/connect-first-counter-cleanup.json`。原有五项用户文件不动。
+本轮是改变后续归因的实测进展，不是产品性能修复；目标保持active。后续优先同一
+Rust／Flutter路径的最早包和选中帧对照，再决定源端或主控端改动。
+
 ## 本轮：普通Driver源端时钟关联与单项稳定输入（2026-10-18）
 
 上一轮c1ec73e／1aeb17b为progress：补齐首帧同PTS分段，确认软件解码缩短AVD
@@ -19,8 +51,8 @@ session.clock.probe与独立fixture的输入／首次draw日志，补同PTS raw 
 配对、三个round时钟区间有效（宽54.706／71.936／86.219ms），30张窗口计数正确、
 暂停恢复／停止／App与fixture自动清理确认。严格exit1，性能门槛仍未通过。
 目标input→drawStart中位0.463ms、draw callback0.632ms；drawEnd→raw接收完成的
-条件下／上界中位310.819／390.331ms，24个样本下界均≥217.334ms，不能把问题仅
-归于主控decoder。raw接收完成→relay写入中位0.255ms、relay→onVideo98ms、
+条件下／上界中位310.819／390.331ms，24个样本下界均≥217.334ms；后续核查明确这
+只是快照选中帧，不能证明最早新计数包同样晚或唯一归因。raw接收完成→relay写入中位0.255ms、relay→onVideo98ms、
 onVideo→snapshot128.957ms。各段中位不能相加代替同帧全链路，源码PTS兼容只是
 额外条件；负控制到达下界保留，不当负实际延迟。源文件
 `/tmp/connect-e2e/source-clock-bounded/`，分段 `/tmp/connect-source-clock-stages.json`。
