@@ -183,6 +183,7 @@ struct Decoded {
 struct SnapshotMetadata {
     request: u64,
     pts: f64,
+    submitted_us: u64,
     elapsed_us: u64,
     width: i32,
     height: i32,
@@ -220,6 +221,7 @@ struct Request {
     width: i32,
     height: i32,
     submitted: Instant,
+    submitted_us: u64,
 }
 
 #[derive(Default)]
@@ -348,6 +350,7 @@ unsafe extern "C" fn snapshot_callback(
                 state.latest_snapshot = Some(SnapshotMetadata {
                     request: request_id,
                     pts,
+                    submitted_us: request.submitted_us,
                     elapsed_us,
                     width: request.width,
                     height: request.height,
@@ -529,6 +532,7 @@ pub unsafe extern "C" fn trace_snapshot(
                 width,
                 height,
                 submitted: Instant::now(),
+                submitted_us: trace.elapsed_us(),
             },
         );
     }
@@ -647,7 +651,8 @@ pub unsafe extern "C" fn trace_metrics(token: u64, out: *mut u8, capacity: u32) 
         .collect();
     let snapshot = snapshot.map(|frame| {
         serde_json::json!({
-            "requestId": frame.request, "ptsSeconds": frame.pts, "elapsedUs": frame.elapsed_us,
+            "requestId": frame.request, "ptsSeconds": frame.pts,
+            "submittedElapsedUs": frame.submitted_us, "elapsedUs": frame.elapsed_us,
             "width": frame.width, "height": frame.height,
         })
     });
@@ -860,7 +865,9 @@ mod tests {
     #[test]
     fn snapshot_poll_copies_rows_and_retains_matching_timestamp_without_pixels_in_json() {
         let fixture = Fixture::new();
+        let before_submit = fixture.metrics()["nowElapsedUs"].as_u64().unwrap();
         let (request, callback) = fixture.snapshot(1, 2);
+        let after_submit = fixture.metrics()["nowElapsedUs"].as_u64().unwrap();
         let mut pixels = [
             1_u8, 2, 3, 255, 90, 90, 90, 90, 4, 5, 6, 255, 91, 91, 91, 91,
         ];
@@ -888,6 +895,9 @@ mod tests {
         assert_eq!(metrics["snapshot"]["ptsSeconds"], 4.5);
         assert_eq!(metrics["snapshot"]["width"], 1);
         assert_eq!(metrics["snapshot"]["height"], 2);
+        let submitted = metrics["snapshot"]["submittedElapsedUs"].as_u64().unwrap();
+        assert!((before_submit..=after_submit).contains(&submitted));
+        assert!(submitted <= metrics["snapshot"]["elapsedUs"].as_u64().unwrap());
         assert!(
             metrics["nowElapsedUs"].as_u64().unwrap()
                 >= metrics["snapshot"]["elapsedUs"].as_u64().unwrap()

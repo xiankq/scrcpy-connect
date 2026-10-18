@@ -60,6 +60,8 @@ void main() {
         if (traceFrames) 'frameCorrelationComplete': false,
         if (traceClock) 'clockBracketsRequested': true,
         'adbBurstRequested': adbBurst,
+        'binding': 'IntegrationTestWidgetsFlutterBinding',
+        'framePolicy': binding.framePolicy.name,
         'rounds': rounds,
       };
       Future<VideoJson> request(
