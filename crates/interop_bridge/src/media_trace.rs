@@ -259,17 +259,67 @@ fn valid_pts(pts: f64) -> bool {
     pts.is_finite() && (0.0..f64::MAX).contains(&pts)
 }
 
+// A fixed stack buffer keeps formatting fallible and allocation-free inside the
+// C callback. Both integers take at most 20 digits; the NUL is reserved up front.
+#[cfg(any(target_os = "android", test))]
+fn on_video_marker(token: u64, pts: f64) -> Option<[u8; 80]> {
+    use std::io::Write;
+
+    let pts_us = (pts * 1_000_000.0).round();
+    // u64::MAX rounds up to 2^64 as f64, so this upper bound must be exclusive.
+    // Out-of-range PTS still reach JSON; only their system marker is omitted.
+    if !valid_pts(pts) || !pts_us.is_finite() || pts_us >= u64::MAX as f64 {
+        return None;
+    }
+    let mut marker = [0; 80];
+    let mut output = &mut marker[..79];
+    write!(output, "connect.onVideo(t={token}@ts={})", pts_us as u64).ok()?;
+    Some(marker)
+}
+
+#[cfg(target_os = "android")]
+fn mark_on_video(token: u64, pts: f64) {
+    // Android NDK android/trace.h, available since API 23. Keep these symbols and
+    // libandroid entirely off Apple/Windows and other non-Android build paths.
+    #[link(name = "android")]
+    unsafe extern "C" {
+        fn ATrace_isEnabled() -> bool;
+        fn ATrace_beginSection(section_name: *const c_char);
+        fn ATrace_endSection();
+    }
+
+    // SAFETY: this platform API takes no arguments and has no caller contract.
+    if !unsafe { ATrace_isEnabled() } {
+        return;
+    }
+    let Some(marker) = on_video_marker(token, pts) else {
+        return;
+    };
+    // SAFETY: marker is bounded, NUL-terminated ASCII, live through beginSection.
+    // No fallible work separates this synchronous pair on the callback thread.
+    // The slice observes MDK onVideo, not the decoder's actual completion time.
+    unsafe {
+        ATrace_beginSection(marker.as_ptr().cast());
+        ATrace_endSection();
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+#[inline]
+fn mark_on_video(_token: u64, _pts: f64) {}
+
 unsafe extern "C" fn video_callback(
     frame: *mut *mut VideoFrameApi,
     track: c_int,
     opaque: *mut c_void,
 ) -> c_int {
+    let token = opaque as usize as u64;
     let trace = {
         let Ok(registry) = registry().try_lock() else {
             REGISTRY_DROPS.fetch_add(1, Ordering::Relaxed);
             return 0;
         };
-        registry.traces.get(&(opaque as usize as u64)).cloned()
+        registry.traces.get(&token).cloned()
     };
     let Some(trace) = trace else {
         return 0;
@@ -293,6 +343,10 @@ unsafe extern "C" fn video_callback(
     if !valid_pts(pts) || trace.closed.load(Ordering::Acquire) {
         return 0;
     }
+    // PTS is first available here, next to the existing elapsed_us observation.
+    // Use Perfetto's timestamp for system comparisons: elapsed_us has a separate
+    // Rust process-local clock origin. No registry/state lock is held here.
+    mark_on_video(token, pts);
     let Ok(mut state) = trace.state.try_lock() else {
         trace.drops.fetch_add(1, Ordering::Relaxed);
         return 0;
@@ -657,6 +711,7 @@ pub unsafe extern "C" fn trace_metrics(token: u64, out: *mut u8, capacity: u32) 
         })
     });
     let value = serde_json::json!({
+        "traceToken": token,
         "clockOriginUs": trace.start_us,
         "nowElapsedUs": trace.elapsed_us(), "decoded": decoded, "snapshot": snapshot,
         "drops": trace.drops.load(Ordering::Relaxed),
@@ -680,6 +735,49 @@ mod tests {
 
     // Exact loss counts must not contend with unrelated parallel test traces.
     static TEST_SERIAL: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn on_video_marker_rounds_pts_and_uses_the_trace_token() {
+        for (pts, rounded) in [
+            (0.0, 0),
+            (-0.0, 0),
+            (1.2345674, 1_234_567),
+            (1.2345676, 1_234_568),
+        ] {
+            let marker = on_video_marker(42, pts).unwrap();
+            assert_eq!(
+                std::ffi::CStr::from_bytes_until_nul(&marker)
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
+                format!("connect.onVideo(t=42@ts={rounded})"),
+            );
+        }
+    }
+
+    #[test]
+    fn on_video_marker_bounds_both_integers_and_rejects_unrepresentable_pts() {
+        let marker = on_video_marker(u64::MAX, (u64::MAX as f64 - 4096.0) / 1_000_000.0).unwrap();
+        let name = std::ffi::CStr::from_bytes_until_nul(&marker)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(name.starts_with("connect.onVideo(t=18446744073709551615@ts="));
+        assert!(name.ends_with(')'));
+        assert!(name.len() < 127);
+        assert!(name.is_ascii());
+        assert!(!name.contains(['|', '\n']));
+        for pts in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            -1.0,
+            f64::MAX,
+            u64::MAX as f64 / 1_000_000.0,
+        ] {
+            assert!(on_video_marker(42, pts).is_none(), "{pts}");
+        }
+    }
 
     #[derive(Default)]
     struct FakePlayer {
@@ -809,6 +907,7 @@ mod tests {
             emit(callback, &mut frame, 2);
         }
         let metrics = fixture.metrics();
+        assert_eq!(metrics["traceToken"], fixture.token);
         assert_eq!(metrics["decoded"].as_array().unwrap().len(), 256);
         assert_eq!(metrics["drops"], 44);
         assert_eq!(metrics["decoded"][255]["ptsSeconds"], 1.25);
