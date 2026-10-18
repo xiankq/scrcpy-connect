@@ -1,9 +1,16 @@
 """Guard correlation against false latency attribution across sessions/clocks."""
 
 import copy
+from contextlib import redirect_stdout
+import io
+import json
+from pathlib import Path
+import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 
-from analyze_decoder_trace import correlate
+from analyze_decoder_trace import correlate, main
 
 
 def event(name, timestamp, pid=42):
@@ -85,6 +92,21 @@ class DecoderCorrelationTest(unittest.TestCase):
     def test_marker_before_work_done_cannot_produce_negative_latency(self):
         self.slices[2]["ts"] = str(90_001_000_000)
         self.assertEqual(self.sample()["markerUnmatched"], "marker_precedes_work_done")
+
+    def test_cli_rejects_empty_results_from_a_failed_benchmark(self):
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark = Path(directory) / "benchmark.json"
+            benchmark.write_text(json.dumps({"rounds": []}))
+            args = ["analyze_decoder_trace.py", "--trace-processor", "unused",
+                    "--trace", "unused", "--benchmark", str(benchmark),
+                    "--pid", "42", "--output", f"{directory}/output.json",
+                    "--require-markers"]
+            with patch.object(sys, "argv", args), patch(
+                "analyze_decoder_trace.read_slices", return_value=[]
+            ), redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as result:
+                    main()
+                self.assertEqual(result.exception.code, 1)
 
 
 if __name__ == "__main__":

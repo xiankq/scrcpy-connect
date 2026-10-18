@@ -71,10 +71,11 @@ def correlate(slices, benchmark, process_id):
         pairs.append({"pid": pid, "codec": codec, "ptsUs": pts,
                       "queueNs": queued[0]["ts"], "doneNs": done[0]["ts"]})
 
-    requested_pts = [s["relayFrame"]["ptsUs"] for r in benchmark["rounds"]
+    rounds = benchmark.get("rounds", [])
+    requested_pts = [s["relayFrame"]["ptsUs"] for r in rounds
                      for s in r["inputs"]]
     inputs = []
-    for round_ in benchmark["rounds"]:
+    for round_ in rounds:
         for index, sample in enumerate(round_["inputs"]):
             frame = sample["relayFrame"]
             pts = frame["ptsUs"]
@@ -163,6 +164,8 @@ def main():
         output.write("\n")
     print(json.dumps({k: v for k, v in report.items()
                       if k not in ("inputs", "rejectedCodecGroups")}, indent=2))
+    if not report["inputs"]:
+        parser.exit(1, "No benchmark input observations; see output.\n")
     if args.require_markers and any("doneToOnVideoMs" not in r for r in report["inputs"]):
         parser.exit(1, "Incomplete or ambiguous system marker coverage; see output.\n")
 
