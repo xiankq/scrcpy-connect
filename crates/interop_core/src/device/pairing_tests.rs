@@ -383,7 +383,7 @@ async fn pairing_discovery_updates_and_goodbye_reject_stale_tls_publication() {
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
     let guid = format!("adb-pair-epoch-{}", uuid::Uuid::new_v4());
-    let mut device = blank_device("192.0.2.77".into(), 0, "tls");
+    let mut device = blank_device("192.0.2.77".into(), 0, TransportKind::Tls);
     device.guid = Some(guid.clone());
     let id = device.id.clone();
     runtime.store.write().await.devices.push(device);
@@ -462,7 +462,7 @@ async fn pairing_attempt_aliases_cannot_collide_with_device_operations() {
     let device = blank_device(
         "127.0.0.1".into(),
         listener.local_addr().unwrap().port(),
-        "tls",
+        TransportKind::Tls,
     );
     let device_id = device.id.clone();
     runtime.store.write().await.devices.push(device);

@@ -104,7 +104,7 @@ class SettingsPage extends HookConsumerWidget {
         TextButton(
           onPressed: () async {
             try {
-              final info = await controller.request('system.info');
+              final info = await controller.execute(InteropCommand.systemInfo);
               if (context.mounted) {
                 showAboutDialog(
                   context: context,

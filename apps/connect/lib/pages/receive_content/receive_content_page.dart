@@ -217,9 +217,10 @@ class ReceiveContentPage extends HookConsumerWidget {
                           : () async {
                               busy.value = true;
                               try {
-                                await controller.request('media.cache.retain', {
-                                  'localPath': localPath,
-                                });
+                                await controller.execute(
+                                  InteropCommand.mediaCacheRetain,
+                                  {'localPath': localPath},
+                                );
                                 final result = await SharePlus.instance.share(
                                   ShareParams(files: [XFile(localPath)]),
                                 );

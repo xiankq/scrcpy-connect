@@ -45,7 +45,10 @@ class DocumentOperation extends ChangeNotifier {
     refreshing = true;
     notifyListeners();
     try {
-      final response = await controller.request('delivery.get', exportSource!);
+      final response = await controller.execute(
+        InteropCommand.deliveryGet,
+        exportSource!,
+      );
       if (disposed || generation != _readGeneration) return;
       final record = response['record'];
       if (record is Map<Object?, Object?>) {
@@ -138,7 +141,9 @@ class DocumentOperation extends ChangeNotifier {
     cancelling = true;
     notifyListeners();
     try {
-      await controller.request('documents.cancel', {'operationId': id});
+      await controller.execute(InteropCommand.documentsCancel, {
+        'operationId': id,
+      });
     } catch (failure) {
       if (!disposed) {
         error = '$failure';
@@ -155,7 +160,9 @@ class DocumentOperation extends ChangeNotifier {
     final id = operationId;
     operationId = null;
     if (id != null) {
-      controller.request('documents.cancel', {'operationId': id}).ignore();
+      controller.execute(InteropCommand.documentsCancel, {
+        'operationId': id,
+      }).ignore();
     }
     super.dispose();
   }

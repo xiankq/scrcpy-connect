@@ -78,6 +78,16 @@ _fvp_resolve_deps_options("https://default.example.invalid/" RESOLVED_URL RESOLV
 assert_equal("${RESOLVED_URL}" "https://default.example.invalid" "Non-HTTP environment URL behavior changed")
 set(ENV{FVP_DEPS_URL} "")
 
+# Normal builds always resolve to a release digest, even through a mirror.
+_fvp_resolve_sdk_pin("mdk-sdk-android.7z" RESOLVED_URL RESOLVED_SHA256)
+assert_equal("${RESOLVED_URL}" "https://github.com/wang-bin/mdk-sdk/releases/download/v0.39.0" "Default release URL drifted")
+assert_equal("${RESOLVED_SHA256}" "${FVP_MDK_SHA256_mdk_sdk_android_7z}" "Default Android release digest drifted")
+set(FVP_DEPS_URL "https://mirror.example.invalid/")
+_fvp_resolve_sdk_pin("mdk-sdk-windows-x64-vs2026.7z" RESOLVED_URL RESOLVED_SHA256)
+assert_equal("${RESOLVED_URL}" "https://mirror.example.invalid" "Release mirrors stopped working")
+assert_equal("${RESOLVED_SHA256}" "${FVP_MDK_SHA256_mdk_sdk_windows_x64_vs2026_7z}" "A mirror cleared the Windows release digest")
+set(FVP_DEPS_URL "")
+
 # A valid pin downloads, verifies, and stamps the extracted SDK.
 set(PINNED_ROOT "${TEST_ROOT}/pinned cache")
 set(PINNED_ARCHIVE "${PINNED_ROOT}/mdk-sdk.tar")

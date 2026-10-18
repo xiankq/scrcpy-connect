@@ -112,8 +112,8 @@ class MediaCachePage extends HookWidget {
                         }
                         busy.value = true;
                         try {
-                          final result = await controller.request(
-                            'media.cache.clear',
+                          final result = await controller.execute(
+                            InteropCommand.mediaCacheClear,
                           );
                           if (!context.mounted) return;
                           final deleted =

@@ -2,6 +2,17 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 架构重构批次（2026-10-18）
+
+按目录与架构审计完成共享命令契约、连接/活动 owner、远控呈现状态、启动失败回收、
+TLS 元数据恢复及结构化授权错误；补 FRB/companion 新鲜度、MDK 固定摘要和四端宿主
+构建作业。当前职责与生成入口见[架构说明](../../docs/implementation/architecture.md)。
+
+最终 `tool/check.sh --android` 实际退出 0：Rust 296 passed / 68 ignored，应用 299、
+桥接 130、设计系统 3 项通过，严格分析/Clippy/生成门禁及三 ABI APK 签名、16KB ZIP
+对齐、包内 ELF/manifest/原生所有权检查通过。此批未新增物理设备/其他宿主整包证据，
+未关闭原功能、性能、OEM 与生产密码验收缺口；完整目标仍 active。
+
 ## 本轮：辅助JAR随远端进程退出回收（2026-10-18）
 
 实现提交6fb5c33。真实companion／实际Client.close／独立ADB检查连接，在原实现

@@ -99,11 +99,11 @@ class IncomingSharePage extends HookConsumerWidget {
       error.value = null;
       try {
         if (needsPush) {
-          await controller.request('files.list', {
+          await controller.execute(InteropCommand.filesList, {
             'deviceId': target,
             'path': directory.isEmpty ? '/' : directory,
           });
-          await controller.request('files.push', {
+          await controller.execute(InteropCommand.filesPush, {
             'shareId': share['shareId'],
             'deviceId': target,
             'items': [
@@ -119,7 +119,7 @@ class IncomingSharePage extends HookConsumerWidget {
           pushed.value = true;
         }
         if (needsCopy) {
-          final result = await controller.request('clipboard.set', {
+          final result = await controller.execute(InteropCommand.clipboardSet, {
             'deviceId': target,
             'text': text,
           });

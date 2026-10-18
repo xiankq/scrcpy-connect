@@ -2,7 +2,7 @@
 //! never serve as device identifiers; discovery changes endpoints, not trust.
 use crate::{
     CoreError, CoreResult, Runtime,
-    model::{Device, now, required},
+    model::{Device, TransportKind, now, required},
 };
 use interop_adb::{
     Client, ConnectOptions, OperationOptions, TlsPolicy,
@@ -178,14 +178,6 @@ fn discovery_changed() -> CoreError {
 
 fn authorization_failed(error: &CoreError) -> bool {
     error.code == "authorization_required"
-        || [
-            "CertificateRequired",
-            "BadCertificate",
-            "CertificateUnknown",
-            "UnknownCA",
-        ]
-        .iter()
-        .any(|reason| error.message.contains(reason))
 }
 
 /// Remove admission first, but keep the exact old transport alive while its
@@ -339,7 +331,7 @@ fn address_of(address: SocketAddr) -> String {
         SocketAddr::V6(v6) => v6.ip().to_string(),
     }
 }
-fn blank_device(address: String, port: u16, transport: &str) -> Device {
+fn blank_device(address: String, port: u16, transport: TransportKind) -> Device {
     Device {
         id: uuid::Uuid::new_v4().to_string(),
         name: "Android 设备".into(),
@@ -347,7 +339,7 @@ fn blank_device(address: String, port: u16, transport: &str) -> Device {
         port,
         guid: None,
         serial: None,
-        transport: transport.into(),
+        transport,
         status: "offline".into(),
         model: None,
         android_version: None,
@@ -460,7 +452,7 @@ impl Runtime {
         let transport = match params.get("transport") {
             None => None,
             Some(Value::String(kind)) if matches!(kind.as_str(), "tls" | "tcp") => {
-                Some(kind.as_str())
+                TransportKind::parse(kind)
             }
             Some(_) => {
                 return Err(CoreError::new(
@@ -489,16 +481,17 @@ impl Runtime {
                 // Endpoint edits never weaken a known modern wireless identity.
                 // Legacy callers may omit transport, so retain the old record's
                 // policy rather than reclassifying it from its current port.
-                existing.transport = if existing.guid.is_some() || existing.transport == "tls" {
-                    "tls"
+                existing.transport = if existing.guid.is_some()
+                    || matches!(existing.transport, TransportKind::Tls)
+                {
+                    TransportKind::Tls
                 } else {
-                    transport.unwrap_or("tcp")
-                }
-                .into();
+                    transport.unwrap_or(TransportKind::Tcp)
+                };
                 existing.reason = None;
                 existing.clone()
             } else {
-                let record = blank_device(address, port, transport.unwrap_or("tcp"));
+                let record = blank_device(address, port, transport.unwrap_or(TransportKind::Tcp));
                 store.devices.push(record.clone());
                 record
             }
@@ -648,7 +641,7 @@ impl Runtime {
                     "自动重连已取消或已有连接正在处理。",
                 ));
             }
-            if record.transport != "usb"
+            if !record.transport.is_usb()
                 && record.port == 0
                 && discovered
                     .as_ref()
@@ -669,10 +662,10 @@ impl Runtime {
         let mut attempt = async {
             let mut options = self.connect_options(token.clone()).await?;
             options.request_authorization = request_authorization;
-            if device.transport != "usb" && (device.transport == "tls" || device.guid.is_some()) {
+            if device.transport.requires_tls(device.guid.as_deref()) {
                 options.tls_policy = TlsPolicy::Required;
             }
-            let (client, connected_endpoint) = if device.transport == "usb" {
+            let (client, connected_endpoint) = if device.transport.is_usb() {
                 (self.connect_usb_record(&device, options).await?, None)
             } else if let Some((discovered, endpoints)) = discovered.as_ref().and_then(|answer| {
                 answer
@@ -774,25 +767,8 @@ impl Runtime {
         }
         attempt
     }
-    /// Serialize only one device's publication and teardown. The map lock is
-    /// released before waiting. The boolean retains interrupted cleanup until
-    /// another owner completes it; idle completed entries are pruned.
-    async fn connection_transition(&self, id: &str) -> tokio::sync::OwnedMutexGuard<bool> {
-        let gate = {
-            let mut gates = self.connection_transitions.lock().await;
-            gates.retain(|_, gate| {
-                Arc::strong_count(gate) > 1
-                    || gate
-                        .try_lock()
-                        .map_or(true, |cleanup_pending| *cleanup_pending)
-            });
-            gates.entry(id.into()).or_default().clone()
-        };
-        gate.lock_owned().await
-    }
-
     async fn retire_closed_connection(&self, id: &str) -> CoreResult<()> {
-        let mut transition = self.connection_transition(id).await;
+        let mut transition = self.connections.transition(id).await;
         self.retire_closed_connection_locked(id, &mut transition)
             .await
     }
@@ -837,7 +813,7 @@ impl Runtime {
     ) -> CoreResult<Value> {
         // A connected record admits new video, audio and helper work. Finish
         // the old connection's device-wide cleanup before publishing it.
-        let mut transition = self.connection_transition(id).await;
+        let mut transition = self.connections.transition(id).await;
         self.retire_closed_connection_locked(id, &mut transition)
             .await?;
         let _pending = self.device_operations.lock().await;
@@ -901,7 +877,7 @@ impl Runtime {
             if let Some(endpoint) = connected_endpoint {
                 record.address = address_of(endpoint);
                 record.port = endpoint.port();
-                record.transport = "tls".into();
+                record.transport = TransportKind::Tls;
             }
             record.battery = info.battery;
             record.status = "connected".into();
@@ -926,7 +902,7 @@ impl Runtime {
         Ok(json!({"connected":true,"deviceId":id,"device":device,"adbBurstActive":burst_active}))
     }
     pub(crate) async fn disconnect_device(&self, id: &str, forget: bool) -> CoreResult<Value> {
-        let mut cleanup_pending = self.connection_transition(id).await;
+        let mut cleanup_pending = self.connections.transition(id).await;
         self.device(id).await?;
         let _detached = DetachedConnection({
             let mut pending = self.device_operations.lock().await;
@@ -1102,7 +1078,9 @@ impl Runtime {
             let record = if let Some(index) = index {
                 &mut store.devices[index]
             } else {
-                store.devices.push(blank_device(address.clone(), 0, "tls"));
+                store
+                    .devices
+                    .push(blank_device(address.clone(), 0, TransportKind::Tls));
                 store.devices.last_mut().expect("pushed device")
             };
             if record.guid.as_ref().is_some_and(|known| known != &guid) {
@@ -1113,7 +1091,7 @@ impl Runtime {
             }
             record.guid = Some(guid.clone());
             record.address = address;
-            record.transport = "tls".into();
+            record.transport = TransportKind::Tls;
             record.status = "offline".into();
             record.auto_reconnect = false;
             record.reason = Some("配对已完成，正在发现独立的连接端口。".into());
@@ -1560,7 +1538,9 @@ impl Runtime {
             let record = if let Some(index) = index {
                 &mut store.devices[index]
             } else {
-                store.devices.push(blank_device(String::new(), 0, "usb"));
+                store
+                    .devices
+                    .push(blank_device(String::new(), 0, TransportKind::Usb));
                 store.devices.last_mut().expect("pushed record")
             };
             if let (Some(known), Some(actual)) = (&record.serial, &info.serial)
@@ -1572,7 +1552,7 @@ impl Runtime {
                     "USB 设备与选定记录的序列号不同。",
                 ));
             }
-            record.transport = "usb".into();
+            record.transport = TransportKind::Usb;
             record.id.clone()
         };
         self.attach_client(&id, client, info, token, None, None)
@@ -1885,7 +1865,7 @@ impl Runtime {
     pub(crate) async fn diagnose(&self, id: &str) -> CoreResult<Value> {
         let device = self.device(id).await?;
         let client = self.client(id).await.ok();
-        let tcp_reachable = if device.transport != "usb" && device.port != 0 {
+        let tcp_reachable = if !device.transport.is_usb() && device.port != 0 {
             Some(
                 tokio::time::timeout(
                     Duration::from_secs(3),
@@ -1911,6 +1891,16 @@ impl Runtime {
             "notes":["配对端口与连接端口不同。","mDNS 不可用时仍可手动填写可达的连接地址。","网络可达、已配对与设备连接是独立状态。"]}),
         )
     }
+    pub(crate) async fn schedule_connection_cleanup(self: &Arc<Self>) {
+        for id in self.connections.pending_retirements().await {
+            let owner = self.clone();
+            self.connections
+                .schedule_retirement(id.clone(), async move {
+                    let _ = owner.retire_closed_connection(&id).await;
+                });
+        }
+    }
+
     pub(crate) fn spawn_connection_monitor(self: &Arc<Self>) {
         let weak = Arc::downgrade(self);
         tokio::spawn(async move {
@@ -1933,41 +1923,14 @@ impl Runtime {
                         backoff.remove(&record.id);
                     }
                 }
-                let mut closed = runtime
-                    .connections
-                    .lock()
-                    .await
-                    .iter()
-                    .filter(|(_, client)| client.is_closed())
-                    .map(|(id, _)| id.clone())
-                    .collect::<Vec<_>>();
-                // A caller may be cancelled after removing its Client but
-                // before cleanup completes. Resume such orphaned work even
-                // when no new connection attempt arrives.
-                closed.extend(
-                    runtime
-                        .connection_transitions
-                        .lock()
-                        .await
-                        .iter()
-                        .filter(|(_, gate)| {
-                            Arc::strong_count(gate) == 1
-                                && gate.try_lock().is_ok_and(|pending| *pending)
-                        })
-                        .map(|(id, _)| id.clone()),
-                );
-                closed.sort();
-                closed.dedup();
-                for id in closed {
-                    let _ = runtime.retire_closed_connection(&id).await;
-                }
+                runtime.schedule_connection_cleanup().await;
                 let trusted = runtime
                     .store
                     .read()
                     .await
                     .devices
                     .iter()
-                    .filter(|device| device.transport != "usb")
+                    .filter(|device| !device.transport.is_usb())
                     .filter_map(|device| device.guid.clone())
                     .filter(|guid| !guid.is_empty())
                     .collect();
@@ -1992,7 +1955,7 @@ impl Runtime {
                         };
                         for record in &runtime.store.read().await.devices {
                             if record.guid.as_deref() == Some(changed.as_str())
-                                && record.transport != "usb"
+                                && !record.transport.is_usb()
                             {
                                 backoff.remove(&record.id);
                             }
@@ -2009,7 +1972,12 @@ impl Runtime {
                     .cloned()
                     .collect::<Vec<_>>();
                 for device in records {
-                    if reconnecting.contains_key(&device.id) {
+                    // Retirement publishes the offline projection after all
+                    // old activities have stopped. A reconnect must not write
+                    // connecting/connected over that unpublished transition.
+                    if runtime.connections.is_retiring(&device.id)
+                        || reconnecting.contains_key(&device.id)
+                    {
                         continue;
                     }
                     if backoff
@@ -2018,7 +1986,7 @@ impl Runtime {
                     {
                         continue;
                     }
-                    let discovered = if device.transport != "usb" {
+                    let discovered = if !device.transport.is_usb() {
                         if let Some(guid) = &device.guid {
                             let answers = services.read().await;
                             Some(DiscoveredAttempt {
@@ -2040,7 +2008,7 @@ impl Runtime {
                     {
                         continue;
                     }
-                    if device.transport != "usb"
+                    if !device.transport.is_usb()
                         && device.port == 0
                         && discovered
                             .as_ref()

@@ -46,7 +46,9 @@ class ConnectionFormPage extends HookWidget {
       () => () {
         final attempt = activeAttempt.value;
         if (attempt != null) {
-          controller.request('devices.cancel', {'attemptId': attempt}).ignore();
+          controller.execute(InteropCommand.devicesCancel, {
+            'attemptId': attempt,
+          }).ignore();
         }
       },
       const [],
@@ -98,7 +100,7 @@ class ConnectionFormPage extends HookWidget {
               : response;
           final id = device['id'] ?? response['deviceId'];
           if (id != null && device['status'] != 'connected') {
-            await controller.request('devices.connect', {
+            await controller.execute(InteropCommand.devicesConnect, {
               'deviceId': id,
               'attemptId': attempt,
             });

@@ -1,0 +1,19 @@
+{
+  "artifact": {
+    "sha256": "4fbb0f076dfd31472d82d48f0257accae0d1fc20c6e7d0b0fd6ed4ad53531a19",
+    "size": 54367
+  },
+  "sources": {
+    "build.py": "dd7c98569925dfdff3640d556605b50ce68354bf3fa5d81ee3e90d707c2c32a1",
+    "build.sh": "4d8a5f6a1d3025cbc47a52cd3ed0044f9b1f65909bc9b7e507585beba7662aa2",
+    "src/com/interop/companion/Main.java": "d6a5b4ef6dfd97e7d0bc93fec88080937ea313b325ebd7c1ecd5c3d8a82a4564",
+    "src/com/interop/companion/MediaJobs.java": "d4f89893e5b2aa042b9c9984cb27262d17acffb41f3df5e475698fc406a0d66f",
+    "src/com/interop/companion/Thumbnail.java": "c620a77b3200f4f7f98332825652091b82d3d6565ef3e8349ce4d2e6998462e6"
+  },
+  "tools": {
+    "androidPlatform": "36",
+    "buildTools": "36.0.0",
+    "javaRelease": 8,
+    "minApi": 21
+  }
+}

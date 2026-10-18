@@ -238,7 +238,7 @@ impl Runtime {
             );
             protected.push(writer.path);
         }
-        let transfers = self.transfers.lock().await;
+        let transfers = self.activities.transfers.lock().await;
         // Protect the selected directory as a tree while any descendant is
         // active, even if the root's mkdir task has already completed.
         for task in transfers
@@ -395,7 +395,7 @@ impl Runtime {
             }
         }
         if !deleted_paths.is_empty() {
-            let mut tasks = self.transfers.lock().await;
+            let mut tasks = self.activities.transfers.lock().await;
             let mut changed = false;
             for task in tasks
                 .values_mut()
@@ -499,7 +499,7 @@ impl Runtime {
                 Ok(json!({"leaseId":id,"released":released}))
             }
             "media.cache.acquire" => {
-                let transfers = self.transfers.lock().await;
+                let transfers = self.activities.transfers.lock().await;
                 let task = transfers
                     .get(required(params, "transferId")?)
                     .ok_or_else(|| CoreError::new("not_found", "传输任务已不存在。"))?;

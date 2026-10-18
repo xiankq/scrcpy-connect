@@ -19,18 +19,14 @@ pub struct Runtime {
     pub(crate) root: PathBuf,
     pub(crate) identity: Identity,
     pub(crate) store: RwLock<Store>,
-    pub(crate) connections: Mutex<HashMap<String, Client>>,
-    pub(crate) connection_transitions: Mutex<HashMap<String, Arc<Mutex<bool>>>>,
+    pub(crate) connections: crate::connections::ConnectionOwner,
     pub(crate) encoder_catalog: crate::encoder_catalog::EncoderCatalog,
     pub(crate) events: crate::events::EventBus,
     pub(crate) persistence: Mutex<()>,
-    pub(crate) sessions: Mutex<HashMap<String, crate::scrcpy::Session>>,
-    pub(crate) resource_admission: crate::resource::ResourceAdmission,
-    pub(crate) audio_sources: Mutex<HashMap<String, crate::audio::AudioSource>>,
+    pub(crate) activities: crate::activities::ActivityOwner,
     pub(crate) companions: Mutex<HashMap<String, Arc<crate::companion::Companion>>>,
     pub(crate) observations: Mutex<HashMap<String, crate::observation::Observation>>,
     pub(crate) observation_wakeup: Arc<tokio::sync::Notify>,
-    pub(crate) transfers: Mutex<HashMap<String, crate::files::Transfer>>,
     pub(crate) searches: crate::file_search::Searches,
     pub(crate) gallery_scans: crate::gallery_index::GalleryScans,
     pub(crate) sharing: Mutex<Option<Arc<crate::sharing::ImportManager>>>,
@@ -112,18 +108,14 @@ impl Runtime {
             root,
             identity,
             store: RwLock::new(store),
-            connections: Mutex::new(HashMap::new()),
-            connection_transitions: Mutex::new(HashMap::new()),
+            connections: crate::connections::ConnectionOwner::default(),
             encoder_catalog: crate::encoder_catalog::EncoderCatalog::default(),
             events,
             persistence: Mutex::new(()),
-            sessions: Mutex::new(HashMap::new()),
-            resource_admission: crate::resource::ResourceAdmission::default(),
-            audio_sources: Mutex::new(HashMap::new()),
+            activities: crate::activities::ActivityOwner::default(),
             companions: Mutex::new(HashMap::new()),
             observations: Mutex::new(HashMap::new()),
             observation_wakeup: Arc::new(tokio::sync::Notify::new()),
-            transfers: Mutex::new(HashMap::new()),
             searches: crate::file_search::Searches::default(),
             gallery_scans: crate::gallery_index::GalleryScans::default(),
             sharing: Mutex::new(None),
@@ -186,36 +178,9 @@ impl Runtime {
     }
     pub(crate) async fn client(&self, id: &str) -> CoreResult<Client> {
         self.connections
-            .lock()
+            .client(id)
             .await
-            .get(id)
-            .filter(|c| !c.is_closed())
-            .cloned()
             .ok_or_else(|| CoreError::new("disconnected", "设备尚未连接，请先恢复连接。"))
-    }
-
-    pub(crate) async fn stop_device_activities(&self, id: &str) -> CoreResult<()> {
-        self.searches.cancel_device(id);
-        self.gallery_scans.cancel_device(id);
-        self.observation_connection_changed(id).await;
-        for transfer in self
-            .transfers
-            .lock()
-            .await
-            .values_mut()
-            .filter(|t| t.device_id == id)
-        {
-            if matches!(
-                transfer.status.as_str(),
-                "queued" | "running" | "finalizing"
-            ) {
-                transfer.cancellation.cancel();
-            }
-        }
-        self.stop_device_sessions(id).await;
-        self.stop_device_audio(id).await;
-        self.stop_device_companion(id).await;
-        Ok(())
     }
 
     pub async fn invoke(self: &Arc<Self>, command: &str, params: Value) -> CoreResult<Value> {
@@ -270,9 +235,10 @@ impl Runtime {
                             .flatten()
                             .filter_map(|item| item["source"].as_str())
                             .collect();
-                        let published = self.transfers.lock().await.values().any(|task| {
-                            task.direction == "push" && sources.contains(&task.source.as_str())
-                        });
+                        let published =
+                            self.activities.transfers.lock().await.values().any(|task| {
+                                task.direction == "push" && sources.contains(&task.source.as_str())
+                            });
                         Err((error, !published))
                     }
                 }

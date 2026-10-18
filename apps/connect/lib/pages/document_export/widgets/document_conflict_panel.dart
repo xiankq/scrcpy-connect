@@ -64,8 +64,8 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     final revision = ++_revision;
     final owner = widget.operationId;
     try {
-      final response = await widget.controller.request(
-        'documents.conflict.get',
+      final response = await widget.controller.execute(
+        InteropCommand.documentsConflictGet,
         {'operationId': owner},
       );
       if (!mounted || revision != _revision || owner != widget.operationId) {
@@ -103,8 +103,8 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     final conflictId = value(pending, 'conflictId');
     setState(() => _resolving = conflictId);
     try {
-      final response = await widget.controller.request(
-        'documents.conflict.resolve',
+      final response = await widget.controller.execute(
+        InteropCommand.documentsConflictResolve,
         {
           'operationId': owner,
           'conflictId': conflictId,
@@ -142,7 +142,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     _events = null;
     // Restored pending saves also need a page-exit cancellation owner. The
     // shared command is idempotent and cannot cancel a replacement operation.
-    owner.controller.request('documents.cancel', {
+    owner.controller.execute(InteropCommand.documentsCancel, {
       'operationId': owner.operationId,
     }).ignore();
   }

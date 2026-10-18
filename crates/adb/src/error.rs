@@ -3,7 +3,7 @@ use std::io;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("ADB I/O: {0}")]
-    Io(#[from] io::Error),
+    Io(#[source] io::Error),
     #[error("invalid ADB protocol: {0}")]
     Protocol(String),
     #[error("invalid argument: {0}")]
@@ -31,6 +31,30 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+// rustls exposes peer alerts as the source of an io::Error, both during the
+// TLS handshake and on the first encrypted ADB read. Preserve their meaning
+// here so consumers never depend on a provider's human-readable error text.
+impl From<io::Error> for Error {
+    fn from(error: io::Error) -> Self {
+        if matches!(
+            error
+                .get_ref()
+                .and_then(|source| source.downcast_ref::<rustls::Error>()),
+            Some(rustls::Error::AlertReceived(
+                rustls::AlertDescription::CertificateRequired
+                    | rustls::AlertDescription::BadCertificate
+                    | rustls::AlertDescription::CertificateUnknown
+                    | rustls::AlertDescription::UnknownCA
+                    | rustls::AlertDescription::AccessDenied
+            ))
+        ) {
+            Self::AuthorizationRequired
+        } else {
+            Self::Io(error)
+        }
+    }
+}
 
 pub(crate) async fn bounded<T>(
     timeout: std::time::Duration,

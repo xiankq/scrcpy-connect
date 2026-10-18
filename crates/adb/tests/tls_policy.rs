@@ -21,6 +21,58 @@ fn configured_tls() -> (Identity, TlsConfig) {
         .clone()
 }
 
+#[tokio::test]
+async fn tls_certificate_rejections_are_structured_authorization_errors() {
+    use tokio::io::AsyncWriteExt;
+    // Real TLS records, independent of rustls' Display text. adbd may reject
+    // the client's certificate before an encrypted ADB CNXN is received.
+    // HandshakeFailure (40) is a TLS failure, not an authorization decision.
+    for (alert, authorization) in [
+        (42, true),
+        (46, true),
+        (48, true),
+        (49, true),
+        (116, true),
+        (40, false),
+    ] {
+        let (identity, tls) = configured_tls();
+        let (transport, mut peer) = tokio::io::duplex(16384);
+        let server = tokio::spawn(async move {
+            assert_eq!(
+                Frame::read(&mut peer, 4096, false).await.unwrap().command,
+                protocol::CNXN
+            );
+            Frame::new(protocol::STLS, 0x0100_0000, 0, Vec::new())
+                .write(&mut peer)
+                .await
+                .unwrap();
+            assert_eq!(
+                Frame::read(&mut peer, 4096, false).await.unwrap().command,
+                protocol::STLS
+            );
+            peer.write_all(&[21, 3, 3, 0, 2, 2, alert]).await.unwrap();
+            let _ = peer.read(&mut [0; 4096]).await;
+        });
+        let result = Client::connect_transport(
+            transport,
+            ConnectOptions {
+                identity: Some(identity),
+                tls: Some(tls),
+                tls_policy: TlsPolicy::Required,
+                ..Default::default()
+            },
+        )
+        .await;
+        assert_eq!(
+            matches!(result, Err(Error::AuthorizationRequired)),
+            authorization,
+            "alert {alert}: {:?}",
+            result.err()
+        );
+        server.await.unwrap();
+    }
+}
+
 async fn rejects_plaintext(response: Frame) {
     let (identity, tls) = configured_tls();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

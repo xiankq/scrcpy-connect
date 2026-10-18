@@ -53,7 +53,7 @@ class ThumbnailQueue {
     for (var attempt = 0; attempt < 3 && !lease._released; attempt++) {
       try {
         lease._operationId = _operationId();
-        final result = await controller.request('media.thumbnail', {
+        final result = await controller.execute(InteropCommand.mediaThumbnail, {
           'deviceId': deviceId,
           'path': lease.path,
           'operationId': lease._operationId,
@@ -91,7 +91,7 @@ class ThumbnailQueue {
     if (_active == lease && lease._operationId != null) {
       unawaited(
         Future.sync(
-          () => controller.request('media.thumbnail.cancel', {
+          () => controller.execute(InteropCommand.mediaThumbnailCancel, {
             'deviceId': deviceId,
             'operationId': lease._operationId,
           }),

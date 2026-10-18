@@ -55,10 +55,10 @@ class BackgroundPage extends HookConsumerWidget {
                     changing.value = true;
                     try {
                       await controller.updateSetting('backgroundKeepAlive', v);
-                      await controller.request('background.request', {
-                        'enabled': v,
-                        'askNotificationPermission': v,
-                      });
+                      await controller.execute(
+                        InteropCommand.backgroundRequest,
+                        {'enabled': v, 'askNotificationPermission': v},
+                      );
                     } catch (e) {
                       if (context.mounted) feedback(context, '$e');
                     } finally {

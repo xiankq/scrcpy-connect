@@ -1,5 +1,10 @@
 # 实施与真实验收记录
 
+> 当前结构见[架构说明](architecture.md)。本文件包含已被替代的实验与后端路径：
+> 例如下文历史 `servers/scrcpy/build.py` 与 cooperative 暂停记录，不适用于当前
+> 官方 scrcpy JAR 路径。当前来源与暂停语义以 `servers/vendor/README.md` 为准；
+> 历史通过不自动成为当前提交通过。
+
 目标入口为 [.scratch/interop/goal.md](../../.scratch/interop/goal.md)。2026-10-17的[完整重新核查](../../.scratch/interop/completion-reassessment.md)逐项纠正产品断链：本文件的历史实验通过不表示对应整个用户流程完成。下列结果区分协议单测、真实被控 adbd 和 Android 主控界面；未列通过的能力不推定已完成。下列历史验收保留当时的后端和测试名；当前共享媒体结果以最新迁移小节为准，旧AudioTrack/自写MediaCodec证据不能冒充新后端结果。
 
 ## 当前环境

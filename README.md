@@ -13,7 +13,11 @@
 | `packages/interop_bridge` | Dart／Rust 边界、媒体与系统能力适配 |
 | `crates/adb` | 独立 Rust ADB 主机协议、配对、TLS、USB、shell、sync 等服务 |
 | `crates/interop_core` | 设备、会话、传输及免安装协同活动 |
+| `crates/interop_bridge` | Rust FRB 入口、共享命令校验与有界事件观察者 |
+| `crates/android_helper` | 独立构建的 Android 原子文件操作助手源码 |
+| `protocol` | Dart／Rust 命令、字段形状与状态核验策略的单一来源 |
 | `servers` | 固定版本 scrcpy JAR、临时协同 JAR 与文件原子操作助手 |
+| `third_party/fvp` | 播放器本地修补及固定 MDK 正式版本／摘要 |
 | `designs` | DESIGN.md、产品说明和 Pencil 页面／组件源文件 |
 
 ## 本地开发
@@ -35,7 +39,7 @@ cd apps/connect
 flutter build apk --debug --target-platform android-x64
 ```
 
-生成绑定使用固定 `flutter_rust_bridge_codegen 2.13.0`，在根目录运行 `flutter_rust_bridge_codegen generate`。临时 JAR／助手的构建、源码与产物哈希见各自 `servers/*/README.md`。
+生成绑定使用固定 `flutter_rust_bridge_codegen 2.13.0`。修改共享命令契约后运行 `python3 tool/protocol_codegen.py`，生成 FRB／Dart 代码运行 `python3 tool/generate.py`；两者的 `--check` 均检查生成结果且不改工作区。临时 JAR／助手的构建、源码与产物哈希见各自 `servers/*/README.md`。当前模块职责与资源归属见[架构说明](docs/implementation/architecture.md)。
 
 ### Android 安装包
 

@@ -16,7 +16,9 @@ class RouteRepository {
     if (id.isEmpty) {
       throw const RequestFailure('missing_device', '没有指定设备，请从设备列表重新打开。');
     }
-    final result = await controller.request('device.info', {'deviceId': id});
+    final result = await controller.execute(InteropCommand.deviceInfo, {
+      'deviceId': id,
+    });
     final device = result['device'] is Map<Object?, Object?>
         ? jsonObject(result['device'])
         : result;
@@ -27,7 +29,9 @@ class RouteRepository {
   }
 
   Future<Json> transfer(String id) async {
-    final task = await controller.request('transfers.get', {'transferId': id});
+    final task = await controller.execute(InteropCommand.transfersGet, {
+      'transferId': id,
+    });
     if (value(task, 'id', value(task, 'transferId')) != id) {
       throw const RequestFailure('missing_transfer', '传输记录已不存在，请在传输中心重新选择。');
     }
@@ -37,7 +41,7 @@ class RouteRepository {
   Future<Json> session(String deviceId, String id) async {
     final matches =
         objects(
-          (await controller.request('session.list', {
+          (await controller.execute(InteropCommand.sessionList, {
             'deviceId': deviceId,
           }))['sessions'],
         ).where(
@@ -62,7 +66,7 @@ class RouteRepository {
     final separator = path.lastIndexOf('/');
     final parent = separator <= 0 ? '/' : path.substring(0, separator);
     final matches = objects(
-      (await controller.request('files.list', {
+      (await controller.execute(InteropCommand.filesList, {
         'deviceId': deviceId,
         'path': parent,
       }))['entries'],
@@ -75,7 +79,7 @@ class RouteRepository {
 
   Future<Json> notification(String deviceId, String id) async {
     final matches = objects(
-      (await controller.request('notifications.list', {
+      (await controller.execute(InteropCommand.notificationsList, {
         'deviceId': deviceId,
       }))['notifications'],
     ).where((n) => n['id'] == id);
@@ -106,9 +110,10 @@ class RouteRepository {
     }
 
     try {
-      final snapshot = await controller.request('notifications.list', {
-        'deviceId': deviceId,
-      });
+      final snapshot = await controller.execute(
+        InteropCommand.notificationsList,
+        {'deviceId': deviceId},
+      );
       controller.reconcileNotificationReplies(deviceId, snapshot);
       final current = objects(snapshot['notifications'])
           .where((notification) => notification['id'] == id)

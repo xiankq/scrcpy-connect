@@ -33,7 +33,7 @@ class FileSearchOperation extends ChangeNotifier {
     stopping = false;
     notifyListeners();
     try {
-      final next = await controller.request('files.search.start', {
+      final next = await controller.execute(InteropCommand.filesSearchStart, {
         'deviceId': deviceId,
         'path': path,
         'query': query,
@@ -69,7 +69,7 @@ class FileSearchOperation extends ChangeNotifier {
     final readGeneration = ++_readGeneration;
     _poll?.cancel();
     try {
-      final next = await controller.request('files.search.get', {
+      final next = await controller.execute(InteropCommand.filesSearchGet, {
         'deviceId': deviceId,
         'searchId': id,
       });
@@ -111,7 +111,7 @@ class FileSearchOperation extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      await controller.request('files.search.cancel', {
+      await controller.execute(InteropCommand.filesSearchCancel, {
         'deviceId': deviceId,
         'searchId': id,
       });
@@ -130,7 +130,7 @@ class FileSearchOperation extends ChangeNotifier {
   Future<void> _retire(String id) async {
     if (id.isEmpty) return;
     try {
-      await controller.request('files.search.cancel', {
+      await controller.execute(InteropCommand.filesSearchCancel, {
         'deviceId': deviceId,
         'searchId': id,
       });

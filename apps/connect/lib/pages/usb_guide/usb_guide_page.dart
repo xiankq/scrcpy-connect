@@ -27,7 +27,9 @@ class UsbGuidePage extends HookWidget {
       () => () {
         final id = attempt.value;
         if (id != null) {
-          controller.request('devices.cancel', {'attemptId': id}).ignore();
+          controller.execute(InteropCommand.devicesCancel, {
+            'attemptId': id,
+          }).ignore();
         }
       },
       const [],
@@ -37,7 +39,9 @@ class UsbGuidePage extends HookWidget {
       if (id == null || cancelling.value) return;
       cancelling.value = true;
       try {
-        await controller.request('devices.cancel', {'attemptId': id});
+        await controller.execute(InteropCommand.devicesCancel, {
+          'attemptId': id,
+        });
         if (!context.mounted || attempt.value != id) return;
         attempt.value = null;
         busy.value = false;
@@ -57,7 +61,7 @@ class UsbGuidePage extends HookWidget {
       state.value = null;
       message.value = null;
       try {
-        final result = await controller.request('devices.usb', {
+        final result = await controller.execute(InteropCommand.devicesUsb, {
           'attemptId': id,
           'serial': ?serial,
           if (serial != null) 'connect': true,

@@ -561,7 +561,7 @@ impl Runtime {
             Err(e) => return Err(e.into()),
         };
         let transfers: Vec<Transfer> = serde_json::from_slice(&bytes)?;
-        let mut store = self.transfers.lock().await;
+        let mut store = self.activities.transfers.lock().await;
         for mut task in transfers {
             if task.kind == "directory" && task.status == "completed" && !task.tree_verified {
                 task.status = "interrupted".into();
@@ -615,7 +615,14 @@ impl Runtime {
     }
     pub(crate) async fn persist_transfers(&self) -> CoreResult<()> {
         let _guard = self.persistence.lock().await;
-        let tasks: Vec<_> = self.transfers.lock().await.values().cloned().collect();
+        let tasks: Vec<_> = self
+            .activities
+            .transfers
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect();
         Self::private_write(
             &self.root.join("transfers.json"),
             &serde_json::to_vec(&tasks)?,
@@ -623,7 +630,14 @@ impl Runtime {
         .await
     }
     pub(crate) async fn list_transfers(&self) -> CoreResult<Value> {
-        let mut tasks: Vec<_> = self.transfers.lock().await.values().cloned().collect();
+        let mut tasks: Vec<_> = self
+            .activities
+            .transfers
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect();
         tasks.sort_by_key(|t| std::cmp::Reverse(t.created_at));
         Ok(
             json!({"transfers":tasks.iter().map(transfer_value).collect::<Vec<_>>(),"batches":batch_values(&tasks)}),
@@ -781,7 +795,7 @@ impl Runtime {
         }
         let ids: Vec<_> = tasks.iter().map(|t| t.id.clone()).collect();
         {
-            let mut stored = self.transfers.lock().await;
+            let mut stored = self.activities.transfers.lock().await;
             for task in &tasks {
                 stored.insert(task.id.clone(), task.clone());
             }
@@ -800,7 +814,7 @@ impl Runtime {
             let result = runtime.run_transfer(&id, generation).await;
             let data = {
                 let _gate = runtime.media_cache.gate.lock().await;
-                let mut tasks = runtime.transfers.lock().await;
+                let mut tasks = runtime.activities.transfers.lock().await;
                 if let Some(task) = tasks.get_mut(&id).filter(|t| t.generation == generation) {
                     if let Err(error) = result
                         && !matches!(task.status.as_str(), "completed" | "skipped")
@@ -826,7 +840,7 @@ impl Runtime {
                 let batch = data["batchId"].as_str().unwrap_or_default();
                 runtime.verify_completed_tree(batch).await;
                 let next = {
-                    let tasks = runtime.transfers.lock().await;
+                    let tasks = runtime.activities.transfers.lock().await;
                     let pending = tasks
                         .values()
                         .filter(|task| task.batch_id == batch && !terminal(&task.status))
@@ -850,7 +864,7 @@ impl Runtime {
     }
     async fn verify_completed_tree(&self, batch: &str) {
         let directories = {
-            let tasks = self.transfers.lock().await;
+            let tasks = self.activities.transfers.lock().await;
             if tasks
                 .values()
                 .any(|task| task.batch_id == batch && !terminal(&task.status))
@@ -889,7 +903,7 @@ impl Runtime {
                 }
             }
             .await;
-            let mut tasks = self.transfers.lock().await;
+            let mut tasks = self.activities.transfers.lock().await;
             if let Some(task) = tasks.get_mut(&directory.id).filter(|task| {
                 task.generation == directory.generation && task.status == "completed"
             }) {
@@ -917,7 +931,7 @@ impl Runtime {
                 );
             }
         }
-        let mut tasks = self.transfers.lock().await;
+        let mut tasks = self.activities.transfers.lock().await;
         let mut order = tasks
             .values()
             .filter(|task| task.batch_id == batch)
@@ -960,7 +974,7 @@ impl Runtime {
         // A batch runs in order. A conflict pauses later files, so its selected
         // default is observed before they perform any network or filesystem I/O.
         let mut task = loop {
-            let tasks = self.transfers.lock().await;
+            let tasks = self.activities.transfers.lock().await;
             let task = tasks
                 .get(id)
                 .filter(|t| t.generation == generation)
@@ -979,7 +993,7 @@ impl Runtime {
             tokio::select! {_=task.cancellation.cancelled()=>return Err(CoreError::new("cancelled","传输已取消。")),_=tokio::time::sleep(Duration::from_millis(50))=>{}}
         };
         if let Some(parent_id) = &task.parent_id {
-            let tasks = self.transfers.lock().await;
+            let tasks = self.activities.transfers.lock().await;
             let parent = tasks
                 .get(parent_id)
                 .ok_or_else(|| CoreError::new("parent_missing", "目录任务记录已缺失。"))?;
@@ -1111,7 +1125,7 @@ impl Runtime {
                 loop {
                     tokio::select! {_=cancel.cancelled()=>break,_=tokio::time::sleep(Duration::from_millis(200))=>{}}
                     let data = {
-                        let mut tasks = runtime.transfers.lock().await;
+                        let mut tasks = runtime.activities.transfers.lock().await;
                         tasks
                             .get_mut(&id)
                             .filter(|t| {
@@ -1137,7 +1151,7 @@ impl Runtime {
         match result {
             Ok((count, mode)) => {
                 let _gate = self.media_cache.gate.lock().await;
-                let mut tasks = self.transfers.lock().await;
+                let mut tasks = self.activities.transfers.lock().await;
                 if let Some(saved) = tasks.get_mut(id).filter(|t| t.generation == generation) {
                     saved.status = "completed".into();
                     saved.transferred = count;
@@ -1151,7 +1165,7 @@ impl Runtime {
                 Ok(())
             }
             Err(error) => {
-                let mut tasks = self.transfers.lock().await;
+                let mut tasks = self.activities.transfers.lock().await;
                 if let Some(saved) = tasks.get_mut(id).filter(|t| t.generation == generation) {
                     saved.transferred = progress.load(Ordering::Relaxed);
                     saved.partial_destination_possible = matches!(
@@ -1305,7 +1319,7 @@ impl Runtime {
         client: &interop_adb::Client,
     ) -> CoreResult<()> {
         let parents = {
-            let tasks = self.transfers.lock().await;
+            let tasks = self.activities.transfers.lock().await;
             let mut parents = Vec::new();
             let mut parent_id = task.parent_id.clone();
             while let Some(id) = parent_id {
@@ -1455,7 +1469,7 @@ impl Runtime {
     }
     async fn save_attempt(&self, task: &Transfer) -> CoreResult<()> {
         let _gate = self.media_cache.gate.lock().await;
-        let mut tasks = self.transfers.lock().await;
+        let mut tasks = self.activities.transfers.lock().await;
         let saved = tasks
             .get_mut(&task.id)
             .filter(|t| t.generation == task.generation)
@@ -1476,6 +1490,7 @@ impl Runtime {
         };
         if matches!(command, "transfers.resume" | "transfers.resolve") {
             let previous = self
+                .activities
                 .transfers
                 .lock()
                 .await
@@ -1507,7 +1522,7 @@ impl Runtime {
         if command == "transfers.cancel"
             && let Some(batch) = p["batchId"].as_str()
         {
-            let mut tasks = self.transfers.lock().await;
+            let mut tasks = self.activities.transfers.lock().await;
             let mut found = false;
             for task in tasks.values_mut().filter(|task| task.batch_id == batch) {
                 found = true;
@@ -1533,7 +1548,7 @@ impl Runtime {
             return Ok(json!({"batchId":batch,"status":"cancelling"}));
         }
         let id = required(p, "transferId")?;
-        let mut tasks = self.transfers.lock().await;
+        let mut tasks = self.activities.transfers.lock().await;
         let task = tasks
             .get_mut(id)
             .ok_or_else(|| CoreError::new("not_found", "任务已不存在。"))?;

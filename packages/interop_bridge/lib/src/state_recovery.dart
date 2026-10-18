@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'interop_exception.dart';
+import 'protocol/commands_generated.dart';
 
 typedef StateJson = Map<String, dynamic>;
 
@@ -15,24 +16,7 @@ bool needsVerifiedState(String command, StateJson params) {
         (params['action'] == 'up' ||
             (command == 'session.touch' && params['action'] == 'cancel')));
   }
-  return const {
-    'session.start',
-    'session.resume',
-    'session.text',
-    'session.screen',
-    'session.rotate',
-    'session.launch',
-    'apps.launch',
-    'audio.start',
-    'audio.resume',
-    'observation.start',
-    'notifications.open',
-    'notifications.reply',
-    'notifications.dismiss',
-    'calls.action',
-    'clipboard.get',
-    'clipboard.set',
-  }.contains(command);
+  return InteropCommand.tryParse(command)?.requiresVerifiedState ?? false;
 }
 
 /// Replaces event-derived projections after a transport gap. Snapshots carry

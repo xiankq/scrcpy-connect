@@ -236,6 +236,14 @@ pub(crate) struct Session {
     process_closed: Arc<AtomicBool>,
     process: Option<OwnedProcess>,
 }
+
+impl Session {
+    pub(crate) async fn activity_snapshot(&self) -> Option<Value> {
+        let state = self.state.read().await;
+        (!self.cancellation.is_cancelled() || state["launchOutcome"] == "unknown")
+            .then(|| state.clone())
+    }
+}
 #[derive(Clone)]
 struct OwnedProcess {
     pid: u32,
@@ -504,7 +512,7 @@ impl Runtime {
         }
         let client = self.client(&device_id).await?;
         if package.is_some() {
-            for session in self.sessions.lock().await.values() {
+            for session in self.activities.sessions.lock().await.values() {
                 if session.device_id == device_id && session.package == package {
                     let observed = session.state.read().await;
                     if observed["launchOutcome"] == "unknown" {
@@ -524,10 +532,10 @@ impl Runtime {
             return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
         }
         let id = uuid::Uuid::new_v4().to_string();
-        let activity_id = format!("session:{id}");
+        let activity_id = crate::activities::ActivityRef::Session(&id).to_string();
         let cancellation = CancellationToken::new();
         let mut guard = CancelOnDrop(Some(cancellation.clone()));
-        let reservation = match self.resource_admission.reserve_session(
+        let reservation = match self.activities.admission.reserve_session(
             activity_id.clone(),
             device_id.clone(),
             package.clone().unwrap_or_else(|| "手机屏幕".into()),
@@ -824,7 +832,7 @@ wait "$child""#
                     .await?;
                 app_launch_submitted = true;
                 state.write().await["launchOperationId"] = json!(id);
-                let mut sessions = self.sessions.lock().await;
+                let mut sessions = self.activities.sessions.lock().await;
                 for session in sessions.values() {
                     if session.device_id == device_id && session.package == package {
                         let observed = session.state.read().await;
@@ -962,7 +970,7 @@ wait "$child""#
             observed.clone()
         };
         result["videoToken"] = json!(return_token);
-        let mut sessions = self.sessions.lock().await;
+        let mut sessions = self.activities.sessions.lock().await;
         if app_launch_submitted {
             // Updating avoids dropping the provisional owner and cancelling
             // the live control service shared with the completed session.
@@ -989,8 +997,9 @@ wait "$child""#
     }
 
     pub(crate) async fn stop_device_sessions(&self, device: &str) {
-        self.resource_admission.cancel_device(device);
+        self.activities.admission.cancel_device(device);
         let ids = self
+            .activities
             .sessions
             .lock()
             .await
@@ -1000,7 +1009,7 @@ wait "$child""#
             .collect::<Vec<_>>();
         for id in ids {
             let keep_unknown = {
-                let sessions = self.sessions.lock().await;
+                let sessions = self.activities.sessions.lock().await;
                 if let Some(session) = sessions.get(&id) {
                     let unknown = session.state.read().await["launchOutcome"] == "unknown";
                     if unknown {
@@ -1020,6 +1029,7 @@ wait "$child""#
 
     async fn stop_session(&self, id: &str) {
         let process_closed = self
+            .activities
             .sessions
             .lock()
             .await
@@ -1043,7 +1053,7 @@ wait "$child""#
                 .app_opens
                 .close(id, params["deviceId"].as_str())
                 .await?
-            && !self.sessions.lock().await.contains_key(id)
+            && !self.activities.sessions.lock().await.contains_key(id)
         {
             self.emit(
                 "session.updated",
@@ -1054,8 +1064,11 @@ wait "$child""#
         }
         if command == "session.stop"
             && let Some(id) = params["sessionId"].as_str()
-            && !self.sessions.lock().await.contains_key(id)
-            && self.resource_admission.cancel(&format!("session:{id}"))
+            && !self.activities.sessions.lock().await.contains_key(id)
+            && self
+                .activities
+                .admission
+                .cancel(&crate::activities::ActivityRef::Session(id).to_string())
         {
             return Ok(
                 json!({"sessionId":id,"status":"stopping","starting":true,"applicationStopped":false}),
@@ -1063,7 +1076,7 @@ wait "$child""#
         }
         if command == "session.list" {
             let mut result = Vec::new();
-            for session in self.sessions.lock().await.values() {
+            for session in self.activities.sessions.lock().await.values() {
                 if params["deviceId"]
                     .as_str()
                     .is_none_or(|device| device == session.device_id)
@@ -1091,7 +1104,7 @@ wait "$child""#
             return self.screenshot(params).await;
         }
         let (id, control, state, package, process, cancellation, session_device) = {
-            let sessions = self.sessions.lock().await;
+            let sessions = self.activities.sessions.lock().await;
             let session_id = params["sessionId"].as_str();
             let device_id = params["deviceId"].as_str();
             let mut matching = sessions.iter().filter(|(id, session)| {
@@ -1173,8 +1186,8 @@ wait "$child""#
             // A replacement renderer must preserve a local presentation pause.
             let paused = data["status"] == "paused";
             data["status"] = json!(if paused { "paused" } else { "streaming" });
-            self.resource_admission.set_status(
-                &format!("session:{id}"),
+            self.activities.admission.set_status(
+                &crate::activities::ActivityRef::Session(&id).to_string(),
                 if paused {
                     ResourceStatus::Paused
                 } else {
@@ -1228,8 +1241,8 @@ wait "$child""#
             }
             let mut data = state.write().await;
             data["status"] = json!(if pausing { "paused" } else { "streaming" });
-            self.resource_admission.set_status(
-                &format!("session:{id}"),
+            self.activities.admission.set_status(
+                &crate::activities::ActivityRef::Session(&id).to_string(),
                 if pausing {
                     ResourceStatus::Paused
                 } else {
@@ -1332,7 +1345,7 @@ wait "$child""#
                 self.app_opens
                     .ensure_available(&session_device, package)
                     .await?;
-                let sessions = self.sessions.lock().await;
+                let sessions = self.activities.sessions.lock().await;
                 for session in sessions.values() {
                     if session.device_id == session_device
                         && session.package.as_deref() == Some(package)
@@ -1405,6 +1418,7 @@ wait "$child""#
             return Err(invalid("剪贴板文字过长。"));
         }
         let control = self
+            .activities
             .sessions
             .lock()
             .await
@@ -1462,80 +1476,6 @@ wait "$child""#
 
     pub(crate) async fn launch_app(&self, params: &Value) -> CoreResult<Value> {
         self.start_session(params).await
-    }
-
-    pub(crate) async fn activities(&self) -> CoreResult<Value> {
-        let mut sessions = Vec::new();
-        for session in self.sessions.lock().await.values() {
-            let observed = session.state.read().await;
-            if !session.cancellation.is_cancelled() || observed["launchOutcome"] == "unknown" {
-                sessions.push(observed.clone());
-            }
-        }
-        for record in self.app_opens.unresolved(None).await {
-            if !sessions
-                .iter()
-                .any(|session| session["sessionId"] == record["sessionId"])
-            {
-                sessions.push(record);
-            }
-        }
-        let transfers = self.list_transfers().await?;
-        let devices = self.store.read().await.devices.clone();
-        let device_name = |id: &str| {
-            devices
-                .iter()
-                .find(|device| device.id == id)
-                .map(|device| device.name.clone())
-                .unwrap_or_else(|| "Android 设备".into())
-        };
-        let mut activities = Vec::new();
-        for (device, client) in self.connections.lock().await.iter() {
-            if !client.is_closed() {
-                activities.push(json!({"id":format!("connection:{device}"),"deviceId":device,"deviceName":device_name(device),"name":"设备连接","status":"connected","canStop":true,"stopImpact":"断开这台设备，并停止它的控制会话和传输任务；其他设备不受影响。"}));
-            }
-        }
-        for session in &sessions {
-            activities.push(json!({"id":format!("session:{}",session["sessionId"].as_str().unwrap_or_default()),"deviceId":session["deviceId"],"deviceName":device_name(session["deviceId"].as_str().unwrap_or_default()),"name":session["name"],"status":session["status"],"canStop":true,"stopImpact":"仅关闭这个控制会话，手机应用任务交回设备，不会强停应用。"}));
-        }
-        let known = activities
-            .iter()
-            .filter_map(|activity| activity["id"].as_str().map(str::to_owned))
-            .collect::<HashSet<_>>();
-        for reserved in self
-            .resource_admission
-            .activities()
-            .into_iter()
-            .filter(|reserved| !known.contains(&reserved.id))
-        {
-            activities.push(json!({"id":reserved.id,"deviceId":reserved.device_id,"deviceName":device_name(&reserved.device_id),
-                "name":reserved.name,"status":reserved.status,"canStop":true,"canPause":reserved.can_pause,
-                "reserved":true,"stopImpact":"仅取消这个正在启动或清理的控制会话；已有其他活动保持不变。"}));
-        }
-        if let Some(transfers) = transfers["transfers"].as_array() {
-            for transfer in transfers.iter().filter(|transfer| {
-                matches!(
-                    transfer["status"].as_str(),
-                    Some("queued" | "running" | "finalizing" | "conflict")
-                )
-            }) {
-                activities.push(json!({"id":format!("transfer:{}",transfer["id"].as_str().unwrap_or_default()),"deviceId":transfer["deviceId"],"deviceName":device_name(transfer["deviceId"].as_str().unwrap_or_default()),"name":transfer["name"],"status":transfer["status"],"canStop":true,"stopImpact":"仅取消这一项传输；已完成的文件不回滚，未完成内容保留为实际中断状态。"}));
-            }
-        }
-        for observation in self.observation_list().await? {
-            if observation["wanted"] == true {
-                let id = observation["deviceId"].as_str().unwrap_or_default();
-                activities.push(json!({"id":format!("observation:{id}"),"deviceId":id,"deviceName":device_name(id),"name":"通知与来电观察","status":observation["phase"],"canStop":true,"stopImpact":"仅停止这台设备的通知与来电观察；剪贴板和媒体处理保持运行。"}));
-            }
-        }
-        for source in self.audio_activity_sources().await {
-            let device = source["deviceId"].as_str().unwrap_or_default();
-            let source_id = source["sourceId"].as_str().unwrap_or_default();
-            activities.push(json!({"id":format!("audio:{source_id}"),"deviceId":device,"sourceId":source_id,
-                "deviceName":device_name(device),"name":"设备声音","status":source["status"],"canStop":true,
-                "stopImpact":"仅停止这台设备的这一代音源；设备连接、控制会话、通知与来电观察及其他设备音源保持运行。"}));
-        }
-        Ok(json!({"activities":activities,"sessions":sessions,"transfers":transfers["transfers"]}))
     }
 
     async fn probe_video_encoders(&self, device: &str) -> CoreResult<Vec<VideoEncoder>> {
@@ -1657,7 +1597,7 @@ wait "$child""#
         }).collect();
         let mut active_streams = Vec::new();
         if let Some(device) = device {
-            for session in self.sessions.lock().await.values() {
+            for session in self.activities.sessions.lock().await.values() {
                 if session.device_id == device && !session.cancellation.is_cancelled() {
                     let state = session.state.read().await;
                     active_streams.push(
@@ -1730,7 +1670,7 @@ wait "$child""#
             params,
         )?;
         let previous = {
-            let sessions = self.sessions.lock().await;
+            let sessions = self.activities.sessions.lock().await;
             if let Some(id) = params.get("sessionId") {
                 let id = id.as_str().ok_or_else(|| invalid("会话标识无效。"))?;
                 let session = sessions
@@ -1760,6 +1700,7 @@ wait "$child""#
         validate_encoder_selection(&next, &self.probe_video_encoders(&device).await?)?;
         self.save_device_quality(&device, &next).await?;
         let active = self
+            .activities
             .sessions
             .lock()
             .await
@@ -1774,6 +1715,7 @@ wait "$child""#
     async fn screenshot(&self, params: &Value) -> CoreResult<Value> {
         let device = required(params, "deviceId")?;
         if self
+            .activities
             .sessions
             .lock()
             .await
@@ -2292,6 +2234,84 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn monitor_retires_another_device_while_a_session_waits_for_process_shutdown() {
+        use interop_adb::{Client, DeviceInfo, protocol};
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let mut peers = Vec::new();
+        for id in ["a-slow", "z-fast"] {
+            runtime.store.write().await.devices.push(
+                serde_json::from_value(json!({
+                    "id":id,"name":id,"address":"fixture","port":5555,"transport":"tcp",
+                    "status":"connected","autoReconnect":false,"observationWanted":false,
+                }))
+                .unwrap(),
+            );
+            let (transport, peer) = tokio::io::duplex(4096);
+            let client = Client::from_negotiated_transport(
+                transport,
+                DeviceInfo {
+                    version: protocol::VERSION,
+                    max_payload: 4096,
+                    banner: "device::\0".into(),
+                    features: Default::default(),
+                },
+            )
+            .unwrap();
+            client.close();
+            runtime.connections.lock().await.insert(id.into(), client);
+            peers.push(peer);
+        }
+        let slow_cancel = CancellationToken::new();
+        let process_closed = Arc::new(AtomicBool::new(false));
+        let (control, _requests) = mpsc::channel(1);
+        runtime.activities.sessions.lock().await.insert(
+            "slow-session".into(),
+            Session {
+                device_id: "a-slow".into(),
+                package: None,
+                cancellation: slow_cancel.clone(),
+                control,
+                state: Arc::new(RwLock::new(
+                    json!({"sessionId":"slow-session","status":"streaming"}),
+                )),
+                process_closed: process_closed.clone(),
+                process: None,
+            },
+        );
+        let fast_cancel = CancellationToken::new();
+        let _reservation = runtime
+            .activities
+            .admission
+            .reserve_session(
+                "session:fast".into(),
+                "z-fast".into(),
+                "fast".into(),
+                fast_cancel.clone(),
+            )
+            .unwrap();
+        // Exercise the actual monitor tick and its actual stop_session wait.
+        tokio::time::timeout(Duration::from_secs(5), slow_cancel.cancelled())
+            .await
+            .unwrap();
+        let fast_retired = tokio::time::timeout(Duration::from_millis(500), async {
+            fast_cancel.cancelled().await;
+            let _transition = runtime.connections.transition("z-fast").await;
+        })
+        .await
+        .is_ok();
+        assert!(!process_closed.load(Ordering::Acquire));
+        process_closed.store(true, Ordering::Release);
+        assert!(
+            fast_retired,
+            "one device's 3-second process cleanup must not delay another device's retirement"
+        );
+        assert_eq!(runtime.device("z-fast").await.unwrap().status, "offline");
+        let _transition = runtime.connections.transition("a-slow").await;
+        drop(peers);
+    }
 
     #[tokio::test]
     async fn session_start_entry_keeps_capture_state_out_of_inline_frame() {
@@ -3495,7 +3515,8 @@ mod tests {
         let runtime = Runtime::initialize(directory.path()).await.unwrap();
         let cancellation = CancellationToken::new();
         let _reservation = runtime
-            .resource_admission
+            .activities
+            .admission
             .reserve_session(
                 "session:fixture".into(),
                 "device".into(),
@@ -3510,7 +3531,7 @@ mod tests {
         let (control, mut requests) = mpsc::channel(1);
         // The ready boundary only consumes renderer evidence: no device or
         // remote process is started by this fixture.
-        runtime.sessions.lock().await.insert(
+        runtime.activities.sessions.lock().await.insert(
             "fixture".into(),
             Session {
                 device_id: "device".into(),
@@ -3536,7 +3557,7 @@ mod tests {
             .unwrap();
         assert_eq!(initial["status"], "streaming");
         assert_eq!(
-            runtime.resource_admission.activities()[0].status,
+            runtime.activities.admission.activities()[0].status,
             ResourceStatus::Streaming
         );
 
@@ -3568,7 +3589,7 @@ mod tests {
         assert_eq!(delayed["status"], "paused");
         assert_eq!(delayed["capturePaused"], false);
         assert_eq!(delayed["presentationOnly"], true);
-        let activity = &runtime.resource_admission.activities()[0];
+        let activity = &runtime.activities.admission.activities()[0];
         assert_eq!(activity.status, ResourceStatus::Paused);
         assert!(activity.can_resume);
         assert!(!activity.can_pause);
@@ -3599,7 +3620,7 @@ mod tests {
         assert_eq!(resumed["status"], "streaming");
         assert_eq!(resumed["capturePaused"], false);
         assert_eq!(
-            runtime.resource_admission.activities()[0].status,
+            runtime.activities.admission.activities()[0].status,
             ResourceStatus::Streaming
         );
     }
@@ -3643,7 +3664,8 @@ mod tests {
         for index in 1..crate::resource::APP_SESSION_LIMIT {
             reservations.push(
                 runtime
-                    .resource_admission
+                    .activities
+                    .admission
                     .reserve_session(
                         format!("session:fixture-{index}"),
                         device.to_owned(),
@@ -3668,11 +3690,14 @@ mod tests {
                 .any(|activity| activity["id"] == format!("session:{old_id}"))
         );
         assert_eq!(
-            runtime.sessions.lock().await[old_id].state.read().await["sessionId"],
+            runtime.activities.sessions.lock().await[old_id]
+                .state
+                .read()
+                .await["sessionId"],
             old_id
         );
         assert!(
-            !runtime.sessions.lock().await[old_id]
+            !runtime.activities.sessions.lock().await[old_id]
                 .cancellation
                 .is_cancelled()
         );
@@ -3701,18 +3726,18 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(invalid.code, "encoder_unavailable");
-        let reserved = runtime.resource_admission.activities();
+        let reserved = runtime.activities.admission.activities();
         assert_eq!(reserved.len(), 1);
         assert_eq!(reserved[0].id, format!("session:{old_id}"));
         assert!(
-            !runtime.sessions.lock().await[old_id]
+            !runtime.activities.sessions.lock().await[old_id]
                 .cancellation
                 .is_cancelled()
         );
         drop(socket);
         runtime.stop_session(old_id).await;
         tokio::time::timeout(Duration::from_secs(5), async {
-            while !runtime.resource_admission.activities().is_empty() {
+            while !runtime.activities.admission.activities().is_empty() {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })

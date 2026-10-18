@@ -2,7 +2,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 flutter pub get --enforce-lockfile
+python3 tool/protocol_codegen.py --check
 python3 tool/generate.py --check
+python3 servers/companion/build.py --check
+python3 -m unittest discover -s tool -p 'test_*.py'
+python3 tool/check_native_deps.py
 dart format --output=none --set-exit-if-changed apps/connect/lib apps/connect/test apps/connect/integration_test apps/connect/test_driver packages
 cargo fmt --all --check
 python3 tool/fvp_snapshot_regression.py

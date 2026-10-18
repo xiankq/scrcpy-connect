@@ -26,6 +26,18 @@ pub(crate) struct AudioSource {
     cancellation: CancellationToken,
     state: Arc<RwLock<Value>>,
 }
+impl AudioSource {
+    pub(crate) async fn snapshot(&self, active_only: bool) -> Option<Value> {
+        let state = self.state.read().await;
+        (!active_only
+            || (!self.cancellation.is_cancelled()
+                && matches!(
+                    state["status"].as_str(),
+                    Some("starting" | "playing" | "paused")
+                )))
+        .then(|| state.clone())
+    }
+}
 impl Drop for AudioSource {
     fn drop(&mut self) {
         self.cancellation.cancel();
@@ -185,35 +197,19 @@ impl Runtime {
     }
 
     pub(crate) async fn audio_activity_sources(&self) -> Vec<Value> {
-        let mut sources = Vec::new();
-        for source in self.audio_sources.lock().await.values() {
-            let data = source.state.read().await;
-            if !source.cancellation.is_cancelled()
-                && matches!(
-                    data["status"].as_str(),
-                    Some("starting" | "playing" | "paused")
-                )
-            {
-                sources.push(data.clone());
-            }
-        }
-        sources
+        self.activities.audio_snapshots(true).await
     }
 
     pub(crate) async fn audio_command(&self, command: &str, params: &Value) -> CoreResult<Value> {
         if command == "audio.sources" {
-            let mut sources = Vec::new();
-            for source in self.audio_sources.lock().await.values() {
-                sources.push(source.state.read().await.clone());
-            }
-            return Ok(json!({"sources":sources}));
+            return Ok(json!({"sources":self.activities.audio_snapshots(false).await}));
         }
         let device_id = required(params, "deviceId")?.to_owned();
         if command == "audio.start" {
             return self.start_audio(&device_id).await;
         }
         if command == "audio.stop" {
-            let mut sources = self.audio_sources.lock().await;
+            let mut sources = self.activities.audio_sources.lock().await;
             let stopped = if let Some(source) = sources.get(&device_id) {
                 let mut data = source.state.write().await;
                 if params["sourceId"]
@@ -241,7 +237,7 @@ impl Runtime {
             return Ok(json!({"deviceId":device_id,"sourceId":source_id,"status":"stopped"}));
         }
         let (state, cancellation) = {
-            let sources = self.audio_sources.lock().await;
+            let sources = self.activities.audio_sources.lock().await;
             let source = sources
                 .get(&device_id)
                 .filter(|source| !source.cancellation.is_cancelled())
@@ -336,7 +332,7 @@ impl Runtime {
             json!({"sourceId":id,"deviceId":device_id,"name":device.name,"status":"starting","codec":"pcm_s16le","sampleRate":48000,"channels":2,"bytesPerSample":2,"volume":1.0,"muted":false,"createdAt":now(),"nativeAttached":false,"audibleContentVerified":false,"captureSource":"output","callAudioSupported":false}),
         ));
         {
-            let mut sources = self.audio_sources.lock().await;
+            let mut sources = self.activities.audio_sources.lock().await;
             if let Some(existing) = sources
                 .get(device_id)
                 .filter(|source| !source.cancellation.is_cancelled())

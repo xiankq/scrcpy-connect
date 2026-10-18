@@ -142,11 +142,24 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 
 ## 构建与验证
 
-`build.sh` 使用现有 Java 21、Android SDK 36 和 build-tools 36.0.0 的 javac/d8，
-输出固定 ZIP 时间戳的 `companion.jar`；不联网安装工具。Rust 内嵌 JAR 并校验
-SHA-256；修改源码后需重新构建并同步 `SERVER_SHA`。测试 Fixture 不编入产品 JAR。
-当前产品 JAR 的 SHA-256 为
-`4a3082a8c4bcfe2a83293136dae513a0d5f9436bbe4f3db353c7b95341c28960`。
+`python3 servers/companion/build.py` 使用现有 JDK 21、Android SDK 36 和
+build-tools 36.0.0 的 javac/d8，在临时目录编译，输出确定性的 `companion.jar`
+与 `manifest.json`；不联网安装工具。`build.sh` 保留为同一入口的包装脚本。
+JAR 固定条目顺序、ZIP 时间戳、权限、存储方式和 manifest 内容，避免宿主 ZIP
+元数据或 JDK 的 `Created-By` 文本改变归档。测试 Fixture 不编入产品 JAR。
+
+`python3 servers/companion/build.py --check` 先核对 manifest 中全部 Java 源码、
+构建脚本与受控 JAR 的 SHA-256，再在临时目录真实重建并逐字节比较 JAR；检查
+不改写受控源码、JAR 或 manifest。仅修改 Java 而未重建会被拒绝，手改 manifest
+摘要也不能绕过重建比较。`tool/check.sh` 已接入此门禁。修改源码或构建脚本后需
+重建并提交 JAR 与 manifest，同时同步 Rust 的 `SERVER_SHA`。
+
+2026-10-18 本批增加构建门禁时，将既有 JAR 重新封装为上述确定性格式。对照受控
+原 JAR，`classes.dex` 逐字节未变，SHA-256 仍为
+`6019f7ea51ca4f8c0bfd6f99e15d1ca608f56913809bbc804789ea35d1193464`。
+当前整个产品 JAR 的 SHA-256 已更新为
+`4fbb0f076dfd31472d82d48f0257accae0d1fc20c6e7d0b0fd6ed4ad53531a19`。
+本次构建与 `--check` 本地通过；这项归档一致性验证不新增设备运行验收结论。
 
 上述观察生命周期已通过 Runtime／真实 actor 提交回归，并重建 JAR。
 2026-10-17随后在API36目标AVD执行 `observation_android`：无需页面查询即收到live观察，
@@ -157,7 +170,8 @@ stop后共享helper剪贴板仍可get/set、列表与断线重连均不恢复观
 下列其余既有AVD证据仍按各自功能和版本边界记录。
 
 ```sh
-bash servers/companion/build.sh
+python3 servers/companion/build.py
+python3 servers/companion/build.py --check
 bash servers/companion/tests/build-fixture.sh
 python3 servers/companion/tests/android-probe.py \
   --adb "$ANDROID_ADB" --serial emulator-5556 --calls --skip-receiver

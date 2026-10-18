@@ -191,9 +191,10 @@ class TransferDetailsPage extends HookConsumerWidget {
                         onPressed: () async {
                           try {
                             if (current['destinationScope'] == 'privateCache') {
-                              await controller.request('media.cache.retain', {
-                                'localPath': value(current, 'localPath'),
-                              });
+                              await controller.execute(
+                                InteropCommand.mediaCacheRetain,
+                                {'localPath': value(current, 'localPath')},
+                              );
                             }
                             await SharePlus.instance.share(
                               ShareParams(

@@ -39,7 +39,7 @@ class MediaCacheLease {
     if (--_references != 0) return;
     unawaited(
       controller
-          .request('media.cache.release', {'leaseId': id})
+          .execute(InteropCommand.mediaCacheRelease, {'leaseId': id})
           .then<void>(
             (_) {},
             // A failed release conservatively retains the Core protection. Never

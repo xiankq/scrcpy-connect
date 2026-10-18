@@ -1,6 +1,6 @@
 use crate::{
     CoreError, CoreResult, Runtime,
-    model::{Device, required},
+    model::{Device, TransportKind, required},
 };
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -170,10 +170,10 @@ impl Runtime {
                 settings["deviceQuality"] = json!({});
                 let mut restored = Vec::new();
                 for entry in entries {
-                    let transport = required(entry, "transport")?;
-                    if !matches!(transport, "tcp" | "wireless" | "usb") {
-                        return Err(CoreError::new("invalid_data", "设备记录中的连接方式无效。"));
-                    }
+                    let transport = TransportKind::parse(required(entry, "transport")?)
+                        .ok_or_else(|| {
+                            CoreError::new("invalid_data", "设备记录中的连接方式无效。")
+                        })?;
                     let name = required(entry, "name")?;
                     let address = entry["address"].as_str().unwrap_or("");
                     let port = entry["port"]
@@ -186,7 +186,8 @@ impl Runtime {
                         || address.chars().any(char::is_whitespace)
                         || address.contains('/')
                         || address.contains('\\')
-                        || (transport == "tcp" && (address.is_empty() || port == 0))
+                        || (matches!(transport, TransportKind::Tcp)
+                            && (address.is_empty() || port == 0))
                     {
                         return Err(CoreError::new("invalid_data", "设备名称或地址无效。"));
                     }
@@ -197,7 +198,7 @@ impl Runtime {
                         port,
                         guid: None,
                         serial: None,
-                        transport: transport.into(),
+                        transport,
                         status: "unauthorized".into(),
                         model: None,
                         android_version: None,
@@ -258,74 +259,6 @@ impl Runtime {
         }
         self.persist().await?;
         Ok(json!({"cancelled":true}))
-    }
-
-    pub(crate) async fn stop_activity(self: &Arc<Self>, params: &Value) -> CoreResult<Value> {
-        let id = required(params, "activityId")?;
-        if let Some(source_id) = id.strip_prefix("audio:") {
-            let source = self
-                .audio_activity_sources()
-                .await
-                .into_iter()
-                .find(|source| source["sourceId"] == source_id)
-                .ok_or_else(|| {
-                    CoreError::new("not_found", "此音源活动已结束或已被新一代音源替换。")
-                })?;
-            // Bind to the observed device, then atomically recheck the source
-            // generation inside audio.stop before removing its current owner.
-            return self
-                .audio_command(
-                    "audio.stop",
-                    &json!({"deviceId":source["deviceId"],"sourceId":source_id}),
-                )
-                .await;
-        }
-        if let Some(id) = id.strip_prefix("observation:") {
-            return self
-                .observation_command("observation.stop", &json!({"deviceId":id}))
-                .await;
-        }
-        if let Some(id) = id.strip_prefix("connection:") {
-            return self.disconnect_device(id, false).await;
-        }
-        if let Some(id) = id.strip_prefix("session:") {
-            return self
-                .session_command("session.stop", &json!({"sessionId":id}))
-                .await;
-        }
-        if let Some(id) = id.strip_prefix("transfer:") {
-            return self
-                .transfer_command("transfers.cancel", &json!({"transferId":id}))
-                .await;
-        }
-        Err(CoreError::new("not_found", "此活动已结束或标识无效。"))
-    }
-
-    pub async fn stop_all(self: &Arc<Self>) {
-        let tokens: Vec<_> = self
-            .device_operations
-            .lock()
-            .await
-            .drain()
-            .map(|(_, t)| t)
-            .collect();
-        for token in tokens {
-            token.cancel();
-        }
-        if let Some((_, token)) = self.qr_attempt.lock().await.take() {
-            token.cancel();
-        }
-        let ids: Vec<_> = self
-            .store
-            .read()
-            .await
-            .devices
-            .iter()
-            .map(|d| d.id.clone())
-            .collect();
-        for id in ids {
-            let _ = self.disconnect_device(&id, false).await;
-        }
     }
 }
 

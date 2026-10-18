@@ -574,7 +574,7 @@ impl Runtime {
         // journal reconciliation finishes: a memory-only completed transition is
         // never evidence that a resumable source may be deleted.
         let _persistence = self.persistence.lock().await;
-        let tasks = self.transfers.lock().await;
+        let tasks = self.activities.transfers.lock().await;
         let snapshot: Vec<_> = tasks.values().collect();
         let persisted = async {
             Self::private_write(

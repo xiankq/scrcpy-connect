@@ -67,13 +67,17 @@ class QrPairPage extends HookWidget {
       earlyEvents.value.clear();
       try {
         if (old != null) {
-          await controller.request('devices.cancel', {'attemptId': old});
+          await controller.execute(InteropCommand.devicesCancel, {
+            'attemptId': old,
+          });
         }
-        final result = await controller.request('devices.pair.qr');
+        final result = await controller.execute(InteropCommand.devicesPairQr);
         final id = value(result, 'attemptId');
         if (!context.mounted || generation.value != current) {
           if (id.isNotEmpty) {
-            controller.request('devices.cancel', {'attemptId': id}).ignore();
+            controller.execute(InteropCommand.devicesCancel, {
+              'attemptId': id,
+            }).ignore();
           }
           return;
         }
@@ -103,7 +107,9 @@ class QrPairPage extends HookWidget {
           final id = attempt.value!;
           attempt.value = null;
           message.value = '二维码已过期，请重新生成。';
-          controller.request('devices.cancel', {'attemptId': id}).ignore();
+          controller.execute(InteropCommand.devicesCancel, {
+            'attemptId': id,
+          }).ignore();
         }
       });
       Future.microtask(generate);
@@ -113,7 +119,9 @@ class QrPairPage extends HookWidget {
         generation.value++;
         final id = attempt.value;
         if (id != null) {
-          controller.request('devices.cancel', {'attemptId': id}).ignore();
+          controller.execute(InteropCommand.devicesCancel, {
+            'attemptId': id,
+          }).ignore();
         }
       };
     }, const []);
@@ -194,7 +202,7 @@ class QrPairPage extends HookWidget {
                     final id = attempt.value;
                     try {
                       if (id != null) {
-                        await controller.request('devices.cancel', {
+                        await controller.execute(InteropCommand.devicesCancel, {
                           'attemptId': id,
                         });
                       }

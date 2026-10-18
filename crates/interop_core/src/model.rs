@@ -57,6 +57,35 @@ pub fn now() -> u64 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum TransportKind {
+    Tcp,
+    Wireless,
+    Tls,
+    Usb,
+}
+
+impl TransportKind {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
+        match value {
+            "tcp" => Some(Self::Tcp),
+            "wireless" => Some(Self::Wireless),
+            "tls" => Some(Self::Tls),
+            "usb" => Some(Self::Usb),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn is_usb(&self) -> bool {
+        matches!(self, Self::Usb)
+    }
+
+    pub(crate) fn requires_tls(&self, paired_guid: Option<&str>) -> bool {
+        !self.is_usb() && (matches!(self, Self::Tls) || paired_guid.is_some())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Device {
     pub id: String,
@@ -67,7 +96,7 @@ pub struct Device {
     pub guid: Option<String>,
     #[serde(default)]
     pub serial: Option<String>,
-    pub transport: String,
+    pub transport: TransportKind,
     pub status: String,
     #[serde(default)]
     pub model: Option<String>,

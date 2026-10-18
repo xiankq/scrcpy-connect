@@ -38,9 +38,22 @@ a POSIX host, a C++20 compiler and `dart` on PATH (or `--dart <executable>`).
 
 ## SDK and platform validation
 
-The upstream native SDK resolution is unchanged: CMake supports `FVP_DEPS_URL`
-and `FVP_DEPS_SHA256`, while its default URL uses nightly binaries. CocoaPods
-uses `mdk ~> 0.39.0`; SwiftPM pins its existing release URL and checksum. This
-source patch does not establish a reproducible SDK closure or successful builds
-on every platform. Those remain separate acceptance tasks. See the workspace's
-current status and performance evidence for actual Android validation.
+CMake defaults to the official MDK v0.39.0 release and requires its archive
+SHA-256. `cmake/mdk-release.json` records the official GitHub release API asset
+digests; `cmake/mdk-release.cmake` supplies the matching platform pins. Windows
+uses the release's VS 2026 archive names. `FVP_DEPS_URL` still supports mirrors;
+without an explicit digest override, mirrors must serve those same release bytes.
+A custom SDK requires an explicit 64-character `FVP_DEPS_SHA256`; checksum
+mismatches fail before replacing the cached SDK. `FVP_DEPS_LATEST` cannot override
+these pins. CocoaPods requires exactly `mdk 0.39.0`; SwiftPM already pins the
+matching release URL and checksum.
+
+Provenance: [official v0.39.0 release API](https://api.github.com/repos/wang-bin/mdk-sdk/releases/tags/v0.39.0).
+The pre-existing Android nightly archive in a developer cache had SHA-256
+`70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`, which differs
+from the official release archive. It is not accepted as the release cache.
+`python3 tool/check_native_deps.py` (also invoked by `tool/check.sh`) runs the
+offline CMake dependency tests, including bad-hash
+rejection and preservation of the previous SDK on a failed fetch. CI builds and
+checks final applications on Android, iOS, macOS and Windows; adding these jobs
+does not establish that they have run successfully on their remote hosts.

@@ -151,7 +151,7 @@ class ClipboardCoordinator with WidgetsBindingObserver {
       final local = await _readLocal(target, generation);
       if (!_active(target, generation)) return;
       final result = await controller
-          .request('clipboard.get', {'deviceId': target})
+          .execute(InteropCommand.clipboardGet, {'deviceId': target})
           .timeout(const Duration(seconds: 25));
       if (!_active(target, generation)) return;
       if (result['text'] is! String || result['available'] == false) {
@@ -308,7 +308,10 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     _remote = text; // The Binder echo can arrive before the request completes.
     controller.recordClipboardSend();
     final result = await controller
-        .request('clipboard.set', {'deviceId': target, 'text': text})
+        .execute(InteropCommand.clipboardSet, {
+          'deviceId': target,
+          'text': text,
+        })
         .timeout(const Duration(seconds: 25));
     if (!_active(target, generation)) return;
     if (result['applied'] != true) {

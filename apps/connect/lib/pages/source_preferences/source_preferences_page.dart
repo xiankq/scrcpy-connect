@@ -90,7 +90,7 @@ class SourcePreferencesPage extends HookConsumerWidget {
                 );
                 if (keep == null || !context.mounted) return;
                 for (final source in playing.where((s) => audioId(s) != keep)) {
-                  await controller.request('audio.stop', {
+                  await controller.execute(InteropCommand.audioStop, {
                     'deviceId': source['deviceId'],
                     'sourceId': audioId(source),
                   });
@@ -114,7 +114,7 @@ class SourcePreferencesPage extends HookConsumerWidget {
             controller.cancelAudioFollow();
             final ids = List<Object?>.of(values(appSettings['audioDevices']));
             if (source != null && audioActive(source)) {
-              await controller.request('audio.stop', {
+              await controller.execute(InteropCommand.audioStop, {
                 'deviceId': device['id'],
                 'sourceId': audioId(source),
               });
@@ -131,16 +131,17 @@ class SourcePreferencesPage extends HookConsumerWidget {
                     )
                     .toList();
                 for (final other in others) {
-                  await controller.request('audio.stop', {
+                  await controller.execute(InteropCommand.audioStop, {
                     'deviceId': other['deviceId'],
                     'sourceId': audioId(other),
                   });
                 }
                 ids.clear();
               }
-              final result = await controller.request('audio.start', {
-                'deviceId': device['id'],
-              });
+              final result = await controller.execute(
+                InteropCommand.audioStart,
+                {'deviceId': device['id']},
+              );
               if (!context.mounted) return;
               if (result['status'] == 'playing') {
                 if (!ids.contains(device['id'])) ids.add(device['id']);

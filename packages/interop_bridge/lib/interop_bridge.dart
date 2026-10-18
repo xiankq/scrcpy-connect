@@ -21,8 +21,11 @@ import 'src/share_intake.dart';
 import 'src/documents/documents_coordinator.dart';
 import 'src/documents/system_delivery.dart';
 import 'src/interop_exception.dart';
+import 'src/protocol/command_codec.dart';
+import 'src/runtime_initialization.dart';
 
 export 'src/interop_exception.dart';
+export 'src/protocol/commands_generated.dart' show InteropCommand;
 
 /// The application never invokes an external adb process. This is its only
 /// boundary to the persistent Rust runtime and ordinary platform permissions.
@@ -110,7 +113,13 @@ class InteropBridge {
   StreamSubscription<dynamic>? _platformSubscription;
 
   static Future<InteropBridge>? _initializing;
+  static String? _initializingDirectory;
   static InteropBridge? _active;
+  static final _runtime = RuntimeInitialization(
+    bindingsInitialized: () => RustLib.instance.initialized,
+    initializeBindings: RustLib.init,
+    initializeRuntime: (directory) => core.initialize(dataDirectory: directory),
+  );
 
   static Future<InteropBridge> initialize({required String dataDirectory}) {
     if (_active case final existing? when !existing._disposed) {
@@ -121,14 +130,23 @@ class InteropBridge {
         ),
       );
     }
+    if (_initializing != null && _initializingDirectory != dataDirectory) {
+      return Future.error(
+        const InteropException(
+          'runtime_directory_mismatch',
+          '互联核心正在使用另一个私有目录，请重新启动应用。',
+        ),
+      );
+    }
+    _initializingDirectory = dataDirectory;
     return _initializing ??= _initialize(dataDirectory).whenComplete(() {
       _initializing = null;
+      _initializingDirectory = null;
     });
   }
 
   static Future<InteropBridge> _initialize(String dataDirectory) async {
-    await RustLib.init();
-    await core.initialize(dataDirectory: dataDirectory);
+    await _runtime.attach(dataDirectory);
     final bridge = InteropBridge._(dataDirectory);
     try {
       bridge._eventSubscriptionId = await core.openEvents();
@@ -440,20 +458,17 @@ class InteropBridge {
         '[connect.video] stop params=$params from=${StackTrace.current}',
       );
     }
-    final raw = await core.invoke(
-      requestJson: jsonEncode({'command': command, 'params': params}),
+    final request = CoreRequest.named(command, params);
+    return request.decodeResponse(
+      await core.invoke(requestJson: request.encode()),
     );
-    final envelope = jsonDecode(raw) as Map<String, dynamic>;
-    if (envelope['ok'] != true) {
-      final error = envelope['error'] as Map<String, dynamic>? ?? const {};
-      throw InteropException(
-        error['code'] as String? ?? 'unknown',
-        error['message'] as String? ?? '操作未完成。',
-        error['details'],
-      );
-    }
-    return Map<String, dynamic>.from(envelope['data'] as Map? ?? const {});
   }
+
+  /// Typed callers and the compatibility string entrypoint share one dispatcher.
+  Future<Map<String, dynamic>> execute(
+    InteropCommand command, [
+    Map<String, dynamic> params = const {},
+  ]) => request(command.wire, params);
 
   Future<Map<String, dynamic>> request(
     String command, [

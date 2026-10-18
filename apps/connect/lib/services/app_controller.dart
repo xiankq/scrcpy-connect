@@ -1,5 +1,9 @@
 import 'dart:async';
 
+import 'package:interop_bridge/interop_bridge.dart' show InteropCommand;
+
+export 'package:interop_bridge/interop_bridge.dart' show InteropCommand;
+
 import 'package:scrcpy_connect/services/session_views.dart';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -243,6 +247,9 @@ class AppController extends _$AppController {
   bool isDisposed() => _disposed || !ref.mounted;
   AppState snapshot() => state;
   Stream<Json> eventStream() => _events.stream;
+  Future<Json> execute(InteropCommand command, [Json params = const {}]) =>
+      request(command.wire, params);
+
   Future<Json> request(String command, [Json params = const {}]) {
     // Publish user stop intent before its acknowledgement. A transport failure
     // may otherwise race the stop and make a visible page recreate the stream.
@@ -340,7 +347,7 @@ class AppController extends _$AppController {
 
     update(NotificationReplyPhase.submitting, '正在提交…');
     try {
-      final result = await request('notifications.reply', {
+      final result = await execute(InteropCommand.notificationsReply, {
         'deviceId': key.deviceId,
         'notificationId': key.notificationId,
         'text': previous.text,
@@ -435,7 +442,7 @@ class AppController extends _$AppController {
     final generation = _generation;
     final requestId = ++_shareRequest;
     try {
-      final result = await request('sharing.pending');
+      final result = await execute(InteropCommand.sharingPending);
       if (!_current(generation) || requestId != _shareRequest) return;
       var next = state;
       for (final share in objects(result['shares'])) {
@@ -449,7 +456,7 @@ class AppController extends _$AppController {
 
   Future<void> consumeShare(String id) async {
     final generation = _generation;
-    await request('sharing.consume', {'shareId': id});
+    await execute(InteropCommand.sharingConsume, {'shareId': id});
     if (!_current(generation)) return;
     _consumedShareIds.add(id);
     state = state.copyWith(
@@ -465,7 +472,7 @@ class AppController extends _$AppController {
     final requestId = ++_deviceRequest;
     state = state.copyWith(loading: true);
     try {
-      final result = await request('devices.list');
+      final result = await execute(InteropCommand.devicesList);
       if (!_current(generation) || requestId != _deviceRequest) return;
       state = state.copyWith(
         devices: objects(result['devices']),
@@ -483,7 +490,7 @@ class AppController extends _$AppController {
     final generation = _generation;
     final requestId = ++_settingsRequest;
     try {
-      final result = await request('settings.get');
+      final result = await execute(InteropCommand.settingsGet);
       if (_current(generation) && requestId == _settingsRequest) {
         _settingsEpoch++;
         state = state.copyWith(settings: result, settingsError: () => null);
@@ -501,7 +508,7 @@ class AppController extends _$AppController {
     final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
       if (!_current(generation)) return;
       final epoch = _settingsEpoch;
-      final result = await request('settings.update', {key: next});
+      final result = await execute(InteropCommand.settingsUpdate, {key: next});
       if (_current(generation) && epoch == _settingsEpoch) {
         state = state.copyWith(
           settings: {...state.settings, key: next, ...result},
@@ -543,7 +550,9 @@ class AppController extends _$AppController {
           (state.settings['audioDevices'] as List<Object?>).isNotEmpty;
       if (!intended()) return;
       try {
-        final sources = objects((await request('audio.sources'))['sources']);
+        final sources = objects(
+          (await execute(InteropCommand.audioSources))['sources'],
+        );
         if (!intended()) return;
         if (sources.any(
           (source) => source['deviceId'] == id && source['status'] == 'playing',
@@ -556,13 +565,15 @@ class AppController extends _$AppController {
               ['playing', 'starting', 'paused'].contains(source['status']),
         )) {
           if (!intended()) return;
-          await request('audio.stop', {
+          await execute(InteropCommand.audioStop, {
             'deviceId': source['deviceId'],
             'sourceId': source['sourceId'] ?? source['id'],
           });
         }
         if (!intended()) return;
-        final result = await request('audio.start', {'deviceId': id});
+        final result = await execute(InteropCommand.audioStart, {
+          'deviceId': id,
+        });
         if (!intended()) return;
         if (result['status'] != 'playing') {
           throw StateError(value(result, 'reason', '尚未确认设备声音开始播放。'));

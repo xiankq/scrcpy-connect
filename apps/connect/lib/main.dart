@@ -1,14 +1,11 @@
 import 'package:scrcpy_connect/services/app_dependencies.dart';
-import 'package:scrcpy_connect/services/media_cache_directory.dart';
+import 'package:scrcpy_connect/services/app_bootstrap.dart';
 import 'package:scrcpy_connect/services/local_notification_sink.dart';
 import 'package:scrcpy_connect/services/system_notifications.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:interop_bridge/interop_bridge.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:design_system/design_system.dart';
 import 'package:fvp/fvp.dart' as fvp;
 
@@ -20,26 +17,7 @@ Future<void> main() async {
     },
   );
   try {
-    final directory = await getApplicationSupportDirectory();
-    await directory.create(recursive: true);
-    final bridge = await InteropBridge.initialize(
-      dataDirectory: await directory.resolveSymbolicLinks(),
-    );
-    final outgoing = await outgoingMediaDirectory();
-    await bridge.request('media.cache.configure', {
-      'outgoingDirectory': outgoing.path,
-    });
-    final dependencies = AppDependencies(
-      request: (command, [params = const {}]) async {
-        try {
-          return await bridge.request(command, params);
-        } on InteropException catch (error) {
-          throw RequestFailure(error.code, error.message, error.details);
-        }
-      },
-      events: bridge.events,
-      close: bridge.dispose,
-    );
+    final dependencies = await bootstrapApplication();
     runApp(
       ProviderScope(
         overrides: [

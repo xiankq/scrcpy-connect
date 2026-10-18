@@ -94,7 +94,7 @@ pub async fn upgrade_tls<T: Transport>(stream: T, config: &TlsConfig) -> Result<
             stream,
         )
         .await
-        .map_err(Error::Io)
+        .map_err(Error::from)
 }
 fn tls_error(error: rustls::Error) -> Error {
     Error::Protocol(format!("ADB TLS: {error}"))

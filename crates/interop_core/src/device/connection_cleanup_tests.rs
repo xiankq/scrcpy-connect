@@ -23,7 +23,7 @@ fn connection() -> (Client, DuplexStream) {
 async fn old_connection_cleanup_cannot_cancel_a_replacement_video_start() {
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
-    let mut device = blank_device("127.0.0.1".into(), 9, "tcp");
+    let mut device = blank_device("127.0.0.1".into(), 9, TransportKind::Tcp);
     device.status = "connected".into();
     device.observation_wanted = false;
     // Only this test publishes a replacement; do not let the automatic connector
@@ -39,7 +39,8 @@ async fn old_connection_cleanup_cannot_cancel_a_replacement_video_start() {
         .insert(id.clone(), old.clone());
     let old_cancel = CancellationToken::new();
     let _old_reservation = runtime
-        .resource_admission
+        .activities
+        .admission
         .reserve_session(
             "old-video".into(),
             id.clone(),
@@ -85,7 +86,8 @@ async fn old_connection_cleanup_cannot_cancel_a_replacement_video_start() {
         // the newly published Client. It must survive the old monitor cleanup.
         new_reservation = Some(
             runtime
-                .resource_admission
+                .activities
+                .admission
                 .reserve_session(
                     "new-video".into(),
                     id.clone(),
@@ -106,7 +108,8 @@ async fn old_connection_cleanup_cannot_cancel_a_replacement_video_start() {
     if new_reservation.is_none() {
         new_reservation = Some(
             runtime
-                .resource_admission
+                .activities
+                .admission
                 .reserve_session(
                     "new-video".into(),
                     id.clone(),
@@ -132,7 +135,7 @@ async fn disconnect_revokes_admission_and_serializes_only_its_own_replacement() 
 
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
-    let mut device = blank_device("127.0.0.1".into(), 9, "tcp");
+    let mut device = blank_device("127.0.0.1".into(), 9, TransportKind::Tcp);
     device.observation_wanted = false;
     device.status = "connected".into();
     let id = device.id.clone();
@@ -230,7 +233,7 @@ async fn disconnect_revokes_admission_and_serializes_only_its_own_replacement() 
 async fn replacement_before_monitor_cleanup_retires_old_admission_and_ignores_stale_scan() {
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
-    let mut device = blank_device("127.0.0.1".into(), 9, "tcp");
+    let mut device = blank_device("127.0.0.1".into(), 9, TransportKind::Tcp);
     device.status = "connected".into();
     device.observation_wanted = false;
     let id = device.id.clone();
@@ -243,7 +246,8 @@ async fn replacement_before_monitor_cleanup_retires_old_admission_and_ignores_st
         .insert(id.clone(), old.clone());
     let old_cancel = CancellationToken::new();
     let _old_reservation = runtime
-        .resource_admission
+        .activities
+        .admission
         .reserve_session(
             "old-video".into(),
             id.clone(),
@@ -270,7 +274,8 @@ async fn replacement_before_monitor_cleanup_retires_old_admission_and_ignores_st
     );
     let new_cancel = CancellationToken::new();
     let _new_reservation = runtime
-        .resource_admission
+        .activities
+        .admission
         .reserve_session(
             "new-video".into(),
             id.clone(),
@@ -299,7 +304,7 @@ async fn cancelled_cleanup_must_finish_before_a_later_client_is_published() {
     for recover_without_client in [false, true] {
         let directory = tempfile::tempdir().unwrap();
         let runtime = Runtime::initialize(directory.path()).await.unwrap();
-        let mut device = blank_device("127.0.0.1".into(), 9, "tcp");
+        let mut device = blank_device("127.0.0.1".into(), 9, TransportKind::Tcp);
         device.status = "connected".into();
         device.observation_wanted = false;
         device.auto_reconnect = false;
@@ -313,7 +318,8 @@ async fn cancelled_cleanup_must_finish_before_a_later_client_is_published() {
             .insert(id.clone(), old.clone());
         let old_cancel = CancellationToken::new();
         let _old_reservation = runtime
-            .resource_admission
+            .activities
+            .admission
             .reserve_session(
                 "old-video".into(),
                 id.clone(),
@@ -395,7 +401,7 @@ async fn cancelled_disconnect_closes_detached_transport_and_preserves_cleanup() 
 
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
-    let mut device = blank_device("127.0.0.1".into(), 9, "tcp");
+    let mut device = blank_device("127.0.0.1".into(), 9, TransportKind::Tcp);
     device.status = "connected".into();
     device.observation_wanted = false;
     let id = device.id.clone();
@@ -408,7 +414,8 @@ async fn cancelled_disconnect_closes_detached_transport_and_preserves_cleanup() 
         .insert(id.clone(), old.clone());
     let cancel = CancellationToken::new();
     let _reservation = runtime
-        .resource_admission
+        .activities
+        .admission
         .reserve_session("old-video".into(), id.clone(), "old".into(), cancel.clone())
         .unwrap();
     let observation = runtime.observations.lock().await;

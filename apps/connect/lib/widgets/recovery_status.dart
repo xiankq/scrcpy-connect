@@ -20,7 +20,9 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
     if (_retrying) return;
     setState(() => _retrying = true);
     try {
-      await ref.read(appControllerProvider.notifier).request('state.reconcile');
+      await ref
+          .read(appControllerProvider.notifier)
+          .execute(InteropCommand.stateReconcile);
     } catch (_) {
       // The Bridge publishes the authoritative failure while keeping the gate.
     } finally {

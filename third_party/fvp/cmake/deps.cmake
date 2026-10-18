@@ -1,3 +1,4 @@
+include("${CMAKE_CURRENT_LIST_DIR}/mdk-release.cmake")
 if(NOT DEFINED FVP_DEPS_URL)
   set(FVP_DEPS_URL "" CACHE STRING "Base URL of MDK SDK archives")
 endif()
@@ -58,6 +59,26 @@ function(_fvp_resolve_deps_options DEFAULT_URL OUT_URL OUT_SHA256)
 
   set(${OUT_URL} "${DEPS_URL}" PARENT_SCOPE)
   set(${OUT_SHA256} "${DEPS_SHA256}" PARENT_SCOPE)
+endfunction()
+
+
+function(_fvp_resolve_sdk_pin PACKAGE OUT_URL OUT_SHA256)
+  _fvp_resolve_deps_options(
+    "${FVP_MDK_URL}"
+    FVP_DEPS_URL_EFFECTIVE
+    FVP_DEPS_SHA256_EFFECTIVE
+  )
+  if("${FVP_DEPS_SHA256_EFFECTIVE}" STREQUAL "")
+    # Mirrors may relocate the release, but cannot silently change its bytes.
+    string(REPLACE "." "_" MDK_HASH_KEY "${PACKAGE}")
+    string(REPLACE "-" "_" MDK_HASH_KEY "${MDK_HASH_KEY}")
+    set(FVP_DEPS_SHA256_EFFECTIVE "${FVP_MDK_SHA256_${MDK_HASH_KEY}}")
+  endif()
+  if("${FVP_DEPS_SHA256_EFFECTIVE}" STREQUAL "")
+    message(FATAL_ERROR "No pinned MDK digest for ${PACKAGE}; provide an explicit FVP_DEPS_SHA256 for a custom SDK")
+  endif()
+  set(${OUT_URL} "${FVP_DEPS_URL_EFFECTIVE}" PARENT_SCOPE)
+  set(${OUT_SHA256} "${FVP_DEPS_SHA256_EFFECTIVE}" PARENT_SCOPE)
 endfunction()
 
 
@@ -267,9 +288,9 @@ endfunction()
 macro(fvp_setup_deps)
   fvp_version()
   if(WIN32)
-    set(MDK_SDK_PKG mdk-sdk-windows.7z)
+    set(MDK_SDK_PKG mdk-sdk-windows-vs2026.7z)
     if(CMAKE_CXX_COMPILER_ARCHITECTURE_ID MATCHES "[xX]64") # msvc
-      set(MDK_SDK_PKG mdk-sdk-windows-x64.7z)
+      set(MDK_SDK_PKG mdk-sdk-windows-x64-vs2026.7z)
     endif()
   elseif(ANDROID)
     set(MDK_SDK_PKG mdk-sdk-android.7z)
@@ -284,11 +305,7 @@ macro(fvp_setup_deps)
     endif()
   else()
   endif()
-  _fvp_resolve_deps_options(
-    "https://sourceforge.net/projects/mdk-sdk/files/nightly"
-    FVP_DEPS_URL_EFFECTIVE
-    FVP_DEPS_SHA256_EFFECTIVE
-  )
+  _fvp_resolve_sdk_pin("${MDK_SDK_PKG}" FVP_DEPS_URL_EFFECTIVE FVP_DEPS_SHA256_EFFECTIVE)
   set(MDK_SDK_URL "${FVP_DEPS_URL_EFFECTIVE}/${MDK_SDK_PKG}")
   get_filename_component(MDK_SDK_EXTRACT_DIR "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)
   set(MDK_SDK_SAVE "${MDK_SDK_EXTRACT_DIR}/${MDK_SDK_PKG}")

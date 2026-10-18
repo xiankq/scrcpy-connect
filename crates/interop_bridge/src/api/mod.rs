@@ -1,6 +1,5 @@
 //! Command boundary. Long-lived connections and activities belong to the Rust runtime.
 use interop_core::Runtime;
-use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
 
 pub(crate) mod event_observers;
@@ -48,32 +47,19 @@ pub extern "system" fn Java_dev_scrcpyconnect_scrcpy_1connect_NativeCore_stopAll
 }
 
 pub async fn invoke(request_json: String) -> String {
+    let mut command = None;
     let result = async {
-        if request_json.len() > 1_048_576 {
-            return Err(interop_core::CoreError::new(
-                "request_limit",
-                "操作内容过长。",
-            ));
-        }
-        let request: Value = serde_json::from_str(&request_json)?;
-        let command = request["command"]
-            .as_str()
-            .ok_or_else(|| interop_core::CoreError::new("invalid_argument", "缺少操作名称。"))?;
+        let request = crate::protocol::CommandRequest::decode(&request_json)?;
+        command = Some(request.command);
         let runtime = RUNTIME.get().ok_or_else(|| {
             interop_core::CoreError::new("not_initialized", "互联核心尚未初始化。")
         })?;
         runtime
-            .invoke(
-                command,
-                request.get("params").cloned().unwrap_or_else(|| json!({})),
-            )
+            .invoke(request.command.as_str(), request.params)
             .await
     }
     .await;
-    match result {
-        Ok(data)=>json!({"ok":true,"data":data}),
-        Err(error)=>json!({"ok":false,"error":{"code":error.code,"message":error.message,"details":error.details}}),
-    }.to_string()
+    crate::protocol::response(command, result)
 }
 
 /// Reserve one event observer before constructing Dart's async* listener.

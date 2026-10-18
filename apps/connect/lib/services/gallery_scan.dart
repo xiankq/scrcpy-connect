@@ -37,7 +37,7 @@ class GalleryScan extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final pending = controller.request('media.list', {
+      final pending = controller.execute(InteropCommand.mediaList, {
         'deviceId': deviceId,
         'limit': 100,
       });
@@ -132,7 +132,7 @@ class GalleryScan extends ChangeNotifier {
     _poll?.cancel();
     try {
       final next = await controller
-          .request('media.list', {
+          .execute(InteropCommand.mediaList, {
             'deviceId': deviceId,
             'scanId': id,
             'offset': offset,
@@ -163,7 +163,10 @@ class GalleryScan extends ChangeNotifier {
     notifyListeners();
     try {
       final next = await controller
-          .request('media.scan.cancel', {'deviceId': deviceId, 'scanId': id})
+          .execute(InteropCommand.mediaScanCancel, {
+            'deviceId': deviceId,
+            'scanId': id,
+          })
           .timeout(const Duration(seconds: 15));
       if (!_current(generation)) return;
       _accept(next, offset: 0);
@@ -182,7 +185,10 @@ class GalleryScan extends ChangeNotifier {
     if (id.isEmpty) return;
     try {
       await controller
-          .request('media.scan.cancel', {'deviceId': deviceId, 'scanId': id})
+          .execute(InteropCommand.mediaScanCancel, {
+            'deviceId': deviceId,
+            'scanId': id,
+          })
           .timeout(const Duration(seconds: 15));
     } catch (_) {
       // Read-only work also has a bounded backend deadline.

@@ -55,7 +55,7 @@ Future<void> retrieveFile(
   final local = value(result, 'localPath', value(result, 'path'));
   if (share && local.isNotEmpty && result['status'] == 'completed') {
     try {
-      await controller.request('media.cache.retain', {
+      await controller.execute(InteropCommand.mediaCacheRetain, {
         'localPath': local,
         'ifManaged': true,
       });

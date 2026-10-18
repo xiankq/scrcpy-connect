@@ -2,6 +2,37 @@ use interop_core::Runtime;
 use serde_json::json;
 
 #[tokio::test]
+async fn own_tls_export_restores_transport_without_restoring_authorization() {
+    let source = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize(source.path()).await.unwrap();
+    let added = runtime
+        .invoke(
+            "devices.add",
+            json!({"address":"192.0.2.10","port":37123,"transport":"tls","name":"TLS 手机"}),
+        )
+        .await
+        .unwrap();
+    let exported = runtime.invoke("settings.export", json!({})).await.unwrap();
+    assert_eq!(exported["metadata"]["devices"][0]["transport"], "tls");
+    let target = tempfile::tempdir().unwrap();
+    let restored = Runtime::initialize(target.path()).await.unwrap();
+    let receipt = restored.invoke("settings.import", exported).await.unwrap();
+    assert_eq!(receipt["authorizationRestored"], false);
+    let list = restored.invoke("devices.list", json!({})).await.unwrap();
+    let device = &list["devices"][0];
+    assert_eq!(device["transport"], "tls");
+    assert_eq!(device["status"], "unauthorized");
+    assert_eq!(device["autoReconnect"], false);
+    assert_ne!(device["id"], added["deviceId"]);
+    drop(restored);
+    let reopened = Runtime::initialize(target.path()).await.unwrap();
+    assert_eq!(
+        reopened.invoke("devices.list", json!({})).await.unwrap()["devices"][0]["transport"],
+        "tls"
+    );
+}
+
+#[tokio::test]
 async fn export_contains_metadata_only_and_restore_never_transfers_trust() {
     let source = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(source.path()).await.unwrap();
