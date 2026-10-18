@@ -297,3 +297,23 @@ Rust ADB／共享输出／Texture沿用正式实现，不构造Live测试绑定�
 没有重建JAR。Gradle停止、两AVD正常关闭，394项debug输出1484.9MiB精确清理，
 保留release及有效缓存，当前无在线AVD。真实ARM／profile、平台decoder持续延迟、
 adbd应用失活的主动探测、实际无线切网及长稳仍未关闭。
+
+
+2026-10-18应用失活与实际decoder路径增量：`8c55b84`补空闲sync: OPEN探针、两次
+无入站进展超时后关闭精确旧Client并走既有重连，主动断开仍停止。独立review发现
+完整帧计数会误断慢大帧，真实1MiB WRTE先红；改为读取批次进展后8项wire测试通过，
+保留read_trace和协议校验。3项真实TCP/TLS Runtime用例宿主36.35秒、Android普通
+shell30.97秒通过，含健康拒绝、主动替换不误断及主动断开不复活。完整ADB72／Core169
+通过，13／49 ignored；clippy／fmt、Core三宿主交叉check通过，不当整包运行证明。
+[连接层完整证据与范围](../../../docs/implementation/connection-health.md)。
+
+实际App默认路径经LLDB关联相同AImageReader／window与MediaCodec成功配置，且
+成功acquireLatestImageAsync，调用栈包含MDK；异步图像获取已启用，不再盲试。
+首次空窗口、第二次回调KeyError与有效3条关联回执均保留，只辨路径，不拿debugger
+期间首帧比较收益。[实际路径与剩余定位](../../../docs/research/scrcpy-first-frame-performance.md#实际aimagereader异步路径确认2026-10-18)。
+
+普通main真实表单连接、全屏Settings及远端触控、悬浮退出已目视，热重载成功且无
+Dart错误；启动长帧仍有。两JAR未改未重建。fixture／会话捕获进程／JAR和自带调试
+工具确认清理，Gradle停止、两AVD正常关闭；精确清理约11.6GiB输出，保留有效缓存、
+release和/tmp证据。原生默认延迟、真实ARM／profile、实际无线切网、视频活动恢复
+及长稳仍未完成，本任务与完整目标继续开放。

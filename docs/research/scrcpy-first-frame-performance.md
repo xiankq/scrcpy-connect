@@ -450,3 +450,39 @@ scrcpy开发文档仍明确用重复前帧解决静态画面启动无帧，当�
 两个JAR摘要再次一致。只有这些输入变化或刻意做可复现构建核验时才重建，不把
 Flutter播放参数修改附带变成服务端重编译。
 [官方采集机制](https://github.com/Genymobile/scrcpy/blob/master/doc/develop.md#screen-video-encoding)。
+
+
+## 实际AImageReader异步路径确认（2026-10-18）
+
+普通Driver基准的原生默认路径已在专用主控AVD上附加LLDB，仅记录少量函数参数、
+返回值及调用栈，不调用被测函数、不记录媒体内容。下列三条成功回执可按指针关联，
+调用栈均包含libmdk.so：
+
+| 边界 | 实际回执 |
+| --- | --- |
+| AImageReader_getWindow | reader=0x73b6cac64210，返回0，window=0x73b62ac2e9c0 |
+| AMediaCodec_configure | codec=0x73b6cac64130，window与上项相同，flags=0，返回0 |
+| AImageReader_acquireLatestImageAsync | reader与首项相同，返回0，image=0x73b55ac5bac0非空 |
+
+这证明本次默认解码器输出连接到该AImageReader，且成功走异步latest acquire；
+Flutter自己的SurfaceTexture日志不能单独证明或否定这条解码路径。
+API的窗口及图像获取契约见[Android NDK AImageReader_getWindow](https://developer.android.com/ndk/reference/group/media#aimagereader_getwindow)、
+[AImageReader_acquireLatestImageAsync](https://developer.android.com/ndk/reference/group/media#aimagereader_acquirelatestimageasync)。
+这里是本次固定二进制的运行证据，不推断所有平台都走同一路径。
+
+原始事件为`/tmp/connect-decoder-path-events.jsonl`，完整LLDB日志为
+`/tmp/connect-decoder-path-lldb.log`。首次30秒窗口因host仍构建而没有事件，日志以
+`.first-empty`后缀保留；第二次16.2秒取得上述关联回执后detach。脚本在入口断点中
+注册返回回调时另有Python KeyError，原样保留，不把整次探针称为无错或完整调用
+覆盖；上述三项有效返回与指针匹配经独立解析断言，足以确认实际路径。
+
+调试器会暂停线程，第二次首帧1474ms、首次独立运行2304ms都不能用于延迟对照；
+两次严格命令均失败，fixture与App清理均确认。原始回执分别在
+`/tmp/connect-e2e/decoder-path-probe{,-r2}/result.json`。本轮没有基于它报告性能收益。
+
+这关闭了上一节“若基线未启用，再试异步acquire”的前提：实际已经启用，不再盲试
+`acquire=latest+async`。`reuse=1`也尚无基线生效证据，不直接加入默认。下一步需拆开
+MediaCodec输入到输出、图像获取到onVideo两段，用有界追踪量测等待；函数断点只用
+来辨路径，不能充当低开销逐帧计时。默认解码器、Fvp策略和两个scrcpy JAR均未改。
+连接层另已补上[ADB应用失活恢复](../implementation/connection-health.md)，它关闭
+健康socket下的无响应缺口，不代表平台延迟、实际无线切网或长稳已验收。

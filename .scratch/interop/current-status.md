@@ -4,6 +4,37 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+上一轮普通调度基准与扩量对照已提交，判为progress。本轮继续实际decoder路径定位，
+并新增真实TCP/TLS的ADB应用失活回归：对端保留socket且消费TLS字节，但不回复ADB
+请求；实际40秒未恢复、整项44.84秒红。现补空闲10秒sync: OPEN、3秒期限、两次
+无入站超时才close精确Client，交既有重连；不启动shell／进程、不操作文件、不持
+Runtime、不阻塞其它设备。正常OKAY／CLSE及其它流量均证明响应，显式断开仍停止。
+独立review发现完整帧计数会误断慢大帧；真实1MiB分段WRTE已先红，改为每个非空
+header／payload读取批次记录进展，新增慢header回归，8项wire行为测试通过且再次
+只读复核闭合。既有read_trace及协议验证通过，未改trace时钟边界或协议校验。
+最终3项真实TLS回归宿主36.35秒、Android x64普通shell30.97秒均通过，覆盖应用
+失活恢复／同ID、健康拒绝保持连接、旧probe期间主动替换不误断及主动断开不复活。
+它们不是丢TCP ACK／EOF／真实Wi-Fi切网或实际adbd故障注入的证明。
+decoder路径探针成功附加实际App，关联AImageReader_getWindow成功返回的窗口、
+相同窗口的MediaCodec成功配置及同reader成功acquireLatestImageAsync，均有libmdk
+调用栈；所以异步AImage acquire已启用，不重复该候选。首次30秒窗口等host构建
+而无事件，第二次取得3条关联回执，另有LLDB脚本回调KeyError，全部原样保留；
+只辨路径，不把debugger期间1474ms首帧作性能对照。两次fixture／App清理均确认。
+生产播放器及两个scrcpy JAR未改；JAR未重建，平台持续延迟仍开放。
+详见[连接健康实现](../../docs/implementation/connection-health.md)及
+[实际decoder路径](../../docs/research/scrcpy-first-frame-performance.md#实际aimagereader异步路径确认2026-10-18)。
+代码提交`8c55b84`。完整ADB72 passed／13 ignored、Core169 passed／49 ignored通过；
+两包all-target clippy -D warnings／fmt及Core iOS／macOS／Windows交叉check通过，
+非对应宿主Flutter整包或运行证据。普通main构建74.5秒／安装1514ms，热重载133ms
+成功、无Dart错误；真实UI手动TCP连接→全屏Settings→远端点击Network页→悬浮退出
+已操作并目视，随后通过页面移除测试记录，设备首页空态已目视。启动SurfaceSync
+和HWUI长帧仍有，不算启动流畅或严格首帧通过；未声明真实无线切网／长稳完成。
+两个诊断会话及普通会话无捕获JAR／进程残留，fixture和自带LLDB／Android测试程序
+已移除；LLDB模块缓存408.9MiB删除，原始事件／失败回调日志保留/tmp。
+Gradle停止并正常关闭两AVD；按精确清单清理472项debug输出／26个非视频测试程序
+及其incremental，共11871.9MiB，空闲52.35GiB；release、有效Flutter／Rust依赖、
+视频／health反馈循环及Gradle／CMake／SDK缓存保留。原有五项未跟踪文件未修改。
+
 上一轮已提交native计时并定位Live调度偏差，判为progress。本轮新增独立的普通
 Driver binding基准，沿用实际Rust ADB／共享PortableVideoOutputs／真实Texture，
 不构造Live测试绑定；host经ADB抓实际窗口，在延迟计时之外检查图案。首轮三会话
@@ -27,7 +58,7 @@ Future完成，所以扩量统一用writeStartedUs描述该边界，不裁掉负
 停止Gradle并正常关闭两台AVD，精确清理394项debug输出1484.9MiB，余量48.74GiB；
 release、有效Flutter／Rust／Gradle／CMake／SDK缓存及/tmp原始证据保留。
 下一步继续拆解平台decoder输入／输出与图像获取等待，并补真实ARM／profile证据；
-网络层黑洞已有期限，adbd仍ACK但不处理请求的应用失活仍待主动探测与恢复验证。
+网络层黑洞已有期限；当时待补的adbd应用失活现已修复并完成TLS夹具验收，见本页最新增量。
 
 上一批五组对照与提交判为progress，严格性能仍开放。本轮先补native snapshot提交
 时间，区分onVideo之前／之后提交及实际callback等待，再隔离测试纹理提前消费；

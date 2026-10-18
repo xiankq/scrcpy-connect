@@ -1,7 +1,9 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量见[普通调度基准与解码路径对照](#普通调度基准与解码路径对照2026-10-18)：
-补齐普通Driver绑定下的首帧、新像素及实际窗口验收；平台默认路径仍未达严格性能预算。
+最新增量：已修复[ADB应用失活恢复](connection-health.md)，并确认实际默认解码器
+已使用[异步AImageReader](../research/scrcpy-first-frame-performance.md#实际aimagereader异步路径确认2026-10-18)。
+[普通调度基准与解码路径对照](#普通调度基准与解码路径对照2026-10-18)仍是最近的可比性能数据；
+本轮调试器只辨路径，平台默认延迟仍未达严格预算。
 
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
@@ -1787,3 +1789,24 @@ SurfaceSync1000ms告警仍在，不计流畅度通过。代表原生新图案VID
 摘要与前批一致，未构建服务端。停止Gradle并正常关闭两台AVD，按已有精确清单清理
 394项debug输出1484.9MiB，空闲48.74GiB；保留release、有效Flutter／Rust／Gradle／
 CMake／SDK缓存及原始证据，记录`/tmp/connect-normal-binding-cleanup.json`。
+
+
+## 应用失活恢复与解码路径辨认（2026-10-18）
+
+代码`8c55b84`补齐TCP正常但adbd不再响应时的空闲探测与既有重连。10秒无入站
+读取进展后异步OPEN sync:，3秒期限、连续两次无进展才关闭精确旧Client；活动和
+主动替换会取消旧探针。独立review发现完整帧计数误断合法慢大帧，真实回归先红，
+现按每个非空header／payload读取批次记录进展，原协议校验和trace计时边界保留。
+[行为、所有权、测试与限制](connection-health.md)。
+
+3项公开Runtime真实TLS回归宿主及Android普通shell均通过，完整ADB72／Core169项
+通过，另13／49项ignored；clippy、fmt、Core iOS／macOS／Windows交叉check通过。
+它们不替代实际adbd故障、真实无线切网、视频活动恢复或小时级长稳。普通main已
+实际连接AVD、全屏进入Settings并触控Network页、悬浮退出，热重载133ms成功，
+无Dart错误；启动长帧告警保留，不能称严格首帧达标。
+
+同一默认播放路径的LLDB回执已把AImageReader窗口、MediaCodec成功配置及该reader
+的成功异步latest acquire按指针关联；实际已经启用异步图像获取，不再重复该调参
+候选。[探针原始证据与回调错误边界](../research/scrcpy-first-frame-performance.md#实际aimagereader异步路径确认2026-10-18)。
+不从调试器期间的首帧推导收益，继续拆解原生输入／输出和图像获取等待；默认播放
+策略和JAR均未修改。本任务及整体目标保持开放。
