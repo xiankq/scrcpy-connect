@@ -218,3 +218,36 @@ Context7精确查询无匹配，未由其缺失结果推断能力。
   原Surface资源。回调线程/跨track串行/注销drain也无保证，需保留token/Arc撤销。
 
 这些事实支持一个默认关闭的临时候选实验，不等于MDK renderer快照崩溃已修复。
+
+## VP8实时编码与公开码控参数（2026-10-18）
+
+固定frameworks/av `4b2111885ff934799e70eddae2527a9848c3be29`：C2SoftVpxEnc每次
+编码使用`VPX_DL_REALTIME`，设置`g_lag_in_frames=0`和`g_threads=0`，但没有公开
+deadline/lag/threads/complexity调节入口。`g_threads=0`在libvpx契约中等价于1线程，
+不是自动使用全部核心。[组件配置](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/components/vpx/C2SoftVpxEnc.cpp#574)、
+[实时调用](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/components/vpx/C2SoftVpxEnc.cpp#1041)、
+[线程契约](https://android.googlesource.com/platform/external/libvpx/+/718dd469f67964d8f5fd4c8ebf09513bbfa50146/vpx/vpx_encoder.h#288)。
+
+默认VBR；公开`bitrate-mode=2`经CCodec映射到CBR时，组件还设置
+`VP8E_SET_CPUUSED=-8`。固定Android16 libvpx `718dd469f67964d8f5fd4c8ebf09513bbfa50146`
+的x86_64配置为realtime-only；负值在此路径固定Speed=8，默认正值cpu_used=4则走
+自动选择。CBR同时影响码率控制等行为，不能把A/B结果全归因于speed数字。
+[CBR分支](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/components/vpx/C2SoftVpxEnc.cpp#703)、
+[公开映射](https://android.googlesource.com/platform/frameworks/av/+/4b2111885ff934799e70eddae2527a9848c3be29/media/codec2/sfplugin/CCodecConfig.cpp#389)、
+[x86配置](https://android.googlesource.com/platform/external/libvpx/+/718dd469f67964d8f5fd4c8ebf09513bbfa50146/config/x86_64/vpx_config.h#79)、
+[默认值](https://android.googlesource.com/platform/external/libvpx/+/718dd469f67964d8f5fd4c8ebf09513bbfa50146/vp8/vp8_cx_iface.c#55)、
+[速度选择](https://android.googlesource.com/platform/external/libvpx/+/718dd469f67964d8f5fd4c8ebf09513bbfa50146/vp8/encoder/encodeframe.c#685)。
+
+scrcpy v5.0.1在默认MediaFormat字段后应用codec options，所以上述参数不需要改JAR。
+显式encoder使用`createByCodecName()`并检查MIME；默认选择不承诺硬件。
+[固定scrcpy实现](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java#L280)。
+
+VP8接口没有global headers；不能等待H264式CONFIG或添加SPS/PPS/AnnexB前缀。
+当前项目以session尺寸和VP8关键帧构造Matroska轨道，CodecPrivate为空；实际
+AMediaCodec解码和新像素证据见[性能记录](../implementation/video-performance.md)。
+[空global-header接口](https://android.googlesource.com/platform/external/libvpx/+/718dd469f67964d8f5fd4c8ebf09513bbfa50146/vp8/vp8_cx_iface.c#1415)、
+[官方demux仅合并AVC/HEVC配置](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/app/src/demuxer.c#L277)。
+
+这只支持控制变量的候选实验，不保证当前系统二进制逐字对应固定AOSP源码，也不证明
+VP8在其他设备更快。相同8Mbps不等于相同画质；最终选择还需文本/照片/运动质量、
+带宽和功耗验证。不能仅凭软件编码模拟器结果改变所有设备的默认策略。

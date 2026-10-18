@@ -1,7 +1,7 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量见[时钟括号与Surface输入实验](#时钟括号与surface输入实验2026-10-18)：
-已把动态等待范围收窄到目标绘制结束至主控payload读取之间，仍未达到严格性能门槛。
+最新增量见[编码器对照与目标调度](#编码器对照与目标调度2026-10-18)：
+动态AVC/VP8/VP8-CBR实际新像素对照均未达到严格门槛，默认编码及JAR保持不变。
 
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
@@ -1264,3 +1264,108 @@ release/profile、Gradle/CMake、Rust依赖/incremental及原始证据，避免�
 
 代码`39f62ca`、真实E2E和使用说明`9c42aff`；未push。下一项继续动态上游采集/编码
 排队与MDK安全读帧，独立应用任务接续及物理无线切换须另取实际证据。
+
+
+## 编码器对照与目标调度（2026-10-18）
+
+现有性能入口增加显式`CONNECT_PERF_CODEC`与`CONNECT_PERF_ENCODER`，默认H264、
+平台选编码器不变。三组串行运行，同一双AVD、动态夹具、实际576×1280、请求60fps/
+8Mbps、经典ADB、原生AMediaCodec、逐帧trace开启，无额外snapshot压力或目标时间线。
+每组2轮新连接/新会话、16次精确新计数、2次暂停恢复和实际Flutter合成验证；三组
+`frameCorrelationComplete`/`fixtureCleanupConfirmed`均true，纹理分离/停止及fixture
+卸载确认完成。两轮最终合成计数为9/2，三组首轮截图已目视，非黑屏。
+
+| 配置 | 首像素两轮ms | 输入P50/P95 ms | 输入→relay中位ms | relay→onVideo中位ms |
+| --- | --- | --- | --- | --- |
+| H264，c2.android.avc.encoder | 2830 / 2520 | 1331 / 1592 | 1105.069 | 187.141 |
+| VP8默认，c2.android.vp8.encoder | 2357 / 2308 | 973 / 1508 | 786.994 | 140.744 |
+| VP8临时CBR=2，同编码器 | 2256 / 2253 | 1135 / 1546 | 937.767 | 181.067 |
+
+onVideo→snapshot中位分别31.457/29.373/32.399ms。这里分段中位数不能相加解释
+整体分位数。实际`video.frameTrace`codec为h264/vp8/vp8，VP8的CodecPrivate为空；
+`decoder.video`均明确AMediaCodec，不能称模拟器物理硬解。编码器名称由显式参数
+及既有枚举/服务端createByCodecName契约确认，没有新增实际encoder运行日志。
+
+三组门槛保持首像素≤1000ms、输入P50≤200ms/P95≤300ms，均**exit1**，
+`videoPerformanceComplete=false`。功能循环完成，性能未达标；完整
+样本/清理见`/tmp/connect-e2e/video-codec-{avc,vp8,vp8-cbr}/`，命令输出分别
+`/tmp/connect-video-codec-{avc,vp8,vp8-cbr}.log`。每组仅16次、固定顺序且没有交叉复测，
+不把差异当稳定收益或跨设备推荐。动态色块不是文本/照片画质或稳定60fps吞吐验收。
+历史MDK snapshot原生崩溃依然开放；本次未崩溃不代表已修复。
+
+CBR候选仅在Rust构造scrcpy参数后、显式encoder参数前，对VP8追加
+`,bitrate-mode=2`；不改JAR。原始源码已逐字节恢复，git diff为0。临时补丁保留
+`/tmp/connect-vp8-cbr-candidate.patch`；该候选未胜过本次默认VP8，不进入生产默认。
+固定AOSP的真实码控/CPUUSED分支和限制见[一手研究](../research/scrcpy-first-frame-performance.md#vp8实时编码与公开码控参数2026-10-18)。
+
+复跑H264基线（apps/connect，沿用本文前面的双AVD/fixture构建及25556转发条件）：
+
+```sh
+CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
+CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
+CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_VIDEO_TIMELINE=false \
+CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-codec-avc \
+flutter drive -d emulator-5554 --no-pub \
+  --driver=test_driver/video_performance.dart \
+  --target=integration_test/video_performance_test.dart \
+  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556 \
+  --dart-define=CONNECT_PERF_CODEC=h264 \
+  --dart-define=CONNECT_PERF_ENCODER=c2.android.avc.encoder \
+  --dart-define=CONNECT_PERF_DECODER=native --dart-define=CONNECT_PERF_TRACE_FRAMES=true \
+  --dart-define=CONNECT_PERF_MAX_SIZE=1280 --dart-define=CONNECT_PERF_MAX_FPS=60 \
+  --dart-define=CONNECT_PERF_BIT_RATE=8000000 --dart-define=CONNECT_PERF_ADB_BURST=false \
+  --dart-define=CONNECT_PERF_ROUNDS=2 --dart-define=CONNECT_PERF_TRANSITIONS=8 \
+  --dart-define=CONNECT_PERF_PAUSE_CYCLES=1 \
+  --dart-define=CONNECT_PERF_MAX_START_MS=1000 \
+  --dart-define=CONNECT_PERF_MAX_P50_MS=200 --dart-define=CONNECT_PERF_MAX_P95_MS=300
+```
+
+VP8组仅替换codec/encoder和输出目录。CBR额外加上述临时参数，结束后恢复源码。
+禁止为让命令变绿而放宽门槛或减小分辨率/帧率。
+
+既有Perfetto `/tmp/connect-raw-drain-fbf1db6ec385/capture.perfetto-trace`继续只读分析，
+不混入此次Flutter对照。真实软件AVC在`media.swcodec` PID639/TID14829，捕获进程
+14802的CodecLooper接收完成回调。7.982333秒trace中，主编码线程已记录状态
+7.656137秒，最初326.196ms没有其状态证据。
+
+| 线程组 | on-CPU ms | 可运行等待R/R+ ms | 睡眠S ms |
+| --- | --- | --- | --- |
+| 主编码线程14829 | 4009.856 | 3595.733 | 50.548 |
+| 另外303个同名编码线程合计 | 2548.586 | 2929.372 | 35.783 |
+| 捕获CodecLooper | 99.896 | 188.023 | 7349.491 |
+
+两目标vCPU的闭合sched覆盖7.647357/7.646336秒、非idle96.90%/96.53%。线程时间
+合计不能当墙钟，主线程可运行等待不等于编码计算。trace每秒Surface queueBuffer
+调用40/60/60/60/59/60/60/59，组件完成25/54/57/55/30/29/28/25；后段完成吞吐
+下降而Surface调用仍约60/s。不同层没有逐帧身份映射，不能据此推断丢帧数、slots或
+具体队列深度。已精确匹配的303项完成PTS首末跨度7.186644秒、完成回调跨度
+7.604008秒，条件源年龄首末增长417.364ms；三段各101项年龄中位
+290.313/285.255/590.659ms，保留原时钟和连续运行假设。
+
+主线程状态复算（已有官方trace_processor，dur=-1裁剪到trace末尾）：
+
+```sql
+WITH w AS (SELECT start_ts lo,end_ts hi FROM trace_bounds), x AS (
+  SELECT st.state, MAX(0,MIN(
+    CASE WHEN st.dur=-1 THEN w.hi ELSE st.ts+st.dur END,w.hi
+  )-MAX(st.ts,w.lo)) d
+  FROM thread_state st JOIN thread t USING(utid)
+  JOIN process p USING(upid) CROSS JOIN w
+  WHERE p.pid=639 AND t.tid=14829 AND st.ts<w.hi
+    AND (st.dur=-1 OR st.ts+st.dur>w.lo)
+)
+SELECT state,ROUND(SUM(d)/1e6,3) milliseconds FROM x GROUP BY state;
+```
+
+主代理独立复算R=2556.841、R+=1038.892、Running=4009.856、S=50.548ms。
+证据支持目标调度竞争及源年龄增长，不能独证无竞争时软件编码算力仍不足。
+下一步优先隔离目标CPU/合成竞争并观察实际输出吞吐，不继续盲加通用复杂度参数。
+现有JAR摘要仍与manifest及vendor摘要一致；本批未修改/重建两个JAR。
+
+性能入口严格Dart分析无问题、format/diff检查通过。普通main从恢复后的源码构建
+59.7秒/安装576ms，实际热重载120ms且无Dart运行错误，设备首页已目视后detach；
+启动Skipped34 frames警告仍存在，不计流畅度通过。Gradle停止后清理394项明确
+Android debug输出，释放1493.4MiB、空闲51.3GiB；保留release/native hooks/Rust/
+Gradle/CMake、Flutter hash缓存和全部原始证据。记录`/tmp/connect-video-codec-cleanup.json`。
+目标无捕获进程/fixture，本批6个session逐项确认无遗留捕获JAR。
