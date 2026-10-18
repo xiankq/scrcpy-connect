@@ -389,3 +389,28 @@ Java调用返回不能证明所有设备已清队列。
 硬门禁包括动态→唯一终值→完全静止、单次变化后静止、静态冷启、旋转、暂停恢复；
 最终真实像素必须原样到达，不能靠事后refresh掩盖。之后才比较A/B/A新像素、CPU、
 吞吐、首帧与失败数。此处是源码否定与实验边界，未声称已做pulse实机实验或性能改善。
+
+
+## Flutter测试帧策略与产品呈现边界（2026-10-18）
+
+已对照本机Flutter3.47.6完整framework提交
+`5fc346839b5d0eef006ed8404392afb4dfae428d`的源码，非按旧引擎记忆推断。
+IntegrationTest继承Live绑定且不覆盖帧策略，默认fadePointers在无pump等条件时跳过
+框架帧；fullyLive及benchmarkLive放行。非pump的handleDrawFrame又在除benchmark外
+无条件请求下一帧，所以直接启用fullyLive会持续框架绘制，benchmarkLive不能消除此
+循环，还会改变pump语义。
+[默认和帧处理](https://github.com/flutter/flutter/blob/5fc346839b5d0eef006ed8404392afb4dfae428d/packages/flutter_test/lib/src/binding.dart#L2754)、
+[IntegrationTest继承](https://github.com/flutter/flutter/blob/5fc346839b5d0eef006ed8404392afb4dfae428d/packages/integration_test/lib/integration_test.dart#L45)。
+
+反过来也不能把默认的空档当正常产品：当前SurfaceTexture回调markDirty后调用
+scheduleEngineFrame，经Shell到默认Engine.ScheduleFrame(true)，请求重建layer tree；
+旧外部纹理可复用场景路径仍在，但不能保证此处总绕过测试策略。
+[SurfaceTexture回调](https://github.com/flutter/flutter/blob/5fc346839b5d0eef006ed8404392afb4dfae428d/engine/src/flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java#L352)、
+[引擎调度](https://github.com/flutter/flutter/blob/5fc346839b5d0eef006ed8404392afb4dfae428d/engine/src/flutter/shell/common/shell.cc#L1117)、
+[默认参数](https://github.com/flutter/flutter/blob/5fc346839b5d0eef006ed8404392afb4dfae428d/engine/src/flutter/shell/common/engine.h#L893)。
+
+由此保留原门禁及其readback/阶段性呈现范围，回执增加binding和framePolicy；不把
+本次fullyLive实验写成纯产品速度。真实普通main静态trace与临时测试trace已分别
+采集，实际负载明显不同，但场景／时段不匹配，不报告优化百分比。需用正常
+WidgetsFlutterBinding运行入口、连续实际Texture和真实计数器验证补齐性能验收。
+[两类实测及原始证据](../implementation/video-performance.md#截图提交时间与测试帧调度边界2026-10-18)。

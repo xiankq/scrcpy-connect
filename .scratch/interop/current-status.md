@@ -4,6 +4,28 @@
 
 ## 当前视频性能增量（2026-10-18）
 
+上一批五组对照与提交判为progress，严格性能仍开放。本轮先补native snapshot提交
+时间，区分onVideo之前／之后提交及实际callback等待，再隔离测试纹理提前消费；
+同时只读核查静止视频下TCP半开／网络黑洞健康检查。尚无新的优化收益或验收通过。
+native提交计时与真实C ABI边界通过，完整Bridge Rust17项／clippy／fmt通过。
+四组三轮真实会话均完成像素／暂停／呈现／清理，严格性能全失败；提前挂载及等待
+decode再snapshot未有稳定整体改善，临时Dart/Fvp改动按原字节恢复。额外发现本批
+fullyLive会与测试绑定无条件scheduleFrame形成持续框架帧负载，不能当生产等效；
+Perfetto光栅高CPU只说明该负载实验，原默认门禁不变。正转普通App实际页面核验。
+只读确认TCP黑洞已有keepalive及USER_TIMEOUT，应用层adbd仍ACK但不处理请求则
+缺主动探测，显式断开重连可恢复；不重复已有网络层实现，另留应用失活验收。
+普通main真实表单→设备页→全屏远控已操作，目视目标图案0→2；正常绑定静态15秒
+trace中raster CPU378.232ms／6次swap、视频Surface59.458ms／11次swap、无data-loss，
+对比fullyLive的6.558秒只澄清负载边界，场景不同，不是性能收益或冷首帧测量。
+普通main热重载成功、无Dart错误、测试记录移除后设备首页已目视；两个JAR未变。
+12个已知session JAR逐项无残留、全局匹配捕获JAR与捕获进程均为空，额外普通App
+夹具已卸载，Perfetto临时文件已从设备移除。主控AVD RSS增长至约8.44GiB，停止
+Gradle并正常关闭两台AVD释放内存；精确清理394项debug输出1484.6MiB，空闲49.6GiB。
+源码仅保留native snapshot提交时刻及测试回执binding／framePolicy，不改播放器策略。
+代码提交`f4db3b6`，详见[本批证据](../../docs/implementation/video-performance.md#截图提交时间与测试帧调度边界2026-10-18)。
+下一项采用正常WidgetsFlutterBinding入口测冷启动／实际输入至新像素／持续Texture，
+保留严格预算及暂停清理；不再仅靠调整Live测试策略判断产品优化收益。
+
 本轮继续重复编码器分配候选：上一轮完成了实际依赖修补与设备验证，判为progress。
 先在同一捕获JAR、重新冷启的目标AVD上采集codec创建／释放系统时序，不将新旧
 AVD生命周期差异当优化收益；保持门槛、码率／分辨率／帧率及原协议。对照将记录

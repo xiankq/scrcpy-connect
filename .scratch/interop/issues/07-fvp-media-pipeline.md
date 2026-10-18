@@ -262,3 +262,17 @@ buffer隔离实验参数，默认不覆盖SDK。五组15会话／30次正常新�
 普通main热重载成功、无Dart运行错误、首页已目视并detach；启动卡顿告警继续开放。
 Gradle停止、394项debug输出清理1484.6MiB，保留有效缓存及release。目标15个session
 JAR与捕获进程确认无残留后正常关闭，主控保留首页。完整目标和本任务继续开放。
+
+
+2026-10-18截图提交计时及呈现门禁复核：native元数据增加同钟submittedElapsedUs，
+完整Bridge Rust17项／严格clippy／fmt通过。四组三轮真实负载实验均完成新像素、
+暂停恢复及Texture，严格性能仍失败；提前挂载或等decode后截图未保留生产改动。
+发现fullyLive叠加Live绑定自调度形成额外持续框架绘制，原默认又会抑制部分框架帧；
+两者都不能直接充当正常产品等效。普通main真实UI连AVD及全屏0→2已目视，正常
+静态trace与测试负载分开记录；仍缺正常binding下的完整首帧/输入性能测量入口。
+仅保留native计时与回执binding/framePolicy，代码`f4db3b6`，两JAR未改未重建。
+[实验、源码边界及真实产品页](../../../docs/implementation/video-performance.md#截图提交时间与测试帧调度边界2026-10-18)。
+
+普通main热重载成功／无Dart错误；测试设备记录、fixture、12个session JAR及捕获
+进程确认清理，设备首页已目视。AVD内存增长后正常关闭两台模拟器，Gradle停止，
+清理394项debug输出1484.6MiB，保留release及有效缓存。本任务与完整目标继续开放。

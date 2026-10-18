@@ -1,7 +1,7 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量见[首个验证画面的观测与隔离对照](#首个验证画面的观测与隔离对照2026-10-18)：
-保留首个snapshot的同PTS时序，五组15个真实会话完成；严格首帧／输入延迟仍未达标。
+最新增量见[截图提交时间与测试帧调度边界](#截图提交时间与测试帧调度边界2026-10-18)：
+分清原生请求及回调等待，并用普通App核对持续绘制测试负载；严格性能仍未达标。
 
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。本批没有修改或重建 scrcpy JAR。[产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方 vendor 文件和当前视频依赖的既有暂停补丁产物。
 
@@ -1605,3 +1605,81 @@ Skipped34frames／SurfaceSync1000ms仍开放。15个session捕获JAR逐一确认
 证据保留。清理记录`/tmp/connect-startup-observed-cleanup.json`及
 `/tmp/connect-startup-observed-target-cleanup.json`，资源记录
 `/tmp/connect-codec-allocation-resources.jsonl`。后续双机测量须重启目标并恢复TCP转发。
+
+
+## 截图提交时间与测试帧调度边界（2026-10-18）
+
+保留的代码为native trace成功snapshot元数据增加`submittedElapsedUs`：请求登记后、
+调用MDK API前取同一native单调时钟，回调已有`elapsedUs`不变。它不是跨设备时间，
+也不等于精确GPU开始时间。真实C ABI测试断言提交在调用前后观测括界内、提交≤回调
+≤读取时刻；完整Bridge Rust17项／严格all-target clippy／fmt通过。测试回执另增加
+binding及framePolicy名称，保留原默认策略。最终指定Dart分析／format通过。
+
+**四组诊断均显式改为fullyLive，不能混入原默认基线。** 每组3轮，1280/60/8Mbps、
+实际576×1280 H264/AMediaCodec、trace开启，严格1000/200/300预算未变。第一候选
+仅提前挂载Texture，通过临时allocated事件驱动ValueNotifier；第二候选恢复挂载时机，
+仅等首次已观测decode再snapshot（5ms轮询，4秒界限）。这两项都没有删除播放确认、
+32×32有效像素或64×64计数器断言，均已按原字节撤回，不进入产品默认。
+
+| 持续框架绘制负载实验 | 全启动可读像素ms | 输出verified ms | snapshot登记→回调ms | 正常输入P50/P95 ms |
+| --- | --- | --- | --- | --- |
+| A 默认调用顺序 | 2657 / 1287 / 1259 | 624 / 475 / 481 | 422.345 / 404.473 / 404.680 | 265 / 378 |
+| 提前挂载Texture | 1896 / 1325 / 1442 | 693 / 548 / 548 | 496.300 / 515.732 / 531.538 | 311 / 471 |
+| 等decode再snapshot | 2008 / 1334 / 1214 | 614 / 508 / 451 | 158.638 / 270.459 / 206.414 | 281 / 452 |
+| 恢复默认顺序＋Perfetto | 1888 / 1337 / 1364 | 597 / 467 / 545 | 381.156 / 442.805 / 501.071 | 319 / 391 |
+
+所有命令exit1，12会话／24次正常新像素／12次暂停恢复、真实Texture图案3/6/9、
+停止分离及夹具卸载完成。提前挂载三轮`textureMountedWhenReady=true`，其余为false；
+不是一个未真正挂载的空实验。A的请求登记早于对应decode约60/166/85ms，因此不能
+把该组数百毫秒差解释为Dart迟交请求。等待decode使请求区间变短，但把等待移到了
+提交之前，完整输出没有稳定改善；不将分段数字缩短冒充首帧收益。首轮目标冷开销
+较大，末组有采集开销，三次短样本均不支撑因果优化结论。
+
+原始结果位于`/tmp/connect-e2e/video-early-texture-baseline`、
+`video-early-texture-attached`、`video-snapshot-after-decode`、`video-early-texture-return`。
+宿主日志为`/tmp/connect-<目录名>.log`。复现请求参数沿用上一节公共命令，临时实验
+源存`/tmp/connect-early-texture-test.candidate.dart`及
+`/tmp/connect-early-texture-player.candidate.dart`；共同设置fullyLive，分别追加
+`CONNECT_PERF_ATTACH_EARLY=true`或`CONNECT_PERF_WAIT_DECODE=true`的dart-define。
+这些候选不在当前生产代码；不能只传flag就声称重现。用于历史核验的原始源码备份
+另有`*.before.dart`，勿覆盖后续改动。临时汇总脚本
+`/tmp/connect-summarize-startup-submission.py`逐次要求唯一同PTS并检查时间顺序。
+
+**发现测试调度会改变负载。** Flutter3.47.6默认Live策略fadePointers会在无显式pump
+等条件时跳过框架帧；fullyLive则放行。Live.handleDrawFrame在非pump／非benchmark时
+又无条件scheduleFrame，形成持续框架帧循环；benchmarkLive也不消除该循环。
+另一方面，当前SurfaceTexture会请求重建框架场景，原默认异步阶段又可能抑制实际
+视频消费。因此默认与fullyLive都不能直接叫正常产品等效：原结果仍是实际readback
+及阶段性Texture检查，但缺持续呈现负载证明，不能凭它关闭产品延迟验收。
+[一手源码核对](../research/scrcpy-first-frame-performance.md#flutter测试帧策略与产品呈现边界2026-10-18)。
+
+末组controller Perfetto长14.808651秒，PID7513 raster CPU6558.009ms，两个
+JNISurfaceTextu线程795.436＋1440.490ms；整窗eglSwapBuffers约656次，视频Surface
+约147次dequeue，trace无data-loss。不同SQL对dur>0的过滤会少计一个未完成/零时长
+swap，不能混成严格逐帧对应。此处是强制框架绘制负载证据，不能把6.558秒全算正常
+视频或首次snapshot的300ms。trace与采集日志在末组目录，SQL摘要保留
+`/tmp/connect-controller-startup-{cpu,slices,surface-slices}.csv`。未加入无效的全局优化。
+
+**普通产品页另验。** 恢复main后热重载成功、Dart无运行错误；通过真实UI手动TCP
+表单添加隔离AVD、进入设备页及全屏远控。临时fixture显示0→1→2，变更由目标侧
+ADB keyevent触发，主控截图0和2已目视；这不是输入往返延迟测试。保持正常
+WidgetsFlutterBinding，在静态计数2阶段另采15秒trace：实际14.850150秒，PID7875
+raster CPU378.232ms／6次swap，视频Surface59.458ms／11次swap，trace无data-loss。
+已有产品偏好、实际576×1280，不宣称与上表逐参数/启动阶段一致；正常静态和强制
+绘制试验不能直接相除当优化收益。第一次后台采集启动器退出导致录制进程已消失、
+设备仅0字节文件，明确不计证据；确认终态后保持启动器存活重采成功并移除两份远端
+临时文件。原件、SQL摘要、截图和清理记录均在`/tmp/connect-product-rendering/`。
+
+代码提交`f4db3b6`。后续必须建立正常binding下、保留真实像素与Texture呈现的启动/
+输入测量入口，再判断主控优化收益，不能通过切换测试帧策略制造性能通过。目标编码
+积压及历史MDK worker崩溃继续开放。应用层失活亦须另验：已有TCP keepalive及
+USER_TIMEOUT覆盖网络黑洞，但内核仍ACK而adbd不处理请求不触发此机制，当前可显式
+断开再连；不重复实现已存在的TCP检测，也不把静止视频视为失活。
+
+普通App临时设备记录已通过页面移除、首页目视，额外fixture已卸载。12个session的
+JAR逐项确认不存在，匹配捕获JAR与捕获进程均为空；证明
+`/tmp/connect-early-texture-target-cleanup.json`。两个scrcpy JAR摘要不变、未重建。
+主控AVD RSS升至8846412KiB后不继续堆测，detach、停止Gradle、正常关闭两台AVD；
+精确清理394项debug输出1484.6MiB，空闲49.6GiB，保留release／有效缓存／原始证据。
+资源及清理记录`/tmp/connect-early-texture-resources.jsonl`、
+`/tmp/connect-early-texture-cleanup.json`，当前无在线AVD，下轮需冷启并恢复25556转发。
