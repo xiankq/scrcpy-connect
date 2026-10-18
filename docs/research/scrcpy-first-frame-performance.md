@@ -12,6 +12,12 @@
 仅服务端源码／补丁／版本／构建工具链变化或显式可复现核验才需要重建，
 Flutter或Rust的传输／播放器改动不会自行改变已嵌入的JAR字节。
 
+后续首次分配调查确实修改了被控服务源码，因此另建`initial-codec`隔离产物
+23dc3f84…，验证MediaCodec探测与首捕获复用。它不叠加bounded-input，不覆盖生产：
+源端15次确认分配2→1，完整Flutter A/B/A没有稳定首帧收益，故生产仍b46cd074…。
+详见[候选及复现](../../servers/scrcpy/experiments/initial-codec/README.md)与
+[实际验收](../implementation/video-performance.md#首次编码器分配复用源端减少一次完整首帧未通过)。
+
 **推论：本轮视频传输、首帧与连接稳定性没有证据要求新增 Java 补丁或重新构建 JAR。** 首先改进主控设备的计时、播放器请求/确认顺序、数据消费与背压处理；保持现有服务端协议与暂停扩展。这个结论不意味着可以把当前视频会话换成未修改官方 JAR：当前主控已经依赖暂停扩展 type 128，直接替换会破坏协议。[本地实现](../../crates/interop_core/src/scrcpy.rs)、[已有补丁说明](../../servers/scrcpy/README.md)
 
 | 对象 | 本轮核验 | 结论 |

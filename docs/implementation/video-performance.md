@@ -1,6 +1,7 @@
 # 视频首帧、持续新像素与阻塞恢复
 
-最新增量：实际Rust／Flutter完整编码前缀已逐帧验证，见下一节；8输入中7项snapshot
+最新增量：首次MediaCodec分配复用候选在源端15次实测确认2→1，但完整Flutter
+A/B/A没有稳定首帧收益，不采用生产，见下一节。实际Rust／Flutter完整编码前缀已逐帧验证；8输入中7项snapshot
 选中最早新计数帧，input→firstRaw中位335.226ms，首帧与整体输入预算仍失败。
 生产JAR不替换。此前普通Driver源时钟诊断与隔离服务端输入窗口实验：原双项→稳定
 单项→双项返回输入P50／P95为691／852→581／810→686／925ms，首帧无稳定收益，
@@ -12,6 +13,69 @@
 2026-10-18。按用户最新优先级推进视频性能、首帧和连接稳定性；USB 等产品工作顺延。
 仅实际改动被控捕获服务的隔离实验重建JAR，主控调优复用既有产物。
 [产物与官方机制核查](../research/scrcpy-first-frame-performance.md)区分官方vendor文件和当前视频依赖的既有暂停补丁产物。
+
+## 首次编码器分配复用：源端减少一次，完整首帧未通过
+
+2026-10-18。仅`initial-codec`隔离补丁改服务端源码，未叠加bounded-input，未覆盖
+生产JAR。基线暂停扩展创建编码器查询能力后释放，再为首捕获创建；候选初始gate
+前移，用首次实例查询和捕获，codec选择、画质、约束与重试保持。控制对象必须在
+构造时绑定到实际SurfaceCapture，避免Controller在init前丢弃pause/reset；flex
+display初始暂停期间收到resize仅保留最新请求，实际init约束后应用。
+
+真实编译`SurfaceEncoder.streamCapture()`接缝基线4项红：双分配、初始控制对象
+为空、创建中pause未经历真实迭代清理、init失败缺少capture释放。候选5项全绿，
+含清理中第二次pause的确认顺序。初版候选另由真实`NewDisplayCapture.requestResize`
+复现null约束NPE，v2通过最新请求／真实Size约束／debouncer启动及释放。只替换
+Android SDK接口，没有复制项目状态机。Python构建安全与协议／首包oracle／绝对
+期限共15项通过；slow-trickle不会无限延长启动等待。对应源码及复现命令见
+[候选说明](../../servers/scrcpy/experiments/initial-codec/README.md)。
+
+同两台API36／2vCPU／2048MB SwiftShader AVD，构建全部结束、停止Gradle后测量。
+官方ADB源端5组A/B/A共15次新进程：固定c2.android.avc.encoder、H2641280／60／8M、
+repeat33334µs，每个首媒体包完整离线解码并核对计数0与576×1280。准确PID native
+日志每次基线2分配、候选1分配。首包组中位370.494／358.573／345.836ms，候选减
+前后基线均值的配对中位-26.611ms；五组差值-46.422、-61.466、-26.611、+27.115、
+-1.861ms。排除部署、fixture启动与离线解码；该有限结果不等于Flutter可见收益。
+原件`/tmp/connect-initial-codec-startup-aba`，脚本
+[benchmark_startup.py](../../servers/scrcpy/benchmark_startup.py)。
+
+实际候选生命周期验证：control连接后立即pause、静止首帧与唯一更新、3.5秒静止后
+新计数2、动态→终值、再次pause/resume新计数、旋转和旋转后输入，共8阶段正确。
+初始pause及后续pause确认后均静止，最终精确进程／临时JAR／forward／fixture／设置
+清理通过。初次错误复用bounded-input的无限静态repeat断言失败，保留
+`/tmp/connect-initial-codec-lifecycle`；原生GBS只有限重复，正确夹具要求静止后新计数
+确实到达，最终原件`/tmp/connect-initial-codec-native-lifecycle`。不把合法静态停帧当
+失活，也不删除失败证据。
+
+普通Driver使用同代码、仅内嵌JAR不同的两APK，各1轮8输入，default解码、同目标质量：
+
+| 观测（ms） | 基线A1 | 候选B | 返回基线A2 |
+| --- | ---: | ---: | ---: |
+| 首有效像素 | 2433 | 2356 | 2223 |
+| Core启动 | 965 | 1045 | 1079 |
+| 输出首帧验证 | 1455 | 1299 | 1133 |
+| 输入P50／P95 | 1819／2127 | 1715／2007 | 1714／1911 |
+| input→最早raw中位 | 1623.562 | 1483.765 | 1429.539 |
+| drawEnd→raw条件区间的各端中位 | 1555.193–1628.207 | 1422.573–1469.443 | 1351.555–1412.613 |
+
+候选无稳定优于返回基线的收益，三组严格exit1，**不替换生产JAR**。三份档案
+658／599／647帧精确PTS全部解码关联，最早选帧分别6/8、7/8、6/8，全部最早onVideo
+确实观察到；时钟区间73.014／46.870／61.058ms，drawEnd不是合成完成或物理扫描。
+30张真实全屏窗口计数全部正确，部分超3秒仍失败；暂停／恢复ACK与新计数、逻辑
+stop和fixture/App/driver清理通过。`disposeRequested`仍无native delete确认，不改称
+删除完成。窗口已目视。相比先前bounded-input档案，这里是原生直接输入路径，不
+直接把两次不同负载运行作该补丁的收益对照。
+
+APK`/tmp/connect-artifacts/initial-codec-{baseline,candidate}-debug.apk`摘要
+52bdcdd5…／93c542d7…，核验完整内嵌基线b46cd074…／候选23dc3f84…且另一JAR缺席；
+构建74.1／54.5秒。原件`/tmp/connect-e2e/initial-codec-product-{a1,b,a2}`，汇总
+`/tmp/connect-initial-codec-{product-summary,correlations,apks}.json`。
+该轮缩小了首次分配假设，未解决源端持续积压或主控首呈现。下一步针对实际
+callback／原sourceTimestamp／repeat／credit的等待关联；不再重复本项A/B/A。
+收尾复用普通main APK89527f9a…，MCP热重载成功、无Dart运行错误，设备列表首页
+已目视；没有追加main构建。DTD断开、精确forward清除、两自有AVD核名关闭且PID
+消失，生产三JAR摘要未变。隔离JAR输入恢复生产，删除11项重复debug产物1310.7MiB，
+空闲37.21GiB，保留实测APK／原始证据／有效缓存；清理回执见当前完成度。
 
 ## 实际播放器完整帧前缀与最早新像素
 

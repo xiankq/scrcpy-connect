@@ -33,6 +33,17 @@ fvp/MDK 是否能满足 scrcpy 实时流低延迟、音画同步和 Flutter 渲�
 
 ## 当前状态
 
+2026-10-18首次分配候选：真实SurfaceEncoder及NewDisplay回归先红后绿，源端15次
+证实分配2→1，但普通Flutter A/B/A首像素2433／2356／2223ms、输入P50
+1819／1715／1714ms，无稳定收益，保持隔离、不覆盖生产JAR。全部窗口正确，三份
+658／599／647帧档案精确关联、暂停恢复与逻辑stop通过；native delete确认仍缺。
+完整数字、命令、初次夹具失败及限定边界见[最新性能记录](../../../docs/implementation/video-performance.md#首次编码器分配复用源端减少一次完整首帧未通过)。
+下一步不重复首次分配／提前挂载调参：在bounded-input中关联同一reservation的
+callback、updateTexImage前后、原sourceTimestamp、repeat／编码PTS、swap、输出写入
+和credit post/run，区分源队列年龄与单credit在途服务。先验证实际等待归属；wire PTS
+可能被重复帧单调clamp，不能直接当原sourceTimestamp年龄。不因候选可继续播放或
+文档上的latest命名，就认定已取得最新源buffer。
+
 2026-10-17重新核查：当前共享fvp五codec、PCM、旋转/HOME/焦点有真实证据，旧自写播放器已删除。
 
 首次画质选择已修复并通过真实页面；总延迟/同步/资源/物理播放尚未验收，HEVC1280回退低清不算质量通过，1080真实页路径已有后续证据，MDK原生产物闭包仍缺（A41）。
