@@ -59,7 +59,7 @@ Requirements: R08–R11
 
 ## A52 候选与代际实施
 
-后台可信 GUID 候选遍历及更新／撤销／ABA 已接 Core，真实 DNS-SD／TLS 七项 89.08 秒通过；初始仅缓存旧地址、随后发现新地址的错误发布先红后绿。缓存按可信 GUID 限额并回收遗忘设备。首次配对快速路径、多网卡／物理换网／IPv6 scope／Wi-Fi2仍未关闭，不能把本批局部结果当“完整无线”验收。详见[无线重连](../../../docs/implementation/wireless-reconnect.md)。
+后台可信 GUID 候选遍历及更新／撤销／ABA 已接 Core，真实 DNS-SD／TLS 七项 89.08 秒通过；初始仅缓存旧地址、随后发现新地址的错误发布先红后绿。缓存按可信 GUID 限额并回收遗忘设备。首次配对快速路径后续已修（见下）；多网卡／物理换网／IPv6 scope／Wi-Fi2仍未关闭，不能把本批局部结果当“完整无线”验收。详见[无线重连](../../../docs/implementation/wireless-reconnect.md)。
 
 ## A56实际锁版处置与A58
 
@@ -70,3 +70,10 @@ Requirements: R08–R11
 A56其余逐库契约／完整ADB fuzz、生产密码与四宿主整包继续开放。
 
 A58解析器修复已提交`e776065`，新锁版真实DNS-SD／TLS七项77.36秒、iOS／macOS／Windows核心check、完整`tool/check.sh --android`全部通过；三ABI APK与实际manifest／ELF均核验。默认Rust186／58 ignored与显式七项分别记，不重复计数。上面的整项仍开放，因为daemon异常关闭后的重建／清理尚未实现，其余库契约／完整ADB／生产密码和宿主整包也未闭合。
+
+
+首次配对候选缺口修复`bb0b339`：原行为真实DNS-SD／TLS红测后，候选遍历、成功再提交、
+活跃浏览器代际及发现中取消共五项通过；Core181／53 ignored、既有mDNS七项、clippy
+与三Apple／Windows Core交叉check通过。安全AVD正式App配对／Required TLS／精确
+撤权后拒绝旧身份69秒通过，手动连接不当物理多播候选证据。完整无线仍开放，
+[源码接缝、日志及边界](../../../docs/implementation/wireless-reconnect.md#首次配对完成后的候选地址2026-10-18)。

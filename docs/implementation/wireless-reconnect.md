@@ -15,4 +15,42 @@ rtk proxy env CARGO_BUILD_JOBS=2 \
   cargo test -p interop-core --test mdns_reconnect -- --ignored --test-threads=1
 ```
 
-这不是物理 Wi-Fi 换网或 OEM 验收。IPv6 link-local scope、真实多网卡与 Wi-Fi2 仍待验证；首次配对后快速发现路径仍有只取首地址的独立缺口。授权失败恰好等待内部发布锁的时间窗口没有公共 API 可稳定占锁，本批通过统一锁序与读锁作用域核对，不能称该精确交错已动态通过。完整 ADB／无线任务继续开放。
+这不是物理 Wi-Fi 换网或 OEM 验收。IPv6 link-local scope、真实多网卡与 Wi-Fi2 仍待验证；首次配对缺口的修复与验证见下节。授权失败恰好等待内部发布锁的时间窗口没有公共 API 可稳定占锁，本批通过统一锁序与读锁作用域核对，不能称该精确交错已动态通过。完整 ADB／无线任务继续开放。
+
+## 首次配对完成后的候选地址（2026-10-18）
+
+原实现完成PAKE后只取首个DNS-SD地址，并在TLS成功前保存它。真实多播／TLS回归
+先复现connected=false及坏地址192.168.0.0落库，合法第二地址未被连接。现在复用
+Required TLS候选遍历及成功发布路径；发现浏览器保留到TLS／元数据发布，端口更新
+和goodbye继续推进代际。发现开始前即注册同一设备操作token，显式断开能取消发现，
+最多三次代际重试不会替换并取消自己的token。端点只在成功接入时保存；取消旧表单
+不清除新操作。配对attemptId禁止与已有设备ID混用，避免两个取消入口相互覆盖。
+
+[首次配对边界测试](../../crates/interop_core/src/device/pairing_tests.rs)最终五项
+48.51秒通过：真实DNS-SD首地址不可达／第二地址TLS成功、发现中取消且不再建TCP、
+明文CNXN拒绝且端点不提交、实际发现更新／goodbye后旧TLS client不能发布，以及
+不发网络的attemptId校验。四项多播用例显式执行，默认ignored不算执行证据。
+代际测试使用真实watcher和真实TLS client，但在内部发布接缝检查，不声称完成了
+整个PAKE与元数据竞争的同一次交错。中间两次泛型推断编译失败保留，不当产品红测。
+
+```sh
+rtk proxy env CARGO_BUILD_JOBS=2 cargo test -p interop-core --lib \
+  device::pairing_tests -- --include-ignored --test-threads=1
+```
+
+最终Core181 passed／53 ignored、既有七项mDNS回归及Core all-targets clippy
+`-D warnings`通过。原件分别在`/tmp/connect-pairing-candidates-{final-host-r3,
+core-regression,mdns-regression,clippy}.log`；红测为
+`/tmp/connect-pairing-candidates-red.log`，只读review未报告新增确定问题。
+
+正式App／FRB／Rust在API36安全AVD链路69秒通过：初次未授权拒绝、错码拒绝、实际
+PAKE、独立Required TLS连接、IAdbManager按精确产品身份撤权后拒绝旧身份；原系统
+其他信任保留，记录／fixture／forward清理均确认，hostErrors为空。截图目视确认
+连接工作区及撤权后的授权失败入口，原件`/tmp/connect-e2e/pair-candidates-product/`。
+这是调试型lab镜像与NAT下的手动连接，不是物理多地址Wi-Fi／OEM验收；多播候选由
+上述主机真实协议边界覆盖。两份scrcpy JAR未改，这个修复不需要重建服务端。
+
+
+Core针对iOS／macOS／Windows MSVC交叉check2.33／2.14／2.28秒及Rust格式检查通过，
+不是对应Flutter宿主整包。最终arm64签名产物及正常App恢复／清理见
+[打包记录](android-packaging.md)和[权威状态](../../.scratch/interop/current-status.md)。

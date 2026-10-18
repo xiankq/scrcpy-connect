@@ -122,3 +122,11 @@ proxy-events.json、cleanup.json及截图仅存/tmp；EOF代理不代替物理�
 默认不设置该变量仍用3000ms收集期限。输入计时和窗口抓取分开，输入由窗口检查
 间隔开，不是连续手势或物理面板延迟测量。
 [格式、分段和当前失败结果](../../../docs/implementation/video-dynamic-measurement.md)。
+
+
+`analyze_capture_slots.py`离线重建单一捕获进程的GraphicBufferSource slot持有周期，
+保存全部事件与完整周期、首尾不完整周期及最后墙钟1/3的时间加权占用。拒绝data-loss、
+歧义进程、未闭合slice和非法slot状态；不做PTS或跨时钟相减，slot数不等于精确Codec2
+work队列长度。`--output`必须是新文件，避免覆盖原始证据。
+[当前默认路径实际追踪、命令与限制](../../../docs/research/capture-input-queue.md)。
+校验：`python3 -B -m unittest discover -s tool/e2e/video_fixture -p test_analyze_capture_slots.py -v`。

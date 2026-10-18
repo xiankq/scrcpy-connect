@@ -2,6 +2,67 @@
 
 更新：2026-10-18。目标状态：**active，未完成**。本页是当前完成度的权威入口；[目标契约](goal.md)定义完成门槛，[重新核查](completion-reassessment.md)保留U01–U44／R01–R62／C01–C32逐项追溯和A01–A60发现，[需求审计](requirements-audit.md)保留原需求来源。后续证据须先更新本页，再回填对应既有任务；历史快照不覆盖本页。
 
+## 本轮：首次配对候选修复与输入队列追踪（2026-10-18）
+
+上一轮`6547f2c`／`3b74fbf`为progress：补齐当前持续动态分布，未带来生产收益。
+当前结论：`bb0b339`修复A52首次配对只取首地址及提前保存失败端点；真实DNS-SD／
+TLS反馈循环先红后绿，安全AVD正式配对撤权链路通过。`403c5a6`增加严格离线slot
+分析并复现当前默认视频输入驻留，尚未带来视频性能收益。完整目标继续active，
+不把协议端夹具写成物理换网或整机性能完成。
+两个JAR输入不变，原有五项未跟踪文件不改。
+
+首次多地址回归在旧实现真实失败：connected=false，坏地址192.168.0.0被写入记录。
+候选改用Required TLS候选遍历、成功后落库，浏览器保留至TLS／metadata发布并推进
+代际；发现等待也注册同一操作token，disconnect可取消且不被重试自取消。
+最终5项实际协议边界48.51秒通过（含4项显式multicast、1项无网络alias检查），
+覆盖fallback、取消发现／无后续TCP、拒绝明文且不写端点、真实更新／goodbye后拒绝
+旧TLS client发布。中间两次测试泛型推断编译错误保留，修正后通过；不是产品红测。
+只读review未发现新增确定问题。最终Core181 passed／53 ignored（38 suites）、既有
+7项真实mDNS回归显式串行执行及Core all-targets clippy -D warnings均通过；ignored默认
+数量不当设备证据。安全AVD正式App／FRB／Rust链路69秒完整通过：未授权拒绝、错码
+拒绝、真实PAKE、Required TLS连接、按精确产品身份撤权后拒绝旧身份及清理均确认，
+hostErrors为空。原件 `/tmp/connect-e2e/pair-candidates-product/`，两个状态截图已目视。
+该AVD NAT实验在配对后手动连接，不是物理Wi-Fi多地址首次连接；多地址由上述真实
+DNS-SD／TLS边界测试覆盖。
+
+视频离线新增证据：旧隔离raw-drain目标trace无data-loss、唯一捕获进程下，309次acquire／
+303次release重建293个完整buffer持有周期，末墙钟1/3有99.913%时间同时acquired16个，
+后段持有中位583.259ms。根代理复跑保存 `/tmp/connect-source-slot-analysis.json`；
+这是旧trace新分析，不是当前默认路径测量，也不等同精确component work队列长度。
+普通codec参数不能修改该consumer输入槽数。下一项先在当前入口采trace验证驻留；
+只有实际改采集／提交逻辑的候选才需要隔离重建JAR，不因主控实验重建现有产物。
+新增严格离线slot分析器及9条测试已通过，保留所有事件／完整周期／墙钟加权占用，
+拒绝data-loss、歧义、未闭合slice及非法状态序列。当前入口首次诊断完成8次输入、
+P50／P95=1859／2090ms、首像素3038ms，10张实际窗口计数吻合但10张迟到、整体exit1；
+采trace的外围进程查找失败，未取得该次trace，不能将旧数据当当前证据。第二次因未
+重启一次性benchmark入口被setup拒绝，保留失败。hot restart后第三次完成：输入
+P50／P95=1929／2405ms、首像素2349ms、10张窗口计数吻合，整体仍严格exit1；App／
+fixture清理确认。Android ps NAME只展示路径末尾，改为按精确会话JAR定位PID，再从
+/proc读取完整nice-name，取得8秒／32MB实际trace并清除远端原件。严格分析data-loss0、
+唯一捕获进程下735事件／87 acquire／87 release／71完整周期，末墙钟1/3同时持有16个
+的时间99.951971%，后段完整周期中位1318.763ms。当前默认路径的输入驻留已复现，
+原件 `/tmp/connect-e2e/current-source-slots-r3/`；追踪有观测开销，不作为无追踪性能
+A/B或收益。下一项限定已有GL接缝的最新待提交帧＋有界在途候选；尚未改JAR。
+
+生产修复`bb0b339`／追踪分析器`403c5a6`已分批提交。Core三交叉check分别iOS2.33秒、
+macOS2.14秒、Windows MSVC2.28秒通过，非对应宿主Flutter整包。新的同签名arm64
+release61.33秒完成，46,937,374字节，SHA-256
+`cf23f8100f5166517cb299629a0c1cc0f412f4866463da56d5d406eccd64e577`，ZIP／manifest／
+arm64 ELF／16KB ZIP对齐及签名独立校验通过，保留
+`/tmp/connect-artifacts/connect-arm64-pair-candidates-release.apk`；未冒称物理ARM运行。
+vendor／捕获JAR摘要仍为764eb6f7…／b46cd074…，均未改未重建。
+
+收尾已完成：普通main构建8.5秒／安装1577ms，MCP热重载成功／无Dart运行错误，空
+设备首页实际截图已目视；Skipped40frames／SurfaceSync1000ms／1407ms启动帧仍保留，
+不计启动流畅度通过。目标捕获JAR／捕获进程为空，fixture缺席，trace远端原件移除；
+forward精确按serial删除后缺席，两台自有AVD核对名称关闭且PID消失，安全target-b
+前序已恢复无线关闭并结束。CLI detach、Gradle停止；精确清理394项debug及92项本轮
+已结束的非视频Core测试输出／incremental，逻辑10962.6MiB、空闲46.33GiB。保留release、
+视频／连接反馈程序、有效构建缓存及原始证据，五项用户原未跟踪文件未改、未stage，
+无push。回执`/tmp/connect-pair-candidates-{target-cleanup,forward-cleanup,avd-stop,
+build-cleanup}.json`。下一项是隔离采集提交候选，不能无界阻塞GL或丢失唯一静态终帧。
+
+
 ## 本轮：高动态窗口取样路径（2026-10-18）
 
 当前结论：`6547f2c`实现原始实际窗口取样和强制失败的扩展诊断。限定2→4→2vCPU三组各3轮24输入全部完成，P50／P95分别1866／2202、1584／1865、1793／2145ms；各30次窗口计数匹配，迟到21／30／20次，暂停恢复、停止与App／fixture清理确认。全部严格exit1，没有生产性能收益，也未证明唯一瓶颈；新启动目标返回组首跑输入超时另保留。当前持续动态分布已取得，不再沿用上一轮“尚无当前输入分布”的缺口；首帧、高动态低延迟、native崩溃及完整目标仍未完成。两个JAR未改、未重建。[结果、失败与复现](../../docs/implementation/video-dynamic-measurement.md)。

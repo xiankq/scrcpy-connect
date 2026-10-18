@@ -123,3 +123,11 @@ ZIP完整性／16KB对齐／完整arm64 ELF检查均通过。日志
 `/tmp/connect-decoder-async-release{,-fixed}.log`、回执
 `/tmp/connect-decoder-async-release-receipt.json`。这是实际ARM包构建验证，未上物理ARM，
 不拿x64 debug的五编码及输入性能E2E替代ARM运行。两个scrcpy JAR未变、未重建。
+
+
+首次配对候选修复`bb0b339`后arm64 release61.33秒完成；46,937,374字节，SHA-256
+`cf23f8100f5166517cb299629a0c1cc0f412f4866463da56d5d406eccd64e577`，独立ZIP／签名／
+manifest／arm64 ELF／16KB ZIP页对齐均通过，证书身份未变。保留
+`/tmp/connect-artifacts/connect-arm64-pair-candidates-release.apk`，回执
+`/tmp/connect-pair-candidates-release-receipt.json`；未做相同源码重复打包，也未在
+物理ARM安装运行。此次Rust主控变化不需要重建scrcpy JAR，两份摘要均保持一致。
