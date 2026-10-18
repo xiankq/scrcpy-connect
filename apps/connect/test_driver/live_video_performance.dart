@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_driver/flutter_driver.dart';
+
+import '../benchmark/live_video/android_screencap.dart';
 
 const _fixturePackage = 'dev.scrcpyconnect.videofixture';
 const _requestTimeout = Duration(seconds: 45);
@@ -86,6 +89,10 @@ Future<void> main() async {
   final controller = environment['CONNECT_E2E_DEVICE'];
   final apk = environment['CONNECT_E2E_VIDEO_FIXTURE'];
   final motion = environment['CONNECT_E2E_VIDEO_MOTION'] == 'true';
+  final windowCapture = environment['CONNECT_E2E_SCREEN_CAPTURE'] ?? 'png';
+  final diagnosticSurfaceMs = int.tryParse(
+    environment['CONNECT_E2E_DIAGNOSTIC_SURFACE_MS'] ?? '3000',
+  );
 
   Future<ProcessResult> adbRun(
     String serial,
@@ -245,6 +252,25 @@ Future<void> main() async {
     return bytes;
   }
 
+  Future<Uint8List> captureRaw(String name, Duration timeout) async {
+    final result = await adbRun(
+      controller!,
+      ['exec-out', 'screencap'],
+      binary: true,
+      timeoutLimit: timeout,
+    );
+    if (result.exitCode != 0) throw StateError('Cannot capture $name.');
+    final outputBytes = result.stdout as List<int>;
+    final bytes = outputBytes is Uint8List
+        ? outputBytes
+        : Uint8List.fromList(outputBytes);
+    // Preserve unsupported captures too; parsing must never guess a layout.
+    // Full, unmodified actual window bytes, including the Android header.
+    await File('${output.path}/$name.raw').writeAsBytes(bytes, flush: true);
+    AndroidRgbaScreenshot.parse(bytes);
+    return bytes;
+  }
+
   Future<Map<String, dynamic>> request(
     String command, {
     Map<String, dynamic> arguments = const {},
@@ -256,6 +282,7 @@ Future<void> main() async {
       'startedAtMs': clock.elapsedMilliseconds,
       // The PNG itself remains in its .png evidence file, never in JSON/logs.
       if (arguments.containsKey('pngBase64')) 'hasPng': true,
+      if (arguments.containsKey('androidRawBase64')) 'hasAndroidRaw': true,
     };
     (progress['commands'] as List).add(entry);
     await persist();
@@ -295,13 +322,15 @@ Future<void> main() async {
     final evidence = <String, dynamic>{
       'name': name,
       'expectedCounter': expected,
+      'budgetMs': 3000,
+      'collectionDeadlineMs': diagnosticSurfaceMs,
       'attempts': <Map<String, dynamic>>[],
     };
     (progress['surfaces'] as List).add(evidence);
     Duration surfaceTimeLeft() {
-      final left = const Duration(seconds: 3) - wait.elapsed;
+      final left = Duration(milliseconds: diagnosticSurfaceMs!) - wait.elapsed;
       if (left <= Duration.zero) {
-        throw TimeoutException('Actual surface presentation exceeded 3s.');
+        throw TimeoutException('Actual surface collection deadline exceeded.');
       }
       return left;
     }
@@ -309,21 +338,57 @@ Future<void> main() async {
     try {
       for (var attempt = 1; attempt <= 8; attempt++) {
         final file = '$name-attempt-$attempt';
-        final bytes = await capture(
-          controller!,
-          file,
-          timeoutLimit: surfaceTimeLeft(),
-        );
-        final result = await request(
-          'surface',
-          arguments: {'pngBase64': base64Encode(bytes)},
-          timeoutLimit: surfaceTimeLeft(),
-        );
-        (evidence['attempts'] as List).add({
-          'file': '$file.png',
+        final attemptEvidence = <String, dynamic>{
+          'file': '$file.${windowCapture == 'raw' ? 'raw' : 'png'}',
+          'captureMode': windowCapture,
+          'captureCompleted': false,
+        };
+        (evidence['attempts'] as List).add(attemptEvidence);
+        final captureClock = Stopwatch()..start();
+        late final List<int> bytes;
+        try {
+          bytes = windowCapture == 'raw'
+              ? await captureRaw(file, surfaceTimeLeft())
+              : await capture(
+                  controller!,
+                  file,
+                  timeoutLimit: surfaceTimeLeft(),
+                );
+        } finally {
+          attemptEvidence['captureAndPersistMs'] =
+              captureClock.elapsedMilliseconds;
+          await persist();
+        }
+        attemptEvidence['captureCompleted'] = true;
+        attemptEvidence['bytes'] = bytes.length;
+        final encodingClock = Stopwatch()..start();
+        final encoded = base64Encode(bytes);
+        attemptEvidence['payloadEncodingMs'] =
+            encodingClock.elapsedMilliseconds;
+        final validationClock = Stopwatch()..start();
+        late final Map<String, dynamic> result;
+        try {
+          result = await request(
+            'surface',
+            arguments: {
+              windowCapture == 'raw' ? 'androidRawBase64' : 'pngBase64':
+                  encoded,
+            },
+            timeoutLimit: surfaceTimeLeft(),
+          );
+        } finally {
+          attemptEvidence['validationRequestMs'] =
+              validationClock.elapsedMilliseconds;
+          await persist();
+        }
+        attemptEvidence.addAll({
           ...result,
           'elapsedMs': wait.elapsedMilliseconds,
         });
+        if (result['captureFormat'] !=
+            (windowCapture == 'raw' ? 'android-raw-rgba8888' : 'png')) {
+          throw StateError('Unexpected actual window capture format.');
+        }
         evidence['surfaceWaitMs'] = wait.elapsedMilliseconds;
         evidence['attemptCount'] = attempt;
         await persist();
@@ -343,12 +408,22 @@ Future<void> main() async {
       throw StateError('Actual controller surface verification failed: $name.');
     } finally {
       evidence['surfaceWaitMs'] = wait.elapsedMilliseconds;
+      evidence['budgetMet'] =
+          evidence['valid'] == true && wait.elapsedMilliseconds <= 3000;
       await persist();
     }
   }
 
   await persist();
   try {
+    if (diagnosticSurfaceMs == null ||
+        diagnosticSurfaceMs < 3000 ||
+        diagnosticSurfaceMs > 15000) {
+      throw StateError('Diagnostic surface deadline must be 3000..15000 ms.');
+    }
+    if (windowCapture != 'png' && windowCapture != 'raw') {
+      throw StateError('CONNECT_E2E_SCREEN_CAPTURE must be png or raw.');
+    }
     if (adb == null ||
         adb.isEmpty ||
         target == null ||
@@ -450,6 +525,7 @@ Future<void> main() async {
       }
       await phase('finishing');
       report.addAll(await request('finish'));
+      report['measurementLoopComplete'] = true;
       await persist();
     })();
   } catch (error) {
@@ -528,13 +604,32 @@ Future<void> main() async {
     report['fixtureCleanup'] = cleanup;
     report['fixtureCleanupConfirmed'] = cleanup['complete'];
     report['fixtureMotionEnabled'] = motion;
+    report['windowCaptureMode'] = windowCapture;
+    report['diagnosticOnly'] = diagnosticSurfaceMs != 3000;
+    report['surfaceBudgetMs'] = 3000;
+    report['surfaceCollectionDeadlineMs'] = diagnosticSurfaceMs;
+    final surfaces = progress['surfaces'] as List;
+    final surfaceBudgetMet =
+        surfaces.isNotEmpty &&
+        surfaces.every((s) => (s as Map<String, dynamic>)['budgetMet'] == true);
+    report['surfaceBudgetMet'] = surfaceBudgetMet;
     report['targetFinalCaptured'] = targetFinalCaptured;
     report['surfaces'] = progress['surfaces'];
     report['interruptedAdbProcesses'] = progress['interruptedAdbProcesses'];
-    if (report['videoPerformanceComplete'] != true) {
+    if (report['measurementLoopComplete'] != true) {
       errors.add('Video performance loop incomplete.');
+    } else if (report['videoPerformanceComplete'] != true) {
+      errors.add('Startup or input latency budget failed.');
+    }
+    if (diagnosticSurfaceMs != 3000) {
+      errors.add('Diagnostic collection cannot certify video performance.');
+    }
+    if (!surfaceBudgetMet) {
+      errors.add('Actual window did not meet its 3000ms budget.');
     }
     final complete =
+        diagnosticSurfaceMs == 3000 &&
+        surfaceBudgetMet &&
         report['videoPerformanceComplete'] == true &&
         appCleanupConfirmed &&
         driverCloseConfirmed &&

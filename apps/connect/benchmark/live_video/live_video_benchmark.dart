@@ -11,6 +11,7 @@ import 'package:interop_bridge/src/rust/api.dart' as core;
 import 'package:interop_bridge/src/rust/frb_generated.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'android_screencap.dart';
 import 'pixel_pattern.dart';
 
 /// Agent-runnable measurement of the production ADB/media adapters with normal
@@ -477,56 +478,80 @@ class LiveVideoBenchmark {
 
   Future<VideoJson> _surface(VideoJson command) async {
     final active = _round();
-    final encoded = command['pngBase64'];
+    final hasRaw = command.containsKey('androidRawBase64');
+    final hasPng = command.containsKey('pngBase64');
+    _require(hasRaw != hasPng, 'Expected exactly one actual-window capture.');
+    final encoded = command[hasRaw ? 'androidRawBase64' : 'pngBase64'];
     _require(
       encoded is String && encoded.length <= 16 * 1024 * 1024,
-      'Expected bounded actual-window PNG.',
+      'Expected bounded actual-window capture.',
     );
-    final codec = await ui.instantiateImageCodec(
-      base64Decode(encoded as String),
-    );
+    final bytes = base64Decode(encoded as String);
+    if (hasRaw) {
+      final screenshot = AndroidRgbaScreenshot.parse(bytes);
+      return _recordSurface(
+        active,
+        screenshot.rgba,
+        screenshot.width,
+        screenshot.height,
+        'android-raw-rgba8888',
+      );
+    }
+    final codec = await ui.instantiateImageCodec(bytes);
     try {
       final frame = await codec.getNextFrame();
       try {
         final data = await frame.image.toByteData();
         _require(data != null, 'Window image has no RGBA data.');
-        final context = textureKey.currentContext;
-        if (context == null || !context.mounted) {
-          throw StateError('Texture is not mounted.');
-        }
-        final box = context.findRenderObject()! as RenderBox;
-        final view = View.of(context);
-        final logicalSize = view.physicalSize / view.devicePixelRatio;
-        final origin = box.localToGlobal(Offset.zero);
-        final region = ui.Rect.fromLTWH(
-          origin.dx * frame.image.width / logicalSize.width,
-          origin.dy * frame.image.height / logicalSize.height,
-          box.size.width * frame.image.width / logicalSize.width,
-          box.size.height * frame.image.height / logicalSize.height,
-        );
-        final observed = pixelPattern(
+        return _recordSurface(
+          active,
           data!.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
           frame.image.width,
           frame.image.height,
-          region: region,
+          'png',
         );
-        if (observed == _expected) active['lastPresentedCounter'] = observed;
-        final sample = <String, dynamic>{
-          'expectedCounter': _expected,
-          'counter': observed,
-          'valid': observed == _expected,
-          'width': frame.image.width,
-          'height': frame.image.height,
-          'region': [region.left, region.top, region.width, region.height],
-        };
-        (active['surfaces'] as List<VideoJson>).add(sample);
-        return sample;
       } finally {
         frame.image.dispose();
       }
     } finally {
       codec.dispose();
     }
+  }
+
+  VideoJson _recordSurface(
+    VideoJson active,
+    List<int> rgba,
+    int width,
+    int height,
+    String captureFormat,
+  ) {
+    final context = textureKey.currentContext;
+    if (context == null || !context.mounted) {
+      throw StateError('Texture is not mounted.');
+    }
+    final box = context.findRenderObject()! as RenderBox;
+    final view = View.of(context);
+    final logicalSize = view.physicalSize / view.devicePixelRatio;
+    final origin = box.localToGlobal(Offset.zero);
+    final region = ui.Rect.fromLTWH(
+      origin.dx * width / logicalSize.width,
+      origin.dy * height / logicalSize.height,
+      box.size.width * width / logicalSize.width,
+      box.size.height * height / logicalSize.height,
+    );
+    final observed = pixelPattern(rgba, width, height, region: region);
+    if (observed == _expected) active['lastPresentedCounter'] = observed;
+    final sample = <String, dynamic>{
+      'captureFormat': captureFormat,
+      'expectedCounter': _expected,
+      'counter': observed,
+      'valid': observed == _expected,
+      'width': width,
+      'height': height,
+      'region': [region.left, region.top, region.width, region.height],
+    };
+    (active['surfaces'] as List<VideoJson>).add(sample);
+    return sample;
   }
 
   Future<VideoJson> _stop() async {
