@@ -19,6 +19,8 @@
 | [AVD HEVC实际尺寸约束](hevc-emulator-constraints.md) | 软件编码器配置失败后的尺寸降级、独立码流／FFmpeg对照与1280／1080单变量验证 |
 | [scrcpy、媒体与服务端](scrcpy-media-and-server.md) | 固定 scrcpy 协议、JAR 生命周期、独立应用窗口、fvp/MDK 输入、PTS、音频、录制与并发 |
 | [首帧与客户端状态等待](scrcpy-first-frame-and-latency.md) | 官方静止补帧、播放器阻塞对照、五codec/后台/旋转与真实退出回归 |
+| [当前首帧与产物核查](scrcpy-first-frame-performance.md) | 官方版本／暂停JAR身份、重建条件、源时钟与后续隔离候选边界 |
+| [SurfaceTexture实际队列](surface-texture-queue-semantics.md) | Android16异步替换、原生回调合并、EGLConsumer取帧、静态repeat10次与运行时待证项 |
 | [共享媒体封装与播放器](cross-platform-media-pipeline.md) | 纯Rust Matroska、PTS、鉴权HTTP、fvp公开接口与各平台验收边界 |
 | [协作暂停捕获](cooperative-capture-pause.md) | 固定scrcpy源码的捕获扩展、停止编码与保留task、ACK/代际边界、可复现构建与真实多窗口 |
 | [Flutter/Rust 平台运行时](flutter-rust-platform-runtime.md) | Android 后台与权限、FRB/Riverpod 生命周期、USB 句柄、workspace、文件与输入 |
