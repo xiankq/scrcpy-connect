@@ -52,6 +52,7 @@ class LiveVideoBenchmark {
     defaultValue: 300,
   );
   static const traceFrames = bool.fromEnvironment('CONNECT_PERF_TRACE_FRAMES');
+  static const traceClock = bool.fromEnvironment('CONNECT_PERF_TRACE_CLOCK');
   static const decoderPolicy = String.fromEnvironment(
     'CONNECT_PERF_DECODER',
     defaultValue: 'native',
@@ -98,6 +99,7 @@ class LiveVideoBenchmark {
   Future<void> _idle = Future<void>.value();
   Future<VideoJson>? _cleanupFuture;
   int _expected = 0;
+  int _inputSequence = 0;
   VideoJson? _cleanupReceipt;
 
   Future<String> handle(String? message) async {
@@ -170,6 +172,7 @@ class LiveVideoBenchmark {
 
   Future<VideoJson> _setup() async {
     _require(!_initialized && !_disposed, 'Setup may run once.');
+    _require(!traceClock || traceFrames, 'Clock bounds require frame tracing.');
     _require(
       roundCount > 0 &&
           roundCount <= 20 &&
@@ -232,6 +235,7 @@ class LiveVideoBenchmark {
       'roundCount': roundCount,
       'transitions': transitions,
       'traceFrames': traceFrames,
+      if (traceClock) 'clockBracketsRequested': true,
       'decoderPolicy': decoderPolicy,
       'recoveredPriorDevices': existing.length,
       'quality': {'maxSize': maxSize, 'maxFps': maxFps, 'bitRate': bitRate},
@@ -370,7 +374,12 @@ class LiveVideoBenchmark {
       inputs.length < transitions && !active.containsKey('pause'),
       'Input out of order.',
     );
+    if (traceClock && inputs.isEmpty) {
+      active['clockBefore'] = await _clockProbes();
+    }
+    final before = traceClock ? _player!.frameTrace! : null;
     _expected = (_expected + 1) & 15;
+    _inputSequence++;
     final watch = Stopwatch()..start();
     await _request('session.key', {
       'sessionId': _session,
@@ -386,6 +395,13 @@ class LiveVideoBenchmark {
       'controlMs': controlMs,
       'inputToDecodedMs': elapsed,
       'snapshotMs': reads,
+      if (traceClock) ...{
+        'fixtureSequence': _inputSequence,
+        // A shared Rust clock observation before the Dart invoke, not the
+        // exact socket write instant. It includes invoke/dispatch overhead.
+        'inputObservedBeforeInvokeUs':
+            (before!['clockOriginUs'] as int) + (before['nowElapsedUs'] as int),
+      },
     };
     if (traceFrames) {
       final trace = _player!.frameTrace!;
@@ -416,10 +432,45 @@ class LiveVideoBenchmark {
         'decodeToSnapshotUs':
             (snap['elapsedUs'] as int) - (decoded.single['elapsedUs'] as int),
       });
+      if (traceClock) {
+        final sourcePts = relay.single['sourcePtsUs'];
+        final receiptWait = Stopwatch()..start();
+        late List<VideoJson> raw;
+        do {
+          final sessions = await _request('session.list');
+          final capture = (sessions['sessions'] as List)
+              .cast<VideoJson>()
+              .singleWhere((s) => s['sessionId'] == _session);
+          raw = (capture['transportTrace'] as List)
+              .cast<VideoJson>()
+              .where((f) => f['sourcePtsUs'] == sourcePts)
+              .toList();
+          // The relay reader can run before the raw writer publishes its
+          // receipt. Only a missing receipt can be retried, never ambiguity.
+          if (raw.isNotEmpty ||
+              receiptWait.elapsed >= const Duration(seconds: 1)) {
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 2));
+        } while (true);
+        _require(
+          raw.length == 1,
+          'Expected one transport receipt for source PTS.',
+        );
+        sample['transportFrame'] = raw.single;
+      }
     }
     inputs.add(sample);
+    if (traceClock && inputs.length == transitions) {
+      active['clockAfter'] = await _clockProbes();
+    }
     return sample;
   }
+
+  Future<List<VideoJson>> _clockProbes() async => [
+    for (var probe = 0; probe < 3; probe++)
+      await _request('session.clock.probe', {'sessionId': _session}),
+  ];
 
   Future<List<int>> _waitPixels(int expected) async {
     final watch = Stopwatch()..start();
@@ -465,6 +516,8 @@ class LiveVideoBenchmark {
       'Capture pause not acknowledged.',
     );
     _expected = (_expected + 1) & 15;
+    _inputSequence++;
+    if (traceClock) sample['fixtureSequence'] = _inputSequence;
     await _request('session.key', {
       'sessionId': _session,
       'keyCode': 20,
@@ -633,6 +686,7 @@ class LiveVideoBenchmark {
     return {
       'videoPerformanceComplete': startup && p50 <= maxP50Ms && p95 <= maxP95Ms,
       'decoderPolicy': decoderPolicy,
+      if (traceClock) 'clockBracketsRequested': true,
       'binding': WidgetsBinding.instance.runtimeType.toString(),
       'framePolicy': 'normal-driver-binding',
       'startupBudgetMet': startup,

@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter_driver/flutter_driver.dart';
 
 import '../benchmark/live_video/android_screencap.dart';
+import 'video_source_report.dart';
 
 const _fixturePackage = 'dev.scrcpyconnect.videofixture';
 const _requestTimeout = Duration(seconds: 45);
@@ -89,6 +90,10 @@ Future<void> main() async {
   final controller = environment['CONNECT_E2E_DEVICE'];
   final apk = environment['CONNECT_E2E_VIDEO_FIXTURE'];
   final motion = environment['CONNECT_E2E_VIDEO_MOTION'] == 'true';
+  final timelineEnabled = environment['CONNECT_E2E_VIDEO_TIMELINE'] == 'true';
+  final timelineRun = 'live_${DateTime.now().microsecondsSinceEpoch}_$pid';
+  final targetTimeline = <Map<String, dynamic>>[];
+  String? targetTimelineError;
   final windowCapture = environment['CONNECT_E2E_SCREEN_CAPTURE'] ?? 'png';
   final diagnosticSurfaceMs = int.tryParse(
     environment['CONNECT_E2E_DIAGNOSTIC_SURFACE_MS'] ?? '3000',
@@ -471,6 +476,7 @@ Future<void> main() async {
       '--ez',
       'motion',
       '$motion',
+      if (timelineEnabled) ...['--es', 'timelineRun', timelineRun],
     ]);
     await capture(target, 'target-initial');
     await phase('connecting driver');
@@ -497,6 +503,11 @@ Future<void> main() async {
     await (() async {
       final setup = await request('setup');
       progress['setup'] = setup;
+      if ((setup['clockBracketsRequested'] == true) != timelineEnabled) {
+        throw StateError(
+          'Match CONNECT_E2E_VIDEO_TIMELINE with CONNECT_PERF_TRACE_CLOCK.',
+        );
+      }
       final rounds = setup['roundCount'];
       final config = setup['config'];
       final transitions =
@@ -567,6 +578,35 @@ Future<void> main() async {
       }
     }
     if (installed) {
+      if (timelineEnabled) {
+        try {
+          final text = await targetCommand([
+            'logcat',
+            '-d',
+            '-v',
+            'raw',
+            '-s',
+            'ConnectVideoClock:I',
+            '*:S',
+          ], cleaning: true);
+          for (final line in const LineSplitter().convert(text)) {
+            if (!line.startsWith('{')) continue;
+            final record = jsonDecode(line) as Map<String, dynamic>;
+            if (record['run'] == timelineRun) targetTimeline.add(record);
+          }
+        } catch (error) {
+          targetTimelineError = _safeError(error);
+          errors.add('Target timeline: $targetTimelineError');
+        }
+        try {
+          // Even missing/partial logs must be persisted before uninstall, and
+          // a diagnostic read/write failure must never prevent uninstall.
+          await writeJson('target-timeline.json', targetTimeline);
+        } catch (error) {
+          targetTimelineError = _safeError(error);
+          errors.add('Target timeline persistence: $targetTimelineError');
+        }
+      }
       try {
         await capture(target!, 'target-final', cleaning: true);
         targetFinalCaptured = true;
@@ -605,7 +645,40 @@ Future<void> main() async {
     report['fixtureCleanupConfirmed'] = cleanup['complete'];
     report['fixtureMotionEnabled'] = motion;
     report['windowCaptureMode'] = windowCapture;
-    report['diagnosticOnly'] = diagnosticSurfaceMs != 3000;
+    final setup = progress['setup'] as Map<String, dynamic>?;
+    final clockRequested = setup?['clockBracketsRequested'] == true;
+    final diagnosticOnly =
+        diagnosticSurfaceMs != 3000 ||
+        setup?['traceFrames'] == true ||
+        clockRequested;
+    report['diagnosticOnly'] = diagnosticOnly;
+    if (timelineEnabled || clockRequested) {
+      report['clockBracketsRequested'] = clockRequested;
+      report['targetTimelineRun'] = timelineRun;
+      report['targetTimeline'] = targetTimeline;
+      if (targetTimelineError != null) {
+        report['targetTimelineError'] = targetTimelineError;
+      }
+      try {
+        report.addAll(
+          videoSourceReport(
+            (report['rounds'] as List? ?? const [])
+                .cast<Map<String, dynamic>>(),
+            targetTimeline,
+          ),
+        );
+      } catch (error) {
+        errors.add('Source diagnostics: ${_safeError(error)}');
+      }
+      if (targetTimelineError != null ||
+          report['targetTimelineComplete'] != true) {
+        errors.add('Target timeline does not cover every actual input.');
+      }
+      if (clockRequested &&
+          (report['clockBounds'] as Map?)?['complete'] != true) {
+        errors.add('Conditional source clock bounds incomplete.');
+      }
+    }
     report['surfaceBudgetMs'] = 3000;
     report['surfaceCollectionDeadlineMs'] = diagnosticSurfaceMs;
     final surfaces = progress['surfaces'] as List;
@@ -621,14 +694,14 @@ Future<void> main() async {
     } else if (report['videoPerformanceComplete'] != true) {
       errors.add('Startup or input latency budget failed.');
     }
-    if (diagnosticSurfaceMs != 3000) {
+    if (diagnosticOnly) {
       errors.add('Diagnostic collection cannot certify video performance.');
     }
     if (!surfaceBudgetMet) {
       errors.add('Actual window did not meet its 3000ms budget.');
     }
     final complete =
-        diagnosticSurfaceMs == 3000 &&
+        !diagnosticOnly &&
         surfaceBudgetMet &&
         report['videoPerformanceComplete'] == true &&
         appCleanupConfirmed &&

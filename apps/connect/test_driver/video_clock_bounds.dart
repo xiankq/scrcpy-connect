@@ -102,6 +102,17 @@ ClockJson _roundBounds(ClockJson round, List<ClockJson> timeline) {
           row['sequence'] == sample['fixtureSequence'] && row['kind'] == 'draw',
     );
     final drawEnd = draw['nanoUs'] as int;
+    final observedInput = sample['inputObservedBeforeInvokeUs'] as int?;
+    if (observedInput != null &&
+        (observedInput < (before.last['controllerAfterUs'] as int) ||
+            observedInput > complete)) {
+      throw StateError('Input clock observation falls outside its brackets.');
+    }
+    final input = timeline.singleWhere(
+      (row) =>
+          row['sequence'] == sample['fixtureSequence'] &&
+          row['kind'] == 'input',
+    );
     sampleRows.add({
       'fixtureSequence': sample['fixtureSequence'],
       'sourcePtsUs': pts,
@@ -112,6 +123,21 @@ ClockJson _roundBounds(ClockJson round, List<ClockJson> timeline) {
       'sourceToRawCompleteUpperUs': complete - pts + offsetHigh - deltaLow + 1,
       'drawEndToPayloadLowerUs': received - drawEnd + offsetLow - deltaHigh - 1,
       'drawEndToPayloadUpperUs': received - drawEnd + offsetHigh - deltaLow + 1,
+      'drawEndToRawCompleteLowerUs':
+          complete - drawEnd + offsetLow - deltaHigh - 1,
+      'drawEndToRawCompleteUpperUs':
+          complete - drawEnd + offsetHigh - deltaLow + 1,
+      if (observedInput != null)
+        for (final (name, targetUs) in [
+          ('TargetInput', input['nanoUs'] as int),
+          ('DrawStart', draw['drawStartUs'] as int),
+          ('DrawEnd', drawEnd),
+        ]) ...{
+          'observedInputTo${name}LowerUs':
+              targetUs + deltaLow - offsetHigh - observedInput - 1,
+          'observedInputTo${name}UpperUs':
+              targetUs + deltaHigh - offsetLow - observedInput + 1,
+        },
     });
   }
   return {
