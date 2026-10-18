@@ -19,3 +19,12 @@
 .env
 *.keystore
 *.jks
+
+# Vendored plugin source is tracked; downloaded SDKs and native outputs are not.
+/third_party/fvp/**/.cxx/
+/third_party/fvp/**/mdk-sdk/
+/third_party/fvp/**/mdk-sdk-*
+/third_party/fvp/**/fvp-deps.lock
+/third_party/fvp/**/.fvp-mdk-backup/
+/third_party/fvp/**/.fvp-mdk-extract/
+/third_party/fvp/lib/src/version.h

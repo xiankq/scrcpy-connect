@@ -432,12 +432,11 @@ packages:
     source: sdk
     version: "0.0.0"
   fvp:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: fvp
-      sha256: "2f4607e07748856dbe268a3b968efe973c27f85ea4e7621c4209783a6dad26a0"
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/fvp"
+      relative: true
+    source: path
     version: "0.39.1"
   glob:
     dependency: transitive
