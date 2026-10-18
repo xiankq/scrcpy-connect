@@ -232,6 +232,111 @@ const SPS: &[u8] = &[
 ];
 const PPS: &[u8] = &[0, 0, 0, 1, 0x68, 0xce, 1, 0xa8, 0x35, 0xc8];
 
+#[tokio::test]
+async fn packet_archive_is_exact_http_prefix_and_sealing_does_not_stop_playback() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let streams = MediaStreams::default();
+    let raw = raw_listener().await;
+    let ordinary = open_video(&streams, &raw, 1).await;
+    assert_eq!(
+        streams
+            .command("media.trace.seal", &json!({"relayId":ordinary["relayId"]}))
+            .await
+            .unwrap_err()
+            .code,
+        "trace_unavailable"
+    );
+    streams
+        .command("media.close", &json!({"relayId":ordinary["relayId"]}))
+        .await
+        .unwrap();
+    let relay = streams
+        .command(
+            "media.open",
+            &json!({
+                "kind":"video", "codec":"h264", "port":raw.local_addr().unwrap().port(),
+                "token":TOKEN, "generation":7, "traceFrames":true,"tracePackets":true,
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        streams
+            .command("media.trace.seal", &json!({"relayId":relay["relayId"]}))
+            .await
+            .unwrap_err()
+            .code,
+        "media_archive_empty"
+    );
+    let mut playback = client(&relay, true).await;
+    let mut source = authorized_raw(&raw).await;
+    dimensions(&mut source, 288, 640).await;
+    config(&mut source, false).await;
+    frame(&mut source, 5_000_000, true).await;
+    let mut delivered = first_matroska(&mut playback).await;
+    for index in 1..=2 {
+        frame(&mut source, 5_000_000 + index * 1000, false).await;
+        delivered.extend(http_chunk(&mut playback).await.unwrap());
+    }
+    // HTTP write completion precedes archive publication; wait on the exact
+    // packet receipt rather than racing the relay task's continuation.
+    tokio::time::timeout(DEADLINE, async {
+        while status(&streams, &relay, "streaming").await["packets"] != 3 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let metadata = streams
+        .command("media.trace.seal", &json!({"relayId":relay["relayId"]}))
+        .await
+        .unwrap();
+    assert_eq!(metadata["frames"].as_array().unwrap().len(), 3);
+    assert_eq!(metadata["frames"][0]["ptsUs"], 0);
+    assert_eq!(metadata["frames"][2]["sourcePtsUs"], 5_002_000);
+    let mut captured = Vec::new();
+    loop {
+        let page = streams
+            .command(
+                "media.trace.read",
+                &json!({"relayId":relay["relayId"],"offset":captured.len(),"limit":17}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(page["offset"].as_u64().unwrap(), captured.len() as u64);
+        captured.extend(
+            STANDARD
+                .decode(page["bytesBase64"].as_str().unwrap())
+                .unwrap(),
+        );
+        assert_eq!(page["nextOffset"].as_u64().unwrap(), captured.len() as u64);
+        if page["eof"] == true {
+            break;
+        }
+    }
+    assert_eq!(
+        captured, delivered,
+        "every archived byte is the actual delivered Matroska prefix"
+    );
+    frame(&mut source, 5_003_000, false).await;
+    assert!(
+        http_chunk(&mut playback).await.is_some(),
+        "sealing must keep real playback moving"
+    );
+    assert_eq!(
+        streams
+            .command("media.trace.seal", &json!({"relayId":relay["relayId"]}))
+            .await
+            .unwrap(),
+        metadata
+    );
+    streams
+        .command("media.close", &json!({"relayId":relay["relayId"]}))
+        .await
+        .unwrap();
+    closed_raw(&mut source).await;
+}
+
 async fn open_video(streams: &MediaStreams, raw: &TcpListener, generation: u64) -> Value {
     streams.command("media.open",&json!({"kind":"video","codec":"h264","port":raw.local_addr().unwrap().port(),"token":TOKEN,"generation":generation})).await.unwrap()
 }

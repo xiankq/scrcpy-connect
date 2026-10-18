@@ -6,6 +6,7 @@
 mod codec;
 pub mod http;
 mod matroska;
+mod packet_archive;
 
 pub use codec::{VideoCodec, VideoTrack};
 pub use matroska::{MatroskaMuxer, Track};

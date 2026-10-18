@@ -227,7 +227,10 @@ impl Runtime {
             }
             return self.deliveries.command(command, &params).await;
         }
-        if matches!(command, "media.open" | "media.status" | "media.close") {
+        if matches!(
+            command,
+            "media.open" | "media.status" | "media.close" | "media.trace.seal" | "media.trace.read"
+        ) {
             return self.media.command(command, &params).await;
         }
         if command.starts_with("document.") {

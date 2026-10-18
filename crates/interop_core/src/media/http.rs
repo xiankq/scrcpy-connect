@@ -1,5 +1,6 @@
 //! Authenticated loopback delivery for the shared cross-platform media player.
 
+use super::packet_archive::PacketArchive;
 use super::{
     MAX_CONFIGURATION_BYTES, MAX_PACKET_BYTES, MatroskaMuxer, Track, VideoCodec, VideoTrack,
 };
@@ -28,6 +29,7 @@ struct Entry {
     cancellation: CancellationToken,
     status: Arc<Mutex<Value>>,
     finished: Arc<AtomicBool>,
+    archive: Option<Arc<Mutex<PacketArchive>>>,
 }
 
 struct Completion(Arc<AtomicBool>);
@@ -54,6 +56,31 @@ impl MediaStreams {
                     .get(required(params, "relayId")?)
                     .ok_or_else(|| CoreError::new("media_ended", "媒体输入已结束。"))?;
                 Ok(entry.status.lock().await.clone())
+            }
+            "media.trace.seal" | "media.trace.read" => {
+                let archive = self
+                    .entries
+                    .lock()
+                    .await
+                    .get(required(params, "relayId")?)
+                    .and_then(|entry| entry.archive.clone())
+                    .ok_or_else(|| {
+                        CoreError::new("trace_unavailable", "此媒体输入未开启完整帧诊断。")
+                    })?;
+                let mut archive = archive.lock().await;
+                if command == "media.trace.seal" {
+                    archive.seal()
+                } else {
+                    let offset = params["offset"]
+                        .as_u64()
+                        .and_then(|v| usize::try_from(v).ok())
+                        .ok_or_else(|| CoreError::new("invalid_argument", "诊断读取偏移无效。"))?;
+                    let limit = params["limit"]
+                        .as_u64()
+                        .and_then(|v| usize::try_from(v).ok())
+                        .ok_or_else(|| CoreError::new("invalid_argument", "诊断读取长度无效。"))?;
+                    archive.read(offset, limit)
+                }
             }
             "media.close" => {
                 if let Some(entry) = self
@@ -86,6 +113,17 @@ impl MediaStreams {
             _ => return Err(CoreError::new("invalid_endpoint", "媒体类型无效。")),
         };
         let generation = params["generation"].as_u64().unwrap_or(1);
+        let archive = if params["tracePackets"] == true {
+            if video.is_none() || params["traceFrames"] != true {
+                return Err(CoreError::new(
+                    "invalid_argument",
+                    "完整帧诊断需要视频逐帧观测。",
+                ));
+            }
+            Some(Arc::new(Mutex::new(PacketArchive::try_new()?)))
+        } else {
+            None
+        };
         let endpoint = HttpEndpoint::bind().await?;
         let id = uuid::Uuid::new_v4().to_string();
         let initial = endpoint.view(&id, generation, video, None);
@@ -112,13 +150,22 @@ impl MediaStreams {
                     cancellation: cancellation.clone(),
                     status: status.clone(),
                     finished: finished.clone(),
+                    archive: archive.clone(),
                 },
             );
         }
         let completion = Completion(finished);
         tokio::spawn(async move {
             let _completion = completion;
-            let work = relay(endpoint, port, &token, video, generation, status.clone());
+            let work = relay(
+                endpoint,
+                port,
+                &token,
+                video,
+                generation,
+                status.clone(),
+                archive,
+            );
             let result =
                 tokio::select! { _ = cancellation.cancelled() => Ok(()), result = work => result };
             let mut state = status.lock().await;
@@ -295,6 +342,7 @@ async fn relay(
     video: Option<VideoCodec>,
     mut generation: u64,
     status: Arc<Mutex<Value>>,
+    archive: Option<Arc<Mutex<PacketArchive>>>,
 ) -> CoreResult<()> {
     let client = authenticated_client(&endpoint.listener, &endpoint.secret).await?;
     let (mut incoming, mut output) = client.into_split();
@@ -323,7 +371,7 @@ async fn relay(
         }
         let transition = tokio::select! {
             result = consumer_closed(&mut incoming) => return result,
-            result = forward_generation(output, &mut source, ready, video, generation, &status) => result?,
+            result = forward_generation(output, &mut source, ready, video, generation, &status, archive.as_ref()) => result?,
         };
         drop(incoming);
         drop(endpoint);
@@ -521,6 +569,7 @@ async fn forward_generation(
     video: Option<VideoCodec>,
     generation: u64,
     status: &Mutex<Value>,
+    archive: Option<&Arc<Mutex<PacketArchive>>>,
 ) -> CoreResult<Transition> {
     let Ready {
         format,
@@ -535,7 +584,11 @@ async fn forward_generation(
     )
     .await
     .map_err(|_| CoreError::new("media_timeout", "播放器未及时读取媒体输出。"))??;
-    chunk(&mut output, &mux.take_header()).await?;
+    let header = mux.take_header();
+    if let Some(archive) = archive {
+        archive.lock().await.begin(generation, &header);
+    }
+    chunk(&mut output, &header).await?;
     loop {
         let (flags, bytes) = packet;
         let mux_started_us = tracing.then(super::monotonic_micros);
@@ -549,6 +602,25 @@ async fn forward_generation(
         let write_started_us = tracing.then(super::monotonic_micros);
         chunk(&mut output, &encoded).await?;
         let written_us = tracing.then(super::monotonic_micros);
+        let frame = tracing.then(|| {
+            json!({
+                "generation": generation,
+                "ptsUs": (flags & ((1 << 61) - 1)) - mux.source_origin_us().unwrap(),
+                "sourcePtsUs": flags & ((1 << 61) - 1),
+                "muxStartedUs": mux_started_us,
+                "writeStartedUs": write_started_us,
+                "writtenUs": written_us,
+            })
+        });
+        if let Some(archive) = archive {
+            // Preserve exactly the body bytes delivered to this player, without
+            // disk IO, a second consumer or a new copy on the default path.
+            archive.lock().await.append(
+                generation,
+                &encoded,
+                frame.clone().expect("traced archive"),
+            );
+        }
         {
             let mut state = status.lock().await;
             state["status"] = json!("streaming");
@@ -558,16 +630,7 @@ async fn forward_generation(
                 if frames.len() == 256 {
                     frames.remove(0);
                 }
-                frames.push(json!({
-                    "generation": generation,
-                    "ptsUs": (flags & ((1 << 61) - 1)) - mux.source_origin_us().unwrap(),
-                    // Retain the remote media clock for target-side lab
-                    // correlation. It is not this process's monotonic clock.
-                    "sourcePtsUs": flags & ((1 << 61) - 1),
-                    "muxStartedUs": mux_started_us,
-                    "writeStartedUs": write_started_us,
-                    "writtenUs": written_us,
-                }));
+                frames.push(frame.expect("traced frame"));
             }
         }
         let group = packet_group(source, video.is_some(), 64).await?;
