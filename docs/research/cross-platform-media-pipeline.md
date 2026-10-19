@@ -12,13 +12,58 @@ Rust 继续负责 ADB、scrcpy 帧边界、配置包、PTS 和有界输出；将
 
 ## 固定依赖与接口事实
 
-`fvp` 固定 0.39.1；pub 归档 SHA-256 为 `2f4607e07748856dbe268a3b968efe973c27f85ea4e7621c4209783a6dad26a0`。核查本机 pub cache 与归档中的公开 Player、生成绑定、callback 和依赖 CMake 一致。公开入口导出 Player，可设置 `media`、播放状态、音量/静音、buffer range 和 texture；`nativeHandle` 是 getter。**公开 Dart Player 没有 appendBuffer 方法**，该函数只出现在内部生成的 C API 表。直接使用它还涉及 SDK ABI size 守卫和 native 生命周期，不是无维护成本的现成 Dart 流输入。[固定版本](https://pub.dev/packages/fvp/versions/0.39.1)、[Player 源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/player.dart)、[生成绑定](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/generated_bindings.dart)。
+`fvp` 固定 0.39.1；pub 归档 SHA-256 为 `2f4607e07748856dbe268a3b968efe973c27f85ea4e7621c4209783a6dad26a0`。核查本机 pub cache 与归档中的公开 Player、生成绑定、callback 和依赖 CMake 一致。公开入口导出 Player，可设置 `media`、播放状态、音量/静音、buffer range 和 texture；`nativeHandle` 是 getter。**公开 Dart Player 没有 appendBuffer 方法**，包内存在的是内部生成的 C API 表槽。可利用 `nativeHandle` 编写本仓库自己的 native adapter 接入 MDK，**无需 fork fvp**；但需维护 SDK ABI size 守卫与 native 生命周期，不能视为现成的公开 Dart 流输入。[固定版本](https://pub.dev/packages/fvp/versions/0.39.1)、[Player 源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/player.dart)、[生成绑定](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/generated_bindings.dart)。
 
 MDK 的 `stream:`/appendBuffer 接收字节，不接独立的 scrcpy packet PTS；官方流示例输入为封装后的 FLV。它不能把原始 scrcpy 12 字节私有帧头解释成媒体时间轴，因此使用标准容器仍有必要。公开 C++ enqueue 是已解码 VideoFrame 路径，不能据此推断存在压缩包或 PCM AudioFrame 播放入口。[官方输入示例](https://github.com/wang-bin/mdk-examples/blob/316e06d31d2556892f5eaa93464fd1a3a4993c9f/Native/stream.cpp)、[Player API](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)。
 
 fvp 的 pub lock 不同时锁定各平台 MDK 二进制。0.39.1 依赖下载逻辑允许指定 `FVP_DEPS_URL`/`FVP_DEPS_SHA256`，默认来源包含可变 SDK 下载地址；当时据此建议为正式四平台发布固定平台归档及摘要，现行选择为直接继承原版平台规则。核查时 Android cache SDK stamp 为 `70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`，这只是本机本次证据，不代表其它平台已验证。[依赖下载源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/cmake/deps.cmake)。
 
 低延迟不能依赖默认 buffer。MDK 的 buffer 最大值 0 表示不设上限，而不是零延迟；当前使用min=0/max=150/drop。min=0允许尽快解码；max/drop受关键帧间隔限制，不能把150写成严格队列时长上限。应结合实测选择demux选项。硬件解码器存在不代表成功配置/首帧，仍需按设备检查。fvp 当前 texture 尺寸缓存也要求应用显式处理变化，不能将固定尺寸 POC 写成已支持旋转热切换。[Player API](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)、[解码器文档](https://github.com/wang-bin/mdk-sdk/wiki/Decoders)。
+
+## 2026-10-19 输入链路复核
+
+结论：当前实现确实增加了本机 I/O、封装与解封装，但**尚无当前原版 fvp 下的对照测量证明它显著增加端到端延迟**。最值得对照验证的是 `Matroska → MDK stream: / appendBuffer` 的 native 内存直送；改动较小的候选是合并 Rust 内部 raw TCP 中转、保留现有 HTTP 播放入口。以下为源码/API 核查和研究推论，本次未修改生产链路、未运行设备实验。
+
+### 当前开销的边界
+
+现行链路是 `ADB/scrcpy → Rust raw 本机 TCP → Rust Matroska → 本机 HTTP → MDK demux/decode → Texture`。HTTP 成功接入后持续发送 chunk，通常每个媒体 generation 一次连接，并非每帧重新 HTTP 请求；chunk 由长度、payload、结尾三次 `write_all` 输出，两侧 Rust socket 均设置 `TCP_NODELAY`。mux 每个有效 packet 立即生成独立 Cluster，没有等待多帧或固定时长凑包的逻辑。因此代码能证明存在额外复制、系统调用和任务调度，不能仅凭层数推出固定增加一帧或数百毫秒。[HTTP 实现](../../crates/interop_core/src/media/http.rs)、[mux 实现](../../crates/interop_core/src/media/matroska.rs)。
+
+旧[性能记录](../implementation/video-performance.md)中的约 `0.051ms` 是特定历史运行的写入段测量，不含后续 MDK 读取、探测、解封装、解码与显示等待，也不能继承为当前社区原版整条链路的成本。播放器 packet buffer、codec 重排、render 和显示调度仍存在；更换传输入口不会自动消除这些等待。当前 `min=0` 避免主动等待最小 packet 时长，`max=150/drop` 不是严格的150ms延迟保证。[固定 Player API 修订](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs/82b2c09b7892711a9f1e319424e258d3fb5d9978)。
+
+### MDK 内存直送与 fvp 的接口差距
+
+本次通过 Dart 包读取工具复核 `fvp 0.39.1`：公开 `mdk.dart` 导出 `Player`；`nativeHandle` 返回 `_player.address`，即 **`mdkPlayerAPI*`，不是 `mdkPlayer*`、C++ Player 地址或 Flutter texture id**。内部 generated bindings 有 `appendBuffer` 函数指针槽，但公开 Player 没有同名方法；不能直接写 `player.appendBuffer(...)`。[公开入口](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/mdk.dart)、[Player](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/player.dart)、[生成绑定](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/generated_bindings.dart)。
+
+本机 SDK `include/mdk/c/Player.h` 的真实槽签名是：
+
+```c
+bool (*appendBuffer)(struct mdkPlayer*, const uint8_t* data,
+                     size_t size, int options);
+```
+
+调用对象应是 `api->object`；先设置媒体为 `stream:`，随后提供可被 demux 的媒体字节。签名没有 codec、每包 PTS、关键帧或 track 参数，故仍建议送现有 Matroska header/Cluster，保留 scrcpy 时间轴。它省去传输层，不等于省去 mux/demux，更不等于零复制。C++ `enqueue(const VideoFrame&, void*)` 则向 renderer 送**已解码视频帧**，随后还需渲染线程调用 `renderVideo()`；它不是压缩 H264/H265/AV1 packet 输入或 PCM AudioFrame 播放入口。[官方流输入示例，固定提交](https://github.com/wang-bin/mdk-examples/blob/316e06d31d2556892f5eaa93464fd1a3a4993c9f/Native/stream.cpp)、[固定 Player API 修订](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs/82b2c09b7892711a9f1e319424e258d3fb5d9978)。
+
+可行设计推论是：Dart 仅在会话绑定/释放时传递 handle 和 generation；本仓库自己的 native adapter 借用该表，让 Rust 将封装字节直接送入 MDK，继续复用原版 fvp 的 Player/Texture，**无需维护 fvp fork，也不推荐 Dart 逐帧中转**。新增责任包括：
+
+- 按平台实际 SDK 头文件编译，检查运行时表 `size`、成员范围及非空函数指针。`size==0` 的旧 runtime 不允许访问扩展槽；应使用实际运行时 guard，不能只依赖 release 模式可能关闭的 C++ `assert`。平台 MDK 来源仍遵循工具链契约，不能用 Dart 版本号代替 native ABI 核验。
+- handle 仅借用，fvp 仍拥有 Player；不得由 adapter 调用 delete/reset，不得另建会清理原 Player callbacks 的临时 C++ 包装对象。先停止接收并撤销 generation，等待在途 native 调用退出，再允许 fvp dispose；裸地址本身不提供所有权或跨线程销毁保护。
+- 官方示例只演示普通 payload 的 append；本次检查的 header/wiki **没有明确规定** `options` 的含义、数据是否同步复制、返回 `false` 的重试语义、零长度/空指针 EOF 协议，以及内部 byte queue 的上限/阻塞行为。不能把 `nullptr,0` 当作已确认 EOF，也不能把 `bool` 当作已确认背压。实施前需向上游确认或对实际 SDK 验证这些契约，并设计有界输入、取消唤醒、超时和慢消费者恢复；不在 UI 线程或异步 runtime 关键执行线程承受未知阻塞。`setBufferRange` 控制 demux 后的 packet 队列，不证明 append 前的字节队列有界。
+
+本次 SDK 证据为本机 pub cache 的 `fvp-0.39.1/android/mdk-sdk/include/`：`mdk/c/global.h` 声明0.39.0；`mdk/c/Player.h` SHA-256 为 `3f12300f1c71fda173f50423c5befacc6f0b36e3b6c996a5d3188b7a7e362ef8`，`mdk/Player.h` 为 `80b4aabf8bd52674d2661866ff84e979438f8a77862ecdebd9dd642b84b04c0e`。C 表包含运行时 `size` 说明；C++ `MDK_CALL2` 检查扩展槽，借用构造的析构仍调用 `mdkPlayerAPI_reset(..., false)`。这些是本次本机头文件快照，不代表所有平台 SDK 已固定或运行验收通过；发布包依赖规则见[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)。
+
+### 候选输入的实际边界
+
+| 候选 | 能减少的工作 | 边界与研究判断 |
+| --- | --- | --- |
+| 合并 Rust raw TCP 中转，保留 Matroska HTTP | 少一对本机 socket、一次中转任务及相关读写 | 不改 MDK 接入，改动较小；必须保留 ADB/会话所有权、取消、generation 和有界背压。收益未测。 |
+| Matroska 经 native adapter 送 `stream:` | 可同时移除 raw 中转和本机 HTTP/socket | 最值得验证的路线；保留 mux/demux，新增前述 ABI、内存与生命周期责任。收益未测。 |
+| `tcp://127.0.0.1:port` 直接送 Matroska | 省 HTTP 请求头和 chunk framing | 公开 `media` 可传 URL，MDK 声明支持 FFmpeg protocols；仍有 socket、mux/demux、buffer，不保证明显改善，且需重做单消费者准入/凭据边界。不能直接把 scrcpy 私有帧头交给标准 demux。 |
+| `fd:23` | 可用同进程 fd/pipe 替代网络监听 | MDK 官方明确支持该语法；不是所有平台 HANDLE 的通用替代。须验证实际 MDK build 对非 seek 流的支持、fd 复制/关闭责任与取消；仍要提供容器或明确的媒体格式。 |
+| `mem:addr+size` | 固定内存内容可无 socket 读取 | 官方给出的是地址和有限长度，未承诺可扩容直播 ring buffer 或持续 append；无法据此替代无限实时输入。内存须保持有效、禁止重分配/提前释放，具体保留期限仍需确认。 |
+
+协议能力依据[固定 MDK Player API 修订](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs/82b2c09b7892711a9f1e319424e258d3fb5d9978)；TCP 字节流实现可参考[FFmpeg n8.0 的 tcp.c](https://github.com/FFmpeg/FFmpeg/blob/n8.0/libavformat/tcp.c)，但它不证明本项目每个平台的 MDK 运行包都已包含并验收同一实现。
+
+后续对照应保持 codec、分辨率、码率、关键帧间隔、MDK build、buffer 与 renderer 一致，分别测首帧和稳态，覆盖静止屏、音频、暂停/恢复、generation 切换、慢消费者及停止。至少分开记录 scrcpy packet 进入 Rust、封装完成、播放器入口、解码/渲染事件与实际显示；比较 p50/p95、CPU、复制量和队列深度，才能判断少一层传输带来的收益。比较实验可以使用临时替代输入，生产仍只保留一条选定链路，本研究不引入并行播放模式。
 
 ## 纯 Rust 容器实现
 
