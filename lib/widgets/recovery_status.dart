@@ -44,7 +44,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
       padding: const EdgeInsets.fromLTRB(
         DesignTokens.spacingMd,
         DesignTokens.spacingSm,
-        DesignTokens.spacingLg,
+        DesignTokens.spacingMd,
         0,
       ),
       child: ContentPanel(

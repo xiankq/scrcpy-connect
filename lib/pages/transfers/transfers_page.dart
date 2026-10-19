@@ -49,7 +49,7 @@ class TransfersPage extends HookConsumerWidget {
             padding: EdgeInsets.fromLTRB(
               DesignTokens.spacingMd,
               DesignTokens.spacingSm,
-              DesignTokens.spacingLg,
+              DesignTokens.spacingMd,
               embedded ? 120 : DesignTokens.spacingLg,
             ),
             itemCount: batches.length + tasks.length,

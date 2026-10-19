@@ -157,7 +157,7 @@ class _ExitHandleState extends State<ExitHandle>
                       ? (right ? Alignment.centerRight : Alignment.centerLeft)
                       : Alignment.center,
                   child: Glass(
-                    variant: GlassVariant.clear,
+                    variant: GlassVariant.regular,
                     radius: DesignTokens.roundedFull,
                     child: SizedBox(
                       width: collapsed && !dragging

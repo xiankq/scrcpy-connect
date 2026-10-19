@@ -157,12 +157,10 @@ class IncomingSharePage extends HookConsumerWidget {
       child: PageFrame(
         title: '发送到设备',
 
-        actions: [
-          TextButton(
-            onPressed: busy.value ? null : cancel,
-            child: Text(locked ? '关闭' : '取消'),
-          ),
-        ],
+        trailingAction: TextButton(
+          onPressed: busy.value ? null : cancel,
+          child: Text(locked ? '关闭' : '取消'),
+        ),
         child: GroupedListView(
           padding: const EdgeInsets.all(DesignTokens.spacingMd),
           children: [

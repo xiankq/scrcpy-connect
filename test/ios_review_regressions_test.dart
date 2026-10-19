@@ -14,6 +14,69 @@ import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
 
 void main() {
+  testWidgets('page headers align controls and keep text actions independent', (
+    tester,
+  ) async {
+    final controller = createTestController(fixtureRequest);
+    await controller.initialize();
+    for (final page in [
+      'gallery',
+      'incoming_share',
+      'media_preview_unavailable',
+    ]) {
+      await tester.pumpWidget(
+        RouterTestApp(
+          key: ValueKey(page),
+          controller: controller,
+          theme: ConnectTokens.theme(Brightness.light),
+          home: pageFixtures(controller)[page]!,
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (page == 'gallery') {
+        final back = find
+            .ancestor(of: find.byType(BackButton), matching: find.byType(Glass))
+            .first;
+        expect(tester.getRect(back).left, DesignTokens.spacingMd);
+        expect(
+          tester.getSize(back),
+          const Size.square(DesignTokens.componentIconButtonSize),
+        );
+        expect(
+          tester.getRect(find.text('手机相册')).left,
+          DesignTokens.spacingMd +
+              DesignTokens.componentIconButtonSize +
+              DesignTokens.spacingSm,
+        );
+        expect(
+          tester.getRect(find.byType(GlassToolbarGroup)).right,
+          tester.view.physicalSize.width / tester.view.devicePixelRatio -
+              DesignTokens.spacingMd,
+        );
+      } else if (page == 'incoming_share') {
+        final cancel = find.widgetWithText(TextButton, '取消');
+        expect(cancel, findsOneWidget);
+        expect(
+          find.ancestor(of: cancel, matching: find.byType(Glass)),
+          findsNothing,
+        );
+      } else {
+        final title = find
+            .descendant(of: find.byType(Row), matching: find.text('旅行清单.pdf'))
+            .first;
+        expect(
+          find.ancestor(of: title, matching: find.byType(Glass)),
+          findsNothing,
+        );
+        expect(
+          tester.widget<GlassIconButton>(find.byType(GlassIconButton)).variant,
+          GlassVariant.clear,
+        );
+      }
+    }
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
   testWidgets('add-device content has no adjacent duplicate separators', (
     tester,
   ) async {
@@ -219,8 +282,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('请输入被控手机的地址'), findsOneWidget);
         expect(find.text('端口应为 1–65535 的整数'), findsOneWidget);
-        if (entry.key == 'pairing_form')
+        if (entry.key == 'pairing_form') {
           expect(find.text('请输入六位配对码'), findsOneWidget);
+        }
       }
       expect(
         requests.where(

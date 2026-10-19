@@ -32,7 +32,7 @@ class StartupErrorPage extends StatelessWidget {
                 const SizedBox(height: DesignTokens.spacingSm),
                 SelectableText(
                   error is StateError
-                      ? '${(error as StateError).message}'
+                      ? (error as StateError).message.toString()
                       : error is FormatException
                       ? (error as FormatException).message
                       : '$error'.replaceFirst(

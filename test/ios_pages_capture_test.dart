@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:design_system/design_system.dart';
@@ -431,31 +430,53 @@ Map<String, Widget> pageFixtures(AppController controller) => <String, Widget>{
 };
 
 Future<void> waitForPageImages(WidgetTester tester) async {
-  final imageElements = find.byType(Image).evaluate().toList();
+  final elements = find.byType(Image).evaluate().toList();
+  final received = List<bool>.filled(elements.length, false);
+  final streams = <(ImageStream, ImageStreamListener)>[];
+  Object? failure;
+  // Image decoders need both real IO and scheduled Flutter frames. Awaiting the
+  // stream in runAsync alone would block the very frame that delivers it.
   await tester.runAsync(() async {
-    for (final element in imageElements) {
-      final widget = element.widget as Image;
-      final stream = widget.image.resolve(
+    for (var index = 0; index < elements.length; index++) {
+      final element = elements[index];
+      final stream = (element.widget as Image).image.resolve(
         createLocalImageConfiguration(element),
       );
-      final ready = Completer<void>();
       final listener = ImageStreamListener(
         (info, synchronous) {
+          received[index] = true;
           info.dispose();
-          if (!ready.isCompleted) ready.complete();
         },
         onError: (Object error, StackTrace? stack) {
-          if (!ready.isCompleted) ready.completeError(error, stack);
+          failure = error;
         },
       );
+      streams.add((stream, listener));
       stream.addListener(listener);
-      try {
-        await ready.future.timeout(const Duration(seconds: 10));
-      } finally {
-        stream.removeListener(listener);
-      }
     }
   });
+  try {
+    for (
+      var attempt = 0;
+      attempt < 200 && !received.every((ready) => ready) && failure == null;
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(failure, isNull, reason: 'Fixture photo decoding must succeed');
+    expect(
+      received.every((ready) => ready),
+      isTrue,
+      reason: 'Each fixture image must deliver its first frame before capture',
+    );
+  } finally {
+    for (final (stream, listener) in streams) {
+      stream.removeListener(listener);
+    }
+  }
   await tester.pump();
 }
 

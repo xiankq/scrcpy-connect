@@ -178,27 +178,31 @@ class MediaPreviewPage extends HookWidget {
               ),
               Align(
                 alignment: Alignment.topCenter,
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                    child: Row(
-                      children: [
-                        GlassIconButton(
-                          variant: GlassVariant.clear,
-                          tooltip: MaterialLocalizations.of(context)
-                              .backButtonTooltip,
-                          onPressed: () => closePage<void>(context),
-                          icon: const Icon(LucideIcons.chevronLeft),
-                        ),
-                        const SizedBox(width: DesignTokens.spacingXs),
-                        Expanded(
-                          child: Glass(
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        DesignTokens.colorMediaShade,
+                        DesignTokens.colorTransparent,
+                      ],
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                      child: Row(
+                        children: [
+                          GlassIconButton(
                             variant: GlassVariant.clear,
-                            radius: DesignTokens.roundedFull,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: DesignTokens.spacingSm,
-                              vertical: DesignTokens.spacingXs,
-                            ),
+                            tooltip: MaterialLocalizations.of(context)
+                                .backButtonTooltip,
+                            onPressed: () => closePage<void>(context),
+                            icon: const Icon(LucideIcons.chevronLeft),
+                          ),
+                          const SizedBox(width: DesignTokens.spacingXs),
+                          Expanded(
                             child: Text(
                               value(file, 'name'),
                               maxLines: 1,
@@ -206,35 +210,35 @@ class MediaPreviewPage extends HookWidget {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: DesignTokens.spacingXs),
-                        GlassToolbarGroup(
-                          variant: GlassVariant.clear,
-                          children: [
-                            IconButton(
-                              tooltip: '保存原文件',
-                              onPressed: () => retrieveFile(
-                                context,
-                                controller,
-                                device,
-                                file,
+                          const SizedBox(width: DesignTokens.spacingXs),
+                          GlassToolbarGroup(
+                            variant: GlassVariant.clear,
+                            children: [
+                              IconButton(
+                                tooltip: '保存原文件',
+                                onPressed: () => retrieveFile(
+                                  context,
+                                  controller,
+                                  device,
+                                  file,
+                                ),
+                                icon: const Icon(LucideIcons.download),
                               ),
-                              icon: const Icon(LucideIcons.download),
-                            ),
-                            IconButton(
-                              tooltip: '系统分享',
-                              onPressed: () => retrieveFile(
-                                context,
-                                controller,
-                                device,
-                                file,
-                                share: true,
+                              IconButton(
+                                tooltip: '系统分享',
+                                onPressed: () => retrieveFile(
+                                  context,
+                                  controller,
+                                  device,
+                                  file,
+                                  share: true,
+                                ),
+                                icon: const Icon(LucideIcons.share2),
                               ),
-                              icon: const Icon(LucideIcons.share2),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

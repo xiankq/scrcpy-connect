@@ -7,6 +7,7 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'support/router_test_app.dart';
 
 import 'package:design_system/design_system.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -65,6 +66,14 @@ void main() {
             .enabled,
         isFalse,
       );
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(tester.getCenter(find.text('literal�.txt')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('/sdcard/literal�.txt'), findsOneWidget);
+      await mouse.removePointer();
+      await tester.pumpAndSettle();
       await tester.longPress(find.text('literal�.txt'));
       await tester.pumpAndSettle();
       expect(

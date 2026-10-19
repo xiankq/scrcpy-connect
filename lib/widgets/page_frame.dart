@@ -10,11 +10,13 @@ class PageFrame extends StatelessWidget {
     required this.title,
     required this.child,
     this.actions,
+    this.trailingAction,
     this.bottom,
   });
   final String title;
   final Widget child;
   final List<Widget>? actions;
+  final Widget? trailingAction;
   final Widget? bottom;
   int _headerLines(BuildContext context, BoxConstraints constraints) =>
       constraints.maxHeight - MediaQuery.viewInsetsOf(context).bottom < 400
@@ -26,7 +28,9 @@ class PageFrame extends StatelessWidget {
     final width =
         (constraints.maxWidth -
                 DesignTokens.componentIconButtonSize *
-                    ((actions?.length ?? 0) + 2))
+                    ((actions?.length ?? 0) +
+                        (trailingAction == null ? 0 : 1) +
+                        2))
             .clamp(1.0, double.infinity);
     double height(String text, TextStyle? style) {
       final painter = TextPainter(
@@ -49,78 +53,93 @@ class PageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => Scaffold(
-      appBar: AppBar(
-        toolbarHeight: _toolbarHeight(context, constraints),
-        leading:
-            GoRouter.maybeOf(context) != null &&
-                (GoRouter.of(context).canPop() ||
-                    !['/devices', '/transfers', '/settings'].contains(
-                      GoRouter.of(context)
-                          .routeInformationProvider
-                          .value
-                          .uri
-                          .path,
-                    ))
-            ? Padding(
-                padding: const EdgeInsets.only(left: DesignTokens.spacingXs),
-                child: Center(
-                  child: SizedBox.square(
-                    dimension: DesignTokens.componentIconButtonSize,
-                    child: Glass(
-                      radius: DesignTokens.roundedFull,
-                      child: BackButton(
-                        onPressed: () => closePage<void>(context),
+    builder: (context, constraints) {
+      final hasBack =
+          GoRouter.maybeOf(context) != null &&
+          (GoRouter.of(context).canPop() ||
+              !['/devices', '/transfers', '/settings'].contains(
+                GoRouter.of(context).routeInformationProvider.value.uri.path,
+              ));
+      return Scaffold(
+        appBar: AppBar(
+          toolbarHeight: _toolbarHeight(context, constraints),
+          automaticallyImplyLeading: false,
+          leadingWidth:
+              DesignTokens.spacingMd + DesignTokens.componentIconButtonSize,
+          titleSpacing: hasBack
+              ? DesignTokens.spacingSm
+              : DesignTokens.spacingMd,
+          leading: hasBack
+              ? Padding(
+                  padding: const EdgeInsets.only(left: DesignTokens.spacingMd),
+                  child: Center(
+                    child: SizedBox.square(
+                      dimension: DesignTokens.componentIconButtonSize,
+                      child: Glass(
+                        radius: DesignTokens.roundedFull,
+                        child: BackButton(
+                          onPressed: () => closePage<void>(context),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              )
-            : null,
-        title: Text(
-          title,
-          maxLines: _headerLines(context, constraints),
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleLarge,
+                )
+              : null,
+          title: Text(
+            title,
+            maxLines: _headerLines(context, constraints),
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          actions:
+              (actions == null || actions!.isEmpty) && trailingAction == null
+              ? null
+              : [
+                  if (actions != null && actions!.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        right: trailingAction == null
+                            ? DesignTokens.spacingZero
+                            : DesignTokens.spacingXs,
+                      ),
+                      child: Center(
+                        child: GlassToolbarGroup(children: actions!),
+                      ),
+                    ),
+                  if (trailingAction != null) Center(child: trailingAction!),
+                  const SizedBox(width: DesignTokens.spacingMd),
+                ],
         ),
-        actions: actions == null
-            ? null
-            : [
-                Padding(
-                  padding: const EdgeInsets.only(right: DesignTokens.spacingXs),
-                  child: Center(child: GlassToolbarGroup(children: actions!)),
+        body: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) => Column(
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight / 2,
+                  ),
+                  child: const RecoveryStatus(),
                 ),
+                Expanded(child: child),
               ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) => Column(
-            children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: constraints.maxHeight / 2,
-                ),
-                child: const RecoveryStatus(),
-              ),
-              Expanded(child: child),
-            ],
+            ),
           ),
         ),
-      ),
-      bottomNavigationBar: bottom == null
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  DesignTokens.spacingMd,
-                  DesignTokens.spacingXs,
-                  DesignTokens.spacingMd,
-                  DesignTokens.spacingMd,
+        bottomNavigationBar: bottom == null
+            ? null
+            : SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DesignTokens.spacingMd,
+                    DesignTokens.spacingXs,
+                    DesignTokens.spacingMd,
+                    DesignTokens.spacingMd,
+                  ),
+                  child: bottom,
                 ),
-                child: bottom,
               ),
-            ),
-    ),
+      );
+    },
   );
 }

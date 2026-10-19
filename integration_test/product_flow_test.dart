@@ -260,7 +260,7 @@ void main() {
           tester,
           () =>
               find.byType(BottomSheet).evaluate().isEmpty &&
-              find.text('$requestedVideoEdge').evaluate().isNotEmpty,
+              find.text('$requestedVideoEdge px').evaluate().isNotEmpty,
           reason:
               'Resolution acceptance must request $requestedVideoEdge through the product page.',
         );

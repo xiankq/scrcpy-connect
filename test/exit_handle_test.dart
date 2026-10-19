@@ -8,6 +8,10 @@ void main() {
     'dragging the left handle inward keeps the exit button expanded',
     (tester) async {
       final harness = await _pumpHandle(tester);
+      expect(
+        tester.widget<Glass>(find.byType(Glass)).variant,
+        GlassVariant.regular,
+      );
       await tester.drag(harness.control, const Offset(0, 100));
       await tester.pumpAndSettle();
       expect(find.bySemanticsLabel('展开退出按钮，手机'), findsOneWidget);

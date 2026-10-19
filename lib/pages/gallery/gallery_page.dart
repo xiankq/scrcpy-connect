@@ -79,7 +79,7 @@ class GalleryPage extends HookWidget {
                 padding: const EdgeInsets.fromLTRB(
                   DesignTokens.spacingMd,
                   DesignTokens.spacingXs,
-                  DesignTokens.spacingLg,
+                  DesignTokens.spacingMd,
                   DesignTokens.spacingSm,
                 ),
                 child: Column(
