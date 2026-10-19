@@ -8,6 +8,7 @@ workspace:
   - packages/design_system
   - packages/interop_bridge
 dev_dependencies:
+  ffi: 2.2.0
   archive: 3.6.1
   args: 2.7.0
   crypto: 3.0.7
