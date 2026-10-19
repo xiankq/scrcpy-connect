@@ -22,7 +22,7 @@ fvp 的 pub lock 不同时锁定各平台 MDK 二进制。0.39.1 依赖下载逻
 
 ## 2026-10-19 输入链路复核
 
-当前实现确实增加了本机 I/O、封装与解封装。随后完成的[MDK内存输入对照](mdk-memory-input-experiment.md)已验证原版 fvp 下的 `stream:` / appendBuffer 能实际解码渲染，但在指定Android AVD、相同录像和供数节拍下，没有测出明显的输入到解码延迟或CPU收益；该指标也不是端到端显示延迟。生产继续保留HTTP，实验代码单独留在实验分支。
+当前实现确实增加了本机 I/O、封装与解封装。随后完成的[MDK内存输入对照](mdk-memory-input-experiment.md)已验证原版 fvp 下的 `stream:` / appendBuffer 能实际解码渲染，但在指定Android AVD、相同录像和供数节拍下，没有测出明显的输入到解码延迟或CPU收益；该指标也不是端到端显示延迟。生产继续保留HTTP，实验与诊断工具已合入 `dev`，通过独立入口运行。
 
 初次两组共用AMediaCodec后端。继续诊断时，相同HTTP/容器输入仅更换为FFmpeg slice，输入到onVideo从约95ms降至约1.6ms；软件后端下HTTP与append的P95也均在约1.7ms。最初的高等待已缩小到本机AMediaCodec解码/输出边界，不能写作HTTP传输成本或正常性能。单变量方法、反证和物理设备限制见上述实验记录；官方客户端差异见[scrcpy路径研究](scrcpy-client-latency-path.md)。
 

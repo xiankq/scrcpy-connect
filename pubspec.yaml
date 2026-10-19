@@ -9,6 +9,7 @@ workspace:
   - packages/interop_bridge
 dev_dependencies:
   ffi: 2.2.0
+  fvp: 0.39.1
   archive: 3.6.1
   args: 2.7.0
   crypto: 3.0.7

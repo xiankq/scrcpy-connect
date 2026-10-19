@@ -1,6 +1,6 @@
 # MDK 输入链路与解码延迟对照
 
-2026-10-19，实验分支 `codex/mdk-memory-input`，最终工具提交 `2f5123d`。实验代码未合入 `dev`，生产仍使用 Matroska localhost HTTP；没有新增生产播放模式，也没有修改社区原版 fvp 0.39.1 或 pub cache。
+2026-10-19，原实验工具提交 `2f5123d`，后续诊断工具提交 `1cd5d1b`。两阶段工具现已合入 `dev`，位于 `tool/benchmark/native_input_*.dart`、`tool/driver/native_input.dart` 和 `crates/interop_bridge/src/media_input_probe.rs`。正式播放器仍使用 Matroska localhost HTTP；实验入口独立运行，没有新增产品播放模式，也没有修改社区原版 fvp 0.39.1 或 pub cache。
 
 结论：**Rust 经 MDK `stream:` / C API `appendBuffer` 直送 Matroska 已实际解码、渲染成功；最初两组使用同一 AMediaCodec 后端，均出现约一帧等待，因此这组结果只能说明该后端下更换入口没有明显收益，不能说明94ms合理或是传输成本。** 随后的单变量对照将相同HTTP输入改用FFmpeg slice解码，输入到onVideo降至约1.6ms，等待范围已缩小到本机AMediaCodec解码/输出路径，详见下文。它不是直播内存所有权、背压或跨平台生命周期已经满足生产要求的证明。接口依据及未明确契约见[输入链路研究](cross-platform-media-pipeline.md#2026-10-19-输入链路复核)。
 
@@ -51,7 +51,7 @@ HTTP prepare耗时8～16ms，append为3～5ms；这是准备回执，不是实�
 
 ## 同日继续定位：公共解码后端掩盖了输入差异
 
-诊断分支 `codex/mdk-latency-diagnosis`，配置工具提交 `b74e314`、偶数轮中位数修正 `1cd5d1b`。先对旧回执执行 `jq -e '.groups.http.inputP95Ms.median < 20 and .groups.append.inputP95Ms.median < 20' comparison.json`，稳定返回false/退出1；20ms是本次诊断预算，不是产品SLA或官方scrcpy保证。随后保持编码包、PTS、供数节拍和测量定义不变，逐项测试。
+诊断阶段的配置工具提交 `b74e314`、偶数轮中位数修正 `1cd5d1b`。先对旧回执执行 `jq -e '.groups.http.inputP95Ms.median < 20 and .groups.append.inputP95Ms.median < 20' comparison.json`，稳定返回false/退出1；20ms是本次诊断预算，不是产品SLA或官方scrcpy保证。随后保持编码包、PTS、供数节拍和测量定义不变，逐项测试。
 
 第一项只把Cluster的未知长度VINT替换为实际长度，字节数、内部payload和时间戳不变；新夹具SHA-256 `ef187d382f7c6033f286e940b2edd53b3808151b128044b80096d47a6d84dbcb`。HTTP与append的P50/P95分别为94.408/163.541ms、94.508/166.855ms，没有改善，故不将该变换合入生产mux。
 
@@ -105,6 +105,8 @@ HTTP prepare耗时8～16ms，append为3～5ms；这是准备回执，不是实�
 本轮没有验证音频、慢消费者、长期内存增长、暂停恢复、重连/旋转generation、其他Android版本或其他宿主。尚不具备将该适配器替换生产链路的依据。
 
 ## 复现与证据
+
+当前 `dev` 复跑时，夹具生成和结果汇总仍从仓库根执行；Flutter构建与drive从 `app/` 执行，入口改用 `--target=../tool/benchmark/native_input_probe.dart`、`--driver=../tool/driver/native_input.dart`。下列命令用于重现原提交的目录布局。
 
 实验代码保留在本地提交 `2f5123d`，包含fixture生成器、独立Flutter入口、host driver和按共同PTS汇总的Dart工具；依赖仍为原版 fvp 0.39.1。在该实验提交、已有完整录像归档的条件下，从该提交的仓库根目录执行（下列路径保留实验提交布局）：
 

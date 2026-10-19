@@ -733,7 +733,7 @@ JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收
 
 ## 社区原版下的内存输入实验（2026-10-19）
 
-独立分支 `codex/mdk-memory-input` 已用 Rust → MDK appendBuffer 跑通实际解码和Texture像素核验。Android-x64 profile包在同一AVD交错8轮，扣除两轮预热后，与HTTP按相同PTS比较，未见明显延迟或CPU收益。生产 `dev` 未合入实验适配器；完整方法、输入身份、逐轮结果、早期失败及尚未验证的契约见[专项记录](../research/mdk-memory-input-experiment.md)。该实验没有覆盖实际ADB全链路或其他平台。
+原独立实验提交 `2f5123d` 已用 Rust → MDK appendBuffer 跑通实际解码和Texture像素核验。Android-x64 profile包在同一AVD交错8轮，扣除两轮预热后，与HTTP按相同PTS比较，未见明显延迟或CPU收益。当时 `dev` 未合入实验适配器；完整方法、输入身份、逐轮结果、早期失败及尚未验证的契约见[专项记录](../research/mdk-memory-input-experiment.md)。该实验没有覆盖实际ADB全链路或其他平台。
 
 实验结束恢复上述普通debug APK，摘要未变；实际安装启动、MCP热重启成功，运行时错误查询为空，随后detach。清理本次夹具、重复APK和过期中间输出，净1,417,018,559字节；保留原始输入、测量回执及复用缓存。
 
@@ -741,7 +741,7 @@ JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收
 
 同日继续完成18轮单变量输入对照：明确Cluster长度、direct、noparse及若干AMediaCodec选项均未消除该AVD约一帧等待；保持HTTP/容器不变，仅改FFmpeg slice后输入到onVideo降至约1.6ms。最后4轮软件后端HTTP/append对照均通过20ms诊断门槛、像素与清理核验。完整方法、逐轮结果和未确定的SDK内部边界见上述专项记录；[官方客户端研究](../research/scrcpy-client-latency-path.md)解释参考路径。这不宣称所有Android都应软件解码，也不冒充完整首屏、物理设备或生产修复通过。
 
-诊断工具保留在 `codex/mdk-latency-diagnosis`（最终工具提交 `1cd5d1b`），生产未合入。4个相关Dart工具分析通过；恢复普通APK、热重启及runtime error查询通过，pid24365，随后detach。再次清理该阶段过期构建输出和夹具1,305,212,943字节；普通APK摘要及共享编译缓存保留。
+该阶段诊断工具最终提交 `1cd5d1b`，当时尚未合入 `dev`。4个相关Dart工具分析通过；恢复普通APK、热重启及runtime error查询通过，pid24365，随后detach。再次清理该阶段过期构建输出和夹具1,305,212,943字节；普通APK摘要及共享编译缓存保留。
 
 ## Flutter 主应用迁入 app（2026-10-19）
 
@@ -754,3 +754,11 @@ JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收
 覆盖安装到原有API36/x86_64主控 `emulator-5554`，从 `app/` 使用上述APK启动。MCP热重启成功，CLI记录1404ms，运行时错误查询为空；inspector确认 `ConnectApp`、`HomePage`、`DevicesPage` 与“设备”标题。热重启期间有两条FRB向旧isolate投递失败警告，未登记为零告警。detach后pid25107仍在，回执为 `/tmp/connect-app-runtime.json`。本轮没有重跑远端设备业务、延迟实验、Apple或Windows整包构建。
 
 结束后删除旧根目录APK、重复APK、测试资产和过期Flutter构建输出，28项共3,594,319,772字节，保留上述唯一普通APK以及共享native hooks、Rust、Gradle与pub缓存；清理后APK摘要未变，回执为 `/tmp/connect-app-cleanup.json`。另已删除迁移前生成的iOS／桌面平台临时配置，后续由对应平台构建重新生成。既有主控模拟器与应用数据保留。
+
+## 临时分支合并（2026-10-19）
+
+目录迁移提交 `72564f2`、`3b129e1` 已快进合入 `dev`。输入实验和延迟诊断分别经 `cb09e56`、`b4251ea` 合并，重复新增的四个Dart工具采用后续诊断版本；各分支原提交均保留在合并历史中。工具依赖在根workspace声明固定 `ffi 2.2.0`、社区 `fvp 0.39.1`，未变更依赖版本。实验与诊断仍通过独立benchmark入口运行，正式播放器没有切换输入或解码默认值。
+
+合并后interop-bridge的25项Rust测试、Rust格式、all-targets Clippy、四个新增Dart工具的格式、全仓严格分析及完整生成一致性检查通过。日志为 `/tmp/connect-branch-merge-rust.log`、`/tmp/connect-branch-merge-clippy.log`、`/tmp/connect-branch-merge-analyze.log`、`/tmp/connect-branch-merge-generate.log`。首次分析发现benchmark在根workspace缺少直接fvp依赖，补齐后复验通过。既有普通应用MCP热重启成功，CLI记录1561ms，运行时错误查询为空，detach后原pid25107仍在；这没有重新构建包含实验导出的Android安装包，也没有重跑性能或远端业务验收。
+
+三个临时分支的tip均可从 `dev` 到达，合并后只保留 `dev`、`main`；远端获取时同样只有这两个分支，`main` 未移动。既有 `/tmp/connect-bounded-input-worktree` 是含未提交内容的detached worktree，本轮保留其文件和状态。
