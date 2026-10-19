@@ -54,11 +54,12 @@ Ubuntu 24.04 x86_64；Rust 1.99.1；Flutter 3.47.6 / Dart 3.13.5；Java 21；And
 
 ## Android E2E
 
-从 仓库根目录 执行（要求两个AVD已准备并转发端口）：
+以下命令从仓库根目录开始，进入 `app/` 运行（要求两个AVD已准备并转发端口）：
 
 ```sh
+cd app
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e flutter drive \
-  --driver=tool/driver/integration_test.dart \
+  --driver=../tool/driver/integration_test.dart \
   --target=integration_test/product_flow_test.dart -d emulator-5554 \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556
@@ -170,13 +171,14 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 
 ### 真实UI与独立进程核对
 
-在仓库根目录运行，`PATH`包含本机Rust/Flutter，target5556已将15556转发到5555：
+复现时从仓库根目录开始，`PATH`包含本机Rust/Flutter，target5556已将15556转发到5555：
 
 ```sh
+cd app
 env CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/session-workspace \
-  flutter drive --driver=tool/driver/session_workspace.dart \
+  flutter drive --driver=../tool/driver/session_workspace.dart \
   --target=integration_test/session_workspace_test.dart -d emulator-5554 \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \
@@ -219,12 +221,13 @@ env CONNECT_E2E_TARGET=emulator-5556 \
 
 ### 修复后真实核验
 
-主控5554→被控5556，使用已经准备的转发端点；target secure=0，不能证明未授权首次设置或强制认证。运行目录 仓库根目录，PATH 包含本机 Rust/Flutter：
+主控5554→被控5556，使用已经准备的转发端点；target secure=0，不能证明未授权首次设置或强制认证。以下复现命令从仓库根目录开始，PATH 包含本机 Rust/Flutter：
 
 ```sh
+cd app
 env CONNECT_E2E_ACCEPTANCE=media \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/recovery-csd-fixed \
-  flutter drive --driver=tool/driver/integration_test.dart \
+  flutter drive --driver=../tool/driver/integration_test.dart \
   --target=integration_test/state_recovery_test.dart -d emulator-5554 \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \
@@ -312,14 +315,15 @@ A42原先使用lastEvent触发来电，连续calls.incoming→observation.change
 
 新增[临时通知测试APK](../../tool/e2e/notification_fixture/README.md)仅为独立原接收端；不进产品/companion，不新增被控安装前提。只在明确API36隔离AVD安装本次不存在的测试包、授予该fixture自己的POST_NOTIFICATIONS；有既有包就拒绝覆盖，精确清理并仅卸载本次拥有安装。主控/产品权限和AppOps均未修改。构建产物仅tmp，签名验证通过；独立manifest receiver从原RemoteInput结果key读中文/换行/emoji，AtomicFile记录run/id/原文/count，并在关闭run资格、取消PI后发布最终清理回执防止删除次数证据。
 
-PATH已含本机Rust/Flutter；先在仓库根目录构建`dart tool/e2e/notification_fixture/build.dart`，再进入仓库根目录运行：
+PATH已含本机Rust/Flutter；先在仓库根目录构建`dart tool/e2e/notification_fixture/build.dart`，再从仓库根目录按下列命令进入 `app/` 运行：
 
 ```sh
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/notification-reply-final \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/notification_reply.dart \
+  --driver=../tool/driver/notification_reply.dart \
   --target=integration_test/notification_reply_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556
@@ -380,14 +384,15 @@ Rust工作区159 passed/44 ignored（`/tmp/connect-context-rust.log`）、all-ta
 
 第一份opened截图仍在加载帧，未当作内容视觉通过；因此补“实际看到仍有效的source标题且无loading，撤回项消失”的UI门禁后重跑。此时主控AVD从ADB及qemu进程表都已消失，原因未确定；只重启同一interop-controller，未wipe，保留数据，boot_completed=1后继续。该环境退出不算产品进程恢复通过。
 
-完整运行命令，目录仓库根目录，PATH含本机Rust/Flutter：
+以下复现命令从仓库根目录开始，PATH含本机Rust/Flutter：
 
 ```sh
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/system-notifications-content-verified \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/system_notifications.dart \
+  --driver=../tool/driver/system_notifications.dart \
   --target=integration_test/system_notifications_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556
@@ -417,12 +422,13 @@ env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 
 启动前两台AVD均不在ADB和进程表，原主控日志有ColorBuffer错误，未确定退出根因；原userdata重新启动，无wipe。目标启动阶段events日志记录SystemUI KeyguardService等待20018ms的ANR，早于产品验收；首轮收起截图确实带该系统对话框，因此没有当作视觉通过。后续流程目标对话框已消失。不能将这些环境事件当成产品进程恢复或Glass稳定性结论。
 
-真实产品运行命令在仓库根目录，PATH含Rust/Flutter，两台API36/x86_64：
+以下产品复现命令从仓库根目录开始，PATH含Rust/Flutter，两台API36/x86_64：
 
 ```sh
+cd app
 env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/glass-product-final \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/integration_test.dart \
+  --driver=../tool/driver/integration_test.dart \
   --target=integration_test/product_flow_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \
@@ -578,7 +584,7 @@ Rust默认工作区40套件163通过/47忽略（`/tmp/connect-first-pairing-rust
 
 公开RemotePage／typed路由测试先加入暂停抛错与永不完成两种情况，实际均因页面仍存在而失败。离开本地呈现改为不等待远端pause；输入释放仍在原session有序执行，不强停任务。首版修复曾因在返回页Scaffold就绪前发布Snackbar而失败，并发现重复pause；后置反馈、阻止退出中的重复pause后，remote_lifecycle＋session_views共32项通过。
 
-随后扩展为悬浮退出／系统返回×暂停失败／挂起四组合，全部通过：只退回原页面、只pause原session一次、没有session.stop；失败提示确实在返回页可见并包含设备名。命令：在仓库根目录执行 `flutter test --no-pub test/remote_lifecycle_test.dart --plain-name 'remains reachable when capture pause' --reporter expanded`。修复本地提交`0bf9cb1`。
+随后扩展为悬浮退出／系统返回×暂停失败／挂起四组合，全部通过：只退回原页面、只pause原session一次、没有session.stop；失败提示确实在返回页可见并包含设备名。复现命令：在 `app/` 执行 `flutter test --no-pub test/remote_lifecycle_test.dart --plain-name 'remains reachable when capture pause' --reporter expanded`。修复本地提交`0bf9cb1`。
 
 这没有证明同session立即重进成功：旧挂起请求仍可能阻塞SessionViews队列。真实断网／暂停故障的Android E2E、恢复核验和资源收束仍须继续，不把widget请求夹具当真实设备负例。
 
@@ -595,7 +601,7 @@ A44实施与运行边界见[内容交付](content-delivery.md)。公开Runtime�
 
 双AVD真实内容交付43秒通过，`/tmp/connect-delivery-journal-final.log`、`/tmp/connect-e2e/delivery-journal-final/result.json`。唯一原件63字节，SHA-256 `24517f80a3808bd472d8c1102db2a28ce93eea535b981e5bdaba66eefb863078`，系统取消／保存、完整离页后重进同一传输恢复saved、系统分享至独立receiver、content URI读授权及精确清理均有回执。重进截图已目视。首次`connect-delivery-journal-e2e.log`因路由时序失败：过渡旧页面误算重进，截图实际为文件详情，下一次分享点击未命中；已以旧页消失／当前路由完成／回执可见／命中门槛修正，不计首次通过。Android真实写入中杀进程和unknown恢复仍未验，公开Runtime重开不冒充该故障链路。
 
-A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、减少动态及安全区域／尺寸变化。真实产品流程25秒通过，`/tmp/connect-exit-inward-final.log`、`/tmp/connect-e2e/exit-inward-final/result.json`：通过实际连接表单及画质页选择1080，HEVC编码与实际解码486×1080，拖动收起／点击展开／再次收起／向内拖动保持展开／退出后会话暂停保留，严格host回执`inwardExitHandleExpanded:true`。对应截图已目视。实际命令在仓库根目录使用`--driver=tool/driver/integration_test.dart --target=integration_test/product_flow_test.dart`、`CONNECT_E2E_EXIT_HANDLE=1`及`--dart-define=CONNECT_E2E_VIDEO_MAX_SIZE=1080 --dart-define=CONNECT_E2E_MIN_VIDEO_EDGE=1080`，其余endpoint与内容测试相同。首次`connect-exit-inward-e2e.log`因连接表单尚未完成加载失败，补页面与可命中等待后复验；不是放松选择器／质量要求。
+A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、减少动态及安全区域／尺寸变化。真实产品流程25秒通过，`/tmp/connect-exit-inward-final.log`、`/tmp/connect-e2e/exit-inward-final/result.json`：通过实际连接表单及画质页选择1080，HEVC编码与实际解码486×1080，拖动收起／点击展开／再次收起／向内拖动保持展开／退出后会话暂停保留，严格host回执`inwardExitHandleExpanded:true`。对应截图已目视。当时的实际命令在仓库根目录使用`--driver=tool/driver/integration_test.dart --target=integration_test/product_flow_test.dart`、`CONNECT_E2E_EXIT_HANDLE=1`及`--dart-define=CONNECT_E2E_VIDEO_MAX_SIZE=1080 --dart-define=CONNECT_E2E_MIN_VIDEO_EDGE=1080`，其余endpoint与内容测试相同。首次`connect-exit-inward-e2e.log`因连接表单尚未完成加载失败，补页面与可命中等待后复验；不是放松选择器／质量要求。
 
 本轮两AVD均使用已准备好的API36/secure=0 legacy TCP目标及host15556→5555。不是首次安全配对、物理USB、OEM、通话音频或全部89页验收。仍有SurfaceSync／跳帧及模拟器GLES／BufferQueue释放日志，不登记为性能或零告警通过。
 
@@ -607,7 +613,7 @@ A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、�
 
 双AVD最终真实产品链路51秒通过，`/tmp/connect-app-primary-content-verified.log`与`/tmp/connect-e2e/app-primary-content-verified/result.json`。实际点击应用列表→在手机屏幕打开，复用原ID；host独立观察display0从HOME变Settings，主控实际MDK像素等待内容而非旧HOME／白色启动面，截图已目视为Settings。再实际打开Settings／Dialer独立窗口，三个窗口保留并暂停、逐UUID恢复／截图／关闭，其他窗口存活；9个checkpoint独立检查实际目标进程，全部非整体冻结T态，关闭的精确进程消失。
 
-失败与验收加严原样保留：第一次`connect-app-primary-and-windows-e2e.log`在本地已离页但异步pause尚未回执时即要求paused而失败，现仅只读轮询原ID至5秒上限，不补发pause。46秒后续流程虽通过，主屏截图仍为旧HOME；51秒第一版像素门槛又把白色启动面当内容。两者不计主屏视觉通过，最终加入内容对比门槛并目视Settings后才登记。该已知stock浅色Settings／深色HOME样本门槛不是通用UI识别器，不外推所有应用。命令仍为仓库根目录下`flutter drive --no-pub -d emulator-5554 --driver=tool/driver/session_workspace.dart --target=integration_test/session_workspace_test.dart`，host指定ADB／target及capture目录，Flutter指定ADDRESS=10.0.2.2、PORT=15556。
+失败与验收加严原样保留：第一次`connect-app-primary-and-windows-e2e.log`在本地已离页但异步pause尚未回执时即要求paused而失败，现仅只读轮询原ID至5秒上限，不补发pause。46秒后续流程虽通过，主屏截图仍为旧HOME；51秒第一版像素门槛又把白色启动面当内容。两者不计主屏视觉通过，最终加入内容对比门槛并目视Settings后才登记。该已知stock浅色Settings／深色HOME样本门槛不是通用UI识别器，不外推所有应用。当时的命令为仓库根目录下`flutter drive --no-pub -d emulator-5554 --driver=tool/driver/session_workspace.dart --target=integration_test/session_workspace_test.dart`，host指定ADB／target及capture目录，Flutter指定ADDRESS=10.0.2.2、PORT=15556。
 
 真实副屏失败后的手机回退、旧API／OEM、实际renderer首帧故障、unknown跨进程持久化、多实例和任务迁回完整矩阵继续待验。独立代码审查发现的两项新缺陷修复后复核未再发现确定问题；这不替代上述缺口。
 
@@ -673,7 +679,7 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 
 公开Runtime双设备ADB协议fixture验证精确音源活动、停止保留B、旧sourceId不误停替代源；它不替代真实Android。Flutter活动页确认／精确activityId与既有PortableAudioOutputs共23项通过；新增中文播放状态断言先红后绿。相关5文件严格分析无问题。
 
-真实运行：在仓库根目录执行`env PATH=<toolchain> ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/audio-activities-r3 flutter drive -d emulator-5554 --no-pub --driver=tool/driver/audio_activities.dart --target=integration_test/audio_activities_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556`。第三轮9秒通过，构建10.3秒／安装856ms，日志`/tmp/connect-audio-activities-r3.log`。严格driver要求8个结果全部true及3张截图；回执`/tmp/connect-e2e/audio-activities-r3/result.json`满足。实际PCM、fvp准备／播放与时钟前进后，活动页确认停止，Core源及精确本地输出消失，连接／观察及基线媒体保留，finally清理完整。播放／确认／停止后截图已目视。
+当时真实运行：在仓库根目录执行`env PATH=<toolchain> ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/audio-activities-r3 flutter drive -d emulator-5554 --no-pub --driver=tool/driver/audio_activities.dart --target=integration_test/audio_activities_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556`。第三轮9秒通过，构建10.3秒／安装856ms，日志`/tmp/connect-audio-activities-r3.log`。严格driver要求8个结果全部true及3张截图；回执`/tmp/connect-e2e/audio-activities-r3/result.json`满足。实际PCM、fvp准备／播放与时钟前进后，活动页确认停止，Core源及精确本地输出消失，连接／观察及基线媒体保留，finally清理完整。播放／确认／停止后截图已目视。
 
 首轮在observation.start返回starting时错误要求终态；改只读轮询后继续。第二轮MissingPluginException发生于截图：先前普通main的自动GeneratedPluginRegistrant排除了dev测试插件，而--no-pub没有重新生成；执行离线flutter pub get恢复自动注册后第三轮通过。没有手改注册器或生产Kotlin，没有把失败计通过。
 
@@ -681,7 +687,7 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 
 ## 渐进验收：入站PNG固定接收设备（2026-10-18）
 
-在仓库根目录，以明确独立controller／target／secondTarget环境运行`flutter drive -d emulator-5554 --no-pub --driver=tool/driver/incoming_share_target.dart --target=integration_test/incoming_share_target_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556 --dart-define=CONNECT_E2E_SECOND_PORT=15558`（完整环境与fixture构建见[内容交付](content-delivery.md#外部入站内容的固定目标)）。首轮14秒通过、构建52秒／安装745ms，`/tmp/connect-incoming-share-target-r1.log`、`/tmp/connect-e2e/incoming-share-target/result.json`。
+当时在仓库根目录，以明确独立controller／target／secondTarget环境运行`flutter drive -d emulator-5554 --no-pub --driver=tool/driver/incoming_share_target.dart --target=integration_test/incoming_share_target_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556 --dart-define=CONNECT_E2E_SECOND_PORT=15558`（完整环境与fixture构建见[内容交付](content-delivery.md#外部入站内容的固定目标)）。首轮14秒通过、构建52秒／安装745ms，`/tmp/connect-incoming-share-target-r1.log`、`/tmp/connect-e2e/incoming-share-target/result.json`。
 
 三AVD互异名称＋两端独占marker同时由host和公开files.list核对映射，外部非导出provider凭真实grant向产品提交PNG。页面明确选A后调用公开focusDevice(B)，仍只向A上传；host独立读取68字节与SHA256 `ce01132c640469ef7fb497e7496b12f5046d633b588f397e5c45a6c3efc85037`一致、B无同路径文件、消费后两次刷新不新增传输，精确清理全true。目标确认截图已目视；两台同型号默认同名的选项仍需可辨识线索，不以此声称完整视觉完成。窄分析通过；不沿用上一批全门禁。
 
@@ -701,7 +707,7 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 
 ## Dart 工具与主机测试目录迁移（2026-10-19）
 
-根目录保留 `test/` 与 `integration_test/`；主机驱动及基准分别迁至 `tool/driver/`、`tool/benchmark/`。35 个仓库自有 Python 文件已由 Dart 实现取代，覆盖生成、签名／打包、服务端构建、原生 JVM 回归、夹具构建与性能证据分析。官方 DESIGN.md Node 工具和受控来源归档保留。
+该阶段根目录保留 `test/` 与 `integration_test/`；主机驱动及基准分别迁至 `tool/driver/`、`tool/benchmark/`。35 个仓库自有 Python 文件已由 Dart 实现取代，覆盖生成、签名／打包、服务端构建、原生 JVM 回归、夹具构建与性能证据分析。官方 DESIGN.md Node 工具和受控来源归档保留。
 
 根应用323项通过，`/tmp/connect-dart-migration-flutter.jsonl`；工具49项通过，`/tmp/connect-dart-migration-tools.jsonl`，包含原分析器回归、协议生成精确字节、FRB隔离、APK本地与中央目录CRC、ELF、Windows bundle、Apple归档权限与链接、manifest失败门禁。Windows及Apple打包测试使用主机夹具，不代表对应宿主整包构建。最终静态分析、311个Dart文件格式、Rust格式、129条协议与完整token／FRB／builder生成一致性检查通过，生成日志为`/tmp/connect-dart-migration-generate.log`。
 
@@ -713,7 +719,7 @@ JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收
 
 应用实际解析为 pub.dev hosted `fvp 0.39.1`，不再使用本地源码副本或 path override。原版 `callbacks.cpp` SHA-256 为 `d31142aa65b299a0a471caabae7bdb3f20b902e9239e88beb5babca3d1ca623e`；本次 Android CMake 的 `CMAKE_HOME_DIRECTORY` 指向 pub cache 内该包，`FVP_DEPS_URL` 与 `FVP_DEPS_SHA256` 均为空。构建复用 MDK 0.39.0 缓存，stamp 为 `70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`；这不是一次新下载，也不证明四端 MDK 已固定。原版 snapshot 空结果未判空的已知限制仍按[工具链契约](repository-tooling.md#社区原版-fvp-0391)保留。
 
-根目录执行 `flutter test --no-pub test tool/test tool/e2e/tests`，371 个非 hidden 项全部 success、无 skip，日志为[根应用与工具 JSONL](/tmp/connect-community-fvp-tests.jsonl)。桥接层131项全部 success、无 skip，日志为[桥接层 JSONL](/tmp/connect-community-fvp-bridge.jsonl)。`flutter analyze --no-pub --fatal-infos` 在19.4秒通过；`dart tool/generate.dart --check` 完整通过，日志为[生成检查](/tmp/connect-community-fvp-generate.log)。这些结果不包含已移除的本地 fvp 补丁与 MDK 固定回归。
+当时在根目录执行 `flutter test --no-pub test tool/test tool/e2e/tests`，371 个非 hidden 项全部 success、无 skip，日志为[根应用与工具 JSONL](/tmp/connect-community-fvp-tests.jsonl)。桥接层131项全部 success、无 skip，日志为[桥接层 JSONL](/tmp/connect-community-fvp-bridge.jsonl)。`flutter analyze --no-pub --fatal-infos` 在19.4秒通过；`dart tool/generate.dart --check` 完整通过，日志为[生成检查](/tmp/connect-community-fvp-generate.log)。这些结果不包含已移除的本地 fvp 补丁与 MDK 固定回归。
 
 普通 `lib/main.dart` 入口的 Android x64 debug APK 实际构建138.1秒通过，[构建日志](/tmp/connect-community-fvp-build.log)。产物为 `build/app/outputs/flutter-apk/app-debug.apk`，125,062,865字节，SHA-256 `ab5fcf9b9d796d53297c3e290573de132c489cae87f1cf06474b03a0ae853967`。独立 ZIP 完整性、签名、x64 Flutter/Rust ELF 及16KB对齐检查通过，[产物回执](/tmp/connect-community-fvp-apk.json)；这是 x64 调试产物，不是三ABI或发行签名产物。
 
@@ -736,3 +742,15 @@ JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收
 同日继续完成18轮单变量输入对照：明确Cluster长度、direct、noparse及若干AMediaCodec选项均未消除该AVD约一帧等待；保持HTTP/容器不变，仅改FFmpeg slice后输入到onVideo降至约1.6ms。最后4轮软件后端HTTP/append对照均通过20ms诊断门槛、像素与清理核验。完整方法、逐轮结果和未确定的SDK内部边界见上述专项记录；[官方客户端研究](../research/scrcpy-client-latency-path.md)解释参考路径。这不宣称所有Android都应软件解码，也不冒充完整首屏、物理设备或生产修复通过。
 
 诊断工具保留在 `codex/mdk-latency-diagnosis`（最终工具提交 `1cd5d1b`），生产未合入。4个相关Dart工具分析通过；恢复普通APK、热重启及runtime error查询通过，pid24365，随后detach。再次清理该阶段过期构建输出和夹具1,305,212,943字节；普通APK摘要及共享编译缓存保留。
+
+## Flutter 主应用迁入 app（2026-10-19）
+
+从 `e549f5f` 的根目录应用迁至 `app/`，直接承载源码、应用测试和五个平台 runner。根目录保留 workspace 与仓库工具依赖，依赖版本及内容摘要未变，锁文件仅调整根包依赖的分类。当前目录与命令职责见[工具链契约](repository-tooling.md#应用与-workspace-职责)。
+
+根目录和 `app/` 的离线锁定依赖解析均通过。应用323项、工具49项、设计系统11项、桥接层131项测试全部通过；对应日志为 `/tmp/connect-app-tests.log`、`/tmp/connect-app-tools-tests.log`、`/tmp/connect-app-design-system-tests.log`、`/tmp/connect-app-bridge-tests.log`。全仓严格分析无问题，309个Dart文件格式检查无变化；Riverpod插件故意违规检查、driver验收契约和四组原生JVM契约均通过。完整token／FRB／builder生成一致性检查通过，官方DESIGN.md检查仍有63条警告，未计为零警告；日志为 `/tmp/connect-app-generate.log`。
+
+从仓库根运行 `dart tool/android.dart build --mode debug --abi universal --no-pub`，工具在 `app/` 构建普通 `app/lib/main.dart` 入口，实际耗时170.39秒。三ABI为 `armeabi-v7a`、`arm64-v8a`、`x86_64`，ZIP完整性、签名、Flutter／Rust ELF和16KB ZIP对齐均通过。产物位于 `app/build/app/outputs/flutter-apk/app-debug.apk`，262,755,323字节，SHA-256 `24197483b81f62914e23712491a8990d2bd7820aa37d7c5f5f65930efc4b53a4`；日志为 `/tmp/connect-app-build.log`。这是debug包，不是发行包。
+
+覆盖安装到原有API36/x86_64主控 `emulator-5554`，从 `app/` 使用上述APK启动。MCP热重启成功，CLI记录1404ms，运行时错误查询为空；inspector确认 `ConnectApp`、`HomePage`、`DevicesPage` 与“设备”标题。热重启期间有两条FRB向旧isolate投递失败警告，未登记为零告警。detach后pid25107仍在，回执为 `/tmp/connect-app-runtime.json`。本轮没有重跑远端设备业务、延迟实验、Apple或Windows整包构建。
+
+结束后删除旧根目录APK、重复APK、测试资产和过期Flutter构建输出，28项共3,594,319,772字节，保留上述唯一普通APK以及共享native hooks、Rust、Gradle与pub缓存；清理后APK摘要未变，回执为 `/tmp/connect-app-cleanup.json`。另已删除迁移前生成的iOS／桌面平台临时配置，后续由对应平台构建重新生成。既有主控模拟器与应用数据保留。

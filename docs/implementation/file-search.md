@@ -25,9 +25,10 @@ AOSP设备可能因shell创建的链接无法被adbd读取元数据而使扩展L
 ```sh
 env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
   cargo test -p interop-core --test file_search --test file_search_android -- --include-ignored
-# 工作目录 仓库根目录，Rust/Flutter在PATH，JDK21与Android SDK已配置。
+# 以下 Flutter 命令进入 app/ 执行，Rust/Flutter在PATH，JDK21与Android SDK已配置。
+cd app
 env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/file-search \
-  flutter drive -d emulator-5554 --no-pub --driver=tool/driver/file_search.dart \
+  flutter drive -d emulator-5554 --no-pub --driver=../tool/driver/file_search.dart \
   --target=integration_test/file_search_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556
 ```

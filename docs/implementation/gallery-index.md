@@ -25,14 +25,15 @@ Flutter每页拥有一个固定设备的检查，展示检查／停止、已显�
 
 ## 真实Android入口与保留边界
 
-从仓库根目录运行，下列仅为测试宿主部署／对照使用adb，产品仍经FRB和自有Rust库：
+从仓库根目录开始，按下列命令进入 `app/` 运行；仅为测试宿主部署／对照使用adb，产品仍经FRB和自有Rust库：
 
 ```sh
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/gallery-index \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/gallery_index.dart \
+  --driver=../tool/driver/gallery_index.dart \
   --target=integration_test/gallery_index_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556

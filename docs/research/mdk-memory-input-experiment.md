@@ -106,7 +106,7 @@ HTTP prepare耗时8～16ms，append为3～5ms；这是准备回执，不是实�
 
 ## 复现与证据
 
-实验代码保留在本地提交 `2f5123d`，包含fixture生成器、独立Flutter入口、host driver和按共同PTS汇总的Dart工具；依赖仍为原版 fvp 0.39.1。在该实验提交、已有完整录像归档的条件下：
+实验代码保留在本地提交 `2f5123d`，包含fixture生成器、独立Flutter入口、host driver和按共同PTS汇总的Dart工具；依赖仍为原版 fvp 0.39.1。在该实验提交、已有完整录像归档的条件下，从该提交的仓库根目录执行（下列路径保留实验提交布局）：
 
 ```sh
 flutter pub get --offline --enforce-lockfile

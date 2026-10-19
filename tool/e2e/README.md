@@ -5,6 +5,12 @@ Dart SDK and locked pub dependencies. Run `flutter pub get` from the repository
 root once after changing dependencies. These tools also support an unrelated
 working directory when invoked using an absolute script path.
 
+Flutter device tests and benchmarks run from `app/`. Targets inside the app use
+`--target=integration_test/<entry>.dart`; repository host drivers and benchmark
+targets use `--driver=../tool/driver/<entry>.dart` and
+`--target=../tool/benchmark/<entry>.dart`. Host fixture builders and offline
+analyzers continue to run from the repository root.
+
 Build an independent Android fixture using the installed Android SDK:
 
 ```sh

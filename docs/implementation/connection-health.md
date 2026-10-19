@@ -263,7 +263,8 @@ errors为空，所有清理true。故障注入至旧controllerEOF17768ms、至�
 `/tmp/connect-blackhole-{recovery-verified,eof-control}.log`。
 
 ```sh
-# 在仓库根目录，先按video-performance.md准备双AVD/fixture和25556转发。
+# 从仓库根目录开始，先按video-performance.md准备双AVD/fixture和25556转发。
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
  CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
@@ -271,7 +272,7 @@ env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-application-stall-new \
  FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
  /home/xiankq/flutter/bin/flutter drive -d emulator-5554 \
- --driver=tool/driver/video_recovery.dart --target=integration_test/video_recovery_test.dart
+ --driver=../tool/driver/video_recovery.dart --target=integration_test/video_recovery_test.dart
 ```
 
 去掉FAULT环境变量并换新证据目录即默认EOF控制。本轮三个driver文件Dart分析无问题，

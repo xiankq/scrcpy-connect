@@ -44,8 +44,9 @@
 
 ```sh
 flutter pub get --enforce-lockfile
+cd app
 flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/fvp_probe.dart \
+  --driver=../tool/driver/fvp_probe.dart \
   --target=integration_test/fvp_video_lifecycle_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \

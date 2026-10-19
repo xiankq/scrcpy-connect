@@ -1,14 +1,14 @@
 # Flutter 页面与路由
 
-应用通过 go_router 与 go_router_builder 生成类型化路由，版本以根 pubspec 和 lockfile 为准。产品行为以 [交互规则](../../designs/prod/interaction-rules.md) 为准。生产入口是 `lib/app.dart` 的 `MaterialApp.router`；初始化失败时，`main.dart` 使用独立的 `StartupErrorPage`，不依赖尚未建立的连接服务或路由。
+应用通过 go_router 与 go_router_builder 生成类型化路由，版本以 `app/pubspec.yaml` 和根 `pubspec.lock` 为准。产品行为以 [交互规则](../../designs/prod/interaction-rules.md) 为准。生产入口是 `app/lib/app.dart` 的 `MaterialApp.router`；初始化失败时，`main.dart` 使用独立的 `StartupErrorPage`，不依赖尚未建立的连接服务或路由。
 
 ## 文件布局
 
-- `lib/pages/<page_name>/<page_name>_page.dart`：每页单独目录、单独页面文件。
+- `app/lib/pages/<page_name>/<page_name>_page.dart`：每页单独目录、单独页面文件。
 - 页面专属组件放在该页目录内的 `widgets/`，例如远控退出手柄。
-- `lib/widgets/`：通用布局、操作行、反馈与命令视图。
-- `lib/services/`：控制器、剪贴板协调、文件操作、校验与数据转换。
-- `lib/router/`：类型化路由声明及生成文件、ID 查找、异步路由加载与导航方法。
+- `app/lib/widgets/`：通用布局、操作行、反馈与命令视图。
+- `app/lib/services/`：控制器、剪贴板协调、文件操作、校验与数据转换。
+- `app/lib/router/`：类型化路由声明及生成文件、ID 查找、异步路由加载与导航方法。
 
 不使用 `part` 聚合页面。生产 imports 直接指向所属文件；只有生成器产物使用标准的 `.g.dart` part。
 
@@ -58,9 +58,9 @@
 
 ## 生成与分析
 
-generator 与 build_runner 的兼容组合由根依赖和 lockfile 固定；升级时同时检查生成器支持的 build/analyzer 范围。
+generator 与 build_runner 的兼容组合由 workspace 依赖和根 lockfile 固定；升级时同时检查生成器支持的 build/analyzer 范围。
 
-从 workspace 根运行 `dart run build_runner build --workspace`；验证生成文件使用 `dart run build_runner build --workspace --only-check`。生成文件应与源码一起保留。`build.yaml` 只为生成文件忽略 go_router_builder 对 nullable Object extra 产生的冗余 cast；手写代码保留严格类型分析。
+从 workspace 根运行 `dart run build_runner build --workspace`；验证生成文件使用 `dart run build_runner build --workspace --only-check`。生成文件应与源码一起保留。`app/build.yaml` 只为生成文件忽略 go_router_builder 对 nullable Object extra 产生的冗余 cast；手写代码保留严格类型分析。
 
 官方 `riverpod_lint 3.1.9` 通过 workspace 根 analysis plugin 启用，app 继承根 analysis options，不使用旧 custom_lint 插件配置。Flutter hooks 暂无已确认的一方独立 lint；不引入与当前 analyzer 14 不兼容的第三方 custom_lint 插件。
 

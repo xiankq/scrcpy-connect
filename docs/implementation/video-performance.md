@@ -419,17 +419,18 @@ r1/r2初始严格颜色不匹配，r3颜色比例可识别但首个操作无变�
 
 最终r5完整66秒通过：6轮新连接/会话、120次精确新计数、6次暂停恢复、6张实际Flutter截图和6次确认纹理分离。输入到解码像素P50=446ms、最近秩P95=452ms、P99=569ms、最大571ms；启动到解码首像素1189/1119/1121/1028/1212/1244ms。主控每轮单调计时的媒体观测区间共50451ms、640包/535040容器字节，这是低复杂度色块负载，不是高运动带宽或满负荷帧率测试。`videoPerformanceComplete`和`fixtureCleanupConfirmed`均true，cleanup的uninstalled/absent均true。`/tmp/connect-video-performance-r5.log`、`/tmp/connect-e2e/video-performance-r5/`；不是小时级长稳，也不把主动重连误称自动故障恢复。
 
-可重复运行（工作目录仓库根目录，先从仓库根构建夹具）：
+可重复运行（从仓库根目录开始，先构建夹具，再进入 `app/`）：
 
 ```sh
 dart tool/e2e/video_fixture/build.dart
 flutter pub get --offline
+cd app
 CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
 CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-performance \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/video_performance.dart \
+  --driver=../tool/driver/video_performance.dart \
   --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=25556 \
@@ -749,13 +750,14 @@ control-send等空队列、video在`dequeueOutputBuffer(-1)`。这支持排查�
 夹具绘制/AVD负载与编码/传输/解码需继续分段，不能把所有动态延迟归咎网络。
 
 复现：先构建独立夹具，设置既有drive要求的ADB/主控/目标/APK环境变量（见夹具README），
-在仓库根目录使用：
+从仓库根目录按下列命令进入 `app/` 使用：
 
 ```sh
+cd app
 env CONNECT_E2E_VIDEO_MOTION=true \
  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-pause-stress \
  flutter drive -d emulator-5554 --no-pub \
- --driver=tool/driver/video_performance.dart \
+ --driver=../tool/driver/video_performance.dart \
  --target=integration_test/video_performance_test.dart \
  --dart-define=CONNECT_PERF_DECODER=native \
  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
@@ -1368,13 +1370,14 @@ startupBudgetMet／inputLatencyBudgetMet／videoPerformanceComplete均false。
 输出目录／日志名；不在计时期间并行编译其他任务）：
 
 ```sh
+cd app
 CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 CONNECT_E2E_TARGET=emulator-5556 CONNECT_E2E_DEVICE=emulator-5554 \
 CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_VIDEO_TIMELINE=true \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-burst-classic \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/video_performance.dart --target=integration_test/video_performance_test.dart \
+  --driver=../tool/driver/video_performance.dart --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_PERF_DECODER=native --dart-define=CONNECT_PERF_TRACE_FRAMES=true \
   --dart-define=CONNECT_PERF_TRACE_CLOCK=true --dart-define=CONNECT_PERF_ADB_BURST=false \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556 \
@@ -1661,16 +1664,17 @@ CBR候选仅在Rust构造scrcpy参数后、显式encoder参数前，对VP8追加
 `/tmp/connect-vp8-cbr-candidate.patch`；该候选未胜过本次默认VP8，不进入生产默认。
 固定AOSP的真实码控/CPUUSED分支和限制见[一手研究](../research/scrcpy-first-frame-performance.md#vp8实时编码与公开码控参数2026-10-18)。
 
-复跑H264基线（仓库根目录，沿用本文前面的双AVD/fixture构建及25556转发条件）：
+复跑H264基线（从仓库根目录开始，沿用本文前面的双AVD/fixture构建及25556转发条件）：
 
 ```sh
+cd app
 CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
 CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_VIDEO_TIMELINE=false \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-codec-avc \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/video_performance.dart \
+  --driver=../tool/driver/video_performance.dart \
   --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556 \
   --dart-define=CONNECT_PERF_CODEC=h264 \
@@ -1929,6 +1933,7 @@ readback，不能称纯GPU或面板延迟，也不能从回调数量推断队列
 复现公共命令（已有fixture APK、目标TCP转发25556；debug控制端与隔离测试adbd）：
 
 ```bash
+cd app
 PATH=/home/xiankq/.cargo/bin:/home/xiankq/flutter/bin:/usr/local/bin:/usr/bin:/bin \
 ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 \
 FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
@@ -1937,7 +1942,7 @@ CONNECT_E2E_TARGET=emulator-5556 CONNECT_E2E_DEVICE=emulator-5554 \
 CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-startup-observed-baseline \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/video_performance.dart \
+  --driver=../tool/driver/video_performance.dart \
   --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_PERF_DECODER=native \
   --dart-define=CONNECT_PERF_ADB_BURST=false \
@@ -2109,17 +2114,18 @@ host进程超时先TERM再必要的KILL、确认退出并有界排空管道。�
 的证明；超出15秒恢复窗口仍按未知失败。App清理并发与释放分支另经只读复核。
 
 复现：专用双AVD启动、目标tcpip5555和宿主25556转发建立，构建独立fixture后，在
-仓库根目录运行（ADB与APK为测试宿主工具，不进入产品分发）：
+从仓库根目录按下列命令进入 `app/` 运行（ADB与APK为测试宿主工具，不进入产品分发）：
 
 ```sh
+cd app
 CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
 CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-normal-binding-native-60 \
 FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/live_video_performance.dart \
-  --target=tool/benchmark/live_video_performance.dart \
+  --driver=../tool/driver/live_video_performance.dart \
+  --target=../tool/benchmark/live_video_performance.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=25556 \
   --dart-define=CONNECT_PERF_DECODER=native \

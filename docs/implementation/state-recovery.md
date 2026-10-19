@@ -40,6 +40,6 @@ START_APP 在编码或渲染失败前可能已经产生真实任务副作用。�
 
 ## 验证范围
 
-默认回归覆盖实际容量的 broadcast 溢出、独立观察者、快照水位、晚到设置与分享事件、companion 查询/通知交错、取消缓存、同 ID 的呈现恢复、失效所有者清理、超时/取消、输入释放、覆盖页面返回及剪贴板冻结。真实 Android 流程使用 `integration_test/state_recovery_test.dart` 和生产 Bridge 的显式核验入口，不声称在 AVD 人为制造 FRB 溢出。执行结果、命令及截图见 [验收记录](validation.md)。
+默认回归覆盖实际容量的 broadcast 溢出、独立观察者、快照水位、晚到设置与分享事件、companion 查询/通知交错、取消缓存、同 ID 的呈现恢复、失效所有者清理、超时/取消、输入释放、覆盖页面返回及剪贴板冻结。真实 Android 流程使用 `app/integration_test/state_recovery_test.dart` 和生产 Bridge 的显式核验入口，不声称在 AVD 人为制造 FRB 溢出。执行结果、命令及截图见 [验收记录](validation.md)。
 
 公开 Runtime 重建与应用启动门禁已有验证，不能据此关闭断网后的用户意图恢复、Android 杀进程/系统停止、后台通知完整权限/锁屏矩阵、资源仲裁、完整文件恢复或四宿主整包要求。历史入口缺口与后续修复仍按验收记录各自的阶段解释。

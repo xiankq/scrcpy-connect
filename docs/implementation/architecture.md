@@ -9,7 +9,7 @@ Flutter 页面通过 `AppDependencies` 调用 Dart `InteropBridge`，经 FRB 进
 
 被控兼容按 ADB feature、系统接口与实际权限分别判断，不能把音频或独立应用窗口的下限施加到基础连接与整机远控。无宽元数据／目录协议的设备使用同一个临时原生文件服务；旧 shell 的未知退出码不能作为文件变更成功证据。固定服务端、部署授权、资源回收及当前验证范围见[被控兼容边界](android-target-compatibility.md)。
 
-Flutter 应用位于仓库根目录：`lib/`、`test/`、`integration_test/` 与平台 runner 共用根 `pubspec.yaml`。`packages/`、`crates/`、`servers/`、`tool/` 保留各自构建职责。页面独立放在 `lib/pages/<page_name>/`，私有组件就近存放；共享服务、组件和路由使用 `services/`、`widgets/`、`router/`。路由生命周期见 [Flutter 页面与路由](flutter-navigation.md)。
+Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/` 与平台 runner 共用 `app/pubspec.yaml`。根 `pubspec.yaml` 声明 Dart workspace 与仓库工具依赖，统一解析使用根 `pubspec.lock` 和 `.dart_tool`。`packages/`、`crates/`、`servers/`、`tool/` 保留各自构建职责。页面独立放在 `app/lib/pages/<page_name>/`，私有组件就近存放；共享服务、组件和路由使用 `services/`、`widgets/`、`router/`。路由生命周期见 [Flutter 页面与路由](flutter-navigation.md)。
 
 ## 状态和资源所有权
 
@@ -44,7 +44,7 @@ Flutter 应用位于仓库根目录：`lib/`、`test/`、`integration_test/` 与
 
 ## 材质启动与渲染
 
-`lib/main.dart` 在启动 `try` 内先等待 `GlassMaterial.initialize()`，再调用 `bootstrapApplication()`；支持 shader 的后端加载失败进入启动错误页。材质只有 `liquid_glass_easy` 的一个 lens 引擎。后端实际支持 `ImageFilter` shader 时使用 lens，不支持时使用磨砂回退；降低透明度、高对比或显式实体面使用不透明内容并移除过滤器。减少动态效果另行关闭触摸形变。
+`app/lib/main.dart` 在启动 `try` 内先等待 `GlassMaterial.initialize()`，再调用 `bootstrapApplication()`；支持 shader 的后端加载失败进入启动错误页。材质只有 `liquid_glass_easy` 的一个 lens 引擎。后端实际支持 `ImageFilter` shader 时使用 lens，不支持时使用磨砂回退；降低透明度、高对比或显式实体面使用不透明内容并移除过滤器。减少动态效果另行关闭触摸形变。
 
 lens 拥有轮廓与子内容裁剪，外层不叠加径向保护遮罩或固定白边。Pencil 的 GLSL 只表达静态设计目标，不是 Flutter 渲染实现或 Apple 原生像素等效证明。光学数值来自生成 token，产品布局依据父约束而非整屏缩放。真实 shader、回退及无障碍路径的证据边界见产品验收记录。
 

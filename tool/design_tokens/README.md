@@ -39,5 +39,5 @@ accepted by the explicit emitter contract, and official orphan-color checks
 only inspect DESIGN.md components rather than Flutter theme references.
 
 The emitter owns token translation only. Material backend selection and startup
-initialization belong to `design_system` and `lib/main.dart`; the static Pencil
+initialization belong to `design_system` and `app/lib/main.dart`; the static Pencil
 shader is not input to this generator. See the [toolchain contract](../../docs/implementation/repository-tooling.md).

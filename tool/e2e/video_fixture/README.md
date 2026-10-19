@@ -11,7 +11,7 @@ Android View 更新计数器并绘制新图；主控从实际解码 RGBA 和已�
 开销，是输入到解码图像的上界；截图另验真实呈现，不冒充逐帧玻璃到玻璃延迟。
 
 
-`integration_test/video_performance_test.dart`可通过
+`app/integration_test/video_performance_test.dart`可通过
 `CONNECT_PERF_MAX_SIZE`、`CONNECT_PERF_MAX_FPS`、`CONNECT_PERF_BIT_RATE`
 选择码流配置；默认640/30/2000000保留既有基准。结果记录实际解码尺寸。
 `CONNECT_PERF_CODEC`可选h264/h265/av1/vp8/vp9（默认h264）；
@@ -84,12 +84,12 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 
 
 真实视频断网恢复使用`tool/driver/video_recovery.dart`和
-`integration_test/video_recovery_test.dart`。沿用上述ADB/双设备/fixture环境，
-设置`CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-recovery`，在仓库根目录运行：
+`app/integration_test/video_recovery_test.dart`。沿用上述ADB/双设备/fixture环境，
+设置`CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-recovery`，在 `app/` 目录运行：
 
 ```sh
 flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/video_recovery.dart \
+  --driver=../tool/driver/video_recovery.dart \
   --target=integration_test/video_recovery_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=25557

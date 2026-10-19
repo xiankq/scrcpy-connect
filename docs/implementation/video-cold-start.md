@@ -255,11 +255,12 @@ H265、AV1、VP8、VP9 均有真实 `mdk.snapshot`、Texture、原生截图、�
 main 切回集成测试时需要重新生成原生 integration_test 注册）：
 
 ```sh
+cd app
 env FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
  CONNECT_E2E_ACCEPTANCE=media \
  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/auto-capture-product-five-plugins \
  /home/xiankq/flutter/bin/flutter drive -d emulator-5554 \
- --driver=tool/driver/integration_test.dart --target=integration_test/video_codecs_test.dart \
+ --driver=../tool/driver/integration_test.dart --target=integration_test/video_codecs_test.dart \
  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556
 ```
 

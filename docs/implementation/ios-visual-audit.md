@@ -12,7 +12,7 @@
 - 已静态对照`lib/pages`下全部 **41个`*_page.dart`**。页面代理已补齐41页的浅/深色夹具和5个额外状态，共92张，另加4张窄屏／横屏2倍文字根导航，当前目录 **`/tmp/connect-ios-review`共96张PNG**。对应关系见本文41页表，完整临时清单见[页面回执](/tmp/connect-ios-review/page-audit.md)。
 - 材质代理逐张查看过96张的前一捕获版本；后续页面代理已重拍当前96张，特别等待图片首帧并检查gallery/media_preview的RawImage非空，实际打开确认最新浅/深媒体有照片。**未将前一版的逐张查看冒充当前96张再次全部人工验收**。
 - 页面代理定向回归9文件33项通过，见[日志](/tmp/ios-followup-final.log)；当前96图捕获测试1项通过，见[捕获日志](/tmp/ios-capture-followup.log)。最终根应用全量323个非hidden项成功；之后两处纯lint修复又完成3文件13项（含96图重拍），静态分析与生成一致性均通过，详见后文最终回执。
-- Widget截图走测试降级渲染，不证明Android Impeller折射。独立[GPU harness](../../integration_test/glass_material_test.dart)与[严格driver](../../tool/driver/glass_material.dart)已经交付，主代理已完成9场景shader采集与严格driver校验；材质代理已逐张查看9图并给出有限光学结论；原生级动态、性能、多路真实媒体与物理设备体验仍单列待验。早期`/tmp/connect-refined-ui`仅作历史对照。
+- Widget截图走测试降级渲染，不证明Android Impeller折射。独立[GPU harness](../../app/integration_test/glass_material_test.dart)与[严格driver](../../tool/driver/glass_material.dart)已经交付，主代理已完成9场景shader采集与严格driver校验；材质代理已逐张查看9图并给出有限光学结论；原生级动态、性能、多路真实媒体与物理设备体验仍单列待验。早期`/tmp/connect-refined-ui`仅作历史对照。
 - 主代理最新源稿回执为**101页、30母组件、186变量**：新增共享sidebar `UMqM7`、删除闲置母组件`M7YtSe`；18处旧blur统一为`assets/liquid-glass.glsl`，Pencil shader实际编译成功。当前Get仅有`uESR9`工作台完整内容相对scroll-viewport的有意滚动裁剪；`W7Lua`降低透明度页意外继承的导航shader已改为全实色，Get确认无shader并保存；没有旧panel/reflection六变量引用。`sepTa/H0TFx/DtZbX`更新后已实际查看，没有在这些截图中发现破布局；这是Pencil静态光学表达，不能称与Apple原生像素一致或当作Flutter GPU通过。
 
 用户最新纠正：**“黑色的主题色不要改，我说的是点缀色。”黑白主题及黑色主动作保留**；亮色仅用于图标、连接状态、警告、危险等有明确语义的点缀。当前规范与实现已按此保留主题；最终以 [design.md](../../designs/design.md) 为唯一规范来源。早期将黑色本身列为缺陷、建议全蓝主题的判断已撤回。规范变更不等于全部实例和实现已复验，本文不建立新的颜色、尺寸或光学参数表。

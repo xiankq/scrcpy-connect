@@ -1,6 +1,6 @@
 # Android 打包、签名与安装
 
-> 当前打包入口在仓库根目录，工具行为以 `tool/android.dart`、根 Android 工程和 [工具链契约](repository-tooling.md) 为准。本文同时保留各阶段签名、构建和 APK 摘要；下文“当前产物”只属于所在阶段，不能据历史构建推定当前代码或物理设备运行通过。
+> 仓库打包工具入口在根目录，Flutter 应用在 `app/`；工具行为以 `tool/android.dart`、`app/android/` 工程和 [工具链契约](repository-tooling.md) 为准。本文同时保留各阶段签名、构建和 APK 摘要；下文“当前产物”只属于所在阶段，不能据历史构建推定当前代码或物理设备运行通过。
 
 2026-10-18用户报告直接`flutter build apk`很慢，安装器显示英文的“包信息为空”。本批保持应用ID`dev.scrcpyconnect.scrcpy_connect`和中文名称“邻接”，补可更换的本机签名与真实安装验证，不把用户未提供的原APK当作已检查。
 
@@ -45,10 +45,10 @@ dart tool/android.dart init-signing
 dart tool/android.dart build                 # arm64 release + 完整APK检查
 dart tool/android.dart build --abi universal # 三架构通用包
 dart tool/android.dart build --abi x64       # Android模拟器
-dart tool/android.dart verify build/app/outputs/flutter-apk/app-release.apk
+dart tool/android.dart verify app/build/app/outputs/flutter-apk/app-release.apk
 ```
 
-直接在仓库根目录运行`flutter build apk`也使用相同签名与过滤。不要每次clean；清理调试过期build／Kotlin状态，保留仍复用的native hooks和Gradle缓存，最终安装包与必要验证证据可保留于/tmp。本批不把构建过程写入产品页面，也不上传私钥。
+直接在 `app/` 运行 `flutter build apk`也使用相同签名与过滤。不要每次clean；清理调试过期build／Kotlin状态，保留仍复用的native hooks和Gradle缓存，最终安装包与必要验证证据可保留于/tmp。本批不把构建过程写入产品页面，也不上传私钥。
 
 一手依据：[Flutter Android发布与签名](https://docs.flutter.dev/deployment/android)、[Gradle构建缓存](https://docs.gradle.org/9.3.1/userguide/build_cache.html)、[Android apksigner](https://developer.android.com/tools/apksigner)。实际Flutter默认ABI行为另按本机固定3.47.6的`FlutterPlugin.kt::configureAbiWithoutSplits`源码核查，未改SDK源。
 

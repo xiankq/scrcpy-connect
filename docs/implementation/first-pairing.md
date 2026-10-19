@@ -4,7 +4,7 @@
 
 ## 可重复的产品链路
 
-`integration_test/first_pairing_test.dart` 启动真实 app.main、FRB 和 Runtime，经 typed route/实际表单验证：
+`app/integration_test/first_pairing_test.dart` 启动真实 app.main、FRB 和 Runtime，经 typed route/实际表单验证：
 
 1. 未配对时访问实际 TLS listener，要求明确的证书授权拒绝，不能以超时/拒绝连接代替。
 2. 输入由当前码改一位的错误码，确认真实配对失败且未保存 GUID。
@@ -15,14 +15,15 @@
 
 宿主 driver 用 VM service extension 协调步骤；码不进入 extension 响应、报告或截图。初始拒绝阶段不截图，避免晚到的截图拍到后续配对码。工作台截图发生在实际连接仍保持的 `need-connected-capture` 等待点；撤权拒绝截图也通过专用握手等待完成，两者均不含码。报告中的证书错误只用于证明真实拒绝原因。
 
-工作目录 仓库根目录，PATH 含 Rust/Flutter，目标已按下面条件准备；图片/日志仍只在 tmp：
+以下命令从仓库根目录开始，PATH 含 Rust/Flutter，目标已按下面条件准备；图片/日志仍只在 tmp：
 
 ```sh
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5558 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/first-pairing \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/first_pairing.dart \
+  --driver=../tool/driver/first_pairing.dart \
   --target=integration_test/first_pairing_test.dart
 ```
 

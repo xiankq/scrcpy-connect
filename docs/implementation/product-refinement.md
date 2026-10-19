@@ -8,16 +8,16 @@
 
 | 反馈 | 原问题与决定 | 实现与验证位置／证据边界 |
 | --- | --- | --- |
-| 1 默认 iOS 返回 | 使用框架的 Cupertino 转场，各普通页面不维护自己的返回动画或手势 | design_system的CupertinoPageTransitionsBuilder、[navigation_test](../../test/navigation_test.dart)；沿用平台返回路由。既有模拟器流程有系统返回证据，物理设备交互手势不继承为通过。 |
-| 2 移除易用性设置 | 外观只选择浅色、深色、跟随系统。文字缩放、减少动态和高对比读取系统信号 | AppearancePage／ConnectApp、[preferences_ui_test](../../test/preferences_ui_test.dart)；当前浅／深外观截图已捕获，系统减少动态／高对比与降低透明度分别处理，不另加产品设置入口。 |
-| 3 声音随打开页面 | 设备连接、后台保留会话、实际打开控制页面是三个不同状态。只有最后一种持有播放意图；同时打开设备合并播放，同设备去重 | AppController页面租约、RemotePage与native audio；[audio_test](../../test/audio_test.dart)、[activities_audio_test](../../test/activities_audio_test.dart)；后者纳入本轮33项定向通过。多设备实际听测仍需物理环境。 |
-| 4 设备内剪贴板开关 | 删除全局开关、固定对象、手动发送/获取设置页和冲突选择。当前设备开启同步时，进入和切换立即以设备内容覆盖主控；后续复制自动同步 | DeviceDetailsPage、ClipboardCoordinator与native preferences；[clipboard_test](../../test/clipboard_test.dart)、[preferences_ui_test](../../test/preferences_ui_test.dart)覆盖切换、代次与按设备独立保存；真实系统权限组合仍单列。 |
-| 5 字体按钮紧凑 | 收紧语义文字级别、按钮、列表行、内容边距和导航。触控区域至少44，不以整体缩放达到紧凑 | 共享design_system与生成token；[ios_review_regressions](../../test/ios_review_regressions_test.dart)、[ios_pages_layout](../../test/ios_pages_layout_test.dart)覆盖标题对齐、最小命中、图标尺寸、短横屏、2倍文字。 |
+| 1 默认 iOS 返回 | 使用框架的 Cupertino 转场，各普通页面不维护自己的返回动画或手势 | design_system的CupertinoPageTransitionsBuilder、[navigation_test](../../app/test/navigation_test.dart)；沿用平台返回路由。既有模拟器流程有系统返回证据，物理设备交互手势不继承为通过。 |
+| 2 移除易用性设置 | 外观只选择浅色、深色、跟随系统。文字缩放、减少动态和高对比读取系统信号 | AppearancePage／ConnectApp、[preferences_ui_test](../../app/test/preferences_ui_test.dart)；当前浅／深外观截图已捕获，系统减少动态／高对比与降低透明度分别处理，不另加产品设置入口。 |
+| 3 声音随打开页面 | 设备连接、后台保留会话、实际打开控制页面是三个不同状态。只有最后一种持有播放意图；同时打开设备合并播放，同设备去重 | AppController页面租约、RemotePage与native audio；[audio_test](../../app/test/audio_test.dart)、[activities_audio_test](../../app/test/activities_audio_test.dart)；后者纳入本轮33项定向通过。多设备实际听测仍需物理环境。 |
+| 4 设备内剪贴板开关 | 删除全局开关、固定对象、手动发送/获取设置页和冲突选择。当前设备开启同步时，进入和切换立即以设备内容覆盖主控；后续复制自动同步 | DeviceDetailsPage、ClipboardCoordinator与native preferences；[clipboard_test](../../app/test/clipboard_test.dart)、[preferences_ui_test](../../app/test/preferences_ui_test.dart)覆盖切换、代次与按设备独立保存；真实系统权限组合仍单列。 |
+| 5 字体按钮紧凑 | 收紧语义文字级别、按钮、列表行、内容边距和导航。触控区域至少44，不以整体缩放达到紧凑 | 共享design_system与生成token；[ios_review_regressions](../../app/test/ios_review_regressions_test.dart)、[ios_pages_layout](../../app/test/ios_pages_layout_test.dart)覆盖标题对齐、最小命中、图标尺寸、短横屏、2倍文字。 |
 | 6 玻璃与紫色 | 删除紫色装饰与灰色金属反光，显式定义中性色，内容改普通面。浮动控制共享轻阴影、细边缘和透色材质 | Glass／ContentPanel分层，黑白primary保留；亮蓝／橙／红／绿用于功能图标。官方研究后去静态文件名玻璃、分离文字动作、退出改regular，并去shader路径重复保护渐变／边框；Android shader采集与9图有限人工复核、真实产品r2已通过；原生等效／完整动态／性能不在该结论内。 |
 | 7 设计还原 | 同步调整共享组件、实际页面结构、信息归属与文案；移除废弃设计页面，不保留旧入口 | 同一mobile.pen当前101页；原94页结构扫描后，92手机分批逐张截图＋7补稿＋2大屏；41实现页、96当前Flutter图。详见[逐页审计](ios-visual-audit.md)，不把设计页数换算成已运行业务状态数。 |
 | 8 Flexible | 根据父约束决定标题和内容空间；文本换行、内容滚动、大屏扩展。手机画稿尺寸只作视口，不作为缩放因子 | PageFrame／HomePage按父约束；全部页面在280×620、620×280与2倍文字测试，根导航另测窄pane／宽短pane。定向测试通过；实际键盘与任意长数据仍按场景验收。 |
-| 9 旧版 TCP | 无线指南提供直接 IP+端口入口，默认5555，保留明确的 TCP 传输类型，不依据端口猜测协议 | WirelessGuidePage／ConnectionFormPage与[connection_transport_test](../../test/connection_transport_test.dart)、preferences_ui_test；配对／TLS／TCP类型保留。当前空／错字段点击提交由同一Form.validate原位解释，0协议请求，Pen／规范同步此契约。 |
-| 10 远控返回与三键 | 系统返回/实体 Escape 发远端 Android Back；仅关闭按钮离页。每设备 showNavigationBar 默认true，三键为4/3/187 | RemotePage与设备偏好、[remote_input_test](../../test/remote_input_test.dart)、[remote_lifecycle_test](../../test/remote_lifecycle_test.dart)、[exit_handle_test](../../test/exit_handle_test.dart)；既有AVD实际Back／三键／拖拽关闭证据按原时间保留，本轮GPU另跑。 |
+| 9 旧版 TCP | 无线指南提供直接 IP+端口入口，默认5555，保留明确的 TCP 传输类型，不依据端口猜测协议 | WirelessGuidePage／ConnectionFormPage与[connection_transport_test](../../app/test/connection_transport_test.dart)、preferences_ui_test；配对／TLS／TCP类型保留。当前空／错字段点击提交由同一Form.validate原位解释，0协议请求，Pen／规范同步此契约。 |
+| 10 远控返回与三键 | 系统返回/实体 Escape 发远端 Android Back；仅关闭按钮离页。每设备 showNavigationBar 默认true，三键为4/3/187 | RemotePage与设备偏好、[remote_input_test](../../app/test/remote_input_test.dart)、[remote_lifecycle_test](../../app/test/remote_lifecycle_test.dart)、[exit_handle_test](../../app/test/exit_handle_test.dart)；既有AVD实际Back／三键／拖拽关闭证据按原时间保留，本轮GPU另跑。 |
 | 11 越界静默丢弃 | 原坐标舍入可能产生 width/height 本身，引起远端参数拒绝并被误判为画面失败。边沿限制在有效像素内，越界取消已开始手势并忽略余下事件 | RemotePage.pointer有效像素约束、出界cancel／余下事件忽略；remote_input与remote_lifecycle回归及既有AVD边沿用例。正常断线仍阻止输入；不把触控出界写成画面失败。 |
 
 ## 后续要求与当前证据
@@ -31,7 +31,7 @@
 | 简约且精致 | 统一返回／标题／动作基线、分组、内外几何与列表节奏；内容不玻璃化，文字动作独立，媒体静态文件名不再像玻璃按钮 | 定向回归包括对齐、双分隔、图标拉伸、状态本地化、画质单位、拒接对比；真实背景折射与交互观感另验 |
 | 官方token工具自动生成 | 固定@google/design.md 0.4.0公开lint().designSystem解析，项目仅Dart emitter；generate.py／--check接入门禁，含漂移／未知字段／缺引用等失败检查 | [工具链记录](repository-tooling.md)、tool/design_tokens；材质代理最新回执lint为0错误63警告（27组件扩展＋36标准components未直接引用颜色），generator/check与包11测试／analyze通过；最终生成一致性日志已回填，见当前视觉轮验收。该计数不等于Pencil母组件数 |
 | 社区原版播放器 | 精确使用 pub.dev fvp 0.39.1；移除本地源码副本、path override、snapshot 补丁及 MDK 固定回归，MDK 平台依赖沿用上游规则 | 此前五份空回调保护及固定归档的验收仅属历史。原版 snapshot 空结果未判空的限制保留说明；当前选择使用原版，不以先补修复作为删除副本的条件。规则见[工具链契约](repository-tooling.md#社区原版-fvp-0391)，切换后结果见[验收记录](validation.md) |
-| 根目录只保留一个应用 | 根pubspec／lib／test／integration_test／runner为唯一入口，旧apps/connect与空apps已移除；design_system、interop_bridge和Rust各自保留职责 | 最终普通lib/main.dart Android-x64 debug包已构建、ZIP／ELF及签名校验并覆盖安装启动；具体摘要见末尾。业务r2与普通入口启动观察各保留自身范围，不继承旧APK结果 |
+| 当时的根目录单应用迁移 | 该阶段以根pubspec／lib／test／integration_test／runner为唯一入口，旧apps/connect与空apps已移除；design_system、interop_bridge和Rust各自保留职责 | 最终普通lib/main.dart Android-x64 debug包已构建、ZIP／ELF及签名校验并覆盖安装启动；具体摘要见末尾。业务r2与普通入口启动观察各保留自身范围，不继承旧APK结果 |
 | 清理旧产物与临时文件 | 已清重复旧build／Dart缓存／旧APK／过渡设计导出；历史记录约释放11.32GiB。设计导出放系统临时目录，Git保留源稿、规范与实际引用素材 | 最新96图、测试日志／回执、仍复用缓存与当前APK有意保留。主代理最后清理23项、2,087,737,945字节（约1.944GiB），回执见末尾；11.32GiB仅是之前迁移阶段记录。保留唯一普通入口APK及共享Rust／native缓存，本次文档未reset／commit或删除产物 |
 | 真Android光学验收 | 独立生产Glass harness＋strict driver，9场景；检查shader支持／加载、非Lite、真实拖动、按下／取消、亮暗与reduceTransparency，并在/tmp保存PNG／JSON | **9场景采集契约与逐张有限人工复核完成，真实产品r2通过**。shader支持／加载、交互、非Lite及场景像素标记均通过；visualAcceptanceComplete保持false作为工具不签发人工认证的边界，原生等效／完整形变／性能仍分开验收 |
 

@@ -8,7 +8,8 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| 仓库根目录 | Flutter 主控与 Android 平台适配；保留 iOS、macOS、Windows runner |
+| 仓库根目录 | Dart workspace、统一依赖解析与仓库工具配置 |
+| `app` | Flutter 主控源码、测试与 Android、iOS、macOS、Windows、Linux runner |
 | `packages/design_system` | 中性主题、玻璃材质与共享界面组件 |
 | `packages/interop_bridge` | Dart／Rust 边界、媒体与系统能力适配 |
 | `crates/adb` | 独立 Rust ADB 主机协议、配对、TLS、USB、shell、sync 等服务 |
@@ -18,8 +19,25 @@
 | `protocol` | Dart／Rust 命令、字段形状与状态核验策略的单一来源 |
 | `servers` | 固定版本 scrcpy JAR、临时协同 JAR 与原生文件服务 |
 | `designs` | DESIGN.md、产品说明和 Pencil 页面／组件源文件 |
-| `test`、`integration_test` | Flutter 单元／组件测试与设备端集成测试 |
+| `app/test`、`app/integration_test` | Flutter 单元／组件测试与设备端集成测试 |
 | `tool` | Dart 生成／构建／校验入口、主机驱动、性能基准及测试夹具 |
+
+```text
+app/
+  pubspec.yaml
+  lib/
+  test/
+  integration_test/
+  android/  ios/  macos/  windows/  linux/
+packages/
+crates/
+servers/
+tool/
+pubspec.yaml
+pubspec.lock
+```
+
+根 `pubspec.yaml` 只声明 workspace 与工具依赖；`app/pubspec.yaml` 声明主应用。整个 Dart workspace 共用根 `pubspec.lock` 和 `.dart_tool`。
 
 ## 本地开发
 
@@ -32,10 +50,14 @@ flutter pub get
 npm ci --ignore-scripts --prefix tool/design_tokens
 cargo test --workspace
 ./tool/check.sh
+cd app
+flutter test
 flutter run -d <android-device>
 ```
 
 Android 运行时通过 Flutter native assets 自动构建 Rust 库，不调用或分发外部 `adb` 可执行文件。实际设备测试中的官方 adb 仅用于部署、独立读取系统结果和对照。
+
+在 `app/` 执行：
 
 ```sh
 flutter build apk --debug --target-platform android-x64
@@ -52,17 +74,17 @@ dart tool/android.dart init-signing
 dart tool/android.dart build
 ```
 
-已配置的签名不会被替换；私钥与 `key.properties` 不进入 Git，请自行私密备份这两份文件，后续更新需要同一身份。正式分发时可按 [配置示例](android/key.properties.example) 换成自己的发布密钥。缺少签名会在编译前明确失败，不再生成未签名的“成功”包，也不会悄悄用 debug 密钥签 release。
+已配置的签名不会被替换；私钥与 `key.properties` 不进入 Git，请自行私密备份这两份文件，后续更新需要同一身份。正式分发时可按 [配置示例](app/android/key.properties.example) 换成自己的发布密钥。缺少签名会在编译前明确失败，不再生成未签名的“成功”包，也不会悄悄用 debug 密钥签 release。
 
-打包入口默认只编译 arm64；模拟器使用 `--abi x64`，32 位主控设备使用 `--abi arm`，全架构包使用 `--abi universal`。直接在仓库根目录执行 `flutter build apk` 仍会生成三架构通用签名包。单架构模式也会过滤插件的其他架构库，避免只有插件、没有 Flutter／Rust 的不完整 ABI。
+打包入口默认只编译 arm64；模拟器使用 `--abi x64`，32 位主控设备使用 `--abi arm`，全架构包使用 `--abi universal`。直接在 `app/` 执行 `flutter build apk` 仍会生成三架构通用签名包。单架构模式也会过滤插件的其他架构库，避免只有插件、没有 Flutter／Rust 的不完整 ABI。
 
-最终 APK 在 `build/app/outputs/flutter-apk/app-release.apk`。可独立复核：
+最终 APK 在 `app/build/app/outputs/flutter-apk/app-release.apk`。可独立复核：
 
 ```sh
-dart tool/android.dart verify build/app/outputs/flutter-apk/app-release.apk
+dart tool/android.dart verify app/build/app/outputs/flutter-apk/app-release.apk
 ```
 
-验证包括 ZIP 完整性、签名、16KB ZIP 对齐、包名／启动入口和实际 Flutter／Rust ELF 架构。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[实测与限制](docs/implementation/android-packaging.md)。
+验证包括 ZIP 完整性、签名、16KB ZIP 对齐、包名／启动入口和实际 Flutter／Rust ELF 架构。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `app/build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[实测与限制](docs/implementation/android-packaging.md)。
 
 ## 设计与验收
 

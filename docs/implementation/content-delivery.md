@@ -40,12 +40,13 @@ Flutter 承担主要页面与任务归属；共享 Dart 协调树规划、数量
 
 ```sh
 dart tool/e2e/content_delivery_fixture/build.dart
-# 工作目录 仓库根目录；PATH 包含 Rust 和 Flutter。
+# 从仓库根目录开始；PATH 包含 Rust 和 Flutter。
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/content-delivery \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/content_delivery.dart \
+  --driver=../tool/driver/content_delivery.dart \
   --target=integration_test/content_delivery_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556
@@ -70,12 +71,13 @@ env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 前几轮的DocumentsUI Downloads／Download识别及误读持久回执未公开的renamed／createdCount字段导致测试失败，均未算通过；第四轮功能通过后，目视发现全跳过却报部分已保存，新增公共页面红测后修复并由第五轮复验。持久回执保持现有公开投影，host以实际文件核验成果，没有扩字段来掩盖夹具错误。
 
 ```sh
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_TARGET_ADB_PORT=5555 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/document-conflict \
   flutter drive --no-pub -d emulator-5554 \
-  --driver=tool/driver/document_conflict.dart \
+  --driver=../tool/driver/document_conflict.dart \
   --target=integration_test/document_conflict_flow_test.dart
 ```
 
@@ -85,14 +87,15 @@ env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 
 IncomingSharePage让用户明确选接收设备，提交前捕获该设备和目录；全局焦点变化不会改收件设备。2026-10-18三AVD14秒通过一条PNG链路；独立host确认A字节／hash、B同路径不存在和consume后不重提，未改生产实现。
 
-先构建并仅在主控安装tool/e2e/share_fixture的APK。工作目录仓库根目录，PATH包含Flutter／Rust，ANDROID_HOME指向SDK；目标端5556／5558分别开放已授权测试TCP及hostforward15556／15558。运行：
+先构建并仅在主控安装tool/e2e/share_fixture的APK。以下命令从仓库根目录开始，PATH包含Flutter／Rust，ANDROID_HOME指向SDK；目标端5556／5558分别开放已授权测试TCP及hostforward15556／15558。运行：
 
 ```sh
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_SECOND_TARGET=emulator-5558 \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/incoming_share_target.dart \
+  --driver=../tool/driver/incoming_share_target.dart \
   --target=integration_test/incoming_share_target_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \

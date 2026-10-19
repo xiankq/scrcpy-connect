@@ -20,14 +20,15 @@
 
 ## 可复现命令
 
-工作目录仓库根目录，PATH含Flutter／Rust，ANDROID_HOME指向SDK。主控5554、已授权被控5556的TCP通过15556转发；目标屏幕应为Awake，系统Settings搜索可用，测试初始查询为空。
+以下复现命令从仓库根目录开始，PATH含Flutter／Rust，ANDROID_HOME指向SDK。主控5554、已授权被控5556的TCP通过15556转发；目标屏幕应为Awake，系统Settings搜索可用，测试初始查询为空。
 
 ```sh
+cd app
 env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/remote-ime \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=tool/driver/remote_ime.dart --target=integration_test/remote_ime_test.dart \
+  --driver=../tool/driver/remote_ime.dart --target=integration_test/remote_ime_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556
 ```

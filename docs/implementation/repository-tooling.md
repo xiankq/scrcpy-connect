@@ -20,9 +20,11 @@ dart tool/generate.dart --check
 
 依赖解析先通过锁文件完成，生成过程不自动升级 FRB 依赖，也不触发 `dart run` 的隐式重新解析。网络不可用但固定依赖已缓存时，可先使用 `flutter pub get --offline --enforce-lockfile`；这不允许更新锁文件或跳过生成一致性检查。
 
-## 根目录应用与包职责
+## 应用与 workspace 职责
 
-根 `pubspec.yaml` 是唯一 Flutter 应用入口。根目录仅保留 Flutter 常规的 `test/` 单元／组件测试和 `integration_test/` 设备端集成测试；主机驱动放在 `tool/driver/`，性能基准入口放在 `tool/benchmark/`。驱动命令显式指定 `--driver=tool/driver/<入口>.dart`，基准使用 `--target=tool/benchmark/<入口>.dart`，不依赖默认目录推断。命令和 CI 产物路径从根解析，旧 `apps/connect` 已移除。`packages/design_system` 与 `packages/interop_bridge` 为 Dart workspace 包，`crates/` 为 Cargo workspace，应用平铺不改变这些模块边界。
+`app/pubspec.yaml` 是唯一 Flutter 应用入口，`app/` 直接包含 `lib/`、`test/`、`integration_test/` 与平台 runner。根 `pubspec.yaml` 仅声明 Dart workspace 与仓库工具依赖；`app`、`packages/design_system` 与 `packages/interop_bridge` 共享根 `pubspec.lock` 和 `.dart_tool`，依赖从仓库根统一解析。`crates/` 为 Cargo workspace。
+
+应用运行、构建和 Flutter 测试在 `app/` 执行。主机驱动保留在 `tool/driver/`，性能基准入口保留在 `tool/benchmark/`；从 `app/` 运行时显式指定 `--driver=../tool/driver/<入口>.dart` 与 `--target=../tool/benchmark/<入口>.dart`。仓库工具、生成命令与 CI 编排入口仍从仓库根执行，工具负责将 Flutter 子进程的工作目录设为 `app/`。普通 APK 输出位于 `app/build/app/outputs/flutter-apk/`。
 
 仓库自有生成、构建、诊断及主机测试编排统一使用 Dart；服务端构建器随其产物保存在 `servers/`，其余入口在 `tool/`。工具回归使用同一锁定的 `flutter_test`，不另建测试依赖环境。Node 仅用于官方 DESIGN.md 解析及其 Dart emitter；原生源码和系统构建器保持平台要求的语言。第三方来源归档内的上游脚本不属于自有工具，不改写归档以消除文件扩展名。
 
@@ -50,9 +52,9 @@ MDK 的规则直接继承该发布包，不再由本仓库统一固定正式版�
 
 被控执行产物集中在 `servers/`。scrcpy 使用一份固定版本、上游 Java 源不改动的标准脱糖构建；原始来源、构建输入、DEX 回填、许可及对应源码由 [vendor 清单与工具](../../servers/vendor/README.md)维护。`tool/check.sh` 核对 vendor 和 companion 产物，并执行旧平台兼容回归；功能下限及实际设备证据见[被控兼容边界](android-target-compatibility.md)。构建产物、来源归档和下载缓存不可混为同一清理对象。
 
-普通 `lib/main.dart` 安装包与集成测试入口安装包分开标识；同一输出文件名被测试构建覆盖后，不能继续按普通应用产物交付。保留的交付包记录入口、架构、签名核验与摘要，历史摘要不代表当前文件。
+普通 `app/lib/main.dart` 安装包与集成测试入口安装包分开标识；同一输出文件名被测试构建覆盖后，不能继续按普通应用产物交付。保留的交付包记录入口、架构、签名核验与摘要，历史摘要不代表当前文件。
 
-调试结束清理过期 `build` 中间目录、测试资产、重复 APK 和已失效的 `.dart_tool/flutter_build` 输出。`.dart_tool/hooks_runner/shared`、Gradle 和固定 SDK 下载可作为复用缓存保留，不能与发布包混入 Git；清理前确认没有运行中的构建使用这些目录。
+调试结束清理过期 `app/build` 中间目录、测试资产、重复 APK 和已失效的 `.dart_tool/flutter_build` 输出。`.dart_tool/hooks_runner/shared`、Gradle 和固定 SDK 下载可作为复用缓存保留，不能与发布包混入 Git；清理前确认没有运行中的构建使用这些目录。
 
 设备实验按本次创建的资源清理：测试进程、临时转发、夹具和目标模拟器均记录身份，既有主控及用户资源不随测试批次停止。截图与日志使用系统临时目录；重要结论在仓库文档中保留环境和结果，不能仅依靠临时文件存在。
 

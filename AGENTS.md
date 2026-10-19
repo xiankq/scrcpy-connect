@@ -1,6 +1,6 @@
 # 项目约束
 
-Flutter 主控应用位于仓库根目录；`packages`、`crates`、`servers` 分别承载共享界面与桥接、Rust 领域实现、被控设备临时执行产物。目录职责见 [README](README.md#工作区)，不另建 `apps/connect` 应用副本。
+Flutter 主控应用位于 `app/`，该目录直接包含 Flutter 应用结构；`packages`、`crates`、`servers` 分别承载共享界面与桥接、Rust 领域实现、被控设备临时执行产物。目录职责见 [README](README.md#工作区)。
 
 ## 按任务读取
 
@@ -9,7 +9,7 @@ Flutter 主控应用位于仓库根目录；`packages`、`crates`、`servers` �
 | 领域术语、设备身份、连接或平台边界 | [领域文档规则](docs/agents/domain.md)、[词表](GLOSSARY.md)和对应 [ADR](docs/adr/) |
 | 产品范围、页面入口、默认行为、失败与恢复 | [产品维护约束](designs/prod/AGENTS.md)、[产品规格入口](designs/prod/README.md) |
 | 界面、布局、颜色、材质或 Pencil 组件 | [视觉工作约束](designs/AGENTS.md)、[视觉规范](designs/design.md) |
-| Flutter 页面、导航、当前设备归属 | [主控应用约束](lib/AGENTS.md) |
+| Flutter 页面、导航、当前设备归属 | [主控应用约束](app/lib/AGENTS.md) |
 | 共享主题、材质、控件或 token 接口 | [设计系统约束](packages/design_system/AGENTS.md) |
 | ADB 协议、被控版本、文件服务或 Rust 活动生命周期 | [Rust 核心约束](crates/AGENTS.md) |
 | 被控 JAR、原生助手、上游产物或嵌入摘要 | [服务端产物约束](servers/AGENTS.md) |
