@@ -3,29 +3,29 @@
     {
       "abi": "arm64-v8a",
       "file": "bin/arm64-v8a/interop-rename",
-      "sha256": "88b93ac2b7bc0975d07b7077be0e57d426a2cd99cfb96546c1e8b8089a65d266",
-      "size": 271520,
+      "sha256": "0c725f3b4042a50be09b0482dfae0b61157084c080ff56eb313ff58c27b26aeb",
+      "size": 274632,
       "target": "aarch64-linux-android"
     },
     {
       "abi": "armeabi-v7a",
       "file": "bin/armeabi-v7a/interop-rename",
-      "sha256": "9947968d1012a0ecfb4d6e9f7c86bdfd07a57ba5bb895875e50b3c0fd06b0194",
-      "size": 205436,
+      "sha256": "e648d3f51ab284e1fdcab1b865b06ab2e23d3271fcf5ceaa90a4fbcb6bfe1282",
+      "size": 207636,
       "target": "armv7-linux-androideabi"
     },
     {
       "abi": "x86_64",
       "file": "bin/x86_64/interop-rename",
-      "sha256": "3b360df9eecf4baf5644e8a0c055164aad45d368ef1ea11efee81abd248a1462",
-      "size": 300560,
+      "sha256": "1ad5076fe343994031360005d490b518e637c195ec0b79ea68c4d8d892fa25f3",
+      "size": 303920,
       "target": "x86_64-linux-android"
     },
     {
       "abi": "x86",
       "file": "bin/x86/interop-rename",
-      "sha256": "dc05282b469d42831ae59fa669a5c48c5eb961f7f21e4c36fb468b1fddec7e5d",
-      "size": 303296,
+      "sha256": "fb02a8225335bbae2df74d0e0ec0c042bda20476b19ea6789123ffd43bea0069",
+      "size": 307008,
       "target": "i686-linux-android"
     }
   ],
@@ -36,7 +36,7 @@
   "sources": {
     "crates/android_helper/Cargo.lock": "8d13344aca2604d7fe6d103a2c581f8726a9e6525e040d428d2ca120095dcd87",
     "crates/android_helper/Cargo.toml": "4244f3e0c7d7ded3f6e625ec5febfddfc1c058cca98c8617c1855645f431ba79",
-    "crates/android_helper/src/main.rs": "671a26569a0792c1e0570b5c95be641afb538a5945b7d20d738aedb6700207f7",
+    "crates/android_helper/src/main.rs": "c10da67e534b37a6b6574b50ea2557604e5ee7c106a4c732b2dbe39e8bea4b0c",
     "servers/helpers/build.py": "b13bf6fd376e8e244366bdf5048ebe1ed7728e2e4613e4267b2fa04a6fb5cc11"
   }
 }
