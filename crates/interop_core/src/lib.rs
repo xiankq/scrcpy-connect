@@ -2,6 +2,7 @@
 mod activities;
 mod app_open;
 mod audio;
+mod bundled_servers;
 mod clock_probe;
 mod companion;
 mod connection_health;

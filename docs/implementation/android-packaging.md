@@ -14,7 +14,7 @@
 
 ## 构建速度与边界
 
-开启Gradle本机任务缓存；日常入口默认只编译常见arm64，仍保留原生release优化、R8和资源裁剪，不以debug包替代release。未启用尚无兼容证据的configuration cache，未盲改Rust优化级别。Native hook依赖的Cargo release构建仍由FRB维护，冷构建不能视为热构建。
+Gradle本机任务缓存保持开启；当前交付默认和原生库压缩策略见[工具链契约](repository-tooling.md#应用与-workspace-职责)。下表保留2026-10-18阶段默认arm64时的构建回执，不能据旧命令推定当前默认架构。原生release优化、R8和资源裁剪仍保留。未启用尚无兼容证据的configuration cache，未盲改Rust优化级别。Native hook依赖的Cargo release构建仍由FRB维护，冷构建不能视为热构建。
 
 | 实际命令／状态 | 耗时与产物 |
 | --- | --- |
@@ -42,8 +42,8 @@ arm64正式入口日志`/tmp/connect-release-arm64.log`，SHA-256`82bafbe09f8ca8
 
 ```sh
 dart tool/android.dart init-signing
-dart tool/android.dart build                 # arm64 release + 完整APK检查
-dart tool/android.dart build --abi universal # 三架构通用包
+dart tool/android.dart build                 # 三架构通用 release + 完整APK检查
+dart tool/android.dart build --abi arm64     # ARM64对照构建
 dart tool/android.dart build --abi x64       # Android模拟器
 dart tool/android.dart verify app/build/app/outputs/flutter-apk/app-release.apk
 ```

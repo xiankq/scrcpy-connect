@@ -49,6 +49,10 @@ impl Runtime {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).await?;
         }
+        let artifact_directory = root.join("bundled_servers");
+        tokio::task::spawn_blocking(move || crate::bundled_servers::prepare(&artifact_directory))
+            .await
+            .map_err(|error| CoreError::new("server_integrity", error.to_string()))??;
         let identity_path = root.join("host_identity.pem");
         let identity = match fs::read_to_string(&identity_path).await {
             Ok(pem) => Identity::from_pem(&pem)?,

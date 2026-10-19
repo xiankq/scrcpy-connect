@@ -8,8 +8,10 @@ dart tool/generate.dart --check
 dart servers/vendor/build.dart --check
 dart servers/companion/build.dart --check
 dart servers/helpers/build.dart --check
+dart servers/package.dart --check
 dart servers/companion/tests/compatibility.dart
 dart servers/tests/tooling_test.dart
+dart servers/tests/package_test.dart
 flutter test --no-pub tool/test tool/e2e/tests
 npm test --prefix tool/design_tokens
 dart format --output=none --set-exit-if-changed app/lib app/test app/integration_test tool servers packages

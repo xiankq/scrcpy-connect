@@ -75,8 +75,10 @@ The script locates the repository from its own path and also works outside the r
 `ANDROID_NDK_HOME` may select another installation of the same pinned NDK.
 The script builds against Android API 21, remaps checkout/Cargo paths, removes
 linker build IDs and strips symbols. Committed artifacts and `manifest.json`
-allow ordinary application builds to embed the helpers without needing an NDK
-or a temporary directory. The manifest records source, lockfile, script and
+allow ordinary application builds to package the helpers without needing an NDK
+or a temporary directory. Shared compressed packaging is described in the
+[tooling contract](../../docs/implementation/repository-tooling.md#被控执行产物的共享打包).
+The manifest records source, lockfile, script and
 artifact SHA256 hashes; changing source requires rebuilding all four artifacts.
 The helper's independent Cargo workspace prevents ordinary app builds from
 trying to compile this Android executable as part of the host library workspace.
@@ -93,7 +95,7 @@ cargo +1.99.1 test --locked \
 ## Deployment
 
 `remote_helper.rs` selects an ABI reported by the connected target, verifies the
-embedded artifact against the embedded manifest, and creates a random 0700
+packaged artifact against the compiled manifest, and creates a random 0700
 directory under `/data/local/tmp`. It pushes a fresh helper with mode 0700 for
 each operation. A raw-exec creator holds a directory lease and installs cleanup
 only after exclusive creation succeeds. Losing the creation receipt or dropping
@@ -102,7 +104,7 @@ not authorize cleanup of the existing directory.
 
 It opens the executable on a standard descriptor and returns that descriptor's
 bytes to the host. Only after comparing every byte and an independent random
-end marker against the verified embedded artifact does the host send a one-time
+end marker against the verified packaged artifact does the host send a one-time
 execution token. The bootstrap then executes `/proc/self/fd/0`; substituting the
 pathname cannot redirect execution to another inode. No device-side hash tool
 is required. There is no remote executable

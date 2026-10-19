@@ -182,7 +182,7 @@ JAR 固定条目顺序、ZIP 时间戳、权限、存储方式和 manifest 内�
 构建脚本、共享 `servers/tooling.dart` 与受控 JAR 的 SHA-256，再在临时目录真实重建并逐字节比较 JAR；检查
 不改写受控源码、JAR 或 manifest。仅修改 Java 而未重建会被拒绝，手改 manifest
 摘要也不能绕过重建比较。`tool/check.sh` 已接入此门禁。修改源码或构建脚本后需
-重建并提交 JAR 与 manifest，同时同步 Rust 的 `SERVER_SHA`。
+重建并提交 JAR 与 manifest，再运行 `dart servers/package.dart` 同步共享压缩资源及 Rust 使用的清单；打包规则见[工具链契约](../../docs/implementation/repository-tooling.md#被控执行产物的共享打包)。
 
 2026-10-18 本批增加构建门禁时，将既有 JAR 重新封装为上述确定性格式。对照受控
 原 JAR，`classes.dex` 逐字节未变，SHA-256 仍为

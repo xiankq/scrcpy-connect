@@ -33,3 +33,6 @@ socket2 = { version = "=0.6.5", features = ["all"] }
 
 [target.'cfg(any(target_os = "android", target_os = "linux"))'.dependencies]
 libc = "0.2"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }

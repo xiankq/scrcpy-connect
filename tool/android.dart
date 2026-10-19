@@ -1,4 +1,4 @@
-/// Local signing, single-ABI builds, and independent APK validation.
+/// Local signing, universal release builds, and independent APK validation.
 library;
 
 import 'dart:convert';
@@ -11,6 +11,7 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import 'src/core_tooling.dart';
+import 'packaged_servers.dart';
 
 final root = repositoryRoot();
 const platforms = {
@@ -246,6 +247,7 @@ List<String> verifyApkArchive(List<int> bytes, [List<String>? expectedAbis]) {
       }
     }
   }
+  verifyPackagedServers(archive, root);
   return abis;
 }
 
@@ -287,6 +289,7 @@ Map<String, Object> verifyApk(File input, [List<String>? expectedAbis]) {
     'zipIntegrityVerified': true,
     'zipAlignmentVerified': true,
     'zipNativePageAlignmentBytes': 16384,
+    'sharedServerArtifactsVerified': true,
     'signerCertificates': const LineSplitter()
         .convert(signature)
         .where((line) => line.contains('certificate SHA-256 digest:'))
@@ -298,8 +301,9 @@ Map<String, Object> verifyApk(File input, [List<String>? expectedAbis]) {
 
 void buildApk({
   String mode = 'release',
-  String abi = 'arm64',
+  String abi = 'universal',
   bool noPub = false,
+  bool compressNative = true,
   Directory? application,
 }) {
   application ??= applicationRoot(root);
@@ -338,6 +342,7 @@ void buildApk({
     '--$mode',
     '--target-platform',
     platform.$1,
+    '-Pcompress-native-libs=$compressNative',
     if (noPub) '--no-pub',
   ], cwd: application);
   watch.stop();
@@ -364,14 +369,19 @@ void main(List<String> arguments) {
           ..addOption(
             'abi',
             allowed: platforms.keys.toList(),
-            defaultsTo: 'arm64',
+            defaultsTo: 'universal',
           )
           ..addOption(
             'mode',
             allowed: ['debug', 'release'],
             defaultsTo: 'release',
           )
-          ..addFlag('no-pub', negatable: false),
+          ..addFlag('no-pub', negatable: false)
+          ..addFlag(
+            'compress-native',
+            defaultsTo: true,
+            help: 'Compress native libraries in the APK; Android extracts them at install time.',
+          ),
       )
       ..addCommand('verify', commandParser());
     final args = parser.parse(arguments);
@@ -401,6 +411,7 @@ void main(List<String> arguments) {
           mode: command['mode'] as String,
           abi: command['abi'] as String,
           noPub: command['no-pub'] as bool,
+          compressNative: command['compress-native'] as bool,
         );
       case 'verify':
         if (command.rest.length != 1) {

@@ -191,6 +191,11 @@ void main(List<String> arguments) {
       'tool/design_tokens/generate.mjs',
       if (check) '--check',
     ], cwd: root);
+    runTool([
+      dartExecutable,
+      'servers/package.dart',
+      if (check) '--check',
+    ], cwd: root);
     generateFrb(check);
     runTool(builderCommand(root, check), cwd: root);
   } on Object catch (error) {

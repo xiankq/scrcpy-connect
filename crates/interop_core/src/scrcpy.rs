@@ -8,7 +8,6 @@ use crate::{
 };
 use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, sync::RemotePath};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -24,9 +23,6 @@ use tokio::{
     time::Instant,
 };
 
-pub(crate) const SERVER: &[u8] = include_bytes!("../../../servers/vendor/scrcpy-server-v5.0.1");
-pub(crate) const SERVER_SHA: &str =
-    "201fa96f6643e08fce7fb750e6bec30dc7aa6862b369c88ca82b4d1c65b0903a";
 const MAX_PACKET: usize = 16 * 1024 * 1024;
 const CLIPBOARD_MAX: usize = (1 << 18) - 14;
 // Acquire before spawning: repeatedly cancelled catalog initializers cannot
@@ -535,9 +531,7 @@ impl Runtime {
                 "独立应用窗口需要 Android 10 或更新版本。",
             ));
         }
-        if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
-            return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
-        }
+        let server = crate::bundled_servers::get("scrcpy")?;
         let id = uuid::Uuid::new_v4().to_string();
         let activity_id = crate::activities::ActivityRef::Session(&id).to_string();
         let cancellation = CancellationToken::new();
@@ -684,10 +678,10 @@ impl Runtime {
             let mut sync = client.sync(OperationOptions::default()).await?;
             sync.push(
                 &RemotePath::new(&remote_jar)?,
-                &mut &SERVER[..],
+                &mut &server[..],
                 0o644,
                 now().min(u32::MAX as u64) as u32,
-                SERVER.len() as u64,
+                server.len() as u64,
             )
             .await?;
             drop(sync);
@@ -1484,15 +1478,16 @@ impl Runtime {
     }
 
     pub(crate) async fn list_apps(&self, params: &Value) -> CoreResult<Value> {
+        let server = crate::bundled_servers::get("scrcpy")?;
         let client = self.client(required(params, "deviceId")?).await?;
         let path = format!("/data/local/tmp/interop-apps-{}.jar", uuid::Uuid::new_v4());
         let mut sync = client.sync(OperationOptions::default()).await?;
         sync.push(
             &RemotePath::new(&path)?,
-            &mut &SERVER[..],
+            &mut &server[..],
             0o600,
             now() as u32,
-            SERVER.len() as u64,
+            server.len() as u64,
         )
         .await?;
         drop(sync);
@@ -1554,9 +1549,7 @@ impl Runtime {
     async fn read_video_encoders_owned(
         client: &interop_adb::Client,
     ) -> CoreResult<Vec<VideoEncoder>> {
-        if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
-            return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
-        }
+        let server = crate::bundled_servers::get("scrcpy")?;
         let path = format!(
             "/data/local/tmp/interop-encoders-{}.jar",
             uuid::Uuid::new_v4()
@@ -1570,10 +1563,10 @@ impl Runtime {
             let mut sync = client.sync(operation.clone()).await?;
             sync.push(
                 &RemotePath::new(&path)?,
-                &mut &SERVER[..],
+                &mut &server[..],
                 0o644,
                 now().min(u32::MAX as u64) as u32,
-                SERVER.len() as u64,
+                server.len() as u64,
             )
             .await?;
             drop(sync);
@@ -2580,7 +2573,7 @@ mod tests {
             use interop_adb::protocol;
             let mut power = None;
             let mut sync_bytes = Vec::new();
-            let mut uploaded = 0;
+            let mut uploaded = Vec::new();
             loop {
                 let frame = self.frame().await;
                 match frame.command {
@@ -2594,7 +2587,7 @@ mod tests {
                         } else if service.contains("list_encoders=true") {
                             assert_eq!(
                                 uploaded,
-                                SERVER.len(),
+                                include_bytes!("../../../servers/vendor/scrcpy-server-v5.0.1"),
                                 "the actual bundled probe JAR was uploaded"
                             );
                             return (power.expect("sleep query stays gated"), frame.arg0);
@@ -2623,7 +2616,7 @@ mod tests {
                                     String::from_utf8_lossy(&sync_bytes[8..8 + word])
                                         .starts_with("/data/local/tmp/interop-encoders-")
                                 ),
-                                b"DATA" => uploaded += word,
+                                b"DATA" => uploaded.extend_from_slice(&sync_bytes[8..8 + word]),
                                 _ => panic!("unexpected sync request: {id:?}"),
                             }
                             sync_bytes.drain(..8 + word);

@@ -9,6 +9,8 @@ Flutter 页面通过 `AppDependencies` 调用 Dart `InteropBridge`，经 FRB 进
 
 被控兼容按 ADB feature、系统接口与实际权限分别判断，不能把音频或独立应用窗口的下限施加到基础连接与整机远控。无宽元数据／目录协议的设备使用同一个临时原生文件服务；旧 shell 的未知退出码不能作为文件变更成功证据。固定服务端、部署授权、资源回收及当前验证范围见[被控兼容边界](android-target-compatibility.md)。
 
+被控执行产物在 Android 安装包中由三种主控架构共享，Flutter 宿主准备私有资源缓存，Rust 校验后持有不可变原始字节并负责远端部署；其他宿主和独立 Rust 保留压缩内置资源。生成链、摘要与缓存规则见[共享打包](repository-tooling.md#被控执行产物的共享打包)。被控 ABI 与主控 ABI 独立。
+
 Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/` 与平台 runner 共用 `app/pubspec.yaml`。根 `pubspec.yaml` 声明 Dart workspace 与仓库工具依赖，统一解析使用根 `pubspec.lock` 和 `.dart_tool`。`packages/`、`crates/`、`servers/`、`tool/` 保留各自构建职责。页面独立放在 `app/lib/pages/<page_name>/`，私有组件就近存放；共享服务、组件和路由使用 `services/`、`widgets/`、`router/`。路由生命周期见 [Flutter 页面与路由](flutter-navigation.md)。
 
 ## 状态和资源所有权

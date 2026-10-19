@@ -7,12 +7,6 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{fmt::Write, time::Duration};
 
-const MANIFEST: &str = include_str!("../../../servers/helpers/manifest.json");
-const ARM64: &[u8] = include_bytes!("../../../servers/helpers/bin/arm64-v8a/interop-rename");
-const ARM: &[u8] = include_bytes!("../../../servers/helpers/bin/armeabi-v7a/interop-rename");
-const X64: &[u8] = include_bytes!("../../../servers/helpers/bin/x86_64/interop-rename");
-const X86: &[u8] = include_bytes!("../../../servers/helpers/bin/x86/interop-rename");
-
 struct Deployment {
     lease: interop_adb::AdbStream,
     directory: String,
@@ -67,24 +61,12 @@ impl Deployment {
 }
 
 fn artifact(abis: &str) -> CoreResult<(&'static [u8], String)> {
-    let manifest: Value = serde_json::from_str(MANIFEST)?;
     for abi in abis.split(|c: char| c == ',' || c.is_ascii_whitespace()) {
-        let bytes = match abi {
-            "arm64-v8a" => ARM64,
-            "armeabi-v7a" => ARM,
-            "x86_64" => X64,
-            "x86" => X86,
-            _ => continue,
-        };
-        let hash = manifest["artifacts"]
-            .as_array()
-            .and_then(|entries| entries.iter().find(|entry| entry["abi"] == abi))
-            .and_then(|entry| entry["sha256"].as_str())
-            .ok_or_else(|| CoreError::new("helper_integrity", "内置文件服务清单无效。"))?;
-        if format!("{:x}", Sha256::digest(bytes)) != hash {
-            return Err(CoreError::new("helper_integrity", "内置文件服务校验失败。"));
+        if matches!(abi, "arm64-v8a" | "armeabi-v7a" | "x86_64" | "x86") {
+            let bytes = crate::bundled_servers::get(abi)?;
+            let hash = format!("{:x}", Sha256::digest(bytes));
+            return Ok((bytes, hash));
         }
-        return Ok((bytes, hash.to_owned()));
     }
     Err(CoreError::new(
         "unsupported_abi",
@@ -959,8 +941,9 @@ printf() {{ return 127; }}
             assert!(artifact(abi).is_ok());
         }
         assert!(artifact("unknown").is_err());
-        let manifest: Value = serde_json::from_str(MANIFEST).unwrap();
-        let sources: [(&str, &[u8]); 4] = [
+        let manifest: Value =
+            serde_json::from_str(include_str!("../../../servers/helpers/manifest.json")).unwrap();
+        let sources: [(&str, &[u8]); 5] = [
             (
                 "crates/android_helper/src/main.rs",
                 include_bytes!("../../android_helper/src/main.rs"),
@@ -974,8 +957,12 @@ printf() {{ return 127; }}
                 include_bytes!("../../android_helper/Cargo.lock"),
             ),
             (
-                "servers/helpers/build.py",
-                include_bytes!("../../../servers/helpers/build.py"),
+                "servers/helpers/build.dart",
+                include_bytes!("../../../servers/helpers/build.dart"),
+            ),
+            (
+                "servers/tooling.dart",
+                include_bytes!("../../../servers/tooling.dart"),
             ),
         ];
         for (path, bytes) in sources {
@@ -986,6 +973,42 @@ printf() {{ return 127; }}
             );
         }
     }
+    #[test]
+    fn all_target_abis_select_their_controlled_executable_in_device_order() {
+        for (abi, original) in [
+            (
+                "arm64-v8a",
+                include_bytes!("../../../servers/helpers/bin/arm64-v8a/interop-rename").as_slice(),
+            ),
+            (
+                "armeabi-v7a",
+                include_bytes!("../../../servers/helpers/bin/armeabi-v7a/interop-rename")
+                    .as_slice(),
+            ),
+            (
+                "x86_64",
+                include_bytes!("../../../servers/helpers/bin/x86_64/interop-rename").as_slice(),
+            ),
+            (
+                "x86",
+                include_bytes!("../../../servers/helpers/bin/x86/interop-rename").as_slice(),
+            ),
+        ] {
+            for abis in [
+                abi.to_owned(),
+                format!("unknown, {abi}\n"),
+                format!("{abi},x86"),
+            ] {
+                let (bytes, hash) = artifact(&abis).unwrap();
+                assert_eq!(bytes, original, "wrong deployment for {abis}");
+                assert_eq!(hash, format!("{:x}", Sha256::digest(original)));
+            }
+        }
+        for abis in ["", "unknown", "arm64", "x86_64extra"] {
+            assert_eq!(artifact(abis).unwrap_err().code, "unsupported_abi");
+        }
+    }
+
     #[test]
     fn byte_paths_never_become_shell_syntax() {
         let value = path_assignment("source", b"/x/'$()\xff\n").unwrap();

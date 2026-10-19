@@ -1,9 +1,24 @@
+import com.android.build.api.variant.LibraryAndroidComponentsExtension
 import java.util.Properties
 
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// FindMDK links its optional runtimes so Gradle discovers their native assets.
+// Android remote streams have no subtitle track; keep only actual symbol
+// dependencies in libfvp.so so libass can be excluded below. FFmpeg remains
+// packaged and MDK loads it at runtime.
+val fvpProject = project(":fvp")
+fvpProject.pluginManager.withPlugin("com.android.library") {
+    fvpProject.extensions
+        .getByType<LibraryAndroidComponentsExtension>()
+        .finalizeDsl { library ->
+            library.defaultConfig.externalNativeBuild.cmake.arguments +=
+                "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--as-needed"
+        }
 }
 
 val releaseKeyFile = rootProject.file("key.properties")
@@ -83,6 +98,16 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // Optional sideload APK compression. Android extracts these libraries
+            // at install time, trading installed space for a smaller download.
+            useLegacyPackaging = providers.gradleProperty("compress-native-libs")
+                .orNull?.toBooleanStrict() ?: true
+            excludes += "**/libass.so"
         }
     }
 }

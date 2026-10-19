@@ -40,6 +40,10 @@ void main() {
     bool kernel = false,
     bool wrongMachine = false,
     bool includeRust = true,
+    bool includeServers = true,
+    bool embedServer = false,
+    bool corruptServer = false,
+    bool duplicateServer = false,
   }) {
     final archive = Archive();
     void entry(String name, List<int> bytes) => archive.addFile(
@@ -61,7 +65,28 @@ void main() {
       final header = List<int>.filled(20, 0);
       header.setRange(0, 6, [0x7f, 0x45, 0x4c, 0x46, 2, 1]);
       header[18] = wrongMachine && name == 'libinterop_bridge.so' ? 40 : 183;
-      entry('lib/arm64-v8a/$name', header);
+      entry('lib/arm64-v8a/$name', [
+        ...header,
+        if (embedServer && name == 'libinterop_bridge.so')
+          ...File(
+            p.join(android.root.path, 'servers/vendor/scrcpy-server-v5.0.1'),
+          ).readAsBytesSync(),
+      ]);
+    }
+    if (includeServers) {
+      final servers = Directory(
+        p.join(android.root.path, 'packages/interop_bridge/assets/servers'),
+      );
+      for (final file in servers.listSync().whereType<File>()) {
+        final name =
+            'assets/flutter_assets/packages/interop_bridge/assets/servers/${p.basename(file.path)}';
+        final bytes = file.readAsBytesSync();
+        if (corruptServer && file.path.endsWith('scrcpy.zlib')) bytes[0] ^= 1;
+        entry(name, bytes);
+        if (duplicateServer && file.path.endsWith('scrcpy.zlib')) {
+          entry('$name.duplicate', bytes);
+        }
+      }
     }
     return ZipEncoder().encode(archive)!;
   }
@@ -90,6 +115,28 @@ void main() {
     final extraLength = bytes[28] | bytes[29] << 8;
     bytes[30 + nameLength + extraLength] ^= 1;
     expect(() => android.verifyApkArchive(bytes), throwsA(anything));
+  });
+
+  test('APK rejects missing, corrupt, or duplicated shared server assets', () {
+    expect(
+      () => android.verifyApkArchive(apk(includeServers: false)),
+      throwsStateError,
+    );
+    expect(
+      () => android.verifyApkArchive(apk(corruptServer: true)),
+      throwsStateError,
+    );
+    expect(
+      () => android.verifyApkArchive(apk(duplicateServer: true)),
+      throwsStateError,
+    );
+  });
+
+  test('APK rejects server payloads embedded again in native libraries', () {
+    expect(
+      () => android.verifyApkArchive(apk(embedServer: true)),
+      throwsStateError,
+    );
   });
 
   test('APK CRC verification includes central directory records', () {

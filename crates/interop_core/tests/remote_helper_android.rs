@@ -1,5 +1,7 @@
 //! Actual Android kernel operations, through the same deployment path as production.
 pub use interop_core::{CoreError, CoreResult};
+#[path = "../src/bundled_servers.rs"]
+mod bundled_servers;
 #[path = "../src/remote_helper.rs"]
 mod remote_helper;
 use interop_adb::{Client, ConnectOptions, OperationOptions, sync::RemotePath};

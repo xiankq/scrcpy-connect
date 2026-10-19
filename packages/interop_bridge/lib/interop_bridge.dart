@@ -23,6 +23,7 @@ import 'src/documents/system_delivery.dart';
 import 'src/interop_exception.dart';
 import 'src/protocol/command_codec.dart';
 import 'src/runtime_initialization.dart';
+import 'src/native_runtime.dart';
 
 export 'src/interop_exception.dart';
 export 'src/protocol/commands_generated.dart' show InteropCommand;
@@ -118,7 +119,8 @@ class InteropBridge {
   static final _runtime = RuntimeInitialization(
     bindingsInitialized: () => RustLib.instance.initialized,
     initializeBindings: RustLib.init,
-    initializeRuntime: (directory) => core.initialize(dataDirectory: directory),
+    initializeRuntime: (directory) =>
+        initializeNativeRuntime(dataDirectory: directory),
   );
 
   static Future<InteropBridge> initialize({required String dataDirectory}) {

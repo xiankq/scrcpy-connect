@@ -4,11 +4,10 @@ use crate::{
     CoreError, CoreResult, Runtime,
     model::{now, quote, required},
     remote_process::managed_shell_command,
-    scrcpy::{SERVER, SERVER_SHA, accept_media},
+    scrcpy::accept_media,
 };
 use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, sync::RemotePath};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::{
     sync::{
         Arc,
@@ -349,9 +348,7 @@ impl Runtime {
                 "设备声音采集需要 Android 11 或更新版本。",
             ));
         }
-        if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
-            return Err(CoreError::new("server_integrity", "内置控制服务校验失败。"));
-        }
+        let server = crate::bundled_servers::get("scrcpy")?;
         let cancellation = CancellationToken::new();
         let mut guard = StartupGuard(Some(cancellation.clone()));
         let id = uuid::Uuid::new_v4().to_string();
@@ -445,10 +442,10 @@ impl Runtime {
             let mut sync = client.sync(OperationOptions::default()).await?;
             sync.push(
                 &RemotePath::new(&jar)?,
-                &mut &SERVER[..],
+                &mut &server[..],
                 0o644,
                 now() as u32,
-                SERVER.len() as u64,
+                server.len() as u64,
             )
             .await?;
             drop(sync);

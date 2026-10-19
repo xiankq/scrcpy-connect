@@ -348,7 +348,7 @@ while :; do sleep 0.02; done"#;
         }
 
         async fn upload(client: &Client, path: &str) -> crate::CoreResult<()> {
-            let bytes = crate::scrcpy::SERVER;
+            let bytes = crate::bundled_servers::get("scrcpy")?;
             let count = client
                 .sync(OperationOptions {
                     timeout: Duration::from_secs(10),

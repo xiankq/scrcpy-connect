@@ -67,7 +67,7 @@ flutter build apk --debug --target-platform android-x64
 
 ### Android 安装包
 
-`flutter build apk` 默认构建 release。首次在仓库根目录执行以下命令，生成本机持久的侧载签名，再为常见 arm64 手机构建并验证安装包：
+首次在仓库根目录执行以下命令，生成本机持久的侧载签名，再构建并验证通用 release 安装包。默认架构和原生库压缩策略见[工具链契约](docs/implementation/repository-tooling.md#应用与-workspace-职责)：
 
 ```sh
 dart tool/android.dart init-signing
@@ -76,7 +76,7 @@ dart tool/android.dart build
 
 已配置的签名不会被替换；私钥与 `key.properties` 不进入 Git，请自行私密备份这两份文件，后续更新需要同一身份。正式分发时可按 [配置示例](app/android/key.properties.example) 换成自己的发布密钥。缺少签名会在编译前明确失败，不再生成未签名的“成功”包，也不会悄悄用 debug 密钥签 release。
 
-打包入口默认只编译 arm64；模拟器使用 `--abi x64`，32 位主控设备使用 `--abi arm`，全架构包使用 `--abi universal`。直接在 `app/` 执行 `flutter build apk` 仍会生成三架构通用签名包。单架构模式也会过滤插件的其他架构库，避免只有插件、没有 Flutter／Rust 的不完整 ABI。
+特定主控架构的测试可使用 `--abi x64`、`--abi arm64` 或 `--abi arm`，普通交付保留默认通用模式。单架构模式也会过滤插件的其他架构库，避免只有插件、没有 Flutter／Rust 的不完整 ABI。
 
 最终 APK 在 `app/build/app/outputs/flutter-apk/app-release.apk`。可独立复核：
 
@@ -84,7 +84,7 @@ dart tool/android.dart build
 dart tool/android.dart verify app/build/app/outputs/flutter-apk/app-release.apk
 ```
 
-验证包括 ZIP 完整性、签名、16KB ZIP 对齐、包名／启动入口和实际 Flutter／Rust ELF 架构。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `app/build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[实测与限制](docs/implementation/android-packaging.md)。
+验证包括 ZIP 完整性、签名、16KB ZIP 对齐、包名／启动入口、实际 Flutter／Rust ELF 架构及共享执行产物。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `app/build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[缩包实测与限制](docs/implementation/android-package-size.md)。
 
 ## 设计与验收
 

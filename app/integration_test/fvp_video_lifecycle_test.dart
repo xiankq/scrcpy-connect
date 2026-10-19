@@ -8,6 +8,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:interop_bridge/src/media/portable_video.dart';
 import 'package:interop_bridge/src/media/video_presentation.dart';
 import 'package:interop_bridge/interop_bridge.dart' show InteropException;
+import 'package:interop_bridge/src/native_runtime.dart';
 import 'package:interop_bridge/src/rust/api.dart' as core;
 import 'package:interop_bridge/src/rust/frb_generated.dart';
 import 'package:path_provider/path_provider.dart';
@@ -53,7 +54,7 @@ void main() {
     String? activeSession;
     await tester.runAsync(() async {
       await RustLib.init();
-      await core.initialize(
+      await initializeNativeRuntime(
         dataDirectory: '${support.path}/portable-video-lifecycle',
       );
     });

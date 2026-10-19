@@ -26,9 +26,19 @@ dart tool/generate.dart --check
 
 应用运行、构建和 Flutter 测试在 `app/` 执行。主机驱动保留在 `tool/driver/`，性能基准入口保留在 `tool/benchmark/`；从 `app/` 运行时显式指定 `--driver=../tool/driver/<入口>.dart` 与 `--target=../tool/benchmark/<入口>.dart`。仓库工具、生成命令与 CI 编排入口仍从仓库根执行，工具负责将 Flutter 子进程的工作目录设为 `app/`。普通 APK 输出位于 `app/build/app/outputs/flutter-apk/`。
 
+`dart tool/android.dart build` 默认构建 ARM32、ARM64、x86_64 通用 release APK，并压缩包内原生库，以下载体积为优先。Android 安装时会解压匹配架构的库，需将下载大小与安装后的总占用分别衡量。`--no-compress-native` 保留库在 APK 中直接加载，`--abi` 可用于特定架构分析；这些对照构建不能替代通用交付包。
+
 仓库自有生成、构建、诊断及主机测试编排统一使用 Dart；服务端构建器随其产物保存在 `servers/`，其余入口在 `tool/`。工具回归使用同一锁定的 `flutter_test`，不另建测试依赖环境。Node 仅用于官方 DESIGN.md 解析及其 Dart emitter；原生源码和系统构建器保持平台要求的语言。第三方来源归档内的上游脚本不属于自有工具，不改写归档以消除文件扩展名。
 
 工具迁移后的历史回执仍只证明原版本的运行结果。本文与专项记录中的复现入口随目录调整，原日志、版本、环境及已知限制不因迁移改变。
+
+## 被控执行产物的共享打包
+
+`servers/vendor`、`servers/companion` 和 `servers/helpers` 的原始产物及来源 manifest 仍是受控输入。`dart servers/package.dart` 核对这些摘要，生成 `packages/interop_bridge/assets/servers/` 中的六份 zlib 和原始字节清单；`--check` 只读检查缺失、漂移和多余文件。该生成器已接入 `tool/generate.dart`，更新原始产物后随生成链提交压缩资源，不改写 JAR、DEX 或助手本身。
+
+Android 的三种主控 ABI 共享一套 Flutter package assets，不在各自 Rust 库中嵌入执行产物。`initializeNativeRuntime` 在调用 FRB 初始化前，将六份资源还原到应用私有根的 `bundled_servers/`，逐次校验已有缓存，损坏时原子替换；解压长度有界。Rust 对照编译清单再次校验并保存进程内不可变字节，部署不信任随后被替换的磁盘缓存。缺失或错误资源使初始化失败，不降级到另一份产物。其他宿主及独立 Rust 使用同一组内置压缩资源，验证后还原。
+
+被控助手按被控设备 ABI 选择，不能按主控架构删减。APK 检查核对共享压缩资源只有一套、还原长度与摘要正确，并拒绝 Android Rust 库再次内嵌原始或压缩产物。来源归档和许可证的分发要求不因压缩改变。
 
 ## 社区原版 fvp 0.39.1
 
@@ -43,6 +53,8 @@ MDK 的规则直接继承该发布包，不再由本仓库统一固定正式版�
 | Apple SwiftPM | 上游 binary target 使用 MDK 0.39.0 Apple 归档 URL 及其 checksum。 |
 
 规则依据为固定上游的 [CMake 下载器](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/cmake/deps.cmake)、[Podspec](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/ios/fvp.podspec) 和 [SwiftPM 清单](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/darwin/fvp/Package.swift)。构建回执按实际平台记录采用的 SDK；下载缓存不作为跟踪源码保存。
+
+Android 仅对 fvp 插件链接启用 `--as-needed`，去掉可选运行库的冗余硬依赖后，应用打包排除 `libass.so`。远控输入没有字幕轨，普通视频预览使用平台播放器；其他宿主不排除字幕库。FFmpeg 仍随包分发并由 MDK 运行时加载。此配置不修改社区包源码、SDK 缓存或下载来源，最终 ELF 必须没有缺失的 `libass.so` 必需依赖。
 
 原版 `MdkSnapshot` 对 MDK 失败回调的空 `ret` 未判空，构造 Dart typed data 时直接读取其 stride、height 和 data。此前宿主源边界探针曾注入该空结果并得到原生 SIGSEGV；这是空结果路径的已知限制，区别于 renderer 内部的历史空 `std::function` 崩溃，Dart 异常处理不能拦截该原生解引用。当前选择直接使用原版，不保留本地修补。[原版回调源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/callbacks.cpp)、[历史调查](../research/scrcpy-first-frame-performance.md#fvp空结果故障与可复现交付2026-10-18)。
 

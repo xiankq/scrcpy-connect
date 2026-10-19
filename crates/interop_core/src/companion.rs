@@ -8,7 +8,6 @@ use crate::{
 };
 use interop_adb::{AdbStream, CancellationToken, Client, OperationOptions, sync::RemotePath};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex as StdMutex, OnceLock, Weak},
@@ -16,8 +15,6 @@ use std::{
 };
 use tokio::sync::{RwLock, mpsc, oneshot, watch};
 
-const SERVER: &[u8] = include_bytes!("../../../servers/companion/companion.jar");
-const SERVER_SHA: &str = "07963f1126ce525f65a2ac154187e2766ef1173d8be70f5bfe1d45e1104690af";
 const MAX_MESSAGE: usize = 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -165,9 +162,7 @@ impl Companion {
         cancellation: CancellationToken,
         runtime: Weak<Runtime>,
     ) -> CoreResult<Arc<Self>> {
-        if format!("{:x}", Sha256::digest(SERVER)) != SERVER_SHA {
-            return Err(CoreError::new("server_integrity", "内置互联服务校验失败。"));
-        }
+        let server = crate::bundled_servers::get("companion")?;
         let mut guard = CancelGuard(Some(cancellation.clone()));
         let socket_name = format!("interop-companion-{}", uuid::Uuid::new_v4().simple());
         let secret = format!(
@@ -181,13 +176,13 @@ impl Companion {
             let count = sync
                 .push(
                     &RemotePath::new(&remote_jar)?,
-                    &mut &SERVER[..],
+                    &mut &server[..],
                     0o644,
                     now().min(u32::MAX as u64) as u32,
-                    SERVER.len() as u64,
+                    server.len() as u64,
                 )
                 .await?;
-            if count != SERVER.len() as u64 {
+            if count != server.len() as u64 {
                 return Err(CoreError::new("server_integrity", "互联服务未完整上传。"));
             }
             let command = managed_shell_command(

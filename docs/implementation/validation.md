@@ -1,5 +1,7 @@
 # 实施与真实验收记录
 
+2026-10-19 三架构通用 APK 从 142.9 MB 缩到 58.0 MB 的产物、测试与设备边界见[缩包验收](android-package-size.md)。
+
 > 此文件是按阶段追加的历史验收账本；`.scratch/interop/` 来源现已不随仓库保留，相关正文链接仅表示当时的追溯路径。正文的旧目录、偏好、后端、统计与未决状态保留其当时语境。当前结构与资源所有权见 [架构](architecture.md)，当前产品行为见 [交互规则](../../designs/prod/interaction-rules.md)，2026-10-19 产品/材质回执索引见 [产品验收记录](product-refinement.md)。
 
 > 当前结构见[架构说明](architecture.md)。本文件包含已被替代的实验与后端路径：
