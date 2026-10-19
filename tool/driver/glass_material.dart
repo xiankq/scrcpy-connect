@@ -25,6 +25,13 @@ const _sceneNames = <String>[
   'reduced-motion-pressed',
   'blend-near',
   'blend-separated',
+  'navigation-travel',
+  'menu-open',
+  'menu-cancelled',
+  'exit-held',
+  'exit-recovered',
+  'regular-photo',
+  'clear-photo',
 ];
 
 Future<void> main() async {
@@ -139,6 +146,10 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
   );
   require(report['fallbackEnabled'] == false, 'Fallback was enabled.');
   require(
+    report['nativeSurfaceDuringTiming'] == true,
+    'Timing must precede Android ImageView screenshot conversion.',
+  );
+  require(
     report['debugPointerOverlay'] == false &&
         report['tooltipsVisible'] == false,
     'Debug decorations contaminate captures.',
@@ -184,8 +195,16 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
       'reduced-light-scrolled',
       'reduced-dark',
     ].contains(name);
+    final production = [
+      'navigation-travel',
+      'menu-open',
+      'menu-cancelled',
+      'exit-held',
+      'exit-recovered',
+    ].contains(name);
     final blend = name.startsWith('blend-');
     final clear = name.startsWith('clear-');
+    final photo = name.endsWith('-photo');
     require(
       scene['reduceTransparency'] == reduced,
       'Incorrect accessibility mode: $name.',
@@ -199,25 +218,64 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
       'Incorrect theme: $name.',
     );
     require(
-      scene['background'] == (clear ? 'geometric-media' : 'lines-text-checks'),
+      scene['background'] ==
+          (photo
+              ? 'repository-photo'
+              : clear
+              ? 'geometric-media'
+              : 'lines-text-checks'),
       'Incorrect background: $name.',
     );
     require(
       scene['optics'] == (reduced ? 'skipped-reduced-transparency' : 'shader'),
       'Fallback or missing optical receipt: $name.',
     );
+    require(
+      scene['productionDemo'] == production,
+      'Missing production interaction scene: $name.',
+    );
+    if (!reduced) {
+      final settings = scene['opticalSettings'];
+      require(
+        settings is Map &&
+            settings['bodyMode'] == (clear ? 'clear' : 'adaptive') &&
+            settings['blurSigmaLogicalPx'] is num &&
+            (settings['blurSigmaLogicalPx'] as num) > 0,
+        'Missing or incorrect production optical settings: $name.',
+      );
+    }
     require(scene['lightweightSurfaceCount'] == 0, 'Lite fallback in $name.');
     require(scene['blurWidgetCount'] == 0, 'Blur-only fallback in $name.');
+    if (photo) {
+      final sources = report['photoSources'];
+      require(sources is Map, 'Missing real photo receipts.');
+      final source = (sources as Map)[name];
+      require(source is Map, 'Missing decoded photo: $name.');
+      final receipt = source as Map;
+      require(
+        receipt['imageStreamComplete'] == true &&
+            receipt['path'] == scene['photoPath'] &&
+            receipt['bytes'] is num &&
+            (receipt['bytes'] as num) > 0 &&
+            receipt['decodedWidth'] is num &&
+            (receipt['decodedWidth'] as num) > 0 &&
+            receipt['decodedHeight'] is num &&
+            (receipt['decodedHeight'] as num) > 0,
+        'Photo was not really loaded: $name.',
+      );
+    }
     final lensCount = scene['surfaceCount'];
     require(
-      lensCount ==
-          (reduced
-              ? 0
-              : clear
-              ? 2
-              : blend
-              ? 5
-              : 4),
+      production
+          ? lensCount is int && lensCount >= 5
+          : lensCount ==
+                (reduced
+                    ? 0
+                    : clear
+                    ? 2
+                    : blend
+                    ? 5
+                    : 4),
       'Optics were not enabled/removed as requested: $name.',
     );
     require(
@@ -233,8 +291,7 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
     );
     if (blend) {
       require(
-        scene['blendGroupCount'] is int &&
-            (scene['blendGroupCount'] as int) >= 2,
+        scene['blendGroupCount'] is int && scene['blendGroupCount'] == 1,
         'Fusion demo bypassed shared group geometry.',
       );
     }
@@ -317,6 +374,10 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
     'interruptedRecovery',
     'reducedMotionNoGeometry',
     'realBlendGroup',
+    'navigationRedirectAndReducedMotion',
+    'productionMenuOpenCancelAction',
+    'productionMenuReducedMotion',
+    'actualExitHandleFeedbackCancelTap',
   ]) {
     require(interactions[name] == true, 'Unverified interaction: $name.');
   }

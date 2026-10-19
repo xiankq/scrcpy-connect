@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -6,7 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/pages/connection/discovery/connection_discovery_page.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
+import 'package:scrcpy_connect/pages/connection/wireless/index/connection_wireless_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_workspace_gallery_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
@@ -297,4 +303,410 @@ void main() {
       }
     },
   );
+
+  testWidgets('empty discovery keeps every existing recovery route reachable', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 54, bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(top: 54, bottom: 34);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.view.resetPadding();
+      tester.view.resetViewPadding();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+    final output = Platform.environment['CONNECT_CAPTURE_DIR'];
+    for (final brightness in Brightness.values) {
+      for (final layout in [
+        ('phone', const Size(402, 874), 1.0),
+        ('narrow', const Size(280, 620), 2.0),
+      ]) {
+        tester.view.physicalSize = layout.$2;
+        tester.platformDispatcher.textScaleFactorTestValue = layout.$3;
+        var discoveries = 0;
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          if (command == 'devices.discover') {
+            discoveries++;
+            return {'devices': <Json>[]};
+          }
+          return fixtures.fixtureRequest(command, params);
+        });
+        await controller.initialize();
+        final boundary = GlobalKey();
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: boundary,
+            child: RouterTestApp(
+              key: ValueKey('empty-discovery-${layout.$1}-${brightness.name}'),
+              controller: controller,
+              theme: fixtures.captureTheme(brightness),
+              home: DiscoveryPage(controller: controller),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('没有发现可连接的手机'), findsOneWidget);
+        final before = discoveries;
+        await tester.ensureVisible(find.text('重新查找'));
+        await tester.tap(find.text('重新查找'));
+        await tester.pumpAndSettle();
+        expect(discoveries, before + 1);
+        for (final recovery in [
+          ('手动连接', ConnectionFormPage),
+          ('无线调试设置方法', WirelessGuidePage),
+          ('改用 USB', UsbGuidePage),
+        ]) {
+          final action = find.text(recovery.$1).last;
+          await tester.scrollUntilVisible(
+            action,
+            120,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.ensureVisible(action);
+          await tester.pumpAndSettle();
+          expect(
+            tester
+                .getSize(
+                  find
+                      .ancestor(
+                        of: action,
+                        matching: find.byWidgetPredicate(
+                          (widget) =>
+                              widget is OutlinedButton ||
+                              widget.runtimeType.toString() == 'ActionRow',
+                        ),
+                      )
+                      .first,
+                )
+                .height,
+            greaterThanOrEqualTo(44),
+          );
+          await tester.tap(action);
+          await tester.pumpAndSettle();
+          expect(find.byType(recovery.$2), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+        }
+        final scroll = tester.state<ScrollableState>(
+          find.byType(Scrollable).first,
+        );
+        scroll.position.jumpTo(0);
+        await tester.pumpAndSettle();
+        if (output != null) {
+          final contract = fixtures.captureLayout(boundary);
+          await tester.runAsync(() async {
+            final directory = Directory(output);
+            await directory.create(recursive: true);
+            final image =
+                await (boundary.currentContext!.findRenderObject()!
+                        as RenderRepaintBoundary)
+                    .toImage();
+            final data = await image.toByteData(format: ui.ImageByteFormat.png);
+            final name = 'discovery_empty-${layout.$1}-${brightness.name}';
+            await File('${directory.path}/$name.png')
+                .writeAsBytes(data!.buffer.asUint8List());
+            await File('${directory.path}/$name.json').writeAsString(
+              const JsonEncoder.withIndent('  ').convert(contract),
+            );
+            image.dispose();
+          });
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        controller.dispose();
+      }
+    }
+  });
+
+  testWidgets('local rename and removal dialogs stay readable before mutation', (
+    tester,
+  ) async {
+    for (final font in [
+      (
+        'packages/lucide_icons_flutter/Lucide',
+        'packages/lucide_icons_flutter/assets/lucide.ttf',
+      ),
+      ('MaterialIcons', 'fonts/MaterialIcons-Regular.otf'),
+    ]) {
+      await (FontLoader(font.$1)..addFont(rootBundle.load(font.$2))).load();
+    }
+    final cjk = File('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc');
+    if (cjk.existsSync()) {
+      await (FontLoader(
+            'ConnectCaptureCJK',
+          )..addFont(Future.value(ByteData.sublistView(cjk.readAsBytesSync()))))
+          .load();
+    }
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 54, bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(top: 54, bottom: 34);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.view.resetPadding();
+      tester.view.resetViewPadding();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+    final output = Platform.environment['CONNECT_CAPTURE_DIR'];
+    for (final brightness in Brightness.values) {
+      for (final layout in [
+        ('phone', const Size(402, 874), 1.0),
+        ('narrow', const Size(280, 620), 2.0),
+      ]) {
+        tester.view.physicalSize = layout.$2;
+        tester.platformDispatcher.textScaleFactorTestValue = layout.$3;
+        final mutations = <String>[];
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          if ([
+            'devices.rename',
+            'devices.disconnect',
+            'devices.forget',
+            'files.rename',
+            'files.delete',
+          ].contains(command)) {
+            mutations.add(command);
+          }
+          return fixtures.fixtureRequest(command, params);
+        });
+        await controller.initialize();
+        for (final state in [
+          'device_rename',
+          'device_disconnect',
+          'device_remove',
+          'file_rename',
+          'file_delete',
+        ]) {
+          final boundary = GlobalKey();
+          final isDevice = state.startsWith('device_');
+          await tester.pumpWidget(
+            RepaintBoundary(
+              key: boundary,
+              child: RouterTestApp(
+                key: ValueKey('$state-${layout.$1}-${brightness.name}'),
+                controller: controller,
+                theme: fixtures.captureTheme(brightness),
+                home: isDevice
+                    ? DeviceDetailsPage(
+                        controller: controller,
+                        device: fixtures.device,
+                      )
+                    : FilesPage(
+                        controller: controller,
+                        device: fixtures.device,
+                      ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          if (isDevice) {
+            final action = find.text(switch (state) {
+              'device_rename' => '设备名称',
+              'device_disconnect' => '断开设备连接',
+              _ => '移除此设备',
+            });
+            await tester.scrollUntilVisible(action, 160);
+            await Scrollable.ensureVisible(
+              tester.element(action),
+              alignment: .5,
+            );
+            await tester.pumpAndSettle();
+            await tester.tap(action);
+          } else {
+            await tester.tap(find.byTooltip('文件操作').last);
+            await tester.pumpAndSettle();
+            await tester.tap(
+              find.text(state == 'file_rename' ? '重命名' : '删除').last,
+            );
+          }
+          await tester.pumpAndSettle();
+          expect(find.byType(GlassAlertDialog), findsOneWidget);
+          if (state.endsWith('rename')) {
+            final input = find.descendant(
+              of: find.byType(GlassAlertDialog),
+              matching: find.byType(TextField),
+            );
+            expect(input, findsOneWidget);
+            expect(
+              tester.widget<TextField>(input).controller!.text,
+              isDevice ? '我的手机' : '旅行清单.pdf',
+            );
+          }
+          expect(tester.takeException(), isNull, reason: '$state-${layout.$1}');
+          Future<void> capture([String suffix = '']) async {
+            if (output == null) return;
+            final dialog = find.byType(GlassAlertDialog);
+            List<double> rect(Rect value) => [
+              value.left,
+              value.top,
+              value.width,
+              value.height,
+            ];
+            final bounds = tester.getRect(
+              find
+                  .descendant(
+                    of: dialog,
+                    matching: find.byWidgetPredicate(
+                      (widget) =>
+                          widget is Material &&
+                          widget.type == MaterialType.card,
+                    ),
+                  )
+                  .first,
+            );
+            final contract = <String, Object?>{
+              'coordinateSpace':
+                  'uncropped source image; logical pixels at DPR 1',
+              'components': [
+                for (final type in [TextField, TextButton, FilledButton])
+                  for (final element
+                      in find
+                          .descendant(of: dialog, matching: find.byType(type))
+                          .evaluate())
+                    {
+                      'type': type.toString(),
+                      'globalBounds': rect(
+                        tester.getRect(
+                          find.byElementPredicate(
+                            (candidate) => candidate == element,
+                          ),
+                        ),
+                      ),
+                    },
+              ],
+              'paragraphs': [
+                for (final element
+                    in find
+                        .descendant(of: dialog, matching: find.byType(RichText))
+                        .evaluate())
+                  if (element.renderObject case final RenderParagraph paragraph)
+                    {
+                      'text': paragraph.text.toPlainText(),
+                      'globalBounds': rect(
+                        tester.getRect(
+                          find.byElementPredicate(
+                            (candidate) => candidate == element,
+                          ),
+                        ),
+                      ),
+                      'fontSize': paragraph.text.style?.fontSize,
+                      'fontWeight': paragraph.text.style?.fontWeight?.value,
+                      'height': paragraph.text.style?.height,
+                      'styleRuns': fixtures.captureTextStyleRuns(
+                        paragraph.text,
+                      ),
+                      'textScaleAt14': paragraph.textScaler.scale(14) / 14,
+                    },
+              ],
+              'editableTexts': [
+                for (final element
+                    in find
+                        .descendant(
+                          of: dialog,
+                          matching: find.byElementPredicate(
+                            (element) =>
+                                element is RenderObjectElement &&
+                                element.renderObject is RenderEditable,
+                          ),
+                        )
+                        .evaluate())
+                  if (element.renderObject case final RenderEditable editable)
+                    {
+                      'text': editable.text?.toPlainText() ?? '',
+                      'value': element
+                          .findAncestorWidgetOfExactType<EditableText>()
+                          ?.controller
+                          .text,
+                      'readOnly': editable.readOnly,
+                      'obscureText': editable.obscureText,
+                      'globalBounds': rect(
+                        tester.getRect(
+                          find.byElementPredicate(
+                            (candidate) => candidate == element,
+                          ),
+                        ),
+                      ),
+                      'fieldGlobalBounds': rect(
+                        tester.getRect(
+                          find
+                              .descendant(
+                                of: dialog,
+                                matching: find.byType(TextField),
+                              )
+                              .first,
+                        ),
+                      ),
+                      'textScaleAt14': editable.textScaler.scale(14) / 14,
+                      'styleRuns': fixtures.captureTextStyleRuns(editable.text),
+                    },
+              ],
+            };
+            await tester.runAsync(() async {
+              final directory = Directory(output);
+              await directory.create(recursive: true);
+              final image =
+                  await (boundary.currentContext!.findRenderObject()!
+                          as RenderRepaintBoundary)
+                      .toImage();
+              final data = await image.toByteData(
+                format: ui.ImageByteFormat.png,
+              );
+              await File(
+                '${directory.path}/$state-${layout.$1}-${brightness.name}$suffix.png',
+              ).writeAsBytes(data!.buffer.asUint8List());
+              image.dispose();
+              await File(
+                '${directory.path}/$state-${layout.$1}-${brightness.name}$suffix.json',
+              ).writeAsString(
+                const JsonEncoder.withIndent('  ').convert({
+                  'state': state,
+                  'dialogBounds': [
+                    bounds.left,
+                    bounds.top,
+                    bounds.width,
+                    bounds.height,
+                  ],
+                  ...contract,
+                }),
+              );
+            });
+          }
+
+          await capture();
+          if (!state.endsWith('rename')) {
+            final scrollable = find.descendant(
+              of: find.byType(GlassAlertDialog),
+              matching: find.byType(Scrollable),
+            );
+            expect(scrollable, findsOneWidget);
+            final position = tester.state<ScrollableState>(scrollable).position;
+            if (position.maxScrollExtent > 0) {
+              position.jumpTo(position.maxScrollExtent);
+              await tester.pumpAndSettle();
+              await capture('-scrolled');
+            }
+          }
+          final cancel = find.widgetWithText(TextButton, '取消');
+          await tester.ensureVisible(cancel);
+          await tester.tap(cancel);
+          await tester.pumpAndSettle();
+          expect(find.byType(GlassAlertDialog), findsNothing);
+          expect(mutations, isEmpty);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpAndSettle();
+        }
+        controller.dispose();
+      }
+    }
+  });
 }

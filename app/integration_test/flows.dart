@@ -12,7 +12,12 @@ Future<void> returnFromFiles(WidgetTester tester) async {
     await tester.pump(const Duration(milliseconds: 100));
   }
   expect(route?.animation?.status, AnimationStatus.completed);
-  final back = find.descendant(of: files, matching: find.byType(BackButton));
+  final back = find.descendant(
+    of: files,
+    matching: find.byTooltip(
+      MaterialLocalizations.of(tester.element(files)).backButtonTooltip,
+    ),
+  );
   expect(back, findsOneWidget);
   await tester.tap(back);
   // The old workspace can coexist with the entering file route during its

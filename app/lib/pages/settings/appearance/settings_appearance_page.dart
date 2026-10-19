@@ -36,10 +36,9 @@ class AppearancePage extends HookConsumerWidget {
             ('system', '跟随系统', LucideIcons.monitor),
           ])
             ChoiceRow<String>(
-              leading: Icon(
-                option.$3,
-                size: DesignTokens.componentIconSize,
-                color: Theme.of(context).colorScheme.onSurface,
+              leading: ListIconBadge(
+                icon: option.$3,
+                backgroundColor: DesignTokens.colorListIconBlue,
               ),
               title: Text(option.$2),
               value: option.$1,

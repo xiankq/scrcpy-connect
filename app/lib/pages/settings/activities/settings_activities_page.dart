@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -28,11 +29,16 @@ class ActivitiesPage extends HookConsumerWidget {
         builder: (context, data, refresh) {
           final activities = objects(data['activities']);
           if (activities.isEmpty) {
-            return EmptyContent(
-              icon: LucideIcons.activity,
-              title: '暂无正在进行的活动',
-              message: '设备连接、控制会话、传输、声音与通话会分别显示在这里。',
-              action: TextButton(onPressed: refresh, child: const Text('重新检查')),
+            return PageChromeBody(
+              child: EmptyContent(
+                icon: LucideIcons.activity,
+                title: '暂无正在进行的活动',
+                message: '设备连接、控制会话、传输、声音与通话会分别显示在这里。',
+                action: TextButton(
+                  onPressed: refresh,
+                  child: const Text('重新检查'),
+                ),
+              ),
             );
           }
           final groups = <String, List<Json>>{};
@@ -67,7 +73,7 @@ class ActivitiesPage extends HookConsumerWidget {
                           icon: LucideIcons.activity,
                           title: value(activity, 'name', '当前活动'),
 
-                          trailing: Tooltip(
+                          trailing: GlassTooltip(
                             message: value(
                               activity,
                               'statusLabel',

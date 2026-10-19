@@ -20,16 +20,14 @@ Future<void> main() async {
     await GlassMaterial.initialize();
     final dependencies = await bootstrapApplication();
     runApp(
-      GlassMaterial.wrap(
-        child: ProviderScope(
-          overrides: [
-            appDependenciesProvider.overrideWithValue(dependencies),
-            systemNotificationSinkProvider.overrideWithValue(
-              LocalNotificationSink(),
-            ),
-          ],
-          child: const ConnectApp(),
-        ),
+      ProviderScope(
+        overrides: [
+          appDependenciesProvider.overrideWithValue(dependencies),
+          systemNotificationSinkProvider.overrideWithValue(
+            LocalNotificationSink(),
+          ),
+        ],
+        child: GlassMaterial.wrap(child: const ConnectApp()),
       ),
     );
   } catch (error) {

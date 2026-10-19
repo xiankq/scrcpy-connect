@@ -22,7 +22,7 @@ class MediaCachePage extends HookWidget {
     return PageFrame(
       title: '媒体暂存',
       actions: [
-        IconButton(
+        GlassActionIcon(
           tooltip: '重新检查占用',
           onPressed: busy.value ? null : () => revision.value++,
           icon: const Icon(LucideIcons.refreshCw),
@@ -76,20 +76,29 @@ class MediaCachePage extends HookWidget {
               ),
               const SectionTitle('空间去向'),
               ListTile(
-                leading: const Icon(LucideIcons.shieldCheck),
+                leading: const ListIconBadge(
+                  icon: LucideIcons.shieldCheck,
+                  backgroundColor: DesignTokens.colorListIconMint,
+                ),
                 title: const Text('受保护'),
 
                 trailing: Text(_size(protected)),
               ),
               ListTile(
-                leading: const Icon(LucideIcons.brushCleaning),
+                leading: const ListIconBadge(
+                  icon: LucideIcons.brushCleaning,
+                  backgroundColor: DesignTokens.colorListIconBlue,
+                ),
                 title: const Text('可回收'),
 
                 trailing: Text(_size(reclaimable)),
               ),
               if (reserved > 0)
                 ListTile(
-                  leading: const Icon(LucideIcons.download),
+                  leading: const ListIconBadge(
+                    icon: LucideIcons.download,
+                    backgroundColor: DesignTokens.colorListIconAmber,
+                  ),
                   title: const Text('正在准备'),
 
                   trailing: Text(_size(reserved)),

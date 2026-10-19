@@ -2,6 +2,8 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
+import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
 /// Content stays on an opaque grouped surface; glass is reserved for chrome.
 class GroupedListView extends StatelessWidget {
@@ -26,7 +28,15 @@ class GroupedListView extends StatelessWidget {
       child is CheckboxListTile;
   @override
   Widget build(BuildContext context) {
-    final grouped = <Widget>[];
+    final grouped = <Widget>[
+      if (PageChromePadding.hasRecovery(context))
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height / 2,
+          ),
+          child: const RecoveryStatus(padding: EdgeInsets.zero),
+        ),
+    ];
     final rows = <Widget>[];
     void flush() {
       if (rows.isEmpty) return;
@@ -48,12 +58,18 @@ class GroupedListView extends StatelessWidget {
       }
     }
     flush();
-    return ListView(
-      padding: padding,
-      shrinkWrap: shrinkWrap,
-      physics: physics,
-      controller: controller,
-      children: grouped,
+    return PageChromePadding(
+      padding: EdgeInsets.zero,
+      showRecovery: false,
+      child: ListView(
+        padding:
+            (padding ?? EdgeInsets.zero).resolve(Directionality.of(context)) +
+            PageChromePadding.of(context),
+        shrinkWrap: shrinkWrap,
+        physics: physics,
+        controller: controller,
+        children: grouped,
+      ),
     );
   }
 }
@@ -139,7 +155,7 @@ class GroupedItem extends StatelessWidget {
             height: DesignTokens.spacingHairline,
             indent:
                 DesignTokens.spacingMd +
-                DesignTokens.componentFileIconSize +
+                DesignTokens.componentListIconSize +
                 DesignTokens.componentRowGap,
             endIndent: DesignTokens.spacingMd,
           ),

@@ -153,6 +153,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('IP 地址连接'), 200);
       await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('IP 地址连接')),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('IP 地址连接').hitTestable(), findsOneWidget);
       await tester.tap(find.text('IP 地址连接'));
       await tester.pumpAndSettle();
       expect(find.text('填写 IP 地址与连接端口'), findsOneWidget);

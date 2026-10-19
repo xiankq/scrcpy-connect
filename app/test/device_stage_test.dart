@@ -1,3 +1,5 @@
+import 'support/page_back.dart';
+
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,6 +100,22 @@ void main() {
     );
     await pumpRow('文件管理', 1);
     expect(tester.getSize(find.byType(ActionRow)).height, 56);
+    final badge = find.byType(ListIconBadge);
+    expect(tester.getSize(badge), const Size(28, 28));
+    expect(
+      tester.widget<ListIconBadge>(badge).backgroundColor,
+      DesignTokens.colorListIconAmber,
+    );
+    expect(
+      tester
+          .widget<Icon>(find.descendant(of: badge, matching: find.byType(Icon)))
+          .color,
+      DesignTokens.componentListIconTextColor,
+    );
+    expect(
+      tester.getTopLeft(find.text('文件管理')).dx - tester.getTopRight(badge).dx,
+      12,
+    );
     await tester.tap(find.text('文件管理'));
     expect(taps, 1);
     await pumpRow('很长的设备功能名称需要在窄容器内完整换行', 2);
@@ -169,7 +187,10 @@ void main() {
         expect(find.text('2 / 3 项功能可用'), findsOneWidget);
         expect(find.text('1 个已保留会话'), findsOneWidget);
         expect(find.text('已连接'), findsOneWidget);
-        await tester.ensureVisible(find.text('打开手机屏幕'));
+        await Scrollable.ensureVisible(
+          tester.element(find.text('打开手机屏幕')),
+          alignment: .5,
+        );
         await tester.pumpAndSettle();
         expect(find.text('打开手机屏幕').hitTestable(), findsOneWidget);
         final button = tester.widget<FilledButton>(
@@ -204,9 +225,14 @@ void main() {
     );
     await tester.tap(find.byTooltip('我的 Android 手机详情'));
     await tester.pumpAndSettle();
+    expect(find.text('设备详情'), findsOneWidget);
+    expect(find.byType(DeviceDetailsPage), findsNothing);
+    expect(find.byType(DeviceWorkspacePage), findsNothing);
+    await tester.tap(find.text('设备详情'));
+    await tester.pumpAndSettle();
     expect(find.byType(DeviceDetailsPage), findsOneWidget);
     expect(find.byType(DeviceWorkspacePage), findsNothing);
-    await tester.tap(find.byType(BackButton).first);
+    await tester.tap(pageBackButton(tester).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('我的 Android 手机'));
     await tester.pumpAndSettle();

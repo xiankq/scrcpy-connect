@@ -4,6 +4,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('pointer cancellation clears press feedback without exiting', (
+    tester,
+  ) async {
+    final harness = await _pumpHandle(tester);
+    expect(find.byType(GlassPressFeedback), findsOneWidget);
+    final pointer = await tester.startGesture(
+      tester.getCenter(harness.control),
+    );
+    await tester.pump();
+    await pointer.cancel();
+    await tester.pumpAndSettle();
+    expect(harness.exits, 0);
+    expect(harness.remoteTouches, 0);
+    expect(find.bySemanticsLabel('退出控制，返回手机'), findsOneWidget);
+
+    final drag = await tester.startGesture(tester.getCenter(harness.control));
+    await drag.moveBy(const Offset(100, 70));
+    await tester.pump();
+    await drag.cancel();
+    await tester.pumpAndSettle();
+    expect(harness.exits, 0);
+    expect(harness.remoteTouches, 0);
+    expect(find.bySemanticsLabel('展开退出按钮，手机'), findsOneWidget);
+
+    await tester.tap(harness.control);
+    await tester.pumpAndSettle();
+    expect(harness.exits, 0);
+    await tester.tap(harness.control);
+    await tester.pump();
+    expect(harness.exits, 1);
+  });
+
   testWidgets(
     'dragging the left handle inward keeps the exit button expanded',
     (tester) async {

@@ -13,8 +13,36 @@ class ExitHandle extends StatefulWidget {
   });
   final VoidCallback onExit;
   final String deviceLabel;
+  static const initialOffset = Offset(12, 80);
+
+  /// The initial overlay footprint also reserves space in recovery content.
+  static Rect initialBoundsFor(Size viewport, MediaQueryData media) {
+    final bounds = _dragBoundsFor(viewport, media);
+    return Rect.fromLTWH(
+      initialOffset.dx.clamp(bounds.left, bounds.right).toDouble(),
+      initialOffset.dy.clamp(bounds.top, bounds.bottom).toDouble(),
+      DesignTokens.componentRemoteExitSize,
+      DesignTokens.componentRemoteExitHitHeight,
+    );
+  }
+
   @override
   State<ExitHandle> createState() => _ExitHandleState();
+}
+
+Rect _dragBoundsFor(Size viewport, MediaQueryData media) {
+  final padding = media.padding;
+  final gestures = media.systemGestureInsets;
+  final left = math.max(padding.left, gestures.left);
+  final right = math.max(padding.right, gestures.right);
+  final top = math.max(padding.top, gestures.top) + 12;
+  final bottom = math.max(padding.bottom, gestures.bottom) + 12;
+  return Rect.fromLTRB(
+    left,
+    top,
+    math.max(left, viewport.width - right - 52),
+    math.max(top, viewport.height - bottom - 52),
+  );
 }
 
 class _ExitHandleState extends State<ExitHandle>
@@ -25,7 +53,7 @@ class _ExitHandleState extends State<ExitHandle>
           offset = Offset(animation.value, offset.dy);
         });
       });
-  Offset offset = const Offset(12, 80);
+  Offset offset = ExitHandle.initialOffset;
   bool collapsed = false;
   bool dragging = false;
   bool right = false;
@@ -94,17 +122,12 @@ class _ExitHandleState extends State<ExitHandle>
       final media = MediaQuery.of(context);
       final padding = media.padding;
       final gestures = media.systemGestureInsets;
-      final left = math.max(padding.left, gestures.left);
       final rightInset = math.max(padding.right, gestures.right);
-      final top = math.max(padding.top, gestures.top) + 12;
-      final bottom = math.max(padding.bottom, gestures.bottom) + 12;
-      dragBounds = Rect.fromLTRB(
-        left,
-        top,
-        math.max(left, viewport.width - rightInset - 52),
-        math.max(top, viewport.height - bottom - 52),
+      dragBounds = _dragBoundsFor(viewport, media);
+      collapsedRight = math.max(
+        dragBounds.left,
+        viewport.width - rightInset - 44,
       );
-      collapsedRight = math.max(left, viewport.width - rightInset - 44);
       final dx = offset.dx.clamp(dragBounds.left, dragBounds.right).toDouble();
       final dy = offset.dy.clamp(dragBounds.top, dragBounds.bottom).toDouble();
       return Stack(
@@ -122,66 +145,68 @@ class _ExitHandleState extends State<ExitHandle>
                   ? '展开退出按钮，${widget.deviceLabel}'
                   : '退出控制，返回${widget.deviceLabel}',
               button: true,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapDown: (_) => animation.stop(),
-                onPanStart: (_) {
-                  animation.stop();
-                  setState(() {
-                    dragStartedCollapsed = collapsed;
-                    dragStartX = dx;
-                    dragging = true;
-                    collapsed = false;
-                    offset = Offset(dx, dy);
-                  });
-                },
-                onPanUpdate: (details) => setState(() {
-                  offset = Offset(
-                    (offset.dx + details.delta.dx).clamp(
-                      dragBounds.left,
-                      dragBounds.right,
-                    ),
-                    (offset.dy + details.delta.dy).clamp(
-                      dragBounds.top,
-                      dragBounds.bottom,
-                    ),
-                  );
-                }),
-                onPanEnd: settle,
-                onPanCancel: () {
-                  if (dragging) settle(DragEndDetails());
-                },
-                onTap: activateControl,
-                child: Align(
-                  alignment: collapsed && !dragging
-                      ? (right ? Alignment.centerRight : Alignment.centerLeft)
-                      : Alignment.center,
-                  child: Glass(
-                    variant: GlassVariant.regular,
-                    radius: DesignTokens.roundedFull,
-                    child: SizedBox(
-                      width: collapsed && !dragging
-                          ? DesignTokens.componentRemoteExitPeekWidth
-                          : DesignTokens.componentRemoteExitSize,
-                      height: DesignTokens.componentRemoteExitHitHeight,
-                      child: collapsed && !dragging
-                          ? Center(
-                              child: Container(
-                                width: 3,
-                                height: DesignTokens.spacingMd,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.color,
-                                  borderRadius: BorderRadius.circular(3),
+              child: GlassPressFeedback(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (_) => animation.stop(),
+                  onPanStart: (_) {
+                    animation.stop();
+                    setState(() {
+                      dragStartedCollapsed = collapsed;
+                      dragStartX = dx;
+                      dragging = true;
+                      collapsed = false;
+                      offset = Offset(dx, dy);
+                    });
+                  },
+                  onPanUpdate: (details) => setState(() {
+                    offset = Offset(
+                      (offset.dx + details.delta.dx).clamp(
+                        dragBounds.left,
+                        dragBounds.right,
+                      ),
+                      (offset.dy + details.delta.dy).clamp(
+                        dragBounds.top,
+                        dragBounds.bottom,
+                      ),
+                    );
+                  }),
+                  onPanEnd: settle,
+                  onPanCancel: () {
+                    if (dragging) settle(DragEndDetails());
+                  },
+                  onTap: activateControl,
+                  child: Align(
+                    alignment: collapsed && !dragging
+                        ? (right ? Alignment.centerRight : Alignment.centerLeft)
+                        : Alignment.center,
+                    child: Glass(
+                      variant: GlassVariant.regular,
+                      radius: DesignTokens.roundedFull,
+                      child: SizedBox(
+                        width: collapsed && !dragging
+                            ? DesignTokens.componentRemoteExitPeekWidth
+                            : DesignTokens.componentRemoteExitSize,
+                        height: DesignTokens.componentRemoteExitHitHeight,
+                        child: collapsed && !dragging
+                            ? Center(
+                                child: Container(
+                                  width: 3,
+                                  height: DesignTokens.spacingMd,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
                                 ),
+                              )
+                            : const Icon(
+                                LucideIcons.x,
+                                size: DesignTokens.componentIconFeatureSize,
                               ),
-                            )
-                          : const Icon(
-                              LucideIcons.x,
-                              size: DesignTokens.componentIconFeatureSize,
-                            ),
+                      ),
                     ),
                   ),
                 ),

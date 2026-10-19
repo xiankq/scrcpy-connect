@@ -31,12 +31,15 @@ class HomePage extends HookConsumerWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 850;
+        final shortLandscape =
+            constraints.maxWidth > constraints.maxHeight &&
+            constraints.maxHeight < DesignTokens.componentSheetShortHeight;
         final destinations = const [
           (LucideIcons.smartphone, '设备'),
           (LucideIcons.arrowUpDown, '传输'),
           (LucideIcons.settings2, '设置'),
         ];
-        if (wide) {
+        if (wide || shortLandscape) {
           return withBack(
             Scaffold(
               body: Row(
@@ -44,43 +47,69 @@ class HomePage extends HookConsumerWidget {
                 children: [
                   SafeArea(
                     child: SizedBox(
-                      width: DesignTokens.componentSidebarWidth,
+                      width: shortLandscape
+                          ? DesignTokens.componentSidebarCompactWidth
+                          : DesignTokens.componentSidebarWidth,
                       child: Padding(
-                        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                        padding: EdgeInsets.all(
+                          shortLandscape
+                              ? DesignTokens.spacingXs
+                              : DesignTokens.spacingMd,
+                        ),
                         child: Glass(
                           padding: const EdgeInsets.all(DesignTokens.spacingXs),
                           child: SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: DesignTokens.spacingXl,
-                                    horizontal: DesignTokens.spacingSm,
+                                if (!shortLandscape)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: DesignTokens.spacingXl,
+                                      horizontal: DesignTokens.spacingSm,
+                                    ),
+                                    child: Text(
+                                      '邻接',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium,
+                                    ),
                                   ),
-                                  child: Text(
-                                    '邻接',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineMedium,
-                                  ),
-                                ),
                                 for (var i = 0; i < destinations.length; i++)
                                   Padding(
                                     padding: const EdgeInsets.only(
                                       bottom: DesignTokens.spacingXs,
                                     ),
-                                    child: ListTile(
-                                      shape: const StadiumBorder(),
-                                      selected: tab == i,
-                                      selectedTileColor:
-                                          Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? DesignTokens.colorGlassSelectedDark
-                                          : DesignTokens.colorGlassSelected,
-                                      leading: Icon(destinations[i].$1),
-                                      title: Text(destinations[i].$2),
-                                      onTap: () => selectTab(i),
+                                    child: GlassPressFeedback(
+                                      child: ListTile(
+                                        minTileHeight: shortLandscape
+                                            ? DesignTokens
+                                                  .componentIconButtonSize
+                                            : null,
+                                        minVerticalPadding: shortLandscape
+                                            ? 0
+                                            : null,
+                                        contentPadding: shortLandscape
+                                            ? const EdgeInsets.symmetric(
+                                                horizontal:
+                                                    DesignTokens.spacingXs,
+                                              )
+                                            : null,
+                                        horizontalTitleGap: shortLandscape
+                                            ? DesignTokens.spacingXs
+                                            : null,
+                                        shape: const StadiumBorder(),
+                                        selected: tab == i,
+                                        selectedTileColor:
+                                            Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? DesignTokens
+                                                  .colorGlassSelectedDark
+                                            : DesignTokens.colorGlassSelected,
+                                        leading: Icon(destinations[i].$1),
+                                        title: Text(destinations[i].$2),
+                                        onTap: () => selectTab(i),
+                                      ),
                                     ),
                                   ),
                               ],
@@ -100,27 +129,29 @@ class HomePage extends HookConsumerWidget {
           Scaffold(
             extendBody: true,
             body: navigationShell,
-            bottomNavigationBar: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  DesignTokens.spacingMd,
-                  DesignTokens.spacingZero,
-                  DesignTokens.spacingMd,
-                  DesignTokens.spacingMd,
-                ),
-                child: GlassTabBar(
-                  destinations: [
-                    for (final destination in destinations)
-                      GlassDestination(
-                        icon: destination.$1,
-                        label: destination.$2,
+            bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom > 0
+                ? null
+                : SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DesignTokens.spacingMd,
+                        DesignTokens.spacingZero,
+                        DesignTokens.spacingMd,
+                        DesignTokens.spacingMd,
                       ),
-                  ],
-                  selectedIndex: tab,
-                  onSelected: selectTab,
-                ),
-              ),
-            ),
+                      child: GlassTabBar(
+                        destinations: [
+                          for (final destination in destinations)
+                            GlassDestination(
+                              icon: destination.$1,
+                              label: destination.$2,
+                            ),
+                        ],
+                        selectedIndex: tab,
+                        onSelected: selectTab,
+                      ),
+                    ),
+                  ),
           ),
         );
       },

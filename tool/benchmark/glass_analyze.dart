@@ -18,8 +18,12 @@ void main(List<String> arguments) {
   ) as Map<String, dynamic>;
   final summary = summarizeGlassPerformance(report);
   stdout.writeln(const JsonEncoder.withIndent('  ').convert(summary));
+  final completeScope = report['scope'] == 'glass-performance'
+      ? report['performanceCaptureComplete'] == true &&
+            report['nativeSurfaceDuringTiming'] == true
+      : report['dynamicCaptureComplete'] == true;
   if (report['hostValidationComplete'] != true ||
-      report['dynamicCaptureComplete'] != true ||
+      !completeScope ||
       summary['performanceAcceptanceComplete'] != true) {
     exitCode = 1;
   }

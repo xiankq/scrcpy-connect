@@ -284,7 +284,9 @@ void main() {
         find.byWidgetPredicate(
           (widget) =>
               (widget is Tooltip &&
-                  (widget.message?.contains('新建窗口时确认') ?? false)) ||
+                  ((widget.message ?? widget.richMessage?.toPlainText())
+                          ?.contains('新建窗口时确认') ??
+                      false)) ||
               (widget is Text && (widget.data?.contains('新建窗口时确认') ?? false)),
         ),
         findsWidgets,
@@ -301,7 +303,9 @@ void main() {
         find.byWidgetPredicate(
           (widget) =>
               (widget is Tooltip &&
-                  (widget.message?.contains('新建窗口时确认') ?? false)) ||
+                  ((widget.message ?? widget.richMessage?.toPlainText())
+                          ?.contains('新建窗口时确认') ??
+                      false)) ||
               (widget is Text && (widget.data?.contains('新建窗口时确认') ?? false)),
         ),
         findsWidgets,

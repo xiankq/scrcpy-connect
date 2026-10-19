@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
@@ -49,14 +50,16 @@ class SessionsPage extends HookWidget {
               )
               .toList();
           if (sessions.isEmpty) {
-            return EmptyContent(
-              icon: LucideIcons.panelsTopLeft,
-              title: '没有打开的控制会话',
-              message: '从手机屏幕或应用入口接续真实任务。',
-              action: FilledButton(
-                onPressed: () =>
-                    openRemoteRoute(context, deviceId: value(device, 'id')),
-                child: const Text('打开手机屏幕'),
+            return PageChromeBody(
+              child: EmptyContent(
+                icon: LucideIcons.panelsTopLeft,
+                title: '没有打开的控制会话',
+                message: '从手机屏幕或应用入口接续真实任务。',
+                action: FilledButton(
+                  onPressed: () =>
+                      openRemoteRoute(context, deviceId: value(device, 'id')),
+                  child: const Text('打开手机屏幕'),
+                ),
               ),
             );
           }
@@ -100,7 +103,7 @@ class SessionsPage extends HookWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            IconButton(
+                            GlassActionIcon(
                               tooltip: '窗口工具',
                               color: Theme.of(context).colorScheme.onSurface,
                               key: ValueKey(
@@ -116,7 +119,7 @@ class SessionsPage extends HookWidget {
                                 ),
                               ).push<void>(context),
                             ),
-                            IconButton(
+                            GlassActionIcon(
                               tooltip: '关闭窗口',
                               color: Theme.of(context).colorScheme.onSurface,
                               key: ValueKey(

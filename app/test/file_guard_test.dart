@@ -60,9 +60,7 @@ void main() {
       expect(find.byTooltip('删除所选'), findsNothing);
       expect(
         tester
-            .widget<PopupMenuButton<String>>(
-              find.byType(PopupMenuButton<String>).first,
-            )
+            .widget<GlassMenuButton>(find.byType(GlassMenuButton).first)
             .enabled,
         isFalse,
       );

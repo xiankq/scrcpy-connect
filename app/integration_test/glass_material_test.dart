@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
+import 'package:scrcpy_connect/widgets/media_controls_protection.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoButton;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -16,7 +19,18 @@ const _shareKey = ValueKey('glass-share');
 const _toolbarKey = ValueKey('glass-toolbar');
 const _panelKey = ValueKey('glass-panel');
 const _tabsKey = ValueKey('glass-tabs');
+const _menuKey = ValueKey('glass-menu-source');
 const _sceneMarkerKey = ValueKey('glass-scene-marker');
+const _regularPhotoPath = String.fromEnvironment(
+  'CONNECT_GLASS_REGULAR_PHOTO',
+  defaultValue:
+      '/data/user/0/dev.scrcpyconnect.scrcpy_connect/cache/glass-lake.jpg',
+);
+const _clearPhotoPath = String.fromEnvironment(
+  'CONNECT_GLASS_CLEAR_PHOTO',
+  defaultValue:
+      '/data/user/0/dev.scrcpyconnect.scrcpy_connect/cache/glass-forest.jpg',
+);
 
 void main() {
   final binding = _CleanGlassBinding()
@@ -28,6 +42,7 @@ void main() {
       'schemaVersion': 2,
       'backend': GlassMaterial.backend,
       'backendVersion': GlassMaterial.backendVersion,
+      'composition': GlassMaterial.composition,
       'buildMode': kProfileMode
           ? 'profile'
           : kReleaseMode
@@ -50,6 +65,7 @@ void main() {
       'interactions': <String, dynamic>{},
       'motionSamples': <Map<String, dynamic>>[],
       'performance': <Map<String, dynamic>>[],
+      'photoSources': <String, dynamic>{},
     };
     binding.reportData = report;
     final previousHitTestSetting = WidgetController.hitTestWarningShouldBeFatal;
@@ -69,12 +85,146 @@ void main() {
       final harnessKey = GlobalKey<_GlassHarnessState>();
       await tester.pumpWidget(_GlassHarness(key: harnessKey));
       await _frames(tester);
-      await binding.convertFlutterSurfaceToImage();
-      report['surfaceConverted'] = true;
-      await _frames(tester);
       final harness = harnessKey.currentState!;
       final scenes = report['scenes'] as List<Map<String, dynamic>>;
       final interactions = report['interactions'] as Map<String, dynamic>;
+
+      Future<void> measurePerformance() async {
+        // Measure continuous background repaint at real vsync. No screenshot,
+        // pump or image decoding is allowed inside these measured windows.
+        for (final scenario in [
+          ('regular', false, false, false),
+          ('clear', true, false, false),
+          ('blend', false, false, true),
+          ('reduced', false, true, false),
+        ]) {
+          harness.configure(
+            brightness: Brightness.light,
+            media: scenario.$2,
+            reduceTransparency: scenario.$3,
+            blendDemo: scenario.$4,
+          );
+          await _frames(tester);
+          final lensCount = find.byType(liquid.AdaptiveGlass).evaluate().length;
+          final liteCount = find
+              .byType(liquid.LightweightLiquidGlass)
+              .evaluate()
+              .length;
+          final layerCount = find
+              .byType(liquid.LiquidGlassLayer)
+              .evaluate()
+              .length;
+          expect(
+            liteCount,
+            0,
+            reason: 'Performance cannot use a Lite substitute.',
+          );
+          if (scenario.$3) {
+            expect(lensCount, 0);
+            expect(layerCount, 0);
+          } else {
+            expect(
+              lensCount,
+              scenario.$2
+                  ? 2
+                  : scenario.$4
+                  ? 5
+                  : 4,
+            );
+            expect(
+              layerCount,
+              1,
+              reason: 'Same-plane controls share one refraction pass.',
+            );
+          }
+          final raw = <ui.FrameTiming>[];
+          void timing(List<ui.FrameTiming> frames) => raw.addAll(frames);
+          binding.addTimingsCallback(timing);
+          final paintBefore = harness.backgroundPaints;
+          harness.startBackgroundMotion();
+          // Warm up shader/ticker work before starting the measured interval.
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(seconds: 1)),
+          );
+          final start = DateTime.now().microsecondsSinceEpoch;
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(seconds: 3)),
+          );
+          final end = DateTime.now().microsecondsSinceEpoch;
+          harness.stopBackgroundMotion();
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 350)),
+          );
+          binding.removeTimingsCallback(timing);
+          final frames = raw.where((f) {
+            final wall = f.timestampInMicroseconds(
+              ui.FramePhase.rasterFinishWallTime,
+            );
+            return wall >= start && wall <= end;
+          }).toList();
+          expect(
+            frames,
+            isNotEmpty,
+            reason: 'Real raster FrameTimings must arrive.',
+          );
+          expect(harness.backgroundPaints - paintBefore, greaterThan(2));
+          (report['performance'] as List<Map<String, dynamic>>).add({
+            'scenario': scenario.$1,
+            'renderSurface': 'native',
+            'quality': scenario.$3 ? 'opaque' : 'premium',
+            if (!scenario.$3)
+              'opticalSettings': _opticsReceipt(
+                Brightness.light,
+                scenario.$2 ? GlassVariant.clear : GlassVariant.regular,
+              ),
+            'lensCount': lensCount,
+            'liteCount': liteCount,
+            'layerCount': layerCount,
+            'logicalViewport': [
+              tester.view.physicalSize.width / tester.view.devicePixelRatio,
+              tester.view.physicalSize.height / tester.view.devicePixelRatio,
+            ],
+            'devicePixelRatio': tester.view.devicePixelRatio,
+            'windowStartWallUs': start,
+            'windowEndWallUs': end,
+            'refreshRateHz': tester.view.display.refreshRate,
+            'backgroundPaints': harness.backgroundPaints - paintBefore,
+            'screenshotsDuringMeasurement': 0,
+            'frames': [
+              for (final f in frames)
+                {
+                  'number': f.frameNumber,
+                  'vsyncStartUs': f.timestampInMicroseconds(
+                    ui.FramePhase.vsyncStart,
+                  ),
+                  'buildUs': f.buildDuration.inMicroseconds,
+                  'rasterUs': f.rasterDuration.inMicroseconds,
+                  'totalUs': f.totalSpan.inMicroseconds,
+                },
+            ],
+          });
+        }
+      }
+
+      if (const bool.fromEnvironment('CONNECT_GLASS_PERF_ONLY')) {
+        report['scope'] = 'glass-performance';
+        report['samplingBounds'] = GlassMaterial.samplingBounds;
+        await measurePerformance();
+        report['nativeSurfaceDuringTiming'] = true;
+        report['performanceCaptureComplete'] = true;
+        report['harnessComplete'] = true;
+        return;
+      }
+
+      // Android ImageView capture changes the rendering path. Time the native
+      // production surface first; only convert after the measured windows end.
+      await measurePerformance();
+      report['nativeSurfaceDuringTiming'] = true;
+      harness.configure(brightness: Brightness.light);
+      await _frames(tester);
+      await binding.convertFlutterSurfaceToImage();
+      report['surfaceConverted'] = true;
+      await _frames(tester);
 
       Future<void> capture(String name, {bool settle = true}) async {
         final requestedAt = DateTime.now().microsecondsSinceEpoch;
@@ -109,7 +259,9 @@ void main() {
         } else if (supported) {
           expect(
             lensCount,
-            harness.media
+            harness.productionDemo
+                ? greaterThanOrEqualTo(5)
+                : harness.media
                 ? 2
                 : harness.blendDemo
                 ? 5
@@ -159,8 +311,18 @@ void main() {
             marker.height,
           ],
           'brightness': harness.brightness.name,
-          'background': harness.media ? 'geometric-media' : 'lines-text-checks',
+          'background': harness.photoPath != null
+              ? 'repository-photo'
+              : harness.media
+              ? 'geometric-media'
+              : 'lines-text-checks',
+          if (harness.photoPath != null) 'photoPath': harness.photoPath,
           'variant': harness.media ? 'clear' : 'regular',
+          if (!reduced)
+            'opticalSettings': _opticsReceipt(
+              harness.brightness,
+              harness.media ? GlassVariant.clear : GlassVariant.regular,
+            ),
           'reduceTransparency': reduced,
           'reduceMotion': harness.reduceMotion,
           'requestedAtUs': requestedAt,
@@ -170,6 +332,7 @@ void main() {
               .byType(liquid.LiquidGlassBlendGroup)
               .evaluate()
               .length,
+          'productionDemo': harness.productionDemo,
           'blendDemo': harness.blendDemo,
           'blendNear': harness.blendNear,
           'optics': reduced
@@ -321,73 +484,138 @@ void main() {
       await capture('blend-separated');
       interactions['realBlendGroup'] = true;
 
-      // Measure continuous background repaint at real vsync. No screenshot,
-      // pump or image decoding is allowed inside these measured windows.
-      for (final scenario in [
-        ('regular', false, false, false),
-        ('clear', true, false, false),
-        ('blend', false, false, true),
-        ('reduced', false, true, false),
-      ]) {
-        harness.configure(
-          brightness: Brightness.light,
-          media: scenario.$2,
-          reduceTransparency: scenario.$3,
-          blendDemo: scenario.$4,
-        );
-        await _frames(tester);
-        final raw = <ui.FrameTiming>[];
-        void timing(List<ui.FrameTiming> frames) => raw.addAll(frames);
-        binding.addTimingsCallback(timing);
-        final paintBefore = harness.backgroundPaints;
-        harness.startBackgroundMotion();
-        // Warm up shader/ticker work before starting the measured interval.
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(seconds: 1)),
-        );
-        final start = DateTime.now().microsecondsSinceEpoch;
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(seconds: 3)),
-        );
-        final end = DateTime.now().microsecondsSinceEpoch;
-        harness.stopBackgroundMotion();
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 350)),
-        );
-        binding.removeTimingsCallback(timing);
-        final frames = raw.where((f) {
-          final wall = f.timestampInMicroseconds(
-            ui.FramePhase.rasterFinishWallTime,
-          );
-          return wall >= start && wall <= end;
-        }).toList();
-        expect(
-          frames,
-          isNotEmpty,
-          reason: 'Real raster FrameTimings must arrive.',
-        );
-        expect(harness.backgroundPaints - paintBefore, greaterThan(2));
-        (report['performance'] as List<Map<String, dynamic>>).add({
-          'scenario': scenario.$1,
-          'windowStartWallUs': start,
-          'windowEndWallUs': end,
-          'refreshRateHz': tester.view.display.refreshRate,
-          'backgroundPaints': harness.backgroundPaints - paintBefore,
-          'screenshotsDuringMeasurement': 0,
-          'frames': [
-            for (final f in frames)
-              {
-                'number': f.frameNumber,
-                'vsyncStartUs': f.timestampInMicroseconds(
-                  ui.FramePhase.vsyncStart,
-                ),
-                'buildUs': f.buildDuration.inMicroseconds,
-                'rasterUs': f.rasterDuration.inMicroseconds,
-                'totalUs': f.totalSpan.inMicroseconds,
-              },
-          ],
+      // Exercise the same navigation, menu and exit control used by app pages.
+      harness.configure(brightness: Brightness.light, productionDemo: true);
+      await _frames(tester);
+      Finder indicator() => find.descendant(
+        of: find.descendant(
+          of: find.byKey(_tabsKey),
+          matching: find.byType(liquid.SpringBuilder),
+        ),
+        matching: find.byType(DecoratedBox),
+      );
+      final navStart = tester.getRect(indicator());
+      final navigationSamples = <Map<String, dynamic>>[];
+      await tester.tap(find.text('Settings'));
+      await tester.pump();
+      for (var frame = 0; frame < 6; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        final rect = tester.getRect(indicator());
+        navigationSamples.add({
+          'frame': frame,
+          'left': rect.left,
+          'width': rect.width,
         });
       }
+      expect(tester.getRect(indicator()).left, greaterThan(navStart.left));
+      await capture('navigation-travel', settle: false);
+      final beforeRedirect = tester.getRect(indicator());
+      await tester.tap(find.text('Files'));
+      await tester.pump();
+      expect(
+        tester.getRect(indicator()).left,
+        closeTo(beforeRedirect.left, beforeRedirect.width * .1),
+      );
+      harness.setReducedMotion(true);
+      await tester.pump();
+      final filesTarget = tester.getRect(
+        find.ancestor(
+          of: find.text('Files'),
+          matching: find.byType(CupertinoButton),
+        ),
+      );
+      expect(tester.getRect(indicator()).left, closeTo(filesTarget.left, .1));
+      interactions['navigationRedirectAndReducedMotion'] = true;
+      interactions['navigationSamples'] = navigationSamples;
+      harness.setReducedMotion(false);
+      await _frames(tester);
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(_menuKey),
+          matching: find.byType(IconButton),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('Device details'), findsOneWidget);
+      await capture('menu-open');
+      final viewport = tester.view.physicalSize / tester.view.devicePixelRatio;
+      await tester.tapAt(Offset(5, viewport.height - 5));
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('Device details'), findsNothing);
+      expect(harness.menuCount, 0);
+      await capture('menu-cancelled');
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(_menuKey),
+          matching: find.byType(IconButton),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.tap(find.text('Device details'));
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(harness.menuCount, 1);
+      interactions['productionMenuOpenCancelAction'] = true;
+      harness.setReducedMotion(true);
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(_menuKey),
+          matching: find.byType(IconButton),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(find.text('Device details'), findsOneWidget);
+      final reducedMenuBounds = tester.getRect(find.byType(MenuItemButton));
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(tester.getRect(find.byType(MenuItemButton)), reducedMenuBounds);
+      interactions['reducedMenuBounds'] = [
+        reducedMenuBounds.left,
+        reducedMenuBounds.top,
+        reducedMenuBounds.width,
+        reducedMenuBounds.height,
+      ];
+      await tester.tapAt(Offset(5, viewport.height - 5));
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(find.text('Device details'), findsNothing);
+      expect(harness.menuCount, 1);
+      interactions['productionMenuReducedMotion'] = true;
+      harness.setReducedMotion(false);
+      await _frames(tester);
+      final exit = find.descendant(
+        of: find.byType(ExitHandle),
+        matching: find.byType(GlassPressFeedback),
+      );
+      expect(tester.getSize(exit), const Size(52, 52));
+      final exitPress = await tester.startGesture(tester.getCenter(exit));
+      await tester.pump(const Duration(milliseconds: 64));
+      await capture('exit-held', settle: false);
+      await exitPress.cancel();
+      await _frames(tester);
+      expect(harness.exitCount, 0);
+      await capture('exit-recovered');
+      await tester.tap(exit);
+      await _frames(tester);
+      expect(harness.exitCount, 1);
+      interactions['actualExitHandleFeedbackCancelTap'] = true;
+
+      for (final photo in [
+        ('regular-photo', _regularPhotoPath, false),
+        ('clear-photo', _clearPhotoPath, true),
+      ]) {
+        final receipt = await tester.runAsync(() => _loadPhoto(photo.$2));
+        expect(receipt, isNotNull);
+        (report['photoSources'] as Map<String, dynamic>)[photo.$1] = receipt;
+        harness.configure(
+          brightness: Brightness.light,
+          media: photo.$3,
+          photoPath: photo.$2,
+        );
+        await _frames(tester);
+        expect(find.byType(Image), findsOneWidget);
+        await capture(photo.$1);
+      }
+
+      report['samplingBounds'] = GlassMaterial.samplingBounds;
       report['dynamicCaptureComplete'] = true;
       report['performanceCaptureComplete'] = true;
       report['functionalAcceptanceComplete'] = true;
@@ -422,6 +650,59 @@ Future<void> _frames(WidgetTester tester) async {
 // A framework pump can finish while the raster thread and Android ImageReader
 // still hold the preceding scene. Wait for a new raster receipt, then allow
 // the platform compositor to present it; endOfFrame alone is insufficient.
+Map<String, Object> _opticsReceipt(
+  Brightness brightness,
+  GlassVariant variant,
+) {
+  final settings = Glass.optics(brightness: brightness, variant: variant);
+  return {
+    'bodyMode': settings.bodyMode.name,
+    'blurSigmaLogicalPx': settings.blur,
+    'thicknessLogicalPx': settings.thickness,
+    'refractiveIndex': settings.refractiveIndex,
+    'chromaticAberration': settings.chromaticAberration,
+    'glassColorArgb': settings.glassColor
+        .toARGB32()
+        .toRadixString(16)
+        .padLeft(8, '0'),
+  };
+}
+
+Future<Map<String, Object>> _loadPhoto(String path) async {
+  final file = File(path);
+  if (!await file.exists()) {
+    throw StateError(
+      'Push the repository photograph to $path before the GPU run.',
+    );
+  }
+  final bytes = await file.length();
+  final stream = FileImage(file).resolve(const ImageConfiguration());
+  final completed = Completer<ImageInfo>();
+  final listener = ImageStreamListener(
+    (info, synchronousCall) {
+      if (!completed.isCompleted) completed.complete(info);
+    },
+    onError: (Object error, StackTrace? stack) {
+      if (!completed.isCompleted) completed.completeError(error, stack);
+    },
+  );
+  stream.addListener(listener);
+  try {
+    final info = await completed.future.timeout(const Duration(seconds: 15));
+    final receipt = <String, Object>{
+      'path': path,
+      'bytes': bytes,
+      'decodedWidth': info.image.width,
+      'decodedHeight': info.image.height,
+      'imageStreamComplete': true,
+    };
+    info.dispose();
+    return receipt;
+  } finally {
+    stream.removeListener(listener);
+  }
+}
+
 Future<void> _rasterizedFrame(WidgetTester tester) async {
   final rasterized = Completer<void>();
   final started = DateTime.now().microsecondsSinceEpoch;
@@ -515,6 +796,10 @@ class _GlassHarnessState extends State<_GlassHarness>
   int backgroundPaints = 0;
   bool reduceMotion = false;
   bool blendDemo = false;
+  bool productionDemo = false;
+  int menuCount = 0;
+  int exitCount = 0;
+  void setReducedMotion(bool value) => setState(() => reduceMotion = value);
   bool blendNear = true;
   void startBackgroundMotion() => backgroundMotion.repeat();
   void stopBackgroundMotion() => backgroundMotion.stop();
@@ -524,6 +809,7 @@ class _GlassHarnessState extends State<_GlassHarness>
   final scroll = ScrollController();
   Brightness brightness = Brightness.light;
   bool media = false;
+  String? photoPath;
   bool reduceTransparency = false;
   int selectedIndex = 0;
   int closeCount = 0;
@@ -543,6 +829,8 @@ class _GlassHarnessState extends State<_GlassHarness>
     bool reduceTransparency = false,
     bool reduceMotion = false,
     bool blendDemo = false,
+    bool productionDemo = false,
+    String? photoPath,
   }) {
     scroll.jumpTo(0);
     setState(() {
@@ -551,6 +839,8 @@ class _GlassHarnessState extends State<_GlassHarness>
       this.reduceTransparency = reduceTransparency;
       this.reduceMotion = reduceMotion;
       this.blendDemo = blendDemo;
+      this.productionDemo = productionDemo;
+      this.photoPath = photoPath;
       blendNear = true;
       selectedIndex = 0;
     });
@@ -585,6 +875,38 @@ class _GlassHarnessState extends State<_GlassHarness>
                 final variant = media
                     ? GlassVariant.clear
                     : GlassVariant.regular;
+                final topControls = Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    GlassIconButton(
+                      key: _closeKey,
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Close test control',
+                      variant: variant,
+                      color: mediaColor,
+                      onPressed: () => setState(() => closeCount++),
+                    ),
+                    GlassToolbarGroup(
+                      key: _toolbarKey,
+                      variant: variant,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.zoom_in),
+                          color: mediaColor,
+                          tooltip: 'Zoom test control',
+                          onPressed: () {},
+                        ),
+                        IconButton(
+                          key: _shareKey,
+                          icon: const Icon(Icons.ios_share),
+                          color: mediaColor,
+                          tooltip: 'Share test control',
+                          onPressed: () => setState(() => shareCount++),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
                 return Stack(
                   fit: StackFit.expand,
                   children: [
@@ -593,18 +915,25 @@ class _GlassHarnessState extends State<_GlassHarness>
                       physics: const ClampingScrollPhysics(),
                       child: AnimatedBuilder(
                         animation: backgroundMotion,
-                        builder: (context, _) => CustomPaint(
-                          size: Size(
-                            constraints.maxWidth,
-                            constraints.maxHeight * 3,
-                          ),
-                          painter: _BackdropPainter(
-                            dark: brightness == Brightness.dark,
-                            media: media,
-                            phase: backgroundMotion.value,
-                            onPaint: () => backgroundPaints++,
-                          ),
-                        ),
+                        builder: (context, _) => photoPath != null
+                            ? Image.file(
+                                File(photoPath!),
+                                width: constraints.maxWidth,
+                                height: constraints.maxHeight,
+                                fit: BoxFit.cover,
+                              )
+                            : CustomPaint(
+                                size: Size(
+                                  constraints.maxWidth,
+                                  constraints.maxHeight * 3,
+                                ),
+                                painter: _BackdropPainter(
+                                  dark: brightness == Brightness.dark,
+                                  media: media,
+                                  phase: backgroundMotion.value,
+                                  onPaint: () => backgroundPaints++,
+                                ),
+                              ),
                       ),
                     ),
                     if (media)
@@ -612,163 +941,158 @@ class _GlassHarnessState extends State<_GlassHarness>
                         left: 0,
                         top: 0,
                         right: 0,
-                        height: MediaQuery.paddingOf(context).top + 120,
-                        child: const IgnorePointer(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  DesignTokens.colorMediaShade,
-                                  DesignTokens.colorTransparent,
-                                ],
-                              ),
+                        child: MediaControlsProtection(
+                          child: SafeArea(
+                            bottom: false,
+                            minimum: const EdgeInsets.all(20),
+                            child: GlassSurfaceGroup(
+                              variant: GlassVariant.clear,
+                              child: topControls,
                             ),
                           ),
                         ),
                       ),
-                    SafeArea(
-                      minimum: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    if (!media)
+                      GlassSurfaceGroup(
+                        variant: variant,
+                        child: SafeArea(
+                          minimum: const EdgeInsets.all(20),
+                          child: Column(
                             children: [
-                              GlassIconButton(
-                                key: _closeKey,
-                                icon: const Icon(Icons.close),
-                                tooltip: 'Close test control',
-                                variant: variant,
-                                color: mediaColor,
-                                onPressed: () => setState(() => closeCount++),
-                              ),
-                              GlassToolbarGroup(
-                                key: _toolbarKey,
-                                variant: variant,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.zoom_in),
-                                    color: mediaColor,
-                                    tooltip: 'Zoom test control',
-                                    onPressed: () {},
-                                  ),
-                                  IconButton(
-                                    key: _shareKey,
-                                    icon: const Icon(Icons.ios_share),
-                                    color: mediaColor,
-                                    tooltip: 'Share test control',
-                                    onPressed: () =>
-                                        setState(() => shareCount++),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          Expanded(
-                            child: Center(
-                              child: media
-                                  ? const SizedBox.shrink()
-                                  : blendDemo
-                                  ? SizedBox(
-                                      key: _panelKey,
-                                      width: 280,
-                                      height: 120,
-                                      child: GlassSurfaceGroup(
-                                        child: Stack(
-                                          clipBehavior: Clip.none,
-                                          children: [
-                                            const Positioned(
-                                              left: 20,
-                                              top: 12,
-                                              child: SizedBox(
-                                                width: 96,
-                                                height: 96,
-                                                child: Glass(
-                                                  radius: 48,
-                                                  child: Center(
-                                                    child: Icon(
-                                                      Icons.circle_outlined,
+                              topControls,
+                              Expanded(
+                                child: Center(
+                                  child: media
+                                      ? const SizedBox.shrink()
+                                      : blendDemo
+                                      ? SizedBox(
+                                          key: _panelKey,
+                                          width: 280,
+                                          height: 120,
+                                          child: GlassSurfaceGroup(
+                                            child: Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                const Positioned(
+                                                  left: 20,
+                                                  top: 12,
+                                                  child: SizedBox(
+                                                    width: 96,
+                                                    height: 96,
+                                                    child: Glass(
+                                                      radius: 48,
+                                                      child: Center(
+                                                        child: Icon(
+                                                          Icons.circle_outlined,
+                                                        ),
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                            ),
-                                            Positioned(
-                                              left: blendNear ? 110 : 160,
-                                              top: 12,
-                                              child: const SizedBox(
-                                                width: 96,
-                                                height: 96,
-                                                child: Glass(
-                                                  radius: 48,
-                                                  child: Center(
-                                                    child: Icon(Icons.add),
+                                                Positioned(
+                                                  left: blendNear ? 110 : 160,
+                                                  top: 12,
+                                                  child: const SizedBox(
+                                                    width: 96,
+                                                    height: 96,
+                                                    child: Glass(
+                                                      radius: 48,
+                                                      child: Center(
+                                                        child: Icon(Icons.add),
+                                                      ),
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
+                                              ],
                                             ),
-                                          ],
+                                          ),
+                                        )
+                                      : Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                          ),
+                                          child: Glass(
+                                            key: _panelKey,
+                                            padding: const EdgeInsets.all(24),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                Text(
+                                                  'Regular material',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium,
+                                                ),
+                                                const SizedBox(height: 12),
+                                                const Text('Aa 0123456789'),
+                                                const SizedBox(height: 8),
+                                                const Text(
+                                                  'Fine lines move behind '
+                                                  'this fixed optical sample.',
+                                                ),
+                                                if (productionDemo)
+                                                  Align(
+                                                    alignment:
+                                                        Alignment.centerRight,
+                                                    child: GlassMenuButton(
+                                                      key: _menuKey,
+                                                      icon: const Icon(
+                                                        Icons.more_horiz,
+                                                      ),
+                                                      tooltip: 'Device actions',
+                                                      actions: [
+                                                        GlassMenuAction(
+                                                          label:
+                                                              'Device details',
+                                                          onPressed: () =>
+                                                              setState(
+                                                                () =>
+                                                                    menuCount++,
+                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    )
-                                  : Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                      ),
-                                      child: Glass(
-                                        key: _panelKey,
-                                        padding: const EdgeInsets.all(24),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            Text(
-                                              'Regular material',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium,
-                                            ),
-                                            const SizedBox(height: 12),
-                                            const Text('Aa 0123456789'),
-                                            const SizedBox(height: 8),
-                                            const Text(
-                                              'Fine lines move behind '
-                                              'this fixed optical sample.',
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                ),
+                              ),
+                              if (!media)
+                                GlassTabBar(
+                                  key: _tabsKey,
+                                  destinations: const [
+                                    GlassDestination(
+                                      icon: Icons.devices,
+                                      label: 'Devices',
                                     ),
-                            ),
+                                    GlassDestination(
+                                      icon: Icons.folder,
+                                      label: 'Files',
+                                    ),
+                                    GlassDestination(
+                                      icon: Icons.settings,
+                                      label: 'Settings',
+                                    ),
+                                  ],
+                                  selectedIndex: selectedIndex,
+                                  onSelected: (index) => setState(() {
+                                    selectedIndex = index;
+                                    tabCount++;
+                                  }),
+                                ),
+                            ],
                           ),
-                          if (!media)
-                            GlassTabBar(
-                              key: _tabsKey,
-                              destinations: const [
-                                GlassDestination(
-                                  icon: Icons.devices,
-                                  label: 'Devices',
-                                ),
-                                GlassDestination(
-                                  icon: Icons.folder,
-                                  label: 'Files',
-                                ),
-                                GlassDestination(
-                                  icon: Icons.settings,
-                                  label: 'Settings',
-                                ),
-                              ],
-                              selectedIndex: selectedIndex,
-                              onSelected: (index) => setState(() {
-                                selectedIndex = index;
-                                tabCount++;
-                              }),
-                            ),
-                        ],
+                        ),
                       ),
-                    ),
+                    if (productionDemo)
+                      ExitHandle(
+                        deviceLabel: 'GPU test device',
+                        onExit: () => setState(() => exitCount++),
+                      ),
                     // Opaque diagnostic stamp is deliberately outside every lens.
                     // Its pixels let the host reject stale or mislabeled PNGs.
                     Positioned(

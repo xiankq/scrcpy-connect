@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -26,31 +27,37 @@ class ShareDirectoryPickerPage extends HookWidget {
     );
     return PageFrame(
       title: '选择目标目录',
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: '上一级',
-                  onPressed: path.value == '/'
-                      ? null
-                      : () {
-                          final parts = path.value
-                              .split('/')
-                              .where((part) => part.isNotEmpty)
-                              .toList();
-                          if (parts.isNotEmpty) parts.removeLast();
-                          path.value = '/${parts.join('/')}';
-                        },
-                  icon: const Icon(LucideIcons.arrowUp),
+      child: Builder(
+        builder: (context) => NestedScrollView(
+          headerSliverBuilder: (context, innerScrolled) => [
+            const PageChromeSliver(),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                child: Row(
+                  children: [
+                    GlassActionIcon(
+                      tooltip: '上一级',
+                      onPressed: path.value == '/'
+                          ? null
+                          : () {
+                              final parts = path.value
+                                  .split('/')
+                                  .where((part) => part.isNotEmpty)
+                                  .toList();
+                              if (parts.isNotEmpty) parts.removeLast();
+                              path.value = '/${parts.join('/')}';
+                            },
+                      icon: const Icon(LucideIcons.arrowUp),
+                    ),
+                    Expanded(child: Text(path.value)),
+                  ],
                 ),
-                Expanded(child: Text(path.value)),
-              ],
+              ),
             ),
-          ),
-          Expanded(
+          ],
+          body: PageChromePadding.removeTop(
+            context: context,
             child: CommandView(
               controller: controller,
               command: 'files.list',
@@ -100,7 +107,7 @@ class ShareDirectoryPickerPage extends HookWidget {
               },
             ),
           ),
-        ],
+        ),
       ),
     );
   }

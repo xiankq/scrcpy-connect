@@ -76,7 +76,7 @@ class MediaThumbnail extends HookConsumerWidget {
                         textAlign: TextAlign.center,
                       ),
                     ),
-                    IconButton(
+                    GlassActionIcon(
                       tooltip: '重试缩略图',
                       onPressed: () => retry.value++,
                       icon: const Icon(

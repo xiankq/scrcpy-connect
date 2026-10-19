@@ -26,7 +26,7 @@ class ChoiceRow<T> extends StatelessWidget {
       contentPadding:
           contentPadding ??
           const EdgeInsets.symmetric(horizontal: DesignTokens.spacingMd),
-      minLeadingWidth: DesignTokens.componentIconSize,
+      minLeadingWidth: DesignTokens.componentListIconSize,
       leading: leading,
       titleTextStyle: Theme.of(context).textTheme.bodyLarge,
       enabled: onChanged != null,

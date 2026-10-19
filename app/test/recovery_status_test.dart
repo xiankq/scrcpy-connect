@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -96,6 +98,11 @@ void main() {
             'data': {'reason': List.filled(12, '设备状态尚未确认。').join()},
           });
           await tester.pumpAndSettle();
+          await Scrollable.ensureVisible(
+            tester.element(find.text('重新核验')),
+            alignment: .5,
+          );
+          await tester.pumpAndSettle();
           expect(find.text('重新核验').hitTestable(), findsOneWidget);
           final action = find.text(settingsTab ? '当前活动' : '取消本批传输');
           final page = settingsTab
@@ -112,7 +119,6 @@ void main() {
           await Scrollable.ensureVisible(tester.element(action), alignment: .5);
           await tester.pumpAndSettle();
           expect(action.hitTestable(), findsOneWidget);
-          expect(find.text('重新核验').hitTestable(), findsOneWidget);
           await tester.tap(action);
           await tester.pumpAndSettle();
           if (settingsTab) {
@@ -137,6 +143,18 @@ void main() {
             router.pop();
             await tester.pumpAndSettle();
           }
+          await tester.scrollUntilVisible(
+            find.text('重新核验'),
+            -200,
+            scrollable: scrollable,
+          );
+          await tester.pumpAndSettle();
+          await Scrollable.ensureVisible(
+            tester.element(find.text('重新核验')),
+            alignment: .5,
+          );
+          await tester.pumpAndSettle();
+          expect(find.text('重新核验').hitTestable(), findsOneWidget);
           await tester.tap(find.text('重新核验'));
           await tester.pumpAndSettle();
           expect(
@@ -178,10 +196,12 @@ void main() {
           child: MaterialApp(
             home: PageFrame(
               title: '当前活动',
-              child: Center(
-                child: TextButton(
-                  onPressed: () => stops++,
-                  child: const Text('停止当前活动'),
+              child: PageChromeBody(
+                child: Center(
+                  child: TextButton(
+                    onPressed: () => stops++,
+                    child: const Text('停止当前活动'),
+                  ),
                 ),
               ),
             ),
@@ -290,10 +310,12 @@ void main() {
           child: MaterialApp(
             home: PageFrame(
               title: '当前活动',
-              child: Center(
-                child: TextButton(
-                  onPressed: () => stops++,
-                  child: const Text('停止活动'),
+              child: PageChromeBody(
+                child: Center(
+                  child: TextButton(
+                    onPressed: () => stops++,
+                    child: const Text('停止活动'),
+                  ),
                 ),
               ),
             ),

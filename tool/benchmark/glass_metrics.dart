@@ -64,7 +64,12 @@ Map<String, Object?> summarizeGlassPerformance(Map<String, dynamic> report) {
     'performanceSummary': summaries,
     'performanceWithinBudget': withinBudget,
     'performanceAcceptanceComplete':
-        report['buildMode'] == 'profile' && withinBudget,
-    'performanceScope': 'Continuous diagnostic Flutter background, production material controls; no screen capture inside timed intervals. Does not measure multi-video workloads or Apple native equivalence.',
+        report['buildMode'] == 'profile' &&
+        report['nativeSurfaceDuringTiming'] == true &&
+        withinBudget,
+    'performanceScope':
+        'Continuous diagnostic Flutter background, production material controls; '
+        '${report['nativeSurfaceDuringTiming'] == true ? 'native Android surface' : 'surface not certified as native'}. '
+        'No screen capture inside timed intervals. Does not measure multi-video workloads or Apple native equivalence.',
   };
 }

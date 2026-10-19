@@ -115,7 +115,7 @@ class QualityPage extends HookWidget {
             String title,
             List<Json> options,
             dynamic selected,
-          ) => showModalBottomSheet<Json>(
+          ) => showGlassModalSheet<Json>(
             context: context,
             isScrollControlled: true,
             builder: (context) => SafeArea(
@@ -137,7 +137,7 @@ class QualityPage extends HookWidget {
                       ),
                     ),
                     for (final item in options)
-                      Tooltip(
+                      GlassTooltip(
                         message: value(item, 'reason'),
                         child: ListTile(
                           title: Text(

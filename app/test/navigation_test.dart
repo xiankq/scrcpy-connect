@@ -1,3 +1,5 @@
+import 'support/page_back.dart';
+
 import 'package:scrcpy_connect/router/app_router.dart';
 
 import 'support/test_controller.dart';
@@ -67,7 +69,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 40));
         await tester.pump();
         expect(find.byType(FilesPage), findsOneWidget);
-        expect(find.byType(BackButton), findsNWidgets(2));
+        expect(pageBackButton(tester), findsNWidgets(2));
         expect(
           ModalRoute.of(tester.element(find.byType(FilesPage)))
               ?.animation

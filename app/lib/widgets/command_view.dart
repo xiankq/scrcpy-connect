@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -37,26 +38,30 @@ class CommandView extends HookWidget {
     previousIdentity.value = identity;
     final result = useFuture(future, preserveState: !changedObject);
     if (result.connectionState != ConnectionState.done && !result.hasData) {
-      return const Center(child: CircularProgressIndicator.adaptive());
+      return const PageChromeBody(
+        child: Center(child: CircularProgressIndicator.adaptive()),
+      );
     }
     if (result.hasError) {
-      return EmptyContent(
-        icon: LucideIcons.circleAlert,
-        title: emptyTitle,
-        message: '${result.error}',
-        action: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            OutlinedButton.icon(
-              onPressed: () => retry.value++,
-              icon: const Icon(
-                LucideIcons.refreshCw,
-                size: DesignTokens.componentIconActionSize,
+      return PageChromeBody(
+        child: EmptyContent(
+          icon: LucideIcons.circleAlert,
+          title: emptyTitle,
+          message: '${result.error}',
+          action: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => retry.value++,
+                icon: const Icon(
+                  LucideIcons.refreshCw,
+                  size: DesignTokens.componentIconActionSize,
+                ),
+                label: const Text('重新检查'),
               ),
-              label: const Text('重新检查'),
-            ),
-            ?alternative,
-          ],
+              ?alternative,
+            ],
+          ),
         ),
       );
     }

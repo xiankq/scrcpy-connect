@@ -1,4 +1,3 @@
-import 'package:scrcpy_connect/widgets/root_page_header.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -6,7 +5,6 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
-import 'package:scrcpy_connect/widgets/recovery_status.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -30,15 +28,11 @@ class SettingsPage extends HookConsumerWidget {
     final body = GroupedListView(
       padding: EdgeInsets.fromLTRB(
         DesignTokens.spacingMd,
-        embedded ? DesignTokens.spacingZero : DesignTokens.spacingSm,
+        DesignTokens.spacingSm,
         DesignTokens.spacingMd,
-        embedded ? 120 : DesignTokens.spacingLg,
+        DesignTokens.spacingLg,
       ),
       children: [
-        if (embedded) ...[
-          const RootPageHeader(title: '设置'),
-          const SizedBox(height: DesignTokens.spacingSm),
-        ],
         if (appSettingsError != null) StateNote('偏好尚未读取：$appSettingsError'),
         ContentPanel(
           padding: EdgeInsets.zero,
@@ -89,11 +83,40 @@ class SettingsPage extends HookConsumerWidget {
             try {
               final info = await controller.execute(InteropCommand.systemInfo);
               if (context.mounted) {
-                showAboutDialog(
+                showGlassDialog<void>(
                   context: context,
-                  applicationName: '邻接 Interconnect',
-                  applicationVersion: value(info, 'version', '开发版本'),
-                  children: [Text(value(info, 'description', '基于设备授权的跨设备互联'))],
+                  builder: (dialogContext) => GlassAlertDialog(
+                    title: const Text('邻接 Interconnect'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(value(info, 'version', '开发版本')),
+                        const SizedBox(height: DesignTokens.spacingMd),
+                        Text(value(info, 'description', '基于设备授权的跨设备互联')),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => showLicensePage(
+                          context: dialogContext,
+                          applicationName: '邻接 Interconnect',
+                          applicationVersion: value(info, 'version', '开发版本'),
+                        ),
+                        child: Text(
+                          MaterialLocalizations.of(dialogContext)
+                              .viewLicensesButtonLabel,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: Text(
+                          MaterialLocalizations.of(dialogContext)
+                              .closeButtonLabel,
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               }
             } catch (e) {
@@ -104,23 +127,6 @@ class SettingsPage extends HookConsumerWidget {
         ),
       ],
     );
-    if (embedded) {
-      return SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) => Column(
-            children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: constraints.maxHeight / 2,
-                ),
-                child: const RecoveryStatus(),
-              ),
-              Expanded(child: body),
-            ],
-          ),
-        ),
-      );
-    }
-    return PageFrame(title: '设置', child: body);
+    return PageFrame(root: embedded, title: '设置', child: body);
   }
 }

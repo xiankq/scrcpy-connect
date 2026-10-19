@@ -1,3 +1,4 @@
+import 'support/page_back.dart';
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/app.dart';
@@ -448,7 +449,7 @@ void main() {
         pathParameters: {'deviceId': 'phone'},
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(BackButton));
+      await tester.tap(pageBackButton(tester));
       await tester.pumpAndSettle();
       expect(await cancelled, isNull);
       expect(

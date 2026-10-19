@@ -21,7 +21,7 @@ class OriginalFileHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Tooltip(
+            GlassTooltip(
               message: name,
               child: Text(
                 name,

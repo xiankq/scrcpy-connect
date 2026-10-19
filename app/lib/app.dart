@@ -79,9 +79,9 @@ class ConnectApp extends HookConsumerWidget {
         final activation = systemNotifications.takeActivation();
         if (activation == null) return;
         if (!activation.available) {
-          showDialog<void>(
+          showGlassDialog<void>(
             context: context,
-            builder: (context) => AlertDialog(
+            builder: (context) => GlassAlertDialog(
               title: const Text('这条提醒已失效'),
               content: Text(activation.reason),
               actions: [
@@ -174,7 +174,7 @@ class ConnectApp extends HookConsumerWidget {
             return;
           }
           final device = matches.first;
-          showModalBottomSheet<void>(
+          showGlassModalSheet<void>(
             context: context,
             isScrollControlled: true,
             builder: (context) => SafeArea(

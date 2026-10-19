@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
+
+import 'support/page_back.dart';
+
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/index/widgets/device_card.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -35,23 +39,35 @@ void main() {
       await tester.pumpAndSettle();
       if (page == 'gallery') {
         final back = find
-            .ancestor(of: find.byType(BackButton), matching: find.byType(Glass))
+            .descendant(
+              of: find.ancestor(
+                of: pageBackButton(tester),
+                matching: find.byType(GlassIconButton),
+              ),
+              matching: find.byType(Glass),
+            )
             .first;
-        expect(tester.getRect(back).left, DesignTokens.spacingMd);
+        final width =
+            tester.view.physicalSize.width / tester.view.devicePixelRatio;
+        final columnLeft = math.max(
+          0.0,
+          (width - DesignTokens.componentPageContentMaxWidth) / 2,
+        );
+        expect(tester.getRect(back).left, columnLeft + DesignTokens.spacingMd);
         expect(
           tester.getSize(back),
           const Size.square(DesignTokens.componentIconButtonSize),
         );
         expect(
           tester.getRect(find.text('手机相册')).left,
-          DesignTokens.spacingMd +
+          columnLeft +
+              DesignTokens.spacingMd +
               DesignTokens.componentIconButtonSize +
               DesignTokens.spacingSm,
         );
         expect(
           tester.getRect(find.byType(GlassToolbarGroup)).right,
-          tester.view.physicalSize.width / tester.view.devicePixelRatio -
-              DesignTokens.spacingMd,
+          width - columnLeft - DesignTokens.spacingMd,
         );
       } else if (page == 'incoming_share') {
         final cancel = find.widgetWithText(TextButton, '取消');
@@ -199,32 +215,75 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
-  testWidgets(
-    'short landscape initially shows the complete first device above navigation',
-    (tester) async {
-      tester.view.physicalSize = const Size(620, 280);
-      tester.view.devicePixelRatio = 1;
-      tester.platformDispatcher.textScaleFactorTestValue = 2;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-        tester.platformDispatcher.clearTextScaleFactorTestValue();
-      });
-      final controller = createTestController(fixtureRequest);
-      await controller.initialize();
-      await tester.pumpWidget(
-        TestProviderScope(controller: controller, child: const ConnectApp()),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        tester.getRect(find.byType(DeviceCard).first).bottom,
-        lessThanOrEqualTo(tester.getRect(find.byType(GlassTabBar)).top),
-      );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
+  for (final safeArea in [
+    const FakeViewPadding(),
+    const FakeViewPadding(top: 54, bottom: 34),
+  ]) {
+    testWidgets(
+      'short landscape keeps the complete first device and sidebar reachable with safe top ${safeArea.top}',
+      (tester) async {
+        tester.view.physicalSize = const Size(620, 280);
+        tester.view.devicePixelRatio = 1;
+        tester.view.padding = safeArea;
+        tester.view.viewPadding = safeArea;
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+          tester.view.resetPadding();
+          tester.view.resetViewPadding();
+          tester.platformDispatcher.clearTextScaleFactorTestValue();
+        });
+        final controller = createTestController(fixtureRequest);
+        await controller.initialize();
+        await tester.pumpWidget(
+          TestProviderScope(controller: controller, child: const ConnectApp()),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(GlassTabBar), findsNothing);
+        final navigation = find
+            .ancestor(
+              of: find.widgetWithText(ListTile, '设备'),
+              matching: find.byType(Glass),
+            )
+            .first;
+        final navigationBounds = tester.getRect(navigation);
+        final card = find.byType(DeviceCard).first;
+        final cardBounds = tester.getRect(card);
+        expect(cardBounds.left, greaterThanOrEqualTo(navigationBounds.right));
+        expect(cardBounds.top, greaterThanOrEqualTo(safeArea.top));
+        expect(cardBounds.bottom, lessThanOrEqualTo(280 - safeArea.bottom));
+        expect(cardBounds.right, lessThanOrEqualTo(620));
+        expect(navigationBounds.top, greaterThanOrEqualTo(safeArea.top));
+        expect(
+          navigationBounds.bottom,
+          lessThanOrEqualTo(280 - safeArea.bottom),
+        );
+        for (final destination in ['传输', '设置', '设备']) {
+          final action = find.widgetWithText(ListTile, destination);
+          expect(action.hitTestable(), findsOneWidget);
+          final bounds = tester.getRect(action);
+          expect(navigationBounds.contains(bounds.topLeft), isTrue);
+          expect(
+            navigationBounds.contains(
+              bounds.bottomRight - const Offset(.1, .1),
+            ),
+            isTrue,
+          );
+          await tester.tap(action);
+          await tester.pumpAndSettle();
+          expect(tester.widget<ListTile>(action).selected, isTrue);
+        }
+        expect(card.hitTestable(), findsOneWidget);
+        await tester.tap(card);
+        await tester.pumpAndSettle();
+        expect(find.byType(DeviceWorkspacePage), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      },
+    );
+  }
   testWidgets(
     'domain status, quality units and startup error remain understandable',
     (tester) async {

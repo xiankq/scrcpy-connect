@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/pages/devices/workspace/files/search/devices_workspace_files_search_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
 
 import 'support/test_controller.dart';
@@ -119,7 +120,12 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '搜索'));
     await tester.pump();
     controller.focusedDeviceId = 'different-phone';
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(
+      find.byTooltip(
+        MaterialLocalizations.of(tester.element(find.byType(FileSearchPage)))
+            .backButtonTooltip,
+      ),
+    );
     await tester.pumpAndSettle();
     lateStart.complete({
       'searchId': 'late-own-search',

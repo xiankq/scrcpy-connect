@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
@@ -75,16 +76,18 @@ class SessionToolsPage extends HookWidget {
                 value(item, 'sessionId', value(item, 'id')) == selected.value,
           );
           if (matches.isEmpty) {
-            return EmptyContent(
-              icon: LucideIcons.appWindow,
-              title: '这个窗口已结束',
-              message: '重新选择已有窗口，不会自动创建或操作其他会话。',
-              action: TextButton(
-                onPressed: () {
-                  selected.value = null;
-                  refresh();
-                },
-                child: const Text('选择其他窗口'),
+            return PageChromeBody(
+              child: EmptyContent(
+                icon: LucideIcons.appWindow,
+                title: '这个窗口已结束',
+                message: '重新选择已有窗口，不会自动创建或操作其他会话。',
+                action: TextButton(
+                  onPressed: () {
+                    selected.value = null;
+                    refresh();
+                  },
+                  child: const Text('选择其他窗口'),
+                ),
               ),
             );
           }
@@ -112,7 +115,7 @@ class SessionToolsPage extends HookWidget {
           if (result != null && context.mounted) {
             final path = value(result, 'localPath');
             if (path.isNotEmpty) {
-              await showModalBottomSheet<void>(
+              await showGlassModalSheet<void>(
                 context: context,
                 isScrollControlled: true,
                 builder: (context) => SafeArea(

@@ -18,7 +18,7 @@ class DiscoveryPage extends StatelessWidget {
   Widget build(BuildContext context) => PageFrame(
     title: '附近设备',
     actions: [
-      IconButton(
+      GlassActionIcon(
         onPressed: () => ConnectionFormRoute().push<void>(context),
         tooltip: '手动连接',
         icon: const Icon(LucideIcons.plus),
@@ -31,20 +31,53 @@ class DiscoveryPage extends StatelessWidget {
       builder: (context, data, refresh) {
         final list = objects(data['devices']);
         if (list.isEmpty) {
-          return EmptyContent(
-            icon: LucideIcons.radar,
-            title: '未发现设备',
-            message: '确认被控手机已打开无线调试，并处于可达网络。没有发现设备不代表无法连接。',
-            action: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FilledButton(onPressed: refresh, child: const Text('重新发现')),
-                TextButton(
-                  onPressed: () => ConnectionFormRoute().push<void>(context),
-                  child: const Text('手动填写地址'),
+          return GroupedListView(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
+            children: [
+              ContentPanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          LucideIcons.wifiOff,
+                          color: ConnectTokens.amber,
+                          size: 32,
+                        ),
+                        const SizedBox(width: DesignTokens.spacingSm),
+                        Expanded(
+                          child: Text(
+                            '没有发现可连接的手机',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: DesignTokens.spacingMd),
+                    const Text('检查被控手机是否开启无线调试。网络隔离可能影响发现，也可以手动输入可达地址。'),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: DesignTokens.spacingMd),
+              FilledButton(onPressed: refresh, child: const Text('重新查找')),
+              const SizedBox(height: DesignTokens.spacingMd),
+              OutlinedButton(
+                onPressed: () => ConnectionFormRoute().push<void>(context),
+                child: const Text('手动连接'),
+              ),
+              const SizedBox(height: DesignTokens.spacingMd),
+              ActionRow(
+                icon: LucideIcons.info,
+                title: '无线调试设置方法',
+                onTap: () => WirelessGuideRoute().push<void>(context),
+              ),
+              ActionRow(
+                icon: LucideIcons.usb,
+                title: '改用 USB',
+                onTap: () => UsbGuideRoute().push<void>(context),
+              ),
+            ],
           );
         }
         return GroupedListView(

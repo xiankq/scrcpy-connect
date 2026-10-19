@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -68,39 +69,45 @@ class NotificationsPage extends HookConsumerWidget {
               .toList();
           final state = value(data, 'status', 'unknown');
           if (notifications.isEmpty && state != 'available') {
-            return EmptyContent(
-              icon: LucideIcons.bellOff,
-              title: switch (state) {
-                'needsSetup' => '通知访问需要设置',
-                'stopped' => '通知观察已停止',
-                'unknown' || 'checking' || 'starting' => '通知状态尚未核验',
-                _ => '通知同步受限',
-              },
-              message: value(data, 'reason', '这台设备尚未提供可靠的通知访问。你可以在手机原应用中处理。'),
-              action: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FilledButton(
-                    onPressed: () =>
-                        openRemoteRoute(context, deviceId: value(device, 'id')),
-                    child: const Text('在手机上查看'),
-                  ),
-                  TextButton(
-                    onPressed: starting.value ? null : verify,
-                    child: Text(state == 'stopped' ? '启用通知与来电观察' : '重新核验通知'),
-                  ),
-                ],
+            return PageChromeBody(
+              child: EmptyContent(
+                icon: LucideIcons.bellOff,
+                title: switch (state) {
+                  'needsSetup' => '通知访问需要设置',
+                  'stopped' => '通知观察已停止',
+                  'unknown' || 'checking' || 'starting' => '通知状态尚未核验',
+                  _ => '通知同步受限',
+                },
+                message: value(data, 'reason', '这台设备尚未提供可靠的通知访问。你可以在手机原应用中处理。'),
+                action: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FilledButton(
+                      onPressed: () => openRemoteRoute(
+                        context,
+                        deviceId: value(device, 'id'),
+                      ),
+                      child: const Text('在手机上查看'),
+                    ),
+                    TextButton(
+                      onPressed: starting.value ? null : verify,
+                      child: Text(state == 'stopped' ? '启用通知与来电观察' : '重新核验通知'),
+                    ),
+                  ],
+                ),
               ),
             );
           }
           if (notifications.isEmpty) {
-            return EmptyContent(
-              icon: LucideIcons.bell,
-              title: '没有当前通知',
-              message: '这里只显示仍有效的通知，不建立长期通知档案。',
-              action: TextButton(
-                onPressed: starting.value ? null : verify,
-                child: const Text('刷新当前通知'),
+            return PageChromeBody(
+              child: EmptyContent(
+                icon: LucideIcons.bell,
+                title: '没有当前通知',
+                message: '这里只显示仍有效的通知，不建立长期通知档案。',
+                action: TextButton(
+                  onPressed: starting.value ? null : verify,
+                  child: const Text('刷新当前通知'),
+                ),
               ),
             );
           }
@@ -140,38 +147,37 @@ class NotificationsPage extends HookConsumerWidget {
                                       .titleMedium,
                                 ),
                               ),
-                              PopupMenuButton<String>(
+                              GlassMenuButton(
+                                icon: const Icon(LucideIcons.ellipsisVertical),
                                 tooltip: '通知操作',
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                    value: 'hide',
-                                    child: Text('仅在本机隐藏'),
+                                actions: [
+                                  GlassMenuAction(
+                                    label: '仅在本机隐藏',
+                                    onPressed: () {
+                                      hidden.value = {
+                                        ...hidden.value,
+                                        value(notification, 'id'),
+                                      };
+                                    },
                                   ),
                                   if (notification['canDismiss'] == true)
-                                    const PopupMenuItem(
-                                      value: 'dismiss',
-                                      child: Text('清除手机上的通知'),
+                                    GlassMenuAction(
+                                      label: '清除手机上的通知',
+                                      onPressed: () async {
+                                        await perform(
+                                          context,
+                                          controller,
+                                          'notifications.dismiss',
+                                          {
+                                            'deviceId': device['id'],
+                                            'notificationId':
+                                                notification['id'],
+                                          },
+                                        );
+                                        refresh();
+                                      },
                                     ),
                                 ],
-                                onSelected: (action) async {
-                                  if (action == 'hide') {
-                                    hidden.value = {
-                                      ...hidden.value,
-                                      value(notification, 'id'),
-                                    };
-                                  } else {
-                                    await perform(
-                                      context,
-                                      controller,
-                                      'notifications.dismiss',
-                                      {
-                                        'deviceId': device['id'],
-                                        'notificationId': notification['id'],
-                                      },
-                                    );
-                                    refresh();
-                                  }
-                                },
                               ),
                             ],
                           ),

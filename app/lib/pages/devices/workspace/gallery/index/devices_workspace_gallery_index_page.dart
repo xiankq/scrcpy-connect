@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
+
 import 'dart:async';
 
 import 'package:design_system/design_system.dart';
@@ -52,12 +54,12 @@ class GalleryPage extends HookWidget {
       title: '手机相册',
 
       actions: [
-        IconButton(
+        GlassActionIcon(
           tooltip: '重新检查相册',
           onPressed: reload,
           icon: const Icon(LucideIcons.refreshCw),
         ),
-        IconButton(
+        GlassActionIcon(
           tooltip: selected.value.isEmpty ? '选择照片' : '取消选择',
           onPressed: media.isEmpty
               ? null
@@ -74,6 +76,7 @@ class GalleryPage extends HookWidget {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            const PageChromeSliver(),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -115,9 +118,8 @@ class GalleryPage extends HookWidget {
                               DesignTokens.componentIconButtonSize,
                             ),
                           ),
-                          onPressed: () => showModalBottomSheet<void>(
+                          onPressed: () => showGlassModalSheet<void>(
                             context: context,
-                            backgroundColor: Colors.transparent,
                             isScrollControlled: true,
                             builder: (_) => GalleryScopeSheet(
                               device: device,
@@ -341,6 +343,7 @@ class GalleryPage extends HookWidget {
             const SliverToBoxAdapter(
               child: SizedBox(height: DesignTokens.spacingLg),
             ),
+            const PageChromeBottomSliver(),
           ],
         ),
       ),

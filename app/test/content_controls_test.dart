@@ -36,7 +36,19 @@ void main() {
       expect(panel.height, 56 * count);
       expect(tester.getRect(rows.first).top, panel.top);
       expect(tester.getRect(rows.last).bottom, panel.bottom);
-      expect(tester.getTopLeft(find.text('目录 0')).dx, panel.left + 50);
+      final badge = find.descendant(
+        of: rows.first,
+        matching: find.byType(ListIconBadge),
+      );
+      expect(
+        tester.getRect(badge),
+        Rect.fromLTWH(panel.left + 16, panel.top + 14, 28, 28),
+      );
+      expect(tester.getTopLeft(find.text('目录 0')).dx, panel.left + 56);
+      expect(
+        tester.getTopLeft(find.text('目录 0')).dx - tester.getTopRight(badge).dx,
+        12,
+      );
       expect(find.text('目录 0').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
@@ -84,10 +96,22 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.getTopLeft(find.byType(ContentPanel).first).dx, 16);
+        expect(
+          tester.getTopLeft(find.text('/sdcard')).dy,
+          greaterThanOrEqualTo(tester.getBottomRight(find.byType(AppBar)).dy),
+        );
         if (count == 1) {
           expect(tester.getTopLeft(find.text('使用这个目录')).dy, lessThan(400));
         }
-        await tester.scrollUntilVisible(find.text('使用这个目录'), 200);
+        await tester.scrollUntilVisible(
+          find.text('使用这个目录'),
+          200,
+          scrollable: find.byType(Scrollable).last,
+        );
+        await Scrollable.ensureVisible(
+          tester.element(find.text('使用这个目录')),
+          alignment: .5,
+        );
         await tester.pumpAndSettle();
         expect(find.text('使用这个目录').hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
@@ -113,14 +137,20 @@ void main() {
                 ChoiceRow<int>(
                   value: 0,
                   groupValue: 0,
-                  leading: const Icon(LucideIcons.sun, size: 22),
+                  leading: const ListIconBadge(
+                    icon: LucideIcons.sun,
+                    backgroundColor: DesignTokens.colorListIconBlue,
+                  ),
                   title: const Text('浅色'),
                   onChanged: (_) {},
                 ),
                 ChoiceRow<int>(
                   value: 1,
                   groupValue: 0,
-                  leading: const Icon(LucideIcons.moon, size: 22),
+                  leading: const ListIconBadge(
+                    icon: LucideIcons.moon,
+                    backgroundColor: DesignTokens.colorListIconBlue,
+                  ),
                   title: const Text('深色'),
                   onChanged: (_) {},
                 ),
@@ -132,8 +162,24 @@ void main() {
     );
     expect(tester.getSize(find.byType(ActionRow)).height, 56);
     expect(tester.getSize(find.byType(ChoiceRow<int>).first).height, 56);
-    expect(tester.getTopLeft(find.text('文件')).dx, 50);
-    expect(tester.getTopLeft(find.text('浅色')).dx, 50);
+    expect(tester.getSize(find.byType(ChoiceRow<int>).last).height, 56);
+    expect(tester.getRect(find.byType(ContentPanel).last).height, 112);
+    for (final label in ['文件', '浅色', '深色']) {
+      expect(tester.getTopLeft(find.text(label)).dx, 56);
+    }
+    for (final element in find.byType(ListIconBadge).evaluate()) {
+      final badge = find.byElementPredicate(
+        (candidate) => candidate == element,
+      );
+      expect(tester.getSize(badge), const Size(28, 28));
+      expect(tester.getTopLeft(badge).dx, 16);
+      final glyph = tester.widget<Icon>(
+        find.descendant(of: badge, matching: find.byType(Icon)),
+      );
+      expect(glyph.color, Colors.white);
+      expect(glyph.size, 20);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

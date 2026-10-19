@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/file_row_title.dart';
@@ -117,7 +118,7 @@ class FilesPage extends HookWidget {
       title: '文件管理',
 
       actions: [
-        IconButton(
+        GlassActionIcon(
           tooltip: '新建文件夹',
           onPressed: busy.value
               ? null
@@ -140,7 +141,7 @@ class FilesPage extends HookWidget {
                 },
           icon: const Icon(LucideIcons.folderPlus),
         ),
-        IconButton(
+        GlassActionIcon(
           tooltip: '发送本机文件',
           onPressed: busy.value ? null : upload,
           icon: const Icon(LucideIcons.upload),
@@ -149,7 +150,7 @@ class FilesPage extends HookWidget {
             Platform.isLinux ||
             Platform.isMacOS ||
             Platform.isWindows)
-          IconButton(
+          GlassActionIcon(
             tooltip: '发送本机文件夹',
             onPressed: busy.value
                 ? null
@@ -165,88 +166,94 @@ class FilesPage extends HookWidget {
             icon: const Icon(LucideIcons.folderUp),
           ),
       ],
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              DesignTokens.spacingMd,
-              DesignTokens.spacingXs,
-              DesignTokens.spacingMd,
-              DesignTokens.spacingSm,
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: '上一级目录',
-                      onPressed: path.value == '/'
-                          ? null
-                          : () {
-                              final parent = path.value.substring(
-                                0,
-                                path.value.lastIndexOf('/'),
-                              );
-                              path.value = parent.isEmpty ? '/' : parent;
-                              selected.value = {};
-                            },
-                      icon: const Icon(
-                        LucideIcons.arrowUp,
-                        size: DesignTokens.componentIconActionSize,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        path.value,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '刷新目录',
-                      onPressed: () => revision.value++,
-                      icon: const Icon(
-                        LucideIcons.refreshCw,
-                        size: DesignTokens.componentIconActionSize,
-                      ),
-                    ),
-                  ],
+      child: Builder(
+        builder: (context) => NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            const PageChromeSliver(),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  DesignTokens.spacingMd,
+                  DesignTokens.spacingXs,
+                  DesignTokens.spacingMd,
+                  DesignTokens.spacingSm,
                 ),
-                const SizedBox(height: DesignTokens.spacingXs),
-                Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: query,
-                        decoration: const InputDecoration(
-                          hintText: '搜索当前目录',
-                          prefixIcon: Icon(
-                            LucideIcons.search,
+                    Row(
+                      children: [
+                        GlassActionIcon(
+                          tooltip: '上一级目录',
+                          onPressed: path.value == '/'
+                              ? null
+                              : () {
+                                  final parent = path.value.substring(
+                                    0,
+                                    path.value.lastIndexOf('/'),
+                                  );
+                                  path.value = parent.isEmpty ? '/' : parent;
+                                  selected.value = {};
+                                },
+                          icon: const Icon(
+                            LucideIcons.arrowUp,
                             size: DesignTokens.componentIconActionSize,
                           ),
                         ),
-                      ),
+                        Expanded(
+                          child: Text(
+                            path.value,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        GlassActionIcon(
+                          tooltip: '刷新目录',
+                          onPressed: () => revision.value++,
+                          icon: const Icon(
+                            LucideIcons.refreshCw,
+                            size: DesignTokens.componentIconActionSize,
+                          ),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      tooltip: '搜索子文件夹',
-                      onPressed: () => FileSearchRoute(
-                        deviceId: value(device, 'id'),
-                        path: path.value,
-                        query: query.text,
-                      ).push<void>(context),
-                      icon: const Icon(
-                        LucideIcons.folderSearch,
-                        size: DesignTokens.componentIconActionSize,
-                      ),
+                    const SizedBox(height: DesignTokens.spacingXs),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: query,
+                            decoration: const InputDecoration(
+                              hintText: '搜索当前目录',
+                              prefixIcon: Icon(
+                                LucideIcons.search,
+                                size: DesignTokens.componentIconActionSize,
+                              ),
+                            ),
+                          ),
+                        ),
+                        GlassActionIcon(
+                          tooltip: '搜索子文件夹',
+                          onPressed: () => FileSearchRoute(
+                            deviceId: value(device, 'id'),
+                            path: path.value,
+                            query: query.text,
+                          ).push<void>(context),
+                          icon: const Icon(
+                            LucideIcons.folderSearch,
+                            size: DesignTokens.componentIconActionSize,
+                          ),
+                        ),
+                      ],
                     ),
+                    if (busy.value) const LinearProgressIndicator(minHeight: 2),
                   ],
                 ),
-                if (busy.value) const LinearProgressIndicator(minHeight: 2),
-              ],
+              ),
             ),
-          ),
-          Expanded(
+          ],
+          body: PageChromePadding.removeTop(
+            context: context,
             child: CommandView(
               key: ValueKey(revision.value),
               controller: controller,
@@ -277,15 +284,17 @@ class FilesPage extends HookWidget {
                         return value(a, 'name').compareTo(value(b, 'name'));
                       });
                 if (entries.isEmpty) {
-                  return EmptyContent(
-                    icon: LucideIcons.folderOpen,
-                    title: query.text.isEmpty ? '这个目录是空的' : '没有匹配的文件',
-                    message: query.text.isEmpty
-                        ? '发送本机文件到 ${path.value}，或新建文件夹。'
-                        : '试试其他文件名。',
-                    action: TextButton(
-                      onPressed: query.text.isEmpty ? upload : query.clear,
-                      child: Text(query.text.isEmpty ? '发送文件' : '清除搜索'),
+                  return PageChromeBody(
+                    child: EmptyContent(
+                      icon: LucideIcons.folderOpen,
+                      title: query.text.isEmpty ? '这个目录是空的' : '没有匹配的文件',
+                      message: query.text.isEmpty
+                          ? '发送本机文件到 ${path.value}，或新建文件夹。'
+                          : '试试其他文件名。',
+                      action: TextButton(
+                        onPressed: query.text.isEmpty ? upload : query.clear,
+                        child: Text(query.text.isEmpty ? '发送文件' : '清除搜索'),
+                      ),
                     ),
                   );
                 }
@@ -308,7 +317,7 @@ class FilesPage extends HookWidget {
                             Expanded(
                               child: Text('已选择 ${selected.value.length} 项'),
                             ),
-                            IconButton(
+                            GlassActionIcon(
                               tooltip: '取回所选',
                               onPressed: () async {
                                 await retrieveSelection(
@@ -320,7 +329,7 @@ class FilesPage extends HookWidget {
                               },
                               icon: const Icon(LucideIcons.download),
                             ),
-                            IconButton(
+                            GlassActionIcon(
                               tooltip: '删除所选',
                               onPressed: () async {
                                 if (await confirm(
@@ -343,7 +352,7 @@ class FilesPage extends HookWidget {
                                 color: ConnectTokens.danger,
                               ),
                             ),
-                            IconButton(
+                            GlassActionIcon(
                               tooltip: '取消选择',
                               onPressed: () => selected.value = {},
                               icon: const Icon(LucideIcons.x),
@@ -355,11 +364,12 @@ class FilesPage extends HookWidget {
                       child: RefreshIndicator(
                         onRefresh: () async => refresh(),
                         child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(
+                          padding: EdgeInsets.fromLTRB(
                             DesignTokens.spacingMd,
                             0,
                             DesignTokens.spacingMd,
-                            DesignTokens.spacingMd,
+                            DesignTokens.spacingMd +
+                                PageChromePadding.of(context).bottom,
                           ),
                           itemCount: entries.length,
                           separatorBuilder: (_, _) => const SizedBox.shrink(),
@@ -378,6 +388,53 @@ class FilesPage extends HookWidget {
                               selected.value = next;
                             }
 
+                            Future<void> handleFileAction(String action) async {
+                              switch (action) {
+                                case 'select':
+                                  toggle();
+                                case 'rename':
+                                  final name = await askText(
+                                    context,
+                                    title: '重命名',
+                                    initial: value(entry, 'name'),
+                                  );
+                                  if (name != null && context.mounted) {
+                                    if (name.contains('/') ||
+                                        name == '.' ||
+                                        name == '..') {
+                                      feedback(context, '名称不能包含路径分隔符');
+                                      return;
+                                    }
+                                    await mutate('files.rename', {
+                                      'path': entryPath,
+                                      'name': name,
+                                    });
+                                  }
+                                case 'delete':
+                                  if (await confirm(
+                                        context,
+                                        '删除“${value(entry, 'name')}”？',
+                                        '将从 ${deviceName(device)} 删除此${folder ? '文件夹及其内容' : '文件'}，无法在本应用撤销。',
+                                        action: '删除',
+                                        danger: true,
+                                      ) &&
+                                      context.mounted) {
+                                    await mutate('files.delete', {
+                                      'paths': [entryPath],
+                                    });
+                                  }
+                                case 'download':
+                                  if (context.mounted) {
+                                    await retrieveFile(
+                                      context,
+                                      controller,
+                                      device,
+                                      entry,
+                                    );
+                                  }
+                              }
+                            }
+
                             return GroupedItem(
                               index: i,
                               count: entries.length,
@@ -394,14 +451,12 @@ class FilesPage extends HookWidget {
                                                 ? (_) => toggle()
                                                 : null,
                                           )
-                                        : FeatureIcon(
-                                            folder
+                                        : ListIconBadge(
+                                            icon: folder
                                                 ? LucideIcons.folder
                                                 : LucideIcons.file,
-                                            color: ConnectTokens.amber,
-
-                                            size: DesignTokens
-                                                .componentIconButtonSize,
+                                            backgroundColor:
+                                                DesignTokens.colorListIconAmber,
                                           ),
                                     title: FileRowTitle(
                                       tooltipTriggerMode:
@@ -429,79 +484,38 @@ class FilesPage extends HookWidget {
                                               ).push<void>(context);
                                             }
                                           },
-                                    trailing: PopupMenuButton<String>(
+                                    trailing: GlassMenuButton(
+                                      icon: const Icon(
+                                        LucideIcons.ellipsisVertical,
+                                      ),
                                       tooltip: '文件操作',
                                       enabled: openable || manageable,
-                                      onSelected: (action) async {
-                                        switch (action) {
-                                          case 'select':
-                                            toggle();
-                                          case 'rename':
-                                            final name = await askText(
-                                              context,
-                                              title: '重命名',
-                                              initial: value(entry, 'name'),
-                                            );
-                                            if (name != null &&
-                                                context.mounted) {
-                                              if (name.contains('/') ||
-                                                  name == '.' ||
-                                                  name == '..') {
-                                                feedback(
-                                                  context,
-                                                  '名称不能包含路径分隔符',
-                                                );
-                                                return;
-                                              }
-                                              await mutate('files.rename', {
-                                                'path': entryPath,
-                                                'name': name,
-                                              });
-                                            }
-                                          case 'delete':
-                                            if (await confirm(
-                                                  context,
-                                                  '删除“${value(entry, 'name')}”？',
-                                                  '将从 ${deviceName(device)} 删除此${folder ? '文件夹及其内容' : '文件'}，无法在本应用撤销。',
-                                                  action: '删除',
-                                                  danger: true,
-                                                ) &&
-                                                context.mounted) {
-                                              await mutate('files.delete', {
-                                                'paths': [entryPath],
-                                              });
-                                            }
-                                          case 'download':
-                                            if (context.mounted) {
-                                              await retrieveFile(
-                                                context,
-                                                controller,
-                                                device,
-                                                entry,
-                                              );
-                                            }
-                                        }
-                                      },
-                                      itemBuilder: (_) => [
-                                        PopupMenuItem(
-                                          enabled: manageable,
-                                          value: 'select',
-                                          child: Text('选择'),
+                                      actions: [
+                                        GlassMenuAction(
+                                          label: '选择',
+                                          onPressed: manageable
+                                              ? () => handleFileAction('select')
+                                              : null,
                                         ),
-                                        PopupMenuItem(
-                                          enabled: manageable,
-                                          value: 'rename',
-                                          child: Text('重命名'),
+                                        GlassMenuAction(
+                                          label: '重命名',
+                                          onPressed: manageable
+                                              ? () => handleFileAction('rename')
+                                              : null,
                                         ),
-                                        PopupMenuItem(
-                                          enabled: openable,
-                                          value: 'download',
-                                          child: Text('取回本机'),
+                                        GlassMenuAction(
+                                          label: '取回本机',
+                                          onPressed: openable
+                                              ? () =>
+                                                    handleFileAction('download')
+                                              : null,
                                         ),
-                                        PopupMenuItem(
-                                          enabled: manageable,
-                                          value: 'delete',
-                                          child: Text('删除'),
+                                        GlassMenuAction(
+                                          label: '删除',
+                                          destructive: true,
+                                          onPressed: manageable
+                                              ? () => handleFileAction('delete')
+                                              : null,
                                         ),
                                       ],
                                     ),
@@ -528,7 +542,7 @@ class FilesPage extends HookWidget {
               },
             ),
           ),
-        ],
+        ),
       ),
     );
   }

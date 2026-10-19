@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -20,22 +21,28 @@ class AppsPage extends HookWidget {
     useListenable(query);
     return PageFrame(
       title: '手机应用',
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            child: TextField(
-              controller: query,
-              decoration: const InputDecoration(
-                hintText: '搜索应用',
-                prefixIcon: Icon(
-                  LucideIcons.search,
-                  size: DesignTokens.componentIconActionSize,
+      child: Builder(
+        builder: (context) => NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            const PageChromeSliver(),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                child: TextField(
+                  controller: query,
+                  decoration: const InputDecoration(
+                    hintText: '搜索应用',
+                    prefixIcon: Icon(
+                      LucideIcons.search,
+                      size: DesignTokens.componentIconActionSize,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
+          ],
+          body: PageChromePadding.removeTop(
+            context: context,
             child: CommandView(
               controller: controller,
               command: 'apps.list',
@@ -55,24 +62,27 @@ class AppsPage extends HookWidget {
                     )
                     .toList();
                 if (apps.isEmpty) {
-                  return EmptyContent(
-                    icon: LucideIcons.layoutGrid,
-                    title: query.text.isEmpty ? '没有可显示的应用' : '未找到应用',
-                    message: query.text.isEmpty
-                        ? '连接设备后重新获取应用列表。'
-                        : '试试应用名称或包名。',
-                    action: TextButton(
-                      onPressed: query.text.isEmpty ? refresh : query.clear,
-                      child: const Text('重新检查'),
+                  return PageChromeBody(
+                    child: EmptyContent(
+                      icon: LucideIcons.layoutGrid,
+                      title: query.text.isEmpty ? '没有可显示的应用' : '未找到应用',
+                      message: query.text.isEmpty
+                          ? '连接设备后重新获取应用列表。'
+                          : '试试应用名称或包名。',
+                      action: TextButton(
+                        onPressed: query.text.isEmpty ? refresh : query.clear,
+                        child: const Text('重新检查'),
+                      ),
                     ),
                   );
                 }
                 return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(
+                  padding: EdgeInsets.fromLTRB(
                     DesignTokens.spacingMd,
                     0,
                     DesignTokens.spacingMd,
-                    DesignTokens.spacingMd,
+                    DesignTokens.spacingMd +
+                        PageChromePadding.of(context).bottom,
                   ),
                   itemCount: apps.length,
                   itemBuilder: (context, i) {
@@ -86,12 +96,11 @@ class AppsPage extends HookWidget {
 
                         onTap: () async {
                           final api = int.tryParse(value(device, 'apiLevel'));
-                          final mode = await showModalBottomSheet<String>(
+                          final mode = await showGlassModalSheet<String>(
                             context: context,
-                            backgroundColor: Colors.transparent,
                             isScrollControlled: true,
                             builder: (context) => SafeArea(
-                              child: Glass(
+                              child: Padding(
                                 padding: const EdgeInsets.all(
                                   DesignTokens.spacingMd,
                                 ),
@@ -165,7 +174,7 @@ class AppsPage extends HookWidget {
               },
             ),
           ),
-        ],
+        ),
       ),
     );
   }

@@ -7,7 +7,16 @@ import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// A recovery status inside the page flow, leaving content and cleanup usable.
 class RecoveryStatus extends ConsumerStatefulWidget {
-  const RecoveryStatus({super.key});
+  const RecoveryStatus({
+    super.key,
+    this.padding = const EdgeInsets.fromLTRB(
+      DesignTokens.spacingMd,
+      DesignTokens.spacingSm,
+      DesignTokens.spacingMd,
+      0,
+    ),
+  });
+  final EdgeInsetsGeometry padding;
 
   @override
   ConsumerState<RecoveryStatus> createState() => _RecoveryStatusState();
@@ -41,12 +50,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
     final failed = error != null;
     final reason = error?.trim();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        DesignTokens.spacingMd,
-        DesignTokens.spacingSm,
-        DesignTokens.spacingMd,
-        0,
-      ),
+      padding: widget.padding,
       child: ContentPanel(
         padding: const EdgeInsets.symmetric(
           horizontal: DesignTokens.spacingMd,

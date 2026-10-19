@@ -8,6 +8,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 void main() {
+  test('clear uses direct tint while regular preserves adaptive luminance', () {
+    for (final brightness in Brightness.values) {
+      expect(
+        Glass.optics(
+          brightness: brightness,
+          variant: GlassVariant.clear,
+        ).bodyMode,
+        liquid.GlassBodyMode.clear,
+      );
+      expect(
+        Glass.optics(
+          brightness: brightness,
+          variant: GlassVariant.regular,
+        ).bodyMode,
+        liquid.GlassBodyMode.adaptive,
+      );
+    }
+  });
+
   testWidgets('selection fields keep labels inside and grow for large text', (
     tester,
   ) async {
@@ -646,4 +665,243 @@ void main() {
     expect(tester.getRect(button), initial);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('navigation retargets continuously and reducing motion snaps', (
+    tester,
+  ) async {
+    var selected = 0;
+    var reduced = false;
+    late StateSetter update;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ConnectTokens.theme(Brightness.light),
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            update = setState;
+            return MediaQuery(
+              data: MediaQueryData(disableAnimations: reduced),
+              child: Center(
+                child: SizedBox(
+                  width: 280,
+                  child: GlassTabBar(
+                    destinations: const [
+                      GlassDestination(icon: Icons.devices, label: '设备'),
+                      GlassDestination(icon: Icons.swap_vert, label: '传输'),
+                      GlassDestination(icon: Icons.settings, label: '设置'),
+                    ],
+                    selectedIndex: selected,
+                    onSelected: (index) => setState(() => selected = index),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    final indicator = find.byKey(const ValueKey('glass-navigation-selection'));
+    final initial = tester.getRect(indicator);
+    await tester.tap(find.text('设置'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 64));
+    final moving = tester.getRect(indicator);
+    expect(moving.left, greaterThan(initial.left));
+    expect(
+      moving.right,
+      lessThan(tester.getRect(find.byType(GlassTabBar)).right),
+    );
+    await tester.tap(find.text('传输'));
+    await tester.pump();
+    expect(tester.getRect(indicator).left, closeTo(moving.left, .01));
+    update(() => reduced = true);
+    await tester.pump();
+    final destination = tester.getRect(
+      find.ancestor(
+        of: find.text('传输'),
+        matching: find.byType(CupertinoButton),
+      ),
+    );
+    expect(tester.getRect(indicator).left, closeTo(destination.left, .01));
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.getRect(indicator).left, closeTo(destination.left, .01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'pointer feedback clears on cancellation without owning gestures',
+    (tester) async {
+      var taps = 0;
+      var pans = 0;
+      var enabled = true;
+      late StateSetter update;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return Center(
+                child: GlassPressFeedback(
+                  enabled: enabled,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => taps++,
+                    onPanUpdate: (_) => pans++,
+                    child: const SizedBox(width: 52, height: 52),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      final target = find.byType(GlassPressFeedback);
+      Color? overlay() =>
+          (tester
+                      .widget<DecoratedBox>(
+                        find.descendant(
+                          of: target,
+                          matching: find.byType(DecoratedBox),
+                        ),
+                      )
+                      .decoration
+                  as ShapeDecoration)
+              .color;
+      final initial = overlay();
+      final cancelled = await tester.startGesture(tester.getCenter(target));
+      await tester.pump();
+      expect(overlay(), isNot(initial));
+      expect(overlay()!.a, greaterThan(0));
+      await cancelled.cancel();
+      await tester.pump();
+      expect(overlay(), initial);
+      expect(taps, 0);
+      final drag = await tester.startGesture(tester.getCenter(target));
+      await drag.moveBy(const Offset(60, 0));
+      await tester.pump();
+      await drag.moveBy(const Offset(10, 0));
+      await drag.up();
+      await tester.pump();
+      expect(pans, greaterThan(0));
+      expect(taps, 0);
+      expect(overlay(), initial);
+      final interrupted = await tester.startGesture(tester.getCenter(target));
+      await tester.pump();
+      update(() => enabled = false);
+      await tester.pump();
+      expect(overlay(), initial);
+      await interrupted.cancel();
+      await tester.pump();
+      expect(tester.getSize(target), const Size(52, 52));
+    },
+  );
+
+  testWidgets(
+    'menu preserves actions and dismissal in the non-shader renderer',
+    (tester) async {
+      var activations = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          builder: (context, child) =>
+              TooltipVisibility(visible: false, child: child!),
+          home: Scaffold(
+            body: Center(
+              child: GlassMenuButton(
+                icon: const Icon(Icons.more_horiz),
+                tooltip: '更多',
+                actions: [
+                  GlassMenuAction(
+                    label: '设备详情',
+                    onPressed: () => activations++,
+                  ),
+                  const GlassMenuAction(label: '不可用', onPressed: null),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.getSize(find.byType(GlassMenuButton)), const Size(44, 44));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(GlassMenuButton),
+          matching: find.byType(IconButton),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('不可用'));
+      await tester.pumpAndSettle();
+      expect(activations, 0);
+      expect(find.text('设备详情'), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect(activations, 0);
+      expect(find.text('设备详情'), findsNothing);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(GlassMenuButton),
+          matching: find.byType(IconButton),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('设备详情'));
+      await tester.pumpAndSettle();
+      expect(activations, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'reduced-motion menu opens immediately and keeps actions reachable',
+    (tester) async {
+      var activations = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              disableAnimations: true,
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: TooltipVisibility(visible: false, child: child!),
+          ),
+          home: Scaffold(
+            body: Center(
+              child: GlassMenuButton(
+                icon: const Icon(Icons.more_horiz),
+                tooltip: '更多',
+                actions: [
+                  GlassMenuAction(
+                    label: '设备详情',
+                    onPressed: () => activations++,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      final trigger = find.descendant(
+        of: find.byType(GlassMenuButton),
+        matching: find.byType(IconButton),
+      );
+      await tester.tap(trigger);
+      await tester.pump();
+      expect(find.text('设备详情'), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(MenuItemButton)).height,
+        greaterThanOrEqualTo(44),
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pump();
+      expect(find.text('设备详情'), findsNothing);
+      expect(activations, 0);
+      await tester.tap(trigger);
+      await tester.pump();
+      await tester.tap(find.text('设备详情'));
+      await tester.pump();
+      expect(activations, 1);
+      expect(find.text('设备详情'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

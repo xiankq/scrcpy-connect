@@ -20,12 +20,21 @@ class ActionRow extends StatelessWidget {
   final Color? color;
   final Widget? trailing;
   final EdgeInsetsGeometry contentPadding;
-  Color _iconColor(BuildContext context) {
-    if (color != null) return ConnectTokens.accent(context, color!);
-    if (icon == LucideIcons.appWindow) {
-      return Theme.of(context).colorScheme.onSurface;
+  Color get _badgeColor {
+    if (color == ConnectTokens.danger ||
+        color == ConnectTokens.coral ||
+        color == DesignTokens.colorListIconCoral) {
+      return DesignTokens.colorListIconCoral;
     }
-    final accent = switch (icon) {
+    if (color == ConnectTokens.amber ||
+        color == DesignTokens.colorListIconAmber) {
+      return DesignTokens.colorListIconAmber;
+    }
+    if (color == ConnectTokens.mint ||
+        color == DesignTokens.colorListIconMint) {
+      return DesignTokens.colorListIconMint;
+    }
+    return switch (icon) {
       LucideIcons.folder ||
       LucideIcons.folderOpen ||
       LucideIcons.file ||
@@ -34,22 +43,18 @@ class ActionRow extends StatelessWidget {
       LucideIcons.upload ||
       LucideIcons.usb ||
       LucideIcons.fileInput ||
-      LucideIcons.fileOutput => ConnectTokens.amber,
-      LucideIcons.phone || LucideIcons.phoneIncoming => ConnectTokens.mint,
-      _ => ConnectTokens.blue,
+      LucideIcons.fileOutput => DesignTokens.colorListIconAmber,
+      LucideIcons.phone ||
+      LucideIcons.phoneIncoming => DesignTokens.colorListIconMint,
+      _ => DesignTokens.colorListIconBlue,
     };
-    return ConnectTokens.accent(context, accent);
   }
 
   @override
   Widget build(BuildContext context) => ListTile(
     contentPadding: contentPadding,
-    minLeadingWidth: DesignTokens.componentIconSize,
-    leading: Icon(
-      icon,
-      color: _iconColor(context),
-      size: DesignTokens.componentIconSize,
-    ),
+    minLeadingWidth: DesignTokens.componentListIconSize,
+    leading: ListIconBadge(icon: icon, backgroundColor: _badgeColor),
     title: Text(title, style: Theme.of(context).textTheme.bodyLarge),
     trailing:
         trailing ??

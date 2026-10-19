@@ -30,7 +30,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
       title: deviceName(current),
 
       actions: [
-        IconButton(
+        GlassActionIcon(
           tooltip: '设备详情',
           onPressed: () =>
               DeviceDetailsRoute(deviceId: value(current, 'id'))

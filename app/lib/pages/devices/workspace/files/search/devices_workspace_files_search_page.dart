@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/file_row_title.dart';
 import 'package:design_system/design_system.dart';
@@ -70,6 +71,7 @@ class FileSearchPage extends HookWidget {
       title: '搜索文件',
       child: CustomScrollView(
         slivers: [
+          const PageChromeSliver(),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -288,7 +290,10 @@ class FileSearchPage extends HookWidget {
                           ExpansionTile(
                             key: ValueKey('$status:${issues.length}'),
                             tilePadding: EdgeInsets.zero,
-                            leading: const Icon(LucideIcons.info),
+                            leading: const ListIconBadge(
+                              icon: LucideIcons.info,
+                              backgroundColor: DesignTokens.colorListIconBlue,
+                            ),
                             trailing: const Icon(
                               LucideIcons.chevronDown,
                               size: DesignTokens.componentIconActionSize,
@@ -321,11 +326,11 @@ class FileSearchPage extends HookWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         ListTile(
-                          leading: FeatureIcon(
-                            folder ? LucideIcons.folder : LucideIcons.file,
-                            color: ConnectTokens.amber,
-
-                            size: DesignTokens.componentIconButtonSize,
+                          leading: ListIconBadge(
+                            icon: folder
+                                ? LucideIcons.folder
+                                : LucideIcons.file,
+                            backgroundColor: DesignTokens.colorListIconAmber,
                           ),
                           title: FileRowTitle(
                             name: value(file, 'name'),
@@ -365,6 +370,7 @@ class FileSearchPage extends HookWidget {
                 },
               ),
             ),
+          const PageChromeBottomSliver(),
         ],
       ),
     );

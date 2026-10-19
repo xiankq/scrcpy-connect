@@ -91,15 +91,17 @@ class DeviceCard extends HookConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: DesignTokens.spacingXs),
-                IconButton(
-                  constraints: const BoxConstraints.tightFor(
-                    width: DesignTokens.componentIconButtonSize,
-                    height: DesignTokens.componentIconButtonSize,
-                  ),
-                  onPressed: () =>
-                      DeviceDetailsRoute(deviceId: value(device, 'id'))
-                          .push<void>(context),
+                GlassMenuButton(
                   tooltip: '${deviceName(device)}详情',
+                  actions: [
+                    GlassMenuAction(
+                      label: '设备详情',
+                      icon: const Icon(LucideIcons.info),
+                      onPressed: () =>
+                          DeviceDetailsRoute(deviceId: value(device, 'id'))
+                              .push<void>(context),
+                    ),
+                  ],
                   icon: const Icon(
                     LucideIcons.ellipsis,
                     size: DesignTokens.componentIconActionSize,

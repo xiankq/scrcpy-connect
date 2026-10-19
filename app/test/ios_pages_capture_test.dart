@@ -534,16 +534,47 @@ Future<void> waitForPageImages(WidgetTester tester) async {
   await tester.pump();
 }
 
+/// Resolve nested span styles as painted, including foreground Paint overrides.
+List<Map<String, Object?>> captureTextStyleRuns(InlineSpan? text) {
+  final runs = <Map<String, Object?>>[];
+  void visit(InlineSpan value, TextStyle inherited) {
+    final style = inherited.merge(value.style);
+    if (value is! TextSpan) return;
+    if (value.text case final String content) {
+      final color =
+          style.foreground?.color ?? style.color ?? const Color(0xff000000);
+      final argb = color.toARGB32();
+      runs.add({
+        'text': content,
+        'fontFamily': style.fontFamily,
+        'fontSize': style.fontSize,
+        'fontWeight': style.fontWeight?.value,
+        'height': style.height,
+        'letterSpacing': style.letterSpacing,
+        'colorArgb': argb,
+        'colorHex': '#${argb.toRadixString(16).padLeft(8, '0').toUpperCase()}',
+        if (style.foreground?.shader != null) 'foregroundHasShader': true,
+      });
+    }
+    for (final child in value.children ?? const <InlineSpan>[]) {
+      visit(child, style);
+    }
+  }
+
+  if (text != null) visit(text, const TextStyle());
+  return runs;
+}
+
 /// Read laid-out widgets without wrapping them or changing their constraints.
 /// Bounds are source-image coordinates, before the parity tool's declared crop.
 Map<String, Object?> captureLayout(GlobalKey boundary) {
   final components = <Map<String, Object?>>[];
   final paragraphs = <Map<String, Object?>>[];
+  final editableTexts = <Map<String, Object?>>[];
   final root = boundary.currentContext! as Element;
   final viewport = Offset.zero & (root.findRenderObject()! as RenderBox).size;
   const tracked = {
     'PageFrame',
-    'RootPageHeader',
     'GroupedListView',
     'GroupedItem',
     'ActionRow',
@@ -552,6 +583,7 @@ Map<String, Object?> captureLayout(GlobalKey boundary) {
     'StateNote',
     'ContentPanel',
     'FeatureIcon',
+    'ListIconBadge',
     'Glass',
     'GlassTabBar',
     'GlassIconButton',
@@ -606,6 +638,9 @@ Map<String, Object?> captureLayout(GlobalKey boundary) {
         'type': type,
         'parentComponent': owner,
         if (widget.key != null) 'key': widget.key.toString(),
+        if (widget is ListIconBadge)
+          'backgroundColorHex':
+              '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}',
         ...geometry(box),
       });
       owner = id;
@@ -616,27 +651,6 @@ Map<String, Object?> captureLayout(GlobalKey boundary) {
         render.attached &&
         render.hasSize) {
       final text = render.text.toPlainText();
-      final runs = <Map<String, Object?>>[];
-      void span(InlineSpan value, TextStyle inherited) {
-        final style = inherited.merge(value.style);
-        if (value is TextSpan) {
-          if (value.text case final String content) {
-            runs.add({
-              'text': content,
-              'fontFamily': style.fontFamily,
-              'fontSize': style.fontSize,
-              'fontWeight': style.fontWeight?.value,
-              'height': style.height,
-              'letterSpacing': style.letterSpacing,
-            });
-          }
-          for (final child in value.children ?? const <InlineSpan>[]) {
-            span(child, style);
-          }
-        }
-      }
-
-      span(render.text, const TextStyle());
       paragraphs.add({
         'text': text,
         'parentComponent': owner,
@@ -651,7 +665,32 @@ Map<String, Object?> captureLayout(GlobalKey boundary) {
           ))
             rect(line.toRect()),
         ],
-        'styleRuns': runs,
+        'styleRuns': captureTextStyleRuns(render.text),
+      });
+    }
+    if (element is RenderObjectElement &&
+        render is RenderEditable &&
+        render.attached &&
+        render.hasSize) {
+      final editable = element.findAncestorWidgetOfExactType<EditableText>();
+      RenderBox? field;
+      element.visitAncestorElements((ancestor) {
+        if (ancestor.widget is! TextField) return true;
+        final box = ancestor.findRenderObject();
+        if (box is RenderBox && box.attached && box.hasSize) field = box;
+        return false;
+      });
+      editableTexts.add({
+        'text': render.text?.toPlainText() ?? '',
+        'value': editable?.controller.text,
+        'readOnly': render.readOnly,
+        'obscureText': render.obscureText,
+        'parentComponent': owner,
+        ...geometry(render),
+        if (field != null)
+          'fieldGlobalBounds': geometry(field!)['globalBounds'],
+        'textScaleAt14': render.textScaler.scale(14) / 14,
+        'styleRuns': captureTextStyleRuns(render.text),
       });
     }
     element.visitChildren((child) => visit(child, owner));
@@ -667,31 +706,104 @@ Map<String, Object?> captureLayout(GlobalKey boundary) {
         'scroll clips; intersectsViewport is not a paint-visibility assertion.',
     'components': components,
     'paragraphs': paragraphs,
+    'editableTexts': editableTexts,
   };
+}
+
+Future<File> loadCaptureFonts() async {
+  for (final font in [
+    (
+      'packages/lucide_icons_flutter/Lucide',
+      'packages/lucide_icons_flutter/assets/lucide.ttf',
+    ),
+    ('MaterialIcons', 'fonts/MaterialIcons-Regular.otf'),
+  ]) {
+    await (FontLoader(font.$1)..addFont(rootBundle.load(font.$2))).load();
+  }
+  final cjk = File('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc');
+  if (cjk.existsSync()) {
+    for (final family in ['Roboto', 'ConnectCaptureCJK', 'Ahem']) {
+      await (FontLoader(
+            family,
+          )..addFont(Future.value(ByteData.sublistView(cjk.readAsBytesSync()))))
+          .load();
+    }
+  }
+  return cjk;
+}
+
+Future<void> captureHomeLandscape(
+  WidgetTester tester,
+  Directory directory,
+  AppController controller,
+  Brightness brightness,
+) async {
+  final boundary = GlobalKey();
+  final router = createAppRouter();
+  tester.view.physicalSize = const Size(620, 280);
+  await tester.pumpWidget(
+    RepaintBoundary(
+      key: boundary,
+      child: TestProviderScope(
+        controller: controller,
+        child: MaterialApp.router(
+          routerConfig: router,
+          theme: captureTheme(brightness),
+          debugShowCheckedModeBanner: false,
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull);
+  await tester.runAsync(() async {
+    final image =
+        await (boundary.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary)
+            .toImage();
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    await File(
+      '${directory.path}/home-landscape-large-text-${brightness.name}.png',
+    ).writeAsBytes(data!.buffer.asUint8List());
+    image.dispose();
+  });
+  await tester.pumpWidget(const SizedBox());
+  router.dispose();
 }
 
 void main() {
   final output = Platform.environment['CONNECT_CAPTURE_DIR'];
   if (output == null) return;
+  testWidgets('capture home landscape with native sidebar font', (
+    tester,
+  ) async {
+    await loadCaptureFonts();
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 54, bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(top: 54, bottom: 34);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.view.resetPadding();
+      tester.view.resetViewPadding();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+    final directory = Directory(output);
+    await tester.runAsync(() => directory.create(recursive: true));
+    for (final brightness in Brightness.values) {
+      final controller = createTestController(fixtureRequest);
+      await controller.initialize();
+      controller.settings = {
+        ...controller.settings,
+        'appearance': brightness.name,
+      };
+      await captureHomeLandscape(tester, directory, controller, brightness);
+      controller.dispose();
+    }
+  });
   testWidgets('capture every product page in light and dark', (tester) async {
-    for (final font in [
-      (
-        'packages/lucide_icons_flutter/Lucide',
-        'packages/lucide_icons_flutter/assets/lucide.ttf',
-      ),
-      ('MaterialIcons', 'fonts/MaterialIcons-Regular.otf'),
-    ]) {
-      await (FontLoader(font.$1)..addFont(rootBundle.load(font.$2))).load();
-    }
-    final cjk = File('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc');
-    if (cjk.existsSync()) {
-      for (final family in ['Roboto', 'ConnectCaptureCJK', 'Ahem']) {
-        await (FontLoader(family)..addFont(
-              Future.value(ByteData.sublistView(cjk.readAsBytesSync())),
-            ))
-            .load();
-      }
-    }
+    final cjk = await loadCaptureFonts();
     tester.view.physicalSize = const Size(402, 874);
     tester.view.devicePixelRatio = 1;
     // Match the reference phone viewport. System status text and the home
@@ -1033,6 +1145,10 @@ void main() {
         ('narrow', const Size(280, 620)),
         ('landscape', const Size(620, 280)),
       ]) {
+        if (layout.$1 == 'landscape') {
+          await captureHomeLandscape(tester, directory, controller, brightness);
+          continue;
+        }
         tester.view.physicalSize = layout.$2;
         await tester.pumpAndSettle();
         expect(

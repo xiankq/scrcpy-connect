@@ -1,4 +1,5 @@
-import 'package:scrcpy_connect/widgets/root_page_header.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
+import 'package:scrcpy_connect/widgets/recovery_status.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/transfers/index/widgets/transfer_batch_panel.dart';
@@ -6,7 +7,6 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/transfer_state.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
-import 'package:scrcpy_connect/widgets/recovery_status.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import 'package:flutter/material.dart';
@@ -37,25 +37,33 @@ class TransfersPage extends HookConsumerWidget {
         final tasks = objects(data['transfers']);
         final batches = objects(data['batches']);
         if (tasks.isEmpty && batches.isEmpty) {
-          return const EmptyContent(
-            icon: LucideIcons.arrowUpDown,
-            title: '暂无传输任务',
-            message: '在设备的文件管理或相册中取回内容，或发送本机文件。任务会在这里显示实际进度与结果。',
+          return const PageChromeBody(
+            child: EmptyContent(
+              icon: LucideIcons.arrowUpDown,
+              title: '暂无传输任务',
+              message: '在设备的文件管理或相册中取回内容，或发送本机文件。任务会在这里显示实际进度与结果。',
+            ),
           );
         }
         return RefreshIndicator(
           onRefresh: () async => refresh(),
           child: ListView.separated(
-            padding: EdgeInsets.fromLTRB(
-              DesignTokens.spacingMd,
-              DesignTokens.spacingSm,
-              DesignTokens.spacingMd,
-              embedded ? 120 : DesignTokens.spacingLg,
-            ),
-            itemCount: batches.length + tasks.length,
-            separatorBuilder: (_, _) =>
-                const SizedBox(height: DesignTokens.spacingMd),
-            itemBuilder: (context, i) {
+            padding:
+                EdgeInsets.fromLTRB(
+                  DesignTokens.spacingMd,
+                  DesignTokens.spacingSm,
+                  DesignTokens.spacingMd,
+                  DesignTokens.spacingLg,
+                ) +
+                PageChromePadding.of(context),
+            itemCount: batches.length + tasks.length + 1,
+            separatorBuilder: (_, index) =>
+                SizedBox(height: index == 0 ? 0 : DesignTokens.spacingMd),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return const RecoveryStatus(padding: EdgeInsets.zero);
+              }
+              final i = index - 1;
               if (i < batches.length) {
                 return TransferBatchPanel(
                   controller: controller,
@@ -146,44 +154,11 @@ class TransfersPage extends HookConsumerWidget {
         );
       },
     );
-    if (embedded) {
-      return SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: constraints.maxHeight / 2,
-                ),
-                child: const RecoveryStatus(),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  DesignTokens.spacingMd,
-                  DesignTokens.spacingZero,
-                  DesignTokens.spacingMd,
-                  DesignTokens.spacingXs,
-                ),
-                child: RootPageHeader(
-                  title: '传输',
-                  action: GlassIconButton(
-                    tooltip: '刷新任务',
-                    onPressed: () => revision.value++,
-                    icon: const Icon(LucideIcons.refreshCw),
-                  ),
-                ),
-              ),
-              Expanded(child: content),
-            ],
-          ),
-        ),
-      );
-    }
     return PageFrame(
-      title: '传输中心',
+      root: embedded,
+      title: embedded ? '传输' : '传输中心',
       actions: [
-        IconButton(
+        GlassActionIcon(
           tooltip: '刷新任务',
           onPressed: () => revision.value++,
           icon: const Icon(LucideIcons.refreshCw),

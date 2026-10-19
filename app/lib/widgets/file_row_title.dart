@@ -15,14 +15,14 @@ class FileRowTitle extends StatelessWidget {
   final String? size;
   final TooltipTriggerMode tooltipTriggerMode;
   @override
-  Widget build(BuildContext context) => Tooltip(
+  Widget build(BuildContext context) => GlassTooltip(
     message: path,
     triggerMode: tooltipTriggerMode,
     child: LayoutBuilder(
       builder: (context, constraints) {
-        final actualSize = size;
-        if (actualSize == null) return Text(name);
         final theme = Theme.of(context).textTheme;
+        final actualSize = size;
+        if (actualSize == null) return Text(name, style: theme.bodyLarge);
         final sizeStyle = theme.bodySmall;
         final painter = TextPainter(
           text: TextSpan(text: actualSize, style: sizeStyle),
@@ -39,7 +39,7 @@ class FileRowTitle extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(name),
+              Text(name, style: theme.bodyLarge),
               Align(
                 alignment: AlignmentDirectional.centerEnd,
                 child: sizeLabel,
@@ -49,7 +49,7 @@ class FileRowTitle extends StatelessWidget {
         }
         return Row(
           children: [
-            Expanded(child: Text(name)),
+            Expanded(child: Text(name, style: theme.bodyLarge)),
             const SizedBox(width: DesignTokens.spacingXs),
             sizeLabel,
           ],

@@ -13,7 +13,7 @@ const componentProperties = new Set([
   'backgroundColor', 'textColor', 'typography', 'rounded', 'padding', 'size',
   'height', 'width', 'maxWidth', 'borderColor', 'blur', 'shadowBlur', 'shadowOffset', 'angle',
   'refractionIndex', 'refractionWidth', 'opticalDepth', 'dispersion', 'magnification', 'saturation',
-  'gap', 'verticalPadding', 'opacity',
+  'gap', 'verticalPadding', 'opacity', 'scale', 'stretch',
   'specularThickness', 'specularSharpness', 'specularSpread', 'specularIntensity',
   'specularOppositeIntensity', 'glowThickness', 'glowAngle', 'glowSpread',
   'glowIntensity', 'glowOppositeIntensity',

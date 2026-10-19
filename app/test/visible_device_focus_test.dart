@@ -1,3 +1,5 @@
+import 'support/page_back.dart';
+
 import 'dart:async';
 
 import 'package:design_system/design_system.dart';
@@ -133,7 +135,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(backend.controller.snapshot().focusedDeviceId, 'b');
 
-        await tester.tap(find.byType(BackButton));
+        await tester.tap(pageBackButton(tester));
         await tester.pumpAndSettle();
         expect(
           tester.element(find.byType(DeviceWorkspacePage)),
@@ -195,7 +197,7 @@ void main() {
           });
           await tester.pumpAndSettle();
           expect(local, syncB ? 'visible B content' : 'a baseline');
-          await tester.tap(find.byType(BackButton));
+          await tester.tap(pageBackButton(tester));
           await tester.pumpAndSettle();
           expect(tester.element(find.byType(FilesPage)), same(filesA));
           expect(backend.controller.snapshot().focusedDeviceId, 'a');
@@ -246,7 +248,7 @@ void main() {
       oldLookup.complete(_devices[1]);
       await tester.pumpAndSettle();
       expect(backend.controller.snapshot().focusedDeviceId, 'c');
-      await tester.tap(find.byType(BackButton));
+      await tester.tap(pageBackButton(tester));
       await tester.pumpAndSettle();
       expect(backend.controller.snapshot().focusedDeviceId, 'a');
       expect(tester.takeException(), isNull);
@@ -310,7 +312,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(backend.controller.snapshot().focusedDeviceId, 'b');
         expect(backend.audioDevices, isEmpty);
-        await tester.tap(find.byType(BackButton));
+        await tester.tap(pageBackButton(tester));
         await tester.pumpAndSettle();
         expect(backend.controller.snapshot().focusedDeviceId, 'a');
         expect(backend.audioDevices, isEmpty);

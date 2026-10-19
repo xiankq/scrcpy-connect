@@ -9,6 +9,9 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'src/design_tokens.g.dart';
 
 export 'src/design_tokens.g.dart';
+export 'src/list_icon_badge.dart';
+
+part 'src/glass_overlays.dart';
 
 /// Semantic values mapped directly from designs/design.md.
 abstract final class ConnectTokens {
@@ -485,6 +488,8 @@ abstract final class GlassMaterial {
   static bool get isInitialized => _initialized;
   static const backend = 'liquid_glass_widgets';
   static const backendVersion = '1.13.0';
+  static const samplingBounds = 'surface-rect-with-optical-headroom';
+  static const composition = 'same-variant-single-sdf-layer';
 
   static Future<void> initialize() {
     if (!ImageFilter.isShaderFilterSupported) return Future<void>.value();
@@ -515,34 +520,104 @@ bool _opaqueGlass(BuildContext context, {bool solid = false}) =>
     GlassPreferences.reduced(context) ||
     MediaQuery.highContrastOf(context);
 
-/// A local set of glass shapes sharing one backdrop read and blend geometry.
-/// Keep overlapping routes and unrelated content outside this group.
+// An explicit rectangular compositor bound precedes the backend's shape and
+// blur passes. Preserve optical edge and press headroom without sampling an
+// unconstrained ancestor surface.
+Widget _boundGlassSampling(
+  Widget child, {
+  EdgeInsets expansion = const EdgeInsets.all(
+    DesignTokens.componentGlassRefractionWidth,
+  ),
+}) => ClipRect(
+  clipBehavior: Clip.hardEdge,
+  clipper: _GlassSamplingClipper(expansion),
+  child: child,
+);
+
+EdgeInsets _glassMotionExpansion(
+  Size size,
+  double maximumScale, {
+  bool centered = false,
+}) {
+  final fraction = (maximumScale - 1) / (centered ? 2 : 1);
+  return EdgeInsets.symmetric(
+    horizontal: math.max(
+      DesignTokens.componentGlassRefractionWidth,
+      size.width * fraction,
+    ),
+    vertical: math.max(
+      DesignTokens.componentGlassRefractionWidth,
+      size.height * fraction,
+    ),
+  );
+}
+
+class _GlassSamplingClipper extends CustomClipper<Rect> {
+  const _GlassSamplingClipper(this.expansion);
+  final EdgeInsets expansion;
+  @override
+  Rect getClip(Size size) => Rect.fromLTRB(
+    -expansion.left,
+    -expansion.top,
+    size.width + expansion.right,
+    size.height + expansion.bottom,
+  );
+  @override
+  bool shouldReclip(_GlassSamplingClipper oldClipper) =>
+      oldClipper.expansion != expansion;
+}
+
+/// One optical plane sharing a single SDF and refraction pass.
+/// Same-variant groups join the enclosing plane; different variants remain
+/// separate. Scope this to a current page, never a Navigator or retained tabs.
 class GlassSurfaceGroup extends StatelessWidget {
   const GlassSurfaceGroup({
     super.key,
     required this.child,
     this.variant = GlassVariant.regular,
-  });
+    this.clipExpansion = const EdgeInsets.all(
+      DesignTokens.componentGlassRefractionWidth,
+    ),
+  }) : _isolated = false;
+
+  /// An overlay owns a new sampling plane even when its OverlayPortal retains
+  /// the source toolbar's inherited group. It never joins that source plane.
+  const GlassSurfaceGroup.isolated({
+    super.key,
+    required this.child,
+    this.variant = GlassVariant.regular,
+    this.clipExpansion = const EdgeInsets.all(
+      DesignTokens.componentGlassRefractionWidth,
+    ),
+  }) : _isolated = true;
   final Widget child;
   final GlassVariant variant;
+  final EdgeInsets clipExpansion;
+  final bool _isolated;
 
   @override
   Widget build(BuildContext context) {
     if (_opaqueGlass(context) || !ImageFilter.isShaderFilterSupported) {
       return child;
     }
-    return liquid.GlassBackdropGroup(
-      child: liquid.AdaptiveLiquidGlassLayer(
-        settings: Glass.optics(
-          brightness: Theme.of(context).brightness,
-          variant: variant,
+    final enclosing = context.dependOnInheritedWidgetOfExactType<_GlassGroup>();
+    if (!_isolated && enclosing?.variant == variant) return child;
+    return _boundGlassSampling(
+      liquid.GlassBackdropGroup(
+        child: liquid.AdaptiveLiquidGlassLayer(
+          settings: Glass.optics(
+            brightness: Theme.of(context).brightness,
+            variant: variant,
+          ),
+          quality: liquid.GlassQuality.premium,
+          // Blend is a geometric distance, from the same optical edge token.
+          blendAmount: DesignTokens.componentGlassRefractionWidth,
+          clipBehavior: Clip.none,
+          clipExpansion: clipExpansion,
+          child: _GlassGroup(variant: variant, child: child),
         ),
-        quality: liquid.GlassQuality.premium,
-        // Blend is a geometric distance, from the same optical edge token.
-        blendAmount: DesignTokens.componentGlassRefractionWidth,
-        clipBehavior: Clip.none,
-        child: _GlassGroup(variant: variant, child: child),
       ),
+      expansion: clipExpansion,
     );
   }
 }
@@ -563,8 +638,12 @@ class Glass extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.solid = false,
     this.variant = GlassVariant.regular,
+    this.clipExpansion = const EdgeInsets.all(
+      DesignTokens.componentGlassRefractionWidth,
+    ),
   });
   final Widget child;
+  final EdgeInsets clipExpansion;
   final double radius;
   final EdgeInsetsGeometry padding;
   final bool solid;
@@ -587,6 +666,9 @@ class Glass extends StatelessWidget {
       blur: clear
           ? DesignTokens.componentGlassClearBlur
           : ConnectTokens.glassBlur,
+      bodyMode: clear
+          ? liquid.GlassBodyMode.clear
+          : liquid.GlassBodyMode.adaptive,
       glassColor: clear
           ? (dark
                 ? DesignTokens.colorGlassClearDark
@@ -620,7 +702,7 @@ class Glass extends StatelessWidget {
         child: Padding(padding: padding, child: child),
       ),
     );
-    final Widget surface;
+    Widget surface;
     if (opaque) {
       surface = ClipRRect(
         borderRadius: BorderRadius.circular(radius),
@@ -645,8 +727,10 @@ class Glass extends StatelessWidget {
               settings: style,
               quality: liquid.GlassQuality.premium,
               allowElevation: false,
+              clipExpansion: clipExpansion,
               child: content,
             );
+      surface = _boundGlassSampling(surface, expansion: clipExpansion);
     } else {
       // Widget tests and non-shader backends retain a declared frosted fallback.
       surface = ClipRRect(
@@ -714,16 +798,22 @@ class GlassIconButton extends StatelessWidget {
       ),
       child: icon,
     );
-    final Widget control;
+    Widget control;
     if (opaque || !ImageFilter.isShaderFilterSupported || !enabled) {
-      control = Glass(
-        radius: DesignTokens.roundedFull,
-        variant: variant,
-        child: CupertinoButton(
-          padding: const EdgeInsets.all(DesignTokens.spacingSm),
-          minimumSize: const Size.square(DesignTokens.componentIconButtonSize),
-          onPressed: onPressed,
-          child: content,
+      control = GlassPressFeedback(
+        enabled: enabled,
+        child: Glass(
+          radius: DesignTokens.roundedFull,
+          variant: variant,
+          child: CupertinoButton(
+            padding: const EdgeInsets.all(DesignTokens.spacingSm),
+            minimumSize: const Size.square(
+              DesignTokens.componentIconButtonSize,
+            ),
+            pressedOpacity: 1,
+            onPressed: onPressed,
+            child: content,
+          ),
         ),
       );
     } else {
@@ -745,22 +835,366 @@ class GlassIconButton extends StatelessWidget {
             variant: variant,
           ),
           quality: liquid.GlassQuality.premium,
-          useOwnLayer: true,
+          useOwnLayer:
+              context
+                  .dependOnInheritedWidgetOfExactType<_GlassGroup>()
+                  ?.variant !=
+              variant,
           // Keep press/lighting feedback while removing spatial motion.
-          stretch: reducedMotion ? 0 : 0.5,
-          interactionScale: reducedMotion ? 1 : null,
+          stretch: reducedMotion
+              ? 0
+              : DesignTokens.componentGlassInteractionStretch,
+          interactionScale: reducedMotion
+              ? 1
+              : DesignTokens.componentGlassInteractionScale,
           anchorStretch: !reducedMotion,
           label: tooltip,
           onTap: onPressed!,
           child: content,
         ),
       );
+      control = _boundGlassSampling(control);
     }
-    return Tooltip(
+    return GlassTooltip(
       message: tooltip,
       child: SizedBox.square(
         dimension: DesignTokens.componentIconButtonSize,
         child: control,
+      ),
+    );
+  }
+}
+
+/// Pointer feedback for controls whose gesture recognizer belongs to the app.
+/// This observes pointers only; taps, dragging and cancellation stay with child.
+class GlassPressFeedback extends StatefulWidget {
+  const GlassPressFeedback({
+    super.key,
+    required this.child,
+    this.radius = DesignTokens.roundedFull,
+    this.enabled = true,
+  });
+  final Widget child;
+  final double radius;
+  final bool enabled;
+
+  @override
+  State<GlassPressFeedback> createState() => _GlassPressFeedbackState();
+}
+
+class _GlassPressFeedbackState extends State<GlassPressFeedback>
+    with WidgetsBindingObserver {
+  final Map<int, Offset> _pointers = {};
+  Offset _touch = Offset.zero;
+  int _lifecycleEpoch = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(GlassPressFeedback oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled) _pointers.clear();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && _pointers.isNotEmpty) {
+      setState(() {
+        _pointers.clear();
+        _lifecycleEpoch++;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  void _track(PointerEvent event) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || box.size.isEmpty) return;
+    final position = box.globalToLocal(event.position);
+    setState(() {
+      _pointers[event.pointer] = position;
+      _touch = Offset(
+        (position.dx / box.size.width * 2 - 1).clamp(-1, 1),
+        (position.dy / box.size.height * 2 - 1).clamp(-1, 1),
+      );
+    });
+  }
+
+  void _release(PointerEvent event) {
+    if (_pointers.containsKey(event.pointer)) {
+      setState(() => _pointers.remove(event.pointer));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback =
+        _opaqueGlass(context) || !ImageFilter.isShaderFilterSupported;
+    final pressed = widget.enabled && _pointers.isNotEmpty;
+    final reducedMotion = liquid.GlassAccessibilityData.of(context)
+        .reduceMotion;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(widget.radius),
+    );
+    Widget content = widget.child;
+    if (fallback) {
+      content = DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: ShapeDecoration(
+          shape: shape,
+          color: pressed
+              ? Theme.of(context).colorScheme.onSurface.withValues(
+                  alpha: DesignTokens.componentControlFeedbackOpacity,
+                )
+              : DesignTokens.colorTransparent,
+        ),
+        child: content,
+      );
+    } else {
+      content = liquid.GlassGlow(
+        key: ValueKey(_lifecycleEpoch),
+        enabled: widget.enabled,
+        clipper: ShapeBorderClipper(shape: shape),
+        child: content,
+      );
+    }
+    // Only observe pointers. Child recognizers retain taps, drags and arena
+    // cancellation, and transforms never enlarge their layout or hit regions.
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: widget.enabled ? _track : null,
+      onPointerMove: widget.enabled
+          ? (event) {
+              if (_pointers.containsKey(event.pointer)) _track(event);
+            }
+          : null,
+      onPointerUp: _release,
+      onPointerCancel: _release,
+      child: liquid.SpringBuilder(
+        value: pressed && !reducedMotion ? 1 : 0,
+        spring: liquid.GlassSpring.interactive(),
+        builder: (context, press, child) => liquid.SpringBuilder(
+          value: pressed && !reducedMotion ? _touch.dx : 0,
+          spring: liquid.GlassSpring.interactive(),
+          builder: (context, x, child) => liquid.SpringBuilder(
+            value: pressed && !reducedMotion ? _touch.dy : 0,
+            spring: liquid.GlassSpring.interactive(),
+            builder: (context, y, child) {
+              final growth = reducedMotion
+                  ? 0.0
+                  : DesignTokens.componentGlassInteractionScale - 1;
+              final stretch =
+                  growth * DesignTokens.componentGlassInteractionStretch;
+              return Transform(
+                alignment: Alignment(
+                  -x.clamp(-1, 1).toDouble(),
+                  -y.clamp(-1, 1).toDouble(),
+                ),
+                transformHitTests: false,
+                transform: Matrix4.diagonal3Values(
+                  1 + growth * press + stretch * (x.abs() - y.abs()),
+                  1 + growth * press + stretch * (y.abs() - x.abs()),
+                  1,
+                ),
+                child: child,
+              );
+            },
+            child: child,
+          ),
+          child: child,
+        ),
+        child: content,
+      ),
+    );
+  }
+}
+
+/// One existing application action, without device or routing knowledge.
+@immutable
+class GlassMenuAction {
+  const GlassMenuAction({
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.destructive = false,
+  });
+  final String label;
+  final VoidCallback? onPressed;
+  final Widget? icon;
+  final bool destructive;
+}
+
+/// A 44-point menu source that morphs using the production glass backend.
+class GlassMenuButton extends StatelessWidget {
+  const GlassMenuButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.actions,
+    this.variant = GlassVariant.regular,
+    this.enabled = true,
+  }) : assert(actions.length > 0);
+  final Widget icon;
+  final String tooltip;
+  final List<GlassMenuAction> actions;
+  final GlassVariant variant;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final opaque = _opaqueGlass(context);
+    final reducedMotion = liquid.GlassAccessibilityData.of(context)
+        .reduceMotion;
+    final style = theme.textTheme.labelLarge!;
+    final itemHeight = math.max(
+      DesignTokens.componentIconButtonSize,
+      MediaQuery.textScalerOf(context).scale(style.fontSize!) * style.height! +
+          2 * DesignTokens.spacingSm,
+    );
+    if (!enabled) {
+      return GlassIconButton(
+        icon: icon,
+        tooltip: tooltip,
+        onPressed: null,
+        variant: variant,
+      );
+    }
+    if (reducedMotion || opaque || !ImageFilter.isShaderFilterSupported) {
+      // The backend's "instant" morph still uses a spatial spring. Reduced
+      // motion uses an unanimated framework lifecycle; fallback renderers use
+      // the same keyboard and dismissal semantics with an explicit solid face.
+      return MenuAnchor(
+        animated: !reducedMotion,
+        clipBehavior: Clip.none,
+        consumeOutsideTap: true,
+        style: const MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(
+            DesignTokens.colorTransparent,
+          ),
+          surfaceTintColor: WidgetStatePropertyAll(
+            DesignTokens.colorTransparent,
+          ),
+          elevation: WidgetStatePropertyAll(0),
+          padding: WidgetStatePropertyAll(EdgeInsets.zero),
+        ),
+        menuChildren: [
+          GlassSurfaceGroup.isolated(
+            variant: variant,
+            child: Glass(
+              solid: !ImageFilter.isShaderFilterSupported,
+              variant: variant,
+              radius: DesignTokens.roundedLg,
+              padding: const EdgeInsets.symmetric(
+                vertical: DesignTokens.spacingXs,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final action in actions)
+                    MenuItemButton(
+                      style: ButtonStyle(
+                        minimumSize: WidgetStatePropertyAll(
+                          Size(
+                            DesignTokens.componentIconButtonSize,
+                            itemHeight,
+                          ),
+                        ),
+                        textStyle: WidgetStatePropertyAll(style),
+                        foregroundColor: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.disabled)
+                              ? theme.disabledColor
+                              : action.destructive
+                              ? theme.colorScheme.error
+                              : theme.colorScheme.onSurface,
+                        ),
+                        iconSize: const WidgetStatePropertyAll(
+                          DesignTokens.componentIconSize,
+                        ),
+                      ),
+                      leadingIcon: action.icon,
+                      onPressed: action.onPressed,
+                      child: Text(action.label),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        builder: (context, controller, child) => GlassActionIcon(
+          style: IconButton.styleFrom(
+            minimumSize: const Size.square(
+              DesignTokens.componentIconButtonSize,
+            ),
+            maximumSize: const Size.square(
+              DesignTokens.componentIconButtonSize,
+            ),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: theme.colorScheme.onSurface,
+            iconSize: DesignTokens.componentIconSize,
+          ),
+          icon: icon,
+          tooltip: tooltip,
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+        ),
+      );
+    }
+    return liquid.GlassAccessibilityScope(
+      reduceMotion: reducedMotion,
+      child: liquid.GlassMenu(
+        autoAdjustToScreen: true,
+        menuPadding: const EdgeInsets.all(DesignTokens.spacingMd),
+        menuBorderRadius: DesignTokens.roundedLg,
+        itemBorderRadius: DesignTokens.roundedMd,
+        settings: Glass.optics(brightness: theme.brightness, variant: variant),
+        quality: liquid.GlassQuality.premium,
+        stretch: reducedMotion
+            ? 0
+            : DesignTokens.componentGlassInteractionStretch,
+        triggerBuilder: (context, toggle) => GlassActionIcon(
+          style: IconButton.styleFrom(
+            minimumSize: const Size.square(
+              DesignTokens.componentIconButtonSize,
+            ),
+            maximumSize: const Size.square(
+              DesignTokens.componentIconButtonSize,
+            ),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: theme.colorScheme.onSurface,
+            iconSize: DesignTokens.componentIconSize,
+          ),
+          icon: icon,
+          tooltip: tooltip,
+          onPressed: toggle,
+        ),
+        items: [
+          for (final action in actions)
+            liquid.GlassMenuItem(
+              title: action.label,
+              icon: action.icon,
+              onTap: action.onPressed ?? () {},
+              enabled: action.onPressed != null,
+              isDestructive: action.destructive,
+              height: itemHeight,
+              titleStyle: style,
+              iconColor: action.destructive
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.onSurface,
+              iconSize: DesignTokens.componentIconSize,
+              enablePressScale: !reducedMotion,
+            ),
+        ],
       ),
     );
   }
@@ -785,19 +1219,21 @@ class GlassToolbarGroup extends StatelessWidget {
     );
     return GlassSurfaceGroup(
       variant: variant,
-      child: Glass(
-        radius: DesignTokens.roundedFull,
-        variant: variant,
-        child: IconButtonTheme(
-          data: IconButtonThemeData(
-            style:
-                IconButtonTheme.of(context).style?.merge(compactStyle) ??
-                compactStyle,
-          ),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: children,
+      child: GlassPressFeedback(
+        child: Glass(
+          radius: DesignTokens.roundedFull,
+          variant: variant,
+          child: IconButtonTheme(
+            data: IconButtonThemeData(
+              style:
+                  IconButtonTheme.of(context).style?.merge(compactStyle) ??
+                  compactStyle,
+            ),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: children,
+            ),
           ),
         ),
       ),
@@ -828,73 +1264,120 @@ class GlassTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final opaque =
-        GlassPreferences.reduced(context) || MediaQuery.highContrastOf(context);
-    return Glass(
-      radius: DesignTokens.componentNavigationRounded,
-      padding: const EdgeInsets.all(DesignTokens.componentNavigationPadding),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          for (var index = 0; index < destinations.length; index++)
-            Expanded(
-              child: Semantics(
-                selected: index == selectedIndex,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: index == selectedIndex
-                        ? (opaque
-                              ? Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHigh
-                              : dark
-                              ? DesignTokens.colorGlassSelectedDark
-                              : DesignTokens.colorGlassSelected)
-                        : DesignTokens.colorTransparent,
-                    borderRadius: BorderRadius.circular(
-                      DesignTokens.roundedFull,
+    final opaque = _opaqueGlass(context);
+    final reducedMotion = liquid.GlassAccessibilityData.of(context)
+        .reduceMotion;
+    final selectionColor = opaque
+        ? Theme.of(context).colorScheme.surfaceContainerHigh
+        : dark
+        ? DesignTokens.colorGlassSelectedDark
+        : DesignTokens.colorGlassSelected;
+    return LayoutBuilder(
+      builder: (context, constraints) => GlassPressFeedback(
+        radius: DesignTokens.componentNavigationRounded,
+        child: Glass(
+          clipExpansion: _glassMotionExpansion(
+            Size(
+              constraints.maxWidth,
+              MediaQuery.textScalerOf(context)
+                  .scale(DesignTokens.componentNavigationHeight),
+            ),
+            1 +
+                (DesignTokens.componentGlassInteractionScale - 1) *
+                    (1 + DesignTokens.componentGlassInteractionStretch),
+          ),
+          radius: DesignTokens.componentNavigationRounded,
+          padding: const EdgeInsets.all(
+            DesignTokens.componentNavigationPadding,
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: liquid.SpringBuilder(
+                    // Replacing the spring also stops an in-flight transition when
+                    // the system preference changes without a selection change.
+                    key: ValueKey((reducedMotion, destinations.length)),
+                    value: selectedIndex.toDouble(),
+                    spring: liquid.GlassSpring.smooth(),
+                    builder: (context, value, child) => Align(
+                      alignment: AlignmentDirectional(
+                        -1 + 2 * value / (destinations.length - 1),
+                        0,
+                      ),
+                      child: FractionallySizedBox(
+                        widthFactor: 1 / destinations.length,
+                        heightFactor: 1,
+                        child: child,
+                      ),
+                    ),
+                    child: DecoratedBox(
+                      key: const ValueKey('glass-navigation-selection'),
+                      decoration: BoxDecoration(
+                        color: selectionColor,
+                        borderRadius: BorderRadius.circular(
+                          DesignTokens.roundedFull,
+                        ),
+                      ),
                     ),
                   ),
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.spacingXxs,
-                    ),
-                    minimumSize: const Size(
-                      DesignTokens.componentIconButtonSize,
-                      DesignTokens.componentNavigationHeight -
-                          2 * DesignTokens.componentNavigationPadding,
-                    ),
-                    onPressed: () => onSelected(index),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          destinations[index].icon,
-                          size: DesignTokens.componentIconSize,
-                          color: index == selectedIndex
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: DesignTokens.spacingMicro),
-                        Text(
-                          destinations[index].label,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.labelLarge!
-                              .copyWith(
+                ),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  for (var index = 0; index < destinations.length; index++)
+                    Expanded(
+                      child: Semantics(
+                        selected: index == selectedIndex,
+                        child: CupertinoButton(
+                          pressedOpacity: 1,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: DesignTokens.spacingXxs,
+                          ),
+                          minimumSize: const Size(
+                            DesignTokens.componentIconButtonSize,
+                            DesignTokens.componentNavigationHeight -
+                                2 * DesignTokens.componentNavigationPadding,
+                          ),
+                          onPressed: () => onSelected(index),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                destinations[index].icon,
+                                size: DesignTokens.componentIconSize,
                                 color: index == selectedIndex
                                     ? Theme.of(context).colorScheme.primary
                                     : Theme.of(context)
                                           .colorScheme
                                           .onSurfaceVariant,
                               ),
+                              const SizedBox(height: DesignTokens.spacingMicro),
+                              Text(
+                                destinations[index].label,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.labelLarge!
+                                    .copyWith(
+                                      color: index == selectedIndex
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                ],
               ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -17,7 +17,7 @@ class GalleryScopeSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final issues = objects(snapshot['issues']);
     return SafeArea(
-      child: Glass(
+      child: Padding(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
         child: SizedBox(
           height: MediaQuery.sizeOf(context).height * .8,

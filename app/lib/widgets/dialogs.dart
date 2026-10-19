@@ -3,9 +3,27 @@ import 'package:flutter/material.dart';
 import 'package:design_system/design_system.dart';
 
 void feedback(BuildContext context, String message) =>
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(glassSnackBar(message));
+
+/// A neutral foreground follows the glass appearance, rather than SnackBar's
+/// inverse default text colors. Build it in the receiving messenger's context.
+SnackBar glassSnackBar(String message) => SnackBar(
+  behavior: SnackBarBehavior.floating,
+  backgroundColor: Colors.transparent,
+  elevation: 0,
+  padding: EdgeInsets.zero,
+  content: Builder(
+    builder: (context) => Glass(
+      radius: DesignTokens.roundedLg,
+      padding: const EdgeInsets.all(DesignTokens.spacingMd),
+      child: Text(
+        message,
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+      ),
+    ),
+  ),
+);
 Future<Json?> perform(
   BuildContext context,
   AppController controller,
@@ -32,19 +50,31 @@ Future<String?> askText(
   int lines = 1,
 }) async {
   final controller = TextEditingController(text: initial);
-  final result = await showDialog<String>(
+  final result = await showGlassDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (context) => GlassAlertDialog(
       title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        minLines: lines,
-        maxLines: lines + 3,
-        decoration: InputDecoration(labelText: label),
-        onSubmitted: (s) {
-          if (s.trim().isNotEmpty) Navigator.pop(context, s.trim());
-        },
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (label != null) ...[
+            ExcludeSemantics(child: Text(label)),
+            const SizedBox(height: DesignTokens.spacingXs),
+          ],
+          Semantics(
+            label: label,
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: lines,
+              maxLines: lines + 3,
+              onSubmitted: (s) {
+                if (s.trim().isNotEmpty) Navigator.pop(context, s.trim());
+              },
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -74,9 +104,9 @@ Future<bool> confirm(
   String action = '确认',
   bool danger = false,
 }) async =>
-    await showDialog<bool>(
+    await showGlassDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => GlassAlertDialog(
         title: Text(title),
         content: Text(message),
         actions: [

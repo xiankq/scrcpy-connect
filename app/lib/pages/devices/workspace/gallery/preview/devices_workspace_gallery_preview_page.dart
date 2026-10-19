@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/file_actions.dart';
 import 'package:scrcpy_connect/services/media_cache_lease.dart';
 import 'package:scrcpy_connect/widgets/cached_file_image.dart';
+import 'package:scrcpy_connect/widgets/media_controls_protection.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 
 import 'dart:io';
@@ -178,68 +179,66 @@ class MediaPreviewPage extends HookWidget {
               ),
               Align(
                 alignment: Alignment.topCenter,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        DesignTokens.colorMediaShade,
-                        DesignTokens.colorTransparent,
-                      ],
-                    ),
-                  ),
+                child: MediaControlsProtection(
                   child: SafeArea(
+                    bottom: false,
                     child: Padding(
                       padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                      child: Row(
-                        children: [
-                          GlassIconButton(
-                            variant: GlassVariant.clear,
-                            tooltip: MaterialLocalizations.of(context)
-                                .backButtonTooltip,
-                            onPressed: () => closePage<void>(context),
-                            icon: const Icon(LucideIcons.chevronLeft),
-                          ),
-                          const SizedBox(width: DesignTokens.spacingXs),
-                          Expanded(
-                            child: Text(
-                              value(file, 'name'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium,
+                      child: GlassSurfaceGroup(
+                        variant: GlassVariant.clear,
+                        child: Row(
+                          children: [
+                            GlassIconButton(
+                              variant: GlassVariant.clear,
+                              tooltip: MaterialLocalizations.of(context)
+                                  .backButtonTooltip,
+                              onPressed: () => closePage<void>(context),
+                              icon: const Icon(LucideIcons.chevronLeft),
                             ),
-                          ),
-                          const SizedBox(width: DesignTokens.spacingXs),
-                          GlassToolbarGroup(
-                            variant: GlassVariant.clear,
-                            children: [
-                              IconButton(
-                                tooltip: '保存原文件',
-                                color: Theme.of(context).colorScheme.onSurface,
-                                onPressed: () => retrieveFile(
-                                  context,
-                                  controller,
-                                  device,
-                                  file,
-                                ),
-                                icon: const Icon(LucideIcons.download),
+                            const SizedBox(width: DesignTokens.spacingXs),
+                            Expanded(
+                              child: Text(
+                                value(file, 'name'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium,
                               ),
-                              IconButton(
-                                tooltip: '系统分享',
-                                color: Theme.of(context).colorScheme.onSurface,
-                                onPressed: () => retrieveFile(
-                                  context,
-                                  controller,
-                                  device,
-                                  file,
-                                  share: true,
+                            ),
+                            const SizedBox(width: DesignTokens.spacingXs),
+                            GlassToolbarGroup(
+                              variant: GlassVariant.clear,
+                              children: [
+                                GlassActionIcon(
+                                  tooltip: '保存原文件',
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                  onPressed: () => retrieveFile(
+                                    context,
+                                    controller,
+                                    device,
+                                    file,
+                                  ),
+                                  icon: const Icon(LucideIcons.download),
                                 ),
-                                icon: const Icon(LucideIcons.share2),
-                              ),
-                            ],
-                          ),
-                        ],
+                                GlassActionIcon(
+                                  tooltip: '系统分享',
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                  onPressed: () => retrieveFile(
+                                    context,
+                                    controller,
+                                    device,
+                                    file,
+                                    share: true,
+                                  ),
+                                  icon: const Icon(LucideIcons.share2),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
