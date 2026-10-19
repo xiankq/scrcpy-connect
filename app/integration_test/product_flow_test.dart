@@ -1,16 +1,16 @@
 import 'dart:ui' as ui;
 
-import 'package:scrcpy_connect/pages/device_workspace/device_workspace_page.dart';
-import 'package:scrcpy_connect/pages/device_details/device_details_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/pages/diagnostics/diagnostics_page.dart';
-import 'package:scrcpy_connect/pages/quality/quality_page.dart';
-import 'package:scrcpy_connect/pages/connection_form/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/pages/files/files_page.dart';
-import 'package:scrcpy_connect/pages/remote/remote_page.dart';
-import 'package:scrcpy_connect/pages/remote/widgets/exit_handle.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -126,23 +126,14 @@ void main() {
       );
       await tester.tap(find.byTooltip('添加设备'));
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.text('手动填写地址'));
+      await tester.tap(
+        find.text(transport == 'tcp' ? 'IP 地址连接' : '手动填写无线调试地址'),
+      );
       await waitFor(
         tester,
         () => find.byType(ConnectionFormPage).evaluate().isNotEmpty,
         reason: 'The actual connection form must finish its route loading.',
       );
-      if (transport == 'tcp') {
-        await waitFor(
-          tester,
-          () => find.text('现代无线调试（加密）').hitTestable().evaluate().isNotEmpty,
-          reason: 'The real transport selector must be reachable.',
-        );
-        await tester.tap(find.text('现代无线调试（加密）'));
-        await tester.pump(const Duration(milliseconds: 400));
-        await tester.tap(find.text('旧版 TCP（USB 授权后开启）').last);
-        await tester.pump(const Duration(milliseconds: 400));
-      }
       await tester.enterText(find.byType(TextFormField).at(0), address);
       await tester.enterText(find.byType(TextFormField).at(1), '65536');
       await tester.ensureVisible(find.text('连接设备'));

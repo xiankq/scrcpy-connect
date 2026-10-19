@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/devices/devices_page.dart';
-import 'package:scrcpy_connect/pages/settings/settings_page.dart';
-import 'package:scrcpy_connect/pages/transfers/transfers_page.dart';
+import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
+import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
+import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';

@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/pages/remote/remote_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';

@@ -4,7 +4,7 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:scrcpy_connect/pages/connection_form/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
@@ -84,6 +84,119 @@ Future<Json> _submit(WidgetTester tester, _Backend backend) async {
 }
 
 void main() {
+  testWidgets('connection methods share a panel and IP opens its typed form', (
+    tester,
+  ) async {
+    final backend = _Backend();
+    final router = await _mount(
+      tester,
+      backend,
+      const AddDeviceRoute().location,
+    );
+    final panel = find.ancestor(
+      of: find.text('IP 地址连接'),
+      matching: find.byType(ContentPanel),
+    );
+    expect(panel, findsOneWidget);
+    expect(tester.getSize(panel).height, 168);
+    for (final label in ['无线调试连接', 'USB 数据线', 'IP 地址连接']) {
+      expect(
+        find.descendant(of: panel, matching: find.text(label)),
+        findsOneWidget,
+      );
+    }
+    await tester.tap(find.text('IP 地址连接'));
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, '/connection/form');
+    expect(
+      router.routeInformationProvider.value.uri.queryParameters['transport'],
+      'tcp',
+    );
+    expect(find.text('填写 IP 地址与连接端口'), findsOneWidget);
+    expect(find.textContaining('已允许按地址连接'), findsOneWidget);
+    expect(find.textContaining('可信网络'), findsOneWidget);
+    expect(find.textContaining('TCP'), findsNothing);
+    expect(find.textContaining('旧版'), findsNothing);
+    await tester.enterText(find.byType(TextFormField).first, 'phone.local');
+    final added = await _submit(tester, backend);
+    expect(added['transport'], 'tcp');
+    expect(added['port'], 5555);
+  });
+
+  for (final kind in ['tcp', 'tls']) {
+    testWidgets(
+      'reauthorization IP entry retains identity and protects $kind',
+      (tester) async {
+        final backend = _Backend(
+          record: {
+            'id': 'known-device',
+            'name': '手机',
+            'address': 'phone.local',
+            'transport': kind,
+            'status': 'offline',
+          },
+        );
+        final router = await _mount(
+          tester,
+          backend,
+          const AddDeviceRoute(deviceId: 'known-device').location,
+        );
+        await tester.tap(find.text('IP 地址连接'));
+        await tester.pumpAndSettle();
+        final query = router.routeInformationProvider.value.uri.queryParameters;
+        expect(query['transport'], 'tcp');
+        expect(query['device-id'], 'known-device');
+        expect(query['address'], 'phone.local');
+        await tester.enterText(find.byType(TextFormField).at(1), '37123');
+        final added = await _submit(tester, backend);
+        expect(added['address'], 'phone.local');
+        expect(added['deviceId'], 'known-device');
+        expect(added['transport'], kind);
+      },
+    );
+  }
+
+  testWidgets(
+    'manual wireless address entry keeps encrypted transport on 5555',
+    (tester) async {
+      final backend = _Backend();
+      await _mount(tester, backend, const AddDeviceRoute().location);
+      await tester.ensureVisible(find.text('手动填写无线调试地址'));
+      await tester.tap(find.text('手动填写无线调试地址'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).first, 'phone.local');
+      await tester.enterText(find.byType(TextFormField).at(1), '5555');
+      final added = await _submit(tester, backend);
+      expect(added['transport'], 'tls');
+    },
+  );
+
+  testWidgets('wireless guide contains pairing steps and USB recovery only', (
+    tester,
+  ) async {
+    final backend = _Backend();
+    final router = await _mount(
+      tester,
+      backend,
+      const WirelessGuideRoute(address: 'phone.local').location,
+    );
+    expect(find.text('IP 地址连接'), findsNothing);
+    expect(find.textContaining('TCP'), findsNothing);
+    expect(find.text('让被控手机扫码配对'), findsOneWidget);
+    expect(find.text('使用 USB 连接'), findsOneWidget);
+    await tester.ensureVisible(find.text('使用配对码'));
+    await tester.tap(find.text('使用配对码'));
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.queryParameters['pairing'],
+      'true',
+    );
+    expect(
+      router.routeInformationProvider.value.uri.queryParameters['address'],
+      'phone.local',
+    );
+  });
+
   testWidgets('pairing authentication failure explains current-window retry', (
     tester,
   ) async {
@@ -406,24 +519,35 @@ void main() {
     expect(added['port'], 5555);
   });
 
-  testWidgets('manual legacy TCP is an explicit choice independent of port', (
-    tester,
-  ) async {
-    final backend = _Backend();
-    await _mount(
-      tester,
-      backend,
-      const ConnectionFormRoute(address: 'phone.local', port: '37123').location,
-    );
-    await tester.tap(find.text('现代无线调试（加密）'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('旧版 TCP（USB 授权后开启）').last);
-    await tester.pumpAndSettle();
-    expect(find.text('填写已开启的 TCP 连接信息'), findsOneWidget);
-    final added = await _submit(tester, backend);
-    expect(added['transport'], 'tcp');
-    expect(added['port'], 37123);
-  });
+  testWidgets(
+    'IP address connection is an explicit choice independent of port',
+    (tester) async {
+      final backend = _Backend();
+      await _mount(
+        tester,
+        backend,
+        const ConnectionFormRoute(
+          address: 'phone.local',
+          port: '37123',
+        ).location,
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (widget) => widget is DropdownButtonFormField,
+          ),
+          matching: find.text('无线调试连接'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('IP 地址连接').last);
+      await tester.pumpAndSettle();
+      expect(find.text('填写 IP 地址与连接端口'), findsOneWidget);
+      final added = await _submit(tester, backend);
+      expect(added['transport'], 'tcp');
+      expect(added['port'], 37123);
+    },
+  );
 
   for (final record in <Json>[
     {'id': 'known-device', 'transport': 'tls'},

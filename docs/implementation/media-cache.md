@@ -16,7 +16,7 @@ Flutter 页面拥有返回租约，迟到回复在页面已退出时释放自己
 
 ## 设置与设计
 
-正式生成路由 `/settings/media-cache`，入口位于设置的本机数据区域。一页一个浅层目录及 `_page.dart` 文件，复用既有主题／面板。清理需要确认，区分受保护和可回收；清理完成只报告实际回收量，剩余受保护内容不会被称为全部清空。Pencil 同一文件的偏好类别补两页，产品说明见 [覆盖](../../designs/prod/coverage.md)。
+正式生成路由 `/settings/media-cache`，入口位于设置的本机数据区域。页面归属 `pages/settings/media_cache/`，文件命名与组件布局遵循[页面文件布局](flutter-navigation.md#文件布局)，复用既有主题／面板。清理需要确认，区分受保护和可回收；清理完成只报告实际回收量，剩余受保护内容不会被称为全部清空。Pencil 同一文件的偏好类别补两页，产品说明见 [覆盖](../../designs/prod/coverage.md)。
 
 ## 验证
 

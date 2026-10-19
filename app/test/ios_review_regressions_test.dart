@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/pages/devices/widgets/device_card.dart';
+import 'package:scrcpy_connect/pages/devices/index/widgets/device_card.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:flutter/rendering.dart';
 

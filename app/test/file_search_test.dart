@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/pages/file_details/file_details_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
 
 import 'support/test_controller.dart';
 import 'support/router_test_app.dart';
@@ -8,7 +8,7 @@ import 'dart:async';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/files/files_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 void main() {

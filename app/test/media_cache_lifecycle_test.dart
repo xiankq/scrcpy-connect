@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/media_preview/media_preview_page.dart';
-import 'package:scrcpy_connect/pages/receive_content/receive_content_page.dart';
-import 'package:scrcpy_connect/pages/transfer_details/transfer_details_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
+import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
+import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/media_thumbnail.dart';
 

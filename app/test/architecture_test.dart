@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final lib = Directory('lib');
-  test('each product page has its own shallow directory and one page file', () {
+  test('pages follow business hierarchy and own their leaf directory', () {
     final pages = Directory('${lib.path}/pages');
     final pageFiles = pages
         .listSync(recursive: true)
@@ -15,12 +15,22 @@ void main() {
     final folders = <String>{};
     for (final file in pageFiles) {
       final relative = file.path.substring(pages.path.length + 1).split('/');
-      expect(relative, hasLength(2), reason: file.path);
-      expect(relative.last, '${relative.first}_page.dart');
+      final hierarchy = relative.take(relative.length - 1).toList();
+      expect(hierarchy, isNotEmpty, reason: file.path);
+      expect(relative.last, '${hierarchy.join('_')}_page.dart');
       expect(
-        folders.add(relative.first),
+        folders.add(hierarchy.join('/')),
         isTrue,
         reason: 'Every page owns one directory.',
+      );
+      expect(
+        pageFiles.where(
+          (other) =>
+              other.path != file.path &&
+              other.path.startsWith('${file.parent.path}/'),
+        ),
+        isEmpty,
+        reason: 'A page with subpages belongs in its own index directory.',
       );
       final pageClasses = RegExp(
         r'^class (\w+Page)\b',

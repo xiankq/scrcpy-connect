@@ -1,9 +1,9 @@
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/pages/calls/calls_page.dart';
-import 'package:scrcpy_connect/pages/notification_reply/notification_reply_page.dart';
-import 'package:scrcpy_connect/pages/notifications/notifications_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/notifications/reply/devices_workspace_notifications_reply_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';

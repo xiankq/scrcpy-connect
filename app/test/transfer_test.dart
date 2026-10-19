@@ -1,7 +1,7 @@
 import 'support/test_controller.dart';
 
-import 'package:scrcpy_connect/pages/transfer_details/transfer_details_page.dart';
-import 'package:scrcpy_connect/pages/transfers/transfers_page.dart';
+import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
+import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';

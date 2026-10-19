@@ -4,13 +4,16 @@
 
 ## 文件布局
 
-- `app/lib/pages/<page_name>/<page_name>_page.dart`：每页单独目录、单独页面文件。
-- 页面专属组件放在该页目录内的 `widgets/`，例如远控退出手柄。
+- `app/lib/pages/` 按业务归属组织父子目录。有延伸子页的入口放入该业务目录的 `index/`；叶页直接放在自己的目录，不额外套 `index/`。
+- 页面文件名由 `pages/` 以下的完整目录链用下划线连接，再加 `_page.dart`，包括 `index`：例如 `settings/index/settings_index_page.dart`、`settings/appearance/settings_appearance_page.dart`、`transfers/details/index/transfers_details_index_page.dart`。
+- 页面专属组件放在该页面目录的 `widgets/`。跨子页共用的业务组件放在最近共同业务目录的 `widgets/`，例如 `devices/widgets/device_identity.dart` 和 `transfers/details/widgets/`；不从另一个页面的私有 `widgets/` 引入。
 - `app/lib/widgets/`：通用布局、操作行、反馈与命令视图。
 - `app/lib/services/`：控制器、剪贴板协调、文件操作、校验与数据转换。
 - `app/lib/router/`：类型化路由声明及生成文件、ID 查找、异步路由加载与导航方法。
 
 不使用 `part` 聚合页面。生产 imports 直接指向所属文件；只有生成器产物使用标准的 `.g.dart` part。
+
+设置归 `settings/`，连接建立流程归 `connection/`，设备详情与工作台分别归 `devices/details/`、`devices/workspace/`，任务接收与导出归 `transfers/details/`。同一页面的多个入口复用同一实现；目录表达业务归属，不机械复制路由 URL 或每条跳转路径。页面类名与 typed route 身份不因目录迁移而改变。
 
 ## 页面身份
 
@@ -66,4 +69,4 @@ generator 与 build_runner 的兼容组合由 workspace 依赖和根 lockfile �
 
 ## 验证
 
-既有页面与交互测试继续保留。`router_test.dart` 覆盖分支状态与返回、ID 查找、缺失记录、远控重建与会话清理、typed 目录结果、分享返回和表单替换。`architecture_test.dart` 约束浅层页面目录、单页文件、生成 typed 路由与共享组件位置。`app_provider_test.dart` 验证深冻结快照、晚回执抑制、transport 释放、原生帧隔离和设置更新顺序。Android 真机/模拟器 integration tests 仍从实际桥接服务读取状态，不用路由测试 fixture 代替原生验收。
+既有页面与交互测试继续保留。`router_test.dart` 覆盖分支状态与返回、ID 查找、缺失记录、远控重建与会话清理、typed 目录结果、分享返回和表单替换。`architecture_test.dart` 约束业务层级命名、单页叶目录、生成 typed 路由与共享组件位置。`app_provider_test.dart` 验证深冻结快照、晚回执抑制、transport 释放、原生帧隔离和设置更新顺序。Android 真机/模拟器 integration tests 仍从实际桥接服务读取状态，不用路由测试 fixture 代替原生验收。

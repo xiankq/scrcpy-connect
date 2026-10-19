@@ -3,8 +3,8 @@ import 'support/test_controller.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/connection_form/connection_form_page.dart';
-import 'package:scrcpy_connect/pages/diagnostics/diagnostics_page.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
 
 void main() {
   const device = <String, dynamic>{

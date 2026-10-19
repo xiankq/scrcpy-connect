@@ -2,7 +2,7 @@ import 'package:scrcpy_connect/widgets/grouped_list.dart';
 
 import 'support/test_controller.dart';
 
-import 'package:scrcpy_connect/pages/background/background_page.dart';
+import 'package:scrcpy_connect/pages/settings/background/settings_background_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';

@@ -24,7 +24,7 @@
 - [视频适配器](../../packages/interop_bridge/lib/src/media/fvp_video_player.dart)明确将输入设为 Matroska，经本机 HTTP 打开；Android 优先 `AMediaCodec:async=1`，保留 `FFmpeg:thread_type=slice` 软件后备。
 - [视频 codec 模型](../../crates/interop_core/src/media/codec.rs)处理 H.264、H.265、AV1、VP8、VP9。仅保留 H.264 会缩减现有能力，不能作为透明的体积优化。
 - [音频适配器](../../packages/interop_bridge/lib/src/media/fvp_audio_player.dart)同样使用 Matroska；[封装器](../../crates/interop_core/src/media/matroska.rs)输出 `A_PCM/INT/LIT`，当前[采集链路](../../crates/interop_core/src/audio.rs)请求 raw PCM。
-- 当前远控封装没有字幕轨。Android 普通[视频预览](../../app/lib/pages/media_preview/widgets/video_preview.dart)使用平台 `video_player`；[应用入口](../../app/lib/main.dart)只在 Windows / Linux 将其后端替换成 fvp。因此可研究 Android 专用的窄 FFmpeg 集合，但不能把它原样应用到需要通用视频预览的桌面后端。
+- 当前远控封装没有字幕轨。Android 普通[视频预览](../../app/lib/pages/devices/workspace/gallery/preview/widgets/video_preview.dart)使用平台 `video_player`；[应用入口](../../app/lib/main.dart)只在 Windows / Linux 将其后端替换成 fvp。因此可研究 Android 专用的窄 FFmpeg 集合，但不能把它原样应用到需要通用视频预览的桌面后端。
 
 这些使用点只能确定初始保留集合。MDK 的动态符号、像素转换、重采样、截图及媒体信息探测仍可能要求相应库和实现，不能把一组未经运行验证的 configure 参数称为可交付最小配置。
 

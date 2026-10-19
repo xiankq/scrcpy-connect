@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/pages/device_workspace/device_workspace_page.dart';
-import 'package:scrcpy_connect/pages/files/files_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

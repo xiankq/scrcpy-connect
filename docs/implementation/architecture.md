@@ -11,7 +11,7 @@ Flutter 页面通过 `AppDependencies` 调用 Dart `InteropBridge`，经 FRB 进
 
 被控执行产物在 Android 安装包中由三种主控架构共享，Flutter 宿主准备私有资源缓存，Rust 校验后持有不可变原始字节并负责远端部署；其他宿主和独立 Rust 保留压缩内置资源。生成链、摘要与缓存规则见[共享打包](repository-tooling.md#被控执行产物的共享打包)。被控 ABI 与主控 ABI 独立。
 
-Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/` 与平台 runner 共用 `app/pubspec.yaml`。根 `pubspec.yaml` 声明 Dart workspace 与仓库工具依赖，统一解析使用根 `pubspec.lock` 和 `.dart_tool`。`packages/`、`crates/`、`servers/`、`tool/` 保留各自构建职责。页面独立放在 `app/lib/pages/<page_name>/`，私有组件就近存放；共享服务、组件和路由使用 `services/`、`widgets/`、`router/`。路由生命周期见 [Flutter 页面与路由](flutter-navigation.md)。
+Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/` 与平台 runner 共用 `app/pubspec.yaml`。根 `pubspec.yaml` 声明 Dart workspace 与仓库工具依赖，统一解析使用根 `pubspec.lock` 和 `.dart_tool`。`packages/`、`crates/`、`servers/`、`tool/` 保留各自构建职责。页面按业务父子层级放在 `app/lib/pages/`，入口、叶页命名及业务组件归属统一见[页面文件布局](flutter-navigation.md#文件布局)；共享服务、通用组件和路由使用 `services/`、`widgets/`、`router/`。路由生命周期见 [Flutter 页面与路由](flutter-navigation.md)。
 
 ## 状态和资源所有权
 

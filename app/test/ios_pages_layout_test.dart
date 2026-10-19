@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/pages/media_preview/media_preview_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

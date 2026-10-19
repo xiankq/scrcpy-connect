@@ -1,7 +1,7 @@
 import 'support/test_controller.dart';
 
-import 'package:scrcpy_connect/pages/connection_form/connection_form_page.dart';
-import 'package:scrcpy_connect/pages/qr_pair/qr_pair_page.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';

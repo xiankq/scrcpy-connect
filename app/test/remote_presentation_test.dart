@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/remote/remote_presentation.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 const _pixels = <String, dynamic>{
   'sessionId': 'original',

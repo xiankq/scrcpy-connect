@@ -173,7 +173,6 @@ class IncomingSharePage extends HookConsumerWidget {
               StateNote(message, icon: LucideIcons.circleAlert),
             if (files.isNotEmpty) ...[
               ConnectSwitchRow(
-                contentPadding: EdgeInsets.zero,
                 title: Text('传入 ${files.length} 个文件'),
                 value: includeFiles.value,
                 onChanged: busy.value || locked
@@ -185,7 +184,6 @@ class IncomingSharePage extends HookConsumerWidget {
             ],
             if (text.isNotEmpty) ...[
               ConnectSwitchRow(
-                contentPadding: EdgeInsets.zero,
                 title: const Text('写入设备剪贴板'),
 
                 value: includeText.value,

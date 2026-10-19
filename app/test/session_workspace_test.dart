@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:scrcpy_connect/pages/remote/remote_page.dart';
-import 'package:scrcpy_connect/pages/session_tools/session_tools_page.dart';
-import 'package:scrcpy_connect/pages/sessions/sessions_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/sessions/tools/devices_workspace_sessions_tools_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';

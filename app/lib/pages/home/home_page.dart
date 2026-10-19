@@ -40,6 +40,7 @@ class HomePage extends HookConsumerWidget {
           return withBack(
             Scaffold(
               body: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SafeArea(
                     child: SizedBox(
