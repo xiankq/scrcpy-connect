@@ -65,6 +65,8 @@ class InputProbe extends ChangeNotifier {
   NativeFrameTrace? _trace;
   int? _token;
   bool _busy = false;
+  Future<void>? _initialization;
+  Future<int>? _textureCreation;
   final _decoded = <String, Map<String, dynamic>>{};
   final _events = <Map<String, dynamic>>[];
   final _subscriptions = <StreamSubscription<dynamic>>[];
@@ -125,7 +127,7 @@ class InputProbe extends ChangeNotifier {
       throw ArgumentError('mode must be http or append');
     }
     final previousCleanup = await _cleanup();
-    await RustLib.init();
+    await (_initialization ??= RustLib.init());
     final support = await getApplicationSupportDirectory();
     final fixture = _loadedFixture ??= await File(
       '${support.path}/native-input-fixture.mdkp',
@@ -198,7 +200,10 @@ class InputProbe extends ChangeNotifier {
     );
     final prepareMs = watch.elapsedMilliseconds;
     if (prepared < 0) throw StateError('MDK failed to prepare $mode');
-    final id = await player.updateTexture().timeout(const Duration(seconds: 8));
+    // A timeout does not cancel CreateRT. Keep the original operation so a
+    // late texture cannot outlive its borrowed Player during cleanup.
+    final creation = _textureCreation = player.updateTexture();
+    final id = await creation.timeout(const Duration(seconds: 8));
     if (id < 0) throw StateError('MDK did not create a texture');
     final size = await player.textureSize;
     texture = id;
@@ -331,7 +336,6 @@ class InputProbe extends ChangeNotifier {
     texture = null;
     notifyListeners();
     await WidgetsBinding.instance.endOfFrame;
-    await player.updateTexture(width: -1).timeout(const Duration(seconds: 5));
     player.state = mdk.PlaybackState.stopped;
     final wait = Stopwatch()..start();
     while (!player.waitFor(mdk.PlaybackState.stopped, timeout: 1)) {
@@ -340,6 +344,16 @@ class InputProbe extends ChangeNotifier {
       }
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
+    // fvp waits for videoSize even when releasing a texture. Stop first so a
+    // failed prepare can settle; if an operation stays pending, retain the
+    // Player and report failure instead of disposing underneath that operation.
+    final creation = _textureCreation;
+    if (creation != null) {
+      await creation.timeout(const Duration(seconds: 5));
+    }
+    await player.textureSize.timeout(const Duration(seconds: 5));
+    await player.updateTexture(width: -1).timeout(const Duration(seconds: 5));
+    _textureCreation = null;
     _trace?.close();
     _trace = null;
     for (final subscription in _subscriptions) {

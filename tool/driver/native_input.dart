@@ -7,6 +7,31 @@ import 'package:flutter_driver/flutter_driver.dart';
 // collecting one does not establish pixel correctness or display latency.
 Future<void> main() async {
   final environment = Platform.environment;
+  final adb = environment['CONNECT_E2E_ADB'];
+  final device = environment['CONNECT_E2E_DEVICE'];
+  final bundle = environment['CONNECT_MDK_INPUT_BUNDLE'];
+  if (adb == null ||
+      device == null ||
+      bundle == null ||
+      !File(bundle).existsSync()) {
+    throw StateError(
+      'Set CONNECT_E2E_ADB, CONNECT_E2E_DEVICE and CONNECT_MDK_INPUT_BUNDLE.',
+    );
+  }
+  const package = 'dev.scrcpyconnect.scrcpy_connect';
+  final remoteFixture = '/data/local/tmp/connect-mdk-input-$pid.mdkp';
+  var fixtureAttempted = false;
+  Future<void> adbRun(List<String> arguments) async {
+    final result = await Process.run(adb, [
+      '-s',
+      device,
+      ...arguments,
+    ]).timeout(const Duration(seconds: 20));
+    if (result.exitCode != 0) {
+      throw StateError('Fixture adb operation failed: ${result.stderr}');
+    }
+  }
+
   final output = Directory(
     environment['CONNECT_E2E_CAPTURE_DIR'] ?? '/tmp/connect-mdk-input',
   ).absolute;
@@ -73,6 +98,19 @@ Future<void> main() async {
       printCommunication: false,
       logCommunicationToFile: false,
     ).timeout(timeout);
+    // Install data after flutter drive installs the APK. A prior invocation may
+    // have removed its test package; preloading before install is insufficient.
+    fixtureAttempted = true;
+    await adbRun(['push', bundle, remoteFixture]);
+    await adbRun(['shell', 'run-as', package, 'mkdir', '-p', 'files']);
+    await adbRun([
+      'shell',
+      'run-as',
+      package,
+      'cp',
+      remoteFixture,
+      'files/native-input-fixture.mdkp',
+    ]);
     report['initialState'] = await request({
       'command': 'state',
     }, 'state-before');
@@ -118,6 +156,24 @@ Future<void> main() async {
       } catch (error, stack) {
         report['cleanupComplete'] = false;
         report['cleanupError'] = '$error';
+        failure ??= error;
+        failureStack ??= stack;
+      }
+    }
+    if (fixtureAttempted) {
+      try {
+        await adbRun([
+          'shell',
+          'run-as',
+          package,
+          'rm',
+          '-f',
+          'files/native-input-fixture.mdkp',
+        ]);
+        await adbRun(['shell', 'rm', '-f', remoteFixture]);
+        report['fixtureRemoved'] = true;
+      } catch (error, stack) {
+        report['fixtureRemoved'] = false;
         failure ??= error;
         failureStack ??= stack;
       }
