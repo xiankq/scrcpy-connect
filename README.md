@@ -17,7 +17,6 @@
 | `crates/android_helper` | 独立构建的 Android 原生元数据、目录与原子文件操作源码 |
 | `protocol` | Dart／Rust 命令、字段形状与状态核验策略的单一来源 |
 | `servers` | 固定版本 scrcpy JAR、临时协同 JAR 与原生文件服务 |
-| `third_party/fvp` | 播放器本地修补及固定 MDK 正式版本／摘要 |
 | `designs` | DESIGN.md、产品说明和 Pencil 页面／组件源文件 |
 | `test`、`integration_test` | Flutter 单元／组件测试与设备端集成测试 |
 | `tool` | Dart 生成／构建／校验入口、主机驱动、性能基准及测试夹具 |
@@ -78,6 +77,6 @@ dart tool/android.dart verify build/app/outputs/flutter-apk/app-release.apk
 
 规则在责任文档中维护，研究建议和历史验收不替代当前规范。源稿 Frame 可表达同一产品页面的多个状态，不与路由数量一一对应。预览与 E2E 资产放系统临时目录；临时日志的生命周期不等于永久归档。
 
-`third_party/fvp` 是基于官方0.39.1的受控源码副本，约470 KiB；保留原生snapshot失败空指针修复与MDK归档版本／SHA固定。相对于固定上游基线，这些差异仍由本仓库维护；升级时按实际源码判断是否可以移除副本。具体差异见[补丁清单](third_party/fvp/CONNECT_PATCHES.md)；下载的SDK和构建缓存不进入Git。
+播放器精确使用社区发布的 [fvp 0.39.1](https://pub.dev/packages/fvp/versions/0.39.1)，不保留本地源码副本、补丁或 path override。MDK 下载与平台版本规则继承该发布包；原版 snapshot 空结果未判空的已知限制、原生依赖和历史验证边界见[工具链契约](docs/implementation/repository-tooling.md#社区原版-fvp-0391)。
 
 `tool/check.sh` 执行 Rust 格式／Clippy／默认测试、Flutter 分析／组件测试和固定官方 DESIGN.md NPM 校验。真实 AVD、无线配对、媒体、文件及故障测试需要对应环境和显式测试参数，方法与证据见验收记录。跨 target 的 Rust 检查与各宿主整包链接分别记录。

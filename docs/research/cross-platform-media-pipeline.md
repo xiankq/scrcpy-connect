@@ -2,6 +2,8 @@
 
 核查日期：2026-10-17。对应实现：`crates/interop_core/src/media/`。本记录区分已验证的容器输出、播放器接口事实和仍需平台验收的生命周期，不能用 FFmpeg 解码成功代替手机首帧、音频焦点或后台行为验收。
 
+本文的 MDK 二进制固定建议与完成度属于该研究阶段。当前播放器直接使用社区原版 fvp 0.39.1，MDK 下载和平台约束继承发布包，不维护本地 fork 或额外固定回归；现行规则与 snapshot 限制见[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)。历史实测不自动成为当前依赖切换后的运行证据。
+
 ## 决策与边界
 
 Rust 继续负责 ADB、scrcpy 帧边界、配置包、PTS 和有界输出；将压缩视频或 PCM 封装为标准 Matroska，通过带随机凭据的 localhost HTTP 流交给 `package:fvp/mdk.dart` 的公开 `Player.media`。Flutter 负责展示 Texture 和输入坐标映射；系统权限、音频焦点、前台服务、SAF 等仍保留薄平台适配。首轮使用每端点一个 Track，视频属于控制会话，音频属于设备共享音源；两个独立 Player 不等于已实现音画同步。
@@ -14,7 +16,7 @@ Rust 继续负责 ADB、scrcpy 帧边界、配置包、PTS 和有界输出；将
 
 MDK 的 `stream:`/appendBuffer 接收字节，不接独立的 scrcpy packet PTS；官方流示例输入为封装后的 FLV。它不能把原始 scrcpy 12 字节私有帧头解释成媒体时间轴，因此使用标准容器仍有必要。公开 C++ enqueue 是已解码 VideoFrame 路径，不能据此推断存在压缩包或 PCM AudioFrame 播放入口。[官方输入示例](https://github.com/wang-bin/mdk-examples/blob/316e06d31d2556892f5eaa93464fd1a3a4993c9f/Native/stream.cpp)、[Player API](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)。
 
-fvp 的 pub lock 不同时锁定各平台 MDK 二进制。0.39.1 依赖下载逻辑允许指定 `FVP_DEPS_URL`/`FVP_DEPS_SHA256`，默认来源包含可变 SDK 下载地址；正式四平台发布需固定平台归档及摘要。核查时 Android cache SDK stamp 为 `70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`，这只是本机本次证据，不代表其它平台已验证。[依赖下载源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/cmake/deps.cmake)。
+fvp 的 pub lock 不同时锁定各平台 MDK 二进制。0.39.1 依赖下载逻辑允许指定 `FVP_DEPS_URL`/`FVP_DEPS_SHA256`，默认来源包含可变 SDK 下载地址；当时据此建议为正式四平台发布固定平台归档及摘要，现行选择为直接继承原版平台规则。核查时 Android cache SDK stamp 为 `70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`，这只是本机本次证据，不代表其它平台已验证。[依赖下载源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/cmake/deps.cmake)。
 
 低延迟不能依赖默认 buffer。MDK 的 buffer 最大值 0 表示不设上限，而不是零延迟；当前使用min=0/max=150/drop。min=0允许尽快解码；max/drop受关键帧间隔限制，不能把150写成严格队列时长上限。应结合实测选择demux选项。硬件解码器存在不代表成功配置/首帧，仍需按设备检查。fvp 当前 texture 尺寸缓存也要求应用显式处理变化，不能将固定尺寸 POC 写成已支持旋转热切换。[Player API](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)、[解码器文档](https://github.com/wang-bin/mdk-sdk/wiki/Decoders)。
 

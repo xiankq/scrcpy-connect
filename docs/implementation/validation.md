@@ -7,6 +7,8 @@
 > 官方 scrcpy JAR 路径。当前来源与暂停语义以 `servers/vendor/README.md` 为准；
 > 历史通过不自动成为当前提交通过。
 
+> 当前播放器使用社区原版 fvp 0.39.1，已移除本地源码副本、snapshot 空结果补丁与 MDK 固定回归。旧 snapshot 接缝、CMake 用例、补丁版媒体运行和 APK 回执仅证明各自当时版本；原版依赖规则与已知限制见[工具链契约](repository-tooling.md#社区原版-fvp-0391)。
+
 目标入口为 .scratch/interop/goal.md（历史路径 `../../.scratch/interop/goal.md`）。2026-10-17的完整重新核查（历史路径 `../../.scratch/interop/completion-reassessment.md`）逐项纠正产品断链：本文件的历史实验通过不表示对应整个用户流程完成。下列结果区分协议单测、真实被控 adbd 和 Android 主控界面；未列通过的能力不推定已完成。下列历史验收保留当时的后端和测试名；当前共享媒体结果以最新迁移小节为准，旧AudioTrack/自写MediaCodec证据不能冒充新后端结果。
 
 ## 当前环境
@@ -706,3 +708,19 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 三类服务端产物检查、companion临时重建逐字节比较、四组Java兼容回归及ZIP／DEX／摘要漂移负例通过；Java源、运行JAR、四ABI ELF和对应源码归档字节未改。六种独立测试APK均在本机Linux／SDK36实编译、签名并验签，随后清理临时输出；本轮未重新执行设备端采集或其他宿主构建。
 
 JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收契约、截图解析和故障代理通过。既有x64 debug交付APK由新Dart工具复核ZIP、签名、16KB对齐及ELF，摘要仍为`7369a0ab259df8f0f78f3bbdda08088f50b53f90eebb72a9ca21f55b0f4f8211`，回执为`/tmp/connect-dart-migration-apk.json`；未新建三ABI APK。现有应用热重载成功，运行时错误查询为空，随后detach。
+
+## 切回社区原版 fvp 0.39.1（2026-10-19）
+
+应用实际解析为 pub.dev hosted `fvp 0.39.1`，不再使用本地源码副本或 path override。原版 `callbacks.cpp` SHA-256 为 `d31142aa65b299a0a471caabae7bdb3f20b902e9239e88beb5babca3d1ca623e`；本次 Android CMake 的 `CMAKE_HOME_DIRECTORY` 指向 pub cache 内该包，`FVP_DEPS_URL` 与 `FVP_DEPS_SHA256` 均为空。构建复用 MDK 0.39.0 缓存，stamp 为 `70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`；这不是一次新下载，也不证明四端 MDK 已固定。原版 snapshot 空结果未判空的已知限制仍按[工具链契约](repository-tooling.md#社区原版-fvp-0391)保留。
+
+根目录执行 `flutter test --no-pub test tool/test tool/e2e/tests`，371 个非 hidden 项全部 success、无 skip，日志为[根应用与工具 JSONL](/tmp/connect-community-fvp-tests.jsonl)。桥接层131项全部 success、无 skip，日志为[桥接层 JSONL](/tmp/connect-community-fvp-bridge.jsonl)。`flutter analyze --no-pub --fatal-infos` 在19.4秒通过；`dart tool/generate.dart --check` 完整通过，日志为[生成检查](/tmp/connect-community-fvp-generate.log)。这些结果不包含已移除的本地 fvp 补丁与 MDK 固定回归。
+
+普通 `lib/main.dart` 入口的 Android x64 debug APK 实际构建138.1秒通过，[构建日志](/tmp/connect-community-fvp-build.log)。产物为 `build/app/outputs/flutter-apk/app-debug.apk`，125,062,865字节，SHA-256 `ab5fcf9b9d796d53297c3e290573de132c489cae87f1cf06474b03a0ae853967`。独立 ZIP 完整性、签名、x64 Flutter/Rust ELF 及16KB对齐检查通过，[产物回执](/tmp/connect-community-fvp-apk.json)；这是 x64 调试产物，不是三ABI或发行签名产物。
+
+本次编译命令中的 `callbacks.cpp` 路径指向 hosted 包源码。APK 内 `lib/x86_64/libfvp.so` 与本次插件输出的 SHA-256 一致，均为 `b0650287e507a00f5dc4d5db567732254d5ce8df9e18f265c302d3570edaf9e4`。
+
+该普通包覆盖安装到 `emulator-5554` 后启动，观察到 pid21411 与 Impeller OpenGLES。Dart MCP 热重启成功，运行时错误查询为空；热重启期间仍有两条 FRB failpost 旧 isolate 投递警告，保留该观察，不记为零告警启动。
+
+本次未重跑远控、媒体 E2E 或其他宿主构建／运行；此前本地补丁版的首帧、snapshot、GPU 和业务通过不继承为社区原版通过。此处只记录已执行的测试、静态分析、生成一致性、Android x64 打包与普通入口启动范围。
+
+调试结束已 detach，保留既有模拟器及其应用。清理26项构建中间目录、测试资产与重复 APK，共2,031,439,569字节；`build` 仅保留上述普通入口 APK，复用的共享原生、Rust、Gradle 和 pub 缓存保留，[清理回执](/tmp/connect-community-fvp-cleanup.json)。删除源码副本前，两份未提交文件已备份至 `/tmp/connect-fvp-uncommitted-ZhtXcw`。

@@ -168,31 +168,6 @@ void main() {
     );
   });
 
-  test('MDK pins match release receipt and Apple configuration', () {
-    final base = p.join(root.path, 'third_party/fvp');
-    final receipt = jsonDecode(
-      File(p.join(base, 'cmake/mdk-release.json')).readAsStringSync(),
-    ) as Map<String, dynamic>;
-    final archives = receipt['archives'] as Map<String, dynamic>;
-    final cmake = File(p.join(base, 'cmake/mdk-release.cmake'))
-        .readAsStringSync();
-    for (final archive in archives.entries) {
-      final key = archive.key.replaceAll('.', '_').replaceAll('-', '_');
-      expect(cmake, contains('set(FVP_MDK_SHA256_$key "${archive.value}")'));
-      expect(archive.value, matches(RegExp(r'^[a-f0-9]{64}$')));
-    }
-    expect(
-      File(p.join(base, 'darwin/fvp/Package.swift')).readAsStringSync(),
-      contains(archives['mdk-sdk-apple.zip']),
-    );
-    for (final directory in Directory(base).listSync().whereType<Directory>()) {
-      final podspec = File(p.join(directory.path, 'fvp.podspec'));
-      if (podspec.existsSync()) {
-        expect(podspec.readAsStringSync(), contains("'mdk', '= 0.39.0'"));
-      }
-    }
-  });
-
   test('Windows bundle requires a unique valid packaged x64 Rust library', () {
     final bundle = Directory(p.join(temporary.path, 'bundle'))..createSync();
     final header = Uint8List(72);

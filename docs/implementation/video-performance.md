@@ -2,6 +2,8 @@
 
 > 本文是 2026-10-18 各轮视频实验的历史记录，包含未采用候选、失败结果和当时的产物/命令。生产路径与依赖以 [架构](architecture.md)、[工具链契约](repository-tooling.md) 和 `servers/vendor/README.md` 为准；下文“最新”“当前”只指各段实验阶段。产品视觉与最终回归证据见 [产品验收记录](product-refinement.md)。
 
+> 下文的 fvp 仓库内补丁、固定 MDK 和专用回归均属历史，相关本地文件现已移除。当前直接使用社区原版 fvp 0.39.1；补丁版的源码边界、媒体、性能或 APK 结果不继承为原版验证。
+
 最新增量：隔离bounded-input将无限静态重复改为每个实际源帧最多10次；关闭诊断的
 普通Driver静态对照，候选输入P50/P95为149/236ms，两侧完成基线201/290、196/295ms。
 候选仍有一次首帧1036ms，未通过完整预算，**生产JAR不替换**。原返回组窗口超时
@@ -1812,10 +1814,10 @@ CMake/Flutter有效缓存及全部原始证据。记录`/tmp/connect-snapshot-cl
 延续前批NULL结果调查，已校验官方pub归档摘要并引入仓库内fvp0.39.1源码补丁。
 仅五份MdkSnapshot源副本同步增加空结果判断，原Dart处理仍把空Uint8List完成为null；
 不修改本机pub缓存、不引入新的Android呈现代码、不重建scrcpy JAR。路径依赖由根
-pubspec统一覆盖，来源／许可证／归档SHA及SDK边界保留在
-[CONNECT_PATCHES.md](../../third_party/fvp/CONNECT_PATCHES.md)。
+pubspec统一覆盖，来源／许可证／归档SHA及SDK边界当时保存在
+`third_party/fvp/CONNECT_PATCHES.md`（历史文件，现已移除）。
 
-可执行的真实源边界红绿命令（宿主C++20与Dart，不包含MDK renderer）：
+当时的真实源边界红绿命令（宿主C++20与Dart，不包含MDK renderer；该专用工具现已移除，以下仅作历史记录）：
 
 ```sh
 dart tool/fvp_snapshot_regression.dart --package-root /tmp/connect-fvp-official-0.39.1

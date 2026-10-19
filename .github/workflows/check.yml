@@ -30,7 +30,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
-      - name: Install native dependency check tools
+      - name: Install native build tools
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y cmake ninja-build

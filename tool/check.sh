@@ -12,10 +12,8 @@ dart servers/companion/tests/compatibility.dart
 dart servers/tests/tooling_test.dart
 flutter test --no-pub tool/test tool/e2e/tests
 npm test --prefix tool/design_tokens
-dart tool/check_native_deps.dart
 dart format --output=none --set-exit-if-changed lib test integration_test tool servers packages
 cargo fmt --all --check
-dart tool/fvp_snapshot_regression.dart
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 flutter analyze --no-pub --fatal-infos

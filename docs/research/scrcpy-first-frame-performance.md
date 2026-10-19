@@ -2,6 +2,8 @@
 
 本文包含已移除捕获扩展的历史实现调查；文中的 `CAPTURE_SERVER`、`servers/scrcpy/` 与暂停扩展依赖只适用于当时版本。当前生产嵌入的官方服务端由 [vendor 清单](../../servers/vendor/README.md)说明，当前链路见[架构](../implementation/architecture.md)，历史产物替换限制不作为现行规则。
 
+文中的 fvp 本地补丁与专用回归也已移除。当前直接使用 pub.dev 原版 fvp 0.39.1，保留其 snapshot 空结果未判空限制；下文补丁实施、SDK 固定建议及运行结果按历史阅读，现行依赖规则见[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)。
+
 调查日期：2026-10-18。仅静态读取本仓库、官方 release API、官方当前开发者文档及固定 v5.0.1 源码；本轮未构建 JAR、未运行测试、未连接设备。**已证**表示本轮可直接核查的文件、摘要或源码行为；**推论**表示由实现导出的建议；**需验证**表示尚无本轮设备测量支持。既有设备结果见[先前首帧调查](scrcpy-first-frame-and-latency.md)，不视为本轮重测。
 
 后续实施与实际设备测量另记于[视频性能记录](../implementation/video-performance.md)：保持现有JAR、主控探测对照、真实半包/背压红绿回归及动态图案E2E。下文的“本轮未运行”仅指本报告的资料核查步骤，不覆盖该后续实施。
@@ -277,8 +279,8 @@ typed-data前无条件解引用`ret->stride/height/data`；该方法也没有使
 native槽位，并以成功native提交后的hook刷新静止源。结果交付仍不能证明MDK内部
 worker已完成回调后收尾。完整红绿及静态/动态/恢复证据见
 [生命周期记录](../implementation/video-performance.md#截图生命周期与暂停提交顺序2026-10-18)。
-后续需单独构造null失败回调验证，并通过可复现的依赖补丁/替代实现处理，不能只改
-本机pub缓存或把这些有限次数无崩溃写成整个播放器稳定性完成。
+当时建议单独构造null失败回调，并通过可复现的依赖补丁/替代实现处理，后续源边界
+结果见下节。该处理建议不作为当前使用原版的前置条件；有限次数无崩溃仍不能证明整个播放器稳定性。
 
 
 ## fvp空结果故障与可复现交付（2026-10-18）
@@ -291,14 +293,14 @@ worker已完成回调后收尾。完整红绿及静态/动态/恢复证据见
 这是空指针解引用的确定性源边界复现，非历史renderer空std::function实机复现。
 [官方pub归档](https://pub.dev/api/archives/fvp-0.39.1.tar.gz)。
 
-**已实施：**仓库内third_party/fvp保留上游许可证／Dart API／全部平台源码，
+**当时实施（现已移除）：**仓库内third_party/fvp保留上游许可证／Dart API／全部平台源码，
 省略示例和SDK／生成／构建数据。根path override使应用与Bridge共同使用该版本，
 lockfile正常记录path，不以原hosted摘要冒充修补源码身份。五份原生副本统一在
 ret为null时发送空Uint8List；既有player.dart把空数据转换为null完成Future。
 仅提前return会留下永久pending请求，因此不采用。回归同时检查有效带stride缓冲
 及未知handle，并通过真实Dart VM NativeApi.postCObject／ReceivePort确认空和
-填充typed data可交付。见[来源与补丁](../../third_party/fvp/CONNECT_PATCHES.md)、
-[可执行回归](../../tool/fvp_snapshot_regression.dart)。
+填充typed data可交付。当时的补丁清单 `third_party/fvp/CONNECT_PATCHES.md` 和
+专用回归 `tool/fvp_snapshot_regression.dart` 均已移除，原始源边界结果保留为历史证据。
 
 **边界：**该修补没有改变MDK renderer二进制，也没有证明结果交付时worker已排空；
 历史空回调崩溃继续开放。Android真实设备链路结果另记[视频性能](../implementation/video-performance.md)。
@@ -361,7 +363,7 @@ MDK公开`prepare(0)`回调表示媒体信息就绪，不能当首帧已显示�
 时间采样。锁定fvp Android JNI_OnLoad主动设为1，因此实验在其初始化后请求0；
 未读回SDK内部值，只报告请求。两项都影响进程内其他播放器，不能作为每个会话的
 随意开关。[Global Options](https://github.com/wang-bin/mdk-sdk/wiki/Global-Options)、
-[锁定源码](../../third_party/fvp/android/fvp_plugin.cpp)。
+[固定上游源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/android/fvp_plugin.cpp)。
 实际五组对照没有满足原严格性能预算，两个实验均不进入产品默认；首个32×32验证
 截图指标与时钟读取括界已保留，详见[实际结果](../implementation/video-performance.md#首个验证画面的观测与隔离对照2026-10-18)。
 

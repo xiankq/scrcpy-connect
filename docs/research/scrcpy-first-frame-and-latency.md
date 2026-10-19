@@ -2,6 +2,8 @@
 
 调查与实测：2026-10-17。先核对官方开发者文档与固定源码，再用真实 Android 双 AVD 缩小故障。本记录区分已通过的 Android 双 AVD 实测与音频、长期后台和其他平台仍待验收的项目。
 
+本文保留当时的 SDK 锁定建议和实测身份。当前直接使用社区原版 fvp 0.39.1，MDK 规则沿用上游，详见[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)；本记录不要求恢复已删除的本地依赖补丁或固定回归。
+
 ## 已确认与修正
 
 - 官方开发者文档明确说明静止屏幕初始不出帧的问题，由 `KEY_REPEAT_PREVIOUS_FRAME_AFTER` 解决。[S01] 官方 5.0.1 server 已设置 100000µs 重复间隔、priority=0、latency=1；本项目没有覆盖它们，不能把重复添加这个配置作为修复。[S02]
@@ -68,7 +70,7 @@ MDK `prepare(0)`仅可确认媒体信息，不保证那一刻已经显示首帧�
 1. 静止输入的暂停原先4秒失败：有界查询约1～2ms返回false，更换decoder无效。官方ControlMessage定义RESET_VIDEO=17，Controller只请求重置现有encoder，不注入点击或重启应用。[S08][S09] 实测在请求本地pause后用该控制消息提供新编码输出，可以收到真实暂停ACK。共享VideoPresentation现按会话串行化：本地pause请求/refresh/真实ACK → Core暂停捕获；恢复则Core先继续捕获并RESET_VIDEO → 本地playing ACK与实际snapshot。确认失败不提交捕获暂停，尽可能恢复本地消费者，保留原始错误。五种编码完整链路已通过；真实 HOME 退后台2秒再返回 Activity 也在产品页面通过，恢复要求真实 snapshot，不能由 streaming 状态代替。更长后台、系统回收仍需另外验收。
 2. 旋转已验证同一 session/relay 的 generation 1→2、新代真实 snapshot、Texture 更换及 Core 触控尺寸同步，测试约5秒通过。模拟器自动旋转会随传感器转回；测试夹具关闭目标自动旋转，结束恢复原设置。另一次7秒回归在旋转动画后900ms截图，目视确认画面方向与比例正确；这900ms仅用于稳定视觉检查，不计作首帧时间。
 3. 删除267行 RemoteVideoDecoder 及 MainActivity 视频方法后，真实产品页面的五种编码再次全部通过（28秒），包含 Texture、实际首帧、沉浸布局、退出与停止。后续共享PCM暂停恢复、实际产品HOME与Activity重建已通过，旧声音循环也已删除；真实外部AudioManager焦点也已完成双设备临时loss/gain、手动暂停保留和永久loss关闭旧源的验收，见[共享所有权记录](android-share-trust.md)；长期后台、进程回收仍待单独验收。
-4. 公共dispose为async-void，只能报告请求及纹理分离，不能伪称native delete已确认。fvp锁文件也不能锁定所有平台下载的MDK二进制；四端归档与摘要仍需固定。
+4. 公共dispose为async-void，只能报告请求及纹理分离，不能伪称native delete已确认。fvp锁文件也不能锁定所有平台下载的MDK二进制；当时提出固定四端归档与摘要的建议，当前平台依赖直接沿用社区原包规则。
 
 ## 回归证据与退出保证
 

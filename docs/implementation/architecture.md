@@ -9,7 +9,7 @@ Flutter 页面通过 `AppDependencies` 调用 Dart `InteropBridge`，经 FRB 进
 
 被控兼容按 ADB feature、系统接口与实际权限分别判断，不能把音频或独立应用窗口的下限施加到基础连接与整机远控。无宽元数据／目录协议的设备使用同一个临时原生文件服务；旧 shell 的未知退出码不能作为文件变更成功证据。固定服务端、部署授权、资源回收及当前验证范围见[被控兼容边界](android-target-compatibility.md)。
 
-Flutter 应用位于仓库根目录：`lib/`、`test/`、`integration_test/` 与平台 runner 共用根 `pubspec.yaml`。`packages/`、`crates/`、`servers/`、`third_party/`、`tool/` 保留各自构建职责。页面独立放在 `lib/pages/<page_name>/`，私有组件就近存放；共享服务、组件和路由使用 `services/`、`widgets/`、`router/`。路由生命周期见 [Flutter 页面与路由](flutter-navigation.md)。
+Flutter 应用位于仓库根目录：`lib/`、`test/`、`integration_test/` 与平台 runner 共用根 `pubspec.yaml`。`packages/`、`crates/`、`servers/`、`tool/` 保留各自构建职责。页面独立放在 `lib/pages/<page_name>/`，私有组件就近存放；共享服务、组件和路由使用 `services/`、`widgets/`、`router/`。路由生命周期见 [Flutter 页面与路由](flutter-navigation.md)。
 
 ## 状态和资源所有权
 
@@ -38,7 +38,9 @@ Flutter 应用位于仓库根目录：`lib/`、`test/`、`integration_test/` 与
 
 `TransportKind` 在保存、导出与恢复中区分 tcp、wireless、tls、usb。TLS 的明确授权拒绝映射为结构化错误，产品策略不解析展示文本。新增活动通过 activities 统一投影和停止；新增远控转换由 RemotePresentation 协调，页面不另建平行恢复状态。
 
-生成文件与来源一起维护，修改来源后重新生成。共享命令、FRB、Dart builder 和 companion 源码/产物检查由 `tool/check.sh` 汇总；视觉 token 的官方解析与自有 Dart emitter、fvp 受控副本边界见 [工具链契约](repository-tooling.md)。
+生成文件与来源一起维护，修改来源后重新生成。共享命令、FRB、Dart builder 和 companion 源码/产物检查由 `tool/check.sh` 汇总；视觉 token 的官方解析与自有 Dart emitter、社区原版 fvp 的依赖边界见 [工具链契约](repository-tooling.md)。
+
+共享播放器使用 pub.dev 精确版本 `fvp: 0.39.1`，不维护本地 fork 或原生补丁。MDK 的实际来源、版本与下载行为由该发布包的平台构建文件决定；锁定 Dart 包不等于所有平台 MDK 二进制也已锁定。历史本地补丁的 snapshot 接缝与 MDK 固定回归不再是当前门禁，普通宿主产物检查继续保留；原版空结果回调限制见工具链契约。
 
 ## 材质启动与渲染
 

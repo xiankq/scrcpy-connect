@@ -2,6 +2,8 @@
 
 > 此文件是 2026-10-18–19 产品修订的验收记录，保留各阶段测试数、失败、截图及产物边界。它不是另一份产品规范；当前行为以 [交互规则](../../designs/prod/interaction-rules.md) 为准，实现所有权与生成链分别见 [架构](architecture.md) 和 [工具链契约](repository-tooling.md)。
 
+> 播放器现已改为 pub.dev 社区原版 fvp 0.39.1，本地副本与专用补丁回归已移除。下文采用本地补丁或固定 MDK 的测试、GPU 采集和 APK 回执保留其历史身份，不继承为此次原版依赖切换后的通过证据；原版依赖规则及 snapshot 限制见[工具链契约](repository-tooling.md#社区原版-fvp-0391)。
+
 本轮按用户最初十一项反馈及后续逐页／工具链要求调整产品规则、同一份Pencil源稿和Flutter/Rust实现。当前设计为101页（99手机、2大屏）；原92手机逐张截图分为各46页两批，新增7页及2大屏另有实际截图查看回执。全部41源码页已对照，当前96张浅／深与响应式夹具截图已重拍。视觉值来自 [design.md](../../designs/design.md)，流程来自 [交互规则](../../designs/prod/interaction-rules.md)。既有 ADR 的主控免调试、真实应用任务与连接授权约束继续有效。
 
 | 反馈 | 原问题与决定 | 实现与验证位置／证据边界 |
@@ -28,7 +30,7 @@
 | 先读Apple官方再继续 | 已读Materials、Toolbars、Tab bars、Sidebars、Layout、Buttons官方正文及WWDC25 219／356／284 | [官方复核](../research/liquid-glass-design-review.md)含直接URL、用途边界与后续实施。研究阶段暂停已结束；当前GPU采集、9图有限人工复核和真实产品r2已完成；未将其扩大为原生等效 |
 | 简约且精致 | 统一返回／标题／动作基线、分组、内外几何与列表节奏；内容不玻璃化，文字动作独立，媒体静态文件名不再像玻璃按钮 | 定向回归包括对齐、双分隔、图标拉伸、状态本地化、画质单位、拒接对比；真实背景折射与交互观感另验 |
 | 官方token工具自动生成 | 固定@google/design.md 0.4.0公开lint().designSystem解析，项目仅Dart emitter；generate.py／--check接入门禁，含漂移／未知字段／缺引用等失败检查 | [工具链记录](repository-tooling.md)、tool/design_tokens；材质代理最新回执lint为0错误63警告（27组件扩展＋36标准components未直接引用颜色），generator/check与包11测试／analyze通过；最终生成一致性日志已回填，见当前视觉轮验收。该计数不等于Pencil母组件数 |
-| third_party是否能删除 | 保留fvp 0.39.1受控源码：五份snapshot空回调保护、MDK精确版本／摘要与平台约束，以及许可证和回归；没有vendored SDK或构建产物 | [补丁清单](../../third_party/fvp/CONNECT_PATCHES.md)、工具链记录。直接退回未修复发布版会恢复原生空回调崩溃风险；替换须先具备同等上游修复，不以“看似冗余”删除 |
+| 社区原版播放器 | 精确使用 pub.dev fvp 0.39.1；移除本地源码副本、path override、snapshot 补丁及 MDK 固定回归，MDK 平台依赖沿用上游规则 | 此前五份空回调保护及固定归档的验收仅属历史。原版 snapshot 空结果未判空的限制保留说明；当前选择使用原版，不以先补修复作为删除副本的条件。规则见[工具链契约](repository-tooling.md#社区原版-fvp-0391)，切换后结果见[验收记录](validation.md) |
 | 根目录只保留一个应用 | 根pubspec／lib／test／integration_test／runner为唯一入口，旧apps/connect与空apps已移除；design_system、interop_bridge和Rust各自保留职责 | 最终普通lib/main.dart Android-x64 debug包已构建、ZIP／ELF及签名校验并覆盖安装启动；具体摘要见末尾。业务r2与普通入口启动观察各保留自身范围，不继承旧APK结果 |
 | 清理旧产物与临时文件 | 已清重复旧build／Dart缓存／旧APK／过渡设计导出；历史记录约释放11.32GiB。设计导出放系统临时目录，Git保留源稿、规范与实际引用素材 | 最新96图、测试日志／回执、仍复用缓存与当前APK有意保留。主代理最后清理23项、2,087,737,945字节（约1.944GiB），回执见末尾；11.32GiB仅是之前迁移阶段记录。保留唯一普通入口APK及共享Rust／native缓存，本次文档未reset／commit或删除产物 |
 | 真Android光学验收 | 独立生产Glass harness＋strict driver，9场景；检查shader支持／加载、非Lite、真实拖动、按下／取消、亮暗与reduceTransparency，并在/tmp保存PNG／JSON | **9场景采集契约与逐张有限人工复核完成，真实产品r2通过**。shader支持／加载、交互、非Lite及场景像素标记均通过；visualAcceptanceComplete保持false作为工具不签发人工认证的边界，原生等效／完整形变／性能仍分开验收 |
@@ -56,7 +58,7 @@ Android x64 debug APK 已构建并独立验证 ZIP、签名、Flutter/Rust ELF �
 
 单测、组件测试和模拟器截图不能替代物理手机上的多设备声音听测、剪贴板系统权限、GPU材质与系统返回手势验收。模拟器日志仍有 GLES 0x501 及 Surface 释放后的 BufferQueue 告警，当前实际解码、健康状态和截图核对通过；不把这些局部证据推广为各GPU零告警或四端运行全部通过。未执行的真机组合不继承历史通过记录。
 
-## 当前视觉轮验收
+## 视觉修订阶段验收（历史产物）
 
 根应用最终`flutter test --no-pub --reporter json`全量 **323个非hidden项success**，done.success=true：[JSONL](/tmp/connect-final-tests.jsonl)。之后只修startupError无用字符串插值和测试braces两处lint；`ios_review_regressions`、`ios_pages_layout`、`ios_pages_capture`3文件 **13项success**，含全部96图再次捕获：[JSONL](/tmp/connect-final-pages.jsonl)。[Flutter analyze](/tmp/connect-final-analyze.log)为No issues found；[tool/generate.dart --check](/tmp/connect-final-generate.log)包含官方token解析、FRB Rust／Dart及build_runner生成一致性，全部成功。材质代理另有design_system 11项和Node生成器4项通过回执；这些是当前轮证据，不重复使用历史Rust301／桥接131计数。
 
@@ -72,7 +74,7 @@ Android Impeller独立9场景[result.json](/tmp/connect-glass-material/result.js
 
 主代理当前Pencil回执为101页、30母组件、186变量：新增共享sidebar、删除闲置母组件；18处旧blur使用同一编译成功的liquid-glass.glsl。更新后媒体预览、大屏与远控代表截图已实际查看；Pencil材料属于静态表达，不能据此声称Flutter GPU或Apple原生像素一致。main已等待GlassMaterial.initialize，GPU新材质9图捕获已完成，9图有限人工结论及真实产品r2已在上文回填；W7Lua降低透明度导航已改全实色，Get确认无shader并保存，统计不变。
 
-## 最终普通入口与清理
+## 视觉修订阶段普通入口与清理（历史产物）
 
 普通`lib/main.dart`入口Android-x64 debug包已构建：[构建日志](/tmp/connect-final-main-build.log)、[产物回执](/tmp/connect-final-main-apk.json)。保留唯一APK为`build/app/outputs/flutter-apk/app-debug.apk`，**147,239,422字节**，SHA256 `b7c766abfc6a94a2166af30fa2a4572898deb297e4a6ae62c94b5973e91073e8`；ZIP完整性、x64 ELF与apksigner签名验证通过。该普通包已成功覆盖集成测试包安装并am start，启动观察pid11476、Impeller OpenGLES、未见UnhandledException；这是普通入口启动证据，完整业务通过仍以此前独立集成r2回执为界。debug包不等同发行签名产物。
 

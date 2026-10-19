@@ -28,11 +28,23 @@ dart tool/generate.dart --check
 
 工具迁移后的历史回执仍只证明原版本的运行结果。本文与专项记录中的复现入口随目录调整，原日志、版本、环境及已知限制不因迁移改变。
 
-## 唯一受控 fork：third_party/fvp
+## 社区原版 fvp 0.39.1
 
-`third_party/fvp` 保存官方 fvp 0.39.1 源码与许可证。受控差异是五份原生 snapshot 回调的空结果保护、MDK 0.39.0 正式版本及官方归档 SHA 固定、Apple 精确版本约束，以及相应清单和回归；公开 Dart 播放器 API 保持上游接口。具体来源与补丁见 [CONNECT_PATCHES.md](../../third_party/fvp/CONNECT_PATCHES.md)。下载的 SDK、`.cxx` 与构建缓存不属于跟踪源码。
+播放器精确依赖 pub.dev 社区原版 `fvp: 0.39.1`，由锁文件记录 hosted 包身份。不保留 `third_party/fvp` 源码副本、path override 或本地空回调补丁，也不修改 pub 缓存。包的来源是 [0.39.1 发布版](https://pub.dev/packages/fvp/versions/0.39.1)，其[原始归档](https://pub.dev/api/archives/fvp-0.39.1.tar.gz) SHA-256 为 `2f4607e07748856dbe268a3b968efe973c27f85ea4e7621c4209783a6dad26a0`。
 
-snapshot 失败允许空结果，未保护的原生解引用可直接终止主控进程，Dart 异常处理无法拦截；首帧、恢复和截图均依赖该路径。保留源码副本是为使这组修复及原生依赖可重复。取消 path override 的条件是替代上游版本具备同等保护与依赖约束，并通过对应回归，不能只删除目录。
+MDK 的规则直接继承该发布包，不再由本仓库统一固定正式版本或各平台归档摘要：
+
+| 构建路径 | 原版依赖规则 |
+| --- | --- |
+| Android、Windows、Linux 的 CMake | 默认从 SourceForge nightly 下载对应平台 SDK；上游支持 `FVP_DEPS_URL`、可选 `FVP_DEPS_SHA256` 与 `FVP_DEPS_LATEST`。Dart 锁文件不固定这些下载字节。 |
+| Apple CocoaPods | `mdk ~> 0.39.0` 版本范围，由 Pod 解析结果确定具体版本。 |
+| Apple SwiftPM | 上游 binary target 使用 MDK 0.39.0 Apple 归档 URL 及其 checksum。 |
+
+规则依据为固定上游的 [CMake 下载器](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/cmake/deps.cmake)、[Podspec](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/ios/fvp.podspec) 和 [SwiftPM 清单](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/darwin/fvp/Package.swift)。构建回执按实际平台记录采用的 SDK；下载缓存不作为跟踪源码保存。
+
+原版 `MdkSnapshot` 对 MDK 失败回调的空 `ret` 未判空，构造 Dart typed data 时直接读取其 stride、height 和 data。此前宿主源边界探针曾注入该空结果并得到原生 SIGSEGV；这是空结果路径的已知限制，区别于 renderer 内部的历史空 `std::function` 崩溃，Dart 异常处理不能拦截该原生解引用。当前选择直接使用原版，不保留本地修补。[原版回调源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/callbacks.cpp)、[历史调查](../research/scrcpy-first-frame-performance.md#fvp空结果故障与可复现交付2026-10-18)。
+
+本地补丁及其 `fvp_snapshot_regression`、`check_native_deps` 专用工具与 MDK 固定回归已移除。普通宿主产物的链接、库架构和打包验证继续保留。下文及专项记录中的补丁版测试、APK、SDK 摘要均保留历史身份，不继承为社区原版验证；切换后的实际结果另记[验收记录](validation.md)。
 
 ## 构建与产物边界
 

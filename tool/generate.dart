@@ -79,23 +79,13 @@ void copyFrbInputs(Directory source, Directory isolated) {
     '.dart_tool',
     '.cxx',
   };
-  for (final name in [
-    'crates',
-    'packages',
-    'lib',
-    'servers',
-    'protocol',
-    'third_party',
-  ]) {
+  for (final name in ['crates', 'packages', 'lib', 'servers', 'protocol']) {
     final directory = Directory(p.join(source.path, name));
     if (directory.existsSync()) {
       copyDirectory(
         directory,
         Directory(p.join(isolated.path, name)),
-        exclude: (name) =>
-            ignored.contains(name) ||
-            name.startsWith('mdk-sdk') ||
-            name.startsWith('.fvp-mdk-'),
+        exclude: ignored.contains,
       );
     }
   }

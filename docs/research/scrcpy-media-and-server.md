@@ -13,7 +13,7 @@
 | scrcpy | 最新正式 release `v5.0.1`，2026-10-08 发布；解引用后的源码 commit `a60891aea193d92e7e5c3942700eca63f9d19a5f` | [官方 release][S01]；通过 `git ls-remote` 核对 annotated tag 与 commit。下文 server/client 源码均固定到该 commit。 |
 | 官方 server JAR | `scrcpy-server-v5.0.1`；SHA-256 `764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536` | [官方构建说明][S02]及 release asset digest。这里只核对官方公布值，未下载二进制重新计算。 |
 | fvp | pub.dev 当前 `0.39.1`；tag `v0.39.1` → `a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93` | [pub.dev][F01]、[固定 README][F02]。本轮未运行 Flutter 或编译插件。 |
-| MDK | 为调查选定正式 tag `v0.39.0` → `3c3a03646ca2c51a8969bcea9f81cbecce0770df` | [固定 README][M01]。这不等于 fvp 各平台构建自动用了该不可变二进制；SDK 下载地址、摘要与日志仍须锁定并核对。 |
+| MDK | 为调查选定正式 tag `v0.39.0` → `3c3a03646ca2c51a8969bcea9f81cbecce0770df` | [固定 README][M01]。这不等于 fvp 各平台构建自动用了该不可变二进制；当时建议锁定并核对 SDK 下载地址与摘要。当前原版平台规则见[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)。 |
 | FRB | 当前 stable `2.13.0`；tag `v2.13.0` → `8631db91a90c699439c9ce2a1fb4164ae8661da9` | [pub.dev][R01]、[固定 zero-copy 文档][R02]。不采用 beta 的行为作承诺。 |
 
 先查 Context7 的 fvp / FRB 文档，再读取上述项目官方仓库、Android / Flutter 官方 API。MDK wiki、Android 和 Flutter 在线文档属于调查当日内容，可能变化。scrcpy v5.0.1 的 `doc/develop.md` 仍保留“4.0”叙述和命令示例；本文遇到差异以 v5.0.1 `Options`、`Streamer`、`DesktopConnection` 和客户端 demuxer 的实际实现为准，不照抄旧示例中的版本参数。[S03]、[S04]、[S05]、[S06]、[S07]
