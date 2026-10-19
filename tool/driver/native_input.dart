@@ -46,20 +46,36 @@ Future<void> main() async {
       (environment['CONNECT_MDK_INPUT_ORDER'] ??
               'http,append,append,http,http,append')
           .split(',');
+  final configuredCases = environment['CONNECT_MDK_INPUT_CASES'];
+  final cases = configuredCases == null
+      ? order.map((mode) => <String, dynamic>{'mode': mode}).toList()
+      : (jsonDecode(configuredCases) as List<dynamic>)
+            .cast<Map<String, dynamic>>();
   final seconds = int.parse(
     environment['CONNECT_MDK_INPUT_TIMEOUT_SECONDS'] ?? '90',
   );
-  if (order.isEmpty ||
-      order.any((mode) => mode != 'http' && mode != 'append') ||
+  if (cases.isEmpty ||
+      cases.length > 24 ||
+      cases.any(
+        (value) => value['mode'] != 'http' && value['mode'] != 'append',
+      ) ||
       seconds < 1 ||
       seconds > 600) {
     throw StateError('Invalid order or timeout.');
   }
   final timeout = Duration(seconds: seconds);
+  final maxP95 = environment['CONNECT_MDK_INPUT_MAX_P95_US'] == null
+      ? null
+      : int.parse(environment['CONNECT_MDK_INPUT_MAX_P95_US']!);
+  if (maxP95 != null && maxP95 <= 0) {
+    throw ArgumentError('Invalid latency budget');
+  }
   final runDirectory = await output.createTemp('run-');
   final report = <String, dynamic>{
     'complete': false,
-    'order': order,
+    'order': cases.map((value) => value['mode']).toList(),
+    'cases': cases,
+    'maxInputToDecodedP95Us': maxP95,
     'startedAt': DateTime.now().toUtc().toIso8601String(),
     'screenshotsAreCaptureOnly': true,
     'runs': <Map<String, dynamic>>[],
@@ -115,8 +131,9 @@ Future<void> main() async {
       'command': 'state',
     }, 'state-before');
     final rounds = <String, int>{'http': 0, 'append': 0};
-    for (var index = 0; index < order.length; index++) {
-      final mode = order[index];
+    for (var index = 0; index < cases.length; index++) {
+      final configuration = cases[index];
+      final mode = configuration['mode'] as String;
       final round = rounds.update(mode, (value) => value + 1);
       final name = '${index + 1}-$mode-$round';
       final evidence = <String, dynamic>{
@@ -127,11 +144,19 @@ Future<void> main() async {
       (report['runs'] as List).add(evidence);
       await persist();
       evidence['response'] = await request({
+        ...configuration,
         'command': 'run',
         'mode': mode,
         'round': round,
       }, name);
       await persist();
+      if (maxP95 != null) {
+        final response = evidence['response'] as Map<String, dynamic>;
+        final summary = response['summary'] as Map<String, dynamic>;
+        if ((summary['steadyInputToDecodedP95Us'] as int) > maxP95) {
+          throw StateError('Player input-to-onVideo P95 exceeded $maxP95 us');
+        }
+      }
       final screenshot = await driver.screenshot().timeout(timeout);
       await File('${runDirectory.path}/$name.png')
           .writeAsBytes(screenshot, flush: true);
