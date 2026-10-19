@@ -2,12 +2,15 @@
 """Generate design tokens, FRB and Dart builders; --check never rewrites outputs."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.parse import urljoin, urlparse
+from urllib.request import url2pathname
 
 ROOT = Path(__file__).resolve().parent.parent
 FRB_VERSION = "2.13.0"
@@ -85,7 +88,17 @@ def main():
             design.append("--check")
         subprocess.run(design, cwd=ROOT, check=True)
         generate_frb(args.check)
-        command = ["dart", "run", "build_runner", "build", "--workspace"]
+        # Dependency resolution belongs to pub get, not output verification.
+        # Invoke the resolved runner directly so dart run cannot re-resolve
+        # the workspace or access the package registry during --check.
+        package_config = ROOT / ".dart_tool/package_config.json"
+        packages = json.loads(package_config.read_text())["packages"]
+        runner = next((p for p in packages if p["name"] == "build_runner"), None)
+        if runner is None:
+            raise ValueError("Resolve the locked Dart dependencies before generation")
+        runner_uri = urljoin(package_config.as_uri(), runner["rootUri"].rstrip("/") + "/bin/build_runner.dart")
+        command = ["dart", "--disable-dart-dev", f"--packages={package_config}",
+                   url2pathname(urlparse(runner_uri).path), "build", "--workspace"]
         if args.check:
             command.append("--only-check")
         return subprocess.run(command, cwd=ROOT).returncode
