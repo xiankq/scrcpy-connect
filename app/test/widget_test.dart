@@ -1,10 +1,10 @@
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/pages/add_device/add_device_page.dart';
-import 'package:scrcpy_connect/pages/connection_form/connection_form_page.dart';
-import 'package:scrcpy_connect/pages/remote/remote_page.dart';
-import 'package:scrcpy_connect/pages/remote/widgets/exit_handle.dart';
+import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/services/remote_input.dart';
@@ -76,7 +76,7 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.text('无线连接'));
+      await tester.tap(find.text('无线调试连接'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('使用配对码'));
       await tester.tap(find.text('使用配对码'));
@@ -197,8 +197,8 @@ void main() {
       expect(calls.where((call) => call.startsWith('session.')), isEmpty);
       await tester.tap(find.text('添加设备').last);
       await tester.pumpAndSettle();
-      expect(find.text('无线连接'), findsOneWidget);
-      expect(find.text('手动填写地址'), findsOneWidget);
+      expect(find.text('无线调试连接'), findsOneWidget);
+      expect(find.text('手动填写无线调试地址'), findsOneWidget);
     },
   );
   testWidgets('invalid connection port cannot reach device backend', (

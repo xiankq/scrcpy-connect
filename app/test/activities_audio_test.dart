@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/activities/activities_page.dart';
+import 'package:scrcpy_connect/pages/settings/activities/settings_activities_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
 
 import 'support/test_controller.dart';
 
@@ -62,13 +61,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('手机 A · 设备声音'), findsOneWidget);
-      expect(find.text('手机 B · 设备声音'), findsOneWidget);
+      expect(find.text('手机 A'), findsOneWidget);
+      expect(find.text('手机 B'), findsOneWidget);
+      expect(find.text('设备声音'), findsNWidgets(2));
       expect(find.byTooltip('正在播放'), findsNWidgets(2));
-      final rowA = find.ancestor(
-        of: find.textContaining('手机 A'),
-        matching: find.byType(ActionRow),
-      );
+      final rowA = find.byKey(const ValueKey('activities:id:device-a'));
       await tester.tap(find.descendant(of: rowA, matching: find.text('停止')));
       await tester.pumpAndSettle();
       expect(find.text('仅停止手机 A 的设备声音，连接和手机 B 保持原状。'), findsOneWidget);
@@ -79,7 +76,7 @@ void main() {
       expect(lists, greaterThan(1));
       expect(find.textContaining('手机 A'), findsNothing);
       expect(find.textContaining('手机 B'), findsOneWidget);
-      expect(find.text('手机 B · 设备声音'), findsOneWidget);
+      expect(find.text('设备声音'), findsOneWidget);
       expect(find.byTooltip('正在播放'), findsOneWidget);
       expect(
         requests.where(

@@ -82,6 +82,7 @@ class TransfersPage extends HookConsumerWidget {
                                 ? LucideIcons.upload
                                 : LucideIcons.download,
                             color: ConnectTokens.amber,
+                            size: DesignTokens.componentFileIconSize,
                           ),
                           const SizedBox(width: DesignTokens.spacingSm),
                           Expanded(

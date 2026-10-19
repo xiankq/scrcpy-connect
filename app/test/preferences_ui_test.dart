@@ -2,9 +2,9 @@ import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/appearance/appearance_page.dart';
-import 'package:scrcpy_connect/pages/device_details/device_details_page.dart';
-import 'package:scrcpy_connect/pages/wireless_guide/wireless_guide_page.dart';
+import 'package:scrcpy_connect/pages/settings/appearance/settings_appearance_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
+import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 import 'support/router_test_app.dart';
@@ -109,7 +109,7 @@ void main() {
   );
 
   for (final size in [const Size(280, 620), const Size(620, 280)]) {
-    testWidgets('appearance and legacy connection remain reachable at $size', (
+    testWidgets('appearance and IP connection remain reachable at $size', (
       tester,
     ) async {
       tester.view.physicalSize = size;
@@ -141,21 +141,21 @@ void main() {
       expect(find.byType(ConnectSwitchRow), findsNothing);
       expect(tester.takeException(), isNull);
 
-      // Rebuild with a new router to exercise the public wireless entry.
+      // Rebuild with a new router to exercise the public method selection.
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpWidget(
         RouterTestApp(
           controller: controller,
           theme: ConnectTokens.theme(Brightness.light),
-          home: WirelessGuidePage(controller: controller),
+          home: AddDevicePage(controller: controller),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('使用 IP 与端口连接'), 200);
+      await tester.scrollUntilVisible(find.text('IP 地址连接'), 200);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('使用 IP 与端口连接'));
+      await tester.tap(find.text('IP 地址连接'));
       await tester.pumpAndSettle();
-      expect(find.text('填写已开启的 TCP 连接信息'), findsOneWidget);
+      expect(find.text('填写 IP 地址与连接端口'), findsOneWidget);
       final portField = find.widgetWithText(TextFormField, '连接端口');
       final verticalScroll = find.byWidgetPredicate(
         (widget) =>
