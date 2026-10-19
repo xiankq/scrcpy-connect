@@ -46,9 +46,11 @@ Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/`
 
 ## 材质启动与渲染
 
-`app/lib/main.dart` 在启动 `try` 内先等待 `GlassMaterial.initialize()`，再调用 `bootstrapApplication()`；支持 shader 的后端加载失败进入启动错误页。材质只有 `liquid_glass_easy` 的一个 lens 引擎。后端实际支持 `ImageFilter` shader 时使用 lens，不支持时使用磨砂回退；降低透明度、高对比或显式实体面使用不透明内容并移除过滤器。减少动态效果另行关闭触摸形变。
+`app/lib/main.dart` 在启动 `try` 内先等待 `GlassMaterial.initialize()`，再调用 `bootstrapApplication()`，生产应用通过 `GlassMaterial.wrap` 接入 `liquid_glass_widgets` 的主题亮度和系统辅助偏好。支持 shader 时初始化失败进入启动错误页；实际支持 `ImageFilter` shader 时使用 premium 光学路径，不支持时使用明确的磨砂回退。降低透明度、高对比或显式实体面使用不透明内容并移除光学与模糊；减少动态效果另行关闭弹性位移。
 
-lens 拥有轮廓与子内容裁剪，外层不叠加径向保护遮罩或固定白边。Pencil 的 GLSL 只表达静态设计目标，不是 Flutter 渲染实现或 Apple 原生像素等效证明。光学数值来自生成 token，产品布局依据父约束而非整屏缩放。真实 shader、回退及无障碍路径的证据边界见产品验收记录。
+`Glass`、图标控制、工具组和导航保留项目的语义接口，由新库的 `AdaptiveGlass` 与交互控件承载。相关控制在局部 `GlassSurfaceGroup` 中共享背景读取和融合形状，分组不跨 Navigator 或覆盖不同路由。实体内容卡片与列表使用原内容材料。透镜厚度、折射率、色散、着色、模糊和光照由生成 token 映射，角度按后端要求转换；`refractionWidth` 用于局部融合距离，不作为厚度的替代值。
+
+光学层拥有轮廓与子内容裁剪，外层不叠加径向保护遮罩或固定白边。Pencil GLSL 是静态设计投影，与 Flutter 渲染分别核对。真实 shader、回退、辅助偏好与动态性能的验证结果见[设计与实现对照](design-fidelity.md)。
 
 ## 平台交付边界
 

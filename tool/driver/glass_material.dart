@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../benchmark/glass_metrics.dart';
+
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
@@ -15,6 +17,14 @@ const _sceneNames = <String>[
   'reduced-light',
   'reduced-light-scrolled',
   'reduced-dark',
+  'motion-rest',
+  'motion-held',
+  'motion-drag',
+  'motion-repress',
+  'motion-recovered',
+  'reduced-motion-pressed',
+  'blend-near',
+  'blend-separated',
 ];
 
 Future<void> main() async {
@@ -68,6 +78,7 @@ Future<void> main() async {
       // Preserve partial evidence on failure; validation always fails closed.
       try {
         validateGlassMaterialReport(report);
+        report.addAll(summarizeGlassPerformance(report));
         // Read the actual captured pixels, independently of the scene receipt.
         // A correct JSON theme/variant cannot make a stale screenshot pass.
         for (final value in report['scenes'] as List<dynamic>) {
@@ -107,7 +118,7 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
     if (!condition) throw StateError(message);
   }
 
-  require(report['schemaVersion'] == 1, 'Missing Glass report schema.');
+  require(report['schemaVersion'] == 2, 'Missing Glass report schema.');
   require(report['scope'] == 'glass-material', 'Wrong acceptance scope.');
   require(report['platform'] == 'android', 'Android runtime was not used.');
   for (final key in <String>[
@@ -121,7 +132,22 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
   ]) {
     require(report[key] == true, 'Glass acceptance missing: $key.');
   }
-  require(report['liteGlassEnabled'] == false, 'Lite fallback was enabled.');
+  require(
+    report['backend'] == 'liquid_glass_widgets' &&
+        report['backendVersion'] == '1.13.0',
+    'Wrong production material backend.',
+  );
+  require(report['fallbackEnabled'] == false, 'Fallback was enabled.');
+  require(
+    report['debugPointerOverlay'] == false &&
+        report['tooltipsVisible'] == false,
+    'Debug decorations contaminate captures.',
+  );
+  require(
+    report['dynamicCaptureComplete'] == true &&
+        report['performanceCaptureComplete'] == true,
+    'Missing dynamic or timing evidence.',
+  );
   require(
     report['visualAcceptanceComplete'] == false,
     'The capture harness cannot declare a human visual review passed.',
@@ -153,7 +179,12 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
           marker.every((v) => v is num && v.isFinite),
       'Missing scene marker bounds: $name.',
     );
-    final reduced = name.startsWith('reduced-');
+    final reduced = [
+      'reduced-light',
+      'reduced-light-scrolled',
+      'reduced-dark',
+    ].contains(name);
+    final blend = name.startsWith('blend-');
     final clear = name.startsWith('clear-');
     require(
       scene['reduceTransparency'] == reduced,
@@ -175,18 +206,38 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
       scene['optics'] == (reduced ? 'skipped-reduced-transparency' : 'shader'),
       'Fallback or missing optical receipt: $name.',
     );
-    require(scene['liteCount'] == 0, 'Lite fallback in $name.');
+    require(scene['lightweightSurfaceCount'] == 0, 'Lite fallback in $name.');
     require(scene['blurWidgetCount'] == 0, 'Blur-only fallback in $name.');
-    final lensCount = scene['lensCount'];
+    final lensCount = scene['surfaceCount'];
     require(
       lensCount ==
           (reduced
               ? 0
               : clear
               ? 2
+              : blend
+              ? 5
               : 4),
       'Optics were not enabled/removed as requested: $name.',
     );
+    require(
+      scene['reduceMotion'] == (name == 'reduced-motion-pressed'),
+      'Incorrect reduced motion policy: $name.',
+    );
+    require(
+      scene['layerCount'] is int &&
+          (reduced
+              ? scene['layerCount'] == 0
+              : (scene['layerCount'] as int) > 0),
+      'Missing actual backend layers: $name.',
+    );
+    if (blend) {
+      require(
+        scene['blendGroupCount'] is int &&
+            (scene['blendGroupCount'] as int) >= 2,
+        'Fusion demo bypassed shared group geometry.',
+      );
+    }
     final offset = scene['backgroundOffset'];
     require(
       offset is num &&
@@ -263,8 +314,56 @@ void validateGlassMaterialReport(Map<String, dynamic> report) {
     'tapAfterBackgroundScroll',
     'clearToolbarTap',
     'reducedControlsOperate',
+    'interruptedRecovery',
+    'reducedMotionNoGeometry',
+    'realBlendGroup',
   ]) {
     require(interactions[name] == true, 'Unverified interaction: $name.');
+  }
+  final motion = report['motionSamples'];
+  require(
+    motion is List && motion.length >= 50,
+    'Missing real multi-frame presentation samples.',
+  );
+  final phases = (motion as List).map((v) => (v as Map)['phase']).toSet();
+  require(
+    phases.containsAll({
+      'press',
+      'drag',
+      'cancel',
+      'repress',
+      'recovery',
+      'reduced-motion-press',
+    }),
+    'Incomplete interruption sequence.',
+  );
+  for (final raw in motion) {
+    final item = raw as Map;
+    final bounds = item['bounds'];
+    require(
+      bounds is List &&
+          bounds.length == 4 &&
+          bounds.every((n) => n is num && n.isFinite),
+      'Invalid presentation sample.',
+    );
+  }
+  final performance = report['performance'];
+  require(
+    performance is List && performance.length == 4,
+    'Missing measured real-vsync workload windows.',
+  );
+  for (final raw in performance as List) {
+    final sample = raw as Map;
+    require(
+      sample['frames'] is List && (sample['frames'] as List).isNotEmpty,
+      'No actual FrameTiming samples.',
+    );
+    require(
+      sample['screenshotsDuringMeasurement'] == 0 &&
+          sample['backgroundPaints'] is int &&
+          (sample['backgroundPaints'] as int) > 2,
+      'Timing window is static or contaminated by captures.',
+    );
   }
   final distance = interactions['backgroundScrollDistance'];
   require(

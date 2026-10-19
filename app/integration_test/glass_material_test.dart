@@ -5,8 +5,6 @@ import 'dart:ui' as ui;
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 // Public renderer diagnostics only; all surfaces below use design_system.
@@ -100,7 +98,6 @@ void main() {
         final opticsActive =
             supported &&
             GlassMaterial.isInitialized &&
-            liteCount == 0 &&
             lensCount > 0 &&
             liteCount == 0 &&
             !reduced;
@@ -180,8 +177,8 @@ void main() {
               : opticsActive
               ? 'shader'
               : 'fallback-only',
-          'lensCount': lensCount,
-          'liteCount': liteCount,
+          'surfaceCount': lensCount,
+          'lightweightSurfaceCount': liteCount,
           'blurWidgetCount': blurCount,
           'backgroundOffset': harness.scroll.offset,
           'physicalWidth': view.physicalSize.width,
@@ -674,6 +671,7 @@ class _GlassHarnessState extends State<_GlassHarness>
                                   ? const SizedBox.shrink()
                                   : blendDemo
                                   ? SizedBox(
+                                      key: _panelKey,
                                       width: 280,
                                       height: 120,
                                       child: GlassSurfaceGroup(

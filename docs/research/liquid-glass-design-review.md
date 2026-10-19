@@ -1,6 +1,6 @@
 # Liquid Glass 官方设计复核
 
-日期：2026-10-19。状态：官方资料研究完成；后续用途、对齐与分组纠正已实施，9场景Android光学采集契约已通过，9张图有限人工复核及真实Android产品流程r2已完成，原生等效／完整动态／性能仍单列。研究阶段曾暂停视觉改动；该历史暂停已结束，不能继续当作当前任务状态。本文不将静态设计或Widget截图写成原生Liquid Glass验收。
+日期：2026-10-19。官方资料研究已完成。本文的实现与验收回执保留迁移前 `liquid_glass_easy` 阶段的身份，包括旧9场景GPU及产品r2；它们不证明 `liquid_glass_widgets` 后端已经通过。当前工程边界见[架构](../implementation/architecture.md#材质启动与渲染)，本次迁移结果见[设计与实现对照](../implementation/design-fidelity.md)。官方原则与项目推论仍分别标明，静态稿与Widget截图不构成原生等效证明。
 
 ## 结论
 
@@ -71,19 +71,19 @@ UIKit将 UIGlassEffect 与 UIBlurEffect明确区分；交互性、材质化/退�
 
 | 定位 | 初始发现与后续事实 | 当前证据／限制 |
 | --- | --- | --- |
-| `app/lib/pages/media_preview/media_preview_page.dart` | 初始不可点击文件名被clear Glass包裹；现在为普通单行文字，clear只留返回和保存／分享控制，导航后方有局部渐退保护 | `ios_review_regressions_test.dart`检查文件名不在Glass内；浅／深媒体最新截图已显示照片。保护层与图标在真实明暗纹理上的光学表现仍待GPU查看 |
+| `app/lib/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart` | 初始不可点击文件名被clear Glass包裹；现在为普通单行文字，clear只留返回和保存／分享控制，导航后方有局部渐退保护 | `ios_review_regressions_test.dart`检查文件名不在Glass内；浅／深媒体最新截图已显示照片。保护层与图标在真实明暗纹理上的光学表现仍待GPU查看 |
 | `app/lib/widgets/page_frame.dart` | 初始所有actions放同一GlassToolbarGroup；现在相关图标仍共享，真实文字动作通过独立`trailingAction`布局，并统一返回与标题对齐 | 相关回归覆盖图标组、文字动作不在Glass内及左右对齐；不以组件接口存在代替所有未来调用正确 |
 | `packages/design_system/lib/design_system.dart` Glass.optics | 调用LiquidGlassLens，配置refraction、specular与glow；不支持shader时回退BackdropFilter | 独立GPU harness要求Android shader支持、程序已加载、非Lite，并捕获真实背景；当前9场景采集契约与逐张有限画面复核已完成，原生级质量结论仍单列；不能只因API名称称为原生Liquid Glass等效 |
 | 同文件Glass.build及外部BoxShadow | 初始wrapper另绘固定保护渐变／边框；当前shader路径已去掉额外保护渐变与重复边框，外部柔和阴影仍按Theme固定，降低透明度与高对比直接使用实体分支 | 这些清理减少灰色条带与双重描边，但固定阴影不能称Apple自适应阴影；库与实际背景表现仍需独立核验 |
 | 同文件Glass交互与启动 | 当前要求支持shader时先初始化程序，main已await GlassMaterial.initialize；交互控件接入细微touch flex，disableAnimations时不启用；不再由页面单独画一套玻璃 | 已有包级回归与静态分析回执；实际按压／取消画面、可打断性及对比适应由GPU运行验证，接入参数不等于原生级手感通过 |
-| `app/lib/pages/remote/widgets/exit_handle.dart` | 初始退出控件一律clear；后续已改regular，适用于任意远端应用背景，既有拖拽／吸附／展开／关闭行为保留 | `exit_handle_test.dart`纳入定向回归；真实文字、明暗背景及视频上的可见性仍需设备截图与输入结果 |
+| `app/lib/pages/devices/workspace/remote/widgets/exit_handle.dart` | 初始退出控件一律clear；后续已改regular，适用于任意远端应用背景，既有拖拽／吸附／展开／关闭行为保留 | `exit_handle_test.dart`纳入定向回归；真实文字、明暗背景及视频上的可见性仍需设备截图与输入结果 |
 | GlassToolbarGroup、GlassTabBar | 已有一层共享Glass，子项保持普通控件/浅选中面 | 方向正确；保持一层材料，不新增每项完整玻璃 |
 | OriginalFileHeader、GroupedListView | 文件标题是普通内容，相关行以ContentPanel统一分组 | 方向正确；别为了全局“玻璃化”把它们替换为lens |
 | GlassIconButton与普通返回控制 | 已区分点击区域与内部图标 | 保持一致命中；不要把每个图标图形都扩大成整块圆形 |
 
 上述已实施的用途纠正关闭了相应初始建议，尚未验证的动态能力保持开放。它们不代表所有页面业务状态运行通过，也不改变初始94页结构扫描的历史事实。
 
-主代理另已将Pencil的18处旧blur替换为同一`assets/liquid-glass.glsl`，实际编译成功，并查看更新后的媒体预览、大屏和远控代表页。该静态光学表达与Flutter生产shader是两类证据；不能因Pencil编译或静态图中边缘可见，就称为Apple原生效果一致。源稿当前101页、30母组件、186变量，源码当前41页，完整对应关系以逐页审计为准。
+主代理另已将Pencil的18处旧blur替换为同一`assets/liquid-glass.glsl`，实际编译成功，并查看更新后的媒体预览、大屏和远控代表页。该静态光学表达与Flutter生产shader是两类证据；不能因Pencil编译或静态图中边缘可见，就称为Apple原生效果一致。该轮源稿为101页、30母组件、186变量，源码为41页，这是重构前的历史快照；后续设备舞台重构与当前验证范围见[设计与实现对照](../implementation/design-fidelity.md)。
 
 ## 实施与验收顺序
 
