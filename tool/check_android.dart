@@ -57,7 +57,7 @@ void main(List<String> arguments) {
     final root = repositoryRoot();
     final apk = File(
       arguments.isEmpty
-          ? '${root.path}/build/app/outputs/flutter-apk/app-debug.apk'
+          ? '${applicationRoot(root).path}/build/app/outputs/flutter-apk/app-debug.apk'
           : arguments.single,
     ).absolute;
     verifyApk(apk, ['armeabi-v7a', 'arm64-v8a', 'x86_64']);

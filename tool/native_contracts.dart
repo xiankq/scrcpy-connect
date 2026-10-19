@@ -17,7 +17,7 @@ Future<void> main(List<String> arguments) async {
       );
     }
     final root = repositoryRoot();
-    final android = path.join(root.path, 'android');
+    final android = path.join(applicationRoot(root).path, 'android');
     final properties = <String, String>{};
     for (final line in File(
       path.join(android, 'local.properties'),

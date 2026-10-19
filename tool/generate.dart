@@ -79,7 +79,13 @@ void copyFrbInputs(Directory source, Directory isolated) {
     '.dart_tool',
     '.cxx',
   };
-  for (final name in ['crates', 'packages', 'lib', 'servers', 'protocol']) {
+  // Only app sources and its workspace manifest are generator inputs. Native
+  // runners can contain machine-local SDK paths and signing credentials.
+  final appManifest = File(p.join(source.path, 'app/pubspec.yaml'));
+  final isolatedManifest = File(p.join(isolated.path, 'app/pubspec.yaml'));
+  isolatedManifest.parent.createSync(recursive: true);
+  appManifest.copySync(isolatedManifest.path);
+  for (final name in ['crates', 'packages', 'app/lib', 'servers', 'protocol']) {
     final directory = Directory(p.join(source.path, name));
     if (directory.existsSync()) {
       copyDirectory(

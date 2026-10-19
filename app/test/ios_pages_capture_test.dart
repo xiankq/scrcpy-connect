@@ -182,7 +182,7 @@ Future<Json> fixtureRequest(String command, [Json params = const {}]) async =>
       'media.preview' || 'media.thumbnail' =>
         params['path'] == photo['path']
             ? {
-                'localPath': File('designs/assets/sample-lake.jpg')
+                'localPath': File('../designs/assets/sample-lake.jpg')
                     .absolute
                     .path,
                 'mime': 'image/jpeg',

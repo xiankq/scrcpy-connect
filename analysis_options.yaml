@@ -12,9 +12,9 @@ analyzer:
   exclude:
     - '**/build/**'
     - '**/.dart_tool/**'
-    - android/**
-    - ios/**
-    - macos/**
-    - windows/**
-    - linux/**
+    - app/android/**
+    - app/ios/**
+    - app/macos/**
+    - app/windows/**
+    - app/linux/**
     - build/**

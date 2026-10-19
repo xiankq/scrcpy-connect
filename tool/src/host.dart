@@ -1,6 +1,6 @@
 import 'dart:io';
 
-export 'core_tooling.dart' show repositoryRoot, executable;
+export 'core_tooling.dart' show repositoryRoot, applicationRoot, executable;
 
 Future<void> runChecked(
   String executable,

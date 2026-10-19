@@ -23,6 +23,20 @@ void main() {
   );
   tearDown(() => temporary.deleteSync(recursive: true));
 
+  test('application root is the app workspace member', () {
+    File(p.join(temporary.path, 'pubspec.yaml'))
+        .writeAsStringSync('workspace:');
+    File(p.join(temporary.path, 'Cargo.toml')).writeAsStringSync('[workspace]');
+    final application = applicationRoot(temporary);
+    final entrypoint = File(p.join(application.path, 'lib/main.dart'));
+    entrypoint.parent.createSync(recursive: true);
+    entrypoint.writeAsStringSync('void main() {}');
+    File(p.join(application.path, 'pubspec.yaml'))
+        .writeAsStringSync('name: app');
+    expect(application.path, p.join(temporary.path, 'app'));
+    expect(repositoryRoot(entrypoint.uri).path, temporary.path);
+  });
+
   test('each FRB output drift and missing output is rejected', () {
     final before = Directory(p.join(temporary.path, 'before'));
     final after = Directory(p.join(temporary.path, 'after'));
@@ -79,6 +93,13 @@ void main() {
       'flutter_rust_bridge.yaml',
       'pubspec.yaml',
       'pubspec.lock',
+      'app/pubspec.yaml',
+      'app/lib/main.dart',
+      'app/lib/generated.g.dart',
+      'app/.dart_tool/flutter_build/cache',
+      'app/build/app.apk',
+      'app/android/local.properties',
+      'app/android/key.properties',
       'crates/bridge/src/lib.rs',
       'crates/bridge/target/cache',
       '.dart_tool/package_config.json',
@@ -88,6 +109,16 @@ void main() {
       file.writeAsStringSync(name);
     }
     generate.copyFrbInputs(source, isolated);
+    for (final name in [
+      'app/pubspec.yaml',
+      'app/lib/main.dart',
+      'app/lib/generated.g.dart',
+    ]) {
+      expect(File(p.join(isolated.path, name)).readAsStringSync(), name);
+    }
+    for (final name in ['app/.dart_tool', 'app/build', 'app/android']) {
+      expect(Directory(p.join(isolated.path, name)).existsSync(), isFalse);
+    }
     final copied = File(p.join(isolated.path, 'crates/bridge/src/lib.rs'))
       ..writeAsStringSync('generator edit');
     expect(copied.readAsStringSync(), 'generator edit');
@@ -128,6 +159,7 @@ void main() {
           p.join(temporary.path, 'cache/build_runner/bin/build_runner.dart'),
         ),
       );
+      expect(command, contains('--workspace'));
       expect(command, contains('--only-check'));
       expect(command, isNot(contains('run')));
       config.writeAsStringSync('{"packages": []}');

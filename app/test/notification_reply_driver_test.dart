@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../tool/driver/notification_reply.dart'
+import '../../tool/driver/notification_reply.dart'
     show validateNotificationReplyReport;
 
 const _runId = 'independent-run';

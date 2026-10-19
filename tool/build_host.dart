@@ -170,6 +170,7 @@ void main(List<String> arguments) {
       );
     }
     final platform = args.rest.single;
+    final application = applicationRoot(root);
     if (!(args['verify-only'] as bool)) {
       runTool([
         executable('flutter') ?? 'flutter',
@@ -178,16 +179,18 @@ void main(List<String> arguments) {
         '--release',
         '--no-pub',
         if (platform == 'ios') '--no-codesign',
-      ], cwd: root);
+      ], cwd: application);
     }
     late Directory bundle;
     if (platform == 'windows') {
-      bundle = Directory(p.join(root.path, 'build/windows/x64/runner/Release'));
+      bundle = Directory(
+        p.join(application.path, 'build/windows/x64/runner/Release'),
+      );
       verifyWindows(bundle);
     } else {
       final directory = Directory(
         p.join(
-          root.path,
+          application.path,
           platform == 'ios'
               ? 'build/ios/iphoneos'
               : 'build/macos/Build/Products/Release',

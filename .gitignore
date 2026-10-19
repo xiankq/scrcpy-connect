@@ -20,18 +20,18 @@
 *.keystore
 *.jks
 
-# Flutter application and editor outputs (the application lives at the root).
+# Flutter application and editor outputs.
 *.iml
 *.ipr
 *.iws
 .idea/
-/coverage/
-/.pub/
-/.pub-cache/
-/.widget_preview/
-/android/app/debug/
-/android/app/profile/
-/android/app/release/
+**/coverage/
+**/.pub/
+**/.pub-cache/
+**/.widget_preview/
+/app/android/app/debug/
+/app/android/app/profile/
+/app/android/app/release/
 
 # Pinned build-time design tooling.
 **/node_modules/

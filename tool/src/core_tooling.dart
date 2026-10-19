@@ -17,6 +17,10 @@ Directory repositoryRoot([Uri? script]) {
   }
 }
 
+/// The single Flutter application is a member of the repository workspace.
+Directory applicationRoot([Directory? repository]) =>
+    Directory(p.join((repository ?? repositoryRoot()).path, 'app'));
+
 String? executable(String name) {
   final extensions = Platform.isWindows
       ? [

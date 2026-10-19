@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../tool/driver/video_clock_bounds.dart';
+import '../../tool/driver/video_clock_bounds.dart';
 
 void main() {
   final round = <String, dynamic>{

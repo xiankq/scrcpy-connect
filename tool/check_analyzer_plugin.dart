@@ -17,9 +17,9 @@ class InvalidNotifier extends Notifier<int> {
 void main() {
   Directory? temporary;
   try {
-    final root = repositoryRoot();
+    final application = applicationRoot();
     // The fixture must inherit the workspace's analyzer plugin and imports.
-    temporary = Directory(path.join(root.path, 'test'))
+    temporary = Directory(path.join(application.path, 'test'))
         .createTempSync('lint_smoke_');
     final fixture = File(path.join(temporary.path, 'lint_smoke.dart'))
       ..writeAsStringSync(source);
@@ -27,7 +27,7 @@ void main() {
       'analyze',
       '--fatal-infos',
       fixture.path,
-    ], workingDirectory: root.path);
+    ], workingDirectory: application.path);
     final output = '${result.stdout}\n${result.stderr}';
     if (!output.toLowerCase().contains('avoid_public_notifier_properties')) {
       throw StateError(

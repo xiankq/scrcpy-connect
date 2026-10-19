@@ -35,11 +35,11 @@ void privateFile(File file, List<int> contents) {
 }
 
 void initializeSigning({Directory? android}) {
-  android ??= Directory(p.join(root.path, 'android'));
+  android ??= Directory(p.join(applicationRoot(root).path, 'android'));
   final properties = File(p.join(android.path, 'key.properties'));
   if (properties.existsSync()) {
     stdout.writeln(
-      'Keeping existing android/key.properties and signing identity.',
+      'Keeping existing app/android/key.properties and signing identity.',
     );
     return;
   }
@@ -302,7 +302,7 @@ void buildApk({
   bool noPub = false,
   Directory? application,
 }) {
-  application ??= root;
+  application ??= applicationRoot(root);
   final android = Directory(p.join(application.path, 'android'));
   if (mode == 'release' &&
       !File(p.join(android.path, 'key.properties')).existsSync()) {
