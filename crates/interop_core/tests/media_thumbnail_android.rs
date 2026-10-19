@@ -57,13 +57,13 @@ async fn connected() -> (tempfile::TempDir, Arc<Runtime>, String, Client, String
     let remote = format!("/data/local/tmp/interop-thumbnail-{}", uuid::Uuid::new_v4());
     let out = client
         .shell(
-            &format!("mkdir -m 700 {remote}"),
+            &format!("mkdir {remote} && chmod 755 {remote}"),
             1024,
             OperationOptions::default(),
         )
         .await
         .unwrap();
-    assert_eq!(out.exit_code, Some(0));
+    assert!(out.exit_code.is_none_or(|code| code == 0));
     (root, runtime, id, client, remote)
 }
 async fn push(client: &Client, path: &str, bytes: &[u8], mode: u32) {
@@ -230,10 +230,25 @@ async fn validates_bounds_and_cancel_before_start_without_connecting() {
 async fn real_images_video_orientation_cache_errors_and_cancel_use_only_small_jpeg_rpc() {
     Box::pin(real_thumbnail_fixture()).await;
 }
-async fn real_thumbnail_fixture() {
-    eprintln!("thumbnail fixture setup");
-    let (root, runtime, id, client, remote) = Box::pin(connected()).await;
-    eprintln!("thumbnail fixture connected");
+#[tokio::test]
+#[ignore = "requires Android 5+ raw adbd and ffmpeg; checks still images independently of video API"]
+async fn real_still_images_keep_exif_and_cache_on_legacy_android() {
+    let (_root, runtime, id, client, remote) = connected().await;
+    images(&runtime, &id, &client, &remote).await;
+    client
+        .shell(
+            &format!("rm -rf {remote}"),
+            1024,
+            OperationOptions::default(),
+        )
+        .await
+        .unwrap();
+    runtime
+        .invoke("devices.disconnect", json!({"deviceId":id}))
+        .await
+        .unwrap();
+}
+async fn images(runtime: &Arc<Runtime>, id: &str, client: &Client, remote: &str) -> Vec<u8> {
     let jpeg = ffmpeg(&[
         "-f",
         "lavfi",
@@ -261,8 +276,8 @@ async fn real_thumbnail_fixture() {
         eprintln!("thumbnail EXIF {orientation}");
         let path = format!("{remote}/exif-{orientation}.jpg");
         let source = exif(&jpeg, orientation);
-        push(&client, &path, &source, 0o600).await;
-        let result = thumb(&runtime, &id, &path).await;
+        push(client, &path, &source, 0o644).await;
+        let result = thumb(runtime, id, &path).await;
         assert_eq!(result["orientation"], orientation);
         assert_eq!(result["originalSize"], source.len());
         assert_eq!(
@@ -276,7 +291,7 @@ async fn real_thumbnail_fixture() {
         assert!(result["bytesTransferred"].as_u64().unwrap() < 32 * 1024);
         assert_eq!(result["originalBytesTransferred"], 0);
         if orientation == 1 {
-            let hit = thumb(&runtime, &id, &path).await;
+            let hit = thumb(runtime, id, &path).await;
             assert_eq!(hit["cacheHit"], true);
             assert_eq!(hit["jpegBytesTransferred"], 0);
             assert!(hit["bytesTransferred"].as_u64().unwrap() < 2048);
@@ -286,13 +301,13 @@ async fn real_thumbnail_fixture() {
             let middle = damaged.len() / 2;
             damaged[middle] ^= 1;
             tokio::fs::write(cache_path, &damaged).await.unwrap();
-            assert_eq!(thumb(&runtime, &id, &path).await["cacheHit"], false);
+            assert_eq!(thumb(runtime, id, &path).await["cacheHit"], false);
             // Same size and the same caller-supplied mtime: source ctime/identity
             // validation must invalidate the earlier thumbnail too.
             let changed = exif(&jpeg, 3);
             assert_eq!(changed.len(), source.len());
-            push(&client, &path, &changed, 0o600).await;
-            let updated = thumb(&runtime, &id, &path).await;
+            push(client, &path, &changed, 0o644).await;
+            let updated = thumb(runtime, id, &path).await;
             assert_eq!(updated["cacheHit"], false);
             assert_ne!(updated["localPath"], result["localPath"]);
             assert_eq!(
@@ -302,6 +317,13 @@ async fn real_thumbnail_fixture() {
             assert_eq!(corners(&updated), expected[2]);
         }
     }
+    jpeg
+}
+async fn real_thumbnail_fixture() {
+    eprintln!("thumbnail fixture setup");
+    let (root, runtime, id, client, remote) = Box::pin(connected()).await;
+    eprintln!("thumbnail fixture connected");
+    let jpeg = images(&runtime, &id, &client, &remote).await;
     let base = root.path().join("video.mp4");
     let rotated = root.path().join("rotated.mp4");
     ffmpeg(&[
@@ -330,7 +352,7 @@ async fn real_thumbnail_fixture() {
     let mut video = tokio::fs::read(rotated).await.unwrap();
     video.resize(8 * 1024 * 1024, 0);
     let path = format!("{remote}/rotated.mp4");
-    push(&client, &path, &video, 0o600).await;
+    push(&client, &path, &video, 0o644).await;
     let result = thumb(&runtime, &id, &path).await;
     assert_eq!(result["videoRotation"], 90);
     assert!(result["height"].as_u64().unwrap() > result["width"].as_u64().unwrap());
@@ -355,7 +377,7 @@ async fn real_thumbnail_fixture() {
         "thumbnail must not download an original through preview"
     );
     let broken = format!("{remote}/broken.jpg");
-    push(&client, &broken, b"not an image", 0o600).await;
+    push(&client, &broken, b"not an image", 0o644).await;
     assert_eq!(
         runtime
             .invoke("media.thumbnail", json!({"deviceId":id,"path":broken}))
@@ -390,7 +412,7 @@ async fn real_thumbnail_fixture() {
         "pipe:1",
     ]);
     let png_path = format!("{remote}/large.png");
-    push(&client, &png_path, &png, 0o600).await;
+    push(&client, &png_path, &png, 0o644).await;
     let png_thumb = thumb(&runtime, &id, &png_path).await;
     assert_eq!(
         (png_thumb["width"].as_u64(), png_thumb["height"].as_u64()),
@@ -404,7 +426,7 @@ async fn real_thumbnail_fixture() {
     giant[sof + 5..sof + 7].copy_from_slice(&20000u16.to_be_bytes());
     giant[sof + 7..sof + 9].copy_from_slice(&20000u16.to_be_bytes());
     let giant_path = format!("{remote}/giant.jpg");
-    push(&client, &giant_path, &giant, 0o600).await;
+    push(&client, &giant_path, &giant, 0o644).await;
     assert_eq!(
         runtime
             .invoke("media.thumbnail", json!({"deviceId":id,"path":giant_path}))
@@ -444,7 +466,7 @@ async fn real_thumbnail_fixture() {
         &client,
         &audio_path,
         &tokio::fs::read(audio).await.unwrap(),
-        0o600,
+        0o644,
     )
     .await;
     assert_eq!(
@@ -600,7 +622,7 @@ async fn real_disconnect_reaps_media_child_without_reviving_companion() {
         "pipe:1",
     ]);
     let path = format!("{remote}/disconnect.jpg");
-    push(&client, &path, &jpeg, 0o600).await;
+    push(&client, &path, &jpeg, 0o644).await;
     let op = uuid::Uuid::new_v4().to_string();
     let task = {
         let runtime = runtime.clone();

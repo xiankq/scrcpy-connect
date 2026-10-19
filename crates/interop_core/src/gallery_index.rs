@@ -1,7 +1,7 @@
 //! Read-only shared-storage snapshots. Workers own a client and scan, never Runtime.
 use crate::{
     CoreError, CoreResult, Runtime,
-    model::{mime, quote, remote_path, required},
+    model::{mime, remote_path, required},
 };
 use interop_adb::{
     Client, OperationOptions,
@@ -340,119 +340,28 @@ fn options(scan: &Scan) -> OperationOptions {
         cancellation: scan.cancellation.clone(),
     }
 }
-fn parse_stat(bytes: &[u8]) -> Option<FileStat> {
-    let fields = std::str::from_utf8(bytes)
-        .ok()?
-        .trim()
-        .split(':')
-        .collect::<Vec<_>>();
-    if fields.len() != 3 {
-        return None;
-    }
-    Some(FileStat {
-        mode: u32::from_str_radix(fields[0], 16).ok()?,
-        size: fields[1].parse().ok()?,
-        modified_seconds: fields[2].parse().ok()?,
-    })
-}
 async fn stat(scan: &Scan, client: &Client, path: &str) -> CoreResult<FileStat> {
-    let mut sync = client.sync(options(scan)).await?;
-    let remote = RemotePath::new(path)?;
-    // /sdcard is the standard Android alias; only this root may be followed.
-    let result = if path == ROOT {
-        sync.stat(&remote).await
-    } else {
-        sync.lstat(&remote).await
-    };
-    match result {
-        Ok(stat) if path != ROOT || stat.mode & 0o170000 != 0o120000 => Ok(stat),
-        // Legacy SYNC STAT is no-follow even when the caller requests stat.
-        // Resolve only the explicit /sdcard root with unprivileged shell stat.
-        _ => {
-            let follow = if path == ROOT { "-L " } else { "" };
-            let result = client
-                .shell(
-                    &format!("stat {follow}-c '%f:%s:%Y' -- {}", quote(path)?),
-                    4096,
-                    options(scan),
-                )
-                .await?;
-            if result.exit_code != Some(0) || !result.stderr.is_empty() {
-                return Err(CoreError::new(
-                    "remote_stat_failed",
-                    "目录不存在或无权读取元数据。",
-                ));
-            }
-            parse_stat(&result.stdout)
-                .ok_or_else(|| CoreError::new("invalid_metadata", "目录元数据无效。"))
-        }
-    }
+    crate::remote_fs::stat(client, path, path == ROOT, options(scan)).await
 }
 async fn accessible(scan: &Scan, client: &Client, path: &str) -> CoreResult<bool> {
-    let path = quote(path)?;
-    let result = client
-        .shell(
-            &format!("[ -r {path} ] && [ -x {path} ]"),
-            4096,
-            options(scan),
-        )
-        .await?;
-    Ok(result.exit_code == Some(0) && result.stderr.is_empty())
+    crate::remote_fs::accessible(client, path, options(scan)).await
 }
-// Some SELinux configurations deny adbd getattr on a symlink, failing LIS2 for
-// its entire parent. Keep fallback enumeration per-directory and output bounded.
-async fn shell_children(
+async fn native_children(
     scan: &Scan,
     client: &Client,
     path: &str,
     limit: usize,
 ) -> CoreResult<(Vec<DirEntry>, usize)> {
-    let prefix = quote(path)?;
-    let script = format!(
-        "[ -r {prefix} ] && [ -x {prefix} ] || exit 1; count=0; for child in {prefix}/* {prefix}/.[!.]* {prefix}/..?*; do if ! [ -e \"$child\" ] && ! [ -L \"$child\" ]; then if [ \"$child\" = {prefix}'/*' ] || [ \"$child\" = {prefix}'/.[!.]*' ] || [ \"$child\" = {prefix}'/..?*' ]; then continue; fi; fi; count=$((count+1)); [ \"$count\" -le {limit} ] || {{ printf '\\0LIMIT\\0'; exit 0; }}; printf '%s\\0' \"${{child##*/}}\"; stat -c '%f:%s:%Y' -- \"$child\" 2>/dev/null || printf ERROR; printf '\\0'; done"
-    );
-    let result = client
-        .shell(&script, 8 * 1024 * 1024, options(scan))
-        .await?;
-    if result.exit_code != Some(0) {
-        return Err(CoreError::new(
-            "directory_read_failed",
-            "目录不存在或无权读取。",
-        ));
+    let listing = crate::remote_fs::fallback_children(client, path, limit, options(scan)).await?;
+    if listing.truncated {
+        scan.issue(path, "entry_limit", "达到每目录项数量上限，结果不完整。");
     }
-    if !result.stderr.is_empty() {
-        scan.issue(
-            path,
-            "directory_read_failed",
-            "目录枚举产生错误，结果不完整。",
-        );
-    }
-    let mut records = result.stdout.split(|byte| *byte == 0);
-    let mut entries = Vec::new();
-    let mut examined = 0usize;
-    while let Some(name) = records.next() {
-        if name.is_empty() {
-            if records.next() == Some(&b"LIMIT"[..]) {
-                scan.issue(path, "entry_limit", "达到每目录项数量上限，结果不完整。");
-            }
-            break;
-        }
-        if examined >= limit {
-            scan.issue(path, "entry_limit", "达到每目录项数量上限，结果不完整。");
-            break;
-        }
-        examined += 1;
-        let Some(metadata) = records.next() else {
-            scan.issue(path, "invalid_metadata", "目录枚举记录不完整。");
-            break;
-        };
-        if let Some(stat) = parse_stat(metadata) {
-            entries.push(DirEntry {
-                name: name.to_vec(),
-                stat,
-            });
-        } else {
-            scan.issue(path, "source_changed", "部分目录项已变化或无权读取元数据。");
+    let examined = listing.entries.len();
+    let mut entries = Vec::with_capacity(examined);
+    for (name, stat) in listing.entries {
+        match stat {
+            Ok(stat) => entries.push(DirEntry { name, stat }),
+            Err(error) => scan.issue(path, &error.code, &error.message),
         }
     }
     Ok((entries, examined))
@@ -499,7 +408,12 @@ async fn walk(scan: &Scan, client: &Client) -> CoreResult<()> {
         }
         let mut sync = client.sync(options(scan)).await?;
         let budget = MAX_DIRECTORY_ENTRIES.min(MAX_ENTRIES - visited);
-        let (children, consumed) = match sync.list(&RemotePath::new(&path)?, budget).await {
+        let listed = if client.info().features.contains("ls_v2") {
+            sync.list(&RemotePath::new(&path)?, budget).await
+        } else {
+            Err(interop_adb::Error::Unsupported("ls_v2"))
+        };
+        let (children, consumed) = match listed {
             Ok(children) => {
                 let consumed = children.len();
                 (children, consumed)
@@ -509,7 +423,7 @@ async fn walk(scan: &Scan, client: &Client) -> CoreResult<()> {
                 if overflow {
                     scan.issue(&path, "entry_limit", "目录项数量超过上限，结果不完整。");
                 }
-                match shell_children(scan, client, &path, budget).await {
+                match native_children(scan, client, &path, budget).await {
                     Ok((children, examined)) => {
                         // A failed SYNC listing consumed its bounded prefix.
                         // The fallback recovers those entries rather than

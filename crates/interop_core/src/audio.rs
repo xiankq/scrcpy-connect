@@ -3,6 +3,7 @@
 use crate::{
     CoreError, CoreResult, Runtime,
     model::{now, quote, required},
+    remote_process::managed_shell_command,
     scrcpy::{SERVER, SERVER_SHA, accept_media},
 };
 use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, sync::RemotePath};
@@ -445,16 +446,17 @@ impl Runtime {
             sync.push(
                 &RemotePath::new(&jar)?,
                 &mut &SERVER[..],
-                0o600,
+                0o644,
                 now() as u32,
                 SERVER.len() as u64,
             )
             .await?;
             drop(sync);
             let command = format!(
-                "CLASSPATH={} app_process / com.genymobile.scrcpy.Server 5.0.1 scid={scid:08x} log_level=warn video=false audio=true control=false audio_codec=raw audio_source=output tunnel_forward=true cleanup=true power_on=false send_device_meta=true send_dummy_byte=true send_stream_meta=true send_frame_meta=true",
+                "CLASSPATH={} exec app_process / com.genymobile.scrcpy.Server 5.0.1 scid={scid:08x} log_level=warn video=false audio=true control=false audio_codec=raw audio_source=output tunnel_forward=true cleanup=true power_on=false send_device_meta=true send_dummy_byte=true send_stream_meta=true send_frame_meta=true",
                 quote(&jar)?
             );
+            let command = managed_shell_command(&jar, &command, false)?;
             let mut process = client.exec(&command, options(&cancellation)).await?;
             let process_closed = Arc::new(AtomicBool::new(false));
             let logs = Arc::new(Mutex::new(Vec::new()));

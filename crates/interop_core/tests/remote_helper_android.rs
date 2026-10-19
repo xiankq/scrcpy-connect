@@ -34,13 +34,144 @@ async fn shell(client: &Client, command: &str) -> Vec<u8> {
         .shell(command, 16 * 1024, OperationOptions::default())
         .await
         .unwrap();
-    assert_eq!(
-        output.exit_code,
-        Some(0),
+    assert!(
+        output.exit_code.is_none_or(|code| code == 0),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
     output.stdout
+}
+
+#[tokio::test]
+#[ignore = "requires Android 5+ raw adbd; creates and removes a UUID directory only"]
+async fn actual_metadata_preserves_raw_names_links_and_bounded_listing_without_shell_tools() {
+    let endpoint = std::env::var("INTEROP_CORE_TEST_ENDPOINT").unwrap();
+    let client = Client::connect_tcp(&endpoint, ConnectOptions::default())
+        .await
+        .unwrap();
+    let root = format!(
+        "/data/local/tmp/interop-metadata-test-{}",
+        uuid::Uuid::new_v4().simple()
+    );
+    assert_eq!(
+        shell(&client, &format!("mkdir {root} && print -nr -- created")).await,
+        b"created"
+    );
+    let path = [root.as_bytes(), b"/quote'\n\xff"].concat();
+    put(&client, &path, b"fixture").await;
+    shell(
+        &client,
+        &format!("ln -s missing {root}/dangling; mkdir {root}/directory"),
+    )
+    .await;
+    let lstat = remote_helper::remote_metadata(
+        &client,
+        &format!("{root}/dangling"),
+        "lstat",
+        1,
+        OperationOptions::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(lstat["mode"].as_u64().unwrap() & 0o170000, 0o120000);
+    let missing = remote_helper::remote_metadata(
+        &client,
+        &format!("{root}/dangling"),
+        "stat",
+        1,
+        OperationOptions::default(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(missing.code, "not_found");
+    let list =
+        remote_helper::remote_metadata(&client, &root, "list", 3, OperationOptions::default())
+            .await
+            .unwrap();
+    assert_eq!(list["truncated"], false);
+    assert_eq!(list["entries"].as_array().unwrap().len(), 3);
+    assert!(
+        list["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["nameHex"] == "71756f7465270aff" && entry["size"] == 7)
+    );
+    let limited =
+        remote_helper::remote_metadata(&client, &root, "list", 1, OperationOptions::default())
+            .await
+            .unwrap();
+    assert_eq!(limited["truncated"], true);
+    assert_eq!(limited["entries"].as_array().unwrap().len(), 1);
+    // Public file operations must work without shell_v2, printf or mkdir --.
+    let state = tempfile::tempdir().unwrap();
+    let runtime = interop_core::Runtime::initialize(state.path())
+        .await
+        .unwrap();
+    let endpoint: std::net::SocketAddr = endpoint.parse().unwrap();
+    let id = runtime
+        .invoke(
+            "devices.add",
+            serde_json::json!({"address":endpoint.ip().to_string(),"port":endpoint.port()}),
+        )
+        .await
+        .unwrap()["deviceId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    runtime
+        .invoke("observation.stop", serde_json::json!({"deviceId":id}))
+        .await
+        .unwrap();
+    runtime
+        .invoke("devices.connect", serde_json::json!({"deviceId":id}))
+        .await
+        .unwrap();
+    let directory = format!("{root}/created");
+    runtime
+        .invoke(
+            "files.mkdir",
+            serde_json::json!({"deviceId":id,"path":directory}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        runtime
+            .invoke(
+                "files.mkdir",
+                serde_json::json!({"deviceId":id,"path":directory})
+            )
+            .await
+            .unwrap_err()
+            .code,
+        "remote_error",
+        "legacy exit receipt must preserve mkdir failure"
+    );
+    let files = runtime
+        .invoke("files.list", serde_json::json!({"deviceId":id,"path":root}))
+        .await
+        .unwrap();
+    assert_eq!(files["entries"].as_array().unwrap().len(), 4);
+    assert!(
+        files["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["nameIsUtf8"] == false && entry["canOpen"] == false)
+    );
+    runtime
+        .invoke(
+            "files.delete",
+            serde_json::json!({"deviceId":id,"paths":[directory]}),
+        )
+        .await
+        .unwrap();
+    runtime
+        .invoke("devices.disconnect", serde_json::json!({"deviceId":id}))
+        .await
+        .unwrap();
+    shell(&client, &format!("rm -rf {root}")).await;
+    client.close();
 }
 
 #[tokio::test]
@@ -169,7 +300,7 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
         get(&client, candidate.as_bytes()).await.unwrap(),
         b"candidate"
     );
-    shell(&client,&format!("mkdir -p -- {root}/dir/sub; printf payload > {root}/dir/sub/file; ln -s target {root}/link")).await;
+    shell(&client,&format!("mkdir -p -- {root}/dir/sub; print -nr -- payload > {root}/dir/sub/file; ln -s target {root}/link")).await;
     remote_helper::remote_rename(
         &client,
         &format!("{root}/dir"),

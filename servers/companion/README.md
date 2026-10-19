@@ -4,8 +4,12 @@
 `crates/interop_core/src/companion.rs`。它是经已授权 ADB 推送的临时 DEX JAR，
 以实际 shell UID 2000 运行；不安装 APK、不请求 root、不授予通知 listener
 组件权限、不修改 AppOps，也不访问短信数据库。主控本身不需要开启调试。
+调试／工程系统的 adbd 可能以 root 启动 `app_process`；入口采用固定上游
+scrcpy 5.0.1 的相同策略，在创建 Context、访问 Binder 或启动 worker 前通过
+`Os.setuid(2000)` 降为 shell。降权失败或实际 UID 不为 2000 立即退出；后续
+初始化仍校验 shell 身份，不使用 root 执行互联操作。
 
-本记录核实于 2026-10-17。源码依据固定为 AOSP `android-16.0.0_r1`，
+现代接口源码依据固定为 AOSP `android-16.0.0_r1`，
 frameworks/base commit `99b01a65cc4c104933788b3143285ab6bae65827`。
 Android 11 对照和更广泛权限研究见
 [`android-shell-interop-capabilities.md`](../../docs/research/android-shell-interop-capabilities.md)。
@@ -42,7 +46,14 @@ PackageContext，且校验 context 的包名与 UID 2000 归因；没有冒充 `
 [`ITelephonyRegistry.listenWithEventList`](https://android.googlesource.com/platform/frameworks/base/+/99b01a65cc4c104933788b3143285ab6bae65827/core/java/com/android/internal/telephony/ITelephonyRegistry.aidl#54)
 回调，读取
 [`ITelecomService.getCallStateUsingPackage`](https://android.googlesource.com/platform/frameworks/base/+/99b01a65cc4c104933788b3143285ab6bae65827/telecomm/java/com/android/internal/telecom/ITelecomService.aidl#224)
-的系统聚合状态。原始已交付 call-state 转换会先更新 observation generation，
+的系统聚合状态。旧系统按已知 AIDL 参数类型选择签名：Android 5.0 的
+[`listenForSubscriber(long, ...)`](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/android-5.0.0_r1/telephony/java/com/android/internal/telephony/ITelephonyRegistry.aidl)
+使用该版本的 `Long.MAX_VALUE` 默认订阅；Android 6–10 使用五参数 int 订阅，
+Android 11 使用附带 feature tag 的六参数签名，Android 12+ 使用 event list。
+旧 Telecom 读取 `getCallState()`；打开当前系统通话界面接受已知的一、二、三
+参数 `showInCallScreen`。仅在签名不存在时选择旧签名；实际权限拒绝不会触发
+另一种调用以绕过归因或权限。未知签名仍明确失败。
+原始已交付 call-state 转换会先更新 observation generation，
 再合并快照工作。系统聚合 API 和异步回调没有提供完整、原子的逐通话对象，
 本地 generation 不能补出未交付的转换，也不能保证观察引用唯一对应一次通话。
 这些 ID 是观察引用，`aggregate=true`，并非 Telecom 的具体 call 对象。
@@ -72,6 +83,11 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 [`ClipboardService`](https://android.googlesource.com/platform/frameworks/base/+/99b01a65cc4c104933788b3143285ab6bae65827/services/core/java/com/android/server/clipboard/ClipboardService.java#1301)
 仍校验包归属、AppOps、焦点／后台读取权限；读取还受设备锁定限制。
 产品检查真实权限、AppOps 和 Keyguard，不修改它们，也不解锁或点亮屏幕。
+AppOps 优先使用当前字符串接口；AOSP 5.0 定义剪贴板整数操作但未登记对应
+字符串映射，只有明确的 unknown-operation 映射失败或字符串方法不存在时，
+才核对实际 `OP_READ_CLIPBOARD=29`／`OP_WRITE_CLIPBOARD=30` 字段并调用已知
+整数签名。字符串或整数返回的拒绝、SecurityException 与其他参数错误均保留，
+不据此回退或修改 AppOps。[固定 AOSP 5.0 AppOpsManager](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/android-5.0.0_r1/core/java/android/app/AppOpsManager.java)
 
 `get` 返回 `{text, hasText, available:true, live:true, source:"companion"}`；
 只读取第一项已存在的文本，不将 URI 或 Intent 转成文本、不访问其内容提供方。
@@ -88,7 +104,7 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 
 实际 API 36 AVD 已通过：无视频 session 的 Unicode／换行／引号文本往返，
 第二个独立 companion 写入触发第一个实例实时事件，启动期间断开取消，
-以及断开后的读取拒绝。旧 Android 签名、OEM、锁屏及多用户矩阵尚未运行验证。
+以及断开后的读取拒绝。旧 Android 设备运行、OEM、锁屏及多用户矩阵尚未因此得到验证。
 
 ## 目标端媒体缩略图
 
@@ -108,10 +124,22 @@ Rust 优先复用已有 scrcpy 控制通道，无控制会话时走同一认证 
 媒体操作使用一次性 UUID；取消和完成后不能复用。关闭 stdin 会由子进程独立
 监视线程杀死自身，8 秒独立 watchdog 限制 native 解码，父进程确认退出并回收
 后才回报取消；无法确认则返回 `media_cleanup_unknown`。不会按过期的数字 PID
-杀进程。Android <26 的有界进程生命周期、Android 26 的有界视频取帧尚未实现，
-返回 `thumbnail_api_pending`，不伪称系统不支持。OOM、损坏、无帧、权限拒绝和
+杀进程。进程等待使用 API 21 已有的 `exitValue()` 配合单调时钟与有界等待，
+不依赖 API 26 的 `isAlive()` 或带超时的 `waitFor()`。API 21–23 的图片 EXIF
+通过持有 `ParcelFileDescriptor.dup` 后的 `/proc/self/fd/<fd>` 调用旧构造方法，
+始终读取同一打开 inode；API 24+ 继续使用 InputStream 构造，不重新打开用户路径。
+Android <27 的有界视频取帧尚未实现，返回 `thumbnail_api_pending`，不伪称系统
+不支持；不会用无界完整视频帧解码作回退。OOM、损坏、无帧、权限拒绝和
 源变化均显式失败，不自动下载原件补救。详细边界和实测见
 [媒体缩略图管线](../../docs/research/media-thumbnail-pipeline.md)。
+视频实现与其 `MediaDataSource` 匿名子类隔离在仅 API 27+ 进入的内部类，避免
+API 21 验证图片／stat 类时解析缺失的视频父类。工作队列以 `ConcurrentMap`
+声明活动表，使条件移除绑定已有的并发接口，不生成 API 24 才提供的
+`Map.remove(key, value)` 默认方法调用；仅设置 D8 `--min-api` 不会补齐此平台方法。
+文件打开仍原子设置 Linux `O_CLOEXEC`。API 21 缺少对应 `OsConstants` Java 字段，
+实现使用 Android ARM／ARM64／x86／x86_64 的固定 Linux UAPI 数值 `02000000`，
+不通过删除该标记或重新打开源路径规避字段缺失。
+[Linux 3.10 UAPI](https://raw.githubusercontent.com/torvalds/linux/v3.10/include/uapi/asm-generic/fcntl.h)
 
 ## 协议与生命周期
 
@@ -157,9 +185,20 @@ JAR 固定条目顺序、ZIP 时间戳、权限、存储方式和 manifest 内�
 2026-10-18 本批增加构建门禁时，将既有 JAR 重新封装为上述确定性格式。对照受控
 原 JAR，`classes.dex` 逐字节未变，SHA-256 仍为
 `6019f7ea51ca4f8c0bfd6f99e15d1ca608f56913809bbc804789ea35d1193464`。
-当前整个产品 JAR 的 SHA-256 已更新为
+当时整个产品 JAR 的 SHA-256 更新为
 `4fbb0f076dfd31472d82d48f0257accae0d1fc20c6e7d0b0fd6ed4ad53531a19`。
 本次构建与 `--check` 本地通过；这项归档一致性验证不新增设备运行验收结论。
+当前产物摘要与完整构建输入以同目录 `manifest.json` 为准。
+
+`python3 servers/companion/tests/compatibility.py` 在临时目录编译并运行宿主
+兼容边界测试：不提供 API 26 进程方法的 Process 验证有界等待与退出，固定
+AIDL 形状验证 API 21、23、30、31+ 的 listener 注册／注销、旧系统 UI 请求和
+读取权限拒绝不回退。该测试经过先失败后通过的回归循环；它验证调用协议，
+不证明任何 Android 或 OEM 已授予通知／电话权限。
+检查还扫描编译后字节码，拒绝已知的 Java 8 集合默认方法调用，并核对公共
+图片／stat 类没有直接引用新版本视频 API；这些断言先重现了实际兼容缺口，
+再用于检查修复后的调用归属与类加载边界。
+同一检查还阻止重新引入 API 21 缺失的 `OsConstants.O_CLOEXEC` 字段引用。
 
 上述观察生命周期已通过 Runtime／真实 actor 提交回归，并重建 JAR。
 2026-10-17随后在API36目标AVD执行 `observation_android`：无需页面查询即收到live观察，

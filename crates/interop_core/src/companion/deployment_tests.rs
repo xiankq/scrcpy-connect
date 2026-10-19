@@ -1,6 +1,88 @@
 use super::*;
 use std::collections::BTreeSet;
 
+#[tokio::test]
+#[ignore = "requires isolated Android 5+ raw adbd; kills no unrelated process"]
+async fn raw_exec_eof_reaps_a_blocked_initializer_before_removing_its_jar() {
+    let endpoint = std::env::var("INTEROP_CORE_TEST_ENDPOINT").unwrap();
+    let options = interop_adb::ConnectOptions::default();
+    let inspection = Client::connect_tcp(&endpoint, options.clone())
+        .await
+        .unwrap();
+    let path = format!(
+        "/data/local/tmp/interop-eof-{}.jar",
+        uuid::Uuid::new_v4().simple()
+    );
+    let marker = format!("{path}.exit");
+    inspect(
+        &inspection,
+        &format!("print -nr -- fixture > {}", quote(&path).unwrap()),
+    )
+    .await;
+    let on_term = format!(
+        "if [ -f {} ]; then print -nr -- retained; else print -nr -- early-delete; fi > {}; exit 0",
+        quote(&path).unwrap(),
+        quote(&marker).unwrap()
+    );
+    let script = format!(
+        "trap {} TERM; print -r -- \"INTEROP_COMPANION_READY $$\"; while :; do sleep 1; done",
+        quote(&on_term).unwrap()
+    );
+    let command = managed_shell_command(
+        &path,
+        &format!("exec /system/bin/sh -c {}", quote(&script).unwrap()),
+        false,
+    )
+    .unwrap();
+    let client = Client::connect_tcp(&endpoint, options).await.unwrap();
+    let mut process = client
+        .exec(&command, OperationOptions::default())
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), ready(&mut process))
+        .await
+        .unwrap()
+        .unwrap();
+    client.close();
+    let removed = tokio::time::timeout(Duration::from_secs(8), async {
+        loop {
+            if inspect(
+                &inspection,
+                &format!(
+                    "if [ -e {} ]; then print -nr -- present; fi",
+                    quote(&path).unwrap()
+                ),
+            )
+            .await
+            .is_empty()
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .is_ok();
+    let ordering = inspect(&inspection, &format!("cat {}", quote(&marker).unwrap())).await;
+    inspect(
+        &inspection,
+        &format!(
+            "rm -f {} {}",
+            quote(&path).unwrap(),
+            quote(&marker).unwrap()
+        ),
+    )
+    .await;
+    assert!(
+        removed,
+        "raw host EOF must stop the owned initializer without PTY HUP"
+    );
+    assert_eq!(
+        ordering, "retained",
+        "child exit must precede temporary JAR deletion"
+    );
+}
+
 async fn inspect(client: &Client, command: &str) -> String {
     let result = client
         .shell(
@@ -214,6 +296,7 @@ async fn real_managed_launcher_preserves_exit_and_reaps_interrupted_children() {
         let command = managed_shell_command(
             &path,
             &format!("exec /system/bin/sh -c {}", quote(&script).unwrap()),
+            false,
         )
         .unwrap();
         let result = inspection
@@ -263,13 +346,14 @@ async fn real_managed_launcher_preserves_exit_and_reaps_interrupted_children() {
         let command = managed_shell_command(
             &path,
             &format!("exec /system/bin/sh -c {}", quote(&script).unwrap()),
+            false,
         )
         .unwrap();
         let client = Client::connect_tcp(&endpoint, options.clone())
             .await
             .unwrap();
         let mut shell = client
-            .shell_session(&command, ShellMode::Raw, 4096, OperationOptions::default())
+            .exec(&command, OperationOptions::default())
             .await
             .unwrap();
         tokio::time::timeout(Duration::from_secs(5), ready(&mut shell))

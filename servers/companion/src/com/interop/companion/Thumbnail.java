@@ -9,6 +9,7 @@ import android.media.ExifInterface;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaDataSource;
 import android.os.Build;
+import android.os.ParcelFileDescriptor;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
@@ -24,6 +25,10 @@ import org.json.JSONObject;
 public final class Thumbnail {
     static final int MAX_JPEG = 256 * 1024;
     static final long MAX_SOURCE = 64L * 1024 * 1024 * 1024;
+    // Linux UAPI O_CLOEXEC = 02000000 for Android ARM/ARM64/x86/x86_64.
+    // The kernel flag predates API21, whose OsConstants Java field is absent.
+    // Preserve atomic close-on-exec at open without resolving that newer field.
+    private static final int OPEN_CLOSE_ON_EXEC = 0x80000;
     static final class Failure extends Exception {
         final String code;
         Failure(String code, String message) { super(message); this.code = code; }
@@ -68,9 +73,19 @@ public final class Thumbnail {
         // on Android 12+, which is absent in a shell process. The read-only
         // InputStream API avoids MediaProvider transcoding and keeps this exact FD.
         int orientation;
-        try (InputStream input = new BufferedInputStream(new FileInputStream(Os.dup(fd)), 8192)) {
-            ExifInterface exif = new ExifInterface(input);
-            orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+        if (Build.VERSION.SDK_INT >= 24) {
+            try (InputStream input = new BufferedInputStream(new FileInputStream(Os.dup(fd)), 8192)) {
+                ExifInterface exif = new ExifInterface(input);
+                orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            }
+        } else {
+            // API21-23 only expose the filename constructor. A held duplicate
+            // names the exact opened inode, even if the source path is replaced;
+            // never reopen the user path or discard its EXIF orientation.
+            try (ParcelFileDescriptor duplicate = ParcelFileDescriptor.dup(fd)) {
+                ExifInterface exif = new ExifInterface("/proc/self/fd/" + duplicate.getFd());
+                orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            }
         }
         if (orientation == ExifInterface.ORIENTATION_UNDEFINED) orientation = ExifInterface.ORIENTATION_NORMAL;
         if (orientation < 1 || orientation > 8) throw new Failure("media_orientation_invalid", "Image orientation is invalid");
@@ -100,8 +115,11 @@ public final class Thumbnail {
             return transformed;
         } catch (Exception | Error e) { decoded.recycle(); throw e; }
     }
-    private static Bitmap video(FileDescriptor fd, long size, int maxSize, JSONObject result) throws Exception {
-        if (Build.VERSION.SDK_INT < 27) throw new Failure("thumbnail_api_pending", "Bounded video frame retrieval on Android below 8.1 has not been implemented; explicitly open the original instead");
+    // ART21 verifies a method's referenced classes before its SDK guard runs.
+    // Keep MediaDataSource (API23) and bounded video retrieval (API27) outside
+    // the image/stat class, including their anonymous subclass and signatures.
+    private static final class VideoApi27 {
+      static Bitmap frame(FileDescriptor fd, long size, int maxSize, JSONObject result) throws Exception {
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
             // Read the exact opened descriptor through the public API. The FD
@@ -130,6 +148,7 @@ public final class Thumbnail {
             result.put("videoRotation", rotation).put("orientationApplied", "platformVideoRotation").put("frameTimeUs", 0);
             return frame;
         } finally { retriever.release(); }
+      }
     }
     private static final class OutputLimit extends RuntimeException {}
     private static final class BoundedOutput extends ByteArrayOutputStream {
@@ -140,7 +159,7 @@ public final class Thumbnail {
         String path = request.getString("path");
         if (!path.startsWith("/") || path.length() > 4096 || path.indexOf('\0') >= 0) throw new Failure("invalid_path", "Absolute media path is invalid");
         regular(Os.lstat(path));
-        FileDescriptor fd = Os.open(path, OsConstants.O_RDONLY | OsConstants.O_NOFOLLOW | OsConstants.O_CLOEXEC, 0);
+        FileDescriptor fd = Os.open(path, OsConstants.O_RDONLY | OsConstants.O_NOFOLLOW | OPEN_CLOSE_ON_EXEC, 0);
         try {
             StructStat before = Os.fstat(fd); regular(before);
             JSONObject source = stamp(before);
@@ -152,7 +171,10 @@ public final class Thumbnail {
                 String kind = request.getString("kind");
                 Bitmap bitmap;
                 if (kind.equals("image")) bitmap = image(fd, path, before.st_size, maxSize, result);
-                else if (kind.equals("video")) bitmap = video(fd, before.st_size, maxSize, result);
+                else if (kind.equals("video")) {
+                    if (Build.VERSION.SDK_INT < 27) throw new Failure("thumbnail_api_pending", "Bounded video frame retrieval on Android below 8.1 has not been implemented; explicitly open the original instead");
+                    bitmap = VideoApi27.frame(fd, before.st_size, maxSize, result);
+                }
                 else throw new Failure("invalid_argument", "Thumbnail media kind is invalid");
                 Bitmap flat = null;
                 try {

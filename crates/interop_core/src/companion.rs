@@ -4,11 +4,9 @@
 use crate::{
     CoreError, CoreResult, Runtime,
     model::{now, quote, required},
+    remote_process::managed_shell_command,
 };
-use interop_adb::{
-    AdbStream, CancellationToken, Client, OperationOptions, ShellEvent, ShellMode, ShellSession,
-    sync::RemotePath,
-};
+use interop_adb::{AdbStream, CancellationToken, Client, OperationOptions, sync::RemotePath};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
@@ -19,7 +17,7 @@ use std::{
 use tokio::sync::{RwLock, mpsc, oneshot, watch};
 
 const SERVER: &[u8] = include_bytes!("../../../servers/companion/companion.jar");
-const SERVER_SHA: &str = "4fbb0f076dfd31472d82d48f0257accae0d1fc20c6e7d0b0fd6ed4ad53531a19";
+const SERVER_SHA: &str = "07963f1126ce525f65a2ac154187e2766ef1173d8be70f5bfe1d45e1104690af";
 const MAX_MESSAGE: usize = 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -101,68 +99,36 @@ async fn read_message(stream: &mut AdbStream, line: &mut Vec<u8>) -> CoreResult<
         line.extend_from_slice(&buffer[..count]);
     }
 }
-async fn ready(shell: &mut ShellSession) -> CoreResult<()> {
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    while let Some(message) = shell.next_event().await? {
-        match message {
-            ShellEvent::Stdout(bytes) => {
-                if stdout.len() + bytes.len() > 8192 {
-                    return Err(CoreError::new(
-                        "companion_startup",
-                        "互联服务启动输出超过限制。",
-                    ));
-                }
-                stdout.extend(bytes);
-                if stdout.split(|byte| *byte == b'\n').any(|line| {
-                    line.starts_with(b"INTEROP_COMPANION_READY ")
-                        && line[24..].iter().all(u8::is_ascii_digit)
-                }) {
-                    return Ok(());
-                }
+async fn ready(shell: &mut AdbStream) -> CoreResult<()> {
+    let mut output = Vec::new();
+    let mut line = Vec::new();
+    loop {
+        let mut byte = [0];
+        if shell.read(&mut byte).await? == 0 {
+            break;
+        }
+        if output.len() == 8192 {
+            return Err(CoreError::new(
+                "companion_startup",
+                "互联服务启动输出超过限制。",
+            ));
+        }
+        output.push(byte[0]);
+        if byte[0] == b'\n' {
+            if line
+                .strip_prefix(b"INTEROP_COMPANION_READY ")
+                .is_some_and(|pid| !pid.is_empty() && pid.iter().all(u8::is_ascii_digit))
+            {
+                return Ok(());
             }
-            ShellEvent::Stderr(bytes) => stderr.extend(
-                bytes
-                    .into_iter()
-                    .take(4096usize.saturating_sub(stderr.len())),
-            ),
-            ShellEvent::Exit(_) => break,
+            line.clear();
+        } else {
+            line.push(byte[0]);
         }
     }
     Err(CoreError::new(
         "companion_startup",
-        format!("互联服务未能启动：{}", String::from_utf8_lossy(&stderr)),
-    ))
-}
-// adbd sends HUP to its shell, not its descendants. Keep that shell alive to
-// reap our child and remove only this deployment even when the host is gone.
-fn managed_shell_command(remote_jar: &str, command: &str) -> CoreResult<String> {
-    Ok(format!(
-        r#"run_companion() {{ {command}; }}
-cleanup() {{
-    result=$1
-    trap - EXIT
-    trap '' HUP INT TERM
-    # Refresh job state before signalling: completed children may already be
-    # reaped. Never signal a saved numeric PID that could have been reused.
-    jobs %1 >/dev/null 2>&1
-    kill -TERM %1 2>/dev/null
-    kill -CONT %1 2>/dev/null
-    wait "${{child:-$!}}" 2>/dev/null
-    rm -f -- {path}
-    exit "$result"
-}}
-# Call cleanup directly: mksh's exit builtin can warn about stopped jobs
-# before running EXIT, and a closed stderr could then kill it with SIGPIPE.
-trap 'cleanup $?' EXIT
-trap 'cleanup 129' HUP
-trap 'cleanup 130' INT
-trap 'cleanup 143' TERM
-run_companion <&0 &
-child=$!
-wait "$child"
-exit "$?""#,
-        path = quote(remote_jar)?
+        format!("互联服务未能启动：{}", String::from_utf8_lossy(&output)),
     ))
 }
 fn rpc_error(action: bool, message: &str) -> CoreError {
@@ -216,7 +182,7 @@ impl Companion {
                 .push(
                     &RemotePath::new(&remote_jar)?,
                     &mut &SERVER[..],
-                    0o600,
+                    0o644,
                     now().min(u32::MAX as u64) as u32,
                     SERVER.len() as u64,
                 )
@@ -232,10 +198,9 @@ impl Companion {
                     socket_name,
                     secret
                 ),
+                false,
             )?;
-            let mut shell = client
-                .shell_session(&command, ShellMode::Raw, 65536, operations(&cancellation))
-                .await?;
+            let mut shell = client.exec(&command, operations(&cancellation)).await?;
             ready(&mut shell).await?;
             let mut stream = client
                 .open(
@@ -389,14 +354,15 @@ impl Companion {
     }
 }
 
-async fn drain_process(mut shell: ShellSession, cancellation: &CancellationToken) {
+async fn drain_process(mut shell: AdbStream, cancellation: &CancellationToken) {
+    let mut buffer = [0; 4096];
     loop {
         tokio::select! {
             _=cancellation.cancelled()=>{
-                let _=tokio::time::timeout(Duration::from_secs(3),async {while shell.next_event().await.is_ok_and(|event|event.is_some()) {}}).await;
+                let _=tokio::time::timeout(Duration::from_secs(3),async {while shell.read(&mut [0; 4096]).await.is_ok_and(|count| count != 0) {}}).await;
                 break;
             },
-            result=shell.next_event()=>if matches!(result,Ok(None)|Err(_)) {break;},
+            result=shell.read(&mut buffer)=>if matches!(result,Ok(0)|Err(_)) {break;},
         }
     }
 }

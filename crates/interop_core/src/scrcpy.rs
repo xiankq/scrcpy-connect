@@ -3,6 +3,7 @@
 use crate::{
     CoreError, CoreResult, Runtime,
     model::{now, quote, required},
+    remote_process::managed_shell_command,
     resource::ResourceStatus,
 };
 use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, sync::RemotePath};
@@ -25,7 +26,7 @@ use tokio::{
 
 pub(crate) const SERVER: &[u8] = include_bytes!("../../../servers/vendor/scrcpy-server-v5.0.1");
 pub(crate) const SERVER_SHA: &str =
-    "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536";
+    "201fa96f6643e08fce7fb750e6bec30dc7aa6862b369c88ca82b4d1c65b0903a";
 const MAX_PACKET: usize = 16 * 1024 * 1024;
 const CLIPBOARD_MAX: usize = (1 << 18) - 14;
 // Acquire before spawning: repeatedly cancelled catalog initializers cannot
@@ -297,7 +298,7 @@ impl OwnedProcess {
         // rather than retaining a numeric PID across independent shell calls.
         // app_process rewrites argv[0]; explicitly give it a unique nice-name
         // containing both our private JAR path and SCID, then match that whole arg.
-        let identity = quote(&format!("\ninterop.scrcpy:{}:{}\n", self.scid, self.jar))?;
+        let identity = quote(&format!("interop.scrcpy:{}:{}", self.scid, self.jar))?;
         let command = format!(
             r#"p={pid}
 expected={started}
@@ -308,14 +309,11 @@ identity() {{
   state=$1
   shift 19 || return 1
   [ "$1" = "$expected" ] || return 1
-  cmd=$(tr '\000' '\n' < /proc/$p/cmdline) || return 1
-  cmd="
-$cmd
-"
-  case "$cmd" in *{identity}*) ;; *) return 1 ;; esac
+  IFS= read -r -d '' cmd < /proc/$p/cmdline || return 1
+  [ "$cmd" = {identity} ] || return 1
 }}
-identity || {{ printf 'identity-mismatch\n'; exit 41; }}
-case "$state" in R|S|D|I) printf 'verified:%s\n' "$state"; exit 0 ;; esac
+identity || {{ print -r -- identity-mismatch; exit 41; }}
+case "$state" in R|S|D|I) print -r -- "verified:$state"; exit 0 ;; esac
 exit 43"#,
             pid = self.pid,
             started = self.started,
@@ -525,6 +523,12 @@ impl Runtime {
             }
         }
         let device = self.device(&device_id).await?;
+        if device.api_level.is_some_and(|level| level < 21) {
+            return Err(CoreError::new(
+                "unsupported",
+                "整机远控需要 Android 5.0 或更新版本。",
+            ));
+        }
         if package.is_some() && device.api_level.is_some_and(|level| level < 29) {
             return Err(CoreError::new(
                 "unsupported",
@@ -674,12 +678,14 @@ impl Runtime {
             .unwrap_or(8_000_000)
             .clamp(500_000, 50_000_000);
         let mut app_launch_submitted = false;
+        let startup_failure = Arc::new(std::sync::Mutex::new(None::<String>));
+        let startup_logs = Arc::new(Mutex::new(Vec::new()));
         let startup = async {
             let mut sync = client.sync(OperationOptions::default()).await?;
             sync.push(
                 &RemotePath::new(&remote_jar)?,
                 &mut &SERVER[..],
-                0o600,
+                0o644,
                 now().min(u32::MAX as u64) as u32,
                 SERVER.len() as u64,
             )
@@ -690,7 +696,7 @@ impl Runtime {
                 json!(startup_clock.elapsed().as_millis() as u64),
             );
             let mut command = format!(
-                "CLASSPATH={} app_process / --nice-name={} com.genymobile.scrcpy.Server 5.0.1 scid={scid:08x} log_level=warn video=true audio=false control=true video_codec={} max_size={max_size} max_fps={max_fps} video_bit_rate={bit_rate} tunnel_forward=true cleanup=true vd_destroy_content=false clipboard_autosync=false power_on=false send_dummy_byte=true send_device_meta=true send_stream_meta=true send_frame_meta=true",
+                "CLASSPATH={} exec app_process / --nice-name={} com.genymobile.scrcpy.Server 5.0.1 scid={scid:08x} log_level=warn video=true audio=false control=true video_codec={} max_size={max_size} max_fps={max_fps} video_bit_rate={bit_rate} tunnel_forward=true cleanup=true vd_destroy_content=false clipboard_autosync=false power_on=false send_dummy_byte=true send_device_meta=true send_stream_meta=true send_frame_meta=true",
                 quote(&remote_jar)?,
                 quote(&format!("interop.scrcpy:{scid:08x}:{remote_jar}"))?,
                 selected_codec.name,
@@ -705,20 +711,10 @@ impl Runtime {
             if package.is_some() {
                 command.push_str(" new_display=1080x1920 vd_system_decorations=false");
             }
-            // Keep the launcher's stdin open while reporting the child identity.
-            command = format!(
-                r#"{command} </dev/null &
-child=$!
-IFS= read -r stat < /proc/$child/stat || exit 40
-rest=${{stat##*) }}
-set -- $rest
-shift 19 || exit 40
-started=$1
-case "$started" in ''|*[!0-9]*) exit 40 ;; esac
-printf '__INTEROP_PID__%s:%s\n' "$child" "$started"
-while IFS= read -r keepalive; do :; done
-wait "$child""#
-            );
+            // Raw exec has no PTY HUP guarantee. The shared supervisor owns
+            // the child through EOF, including cancellation before sockets
+            // are accepted, and reports its identity before child output.
+            command = managed_shell_command(&remote_jar, &command, true)?;
             let mut process = client.exec(&command, options(&cancellation)).await?;
             let mut pid_line = Vec::new();
             loop {
@@ -734,11 +730,12 @@ wait "$child""#
             }
             let (pid, started) = launch_identity(&pid_line)?;
             let process_closed = Arc::new(AtomicBool::new(false));
-            let logs = Arc::new(Mutex::new(Vec::new()));
+            let logs = startup_logs.clone();
             let process_cancel = cancellation.clone();
             let process_closed_task = process_closed.clone();
             let process_logs = logs.clone();
             let process_state = state.clone();
+            let process_failure = startup_failure.clone();
             tokio::spawn(async move {
                 let mut buffer = [0; 4096];
                 loop {
@@ -756,13 +753,15 @@ wait "$child""#
                     let detail = String::from_utf8_lossy(&process_logs.lock().await)
                         .trim()
                         .to_owned();
-                    let mut state = process_state.write().await;
-                    state["status"] = json!("failed");
-                    state["reason"] = json!(if detail.is_empty() {
+                    let reason = if detail.is_empty() {
                         "被控端的窗口服务已结束，请检查连接后重新打开。".to_owned()
                     } else {
                         detail
-                    });
+                    };
+                    *process_failure.lock().expect("startup failure") = Some(reason.clone());
+                    let mut state = process_state.write().await;
+                    state["status"] = json!("failed");
+                    state["reason"] = json!(reason);
                 }
                 process_closed_task.store(true, Ordering::Release);
                 process_cancel.cancel();
@@ -826,6 +825,7 @@ wait "$child""#
             let actor_events = self.events.clone();
             let actor_device = device_id.clone();
             let actor_state = state.clone();
+            let actor_failure = startup_failure.clone();
             tokio::spawn(async move {
                 run_control(
                     control,
@@ -834,6 +834,7 @@ wait "$child""#
                     actor_events,
                     actor_device,
                     actor_state,
+                    actor_failure,
                 )
                 .await;
             });
@@ -945,6 +946,28 @@ wait "$child""#
             } else {
                 Ok(result)
             }
+        });
+        // The process monitor cancels sibling I/O after recording its cause.
+        // Preserve diagnostics even when control EOF wins the startup select.
+        let diagnostic = String::from_utf8_lossy(&startup_logs.lock().await)
+            .trim()
+            .to_owned();
+        let started = started.map_err(|error| {
+            startup_failure
+                .lock()
+                .expect("startup failure")
+                .as_ref()
+                .map(|reason| {
+                    CoreError::new(
+                        "server_start_failed",
+                        if diagnostic.is_empty() {
+                            reason
+                        } else {
+                            &diagnostic
+                        },
+                    )
+                })
+                .unwrap_or(error)
         });
         let (control, process_closed, process) = match started {
             Ok(started) => started,
@@ -1548,7 +1571,7 @@ wait "$child""#
             sync.push(
                 &RemotePath::new(&path)?,
                 &mut &SERVER[..],
-                0o600,
+                0o644,
                 now().min(u32::MAX as u64) as u32,
                 SERVER.len() as u64,
             )
@@ -2084,6 +2107,7 @@ async fn run_control(
     events: crate::events::EventBus,
     device: String,
     state: Arc<RwLock<Value>>,
+    startup_failure: Arc<std::sync::Mutex<Option<String>>>,
 ) {
     let mut incoming = Vec::new();
     let mut buffer = [0; 4096];
@@ -2136,7 +2160,22 @@ async fn run_control(
                 if abort { break; }
             },
             result = stream.read(&mut buffer) => {
-                let Ok(count) = result else { break; }; if count == 0 { break; }
+                let count = match result {
+                    Ok(count) if count != 0 => count,
+                    closed => {
+                        // Record an observed remote close before waking startup.
+                        // A user cancellation may also end read(); it is not a
+                        // server failure, even when ordinary WARN logs exist.
+                        if !cancellation.is_cancelled() {
+                            let reason = match closed {
+                                Err(error) => format!("控制连接读取失败：{error}"),
+                                _ => "被控端的控制连接已结束。".to_owned(),
+                            };
+                            startup_failure.lock().expect("startup failure").get_or_insert(reason);
+                        }
+                        break;
+                    }
+                };
                 incoming.extend_from_slice(&buffer[..count]);
                 loop {
                     if incoming.is_empty() { break; }
@@ -2717,6 +2756,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn screen_below_api21_is_rejected_before_any_device_command() {
+        let mut fixture = ColdStartFixture::new().await;
+        fixture
+            .runtime
+            .store
+            .write()
+            .await
+            .devices
+            .iter_mut()
+            .find(|device| device.id == "cold-device")
+            .unwrap()
+            .api_level = Some(19);
+        let result = tokio::time::timeout(Duration::from_secs(1), fixture.start_with(json!({})))
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(result.code, "unsupported");
+        fixture.assert_no_open().await;
+        fixture.client.close();
+    }
+
+    #[tokio::test]
     async fn cold_default_screen_rejects_sleep_without_upload_or_wake() {
         use interop_adb::protocol;
         let mut fixture = ColdStartFixture::new().await;
@@ -2912,6 +2974,7 @@ mod tests {
         control: mpsc::Sender<ControlRequest>,
         cancellation: CancellationToken,
         running: tokio::task::JoinHandle<()>,
+        startup_failure: Arc<std::sync::Mutex<Option<String>>>,
     }
 
     impl ControlTransportFixture {
@@ -2948,6 +3011,7 @@ mod tests {
                 .unwrap();
             let stream = opening.await.unwrap();
             let (control, requests) = mpsc::channel(64);
+            let startup_failure = Arc::new(std::sync::Mutex::new(None));
             let running = tokio::spawn(run_control(
                 stream,
                 requests,
@@ -2955,6 +3019,7 @@ mod tests {
                 crate::events::EventBus::new(8),
                 "fixture-device".into(),
                 Arc::new(RwLock::new(json!({"sessionId":"fixture"}))),
+                startup_failure.clone(),
             ));
             Self {
                 peer,
@@ -2963,6 +3028,7 @@ mod tests {
                 control,
                 cancellation,
                 running,
+                startup_failure,
             }
         }
 
@@ -3084,8 +3150,26 @@ mod tests {
             .expect("stopping a session must cancel its pending write receipt")
             .unwrap();
         assert!(writing.await.unwrap().is_err());
+        assert!(fixture.startup_failure.lock().unwrap().is_none());
         assert_eq!(fixture.read().await.command, protocol::CLSE);
         fixture.assert_healthy_service().await;
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn control_remote_eof_records_failure_before_cancelling_startup() {
+        use interop_adb::protocol::{self, Frame};
+        let mut fixture = ControlTransportFixture::start().await;
+        Frame::new(protocol::CLSE, 77, fixture.local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(fixture.cancellation.is_cancelled());
+        assert!(fixture.startup_failure.lock().unwrap().is_some());
         fixture.client.close();
     }
 

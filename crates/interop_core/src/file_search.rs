@@ -1,7 +1,7 @@
 //! Bounded, cancellable name searches. Workers never retain the Runtime.
 use crate::{
     CoreError, CoreResult, Runtime,
-    model::{mime, quote, remote_path, required},
+    model::{mime, remote_path, required},
 };
 use interop_adb::{
     Client, OperationOptions,
@@ -229,100 +229,29 @@ fn options(search: &Search) -> OperationOptions {
     }
 }
 async fn stat(search: &Search, client: &Client, path: &str) -> CoreResult<FileStat> {
-    let mut sync = client.sync(options(search)).await?;
-    match sync.lstat(&RemotePath::new(path)?).await {
-        Ok(stat) => Ok(stat),
-        Err(_) => {
-            let result = client
-                .shell(
-                    &format!("stat -c '%f:%s:%Y' -- {}", quote(path)?),
-                    4096,
-                    options(search),
-                )
-                .await?;
-            if result.exit_code != Some(0) {
-                return Err(CoreError::new(
-                    "remote_stat_failed",
-                    "目录不存在或无权读取元数据。",
-                ));
-            }
-            parse_stat(&result.stdout)
-                .ok_or_else(|| CoreError::new("invalid_metadata", "文件元数据格式无效。"))
-        }
-    }
+    crate::remote_fs::stat(client, path, true, options(search)).await
 }
-fn parse_stat(bytes: &[u8]) -> Option<FileStat> {
-    let fields = std::str::from_utf8(bytes)
-        .ok()?
-        .trim()
-        .split(':')
-        .collect::<Vec<_>>();
-    if fields.len() != 3 {
-        return None;
-    }
-    Some(FileStat {
-        mode: u32::from_str_radix(fields[0], 16).ok()?,
-        size: fields[1].parse().ok()?,
-        modified_seconds: fields[2].parse().ok()?,
-    })
-}
-// AOSP SELinux can deny adbd getattr of shell-created symlinks, poisoning LIS2.
-// Shell's ordinary unprivileged lstat can still inspect them. NUL-delimited
-// records preserve quotes/newlines/raw names; no recursive shell traversal.
-async fn shell_children(
+async fn native_children(
     search: &Search,
     client: &Client,
     path: &str,
     limit: usize,
 ) -> CoreResult<Vec<DirEntry>> {
-    // The absolute root must remain "/" for permission checks. Only the glob
-    // prefix drops its separator, so root children are spelled /*, not //*.
-    let quoted = quote(path)?;
-    let prefix = quote(path.trim_end_matches('/'))?;
-    let script = format!(
-        "[ -r {quoted} ] && [ -x {quoted} ] || exit 1; count=0; for child in {prefix}/* {prefix}/.[!.]* {prefix}/..?*; do if ! [ -e \"$child\" ] && ! [ -L \"$child\" ]; then if [ \"$child\" = {prefix}'/*' ] || [ \"$child\" = {prefix}'/.[!.]*' ] || [ \"$child\" = {prefix}'/..?*' ]; then continue; fi; fi; count=$((count+1)); [ \"$count\" -le {limit} ] || {{ printf '\\0LIMIT\\0'; exit 0; }}; printf '%s\\0' \"${{child##*/}}\"; stat -c '%f:%s:%Y' -- \"$child\" 2>/dev/null || printf ERROR; printf '\\0'; done"
-    );
-    let result = client
-        .shell(&script, 8 * 1024 * 1024, options(search))
-        .await?;
-    if result.exit_code != Some(0) {
-        return Err(CoreError::new(
-            "directory_read_failed",
-            "目录不存在或无权读取。",
-        ));
+    let listing = crate::remote_fs::fallback_children(client, path, limit, options(search)).await?;
+    if listing.truncated {
+        search.issue(path, "entry_limit", "达到目录项数量上限，结果不完整。");
     }
-    if !result.stderr.is_empty() {
-        search.issue(
-            path,
-            "directory_read_failed",
-            "目录枚举产生错误，结果可能不完整。",
-        );
-    }
-    let mut records = result.stdout.split(|byte| *byte == 0);
-    let mut entries = Vec::new();
-    while let Some(name) = records.next() {
-        if name.is_empty() {
-            if records.next() == Some(&b"LIMIT"[..]) {
-                search.issue(path, "entry_limit", "达到目录项数量上限，结果不完整。");
-            }
-            break;
-        }
-        let Some(metadata) = records.next() else {
-            search.issue(path, "entry_limit", "达到目录项数量上限，结果不完整。");
-            break;
-        };
-        match parse_stat(metadata) {
-            Some(stat) => entries.push(DirEntry {
-                name: name.to_vec(),
-                stat,
-            }),
-            None => search.issue(path, "source_changed", "部分目录项已变化或无权读取元数据。"),
+    let mut entries = Vec::with_capacity(listing.entries.len());
+    for (name, stat) in listing.entries {
+        match stat {
+            Ok(stat) => entries.push(DirEntry { name, stat }),
+            Err(error) => search.issue(path, &error.code, &error.message),
         }
     }
     Ok(entries)
 }
 fn alias(path: &str) -> bool {
-    matches!(path, "/sdcard" | "/mnt/sdcard" | "/storage/self/primary")
+    crate::remote_fs::storage_alias(path)
 }
 async fn check_root(search: &Search, client: &Client, path: &str) -> CoreResult<()> {
     let mut prefix = String::new();
@@ -337,8 +266,7 @@ async fn check_root(search: &Search, client: &Client, path: &str) -> CoreResult<
             ));
         }
     }
-    let mut sync = client.sync(options(search)).await?;
-    if sync.stat(&RemotePath::new(path)?).await?.mode & 0o170000 != 0o040000 {
+    if stat(search, client, path).await?.mode & 0o170000 != 0o040000 {
         return Err(CoreError::new("invalid_path", "搜索根必须是目录。"));
     }
     Ok(())
@@ -376,15 +304,7 @@ async fn walk(
         };
         // Some adbd LIST implementations turn opendir(EACCES) into empty DONE.
         // Confirm actual traversal permission before accepting an empty listing.
-        let quoted = quote(&path)?;
-        let accessible = client
-            .shell(
-                &format!("[ -r {quoted} ] && [ -x {quoted} ]"),
-                4096,
-                options(search),
-            )
-            .await?;
-        if accessible.exit_code != Some(0) || !accessible.stderr.is_empty() {
+        if !crate::remote_fs::accessible(client, &path, options(search)).await? {
             search.issue(
                 &path,
                 "permission_denied",
@@ -393,20 +313,23 @@ async fn walk(
             continue;
         }
         let mut sync = client.sync(options(search)).await?;
-        let children = match sync
-            .list(
+        let listed = if client.info().features.contains("ls_v2") {
+            sync.list(
                 &RemotePath::new(&path)?,
                 MAX_DIRECTORY_ENTRIES.min(MAX_ENTRIES - visited),
             )
             .await
-        {
+        } else {
+            Err(interop_adb::Error::Unsupported("ls_v2"))
+        };
+        let children = match listed {
             Ok(children) => children,
             Err(error) => {
                 if matches!(error, interop_adb::Error::OutputLimit) {
                     search.issue(&path, "entry_limit", "目录项数量超过上限，结果不完整。");
                     continue;
                 }
-                match shell_children(
+                match native_children(
                     search,
                     client,
                     &path,

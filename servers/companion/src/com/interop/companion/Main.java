@@ -180,8 +180,7 @@ public final class Main {
         }
         if(callsListening) {
             try {
-                if(Build.VERSION.SDK_INT>=31) invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[0],false);
-                else invoke(registry,"listenForSubscriber",Integer.MAX_VALUE,PACKAGE,null,phoneToken,0,false);
+                CallServices.listen(registry,phoneToken,false);
                 callsListening=false;phoneToken=null;
             } catch(Exception e) {callError=error(e);clean=false;}
         }
@@ -198,8 +197,7 @@ public final class Main {
             telecom=service("telecom","com.android.internal.telecom.ITelecomService");
             registry=service("telephony.registry","com.android.internal.telephony.ITelephonyRegistry");
             phoneToken=callback("com.android.internal.telephony.IPhoneStateListener",()->scheduleRefresh(currentEpoch));
-            if(Build.VERSION.SDK_INT>=31) invoke(registry,"listenWithEventList",true,true,Integer.MAX_VALUE,PACKAGE,null,phoneToken,new int[]{6},true);
-            else invoke(registry,"listenForSubscriber",Integer.MAX_VALUE,PACKAGE,null,phoneToken,32,true);
+            CallServices.listen(registry,phoneToken,true);
             callsListening=true;refreshCalls(false);
         } catch(Exception e) {callError=error(e);}
         return observationSnapshot(true);
@@ -211,16 +209,17 @@ public final class Main {
             if(!method.getName().equals(name)) continue;
             Class<?>[] types=method.getParameterTypes();
             int offset=first==null?0:1;
-            if(types.length<=offset || (first!=null && !types[0].isInstance(first))) continue;
+            if(types.length<offset || (first!=null && !types[0].isInstance(first))) continue;
             int count=types.length-offset;
-            boolean known=count==1 && types[offset]==String.class
+            boolean known=count==0 && name.equals("removePrimaryClipChangedListener")
+                || count==1 && types[offset]==String.class
                 || count==2 && types[offset]==String.class && types[offset+1]==int.class
                 || count==3 && types[offset]==String.class && types[offset+1]==String.class && types[offset+2]==int.class
                 || count==4 && types[offset]==String.class && types[offset+1]==String.class && types[offset+2]==int.class && types[offset+3]==int.class;
             if(!known) continue;
             List<Object> args=new ArrayList<>();
             if(first!=null) args.add(first);
-            args.add(PACKAGE);
+            if(count>=1) args.add(PACKAGE);
             if(count>=3) args.add(null); // Actual shell attribution tag is absent.
             if(count>=2) args.add(userId);
             if(count==4) args.add(0); // Context.DEVICE_ID_DEFAULT, not a virtual-device identity.
@@ -236,7 +235,7 @@ public final class Main {
         if(Build.VERSION.SDK_INT>=29 && shellContext.checkCallingOrSelfPermission("android.permission.READ_CLIPBOARD_IN_BACKGROUND")!=PackageManager.PERMISSION_GRANTED)
             throw new Failure("permission_denied","The target shell package lacks background clipboard permission");
         AppOpsManager ops=(AppOpsManager)shellContext.getSystemService(Context.APP_OPS_SERVICE);
-        if(ops==null || ops.checkOpNoThrow(writing?"android:write_clipboard":"android:read_clipboard",Process.myUid(),PACKAGE)!=AppOpsManager.MODE_ALLOWED)
+        if(ops==null || ClipboardAppOps.check(ops,writing,Process.myUid())!=AppOpsManager.MODE_ALLOWED)
             throw new Failure("permission_denied","The target denies this clipboard AppOp");
     }
     private void ensureClipboard() throws Exception {
@@ -369,7 +368,7 @@ public final class Main {
     }
     private void refreshCalls(boolean event) throws Exception {
         if(!observationEnabled || !callsListening || callError!=null) return;
-        int previous=callState;int actual=(Integer)invoke(telecom,"getCallStateUsingPackage",PACKAGE,null);
+        int previous=callState;int actual=CallServices.state(telecom);
         long generation=phoneGeneration.get();
         if(actual!=0 && (callId==null || generation!=observedPhoneGeneration)) callId=UUID.randomUUID().toString();
         observedPhoneGeneration=generation;
@@ -396,14 +395,7 @@ public final class Main {
             .put("audioStatus","unknown").put("audioRoute","声音与麦克风继续由被控手机处理；主控双向通话音频尚未实现。");
     }
     private Method systemCallUiMethod() {
-        if(telecom==null) return null;
-        for(Method method:telecom.getClass().getMethods()) {
-            if(!method.getName().equals("showInCallScreen")) continue;
-            Class<?>[] types=method.getParameterTypes();
-            if(Arrays.equals(types,new Class<?>[]{boolean.class,String.class,String.class})
-                || Arrays.equals(types,new Class<?>[]{boolean.class,String.class})) return method;
-        }
-        return null;
+        return CallServices.systemUiMethod(telecom);
     }
     private JSONObject openSystemCallUi(JSONObject request) throws Exception {
         if(request.has("callId")) throw new Failure("call_targeting_unavailable","此入口仅打开手机当前系统通话界面，不能定位指定通话。");
@@ -415,9 +407,7 @@ public final class Main {
         Method method=systemCallUiMethod();
         if(method==null) throw new Failure("call_ui_unsupported","此系统未提供已适配的通话界面打开接口，请在手机上继续处理。");
         try {
-            method.setAccessible(true);
-            if(method.getParameterTypes().length==3) method.invoke(telecom,false,PACKAGE,null);
-            else method.invoke(telecom,false,PACKAGE);
+            CallServices.openSystemUi(telecom);
         } catch(Exception e) {
             Exception cause=e instanceof InvocationTargetException && e.getCause() instanceof Exception?(Exception)e.getCause():e;
             callUiError=error(cause);
@@ -488,6 +478,12 @@ public final class Main {
     }
     public static void main(String[] args) {
         try {
+            // Match the fixed upstream scrcpy server: debug/eng adbd may start
+            // app_process as root, but every companion operation uses shell.
+            // Drop before context creation, Binder access or worker creation;
+            // a failed transition is terminal and never runs privileged work.
+            if(Process.myUid()==0) android.system.Os.setuid(2000);
+            if(Process.myUid()!=2000) throw new Failure("wrong_identity","Companion requires the authorized ADB shell identity");
             if(args.length!=2 || !args[0].matches("interop-companion-[0-9a-f]{32}") || !args[1].matches("[0-9a-f]{64}")) throw new Failure("invalid_argument","Expected a random abstract socket name and authentication token");
             Looper.prepareMainLooper();
             Main main=new Main();main.prepareContext();main.run(args[0],args[1]);System.exit(0);

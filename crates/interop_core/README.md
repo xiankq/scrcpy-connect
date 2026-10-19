@@ -5,8 +5,10 @@
 提供有界实时事件。界面不直接管理 ADB socket 或目标临时进程。
 
 运行时使用相邻的 `interop-adb` 直接连接 adbd，不调用系统 adb 或 scrcpy 主机。
-固定的 scrcpy JAR、免安装 Binder companion 和四 ABI 原子重命名助手位于
+固定的 scrcpy JAR、免安装 Binder companion 和四 ABI 原生文件服务位于
 [`servers`](../../servers/)，其来源、构建与摘要分别记录在对应目录。
+系统版本、ADB feature 与实际权限分别判断，低版本元数据和进程回收的
+契约及证据见[被控兼容边界](../../docs/implementation/android-target-compatibility.md)。
 
 调用方须提供平台私有目录。设备偏好、传输进度与主机身份分开存储；Unix
 目录权限为 0700，私钥为 0600。导出设备元数据不包含身份。应用不得把该目录
@@ -24,4 +26,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 真实设备测试默认忽略，必须显式提供隔离目标；运行方法、实际通过范围和
 未验证项见[验收记录](../../docs/implementation/validation.md)。单元测试通过
 不表示 Android/OEM 或四端应用整包均已验收。当前密码提供器为 experimental；
-具体通话控制、通话音频等缺口仍在[目标矩阵](../../.scratch/interop/goal.md)跟踪。
+具体通话控制、通话音频等能力与验证边界见[产品验收](../../docs/implementation/product-refinement.md)及[流程覆盖](../../designs/prod/coverage.md)。

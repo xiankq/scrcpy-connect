@@ -1667,7 +1667,7 @@ impl Runtime {
         if let Some(client) = &client {
             let shell = client
                 .shell(
-                    "printf interop-capability-check",
+                    "print -nr -- interop-capability-check",
                     1024,
                     operations(5, CancellationToken::new()),
                 )
@@ -1751,13 +1751,24 @@ impl Runtime {
                 if active_session {
                     "当前设备已有实际视频控制会话。"
                 } else {
-                    "scrcpy 5.0.1 屏幕链路已实现并经 Android 16 验证；当前设备编码器及厂商输入权限在启动时确认。"
+                    "当前设备的编码器及厂商输入权限在启动时确认。"
                 },
             );
             add(
                 "clipboard",
                 companion_snapshot.as_ref().and_then(|snapshot|snapshot["clipboard"]["status"].as_str()).unwrap_or("unknown"),
                 companion_snapshot.as_ref().and_then(|snapshot|snapshot["clipboard"]["reason"].as_str()).unwrap_or("已有屏幕控制与无视频文本通道；状态反映目标当前探测结果，主控自动同步仍须在前台并遵守本机权限。"),
+            );
+        } else if device.api_level.is_some_and(|api| api < 21) {
+            add(
+                "screen",
+                "unavailable",
+                "整机远控需要 Android 5.0 或更新版本。",
+            );
+            add(
+                "clipboard",
+                "unavailable",
+                "互联文本通道需要 Android 5.0 或更新版本。",
             );
         } else {
             add(

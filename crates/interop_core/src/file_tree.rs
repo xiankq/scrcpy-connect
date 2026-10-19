@@ -2,7 +2,7 @@
 use crate::{
     CoreError, CoreResult,
     files::{SourceStamp, local_stamp, metadata_stamp},
-    model::{quote, remote_path},
+    model::remote_path,
 };
 use interop_adb::{Client, OperationOptions, sync::RemotePath};
 use std::{collections::HashSet, path::Path};
@@ -199,19 +199,22 @@ impl Selection {
             let destination = self.entries[index].destination.clone();
             let depth = self.entries[index].depth + 1;
             // One directory is also bounded; no shell find or unbounded stdout.
-            let children = match sync
-                .list(
+            let listed = if client.info().features.contains("ls_v2") {
+                sync.list(
                     &RemotePath::new(&source)?,
                     MAX_ENTRIES - self.entries.len() + 1,
                 )
                 .await
-            {
+            } else {
+                Err(interop_adb::Error::Unsupported("ls_v2"))
+            };
+            let children = match listed {
                 Ok(children) => children
                     .into_iter()
                     .map(|child| (child.name, Ok(child.stat)))
                     .collect(),
                 Err(_) => {
-                    match shell_children(client, &source, MAX_ENTRIES - self.entries.len() + 1)
+                    match native_children(client, &source, MAX_ENTRIES - self.entries.len() + 1)
                         .await
                     {
                         Ok(children) => children,
@@ -296,91 +299,21 @@ pub(crate) async fn remote_stat(
     client: &Client,
     path: &str,
 ) -> CoreResult<interop_adb::sync::FileStat> {
-    let mut sync = client.sync(OperationOptions::default()).await?;
-    match sync.lstat(&RemotePath::new(path)?).await {
-        Ok(stat) => Ok(stat),
-        // Some AOSP policies deny adbd getattr on shell-created symlinks.
-        // The ordinary shell service can report their actual lstat metadata;
-        // no root, permission changes, or follow-link option are involved.
-        Err(_) => shell_stat(client, path).await,
-    }
+    crate::remote_fs::stat(client, path, false, OperationOptions::default()).await
 }
 
 type ChildStats = Vec<(Vec<u8>, CoreResult<interop_adb::sync::FileStat>)>;
-async fn shell_children(client: &Client, path: &str, limit: usize) -> CoreResult<ChildStats> {
-    let result = client
-        .shell(
-            &format!("find {} -mindepth 1 -maxdepth 1 -print0", quote(path)?),
-            MAX_PATH_BYTES,
-            OperationOptions::default(),
-        )
-        .await?;
-    if result.exit_code != Some(0) {
+async fn native_children(client: &Client, path: &str, limit: usize) -> CoreResult<ChildStats> {
+    let listing =
+        crate::remote_fs::fallback_children(client, path, limit, OperationOptions::default())
+            .await?;
+    if listing.truncated {
         return Err(CoreError::new(
-            "directory_read_failed",
-            String::from_utf8_lossy(&result.stderr).into_owned(),
+            "tree_limit",
+            "目录项目数量超过上限，请分批选择。",
         ));
     }
-    let mut children = Vec::new();
-    for child in result
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|child| !child.is_empty())
-    {
-        if children.len() >= limit {
-            return Err(CoreError::new(
-                "tree_limit",
-                "目录项目数量超过上限，请分批选择。",
-            ));
-        }
-        let name = child
-            .rsplit(|byte| *byte == b'/')
-            .next()
-            .unwrap_or_default()
-            .to_vec();
-        let stat = match std::str::from_utf8(child) {
-            Ok(path) => shell_stat(client, path).await,
-            Err(_) => Err(CoreError::new(
-                "invalid_filename",
-                "不能安全表示此文件名；未传输此项。",
-            )),
-        };
-        children.push((name, stat));
-    }
-    Ok(children)
-}
-async fn shell_stat(client: &Client, path: &str) -> CoreResult<interop_adb::sync::FileStat> {
-    let result = client
-        .shell(
-            &format!("stat -c '%f:%s:%Y' -- {}", quote(path)?),
-            4096,
-            OperationOptions::default(),
-        )
-        .await?;
-    if result.exit_code != Some(0) {
-        let message = String::from_utf8_lossy(&result.stderr).into_owned();
-        return Err(CoreError::new(
-            if message.contains("No such file") {
-                "source_changed"
-            } else {
-                "remote_stat_failed"
-            },
-            message,
-        ));
-    }
-    let output = std::str::from_utf8(&result.stdout)
-        .map_err(|_| CoreError::new("invalid_metadata", "文件元数据格式无效。"))?;
-    let fields = output.trim().split(':').collect::<Vec<_>>();
-    let parse = || -> Option<interop_adb::sync::FileStat> {
-        Some(interop_adb::sync::FileStat {
-            mode: u32::from_str_radix(fields.first()?, 16).ok()?,
-            size: fields.get(1)?.parse().ok()?,
-            modified_seconds: fields.get(2)?.parse().ok()?,
-        })
-    };
-    parse()
-        .filter(|_| fields.len() == 3)
-        .ok_or_else(|| CoreError::new("invalid_metadata", "文件元数据格式无效。"))
+    Ok(listing.entries)
 }
 
 #[cfg(test)]

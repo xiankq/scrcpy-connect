@@ -13,7 +13,7 @@ final class MediaJobs implements AutoCloseable {
     private final Reply reply;
     private final ThreadPoolExecutor worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
     private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
-    private final Map<String, Job> active = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Job> active = new ConcurrentHashMap<>();
     private final Set<String> seen = new HashSet<>();
     private final AtomicBoolean closed = new AtomicBoolean();
     MediaJobs(Reply reply) { this.reply = reply; }
@@ -44,9 +44,6 @@ final class MediaJobs implements AutoCloseable {
         if (!command.equals("media.thumbnail") && !command.equals("media.stat")) {
             respond(request, null, failure("invalid_command", "Unknown media command")); return;
         }
-        if (android.os.Build.VERSION.SDK_INT < 26) {
-            respond(request, null, failure("thumbnail_api_pending", "Bounded isolated media process lifecycle on Android below 8.0 has not been implemented")); return;
-        }
         synchronized (seen) {
             if (seen.contains(operation)) { respond(request, null, failure("operation_reused", "Media operation has already ended or been cancelled")); return; }
             if (seen.size() == 65536) { respond(request, null, failure("operation_limit", "Media operation identity limit reached; reconnect the companion")); return; }
@@ -67,7 +64,7 @@ final class MediaJobs implements AutoCloseable {
         void finish(JSONObject result, JSONObject error) {
             if (!finished.compareAndSet(false, true)) return;
             java.lang.Process child = process;
-            if (child == null || !child.isAlive()) active.remove(operation, this);
+            if (child == null || !Processes.alive(child)) active.remove(operation, this);
             try { respond(request, result, error); } catch (Exception ignored) {}
         }
         boolean cancel(String code) {
@@ -104,7 +101,7 @@ final class MediaJobs implements AutoCloseable {
                     if (output.size() >= 384 * 1024) throw new Thumbnail.Failure("thumbnail_output_limit", "Decoder response exceeds the output bound");
                     output.write(value);
                 }
-                if (!child.waitFor(2, TimeUnit.SECONDS)) throw new Thumbnail.Failure("media_timeout", "Decoder did not exit after its response");
+                if (!Processes.await(child, 2000)) throw new Thumbnail.Failure("media_timeout", "Decoder did not exit after its response");
                 if (child.exitValue() != 0 || output.size() == 0) throw new Thumbnail.Failure("media_decode_failed", "Isolated media process exited without a valid result");
                 JSONObject response = new JSONObject(new String(output.toByteArray(), StandardCharsets.UTF_8));
                 result = response.optJSONObject("result"); error = response.optJSONObject("error");
@@ -128,11 +125,11 @@ final class MediaJobs implements AutoCloseable {
         try {
             try { child.exitValue(); return true; } catch (IllegalThreadStateException alive) {}
             try { child.getOutputStream().close(); } catch (IOException ignored) {}
-            if (child.waitFor(2, TimeUnit.SECONDS)) return true;
+            if (Processes.await(child, 2000)) return true;
             // Owned Process fallback, never an arbitrary numeric PID. On AOSP
             // this is SIGTERM; the child's own deadline provides SIGKILL.
             child.destroy();
-            return child.waitFor(2, TimeUnit.SECONDS);
+            return Processes.await(child, 2000);
         } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return false; }
     }
     @Override public void close() { shutdown(); }

@@ -192,7 +192,7 @@ impl Peer {
                 protocol::CNXN,
                 protocol::VERSION,
                 1024 * 1024,
-                b"device::features=shell_v2;\0".to_vec(),
+                b"device::features=shell_v2,stat_v2;\0".to_vec(),
             )
             .write(&mut socket)
             .await
@@ -250,6 +250,22 @@ impl Peer {
                     let content = data.lock().unwrap().clone();
                     let mut reply = Vec::new();
                     match &frame.payload[..4] {
+                        b"STA2" | b"LST2" => {
+                            // This peer exercises cache ownership with modern
+                            // metadata, independently of legacy helper deployment.
+                            reply.extend(&frame.payload[..4]);
+                            reply.extend(0u32.to_le_bytes()); // errno
+                            reply.extend(1u64.to_le_bytes()); // device
+                            reply.extend(1u64.to_le_bytes()); // inode
+                            reply.extend(0o100644u32.to_le_bytes());
+                            reply.extend(1u32.to_le_bytes()); // link count
+                            reply.extend(2000u32.to_le_bytes()); // uid
+                            reply.extend(2000u32.to_le_bytes()); // gid
+                            reply.extend((content.len() as u64).to_le_bytes());
+                            for _ in 0..3 {
+                                reply.extend(10i64.to_le_bytes()); // atime, mtime, ctime
+                            }
+                        }
                         b"STAT" => {
                             reply.extend(b"STAT");
                             reply.extend(0o100644u32.to_le_bytes());

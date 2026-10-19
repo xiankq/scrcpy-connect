@@ -133,8 +133,8 @@ async fn bounded_search_finds_distinct_paths_and_never_traverses_links() {
     .await
     .unwrap();
     let root = format!("/data/local/tmp/interop-search-{}", uuid::Uuid::new_v4());
-    let fixture = client.shell(&format!("mkdir -p '{root}/a' '{root}/b' '{root}/outside'; ln -s '{root}/outside' '{root}/a/link'"), 4096, OperationOptions::default()).await.unwrap();
-    assert_eq!(fixture.exit_code, Some(0));
+    let fixture = client.shell(&format!("mkdir -p '{root}/a' '{root}/b' '{root}/outside'; ln -s '{root}/outside' '{root}/a/link' && print -nr -- created"), 4096, OperationOptions::default()).await.unwrap();
+    assert_eq!(fixture.stdout, b"created");
     let mut sync = client.sync(OperationOptions::default()).await.unwrap();
     for name in [
         "a/中文 ' REPORT.JPG",
@@ -271,8 +271,8 @@ async fn bounded_search_finds_distinct_paths_and_never_traverses_links() {
             .iter()
             .all(|entry| !entry["path"].as_str().unwrap().contains('�'))
     );
-    let setup = client.shell(&format!("mkdir '{root}/many'; n=0; while [ \"$n\" -le 500 ]; do : > '{root}/many'/match-$n.txt; n=$((n+1)); done"), 4096, OperationOptions::default()).await.unwrap();
-    assert_eq!(setup.exit_code, Some(0));
+    let setup = client.shell(&format!("mkdir '{root}/many'; n=0; while [ \"$n\" -le 500 ]; do : > '{root}/many'/match-$n.txt; n=$((n+1)); done; print -nr -- created"), 4096, OperationOptions::default()).await.unwrap();
+    assert_eq!(setup.stdout, b"created");
     let limited = runtime.invoke("files.search.start", json!({"deviceId":id,"path":format!("{root}/many"),"query":"match","filter":"documents"})).await.unwrap();
     let partial = settled(&runtime, id, &limited).await;
     assert_eq!(partial["status"], "partial", "{partial}");
@@ -293,7 +293,7 @@ async fn bounded_search_finds_distinct_paths_and_never_traverses_links() {
         )
         .await
         .unwrap();
-    assert_eq!(fixture.exit_code, Some(0));
+    assert_eq!(fixture.stdout, b"created");
     let empty = runtime
         .invoke(
             "files.search.start",

@@ -5,7 +5,9 @@ flutter pub get --enforce-lockfile
 npm ci --ignore-scripts --prefix tool/design_tokens
 python3 tool/protocol_codegen.py --check
 python3 tool/generate.py --check
+python3 servers/vendor/build.py --check
 python3 servers/companion/build.py --check
+python3 servers/companion/tests/compatibility.py
 python3 -m unittest discover -s tool -p 'test_*.py'
 npm test --prefix tool/design_tokens
 python3 tool/check_native_deps.py

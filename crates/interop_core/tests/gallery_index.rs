@@ -1,8 +1,9 @@
-use interop_adb::protocol::{self, Frame};
+#[path = "support/gallery_adbd.rs"]
+mod gallery_adbd;
 use interop_core::Runtime;
 use serde_json::{Value, json};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -11,6 +12,7 @@ use std::{
 struct Node {
     mode: u32,
     modified: u32,
+    size: u64,
 }
 #[derive(Default)]
 struct DeviceFiles {
@@ -30,6 +32,7 @@ impl DeviceFiles {
             Node {
                 mode: 0o40755,
                 modified: 10,
+                size: 123,
             },
         );
     }
@@ -39,6 +42,7 @@ impl DeviceFiles {
             Node {
                 mode: 0o100644,
                 modified,
+                size: 123,
             },
         );
     }
@@ -61,199 +65,8 @@ impl Peer {
         files.lock().unwrap().directory("/sdcard");
         let data = files.clone();
         let task = tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.unwrap();
-            socket.set_nodelay(true).unwrap();
-            Frame::read(&mut socket, 1024 * 1024, false).await.unwrap();
-            Frame::new(
-                protocol::CNXN,
-                protocol::VERSION,
-                1024 * 1024,
-                b"device::features=shell_v2;\0".to_vec(),
-            )
-            .write(&mut socket)
-            .await
-            .unwrap();
-            let mut services = HashMap::<u32, String>::new();
-            let mut ending = HashSet::new();
-            while let Ok(frame) = Frame::read(&mut socket, 1024 * 1024, false).await {
-                let id = frame.arg0;
-                if frame.command == protocol::OPEN {
-                    let service = String::from_utf8(frame.payload)
-                        .unwrap()
-                        .trim_end_matches('\0')
-                        .to_owned();
-                    services.insert(id, service.clone());
-                    Frame::new(protocol::OKAY, id, id, vec![])
-                        .write(&mut socket)
-                        .await
-                        .unwrap();
-                    if service.starts_with("shell") {
-                        let reply = {
-                            let data = data.lock().unwrap();
-                            if service.contains("[ -r ") && data.blocked {
-                                None
-                            } else {
-                                let exit = u8::from(
-                                    data.denied
-                                        .iter()
-                                        .any(|path| service.contains(&format!("'{path}'"))),
-                                );
-                                let mut bytes = Vec::new();
-                                if data.legacy_root_alias && service.contains("stat -L -c") {
-                                    let output = b"41ed:123:10\n";
-                                    bytes.push(1);
-                                    bytes.extend((output.len() as u32).to_le_bytes());
-                                    bytes.extend(output);
-                                }
-                                if service.contains("count=0; for child") {
-                                    let path = service
-                                        .split("[ -r '")
-                                        .nth(1)
-                                        .unwrap()
-                                        .split("' ]")
-                                        .next()
-                                        .unwrap();
-                                    let limit = service
-                                        .split("[ \"$count\" -le ")
-                                        .nth(1)
-                                        .unwrap()
-                                        .split(' ')
-                                        .next()
-                                        .unwrap()
-                                        .parse::<usize>()
-                                        .unwrap();
-                                    let prefix = format!("{path}/");
-                                    let children = data
-                                        .nodes
-                                        .iter()
-                                        .filter_map(|(path, node)| {
-                                            Some((
-                                                path.strip_prefix(&prefix)
-                                                    .filter(|name| !name.contains('/'))?,
-                                                node,
-                                            ))
-                                        })
-                                        .collect::<Vec<_>>();
-                                    let mut output = Vec::new();
-                                    for (name, node) in children.iter().take(limit) {
-                                        output.extend(name.as_bytes());
-                                        output.push(0);
-                                        if data.fallback_metadata_failure {
-                                            output.extend(b"ERROR");
-                                        } else {
-                                            output.extend(
-                                                format!("{:x}:123:{}\n", node.mode, node.modified)
-                                                    .as_bytes(),
-                                            );
-                                        }
-                                        output.push(0);
-                                    }
-                                    if children.len() > limit {
-                                        output.extend(b"\0LIMIT\0");
-                                    }
-                                    bytes.push(1);
-                                    bytes.extend((output.len() as u32).to_le_bytes());
-                                    bytes.extend(output);
-                                }
-                                bytes.extend([3, 1, 0, 0, 0]);
-                                bytes.push(exit);
-                                Some(bytes)
-                            }
-                        };
-                        if let Some(reply) = reply {
-                            Frame::new(protocol::WRTE, id, id, reply)
-                                .write(&mut socket)
-                                .await
-                                .unwrap();
-                            ending.insert(id);
-                        }
-                    }
-                } else if frame.command == protocol::OKAY && ending.remove(&frame.arg1) {
-                    Frame::new(protocol::CLSE, frame.arg1, id, vec![])
-                        .write(&mut socket)
-                        .await
-                        .unwrap();
-                } else if frame.command == protocol::WRTE {
-                    Frame::new(protocol::OKAY, frame.arg1, id, vec![])
-                        .write(&mut socket)
-                        .await
-                        .unwrap();
-                    assert_eq!(services.get(&id).map(String::as_str), Some("sync:"));
-                    let request = &frame.payload;
-                    assert!(request.len() >= 8);
-                    let path = std::str::from_utf8(&request[8..]).unwrap();
-                    let reply = {
-                        let mut data = data.lock().unwrap();
-                        let mut bytes = Vec::new();
-                        match &request[..4] {
-                            b"STAT" => {
-                                let node = data.nodes.get(path);
-                                bytes.extend(b"STAT");
-                                let mode = if data.legacy_root_alias && path == "/sdcard" {
-                                    0o120777
-                                } else {
-                                    node.map_or(0, |n| n.mode)
-                                };
-                                bytes.extend(mode.to_le_bytes());
-                                bytes.extend(123u32.to_le_bytes());
-                                bytes.extend(node.map_or(0, |n| n.modified).to_le_bytes());
-                            }
-                            b"LIST" => {
-                                if data.list_failures.contains(path) {
-                                    bytes.extend(b"FAIL");
-                                    bytes.extend(6u32.to_le_bytes());
-                                    bytes.extend(b"denied");
-                                } else {
-                                    // Like affected adbd versions, EACCES is an empty DONE.
-                                    if !data.denied.contains(path) {
-                                        let prefix = format!("{path}/");
-                                        for (path, node) in data.nodes.iter().rev() {
-                                            if let Some(name) = path
-                                                .strip_prefix(&prefix)
-                                                .filter(|name| !name.contains('/'))
-                                            {
-                                                bytes.extend(b"DENT");
-                                                bytes.extend(node.mode.to_le_bytes());
-                                                bytes.extend(123u32.to_le_bytes());
-                                                bytes.extend(node.modified.to_le_bytes());
-                                                bytes.extend((name.len() as u32).to_le_bytes());
-                                                bytes.extend(name.as_bytes());
-                                            }
-                                        }
-                                        if path == "/sdcard" {
-                                            for name in &data.raw_root_names {
-                                                bytes.extend(b"DENT");
-                                                bytes.extend(0o100644u32.to_le_bytes());
-                                                bytes.extend(123u32.to_le_bytes());
-                                                bytes.extend(10u32.to_le_bytes());
-                                                bytes.extend((name.len() as u32).to_le_bytes());
-                                                bytes.extend(name);
-                                            }
-                                        }
-                                    }
-                                    bytes.extend(b"DONE");
-                                    bytes.extend([0; 16]);
-                                    if data.changed_on_list.remove(path) {
-                                        data.nodes.get_mut(path).unwrap().modified += 1;
-                                    }
-                                }
-                            }
-                            _ => panic!("unexpected sync request"),
-                        }
-                        bytes
-                    };
-                    Frame::new(protocol::WRTE, frame.arg1, id, reply)
-                        .write(&mut socket)
-                        .await
-                        .unwrap();
-                } else if frame.command == protocol::CLSE {
-                    services.remove(&id);
-                    Frame::new(protocol::CLSE, frame.arg1, id, vec![])
-                        .write(&mut socket)
-                        .await
-                        .unwrap();
-                }
-            }
+            let (socket, _) = listener.accept().await.unwrap();
+            let _ = gallery_adbd::serve(socket, data).await;
         });
         Self { files, port, task }
     }
@@ -562,6 +375,7 @@ async fn gallery_marks_source_changes_and_invalid_names_partial_without_unsafe_p
             Node {
                 mode: 0o120777,
                 modified: 10,
+                size: 123,
             },
         );
         files.media("/sdcard/link/hidden.jpg", 100);
@@ -671,6 +485,30 @@ async fn gallery_follows_only_the_standard_sdcard_alias_on_legacy_adbd() {
     let page = finished(&runtime, &device, scan["scanId"].as_str().unwrap(), 100).await;
     assert_eq!(page["status"], "completed");
     assert_eq!(page["items"][0]["path"], "/sdcard/root.jpg");
+}
+
+#[tokio::test]
+async fn gallery_uses_native_wide_metadata_instead_of_truncated_legacy_sync_sizes() {
+    let peer = Peer::start().await;
+    {
+        let mut files = peer.files.lock().unwrap();
+        files.legacy_root_alias = true;
+        files.media("/sdcard/large.mp4", 10);
+        files.nodes.get_mut("/sdcard/large.mp4").unwrap().size = (1u64 << 32) + 19;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let device = peer.connect(&runtime).await;
+    let scan = runtime
+        .invoke("media.list", json!({"deviceId":device}))
+        .await
+        .unwrap();
+    let page = finished(&runtime, &device, scan["scanId"].as_str().unwrap(), 100).await;
+    assert_eq!(page["status"], "completed", "{page}");
+    assert_eq!(page["items"][0]["path"], "/sdcard/large.mp4");
+    // The legacy STAT/DENT fixture truncates this to 19 on the wire. Only the
+    // verified native helper can recover the actual size on this connection.
+    assert_eq!(page["items"][0]["size"], 4_294_967_315u64);
 }
 
 #[tokio::test]

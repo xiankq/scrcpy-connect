@@ -28,10 +28,16 @@ async fn jar_video_authentication_framing_and_h264_decode() {
         .await
         .unwrap();
     eprintln!("scrcpy E2E: start session");
-    let session = runtime
+    let started = runtime
         .invoke("session.start", json!({"deviceId":id}))
-        .await
-        .unwrap();
+        .await;
+    if started.is_err() {
+        eprintln!(
+            "session startup state: {}",
+            runtime.invoke("state.snapshot", json!({})).await.unwrap()
+        );
+    }
+    let session = started.unwrap();
     assert_eq!(session["status"], "starting");
     assert!(session["textureId"].is_null());
     let video_port = session["videoPort"].as_u64().unwrap() as u16;

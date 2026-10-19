@@ -208,9 +208,6 @@ fn batch_values(tasks: &[Transfer]) -> Vec<Value> {
             "selectedRootCount":tasks.iter().filter(|task|task.parent_id.is_none()).count()})
     }).collect()
 }
-fn missing_remote(error: &interop_adb::Error) -> bool {
-    matches!(error,interop_adb::Error::Remote(message) if message.contains("errno 2") || message.contains("does not exist") || message.contains("No such file"))
-}
 fn check_cancel(token: &CancellationToken) -> CoreResult<()> {
     if token.is_cancelled() {
         Err(CoreError::new("cancelled", "传输已取消。"))
@@ -463,7 +460,34 @@ impl Runtime {
         let path = remote_path(p["path"].as_str().unwrap_or("/sdcard"))?;
         let client = self.client(id).await?;
         let mut sync = client.sync(OperationOptions::default()).await?;
-        let mut entries = sync.list(&RemotePath::new(&path)?, 100_000).await?;
+        let listed = if client.info().features.contains("ls_v2") {
+            sync.list(&RemotePath::new(&path)?, 10_000).await
+        } else {
+            Err(interop_adb::Error::Unsupported("ls_v2"))
+        };
+        let mut entries = match listed {
+            Ok(entries) => entries,
+            Err(_) => {
+                let listing = crate::remote_fs::fallback_children(
+                    &client,
+                    &path,
+                    10_000,
+                    OperationOptions::default(),
+                )
+                .await?;
+                if listing.truncated {
+                    return Err(CoreError::new(
+                        "directory_limit",
+                        "目录超过 10000 项，请在手机上将内容分组后读取。",
+                    ));
+                }
+                listing
+                    .entries
+                    .into_iter()
+                    .map(|(name, stat)| stat.map(|stat| interop_adb::sync::DirEntry { name, stat }))
+                    .collect::<CoreResult<Vec<_>>>()?
+            }
+        };
         entries.sort_by(|a, b| {
             let directory = |mode: u32| mode & 0o170000 == 0o040000;
             directory(b.stat.mode)
@@ -490,7 +514,7 @@ impl Runtime {
         let script = match command {
             "files.mkdir" => {
                 let path = remote_path(required(p, "path")?)?;
-                format!("mkdir -- {}", quote(&path)?)
+                format!("mkdir {}", quote(&path)?)
             }
             "files.delete" => {
                 let paths = p["paths"]
@@ -515,11 +539,11 @@ impl Runtime {
             }
             _ => unreachable!(),
         };
-        let result = client
-            .shell(&script, 1_048_576, OperationOptions::default())
-            .await;
+        let result =
+            crate::remote_fs::command(&client, &script, 1_048_576, OperationOptions::default())
+                .await;
         let result = result.map_err(|e| {
-            let mut error = CoreError::from(e);
+            let mut error = e;
             if command == "files.delete" {
                 error.code = "result_unknown".into();
                 error.message =
@@ -1036,7 +1060,6 @@ impl Runtime {
         if task.kind == "directory" {
             return self.transfer_directory(&mut task, &client, options).await;
         }
-        let mut sync = client.sync(options.clone()).await?;
         let stamp = if push {
             local_stamp(&task.source).await?
         } else {
@@ -1062,10 +1085,10 @@ impl Runtime {
         task.source_stamp = Some(stamp.clone());
         task.total = Some(stamp.size);
         let exists = if push {
-            match sync.stat(&RemotePath::new(&task.destination)?).await {
+            match crate::remote_fs::stat(&client, &task.destination, false, options.clone()).await {
                 Ok(_) => true,
-                Err(e) if missing_remote(&e) => false,
-                Err(e) => return Err(e.into()),
+                Err(error) if error.code == "not_found" => false,
+                Err(error) => return Err(error),
             }
         } else {
             fs::symlink_metadata(&task.destination)
@@ -1256,7 +1279,10 @@ impl Runtime {
             let completed_file = output.inner.into_std().await;
             #[cfg(not(any(target_os = "linux", target_os = "android")))]
             drop(output);
-            let after = SourceStamp::from(sync.stat(&RemotePath::new(&task.source)?).await?);
+            drop(sync);
+            let after = SourceStamp::from(
+                crate::remote_fs::stat(client, &task.source, false, options).await?,
+            );
             if count != stamp.size || after != stamp {
                 return Err(CoreError::new(
                     "source_changed",
@@ -1394,7 +1420,7 @@ impl Runtime {
         let existing = if push {
             match crate::file_tree::remote_stat(client, &task.destination).await {
                 Ok(stat) => Some(stat.mode & 0o170000 == 0o040000),
-                Err(error) if error.code == "source_changed" => None,
+                Err(error) if error.code == "not_found" => None,
                 Err(error) => return Err(error),
             }
         } else {
@@ -1441,16 +1467,16 @@ impl Runtime {
         check_cancel(&task.cancellation)?;
         if existing != Some(true) {
             if push {
-                let result = client
-                    .shell(
-                        &format!("mkdir -- {}", quote(&task.destination)?),
-                        4096,
-                        options,
-                    )
-                    .await
-                    .map_err(|_| {
-                        CoreError::new("result_unknown", "目录创建结果不确定，请刷新核对。")
-                    })?;
+                let result = crate::remote_fs::command(
+                    client,
+                    &format!("mkdir {}", quote(&task.destination)?),
+                    4096,
+                    options,
+                )
+                .await
+                .map_err(|_| {
+                    CoreError::new("result_unknown", "目录创建结果不确定，请刷新核对。")
+                })?;
                 if result.exit_code != Some(0) {
                     return Err(CoreError::new(
                         "directory_create_failed",
@@ -1967,8 +1993,9 @@ impl Runtime {
             timeout: Duration::from_secs(300),
             ..Default::default()
         };
-        let mut sync = client.sync(options).await?;
-        let source = SourceStamp::from(sync.stat(&RemotePath::new(&path)?).await?);
+        let source = SourceStamp::from(
+            crate::remote_fs::stat(&client, &path, false, options.clone()).await?,
+        );
         if source.mode & 0o170000 != 0o100000 {
             return Err(CoreError::new("not_a_file", "预览源必须是普通文件。"));
         }
@@ -2014,11 +2041,14 @@ impl Runtime {
             .open(&temp)
             .await?;
         let result: CoreResult<MediaCache> = async {
+            let mut sync = client.sync(options.clone()).await?;
             let count = sync
                 .pull(&RemotePath::new(&path)?, &mut file, source.size)
                 .await?;
             file.sync_all().await?;
-            let after = SourceStamp::from(sync.stat(&RemotePath::new(&path)?).await?);
+            drop(sync);
+            let after =
+                SourceStamp::from(crate::remote_fs::stat(&client, &path, false, options).await?);
             if count != source.size || after != source {
                 return Err(CoreError::new(
                     "source_changed",

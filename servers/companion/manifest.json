@@ -1,14 +1,17 @@
 {
   "artifact": {
-    "sha256": "4fbb0f076dfd31472d82d48f0257accae0d1fc20c6e7d0b0fd6ed4ad53531a19",
-    "size": 54367
+    "sha256": "07963f1126ce525f65a2ac154187e2766ef1173d8be70f5bfe1d45e1104690af",
+    "size": 57691
   },
   "sources": {
     "build.py": "dd7c98569925dfdff3640d556605b50ce68354bf3fa5d81ee3e90d707c2c32a1",
     "build.sh": "4d8a5f6a1d3025cbc47a52cd3ed0044f9b1f65909bc9b7e507585beba7662aa2",
-    "src/com/interop/companion/Main.java": "d6a5b4ef6dfd97e7d0bc93fec88080937ea313b325ebd7c1ecd5c3d8a82a4564",
-    "src/com/interop/companion/MediaJobs.java": "d4f89893e5b2aa042b9c9984cb27262d17acffb41f3df5e475698fc406a0d66f",
-    "src/com/interop/companion/Thumbnail.java": "c620a77b3200f4f7f98332825652091b82d3d6565ef3e8349ce4d2e6998462e6"
+    "src/com/interop/companion/CallServices.java": "1acc01056621133acde69872286ff7831ffa8730f37bef700137d06751654df5",
+    "src/com/interop/companion/ClipboardAppOps.java": "e5c9e491e025fd3db6c63d64948def123dbce84d0d2ec12e347fd9578ed263d9",
+    "src/com/interop/companion/Main.java": "228c6156988d6af8645c91f477e26ccebdabb283938ae540018314aaebc41959",
+    "src/com/interop/companion/MediaJobs.java": "79395e2629997411fd2ef5325366e40fe3112f4ef07148cc226948e90657d3f3",
+    "src/com/interop/companion/Processes.java": "bb0a018e3cf3a9a3de1f1f64a17e24597660d87078f446037d27aa145593c866",
+    "src/com/interop/companion/Thumbnail.java": "277549b8baa8e9197a9333f460e6d705b347d3d04ffd88b57d6baf5b2bd2aafc"
   },
   "tools": {
     "androidPlatform": "36",

@@ -118,7 +118,8 @@ impl Peer {
                             return;
                         }
                     } else {
-                        assert!(service.starts_with("exec:CLASSPATH="), "{service}");
+                        assert!(service.starts_with("exec:run_owned() {"), "{service}");
+                        assert!(service.contains("exec app_process /"), "{service}");
                         let scid = &service.split_once("scid=").unwrap().1[..8];
                         let audio_only = service.contains("video=false");
                         media.insert(format!("localabstract:scrcpy_{scid}"), (audio_only, 0));
