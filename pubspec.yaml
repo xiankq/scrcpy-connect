@@ -24,6 +24,7 @@ dependencies:
   riverpod_annotation: 4.0.7
   flutter_local_notifications: 22.3.2
 dev_dependencies:
+  ffi: 2.2.0
   archive: 3.6.1
   args: 2.7.0
   crypto: 3.0.7
