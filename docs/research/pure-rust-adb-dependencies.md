@@ -142,4 +142,4 @@ A/B 均未要求削减 USB、配对、发现或压缩能力。B 也没有由“�
 3. **确定主控授权身份是否优先交给 Keystore。**建议比较 B 与软件 Rust 身份的兼容矩阵后决定；其收益是私钥不可导出与调用路径隔离，代价是系统密码 API 和硬件参数差异。依赖：第 1、2 项及已确认 Q26；无需重新询问是否默认迁移。
 4. **确定现有实现的复用与维护责任。**建议允许组合上游 crate 或维护有边界的 fork，补齐 provider、USB、Zstd 接口与完整度验收；“Rust 重写”不应未经确认解释为全部从零。依赖：第 1、2 项；决定是否承诺长期跟进上游协议、依赖安全和跨平台构建。
 
-当前执行入口为[任务02](../../.scratch/interop/issues/02-pure-rust-crypto-dependencies.md)、[身份任务15](../../.scratch/interop/issues/15-identity-trust-and-transports.md)和[四端构建任务03](../../.scratch/interop/issues/03-workspace-bridge-platform-builds.md)。上述比较由代理开展，不把常规库复用或signer候选反复交用户投票；只有具体例外超出既有授权才带证据沟通。
+当前执行入口为任务02（历史路径 `../../.scratch/interop/issues/02-pure-rust-crypto-dependencies.md`）、身份任务15（历史路径 `../../.scratch/interop/issues/15-identity-trust-and-transports.md`）和四端构建任务03（历史路径 `../../.scratch/interop/issues/03-workspace-bridge-platform-builds.md`）。上述比较由代理开展，不把常规库复用或signer候选反复交用户投票；只有具体例外超出既有授权才带证据沟通。

@@ -10,7 +10,7 @@
 | [scrcpy 媒体与服务端](scrcpy-media-and-server.md) | v5.0.1、Android 10 虚拟显示、11 音频、13 duplication、单应用任务与多实例、协议版本 | 明确复核基础 Android 5+ 是否真的被最新上游放弃；区分启动应用与独立应用窗口，避免误删历史承诺 |
 | [四端编译约束](cross-platform-build-contract.md) | 三层构建证据、iOS 排除 nusb、正式 feature 闭包、编译与运行分开 | Apple 本地网络首次授权、系统 Bonjour 与自行 UDP mDNS 的 entitlement 差异，应形成运行专项验收 |
 
-依据是[当前规格](../../.scratch/interop/spec.md)、[访谈汇总](../../.scratch/interop/interview.md)与 ADR [0001](../adr/0001-apk-free-controlled-device.md)、[0003](../adr/0003-reachable-cross-network-adb.md)、[0006](../adr/0006-controller-without-debugging.md)。本文不恢复查看模式，不增加被控 APK、主控调试、公共中继等已排除条件。
+依据是当前规格（历史路径 `../../.scratch/interop/spec.md`）、访谈汇总（历史路径 `../../.scratch/interop/interview.md`）与 ADR [0001](../adr/0001-apk-free-controlled-device.md)、[0003](../adr/0003-reachable-cross-network-adb.md)、[0006](../adr/0006-controller-without-debugging.md)。本文不恢复查看模式，不增加被控 APK、主控调试、公共中继等已排除条件。
 
 ## 1. scrcpy：未发现 Android 5+ 基础目标与当前上游矛盾
 

@@ -1,5 +1,7 @@
 # 高动态窗口取样与目标资源对照
 
+> 本文记录动态视频测量的方法与历史对照。各轮性能结论限定于注明的样本/配置；生产依赖以 [工具链契约](repository-tooling.md) 为准，历史测试命令不构成当前构建配置。
+
 2026-10-18。生产默认仍为 Android 显式异步 AMediaCodec，H264 1280／60fps／8Mbps，
 实际 576×1280。双 API36 x64 AVD、SwiftShader、Flutter debug、经典 ADB，持续变色
 fixture；普通 Driver 调度，不使用 integration binding，也没有逐帧／系统追踪。

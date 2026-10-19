@@ -2,12 +2,12 @@
 status: accepted
 ---
 
-# 在 monorepo 中建设独立 Rust ADB 主机库与 Flutter 应用
+# 独立 Rust ADB 主机库与 Flutter 主控应用
 
-用户选择 Rust 实现可独立复用的完整 ADB 主机库，经 flutter_rust_bridge 提供给 Flutter，Flutter 承担主要界面与呈现，使用 Flutter Hooks 和 Riverpod。在同一 monorepo 中演进这些部分，以便协议、绑定和应用协同变更，并为后续 iOS、Windows、macOS 主控适配保留路径。
+ADB 主机能力由可独立复用的 Rust 库提供，经 flutter_rust_bridge 接入 Flutter。Flutter 承担主控界面与本机呈现，使用 Hooks 和 Riverpod；协议、绑定、领域实现与应用在同一仓库协同演进。
 
-完整性覆盖主机侧连接、认证、无线配对、设备发现、传输复用及设备服务；不把重写被控设备的 adbd 或逐项复制桌面命令行工具作为同义目标。当前功能实施与运行验证针对 Android；Q32 已将四端实际编译补为交付要求，具体遵循四端编译契约。未来端运行验证仍可后续开展，不能把“Rust/Flutter 可跨平台”当成 USB、后台运行和媒体链路已在所有平台验证。具体公开服务契约与生产密码方案仍须闭合；workspace、共享媒体等实施进展以[当前完成度](../../.scratch/interop/current-status.md)为准，不再将本决定写成所有技术细节均未选定。
+“完整 ADB 主机”指连接、认证、无线配对、设备发现、传输复用及被控服务访问；不等同于重写被控设备的 adbd 或逐项复制桌面 adb 命令行。应用不调用或分发外部 adb 可执行文件，独立设备实验使用的官方 adb 不属于产品依赖。
 
-Q22 中用户补充“希望尽量做到整个 ADB 依赖链纯 Rust”。依赖选型应据此核查实际源码与 feature 图，不能默认接受 ring、aws-lc、libusb 或压缩 C 库；但“尽量”尚不是无例外禁令，也不等于要求从零编写所有 Rust 实现。系统 API/JNI 调用的口径、TLS 提供者成熟度及例外策略仍在调研和访谈中。
+ADB 依赖链以尽量采用 Rust 实现为选型方向。系统 API/JNI、TLS 提供者、USB 和压缩后端分别说明其边界；此约束不扩展为对整个媒体栈的纯 Rust 要求，也不构成从零实现已有库的理由。具体依赖与生产成熟度依据[依赖研究](../research/pure-rust-adb-dependencies.md)核查。
 
-Q32 中用户未确定更严格的纯度定义，明确要求确保 Android、iOS、Windows、macOS 全平台编译。将四端编译作为交付验收要求：ADB 核心、平台适配与应用依赖应保留可构建路径，平台不具备的运行能力不得拖垮整个包的编译。2026-10-17已有Android三ABI整包本地证据，其余三宿主整包未取得通过证据；不能把文档宣称支持视为编译通过，也不据此自动接受原生密码依赖。具体产物与验证边界见[当前完成度](../../.scratch/interop/current-status.md)。
+Android、iOS、macOS、Windows 的实际整包编译属于交付要求。平台能力缺失不能破坏其他平台的编译；跨 target 检查、宿主链接、Flutter 整包和实际运行是不同证据。构建契约见[四端编译约束](../research/cross-platform-build-contract.md)，已执行结果见[验收记录](../implementation/validation.md)。目录与资源所有权由[架构](../implementation/architecture.md)维护。

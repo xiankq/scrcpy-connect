@@ -1,10 +1,10 @@
 # Liquid Glass 官方设计复核
 
-日期：2026-10-19。状态：研究完成，视觉实施暂停。本轮仅新增此文件，不修改 Pen、规范、代码或此前101页审计事实。
+日期：2026-10-19。状态：官方资料研究完成；后续用途、对齐与分组纠正已实施，9场景Android光学采集契约已通过，9张图有限人工复核及真实Android产品流程r2已完成，原生等效／完整动态／性能仍单列。研究阶段曾暂停视觉改动；该历史暂停已结束，不能继续当作当前任务状态。本文不将静态设计或Widget截图写成原生Liquid Glass验收。
 
 ## 结论
 
-本项目应继续保持用户指定的**黑白主题与黑色主动作**，亮色只承担有意义的图标和状态点缀。下一轮的重点是统一对齐、分组、内外几何与内容层级，而非把所有表面做成圆形玻璃。官方允许工具栏采用默认单色外观；这是与项目选择相容的原则，不代表 Apple 要求所有产品使用黑色主题。[HIG Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars)
+本项目继续保持用户指定的**黑白主题与黑色主动作**，亮色只承担有意义的图标和状态点缀。后续实施围绕对齐、分组、内外几何与内容层级展开，没有将所有表面做成圆形玻璃。官方允许工具栏采用默认单色外观；这是与项目选择相容的原则，不代表 Apple 要求所有产品使用黑色主题。[HIG Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars)
 
 Liquid Glass 是内容上方的功能层。设备卡、普通列表、表单、文件名等内容，不应因为可见就各自拥有一片玻璃；普通内容材料有其独立作用。[HIG Materials](https://developer.apple.com/design/human-interface-guidelines/materials)
 
@@ -65,30 +65,38 @@ UIKit将 UIGlassEffect 与 UIBlurEffect明确区分；交互性、材质化/退�
 - **休止态可读且不遮挡任务。** 静止时避免关键正文与玻璃控制发生冲突；媒体可延伸到控制后方，但应保护主体与文字。滚动边缘效果只用于真正有浮动UI的边缘，不是装饰渐变。[WWDC25 219](https://developer.apple.com/videos/play/wwdc2025/219/)、[WWDC25 356](https://developer.apple.com/videos/play/wwdc2025/356/)
 - **文字增大时布局跟着变。** 根据可用空间改行、堆叠或滚动，安全区与最后一项内容不能被持久控件永久覆盖。精简副描述后仍保留支持状态、错误、进度和对象归属。[Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
 
-## 当前本地用法的具体复核
+## 本地用法复核与后续实施
 
-本节依据只读源码；不修改实现。Pencil只读连接在本轮检查时断开，因此不把旧组件记忆当作当前画布的新证据。
+官方研究阶段只读源码；下表现补入后续实际源码、定向测试及页面代理回执。原92手机页已分两批各46页实际截图，新增7页和2大屏也有截图查看回执。最终浅／深色96张Flutter夹具已重拍；这些仍是测试降级渲染，不能代替真机shader。详细版本边界见[逐页审计](../implementation/ios-visual-audit.md)。
 
-| 定位 | 当前事实 | 建议纠正／证据边界 |
+| 定位 | 初始发现与后续事实 | 当前证据／限制 |
 | --- | --- | --- |
-| `lib/pages/media_preview/media_preview_page.dart:195` | 不可点击的文件名单独包在clear Glass中，左右另有返回和动作组 | 文件名回归普通标题/内容标识；若需要可读保护，以整体媒体导航关系解决，避免静态标签看起来像按钮。属于基于Toolbars职责的项目判断 |
-| `lib/widgets/page_frame.dart` actions处理 | 全部actions直接放入同一个GlassToolbarGroup，不区分文字、普通图标和主要动作 | 分组接口表达语义：相关图标共享、文字动作单独、主要动作独立。不能只依据children数量均摊 |
-| `packages/design_system/lib/design_system.dart:406` Glass.optics | 已调用LiquidGlassLens，配置refraction、specular与glow；不支持shader时回退BackdropFilter | 可以称有实时光学与兼容路径，不能只因API名称就称为原生Liquid Glass等效 |
-| 同文件Glass.build及外部BoxShadow | wrapper按Theme brightness选材料，外阴影与保护渐变固定；未在wrapper看到尺寸或背景对比驱动这些参数 | 固定阴影不是Apple描述的自适应阴影。依赖库内部是否补齐仍需独立核验，不凭未检查的库内部断言完全没有适应 |
-| 同文件Glass保护层 | 所有表面使用相同机制的径向保护渐变 | 不用重复白雾遮住全部透色来“修复”对比；按regular/clear职责与内容量检查文字、边缘及大面板 |
-| `lib/pages/remote/widgets/exit_handle.dart:159` | 退出控件一律clear，颜色由当前Theme决定；远端内容不保证是照片或视频 | 对任意远端应用优先regular；明确媒体背景才评估clear，不通过更浓统一遮罩代替正确variant选择 |
+| `lib/pages/media_preview/media_preview_page.dart` | 初始不可点击文件名被clear Glass包裹；现在为普通单行文字，clear只留返回和保存／分享控制，导航后方有局部渐退保护 | `ios_review_regressions_test.dart`检查文件名不在Glass内；浅／深媒体最新截图已显示照片。保护层与图标在真实明暗纹理上的光学表现仍待GPU查看 |
+| `lib/widgets/page_frame.dart` | 初始所有actions放同一GlassToolbarGroup；现在相关图标仍共享，真实文字动作通过独立`trailingAction`布局，并统一返回与标题对齐 | 相关回归覆盖图标组、文字动作不在Glass内及左右对齐；不以组件接口存在代替所有未来调用正确 |
+| `packages/design_system/lib/design_system.dart` Glass.optics | 调用LiquidGlassLens，配置refraction、specular与glow；不支持shader时回退BackdropFilter | 独立GPU harness要求Android shader支持、程序已加载、非Lite，并捕获真实背景；当前9场景采集契约与逐张有限画面复核已完成，原生级质量结论仍单列；不能只因API名称称为原生Liquid Glass等效 |
+| 同文件Glass.build及外部BoxShadow | 初始wrapper另绘固定保护渐变／边框；当前shader路径已去掉额外保护渐变与重复边框，外部柔和阴影仍按Theme固定，降低透明度与高对比直接使用实体分支 | 这些清理减少灰色条带与双重描边，但固定阴影不能称Apple自适应阴影；库与实际背景表现仍需独立核验 |
+| 同文件Glass交互与启动 | 当前要求支持shader时先初始化程序，main已await GlassMaterial.initialize；交互控件接入细微touch flex，disableAnimations时不启用；不再由页面单独画一套玻璃 | 已有包级回归与静态分析回执；实际按压／取消画面、可打断性及对比适应由GPU运行验证，接入参数不等于原生级手感通过 |
+| `lib/pages/remote/widgets/exit_handle.dart` | 初始退出控件一律clear；后续已改regular，适用于任意远端应用背景，既有拖拽／吸附／展开／关闭行为保留 | `exit_handle_test.dart`纳入定向回归；真实文字、明暗背景及视频上的可见性仍需设备截图与输入结果 |
 | GlassToolbarGroup、GlassTabBar | 已有一层共享Glass，子项保持普通控件/浅选中面 | 方向正确；保持一层材料，不新增每项完整玻璃 |
 | OriginalFileHeader、GroupedListView | 文件标题是普通内容，相关行以ContentPanel统一分组 | 方向正确；别为了全局“玻璃化”把它们替换为lens |
 | GlassIconButton与普通返回控制 | 已区分点击区域与内部图标 | 保持一致命中；不要把每个图标图形都扩大成整块圆形 |
 
-这些是阅读时的代码事实与后续建议，不代表新的逐页运行验收。此前94页结构扫描、分批截图复核和7页补稿的证据继续保留在 [ios-visual-audit.md](../implementation/ios-visual-audit.md)，本研究不修改它们。
+上述已实施的用途纠正关闭了相应初始建议，尚未验证的动态能力保持开放。它们不代表所有页面业务状态运行通过，也不改变初始94页结构扫描的历史事实。
 
-## 后续行动顺序（尚未执行）
+主代理另已将Pencil的18处旧blur替换为同一`assets/liquid-glass.glsl`，实际编译成功，并查看更新后的媒体预览、大屏和远控代表页。该静态光学表达与Flutter生产shader是两类证据；不能因Pencil编译或静态图中边缘可见，就称为Apple原生效果一致。源稿当前101页、30母组件、186变量，源码当前41页，完整对应关系以逐页审计为准。
 
-1. 先确定每个对象属于内容、导航还是局部动作；删除没有控制语义的玻璃标签。
-2. 再统一标题/行/工具栏的基线、内边距、同心关系与动作分组，保留黑白主题和语义点缀。
-3. 分别对regular与媒体clear验证真实明暗/文字背景；再检查大面板、侧栏与滚动边缘。
-4. 最后验证按下、取消、过渡中交互及降低透明度/高对比/减少动态。没有这些运行证据，保留“静态近似/兼容降级”的明确限制。
+## 实施与验收顺序
 
-本轮没有实施上述行动。Flutter架构按既有 [ADR 0002](../adr/0002-rust-adb-and-flutter-monorepo.md)保持；官方原生控件建议不能被写成已获授权重写技术栈。
+1. 已按内容、导航和局部动作区分用途；静态文件名去玻璃，普通内容维持中性实体。
+2. 已统一标题／行／工具栏分组与对齐，删除描述型副标题，保留黑白主题及真实状态正文；41页各有浅／深截图，窄屏／横屏2倍文字和重点回归已有证据。
+3. 独立Android shader场景已经完成9图采集与严格driver校验。生产GlassIconButton、GlassToolbarGroup、GlassTabBar、regular面板和clear媒体控制覆盖明暗背景；测试背景含细线、字样、格纹与彩色几何，属于诊断夹具，不加入产品装饰。
+4. harness要求实际拖动背景、按下／取消后再操作，并切换light／dark／reduceTransparency；降低透明度场景必须移除Lens／Lite／BackdropFilter。严格driver保存PNG与JSON，shader不支持或退回fallback不得登记光学完成。
+
+当前[result.json](/tmp/connect-glass-material/result.json)已报告shader支持／加载、非Lite、交互、9图场景像素标记及host校验通过；降低透明度3图未挂载Lens／Lite／BackdropFilter。材质代理已逐张实际查看9图，真实产品r2也已通过，分别见下文记录。`opticalCaptureComplete`只表示满足shader路径条件的捕获完成，`visualAcceptanceComplete`仍为false，这是工具不签发人工认证的固定边界，并非另行9图人工复核失败；不能把blur＋border、capability=true或单张静态图当作完整原生效果。材质代理逐图确认clear明暗左上close的蓝条弯折／位移与背景透入，regular浅深／滚动文字清楚且未见额外黑块、斜线或截断，reduced三图实色且光学组件为0；pressed图含debug指针与tooltip，不证明完整动态形变。背景自适应阴影／对比、可打断形变、来源过渡、多路真实视频预算、减少动态与读屏等仍需相应证据。
+
+最终实现验证：根应用[323项全量](/tmp/connect-final-tests.jsonl)通过；之后两处纯lint修复的[3文件13项回归及96图重拍](/tmp/connect-final-pages.jsonl)通过；[analyze](/tmp/connect-final-analyze.log)无问题，[生成一致性](/tmp/connect-final-generate.log)含FRB与build_runner通过，design_system 11项和Node生成器4项通过。真实[产品r2回执](/tmp/connect-final-product/result.json)验证H.265实际486×1080、三键、系统Back保留远控、画面外点击静默、退出把手与关闭后停止音源；root另实际查看远控与返回工作台画面。这不代替多设备实机、原生交互等效或性能验证。Pencil降低透明度页W7Lua导航意外继承shader已改全实色，主代理Get确认无shader并保存。
+
+普通lib/main.dart Android-x64 debug包另完成构建、ZIP／ELF／签名验证与覆盖安装启动，启动观察为Impeller OpenGLES、未见UnhandledException，详见[最终产物回执](/tmp/connect-final-main-apk.json)。该启动观察与集成r2业务、独立9图光学分别记录，不宣称全套原生材料行为通过。最后[清理23项、2,087,737,945字节](/tmp/connect-final-cleanup.json)后保留普通APK、验收证据与共享编译缓存，未修改本研究引用的工具结果。
+
+Flutter架构按既有 [ADR 0002](../adr/0002-rust-adb-and-flutter-monorepo.md)保持；官方原生控件建议不能被写成已获授权重写技术栈。所有视觉值仍来自`designs/design.md`及生成token，本研究不建立另一份参数规范。
 

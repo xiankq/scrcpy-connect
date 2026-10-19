@@ -1,11 +1,13 @@
 # 实施与真实验收记录
 
+> 此文件是按阶段追加的历史验收账本；`.scratch/interop/` 来源现已不随仓库保留，相关正文链接仅表示当时的追溯路径。正文的旧目录、偏好、后端、统计与未决状态保留其当时语境。当前结构与资源所有权见 [架构](architecture.md)，当前产品行为见 [交互规则](../../designs/prod/interaction-rules.md)，2026-10-19 产品/材质回执索引见 [产品验收记录](product-refinement.md)。
+
 > 当前结构见[架构说明](architecture.md)。本文件包含已被替代的实验与后端路径：
 > 例如下文历史 `servers/scrcpy/build.py` 与 cooperative 暂停记录，不适用于当前
 > 官方 scrcpy JAR 路径。当前来源与暂停语义以 `servers/vendor/README.md` 为准；
 > 历史通过不自动成为当前提交通过。
 
-目标入口为 [.scratch/interop/goal.md](../../.scratch/interop/goal.md)。2026-10-17的[完整重新核查](../../.scratch/interop/completion-reassessment.md)逐项纠正产品断链：本文件的历史实验通过不表示对应整个用户流程完成。下列结果区分协议单测、真实被控 adbd 和 Android 主控界面；未列通过的能力不推定已完成。下列历史验收保留当时的后端和测试名；当前共享媒体结果以最新迁移小节为准，旧AudioTrack/自写MediaCodec证据不能冒充新后端结果。
+目标入口为 .scratch/interop/goal.md（历史路径 `../../.scratch/interop/goal.md`）。2026-10-17的完整重新核查（历史路径 `../../.scratch/interop/completion-reassessment.md`）逐项纠正产品断链：本文件的历史实验通过不表示对应整个用户流程完成。下列结果区分协议单测、真实被控 adbd 和 Android 主控界面；未列通过的能力不推定已完成。下列历史验收保留当时的后端和测试名；当前共享媒体结果以最新迁移小节为准，旧AudioTrack/自写MediaCodec证据不能冒充新后端结果。
 
 ## 当前环境
 
@@ -144,7 +146,7 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 
 ## 全量核查后的实际页面回归（2026-10-17）
 
-本轮全量缺口见[重新核查](../../.scratch/interop/completion-reassessment.md)，不把局部通过当整个目标完成。UI修复`1660805`：诊断页消费真实Rust JSON；首次编码允许runtime candidate，已知不可用继续禁选；远控独立消息作用域，上一页保存反馈不遮挡手机，当前会话资源调整仍可显示。
+本轮全量缺口见重新核查（历史路径 `../../.scratch/interop/completion-reassessment.md`），不把局部通过当整个目标完成。UI修复`1660805`：诊断页消费真实Rust JSON；首次编码允许runtime candidate，已知不可用继续禁选；远控独立消息作用域，上一页保存反馈不遮挡手机，当前会话资源调整仍可显示。
 
 - 指定诊断/画质6项回归先红后绿；新增旧页面30秒SnackBar隔离测试先红后绿。整合后应用全量83项通过，严格全仓Flutter分析无问题，格式/diff通过。整合首轮遗漏confirm导入造成编译失败，修正后重新全量通过，日志`/tmp/connect-reaudit-app-tests-final.log`。
 - 使用本文件Android E2E命令，把capture目录设为`/tmp/connect-e2e/requirements-reaudit-final`。本次20秒真实退出0：手动连接/非法端口校验、真实文件目录、实际设备详情→诊断、实际画质页首次H.265选择、下一会话确实H.265且`firstFrameDecoded=true/evidence=mdk.snapshot`，全屏/触控/退出拖动吸附展开/返回均通过。诊断、编码选择和最终远控图已目视；日志`/tmp/connect-requirements-reaudit-fullscreen-final.log`，result.json的产品完成回执true。
@@ -155,7 +157,7 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 
 ## 保留多窗口与协作捕获暂停（2026-10-17）
 
-范围：手机切换保留会话、窗口级工具/截图与当前共享播放器生命周期。完整前沿见[核查第10节](../../.scratch/interop/completion-reassessment.md#10-持续会话批次实际进展与未完成部分)，并非大屏并排或断线/进程恢复完成。
+范围：手机切换保留会话、窗口级工具/截图与当前共享播放器生命周期。完整前沿见核查第10节（历史路径 `../../.scratch/interop/completion-reassessment.md#10-持续会话批次实际进展与未完成部分`），并非大屏并排或断线/进程恢复完成。
 
 ### 实际失败与修复
 
@@ -198,7 +200,7 @@ rtk proxy env CONNECT_E2E_TARGET=emulator-5556 \
 
 ## 事件缺口核验与编码会话边界（2026-10-17）
 
-当前范围见 [恢复契约](state-recovery.md) 和 [完整核查第11节](../../.scratch/interop/completion-reassessment.md#11-事件缺口后的状态核验批次)。核心与桥接批次为 `cf35daf` / `3ee0318`，媒体边界 `d7d60d8`，应用 `591d48e`。不以本节关闭全产品目标。
+当前范围见 [恢复契约](state-recovery.md) 和 完整核查第11节（历史路径 `../../.scratch/interop/completion-reassessment.md#11-事件缺口后的状态核验批次`）。核心与桥接批次为 `cf35daf` / `3ee0318`，媒体边界 `d7d60d8`，应用 `591d48e`。不以本节关闭全产品目标。
 
 ### 默认及交错回归
 
@@ -236,7 +238,7 @@ rtk proxy env CONNECT_E2E_ACCEPTANCE=media \
 
 ## 再次逐指令审计及新增回归
 
-本次稳定审计基准 `48c5003`。完整差距和每次可见用户输入对应见[重新核查第12节](../../.scratch/interop/completion-reassessment.md#12-再次逐指令复核当前交付远未完成)，新增A37–A42；不把工作转述为“只剩补测试”。已有77页独立分行/组件、Flutter工程化和删除旧自写播放器仍然成立；液态材质、完整状态、通知/通话/内容/恢复与四宿主交付仍未完成。
+本次稳定审计基准 `48c5003`。完整差距和每次可见用户输入对应见重新核查第12节（历史路径 `../../.scratch/interop/completion-reassessment.md#12-再次逐指令复核当前交付远未完成`），新增A37–A42；不把工作转述为“只剩补测试”。已有77页独立分行/组件、Flutter工程化和删除旧自写播放器仍然成立；液态材质、完整状态、通知/通话/内容/恢复与四宿主交付仍未完成。
 
 ### TLS策略与真实协议负例
 
@@ -568,7 +570,7 @@ Rust默认工作区40套件163通过/47忽略（`/tmp/connect-first-pairing-rust
 
 ## 当前全量复核与异常退出修复
 
-当前结论集中至[完成度](../../.scratch/interop/current-status.md)，U01–U44／R01–R60／C01–C32追溯继续保留。本轮追加A43–A49：退出受暂停回执阻塞、系统保存未知状态离页丢失、内拖展开不保持、Android CI未构包、完整ADB服务边界未决、原生产品冲突弹窗及独立应用未知启动后检查可能重提。除下述退出局部修复，其余未记录通过；A49目前是源码路径发现，未冒充故障实测。
+当前结论集中至完成度（历史路径 `../../.scratch/interop/current-status.md`），U01–U44／R01–R60／C01–C32追溯继续保留。本轮追加A43–A49：退出受暂停回执阻塞、系统保存未知状态离页丢失、内拖展开不保持、Android CI未构包、完整ADB服务边界未决、原生产品冲突弹窗及独立应用未知启动后检查可能重提。除下述退出局部修复，其余未记录通过；A49目前是源码路径发现，未冒充故障实测。
 
 ### 退出回归和边界
 
@@ -623,11 +625,11 @@ CI保留既有`host-checks`身份，显式调用`./tool/check.sh --android`，�
 
 ## 本次逐指令审计后的实际实施
 
-当前权威状态仍是[当前完成度](../../.scratch/interop/current-status.md)，12领域／20原任务均未整体关闭；逐条U01–U44／R01–R60／C01–C32及新增A50–A56见[重新核查](../../.scratch/interop/completion-reassessment.md#23-审计后的实际修复与当前边界)。下面证据更新前面的历史缺口，不把局部通过外推成完整产品。
+当前权威状态仍是当前完成度（历史路径 `../../.scratch/interop/current-status.md`），12领域／20原任务均未整体关闭；逐条U01–U44／R01–R60／C01–C32及新增A50–A56见重新核查（历史路径 `../../.scratch/interop/completion-reassessment.md#23-审计后的实际修复与当前边界`）。下面证据更新前面的历史缺口，不把局部通过外推成完整产品。
 
 - `68cec63`：A52可信GUID发现候选、Required TLS及更新／撤销／ABA代际屏障；七项真实DNS-SD／TLS最终89.08秒通过，cached旧连接发布实际先红后绿。每GUID八个活动服务，仅信任记录缓存，无无界墓碑；首次配对快速发现仍取首地址，物理切网／Wi-Fi2等仍缺。[细节](wireless-reconnect.md)。
 - `6abdedc`／`c08178d`：A49／A50私有持久启动操作与主屏独立UUID、断开／Runtime重建待核验、队列取消许可；四项真实Android公开Runtime50.17秒通过，包含真实START_APP丢ACK／前序ACK阻塞、精确取消后无旧启动、写盘失败／设备级关闭。49项页面／生命周期／视图回归通过，核对和关闭不被key-up／pointer-cancel／pause回执挂住。Runtime重建不是Android现场杀进程，真实decoder／副屏回退UI仍缺。[细节](app-launch-recovery.md)。
-- `041452c`：A48系统目录冲突共享Flutter页／协调器，精确操作和冲突ID、当前批次策略／取消／离页。真实系统文件选择和独立文件核验最终r5全3分02秒通过；目视第四轮发现零成果误报后，先红后绿并再次实际复验。此前入口／回执夹具错误不计通过。USB产品选择、provider及中断矩阵仍缺。[细节](content-delivery.md#共享系统目录冲突与零成果结果a48)。
+- `041452c`：A48系统目录冲突共享Flutter页／协调器，精确操作和冲突ID、当前批次策略／取消／离页。真实系统文件选择和独立文件核验最终r5全3分02秒通过；目视第四轮发现零成果误报后，先红后绿并再次实际复验。此前入口／回执夹具错误不计通过。USB产品选择、provider及中断矩阵仍缺。[细节](content-delivery.md#共享系统目录冲突与零成果结果)。
 - `99491be`：A54十二个Apple官方正文来源，补自身互通与FaceTime移动端获允远控，区分事实／产品决定／代理建议；没有Apple实操，不增加已排除功能。[研究](../research/apple-continuity-workflows.md)。
 - `82a8fb8`：中文配对错误与实际重新配对入口，公开16项通过；首轮真实链路捕获auth失败仍英文，补准确分支／公开红绿后完整66秒通过，`/tmp/connect-oct17-connection-feedback-r2.log`及`/tmp/connect-e2e/connection-feedback-r2/result.json`。实际rawpeer拒绝与中文呈现分开校验；fresh码／Required TLS／系统接口精确撤权／独立清理均成功，hostErrors为空。已目视工作台和撤权中文截图，不拍配对码。直接Settings Forget和量产设备仍未验。[细节](first-pairing.md#中文错误与重新配对入口复验)。
 

@@ -77,7 +77,7 @@ CONFIG／EOS／重复帧需区分；没有后续frameAvailable时，唯一静态
 
 固定scrcpy v5.0.1源码中，`ScreenCapture`无filter时直接将encoder Surface交给显示，
 `OpenGLRunner`当前对frameAvailable直接render，`SurfaceEncoder`处理实际编码输出；
-仓库版本及受控来源见[捕获服务说明](../../servers/scrcpy/README.md)。
+仓库版本及受控来源见捕获服务说明（历史路径 `../../servers/scrcpy/README.md`）。
 这种方案改变被控端实际执行的采集／提交逻辑，必须构建有独立摘要的候选JAR，
 不能只改`.build`或把已有产物重新打包冒充修复。应先支持独立候选输出，保留当前
 两份产物不变。用户“不无故重建”的要求不排除确有服务端源码变化时的必要构建。

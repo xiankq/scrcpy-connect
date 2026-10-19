@@ -1,28 +1,7 @@
-# Domain docs
+# 领域文档
 
-## Layout
+本仓库使用一个领域上下文：[GLOSSARY.md](../../GLOSSARY.md)定义术语，[docs/adr/](../adr/)记录已接受的架构取舍。探索设备、授权、会话与平台边界前读取相关条目。
 
-This repository uses a single context:
+词表只解释对象及容易混淆的概念，不承载状态转换、协议字段或实现方案。产品行为在[产品规格](../../designs/prod/README.md)维护，资源所有权在[架构](../implementation/architecture.md)维护。
 
-- `GLOSSARY.md` at the repository root defines domain vocabulary.
-- `docs/adr/` contains architectural decision records.
-
-## Before exploring
-
-Read `GLOSSARY.md` and ADRs relevant to the area being explored.
-
-If these documents do not exist, proceed silently. The `/domain-modeling`
-skill creates them when terminology or decisions are resolved.
-
-## Vocabulary
-
-Use glossary terms in issue titles, proposals, hypotheses, and tests.
-Follow any explicitly preferred terms and avoided synonyms.
-
-If a needed concept is absent, reconsider whether it belongs to the
-domain. Record genuine vocabulary gaps for `/domain-modeling`.
-
-## Decision conflicts
-
-Explicitly identify any proposal that contradicts an existing ADR.
-Cite the ADR and explain why the decision should be reconsidered.
+ADR 记录难以逆转、有明确替代方案的决定及其理由。实现进度和测试结果归验收记录；研究建议不直接标记为 accepted。与现有 ADR 冲突的变更需指出对应决定与变更理由，而非在其他文档保留第二套边界。

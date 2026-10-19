@@ -3,7 +3,7 @@
 日期：2026-10-18。范围：只读核查隔离候选
 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1` 与 Android 16 / API 36
 AOSP 的实际调用链。本页是源码证据，**不是性能、厂商兼容或运行时队列状态验收**。
-当前目标状态以 [current-status.md](../../.scratch/interop/current-status.md) 为准。
+当前链路与验证边界见[架构](../implementation/architecture.md)及[视频性能记录](../implementation/video-performance.md)；下文隔离候选和临时源码位置属于历史调查对象。
 没有构建、启动设备、替换生产 JAR 或改变捕获代码。
 
 ## 结论
@@ -43,9 +43,9 @@ callback 积压当成瓶颈。来源：[Java 投递](https://android.googlesourc
 `updateTexImage()`，随后把 `getTimestamp()` 交给 `BoundedInputFlow.onSource()`。
 信用完成与定时 drain 也在同一 GL Handler 上。此处研究的是前一段源队列；
 GL 输出到编码器的 Surface 是另一条队列。
-本地依据：[ScreenCapture.java](/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java:119)、
-[OpenGLRunner.java](/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/opengl/OpenGLRunner.java:180)、
-[BoundedInputFlow.java](/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/BoundedInputFlow.java:26)。
+本地依据：ScreenCapture.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java:119`）、
+OpenGLRunner.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/opengl/OpenGLRunner.java:180`）、
+BoundedInputFlow.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/BoundedInputFlow.java:26`）。
 
 ## 创建与生产连接：哪些标志实际成立
 
@@ -163,7 +163,7 @@ timestamp 不变或持续忙循环，都不是已证明的“总能取最新且�
 精确完成的信用账本永久缺项。当前源 VDS 已有自己的 interval 0；两者职责不同。
 这是由 Surface 行为及候选账本约束得出的风险推论，不是已运行出的故障。
 来源：[Surface 设置](https://android.googlesource.com/platform/frameworks/native/+/refs/tags/android-16.0.0_r1/libs/gui/Surface.cpp#587)、
-[本地 LatestInputWindow 精确 complete](/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java:94)。
+本地 LatestInputWindow 精确 complete（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java:94`）。
 
 ## 原生静态 repeat 与信用
 
@@ -176,8 +176,8 @@ codec 输入缓冲及新源帧约束，所以静态流不是无限 heartbeat。
 此候选的 SurfaceEncoder 移除 `KEY_REPEAT_PREVIOUS_FRAME_AFTER`，转由
 LatestInputWindow 发 repeat 并分配唯一实际编码 PTS。因而原生十次上限不能直接
 解释该候选静态阶段的所有输出节奏，也不能为任意未知输出 PTS 补造信用。
-源码证据：[SurfaceEncoder.java](/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java:88)、
-[LatestInputWindow.java](/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java:142)。
+源码证据：SurfaceEncoder.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java:88`）、
+LatestInputWindow.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java:142`）。
 
 ## 尚需运行时证明
 

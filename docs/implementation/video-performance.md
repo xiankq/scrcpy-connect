@@ -1,10 +1,12 @@
 # 视频首帧、持续新像素与阻塞恢复
 
+> 本文是 2026-10-18 各轮视频实验的历史记录，包含未采用候选、失败结果和当时的产物/命令。生产路径与依赖以 [架构](architecture.md)、[工具链契约](repository-tooling.md) 和 `servers/vendor/README.md` 为准；下文“最新”“当前”只指各段实验阶段。产品视觉与最终回归证据见 [产品验收记录](product-refinement.md)。
+
 最新增量：隔离bounded-input将无限静态重复改为每个实际源帧最多10次；关闭诊断的
 普通Driver静态对照，候选输入P50/P95为149/236ms，两侧完成基线201/290、196/295ms。
 候选仍有一次首帧1036ms，未通过完整预算，**生产JAR不替换**。原返回组窗口超时
 单独保留，独立重试不覆盖失败。源队列核查也排除了未经证实的FIFO／旧Java回调
-堆积前提，见下一节。权威完成度见[当前状态](../../.scratch/interop/current-status.md)。
+堆积前提，见下一节。完整目标的历史追溯路径为 `.scratch/interop/current-status.md`（现未保留）；本文件的局部结果不能代替整体验收。
 [Android显式异步解码](android-decoder-async.md)仍为生产默认；旧测试路径的通过不
 覆盖后续普通Driver失败。连接稳定性增量见[应用失活恢复](connection-health.md)。
 
@@ -34,7 +36,7 @@ bootstrap2→steady1均未变，未叠加initial-codec或主控提前挂载。
 真实模块基线先红：静止预算耗尽后仍有timer／提交；候选9组行为回归、既有暂停
 JVM及15组Python测试通过。新增回归包含10次额度、长静止无任务、唯一新源恢复、
 最后重复阻挡时的pending终值及stall，不复制模块算法。只读review未发现确定缺陷。
-复现见[候选说明](../../servers/scrcpy/experiments/bounded-input/README.md)。
+复现见候选说明（历史路径 `servers/scrcpy/experiments/bounded-input/README.md`，现已移除）。
 
 实际API36生命周期共8阶段：源1+10媒体帧后静止4.5秒不再增长；静止后的唯一新
 计数、动态终值、暂停恢复及新计数、旋转和旋转输入均正确。最终进程／临时JAR／
@@ -106,7 +108,7 @@ display初始暂停期间收到resize仅保留最新请求，实际init约束后
 复现null约束NPE，v2通过最新请求／真实Size约束／debouncer启动及释放。只替换
 Android SDK接口，没有复制项目状态机。Python构建安全与协议／首包oracle／绝对
 期限共15项通过；slow-trickle不会无限延长启动等待。对应源码及复现命令见
-[候选说明](../../servers/scrcpy/experiments/initial-codec/README.md)。
+候选说明（历史路径 `servers/scrcpy/experiments/initial-codec/README.md`，现已移除）。
 
 同两台API36／2vCPU／2048MB SwiftShader AVD，构建全部结束、停止Gradle后测量。
 官方ADB源端5组A/B/A共15次新进程：固定c2.android.avc.encoder、H2641280／60／8M、
@@ -115,7 +117,7 @@ repeat33334µs，每个首媒体包完整离线解码并核对计数0与576×128
 前后基线均值的配对中位-26.611ms；五组差值-46.422、-61.466、-26.611、+27.115、
 -1.861ms。排除部署、fixture启动与离线解码；该有限结果不等于Flutter可见收益。
 原件`/tmp/connect-initial-codec-startup-aba`，脚本
-[benchmark_startup.py](../../servers/scrcpy/benchmark_startup.py)。
+benchmark_startup.py（历史路径 `servers/scrcpy/benchmark_startup.py`，现已移除）。
 
 实际候选生命周期验证：control连接后立即pause、静止首帧与唯一更新、3.5秒静止后
 新计数2、动态→终值、再次pause/resume新计数、旋转和旋转后输入，共8阶段正确。
@@ -800,7 +802,7 @@ MDK x64崩溃二进制`/tmp/connect-pause-libmdk-x64.so`也留存，供后续符
 
 本批不改生产播放参数，也不重建任何JAR。官方JAR仍为`764eb6f7…`，捕获扩展仍为
 `b46cd074…`。普通Flutter／Rust构建直接嵌入受控产物；修改被控服务端源码／补丁／
-固定工具链或明确复现构建时才重建，详见[构建规则](../../servers/scrcpy/README.md)。
+固定工具链或明确复现构建时才重建，详见构建规则（历史路径 `servers/scrcpy/README.md`，现已移除）。
 
 ### 同栈崩溃已重复，尚未修复
 
@@ -1053,7 +1055,7 @@ ROUNDS2、TRANSITIONS8、PAUSE_CYCLES1、MAX_START_MS1000、MAX_P50_MS200、MAX_
 严格Flutter分析4.8秒无问题，Core all-target clippy -D warnings 5.32秒与fmt通过，
 `/tmp/connect-transport-final-analyze.log`、`/tmp/connect-transport-clippy.log`。
 正常生产播放参数、官方及捕获扩展JAR均未改／重建；旧ARM64 release未更新，新增诊断
-只由本批x64测试APK实际运行。服务端重建条件见[构建规则](../../servers/scrcpy/README.md)。
+只由本批x64测试APK实际运行。服务端重建条件见构建规则（历史路径 `servers/scrcpy/README.md`，现已移除）。
 
 最终有界等待／字段命名版再跑同样AMediaCodec配置2轮，16次同PTS与18项目标时间线
 完整匹配，两次暂停、Flutter计数9／2呈现与卸载确认完成；P50／P95=1259／1968ms，

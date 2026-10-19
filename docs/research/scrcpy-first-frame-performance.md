@@ -1,5 +1,7 @@
 # scrcpy 首帧、视频传输与连接稳定性核查
 
+本文包含已移除捕获扩展的历史实现调查；文中的 `CAPTURE_SERVER`、`servers/scrcpy/` 与暂停扩展依赖只适用于当时版本。当前生产嵌入的官方服务端由 [vendor 清单](../../servers/vendor/README.md)说明，当前链路见[架构](../implementation/architecture.md)，历史产物替换限制不作为现行规则。
+
 调查日期：2026-10-18。仅静态读取本仓库、官方 release API、官方当前开发者文档及固定 v5.0.1 源码；本轮未构建 JAR、未运行测试、未连接设备。**已证**表示本轮可直接核查的文件、摘要或源码行为；**推论**表示由实现导出的建议；**需验证**表示尚无本轮设备测量支持。既有设备结果见[先前首帧调查](scrcpy-first-frame-and-latency.md)，不视为本轮重测。
 
 后续实施与实际设备测量另记于[视频性能记录](../implementation/video-performance.md)：保持现有JAR、主控探测对照、真实半包/背压红绿回归及动态图案E2E。下文的“本轮未运行”仅指本报告的资料核查步骤，不覆盖该后续实施。
@@ -15,17 +17,17 @@ Flutter或Rust的传输／播放器改动不会自行改变已嵌入的JAR字节
 后续首次分配调查确实修改了被控服务源码，因此另建`initial-codec`隔离产物
 23dc3f84…，验证MediaCodec探测与首捕获复用。它不叠加bounded-input，不覆盖生产：
 源端15次确认分配2→1，完整Flutter A/B/A没有稳定首帧收益，故生产仍b46cd074…。
-详见[候选及复现](../../servers/scrcpy/experiments/initial-codec/README.md)与
+详见候选及复现（历史路径 `../../servers/scrcpy/experiments/initial-codec/README.md`）与
 [实际验收](../implementation/video-performance.md#首次编码器分配复用源端减少一次完整首帧未通过)。
 
-**推论：本轮视频传输、首帧与连接稳定性没有证据要求新增 Java 补丁或重新构建 JAR。** 首先改进主控设备的计时、播放器请求/确认顺序、数据消费与背压处理；保持现有服务端协议与暂停扩展。这个结论不意味着可以把当前视频会话换成未修改官方 JAR：当前主控已经依赖暂停扩展 type 128，直接替换会破坏协议。[本地实现](../../crates/interop_core/src/scrcpy.rs)、[已有补丁说明](../../servers/scrcpy/README.md)
+**推论：本轮视频传输、首帧与连接稳定性没有证据要求新增 Java 补丁或重新构建 JAR。** 首先改进主控设备的计时、播放器请求/确认顺序、数据消费与背压处理；保持现有服务端协议与暂停扩展。这个结论不意味着可以把当前视频会话换成未修改官方 JAR：当前主控已经依赖暂停扩展 type 128，直接替换会破坏协议。[本地实现](../../crates/interop_core/src/scrcpy.rs)、已有补丁说明（历史路径 `../../servers/scrcpy/README.md`）
 
 | 对象 | 本轮核验 | 结论 |
 | --- | --- | --- |
 | 官方 release | `v5.0.1`，发布时间 `2026-10-08T06:44:27Z`；annotated tag 对象 `a0c27ff382c411af1301dcc1cd8205c9aeb81996` 解引用到 `a60891aea193d92e7e5c3942700eca63f9d19a5f` | **已证**；不能把 tag 对象当源码 commit。[Release API][R01]、[tag 对象][R02] |
 | `servers/vendor/scrcpy-server-v5.0.1` | 本地 SHA-256 `764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536`；官方 asset API 报同一 digest、大小 733930 bytes | **已证**：该 vendor 文件与官方发布物摘要一致。[R01] |
-| `servers/scrcpy/interop-scrcpy-server.jar` | 本地 SHA-256 `91606a603a49bbea2be37ec500cde44a588483ac3162bc466d23b2f9d840deab`，与本仓库 manifest 一致 | **已证**：这是本仓库 cooperative pause 补丁产物，不能称其为未修改官方 JAR。[manifest](../../servers/scrcpy/manifest.json) |
-| 补丁文件 | `0001-cooperative-capture-pause.patch` 本地 SHA-256 `bb78d60dfac9ceb43784681563b48af1745a7e6b26a80bffeaa87fb57bf23381`，与 manifest 一致 | **已证**：本轮只核验追踪文件一致性，没有重建验证源码到二进制的对应关系。[补丁](../../servers/scrcpy/patches/0001-cooperative-capture-pause.patch) |
+| `servers/scrcpy/interop-scrcpy-server.jar` | 本地 SHA-256 `91606a603a49bbea2be37ec500cde44a588483ac3162bc466d23b2f9d840deab`，与本仓库 manifest 一致 | **已证**：这是本仓库 cooperative pause 补丁产物，不能称其为未修改官方 JAR。manifest（历史路径 `../../servers/scrcpy/manifest.json`） |
+| 补丁文件 | `0001-cooperative-capture-pause.patch` 本地 SHA-256 `bb78d60dfac9ceb43784681563b48af1745a7e6b26a80bffeaa87fb57bf23381`，与 manifest 一致 | **已证**：本轮只核验追踪文件一致性，没有重建验证源码到二进制的对应关系。补丁（历史路径 `../../servers/scrcpy/patches/0001-cooperative-capture-pause.patch`） |
 | 当前视频路径 | `start_session_with_settings()` 校验并推送 `CAPTURE_SERVER`；启动参数协议版本仍为 `5.0.1` | **已证**：视频使用上述补丁 JAR；枚举与设备音源保留官方 `SERVER` 路径。[scrcpy.rs](../../crates/interop_core/src/scrcpy.rs)、[audio.rs](../../crates/interop_core/src/audio.rs) |
 
 **已证：**本轮 GitHub API 的 `master` 也指向上述源码 commit。然而当前 `doc/develop.md` 仍自称描述协议 4.0，示例也使用 server 4.0，部分链接固定到更旧 commit。因此开发者文档用于解释设计，字节协议和实现以 v5.0.1 源码为准，不能复制其版本示例。[当前 master API][R03]、[当前 develop.md][R04]
@@ -33,7 +35,7 @@ Flutter或Rust的传输／播放器改动不会自行改变已嵌入的JAR字节
 ## 首帧与低延迟已有机制
 
 - **已证：**官方开发者文档把静止画面起始不出帧、快速运动后的最后画面质量差列为 `KEY_REPEAT_PREVIOUS_FRAME_AFTER` 要解决的问题；v5.0.1 已设置 **100000µs（100ms）**，API23+ `KEY_PRIORITY=0`，API26+ `KEY_LATENCY=1`。100ms 是重复上一帧配置，不是端到端首帧时限，也不保证任何编码器严格兑现该延迟。[R04]、[SurfaceEncoder][R05]
-- **已证：**v5.0.1 的自定义 codec options 在上述默认项之后写入，因此可以覆盖默认项；本项目当前视频启动命令没有传 `video_codec_options`，已有暂停补丁也没有改这些默认值。重复添加这些字段不能解释本项目当前问题。[R05]、[本地启动命令与补丁](../../servers/scrcpy/README.md)
+- **已证：**v5.0.1 的自定义 codec options 在上述默认项之后写入，因此可以覆盖默认项；本项目当前视频启动命令没有传 `video_codec_options`，已有暂停补丁也没有改这些默认值。重复添加这些字段不能解释本项目当前问题。[R05]、本地启动命令与补丁（历史路径 `../../servers/scrcpy/README.md`）
 - **已证：**官方视频说明默认没有额外视频延迟缓冲；H264 被描述为应有更低延迟。官方 decoder 设置 `AV_CODEC_FLAG_LOW_DELAY`，没有在该初始化路径强制 `threads=1`。[video.md][R06]、[decoder.c][R07]
 - **推论：**保留已经可用的编码器，优先测量主控播放器实际后端、探测、状态等待与呈现耗时。H264 适合作为性能基线，但不能用文档代替五种编码、硬件/软件后端和具体设备的测量。不能把 server `latency=1` 或 decoder 名称当成端到端低延迟证明。[R05]、[R06]、[R07]
 
@@ -310,7 +312,7 @@ ret为null时发送空Uint8List；既有player.dart把空数据转换为null完�
 streamCapture：先createMediaCodec读取capabilities，补丁随后无条件release并置null，
 初始CaptureControl.paused=false时门立即放行，再次create后configure／创建Surface／
 capture.start／codec.start。即使ignoreVideoEncoderConstraints=true也仍走两次创建。
-[已追踪补丁](../../servers/scrcpy/patches/0001-cooperative-capture-pause.patch)、
+已追踪补丁（历史路径 `../../servers/scrcpy/patches/0001-cooperative-capture-pause.patch`）、
 [上游固定实现](https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java)。
 只读javap对已有.build/classes也看到create／release／置null／await门／再create的
 对应顺序，但并非此次重建或反编译当前DEX的新证明。现有CapturePauseTest覆盖门

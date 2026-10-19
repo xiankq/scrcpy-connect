@@ -1,5 +1,7 @@
 # Android 打包、签名与安装
 
+> 当前打包入口在仓库根目录，工具行为以 `tool/android.py`、根 Android 工程和 [工具链契约](repository-tooling.md) 为准。本文同时保留各阶段签名、构建和 APK 摘要；下文“当前产物”只属于所在阶段，不能据历史构建推定当前代码或物理设备运行通过。
+
 2026-10-18用户报告直接`flutter build apk`很慢，安装器显示英文的“包信息为空”。本批保持应用ID`dev.scrcpyconnect.scrcpy_connect`和中文名称“邻接”，补可更换的本机签名与真实安装验证，不把用户未提供的原APK当作已检查。
 
 ## 已复现的原因与修复

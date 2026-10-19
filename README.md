@@ -1,8 +1,8 @@
 # 邻接 · Interconnect
 
-用手边的 Android 手机查看、操作和取用另一台 Android 手机。设备列表是首页；远控全屏显示，应用任务保留在原手机，文件与相册可手动取回，通知跳转手机原应用。主控不要求开启调试；被控端使用系统 USB／无线调试授权，不安装配套 APK。
+面向 Android 被控设备的跨设备互联应用，优先服务手机主控。设备列表是首页；远控全屏呈现真实任务，文件、相册和通信分别提供任务入口。主控不要求开启调试；被控设备使用系统 USB／无线调试授权，不安装配套 APK。
 
-这是持续实施中的项目。已在三台独立 Android 16 无头模拟器完成真实连接、投控、五种视频格式渲染、文件与目录传输、系统文件选择器、跨设备剪贴板、音频播放及后台策略验证；完整状态与限制见 [验收记录](docs/implementation/validation.md)。模拟器成功不代表物理 USB、旧系统、OEM 后台或生产密码安全已经通过。
+功能规则、代码实现和运行验收分别记录。Android 模拟器已验证的具体链路见[产品验收](docs/implementation/product-refinement.md)与[专项记录](docs/implementation/validation.md)；低版本条件和实测范围见[被控兼容边界](docs/implementation/android-target-compatibility.md)；物理 USB、OEM 后台、其他宿主和生产密码安全需要各自证据。
 
 ## 工作区
 
@@ -14,9 +14,9 @@
 | `crates/adb` | 独立 Rust ADB 主机协议、配对、TLS、USB、shell、sync 等服务 |
 | `crates/interop_core` | 设备、会话、传输及免安装协同活动 |
 | `crates/interop_bridge` | Rust FRB 入口、共享命令校验与有界事件观察者 |
-| `crates/android_helper` | 独立构建的 Android 原子文件操作助手源码 |
+| `crates/android_helper` | 独立构建的 Android 原生元数据、目录与原子文件操作源码 |
 | `protocol` | Dart／Rust 命令、字段形状与状态核验策略的单一来源 |
-| `servers` | 固定版本 scrcpy JAR、临时协同 JAR 与文件原子操作助手 |
+| `servers` | 固定版本 scrcpy JAR、临时协同 JAR 与原生文件服务 |
 | `third_party/fvp` | 播放器本地修补及固定 MDK 正式版本／摘要 |
 | `designs` | DESIGN.md、产品说明和 Pencil 页面／组件源文件 |
 
@@ -51,7 +51,7 @@ python3 tool/android.py build
 
 已配置的签名不会被替换；私钥与 `key.properties` 不进入 Git，请自行私密备份这两份文件，后续更新需要同一身份。正式分发时可按 [配置示例](android/key.properties.example) 换成自己的发布密钥。缺少签名会在编译前明确失败，不再生成未签名的“成功”包，也不会悄悄用 debug 密钥签 release。
 
-打包入口默认只编译 arm64；模拟器使用 `--abi x64`，旧手机使用 `--abi arm`，全架构包使用 `--abi universal`。直接在仓库根目录执行 `flutter build apk` 仍会生成三架构通用签名包。单架构模式也会过滤插件的其他架构库，避免只有插件、没有 Flutter／Rust 的不完整 ABI。
+打包入口默认只编译 arm64；模拟器使用 `--abi x64`，32 位主控设备使用 `--abi arm`，全架构包使用 `--abi universal`。直接在仓库根目录执行 `flutter build apk` 仍会生成三架构通用签名包。单架构模式也会过滤插件的其他架构库，避免只有插件、没有 Flutter／Rust 的不完整 ABI。
 
 最终 APK 在 `build/app/outputs/flutter-apk/app-release.apk`。可独立复核：
 
@@ -63,8 +63,17 @@ python3 tool/android.py verify build/app/outputs/flutter-apk/app-release.apk
 
 ## 设计与验收
 
-[验收记录](docs/implementation/validation.md)区分实现、证据和剩余工作；[本轮产品修订](docs/implementation/product-refinement.md)逐项记录反馈处理；[产品说明](designs/prod/README.md)说明功能取舍；[视觉规范](designs/design.md)与 `designs/mobile.pen` 保存设计源。预览图和 E2E 资产放系统临时目录，不收进 Git。
+| 文档 | 责任 |
+| --- | --- |
+| [词表](GLOSSARY.md)与 [ADR](docs/adr/) | 对象含义与已接受的架构边界 |
+| [产品规格](designs/prod/README.md) | 功能范围、入口、默认交互和失败恢复 |
+| [视觉规范](designs/design.md)与 [Pencil 源稿](designs/mobile.pen) | 视觉 token、组件语义和代表状态 |
+| [架构](docs/implementation/architecture.md)与[工具链](docs/implementation/repository-tooling.md) | 实现职责、资源所有权和生成契约 |
+| [研究索引](docs/research/README.md) | 固定来源下的事实、比较与推论 |
+| [产品验收](docs/implementation/product-refinement.md)、[视觉审计](docs/implementation/ios-visual-audit.md)、[专项记录](docs/implementation/validation.md) | 指定版本、环境、状态和证据范围 |
 
-`third_party/fvp` 是基于官方0.39.1的受控源码副本，约470 KiB；保留原生snapshot失败空指针修复与MDK归档版本／SHA固定。当前官方发布版尚未包含同等修复，因此保留该目录。具体差异见[补丁清单](third_party/fvp/CONNECT_PATCHES.md)；下载的SDK和构建缓存不进入Git。
+规则在责任文档中维护，研究建议和历史验收不替代当前规范。源稿 Frame 可表达同一产品页面的多个状态，不与路由数量一一对应。预览与 E2E 资产放系统临时目录；临时日志的生命周期不等于永久归档。
+
+`third_party/fvp` 是基于官方0.39.1的受控源码副本，约470 KiB；保留原生snapshot失败空指针修复与MDK归档版本／SHA固定。相对于固定上游基线，这些差异仍由本仓库维护；升级时按实际源码判断是否可以移除副本。具体差异见[补丁清单](third_party/fvp/CONNECT_PATCHES.md)；下载的SDK和构建缓存不进入Git。
 
 `tool/check.sh` 执行 Rust 格式／Clippy／默认测试、Flutter 分析／组件测试和固定官方 DESIGN.md NPM 校验。真实 AVD、无线配对、媒体、文件及故障测试需要对应环境和显式测试参数，方法与证据见验收记录。跨 target 的 Rust 检查与各宿主整包链接分别记录。

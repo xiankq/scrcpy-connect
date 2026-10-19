@@ -4,7 +4,7 @@
 
 ## 研究与既定范围的关系
 
-用户已确定手机控制手机优先；被控为无 root、无额外 APK 的 Android，允许 ADB 推送和临时运行 JAR；主控不要求开启调试。文件、相册预览和通话可有专用功能页；短信只通过通知进入被控手机原应用；录屏及文件／相册自动备份已移除。联系人、专用相机、终端、长期通知档案及自动编辑回写等由代理按授权移出范围。以上区分沿用[产品规格](../../.scratch/interop/spec.md)与[功能取舍](../../designs/prod/scope.md)，不是本研究重新征求的决定。
+用户已确定手机控制手机优先；被控为无 root、无额外 APK 的 Android，允许 ADB 推送和临时运行 JAR；主控不要求开启调试。文件、相册预览和通话可有专用功能页；短信只通过通知进入被控手机原应用；录屏及文件／相册自动备份已移除。联系人、专用相机、终端、长期通知档案及自动编辑回写等由代理按授权移出范围。以上区分沿用产品规格（历史路径 `../../.scratch/interop/spec.md`）与[功能取舍](../../designs/prod/scope.md)，不是本研究重新征求的决定。
 
 Apple 的镜像、原生业务应用、活动接力和内容传送是不同路由。下列事实只能作为交互参考；Apple 系统能力不能证明普通第三方应用或 ADB 临时 JAR 具有同等权限。相关约束仍以 [ADR 0001](../adr/0001-apk-free-controlled-device.md)、[ADR 0005](../adr/0005-real-application-tasks-in-linked-windows.md)、[ADR 0006](../adr/0006-controller-without-debugging.md) 为准。
 
@@ -34,7 +34,7 @@ Apple 同时提供独立的 Text Message Forwarding：在同一 Apple Account、
 | --- | --- | --- |
 | Handoff：在一端打开支持的应用并开始任务，再从另一端的 Dock／应用切换器接力入口继续。iPhone 有应用切换器底部入口，iPad 有 Dock 入口。[使用 Handoff](https://support.apple.com/en-us/102426) | 同一 Apple Account、Wi-Fi／蓝牙及 Handoff 开启，源设备解锁、近旁且任务在前台；目标也有支持的应用。[设置条件](https://support.apple.com/en-us/102426) | 保持“原应用接续”和“在本机打开”两种文案。本机接力需要具体应用或链接支持，不能把任意远端应用的状态称为可迁移。 |
 | Handoff 由应用提供 NSUserActivity，声明活动类型、更新活动信息，在目标应用恢复；跨平台应用需共享开发者 Team ID。文档要求传递临时活动信息，文档本体通过其他机制共享。[开发文档](https://developer.apple.com/documentation/foundation/implementing-handoff-in-your-app) | 不是把原设备任意应用实例直接搬到目标系统；应用活动恢复与内容数据可达是两个问题。 | 不让 Handoff／应用合作成为本项目免 APK 远控的基础条件，也不为此追加编辑副本管理或自动回写。 |
-| Universal Clipboard：在一台设备正常复制，在另一台正常粘贴；内容短暂保留，或被任一端下次复制替换。[通用剪贴板](https://support.apple.com/en-us/102430) | 近旁、同账号、Wi-Fi／蓝牙和 Handoff 开启；官方列举文本、图像、照片、视频等内容。[设置与使用](https://support.apple.com/en-us/102430) | 保留就近复制／粘贴与内容发送，不建立剪贴板历史中心。多台 Android 的同步对象继续遵循当前设备／固定对象规则；该规则是项目默认，不是 Apple 事实。 |
+| Universal Clipboard：在一台设备正常复制，在另一台正常粘贴；内容短暂保留，或被任一端下次复制替换。[通用剪贴板](https://support.apple.com/en-us/102430) | 近旁、同账号、Wi-Fi／蓝牙和 Handoff 开启；官方列举文本、图像、照片、视频等内容。[设置与使用](https://support.apple.com/en-us/102430) | 保留就近复制／粘贴与内容发送，不建立剪贴板历史中心。本项目只同步当前操作且开启自动同步的设备，不提供固定对象；具体行为见[交互规则](../../designs/prod/interaction-rules.md#声音与剪贴板)，与 Apple 的同账号机制分别理解。 |
 | AirDrop：Photos／Files 选择内容 → 系统分享 → AirDrop → 选择接收者；接收方接受。需要近旁、Wi-Fi／蓝牙开启，使用个人热点时先断开；非联系人须开启相应可发现范围，新的系统组合还有 AirDrop code 条件。[iPhone／iPad 操作](https://support.apple.com/en-us/119857) | 是明确的内容发送／接收流程；不能把已分享一张照片理解为获得远端图库浏览授权。 | 专用文件／相册页服务浏览、选择和手动取用，系统分享服务已取得内容的下一步；不要让发送一份内容自动开启备份或后台全量下载。 |
 | Mac 可通过应用分享或 Finder 的 AirDrop 发送；同账号的自有设备可自动接收，接收内容进入 Photos、Files 或 Downloads 等实际位置，取决于内容及设备。[Mac AirDrop](https://support.apple.com/guide/mac-help/mh35868/mac) | 官方还说明已经开始的传输离开近距离后可继续通过互联网；这是 Apple 的能力。 | 成功反馈应给出本机真实保存位置／打开入口。本项目只有已有可达网络路径，不承诺复制 AirDrop 的互联网续传或自动穿透。 |
 
@@ -54,7 +54,7 @@ Apple 的蜂窝通话接力让 iPhone 转接通话到同账号的 Mac／iPad：�
 | --- | --- | --- |
 | Mac → iPhone | iPhone Mirroring 对已授权、近旁且锁定的 iPhone 提供真实应用操作及通知接续。[镜像帮助](https://support.apple.com/en-us/120421) | 一次一对，不能由此宣称 Apple 已提供任意多设备并发应用窗口或远程公网控制。 |
 | iPhone／iPad → 另一手机／平板 | FaceTime 中有人参与并接受的屏幕远控；同时有 Handoff、AirDrop、Universal Clipboard、iPad 通话接力等各自路径。[iPhone FaceTime](https://support.apple.com/guide/iphone/iph5d70f34a3/ios)、[iPad FaceTime](https://support.apple.com/guide/ipad/ipada92df253/ipados)、[连续互通要求](https://support.apple.com/en-us/108046) | iPhone Mirroring 官方主控条件没有 iPhone／iPad。FaceTime 协助不能当成同账号、自有设备、锁定近旁且平时已授权的镜像工作台；未据这些资料确认移动端拥有等同 Mac 的后台 iPhone 通知接续。 |
-| 本项目 Android 手机 → Android 手机 | 目标是已获授权设备的持续连接、远控、文件／相册及通信任务；已有产品规格，不由 Apple 文档证明实现。[项目规格](../../.scratch/interop/spec.md) | 不要求启动 FaceTime／同类通话才控制设备；不引入 Apple Account、厂商私有协议或主控调试作为基础条件。 |
+| 本项目 Android 手机 → Android 手机 | 目标是已获授权设备的持续连接、远控、文件／相册及通信任务；已有产品规格，不由 Apple 文档证明实现。项目规格（历史路径 `../../.scratch/interop/spec.md`） | 不要求启动 FaceTime／同类通话才控制设备；不引入 Apple Account、厂商私有协议或主控调试作为基础条件。 |
 
 以上“没有列入主控条件”限定于核查的 iPhone Mirroring 官方产品，不是断言 Apple 所有辅助功能、企业管理或第三方工具都不支持任何远控。FaceTime 资料的地区可用性也不能与镜像可用性合并；中国等目标市场须按对应功能另核查，不能从“非欧盟”直接推成全部可用。
 

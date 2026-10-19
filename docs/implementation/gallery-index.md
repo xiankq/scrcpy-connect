@@ -46,7 +46,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 
 第二轮真实验收`/tmp/connect-gallery-index-r2.log`已独立核验105个文件大小和4207字节样本原文，清理独立通过，但分页汇总断言失败，未计完整通过。以同一公开页面构造100＋5项的滚动测试，确认页查询已到offset100，而汇总Sliver滚出后不再被finder呈现；先回到范围／汇总位置再断言105／105后通过。真实用例同步保持实际加载更多点击、精确105总数和分页排序要求，不放松成仅按钮消失。
 
-第三轮完整85秒通过：`/tmp/connect-gallery-index-r3.log`、`/tmp/connect-e2e/gallery-index-r3/result.json`。必需回执及独立原文／105大小／精确清理全true，hostErrors为空；实际加载更多、范围面板与刷新后106项／旧快照105项已验证。主代理已目视首页网格和范围截图。
+第三轮完整85秒通过：`/tmp/connect-gallery-index-r3.log`、`/tmp/connect-e2e/gallery-index-r3/result.json`。必需回执及独立原文／105大小／精确清理全true，hostErrors为空；实际加载更多、范围面板与刷新后106项／旧快照105项已验证。已目视首页网格和范围截图。
 
 该轮仅要求至少一张实际缩略图解码，目视暴露A57：各cell直接并发请求，而companion只有一个worker和一个等待位，busy后widget保持失败、离屏未精确取消。此证据只能证明单张通路，不能证明多图网格可用。共享有界调度、精确取消、有限busy恢复和真实多图门槛须单独实现与复验；A53和相册领域仍未整体关闭。
 

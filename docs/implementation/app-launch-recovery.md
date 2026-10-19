@@ -1,6 +1,6 @@
 # 应用打开记录与恢复
 
-对应 A49／A50。独立应用窗口和手机主屏上的 `session.launch` 都在发送 START_APP 前，将设备、包名、操作 UUID 和关联会话 UUID 写入本机私有记录。ADB 写入回执不代表 Android 应用完成启动；编码／渲染失败也不证明应用没有打开。
+独立应用窗口和手机主屏上的 `session.launch` 都在发送 START_APP 前，将设备、包名、操作 UUID 和关联会话 UUID 写入本机私有记录。ADB 写入回执不代表 Android 应用完成启动；编码／渲染失败也不证明应用没有打开。
 
 主屏打开采用独立操作 UUID，不占用主屏会话的身份。返回未知结果时，`sessionId`／`launchOperationId` 指向这次操作，`linkedSessionId` 仅说明原主屏归属。检查和关闭必须使用操作 UUID，不能把原主屏当成待关闭记录。
 
@@ -22,7 +22,7 @@ START_APP 使用独立提交许可。控制队列取出时，只有尚未取消�
 
 ## 已测边界
 
-公开 Runtime 的真实 Android 测试位于 [app_launch_android.rs](../../crates/interop_core/tests/app_launch_android.rs)。本轮四项串行通过，50.17 秒，普通测试线程栈。故障代理只阻塞或丢弃真实 adbd 的指定 ACK，不替换 Core；独立 ADB 客户端检查真实应用任务。
+公开 Runtime 的真实 Android 测试位于 [app_launch_android.rs](../../crates/interop_core/tests/app_launch_android.rs)。记录阶段四项串行通过，50.17 秒，普通测试线程栈。故障代理只阻塞或丢弃真实 adbd 的指定 ACK，不替换 Core；独立 ADB 客户端检查真实应用任务。
 
 覆盖主屏同 UUID 打开、缺包导致首帧失败、断开／Runtime 重建后阻止重放、已编码后渲染清理、记录写盘失败、按设备关闭、主屏回执丢失、排队超时后关闭及迟到 ACK 恢复。`session.launch` 已加入 Bridge 的恢复核验屏障。
 
@@ -33,4 +33,4 @@ rtk proxy env CARGO_BUILD_JOBS=2 INTEROP_ADBD_PORT=15556 \
   cargo test -p interop-core --test app_launch_android -- --ignored --test-threads=1
 ```
 
-该证据不等于 Android 杀进程现场、实际解码器故障、旧系统副屏回退或所有 OEM 的恢复验收；完整应用／IME／多窗口任务继续开放。
+该证据不等于 Android 杀进程现场、实际解码器故障、旧系统副屏回退或所有 OEM 的恢复验收；完整应用／IME／多窗口恢复仍需分别验收。
