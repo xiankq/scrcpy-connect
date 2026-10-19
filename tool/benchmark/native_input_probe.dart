@@ -126,6 +126,13 @@ class InputProbe extends ChangeNotifier {
     if (mode != 'http' && mode != 'append') {
       throw ArgumentError('mode must be http or append');
     }
+    final properties =
+        (request['properties'] as Map<String, dynamic>?)
+            ?.cast<String, String>() ??
+        const <String, String>{};
+    final decoders =
+        (request['videoDecoders'] as List<dynamic>?)?.cast<String>() ??
+        const ['AMediaCodec:async=1', 'FFmpeg:thread_type=slice'];
     final previousCleanup = await _cleanup();
     await (_initialization ??= RustLib.init());
     final support = await getApplicationSupportDirectory();
@@ -145,15 +152,15 @@ class InputProbe extends ChangeNotifier {
     player
       ..activeAudioTracks = const []
       ..mute = true
-      ..videoDecoders = const [
-        'AMediaCodec:async=1',
-        'FFmpeg:thread_type=slice',
-      ]
+      ..videoDecoders = decoders
       ..setBufferRange(min: 0, max: 150, drop: true)
       ..setProperty('avformat.input', 'matroska')
       ..setProperty('avformat.fpsprobesize', '0')
       ..setProperty('avformat.probesize', '32')
       ..setProperty('fps', '-1');
+    for (final entry in properties.entries) {
+      player.setProperty(entry.key, entry.value);
+    }
     _subscriptions.add(
       player.onEvent.listen((event) {
         if (_events.length < 100) {
@@ -282,11 +289,16 @@ class InputProbe extends ChangeNotifier {
       'complete': true,
       'prototype': true,
       'mode': mode,
+      'configuration': request['label'] ?? 'baseline',
+      'properties': properties,
+      'videoDecoders': decoders,
       'measurementWindowUs': runUs,
       'finiteStreamCompletionVerified': false,
       'round': request['round'],
       'fixtureSha256': expectedHash,
       'captureSha256': const String.fromEnvironment('nativeInputCaptureSha256'),
+      'clusterSizing': const String.fromEnvironment('nativeInputClusterSizing'),
+      'replaySha256': const String.fromEnvironment('nativeInputReplaySha256'),
       'mdkVersion': mdk.version(),
       'prepareMs': prepareMs,
       'textureMs': textureMs,

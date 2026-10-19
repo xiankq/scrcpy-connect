@@ -45,6 +45,8 @@ void main(List<String> args) {
           .toSet();
   final common = runs.map(pts).reduce((a, b) => a.intersection(b));
   if (common.isEmpty) throw StateError('No common decoded PTS');
+  final variedConfiguration =
+      runs.map((r) => r['configuration']).toSet().length > 1;
   final results = <Map<String, dynamic>>[];
   for (final r in runs) {
     final n = _object(r['native']);
@@ -72,6 +74,10 @@ void main(List<String> args) {
     results.add({
       'mode': r['mode'],
       'round': r['round'],
+      'configuration': r['configuration'],
+      'group': variedConfiguration
+          ? '${r['mode']}/${r['configuration']}'
+          : r['mode'],
       'commonFrames': common.length,
       'decodedFrames': _objects(r['decoded']).length,
       'prepareMs': r['prepareMs'],
@@ -99,10 +105,9 @@ void main(List<String> args) {
     });
   }
   final groups = <String, dynamic>{};
-  for (final mode in ['http', 'append']) {
-    final group = results.where((r) => r['mode'] == mode).toList();
-    if (group.isEmpty) throw StateError('Missing $mode group');
-    groups[mode] = {
+  for (final name in results.map((r) => r['group'] as String).toSet()) {
+    final group = results.where((r) => r['group'] == name).toList();
+    groups[name] = {
       for (final key in [
         'inputP50Ms',
         'inputP95Ms',

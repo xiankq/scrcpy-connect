@@ -11,6 +11,11 @@ Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption('bundle', help: 'Optional MDKP output path.')
     ..addOption('defines', help: 'Optional dart-define-from-file JSON path.')
+    ..addFlag(
+      'finite-clusters',
+      negatable: false,
+      help: 'Experiment: replace only Cluster unknown sizes with actual sizes.',
+    )
     ..addFlag('help', abbr: 'h', negatable: false);
   final args = parser.parse(arguments);
   if (args['help'] == true || args.rest.length != 1) {
@@ -50,6 +55,27 @@ Future<void> main(List<String> arguments) async {
     throw const FormatException('Archive byte count does not match capture.');
   }
   final chunks = _splitCapture(capture, pts);
+  if (args['finite-clusters'] == true) {
+    for (var i = 1; i < chunks.length; i++) {
+      final source = chunks[i];
+      final element = _element(source, 0, source.length);
+      if (element.id != _cluster || element.end != null) {
+        throw const FormatException('Expected an unknown-sized Cluster');
+      }
+      final width = element.data - 4;
+      final size = source.length - element.data;
+      if (width < 1 || width > 8 || size >= (1 << (width * 7)) - 1) {
+        throw const FormatException('Cluster size does not fit existing VINT');
+      }
+      final finite = Uint8List.fromList(source);
+      var encoded = (1 << (width * 7)) | size;
+      for (var offset = element.data - 1; offset >= 4; offset--) {
+        finite[offset] = encoded & 255;
+        encoded >>= 8;
+      }
+      chunks[i] = finite;
+    }
+  }
   final output = BytesBuilder(copy: false)..add(ascii.encode('MDKP'));
   final count = ByteData(4)..setUint32(0, chunks.length, Endian.big);
   output.add(count.buffer.asUint8List());
@@ -82,6 +108,12 @@ Future<void> main(List<String> arguments) async {
     'nativeInputFixtureDurationUs': pts.last,
     'nativeInputFixtureBytes': bundle.length,
     'nativeInputCaptureBytes': capture.length,
+    'nativeInputClusterSizing': args['finite-clusters'] == true
+        ? 'finite'
+        : 'unknown',
+    'nativeInputReplaySha256': sha256
+        .convert(chunks.expand((c) => c).toList())
+        .toString(),
   };
   // create(exclusive:true) refuses to replace previous evidence or source files.
   final bundleFile = File(bundlePath);
