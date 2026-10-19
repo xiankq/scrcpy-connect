@@ -730,3 +730,9 @@ JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收
 独立分支 `codex/mdk-memory-input` 已用 Rust → MDK appendBuffer 跑通实际解码和Texture像素核验。Android-x64 profile包在同一AVD交错8轮，扣除两轮预热后，与HTTP按相同PTS比较，未见明显延迟或CPU收益。生产 `dev` 未合入实验适配器；完整方法、输入身份、逐轮结果、早期失败及尚未验证的契约见[专项记录](../research/mdk-memory-input-experiment.md)。该实验没有覆盖实际ADB全链路或其他平台。
 
 实验结束恢复上述普通debug APK，摘要未变；实际安装启动、MCP热重启成功，运行时错误查询为空，随后detach。清理本次夹具、重复APK和过期中间输出，净1,417,018,559字节；保留原始输入、测量回执及复用缓存。
+
+### 后续解码后端定位
+
+同日继续完成18轮单变量输入对照：明确Cluster长度、direct、noparse及若干AMediaCodec选项均未消除该AVD约一帧等待；保持HTTP/容器不变，仅改FFmpeg slice后输入到onVideo降至约1.6ms。最后4轮软件后端HTTP/append对照均通过20ms诊断门槛、像素与清理核验。完整方法、逐轮结果和未确定的SDK内部边界见上述专项记录；[官方客户端研究](../research/scrcpy-client-latency-path.md)解释参考路径。这不宣称所有Android都应软件解码，也不冒充完整首屏、物理设备或生产修复通过。
+
+诊断工具保留在 `codex/mdk-latency-diagnosis`（最终工具提交 `1cd5d1b`），生产未合入。4个相关Dart工具分析通过；恢复普通APK、热重启及runtime error查询通过，pid24365，随后detach。再次清理该阶段过期构建输出和夹具1,305,212,943字节；普通APK摘要及共享编译缓存保留。

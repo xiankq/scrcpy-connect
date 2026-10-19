@@ -1,8 +1,8 @@
-# MDK 内存输入对照实验
+# MDK 输入链路与解码延迟对照
 
 2026-10-19，实验分支 `codex/mdk-memory-input`，最终工具提交 `2f5123d`。实验代码未合入 `dev`，生产仍使用 Matroska localhost HTTP；没有新增生产播放模式，也没有修改社区原版 fvp 0.39.1 或 pub cache。
 
-结论：**Rust 经 MDK `stream:` / C API `appendBuffer` 直送 Matroska 已实际解码、渲染成功，但本轮没有测出值得替换现行 HTTP 的延迟或 CPU 收益。** 这证明该输入在指定 SDK/设备上可行，不是直播内存所有权、背压或跨平台生命周期已经满足生产要求的证明。接口依据及未明确契约见[输入链路研究](cross-platform-media-pipeline.md#2026-10-19-输入链路复核)。
+结论：**Rust 经 MDK `stream:` / C API `appendBuffer` 直送 Matroska 已实际解码、渲染成功；最初两组使用同一 AMediaCodec 后端，均出现约一帧等待，因此这组结果只能说明该后端下更换入口没有明显收益，不能说明94ms合理或是传输成本。** 随后的单变量对照将相同HTTP输入改用FFmpeg slice解码，输入到onVideo降至约1.6ms，等待范围已缩小到本机AMediaCodec解码/输出路径，详见下文。它不是直播内存所有权、背压或跨平台生命周期已经满足生产要求的证明。接口依据及未明确契约见[输入链路研究](cross-platform-media-pipeline.md#2026-10-19-输入链路复核)。
 
 ## 环境与输入
 
@@ -45,9 +45,52 @@ CPU按 `/proc/self/stat` 的 utime+stime、实际 wall 时间计算，设备 CLK
 
 HTTP prepare耗时8～16ms，append为3～5ms；这是准备回执，不是实际显示首帧。HTTP轮次峰值RSS为271.85～278.79MiB，append为274.88～276.71MiB；共享进程、固定夹具及解码器缓存随轮次变化，不能据此宣称内存占用改善。
 
-两组都表现出上一帧的 onVideo 紧跟下一帧输入：六轮该时间差P50为0.503～0.706ms，P95为2.344～3.949ms。**研究推论：容器边界读取、解封装或后续提交节拍比本机 HTTP 更值得优先排查。** 尚未分离 demux 和 codec 内部事件，不能把等待全部归因于某一个模块。
+两组都表现出上一帧的 onVideo 紧跟下一帧输入：六轮该时间差P50为0.503～0.706ms，P95为2.344～3.949ms。这曾使容器读取与后续提交节拍成为优先候选；下文实验中，明确Cluster长度、direct和noparse均没有改善，而更换解码后端显著改善。不能继续把这一相关性直接解释为容器必须等待下一帧。
 
 每轮计时后执行一次实际64×64像素读取，色块 counter oracle有效，并核对 snapshot PTS存在于解码回执；最终两组截图也已目视看到动态色块内容。截图与snapshot在性能计时后，不把截图捕获成功当作显示延迟测量。未测物理屏幕扫描、触控往返或完整 ADB 编码链路。
+
+## 同日继续定位：公共解码后端掩盖了输入差异
+
+诊断分支 `codex/mdk-latency-diagnosis`，配置工具提交 `b74e314`、偶数轮中位数修正 `1cd5d1b`。先对旧回执执行 `jq -e '.groups.http.inputP95Ms.median < 20 and .groups.append.inputP95Ms.median < 20' comparison.json`，稳定返回false/退出1；20ms是本次诊断预算，不是产品SLA或官方scrcpy保证。随后保持编码包、PTS、供数节拍和测量定义不变，逐项测试。
+
+第一项只把Cluster的未知长度VINT替换为实际长度，字节数、内部payload和时间戳不变；新夹具SHA-256 `ef187d382f7c6033f286e940b2edd53b3808151b128044b80096d47a6d84dbcb`。HTTP与append的P50/P95分别为94.408/163.541ms、94.508/166.855ms，没有改善，故不将该变换合入生产mux。
+
+其他项恢复原夹具 `b142de…188fb`，共用同一profile APK，SHA-256 `70d8e896539c47078d41220e3ac4de01e07fe642f08dc162d417f8d658e937c4`。两批合计12轮，全部完成真实像素和清理回执；每批按共同PTS窗口对照，分别均109帧。下表每项是指定轮次的P50/P95，不把单轮当作所有设备的统计分布。
+
+| 配置，其他参数保持不变 | 输入到onVideo P50 | P95 |
+| --- | ---: | ---: |
+| 原AMediaCodec async基线 | 95.055ms | 163.248ms |
+| 仅 `avformat.fflags=+noparse+nofillin` | 95.262ms | 164.455ms |
+| 仅 `avformat.avioflags=direct` | 95.158ms | 163.256ms |
+| 仅改用 `FFmpeg:thread_type=slice` | 1.606ms | 1.835ms |
+| FFmpeg slice再加 `avcodec.flags=+low_delay` | 1.591ms | 1.783ms |
+| AMediaCodec async，`surface=0` | 93.739ms | 163.335ms |
+| AMediaCodec async，`low_latency=1` | 95.440ms | 166.610ms |
+| AMediaCodec async，`image=0` | 93.409ms | 163.164ms |
+| AMediaCodec，`async=0` | 296.970ms | 413.040ms |
+
+第二批再次测试FFmpeg slice为1.587/1.912ms，前后AMediaCodec基线分别为94.532/163.245ms和94.853/163.800ms。实际decoder事件分别报告FFmpeg与AMediaCodec，没有将候选字符串当运行选择。`low_latency`、`direct`等配置无改善只说明本次调用的实际结果；MDK允许存储未知property，不能从设置未报错反推每个参数在内部均生效。
+
+最后用FFmpeg slice做 `HTTP, append, append, HTTP` 四轮对照，启用driver的P95小于20ms预算。四轮均通过预算、像素及停止清理断言，按同样109个共同PTS比较：
+
+| 轮次 | 输入 | P50 | P95 |
+| --- | --- | ---: | ---: |
+| 1 | HTTP | 1.586ms | 1.746ms |
+| 2 | append | 1.524ms | 1.674ms |
+| 3 | append | 1.520ms | 1.691ms |
+| 4 | HTTP | 1.561ms | 1.767ms |
+
+每组两轮的中位数取两个中心值的平均：HTTP为1.574/1.757ms，append为1.522/1.683ms。差异远小于最初约一帧等待，不支持以绕过HTTP解释或解决那94ms。完整回执为 `/tmp/connect-mdk-latency-software/run-YYAQXE/`；该批20ms断言实际返回true/退出0，未仅回放旧数值作通过声明。
+
+第一批原AMediaCodec首个编码帧进入到onVideo为342.167ms，软件slice为6.682ms，加low_delay为5.192ms。各轮prepare回执仅8～10ms，说明prepare不能代替首帧。这里仍不含部署、连接、被控编码器启动、Flutter/GPU与物理显示，不能写作整个远控首屏已优化到5ms。
+
+这份录像381帧跨36.35秒，帧间隔并非固定60fps。约一帧的等待在该输入下就会变成约94ms，不能机械外推为60fps下固定额外94ms；同样，静止前最后一帧被保留的问题也不能用平均fps掩盖。
+
+**可下的因果结论：同一HTTP、相同容器和包在FFmpeg路径可迅速交帧，最初高延迟的主要等待位于当前AVD所走的MDK AMediaCodec解码/输出边界。** 尚未获得系统codec输出可用、MDK取出输出与onVideo之间的独立时间点，因此不能唯一归因于goldfish驱动、MDK轮询或重排。软件对照不是所有Android设备都应默认软件解码的依据；生产没有据此强制切换后端。
+
+官方scrcpy的完整包直送、LOW_DELAY及默认不额外缓冲的源码依据，以及上述候选的反证，见[客户端路径研究](scrcpy-client-latency-path.md)。参考FFmpeg的Matroska H264 parser本就使用完整帧模式；未知Cluster可立即交付内部SimpleBlock。软件slice与slice+low_delay本次也近似，不能把本次改善再归因于后加的low_delay标志。
+
+本次回执：`/tmp/connect-mdk-finite-cluster/run-ZHEBVE/`、`/tmp/connect-mdk-latency-options/run-CISJSA/`、`/tmp/connect-mdk-latency-native/run-NMHSWY/`。诊断driver支持逐轮配置及 `CONNECT_MDK_INPUT_MAX_P95_US` 预算，写出原始回执后才判断超限，避免只以进程正常结束判定低延迟通过。生产修复、物理设备与完整首屏对照仍未完成。
 
 ## 失败记录与生命周期边界
 
@@ -85,6 +128,8 @@ dart tool/benchmark/native_input_compare.dart /tmp/connect-mdk-input-abba/run-XX
 
 原始归档：`/tmp/connect-e2e/product-packet-diagnostic/round-1-archive-AQYDHG/`。正式回执、每轮JSON/PNG、cleanup与comparison：`/tmp/connect-mdk-input-abba/run-RJPMZR/`，驱动日志`/tmp/connect-mdk-input-abba.log`。临时路径用于追溯本轮运行，不保证跨机器存在；上面的环境、输入摘要和结果表保留独立可读的记录。
 
-结束后回到 `dev`，普通 `lib/main.dart` APK已覆盖安装并启动，pid22980；MCP hot restart成功、runtime error查询为空。热重启时观察到两条FRB向旧isolate投递的failpost警告，未将其写作零告警。随后detach，普通应用仍运行。
+初次输入比较结束后回到 `dev`，普通 `lib/main.dart` APK已覆盖安装并启动，pid22980；MCP hot restart成功、runtime error查询为空。热重启时观察到两条FRB向旧isolate投递的failpost警告，未将其写作零告警。随后detach，普通应用仍运行。
 
 普通APK仍为125,062,865字节、SHA-256 `ab5fcf9b9d796d53297c3e290573de132c489cae87f1cf06474b03a0ae853967`。已删除测试夹具、重复profile APK、过期build/Flutter与native hook单元输出和临时分析脚本，净清理1,417,018,559字节；保留普通APK、原始录像与测量回执，以及共享原生/Rust/Gradle/pub复用缓存。既有模拟器、其他调试资源未停止或清理。
+
+继续定位阶段共18轮实际输入对照完成，其中最后4轮额外通过20ms诊断预算；该阶段不是生产AMediaCodec延迟修复。实验profile仍不支持hot restart，runtime error查询为空。结束再次回到 `dev`，普通APK覆盖安装、MCP hot restart通过、runtime error查询为空，detach后pid24365仍运行；APK摘要未变。清理该阶段重复profile包、过期build/Flutter/native hook单元输出和两份生成夹具，净1,305,212,943字节。保留原录像、逐轮回执及共享编译缓存，未停止既有模拟器。
