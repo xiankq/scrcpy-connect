@@ -30,7 +30,12 @@ class GroupedListView extends StatelessWidget {
     final rows = <Widget>[];
     void flush() {
       if (rows.isEmpty) return;
-      grouped.add(ContentPanel(child: Column(children: List<Widget>.of(rows))));
+      grouped.add(
+        ContentPanel(
+          padding: EdgeInsets.zero,
+          child: Column(children: List.of(rows)),
+        ),
+      );
       rows.clear();
     }
 
@@ -53,14 +58,16 @@ class GroupedListView extends StatelessWidget {
   }
 }
 
-/// A Cupertino switch keeps its intrinsic touch target even with large text.
+/// The compact control and the row's text keep independent minimum sizes.
 class ConnectSwitchRow extends StatelessWidget {
   const ConnectSwitchRow({
     super.key,
     required this.title,
     required this.value,
     required this.onChanged,
-    this.contentPadding = EdgeInsets.zero,
+    this.contentPadding = const EdgeInsets.symmetric(
+      horizontal: DesignTokens.spacingMd,
+    ),
   });
   final Widget title;
   final bool value;
@@ -71,21 +78,26 @@ class ConnectSwitchRow extends StatelessWidget {
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onChanged == null ? null : () => onChanged!(!value),
-      child: Padding(
-        padding: contentPadding.add(
-          const EdgeInsets.symmetric(vertical: DesignTokens.spacingXs),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: DesignTokens.componentRowHeight,
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: DefaultTextStyle(
-                style: Theme.of(context).textTheme.bodyLarge!,
-                child: title,
+        child: Padding(
+          padding: contentPadding.add(
+            const EdgeInsets.symmetric(vertical: DesignTokens.spacingTight),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: DefaultTextStyle(
+                  style: Theme.of(context).textTheme.bodyLarge!,
+                  child: title,
+                ),
               ),
-            ),
-            const SizedBox(width: DesignTokens.spacingSm),
-            ConnectSwitch(value: value, onChanged: onChanged),
-          ],
+              const SizedBox(width: DesignTokens.spacingSm),
+              ConnectSwitch(value: value, onChanged: onChanged),
+            ],
+          ),
         ),
       ),
     ),
@@ -119,20 +131,19 @@ class GroupedItem extends StatelessWidget {
             : DesignTokens.spacingZero,
       ),
     ),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingMd),
-      child: Column(
-        children: [
-          child,
-          if (child is! ActionRow && index < count - 1)
-            const Divider(
-              height: DesignTokens.spacingHairline,
-              indent:
-                  DesignTokens.componentFileIconSize +
-                  DesignTokens.componentRowGap,
-            ),
-        ],
-      ),
+    child: Column(
+      children: [
+        child,
+        if (child is! ActionRow && index < count - 1)
+          const Divider(
+            height: DesignTokens.spacingHairline,
+            indent:
+                DesignTokens.spacingMd +
+                DesignTokens.componentFileIconSize +
+                DesignTokens.componentRowGap,
+            endIndent: DesignTokens.spacingMd,
+          ),
+      ],
     ),
   );
 }

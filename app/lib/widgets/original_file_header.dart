@@ -10,7 +10,7 @@ class OriginalFileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.center,
     children: [
       FeatureIcon(
         kind == 'directory' ? LucideIcons.folder : LucideIcons.file,

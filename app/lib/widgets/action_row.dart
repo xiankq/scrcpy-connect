@@ -10,14 +10,21 @@ class ActionRow extends StatelessWidget {
     this.onTap,
     this.color,
     this.trailing,
+    this.contentPadding = const EdgeInsets.symmetric(
+      horizontal: DesignTokens.spacingMd,
+    ),
   });
   final IconData icon;
   final String title;
   final VoidCallback? onTap;
   final Color? color;
   final Widget? trailing;
+  final EdgeInsetsGeometry contentPadding;
   Color _iconColor(BuildContext context) {
     if (color != null) return ConnectTokens.accent(context, color!);
+    if (icon == LucideIcons.appWindow) {
+      return Theme.of(context).colorScheme.onSurface;
+    }
     final accent = switch (icon) {
       LucideIcons.folder ||
       LucideIcons.folderOpen ||
@@ -28,9 +35,6 @@ class ActionRow extends StatelessWidget {
       LucideIcons.usb ||
       LucideIcons.fileInput ||
       LucideIcons.fileOutput => ConnectTokens.amber,
-      LucideIcons.images ||
-      LucideIcons.image ||
-      LucideIcons.camera => ConnectTokens.coral,
       LucideIcons.phone || LucideIcons.phoneIncoming => ConnectTokens.mint,
       _ => ConnectTokens.blue,
     };
@@ -38,37 +42,23 @@ class ActionRow extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: DesignTokens.spacingXxs,
-        ),
-        leading: Icon(
-          icon,
-          color: _iconColor(context),
-          size: DesignTokens.componentIconSize,
-        ),
-        title: Text(title, style: Theme.of(context).textTheme.bodyLarge),
-        trailing:
-            trailing ??
-            (onTap == null
-                ? null
-                : const Icon(
-                    LucideIcons.chevronRight,
-                    size: DesignTokens.componentIconSmallSize,
-                  )),
-        onTap: onTap,
-      ),
-      PositionedDirectional(
-        start: DesignTokens.componentIconSize + DesignTokens.componentRowGap,
-        end: DesignTokens.spacingZero,
-        bottom: DesignTokens.spacingZero,
-        child: Divider(
-          height: DesignTokens.spacingHairline,
-          thickness: DesignTokens.spacingHairline,
-        ),
-      ),
-    ],
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: contentPadding,
+    minLeadingWidth: DesignTokens.componentIconSize,
+    leading: Icon(
+      icon,
+      color: _iconColor(context),
+      size: DesignTokens.componentIconSize,
+    ),
+    title: Text(title, style: Theme.of(context).textTheme.bodyLarge),
+    trailing:
+        trailing ??
+        (onTap == null
+            ? null
+            : const Icon(
+                LucideIcons.chevronRight,
+                size: DesignTokens.componentIconSmallSize,
+              )),
+    onTap: onTap,
   );
 }

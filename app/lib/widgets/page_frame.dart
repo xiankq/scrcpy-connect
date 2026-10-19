@@ -2,6 +2,7 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/widgets/recovery_status.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:design_system/design_system.dart';
 
 class PageFrame extends StatelessWidget {
@@ -77,8 +78,16 @@ class PageFrame extends StatelessWidget {
                       dimension: DesignTokens.componentIconButtonSize,
                       child: Glass(
                         radius: DesignTokens.roundedFull,
-                        child: BackButton(
-                          onPressed: () => closePage<void>(context),
+                        child: ActionIconTheme(
+                          data: ActionIconThemeData(
+                            backButtonIconBuilder: (context) => const Icon(
+                              LucideIcons.chevronLeft,
+                              size: DesignTokens.componentIconSize,
+                            ),
+                          ),
+                          child: BackButton(
+                            onPressed: () => closePage<void>(context),
+                          ),
                         ),
                       ),
                     ),
@@ -112,31 +121,49 @@ class PageFrame extends StatelessWidget {
         ),
         body: SafeArea(
           top: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) => Column(
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight / 2,
-                  ),
-                  child: const RecoveryStatus(),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: DesignTokens.componentPageContentMaxWidth,
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: constraints.maxHeight / 2,
+                      ),
+                      child: const RecoveryStatus(),
+                    ),
+                    Expanded(child: child),
+                  ],
                 ),
-                Expanded(child: child),
-              ],
+              ),
             ),
           ),
         ),
         bottomNavigationBar: bottom == null
             ? null
             : SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    DesignTokens.spacingMd,
-                    DesignTokens.spacingXs,
-                    DesignTokens.spacingMd,
-                    DesignTokens.spacingMd,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: 1,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: DesignTokens.componentPageContentMaxWidth,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DesignTokens.spacingMd,
+                        DesignTokens.spacingXs,
+                        DesignTokens.spacingMd,
+                        DesignTokens.spacingMd,
+                      ),
+                      child: SizedBox(width: double.infinity, child: bottom),
+                    ),
                   ),
-                  child: bottom,
                 ),
               ),
       );

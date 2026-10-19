@@ -1,11 +1,17 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 
-/// Root tabs use the same compact title and header rhythm as pushed pages.
+/// Root destinations lead with a display title; short viewports stay compact.
 class RootPageHeader extends StatelessWidget {
-  const RootPageHeader({super.key, required this.title, this.action});
+  const RootPageHeader({
+    super.key,
+    required this.title,
+    this.action,
+    this.compact = false,
+  });
   final String title;
   final Widget? action;
+  final bool compact;
   @override
   Widget build(BuildContext context) => ConstrainedBox(
     constraints: const BoxConstraints(
@@ -14,7 +20,12 @@ class RootPageHeader extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          child: Text(
+            title,
+            style: compact
+                ? Theme.of(context).textTheme.titleLarge
+                : Theme.of(context).textTheme.displaySmall,
+          ),
         ),
         ?action,
       ],

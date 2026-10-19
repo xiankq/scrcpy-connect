@@ -18,21 +18,43 @@ class FileRowTitle extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
     message: path,
     triggerMode: tooltipTriggerMode,
-    child: Row(
-      children: [
-        Expanded(child: Text(name)),
-        if (size != null) ...[
-          const SizedBox(width: DesignTokens.spacingXs),
-          Flexible(
-            child: Text(
-              size!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        ],
-      ],
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final actualSize = size;
+        if (actualSize == null) return Text(name);
+        final theme = Theme.of(context).textTheme;
+        final sizeStyle = theme.bodySmall;
+        final painter = TextPainter(
+          text: TextSpan(text: actualSize, style: sizeStyle),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout();
+        final sizeWidth = painter.width;
+        painter.dispose();
+        final minimumNameWidth = MediaQuery.textScalerOf(context)
+            .scale(theme.bodyLarge!.fontSize! * 4);
+        final sizeLabel = Text(actualSize, style: sizeStyle);
+        if (constraints.maxWidth <
+            minimumNameWidth + DesignTokens.spacingXs + sizeWidth) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(name),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: sizeLabel,
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: Text(name)),
+            const SizedBox(width: DesignTokens.spacingXs),
+            sizeLabel,
+          ],
+        );
+      },
     ),
   );
 }

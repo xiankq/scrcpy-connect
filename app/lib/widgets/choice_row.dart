@@ -9,19 +9,26 @@ class ChoiceRow<T> extends StatelessWidget {
     required this.groupValue,
     required this.onChanged,
     required this.title,
+    this.leading,
     this.contentPadding,
   });
   final T value;
   final T? groupValue;
   final ValueChanged<T?>? onChanged;
   final Widget title;
+  final Widget? leading;
   final EdgeInsetsGeometry? contentPadding;
   @override
   Widget build(BuildContext context) => Semantics(
     checked: value == groupValue,
     inMutuallyExclusiveGroup: true,
     child: ListTile(
-      contentPadding: contentPadding,
+      contentPadding:
+          contentPadding ??
+          const EdgeInsets.symmetric(horizontal: DesignTokens.spacingMd),
+      minLeadingWidth: DesignTokens.componentIconSize,
+      leading: leading,
+      titleTextStyle: Theme.of(context).textTheme.bodyLarge,
       enabled: onChanged != null,
       trailing: value == groupValue
           ? Icon(
