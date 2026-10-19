@@ -32,10 +32,6 @@ abstract final class ConnectTokens {
   static const glassDispersion = DesignTokens.componentGlassDispersion;
   static const glassMagnification = DesignTokens.componentGlassMagnification;
   static const glassSaturation = DesignTokens.componentGlassSaturation;
-  static const glassPanel = DesignTokens.colorGlassPanel;
-  static const glassPanelDark = DesignTokens.colorGlassPanelDark;
-  static const glassReflection = DesignTokens.colorGlassReflection;
-  static const glassReflectionDark = DesignTokens.colorGlassReflectionDark;
   static const glassEdge = DesignTokens.colorGlassEdge;
   static const glassEdgeDark = DesignTokens.colorGlassEdgeDark;
   static const shadow = DesignTokens.colorShadow;
@@ -387,6 +383,22 @@ class GlassPreferences extends InheritedWidget {
 /// Regular separates floating controls from content; clear belongs over media.
 enum GlassVariant { regular, clear }
 
+/// Preloads the single optical engine before the application is mounted.
+/// Await inside the application's startup error boundary. Unsupported backends
+/// keep their frosted fallback; supported backends propagate loading failures.
+abstract final class GlassMaterial {
+  static Future<void>? _initialization;
+
+  static Future<void> initialize() {
+    if (!ImageFilter.isShaderFilterSupported) return Future<void>.value();
+    return _initialization ??= liquid.LiquidGlassShaders.ensureLoaded()
+        .catchError((Object error, StackTrace stack) {
+          _initialization = null;
+          Error.throwWithStackTrace(error, stack);
+        });
+  }
+}
+
 class Glass extends StatelessWidget {
   const Glass({
     super.key,
@@ -395,12 +407,25 @@ class Glass extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.solid = false,
     this.variant = GlassVariant.regular,
-  });
+  }) : _interactive = false;
+
+  // Only the bounded 44-point icon control opts into the package's flex.
+  // Its touch implementation uses constraints.biggest as the rest footprint;
+  // enabling it on naturally sized bars would expand their layout.
+  const Glass._control({
+    required this.child,
+    required this.radius,
+    required this.variant,
+    required bool enabled,
+  }) : padding = EdgeInsets.zero,
+       solid = false,
+       _interactive = enabled;
   final Widget child;
   final double radius;
   final EdgeInsetsGeometry padding;
   final bool solid;
   final GlassVariant variant;
+  final bool _interactive;
 
   /// The package's standalone shader consumes this one optical profile.
   static liquid.LiquidGlassStyle optics({
@@ -411,7 +436,9 @@ class Glass extends StatelessWidget {
     final dark = brightness == Brightness.dark;
     final clear = variant == GlassVariant.clear;
     return liquid.LiquidGlassStyle(
-      shape: liquid.LiquidGlassShape.roundedRectangle(cornerRadius: radius),
+      shape: liquid.LiquidGlassShape.continuousRoundedRectangle(
+        cornerRadius: radius,
+      ),
       refractionIndex: ConnectTokens.glassRefractionIndex,
       refractionWidth: ConnectTokens.glassRefractionWidth,
       dispersion: ConnectTokens.glassDispersion,
@@ -460,32 +487,9 @@ class Glass extends StatelessWidget {
       decoration: BoxDecoration(
         color: opaque ? Theme.of(context).colorScheme.surface : null,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: opaque
-              ? Theme.of(context).colorScheme.outline
-              : (dark ? ConnectTokens.glassEdgeDark : ConnectTokens.glassEdge),
-        ),
-        gradient: opaque
-            ? null
-            : RadialGradient(
-                radius: 1,
-                transform: const _GlassProtectionTransform(),
-                // A shallow, neutral falloff keeps labels readable without
-                // painting a gray reflective band around the control.
-                colors: [
-                  if (variant == GlassVariant.clear)
-                    dark
-                        ? DesignTokens.colorGlassClearPanelDark
-                        : DesignTokens.colorGlassClearPanel
-                  else
-                    dark
-                        ? ConnectTokens.glassPanelDark
-                        : ConnectTokens.glassPanel,
-                  dark
-                      ? ConnectTokens.glassReflectionDark
-                      : ConnectTokens.glassReflection,
-                ],
-              ),
+        border: opaque
+            ? Border.all(color: Theme.of(context).colorScheme.outline)
+            : null,
       ),
       child: Material(
         type: MaterialType.transparency,
@@ -496,17 +500,44 @@ class Glass extends StatelessWidget {
     if (opaque) {
       // Accessibility preferences remove the optical work, rather than only
       // hiding a running shader behind an opaque decoration.
-      surface = content;
+      surface = ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: content,
+      );
     } else if (ImageFilter.isShaderFilterSupported) {
+      if (!liquid.LiquidGlassShaders.isLoadedFor(true)) {
+        throw StateError(
+          'Await GlassMaterial.initialize() before mounting glass controls.',
+        );
+      }
       surface = liquid.LiquidGlassLens(
         // No capture view, background screenshots or second optical engine.
         style: style,
+        touch: _interactive && !MediaQuery.disableAnimationsOf(context)
+            ? const liquid.LiquidGlassTouch(
+                flex: liquid.LiquidGlassFlex.subtle(),
+              )
+            : null,
         child: content,
       );
     } else {
-      surface = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur),
-        child: ColoredBox(color: base, child: content),
+      surface = ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: base,
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(
+                color: dark
+                    ? ConnectTokens.glassEdgeDark
+                    : ConnectTokens.glassEdge,
+              ),
+            ),
+            child: content,
+          ),
+        ),
       );
     }
     return DecoratedBox(
@@ -520,28 +551,9 @@ class Glass extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: surface,
-      ),
-    );
-  }
-}
-
-// Keep protection elliptical on wide navigation and narrow handles. Scaling
-// from the shortest side makes the falloff relative to the whole surface.
-class _GlassProtectionTransform extends GradientTransform {
-  const _GlassProtectionTransform();
-
-  @override
-  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
-    if (bounds.shortestSide <= 0) return null;
-    final sx = bounds.width / bounds.shortestSide;
-    final sy = bounds.height / bounds.shortestSide;
-    return Matrix4.diagonal3Values(sx, sy, 1)..setTranslationRaw(
-      bounds.center.dx * (1 - sx),
-      bounds.center.dy * (1 - sy),
-      0,
+      // The lens owns its continuous, deforming outline and child clipping.
+      // An outer rest-size clip would cut off its touch response.
+      child: surface,
     );
   }
 }
@@ -565,21 +577,25 @@ class GlassIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
-    child: Glass(
-      radius: DesignTokens.roundedFull,
-      variant: variant,
-      child: CupertinoButton(
-        padding: const EdgeInsets.all(DesignTokens.spacingSm),
-        minimumSize: const Size.square(DesignTokens.componentIconButtonSize),
-        onPressed: onPressed,
-        child: IconTheme(
-          data: IconThemeData(
-            size: DesignTokens.componentIconSize,
-            color: onPressed == null
-                ? Theme.of(context).disabledColor
-                : color ?? Theme.of(context).colorScheme.onSurface,
+    child: SizedBox.square(
+      dimension: DesignTokens.componentIconButtonSize,
+      child: Glass._control(
+        radius: DesignTokens.roundedFull,
+        variant: variant,
+        enabled: onPressed != null,
+        child: CupertinoButton(
+          padding: const EdgeInsets.all(DesignTokens.spacingSm),
+          minimumSize: const Size.square(DesignTokens.componentIconButtonSize),
+          onPressed: onPressed,
+          child: IconTheme(
+            data: IconThemeData(
+              size: DesignTokens.componentIconSize,
+              color: onPressed == null
+                  ? Theme.of(context).disabledColor
+                  : color ?? Theme.of(context).colorScheme.onSurface,
+            ),
+            child: icon,
           ),
-          child: icon,
         ),
       ),
     ),

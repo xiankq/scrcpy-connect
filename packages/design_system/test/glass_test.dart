@@ -53,6 +53,10 @@ void main() {
           variant: GlassVariant.clear,
         );
         for (final style in [regular, clear]) {
+          expect(
+            style.shape!.cornerStyle,
+            liquid.LiquidGlassCornerStyle.continuousRoundedRectangle,
+          );
           expect(style.refractionIndex, greaterThan(1.02));
           expect(style.refractionWidth, greaterThan(0));
           expect(style.specular!.thickness, greaterThan(0));
@@ -68,31 +72,72 @@ void main() {
     },
   );
 
-  test(
-    'clear media protection keeps matching text legible over extreme backdrops',
-    () {
-      for (final brightness in Brightness.values) {
-        final dark = brightness == Brightness.dark;
-        final backdrop = dark ? Colors.white : Colors.black;
-        final panel = dark
-            ? DesignTokens.colorGlassClearPanelDark
-            : DesignTokens.colorGlassClearPanel;
-        final text = dark ? Colors.white : Colors.black;
-        final material = Glass.optics(
-          brightness: brightness,
-          variant: GlassVariant.clear,
+  test('clear relies on the media layer for bright-background protection', () {
+    for (final backdrop in [Colors.white, Colors.black]) {
+      final material = Glass.optics(
+        brightness: Brightness.dark,
+        variant: GlassVariant.clear,
+      );
+      final center = Color.alphaBlend(
+        material.color,
+        Color.alphaBlend(DesignTokens.colorMediaShade, backdrop),
+      );
+      final a = Colors.white.computeLuminance();
+      final b = center.computeLuminance();
+      final ratio = a > b ? (a + .05) / (b + .05) : (b + .05) / (a + .05);
+      expect(ratio, greaterThanOrEqualTo(4.5));
+    }
+  });
+
+  testWidgets('translucent surfaces do not carry a second protection mask', (
+    tester,
+  ) async {
+    for (final brightness in Brightness.values) {
+      for (final variant in GlassVariant.values) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ConnectTokens.theme(brightness),
+            home: Center(
+              child: Glass(variant: variant, child: const Text('控制')),
+            ),
+          ),
         );
-        final center = Color.alphaBlend(
-          panel,
-          Color.alphaBlend(material.color, backdrop),
+        final decorations = tester.widgetList<DecoratedBox>(
+          find.descendant(
+            of: find.byType(Glass),
+            matching: find.byType(DecoratedBox),
+          ),
         );
-        final a = text.computeLuminance();
-        final b = center.computeLuminance();
-        final ratio = a > b ? (a + .05) / (b + .05) : (b + .05) / (a + .05);
-        expect(ratio, greaterThanOrEqualTo(4.5));
+        expect(
+          decorations.where(
+            (box) =>
+                box.decoration is BoxDecoration &&
+                (box.decoration as BoxDecoration).gradient != null,
+          ),
+          isEmpty,
+        );
       }
-    },
-  );
+    }
+  });
+
+  testWidgets('icon control keeps a bounded 44 point rest footprint', (
+    tester,
+  ) async {
+    await GlassMaterial.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: GlassIconButton(
+            icon: const Icon(Icons.add),
+            tooltip: '添加',
+            onPressed: () {},
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(Glass)), const Size(44, 44));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'floating navigation remains reachable with large text on a narrow screen',

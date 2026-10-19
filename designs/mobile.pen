@@ -191,27 +191,42 @@
           "reusable": true,
           "width": 354,
           "height": 72,
-          "fill": "$glass",
-          "cornerRadius": "$radius-full",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "cornerRadius": "$radius-full",
+          "stroke": "$transparent",
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "gap": "$space-xxs",
           "padding": "$space-xxs",
           "alignItems": "center",
@@ -414,7 +429,7 @@
           "fill": "$secondary",
           "textGrowth": "fixed-width",
           "width": 354,
-          "content": "黑色作为主题，彩色用于识别\n浅色默认，接听使用浅薄荷玻璃",
+          "content": "黑白主题，明亮语义点缀\n内容与浮动控制分层",
           "lineHeight": "$line-caption",
           "fontFamily": "$font-caption",
           "fontSize": "$size-caption",
@@ -1258,27 +1273,42 @@
           "reusable": true,
           "width": 52,
           "height": 52,
-          "fill": "$glass",
-          "cornerRadius": "$radius-full",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "cornerRadius": "$radius-full",
+          "stroke": "$transparent",
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "layout": "vertical",
           "gap": "$space-sm",
           "justifyContent": "center",
@@ -1316,32 +1346,47 @@
               "name": "侧边玻璃把手",
               "width": 12,
               "height": 52,
-              "fill": "$glass",
+              "fill": {
+                "type": "shader",
+                "enabled": true,
+                "url": "assets/liquid-glass.glsl",
+                "uniforms": {
+                  "u_ior": "$glass-refractionIndex",
+                  "u_refractionWidth": "$glass-refractionWidth",
+                  "u_blur": "$glass-blur",
+                  "u_tint": "$glass",
+                  "u_edgeLight": "$glass-edge",
+                  "u_specularThickness": "$glass-specularThickness",
+                  "u_specularSharpness": "$glass-specularSharpness",
+                  "u_specularAngle": "$glass-angle",
+                  "u_specularSpread": "$glass-specularSpread",
+                  "u_specularIntensity": "$glass-specularIntensity",
+                  "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                  "u_glowThickness": "$glass-glowThickness",
+                  "u_glowAngle": "$glass-glowAngle",
+                  "u_glowSpread": "$glass-glowSpread",
+                  "u_glowIntensity": "$glass-glowIntensity",
+                  "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
+                }
+              },
               "cornerRadius": [
                 999,
                 0,
                 0,
                 999
               ],
-              "stroke": "$glass-edge",
-              "strokeWidth": "$space-hairline",
+              "stroke": "$transparent",
               "strokeAlignment": "inner",
-              "effect": [
-                {
-                  "type": "background_blur",
-                  "radius": "$glass-blur"
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "$shadow",
+                "offset": {
+                  "x": 0,
+                  "y": "$glass-shadowOffset"
                 },
-                {
-                  "type": "shadow",
-                  "shadowType": "outer",
-                  "color": "$shadow",
-                  "offset": {
-                    "x": 0,
-                    "y": "$glass-shadowOffset"
-                  },
-                  "blur": "$glass-shadowBlur"
-                }
-              ],
+                "blur": "$glass-shadowBlur"
+              },
               "layout": "none",
               "children": [
                 {
@@ -1875,49 +1920,42 @@
           "name": "面板 / 玻璃上下文 · 共用外壳",
           "reusable": true,
           "width": 378,
-          "fill": [
-            "$glass",
-            {
-              "type": "gradient",
-              "gradientType": "radial",
-              "enabled": true,
-              "rotation": 0,
-              "size": {
-                "width": 1,
-                "height": 1
-              },
-              "colors": [
-                {
-                  "color": "$glass-panel",
-                  "position": 0
-                },
-                {
-                  "color": "$glass-reflection",
-                  "position": 1
-                }
-              ]
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
           "cornerRadius": "$radius-xl",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
+          "stroke": "$transparent",
           "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
             },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
-            }
-          ],
+            "blur": "$glass-shadowBlur"
+          },
           "layout": "vertical",
           "gap": "$space-md",
           "padding": "$space-lg",
@@ -2098,27 +2136,42 @@
               "enabled": false,
               "width": 290,
               "height": 44,
-              "fill": "$glass",
-              "cornerRadius": "$radius-full",
-              "stroke": "$glass-edge",
-              "strokeWidth": "$space-hairline",
-              "strokeAlignment": "inner",
-              "effect": [
-                {
-                  "type": "background_blur",
-                  "radius": "$glass-blur"
-                },
-                {
-                  "type": "shadow",
-                  "shadowType": "outer",
-                  "color": "$shadow",
-                  "offset": {
-                    "x": 0,
-                    "y": "$glass-shadowOffset"
-                  },
-                  "blur": "$glass-shadowBlur"
+              "fill": {
+                "type": "shader",
+                "enabled": true,
+                "url": "assets/liquid-glass.glsl",
+                "uniforms": {
+                  "u_ior": "$glass-refractionIndex",
+                  "u_refractionWidth": "$glass-refractionWidth",
+                  "u_blur": "$glass-blur",
+                  "u_tint": "$glass",
+                  "u_edgeLight": "$glass-edge",
+                  "u_specularThickness": "$glass-specularThickness",
+                  "u_specularSharpness": "$glass-specularSharpness",
+                  "u_specularAngle": "$glass-angle",
+                  "u_specularSpread": "$glass-specularSpread",
+                  "u_specularIntensity": "$glass-specularIntensity",
+                  "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                  "u_glowThickness": "$glass-glowThickness",
+                  "u_glowAngle": "$glass-glowAngle",
+                  "u_glowSpread": "$glass-glowSpread",
+                  "u_glowIntensity": "$glass-glowIntensity",
+                  "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
                 }
-              ],
+              },
+              "cornerRadius": "$radius-full",
+              "stroke": "$transparent",
+              "strokeAlignment": "inner",
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "$shadow",
+                "offset": {
+                  "x": 0,
+                  "y": "$glass-shadowOffset"
+                },
+                "blur": "$glass-shadowBlur"
+              },
               "gap": "$space-xs",
               "padding": "$space-sm",
               "alignItems": "center",
@@ -2433,27 +2486,42 @@
           "reusable": true,
           "width": 44,
           "height": 44,
-          "fill": "$glass",
-          "cornerRadius": "$radius-full",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "cornerRadius": "$radius-full",
+          "stroke": "$transparent",
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "layout": "vertical",
           "gap": "$space-zero",
           "justifyContent": "center",
@@ -2499,8 +2567,39 @@
                   "type": "ref",
                   "ref": "lufWX",
                   "name": "返回",
-                  "fill": "$transparent",
-                  "effect": [],
+                  "fill": {
+                    "type": "shader",
+                    "enabled": true,
+                    "url": "assets/liquid-glass.glsl",
+                    "uniforms": {
+                      "u_ior": "$glass-refractionIndex",
+                      "u_refractionWidth": "$glass-refractionWidth",
+                      "u_blur": "$glass-blur",
+                      "u_tint": "$glass",
+                      "u_edgeLight": "$glass-edge",
+                      "u_specularThickness": "$glass-specularThickness",
+                      "u_specularSharpness": "$glass-specularSharpness",
+                      "u_specularAngle": "$glass-angle",
+                      "u_specularSpread": "$glass-specularSpread",
+                      "u_specularIntensity": "$glass-specularIntensity",
+                      "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                      "u_glowThickness": "$glass-glowThickness",
+                      "u_glowAngle": "$glass-glowAngle",
+                      "u_glowSpread": "$glass-glowSpread",
+                      "u_glowIntensity": "$glass-glowIntensity",
+                      "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
+                    }
+                  },
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "$shadow",
+                    "offset": {
+                      "x": 0,
+                      "y": "$glass-shadowOffset"
+                    },
+                    "blur": "$glass-shadowBlur"
+                  },
                   "stroke": "$transparent",
                   "descendants": {
                     "alBho": {
@@ -2539,27 +2638,42 @@
                   "name": "导航操作组",
                   "enabled": false,
                   "height": 44,
-                  "fill": "$glass",
-                  "cornerRadius": "$radius-full",
-                  "stroke": "$glass-edge",
-                  "strokeWidth": "$space-hairline",
-                  "strokeAlignment": "inner",
-                  "effect": [
-                    {
-                      "type": "background_blur",
-                      "radius": "$glass-blur"
-                    },
-                    {
-                      "type": "shadow",
-                      "shadowType": "outer",
-                      "color": "$shadow",
-                      "offset": {
-                        "x": 0,
-                        "y": "$glass-shadowOffset"
-                      },
-                      "blur": "$glass-shadowBlur"
+                  "fill": {
+                    "type": "shader",
+                    "enabled": true,
+                    "url": "assets/liquid-glass.glsl",
+                    "uniforms": {
+                      "u_ior": "$glass-refractionIndex",
+                      "u_refractionWidth": "$glass-refractionWidth",
+                      "u_blur": "$glass-blur",
+                      "u_tint": "$glass",
+                      "u_edgeLight": "$glass-edge",
+                      "u_specularThickness": "$glass-specularThickness",
+                      "u_specularSharpness": "$glass-specularSharpness",
+                      "u_specularAngle": "$glass-angle",
+                      "u_specularSpread": "$glass-specularSpread",
+                      "u_specularIntensity": "$glass-specularIntensity",
+                      "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                      "u_glowThickness": "$glass-glowThickness",
+                      "u_glowAngle": "$glass-glowAngle",
+                      "u_glowSpread": "$glass-glowSpread",
+                      "u_glowIntensity": "$glass-glowIntensity",
+                      "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
                     }
-                  ],
+                  },
+                  "cornerRadius": "$radius-full",
+                  "stroke": "$transparent",
+                  "strokeAlignment": "inner",
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "$shadow",
+                    "offset": {
+                      "x": 0,
+                      "y": "$glass-shadowOffset"
+                    },
+                    "blur": "$glass-shadowBlur"
+                  },
                   "gap": "$space-zero",
                   "children": [
                     {
@@ -3465,101 +3579,6 @@
         },
         {
           "type": "frame",
-          "id": "M7YtSe",
-          "x": 482,
-          "y": 3330,
-          "name": "组件 / 玻璃功能工具栏",
-          "reusable": true,
-          "width": 354,
-          "height": 64,
-          "fill": "$glass",
-          "cornerRadius": "$radius-full",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
-            }
-          ],
-          "gap": "$space-xs",
-          "padding": "$space-xs",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "xBrIG",
-              "x": 0,
-              "y": 0,
-              "name": "实际项目状态",
-              "enabled": false,
-              "fill": "$text",
-              "textGrowth": "fixed-width",
-              "width": "fill_container(0)",
-              "content": "已选择 3 项",
-              "lineHeight": "$line-label",
-              "fontFamily": "$font-label",
-              "fontSize": "$size-label",
-              "fontWeight": "normal"
-            },
-            {
-              "id": "LZvSj",
-              "type": "ref",
-              "ref": "lufWX",
-              "name": "工具动作",
-              "fill": "$transparent",
-              "stroke": "$transparent",
-              "effect": [],
-              "descendants": {
-                "alBho": {
-                  "icon": "folder-plus",
-                  "fill": "$accent-amber"
-                }
-              }
-            },
-            {
-              "id": "c5CPVr",
-              "type": "ref",
-              "ref": "QXIw5",
-              "name": "主要动作",
-              "width": "fill_container",
-              "descendants": {
-                "mpPvv": {
-                  "content": "向手机发送文件"
-                }
-              }
-            },
-            {
-              "id": "FanWZ",
-              "type": "ref",
-              "ref": "lufWX",
-              "name": "附加工具",
-              "enabled": false,
-              "fill": "$transparent",
-              "stroke": "$transparent",
-              "effect": [],
-              "descendants": {
-                "alBho": {
-                  "icon": "share-2",
-                  "fill": "$text"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "gkDVd",
           "x": 964,
           "y": 3330,
@@ -3567,6 +3586,25 @@
           "reusable": true,
           "width": 354,
           "height": 56,
+          "fill": {
+            "type": "gradient",
+            "gradientType": "linear",
+            "enabled": true,
+            "rotation": 0,
+            "size": {
+              "height": 1
+            },
+            "colors": [
+              {
+                "color": "$media-shade",
+                "position": 0
+              },
+              {
+                "color": "$transparent",
+                "position": 1
+              }
+            ]
+          },
           "gap": "$space-xs",
           "padding": [
             "$space-tight",
@@ -3579,114 +3617,66 @@
               "type": "ref",
               "ref": "lufWX",
               "name": "关闭媒体预览",
-              "fill": [
-                "$glass-clear",
-                {
-                  "type": "gradient",
-                  "gradientType": "radial",
-                  "enabled": true,
-                  "rotation": 0,
-                  "size": {
-                    "width": 1,
-                    "height": 1
-                  },
-                  "colors": [
-                    {
-                      "color": "$glass-clear-panel",
-                      "position": 0
-                    },
-                    {
-                      "color": "$glass-reflection",
-                      "position": 1
-                    }
-                  ]
+              "fill": {
+                "type": "shader",
+                "enabled": true,
+                "url": "assets/liquid-glass.glsl",
+                "uniforms": {
+                  "u_ior": "$glass-refractionIndex",
+                  "u_refractionWidth": "$glass-refractionWidth",
+                  "u_blur": "$glass-clear-blur",
+                  "u_tint": "$glass-clear",
+                  "u_edgeLight": "$glass-edge",
+                  "u_specularThickness": "$glass-specularThickness",
+                  "u_specularSharpness": "$glass-specularSharpness",
+                  "u_specularAngle": "$glass-angle",
+                  "u_specularSpread": "$glass-specularSpread",
+                  "u_specularIntensity": "$glass-specularIntensity",
+                  "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                  "u_glowThickness": "$glass-glowThickness",
+                  "u_glowAngle": "$glass-glowAngle",
+                  "u_glowSpread": "$glass-glowSpread",
+                  "u_glowIntensity": "$glass-glowIntensity",
+                  "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
                 }
-              ],
-              "stroke": "$glass-edge",
-              "strokeWidth": "$space-hairline",
+              },
+              "stroke": "$transparent",
+              "strokeWidth": 0,
               "strokeAlignment": "inner",
-              "effect": [
-                {
-                  "type": "background_blur",
-                  "radius": 4
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "$shadow",
+                "offset": {
+                  "x": 0,
+                  "y": "$glass-shadowOffset"
                 },
-                {
-                  "type": "shadow",
-                  "shadowType": "outer",
-                  "color": "$shadow",
-                  "offset": {
-                    "x": 0,
-                    "y": "$glass-shadowOffset"
-                  },
-                  "blur": "$glass-shadowBlur"
-                }
-              ],
+                "blur": "$glass-shadowBlur"
+              },
               "descendants": {
                 "alBho": {
                   "icon": "chevron-left",
-                  "fill": "$text"
+                  "fill": "$white"
                 }
               }
             },
             {
               "type": "frame",
               "id": "tMKpJ",
-              "name": "文件名保护玻璃",
+              "name": "媒体文件名",
               "width": "fill_container",
-              "fill": [
-                "$glass-clear",
-                {
-                  "type": "gradient",
-                  "gradientType": "radial",
-                  "enabled": true,
-                  "rotation": 0,
-                  "size": {
-                    "width": 1,
-                    "height": 1
-                  },
-                  "colors": [
-                    {
-                      "color": "$glass-clear-panel",
-                      "position": 0
-                    },
-                    {
-                      "color": "$glass-reflection",
-                      "position": 1
-                    }
-                  ]
-                }
-              ],
+              "fill": "$transparent",
               "cornerRadius": "$radius-full",
-              "stroke": "$glass-edge",
-              "strokeWidth": "$space-hairline",
+              "stroke": "$transparent",
               "strokeAlignment": "inner",
-              "effect": [
-                {
-                  "type": "background_blur",
-                  "radius": 4
-                },
-                {
-                  "type": "shadow",
-                  "shadowType": "outer",
-                  "color": "$shadow",
-                  "offset": {
-                    "x": 0,
-                    "y": "$glass-shadowOffset"
-                  },
-                  "blur": "$glass-shadowBlur"
-                }
-              ],
-              "padding": [
-                "$space-xs",
-                "$space-sm"
-              ],
+              "padding": "$space-zero",
               "alignItems": "center",
               "children": [
                 {
                   "type": "text",
                   "id": "yXjRE",
                   "name": "文件名称",
-                  "fill": "$text",
+                  "fill": "$white",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
                   "content": "林间光影.jpg",
@@ -3702,49 +3692,42 @@
               "id": "QRJfU",
               "name": "保存与系统分享",
               "height": 44,
-              "fill": [
-                "$glass-clear",
-                {
-                  "type": "gradient",
-                  "gradientType": "radial",
-                  "enabled": true,
-                  "rotation": 0,
-                  "size": {
-                    "width": 1,
-                    "height": 1
-                  },
-                  "colors": [
-                    {
-                      "color": "$glass-clear-panel",
-                      "position": 0
-                    },
-                    {
-                      "color": "$glass-reflection",
-                      "position": 1
-                    }
-                  ]
+              "fill": {
+                "type": "shader",
+                "enabled": true,
+                "url": "assets/liquid-glass.glsl",
+                "uniforms": {
+                  "u_ior": "$glass-refractionIndex",
+                  "u_refractionWidth": "$glass-refractionWidth",
+                  "u_blur": "$glass-clear-blur",
+                  "u_tint": "$glass-clear",
+                  "u_edgeLight": "$glass-edge",
+                  "u_specularThickness": "$glass-specularThickness",
+                  "u_specularSharpness": "$glass-specularSharpness",
+                  "u_specularAngle": "$glass-angle",
+                  "u_specularSpread": "$glass-specularSpread",
+                  "u_specularIntensity": "$glass-specularIntensity",
+                  "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                  "u_glowThickness": "$glass-glowThickness",
+                  "u_glowAngle": "$glass-glowAngle",
+                  "u_glowSpread": "$glass-glowSpread",
+                  "u_glowIntensity": "$glass-glowIntensity",
+                  "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
                 }
-              ],
+              },
               "cornerRadius": "$radius-full",
-              "stroke": "$glass-edge",
-              "strokeWidth": "$space-hairline",
+              "stroke": "$transparent",
               "strokeAlignment": "inner",
-              "effect": [
-                {
-                  "type": "background_blur",
-                  "radius": 4
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "$shadow",
+                "offset": {
+                  "x": 0,
+                  "y": "$glass-shadowOffset"
                 },
-                {
-                  "type": "shadow",
-                  "shadowType": "outer",
-                  "color": "$shadow",
-                  "offset": {
-                    "x": 0,
-                    "y": "$glass-shadowOffset"
-                  },
-                  "blur": "$glass-shadowBlur"
-                }
-              ],
+                "blur": "$glass-shadowBlur"
+              },
               "children": [
                 {
                   "id": "zjSXJ",
@@ -3757,7 +3740,7 @@
                   "descendants": {
                     "alBho": {
                       "icon": "download",
-                      "fill": "$text"
+                      "fill": "$white"
                     }
                   }
                 },
@@ -3772,11 +3755,159 @@
                   "descendants": {
                     "alBho": {
                       "icon": "share-2",
-                      "fill": "$text"
+                      "fill": "$white"
                     }
                   }
                 }
               ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "UMqM7",
+          "x": 1446,
+          "y": 3000,
+          "name": "组件 / 自适应侧栏",
+          "reusable": true,
+          "width": 212,
+          "height": 700,
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
+            }
+          },
+          "cornerRadius": "$radius-lg",
+          "stroke": "$transparent",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
+          "layout": "vertical",
+          "gap": "$space-xs",
+          "padding": "$space-xs",
+          "children": [
+            {
+              "type": "frame",
+              "id": "oXz9e",
+              "name": "产品名称",
+              "width": "fill_container",
+              "layout": "vertical",
+              "padding": [
+                "$space-xl",
+                "$space-sm"
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "FMHJl",
+                  "name": "邻接",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "邻接",
+                  "lineHeight": "$line-title",
+                  "fontFamily": "$font-title",
+                  "fontSize": "$size-title",
+                  "fontWeight": "$weight-title"
+                }
+              ]
+            },
+            {
+              "id": "YR8B6",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "侧栏 / 设备",
+              "width": "fill_container",
+              "height": 56,
+              "padding": "$space-sm",
+              "cornerRadius": "$radius-full",
+              "fill": "$glass-selected",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "smartphone",
+                  "fill": "$primary"
+                },
+                "nyAaN": {
+                  "content": "设备",
+                  "fill": "$primary"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "trm3t",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "侧栏 / 传输",
+              "width": "fill_container",
+              "height": 56,
+              "padding": "$space-sm",
+              "cornerRadius": "$radius-full",
+              "fill": "$transparent",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "arrow-up-down",
+                  "fill": "$secondary"
+                },
+                "nyAaN": {
+                  "content": "传输",
+                  "fill": "$text"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "id": "xNQwz",
+              "type": "ref",
+              "ref": "OuAnF",
+              "name": "侧栏 / 设置",
+              "width": "fill_container",
+              "height": 56,
+              "padding": "$space-sm",
+              "cornerRadius": "$radius-full",
+              "fill": "$transparent",
+              "descendants": {
+                "n4qgqg": {
+                  "icon": "settings-2",
+                  "fill": "$secondary"
+                },
+                "nyAaN": {
+                  "content": "设置",
+                  "fill": "$text"
+                },
+                "kb9Ts": {
+                  "enabled": false
+                }
+              }
             }
           ]
         }
@@ -3991,26 +4122,42 @@
           "y": 770,
           "width": "fill_container",
           "height": 72,
-          "fill": "$glass",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "stroke": "$transparent",
+          "strokeWidth": 0,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "padding": "$space-xxs",
           "descendants": {
             "fQuah": {
@@ -4258,26 +4405,42 @@
           "y": 770,
           "width": "fill_container",
           "height": 72,
-          "fill": "$glass",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "stroke": "$transparent",
+          "strokeWidth": 0,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "padding": "$space-xxs",
           "descendants": {
             "fQuah": {
@@ -7238,17 +7401,6 @@
                   "fontFamily": "$font-heading",
                   "fontSize": "$size-heading",
                   "fontWeight": "$weight-heading"
-                },
-                {
-                  "type": "text",
-                  "id": "fJnxE",
-                  "name": "管理",
-                  "fill": "$secondary",
-                  "content": "管理",
-                  "lineHeight": "$line-caption",
-                  "fontFamily": "$font-caption",
-                  "fontSize": "$size-caption",
-                  "fontWeight": "$weight-caption"
                 }
               ]
             },
@@ -7266,13 +7418,49 @@
                 },
                 "n4qgqg": {
                   "icon": "smartphone",
-                  "fill": "$accent-mint"
+                  "fill": "$accent-blue"
                 },
                 "nyAaN": {
                   "content": "手机屏幕 · 已保留"
                 },
                 "kb9Ts": {
-                  "enabled": true
+                  "type": "frame",
+                  "id": "CcCIc",
+                  "name": "会话管理操作",
+                  "height": 44,
+                  "gap": "$space-zero",
+                  "children": [
+                    {
+                      "id": "bkOBI",
+                      "type": "ref",
+                      "ref": "lufWX",
+                      "name": "窗口工具",
+                      "fill": "$transparent",
+                      "stroke": "$transparent",
+                      "effect": [],
+                      "descendants": {
+                        "alBho": {
+                          "icon": "sliders-horizontal",
+                          "fill": "$text"
+                        }
+                      }
+                    },
+                    {
+                      "id": "Z0A8I",
+                      "type": "ref",
+                      "ref": "lufWX",
+                      "name": "关闭会话",
+                      "fill": "$transparent",
+                      "stroke": "$transparent",
+                      "effect": [],
+                      "descendants": {
+                        "alBho": {
+                          "icon": "x",
+                          "fill": "$text"
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             },
@@ -7307,10 +7495,46 @@
                   "fill": "$accent-blue"
                 },
                 "nyAaN": {
-                  "content": "笔记"
+                  "content": "笔记 · 运行中"
                 },
                 "kb9Ts": {
-                  "enabled": true
+                  "type": "frame",
+                  "id": "B2YuUG",
+                  "name": "会话管理操作",
+                  "height": 44,
+                  "gap": "$space-zero",
+                  "children": [
+                    {
+                      "id": "eSSUb",
+                      "type": "ref",
+                      "ref": "lufWX",
+                      "name": "窗口工具",
+                      "fill": "$transparent",
+                      "stroke": "$transparent",
+                      "effect": [],
+                      "descendants": {
+                        "alBho": {
+                          "icon": "sliders-horizontal",
+                          "fill": "$text"
+                        }
+                      }
+                    },
+                    {
+                      "id": "SNt0R",
+                      "type": "ref",
+                      "ref": "lufWX",
+                      "name": "关闭会话",
+                      "fill": "$transparent",
+                      "stroke": "$transparent",
+                      "effect": [],
+                      "descendants": {
+                        "alBho": {
+                          "icon": "x",
+                          "fill": "$text"
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             },
@@ -8172,26 +8396,42 @@
           "x": 16,
           "y": 770,
           "width": "fill_container",
-          "fill": "$glass",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "stroke": "$transparent",
+          "strokeWidth": 0,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "height": 72,
           "padding": "$space-xxs",
           "descendants": {
@@ -11301,26 +11541,42 @@
           "x": 16,
           "y": 770,
           "width": "fill_container",
-          "fill": "$glass",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "stroke": "$transparent",
+          "strokeWidth": 0,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "height": 72,
           "padding": "$space-xxs",
           "descendants": {
@@ -11689,26 +11945,42 @@
           "y": 770,
           "width": "fill_container",
           "height": 72,
-          "fill": "$glass",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "stroke": "$transparent",
+          "strokeWidth": 0,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "padding": "$space-xxs",
           "descendants": {
             "fQuah": {
@@ -12729,134 +13001,12 @@
           "padding": "$space-md",
           "children": [
             {
-              "type": "frame",
-              "id": "a0G95",
-              "name": "Home玻璃侧栏",
+              "id": "U05pQ",
+              "type": "ref",
+              "ref": "UMqM7",
+              "name": "Home自适应侧栏",
               "width": "fill_container",
-              "height": "fill_container",
-              "fill": "$glass",
-              "cornerRadius": "$radius-lg",
-              "stroke": "$glass-edge",
-              "strokeWidth": "$space-hairline",
-              "effect": [
-                {
-                  "type": "background_blur",
-                  "radius": "$glass-blur"
-                },
-                {
-                  "type": "shadow",
-                  "shadowType": "outer",
-                  "color": "$shadow",
-                  "offset": {
-                    "x": 0,
-                    "y": "$glass-shadowOffset"
-                  },
-                  "blur": "$glass-shadowBlur"
-                }
-              ],
-              "layout": "vertical",
-              "gap": "$space-xs",
-              "padding": "$space-xs",
-              "children": [
-                {
-                  "type": "frame",
-                  "id": "kWetO",
-                  "name": "产品名称",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "padding": [
-                    "$space-xl",
-                    "$space-sm"
-                  ],
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "ItbHg",
-                      "name": "邻接",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "邻接",
-                      "lineHeight": "$line-title",
-                      "fontFamily": "$font-title",
-                      "fontSize": "$size-title",
-                      "fontWeight": "$weight-title"
-                    }
-                  ]
-                },
-                {
-                  "id": "B2ZqK",
-                  "type": "ref",
-                  "ref": "OuAnF",
-                  "name": "侧栏 / 设备",
-                  "width": "fill_container",
-                  "height": 56,
-                  "padding": "$space-sm",
-                  "cornerRadius": "$radius-full",
-                  "fill": "$glass-selected",
-                  "descendants": {
-                    "n4qgqg": {
-                      "icon": "smartphone",
-                      "fill": "$primary"
-                    },
-                    "nyAaN": {
-                      "content": "设备",
-                      "fill": "$primary"
-                    },
-                    "kb9Ts": {
-                      "enabled": false
-                    }
-                  }
-                },
-                {
-                  "id": "PVQE0",
-                  "type": "ref",
-                  "ref": "OuAnF",
-                  "name": "侧栏 / 传输",
-                  "width": "fill_container",
-                  "height": 56,
-                  "padding": "$space-sm",
-                  "cornerRadius": "$radius-full",
-                  "fill": "$transparent",
-                  "descendants": {
-                    "n4qgqg": {
-                      "icon": "arrow-up-down",
-                      "fill": "$secondary"
-                    },
-                    "nyAaN": {
-                      "content": "传输",
-                      "fill": "$text"
-                    },
-                    "kb9Ts": {
-                      "enabled": false
-                    }
-                  }
-                },
-                {
-                  "id": "UZU4D",
-                  "type": "ref",
-                  "ref": "OuAnF",
-                  "name": "侧栏 / 设置",
-                  "width": "fill_container",
-                  "height": 56,
-                  "padding": "$space-sm",
-                  "cornerRadius": "$radius-full",
-                  "fill": "$transparent",
-                  "descendants": {
-                    "n4qgqg": {
-                      "icon": "settings-2",
-                      "fill": "$secondary"
-                    },
-                    "nyAaN": {
-                      "content": "设置",
-                      "fill": "$text"
-                    },
-                    "kb9Ts": {
-                      "enabled": false
-                    }
-                  }
-                }
-              ]
+              "height": "fill_container"
             }
           ]
         },
@@ -13043,134 +13193,12 @@
           "padding": "$space-md",
           "children": [
             {
-              "type": "frame",
-              "id": "ePK87",
-              "name": "Home玻璃侧栏",
+              "id": "QhSA8",
+              "type": "ref",
+              "ref": "UMqM7",
+              "name": "Home自适应侧栏",
               "width": "fill_container",
-              "height": "fill_container",
-              "fill": "$glass",
-              "cornerRadius": "$radius-lg",
-              "stroke": "$glass-edge",
-              "strokeWidth": "$space-hairline",
-              "effect": [
-                {
-                  "type": "background_blur",
-                  "radius": "$glass-blur"
-                },
-                {
-                  "type": "shadow",
-                  "shadowType": "outer",
-                  "color": "$shadow",
-                  "offset": {
-                    "x": 0,
-                    "y": "$glass-shadowOffset"
-                  },
-                  "blur": "$glass-shadowBlur"
-                }
-              ],
-              "layout": "vertical",
-              "gap": "$space-xs",
-              "padding": "$space-xs",
-              "children": [
-                {
-                  "type": "frame",
-                  "id": "E1oHx",
-                  "name": "产品名称",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "padding": [
-                    "$space-xl",
-                    "$space-sm"
-                  ],
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "RrhsV",
-                      "name": "邻接",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "邻接",
-                      "lineHeight": "$line-title",
-                      "fontFamily": "$font-title",
-                      "fontSize": "$size-title",
-                      "fontWeight": "$weight-title"
-                    }
-                  ]
-                },
-                {
-                  "id": "f9xIT",
-                  "type": "ref",
-                  "ref": "OuAnF",
-                  "name": "侧栏 / 设备",
-                  "width": "fill_container",
-                  "height": 56,
-                  "padding": "$space-sm",
-                  "cornerRadius": "$radius-full",
-                  "fill": "$glass-selected",
-                  "descendants": {
-                    "n4qgqg": {
-                      "icon": "smartphone",
-                      "fill": "$primary"
-                    },
-                    "nyAaN": {
-                      "content": "设备",
-                      "fill": "$primary"
-                    },
-                    "kb9Ts": {
-                      "enabled": false
-                    }
-                  }
-                },
-                {
-                  "id": "bMyef",
-                  "type": "ref",
-                  "ref": "OuAnF",
-                  "name": "侧栏 / 传输",
-                  "width": "fill_container",
-                  "height": 56,
-                  "padding": "$space-sm",
-                  "cornerRadius": "$radius-full",
-                  "fill": "$transparent",
-                  "descendants": {
-                    "n4qgqg": {
-                      "icon": "arrow-up-down",
-                      "fill": "$secondary"
-                    },
-                    "nyAaN": {
-                      "content": "传输",
-                      "fill": "$text"
-                    },
-                    "kb9Ts": {
-                      "enabled": false
-                    }
-                  }
-                },
-                {
-                  "id": "wceHq",
-                  "type": "ref",
-                  "ref": "OuAnF",
-                  "name": "侧栏 / 设置",
-                  "width": "fill_container",
-                  "height": 56,
-                  "padding": "$space-sm",
-                  "cornerRadius": "$radius-full",
-                  "fill": "$transparent",
-                  "descendants": {
-                    "n4qgqg": {
-                      "icon": "settings-2",
-                      "fill": "$secondary"
-                    },
-                    "nyAaN": {
-                      "content": "设置",
-                      "fill": "$text"
-                    },
-                    "kb9Ts": {
-                      "enabled": false
-                    }
-                  }
-                }
-              ]
+              "height": "fill_container"
             }
           ]
         },
@@ -14496,7 +14524,10 @@
               "fontFamily": "$font-heading"
             },
             "BiHE4": {
-              "enabled": true
+              "enabled": true,
+              "fill": "$surface",
+              "stroke": "$outline",
+              "strokeWidth": "$space-hairline"
             },
             "eVp4v": {
               "enabled": true,
@@ -14635,24 +14666,18 @@
           "name": "全局导航",
           "x": 16,
           "y": 770,
-          "fill": "$glass",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
+          "fill": "$surface",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
             },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
-            }
-          ],
-          "stroke": "$glass-edge",
+            "blur": "$glass-shadowBlur"
+          },
+          "stroke": "$outline",
           "width": "fill_container",
           "height": 72,
           "strokeWidth": "$space-hairline",
@@ -15161,26 +15186,42 @@
           "y": 770,
           "width": "fill_container",
           "height": 72,
-          "fill": "$glass",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "stroke": "$transparent",
+          "strokeWidth": 0,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "padding": "$space-xxs",
           "descendants": {
             "fQuah": {
@@ -15452,26 +15493,42 @@
           "y": 770,
           "width": "fill_container",
           "height": 72,
-          "fill": "$glass",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "stroke": "$transparent",
+          "strokeWidth": 0,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "padding": "$space-xxs",
           "descendants": {
             "fQuah": {
@@ -15716,26 +15773,42 @@
           "y": 770,
           "width": "fill_container",
           "height": 72,
-          "fill": "$glass",
-          "stroke": "$glass-edge",
-          "strokeWidth": "$space-hairline",
-          "strokeAlignment": "inner",
-          "effect": [
-            {
-              "type": "background_blur",
-              "radius": "$glass-blur"
-            },
-            {
-              "type": "shadow",
-              "shadowType": "outer",
-              "color": "$shadow",
-              "offset": {
-                "x": 0,
-                "y": "$glass-shadowOffset"
-              },
-              "blur": "$glass-shadowBlur"
+          "fill": {
+            "type": "shader",
+            "enabled": true,
+            "url": "assets/liquid-glass.glsl",
+            "uniforms": {
+              "u_ior": "$glass-refractionIndex",
+              "u_refractionWidth": "$glass-refractionWidth",
+              "u_blur": "$glass-blur",
+              "u_tint": "$glass",
+              "u_edgeLight": "$glass-edge",
+              "u_specularThickness": "$glass-specularThickness",
+              "u_specularSharpness": "$glass-specularSharpness",
+              "u_specularAngle": "$glass-angle",
+              "u_specularSpread": "$glass-specularSpread",
+              "u_specularIntensity": "$glass-specularIntensity",
+              "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+              "u_glowThickness": "$glass-glowThickness",
+              "u_glowAngle": "$glass-glowAngle",
+              "u_glowSpread": "$glass-glowSpread",
+              "u_glowIntensity": "$glass-glowIntensity",
+              "u_glowOppositeIntensity": "$glass-glowOppositeIntensity"
             }
-          ],
+          },
+          "stroke": "$transparent",
+          "strokeWidth": 0,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "$shadow",
+            "offset": {
+              "x": 0,
+              "y": "$glass-shadowOffset"
+            },
+            "blur": "$glass-shadowBlur"
+          },
           "padding": "$space-xxs",
           "descendants": {
             "fQuah": {
@@ -18018,14 +18091,14 @@
               "id": "KOnCl",
               "type": "ref",
               "ref": "QXIw5",
-              "name": "修正端口后连接",
+              "name": "提交并验证端口",
               "width": "fill_container",
-              "fill": "$tint",
+              "fill": "$primary-action",
               "height": 44,
               "descendants": {
                 "mpPvv": {
-                  "content": "修正端口后连接",
-                  "fill": "$secondary"
+                  "content": "连接",
+                  "fill": "$on-primary"
                 }
               }
             },
@@ -21947,229 +22020,104 @@
               ],
               "children": [
                 {
-                  "type": "frame",
-                  "id": "Hw3ov",
+                  "id": "x2eAa",
+                  "type": "ref",
+                  "ref": "OuAnF",
                   "name": "分辨率上限",
                   "width": "fill_container",
-                  "height": 48,
-                  "gap": "$space-sm",
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "XlN8m",
-                      "name": "分辨率上限",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
+                  "descendants": {
+                    "i9kceM": {
+                      "enabled": false
+                    },
+                    "nyAaN": {
                       "content": "分辨率上限",
-                      "lineHeight": "$line-body",
-                      "fontFamily": "$font-body",
-                      "fontSize": "$size-body",
-                      "fontWeight": "normal"
+                      "fontWeight": "$weight-body"
                     },
-                    {
-                      "type": "text",
-                      "id": "HIjhi",
-                      "name": "当前值",
-                      "fill": "$secondary",
-                      "content": "1080p",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "icon",
-                      "id": "X3DrC",
-                      "name": "修改分辨率上限",
-                      "width": 16,
-                      "height": 16,
-                      "icon": "chevron-right",
-                      "library": "lucide",
-                      "fill": "$secondary"
+                    "kQv79": {
+                      "enabled": true,
+                      "content": "1080p"
                     }
-                  ]
+                  }
                 },
                 {
-                  "type": "frame",
-                  "id": "F6fzlb",
+                  "id": "S1sLuW",
+                  "type": "ref",
+                  "ref": "OuAnF",
                   "name": "帧率",
                   "width": "fill_container",
-                  "height": 48,
-                  "gap": "$space-sm",
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "kSEQu",
-                      "name": "帧率",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
+                  "descendants": {
+                    "i9kceM": {
+                      "enabled": false
+                    },
+                    "nyAaN": {
                       "content": "帧率",
-                      "lineHeight": "$line-body",
-                      "fontFamily": "$font-body",
-                      "fontSize": "$size-body",
-                      "fontWeight": "normal"
+                      "fontWeight": "$weight-body"
                     },
-                    {
-                      "type": "text",
-                      "id": "MwVum",
-                      "name": "当前值",
-                      "fill": "$secondary",
-                      "content": "60 fps",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "icon",
-                      "id": "hCapv",
-                      "name": "修改帧率",
-                      "width": 16,
-                      "height": 16,
-                      "icon": "chevron-right",
-                      "library": "lucide",
-                      "fill": "$secondary"
+                    "kQv79": {
+                      "enabled": true,
+                      "content": "60 fps"
                     }
-                  ]
+                  }
                 },
                 {
-                  "type": "frame",
-                  "id": "lGeod",
+                  "id": "D3FJV1",
+                  "type": "ref",
+                  "ref": "OuAnF",
                   "name": "码率",
                   "width": "fill_container",
-                  "height": 48,
-                  "gap": "$space-sm",
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "yZhSY",
-                      "name": "码率",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
+                  "descendants": {
+                    "i9kceM": {
+                      "enabled": false
+                    },
+                    "nyAaN": {
                       "content": "码率",
-                      "lineHeight": "$line-body",
-                      "fontFamily": "$font-body",
-                      "fontSize": "$size-body",
-                      "fontWeight": "normal"
+                      "fontWeight": "$weight-body"
                     },
-                    {
-                      "type": "text",
-                      "id": "k9aej8",
-                      "name": "当前值",
-                      "fill": "$secondary",
-                      "content": "8 Mbps",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "icon",
-                      "id": "CMo68",
-                      "name": "修改码率",
-                      "width": 16,
-                      "height": 16,
-                      "icon": "chevron-right",
-                      "library": "lucide",
-                      "fill": "$secondary"
+                    "kQv79": {
+                      "enabled": true,
+                      "content": "8 Mbps"
                     }
-                  ]
+                  }
                 },
                 {
-                  "type": "frame",
-                  "id": "d5sgu",
+                  "id": "p1F7W",
+                  "type": "ref",
+                  "ref": "OuAnF",
                   "name": "编码格式",
                   "width": "fill_container",
-                  "height": 48,
-                  "gap": "$space-sm",
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "jpICW",
-                      "name": "编码格式",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
+                  "descendants": {
+                    "i9kceM": {
+                      "enabled": false
+                    },
+                    "nyAaN": {
                       "content": "编码格式",
-                      "lineHeight": "$line-body",
-                      "fontFamily": "$font-body",
-                      "fontSize": "$size-body",
-                      "fontWeight": "normal"
+                      "fontWeight": "$weight-body"
                     },
-                    {
-                      "type": "text",
-                      "id": "x1a4Q",
-                      "name": "当前值",
-                      "fill": "$secondary",
-                      "content": "H.264",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "icon",
-                      "id": "KNVjV",
-                      "name": "修改编码格式",
-                      "width": 16,
-                      "height": 16,
-                      "icon": "chevron-right",
-                      "library": "lucide",
-                      "fill": "$secondary"
+                    "kQv79": {
+                      "enabled": true,
+                      "content": "H.264"
                     }
-                  ]
+                  }
                 },
                 {
-                  "type": "frame",
-                  "id": "WpZ9g",
+                  "id": "O8Zdsl",
+                  "type": "ref",
+                  "ref": "OuAnF",
                   "name": "视频编码器",
                   "width": "fill_container",
-                  "height": 48,
-                  "gap": "$space-sm",
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "Ar16a",
-                      "name": "视频编码器",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
+                  "descendants": {
+                    "i9kceM": {
+                      "enabled": false
+                    },
+                    "nyAaN": {
                       "content": "视频编码器",
-                      "lineHeight": "$line-body",
-                      "fontFamily": "$font-body",
-                      "fontSize": "$size-body",
-                      "fontWeight": "normal"
+                      "fontWeight": "$weight-body"
                     },
-                    {
-                      "type": "text",
-                      "id": "hGcgN",
-                      "name": "当前值",
-                      "fill": "$secondary",
-                      "content": "自动",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "icon",
-                      "id": "Qz8GF",
-                      "name": "修改视频编码器",
-                      "width": 16,
-                      "height": 16,
-                      "icon": "chevron-right",
-                      "library": "lucide",
-                      "fill": "$secondary"
+                    "kQv79": {
+                      "enabled": true,
+                      "content": "自动"
                     }
-                  ]
+                  }
                 }
               ]
             }
@@ -31202,23 +31150,6 @@
         }
       ]
     },
-    "glass-reflection": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#ffffff08",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#1c1c1e08",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
-    },
     "glass-action": {
       "type": "color",
       "value": [
@@ -31247,23 +31178,6 @@
         },
         {
           "value": "#ffffff1f",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
-    },
-    "glass-panel": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#ffffff33",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#1c1c1e33",
           "theme": {
             "mode": "dark"
           }
@@ -31365,23 +31279,6 @@
         },
         {
           "value": "#f2f2f4",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
-    },
-    "glass-clear-panel": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#ffffff80",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#00000080",
           "theme": {
             "mode": "dark"
           }
@@ -31590,6 +31487,10 @@
     "glass-glowOppositeIntensity": {
       "type": "number",
       "value": 0.5
+    },
+    "glass-clear-blur": {
+      "type": "number",
+      "value": 4
     }
   },
   "fileToken": "a093725f-869e-4791-abe1-22c1bab505db"

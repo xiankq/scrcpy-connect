@@ -9,15 +9,15 @@ only supplies the Dart emitter.
 From the repository root (Node 18+ and the workspace Dart SDK must be on PATH):
 
 ```sh
-npm ci --ignore-scripts --prefix tool/design_tokens
-node tool/design_tokens/generate.mjs
-node tool/design_tokens/generate.mjs --check
-npm test --prefix tool/design_tokens
-npm run lint --prefix tool/design_tokens
+rtk proxy npm ci --ignore-scripts --prefix tool/design_tokens
+rtk proxy node tool/design_tokens/generate.mjs
+rtk proxy node tool/design_tokens/generate.mjs --check
+rtk proxy npm test --prefix tool/design_tokens
+rtk proxy npm run lint --prefix tool/design_tokens
 ```
 
-Edit `designs/design.md`, then regenerate. Commit the generated Dart file and
-the npm lockfile. `--check` regenerates and formats in memory, compares exact
+Edit `designs/design.md`, then regenerate; never edit `design_tokens.g.dart`
+directly. Keep generated output and the npm lockfile with their source changes. `--check` regenerates and formats in memory, compares exact
 bytes, and fails without writing source files when output is missing or stale.
 
 The emitter supports colors including alpha, typography, spacing, rounding,
@@ -37,3 +37,7 @@ tracking come from generated constants.
 Official lint warnings remain visible: project optical/layout extensions are
 accepted by the explicit emitter contract, and official orphan-color checks
 only inspect DESIGN.md components rather than Flutter theme references.
+
+The emitter owns token translation only. Material backend selection and startup
+initialization belong to `design_system` and `lib/main.dart`; the static Pencil
+shader is not input to this generator. See the [toolchain contract](../../docs/implementation/repository-tooling.md).

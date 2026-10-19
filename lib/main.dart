@@ -17,6 +17,7 @@ Future<void> main() async {
     },
   );
   try {
+    await GlassMaterial.initialize();
     final dependencies = await bootstrapApplication();
     runApp(
       ProviderScope(
