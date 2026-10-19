@@ -11,6 +11,6 @@
 | [交互规则](interaction-rules.md) | 远控返回与退出、窗口生命周期、声音、剪贴板、提交保护与恢复 |
 | [流程覆盖](coverage.md) | 各流程已有代表状态、缺口及验收边界 |
 
-产品规则在上述对应文档维护；实施报告记录特定版本的结果和证据，不反向替代规格。当前画布页面、母组件、变量与源码页面的统计及视觉复核边界统一见 [iOS 逐页视觉审计](../../docs/implementation/ios-visual-audit.md)，运行证据见[运行验收](../../docs/implementation/validation.md)。Pencil 的一个 Frame 可以表示同一产品页面的不同状态、抽屉或系统授权示意，不要求逐 Frame 建立产品路由；当前源码路由以实际实现为准。
+产品规则在上述对应文档维护；实施报告记录特定版本的结果和证据，不反向替代规格。当前源稿组织、组件还原与并排对照见[设计还原记录](../../docs/implementation/design-fidelity.md)；重构前的页面清点与视觉复核保留在 [iOS 逐页视觉审计](../../docs/implementation/ios-visual-audit.md)，运行证据见[运行验收](../../docs/implementation/validation.md)。Pencil 的一个 Frame 可以表示同一产品页面的不同状态、抽屉或系统授权示意，不要求逐 Frame 建立产品路由；当前源码路由以实际实现为准。
 
 产品目标、源码已实现行为、静态视觉证据与物理设备验证分别判断。存在入口、设计页面或自动化通过记录，均不能单独证明所有设备已支持相应能力。
