@@ -83,13 +83,13 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 校验：`python3 -m unittest discover -s tool/e2e/video_fixture -p test_analyze_codec_trace.py`。
 
 
-真实视频断网恢复使用`test_driver/video_recovery.dart`和
+真实视频断网恢复使用`tool/driver/video_recovery.dart`和
 `integration_test/video_recovery_test.dart`。沿用上述ADB/双设备/fixture环境，
 设置`CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-recovery`，在仓库根目录运行：
 
 ```sh
 flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/video_recovery.dart \
+  --driver=tool/driver/video_recovery.dart \
   --target=integration_test/video_recovery_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=25557
@@ -109,8 +109,8 @@ proxy-events.json、cleanup.json及截图仅存/tmp；EOF代理不代替物理�
 原30秒自动恢复、新session、真实Flutter图案0→1和停止后不重建断言均保留。
 完整命令、失败覆盖和证据见[连接健康验收](../../../docs/implementation/connection-health.md#实际adbd与可见视频的应用停转故障2026-10-18)。
 
-普通调度性能入口为`benchmark/live_video_performance.dart`，host为
-`test_driver/live_video_performance.dart`。窗口校验默认继续使用PNG；可设置
+普通调度性能入口为`tool/benchmark/live_video_performance.dart`，host为
+`tool/driver/live_video_performance.dart`。窗口校验默认继续使用PNG；可设置
 `CONNECT_E2E_SCREEN_CAPTURE=raw`取实际Android窗口的原始RGBA。该路径严格要求
 现代16字节头／RGBA8888／精确长度与字节上限，不支持的格式保留原件并失败，不猜测
 布局。两条路径均从实际Texture矩形核对同一计数器，不用MDK snapshot替代合成窗口。

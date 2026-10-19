@@ -18,7 +18,7 @@ import 'package:scrcpy_connect/services/file_actions.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-/// Run with test_driver/document_conflict.dart. The host controls only the real
+/// Run with tool/driver/document_conflict.dart. The host controls only the real
 /// Android picker and isolated public files; every product action uses app.main.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

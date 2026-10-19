@@ -63,7 +63,7 @@ provider 查询或读取异常均失败。fixture 只处理 `ACTION_SEND`，不�
 
 ## 自动相册原件交付
 
-自动host入口为`test_driver/content_delivery.dart`，目标为
+自动host入口为`tool/driver/content_delivery.dart`，目标为
 `integration_test/content_delivery_test.dart`。默认`text`从文件详情取用；
 `image`／`video`必须同时设置host环境变量`CONNECT_E2E_CONTENT_KIND`和
 同名`--dart-define`，再用`CONNECT_E2E_FFMPEG`指定实际host FFmpeg绝对路径。

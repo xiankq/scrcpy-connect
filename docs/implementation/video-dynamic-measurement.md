@@ -80,8 +80,8 @@ relay和呈现边界定位，不继续用增加AVD资源当产品修复。
 中位10.5ms。这不是一个阻塞1.8秒的snapshot，也不是目标应用收到输入／绘制完成
 的ACK；当前关闭trace的结果不能唯一定位队列。输入计时仍含snapshot轮询成本。
 
-复现入口为 `benchmark/live_video_performance.dart` 与
-`test_driver/live_video_performance.dart`，沿用[普通调度启动](video-performance.md#普通调度基准与解码路径对照2026-10-18)，
+复现入口为 `tool/benchmark/live_video_performance.dart` 与
+`tool/driver/live_video_performance.dart`，沿用[普通调度启动](video-performance.md#普通调度基准与解码路径对照2026-10-18)，
 设置decoder=default、ROUNDS=3、TRANSITIONS=8、1280／60／8000000；host额外设置
 `CONNECT_E2E_VIDEO_MOTION=true`、`CONNECT_E2E_SCREEN_CAPTURE=raw`、
 `CONNECT_E2E_DIAGNOSTIC_SURFACE_MS=15000`。每次使用新capture目录，不覆盖失败。

@@ -130,7 +130,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/notification-reply \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/notification_reply.dart \
+  --driver=tool/driver/notification_reply.dart \
   --target=integration_test/notification_reply_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556

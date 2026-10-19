@@ -218,7 +218,7 @@ Gradle／CMake／SDK缓存及/tmp原始证据。清理清单
 
 ## 实际adbd与可见视频的应用停转故障（2026-10-18）
 
-`test_driver/video_recovery.dart` 新增 `CONNECT_E2E_RECOVERY_FAULT=blackhole`，默认
+`tool/driver/video_recovery.dart` 新增 `CONNECT_E2E_RECOVERY_FAULT=blackhole`，默认
 EOF模式保留。测试proxy提取到support：只对故障注入时的唯一旧连接保持读取并
 丢弃双向数据，不主动destroy或注入EOF，不保存ADB内容；新连接正常转发。
 每次转发flush保留背压，注入唤醒旧flush等待后继续排空，最多遗留已排队的那个chunk。
@@ -231,7 +231,7 @@ pair；两秒内关闭黑洞与释放监听端口。另验证cleanup生成的EOF
 
 ```sh
 rtk proxy /home/xiankq/flutter/bin/dart \
- test_driver/support/adb_fault_proxy_tcp_test.dart
+ tool/driver/support/adb_fault_proxy_tcp_test.dart
 ```
 
 Driver在清理前保存故障回执并要求两个方向实际drop均大于0，注入关闭计数0，两个
@@ -271,7 +271,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-application-stall-new \
  FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
  /home/xiankq/flutter/bin/flutter drive -d emulator-5554 \
- --driver=test_driver/video_recovery.dart --target=integration_test/video_recovery_test.dart
+ --driver=tool/driver/video_recovery.dart --target=integration_test/video_recovery_test.dart
 ```
 
 去掉FAULT环境变量并换新证据目录即默认EOF控制。本轮三个driver文件Dart分析无问题，

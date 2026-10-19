@@ -22,7 +22,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5558 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/first-pairing \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/first_pairing.dart \
+  --driver=tool/driver/first_pairing.dart \
   --target=integration_test/first_pairing_test.dart
 ```
 

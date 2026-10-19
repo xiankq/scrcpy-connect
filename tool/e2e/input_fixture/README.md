@@ -23,7 +23,7 @@ rtk proxy env CONNECT_E2E_DEVICE=emulator-5554 \
   CONNECT_E2E_ACTIVITY_FIXTURE=/tmp/connect-input-fixture/input-fixture.apk \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/shared-audio-recreate \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/integration_test.dart \
+  --driver=tool/driver/integration_test.dart \
   --target=integration_test/audio_lifecycle_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \

@@ -56,7 +56,7 @@ Ubuntu 24.04 x86_64；Rust 1.99.1；Flutter 3.47.6 / Dart 3.13.5；Java 21；And
 
 ```sh
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e flutter drive \
-  --driver=test_driver/integration_test.dart \
+  --driver=tool/driver/integration_test.dart \
   --target=integration_test/product_flow_test.dart -d emulator-5554 \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556
@@ -151,7 +151,7 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 - 指定诊断/画质6项回归先红后绿；新增旧页面30秒SnackBar隔离测试先红后绿。整合后应用全量83项通过，严格全仓Flutter分析无问题，格式/diff通过。整合首轮遗漏confirm导入造成编译失败，修正后重新全量通过，日志`/tmp/connect-reaudit-app-tests-final.log`。
 - 使用本文件Android E2E命令，把capture目录设为`/tmp/connect-e2e/requirements-reaudit-final`。本次20秒真实退出0：手动连接/非法端口校验、真实文件目录、实际设备详情→诊断、实际画质页首次H.265选择、下一会话确实H.265且`firstFrameDecoded=true/evidence=mdk.snapshot`，全屏/触控/退出拖动吸附展开/返回均通过。诊断、编码选择和最终远控图已目视；日志`/tmp/connect-requirements-reaudit-fullscreen-final.log`，result.json的产品完成回执true。
 - 实际H.265码流230×512，截图仍明显低清；仅能证明页面选择到实际解码，不是视觉质量或低延迟验收。前一轮截图发现本地保存提示跨路由覆盖画面，独立作用域修复后最终截图已无此遮挡。动态玻璃/大字/读屏及完整IME仍未通过。
-- `product_flow_test.dart`不再在缺端点时静默成功。正常完整结束才产出`productAcceptanceComplete=true`；通用driver要求该回执，保留独立audio/background/clipboard/documents模式。纯Dart契约`test_driver/integration_test_contract_test.dart`通过，`--missing-product`真实退出255；该检查已接入`tool/check.sh`。新增页面滚动按具体route/scrollable定位、等转换完成，点击未命中即失败。中间失败如实留在临时日志，没有降低健康/像素/对象断言换取通过。
+- `product_flow_test.dart`不再在缺端点时静默成功。正常完整结束才产出`productAcceptanceComplete=true`；通用driver要求该回执，保留独立audio/background/clipboard/documents模式。纯Dart契约`tool/driver/integration_test_contract_test.dart`通过，`--missing-product`真实退出255；该检查已接入`tool/check.sh`。新增页面滚动按具体route/scrollable定位、等转换完成，点击未命中即失败。中间失败如实留在临时日志，没有降低健康/像素/对象断言换取通过。
 
 本轮没有运行新的物理设备/四端整包/密码安全或当前共享SAF验收；多窗口、持续通知/认证/后台发布、安全通话、活动恢复/事件重取、完整文件/相册交付等仍是实现工作，不能称仅差测试。
 
@@ -174,7 +174,7 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 rtk proxy env CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/session-workspace \
-  flutter drive --driver=test_driver/session_workspace.dart \
+  flutter drive --driver=tool/driver/session_workspace.dart \
   --target=integration_test/session_workspace_test.dart -d emulator-5554 \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \
@@ -185,7 +185,7 @@ rtk proxy env CONNECT_E2E_TARGET=emulator-5556 \
 
 完整运行退出0、40秒，8个独立检查点均通过：paused服务为S而不是T；Settings关闭后其进程消失，其余两个仍存活；最终Dialer实际Texture及MDK snapshot可用。回执`sessionWorkspaceComplete=true/pausedWindowsVerified=3`，日志`/tmp/connect-session-workspace-cooperative4.log`，JSON/PNG在`/tmp/connect-e2e/session-workspace/`。已目视会话列表、Settings截图和最终全屏Dialer；列表的包名/材质仍有产品呈现改进空间，未称视觉设计完成。
 
-同一扩展下真实HOME/Activity返回13秒通过：增加`CONNECT_E2E_BACKGROUND=1 CONNECT_E2E_DEVICE=emulator-5554`，driver改`test_driver/integration_test.dart`、target改`integration_test/background_resume_test.dart`；回执`mediaAcceptanceComplete=true`，日志`/tmp/connect-cooperative-background.log`，图在`/tmp/connect-e2e/cooperative-background/`。
+同一扩展下真实HOME/Activity返回13秒通过：增加`CONNECT_E2E_BACKGROUND=1 CONNECT_E2E_DEVICE=emulator-5554`，driver改`tool/driver/integration_test.dart`、target改`integration_test/background_resume_test.dart`；回执`mediaAcceptanceComplete=true`，日志`/tmp/connect-cooperative-background.log`，图在`/tmp/connect-e2e/cooperative-background/`。
 
 五编码改target为`integration_test/video_codecs_test.dart`，显式`CONNECT_E2E_ACCEPTANCE=media`，不设置BACKGROUND；45秒通过H264/H265/AV1/VP8/VP9的真实共享渲染。每种离开后确认paused，再只停止当前ID，保证下种编码创建新窗口而非误复用旧设置。日志`/tmp/connect-cooperative-codecs.log`，JSON/PNG在`/tmp/connect-e2e/cooperative-codecs/`；H264/H265图已比较，HEVC低清仍存在，不记视觉质量通过。通用driver默认仍要求product回执；media模式缺/false/错误类型回执同样失败，显式product失败不能被media掩盖，纯Dart契约通过。
 
@@ -222,7 +222,7 @@ rtk proxy env CONNECT_E2E_TARGET=emulator-5556 \
 ```sh
 rtk proxy env CONNECT_E2E_ACCEPTANCE=media \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/recovery-csd-fixed \
-  flutter drive --driver=test_driver/integration_test.dart \
+  flutter drive --driver=tool/driver/integration_test.dart \
   --target=integration_test/state_recovery_test.dart -d emulator-5554 \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \
@@ -317,7 +317,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/notification-reply-final \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/notification_reply.dart \
+  --driver=tool/driver/notification_reply.dart \
   --target=integration_test/notification_reply_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556
@@ -385,7 +385,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/system-notifications-content-verified \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/system_notifications.dart \
+  --driver=tool/driver/system_notifications.dart \
   --target=integration_test/system_notifications_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556
@@ -420,7 +420,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 ```sh
 rtk proxy env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/glass-product-final \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/integration_test.dart \
+  --driver=tool/driver/integration_test.dart \
   --target=integration_test/product_flow_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \
@@ -453,7 +453,7 @@ rtk proxy env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/glass-product-final \
 
 ### 实际Android交付与视觉
 
-测试源为`integration_test/content_delivery_test.dart`、`test_driver/content_delivery.dart`及controller-only独立接收器`tool/e2e/content_delivery_fixture/`。接收器无额外权限，只凭真实Intent content URI及read grant读取并计算SHA-256；不安装在被控设备或进入产品。源/导出文件采用唯一runId，host独立读取系统保存位置，再清除本次精确文件与自有接收器；不清空应用数据来伪造取消语义。
+测试源为`integration_test/content_delivery_test.dart`、`tool/driver/content_delivery.dart`及controller-only独立接收器`tool/e2e/content_delivery_fixture/`。接收器无额外权限，只凭真实Intent content URI及read grant读取并计算SHA-256；不安装在被控设备或进入产品。源/导出文件采用唯一runId，host独立读取系统保存位置，再清除本次精确文件与自有接收器；不清空应用数据来伪造取消语义。
 
 第一次完整38秒通过，`/tmp/connect-content-delivery-verified.log`、结果目录`/tmp/connect-e2e/content-delivery-verified/`；但“保存后”截图仍是系统文件页，不登记为产品结果页视觉通过。补阶段确认和返回后截屏门禁，再次39秒退出0，日志`/tmp/connect-content-delivery-visual-verified.log`，结果目录`/tmp/connect-e2e/content-delivery-visual-verified/`：
 
@@ -593,7 +593,7 @@ A44实施与运行边界见[内容交付](content-delivery.md)。公开Runtime�
 
 双AVD真实内容交付43秒通过，`/tmp/connect-delivery-journal-final.log`、`/tmp/connect-e2e/delivery-journal-final/result.json`。唯一原件63字节，SHA-256 `24517f80a3808bd472d8c1102db2a28ce93eea535b981e5bdaba66eefb863078`，系统取消／保存、完整离页后重进同一传输恢复saved、系统分享至独立receiver、content URI读授权及精确清理均有回执。重进截图已目视。首次`connect-delivery-journal-e2e.log`因路由时序失败：过渡旧页面误算重进，截图实际为文件详情，下一次分享点击未命中；已以旧页消失／当前路由完成／回执可见／命中门槛修正，不计首次通过。Android真实写入中杀进程和unknown恢复仍未验，公开Runtime重开不冒充该故障链路。
 
-A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、减少动态及安全区域／尺寸变化。真实产品流程25秒通过，`/tmp/connect-exit-inward-final.log`、`/tmp/connect-e2e/exit-inward-final/result.json`：通过实际连接表单及画质页选择1080，HEVC编码与实际解码486×1080，拖动收起／点击展开／再次收起／向内拖动保持展开／退出后会话暂停保留，严格host回执`inwardExitHandleExpanded:true`。对应截图已目视。实际命令在仓库根目录使用`--driver=test_driver/integration_test.dart --target=integration_test/product_flow_test.dart`、`CONNECT_E2E_EXIT_HANDLE=1`及`--dart-define=CONNECT_E2E_VIDEO_MAX_SIZE=1080 --dart-define=CONNECT_E2E_MIN_VIDEO_EDGE=1080`，其余endpoint与内容测试相同。首次`connect-exit-inward-e2e.log`因连接表单尚未完成加载失败，补页面与可命中等待后复验；不是放松选择器／质量要求。
+A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、减少动态及安全区域／尺寸变化。真实产品流程25秒通过，`/tmp/connect-exit-inward-final.log`、`/tmp/connect-e2e/exit-inward-final/result.json`：通过实际连接表单及画质页选择1080，HEVC编码与实际解码486×1080，拖动收起／点击展开／再次收起／向内拖动保持展开／退出后会话暂停保留，严格host回执`inwardExitHandleExpanded:true`。对应截图已目视。实际命令在仓库根目录使用`--driver=tool/driver/integration_test.dart --target=integration_test/product_flow_test.dart`、`CONNECT_E2E_EXIT_HANDLE=1`及`--dart-define=CONNECT_E2E_VIDEO_MAX_SIZE=1080 --dart-define=CONNECT_E2E_MIN_VIDEO_EDGE=1080`，其余endpoint与内容测试相同。首次`connect-exit-inward-e2e.log`因连接表单尚未完成加载失败，补页面与可命中等待后复验；不是放松选择器／质量要求。
 
 本轮两AVD均使用已准备好的API36/secure=0 legacy TCP目标及host15556→5555。不是首次安全配对、物理USB、OEM、通话音频或全部89页验收。仍有SurfaceSync／跳帧及模拟器GLES／BufferQueue释放日志，不登记为性能或零告警通过。
 
@@ -605,7 +605,7 @@ A45组件回归8项通过，覆盖左右向内拖开、最近侧边、高速、�
 
 双AVD最终真实产品链路51秒通过，`/tmp/connect-app-primary-content-verified.log`与`/tmp/connect-e2e/app-primary-content-verified/result.json`。实际点击应用列表→在手机屏幕打开，复用原ID；host独立观察display0从HOME变Settings，主控实际MDK像素等待内容而非旧HOME／白色启动面，截图已目视为Settings。再实际打开Settings／Dialer独立窗口，三个窗口保留并暂停、逐UUID恢复／截图／关闭，其他窗口存活；9个checkpoint独立检查实际目标进程，全部非整体冻结T态，关闭的精确进程消失。
 
-失败与验收加严原样保留：第一次`connect-app-primary-and-windows-e2e.log`在本地已离页但异步pause尚未回执时即要求paused而失败，现仅只读轮询原ID至5秒上限，不补发pause。46秒后续流程虽通过，主屏截图仍为旧HOME；51秒第一版像素门槛又把白色启动面当内容。两者不计主屏视觉通过，最终加入内容对比门槛并目视Settings后才登记。该已知stock浅色Settings／深色HOME样本门槛不是通用UI识别器，不外推所有应用。命令仍为仓库根目录下`flutter drive --no-pub -d emulator-5554 --driver=test_driver/session_workspace.dart --target=integration_test/session_workspace_test.dart`，host指定ADB／target及capture目录，Flutter指定ADDRESS=10.0.2.2、PORT=15556。
+失败与验收加严原样保留：第一次`connect-app-primary-and-windows-e2e.log`在本地已离页但异步pause尚未回执时即要求paused而失败，现仅只读轮询原ID至5秒上限，不补发pause。46秒后续流程虽通过，主屏截图仍为旧HOME；51秒第一版像素门槛又把白色启动面当内容。两者不计主屏视觉通过，最终加入内容对比门槛并目视Settings后才登记。该已知stock浅色Settings／深色HOME样本门槛不是通用UI识别器，不外推所有应用。命令仍为仓库根目录下`flutter drive --no-pub -d emulator-5554 --driver=tool/driver/session_workspace.dart --target=integration_test/session_workspace_test.dart`，host指定ADB／target及capture目录，Flutter指定ADDRESS=10.0.2.2、PORT=15556。
 
 真实副屏失败后的手机回退、旧API／OEM、实际renderer首帧故障、unknown跨进程持久化、多实例和任务迁回完整矩阵继续待验。独立代码审查发现的两项新缺陷修复后复核未再发现确定问题；这不替代上述缺口。
 
@@ -671,7 +671,7 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 
 公开Runtime双设备ADB协议fixture验证精确音源活动、停止保留B、旧sourceId不误停替代源；它不替代真实Android。Flutter活动页确认／精确activityId与既有PortableAudioOutputs共23项通过；新增中文播放状态断言先红后绿。相关5文件严格分析无问题。
 
-真实运行：在仓库根目录执行`rtk proxy env PATH=<toolchain> ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/audio-activities-r3 flutter drive -d emulator-5554 --no-pub --driver=test_driver/audio_activities.dart --target=integration_test/audio_activities_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556`。第三轮9秒通过，构建10.3秒／安装856ms，日志`/tmp/connect-audio-activities-r3.log`。严格driver要求8个结果全部true及3张截图；回执`/tmp/connect-e2e/audio-activities-r3/result.json`满足。实际PCM、fvp准备／播放与时钟前进后，活动页确认停止，Core源及精确本地输出消失，连接／观察及基线媒体保留，finally清理完整。播放／确认／停止后截图已目视。
+真实运行：在仓库根目录执行`rtk proxy env PATH=<toolchain> ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/audio-activities-r3 flutter drive -d emulator-5554 --no-pub --driver=tool/driver/audio_activities.dart --target=integration_test/audio_activities_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556`。第三轮9秒通过，构建10.3秒／安装856ms，日志`/tmp/connect-audio-activities-r3.log`。严格driver要求8个结果全部true及3张截图；回执`/tmp/connect-e2e/audio-activities-r3/result.json`满足。实际PCM、fvp准备／播放与时钟前进后，活动页确认停止，Core源及精确本地输出消失，连接／观察及基线媒体保留，finally清理完整。播放／确认／停止后截图已目视。
 
 首轮在observation.start返回starting时错误要求终态；改只读轮询后继续。第二轮MissingPluginException发生于截图：先前普通main的自动GeneratedPluginRegistrant排除了dev测试插件，而--no-pub没有重新生成；执行离线flutter pub get恢复自动注册后第三轮通过。没有手改注册器或生产Kotlin，没有把失败计通过。
 
@@ -679,7 +679,7 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 
 ## 渐进验收：入站PNG固定接收设备（2026-10-18）
 
-在仓库根目录，以明确独立controller／target／secondTarget环境运行`flutter drive -d emulator-5554 --no-pub --driver=test_driver/incoming_share_target.dart --target=integration_test/incoming_share_target_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556 --dart-define=CONNECT_E2E_SECOND_PORT=15558`（所有命令经rtk proxy；完整环境与fixture构建见[内容交付](content-delivery.md#外部入站内容的固定目标)）。首轮14秒通过、构建52秒／安装745ms，`/tmp/connect-incoming-share-target-r1.log`、`/tmp/connect-e2e/incoming-share-target/result.json`。
+在仓库根目录，以明确独立controller／target／secondTarget环境运行`flutter drive -d emulator-5554 --no-pub --driver=tool/driver/incoming_share_target.dart --target=integration_test/incoming_share_target_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556 --dart-define=CONNECT_E2E_SECOND_PORT=15558`（所有命令经rtk proxy；完整环境与fixture构建见[内容交付](content-delivery.md#外部入站内容的固定目标)）。首轮14秒通过、构建52秒／安装745ms，`/tmp/connect-incoming-share-target-r1.log`、`/tmp/connect-e2e/incoming-share-target/result.json`。
 
 三AVD互异名称＋两端独占marker同时由host和公开files.list核对映射，外部非导出provider凭真实grant向产品提交PNG。页面明确选A后调用公开focusDevice(B)，仍只向A上传；host独立读取68字节与SHA256 `ce01132c640469ef7fb497e7496b12f5046d633b588f397e5c45a6c3efc85037`一致、B无同路径文件、消费后两次刷新不新增传输，精确清理全true。目标确认截图已目视；两台同型号默认同名的选项仍需可辨识线索，不以此声称完整视觉完成。窄分析通过；不沿用上一批全门禁。
 

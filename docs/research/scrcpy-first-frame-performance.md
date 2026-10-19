@@ -425,7 +425,7 @@ WidgetsFlutterBinding运行入口、连续实际Texture和真实计数器验证�
 
 ## 普通Driver调度与后续decoder定位（2026-10-18）
 
-上述正常调度缺口现由独立`benchmark/live_video_performance.dart`补齐；实际绑定是
+上述正常调度缺口现由独立`tool/benchmark/live_video_performance.dart`补齐；实际绑定是
 `_DriverBinding`，使用普通Scheduler／Renderer／Widgets混入及测试messenger，没有
 Live draw/pump循环。它不是类名为WidgetsFlutterBinding的完整产品App；不将框架
 内部仍import flutter_test误写成使用LiveTestWidgetsBinding。

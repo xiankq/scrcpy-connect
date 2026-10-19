@@ -17,7 +17,7 @@ import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'product_flow_test.dart'
     show expectHealthyRemote, tapPageAction, waitFor;
 
-// Run with test_driver/remote_ime.dart. This injects Flutter IME editing values;
+// Run with tool/driver/remote_ime.dart. This injects Flutter IME editing values;
 // it does not claim to exercise Gboard's Chinese candidate UI.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

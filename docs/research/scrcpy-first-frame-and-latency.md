@@ -43,7 +43,7 @@
 ```sh
 rtk proxy flutter pub get --enforce-lockfile
 rtk proxy flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/fvp_probe.dart \
+  --driver=tool/driver/fvp_probe.dart \
   --target=integration_test/fvp_video_lifecycle_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=15556 \

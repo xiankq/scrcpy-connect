@@ -61,7 +61,7 @@ acceptance signal. The nine-mode run is:
 rtk proxy env CONNECT_E2E_DEVICE=emulator-5554 \
   CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/incoming_share.dart \
+  --driver=tool/driver/incoming_share.dart \
   --target=integration_test/incoming_share_test.dart
 ```
 

@@ -11,7 +11,7 @@ python3 servers/companion/tests/compatibility.py
 python3 -m unittest discover -s tool -p 'test_*.py'
 npm test --prefix tool/design_tokens
 python3 tool/check_native_deps.py
-dart format --output=none --set-exit-if-changed lib test integration_test test_driver packages
+dart format --output=none --set-exit-if-changed lib test integration_test tool/driver tool/benchmark packages
 cargo fmt --all --check
 python3 tool/fvp_snapshot_regression.py
 cargo clippy --workspace --all-targets -- -D warnings
@@ -20,7 +20,7 @@ flutter analyze --no-pub --fatal-infos
 python3 tool/check_analyzer_plugin.py
 flutter test --no-pub
 (cd packages/design_system && flutter test --no-pub)
-dart --disable-dart-dev --packages=.dart_tool/package_config.json test_driver/integration_test_contract_test.dart
+dart --disable-dart-dev --packages=.dart_tool/package_config.json tool/driver/integration_test_contract_test.dart
 (cd packages/interop_bridge && flutter test --no-pub)
 npm run lint --prefix tool/design_tokens
 if [[ "${1:-}" == "--android" ]]; then

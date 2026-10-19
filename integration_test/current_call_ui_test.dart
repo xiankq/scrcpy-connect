@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'product_flow_test.dart'
     show expectHealthyRemote, tapPageAction, waitFor;
 
-// Run only with test_driver/current_call_ui.dart and its isolated virtual modem.
+// Run only with tool/driver/current_call_ui.dart and its isolated virtual modem.
 // The real CallsPage owns observation and calls.open; no runtime call substitutes
 // for tapping either production action in this acceptance path.
 void main() {

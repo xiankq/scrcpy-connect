@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../test_driver/system_notifications.dart'
+import '../tool/driver/system_notifications.dart'
     show validateSystemNotificationsReport;
 
 const _runId = '0123456789abcdef0123456789abcdef';

@@ -259,7 +259,7 @@ rtk proxy env FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f0
  CONNECT_E2E_ACCEPTANCE=media \
  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/auto-capture-product-five-plugins \
  /home/xiankq/flutter/bin/flutter drive -d emulator-5554 \
- --driver=test_driver/integration_test.dart --target=integration_test/video_codecs_test.dart \
+ --driver=tool/driver/integration_test.dart --target=integration_test/video_codecs_test.dart \
  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556
 ```
 

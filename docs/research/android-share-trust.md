@@ -211,7 +211,7 @@ bring the sender itself to the top and deliver that mode. Text+image then passed
 this is evidence for the combined fixture correction, not an isolated proof
 that either change alone fixes all external-app task arrangements. See
 [sender](../../tool/e2e/share_fixture/src/dev/scrcpyconnect/sharefixture/ShareFixtureActivity.java)
-and [driver](../../test_driver/incoming_share.dart).
+and [driver](../../tool/driver/incoming_share.dart).
 
 An intermediate full run passed the first four modes, then found that its intended
 `no-grant` input arrived ready. Android 16's
@@ -299,7 +299,7 @@ rtk proxy flutter test test/share_intake_test.dart
 
 The real-device target is
 [incoming_share_test.dart](../../integration_test/incoming_share_test.dart)
-with [its external driver](../../test_driver/incoming_share.dart).
+with [its external driver](../../tool/driver/incoming_share.dart).
 Its nine modes are text, image, multi, alias, no-grant, self-sentinel, too-many,
 oversize and slow. A complete run must verify exact provider bytes, errors with
 no published files, typed Flutter presentation and cancellation cleanup. The final

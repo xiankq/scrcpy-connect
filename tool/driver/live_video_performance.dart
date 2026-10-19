@@ -12,7 +12,7 @@ const _fixturePackage = 'dev.scrcpyconnect.videofixture';
 const _requestTimeout = Duration(seconds: 45);
 const _overallTimeout = Duration(minutes: 20);
 
-/// Host for benchmark/live_video_performance.dart. Screenshots come from adb
+/// Host for tool/benchmark/live_video_performance.dart. Screenshots come from adb
 /// after each timed app command, so capture/PNG validation adds no input latency.
 Future<void> main() async {
   final environment = Platform.environment;

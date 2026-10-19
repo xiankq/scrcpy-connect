@@ -427,7 +427,7 @@ CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
 CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-performance \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/video_performance.dart \
+  --driver=tool/driver/video_performance.dart \
   --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=25556 \
@@ -753,7 +753,7 @@ control-send等空队列、video在`dequeueOutputBuffer(-1)`。这支持排查�
 rtk proxy env CONNECT_E2E_VIDEO_MOTION=true \
  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-pause-stress \
  flutter drive -d emulator-5554 --no-pub \
- --driver=test_driver/video_performance.dart \
+ --driver=tool/driver/video_performance.dart \
  --target=integration_test/video_performance_test.dart \
  --dart-define=CONNECT_PERF_DECODER=native \
  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
@@ -1372,7 +1372,7 @@ CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_VIDEO_TIMELINE=true \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-burst-classic \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/video_performance.dart --target=integration_test/video_performance_test.dart \
+  --driver=tool/driver/video_performance.dart --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_PERF_DECODER=native --dart-define=CONNECT_PERF_TRACE_FRAMES=true \
   --dart-define=CONNECT_PERF_TRACE_CLOCK=true --dart-define=CONNECT_PERF_ADB_BURST=false \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556 \
@@ -1668,7 +1668,7 @@ CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_VIDEO_TIMELINE=false \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-codec-avc \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/video_performance.dart \
+  --driver=tool/driver/video_performance.dart \
   --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=25556 \
   --dart-define=CONNECT_PERF_CODEC=h264 \
@@ -1935,7 +1935,7 @@ CONNECT_E2E_TARGET=emulator-5556 CONNECT_E2E_DEVICE=emulator-5554 \
 CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-startup-observed-baseline \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/video_performance.dart \
+  --driver=tool/driver/video_performance.dart \
   --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_PERF_DECODER=native \
   --dart-define=CONNECT_PERF_ADB_BURST=false \
@@ -2046,8 +2046,8 @@ JAR逐项确认不存在，匹配捕获JAR与捕获进程均为空；证明
 
 ## 普通调度基准与解码路径对照（2026-10-18）
 
-`afa4943`新增独立开发入口`benchmark/live_video_performance.dart`及host
-`test_driver/live_video_performance.dart`，不改普通产品入口或既有集成门禁。入口先调用
+`afa4943`新增独立开发入口`tool/benchmark/live_video_performance.dart`及host
+`tool/driver/live_video_performance.dart`，不改普通产品入口或既有集成门禁。入口先调用
 `enableFlutterDriverExtension`构造`_DriverBinding`；它使用普通Scheduler／Renderer／
 Widgets混入，没有Live测试绑定的draw/pump循环，回执记录实际binding和模式。
 它仍有Driver服务扩展和测试messenger，不将其类名写成`WidgetsFlutterBinding`，
@@ -2116,8 +2116,8 @@ CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-normal-binding-native-60 \
 FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
 flutter drive -d emulator-5554 --no-pub \
-  --driver=test_driver/live_video_performance.dart \
-  --target=benchmark/live_video_performance.dart \
+  --driver=tool/driver/live_video_performance.dart \
+  --target=tool/benchmark/live_video_performance.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
   --dart-define=CONNECT_E2E_PORT=25556 \
   --dart-define=CONNECT_PERF_DECODER=native \

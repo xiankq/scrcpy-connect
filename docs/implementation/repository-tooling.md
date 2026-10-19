@@ -22,7 +22,7 @@ rtk proxy python3 tool/generate.py --check
 
 ## 根目录应用与包职责
 
-根 `pubspec.yaml` 是唯一 Flutter 应用入口。`lib/`、`test/`、`integration_test/`、`test_driver/`、`benchmark/` 与平台 runner 均在根目录；命令和 CI 产物路径从根解析，旧 `apps/connect` 已移除。`packages/design_system` 与 `packages/interop_bridge` 为 Dart workspace 包，`crates/` 为 Cargo workspace，应用平铺不改变这些模块边界。
+根 `pubspec.yaml` 是唯一 Flutter 应用入口。根目录仅保留 Flutter 常规的 `test/` 单元／组件测试和 `integration_test/` 设备端集成测试；主机驱动放在 `tool/driver/`，性能基准入口放在 `tool/benchmark/`。驱动命令显式指定 `--driver=tool/driver/<入口>.dart`，基准使用 `--target=tool/benchmark/<入口>.dart`，不依赖默认目录推断。命令和 CI 产物路径从根解析，旧 `apps/connect` 已移除。`packages/design_system` 与 `packages/interop_bridge` 为 Dart workspace 包，`crates/` 为 Cargo workspace，应用平铺不改变这些模块边界。
 
 ## 唯一受控 fork：third_party/fvp
 

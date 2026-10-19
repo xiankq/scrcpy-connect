@@ -275,11 +275,11 @@ A2-r2错误使用R热重启，丢失原预编译APK的Dart defines，实际nativ
 
 ```sh
 rtk proxy flutter build apk --debug --target-platform=android-x64 \
-  --target=benchmark/live_video_performance.dart \
+  --target=tool/benchmark/live_video_performance.dart \
   --dart-define=CONNECT_PERF_DECODER=default \
   --dart-define=CONNECT_PERF_ROUNDS=3 --dart-define=CONNECT_PERF_TRANSITIONS=8
 rtk proxy flutter run --no-pub --use-application-binary=/tmp/connect-artifacts/bounded-input-candidate-debug.apk \
-  --target=benchmark/live_video_performance.dart --print-dtd -d emulator-5554 \
+  --target=tool/benchmark/live_video_performance.dart --print-dtd -d emulator-5554 \
   --dart-define=CONNECT_PERF_DECODER=default \
   --dart-define=CONNECT_PERF_ROUNDS=3 --dart-define=CONNECT_PERF_TRANSITIONS=8
 rtk proxy env VM_SERVICE_URL='<本次App的实际VM service URI>' \
@@ -289,7 +289,7 @@ rtk proxy env VM_SERVICE_URL='<本次App的实际VM service URI>' \
   CONNECT_E2E_VIDEO_MOTION=true CONNECT_E2E_SCREEN_CAPTURE=raw \
   CONNECT_E2E_DIAGNOSTIC_SURFACE_MS=15000 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/bounded-input-new-group \
-  dart --packages=../../.dart_tool/package_config.json test_driver/live_video_performance.dart
+  dart --packages=../../.dart_tool/package_config.json tool/driver/live_video_performance.dart
 ```
 
 先按既有夹具入口启动两台AVD并设置目标TCP5555及host25556 forward。A1／A2换回
