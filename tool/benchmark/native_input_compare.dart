@@ -7,6 +7,14 @@ double pct(List<double> values, double q) {
   return sorted[((sorted.length - 1) * q).round()];
 }
 
+double median(List<double> values) {
+  final sorted = List<double>.of(values)..sort();
+  final middle = sorted.length ~/ 2;
+  return sorted.length.isOdd
+      ? sorted[middle]
+      : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
 void main(List<String> args) {
   if (args.isEmpty || args.length > 2) {
     throw ArgumentError('Expected result directory and optional warmup count.');
@@ -117,9 +125,8 @@ void main(List<String> args) {
         'writeOrAppendP95Ms',
       ])
         key: {
-          'median': pct(
+          'median': median(
             group.map((r) => (r[key] as num).toDouble()).toList(),
-            .5,
           ),
           'min': group.map((r) => (r[key] as num).toDouble()).reduce(math.min),
           'max': group.map((r) => (r[key] as num).toDouble()).reduce(math.max),
