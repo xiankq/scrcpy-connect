@@ -22,7 +22,9 @@ fvp 的 pub lock 不同时锁定各平台 MDK 二进制。0.39.1 依赖下载逻
 
 ## 2026-10-19 输入链路复核
 
-结论：当前实现确实增加了本机 I/O、封装与解封装，但**尚无当前原版 fvp 下的对照测量证明它显著增加端到端延迟**。最值得对照验证的是 `Matroska → MDK stream: / appendBuffer` 的 native 内存直送；改动较小的候选是合并 Rust 内部 raw TCP 中转、保留现有 HTTP 播放入口。以下为源码/API 核查和研究推论，本次未修改生产链路、未运行设备实验。
+当前实现确实增加了本机 I/O、封装与解封装。随后完成的[MDK内存输入对照](mdk-memory-input-experiment.md)已验证原版 fvp 下的 `stream:` / appendBuffer 能实际解码渲染，但在指定Android AVD、相同录像和供数节拍下，没有测出明显的输入到解码延迟或CPU收益；该指标也不是端到端显示延迟。生产继续保留HTTP，实验代码单独留在实验分支。
+
+以下为源码/API核查和候选边界。raw TCP中转合并、实际ADB全链路与其他平台仍未作对照。
 
 ### 当前开销的边界
 
@@ -56,7 +58,7 @@ bool (*appendBuffer)(struct mdkPlayer*, const uint8_t* data,
 | 候选 | 能减少的工作 | 边界与研究判断 |
 | --- | --- | --- |
 | 合并 Rust raw TCP 中转，保留 Matroska HTTP | 少一对本机 socket、一次中转任务及相关读写 | 不改 MDK 接入，改动较小；必须保留 ADB/会话所有权、取消、generation 和有界背压。收益未测。 |
-| Matroska 经 native adapter 送 `stream:` | 可同时移除 raw 中转和本机 HTTP/socket | 最值得验证的路线；保留 mux/demux，新增前述 ABI、内存与生命周期责任。收益未测。 |
+| Matroska 经 native adapter 送 `stream:` | 可同时移除 raw 中转和本机 HTTP/socket | 受控输入实验已跑通，未见明显延迟/CPU收益；保留 mux/demux，新增前述 ABI、内存与生命周期责任。生产整链路与跨平台未验证。 |
 | `tcp://127.0.0.1:port` 直接送 Matroska | 省 HTTP 请求头和 chunk framing | 公开 `media` 可传 URL，MDK 声明支持 FFmpeg protocols；仍有 socket、mux/demux、buffer，不保证明显改善，且需重做单消费者准入/凭据边界。不能直接把 scrcpy 私有帧头交给标准 demux。 |
 | `fd:23` | 可用同进程 fd/pipe 替代网络监听 | MDK 官方明确支持该语法；不是所有平台 HANDLE 的通用替代。须验证实际 MDK build 对非 seek 流的支持、fd 复制/关闭责任与取消；仍要提供容器或明确的媒体格式。 |
 | `mem:addr+size` | 固定内存内容可无 socket 读取 | 官方给出的是地址和有限长度，未承诺可扩容直播 ring buffer 或持续 append；无法据此替代无限实时输入。内存须保持有效、禁止重分配/提前释放，具体保留期限仍需确认。 |

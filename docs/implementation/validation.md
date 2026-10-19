@@ -724,3 +724,9 @@ JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收
 本次未重跑远控、媒体 E2E 或其他宿主构建／运行；此前本地补丁版的首帧、snapshot、GPU 和业务通过不继承为社区原版通过。此处只记录已执行的测试、静态分析、生成一致性、Android x64 打包与普通入口启动范围。
 
 调试结束已 detach，保留既有模拟器及其应用。清理26项构建中间目录、测试资产与重复 APK，共2,031,439,569字节；`build` 仅保留上述普通入口 APK，复用的共享原生、Rust、Gradle 和 pub 缓存保留，[清理回执](/tmp/connect-community-fvp-cleanup.json)。删除源码副本前，两份未提交文件已备份至 `/tmp/connect-fvp-uncommitted-ZhtXcw`。
+
+## 社区原版下的内存输入实验（2026-10-19）
+
+独立分支 `codex/mdk-memory-input` 已用 Rust → MDK appendBuffer 跑通实际解码和Texture像素核验。Android-x64 profile包在同一AVD交错8轮，扣除两轮预热后，与HTTP按相同PTS比较，未见明显延迟或CPU收益。生产 `dev` 未合入实验适配器；完整方法、输入身份、逐轮结果、早期失败及尚未验证的契约见[专项记录](../research/mdk-memory-input-experiment.md)。该实验没有覆盖实际ADB全链路或其他平台。
+
+实验结束恢复上述普通debug APK，摘要未变；实际安装启动、MCP热重启成功，运行时错误查询为空，随后detach。清理本次夹具、重复APK和过期中间输出，净1,417,018,559字节；保留原始输入、测量回执及复用缓存。
