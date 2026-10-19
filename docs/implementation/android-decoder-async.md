@@ -67,19 +67,19 @@ begin/end成对、在锁外，不改变原elapsedUs、帧透传或丢失语义�
 再录制并运行host，确保从首轮开始覆盖。录制命令在独立终端运行：
 
 ```sh
-rtk proxy /home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 push tool/e2e/decoder_trace.pbtxt \
+/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 push tool/e2e/decoder_trace.pbtxt \
   /data/misc/perfetto-configs/connect-decoder-trace.pbtxt
-rtk proxy /home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell perfetto --txt \
+/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell perfetto --txt \
   -c /data/misc/perfetto-configs/connect-decoder-trace.pbtxt \
   -o /data/misc/perfetto-traces/connect-decoder-trace.pftrace
-rtk proxy /home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 pull /data/misc/perfetto-traces/connect-decoder-trace.pftrace \
+/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 pull /data/misc/perfetto-traces/connect-decoder-trace.pftrace \
   /tmp/connect-decoder-trace.pftrace
 ```
 
 从对应App启动日志记录真实PID，分析只接收该进程；以下5162仅为本轮候选组：
 
 ```sh
-rtk proxy python3 -B tool/e2e/analyze_decoder_trace.py \
+dart tool/e2e/analyze_decoder_trace.dart \
   --trace-processor /tmp/connect-trace-processor \
   --trace /tmp/connect-decoder-explicit-async.pftrace \
   --benchmark /tmp/connect-e2e/decoder-explicit-async/result.json \
@@ -118,7 +118,7 @@ dart-sys／宿主SDK依赖处失败，不宣称四宿主整包通过。共享播
 直接相除报告优化百分比。66次窗口确认并非66个输入延迟样本。
 
 
-更新后的arm64签名release由现有`rtk proxy python3 tool/android.py build`完成，墙钟
+更新后的arm64签名release由现有`dart tool/android.dart build`完成，墙钟
 47.36秒（Gradle45.9秒），签名、manifest、完整arm64 ELF、ZIP完整性及16KB对齐通过。
 原件`/tmp/connect-artifacts/connect-arm64-decoder-async-release.apk`，46920990字节，
 SHA-256 `fc6db347d819e42abaa630b452f5a7f32edab8b82b2ed37b6ed39aa951f9d022`，证书身份不变。

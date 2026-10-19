@@ -7,7 +7,7 @@ The provider is not exported; the receiver can read it only after a URI grant.
 Build using the installed SDK, without Gradle or a device:
 
 ```sh
-rtk proxy python3 tool/e2e/share_fixture/build.py
+dart tool/e2e/share_fixture/build.dart
 ```
 
 The default output is `/tmp/connect-share-fixture/share-fixture.apk`. The generated
@@ -15,8 +15,8 @@ test signing key and intermediates stay outside the repository. The key is for
 this fixture only. Install/operate only the controller assigned by the E2E owner:
 
 ```sh
-rtk proxy /home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 install -r /tmp/connect-share-fixture/share-fixture.apk
-rtk proxy /home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell am start -n dev.scrcpyconnect.sharefixture/.ShareFixtureActivity --es mode image
+/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 install -r /tmp/connect-share-fixture/share-fixture.apk
+/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell am start -n dev.scrcpyconnect.sharefixture/.ShareFixtureActivity --es mode image
 ```
 
 Replace `image` with a mode below. Each launch targets the real product Activity.
@@ -58,7 +58,7 @@ The product's real pending batch, file bytes and live Flutter route are the
 acceptance signal. The nine-mode run is:
 
 ```sh
-rtk proxy env CONNECT_E2E_DEVICE=emulator-5554 \
+env CONNECT_E2E_DEVICE=emulator-5554 \
   CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   flutter drive -d emulator-5554 --no-pub \
   --driver=tool/driver/incoming_share.dart \

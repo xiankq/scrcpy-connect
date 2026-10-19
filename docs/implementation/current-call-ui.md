@@ -19,7 +19,7 @@ calls.open只打开被控设备当前系统通话界面，不接受callId，不�
 仅在明确隔离的目标AVD且当前无通话时运行：
 
 ```sh
-rtk proxy env ANDROID_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env ANDROID_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   ANDROID_TARGET_SERIAL=emulator-5556 INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
   CARGO_BUILD_JOBS=2 cargo test -p interop-core --test companion_android \
   rust_runtime_observes_rapid_replacement_and_refuses_unsafe_aggregate_actions \
@@ -37,7 +37,7 @@ rtk proxy env ANDROID_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 复现（仓库根目录，目标必须隔离且无现有通话，端口按当前实际转发设置）：
 
 ```sh
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/current-call-ui \
   flutter drive -d emulator-5554 --no-pub \

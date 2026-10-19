@@ -48,7 +48,7 @@ lens 拥有轮廓与子内容裁剪，外层不叠加径向保护遮罩或固定
 
 ## 平台交付边界
 
-`tool/check.sh --android` 覆盖工程检查与三 ABI Android APK；`tool/build_host.py` 由对应宿主执行 iOS、macOS、Windows 整包及库检查。CI 配置存在不代表作业通过；平台功能支持、物理设备/OEM、媒体性能、后台回收和生产密码提供器分别留证。
+`tool/check.sh --android` 覆盖工程检查与三 ABI Android APK；`tool/build_host.dart` 由对应宿主执行 iOS、macOS、Windows 整包及库检查。CI 配置存在不代表作业通过；平台功能支持、物理设备/OEM、媒体性能、后台回收和生产密码提供器分别留证。
 
 ## 2026-10-18 验证快照（历史）
 

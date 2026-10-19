@@ -108,13 +108,12 @@ setup拒绝，原件均保留，不以第三次覆盖前两次。Android ps NAME
 因此实际按精确会话JAR定位PID，再从/proc读取完整nice-name，不猜测PID或匹配截断值。
 
 ```sh
-rtk proxy python3 -B tool/e2e/video_fixture/analyze_capture_slots.py \
+dart tool/e2e/video_fixture/analyze_capture_slots.dart \
   --trace-processor /tmp/connect-trace-processor \
   --trace /tmp/connect-e2e/current-source-slots-r3/capture.perfetto-trace \
   --process-name 'interop.scrcpy:1c2a1e04:/data/local/tmp/interop-scrcpy-f397fede-9e83-4b75-8b3d-5c2d9c06d565.jar' \
   --output /tmp/connect-e2e/current-source-slots-r3/capture-slots-replay.json
-rtk proxy python3 -B -m unittest discover -s tool/e2e/video_fixture \
-  -p test_analyze_capture_slots.py -v
+flutter test --no-pub tool/e2e/tests/analyze_capture_slots_test.dart
 ```
 
 九条离线测试通过；CLI拒绝覆盖原始证据。分析器拒绝data-loss、进程歧义、未闭合或
@@ -173,12 +172,12 @@ swap失败、暂停穿过reserve窗口、关闭后旧timer／output无效。继�
 使用临时SDK／编译器替身，只验证目录／ZIP输出，不冒称编译Java。
 
 ```sh
-rtk proxy python3 -B servers/scrcpy/test_build.py -v
-rtk proxy python3 servers/scrcpy/build.py --output-dir /tmp/connect-bounded-input-baseline-build
-rtk proxy python3 servers/scrcpy/test.py --build-dir /tmp/connect-bounded-input-baseline-build
-rtk proxy python3 servers/scrcpy/build.py --candidate bounded-input \
+python3 -B servers/scrcpy/test_build.py -v
+python3 servers/scrcpy/build.py --output-dir /tmp/connect-bounded-input-baseline-build
+python3 servers/scrcpy/test.py --build-dir /tmp/connect-bounded-input-baseline-build
+python3 servers/scrcpy/build.py --candidate bounded-input \
   --output-dir /tmp/connect-bounded-input-candidate-build
-rtk proxy python3 servers/scrcpy/test.py --candidate bounded-input \
+python3 servers/scrcpy/test.py --candidate bounded-input \
   --build-dir /tmp/connect-bounded-input-candidate-build
 ```
 
@@ -205,7 +204,7 @@ fixture／forward移除、系统旋转设置恢复均确认。原件
 实际解码64×64图像、FFmpeg摘要和result.json。复跑命令使用新输出目录：
 
 ```sh
-rtk proxy python3 -B /tmp/connect-e2e/bounded-input-smoke/driver.py \
+python3 -B /tmp/connect-e2e/bounded-input-smoke/driver.py \
   --jar /tmp/connect-bounded-input-candidate-build/interop-scrcpy-server.jar \
   --out /tmp/connect-e2e/bounded-input-smoke-replay
 ```
@@ -274,15 +273,15 @@ A2-r2错误使用R热重启，丢失原预编译APK的Dart defines，实际nativ
 先复制外部构建的JAR／SHA／manifest，原工作树不替换。构建与运行均显式传同一配置：
 
 ```sh
-rtk proxy flutter build apk --debug --target-platform=android-x64 \
+flutter build apk --debug --target-platform=android-x64 \
   --target=tool/benchmark/live_video_performance.dart \
   --dart-define=CONNECT_PERF_DECODER=default \
   --dart-define=CONNECT_PERF_ROUNDS=3 --dart-define=CONNECT_PERF_TRANSITIONS=8
-rtk proxy flutter run --no-pub --use-application-binary=/tmp/connect-artifacts/bounded-input-candidate-debug.apk \
+flutter run --no-pub --use-application-binary=/tmp/connect-artifacts/bounded-input-candidate-debug.apk \
   --target=tool/benchmark/live_video_performance.dart --print-dtd -d emulator-5554 \
   --dart-define=CONNECT_PERF_DECODER=default \
   --dart-define=CONNECT_PERF_ROUNDS=3 --dart-define=CONNECT_PERF_TRANSITIONS=8
-rtk proxy env VM_SERVICE_URL='<本次App的实际VM service URI>' \
+env VM_SERVICE_URL='<本次App的实际VM service URI>' \
   CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \

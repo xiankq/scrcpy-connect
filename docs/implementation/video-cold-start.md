@@ -62,9 +62,9 @@ Core lib61 passed／2 ignored，clippy all-targets及fmt通过。新增覆盖she
 `/tmp/connect-startup-shell-{core-tests,clippy}.log`。复现单元：
 
 ```sh
-rtk cargo test -p interop-core --lib cold_screen_
-rtk cargo test -p interop-core --lib encoder_probe_shell_removes
-rtk cargo clippy -p interop-core --all-targets -- -D warnings
+cargo test -p interop-core --lib cold_screen_
+cargo test -p interop-core --lib encoder_probe_shell_removes
+cargo clippy -p interop-core --all-targets -- -D warnings
 ```
 
 ## 首个视频输出的原生CPU成本
@@ -101,7 +101,7 @@ token精确限定，`slice`经`thread_track`连到`thread`，取marker之后同r
 Perfetto配置沿用`tool/e2e/decoder_trace.pbtxt`并仅将duration改为30000；同时使用：
 
 ```sh
-rtk proxy /home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell simpleperf record \
+/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell simpleperf record \
   --app dev.scrcpyconnect.scrcpy_connect -e task-clock -f 400 \
   --call-graph dwarf,16384 --no-callchain-joiner --include-thread-name JNISurface \
   --duration 30 --size-limit 32M --clockid monotonic \
@@ -128,7 +128,7 @@ simpleperf为MONOTONIC，trace为BOOTTIME；使用最近`clock_snapshot`加偏�
 `/tmp/connect-startup-cpu-first-{report,callgraph,samples}.txt`。可用相同data重报：
 
 ```sh
-rtk proxy /home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell simpleperf report \
+/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell simpleperf report \
   -i /data/local/tmp/connect-startup-cpu.data \
   --filter-file /data/local/tmp/connect-startup-cpu-first.filter \
   --sort dso,symbol -n --children -g --max-stack 18 --percent-limit 2
@@ -158,7 +158,7 @@ Flutter／Rust正常编译直接嵌入已提交产物。仅服务端输入变更
 
 Core的iOS／macOS／Windows MSVC交叉check分别1.34／1.32／1.24秒通过；不是四宿主
 Flutter整包。Android x64实际基准与arm64 release分别构建。现有签名arm64 release
-经`tool/android.py build`60.40秒完成，签名、manifest、ZIP完整性／16KB对齐和完整
+经`tool/android.dart build`60.40秒完成，签名、manifest、ZIP完整性／16KB对齐和完整
 arm64 ELF检查通过。原件`/tmp/connect-artifacts/connect-arm64-cold-start-release.apk`，
 46920990字节，SHA-256为`d7b15c2e31dcb4d8526e2385e11368332e6bcf152f23a636c0ddbba580b040f6`。
 证书身份不变；未冒称在物理ARM安装或运行。回执
@@ -255,7 +255,7 @@ H265、AV1、VP8、VP9 均有真实 `mdk.snapshot`、Texture、原生截图、�
 main 切回集成测试时需要重新生成原生 integration_test 注册）：
 
 ```sh
-rtk proxy env FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
+env FVP_DEPS_SHA256=70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012 \
  CONNECT_E2E_ACCEPTANCE=media \
  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/auto-capture-product-five-plugins \
  /home/xiankq/flutter/bin/flutter drive -d emulator-5554 \

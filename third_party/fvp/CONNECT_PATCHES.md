@@ -25,7 +25,7 @@ The same change is present in all five upstream callback source copies:
 `lib/src`, `darwin/Classes`, `darwin/fvp/Sources/fvp`, `ios/Classes`, and
 `macos/Classes`. No new platform API or Android implementation is introduced.
 
-Run `python3 tool/fvp_snapshot_regression.py` from the workspace root. This
+Run `dart tool/fvp_snapshot_regression.dart` from the workspace root. This
 compiles the actual function body with the real Dart message headers and injects
 results at the MDK callback boundary. It checks failed and successful completion,
 row padding, unknown handles, and consistency of the platform copies. Against
@@ -52,7 +52,7 @@ Provenance: [official v0.39.0 release API](https://api.github.com/repos/wang-bin
 The pre-existing Android nightly archive in a developer cache had SHA-256
 `70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`, which differs
 from the official release archive. It is not accepted as the release cache.
-`python3 tool/check_native_deps.py` (also invoked by `tool/check.sh`) runs the
+`dart tool/check_native_deps.dart` (also invoked by `tool/check.sh`) runs the
 offline CMake dependency tests, including bad-hash
 rejection and preservation of the previous SDK on a failed fetch. CI builds and
 checks final applications on Android, iOS, macOS and Windows; adding these jobs

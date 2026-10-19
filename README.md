@@ -19,10 +19,14 @@
 | `servers` | 固定版本 scrcpy JAR、临时协同 JAR 与原生文件服务 |
 | `third_party/fvp` | 播放器本地修补及固定 MDK 正式版本／摘要 |
 | `designs` | DESIGN.md、产品说明和 Pencil 页面／组件源文件 |
+| `test`、`integration_test` | Flutter 单元／组件测试与设备端集成测试 |
+| `tool` | Dart 生成／构建／校验入口、主机驱动、性能基准及测试夹具 |
 
 ## 本地开发
 
 固定工具链：Rust 1.99.1、Flutter 3.47.6／Dart 3.13.5、JDK 21；当前 Android 验证使用 SDK 36、NDK 28.2.13676358。Flutter、Android SDK 与 NDK 需提前安装；`ANDROID_HOME` 指向 SDK，Flutter、Rust 在 PATH 中。
+
+自有构建与诊断脚本使用 Dart；Node 用于官方 DESIGN.md 工具。日常工程检查不要求安装 Python。
 
 ```sh
 flutter pub get
@@ -38,15 +42,15 @@ Android 运行时通过 Flutter native assets 自动构建 Rust 库，不调用�
 flutter build apk --debug --target-platform android-x64
 ```
 
-生成绑定使用固定 `flutter_rust_bridge_codegen 2.13.0`。修改共享命令契约后运行 `python3 tool/protocol_codegen.py`，生成设计 token、FRB／Dart 代码运行 `python3 tool/generate.py`；两者的 `--check` 均检查生成结果且不改工作区。设计 token 经固定官方 `@google/design.md 0.4.0` 解析，自动输出到 `packages/design_system/lib/src/design_tokens.g.dart`，不手工维护 Dart 数值；单独生成可运行 `node tool/design_tokens/generate.mjs`。临时 JAR／助手的构建、源码与产物哈希见各自 `servers/*/README.md`。当前模块职责与资源归属见[架构说明](docs/implementation/architecture.md)。
+生成绑定使用固定 `flutter_rust_bridge_codegen 2.13.0`。修改共享命令契约后运行 `dart tool/protocol_codegen.dart`，生成设计 token、FRB／Dart 代码运行 `dart tool/generate.dart`；两者的 `--check` 均检查生成结果且不改工作区。设计 token 经固定官方 `@google/design.md 0.4.0` 解析，自动输出到 `packages/design_system/lib/src/design_tokens.g.dart`，不手工维护 Dart 数值；单独生成可运行 `node tool/design_tokens/generate.mjs`。临时 JAR／助手的构建、源码与产物哈希见各自 `servers/*/README.md`。当前模块职责与资源归属见[架构说明](docs/implementation/architecture.md)。
 
 ### Android 安装包
 
 `flutter build apk` 默认构建 release。首次在仓库根目录执行以下命令，生成本机持久的侧载签名，再为常见 arm64 手机构建并验证安装包：
 
 ```sh
-python3 tool/android.py init-signing
-python3 tool/android.py build
+dart tool/android.dart init-signing
+dart tool/android.dart build
 ```
 
 已配置的签名不会被替换；私钥与 `key.properties` 不进入 Git，请自行私密备份这两份文件，后续更新需要同一身份。正式分发时可按 [配置示例](android/key.properties.example) 换成自己的发布密钥。缺少签名会在编译前明确失败，不再生成未签名的“成功”包，也不会悄悄用 debug 密钥签 release。
@@ -56,7 +60,7 @@ python3 tool/android.py build
 最终 APK 在 `build/app/outputs/flutter-apk/app-release.apk`。可独立复核：
 
 ```sh
-python3 tool/android.py verify build/app/outputs/flutter-apk/app-release.apk
+dart tool/android.dart verify build/app/outputs/flutter-apk/app-release.apk
 ```
 
 验证包括 ZIP 完整性、签名、16KB ZIP 对齐、包名／启动入口和实际 Flutter／Rust ELF 架构。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[实测与限制](docs/implementation/android-packaging.md)。

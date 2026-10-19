@@ -50,10 +50,10 @@
 本机诊断入口和输出均在临时目录 `/tmp/interop-h265-diagnostic/`，不属于可分发产品或仓库测试 fixture；目录清理后不会保留：
 
 ```sh
-rtk proxy /tmp/interop-h265-diagnostic/capture h265 1280 8000000 5 default 60
-rtk proxy /tmp/interop-h265-diagnostic/capture h265 1080 8000000 4 default 60
-rtk proxy /tmp/interop-h265-diagnostic/capture h264 1280 8000000 3 default 60
-rtk proxy /tmp/interop-test-tools/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2 -i /tmp/interop-h265-diagnostic/h265-1280-8000000-fps60.hevc -frames:v 1 /tmp/interop-h265-first.png
+/tmp/interop-h265-diagnostic/capture h265 1280 8000000 5 default 60
+/tmp/interop-h265-diagnostic/capture h265 1080 8000000 4 default 60
+/tmp/interop-h265-diagnostic/capture h264 1280 8000000 3 default 60
+/tmp/interop-test-tools/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2 -i /tmp/interop-h265-diagnostic/h265-1280-8000000-fps60.hevc -frames:v 1 /tmp/interop-h265-first.png
 ```
 
 关键证据：`direct-hevc.log`、`direct-hevc.hevc`、`h265-1280-8000000-fps60.{json,hevc}`、`h265-1080-8000000-fps60.{json,hevc}`、`h264-1280-8000000-fps60.{json,h264}`。对应 `*-first.png`、`*-last.png`、`*-reference-before.png` 可原生查看。JSON 记录请求 quality、实际 session dimensions 与每包 flags/length/PTS，不含 token。

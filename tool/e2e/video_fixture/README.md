@@ -5,7 +5,7 @@
 Android View 更新计数器并绘制新图；主控从实际解码 RGBA 和已呈现的截图识别色块。
 因此保留旧帧、空白纹理和只收到控制写入回执均不能通过。
 
-构建：`python3 tool/e2e/video_fixture/build.py`。生成文件全部在临时目录。
+构建：`dart tool/e2e/video_fixture/build.dart`。生成文件全部在临时目录。
 驱动安装前要求该独立包不存在，测试后卸载自己的包并返回系统设置。
 时延从主控发送操作前的单调时钟开始，到实际新像素可读结束，包含轮询和 snapshot
 开销，是输入到解码图像的上界；截图另验真实呈现，不冒充逐帧玻璃到玻璃延迟。
@@ -73,14 +73,14 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 默认高清80次、当前仍失败的1秒首帧门槛及原始证据见
 [视频性能记录](../../../docs/implementation/video-performance.md)。
 
-`analyze_codec_trace.py`离线分析目标Perfetto中的CCodec `onWorkDone(...@ts=...)`，
+`analyze_codec_trace.dart`离线分析目标Perfetto中的CCodec `onWorkDone(...@ts=...)`，
 与独立宿主raw-drain回执的原始PTS关联；不操作设备或下载工具。
 需要官方`trace_processor query`，输入示例和本次原件见
 [目标侧分段记录](../../../docs/implementation/video-performance.md#目标ccodec完成边界与源年龄2026-10-18)。
 分析器按唯一进程名筛选，拒绝trace data-loss、PTS歧义／接收缺项和时钟不相容，
 保留全部匹配及固定最后1/3统计。时钟snapshot是相继读取、并非严格误差括号；
 该结果不是纯编码耗时或主控实际呈现延迟，不能代替真实新像素E2E。
-校验：`python3 -m unittest discover -s tool/e2e/video_fixture -p test_analyze_codec_trace.py`。
+校验：`flutter test --no-pub tool/e2e/tests/analyze_codec_trace_test.dart`。
 
 
 真实视频断网恢复使用`tool/driver/video_recovery.dart`和
@@ -124,29 +124,29 @@ proxy-events.json、cleanup.json及截图仅存/tmp；EOF代理不代替物理�
 [格式、分段和当前失败结果](../../../docs/implementation/video-dynamic-measurement.md)。
 
 
-`analyze_capture_slots.py`离线重建单一捕获进程的GraphicBufferSource slot持有周期，
+`analyze_capture_slots.dart`离线重建单一捕获进程的GraphicBufferSource slot持有周期，
 保存全部事件与完整周期、首尾不完整周期及最后墙钟1/3的时间加权占用。拒绝data-loss、
 歧义进程、未闭合slice和非法slot状态；不做PTS或跨时钟相减，slot数不等于精确Codec2
 work队列长度。`--output`必须是新文件，避免覆盖原始证据。
 [当前默认路径实际追踪、命令与限制](../../../docs/research/capture-input-queue.md)。
-校验：`python3 -B -m unittest discover -s tool/e2e/video_fixture -p test_analyze_capture_slots.py -v`。
+校验：`flutter test --no-pub tool/e2e/tests/analyze_capture_slots_test.dart`。
 
-`capture_first_counter.py`是另一条宿主raw-drain诊断：在专用目标上复用指定JAR，
+`capture_first_counter.dart`是另一条宿主raw-drain诊断：在专用目标上复用指定JAR，
 保存完整H264包／源PTS／接收时刻、8次真实输入与首次draw日志及前后时钟括界。
 它拒绝覆盖已有同名fixture安装；目标必须是已授权实验设备。测量后用
 `cargo run -p interop-core --example remux_capture_packets -- <目录>`通过生产mux
-转成保留微秒PTS的MKV，再由`analyze_first_counter.py`调用宿主FFmpeg逐帧识别。
+转成保留微秒PTS的MKV，再由`analyze_first_counter.dart`调用宿主FFmpeg逐帧识别。
 要求完整唯一的一包一帧、计数连续、时钟区间有效且采集／清理最终成功；始终选最早
 含新计数的包，不能用后来的snapshot选帧代替。宿主直收未包含Rust／Flutter路径，
 不能当产品延迟验收或与产品组直接相减。命令、实际308包／帧及限制见
 [最早新计数帧核查](../../../docs/implementation/video-performance.md#最早新计数帧与快照选帧的区别)。
-校验：`python3 -B -m unittest discover -s tool/e2e/video_fixture -p test_analyze_first_counter.py -v`。
+校验：`flutter test --no-pub tool/e2e/tests/analyze_first_counter_test.dart`。
 
 同一实际Rust／Flutter播放路径的核查使用`CONNECT_PERF_TRACE_PACKETS=true`（同时
 启用traceFrames／traceClock，单轮）。它限量保留实际HTTP发送的完整Matroska前缀，
 8次输入及实际窗口结束后才封存和导出，默认不开启，不增加产品录屏入口。
-`analyze_player_archive.py --run <本次/tmp目录> --ffmpeg <宿主FFmpeg>`要求381包这类
+`analyze_player_archive.dart --run <本次/tmp目录> --ffmpeg <宿主FFmpeg>`要求381包这类
 完整序列逐项PTS／新计数匹配，再关联各输入保存的raw窗口和onVideo／snapshot。
 没有早帧回调时明确缺席，不补造呈现；最早包和快照选中包可以不同。完整结果、
 32MiB／单档案限制及命令见[实际播放器前缀](../../../docs/implementation/video-performance.md#实际播放器完整帧前缀与最早新像素)。
-校验：`python3 -B -m unittest discover -s tool/e2e/video_fixture -p test_analyze_player_archive.py -v`。
+校验：`flutter test --no-pub tool/e2e/tests/analyze_player_archive_test.dart`。

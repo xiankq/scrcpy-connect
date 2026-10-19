@@ -62,8 +62,8 @@ HTTP/消费者必须加有界 backpressure、鉴权、断线取消和 generation
 复现命令：
 
 ```sh
-rtk proxy cargo +stable test -p interop-core --test media_mux
-rtk proxy env INTEROP_ADBD_PORT=15556 INTEROP_FFMPEG=/absolute/ffmpeg cargo +stable test -p interop-core --test media_mux_ffmpeg -- --ignored --nocapture
+cargo +stable test -p interop-core --test media_mux
+env INTEROP_ADBD_PORT=15556 INTEROP_FFMPEG=/absolute/ffmpeg cargo +stable test -p interop-core --test media_mux_ffmpeg -- --ignored --nocapture
 # 可按测试名 real_avcc / pcm_samples 只跑host两项，不需要设备。
 ```
 

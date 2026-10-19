@@ -37,6 +37,7 @@
     "crates/android_helper/Cargo.lock": "8d13344aca2604d7fe6d103a2c581f8726a9e6525e040d428d2ca120095dcd87",
     "crates/android_helper/Cargo.toml": "4244f3e0c7d7ded3f6e625ec5febfddfc1c058cca98c8617c1855645f431ba79",
     "crates/android_helper/src/main.rs": "c10da67e534b37a6b6574b50ea2557604e5ee7c106a4c732b2dbe39e8bea4b0c",
-    "servers/helpers/build.py": "b13bf6fd376e8e244366bdf5048ebe1ed7728e2e4613e4267b2fa04a6fb5cc11"
+    "servers/helpers/build.dart": "15fec177f3911bab98a338034f1fd38b60ec86f0d9ea7801df21d3f9a70b9e9a",
+    "servers/tooling.dart": "665147573f38e4e70f3cee1af8c42b042a56ec6e22c3174a5f7de96b2cf420e6"
   }
 }

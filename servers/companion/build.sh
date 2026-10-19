@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec python3 "$(dirname "$0")/build.py" "$@"
+exec dart "$(dirname "$0")/build.dart" "$@"

@@ -29,7 +29,7 @@ START_APP 使用独立提交许可。控制队列取出时，只有尚未取消�
 页面／生命周期／会话视图 49 项窄回归通过。主屏未知结果必须匹配本次设备、包名、原主屏 UUID 和独立操作 UUID；断开事件先到不能丢弃迟到的准确操作记录。原主屏的 UP／CANCEL 清理按旧 UUID／绑定代次排队，核对和关闭操作记录不等待输入或 pause 回执。关闭后也不会自动打开应用，只有用户明确选择重新打开才提交新意图。
 
 ```sh
-rtk proxy env CARGO_BUILD_JOBS=2 INTEROP_ADBD_PORT=15556 \
+env CARGO_BUILD_JOBS=2 INTEROP_ADBD_PORT=15556 \
   cargo test -p interop-core --test app_launch_android -- --ignored --test-threads=1
 ```
 

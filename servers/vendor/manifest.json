@@ -69,13 +69,14 @@
     }
   },
   "inputs": {
-    "build.py": "8adc40f4d0fcd627f30fc1871ebd6f3997e2e48f8dd4c35e9cd4689e004d3040",
+    "build.dart": "30856e46849cc397908f67ed45ac179ea7e9c6937796d3f068dc6d07192c9069",
     "test/ScrcpyApi21Probe.java": "6ad3c7e1e5563d92a38558987c4e034c1e693f014ca36c5d6e59dc67674ebe88",
-    "test/build_probe.py": "4aa621bfd35a05f9be4290e0e5b1227b709bab865a65c1347aaaec29f228a4ab",
+    "test/build_probe.dart": "74d811e68438b0908f772f89095f80fe418eb9bb1feb7fce90e963415287072f",
     "LICENSE-scrcpy": "01c12035bf35af37241298dc7ad538eb2a07e5c940437bc6876feeaa9d1951d0",
     "LICENSE-desugar_jdk_libs": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726",
     "ASSEMBLY_EXCEPTION-desugar_jdk_libs": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb",
     "ADDITIONAL_LICENSE_INFO-desugar_jdk_libs": "a69bce275ba7a3570af6579cb0f55682cd75fedfcd49e0e8e9022270c447c916",
-    "LICENSE-desugar_jdk_libs_configuration": "68834f116f8ff545f05d14753357b620748156d60ee36b26beab4cb3f317efe4"
+    "LICENSE-desugar_jdk_libs_configuration": "68834f116f8ff545f05d14753357b620748156d60ee36b26beab4cb3f317efe4",
+    "../tooling.dart": "665147573f38e4e70f3cee1af8c42b042a56ec6e22c3174a5f7de96b2cf420e6"
   }
 }

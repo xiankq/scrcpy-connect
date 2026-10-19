@@ -289,12 +289,12 @@ they no longer constitute Kotlin filesystem-import tests. These test description
 are coverage inventory, not a new execution result from this documentation edit.
 
 ```sh
-rtk proxy cargo +stable test -p interop-core --test share_import
-rtk proxy python3 android/app/src/test/run_native_ownership_tests.py
-rtk proxy python3 android/app/src/test/run_audio_contract_tests.py
-rtk proxy python3 tool/e2e/share_fixture/build.py
+cargo +stable test -p interop-core --test share_import
+dart tool/native_contracts.dart ownership
+dart tool/native_contracts.dart audio
+dart tool/e2e/share_fixture/build.dart
 # From packages/interop_bridge:
-rtk proxy flutter test test/share_intake_test.dart
+flutter test test/share_intake_test.dart
 ```
 
 The real-device target is

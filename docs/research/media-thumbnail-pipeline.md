@@ -35,7 +35,7 @@ Rust 在生成前、生成后校验源戳，再验证 JPEG SHA-256、长度和�
 测试工具为临时 FFmpeg7.0.2-static（imageio-ffmpeg0.6.0），SHA256 `e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99`，不是产品依赖。视频 fixture 使用真实 MP4 display matrix（FFmpeg7 的 `-display_rotation -90`）；旧 `-metadata rotate=90` 未生成旋转矩阵，不能当旋转验证。
 
 ```sh
-rtk proxy env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
+env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
  INTEROP_TEST_FFMPEG=/tmp/interop-test-tools/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2 \
  /home/xiankq/.cargo/bin/cargo +stable test -p interop-core --test media_thumbnail_android -- --ignored --nocapture --test-threads=1
 ```

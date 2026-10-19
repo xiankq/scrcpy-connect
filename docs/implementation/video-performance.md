@@ -228,7 +228,7 @@ fixture及精确forward均清理，两自有AVD核名关闭且PID消失，CLI／
 `CONNECT_E2E_VIDEO_TIMELINE=true`并使用新/tmp输出目录；结束后执行：
 
 ```sh
-rtk proxy python3 -B tool/e2e/video_fixture/analyze_player_archive.py \
+dart tool/e2e/video_fixture/analyze_player_archive.dart \
   --run /tmp/connect-e2e/product-packet-diagnostic \
   --ffmpeg '<宿主FFmpeg可执行文件>'
 ```
@@ -316,7 +316,7 @@ debug-cleanup}.json`。此批是诊断与隔离实验进展，完整性能目标
 编码帧，因此前节drawEnd→raw区间本身不是“源端最早新像素延迟”。这不影响原
 输入到snapshot总计时或有限A/B/A收益，但会改变下一步归因，不能继续盲目缩窗。
 
-新增`tool/e2e/video_fixture/capture_first_counter.py`在独立授权目标上复用现有JAR，
+新增`tool/e2e/video_fixture/capture_first_counter.dart`在独立授权目标上复用现有JAR，
 连续保存完整H264包、精确PTS、文件偏移和宿主单调接收时刻。独立fixture记录每次
 真实输入／首次draw，前后各3次`/proc/uptime`往返建立带10ms量化的时钟区间。
 `remux_capture_packets`使用生产MatroskaMuxer保留微秒PTS；FFmpeg离线逐帧解码，
@@ -352,14 +352,14 @@ AVD核名关闭且PID消失，目标进程／文件／fixture／forward缺席，
 复现需启动专用目标AVD，现有候选路径按实际构建目录替换；每次使用新输出目录：
 
 ```sh
-rtk proxy python3 -B tool/e2e/video_fixture/capture_first_counter.py \
+dart tool/e2e/video_fixture/capture_first_counter.dart \
   --adb /home/xiankq/Android/Sdk/platform-tools/adb --target emulator-5556 \
   --jar /tmp/connect-bounded-input-steady-one-build/interop-scrcpy-server.jar \
   --fixture /tmp/connect-video-fixture/video-fixture.apk \
   --out /tmp/connect-e2e/first-counter-replay
-rtk proxy cargo run -p interop-core --example remux_capture_packets -- \
+cargo run -p interop-core --example remux_capture_packets -- \
   /tmp/connect-e2e/first-counter-replay
-rtk proxy python3 -B tool/e2e/video_fixture/analyze_first_counter.py \
+dart tool/e2e/video_fixture/analyze_first_counter.dart \
   --capture /tmp/connect-e2e/first-counter-replay --ffmpeg '<宿主FFmpeg可执行文件>'
 ```
 
@@ -420,7 +420,7 @@ r1/r2初始严格颜色不匹配，r3颜色比例可识别但首个操作无变�
 可重复运行（工作目录仓库根目录，先从仓库根构建夹具）：
 
 ```sh
-python3 tool/e2e/video_fixture/build.py
+dart tool/e2e/video_fixture/build.dart
 flutter pub get --offline
 CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
@@ -750,7 +750,7 @@ control-send等空队列、video在`dequeueOutputBuffer(-1)`。这支持排查�
 在仓库根目录使用：
 
 ```sh
-rtk proxy env CONNECT_E2E_VIDEO_MOTION=true \
+env CONNECT_E2E_VIDEO_MOTION=true \
  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/video-pause-stress \
  flutter drive -d emulator-5554 --no-pub \
  --driver=tool/driver/video_performance.dart \
@@ -1467,7 +1467,7 @@ workDone→宿主header另沿用raw receipt的完整往返与10ms量化时钟区
 `CCodec event inside capture has no matching received frame`，没有生成假完整结果。
 
 ```sh
-python3 tool/e2e/video_fixture/analyze_codec_trace.py \
+dart tool/e2e/video_fixture/analyze_codec_trace.dart \
   --trace-processor /tmp/connect-trace-processor \
   --receipt /tmp/connect-raw-drain-fbf1db6ec385/result.json \
   --trace /tmp/connect-raw-drain-fbf1db6ec385/capture.perfetto-trace \
@@ -1818,8 +1818,8 @@ pubspec统一覆盖，来源／许可证／归档SHA及SDK边界保留在
 可执行的真实源边界红绿命令（宿主C++20与Dart，不包含MDK renderer）：
 
 ```sh
-python3 tool/fvp_snapshot_regression.py --package-root /tmp/connect-fvp-official-0.39.1
-python3 tool/fvp_snapshot_regression.py
+dart tool/fvp_snapshot_regression.dart --package-root /tmp/connect-fvp-official-0.39.1
+dart tool/fvp_snapshot_regression.dart
 ```
 
 原版实际SIGSEGV（内部exit-11、脚本exit1）；修补后检查未知handle拒绝、空结果一次

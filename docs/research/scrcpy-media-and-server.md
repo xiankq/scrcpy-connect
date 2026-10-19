@@ -198,7 +198,7 @@ AV1 的原始 packet 不能在测试中随意拼接为无边界 OBU 输入：本
 测试工具是临时 `imageio-ffmpeg==0.6.0` 提供的 `ffmpeg 7.0.2-static`，SHA-256 为 `e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99`，不作为产品依赖或分发二进制。执行命令：
 
 ```sh
-rtk proxy env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
+env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
   INTEROP_FFMPEG=/tmp/interop-test-tools/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2 \
   /home/xiankq/.cargo/bin/cargo +stable test -p interop-core --test video_quality_android -- --ignored --nocapture
 ```

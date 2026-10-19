@@ -39,9 +39,9 @@ Flutter 承担主要页面与任务归属；共享 Dart 协调树规划、数量
 双 AVD 自动流程使用真实 `app.main`、Rust ADB、文件详情和任务准备页。host 生成唯一 UTF-8 原件，通过实际系统文件选择器取消／保存，再通过实际 Sharesheet 选择独立测试接收器。保存位置由 host 独立读字节，接收器凭实际 content URI 授权读内容并计算 SHA-256。缺失任一回执均失败。接收器仅安装在主控 AVD；不进入产品、被控设备或发布依赖。
 
 ```sh
-rtk proxy python3 tool/e2e/content_delivery_fixture/build.py
+dart tool/e2e/content_delivery_fixture/build.dart
 # 工作目录 仓库根目录；PATH 包含 Rust 和 Flutter。
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/content-delivery \
   flutter drive -d emulator-5554 --no-pub \
@@ -70,7 +70,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 前几轮的DocumentsUI Downloads／Download识别及误读持久回执未公开的renamed／createdCount字段导致测试失败，均未算通过；第四轮功能通过后，目视发现全跳过却报部分已保存，新增公共页面红测后修复并由第五轮复验。持久回执保持现有公开投影，host以实际文件核验成果，没有扩字段来掩盖夹具错误。
 
 ```sh
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_TARGET_ADB_PORT=5555 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/document-conflict \
@@ -88,7 +88,7 @@ IncomingSharePage让用户明确选接收设备，提交前捕获该设备和目
 先构建并仅在主控安装tool/e2e/share_fixture的APK。工作目录仓库根目录，PATH包含Flutter／Rust，ANDROID_HOME指向SDK；目标端5556／5558分别开放已授权测试TCP及hostforward15556／15558。运行：
 
 ```sh
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_SECOND_TARGET=emulator-5558 \
   flutter drive -d emulator-5554 --no-pub \

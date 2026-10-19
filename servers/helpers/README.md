@@ -65,8 +65,12 @@ Install Rust **1.99.1**, NDK **28.2.13676358**, and Rust targets
 `i686-linux-android`. On Linux x86_64:
 
 ```sh
-rtk proxy python3 servers/helpers/build.py
+dart servers/helpers/build.dart
 ```
+
+`dart servers/helpers/build.dart --check` verifies source/tool and artifact hashes offline; `--rebuild` builds and compares all four ABIs without replacing artifacts.
+Run `flutter pub get` once at the repository root to prepare the Dart dependencies.
+The script locates the repository from its own path and also works outside the root working directory.
 
 `ANDROID_NDK_HOME` may select another installation of the same pinned NDK.
 The script builds against Android API 21, remaps checkout/Cargo paths, removes
@@ -82,7 +86,7 @@ per-entry permission errors, 4096/10000-entry limits, and directory-path
 replacement during a blocked listing:
 
 ```sh
-rtk proxy cargo +1.99.1 test --locked \
+cargo +1.99.1 test --locked \
   --manifest-path crates/android_helper/Cargo.toml
 ```
 
@@ -117,7 +121,7 @@ must refresh; the operation is never repeated through copy/delete.
 ## Actual Android verification
 
 ```sh
-rtk proxy env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
+env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
   /home/xiankq/.cargo/bin/cargo test -p interop-core --test remote_helper_android \
   -- --ignored --nocapture
 ```

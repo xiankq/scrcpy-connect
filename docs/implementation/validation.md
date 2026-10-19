@@ -71,7 +71,7 @@ CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e flutter drive \
 
 - `INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 cargo test -p interop-core --test files_android -- --ignored --test-threads=1`：5项全部通过，25.74秒。覆盖真实push/pull哈希、当前批次冲突策略、取消后显式从零重启、非UTF8碰撞路径保护、FUSE原子发布/重命名。
 - `cargo test -p interop-core remote_helper::tests --lib`：3项通过；含缺失/截断/矛盾回执必须返回`result_unknown`，不允许自动重试未知提交。
-- 四ABI助手由`servers/helpers/build.py`构建，清单同时锁定源文件与每个产物SHA256；Android 16目标实际验证目录、链接、路径转义、并发无覆盖，以及共享存储。不是依赖系统`mv -n`的假原子实现。
+- 四ABI助手由`servers/helpers/build.dart`构建，清单同时锁定源文件与每个产物SHA256；Android 16目标实际验证目录、链接、路径转义、并发无覆盖，以及共享存储。不是依赖系统`mv -n`的假原子实现。
 - 原生USB选择器在系统授权前即登记待取消请求，按generation丢弃晚到广播；FD授权使用一次性lease，Rust复制后释放Java FD。物理USB缺设备，不能由编译/代码回归推定实物通过。
 - 通话聚合状态无法保证具体call身份：真实快速替换来电负例证实旧观察ID不可靠。产品拒绝全局接听/挂断动作，展示`call_targeting_unavailable`与远控入口。安全逐通话控制仍是未完成项。
 - 通知快捷回复原PendingIntent已被系统接受，但测试接收器未证明应用送达；界面明确“系统已接受，送达未知”。草稿及禁止一键重发只在该回复页仍存活时成立：离页重进会丢失Hook状态，不能据此宣布跨导航/重建保护完成，见重新核查A40。
@@ -171,7 +171,7 @@ Android发现补齐：Activity可见与connectedDevice前台服务分别持有Wi
 在仓库根目录运行，`PATH`包含本机Rust/Flutter，target5556已将15556转发到5555：
 
 ```sh
-rtk proxy env CONNECT_E2E_TARGET=emulator-5556 \
+env CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/session-workspace \
   flutter drive --driver=tool/driver/session_workspace.dart \
@@ -220,7 +220,7 @@ rtk proxy env CONNECT_E2E_TARGET=emulator-5556 \
 主控5554→被控5556，使用已经准备的转发端点；target secure=0，不能证明未授权首次设置或强制认证。运行目录 仓库根目录，PATH 包含本机 Rust/Flutter：
 
 ```sh
-rtk proxy env CONNECT_E2E_ACCEPTANCE=media \
+env CONNECT_E2E_ACCEPTANCE=media \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/recovery-csd-fixed \
   flutter drive --driver=tool/driver/integration_test.dart \
   --target=integration_test/state_recovery_test.dart -d emulator-5554 \
@@ -251,7 +251,7 @@ rtk proxy env CONNECT_E2E_ACCEPTANCE=media \
 API36目标`emulator-5556`、转发`127.0.0.1:15556`执行：
 
 ```sh
-rtk proxy env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
+env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
   ANDROID_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   ANDROID_TARGET_SERIAL=emulator-5556 \
   cargo test -p interop-core --test observation_android -- \
@@ -310,10 +310,10 @@ A42原先使用lastEvent触发来电，连续calls.incoming→observation.change
 
 新增[临时通知测试APK](../../tool/e2e/notification_fixture/README.md)仅为独立原接收端；不进产品/companion，不新增被控安装前提。只在明确API36隔离AVD安装本次不存在的测试包、授予该fixture自己的POST_NOTIFICATIONS；有既有包就拒绝覆盖，精确清理并仅卸载本次拥有安装。主控/产品权限和AppOps均未修改。构建产物仅tmp，签名验证通过；独立manifest receiver从原RemoteInput结果key读中文/换行/emoji，AtomicFile记录run/id/原文/count，并在关闭run资格、取消PI后发布最终清理回执防止删除次数证据。
 
-PATH已含本机Rust/Flutter；先在仓库根目录构建`rtk proxy python3 tool/e2e/notification_fixture/build.py`，再进入仓库根目录运行：
+PATH已含本机Rust/Flutter；先在仓库根目录构建`dart tool/e2e/notification_fixture/build.dart`，再进入仓库根目录运行：
 
 ```sh
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/notification-reply-final \
   flutter drive -d emulator-5554 --no-pub \
@@ -381,7 +381,7 @@ Rust工作区159 passed/44 ignored（`/tmp/connect-context-rust.log`）、all-ta
 完整运行命令，目录仓库根目录，PATH含本机Rust/Flutter：
 
 ```sh
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/system-notifications-content-verified \
   flutter drive -d emulator-5554 --no-pub \
@@ -418,7 +418,7 @@ rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 真实产品运行命令在仓库根目录，PATH含Rust/Flutter，两台API36/x86_64：
 
 ```sh
-rtk proxy env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/glass-product-final \
+env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/glass-product-final \
   flutter drive -d emulator-5554 --no-pub \
   --driver=tool/driver/integration_test.dart \
   --target=integration_test/product_flow_test.dart \
@@ -576,7 +576,7 @@ Rust默认工作区40套件163通过/47忽略（`/tmp/connect-first-pairing-rust
 
 公开RemotePage／typed路由测试先加入暂停抛错与永不完成两种情况，实际均因页面仍存在而失败。离开本地呈现改为不等待远端pause；输入释放仍在原session有序执行，不强停任务。首版修复曾因在返回页Scaffold就绪前发布Snackbar而失败，并发现重复pause；后置反馈、阻止退出中的重复pause后，remote_lifecycle＋session_views共32项通过。
 
-随后扩展为悬浮退出／系统返回×暂停失败／挂起四组合，全部通过：只退回原页面、只pause原session一次、没有session.stop；失败提示确实在返回页可见并包含设备名。命令：在仓库根目录执行 `rtk proxy flutter test --no-pub test/remote_lifecycle_test.dart --plain-name 'remains reachable when capture pause' --reporter expanded`。修复本地提交`0bf9cb1`。
+随后扩展为悬浮退出／系统返回×暂停失败／挂起四组合，全部通过：只退回原页面、只pause原session一次、没有session.stop；失败提示确实在返回页可见并包含设备名。命令：在仓库根目录执行 `flutter test --no-pub test/remote_lifecycle_test.dart --plain-name 'remains reachable when capture pause' --reporter expanded`。修复本地提交`0bf9cb1`。
 
 这没有证明同session立即重进成功：旧挂起请求仍可能阻塞SessionViews队列。真实断网／暂停故障的Android E2E、恢复核验和资源收束仍须继续，不把widget请求夹具当真实设备负例。
 
@@ -619,7 +619,7 @@ CI保留既有`host-checks`身份，显式调用`./tool/check.sh --android`，�
 
 三ABI实际APK暂存`/tmp/connect-lifecycle-three-abis-p7uhsufm/app-debug.apk`，249715366字节，SHA-256 `7d66deab1f04e767d3b2cb6b4f22eeb19f596c44152d001fc409028c34d55102`；回执`/tmp/connect-lifecycle-apk-receipt.json`。这份保留避免后续普通main单ABI部署覆盖唯一产物；不作为Git内容，也不宣称发布签名或其他三平台已构建。日志仍有Java8选项、PlatformDocuments非空断言及模拟器渲染／首屏跳帧等既有警告。
 
-解析修正后最后重新执行**整条**`rtk proxy env PATH=<Rust/Flutter/Node及系统路径> CARGO_BUILD_JOBS=2 ANDROID_HOME=/home/xiankq/Android/Sdk ./tool/check.sh --android`，实际退出0，`/tmp/connect-lifecycle-all-gates-final.log`。同一轮生成143输入／10秒、应用212项16秒、设计系统3项、Bridge102项、Rust176／49 ignored和其余门禁全部通过，三ABI增量构建2,384ms，随后4组native main及实际manifest／ELF通过。此前npx缺失和错误数值枚举解析的两次失败日志仍保留，未合并包装成首次整条通过。
+解析修正后最后重新执行**整条**`env PATH=<Rust/Flutter/Node及系统路径> CARGO_BUILD_JOBS=2 ANDROID_HOME=/home/xiankq/Android/Sdk ./tool/check.sh --android`，实际退出0，`/tmp/connect-lifecycle-all-gates-final.log`。同一轮生成143输入／10秒、应用212项16秒、设计系统3项、Bridge102项、Rust176／49 ignored和其余门禁全部通过，三ABI增量构建2,384ms，随后4组native main及实际manifest／ELF通过。此前npx缺失和错误数值枚举解析的两次失败日志仍保留，未合并包装成首次整条通过。
 
 最后普通`lib/main.dart`实际构建11.3秒、安装启动，CLI按R热重启1,417ms，设备列表空态`/tmp/connect-lifecycle-main-restarted.png`已目视，随后detach。默认浅色／黑色主动作、紫色小图标、玻璃底部导航与固定设备首页可见；不以此替代全部设计状态或独立光学验收。仍有两条FRB旧isolate投递警告与启动SurfaceSync／跳帧日志，未称零运行告警。
 
@@ -657,7 +657,7 @@ Pencil保存关闭重开已核对93独立页／12行类别／26母组件／588�
 
 `e776065`：实际mDNS旧锁版核查发现上游已修复的HINFO越界panic，将生产与测试统一精确0.21.2，无发现适配源码变化。窄ADB／Core全部测试目标check、已有discovery单测通过；四端增量依赖树无新增C构建或原生密码／USB实现，系统FFI仍保留。API／feature／版本差异与影响事实、推断分别见[锁版研究](../research/locked-mdns-contract.md)。
 
-HINFO验证只运行修复版已有回归：将registry发布源码原样复制到`/tmp/interop-a58-mdns-rm3xpyvi/mdns-sd-0.21.2`，运行`rtk proxy env CARGO_TARGET_DIR=/tmp/interop-a58-upstream-target /home/xiankq/.cargo/bin/cargo test --manifest-path /tmp/interop-a58-mdns-rm3xpyvi/mdns-sd-0.21.2/Cargo.toml --lib test_hinfo_char_string_at_end_of_packet --locked`。原测试1 passed／53 filtered，构建6.85秒；没有修改registry／生产解析器，没有本地旧版坏包红测，也没有向共享5353注入消息。
+HINFO验证只运行修复版已有回归：将registry发布源码原样复制到`/tmp/interop-a58-mdns-rm3xpyvi/mdns-sd-0.21.2`，运行`env CARGO_TARGET_DIR=/tmp/interop-a58-upstream-target /home/xiankq/.cargo/bin/cargo test --manifest-path /tmp/interop-a58-mdns-rm3xpyvi/mdns-sd-0.21.2/Cargo.toml --lib test_hinfo_char_string_at_end_of_packet --locked`。原测试1 passed／53 filtered，构建6.85秒；没有修改registry／生产解析器，没有本地旧版坏包红测，也没有向共享5353注入消息。
 
 新锁版真实公开Runtime DNS-SD／TLS七项77.36秒全部通过（`/tmp/connect-mdns-safe-reconnect.log`）；不是默认忽略后被计通过。iOS／macOS／Windows核心cross-check分别4.24／4.18／8.26秒通过（`/tmp/connect-mdns-safe-core-cross-checks.log`）。Core发现异常关闭后的重建、其他上游修复、A56其余依赖契约与三宿主Flutter整包仍未关闭。
 
@@ -671,7 +671,7 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 
 公开Runtime双设备ADB协议fixture验证精确音源活动、停止保留B、旧sourceId不误停替代源；它不替代真实Android。Flutter活动页确认／精确activityId与既有PortableAudioOutputs共23项通过；新增中文播放状态断言先红后绿。相关5文件严格分析无问题。
 
-真实运行：在仓库根目录执行`rtk proxy env PATH=<toolchain> ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/audio-activities-r3 flutter drive -d emulator-5554 --no-pub --driver=tool/driver/audio_activities.dart --target=integration_test/audio_activities_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556`。第三轮9秒通过，构建10.3秒／安装856ms，日志`/tmp/connect-audio-activities-r3.log`。严格driver要求8个结果全部true及3张截图；回执`/tmp/connect-e2e/audio-activities-r3/result.json`满足。实际PCM、fvp准备／播放与时钟前进后，活动页确认停止，Core源及精确本地输出消失，连接／观察及基线媒体保留，finally清理完整。播放／确认／停止后截图已目视。
+真实运行：在仓库根目录执行`env PATH=<toolchain> ANDROID_HOME=/home/xiankq/Android/Sdk CARGO_BUILD_JOBS=2 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/audio-activities-r3 flutter drive -d emulator-5554 --no-pub --driver=tool/driver/audio_activities.dart --target=integration_test/audio_activities_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556`。第三轮9秒通过，构建10.3秒／安装856ms，日志`/tmp/connect-audio-activities-r3.log`。严格driver要求8个结果全部true及3张截图；回执`/tmp/connect-e2e/audio-activities-r3/result.json`满足。实际PCM、fvp准备／播放与时钟前进后，活动页确认停止，Core源及精确本地输出消失，连接／观察及基线媒体保留，finally清理完整。播放／确认／停止后截图已目视。
 
 首轮在observation.start返回starting时错误要求终态；改只读轮询后继续。第二轮MissingPluginException发生于截图：先前普通main的自动GeneratedPluginRegistrant排除了dev测试插件，而--no-pub没有重新生成；执行离线flutter pub get恢复自动注册后第三轮通过。没有手改注册器或生产Kotlin，没有把失败计通过。
 
@@ -679,7 +679,7 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 
 ## 渐进验收：入站PNG固定接收设备（2026-10-18）
 
-在仓库根目录，以明确独立controller／target／secondTarget环境运行`flutter drive -d emulator-5554 --no-pub --driver=tool/driver/incoming_share_target.dart --target=integration_test/incoming_share_target_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556 --dart-define=CONNECT_E2E_SECOND_PORT=15558`（所有命令经rtk proxy；完整环境与fixture构建见[内容交付](content-delivery.md#外部入站内容的固定目标)）。首轮14秒通过、构建52秒／安装745ms，`/tmp/connect-incoming-share-target-r1.log`、`/tmp/connect-e2e/incoming-share-target/result.json`。
+在仓库根目录，以明确独立controller／target／secondTarget环境运行`flutter drive -d emulator-5554 --no-pub --driver=tool/driver/incoming_share_target.dart --target=integration_test/incoming_share_target_test.dart --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556 --dart-define=CONNECT_E2E_SECOND_PORT=15558`（完整环境与fixture构建见[内容交付](content-delivery.md#外部入站内容的固定目标)）。首轮14秒通过、构建52秒／安装745ms，`/tmp/connect-incoming-share-target-r1.log`、`/tmp/connect-e2e/incoming-share-target/result.json`。
 
 三AVD互异名称＋两端独占marker同时由host和公开files.list核对映射，外部非导出provider凭真实grant向产品提交PNG。页面明确选A后调用公开focusDevice(B)，仍只向A上传；host独立读取68字节与SHA256 `ce01132c640469ef7fb497e7496b12f5046d633b588f397e5c45a6c3efc85037`一致、B无同路径文件、消费后两次刷新不新增传输，精确清理全true。目标确认截图已目视；两台同型号默认同名的选项仍需可辨识线索，不以此声称完整视觉完成。窄分析通过；不沿用上一批全门禁。
 
@@ -696,3 +696,13 @@ HINFO验证只运行修复版已有回归：将registry发布源码原样复制�
 通话当前UI接续真实Runtime最终9.94秒／构建1.28秒通过，`/tmp/connect-call-system-ui-r2.log`。先让Settings前台，再calls.open并独立dumpsys确认真实InCallActivity前台，modem仍ringing；旧操作不能结束替代call。夹具只取消自己的两个模拟号码，不再全局ENDCALL。该证据不替正式CallsPage→全屏像素E2E，不代表具体callId控制或双向音频。[命令与JAR摘要](current-call-ui.md)。本批未跑新的完整门禁／三ABI留存或其他宿主整包。
 
 普通lib/main.dart当前源码实际构建27.7秒／安装555ms，CLI R热重启1,763ms，`/tmp/connect-ime-call-main.log`；设备列表空态截图`/tmp/connect-ime-call-main-restarted.png`已目视后detach。两条FRB旧isolate投递告警和启动跳帧仍有，该首页不代替A59或完整动态视觉。
+
+## Dart 工具与主机测试目录迁移（2026-10-19）
+
+根目录保留 `test/` 与 `integration_test/`；主机驱动及基准分别迁至 `tool/driver/`、`tool/benchmark/`。35 个仓库自有 Python 文件已由 Dart 实现取代，覆盖生成、签名／打包、服务端构建、原生 JVM 回归、夹具构建与性能证据分析。官方 DESIGN.md Node 工具和受控来源归档保留。
+
+根应用323项通过，`/tmp/connect-dart-migration-flutter.jsonl`；工具49项通过，`/tmp/connect-dart-migration-tools.jsonl`，包含原分析器回归、协议生成精确字节、FRB隔离、APK本地与中央目录CRC、ELF、Windows bundle、Apple归档权限与链接、manifest失败门禁。Windows及Apple打包测试使用主机夹具，不代表对应宿主整包构建。最终静态分析、311个Dart文件格式、Rust格式、129条协议与完整token／FRB／builder生成一致性检查通过，生成日志为`/tmp/connect-dart-migration-generate.log`。
+
+三类服务端产物检查、companion临时重建逐字节比较、四组Java兼容回归及ZIP／DEX／摘要漂移负例通过；Java源、运行JAR、四ABI ELF和对应源码归档字节未改。六种独立测试APK均在本机Linux／SDK36实编译、签名并验签，随后清理临时输出；本轮未重新执行设备端采集或其他宿主构建。
+
+JVM ownership／音频、实际snapshot接缝、三个CMake用例、驱动验收契约、截图解析和故障代理通过。既有x64 debug交付APK由新Dart工具复核ZIP、签名、16KB对齐及ELF，摘要仍为`7369a0ab259df8f0f78f3bbdda08088f50b53f90eebb72a9ca21f55b0f4f8211`，回执为`/tmp/connect-dart-migration-apk.json`；未新建三ABI APK。现有应用热重载成功，运行时错误查询为空，随后detach。

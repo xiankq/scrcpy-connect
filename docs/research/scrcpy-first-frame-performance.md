@@ -298,7 +298,7 @@ ret为null时发送空Uint8List；既有player.dart把空数据转换为null完�
 仅提前return会留下永久pending请求，因此不采用。回归同时检查有效带stride缓冲
 及未知handle，并通过真实Dart VM NativeApi.postCObject／ReceivePort确认空和
 填充typed data可交付。见[来源与补丁](../../third_party/fvp/CONNECT_PATCHES.md)、
-[可执行回归](../../tool/fvp_snapshot_regression.py)。
+[可执行回归](../../tool/fvp_snapshot_regression.dart)。
 
 **边界：**该修补没有改变MDK renderer二进制，也没有证明结果交付时worker已排空；
 历史空回调崩溃继续开放。Android真实设备链路结果另记[视频性能](../implementation/video-performance.md)。

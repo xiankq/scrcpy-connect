@@ -11,18 +11,22 @@
 完整生成与一致性入口从仓库根执行：
 
 ```sh
-rtk proxy npm ci --ignore-scripts --prefix tool/design_tokens
-rtk proxy python3 tool/generate.py
-rtk proxy python3 tool/generate.py --check
+npm ci --ignore-scripts --prefix tool/design_tokens
+dart tool/generate.dart
+dart tool/generate.dart --check
 ```
 
-`tool/generate.py --check` 汇总 token、FRB 和 Dart builder 的生成一致性。`tool/check.sh` 使用固定 Node 依赖运行官方 lint 与生成器回归；官方对项目扩展属性和未直接被标准 components 引用的颜色所给警告保持可见，警告数是源文件状态的结果，不作为固定规格。
+`tool/generate.dart --check` 汇总 token、FRB 和 Dart builder 的生成一致性。`tool/check.sh` 使用固定 Node 依赖运行官方 lint 与生成器回归；官方对项目扩展属性和未直接被标准 components 引用的颜色所给警告保持可见，警告数是源文件状态的结果，不作为固定规格。
 
 依赖解析先通过锁文件完成，生成过程不自动升级 FRB 依赖，也不触发 `dart run` 的隐式重新解析。网络不可用但固定依赖已缓存时，可先使用 `flutter pub get --offline --enforce-lockfile`；这不允许更新锁文件或跳过生成一致性检查。
 
 ## 根目录应用与包职责
 
 根 `pubspec.yaml` 是唯一 Flutter 应用入口。根目录仅保留 Flutter 常规的 `test/` 单元／组件测试和 `integration_test/` 设备端集成测试；主机驱动放在 `tool/driver/`，性能基准入口放在 `tool/benchmark/`。驱动命令显式指定 `--driver=tool/driver/<入口>.dart`，基准使用 `--target=tool/benchmark/<入口>.dart`，不依赖默认目录推断。命令和 CI 产物路径从根解析，旧 `apps/connect` 已移除。`packages/design_system` 与 `packages/interop_bridge` 为 Dart workspace 包，`crates/` 为 Cargo workspace，应用平铺不改变这些模块边界。
+
+仓库自有生成、构建、诊断及主机测试编排统一使用 Dart；服务端构建器随其产物保存在 `servers/`，其余入口在 `tool/`。工具回归使用同一锁定的 `flutter_test`，不另建测试依赖环境。Node 仅用于官方 DESIGN.md 解析及其 Dart emitter；原生源码和系统构建器保持平台要求的语言。第三方来源归档内的上游脚本不属于自有工具，不改写归档以消除文件扩展名。
+
+工具迁移后的历史回执仍只证明原版本的运行结果。本文与专项记录中的复现入口随目录调整，原日志、版本、环境及已知限制不因迁移改变。
 
 ## 唯一受控 fork：third_party/fvp
 

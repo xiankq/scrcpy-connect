@@ -11,7 +11,7 @@
 [mdns_reconnect.rs](../../crates/interop_core/tests/mdns_reconnect.rs) 通过公开 Runtime、真实多播 DNS-SD、TLS/STLS/CNXN socket 检查发布状态。首个不可达地址／第二地址成功、端口变更、goodbye、近似 GUID 拒绝、禁止明文、旧握手迟到、先缓存后发现更新、先缓存后撤销及同端点 ABA 共七项串行通过，最终 89.08 秒。缓存地址先启动后出现新发现的新增测试，修复前确实发布了旧端口，修复后只发布新端口。
 
 ```sh
-rtk proxy env CARGO_BUILD_JOBS=2 \
+env CARGO_BUILD_JOBS=2 \
   cargo test -p interop-core --test mdns_reconnect -- --ignored --test-threads=1
 ```
 
@@ -34,7 +34,7 @@ Required TLS候选遍历及成功发布路径；发现浏览器保留到TLS／�
 整个PAKE与元数据竞争的同一次交错。中间两次泛型推断编译失败保留，不当产品红测。
 
 ```sh
-rtk proxy env CARGO_BUILD_JOBS=2 cargo test -p interop-core --lib \
+env CARGO_BUILD_JOBS=2 cargo test -p interop-core --lib \
   device::pairing_tests -- --include-ignored --test-threads=1
 ```
 

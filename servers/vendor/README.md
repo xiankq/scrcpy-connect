@@ -10,19 +10,19 @@
 
 ## 构建与复查
 
-无需 Android SDK 的离线完整性和构建输入新鲜度检查：
+从仓库内任意工作目录使用脚本绝对路径可定位根目录。先在仓库根目录运行 `flutter pub get` 准备固定 Dart 依赖；之后无需 Android SDK 的离线完整性和构建输入新鲜度检查：
 
 ```sh
-python3 servers/vendor/build.py --check
+dart servers/vendor/build.dart --check
 ```
 
-源码构建需要 Python 3.12+、OpenJDK 21、Android SDK platform 36 与 build-tools 36.0.0。脚本固定 Gradle 9.3.1（下载包 SHA-256）、AGP 9.1.0 / D8-L8-R8 9.1.31、desugar_jdk_libs 与 configuration 2.1.4（各自 JAR SHA-256），并核对本地 API 36 android.jar 摘要。设置 `JAVA_HOME`、`ANDROID_HOME` 后执行：
+源码构建需要 仓库固定 Dart SDK、OpenJDK 21、Android SDK platform 36 与 build-tools 36.0.0。脚本固定 Gradle 9.3.1（下载包 SHA-256）、AGP 9.1.0 / D8-L8-R8 9.1.31、desugar_jdk_libs 与 configuration 2.1.4（各自 JAR SHA-256），并核对本地 API 36 android.jar 摘要。设置 `JAVA_HOME`、`ANDROID_HOME` 后执行：
 
 ```sh
 # 干净临时源码构建，与当前 JAR 逐字节比较，不修改 vendor。
-python3 servers/vendor/build.py --rebuild
+dart servers/vendor/build.dart --rebuild
 # 有意更新构建输入或产物时，验证成功后替换唯一 JAR 与 manifest。
-python3 servers/vendor/build.py --update
+dart servers/vendor/build.dart --update
 ```
 
 `--gradle /path/to/gradle` 可复用已安装的同版本 Gradle；`--offline` 让 Gradle 使用已填充的依赖缓存（固定 scrcpy 源码归档仍需下载）。网络代理由环境与 Gradle 用户配置控制，必要时可显式传 `--gradle-arg=-Dhttps.proxyHost=` 等参数。脚本只在系统临时目录展开固定来源源码，结束即清理，使用 `--no-daemon` 退出本次 Gradle 进程。
@@ -38,7 +38,7 @@ python3 servers/vendor/build.py --update
 可编译保留的诊断探针：
 
 ```sh
-python3 servers/vendor/test/build_probe.py /tmp/scrcpy-api21-probe.jar
+dart servers/vendor/test/build_probe.dart /tmp/scrcpy-api21-probe.jar
 ```
 
 在已授权的被控设备测试中，将 server 和探针推送到设备临时路径、赋予可读权限，并以 `CLASSPATH=<server>:<probe.jar> app_process / ScrcpyApi21Probe` 执行。它加载函数接口、默认方法回填和 Size lambda，调用真实 `BinarySearch.findHighestTrue`，再读取 AVC 编码器 capabilities 调用 `Size.constrain(VideoConstraints)`，不启动编码器。API 21 实际验证得到 `BINARY_SEARCH_OK 7`、`SIZE_CONSTRAIN_OK OMX.google.h264.encoder 96x48`、`PROBE_OK`，确认 `app_process` 可加载第二个 DEX 并经过原失败路径。

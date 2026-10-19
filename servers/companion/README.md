@@ -170,14 +170,16 @@ API 21 验证图片／stat 类时解析缺失的视频父类。工作队列以 `
 
 ## 构建与验证
 
-`python3 servers/companion/build.py` 使用现有 JDK 21、Android SDK 36 和
+先在仓库根目录运行 `flutter pub get` 准备固定 Dart 依赖；脚本通过自身位置定位仓库，从其他工作目录以绝对路径调用也可运行。
+
+`dart servers/companion/build.dart` 使用现有 JDK 21、Android SDK 36 和
 build-tools 36.0.0 的 javac/d8，在临时目录编译，输出确定性的 `companion.jar`
 与 `manifest.json`；不联网安装工具。`build.sh` 保留为同一入口的包装脚本。
 JAR 固定条目顺序、ZIP 时间戳、权限、存储方式和 manifest 内容，避免宿主 ZIP
 元数据或 JDK 的 `Created-By` 文本改变归档。测试 Fixture 不编入产品 JAR。
 
-`python3 servers/companion/build.py --check` 先核对 manifest 中全部 Java 源码、
-构建脚本与受控 JAR 的 SHA-256，再在临时目录真实重建并逐字节比较 JAR；检查
+`dart servers/companion/build.dart --check` 先核对 manifest 中全部 Java 源码、
+构建脚本、共享 `servers/tooling.dart` 与受控 JAR 的 SHA-256，再在临时目录真实重建并逐字节比较 JAR；检查
 不改写受控源码、JAR 或 manifest。仅修改 Java 而未重建会被拒绝，手改 manifest
 摘要也不能绕过重建比较。`tool/check.sh` 已接入此门禁。修改源码或构建脚本后需
 重建并提交 JAR 与 manifest，同时同步 Rust 的 `SERVER_SHA`。
@@ -190,7 +192,7 @@ JAR 固定条目顺序、ZIP 时间戳、权限、存储方式和 manifest 内�
 本次构建与 `--check` 本地通过；这项归档一致性验证不新增设备运行验收结论。
 当前产物摘要与完整构建输入以同目录 `manifest.json` 为准。
 
-`python3 servers/companion/tests/compatibility.py` 在临时目录编译并运行宿主
+`dart servers/companion/tests/compatibility.dart` 在临时目录编译并运行宿主
 兼容边界测试：不提供 API 26 进程方法的 Process 验证有界等待与退出，固定
 AIDL 形状验证 API 21、23、30、31+ 的 listener 注册／注销、旧系统 UI 请求和
 读取权限拒绝不回退。该测试经过先失败后通过的回归循环；它验证调用协议，
@@ -209,10 +211,10 @@ stop后共享helper剪贴板仍可get/set、列表与断线重连均不恢复观
 下列其余既有AVD证据仍按各自功能和版本边界记录。
 
 ```sh
-python3 servers/companion/build.py
-python3 servers/companion/build.py --check
+dart servers/companion/build.dart
+dart servers/companion/build.dart --check
 bash servers/companion/tests/build-fixture.sh
-python3 servers/companion/tests/android-probe.py \
+dart servers/companion/tests/android-probe.dart \
   --adb "$ANDROID_ADB" --serial emulator-5556 --calls --skip-receiver
 
 INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \

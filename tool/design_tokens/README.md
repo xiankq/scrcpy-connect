@@ -9,11 +9,11 @@ only supplies the Dart emitter.
 From the repository root (Node 18+ and the workspace Dart SDK must be on PATH):
 
 ```sh
-rtk proxy npm ci --ignore-scripts --prefix tool/design_tokens
-rtk proxy node tool/design_tokens/generate.mjs
-rtk proxy node tool/design_tokens/generate.mjs --check
-rtk proxy npm test --prefix tool/design_tokens
-rtk proxy npm run lint --prefix tool/design_tokens
+npm ci --ignore-scripts --prefix tool/design_tokens
+node tool/design_tokens/generate.mjs
+node tool/design_tokens/generate.mjs --check
+npm test --prefix tool/design_tokens
+npm run lint --prefix tool/design_tokens
 ```
 
 Edit `designs/design.md`, then regenerate; never edit `design_tokens.g.dart`

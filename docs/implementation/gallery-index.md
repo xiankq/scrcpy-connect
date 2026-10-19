@@ -17,7 +17,7 @@ Flutter每页拥有一个固定设备的检查，展示检查／停止、已显�
 
 ## 已执行的公开测试
 
-`rtk proxy /home/xiankq/.cargo/bin/cargo test -p interop-core --test gallery_index`：十项Runtime协议fixture通过，最终10.45秒；窄clippy严格通过。覆盖动态目录／root媒体、mtime同秒排序、分页／刷新隔离、拒权空DONE、精确取消／错设备／两活动及八终态、断开、非法名称／链接／源变化、legacy根别名、目录与全局预算、字节预算。
+`/home/xiankq/.cargo/bin/cargo test -p interop-core --test gallery_index`：十项Runtime协议fixture通过，最终10.45秒；窄clippy严格通过。覆盖动态目录／root媒体、mtime同秒排序、分页／刷新隔离、拒权空DONE、精确取消／错设备／两活动及八终态、断开、非法名称／链接／源变化、legacy根别名、目录与全局预算、字节预算。
 
 真实先红后绿包括：旧media.list无异步状态；4097项目录total=0而应保留4096；fallback元数据失败不计全局预算；64条拒权后耗尽内存预算时，错误的预留容量导致panic。最终保留prefix、把失败计入examined、按最大问题容器容量预留后通过。fixture不冒充真实adbd或Android主控E2E。
 
@@ -28,7 +28,7 @@ Flutter每页拥有一个固定设备的检查，展示检查／停止、已显�
 从仓库根目录运行，下列仅为测试宿主部署／对照使用adb，产品仍经FRB和自有Rust库：
 
 ```sh
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/gallery-index \
   flutter drive -d emulator-5554 --no-pub \

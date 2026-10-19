@@ -18,7 +18,7 @@
 工作目录 仓库根目录，PATH 含 Rust/Flutter，目标已按下面条件准备；图片/日志仍只在 tmp：
 
 ```sh
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5558 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/first-pairing \
   flutter drive -d emulator-5554 --no-pub \
@@ -42,10 +42,10 @@ emulator37.2.12 对 `-prop ro.adb.secure=1` 明确报告只支持 qemu.*，实�
 
 ```sh
 # endpoint 是系统连接端口的本次宿主转发，绝不是配对端口。
-rtk proxy env ANDROID_TLS_ENDPOINT=127.0.0.1:<当次宿主转发端口> \
+env ANDROID_TLS_ENDPOINT=127.0.0.1:<当次宿主转发端口> \
   cargo test -p interop-adb --test android_wireless \
   android_unpaired_identity_cannot_open_tls_transport -- --include-ignored --exact
-rtk proxy env ANDROID_TLS_ENDPOINT=127.0.0.1:<当次宿主转发端口> \
+env ANDROID_TLS_ENDPOINT=127.0.0.1:<当次宿主转发端口> \
   cargo test -p interop-core --test first_trust_android -- --include-ignored
 ```
 

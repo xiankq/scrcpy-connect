@@ -29,11 +29,11 @@ SIGPIPE是源码支持的解释，不是本次内核信号实测。最终signal 
 没有采用等待前台child的no-op HUP，或向整个进程组发信号的候选。
 
 ```sh
-INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:25556 rtk proxy cargo test -p interop-core \
+INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:25556 cargo test -p interop-core \
   --lib companion::deployment_tests -- --ignored --nocapture --test-threads=1
-rtk proxy cargo test -p interop-core --lib --test application_liveness \
+cargo test -p interop-core --lib --test application_liveness \
   --test device_lifecycle --test tls_connection_policy --test state_snapshot -- --nocapture
-rtk proxy cargo clippy -p interop-core --all-targets -- -D warnings
+cargo clippy -p interop-core --all-targets -- -D warnings
 ```
 
 设备端须是隔离且已授权的Android，25556为本机到adbd的明确forward。两项实际
@@ -96,10 +96,10 @@ DetachedConnection guard保留精确旧传输，供已有媒体owner确认shutdo
 新确定缺陷。第一次filter_map布尔then风格检查失败已按建议修正。
 
 ```sh
-rtk proxy cargo test -p interop-core --lib connection_cleanup_tests -- --nocapture
-rtk proxy cargo test -p interop-core --lib --test application_liveness \
+cargo test -p interop-core --lib connection_cleanup_tests -- --nocapture
+cargo test -p interop-core --lib --test application_liveness \
  --test device_lifecycle --test tls_connection_policy --test state_snapshot -- --nocapture
-rtk proxy cargo clippy -p interop-core --all-targets -- -D warnings
+cargo clippy -p interop-core --all-targets -- -D warnings
 ```
 
 红绿与最终检查日志前缀`/tmp/connect-connection-cleanup-{red,green,cancel-red,transport-unit,
@@ -230,7 +230,7 @@ pair；两秒内关闭黑洞与释放监听端口。另验证cleanup生成的EOF
 `/tmp/connect-blackhole-proxy-root.log`。复现：
 
 ```sh
-rtk proxy /home/xiankq/flutter/bin/dart \
+/home/xiankq/flutter/bin/dart \
  tool/driver/support/adb_fault_proxy_tcp_test.dart
 ```
 
@@ -264,7 +264,7 @@ errors为空，所有清理true。故障注入至旧controllerEOF17768ms、至�
 
 ```sh
 # 在仓库根目录，先按video-performance.md准备双AVD/fixture和25556转发。
-rtk proxy env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
  CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
  CONNECT_E2E_RECOVERY_FAULT=blackhole \
@@ -323,10 +323,10 @@ files.list均在控制route关闭前成功，视频17378→70158字节，CLSE后
 保留该红日志，补observation.stop后单独复跑最终新增测试通过，不隐藏失败。
 
 ```sh
-rtk proxy cargo test -p interop-core --lib
-rtk proxy cargo test -p interop-core control_ --lib -- --nocapture
-rtk proxy cargo clippy -p interop-core --all-targets -- -D warnings
-rtk proxy env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=25556 \
+cargo test -p interop-core --lib
+cargo test -p interop-core control_ --lib -- --nocapture
+cargo clippy -p interop-core --all-targets -- -D warnings
+env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=25556 \
  INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:25556 cargo test -p interop-core \
  --test app_launch_android --test companion_clipboard --test control_stall_android \
  -- --ignored --nocapture --test-threads=1

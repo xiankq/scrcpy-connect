@@ -12,7 +12,7 @@
 `keytool`。在仓库根目录运行：
 
 ```bash
-rtk python3 tool/e2e/content_delivery_fixture/build.py --output /tmp/connect-content-delivery-fixture
+dart tool/e2e/content_delivery_fixture/build.dart --output /tmp/connect-content-delivery-fixture
 ```
 
 可用 `--sdk /path/to/android-sdk` 指定 SDK。`--output` 必须严格位于
@@ -25,7 +25,7 @@ rtk python3 tool/e2e/content_delivery_fixture/build.py --output /tmp/connect-con
 仅在已明确授权的主控 API 36 AVD 上手工安装测试 APK，例如：
 
 ```bash
-rtk adb -s <controller-avd-serial> install -r /tmp/connect-content-delivery-fixture/content-delivery-fixture.apk
+adb -s <controller-avd-serial> install -r /tmp/connect-content-delivery-fixture/content-delivery-fixture.apk
 ```
 
 从主控应用执行真实内容交付，打开 Android 系统 Sharesheet，并手动选择
@@ -36,7 +36,7 @@ rtk adb -s <controller-avd-serial> install -r /tmp/connect-content-delivery-fixt
 等待接收页显示结果后，在 host 读取 **fixture 自己的内部文件**：
 
 ```bash
-rtk adb -s <controller-avd-serial> shell run-as dev.scrcpyconnect.deliveryfixture cat files/receipt.json
+adb -s <controller-avd-serial> shell run-as dev.scrcpyconnect.deliveryfixture cat files/receipt.json
 ```
 
 receipt 的 `status` 应为 `success`，且 `success=true`，再对照原文件的

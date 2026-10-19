@@ -41,8 +41,8 @@
 复现首帧回归（目标已开启TCP调试并保持已知可见Settings界面，主控不需要产品内调试权限）：
 
 ```sh
-rtk proxy flutter pub get --enforce-lockfile
-rtk proxy flutter drive -d emulator-5554 --no-pub \
+flutter pub get --enforce-lockfile
+flutter drive -d emulator-5554 --no-pub \
   --driver=tool/driver/fvp_probe.dart \
   --target=integration_test/fvp_video_lifecycle_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
@@ -95,7 +95,7 @@ Flutter host driver 曾在应用测试超时后输出成功并返回空 metadata
 现保留socket、codec及session尺寸校验，在会话尺寸收到后创建控制actor并提交一次START_APP，再等待有界关键帧；不放宽关键帧、解码或真实任务断言。修复后相同用例4.25秒通过，日志`/tmp/connect-virtual-start-after.log`，覆盖真实应用、剪贴板和关闭后任务保留。复现命令（官方adb只用于部署，测试实际调用Rust ADB）：
 
 ```bash
-rtk proxy env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 cargo test -p interop-core --test scrcpy_device real_application_display_clipboard_and_task_survive_session_stop -- --ignored --nocapture
+env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 cargo test -p interop-core --test scrcpy_device real_application_display_clipboard_and_task_survive_session_stop -- --ignored --nocapture
 ```
 
 这项结果不证明主控多窗口UI或并发资源全部通过；它们继续由独立Android E2E验收。

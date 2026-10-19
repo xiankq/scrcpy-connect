@@ -1,6 +1,6 @@
 # Android 打包、签名与安装
 
-> 当前打包入口在仓库根目录，工具行为以 `tool/android.py`、根 Android 工程和 [工具链契约](repository-tooling.md) 为准。本文同时保留各阶段签名、构建和 APK 摘要；下文“当前产物”只属于所在阶段，不能据历史构建推定当前代码或物理设备运行通过。
+> 当前打包入口在仓库根目录，工具行为以 `tool/android.dart`、根 Android 工程和 [工具链契约](repository-tooling.md) 为准。本文同时保留各阶段签名、构建和 APK 摘要；下文“当前产物”只属于所在阶段，不能据历史构建推定当前代码或物理设备运行通过。
 
 2026-10-18用户报告直接`flutter build apk`很慢，安装器显示英文的“包信息为空”。本批保持应用ID`dev.scrcpyconnect.scrcpy_connect`和中文名称“邻接”，补可更换的本机签名与真实安装验证，不把用户未提供的原APK当作已检查。
 
@@ -8,7 +8,7 @@
 
 旧Gradle仅在`android/key.properties`存在时配置release签名；文件不存在仍让release构建成功。改动前x64 release真实构建86.773秒，日志`/tmp/connect-release-baseline.log`。SDK apksigner明确`DOES NOT VERIFY / Missing META-INF/MANIFEST.MF`；同一APK向主控实验AVD尝试安装，独立PackageManager拒绝`INSTALL_PARSE_FAILED_NO_CERTIFICATES: Failed to collect certificates ... Attempt to get length of null array`，原debug安装未被替换。这证明项目可产生该类不可安装包，不声称已读取用户原手机安装器日志。
 
-现在release任务图在执行前校验签名配置，无配置实际8秒失败、仅4个已有Gradle任务up-to-date，未进入Flutter/Rust编译，`/tmp/connect-release-signing-guard.log`。`tool/android.py init-signing`显式创建本机持久RSA3072/JKS身份、随机密码，`key.properties`及密钥权限600且Git忽略；重复执行保留原身份，不自动替换、不回退debug签名。现有配置示例可用于替换自有发布密钥。该生成身份用于当前本机侧载，尚未建立商店发布／远程密钥托管流程。
+现在release任务图在执行前校验签名配置，无配置实际8秒失败、仅4个已有Gradle任务up-to-date，未进入Flutter/Rust编译，`/tmp/connect-release-signing-guard.log`。`tool/android.dart init-signing`显式创建本机持久RSA3072/JKS身份、随机密码，`key.properties`及密钥权限600且Git忽略；重复执行保留原身份，不自动替换、不回退debug签名。现有配置示例可用于替换自有发布密钥。该生成身份用于当前本机侧载，尚未建立商店发布／远程密钥托管流程。
 
 另一个真实缺陷是`--target-platform android-x64`仍包含ARM的fvp等插件库，却没有对应Flutter/Rust。当前Flutter3.47.6插件默认ABI过滤列表始终包括三架构；app默认配置现按请求平台收紧，`--split-per-abi`保持Flutter自身拆包路径。旧x64包73.9MB，新x64包50.2MB，实际检查只剩完整x86_64。新通用包保留完整三ABI。
 
@@ -19,10 +19,10 @@
 | 实际命令／状态 | 耗时与产物 |
 | --- | --- |
 | 改动前x64 release，清理过Gradle产物，native缓存仍有 | 墙钟86.773秒，Flutter assemble约32.3秒，Gradle缓存关闭、R8／资源输出缺失而重建；未签名，不可安装 |
-| 修复后`python3 tool/android.py build --abi x64 --no-pub` | 墙钟63.32秒／Gradle62.5秒，50,218,157字节，ZIP／签名／manifest／启动入口／ELF／16KB ZIP对齐全部通过；不能把与上一行的差值全部归因缓存 |
+| 修复后`dart tool/android.dart build --abi x64 --no-pub` | 墙钟63.32秒／Gradle62.5秒，50,218,157字节，ZIP／签名／manifest／启动入口／ELF／16KB ZIP对齐全部通过；不能把与上一行的差值全部归因缓存 |
 | 修复后与用户相同`flutter build apk`，切回三ABI | 墙钟73.468秒／Gradle71.2秒，128,895,459字节，三个完整ABI全部验证 |
 | 同源码再次`flutter build apk`，未clean | 墙钟10.760秒／Gradle9.1秒，产物SHA-256不变；属于增量构建证据，不保证任意改动／干净检出同样耗时 |
-| 单架构正式入口`python3 tool/android.py build --no-pub`切到arm64 | 墙钟59.96秒／Gradle59.3秒，46,625,578字节，完整包检查通过；这次含切架构／从E2E切回main，不能与上行热构建直接比 |
+| 单架构正式入口`dart tool/android.dart build --no-pub`切到arm64 | 墙钟59.96秒／Gradle59.3秒，46,625,578字节，完整包检查通过；这次含切架构／从E2E切回main，不能与上行热构建直接比 |
 
 日志依次`/tmp/connect-release-signed-x64-r1.log`、`/tmp/connect-release-default-signed.log`、`/tmp/connect-release-default-repeat.log`。构建时曾并行冷启动第三台软件渲染AVD，宿主可用内存降到2.9GiB／swap约7.1GiB；已停止多余AVD和确认IDLE的旧Gradle daemon，后续安装独立分时执行，不以这种资源争用作为正常编译基准。
 
@@ -30,7 +30,7 @@ arm64正式入口日志`/tmp/connect-release-arm64.log`，SHA-256`82bafbe09f8ca8
 
 ## 实际签名、安装与启动
 
-通用包SHA-256：`64ddf4277feaa788464c3b8131ecfdb74a0549f49cf0c4cf08c98696ce87c6b8`；公开签名证书SHA-256：`fa3aa1d220afce83e6b9cb467bb66ee6b1f8df5d9d380fa31394e843108461cd`。证书摘要不是私钥。`tool/android.py verify`真实调用SDK的apksigner、aapt2、zipalign及ZIP／ELF读取，截断4KiB包负例被拒绝。工程Android门禁增加该验证，不仅相信Flutter“Built”输出。
+通用包SHA-256：`64ddf4277feaa788464c3b8131ecfdb74a0549f49cf0c4cf08c98696ce87c6b8`；公开签名证书SHA-256：`fa3aa1d220afce83e6b9cb467bb66ee6b1f8df5d9d380fa31394e843108461cd`。证书摘要不是私钥。`tool/android.dart verify`真实调用SDK的apksigner、aapt2、zipalign及ZIP／ELF读取，截断4KiB包负例被拒绝。工程Android门禁增加该验证，不仅相信Flutter“Built”输出。
 
 在明确无已有产品安装的第三台API36 x64 AVD执行安装：`adb install /tmp/connect-artifacts/connect-universal-release.apk`成功；`am start -W`冷启动Activity成功、TotalTime3584ms，独立dumpsys确认前台MainActivity，实际截图`/tmp/connect-artifacts/release-installed.png`已目视为正常浅色设备列表。之后`adb install -r`同签名更新亦成功。实验后卸载本次安装并关闭该AVD，未卸载主控原debug应用，未更换其授权身份／数据。
 
@@ -41,11 +41,11 @@ arm64正式入口日志`/tmp/connect-release-arm64.log`，SHA-256`82bafbe09f8ca8
 仓库根目录，Flutter、JDK21在PATH，ANDROID_HOME指向SDK：
 
 ```sh
-python3 tool/android.py init-signing
-python3 tool/android.py build                 # arm64 release + 完整APK检查
-python3 tool/android.py build --abi universal # 三架构通用包
-python3 tool/android.py build --abi x64       # Android模拟器
-python3 tool/android.py verify build/app/outputs/flutter-apk/app-release.apk
+dart tool/android.dart init-signing
+dart tool/android.dart build                 # arm64 release + 完整APK检查
+dart tool/android.dart build --abi universal # 三架构通用包
+dart tool/android.dart build --abi x64       # Android模拟器
+dart tool/android.dart verify build/app/outputs/flutter-apk/app-release.apk
 ```
 
 直接在仓库根目录运行`flutter build apk`也使用相同签名与过滤。不要每次clean；清理调试过期build／Kotlin状态，保留仍复用的native hooks和Gradle缓存，最终安装包与必要验证证据可保留于/tmp。本批不把构建过程写入产品页面，也不上传私钥。
@@ -56,7 +56,7 @@ python3 tool/android.py verify build/app/outputs/flutter-apk/app-release.apk
 
 ## 媒体缓存批次后的实际release复验
 
-新增缓存实现后，`python3 tool/android.py build`实际38.86秒（Gradle37.0秒）通过，当前arm64产物46,740,766字节，SHA-256 `a948e13cbd98c3552e4462415e9e964505b16c60d54e6e85c919be18242865e0`。签名证书仍为上述同一身份；ZIP完整性／16KB ZIP对齐／manifest／完整arm64 ELF均由工具复验。原件另存 `/tmp/connect-artifacts/connect-arm64-cache-release.apk`，与前一批A60原件区分；该包没有在物理arm64手机执行，不复用旧通用包的x64安装证据冒称当前ARM执行。
+新增缓存实现后，`dart tool/android.dart build`实际38.86秒（Gradle37.0秒）通过，当前arm64产物46,740,766字节，SHA-256 `a948e13cbd98c3552e4462415e9e964505b16c60d54e6e85c919be18242865e0`。签名证书仍为上述同一身份；ZIP完整性／16KB ZIP对齐／manifest／完整arm64 ELF均由工具复验。原件另存 `/tmp/connect-artifacts/connect-arm64-cache-release.apk`，与前一批A60原件区分；该包没有在物理arm64手机执行，不复用旧通用包的x64安装证据冒称当前ARM执行。
 
 本轮还实际复现了Flutter3.47.6的构建模式注册问题：E2E留下integration_test的Java注册文件，随后`--no-pub` release在51.7秒时因`package dev.flutter.plugins.integration_test does not exist`失败。正常命令重新准备release插件注册后上述38.86秒成功。固定SDK源码`flutter_plugins.dart::injectPlugins`在release过滤dev依赖，`project.dart`的准备流程负责刷新；跳过准备不能假设注册文件仍匹配。更早一次进程以143中断，没有计作通过或签名失败。
 
@@ -116,7 +116,7 @@ Flutter缓存。原始结果、目标线程栈、主控tombstone及对应MDK x64
 `24379bb`改为Android显式AMediaCodec async，`53bcf10`增加optin系统观测。首次集成
 测试后直接`flutter build apk --release --target-platform android-arm64 --no-pub`在76.2秒
 因GeneratedPluginRegistrant引用release未带入的integration_test而失败，未交付该结果。
-既有tool/android.py的no-pub保护已覆盖此状态；随后用其普通build入口重新生成注册，
+既有tool/android.dart的no-pub保护已覆盖此状态；随后用其普通build入口重新生成注册，
 47.36秒完成（Gradle45.9秒）。两次准备状态不同，不据此报告打包加速。
 
 新原件`/tmp/connect-artifacts/connect-arm64-decoder-async-release.apk`，46920990字节，

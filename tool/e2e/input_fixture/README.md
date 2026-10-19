@@ -1,6 +1,6 @@
 # Independent Android input and lifecycle fixture
 
-Build with `rtk proxy python3 tool/e2e/input_fixture/build.py`. The APK, classes,
+Build with `dart tool/e2e/input_fixture/build.dart`. The APK, classes,
 and test signing key stay in `/tmp/connect-input-fixture`. They are not product
 dependencies. `InputReceiverActivity` records actual Android input delivery for
 the opt-in input-release test.
@@ -17,7 +17,7 @@ For an isolated controller, run from 仓库根目录 after ensuring the target i
 authorized and reachable:
 
 ```sh
-rtk proxy env CONNECT_E2E_DEVICE=emulator-5554 \
+env CONNECT_E2E_DEVICE=emulator-5554 \
   CONNECT_E2E_ADB=/absolute/android-sdk/platform-tools/adb \
   CONNECT_E2E_AUDIO_LIFECYCLE=1 CONNECT_E2E_RECREATE_ACTIVITY=1 \
   CONNECT_E2E_ACTIVITY_FIXTURE=/tmp/connect-input-fixture/input-fixture.apk \

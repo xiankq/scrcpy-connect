@@ -73,9 +73,6 @@ jobs:
           flutter-version: '3.47.6'
           channel: stable
           cache: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       # Use the native shell on Windows; check.sh also runs Linux-only probes.
       # The application's native-assets hook invokes this pinned Rust toolchain.
       - name: Install the repository Rust toolchain
@@ -86,7 +83,7 @@ jobs:
       - name: Resolve the locked Flutter workspace
         run: flutter pub get --enforce-lockfile
       - name: Build and inspect the final host application
-        run: python tool/build_host.py ${{ matrix.platform }}
+        run: dart tool/build_host.dart ${{ matrix.platform }}
       - name: Retain the verified application bundle
         uses: actions/upload-artifact@v4
         with:

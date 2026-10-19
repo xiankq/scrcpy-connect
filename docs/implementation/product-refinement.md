@@ -58,7 +58,7 @@ Android x64 debug APK 已构建并独立验证 ZIP、签名、Flutter/Rust ELF �
 
 ## 当前视觉轮验收
 
-根应用最终`flutter test --no-pub --reporter json`全量 **323个非hidden项success**，done.success=true：[JSONL](/tmp/connect-final-tests.jsonl)。之后只修startupError无用字符串插值和测试braces两处lint；`ios_review_regressions`、`ios_pages_layout`、`ios_pages_capture`3文件 **13项success**，含全部96图再次捕获：[JSONL](/tmp/connect-final-pages.jsonl)。[Flutter analyze](/tmp/connect-final-analyze.log)为No issues found；[tool/generate.py --check](/tmp/connect-final-generate.log)包含官方token解析、FRB Rust／Dart及build_runner生成一致性，全部成功。材质代理另有design_system 11项和Node生成器4项通过回执；这些是当前轮证据，不重复使用历史Rust301／桥接131计数。
+根应用最终`flutter test --no-pub --reporter json`全量 **323个非hidden项success**，done.success=true：[JSONL](/tmp/connect-final-tests.jsonl)。之后只修startupError无用字符串插值和测试braces两处lint；`ios_review_regressions`、`ios_pages_layout`、`ios_pages_capture`3文件 **13项success**，含全部96图再次捕获：[JSONL](/tmp/connect-final-pages.jsonl)。[Flutter analyze](/tmp/connect-final-analyze.log)为No issues found；[tool/generate.dart --check](/tmp/connect-final-generate.log)包含官方token解析、FRB Rust／Dart及build_runner生成一致性，全部成功。材质代理另有design_system 11项和Node生成器4项通过回执；这些是当前轮证据，不重复使用历史Rust301／桥接131计数。
 
 当前96图为41页浅／深＋5额外状态浅／深＋4根导航响应图，位于`/tmp/connect-ios-review`，详见[页面与完整清单](/tmp/connect-ios-review/page-audit.md)。图片等待实际首帧，gallery／media_preview检查RawImage非空，最新媒体浅深图已打开确认照片；远控夹具用测试纹理。Widget截图验证布局、字级与用途，不能证明实际折射；材质代理全96逐张目视属于之前捕获版，没有冒充最新96全量重看。
 
