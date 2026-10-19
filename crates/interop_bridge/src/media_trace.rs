@@ -80,8 +80,8 @@ struct SnapshotRequest {
 // MDK_MediaStatus uses all 32 bits (including Invalid = 1<<31).
 #[repr(C)]
 #[allow(dead_code)]
-struct PlayerApi {
-    object: *mut c_void,
+pub(super) struct PlayerApi {
+    pub(super) object: *mut c_void,
     set_mute: Option<unsafe extern "C" fn(*mut c_void, bool)>,
     set_volume: Option<unsafe extern "C" fn(*mut c_void, f32)>,
     set_media: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
