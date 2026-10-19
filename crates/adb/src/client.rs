@@ -188,7 +188,6 @@ impl Client {
                 .write(&mut transport)
                 .await?;
                 let mut signed = false;
-                let mut offered = false;
                 let mut upgraded = false;
                 loop {
                     // Before negotiation ADB restricts payloads to 4 KiB. New peers may omit checksums.
@@ -250,8 +249,11 @@ impl Client {
                                     0,
                                     identity.sign_token(&frame.payload)?,
                                 )
-                            } else if options.request_authorization && !offered {
-                                offered = true;
+                            } else if options.request_authorization {
+                                // Legacy adbd retries TOKEN after framework
+                                // becomes ready during boot. Reoffer the same
+                                // explicitly authorized key; the enclosing
+                                // deadline/cancellation still bounds retries.
                                 Frame::new(
                                     protocol::AUTH,
                                     3,
@@ -509,13 +511,17 @@ impl Client {
                                 protocol::CLSE
                                     if (route.remote == 0
                                         || frame.arg0 == route.remote
-                                        || (burst_mode && frame.arg0 == 0))
+                                        || frame.arg0 == 0)
                                         && (!burst_mode || frame.payload.is_empty()) =>
                                 {
+                                    // Older adbd also used a zero sender ID for
+                                    // normal closes. Routes belong to this exact
+                                    // transport, so accepting it cannot close a
+                                    // different device's stream.
                                     response = Some(Frame::new(
                                         protocol::CLSE,
                                         frame.arg1,
-                                        if burst_mode && frame.arg0 == 0 {
+                                        if frame.arg0 == 0 {
                                             route.remote
                                         } else {
                                             frame.arg0
@@ -861,10 +867,10 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
             _ = inner.cancellation.cancelled() => {},
             _ = &mut from_device_task => {},
             result = from_host_task => {
-                // A remote CLSE also wakes a sender waiting on byte credit.
+                // A remote CLSE also wakes a sender waiting on an ACK or byte credit.
                 // Keep delivering already-routed input before closing its TCP
                 // destination; selecting the woken writer must not lose tails.
-                if inner.burst_mode && matches!(result, Err(Error::Closed))
+                if matches!(result, Err(Error::Closed))
                     && !inner.cancellation.is_cancelled()
                 {
                     tokio::select! {

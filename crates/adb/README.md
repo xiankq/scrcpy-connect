@@ -28,6 +28,16 @@ failed sync operations close their affected stream rather than reuse uncertain
 protocol state. Callers should drop a sync object when abandoning an in-progress
 operation.
 
+Legacy adbd's ADB 1.0.0 transport retains checksum validation and 4 KiB payload
+fragmentation when that is the daemon's advertised limit. Wire fixtures cover
+both unauthenticated connections and RSA AUTH, legacy shell and sync v1
+stat/list/push/pull. Normal stream closes with a zero sender ID, used by older
+daemons, preserve queued tails and other streams. Explicitly requested
+authorization may reoffer the same public key when a booting daemon retries
+after Android's authorization framework becomes ready; the connection deadline
+and cancellation still bound the handshake. These fixtures establish protocol
+compatibility, not a tested minimum Android release for every service.
+
 `Client::is_closed()` reports an observed close/cancellation, not proof that the
 remote daemon is responsive. `inbound_activity()` provides an opaque snapshot:
 compare only for equality on the same connection. It advances on nonempty reads,
