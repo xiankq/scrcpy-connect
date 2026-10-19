@@ -1,60 +1,65 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:crypto/crypto.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/app.dart';
+import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 
 import 'support/test_controller.dart';
 import 'support/router_test_app.dart';
 
-import 'package:scrcpy_connect/pages/activities/activities_page.dart';
-import 'package:scrcpy_connect/pages/add_device/add_device_page.dart';
-import 'package:scrcpy_connect/pages/appearance/appearance_page.dart';
-import 'package:scrcpy_connect/pages/apps/apps_page.dart';
-import 'package:scrcpy_connect/pages/background/background_page.dart';
-import 'package:scrcpy_connect/pages/calls/calls_page.dart';
-import 'package:scrcpy_connect/pages/capabilities/capabilities_page.dart';
-import 'package:scrcpy_connect/pages/connection_form/connection_form_page.dart';
-import 'package:scrcpy_connect/pages/data_preferences/data_preferences_page.dart';
-import 'package:scrcpy_connect/pages/device_connection_preferences/device_connection_preferences_page.dart';
-import 'package:scrcpy_connect/pages/device_details/device_details_page.dart';
-import 'package:scrcpy_connect/pages/device_workspace/device_workspace_page.dart';
-import 'package:scrcpy_connect/pages/devices/devices_page.dart';
-import 'package:scrcpy_connect/pages/diagnostics/diagnostics_page.dart';
-import 'package:scrcpy_connect/pages/discovery/discovery_page.dart';
-import 'package:scrcpy_connect/pages/document_export/document_export_page.dart';
-import 'package:scrcpy_connect/pages/document_import/document_import_page.dart';
-import 'package:scrcpy_connect/pages/file_details/file_details_page.dart';
-import 'package:scrcpy_connect/pages/file_search/file_search_page.dart';
-import 'package:scrcpy_connect/pages/files/files_page.dart';
-import 'package:scrcpy_connect/pages/gallery/gallery_page.dart';
+import 'package:scrcpy_connect/pages/settings/activities/settings_activities_page.dart';
+import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
+import 'package:scrcpy_connect/pages/settings/appearance/settings_appearance_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
+import 'package:scrcpy_connect/pages/settings/background/settings_background_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/capabilities/devices_details_capabilities_page.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
+import 'package:scrcpy_connect/pages/settings/data_preferences/settings_data_preferences_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
+import 'package:scrcpy_connect/pages/connection/discovery/connection_discovery_page.dart';
+import 'package:scrcpy_connect/pages/transfers/details/export/transfers_details_export_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/import/devices_workspace_files_import_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/search/devices_workspace_files_search_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_workspace_gallery_index_page.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
-import 'package:scrcpy_connect/pages/media_cache/media_cache_page.dart';
-import 'package:scrcpy_connect/pages/media_preview/media_preview_page.dart';
-import 'package:scrcpy_connect/pages/notification_reply/notification_reply_page.dart';
-import 'package:scrcpy_connect/pages/notifications/notifications_page.dart';
-import 'package:scrcpy_connect/pages/qr_pair/qr_pair_page.dart';
-import 'package:scrcpy_connect/pages/quality/quality_page.dart';
-import 'package:scrcpy_connect/pages/receive_content/receive_content_page.dart';
-import 'package:scrcpy_connect/pages/remote/remote_page.dart';
+import 'package:scrcpy_connect/pages/settings/media_cache/settings_media_cache_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/notifications/reply/devices_workspace_notifications_reply_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
+import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
+import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
-import 'package:scrcpy_connect/pages/session_tools/session_tools_page.dart';
-import 'package:scrcpy_connect/pages/sessions/sessions_page.dart';
-import 'package:scrcpy_connect/pages/settings/settings_page.dart';
-import 'package:scrcpy_connect/pages/share_directory_picker/share_directory_picker_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/sessions/tools/devices_workspace_sessions_tools_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
+import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/devices_workspace_files_directory_picker_page.dart';
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
-import 'package:scrcpy_connect/pages/transfer_details/transfer_details_page.dart';
-import 'package:scrcpy_connect/pages/transfers/transfers_page.dart';
-import 'package:scrcpy_connect/pages/usb_guide/usb_guide_page.dart';
-import 'package:scrcpy_connect/pages/wireless_guide/wireless_guide_page.dart';
+import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
+import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
+import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
+import 'package:scrcpy_connect/pages/connection/wireless/index/connection_wireless_index_page.dart';
 
-// Every production page is captured directly, with native responses isolated here.
+// Root tabs and parity reference pages use the production app/router. Other
+// focused page fixtures isolate native responses without inventing app routes.
 // CONNECT_CAPTURE_DIR=/tmp/connect-ios-review flutter test test/ios_pages_capture_test.dart
 const device = <String, dynamic>{
   'id': 'fixture',
@@ -104,6 +109,37 @@ const task = <String, dynamic>{
   'destinationLabel': '本机暂存',
   'totalBytes': 24000000,
   'completedBytes': 15600000,
+  'canCancel': true,
+};
+const qrPayload = 'WIFI:T:ADB;S:fixture;P:123456;;';
+const searchPath = '/sdcard/Download';
+final partialTask = <String, dynamic>{
+  ...task,
+  'id': 'partial-transfer',
+  'transferId': 'partial-transfer',
+  'status': 'partial',
+  'canCancel': false,
+  'canRestart': true,
+  'canExport': false,
+  'error': '部分文件未完成，请核对逐项结果。重新传输会从头开始，并重新检查同名内容。',
+  'items': [
+    {'name': '旅行清单.pdf', 'status': 'completed'},
+    {'name': '视频.mp4', 'status': 'failed'},
+    {'name': '资料.zip', 'status': 'failed'},
+  ],
+};
+final failedDevice = <String, dynamic>{
+  ...device,
+  'status': 'offline',
+  'transport': 'tls',
+  'port': 37123,
+  'reason': '当前地址的连接服务没有响应。',
+};
+final failedDiagnosis = <String, dynamic>{
+  'device': failedDevice,
+  'connected': false,
+  'tcpReachable': false,
+  'identityPresent': true,
 };
 const notification = <String, dynamic>{
   'id': 'message',
@@ -160,7 +196,7 @@ Future<Json> fixtureRequest(String command, [Json params = const {}]) async =>
       'files.search.start' || 'files.search.get' => {
         'searchId': 'search',
         'deviceId': 'fixture',
-        'path': '/sdcard',
+        'path': searchPath,
         'status': 'completed',
         'entries': [file],
         'items': [file],
@@ -286,7 +322,7 @@ Future<Json> fixtureRequest(String command, [Json params = const {}]) async =>
       'devices.pair.qr' => {
         'attemptId': 'qr',
         'status': 'waiting',
-        'payload': 'WIFI:T:ADB;S:fixture;P:123456;;',
+        'payload': qrPayload,
         'expiresAt':
             DateTime.now()
                 .add(const Duration(minutes: 3))
@@ -308,6 +344,11 @@ ThemeData captureTheme(Brightness brightness) {
   );
   return theme.copyWith(
     textTheme: theme.textTheme.apply(fontFamily: family),
+    listTileTheme: theme.listTileTheme.copyWith(
+      titleTextStyle: theme.listTileTheme.titleTextStyle?.copyWith(
+        fontFamily: family,
+      ),
+    ),
     filledButtonTheme: FilledButtonThemeData(
       style: fontStyle(theme.filledButtonTheme.style),
     ),
@@ -320,7 +361,11 @@ ThemeData captureTheme(Brightness brightness) {
   );
 }
 
-Map<String, Widget> pageFixtures(AppController controller) => <String, Widget>{
+Map<String, Widget> pageFixtures(
+  AppController controller, {
+  AppController? diagnosisController,
+  AppController? partialTransferController,
+}) => <String, Widget>{
   'activities': ActivitiesPage(controller: controller),
   'add_device': AddDevicePage(controller: controller),
   'appearance': AppearancePage(controller: controller),
@@ -341,6 +386,10 @@ Map<String, Widget> pageFixtures(AppController controller) => <String, Widget>{
   ),
   'devices': Scaffold(body: DevicesPage(controller: controller)),
   'diagnostics': DiagnosticsPage(controller: controller, device: device),
+  'diagnostics_failed': DiagnosticsPage(
+    controller: diagnosisController ?? controller,
+    device: failedDevice,
+  ),
   'discovery': DiscoveryPage(controller: controller),
   'document_export': DocumentExportPage(
     controller: controller,
@@ -362,11 +411,13 @@ Map<String, Widget> pageFixtures(AppController controller) => <String, Widget>{
   'file_search': FileSearchPage(
     controller: controller,
     device: device,
+    initialPath: searchPath,
     initialQuery: '旅行',
   ),
   'file_search_results': FileSearchPage(
     controller: controller,
     device: device,
+    initialPath: searchPath,
     initialQuery: '旅行',
   ),
   'files': FilesPage(controller: controller, device: device),
@@ -413,7 +464,10 @@ Map<String, Widget> pageFixtures(AppController controller) => <String, Widget>{
     error: StateError('无法读取本机设备连接配置'),
     onRetry: () {},
   ),
-  'transfer_details': TransferDetailsPage(controller: controller, task: task),
+  'transfer_details': TransferDetailsPage(
+    controller: partialTransferController ?? controller,
+    task: partialTask,
+  ),
   'transfers': TransfersPage(controller: controller),
   'usb_guide': UsbGuidePage(controller: controller),
   'wireless_guide': WirelessGuidePage(controller: controller),
@@ -480,6 +534,142 @@ Future<void> waitForPageImages(WidgetTester tester) async {
   await tester.pump();
 }
 
+/// Read laid-out widgets without wrapping them or changing their constraints.
+/// Bounds are source-image coordinates, before the parity tool's declared crop.
+Map<String, Object?> captureLayout(GlobalKey boundary) {
+  final components = <Map<String, Object?>>[];
+  final paragraphs = <Map<String, Object?>>[];
+  final root = boundary.currentContext! as Element;
+  final viewport = Offset.zero & (root.findRenderObject()! as RenderBox).size;
+  const tracked = {
+    'PageFrame',
+    'RootPageHeader',
+    'GroupedListView',
+    'GroupedItem',
+    'ActionRow',
+    'ConnectSwitchRow',
+    'SectionTitle',
+    'StateNote',
+    'ContentPanel',
+    'FeatureIcon',
+    'Glass',
+    'GlassTabBar',
+    'GlassIconButton',
+    'GlassToolbarGroup',
+    'ConnectSwitch',
+    'DeviceIdentity',
+    'DeviceCard',
+    'DeviceHero',
+    'OriginalFileHeader',
+    'AppBar',
+    'ListTile',
+    'TextField',
+    'FilledButton',
+    'OutlinedButton',
+    'TextButton',
+    'IconButton',
+    'BackButton',
+  };
+  List<double> rect(Rect value) => [
+    value.left,
+    value.top,
+    value.width,
+    value.height,
+  ];
+  Map<String, Object?> geometry(RenderBox box) {
+    final bounds = MatrixUtils.transformRect(
+      box.getTransformTo(null),
+      Offset.zero & box.size,
+    );
+    return {
+      'globalBounds': rect(bounds),
+      'intersectsViewport': bounds.overlaps(viewport),
+    };
+  }
+
+  void visit(Element element, String? owner) {
+    final widget = element.widget;
+    if (widget is Offstage && widget.offstage) return;
+    // Opaque route overlays can retain their preceding route without an
+    // Offstage widget. Do not attribute that hidden route's geometry to this PNG.
+    if (ModalRoute.of(element)?.isCurrent == false) return;
+    final type = widget.runtimeType.toString();
+    final render = element.findRenderObject();
+    final box = render is RenderBox && render.attached && render.hasSize
+        ? render
+        : null;
+    if (box != null &&
+        (tracked.contains(type) || type.startsWith('ChoiceRow<'))) {
+      final id = 'component-${components.length}';
+      components.add({
+        'id': id,
+        'type': type,
+        'parentComponent': owner,
+        if (widget.key != null) 'key': widget.key.toString(),
+        ...geometry(box),
+      });
+      owner = id;
+    }
+    // RenderObjectElement avoids recording the same paragraph once per wrapper.
+    if (element is RenderObjectElement &&
+        render is RenderParagraph &&
+        render.attached &&
+        render.hasSize) {
+      final text = render.text.toPlainText();
+      final runs = <Map<String, Object?>>[];
+      void span(InlineSpan value, TextStyle inherited) {
+        final style = inherited.merge(value.style);
+        if (value is TextSpan) {
+          if (value.text case final String content) {
+            runs.add({
+              'text': content,
+              'fontFamily': style.fontFamily,
+              'fontSize': style.fontSize,
+              'fontWeight': style.fontWeight?.value,
+              'height': style.height,
+              'letterSpacing': style.letterSpacing,
+            });
+          }
+          for (final child in value.children ?? const <InlineSpan>[]) {
+            span(child, style);
+          }
+        }
+      }
+
+      span(render.text, const TextStyle());
+      paragraphs.add({
+        'text': text,
+        'parentComponent': owner,
+        ...geometry(render),
+        'maxLines': render.maxLines,
+        'didExceedMaxLines': render.didExceedMaxLines,
+        'textAlign': render.textAlign.name,
+        'textScaleAt14': render.textScaler.scale(14) / 14,
+        'lineBoxes': [
+          for (final line in render.getBoxesForSelection(
+            TextSelection(baseOffset: 0, extentOffset: text.length),
+          ))
+            rect(line.toRect()),
+        ],
+        'styleRuns': runs,
+      });
+    }
+    element.visitChildren((child) => visit(child, owner));
+  }
+
+  visit(root, null);
+  return {
+    'coordinateSpace': 'uncropped source image; logical pixels at DPR 1',
+    'lineBoxCoordinateSpace': 'paragraph-local logical pixels',
+    'sourceViewport': [viewport.width, viewport.height],
+    'visibilityNote':
+        'Offstage and non-current route subtrees excluded. Bounds may extend beyond '
+        'scroll clips; intersectsViewport is not a paint-visibility assertion.',
+    'components': components,
+    'paragraphs': paragraphs,
+  };
+}
+
 void main() {
   final output = Platform.environment['CONNECT_CAPTURE_DIR'];
   if (output == null) return;
@@ -504,29 +694,154 @@ void main() {
     }
     tester.view.physicalSize = const Size(402, 874);
     tester.view.devicePixelRatio = 1;
+    // Match the reference phone viewport. System status text and the home
+    // indicator are outside Flutter's content and excluded by parity crops.
+    tester.view.padding = const FakeViewPadding(top: 54, bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(top: 54, bottom: 34);
     addTearDown(() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
+      tester.view.resetPadding();
+      tester.view.resetViewPadding();
     });
     final directory = Directory(output);
+    final layouts = <String, Object?>{};
+    final capturedAtUtc = DateTime.now().toUtc().toIso8601String();
     await tester.runAsync(() => directory.create(recursive: true));
+    await tester.runAsync(
+      () => File('${directory.path}/capture-contract.json').writeAsString(
+        '${const JsonEncoder.withIndent('  ').convert({
+          'referenceViewport': [402, 874],
+          'capturedAtUtc': capturedAtUtc,
+          'layoutContract': 'layout-contract.json',
+          'responsiveVariants': [
+            {
+              'viewport': [280, 620],
+              'textScale': 2,
+            },
+            {
+              'viewport': [620, 280],
+              'textScale': 2,
+            },
+          ],
+          'largeScreenCaptures': [
+            {
+              'screenshot': 'devices-tablet-light.png',
+              'viewport': [1194, 834],
+              'sourceFrame': 'H0TFx',
+              'route': const DevicesRoute().location,
+              'safeArea': {'top': 0, 'bottom': 0},
+            },
+            {
+              'screenshot': 'device_workspace-desktop-light.png',
+              'viewport': [1440, 960],
+              'sourceFrame': 'zLBrM',
+              'route': const WorkspaceRoute(deviceId: 'fixture').location,
+              'safeArea': {'top': 0, 'bottom': 0},
+            },
+          ],
+          'largeScreenTheme': 'Real production router and pages; captureTheme only replaces font families. Geometry, font sizes and weights retain production tokens.',
+          'devicePixelRatio': 1,
+          'safeArea': {'top': 54, 'bottom': 34},
+          'systemChromeRendered': false,
+          'materialBackend': 'widget-test-fallback',
+          'font': cjk.existsSync() ? cjk.path : 'Flutter test defaults',
+          'device': device,
+          'fixtureScenarios': {
+            'diagnostics_failed': failedDiagnosis,
+            'transfer_details': partialTask,
+            'receive_content': task,
+            'file_search': {'initialPath': searchPath, 'query': '旅行', 'status': 'not-started'},
+            'file_search_results': {'initialPath': searchPath, 'query': '旅行', 'status': 'completed'},
+            'selected_session_tools': {'sessionId': 'screen'},
+            'remote': {'state': 'paused', 'reason': 'renderer receipt unconfirmed', 'nativeTextureSubstituted': false},
+            'qr_pair': {'payload': qrPayload, 'errorCorrectionLevel': 'L'},
+          },
+          'productionRouteCaptures': ['devices', 'transfers', 'settings', 'device_workspace', 'connection_form'],
+          'visualAcceptanceComplete': false,
+        })}\n',
+      ),
+    );
     for (final brightness in Brightness.values) {
       final controller = createTestController(fixtureRequest);
-      await controller.initialize();
-      final pages = pageFixtures(controller);
+      final diagnosisController = createTestController(
+        (command, [params = const {}]) async => command == 'device.diagnose'
+            ? failedDiagnosis
+            : fixtureRequest(command, params),
+      );
+      final partialTransferController = createTestController(
+        (command, [params = const {}]) async =>
+            command == 'transfers.get' &&
+                params['transferId'] == partialTask['id']
+            ? partialTask
+            : fixtureRequest(command, params),
+      );
+      for (final fixtureController in [
+        controller,
+        diagnosisController,
+        partialTransferController,
+      ]) {
+        await fixtureController.initialize();
+        fixtureController.settings = {
+          ...fixtureController.settings,
+          'appearance': brightness.name,
+        };
+      }
+      final pages = pageFixtures(
+        controller,
+        diagnosisController: diagnosisController,
+        partialTransferController: partialTransferController,
+      );
       for (final entry in pages.entries) {
         final boundary = GlobalKey();
+        final productionRoute = switch (entry.key) {
+          'devices' => const DevicesRoute().location,
+          'transfers' => const TransfersRoute().location,
+          'settings' => const SettingsRoute().location,
+          'device_workspace' => const WorkspaceRoute(
+            deviceId: 'fixture',
+          ).location,
+          'connection_form' => const ConnectionFormRoute().location,
+          _ => null,
+        };
         await tester.pumpWidget(
           RepaintBoundary(
             key: boundary,
-            child: RouterTestApp(
-              key: ValueKey('${entry.key}-${brightness.name}'),
-              controller: controller,
-              theme: captureTheme(brightness),
-              home: entry.value,
-            ),
+            child: productionRoute == null
+                ? RouterTestApp(
+                    key: ValueKey('${entry.key}-${brightness.name}'),
+                    controller: entry.key == 'diagnostics_failed'
+                        ? diagnosisController
+                        : entry.key == 'transfer_details'
+                        ? partialTransferController
+                        : controller,
+                    theme: captureTheme(brightness),
+                    home: entry.value,
+                  )
+                : TestProviderScope(
+                    controller: controller,
+                    child: ConnectApp(
+                      key: ValueKey('${entry.key}-${brightness.name}'),
+                    ),
+                  ),
           ),
         );
+        if (productionRoute != null) {
+          await tester.pumpAndSettle();
+          final context = tester.element(find.byType(GlassTabBar));
+          final router = GoRouter.of(context);
+          if (['devices', 'transfers', 'settings'].contains(entry.key)) {
+            router.go(productionRoute);
+          } else {
+            // Push over the actual devices tab so back behavior matches use.
+            router.push<void>(productionRoute);
+          }
+          await tester.pumpAndSettle();
+          if (['devices', 'transfers', 'settings'].contains(entry.key)) {
+            expect(find.byType(GlassTabBar), findsOneWidget);
+            expect(find.byType(BackButton), findsNothing);
+          }
+        }
         for (var frame = 0; frame < 8; frame++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
@@ -537,6 +852,20 @@ void main() {
           }
         }
         await waitForPageImages(tester);
+        if (entry.key == 'diagnostics_failed') {
+          expect(find.text('设备尚未连接'), findsOneWidget);
+          expect(find.text('无法访问设备地址'), findsOneWidget);
+          expect(find.text('设备连接正常'), findsNothing);
+        }
+        if (entry.key == 'transfer_details') {
+          expect(find.text('重新传输'), findsOneWidget);
+          expect(find.text('旅行清单.pdf'), findsOneWidget);
+          expect(find.text('视频.mp4'), findsOneWidget);
+          expect(find.text('资料.zip'), findsOneWidget);
+        }
+        if (entry.key == 'receive_content') {
+          expect(find.text('取消本次传输'), findsOneWidget);
+        }
         if (entry.key == 'gallery' || entry.key == 'media_preview') {
           final rasters = tester
               .widgetList<RawImage>(find.byType(RawImage))
@@ -558,16 +887,120 @@ void main() {
           isNull,
           reason: '${entry.key}-${brightness.name}',
         );
+        final screenshot = '${entry.key}-${brightness.name}.png';
+        final layout = captureLayout(boundary);
         await tester.runAsync(() async {
           final image =
               await (boundary.currentContext!.findRenderObject()!
                       as RenderRepaintBoundary)
                   .toImage();
           final data = await image.toByteData(format: ui.ImageByteFormat.png);
-          await File('${directory.path}/${entry.key}-${brightness.name}.png')
-              .writeAsBytes(data!.buffer.asUint8List());
+          final bytes = data!.buffer.asUint8List();
+          await File('${directory.path}/$screenshot').writeAsBytes(bytes);
+          layouts[screenshot] = {
+            'screenshot': screenshot,
+            'screenshotSha256': sha256.convert(bytes).toString(),
+            'brightness': brightness.name,
+            'captureScope': productionRoute == null
+                ? 'isolated-page-fixture'
+                : 'production-router',
+            'route': productionRoute,
+            ...layout,
+          };
+          await File('${directory.path}/layout-contract.json').writeAsString(
+            '${const JsonEncoder.withIndent('  ').convert({
+              'version': 1,
+              'capturedAtUtc': capturedAtUtc,
+              'referenceViewport': [402, 874],
+              'visualAcceptanceComplete': false,
+              'captures': layouts,
+            })}\n',
+          );
           image.dispose();
         });
+      }
+      if (brightness == Brightness.light) {
+        tester.view.padding = const FakeViewPadding();
+        tester.view.viewPadding = const FakeViewPadding();
+        for (final wide in [
+          (
+            'devices-tablet-light.png',
+            const Size(1194, 834),
+            const DevicesRoute().location,
+          ),
+          (
+            'device_workspace-desktop-light.png',
+            const Size(1440, 960),
+            const WorkspaceRoute(deviceId: 'fixture').location,
+          ),
+        ]) {
+          tester.view.physicalSize = wide.$2;
+          final boundary = GlobalKey();
+          final router = createAppRouter();
+          await tester.pumpWidget(
+            RepaintBoundary(
+              key: boundary,
+              child: TestProviderScope(
+                controller: controller,
+                // Keep production routes, shell and root navigator. Only the
+                // capture theme supplies the native CJK family to standalone
+                // ListTile styles which otherwise use the test engine font.
+                child: MaterialApp.router(
+                  key: ValueKey(wide.$1),
+                  routerConfig: router,
+                  theme: captureTheme(brightness),
+                  debugShowCheckedModeBanner: false,
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          if (wide.$3 != const DevicesRoute().location) {
+            router.push<void>(wide.$3);
+            await tester.pumpAndSettle();
+          }
+          await waitForPageImages(tester);
+          expect(tester.takeException(), isNull, reason: wide.$1);
+          final layout = captureLayout(boundary);
+          await tester.runAsync(() async {
+            final image =
+                await (boundary.currentContext!.findRenderObject()!
+                        as RenderRepaintBoundary)
+                    .toImage();
+            expect(
+              Size(image.width.toDouble(), image.height.toDouble()),
+              wide.$2,
+            );
+            final data = await image.toByteData(format: ui.ImageByteFormat.png);
+            final bytes = data!.buffer.asUint8List();
+            await File('${directory.path}/${wide.$1}').writeAsBytes(bytes);
+            layouts[wide.$1] = {
+              'screenshot': wide.$1,
+              'screenshotSha256': sha256.convert(bytes).toString(),
+              'brightness': brightness.name,
+              'captureScope': 'production-router',
+              'appBootstrap': 'createAppRouter with native-font capture theme',
+              'safeArea': {'top': 0, 'bottom': 0},
+              'route': wide.$3,
+              ...layout,
+            };
+            await File('${directory.path}/layout-contract.json').writeAsString(
+              '${const JsonEncoder.withIndent('  ').convert({
+                'version': 1,
+                'capturedAtUtc': capturedAtUtc,
+                'referenceViewport': [402, 874],
+                'visualAcceptanceComplete': false,
+                'captures': layouts,
+              })}\n',
+            );
+            image.dispose();
+          });
+          await tester.pumpWidget(const SizedBox());
+          router.dispose();
+        }
+        tester.view.physicalSize = const Size(402, 874);
+        tester.view.padding = const FakeViewPadding(top: 54, bottom: 34);
+        tester.view.viewPadding = const FakeViewPadding(top: 54, bottom: 34);
       }
       final boundary = GlobalKey();
       controller.settings = {
@@ -624,6 +1057,8 @@ void main() {
 
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
+      diagnosisController.dispose();
+      partialTransferController.dispose();
     }
   });
 }
