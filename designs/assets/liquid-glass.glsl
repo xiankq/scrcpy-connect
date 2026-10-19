@@ -22,6 +22,8 @@ uniform sampler2D u_backdrop;
 uniform float u_ior;
 /** @label Refraction width */
 uniform float u_refractionWidth;
+/** @label Optical depth */
+uniform float u_opticalDepth;
 /** @label Scattering blur */
 uniform float u_blur;
 /**
@@ -61,24 +63,25 @@ uniform float u_glowOppositeIntensity;
 // Numerical tolerances and quadrature constants are algorithmic, not styling.
 const float EPS = 0.00001;
 const float PI = 3.141592653589793;
-const float SQRT_TWO = 1.4142135623730951;
 
-// A normalized 3 x 3 binomial quadrature. The offset gives this kernel unit
-// variance before scaling by sigma. Pencil accepts two-argument sampling;
-// the host mirrors backdrop samples outside the node, including refraction.
+// Deterministic, equal-weight Gaussian disk quadrature. Nine widely separated
+// taps made 1px lines and glyphs appear as discrete duplicate images at sigma
+// 12. Stratified radii and the golden angle distribute 64 taps without those
+// aligned copies. This is a static Pencil cost, not the Flutter blur backend.
+// Pencil rejects texture2D's third (LOD-bias) argument, even with @mipmap.
+// The host mirrors backdrop samples outside the node, including refraction.
 vec4 scatterBackdrop(vec2 uv, float sigma) {
     if (sigma <= EPS) return texture2D(u_backdrop, uv);
-    vec2 stepUV = vec2(SQRT_TWO * sigma) / max(u_resolution, vec2(EPS));
-    vec4 c = texture2D(u_backdrop, uv) * 0.25;
-    c += texture2D(u_backdrop, uv + vec2(stepUV.x, 0.0)) * 0.125;
-    c += texture2D(u_backdrop, uv - vec2(stepUV.x, 0.0)) * 0.125;
-    c += texture2D(u_backdrop, uv + vec2(0.0, stepUV.y)) * 0.125;
-    c += texture2D(u_backdrop, uv - vec2(0.0, stepUV.y)) * 0.125;
-    c += texture2D(u_backdrop, uv + stepUV) * 0.0625;
-    c += texture2D(u_backdrop, uv - stepUV) * 0.0625;
-    c += texture2D(u_backdrop, uv + vec2(stepUV.x, -stepUV.y)) * 0.0625;
-    c += texture2D(u_backdrop, uv + vec2(-stepUV.x, stepUV.y)) * 0.0625;
-    return c;
+    vec2 pixel = 1.0 / max(u_resolution, vec2(EPS));
+    vec4 c = vec4(0.0);
+    for (int i = 0; i < 64; ++i) {
+        float q = (float(i) + 0.5) / 64.0;
+        float radius = sqrt(-2.0 * log(q));
+        float angle = float(i) * 2.399963229728653;
+        vec2 offset = vec2(cos(angle), sin(angle)) * radius * sigma;
+        c += texture2D(u_backdrop, uv + offset * pixel);
+    }
+    return c / 64.0;
 }
 
 // Two opposing arcs follow the actual shape normal, not an oval painted on
@@ -111,23 +114,34 @@ void main() {
     float depthFraction = clamp(distanceInside / width, 0.0, 1.0);
     float edgeFraction = 1.0 - depthFraction;
 
-    // A circular bevel cross-section supplies the 3D surface normal.
-    // Its optical depth is the existing bevel width: no extra gain or
-    // unbound thickness constant is introduced to exaggerate the bend.
+    // Match easy 5.0's SDF-to-normal bevel ramp. Width controls the rim;
+    // optical depth separately controls ray travel. The latter mirrors the
+    // controlled dependency's fixed 70 logical px and must be token-bound.
     vec3 normal = normalize(vec3(
         outward * sqrt(max(1.0 - depthFraction * depthFraction, 0.0)),
         depthFraction
     ) + vec3(0.0, 0.0, EPS));
     float ior = max(u_ior, 1.0);
     vec3 ray = refract(vec3(0.0, 0.0, -1.0), normal, 1.0 / ior);
-    vec2 refractedUV = uv + ray.xy * width * edgeFraction / resolution;
+    vec2 refractedUV = uv + ray.xy * max(u_opticalDepth, 0.0)
+        * edgeFraction / resolution;
 
     // The middle scatters; the beveled edge retains the sharp displaced
     // scene. Clear uses its own low blur/tint bindings, never a white mask.
-    float sigma = max(u_blur, 0.0) * sqrt(depthFraction);
+    // The old square-root ramp already scattered by sigma 3 at 1px inside a
+    // 16px regular rim, hiding the bend. A continuous zero-slope transition
+    // keeps the thin rim optically clear and reaches the same bulk sigma.
+    float sigma = max(u_blur, 0.0)
+        * smoothstep(0.0, 1.0, depthFraction);
     vec4 backdrop = scatterBackdrop(refractedUV, sigma);
     vec3 backdropColor = backdrop.rgb / max(backdrop.a, EPS);
-    float tintAlpha = clamp(u_tint.a, 0.0, 1.0);
+    // Static volume-absorption projection: the token is the bulk tint at full
+    // relative depth. Beer-Lambert transmission tends to 1 at the silhouette,
+    // retaining the actual refracted backdrop instead of painting a white rim.
+    // This SDF depth projection is not Apple's adaptive material or a claim
+    // that the Flutter backend uses the same absorption model.
+    float tintAlpha = depthFraction <= EPS ? 0.0
+        : 1.0 - pow(1.0 - clamp(u_tint.a, 0.0, 1.0), depthFraction);
     vec3 color = mix(backdropColor, u_tint.rgb, tintAlpha);
     float alpha = backdrop.a + tintAlpha * (1.0 - backdrop.a);
 

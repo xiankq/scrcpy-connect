@@ -11,8 +11,8 @@ const consumer = resolve(root, 'packages/design_system/lib/design_system.dart');
 // Explicit supported extensions to DESIGN.md's standard component properties.
 const componentProperties = new Set([
   'backgroundColor', 'textColor', 'typography', 'rounded', 'padding', 'size',
-  'height', 'width', 'borderColor', 'blur', 'shadowBlur', 'shadowOffset', 'angle',
-  'refractionIndex', 'refractionWidth', 'dispersion', 'magnification', 'saturation',
+  'height', 'width', 'maxWidth', 'borderColor', 'blur', 'shadowBlur', 'shadowOffset', 'angle',
+  'refractionIndex', 'refractionWidth', 'opticalDepth', 'dispersion', 'magnification', 'saturation',
   'gap', 'verticalPadding', 'opacity',
   'specularThickness', 'specularSharpness', 'specularSpread', 'specularIntensity',
   'specularOppositeIntensity', 'glowThickness', 'glowAngle', 'glowSpread',

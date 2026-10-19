@@ -3,10 +3,119 @@ import 'dart:ui';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:liquid_glass_easy/liquid_glass_easy.dart' as liquid;
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 void main() {
+  testWidgets('selection fields keep labels inside and grow for large text', (
+    tester,
+  ) async {
+    for (final scenario in [(370.0, 1.0), (248.0, 2.0)]) {
+      var selected = 'modern';
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ConnectTokens.theme(Brightness.light),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: scenario.$1,
+                child: MediaQuery(
+                  data: MediaQueryData(
+                    textScaler: TextScaler.linear(scenario.$2),
+                  ),
+                  child: StatefulBuilder(
+                    builder: (context, update) => ConnectSelectionField<String>(
+                      label: '连接方式',
+                      value: selected,
+                      icon: const Icon(Icons.expand_more, size: 16),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'modern',
+                          child: Text('现代无线调试（加密）'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'legacy',
+                          child: Text('旧版 TCP（USB 授权后开启）'),
+                        ),
+                      ],
+                      onChanged: (next) => update(() => selected = next!),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final field = find.byType(ConnectSelectionField<String>);
+      final fieldBounds = tester.getRect(field);
+      expect(fieldBounds.height, scenario.$2 == 1 ? 56 : greaterThan(56));
+      final labelBounds = tester.getRect(find.text('连接方式'));
+      expect(labelBounds.top, greaterThanOrEqualTo(fieldBounds.top));
+      expect(labelBounds.bottom, lessThanOrEqualTo(fieldBounds.bottom));
+      expect(tester.takeException(), isNull);
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('旧版 TCP（USB 授权后开启）').last);
+      await tester.pumpAndSettle();
+      expect(selected, 'legacy');
+      final selectedBounds = tester.getRect(find.text('旧版 TCP（USB 授权后开启）'));
+      final updatedBounds = tester.getRect(field);
+      expect(selectedBounds.top, greaterThanOrEqualTo(updatedBounds.top));
+      expect(selectedBounds.bottom, lessThanOrEqualTo(updatedBounds.bottom));
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('button layout is 44 points and text has no inherited tracking', (
+    tester,
+  ) async {
+    for (final brightness in Brightness.values) {
+      final theme = ConnectTokens.theme(brightness);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton(onPressed: () {}, child: const Text('主动作')),
+                  OutlinedButton(onPressed: () {}, child: const Text('次动作')),
+                  TextButton(onPressed: () {}, child: const Text('文字动作')),
+                  IconButton(onPressed: () {}, icon: const Icon(Icons.add)),
+                  Text('分组标题', style: theme.textTheme.bodySmall),
+                  ListTile(title: const Text('选项行')),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      for (final type in [
+        FilledButton,
+        OutlinedButton,
+        TextButton,
+        IconButton,
+      ]) {
+        expect(tester.getSize(find.byType(type)).height, 44);
+      }
+      for (final label in ['主动作', '次动作', '文字动作', '分组标题', '选项行']) {
+        final text = tester.widget<RichText>(
+          find.descendant(
+            of: find.text(label),
+            matching: find.byType(RichText),
+          ),
+        );
+        expect(text.text.style!.letterSpacing, 0, reason: label);
+        if (label == '选项行') {
+          expect(text.text.style!.fontWeight, FontWeight.w400);
+        }
+      }
+    }
+  });
+
   test(
     'generated tokens preserve both theme appearances and optical values',
     () {
@@ -15,7 +124,21 @@ void main() {
       expect(light.colorScheme.primary, const Color(0xff1b1b1f));
       expect(dark.colorScheme.primary, const Color(0xfff2f2f4));
       for (final theme in [light, dark]) {
+        for (final style in [
+          theme.outlinedButtonTheme.style!,
+          theme.textButtonTheme.style!,
+        ]) {
+          final typography = style.textStyle!.resolve({})!;
+          expect(typography.fontSize, 13);
+          expect(typography.fontWeight, FontWeight.w500);
+          expect(typography.height, 1.4);
+        }
         final style = theme.filledButtonTheme.style!;
+        final typography = style.textStyle!.resolve({})!;
+        expect(typography.fontSize, 13);
+        expect(typography.fontWeight, FontWeight.w500);
+        expect(typography.height, 1.4);
+        expect(typography.fontFamily, theme.textTheme.labelLarge!.fontFamily);
         final fill = style.backgroundColor!.resolve({})!;
         final label = style.foregroundColor!.resolve({})!;
         final a = label.computeLuminance();
@@ -43,6 +166,81 @@ void main() {
     },
   );
 
+  testWidgets('compact switches keep geometry, keyboard and toggle semantics', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    for (final brightness in Brightness.values) {
+      var value = false;
+      var enabled = true;
+      late StateSetter update;
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(brightness),
+          theme: ConnectTokens.theme(brightness),
+          home: Scaffold(
+            body: Center(
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  update = setState;
+                  return ConnectSwitch(
+                    value: value,
+                    onChanged: enabled
+                        ? (next) => setState(() => value = next)
+                        : null,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      final control = find.byType(ConnectSwitch);
+      expect(tester.getSize(control), const Size(44, 44));
+      final track = find.descendant(
+        of: control,
+        matching: find.byType(AnimatedContainer),
+      );
+      expect(tester.getSize(track), const Size(44, 28));
+      final thumb = find.descendant(
+        of: control,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration as BoxDecoration).shape == BoxShape.circle,
+        ),
+      );
+      expect(tester.getSize(thumb), const Size(20, 20));
+      expect(
+        tester.getSemantics(control).flagsCollection.isToggled,
+        Tristate.isFalse,
+      );
+      await tester.tapAt(tester.getTopLeft(control) + const Offset(2, 2));
+      await tester.pumpAndSettle();
+      expect(value, isTrue);
+      expect(
+        tester.getSemantics(control).flagsCollection.isToggled,
+        Tristate.isTrue,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(value, isFalse);
+      update(() => enabled = false);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(control).flagsCollection.isEnabled,
+        Tristate.isFalse,
+      );
+      await tester.tap(control);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(value, isFalse);
+    }
+    semantics.dispose();
+  });
+
   test(
     'optical materials preserve transmitted content and visible edge lighting',
     () {
@@ -53,21 +251,15 @@ void main() {
           variant: GlassVariant.clear,
         );
         for (final style in [regular, clear]) {
-          expect(
-            style.shape!.cornerStyle,
-            liquid.LiquidGlassCornerStyle.continuousRoundedRectangle,
-          );
-          expect(style.refractionIndex, greaterThan(1.02));
-          expect(style.refractionWidth, greaterThan(0));
-          expect(style.specular!.thickness, greaterThan(0));
-          expect(style.specular!.intensity, greaterThan(0));
-          expect(style.glow!.thickness, greaterThan(style.specular!.thickness));
-          expect(style.glow!.intensity, greaterThan(0));
-          expect(style.color.a, lessThan(1));
-          expect(style.dispersion, 0);
+          expect(style.refractiveIndex, greaterThan(1.02));
+          expect(style.thickness, greaterThan(0));
+          expect(style.lightIntensity, greaterThan(0));
+          expect(style.glowIntensity, greaterThan(0));
+          expect(style.glassColor.a, lessThan(1));
+          expect(style.chromaticAberration, 0);
         }
         expect(clear.blur, lessThan(regular.blur));
-        expect(clear.color.a, lessThan(regular.color.a));
+        expect(clear.glassColor.a, lessThan(regular.glassColor.a));
       }
     },
   );
@@ -79,7 +271,7 @@ void main() {
         variant: GlassVariant.clear,
       );
       final center = Color.alphaBlend(
-        material.color,
+        material.glassColor,
         Color.alphaBlend(DesignTokens.colorMediaShade, backdrop),
       );
       final a = Colors.white.computeLuminance();
@@ -140,43 +332,97 @@ void main() {
   });
 
   testWidgets(
-    'floating navigation remains reachable with large text on a narrow screen',
+    'floating navigation keeps its standard height and grows for large text',
     (tester) async {
       var selected = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          home: MediaQuery(
-            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-            child: Center(
-              child: SizedBox(
-                width: 280,
-                child: GlassTabBar(
-                  destinations: const [
-                    GlassDestination(icon: Icons.devices, label: '设备'),
-                    GlassDestination(icon: Icons.swap_vert, label: '传输'),
-                    GlassDestination(icon: Icons.settings, label: '设置'),
-                  ],
-                  selectedIndex: selected,
-                  onSelected: (index) => selected = index,
+      for (final brightness in Brightness.values) {
+        for (final scale in [1.0, 2.0]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: ConnectTokens.theme(brightness),
+              home: MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: Center(
+                  child: SizedBox(
+                    width: 280,
+                    child: GlassTabBar(
+                      destinations: const [
+                        GlassDestination(icon: Icons.devices, label: '设备'),
+                        GlassDestination(icon: Icons.swap_vert, label: '传输'),
+                        GlassDestination(icon: Icons.settings, label: '设置'),
+                      ],
+                      selectedIndex: selected,
+                      onSelected: (index) => selected = index,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-      );
-      expect(tester.takeException(), isNull);
-      for (final label in ['设备', '传输', '设置']) {
-        final button = find.ancestor(
-          of: find.text(label),
-          matching: find.byType(CupertinoButton),
-        );
-        final size = tester.getSize(button);
-        expect(size.width, greaterThanOrEqualTo(44));
-        expect(size.height, greaterThanOrEqualTo(44));
+          );
+          expect(tester.takeException(), isNull);
+          final navigationHeight = tester
+              .getSize(find.byType(GlassTabBar))
+              .height;
+          expect(navigationHeight, scale == 1 ? 64 : greaterThan(64));
+          for (final label in ['设备', '传输', '设置']) {
+            final button = find.ancestor(
+              of: find.text(label),
+              matching: find.byType(CupertinoButton),
+            );
+            final size = tester.getSize(button);
+            expect(size.width, greaterThanOrEqualTo(44));
+            expect(size.height, greaterThanOrEqualTo(44));
+          }
+          await tester.tap(find.text('传输'));
+          expect(selected, 1);
+        }
       }
-      await tester.tap(find.text('传输'));
-      expect(selected, 1);
+    },
+  );
+
+  testWidgets(
+    'input fields preserve their minimum height and grow with content',
+    (tester) async {
+      for (final brightness in Brightness.values) {
+        for (final scale in [1.0, 2.0]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: ConnectTokens.theme(brightness),
+              home: MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: Scaffold(
+                  body: Center(
+                    child: SizedBox(
+                      width: 280,
+                      child: TextField(
+                        key: ValueKey((brightness, scale)),
+                        maxLines: null,
+                        decoration: const InputDecoration(
+                          hintText: 'IP 地址或主机名',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          final field = find.byType(TextField);
+          final initialHeight = tester.getSize(field).height;
+          expect(initialHeight, greaterThanOrEqualTo(52));
+          final decoration = tester
+              .widget<InputDecorator>(find.byType(InputDecorator))
+              .decoration;
+          expect(
+            (decoration.border! as OutlineInputBorder).borderRadius,
+            BorderRadius.circular(14),
+          );
+          await tester.enterText(field, '192.168.1.8\n192.168.1.9\n设备地址');
+          await tester.pump();
+          expect(tester.getSize(field).height, greaterThan(initialHeight));
+          expect(tester.takeException(), isNull);
+        }
+      }
     },
   );
 
@@ -294,7 +540,7 @@ void main() {
           ),
         );
 
-        expect(find.byType(liquid.LiquidGlassLens), findsNothing);
+        expect(find.byType(liquid.AdaptiveGlass), findsNothing);
         expect(find.byType(BackdropFilter), findsNothing);
         expect(find.bySemanticsLabel('共享控制'), findsOneWidget);
         expect(tester.getSize(find.byType(Glass)), const Size(76, 76));
@@ -334,7 +580,7 @@ void main() {
       ),
     );
 
-    expect(find.byType(liquid.LiquidGlassLens), findsNothing);
+    expect(find.byType(liquid.AdaptiveGlass), findsNothing);
     expect(find.byType(BackdropFilter), findsOneWidget);
     expect(find.text('可用控制'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -347,5 +593,57 @@ void main() {
     expect(light.systemOverlayStyle!.statusBarBrightness, Brightness.light);
     expect(dark.systemOverlayStyle!.statusBarIconBrightness, Brightness.light);
     expect(dark.systemOverlayStyle!.statusBarBrightness, Brightness.dark);
+  });
+
+  testWidgets('press cancellation and disabling cannot commit a stale action', (
+    tester,
+  ) async {
+    var activations = 0;
+    var enabled = true;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ConnectTokens.theme(Brightness.light),
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            rebuild = setState;
+            return Center(
+              child: GlassIconButton(
+                icon: const Icon(Icons.add),
+                tooltip: '添加',
+                onPressed: enabled ? () => activations++ : null,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    final button = find.byType(GlassIconButton);
+    final initial = tester.getRect(button);
+    final cancelled = await tester.startGesture(tester.getCenter(button));
+    await tester.pump(const Duration(milliseconds: 16));
+    await cancelled.cancel();
+    await tester.pumpAndSettle();
+    expect(activations, 0);
+    expect(tester.getRect(button), initial);
+
+    final interrupted = await tester.startGesture(tester.getCenter(button));
+    await tester.pump(const Duration(milliseconds: 16));
+    rebuild(() {
+      enabled = false;
+    });
+    await tester.pump();
+    await interrupted.up();
+    await tester.pumpAndSettle();
+    expect(activations, 0);
+    rebuild(() {
+      enabled = true;
+    });
+    await tester.pumpAndSettle();
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(activations, 1);
+    expect(tester.getRect(button), initial);
+    expect(tester.takeException(), isNull);
   });
 }

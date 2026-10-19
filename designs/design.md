@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: 邻接 Interconnect
-description: iOS 系统中性内容与黑白主题操作，以真实透色、折射和高光构成 Liquid Glass 控制层。
+description: 设备舞台：设备身份与真实内容建立主视觉，黑白内容层之上悬浮液态玻璃导航与操作。
 colors:
   primary: '#1B1B1F'
   primary-dark: '#F2F2F4'
@@ -91,46 +91,55 @@ typography:
     fontSize: 22px
     fontWeight: 600
     lineHeight: '1.25'
+    letterSpacing: 0px
   heading:
     fontFamily: Noto Sans SC
     fontSize: 17px
     fontWeight: 600
     lineHeight: '1.35'
+    letterSpacing: 0px
   body:
     fontFamily: Noto Sans SC
     fontSize: 14px
     fontWeight: 400
     lineHeight: '1.45'
+    letterSpacing: 0px
   body-emphasis:
     fontFamily: Noto Sans SC
     fontSize: 14px
     fontWeight: 600
     lineHeight: '1.45'
+    letterSpacing: 0px
   body-compact:
     fontFamily: Noto Sans SC
     fontSize: 14px
     fontWeight: 400
     lineHeight: '1.4'
+    letterSpacing: 0px
   label:
     fontFamily: Noto Sans SC
     fontSize: 13px
     fontWeight: 500
     lineHeight: '1.4'
+    letterSpacing: 0px
   caption:
     fontFamily: Noto Sans SC
     fontSize: 12px
     fontWeight: 400
     lineHeight: '1.4'
+    letterSpacing: 0px
   micro:
     fontFamily: Noto Sans SC
     fontSize: 11px
     fontWeight: 500
     lineHeight: '1.3'
+    letterSpacing: 0px
   numeric:
     fontFamily: Inter
     fontSize: 14px
     fontWeight: 600
     lineHeight: '1.3'
+    letterSpacing: 0px
   clock:
     fontFamily: Inter
     fontSize: 48px
@@ -186,12 +195,23 @@ components:
     height: 56px
   page-body:
     height: 632px
+  page-content:
+    maxWidth: 720px
   button-primary:
     height: 44px
     rounded: '{rounded.full}'
     backgroundColor: '{colors.primary-action}'
     textColor: '{colors.on-primary}'
     typography: '{typography.label}'
+  button-secondary:
+    height: 44px
+    rounded: '{rounded.full}'
+    backgroundColor: '{colors.surface-high}'
+    textColor: '{colors.text}'
+    typography: '{typography.label}'
+  button-secondary-dark:
+    backgroundColor: '{colors.surface-high-dark}'
+    textColor: '{colors.text-dark}'
   button-primary-dark:
     backgroundColor: '{colors.primary-action-dark}'
     textColor: '{colors.on-primary-dark}'
@@ -239,6 +259,7 @@ components:
     angle: 45
     refractionIndex: 1.1
     refractionWidth: 16px
+    opticalDepth: 70px
     dispersion: 0
     magnification: 1
     saturation: 1
@@ -271,6 +292,7 @@ components:
     width: 44px
     height: 28px
     rounded: '{rounded.full}'
+    backgroundColor: '{colors.primary-action}'
   switch-thumb:
     size: 20px
   file-icon:
@@ -403,8 +425,19 @@ components:
   remote-exit-hit:
     width: 44px
     height: 52px
-  device-list-item:
+  device-identity:
+    width: 52px
+    height: 72px
+    rounded: '{rounded.md}'
+  device-identity-showcase:
+    width: 84px
+    height: 144px
+  device-identity-compact:
+    height: 44px
+  device-list-item-compact:
     height: 64px
+  device-list-item:
+    height: 108px
     rounded: '{rounded.lg}'
     padding: '{spacing.md}'
     backgroundColor: '{colors.surface}'
@@ -415,6 +448,11 @@ components:
     padding: '{spacing.md}'
     backgroundColor: '{colors.surface}'
     textColor: '{colors.text}'
+  selection-field:
+    height: 56px
+    padding: '{spacing.md}'
+    verticalPadding: '{spacing.xs}'
+    rounded: '{rounded.md}'
   field-block:
     height: 104px
   control-feedback:
@@ -444,7 +482,11 @@ components:
 
 本文件定义主控界面的视觉角色、材料用途和响应布局；数值以 frontmatter token 为准。产品入口、对象归属和操作结果由[产品规格](prod/README.md)定义，视觉稿不另建业务模式。
 
-界面以中性的内容层承载设备、文件和状态，以浮动控制层承载导航和局部操作。保留黑白主题，功能图标使用亮色点缀；液态玻璃用于控制层。精简通过信息取舍、对齐和组件一致性实现，不以删除真实状态或缩小文字代替。
+界面采用“设备舞台”：以设备身份、真实屏幕和用户内容建立视觉中心，以悬浮的液态玻璃导航和操作建立空间层次。黑白是内容基底，功能图标使用语义亮色。设备与内容应比装饰更醒目；玻璃的记忆点来自透入内容、轮廓折射与操作反馈。
+
+首页以 display 字级和有明确设备轮廓的平等设备卡形成识别，工作台先呈现设备身份与真实连接、能力和保留会话，再进入功能分组。远控与媒体把真实内容铺开，控制退到边缘。连接、文件、设置继续采用安静的工具结构，避免为追求设计感改变用户任务。
+
+简约通过减少注意力竞争实现。每页先确定一个视觉重心：设备工作台的设备、文件详情的文件对象、相册的照片、通话页的当前呼叫。构图、尺度和留白围绕这个对象组织；辅助状态与操作随后展开。页面可以共享控件，同时保留各自内容的形态，不把设备、照片和通知都压成相同的列表。
 
 ## Colors
 
@@ -462,7 +504,8 @@ Pencil 的中文使用 Noto Sans SC，时间和数值可使用 Inter；Flutter �
 
 | 内容 | 呈现方式 |
 | --- | --- |
-| 设备连接状态、文件大小、画质当前值 | 同行状态或尾部数值，不另加一行功能介绍 |
+| 设备连接状态、最近连接时间 | 在设备身份旁形成必要状态区，可占独立行；离线时间不能伪装成实时状态 |
+| 文件大小、画质当前值 | 同行状态或尾部数值，不另加一行功能介绍 |
 | 通知正文、失败原因、字段校验、传输进度 | 作为真实内容保留，不因清理副描述而删除 |
 | 文件来源与目标、同名文件完整路径 | 就近提供可核对信息；受限空间使用详情或提示 |
 | 页面用途介绍、普通列表功能解释 | 从标题和列表项移除；仅在实际需要的首次引导中说明操作条件 |
@@ -471,23 +514,32 @@ Pencil 的中文使用 Noto Sans SC，时间和数值可使用 Inter；Flutter �
 
 ## Layout
 
-设备列表是首页，设备卡呈现身份和真实连接状态；设备工作台组织该设备的功能入口。普通页面使用紧凑页头和内容流，文件采用列表，相册采用媒体网格。相关图标和文字共享对齐线、内容边距与行节奏，数值和尾部操作不挤占标题的必要空间。
+设备列表是首页，所有设备卡采用相同层级，不虚构主力设备或实时屏幕。设备卡以设备轮廓、名称、真实状态形成横向构图，标准高度是最小基准，长名称与辅助文字可增高。设备工作台以较大的实体设备轮廓与名称形成不对称主构图；型号与连接状态就近呈现，可用能力与保留会话在分隔线下形成摘要，再接单一黑色屏幕动作和功能分组。轮廓只是设备身份，不伪造远端画面、壁纸或电量。顶层目的地以 display 标题建立入口层级；短横屏收紧为 heading。功能分组标题使用 caption 与 secondary，通过上方 section-title 间距建立层级；普通内容行使用 body 与标准高度，依靠留白和对齐建立关系，不逐行画底线，避免整列加粗；卡片与组头区分分组，分隔仅用于摘要等明确结构边界。下钻页保持紧凑页头和内容流，文件采用列表，相册采用媒体网格。相关图标和文字共享对齐线、内容边距与行节奏，数值和尾部操作不挤占标题的必要空间。
+
+同一设备的一组活动将设备身份提到组头，行内只呈现活动名称与该项操作；不同设备分别成组，停止操作仍归属原活动。普通菜单和选项通过一致的行高、图标槽与尾部对齐建立秩序，末行下方只保留行自身的内容余量。分隔线用于确有结构转换的地方，例如设备身份与能力摘要之间；文件浏览等密集数据视图按实际阅读需要决定相邻项分隔，末行不追加装饰底线。
+
+纯列表的背景容器只负责材料、圆角和裁切，内边距为零；分组高度由各行的实际高度组成，不再叠加一圈上下留白。水平留白、纵向内容余量、最小高度与命中范围由行组件负责。单项与多项分组使用同一行节奏，放大文字时由行增高。包含对象标题、正文或进度的内容卡片使用自身内容内边距；其中嵌入的行显式使用紧凑内嵌变体，避免重复水平缩进。
+
+同级方式使用同一组内的平等入口，以用户可识别的任务命名；差异条件在选择后就近说明。分组表达任务或对象归属，不使用协议代际、技术术语或额外的底部分区制造主次。具体连接名称、授权条件与入口归属由[设备与连接设计](prod/device-connection.md)维护。
 
 ### Flexible 布局
 
 布局依据所在父容器的约束决定，不依据整块屏幕宽度放大或缩小设计稿。手机参考尺寸是审阅视口，不是运行时缩放基准。
 
 - 普通页面以纵向 Flex 分配页头、提示和可滚动内容；正文按可用宽度增高。
+- 普通页面正文、设备列表主内容与底部动作采用居中的 page-content 阅读列；maxWidth 包含页面原有左右内边距，列内卡片继续扣除该边距。高度与滚动仍使用完整可用空间；侧栏在阅读列外，远控与媒体画面不受此宽度约束。
 - 窄容器、横屏、键盘和大文字状态允许换行、堆叠或滚动，末项与主要操作保持可达。
 - 大屏根据可用空间呈现侧栏与单一当前内容，不把静态并排示意解释为原生多窗口能力。
 - 远控画面、遮罩和浮动操作使用叠加定位；远端画面按源比例容纳，导航键占独立空间。
 - 视觉紧凑与命中面积分别控制，最小触控尺寸使用组件 token。
 
-`mobile.pen` 中各状态保持独立顶层 Frame，按任务分类分行。标记为 `scroll-viewport` 的视口可以裁剪完整滚动内容；核对滚动终点和遮挡，不删内容制造首屏完整。画布 Frame 与产品路由的对应见[流程索引](prod/user-flows.md)。
+`mobile.pen` 以主要页面、局部状态板、材料与交互板三类对象组织。只有布局或任务结构独立的页面保留完整视口；同一页的校验、进度、空态、结果与菜单在状态板呈现变化部位，不复制状态栏、标题、导航和背景。明暗与降低透明度在材料板集中对照；远控退出拖拽与吸附用局部控件和动作说明表达。状态板保留原状态 ID 与责任页面引用；一个状态 ID 不等于一条路由。标记为 `scroll-viewport` 的视口可以裁剪完整滚动内容；核对滚动终点和遮挡，不删内容制造首屏完整。画布 Frame 与产品路由的对应见[流程索引](prod/user-flows.md)。
 
 ## Elevation & Depth
 
 Liquid Glass 的材料识别来自真实背景的透镜折射、沿形状变化的边缘光、散射与离面阴影。半透明填充与模糊只能表达磨砂材料，不能单独作为液态玻璃成像证据。光学值使用 `glass` 组件 token，不在正文、页面或 shader 使用处另建数值表。
+
+玻璃承担内容上方的功能层，让人持续理解正在操作什么，以及控制与下方内容的空间关系。材料随背景获得颜色和深度，控件自身仍保持清楚的形状与命中范围。背景平静时允许材料安静；不靠新增纹理、彩色光斑、重复描边或叠加阴影强行展示玻璃。设备卡、长正文和表单保持稳定的中性实体面，使有限的浮动控制形成明确层次。
 
 | 对象 | 材料与边界 |
 | --- | --- |
@@ -498,19 +550,25 @@ Liquid Glass 的材料识别来自真实背景的透镜折射、沿形状变化�
 | 静态文件名、普通标题、说明文字 | 内容标识，不单独包裹玻璃 |
 | 内容流程的主要按钮 | `primary-action` 实色；其强调作用不依赖透明化 |
 
+玻璃先满足三个条件：它是实际控制，它浮在真实内容之上，它的形状与来源操作有关。静止时保持清晰薄边与适量散射；按下时局部提亮与轻微形变，释放或取消均可回到当前状态；菜单与工具面板从触发控件扩展，避免无来源地漂入。减少动态用短暂明暗反馈替代弹性位移。
+
+regular 优先保护导航、标签和未知背景上的可读性，允许更充分的散射；clear 优先保留照片与视频，在紧凑操作周围呈现透明边缘和背景弯折。选择依据是背景和阅读任务，不能将 clear 理解为所有玻璃的升级版。明暗外观分别检查前景对比；降低透明度时保留同一形状、层级和操作位置，切换为实体材料。
+
 相关图标动作共享一层玻璃背景，内部图标不再各包一层。文字动作单独组织；导航选中面与父导航处在同一平面，不叠完整玻璃阴影。内容下方没有图像或滚动对象时，不添加装饰图案来制造折射。
 
 媒体控制的渐退保护用于实际可读性，不能把文字保护罩覆盖整块透镜。材料轮廓、高光和阴影使用同一形状关系，避免固定白边、镜面条纹或额外径向遮罩压住折射。普通内容保持清晰，控制层不改变远端图像本身。
 
-Pencil 的 `assets/liquid-glass.glsl` 表达静态光学外观；Flutter 的生产渲染与兼容路径由[工程契约](../docs/implementation/architecture.md)说明。静态稿、Widget 截图与真实 GPU 成像分别验证。支持位、shader 加载成功或单张截图均不等于动态效果与性能通过。
+评审材料时，使用照片、细线与密集文字作为背景，观察轮廓附近的背景是否连续弯折、散射是否连续、中心内容是否仍能辨认，并确认前景标签清楚。细线或文字出现离散重影时应修正采样；强白边与重模糊不能替代折射。静态稿核对光学目标，运行中再检查背景滚动或视频更新、按下与取消、来源过渡及辅助偏好。任何一项有证据缺口，都保留为未验收项。
+
+Pencil 的 `assets/liquid-glass.glsl` 表达静态光学目标。`glass.opticalDepth` 表示透镜厚度，`refractionWidth` 表示轮廓过渡与相邻形状融合的距离，两者分别控制；更换渲染后端时重新核对 token 映射与实际成像。Flutter 的生产渲染、初始化与兼容路径由[工程契约](../docs/implementation/architecture.md)维护。静态稿、Widget 截图与真实 GPU 成像分别验证，动态交互与性能由运行证据确认。
 
 ## Shapes
 
-内容面、上下文面板、浮动控制和缩略图使用各自语义圆角。内外形状与间距保持同心关系，胶囊用于导航和操作；图标图形大小与按钮命中区域分别定义。圆角和间距由 token 决定，普通内容行依靠对齐、空白和必要分隔建立关系。
+内容面、上下文面板、浮动控制和缩略图使用各自语义圆角。内外形状与间距保持同心关系，胶囊用于导航和操作；图标图形大小与按钮命中区域分别定义。圆角和间距由 token 决定，普通内容行依靠留白和对齐建立关系，不逐行画底线；卡片与组头区分分组，分隔仅用于摘要等明确结构边界。
 
 ## Components
 
-共享设备卡、页头、内容行、开关、选项、主次动作、浮动导航和侧栏均通过组件实例使用。图标统一为 Lucide；真实应用图标和系统画面属于被控内容，不随主控功能色改绘。
+共享设备卡、页头、内容行、开关、选项、主次动作、浮动导航和侧栏均通过组件实例使用。输入框用 connection-field，已选值与标签同时显示的选择框用 selection-field；标签保留在填充面内，候选项在点击后展开，不把完整候选集铺成一排同权胶囊。普通与选项行使用 row 最小高度，依靠留白和对齐，不逐行画底线；有图标时标题从图标宽度加 row gap 后开始，无图标时贴内容左缘。卡片与组头区分分组，分隔仅用于摘要等明确结构边界。开关的轨道与拇指尺寸使用 switch token，命中区域独立达到 icon-button；选中、开关和主要动作使用黑白主题，绿色不作为所有启用状态的通用颜色。次动作使用 button-secondary 的中性实体与 label 字级，文字动作保持透明背景与同一 label 字级。图标统一为 Lucide；真实应用图标和系统画面属于被控内容，不随主控功能色改绘。
 
 远控正常、收起、画质、资源受限和断线状态共享全屏会话结构，使用画面源、退出控件和上下文插槽表达差异。面板不恢复主控页头或内嵌手机卡片，关闭控件保持可触及；断线最后一帧与触控越界的处理按[交互规则](prod/interaction-rules.md)区分。
 

@@ -8,7 +8,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  liquid_glass_easy: 5.0.0
+  liquid_glass_widgets: 1.13.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

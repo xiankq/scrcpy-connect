@@ -115,7 +115,20 @@ abstract final class DesignTokens {
     fontSize: 13.0,
     fontWeight: FontWeight.w500,
     height: 1.4,
-    letterSpacing: null,
+    letterSpacing: 0.0,
+  );
+  static const componentButtonSecondaryBackgroundColor = Color(0xffe5e5ea);
+  static const componentButtonSecondaryDarkBackgroundColor = Color(0xff2c2c2e);
+  static const componentButtonSecondaryDarkTextColor = Color(0xffffffff);
+  static const componentButtonSecondaryHeight = 44.0;
+  static const componentButtonSecondaryRounded = 999.0;
+  static const componentButtonSecondaryTextColor = Color(0xff000000);
+  static const componentButtonSecondaryTypography = TextStyle(
+    fontFamily: "Noto Sans SC",
+    fontSize: 13.0,
+    fontWeight: FontWeight.w500,
+    height: 1.4,
+    letterSpacing: 0.0,
   );
   static const componentCallAvatarSize = 104.0;
   static const componentCanvasHeadingHeight = 96.0;
@@ -143,8 +156,15 @@ abstract final class DesignTokens {
   static const componentDeviceIconHeight = 208.0;
   static const componentDeviceIconRounded = 20.0;
   static const componentDeviceIconWidth = 108.0;
+  static const componentDeviceIdentityCompactHeight = 44.0;
+  static const componentDeviceIdentityHeight = 72.0;
+  static const componentDeviceIdentityRounded = 14.0;
+  static const componentDeviceIdentityShowcaseHeight = 144.0;
+  static const componentDeviceIdentityShowcaseWidth = 84.0;
+  static const componentDeviceIdentityWidth = 52.0;
   static const componentDeviceListItemBackgroundColor = Color(0xffffffff);
-  static const componentDeviceListItemHeight = 64.0;
+  static const componentDeviceListItemCompactHeight = 64.0;
+  static const componentDeviceListItemHeight = 108.0;
   static const componentDeviceListItemPadding = 16.0;
   static const componentDeviceListItemRounded = 20.0;
   static const componentDeviceListItemTextColor = Color(0xff000000);
@@ -178,6 +198,7 @@ abstract final class DesignTokens {
   static const componentGlassGlowSpread = 0.5;
   static const componentGlassGlowThickness = 6.0;
   static const componentGlassMagnification = 1.0;
+  static const componentGlassOpticalDepth = 70.0;
   static const componentGlassRefractionIndex = 1.1;
   static const componentGlassRefractionWidth = 16.0;
   static const componentGlassSaturation = 1.0;
@@ -215,6 +236,7 @@ abstract final class DesignTokens {
   static const componentNavigationPadding = 8.0;
   static const componentNavigationRounded = 999.0;
   static const componentPageBodyHeight = 632.0;
+  static const componentPageContentMaxWidth = 720.0;
   static const componentPageHeaderHeight = 56.0;
   static const componentPairingQrBackgroundColor = Color(0xffffffff);
   static const componentPairingQrSize = 176.0;
@@ -248,6 +270,10 @@ abstract final class DesignTokens {
   static const componentRowVerticalPadding = 8.0;
   static const componentSecondaryLabelDarkTextColor = Color(0xffaeaeb2);
   static const componentSecondaryLabelTextColor = Color(0xff636366);
+  static const componentSelectionFieldHeight = 56.0;
+  static const componentSelectionFieldPadding = 16.0;
+  static const componentSelectionFieldRounded = 14.0;
+  static const componentSelectionFieldVerticalPadding = 8.0;
   static const componentSheetLongHeight = 580.0;
   static const componentSheetMediumHeight = 448.0;
   static const componentSheetPadding = 24.0;
@@ -265,6 +291,7 @@ abstract final class DesignTokens {
   static const componentStatusWarningDarkTextColor = Color(0xffffffff);
   static const componentStatusWarningTextColor = Color(0xff000000);
   static const componentSwitchThumbSize = 20.0;
+  static const componentSwitchTrackBackgroundColor = Color(0xff1b1b1f);
   static const componentSwitchTrackHeight = 28.0;
   static const componentSwitchTrackRounded = 999.0;
   static const componentSwitchTrackWidth = 44.0;
@@ -297,22 +324,22 @@ abstract final class DesignTokens {
   static const typographyBodyCompactFontFamily = "Noto Sans SC";
   static const typographyBodyCompactFontSize = 14.0;
   static const typographyBodyCompactFontWeight = FontWeight.w400;
-  static const double? typographyBodyCompactLetterSpacing = null;
+  static const typographyBodyCompactLetterSpacing = 0.0;
   static const typographyBodyCompactLineHeight = 1.4;
   static const typographyBodyEmphasisFontFamily = "Noto Sans SC";
   static const typographyBodyEmphasisFontSize = 14.0;
   static const typographyBodyEmphasisFontWeight = FontWeight.w600;
-  static const double? typographyBodyEmphasisLetterSpacing = null;
+  static const typographyBodyEmphasisLetterSpacing = 0.0;
   static const typographyBodyEmphasisLineHeight = 1.45;
   static const typographyBodyFontFamily = "Noto Sans SC";
   static const typographyBodyFontSize = 14.0;
   static const typographyBodyFontWeight = FontWeight.w400;
-  static const double? typographyBodyLetterSpacing = null;
+  static const typographyBodyLetterSpacing = 0.0;
   static const typographyBodyLineHeight = 1.45;
   static const typographyCaptionFontFamily = "Noto Sans SC";
   static const typographyCaptionFontSize = 12.0;
   static const typographyCaptionFontWeight = FontWeight.w400;
-  static const double? typographyCaptionLetterSpacing = null;
+  static const typographyCaptionLetterSpacing = 0.0;
   static const typographyCaptionLineHeight = 1.4;
   static const typographyClockFontFamily = "Inter";
   static const typographyClockFontSize = 48.0;
@@ -327,26 +354,26 @@ abstract final class DesignTokens {
   static const typographyHeadingFontFamily = "Noto Sans SC";
   static const typographyHeadingFontSize = 17.0;
   static const typographyHeadingFontWeight = FontWeight.w600;
-  static const double? typographyHeadingLetterSpacing = null;
+  static const typographyHeadingLetterSpacing = 0.0;
   static const typographyHeadingLineHeight = 1.35;
   static const typographyLabelFontFamily = "Noto Sans SC";
   static const typographyLabelFontSize = 13.0;
   static const typographyLabelFontWeight = FontWeight.w500;
-  static const double? typographyLabelLetterSpacing = null;
+  static const typographyLabelLetterSpacing = 0.0;
   static const typographyLabelLineHeight = 1.4;
   static const typographyMicroFontFamily = "Noto Sans SC";
   static const typographyMicroFontSize = 11.0;
   static const typographyMicroFontWeight = FontWeight.w500;
-  static const double? typographyMicroLetterSpacing = null;
+  static const typographyMicroLetterSpacing = 0.0;
   static const typographyMicroLineHeight = 1.3;
   static const typographyNumericFontFamily = "Inter";
   static const typographyNumericFontSize = 14.0;
   static const typographyNumericFontWeight = FontWeight.w600;
-  static const double? typographyNumericLetterSpacing = null;
+  static const typographyNumericLetterSpacing = 0.0;
   static const typographyNumericLineHeight = 1.3;
   static const typographyTitleFontFamily = "Noto Sans SC";
   static const typographyTitleFontSize = 22.0;
   static const typographyTitleFontWeight = FontWeight.w600;
-  static const double? typographyTitleLetterSpacing = null;
+  static const typographyTitleLetterSpacing = 0.0;
   static const typographyTitleLineHeight = 1.25;
 }

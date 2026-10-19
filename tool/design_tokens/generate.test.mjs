@@ -25,18 +25,21 @@ test('official parser preserves light/dark RGBA, line height, references and gla
   assert.match(source, /componentGlassGlowIntensity = 0\.25/);
   assert.match(source, /componentGlassClearBlur = 4\.0/);
   assert.match(source, /componentContentPanelRounded = 20\.0/);
+  assert.match(source, /componentPageContentMaxWidth = 720\.0/);
 });
 
 test('source edits propagate through generated semantic and component values', () => {
   const revised = design.replace("primary-action: '#1B1B1F'", "primary-action: '#12345678'")
     .replace("lineHeight: '1.15'", "lineHeight: '1.2'")
     .replace('blur: 12px', 'blur: 26px')
+    .replace('maxWidth: 720px', 'maxWidth: 680px')
     .replace('  md: 16px', '  md: 18px');
   const { source } = generate(revised);
   assert.match(source, /colorPrimaryAction = Color\(0x78123456\)/);
   assert.match(source, /componentButtonPrimaryBackgroundColor = Color\(0x78123456\)/);
   assert.match(source, /typographyDisplayLineHeight = 1\.2/);
   assert.match(source, /componentGlassBlur = 26\.0/);
+  assert.match(source, /componentPageContentMaxWidth = 680\.0/);
   assert.match(source, /componentRowPadding = 18\.0/);
 });
 
