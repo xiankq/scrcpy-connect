@@ -52,4 +52,4 @@ SDK 条件成立只表示允许尝试。连接成功、接口存在、启动命�
 
 API21 镜像的 H.264 编码器同时无法完成系统 `screenrecord`，因此该样本未证明完整视频远控；不能由它推导所有 Android 5 手机不支持，也不能把较低版本支持写成已全面验收。API21 实际执行了 scrcpy 编码重试涉及的 Java 接口与尺寸约束计算。物理 USB、32 位 ARM 旧手机、厂商 ROM、长时间稳定性及其他主控宿主仍需要分别验证。
 
-来源比较与固定源码证据见 [ADB 兼容研究](../research/adb-android-compatibility.md)。可复验的用例保存在 `crates/adb/tests/legacy_transport.rs`、`crates/interop_core/tests/remote_helper_android.rs`、`media_thumbnail_android.rs`、`scrcpy_device.rs` 及 companion 部署测试中；环境变量与忽略条件在对应测试声明。
+来源比较与固定源码证据见 [ADB 兼容研究](../research/adb-android-compatibility.md)。可复验的用例保存在 `crates/adb/tests/legacy_transport.rs`、`crates/interop_core/src/remote_helper_android_tests.rs`（`cargo test -p interop-core --lib remote_helper::android_tests:: -- --ignored`）、`media_thumbnail_android.rs`、`scrcpy_device.rs` 及 companion 部署测试中；环境变量与忽略条件在对应测试声明。

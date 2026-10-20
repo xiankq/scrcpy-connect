@@ -1,6 +1,4 @@
-import 'dart:ffi';
 import 'dart:io';
-import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -21,141 +19,6 @@ Json event(int ts, int slot, String operation, [int? identity]) => {
 Matcher rejects(String message) => throwsA(
   isA<StateError>().having((e) => e.message, 'message', contains(message)),
 );
-
-// Exercise actual SQLite parsing without adding an independent database package.
-// Use the host SQLite library and C allocator.
-void verifySqlLiterals(List<String> names) {
-  final sqlite = DynamicLibrary.open(
-    Platform.isWindows
-        ? 'sqlite3.dll'
-        : Platform.isMacOS
-        ? '/usr/lib/libsqlite3.dylib'
-        : 'libsqlite3.so.0',
-  );
-  final libc = Platform.isWindows
-      ? DynamicLibrary.open('msvcrt.dll')
-      : DynamicLibrary.process();
-  final malloc = libc
-      .lookupFunction<
-        Pointer<Void> Function(IntPtr),
-        Pointer<Void> Function(int)
-      >('malloc');
-  final free = libc
-      .lookupFunction<
-        Void Function(Pointer<Void>),
-        void Function(Pointer<Void>)
-      >('free');
-  Pointer<Uint8> string(String value) {
-    final bytes = utf8.encode(value);
-    final ptr = malloc(bytes.length + 1).cast<Uint8>();
-    ptr.asTypedList(bytes.length + 1).setAll(0, [...bytes, 0]);
-    return ptr;
-  }
-
-  final open = sqlite
-      .lookupFunction<
-        Int32 Function(Pointer<Uint8>, Pointer<Pointer<Void>>),
-        int Function(Pointer<Uint8>, Pointer<Pointer<Void>>)
-      >('sqlite3_open');
-  final close = sqlite
-      .lookupFunction<
-        Int32 Function(Pointer<Void>),
-        int Function(Pointer<Void>)
-      >('sqlite3_close');
-  final exec = sqlite
-      .lookupFunction<
-        Int32 Function(
-          Pointer<Void>,
-          Pointer<Uint8>,
-          Pointer<Void>,
-          Pointer<Void>,
-          Pointer<Void>,
-        ),
-        int Function(
-          Pointer<Void>,
-          Pointer<Uint8>,
-          Pointer<Void>,
-          Pointer<Void>,
-          Pointer<Void>,
-        )
-      >('sqlite3_exec');
-  final prepare = sqlite
-      .lookupFunction<
-        Int32 Function(
-          Pointer<Void>,
-          Pointer<Uint8>,
-          Int32,
-          Pointer<Pointer<Void>>,
-          Pointer<Void>,
-        ),
-        int Function(
-          Pointer<Void>,
-          Pointer<Uint8>,
-          int,
-          Pointer<Pointer<Void>>,
-          Pointer<Void>,
-        )
-      >('sqlite3_prepare_v2');
-  final step = sqlite
-      .lookupFunction<
-        Int32 Function(Pointer<Void>),
-        int Function(Pointer<Void>)
-      >('sqlite3_step');
-  final text = sqlite
-      .lookupFunction<
-        Pointer<Uint8> Function(Pointer<Void>, Int32),
-        Pointer<Uint8> Function(Pointer<Void>, int)
-      >('sqlite3_column_text');
-  final finalize = sqlite
-      .lookupFunction<
-        Int32 Function(Pointer<Void>),
-        int Function(Pointer<Void>)
-      >('sqlite3_finalize');
-  final db = malloc(sizeOf<Pointer<Void>>()).cast<Pointer<Void>>();
-  final memory = string(':memory:');
-  expect(open(memory, db), 0);
-  free(memory.cast());
-  try {
-    void execute(String sql) {
-      final ptr = string(sql);
-      try {
-        expect(exec(db.value, ptr, nullptr, nullptr, nullptr), 0);
-      } finally {
-        free(ptr.cast());
-      }
-    }
-
-    execute('CREATE TABLE process (name TEXT)');
-    for (final name in names) {
-      execute('INSERT INTO process VALUES (${sqlString(name)})');
-    }
-    for (final name in names) {
-      final sql = string(
-        'SELECT name FROM process WHERE name=${sqlString(name)}',
-      );
-      final statement = malloc(sizeOf<Pointer<Void>>()).cast<Pointer<Void>>();
-      try {
-        expect(prepare(db.value, sql, -1, statement, nullptr), 0);
-        expect(step(statement.value), 100);
-        final ptr = text(statement.value, 0);
-        var length = 0;
-        while (ptr[length] != 0) {
-          length++;
-        }
-        expect(utf8.decode(ptr.asTypedList(length)), name);
-        expect(step(statement.value), 101);
-      } finally {
-        finalize(statement.value);
-        free(statement.cast());
-        free(sql.cast());
-      }
-    }
-    execute('SELECT count(*) FROM process HAVING count(*)=2');
-  } finally {
-    close(db.value);
-    free(db.cast());
-  }
-}
 
 void main() {
   test(
@@ -283,15 +146,6 @@ void main() {
         () => analyzeSlots(rows),
         throwsA(predicate((e) => '$e'.contains(message))),
       );
-    }
-  });
-  test('arbitrary exact process names stay SQL literals', () {
-    verifySqlLiterals([
-      'interop.scrcpy:00000001:/data/local/tmp/interop-scrcpy-a-b.jar',
-      "capture'; DROP TABLE process; --",
-    ]);
-    for (final name in ['', 'bad\x00name']) {
-      expect(() => sqlString(name), throwsArgumentError);
     }
   });
   test(

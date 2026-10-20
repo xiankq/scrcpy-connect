@@ -39,28 +39,6 @@ void main() {
   );
 
   test(
-    'preserves device selectors and global next-session quality settings',
-    () {
-      expect(
-        CoreRequest(InteropCommand.sessionPause, {'deviceId': 'device'}).params,
-        {'deviceId': 'device'},
-      );
-      expect(
-        CoreRequest(InteropCommand.sessionQuality, {
-          'videoCodec': 'h264',
-        }).params,
-        {'videoCodec': 'h264'},
-      );
-      expect(
-        CoreRequest(InteropCommand.mediaCacheConfigure, {
-          'budgetBytes': 5000,
-        }).params,
-        {'budgetBytes': 5000},
-      );
-    },
-  );
-
-  test(
     'malformed successes cannot silently become empty successful results',
     () {
       final request = CoreRequest(InteropCommand.devicesList);

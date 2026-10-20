@@ -1,9 +1,5 @@
 //! Actual Android kernel operations, through the same deployment path as production.
-pub use interop_core::{CoreError, CoreResult};
-#[path = "../src/bundled_servers.rs"]
-mod bundled_servers;
-#[path = "../src/remote_helper.rs"]
-mod remote_helper;
+use crate::remote_helper;
 use interop_adb::{Client, ConnectOptions, OperationOptions, sync::RemotePath};
 
 async fn put(client: &Client, path: &[u8], bytes: &[u8]) {
@@ -107,9 +103,7 @@ async fn actual_metadata_preserves_raw_names_links_and_bounded_listing_without_s
     assert_eq!(limited["entries"].as_array().unwrap().len(), 1);
     // Public file operations must work without shell_v2, printf or mkdir --.
     let state = tempfile::tempdir().unwrap();
-    let runtime = interop_core::Runtime::initialize(state.path())
-        .await
-        .unwrap();
+    let runtime = crate::Runtime::initialize(state.path()).await.unwrap();
     let endpoint: std::net::SocketAddr = endpoint.parse().unwrap();
     let id = runtime
         .invoke(

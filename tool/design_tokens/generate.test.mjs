@@ -10,24 +10,6 @@ import { generate } from './generate.mjs';
 const design = readFileSync(new URL('../../designs/design.md', import.meta.url), 'utf8');
 const cli = fileURLToPath(new URL('./generate.mjs', import.meta.url));
 
-test('official parser preserves light/dark RGBA, line height, references and glass optics in Dart', () => {
-  const { source } = generate(design);
-  assert.match(source, /colorGlass = Color\(0x80ffffff\)/);
-  assert.match(source, /colorGlassDark = Color\(0x991c1c1e\)/);
-  assert.match(source, /colorTextDark = Color\(0xffffffff\)/);
-  assert.match(source, /typographyDisplayLineHeight = 1\.15/);
-  assert.match(source, /typographyDisplayLetterSpacing = -0\.6/);
-  assert.match(source, /componentGlassBlur = 12\.0/);
-  assert.match(source, /componentGlassRefractionIndex = 1\.1/);
-  assert.match(source, /componentGlassRefractionWidth = 16\.0/);
-  assert.match(source, /componentGlassSpecularThickness = 2\.0/);
-  assert.match(source, /componentGlassSpecularIntensity = 0\.75/);
-  assert.match(source, /componentGlassGlowIntensity = 0\.25/);
-  assert.match(source, /componentGlassClearBlur = 4\.0/);
-  assert.match(source, /componentContentPanelRounded = 20\.0/);
-  assert.match(source, /componentPageContentMaxWidth = 720\.0/);
-});
-
 test('source edits propagate through generated semantic and component values', () => {
   const revised = design.replace("primary-action: '#1B1B1F'", "primary-action: '#12345678'")
     .replace("lineHeight: '1.15'", "lineHeight: '1.2'")

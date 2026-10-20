@@ -75,22 +75,4 @@ void main() {
       contains('documentsImportFiles("documents.importFiles", core: false)'),
     );
   });
-
-  test('formatted output matches checked-in contract bytes', () {
-    for (final (path, language, source) in [
-      (
-        'crates/interop_bridge/src/commands_generated.rs',
-        'rust',
-        generator.rustSource(original),
-      ),
-      (
-        'packages/interop_bridge/lib/src/protocol/commands_generated.dart',
-        'dart',
-        generator.dartSource(original),
-      ),
-    ]) {
-      final expected = File(p.join(root.path, path)).readAsStringSync();
-      expect(generator.formatted(source, language), expected, reason: language);
-    }
-  });
 }

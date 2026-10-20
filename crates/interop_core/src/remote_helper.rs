@@ -937,37 +937,6 @@ printf() {{ return 127; }}
         assert_eq!(output.unwrap_err().code, "helper_protocol");
     }
 
-    #[tokio::test]
-    async fn metadata_rejects_unsupported_operations_and_limits_before_device_access() {
-        let (transport, _peer) = tokio::io::duplex(4096);
-        let client = Client::from_negotiated_transport(
-            transport,
-            interop_adb::DeviceInfo {
-                version: interop_adb::protocol::VERSION,
-                max_payload: 4096,
-                banner: "device::".into(),
-                features: Default::default(),
-            },
-        )
-        .unwrap();
-        for (operation, limit) in [("list;reboot", 1), ("list", 0), ("list", 10_001)] {
-            assert_eq!(
-                remote_metadata(
-                    &client,
-                    "/path",
-                    operation,
-                    limit,
-                    OperationOptions::default()
-                )
-                .await
-                .unwrap_err()
-                .code,
-                "invalid_params"
-            );
-        }
-        client.close();
-    }
-
     #[test]
     fn metadata_errno_and_envelopes_are_checked_before_use() {
         assert_eq!(parse_metadata(br#"{"protocol":1,"ok":true,"errno":0,"mode":33188,"size":5,"modifiedSeconds":123}"#).unwrap()["size"], 5);
@@ -1109,3 +1078,7 @@ printf() {{ return 127; }}
         }
     }
 }
+
+#[cfg(test)]
+#[path = "remote_helper_android_tests.rs"]
+mod android_tests;

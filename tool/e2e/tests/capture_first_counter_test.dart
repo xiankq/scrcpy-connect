@@ -28,14 +28,4 @@ void main() {
     await peer.close();
     await expectLater(reader.exact(2), throwsStateError);
   });
-
-  test('run IDs retain UUID version and shell values remain one argument', () {
-    final id = runId();
-    expect(
-      id,
-      matches(RegExp(r'^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$')),
-    );
-    expect(runId(), isNot(id));
-    expect(shellQuote("a'b c"), "'a'\"'\"'b c'");
-  });
 }

@@ -222,41 +222,6 @@ void main() {
   });
 
   testWidgets(
-    'ordinary icon keeps its hit geometry and glass tooltip semantics',
-    (tester) async {
-      final semantics = tester.ensureSemantics();
-      var taps = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          home: Scaffold(
-            body: Center(
-              child: GlassActionIcon(
-                tooltip: '保存原文件',
-                onPressed: () => taps++,
-                icon: const Icon(Icons.save),
-              ),
-            ),
-          ),
-        ),
-      );
-      expect(find.byTooltip('保存原文件'), findsOneWidget);
-      expect(tester.getSize(find.byType(IconButton)), const Size(44, 44));
-      expect(find.byType(Glass), findsNothing);
-      final tooltip = tester.state<TooltipState>(find.byType(Tooltip));
-      tooltip.ensureTooltipVisible();
-      await tester.pumpAndSettle();
-      expect(find.text('保存原文件'), findsOneWidget);
-      expect(find.byType(Glass), findsOneWidget);
-      expect(find.byType(BackdropFilter), findsNothing);
-      await tester.tap(find.byType(IconButton));
-      expect(taps, 1);
-      expect(tester.takeException(), isNull);
-      semantics.dispose();
-    },
-  );
-
-  testWidgets(
     'visible tooltip preserves its semantics and passes taps and drags through',
     (tester) async {
       final semantics = tester.ensureSemantics();

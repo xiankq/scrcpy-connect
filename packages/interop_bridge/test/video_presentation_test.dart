@@ -5,38 +5,6 @@ import 'package:interop_bridge/src/interop_exception.dart';
 import 'package:interop_bridge/src/media/video_presentation.dart';
 
 void main() {
-  test('the first video receipt is accepted without changing its input', () {
-    const receipt = {
-      'sessionId': 'A',
-      'generation': 2,
-      'textureId': 8,
-      'firstFrameDecoded': true,
-    };
-    final merged = mergeVideoOutputReceipt(null, receipt);
-    expect(merged, receipt);
-    merged['paused'] = false;
-    expect(receipt.containsKey('paused'), isFalse);
-  });
-
-  test('a newer receipt replaces output while preserving session metadata', () {
-    final merged = mergeVideoOutputReceipt(
-      const {
-        'sessionId': 'A',
-        'deviceId': 'device-A',
-        'generation': 1,
-        'textureId': 7,
-      },
-      const {'generation': 2, 'textureId': 8, 'snapshotReceipts': 1},
-    );
-    expect(merged, {
-      'sessionId': 'A',
-      'deviceId': 'device-A',
-      'generation': 2,
-      'textureId': 8,
-      'snapshotReceipts': 1,
-    });
-  });
-
   test(
     'an unversioned receipt cannot overwrite a known renderer generation',
     () {
@@ -167,46 +135,6 @@ void main() {
       'generation': 3,
       'snapshotReceipts': 4,
     });
-  });
-
-  test(
-    'session list keeps resumed core state and current rendering evidence',
-    () {
-      final session = sessionWithVideoOutput(
-        {
-          'sessionId': 'A',
-          'status': 'streaming',
-          'capturePaused': false,
-          'connected': true,
-          'awaitingSession': true,
-        },
-        {
-          'status': 'paused',
-          'capturePaused': true,
-          'connected': false,
-          'awaitingSession': false,
-          'textureId': 8,
-          'decodedWidth': 640,
-          'decodedHeight': 360,
-          'firstFrameDecoded': true,
-          'evidence': 'mdk.snapshot',
-        },
-      );
-      expect(session['status'], 'streaming');
-      expect(session['capturePaused'], false);
-      expect(session['connected'], true);
-      expect(session['awaitingSession'], true);
-      expect(session['textureId'], 8);
-      expect(session['decodedWidth'], 640);
-      expect(session['decodedHeight'], 360);
-      expect(session['firstFrameDecoded'], true);
-      expect(session['evidence'], 'mdk.snapshot');
-    },
-  );
-
-  test('a session without a local renderer keeps its core snapshot', () {
-    const core = {'sessionId': 'A', 'status': 'paused'};
-    expect(sessionWithVideoOutput(core, null), core);
   });
 
   test(

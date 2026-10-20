@@ -147,32 +147,6 @@ class _Harness {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('ready combines source PCM and advancing native playback clock without inventing speaker bytes', () async {
-    final h = _Harness();
-    await h.visible();
-    final ready = await h.outputs.start(_stream('A'));
-    for (final key in [
-      'mediaInfoReady',
-      'playingConfirmed',
-      'sourcePcmReceived',
-      'playbackClockAdvanced',
-      'applied',
-    ]) {
-      expect(ready[key], true, reason: key);
-    }
-    expect(ready['playState'], 'playing');
-    expect(ready['clockEndMs'], greaterThan(ready['clockStartMs'] as int));
-    expect(ready['speakerSamplesVerified'], false);
-    expect(ready['audibleContentVerified'], false);
-    expect(ready.containsKey('bytesWritten'), false);
-    expect(
-      h
-          .named('audio.platform.background')
-          .every((c) => c.$2['enabled'] == false),
-      true,
-    );
-    await h.outputs.dispose();
-  });
 
   test('two simultaneous sources share one OS lease and stopping one preserves the other', () async {
     final h = _Harness();

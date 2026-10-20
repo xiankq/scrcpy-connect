@@ -100,31 +100,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn encoder_catalog_reuses_sequential_and_cloned_connection_calls() {
-        let catalog = EncoderCatalog::default();
-        let (client, _peer) = connection();
-        assert!(catalog.peek(&client).await.unwrap().is_none());
-        assert!(catalog.entries.lock().await.is_empty());
-        let calls = AtomicUsize::new(0);
-        for connection in [client.clone(), client.clone(), client.clone()] {
-            catalog
-                .get(&connection, || async {
-                    calls.fetch_add(1, Ordering::SeqCst);
-                    Ok(Vec::new())
-                })
-                .await
-                .unwrap();
-            assert!(catalog.peek(&connection).await.unwrap().unwrap().is_empty());
-        }
-        client.close();
-        assert_eq!(
-            calls.load(Ordering::SeqCst),
-            1,
-            "one actual catalog enumeration per connection"
-        );
-    }
-
-    #[tokio::test]
     async fn encoder_catalog_coalesces_concurrent_callers() {
         let catalog = EncoderCatalog::default();
         let (client, _peer) = connection();

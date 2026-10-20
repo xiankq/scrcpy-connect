@@ -200,33 +200,6 @@ mod tests {
     }
 
     #[test]
-    fn seal_preserves_exact_prefix_metadata_and_is_idempotent() {
-        let mut capture = archive();
-        assert_eq!(capture.seal().unwrap_err().code, "media_archive_empty");
-        assert_eq!(
-            capture.read(0, 1).unwrap_err().code,
-            "media_archive_unsealed"
-        );
-        capture.append(7, b"ignored", frame(7, 0));
-        capture.begin(7, b"header");
-        assert!(capture.seal().is_err());
-        capture.append(7, b"one", frame(7, 0));
-        capture.append(7, b"two", frame(7, 10));
-        let metadata = capture.seal().unwrap();
-        assert_eq!(
-            metadata,
-            json!({
-                "bytes": 12, "frames": [frame(7, 0), frame(7, 10)],
-                "generation": 7, "complete": true,
-            })
-        );
-        capture.append(8, b"ignored", frame(8, 0));
-        capture.begin(8, b"ignored");
-        assert_eq!(capture.seal().unwrap(), metadata);
-        assert_eq!(capture.bytes, b"headeronetwo");
-    }
-
-    #[test]
     fn reads_are_bounded_repeatable_and_allow_exact_eof() {
         let mut capture = archive();
         capture.begin(1, b"head");

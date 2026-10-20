@@ -6,7 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
-import 'glass_material.dart' show readGlassSceneMarker;
+import 'support/glass_scene_marker.dart';
 
 const _scenes = [
   'light-rest',

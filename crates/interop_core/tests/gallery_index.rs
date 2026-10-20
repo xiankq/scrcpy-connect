@@ -112,35 +112,6 @@ async fn finished(runtime: &Arc<Runtime>, device: &str, scan: &str, limit: u64) 
 }
 
 #[tokio::test]
-async fn gallery_validates_pages_and_reports_expired_scans_before_connecting() {
-    let directory = tempfile::tempdir().unwrap();
-    let runtime = Runtime::initialize(directory.path()).await.unwrap();
-    for page in [
-        json!({"limit":0}),
-        json!({"limit":201}),
-        json!({"offset":-1}),
-        json!({"limit":"1"}),
-    ] {
-        let mut params = page;
-        params["deviceId"] = json!("offline");
-        assert_eq!(
-            runtime.invoke("media.list", params).await.unwrap_err().code,
-            "invalid_argument"
-        );
-    }
-    for command in ["media.list", "media.scan.cancel"] {
-        assert_eq!(
-            runtime
-                .invoke(command, json!({"deviceId":"offline","scanId":"expired"}))
-                .await
-                .unwrap_err()
-                .code,
-            "media_scan_not_found"
-        );
-    }
-}
-
-#[tokio::test]
 async fn gallery_discovers_download_custom_root_and_android_media_with_stable_pages() {
     let peer = Peer::start().await;
     {

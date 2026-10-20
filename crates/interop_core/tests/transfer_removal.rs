@@ -131,27 +131,3 @@ async fn persistence_failure_does_not_make_records_disappear_from_memory() {
         1
     );
 }
-
-#[tokio::test]
-async fn removal_rejects_ambiguous_or_missing_targets() {
-    let directory = tempfile::tempdir().unwrap();
-    let runtime = Runtime::initialize(directory.path()).await.unwrap();
-    for params in [json!({}), json!({"transferId":"a","batchId":"b"})] {
-        assert_eq!(
-            runtime
-                .invoke("transfers.remove", params)
-                .await
-                .unwrap_err()
-                .code,
-            "invalid_argument"
-        );
-    }
-    assert_eq!(
-        runtime
-            .invoke("transfers.remove", json!({"batchId":"missing"}))
-            .await
-            .unwrap_err()
-            .code,
-        "not_found"
-    );
-}

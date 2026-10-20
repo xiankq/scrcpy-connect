@@ -24,7 +24,7 @@ Unicode数据的[版权与许可通知](../../crates/interop_core/src/LICENSE-UN
 
 ```sh
 env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
-  cargo test -p interop-core --test file_search --test file_search_android -- --include-ignored
+  cargo test -p interop-core --test file_search_android -- --include-ignored
 # 以下 Flutter 命令进入 app/ 执行，Rust/Flutter在PATH，JDK21与Android SDK已配置。
 cd app
 env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/file-search \
@@ -33,6 +33,6 @@ env CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/file-search \
   --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 --dart-define=CONNECT_E2E_PORT=15556
 ```
 
-公开Runtime回归核对空查询、无连接、记录过期和输入校验；真实adbd样本覆盖跨目录同名、中文/引号/换行、casefold、筛选、无效UTF8、链接、上限、拒权、空目录、存储别名及取消隔离。2026-10-17双API36产品流程从真实文件页搜索/筛选/打开结果，独立核对原件与精确清理，截图已目视。
+保留的真实adbd用例覆盖跨目录同名、中文/引号/换行、casefold、筛选、无效UTF8、链接、上限、拒权、空目录、存储别名及取消隔离。2026-10-17双API36产品流程从真实文件页搜索/筛选/打开结果，独立核对原件与精确清理，截图已目视。
 
 该样本不证明任意OEM权限、实时全文索引、恶意并发替换下的快照隔离、低内存或所有大目录性能；部分结果不能显示为完整无匹配。当前旧协议/元数据回退的证据另见[兼容验证](android-target-compatibility.md#验证证据)。

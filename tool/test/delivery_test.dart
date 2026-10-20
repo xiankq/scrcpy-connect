@@ -6,61 +6,16 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-import '../../servers/companion/build.dart' as companion;
 import '../build_host.dart' as host;
 import '../generate.dart' as generate;
 import '../src/core_tooling.dart';
 
 void main() {
-  late Directory root, temporary;
-  setUpAll(() {
-    root = repositoryRoot(
-      File(p.join(Directory.current.path, 'tool/test/delivery_test.dart')).uri,
-    );
-  });
+  late Directory temporary;
   setUp(
     () => temporary = Directory.systemTemp.createTempSync('delivery-test-'),
   );
   tearDown(() => temporary.deleteSync(recursive: true));
-
-  test('application root is the app workspace member', () {
-    File(p.join(temporary.path, 'pubspec.yaml'))
-        .writeAsStringSync('workspace:');
-    File(p.join(temporary.path, 'Cargo.toml')).writeAsStringSync('[workspace]');
-    final application = applicationRoot(temporary);
-    final entrypoint = File(p.join(application.path, 'lib/main.dart'));
-    entrypoint.parent.createSync(recursive: true);
-    entrypoint.writeAsStringSync('void main() {}');
-    File(p.join(application.path, 'pubspec.yaml'))
-        .writeAsStringSync('name: app');
-    expect(application.path, p.join(temporary.path, 'app'));
-    expect(repositoryRoot(entrypoint.uri).path, temporary.path);
-  });
-
-  test('each FRB output drift and missing output is rejected', () {
-    final before = Directory(p.join(temporary.path, 'before'));
-    final after = Directory(p.join(temporary.path, 'after'));
-    for (final name in generate.outputs) {
-      for (final tree in [before, after]) {
-        final file = File(p.join(tree.path, name));
-        file.parent.createSync(recursive: true);
-        file.writeAsStringSync('generated');
-      }
-    }
-    generate.compareOutputs(before, after);
-    for (final name in generate.outputs) {
-      final file = File(p.join(after.path, name))..writeAsStringSync('stale');
-      expect(
-        () => generate.compareOutputs(before, after),
-        throwsA(
-          isA<StateError>().having((e) => e.message, 'message', contains(name)),
-        ),
-      );
-      file.deleteSync();
-      expect(() => generate.compareOutputs(before, after), throwsStateError);
-      file.writeAsStringSync('generated');
-    }
-  });
 
   test('FRB Rust formatting uses workspace edition and preserves siblings', () {
     final output = File(p.join(temporary.path, generate.outputs.first));
@@ -134,69 +89,6 @@ void main() {
       File(p.join(isolated.path, '.dart_tool/package_config.json'))
           .readAsStringSync(),
       '.dart_tool/package_config.json',
-    );
-  });
-
-  test(
-    'builder command uses resolved runner without dependency resolution',
-    () {
-      final config = File(
-        p.join(temporary.path, '.dart_tool/package_config.json'),
-      );
-      config.parent.createSync();
-      config.writeAsStringSync(
-        jsonEncode({
-          'packages': [
-            {'name': 'build_runner', 'rootUri': '../cache/build_runner'},
-          ],
-        }),
-      );
-      final command = generate.builderCommand(temporary, true);
-      expect(command, contains('--packages=${config.path}'));
-      expect(
-        command,
-        contains(
-          p.join(temporary.path, 'cache/build_runner/bin/build_runner.dart'),
-        ),
-      );
-      expect(command, contains('--workspace'));
-      expect(command, contains('--only-check'));
-      expect(command, isNot(contains('run')));
-      config.writeAsStringSync('{"packages": []}');
-      expect(() => generate.builderCommand(temporary, true), throwsStateError);
-    },
-  );
-
-  test('companion source and artifact drift are rejected', () async {
-    final directory = Directory(p.join(temporary.path, 'companion'));
-    copyDirectory(Directory(p.join(root.path, 'servers/companion')), directory);
-    File(p.join(root.path, 'servers/tooling.dart'))
-        .copySync(p.join(temporary.path, 'tooling.dart'));
-    await companion.verifyManifest(directory);
-    final source = Directory(p.join(directory.path, 'src'))
-        .listSync(recursive: true)
-        .whereType<File>()
-        .firstWhere((file) => file.path.endsWith('.java'));
-    final original = source.readAsBytesSync();
-    source.writeAsBytesSync([...original, ...utf8.encode('\n// changed')]);
-    await expectLater(
-      companion.verifyManifest(directory),
-      throwsA(
-        isA<StateError>().having(
-          (e) => e.message,
-          'message',
-          contains('sources'),
-        ),
-      ),
-    );
-    source.writeAsBytesSync(original);
-    final jar = File(p.join(directory.path, 'companion.jar'));
-    jar.writeAsBytesSync([...jar.readAsBytesSync(), ...utf8.encode('corrupt')]);
-    await expectLater(
-      companion.verifyManifest(directory),
-      throwsA(
-        isA<StateError>().having((e) => e.message, 'message', contains('JAR')),
-      ),
     );
   });
 

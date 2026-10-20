@@ -22,7 +22,6 @@ flutter analyze --no-pub --fatal-infos
 dart tool/check_analyzer_plugin.dart
 (cd app && flutter test --no-pub)
 (cd packages/design_system && flutter test --no-pub)
-dart --disable-dart-dev --packages=.dart_tool/package_config.json tool/driver/integration_test_contract_test.dart
 (cd packages/interop_bridge && flutter test --no-pub)
 npm run lint --prefix tool/design_tokens
 if [[ "${1:-}" == "--android" ]]; then

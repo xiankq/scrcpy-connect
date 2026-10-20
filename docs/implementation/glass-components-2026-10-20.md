@@ -29,7 +29,7 @@ dart tool/glass_emulator.dart --avd <既有AVD名称> \
 
 ## GPU成像与交互样本
 
-从 `app/` 执行：
+以下为当轮历史命令。直接上游组件的采集夹具在测试收敛中移除；当前保留实际 PageFrame／弹层的 `glass_chrome_test.dart` 与 `tool/driver/glass_chrome.dart`，不再重复维护上游控件的场景矩阵。
 
 ```sh
 flutter drive --profile -d <主控设备> \

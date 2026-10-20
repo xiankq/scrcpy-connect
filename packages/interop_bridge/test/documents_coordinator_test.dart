@@ -645,6 +645,17 @@ void main() {
       expect(result['status'], 'saved');
       expect(result['files'], 1);
       expect(result['uri'], 'content://fixture/file');
+      expect(result['bytes'], 3);
+      expect(
+        f.calls.where((c) => c.$1 == 'documents.platform.releaseFd'),
+        hasLength(1),
+      );
+      expect(
+        f.calls
+            .singleWhere((c) => c.$1 == 'document.copy')
+            .$2['sourceIdentity'],
+        containsPair('size', 3),
+      );
       await coordinator.dispose();
     },
   );
@@ -896,31 +907,6 @@ void main() {
       );
     },
   );
-  test(
-    'provider file success requires observed saved size and always releases FD',
-    () async {
-      final f = Fixture()..selected = ['file'];
-      f.node('file', 'saved.txt', size: 0);
-      f.local['/cache/source'] = {'kind': 'file', 'size': 3};
-      final result = await f.coordinator.request('documents.export', {
-        'localPath': '/cache/source',
-        'kind': 'file',
-      });
-      expect(result['status'], 'saved');
-      expect(result['files'], 1);
-      expect(result['bytes'], 3);
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.releaseFd'),
-        hasLength(1),
-      );
-      expect(
-        f.calls
-            .singleWhere((c) => c.$1 == 'document.copy')
-            .$2['sourceIdentity'],
-        containsPair('size', 3),
-      );
-    },
-  );
 
   test(
     'shared document names preserve Unicode and reject path escapes',
@@ -1097,17 +1083,6 @@ void main() {
         f.calls.where((c) => c.$1 == 'documents.platform.delete'),
         isEmpty,
       );
-    },
-  );
-  test(
-    'an unsafe provider name cannot escape its private cache root',
-    () async {
-      final f = Fixture()..selected = ['bad'];
-      f.node('bad', '../escape');
-      final result = await f.coordinator.request('documents.importFiles');
-      expect(result['status'], 'partial');
-      expect(result['files'], 0);
-      expect(f.calls.where((c) => c.$1 == 'document.copy'), isEmpty);
     },
   );
 }

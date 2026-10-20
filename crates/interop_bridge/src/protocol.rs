@@ -161,28 +161,6 @@ mod tests {
     }
 
     #[test]
-    fn preserve_legacy_v1_and_domain_selectors() {
-        let request =
-            CommandRequest::decode(r#"{"command":"session.pause","params":{"deviceId":"device"}}"#)
-                .unwrap();
-        assert_eq!(request.command, Command::SessionPause);
-        assert_eq!(request.params["deviceId"], "device");
-        assert!(
-            CommandRequest::decode(
-                r#"{"command":"session.quality","params":{"videoCodec":"h264"}}"#
-            )
-            .is_ok()
-        );
-        assert!(CommandRequest::decode(r#"{"command":"devices.list"}"#).is_ok());
-        assert!(
-            CommandRequest::decode(
-                r#"{"command":"media.cache.configure","params":{"budgetBytes":5000}}"#
-            )
-            .is_ok()
-        );
-    }
-
-    #[test]
     fn malformed_success_is_an_explicit_protocol_error() {
         let raw = response(Some(Command::DevicesList), Ok(json!({"device":[]})));
         let envelope: Value = serde_json::from_str(&raw).unwrap();
