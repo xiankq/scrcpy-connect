@@ -1,6 +1,6 @@
 # 生成链、单应用目录与受控依赖
 
-本文记录仓库工具链的职责边界。当前产品修订的验证索引见 [产品验收记录](product-refinement.md)；下文测试数、APK 摘要与临时路径是注明阶段的历史产物，不是当前检出的自动通过声明。
+本文记录仓库工具链的职责边界。实际检查与运行边界见[验证记录](validation.md)，本文件维护工具职责与构建输入。
 
 2026-10-20 的依赖版本核对、上游升级约束及构建结果见[依赖升级记录](dependency-upgrade-2026-10-20.md)。
 
@@ -73,17 +73,3 @@ Android 仅对 fvp 插件链接启用 `--as-needed`，去掉可选运行库的�
 调试结束清理过期 `app/build` 中间目录、测试资产、重复 APK 和已失效的 `.dart_tool/flutter_build` 输出。`.dart_tool/hooks_runner/shared`、Gradle 和固定 SDK 下载可作为复用缓存保留，不能与发布包混入 Git；清理前确认没有运行中的构建使用这些目录。
 
 设备实验按本次创建的资源清理：测试进程、临时转发、夹具和目标模拟器均记录身份，既有主控及用户资源不随测试批次停止。截图与日志使用系统临时目录；重要结论在仓库文档中保留环境和结果，不能仅依靠临时文件存在。
-
-## 根目录迁移阶段验证（历史产物）
-
-根目录应用310项、桥接层131项、设计系统4项测试，完整Flutter analyze、分析插件契约、生成器4项Node回归、FRB与Dart生成一致性通过；255个Dart文件格式检查通过。工具8项回归、原生snapshot接缝、CMake依赖3项及driver验收契约通过。
-
-普通`lib/main.dart`入口从根目录实际构建Android x64 debug通过，耗时59.98秒；无旧CMake路径错误。新产物`build/app/outputs/flutter-apk/app-debug.apk`共120,500,169字节，SHA256为`8b40368290e232b01c3cae6ed25b9c51dcd4f5e8318bd372afe9cf839d8d3cfa`。独立验证x86_64 Flutter/Rust ELF、ZIP完整性、16KB对齐与签名通过；debug证书仍为既有身份。JVM原生ownership3项、audio1项通过。构建及验证记录位于`/tmp/connect-root-build.log`、`/tmp/connect-root-apk-receipt.json`和`/tmp/connect-root-native-{ownership,audio}.log`。
-
-该迁移阶段未对新包重复设备端到端部署，未在其他宿主构建；迁移前的AVD流程仍保留其原有时间及产物边界，不继承为新包运行结果。
-
-## 2026-10-19 视觉修订回执（历史产物）
-
-该阶段根应用[全量323个非hidden项](/tmp/connect-final-tests.jsonl)全部success；两处纯lint修复之后[3文件13项](/tmp/connect-final-pages.jsonl)通过并重拍96图；[analyze](/tmp/connect-final-analyze.log)无问题；[generate.py --check](/tmp/connect-final-generate.log)完整通过，含FRB Rust／Dart和build_runner。design_system 11项、Node生成器4项已有材质验证回执。真实[产品r2](/tmp/connect-final-product/result.json)及独立[GPU九场景](/tmp/connect-glass-material/result.json)各按自身契约通过；9张GPU图已逐张有限目视，不把工具visualAcceptanceComplete=false擅自改写成人工认证。按压形变、性能与原生等效仍有明确边界。
-
-最终普通`lib/main.dart`Android-x64 debug包：[构建日志](/tmp/connect-final-main-build.log)、[回执](/tmp/connect-final-main-apk.json)，路径`build/app/outputs/flutter-apk/app-debug.apk`，147,239,422字节，SHA256 `b7c766abfc6a94a2166af30fa2a4572898deb297e4a6ae62c94b5973e91073e8`；ZIP、x64 ELF与apksigner验证通过。普通APK覆盖集成测试包安装并启动成功，观察pid11476、Impeller OpenGLES、未见UnhandledException；该启动观察不代替集成r2完整业务或四宿主运行。

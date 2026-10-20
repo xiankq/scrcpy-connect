@@ -26,4 +26,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 真实设备测试默认忽略，必须显式提供隔离目标；运行方法、实际通过范围和
 未验证项见[验收记录](../../docs/implementation/validation.md)。单元测试通过
 不表示 Android/OEM 或四端应用整包均已验收。当前密码提供器为 experimental；
-具体通话控制、通话音频等能力与验证边界见[产品验收](../../docs/implementation/product-refinement.md)及[流程覆盖](../../designs/prod/coverage.md)。
+具体通话控制、通话音频等能力与验证边界见[设备流程证据](../../docs/implementation/validation.md#历史设备流程证据)及[流程覆盖](../../designs/prod/coverage.md)。

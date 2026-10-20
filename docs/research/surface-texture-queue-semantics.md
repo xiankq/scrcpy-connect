@@ -1,10 +1,6 @@
 # SurfaceTexture 源队列：Android 16 的实际异步与取帧语义
 
-日期：2026-10-18。范围：只读核查隔离候选
-`/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1` 与 Android 16 / API 36
-AOSP 的实际调用链。本页是源码证据，**不是性能、厂商兼容或运行时队列状态验收**。
-当前链路与验证边界见[架构](../implementation/architecture.md)及[视频性能记录](../implementation/video-performance.md)；下文隔离候选和临时源码位置属于历史调查对象。
-没有构建、启动设备、替换生产 JAR 或改变捕获代码。
+2026-10-18。依据AOSP `android-16.0.0_r1` 以及[已弃用的有界输入候选](capture-input-queue.md)核查API36调用链。固定源码说明机制，不证明实际ROM的队列状态或性能；运行结果见候选实验。
 
 ## 结论
 
@@ -33,7 +29,6 @@ callback 积压当成瓶颈。来源：[Java 投递](https://android.googlesourc
 ## 固定版本与本地对象
 
 所有下列 AOSP 源码链接固定为发布标签 `android-16.0.0_r1`，不是滚动 master。
-源码通过 Gitiles `?format=TEXT` 完整下载到检查进程内读取；未在仓库保存源码副本。
 标签与 API 版本不是当前 AVD 二进制摘要证明，厂商及后续补丁差异仍须运行时核验。
 
 候选的 `ScreenCapture.start()` 先由 `OpenGLRunner.start()` 返回新的 input Surface，
@@ -43,10 +38,6 @@ callback 积压当成瓶颈。来源：[Java 投递](https://android.googlesourc
 `updateTexImage()`，随后把 `getTimestamp()` 交给 `BoundedInputFlow.onSource()`。
 信用完成与定时 drain 也在同一 GL Handler 上。此处研究的是前一段源队列；
 GL 输出到编码器的 Surface 是另一条队列。
-本地依据：ScreenCapture.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/ScreenCapture.java:119`）、
-OpenGLRunner.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/opengl/OpenGLRunner.java:180`）、
-BoundedInputFlow.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/BoundedInputFlow.java:26`）。
-
 ## 创建与生产连接：哪些标志实际成立
 
 1. Java 单参数构造转到双参数构造，`singleBufferMode=false`。JNI 的两种编译分支
@@ -117,7 +108,7 @@ sink；HAL HWC 分支在 `onFrameCommitted()` 把输出缓冲 queue 到同一 si
 排除，但也不是已核对的正常 VDS 初始路径。
 API 合约：[SurfaceTexture Java 文档及 update](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/graphics/java/android/graphics/SurfaceTexture.java#312)。
 
-## Callback 合并与当前实现假说
+## Callback 合并与隔离候选假说
 
 原生事件链为 BufferQueueProducer → ProxyConsumerListener → ConsumerBase →
 FrameAvailableListener → JNI → Java Handler。ConsumerBase 的 replaced 转发与 available
@@ -130,7 +121,7 @@ SurfaceTexture FrameAvailableListenerProxy 都只实现 available。因此连续
 [listener 默认值](https://android.googlesource.com/platform/frameworks/native/+/refs/tags/android-16.0.0_r1/libs/gui/include/gui/ConsumerBase.h#42)、
 [JNI 两分支](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/jni/android_graphics_SurfaceTexture.cpp#184)。
 
-**推论而非实测**：当前仅 callback 执行 update、credit drain 只画当前 texture 的
+**推论而非实测**：该候选仅 callback 执行 update、credit drain 只画当前 texture 的
 实现，不能仅凭 Java sendEmptyMessage 推出“大量过期 callback 抢占 credit”。可以在
 某次 update 已获取之后、其余 GL 工作尚未结束时再产生一个通知；这说明通知与
 GL/credit 仍竞争同一线程，不能证明通知数量无界。把信号移到另一 Handler 并在 GL
@@ -163,7 +154,7 @@ timestamp 不变或持续忙循环，都不是已证明的“总能取最新且�
 精确完成的信用账本永久缺项。当前源 VDS 已有自己的 interval 0；两者职责不同。
 这是由 Surface 行为及候选账本约束得出的风险推论，不是已运行出的故障。
 来源：[Surface 设置](https://android.googlesource.com/platform/frameworks/native/+/refs/tags/android-16.0.0_r1/libs/gui/Surface.cpp#587)、
-本地 LatestInputWindow 精确 complete（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java:94`）。
+[候选的精确PTS归还设计](capture-input-queue.md#隔离候选最多两项输入)。
 
 ## 原生静态 repeat 与信用
 
@@ -176,9 +167,6 @@ codec 输入缓冲及新源帧约束，所以静态流不是无限 heartbeat。
 此候选的 SurfaceEncoder 移除 `KEY_REPEAT_PREVIOUS_FRAME_AFTER`，转由
 LatestInputWindow 发 repeat 并分配唯一实际编码 PTS。因而原生十次上限不能直接
 解释该候选静态阶段的所有输出节奏，也不能为任意未知输出 PTS 补造信用。
-源码证据：SurfaceEncoder.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java:88`）、
-LatestInputWindow.java（历史路径 `/tmp/connect-bounded-input-steady-one-build/scrcpy-5.0.1/server/src/main/java/com/genymobile/scrcpy/video/LatestInputWindow.java:142`）。
-
 ## 尚需运行时证明
 
 - 实际系统/ROM 与标签的差异、实际是否走正常 DisplayManager/VDS 路径。

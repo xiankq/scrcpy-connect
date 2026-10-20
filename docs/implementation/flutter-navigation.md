@@ -26,6 +26,7 @@
 | usb-guide / qr-pair | `/connection/usb` / `/connection/qr` | 兼容地址呈现同一添加页并预选 USB 或扫码形式 |
 | workspace | `/devices/:deviceId` | `device.info` |
 | device-connection / capabilities / diagnostics | `/devices/:deviceId/<功能>` | `device.info` |
+| device-activities / device-adb-key / device-convert-ip | `/devices/:deviceId/activities` / `/devices/:deviceId/adb-key` / `/devices/:deviceId/convert-ip` | 核验同一 deviceId；活动按设备过滤，私钥与显式 IP 切换归当前设备 |
 | files / file-details / file-search / gallery / media-preview | `/devices/:deviceId/<功能>` | deviceId；文件 path 经当前目录清单重新核对 |
 | apps / notifications / calls / quality / session-tools / sessions | `/devices/:deviceId/<功能>` | deviceId；通知回复额外按 notificationId 查当前通知 |
 | remote / remote-app | `/devices/:deviceId/remote` / `/devices/:deviceId/apps/:packageName/remote` | 显式打开意图；URL 恢复不会自动创建会话 |
@@ -33,10 +34,11 @@
 | transfer-details / document-export / receive-content | `/transfers/:taskId` 及其 `/export`、`/receive` 子路径 | `transfers.get`；导出能力与本机路径重新核对 |
 | document-import / share-directory | `/devices/:deviceId/documents/import` / `/devices/:deviceId/share-directory` | deviceId 与明确目标目录 |
 | incoming-share | `/sharing/:shareId` | 本机尚未消费的 pending share |
-| appearance / background / activities / data-preferences / media-cache | `/settings/<功能>` | 本机设置与实际服务状态；声音和剪贴板没有专用设置路由 |
+| appearance / background / adb-key / data-preferences / media-cache | `/settings/<功能>` | 本机设置与实际服务状态；adb-key 管理全局私钥；声音和剪贴板没有专用设置路由 |
+| activities（兼容） | `/settings/activities` | 仅重定向设备列表，由用户选择设备后查看其活动 |
 | transfer-center / settings-page | `/activity/transfers` / `/preferences` | 从业务页覆盖打开的独立页面 |
 
-添加设备的方式切换由页面内状态负责，不 push 另一层表单路由。配对码与地址字段草稿在统一外壳保留；二维码配对、USB 检查及发现请求各自持有尝试身份，切换后旧回执不得更新新形式或导航。配对后补全连接端口仍在同页，并携带已配对设备身份与加密连接方式。
+添加设备的方式切换由页面内状态负责，不 push 另一层表单路由。配对码与地址字段草稿在统一外壳保留；二维码配对、USB 检查及发现请求各自持有尝试身份，切换后旧回执不得更新新形式或导航。已有设备的重新授权在配对码、扫码与 USB 形式中均保留 deviceId，使用同一设备选定的授权身份。配对后补全连接端口仍在同页，并携带已配对设备身份与加密连接方式。
 
 旧 `/devices/:deviceId/details` 地址只重定向到该设备工作台，用于已有链接恢复，不建立第二个设备详情页面。
 
@@ -62,7 +64,7 @@
 
 ## 当前设备归属
 
-设备专用页在`_deviceRecord`确认设备后共用`VisibleDeviceFocus`，以ModalRoute当前资格、生命周期及核验状态声明归属；失去资格只撤回自己的待处理声明，不能清空新页面的焦点。post-frame再次检查epoch、设备、mounted及实际route，返回/replace或同帧核验后正确跟随；Remote继续使用更严格的会话/画面核验，不由共享包装器抢先设焦点。独立回复route重新读取通知，失效且已有本机回复时仅呈现核对/复制，不把内存内容恢复成远端动作。对应实际回复流程与历史测试范围见[验收记录](validation.md#连接入口设备归属与原通知回复闭环)。
+设备专用页在`_deviceRecord`确认设备后共用`VisibleDeviceFocus`，以ModalRoute当前资格、生命周期及核验状态声明归属；失去资格只撤回自己的待处理声明，不能清空新页面的焦点。post-frame再次检查epoch、设备、mounted及实际route，返回/replace或同帧核验后正确跟随；Remote继续使用更严格的会话/画面核验，不由共享包装器抢先设焦点。独立回复route重新读取通知，失效且已有本机回复时仅呈现核对/复制，不把内存内容恢复成远端动作。对应实际回复流程与历史测试范围见[验收记录](validation.md#历史设备流程证据)。
 
 ## 生成与分析
 

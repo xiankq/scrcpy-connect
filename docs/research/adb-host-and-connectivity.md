@@ -1,8 +1,8 @@
 # ADB 主机库、连接与身份研究
 
-研究日期：2026-10-16。本文用于后续 grilling 和设计决策，不是实施方案，也不把完整产品改写成 MVP。
+研究日期：2026-10-16。本文记录固定 AOSP 与嵌入式主机库的协议、身份和平台证据。当前库契约见[ADB 库说明](../../crates/adb/README.md)。
 
-已确认范围：当前实现 Android 主控设备；被控设备不安装额外 APK、不 root，允许经 ADB 推送并临时执行自有扩展 JAR；支持同网、USB 和路由已经可达的跨网；支持多被控设备、多控制会话并行；Rust 库独立于 Flutter。未来 iOS、Windows、macOS 可使用各自必要的平台依赖，本次不声称已验证这些平台。
+产品与平台范围见[ADR](../adr/)；本文不以候选库能力声明替代本项目交付证据。
 
 证据等级：**已证事实**来自下列固定源码或官方文档；**工程推论**是据此推导的产品/实现影响；**待 POC**不能凭源码阅读转为已支持。第三方 Rust 库以作者自己的源码为一手来源，其 README 的真机结果仍是作者自述，不是本项目验收结果。
 
@@ -50,7 +50,7 @@ ADB 协议没有为“触控比文件推送更优先”定义跨流服务等级�
 
 ### 2.4 Burst Mode复核与当前实现差距（2026-10-18）
 
-只读子代理复核上述Android17固定修订，另核官方新文档：Burst Mode从Platform Tools
+对上述 Android17 固定修订与官方文档的复核表明：Burst Mode从Platform Tools
 36.0.0提供，当前仍为默认关闭的实验功能，主机由`ADB_BURST_MODE=1`启用。wire feature
 仍叫`delayed_ack`；主机主动宣告与设备支持取交集，不能根据对端banner直接启用。
 [官方Burst说明](https://developer.android.com/tools/adb#burst_mode)、
@@ -62,7 +62,7 @@ ADB 协议没有为“触控比文件推送更优先”定义跨流服务等级�
 不能把它简化为“一个包一次ACK”。[固定adb.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/adb.cpp)、
 [固定sockets.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/sockets.cpp)。
 
-后续已实施默认关闭的`ConnectOptions::burst_mode`，仅主动宣告且对端也支持时启用；
+本项目的`ConnectOptions::burst_mode`，仅主动宣告且对端也支持时启用；
 `Client::burst_mode()`报告实际状态。默认经典模式仍以OPEN.arg1=0、空OKAY、逐包ACK
 和两包接收队列运行。外部连接器原`from_negotiated_transport`保留经典格式；新增
 `from_negotiated_transport_with_burst`要求调用者确实主动宣告过feature，不能只看远端。
@@ -70,14 +70,6 @@ Burst实现正反向流、signed i32增量／i64累计信用、部分消费返�
 每流64KiB信用及一个max_payload超额接收，128MiB全连接保守预留涵盖队列元数据和
 保留读缓冲，尾包消费者释放前不回收预留。未直接照搬桌面32MiB窗口。
 [client.rs](../../crates/adb/src/client.rs)、[信用／预算](../../crates/adb/src/burst.rs)。
-
-这些是可实施的协议差距，**尚未证明是当前约一秒视频等待的原因**。先采逐stream
-payload读取、路由／消费、ACK实际写出及包大小／间隔；后续Burst A/B保持设备／画面／
-码率，比较延迟和排队，而不只吞吐。回归需含classic及双方feature组合、正反向流、
-部分读／合并信用、零／负／耗尽／恢复、非法长度与ID、慢流隔离、取消／尾包及TLS。
-这些协议回归已纳入完整ADB测试72通过／13忽略，包括真实本地TCP反向桥及Rust TLS
-协议端；不是实际USB／无线TLS adbd／全平台长稳通过。Core的`adbBurstMode`默认关闭、
-只影响新连接；经典／Burst双AVD视频对照和范围见[视频记录](../implementation/video-performance.md)。
 
 ## 3. 已证事实：无线配对、密钥与连接安全
 
@@ -244,7 +236,7 @@ AOSP 的 USB serial、TCP `host:port`、无线 GUID/service instance 和临时 `
 
 ## 9. 尚需 POC：证据缺口与可测结果
 
-本次未连接被控设备、未执行配对/安装/密钥导入、未编译候选库。下面所有项仍是未完成验证。
+以下列出由源码差异推导的验证方法；执行状态由[连接验证](../implementation/validation.md)及专项记录维护。
 
 | ID | 验证问题 | 可评审的结果，而不是“看起来能用” |
 | --- | --- | --- |
@@ -258,34 +250,3 @@ AOSP 的 USB serial、TCP `host:port`、无线 GUID/service instance 和临时 `
 | P8 | 取消/超时及未知副作用 | 在header/payload/ACK/文件DONE/安装commit不同点断开；明确每个API何时返回取消、何时远端仍可能执行、何时允许重试 |
 | P9 | sync/安装完整性 | v1/v2、64位文件、所有压缩、Unicode路径/symlink/权限失败、磁盘满、最后字节校验、split安装abandon与commit未知结果；不真的安装被控 helper APK |
 | P10 | 最小依赖与独立库边界 | 不加载Flutter即可运行host核心/测试；Android app不依赖外部adb；native依赖与平台接口可单独枚举；四端核心／FRB最终链接／Flutter整包按编译契约留真实产物，未来端运行验证单列，不以静态依据代替编译 |
-
-## 10. “完整 ADB 库”的验收清单
-
-以下是完整度账本，用来避免以几个成功 shell 命令代替交付；不是分期裁功能。AOSP 仅在特定设备/构建上允许的服务，应暴露准确能力支持级别与失败原因，而不是伪造通用支持。
-
-- [ ] **协议互操作**：1.0.0/1.0.1、校验启停、maxdata协商、帧分片/合并、未知命令/非法长度/ID、feature交集、AUTH多key、STLS/TLS1.3、delayed_ack开关/负credit。
-- [ ] **发现和连接**：UsbManager与TCP、mDNS三种服务、手动IPv4/IPv6/hostname、接口scope、Wi-Fi2元数据与旧版缺失字段、地址更新与重连、已可达跨网。
-- [ ] **身份与授权**：主控RSA持久化、Android公钥格式、pair/QR、私钥与证书生命周期、授权撤销/过期、被控身份关联、备份/导入/换机、日志和错误不泄露秘密。
-- [ ] **流与资源**：并行OPEN、双向流、逐流/全局背压、优先级或公平规则、stream取消与transport关闭区分、半关闭、尾部数据、ID生命周期、资源上限与泄漏检查。
-- [ ] **shell与通用服务**：v1/v2、PTY/raw、stdin关闭/resize/exit、exec/cmd/abb能力协商、logcat/track类长流、所有API支持期限与有界输出/streaming。
-- [ ] **文件sync**：stat/lstat/list v1/v2、sendrecv v1/v2、Brotli/LZ4/Zstd、mtime/mode/symlink/目录行为、64位边界、权限/磁盘失败、进度、取消、完整性与重试语义。
-- [ ] **forward/reverse**：TCP/localabstract等承诺endpoint类型、端口分配/no-rebind、listener与反向OPEN限域、并行、list/remove、断线清理、默认bind可见范围。
-- [ ] **包管理接口**：single/split/multi-package session、streaming/legacy、commit/abandon、卸载与结果解析；incremental/fastdeploy是否属于声称的AOSP等价面必须登记，不能用名称掩盖遗漏。
-- [ ] **完整度对照表**：固定AOSP版本的service/CLI动作逐项映射为库API、平台适配、设备不支持或未完成；root/remount/recovery等按设备能力如实处理。“未完成”不能标成“设备不支持”。
-- [ ] **稳定性证据**：所选Android/OEM矩阵、USB/网络故障注入、多设备多会话长稳、性能和电量、重启/后台/恢复、密钥丢失与撤销；记录版本和可重现步骤。
-- [ ] **库与发行**：Rust API不依赖Flutter，平台transport/signer接口明确；native依赖/许可证/锁定版本/更新策略、fuzz与互操作测试可运行；未来平台未验证项如实列出。
-
-**工程推论：**工作量主要来自兼容性状态组合与可靠性语义，不是24字节header的代码量。现有源码能显著减少协议摸索、提供测试向量与模块参考，但目前没有证据支持“直接选某个crate就完成全部验收”，也没有根据认定必须从零重写每一层。没有需求指标和设备矩阵之前，按人周给精确工期会制造确定性。
-
-## 11. 当前决定与工程研究前沿
-
-Q26 已确定主控身份不自动备份迁移，Q29 已确定按中断原因和操作类型恢复，Q31 已确定保护已有重要活动；Q35 后常规产品默认由代理处理。不再把这些列为下一轮同义问题。
-
-- **完整度：**依 ADR0002 将固定 AOSP 的 host／service 映射到 Rust API、条件能力与互操作用例。5037兼容、incremental／fastdeploy等的定位需形成有理由的边界账本，不将“完整”偷换为仅满足几个产品命令，也不擅自承诺复制所有 CLI。执行见任务01。
-- **复用与纯度：**比较组合与有边界的 fork，记录许可、维护责任、feature 闭包及四端构建。优先尽量纯 Rust，不默认接受原生密码后端。任务02／03／19。
-- **身份：**比较软件保护密钥与外部 signer，验证锁屏重连、AUTH／TLS参数、私钥生命周期、撤销与同设备多路径关联；换机仍重新授权。是否采用具体 signer 是证据驱动的实现选择，不让用户选密码算法。任务15。
-- **恢复：**按主动停止、网络、系统回收、授权失效分类；ADB 流不可直接迁移，控制重建与文件能否恢复分别报告。未知副作用先核对，不重放。任务14。
-- **并发：**在基准硬件和网络上给出资源预算、输入延迟与内存上限，优先保护已有通话和当前交互。任务16／20。
-- **占用与冲突：**直接 USB 被其他主机占用时给出释放接口或切换已授权可达网络的路径；不将外部 adb server 作为基本条件。是否另提供5037适配由完整度账本说明。任务01／05。
-
-任务均在审计账本（历史路径 `../../.scratch/interop/requirements-audit.md`）登记。当前仍没有库、构建或真机通过结果。

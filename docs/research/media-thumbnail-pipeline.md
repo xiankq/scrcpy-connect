@@ -4,6 +4,8 @@
 
 ## 管线与接口
 
+以下描述研究时接口与隔离方法；当前缓存归属及清理规则见[架构](../implementation/architecture.md)，协议字段以生成的命令声明为准。
+
 `media.thumbnail {deviceId,path,maxSize?,operationId?}` 的 maxSize 为 64–512（默认256），operationId 为一次性 UUID。返回 `localPath,mime:image/jpeg,thumbnail:true,width,height,originalSize,cacheHit,sourceStamp,sourceValidation,bytesTransferred,jpegBytes,jpegBytesTransferred,originalBytesTransferred:0,transferAccounting:companionJsonPayloadBytes,operationId`。路径只指向本机私有缓存的小 JPEG，绝不复用 `media.preview`。原内容预览/保存仍须明确调用原接口。
 
 `bytesTransferred` 是实际收到的 companion JSON payload 字节，包含 base64 编码开销和源校验元数据，不包含 ADB/TCP 帧头或首次通用 JAR bootstrap 上传；`jpegBytesTransferred` 是本次 JPEG 二进制内容，命中缓存时为0。它不是原视频读盘量：目标解码器仍会读取目标上的部分原文件。
@@ -44,13 +46,11 @@ env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
 
 两项真实媒体测试在默认2MiB Rust测试线程栈完成22.04s；最终JAR在宿主构建/I/O压力下复跑仍通过90.37s，包括真实子进程运行中断线、退出确认、断线后不重建helper和音频onlyMP4无视频帧。首次扩展测试曾在默认栈发生嵌套future poll栈溢出；GDB定位到thumbnail→RPC→companion startup→sync/open调用链。产品已在RPC/缓存/启动边界堆分配future，默认栈重新运行通过，没有靠增大RUST_MIN_STACK掩盖。
 
-最终JAR真实通知动态更新/旧动作失效/清除通过20.30s；无视频session剪贴板往返/另一companion触发实时事件/启动期间断开两项回归通过49.39s（宿主构建/I/O压力下）。最终 JAR SHA256为 `719e57e3317d91d0858aa722f86770275d3af6130ad2ff0cd4334a5f7722b828`，与Rust内嵌常量和README一致。纯Rust默认边界测试验证参数、提前取消、源戳及JPEG结构。最终core默认回归共39项通过、27项真实环境opt-in忽略；all-targets clippy -D warnings、全workspace fmt --check、作用域git diff --check均通过。
-
 ## 明确限制
 
-- Android<26的有界进程生命周期尚未实现；Android26的有界视频取帧尚未实现，均返回thumbnail_api_pending，不等于系统不支持。
+- 图片 EXIF 的 InputStream 路径依赖 API24+；有界视频取帧依赖 API27+。低版本返回明确的能力限制；不能把某版实现未提供解释为 Android 系统永远不支持。
 - ROM媒体解码器、HEIF/AVIF等格式、超大图和非seekable/特殊文件没有保证；拒绝后用户可以明确打开原件。
 - 目标端硬件解码器进程属于系统服务，独立Java子进程隔离不能绝对保证厂商原生服务无缺陷；超时不会把结果伪装成功。
-- 有界缓存没有总磁盘容量/LRU淘汰策略；后续需产品层清理与容量设置。来源验证非文件快照，存在以上时间粒度边界。
+- 来源验证不是文件快照，存在上述时间粒度边界。当前持久缓存租约与容量淘汰由[媒体缓存实现](../../crates/interop_core/src/media_cache.rs)负责。
 
 断线竞争的重复测试曾发现：Rust shell drain结束不能证明Java finally已回收子进程。最终实现先取消设备拥有的thumbnail tokens，向仍存活的认证helper发media.shutdown，并等待真正Process退出回执后才关闭socket；启动阶段仍直接取消，不创建新helper。待完成的媒体取消请求若不能确认回执，返回media_cleanup_unknown，不把未知说成已回收。设备断线返回只表示本机连接已关闭；网络中断时不能把该结果当作目标进程已回收证明，目标自身的stdin-EOF/有界watchdog继续限制解码。

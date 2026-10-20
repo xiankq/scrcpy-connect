@@ -126,7 +126,7 @@ an originally empty clipboard.
 From `app/`, with Flutter on PATH:
 
 ```sh
-env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+env CONNECT_E2E_ADB=/absolute/android-sdk/platform-tools/adb \
   CONNECT_E2E_TARGET=emulator-5556 \
   CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/notification-reply \
   flutter drive -d emulator-5554 --no-pub \

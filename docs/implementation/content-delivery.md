@@ -16,7 +16,7 @@ Rust以来源任务、私有原件路径和类型的精确三元组持有记录�
 
 页面重进先只读核验，失败时禁止保存；未知结果必须核对当前操作，已保存结果通过另一个明确确认入口保存额外副本。admission被拒绝后重新读取真实旧记录，不把新但未获准的操作当成核对对象。完整回执过大时只尝试写最小unknown元数据，不再次写provider；存储仍失败则保持pending，不能伪报成功。迟到回执不能覆盖另一操作或更改既有终态。离页只取消本次仍在执行的精确操作；另一页面仅查阅pending，不因自身销毁而取消它。
 
-公开Runtime的13项账本回归通过，覆盖重开、容量、并发、持久化失败、旧操作与回执；Bridge全量102项、页面相关25项本轮通过。真实Android系统写入中杀进程／unknown重进、云provider和授权故障矩阵仍未验，不能以Runtime重开测试替代。本节只记录该阶段账本与交付链的验证，整体产品仍按各领域验收边界判断。
+公开Runtime账本、Bridge和页面回归覆盖重开、容量、并发、持久化失败、旧操作与回执。真实Android系统写入中杀进程／unknown重进、云provider和授权故障矩阵仍未验，不能以Runtime重开测试替代。本节只记录该阶段账本与交付链的验证，整体产品仍按各领域验收边界判断。
 
 ## 共享与系统适配边界
 
@@ -54,7 +54,7 @@ env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 
 运行结果、失败与复验记录见[实施验收](validation.md)。单项文本、JPEG及MP4的实际系统交付已有证据；当前整体验收仍需批量取用、目录／提供方矩阵、长原件预览活动、媒体异常组合和进程重建后的任务意图恢复。系统目标／测试 APK 的精确清理由 host 确认；用户语义要求保留的私有暂存没有通过清空应用数据去掩盖。
 
-2026-10-17的A44复验在同一双AVD通过，应用流程43秒：系统取消→保存→完整离页→重进同一传输恢复saved回执→系统分享，独立接收63字节UTF-8原件及同一SHA-256。`/tmp/connect-e2e/delivery-journal-final/result.json`包含`systemSaveReceiptRestored:true`与完整交付／清理回执，`content-delivery-restored-save-product.png`已目视为当前保存页及“再保存一份”入口。首次运行`/tmp/connect-delivery-journal-e2e.log`失败：过渡中的旧页面被误当成重进，截图实际为文件详情，分享点击未命中。现以旧页消失、当前路由完成、保存回执实际可见和分享命中校验修正夹具，首次结果未登记通过。此处真实重进覆盖saved，不冒充Android杀进程后的unknown故障验收。
+2026-10-17双AVD实际验证系统取消→保存→完整离页→重进同一传输恢复saved回执→系统分享；host独立接收原文并核对hash。测试等待真实路由完成、保存回执可见和分享命中，未把过渡中的旧页面算重进。这覆盖saved恢复，不冒充写入中杀进程后的unknown验收。
 
 ## 相册入口的验收变体
 
@@ -66,9 +66,7 @@ env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
 
 系统目录同名决定现在由共享DocumentsCoordinator和Flutter保存页承担，Android只提供系统选择、授权、元数据和句柄。冲突绑定operationId／conflictId，支持保留两份、跳过、取消及本次后续策略；过期决定不能作用新任务。等待纳入本次操作期限，取消／离页清理对应等待者。无法安全替换时继续禁用替换，不把远端文件的三选一直接套到系统提供方。
 
-真实双AVD `document_conflict_flow_test.dart`／`tool/driver/document_conflict.dart` 从app.main、实际目录取回、正式DocumentExportRoute进入；宿主实际操作DocumentsUI，独立核验旧目录／同名文件字节与inode／时间戳、新UTF-8及二进制副本、空目录、跳过／取消／离页无写入，旧决定不能影响新操作。最终r5完整通过3分02秒，`/tmp/connect-e2e/document-conflict-r5/result.json`全部必需产品及宿主回执为true，`emptyPartialReceiptRendered:true`；保存冲突和跳过结果截图已目视，确认全零结果显示“本次未保存内容”。
-
-前几轮的DocumentsUI Downloads／Download识别及误读持久回执未公开的renamed／createdCount字段导致测试失败，均未算通过；第四轮功能通过后，目视发现全跳过却报部分已保存，新增公共页面红测后修复并由第五轮复验。持久回执保持现有公开投影，host以实际文件核验成果，没有扩字段来掩盖夹具错误。
+2026-10-17双AVD正式DocumentExportRoute与真实DocumentsUI核对旧目录/同名文件字节及inode/时间戳、新文本/二进制副本、空目录、跳过/取消/离页无写入和旧决定隔离。全跳过误报“部分已保存”由公开页面回归复现后修复，实际复验确认“本次未保存内容”；宿主以真实文件核验成果，未扩回执字段掩盖夹具错误。
 
 ```sh
 cd app
@@ -81,7 +79,7 @@ env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
   --target=integration_test/document_conflict_flow_test.dart
 ```
 
-本轮实际勾选后续策略，但没有制造第二个自然同名冲突；多冲突策略由协调器测试覆盖，回执明确`realSubsequentApplyConflictVerified:false`。仅证明已测本地树提供方，不证明云提供方／写入杀进程／外部分享打断选择器；多USB选择产品UI仍未迁到共享层。
+该历史样本实际勾选后续策略，但没有制造第二个自然同名冲突；多冲突策略由协调器测试覆盖，回执明确`realSubsequentApplyConflictVerified:false`。仅证明已测本地树提供方，不证明云提供方／写入杀进程／外部分享打断选择器；多USB选择产品UI仍未迁到共享层。
 
 ## 外部入站内容的固定目标
 

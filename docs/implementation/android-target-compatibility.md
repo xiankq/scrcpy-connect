@@ -53,13 +53,3 @@ SDK 条件成立只表示允许尝试。连接成功、接口存在、启动命�
 API21 镜像的 H.264 编码器同时无法完成系统 `screenrecord`，因此该样本未证明完整视频远控；不能由它推导所有 Android 5 手机不支持，也不能把较低版本支持写成已全面验收。API21 实际执行了 scrcpy 编码重试涉及的 Java 接口与尺寸约束计算。物理 USB、32 位 ARM 旧手机、厂商 ROM、长时间稳定性及其他主控宿主仍需要分别验证。
 
 来源比较与固定源码证据见 [ADB 兼容研究](../research/adb-android-compatibility.md)。可复验的用例保存在 `crates/adb/tests/legacy_transport.rs`、`crates/interop_core/tests/remote_helper_android.rs`、`media_thumbnail_android.rs`、`scrcpy_device.rs` 及 companion 部署测试中；环境变量与忽略条件在对应测试声明。
-
-### 本轮工程回归与交付快照
-
-2026-10-19，最终工作区 Rust 格式、严格 Clippy 与默认 workspace 测试通过：337 passed、0 failed、72 ignored；真实设备用例另按上表显式运行，忽略项不计为通过。原生文件服务独立包的 7 项主机回归已通过。Flutter 应用 323 项、桥接 131 项、设计系统 11 项通过，完整静态分析、Riverpod 插件故意违规检测及 driver 契约通过。
-
-协议、FRB／Dart 生成一致性、vendor 产物、companion 临时重建与旧平台兼容、工具／token 生成器和原生依赖检查分步通过。固定依赖通过离线缓存解析；插件检查在恢复直连包源后通过，未跳过断言或更新项目锁文件。官方设计解析器的扩展属性警告仍保留，不作为视觉验收结果。
-
-普通 `lib/main.dart` 入口的 Android x64 debug APK 为 124,992,253 字节，SHA256 为 `7369a0ab259df8f0f78f3bbdda08088f50b53f90eebb72a9ca21f55b0f4f8211`；ZIP、签名、实际 Flutter／Rust ELF 与 16KB 对齐检查通过。安装后已确认设备首页语义及窗口绘制，无致命异常；首次系统启动等待曾超时，后续确认已绘制，此观察不代表启动性能验收，也不代表其他宿主整包验证。
-
-本轮创建的 API21／23 测试模拟器及镜像已移除。构建结束清理约 3.99GB 中间产物、重复 APK 和临时工具；保留上述交付 APK、仍复用的 native hooks／Cargo／Gradle 缓存，以及许可证要求的对应源码。最终设备检查未发现本轮服务进程及临时文件遗留。

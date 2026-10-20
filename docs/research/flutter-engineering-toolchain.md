@@ -4,7 +4,7 @@
 
 ## 兼容版本
 
-| 包 | 固定版本/当前锁定 | 职责 |
+| 包 | 研究版本 | 职责 |
 | --- | --- | --- |
 | go_router / go_router_builder | 18.1.0 / 4.5.0 | typed routes及StatefulShellRoute |
 | hooks_riverpod | 3.4.3 | provider运行时 |
@@ -33,6 +33,4 @@ Riverpod并非强制代码生成；官方建议已有其他生成链时采用，
 
 ## 可复现命令与证据
 
-runner2.16支持workspace及不写输出的only-check，旧delete-conflicting-outputs已移除。脚本从直接依赖runner的app发起workspace构建；提交.g.dart和根锁文件，忽略.dart_tool/build。CI先enforce-lockfile，再检查生成、分析、违规烟测、测试和设计lint。workspace中所有成员dev dependencies共同解析；开发依赖不会成为原生产物，仍可能堵住四端依赖解析。[runner变更](https://pub.dev/packages/build_runner/changelog)、[锁文件检查](https://dart.dev/tools/pub/cmd/pub-get#enforce-lockfile)、[workspace](https://dart.dev/tools/pub/workspaces)。
-
-本轮78/78 widget通过，app严格分析无诊断，workspace only-check退出0，插件negative smoke检出预期违规。重构后实际Android产品页五codec、HOME返回与旋转已取得对应运行证据，见[首帧回归](scrcpy-first-frame-and-latency.md)。以上不代表跨端链接、音频迁移或进程重建已验收；共享层迁移仍按能力重新验证。
+runner2.16支持workspace及不写输出的only-check，旧delete-conflicting-outputs已移除。生成入口与检查顺序见[工具链契约](../implementation/repository-tooling.md)。workspace中所有成员dev dependencies共同解析；开发依赖不会成为原生产物，仍可能堵住四端依赖解析。[runner变更](https://pub.dev/packages/build_runner/changelog)、[锁文件检查](https://dart.dev/tools/pub/cmd/pub-get#enforce-lockfile)、[workspace](https://dart.dev/tools/pub/workspaces)。

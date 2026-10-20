@@ -1,14 +1,12 @@
 # Flutter／Rust 主控运行时与平台边界研究
 
-研究日期：2026-10-16。面向完整互联产品的架构访谈；本文没有实施或运行原型。先经 Context7 核查 Flutter、flutter_rust_bridge（FRB）、Riverpod、Melos，再核对官方文档与源码。文中的「事实」是来源直接支持的能力或限制，「推论」是本产品的设计建议，「POC」是尚不能用文档替代的实机验证。版本相关事实以此日期的文档为准，不能拿 main 分支文档直接代替最终锁定的 SDK。
-
-已对齐根 GLOSSARY、ADR 0001–0003 与 `.scratch/interop/interview.md`。文中技术所有权与目录拆分均是研究建议，不追加已确认决定。最新访谈补充：用户要求继续调研玻璃库，尚未接受跨端分级方案；用户否决独立「查看模式」，要求从完整互联产品和市面产品出发研究交互；触控板未确认；同名文件默认询问且可应用当前任务已确认。
+研究日期：2026-10-16。依据 Flutter、FRB、Riverpod 与平台官方文档，记录权限、资源和生命周期的独立边界。当前目录、所有权与恢复契约见[架构](../implementation/architecture.md)和[状态恢复](../implementation/state-recovery.md)；下面的版本快照及验证方法不承担当前支持矩阵。
 
 ## 先确定哪些边界不能混在一起
 
 | 边界 | 已核实的结论 | 产品影响 |
 | --- | --- | --- |
-| 主控系统版本／被控系统版本 | 当前 Flutter 3.47 主控 Android 支持 API 24–37；scrcpy 被控端基础要求 API 21，音频转发 API 30+ | 「控制 Android 5.0+」不等于「主控 App 能装 Android 5.0」；各能力仍需另报支持范围 |
+| 主控系统版本／被控系统版本 | 研究时 Flutter 3.47 主控 Android 支持 API 24–37；scrcpy 被控端基础要求 API 21，音频转发 API 30+ | 「控制 Android 5.0+」不等于「主控 App 能装 Android 5.0」；各能力仍需另报支持范围 |
 | Android 进程／Flutter engine／Dart isolate／页面 | 生命周期彼此不同，页面 dispose 也不是用户断开连接 | 会话不能绑定页面或单个 provider 的存活 |
 | 本机捕屏／接收远端视频 | MediaProjection 管主控本机屏幕捕获；远端 shell/JAR 发送的视频不是主控的 MediaProjection 会话 | 不能为了常驻而声明与实际工作不匹配的 mediaProjection FGS |
 | Android 公共平台 API／AOSP 内部实现 | AOSP 有代码不代表第三方 App 有调用权限和稳定 ABI | Rust 核心仍需要平台适配；「Rust 全包」不能意味着绕开权限与生命周期 |
@@ -103,14 +101,6 @@
 
 **事实。** flutter_hooks 的 `useEffect` 可在 keys 变化或 widget dispose 时执行清理函数；它适合取消 UI 订阅和清理 controller，不构成后台服务生命周期。[useEffect API](https://pub.dev/documentation/flutter_hooks/latest/flutter_hooks/useEffect.html)。
 
-| 所有者（建议，非既有 ADR） | 持有的状态 | 生命周期 |
-| --- | --- | --- |
-| Rust 会话管理器 | 设备身份、transport 与 session 的映射、连接状态、认证结果、远端能力、重连政策、操作队列、取消令牌、并发配额、文件任务进度／结果 | 进程内，独立于 Dart 订阅；必要意图／任务记录另行持久化 |
-| Android 平台宿主 | FGS、USB 权限与连接、Keystore signer、网络／通知权限、SAF URI grant、Activity 是否可发起授权、系统通知动作 | 受系统组件与权限生命周期管理 |
-| Flutter 应用根 adapter | 当前 Rust client generation、快照与事件订阅、桥接错误、共享 UI 投影 | isolate／engine；可以重新建立 |
-| Riverpod Notifier／AsyncNotifier | 可观察会话投影、筛选／排序、用户发起命令的 loading／result、权限交互过程 | provider scope；重建不应重开设备会话 |
-| Hooks／widget | 焦点、滚动、动画、临时输入、当前控件手势、画布 viewport | 页面／widget |
-
 **推论：** Notifier 处理同步 UI 状态，AsyncNotifier 处理带异步加载的投影／交互；不要在 `build()` 里隐式创建具有副作用的持久设备连接。provider 自动重试不能再次上传文件、重新发按键或重复创建会话。命令用 operation ID 做去重，Rust 决定重试；Riverpod 负责呈现结果。`onDispose` 只释放它拥有的订阅等局部资源，用户断开与停止后台由明确命令触发。
 
 **POC R5：** 离屏暂停时大量 Rust 事件如何处理；客户端重新订阅时取得快照与增量是否有竞态；一次失败是否触发双重重连。纯 Dart／Rust 测试可覆盖状态序列，实际 engine 销毁与 Android Service 必须走集成验证。
@@ -118,20 +108,6 @@
 ## Monorepo、生成代码与跨平台预留
 
 **事实。** Dart pub workspaces 从 Dart 3.6 起提供统一依赖解析，根有共享 pubspec.lock 与 package_config；同一 workspace 不能各包使用冲突的依赖版本。Melos 7 基于 pub workspaces，配置进入根 pubspec.yaml 的 melos 字段，不应照搬旧 melos.yaml 教程。Cargo workspace 共享 Cargo.lock 与 target，并可共享 dependencies／lints；它与 Dart workspace 是两套独立解析系统。[Dart workspaces](https://dart.dev/tools/pub/workspaces)、[Melos 迁移](https://melos.invertase.dev/guides/migrations)、[Cargo workspaces](https://doc.rust-lang.org/cargo/reference/workspaces.html)。
-
-**推论：** 可以采用以下模块边界；这是仓库组织建议，未创建目录，也未决定最终名称：
-
-```text
-apps/mobile/                  Flutter 主控与 Android 宿主
-packages/domain_ui/           纯 Dart UI 投影与交互契约
-packages/native_bridge/       FRB 生成入口与 Dart adapter
-packages/design_system/       玻璃材质、lucide 包装与无障碍约束
-crates/adb_protocol/           无 Android／Flutter 依赖的协议
-crates/session_runtime/        会话、transport 调度与操作模型
-crates/platform_android/       JNI、USB fd、signer 等适配
-crates/flutter_bridge/         FRB 导出边界，避免暴露内部并发结构
-server/                       被控端临时 JAR，独立 Android 构建边界
-```
 
 **事实。** FRB 官方升级流程会随 codegen generate 更新 Dart／Rust 运行时依赖，源码也检查 codegen 与 Dart runtime 版本一致性。[FRB regular upgrades](https://cjycode.com/flutter_rust_bridge/guides/miscellaneous/upgrade/regular)、[版本检查源码](https://github.com/fzyzcjy/flutter_rust_bridge/blob/master/frb_dart/lib/src/main_components/entrypoint.dart)。
 
@@ -153,7 +129,7 @@ server/                       被控端临时 JAR，独立 Android 构建边界
 
 **POC R6：** 同一主控测 1／2／4 路、不同编码／分辨率／帧率；全屏与网格，玻璃覆盖面积／blur 分别变化，前后台切换和持续热负载。记录端到端输入到显示 P50／P95、实际解码队列深度、丢帧、UI raster 时间、内存、温度、功耗，验证播放器销毁与 texture 重建。官方要求性能分析使用真实设备 profile 模式；模拟器与 debug 不能证明最终性能。[Flutter profiling](https://docs.flutter.dev/perf/ui-performance)。
 
-**推论：** 液态玻璃需要静态低透明／高对比回退，暗色下对比度不能靠动态视频背景碰运气；文字缩放、TalkBack 的控件命名与焦点顺序、触摸目标、reduce motion 必须独立验收。视频 texture 没有自动生成远端控件语义树；主控工具栏可无障碍操作不等于远端画面可被本机读屏器理解。[Flutter accessibility](https://docs.flutter.dev/ui/accessibility)。
+远端视频 texture 不会自动生成可供主控读屏器理解的远端控件语义树；主控工具栏可无障碍操作与远端画面可访问性是不同能力。[Flutter accessibility](https://docs.flutter.dev/ui/accessibility)。
 
 ### 中文输入与远端输入法需要单独验证
 
@@ -163,7 +139,7 @@ server/                       被控端临时 JAR，独立 Android 构建边界
 
 **POC R7：** 中文拼音、候选替换、emoji、组合字符、长按重复、粘贴、密码框、游戏按键、远端旋转／分辨率改变；测试至少一种本机中文 IME 与目标系统 IME 的组合。
 
-**推论：** 坐标必须记录远端 display ID、真实画面尺寸、旋转、裁切、letterbox，以及实际存在的 viewport 变换；用其逆变换映射 pointer。每个 pointer ID 必须保持 down→move→up／cancel，切设备、旋转和权限丢失时补 cancel，防止「手指粘住」；不能让 GestureDetector 临时抢走一个已发给远端的多指序列。这些是实现责任，不应作为算法选择交给用户。用户已否决独立查看模式，产品路径按成熟厂商互联产品的直接操作研究；本文不推荐本机画布缩放或模式切换，也不把触控板当已确认能力。
+**推论：** 坐标必须记录远端 display ID、真实画面尺寸、旋转、裁切、letterbox，以及实际存在的 viewport 变换；用其逆变换映射 pointer。每个 pointer ID 必须保持 down→move→up／cancel，切设备、旋转和权限丢失时补 cancel，防止「手指粘住」；不能让 GestureDetector 临时抢走一个已发给远端的多指序列。这些是实现责任，不应作为算法选择交给用户。具体交互入口见[产品规则](../../designs/prod/interaction-rules.md)。
 
 **事实／推论。** Android 边缘 Back 与 Home 系统手势拥有系统处理规则，允许有限的排除区域，不宜承诺全屏拦截。Flutter 本机导航使用 PopScope 接入 predictive back；远端 Back 是另一条输入命令，应有可见入口与清楚映射。[Android gesture navigation](https://developer.android.com/develop/ui/views/touch-and-input/gestures/gesturenav)、[Flutter predictive back](https://docs.flutter.dev/platform-integration/android/predictive-back)。
 
@@ -193,21 +169,4 @@ server/                       被控端临时 JAR，独立 Android 构建边界
 
 **事实。**Apple 本地网络权限、具体 Bonjour service 声明、自行 multicast entitlement 和后台任务各有条件；普通 TCP／Rust 实现不能绕过系统许可。USB 候选后端是否支持也不等于整个核心是否可编译。[Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)、[后台策略](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app)。补充复核见[关键事实](requirements-gap-verification.md)。
 
-**现行交付约束。**保留 BackgroundExecutionCapability、UsbHostCapability、LocalNetworkAuthorization、FileEndpoint、KeySigner、VideoSurface 等适配，同时按[四端编译契约](cross-platform-build-contract.md)实际构建核心、FRB链接和Flutter整包；“只保留接口即可”已被Q32替代。当前Android承担功能运行验证，iOS运行专项保留后续任务，不声明已具Android对等权限或永久后台能力。
-
-## 验证顺序与当前工程前沿
-
-技术验证仍按R3／R4 transport和权限→R1／R2／R5后台与所有权→R6／R7媒体和输入→R8文件语义推进。模拟器覆盖UI、权限状态、协议与错误序列；USB host、硬解、功耗、OEM回收和真实IME保留真机门槛。这是依赖次序，不是“首版只做”裁功能。
-
-| 已有决定 | 剩余工作与任务 |
-| --- | --- |
-| Q23后台按活动、不可见视频暂停 | 验证FGS资格、锁屏、Doze、系统/用户停止及前台恢复；任务14 |
-| Q29持续活动恢复、未知结果不重放 | 持久化意图、结果核对及不可恢复提示；任务14 |
-| Q31保护已有通话与当前操作 | 测资源上限并设计降载/暂停选择；任务12／16 |
-| 默认低延迟、质量细项保留 | 基准设备、网络、并发、P95/P99、首帧、同步、热稳定门槛；任务07／16／20 |
-| 主控不开调试、直接控制且无查看模式 | 中文IME、密码/禁粘贴、焦点、旋转与分屏的可观察默认；任务08 |
-| Q21冲突询问、仅主动传回 | 文件endpoint能力、目录部分成功、取消清理和可恢复资格；任务09 |
-| 实时通知、无长期档案 | 主控锁屏默认隐藏正文和验证码，用户打开App后按授权查看；原通知动作、认证与未知结果；任务11 |
-| Q26身份不自动迁移 | signer及锁屏重连、系统备份排除、丢失与撤销；任务15 |
-
-上述产品默认不再回到用户逐项投票。工程事实先由代理研究与实验；只有具体证据暴露出既有授权无法覆盖的实质取舍才重新沟通。当前所有POC尚未执行，任务入口见审计账本（历史路径 `../../.scratch/interop/requirements-audit.md`）。
+**现行交付约束。**保留 BackgroundExecutionCapability、UsbHostCapability、LocalNetworkAuthorization、FileEndpoint、KeySigner、VideoSurface 等适配，同时按[四端编译契约](cross-platform-build-contract.md)实际构建核心、FRB链接和Flutter整包；平台构建、运行权限和后台能力仍是不同验证层级。

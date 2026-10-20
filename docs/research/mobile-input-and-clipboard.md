@@ -1,6 +1,6 @@
 # 手机主控的中文输入与跨设备剪贴板
 
-研究日期：2026-10-16。仅文档与源码调查，未运行原型。先查 Context7 的 Flutter 文档，再核对 Android、AOSP、scrcpy 及厂商一手资料。本文区分「事实」「工程建议」「待验证」，不更改已确认的免安装 APK／无 root、完整互联产品、直接操作且无查看模式等约束。Q23–27 的后台、设备级声音、真实任务接续、身份不自动迁移与通知默认实时策略沿用访谈结果；Q27 的可选通知历史随后已被最新范围取舍移除；剪贴板历史也没有因此成为产品目标。
+研究日期：2026-10-16。依据Android/AOSP、scrcpy、Flutter与厂商官方资料，记录普通主控App的剪贴板权限、远端shell和中文输入链路。当前目标设备与隐私规则见[交互规则](../../designs/prod/interaction-rules.md)，本报告不复述产品默认。
 
 ## 最影响承诺的结论
 
@@ -80,7 +80,7 @@
 
 ## 后续 POC 与只涉及体验的决策
 
-本轮未执行下列 POC。技术细节和常规默认由代理依据后续授权选择，先形成可观察体验与限制；只有实验证明现有授权无法涵盖的实质取舍才回到用户。
+以下是不能由源码替代的验证维度，运行结果应另记，不作为当前缺陷或完成清单。
 
 | POC | 必须观察的结果 |
 | --- | --- |
@@ -90,24 +90,14 @@
 | C4：图片／文件 | 多 item、MIME、临时／撤销 URI grant、来源 App 退出、接收编辑器不支持、大小限制、跨设备重新发布 URI、取消／断连后的缓存回收。明确哪些是可粘贴内容，哪些需转到保存／分享 |
 | C5：完整交互 | 真机比较厂商手机／平板互联中的键盘弹出位置、遮挡、候选与焦点；与本产品候选链路对照，不引入查看模式，不靠 desktop scrcpy 演示冒充手机体验 |
 
-## 当前默认与剩余验证
-
-1. **现行同步对象：** 当前操作且开启自动同步的设备；切换到该设备时以其文本覆盖主控剪贴板。不提供固定对象、冲突选择或独立发送设置页。C1/C2 仍用于核验权限、焦点与循环，产品规则见[交互规则](../../designs/prod/interaction-rules.md#声音与剪贴板)。
-2. **权限受限的默认由代理落实：**不在失焦或后台状态虚报自动读取，不轮询抢回剪贴板；用户回到前台或明确复制／发送时再按系统许可处理。两端内容与来源、敏感标记、到期和失败需要可辨，不建立历史中心。C1/C2/C4 决定可执行的具体状态。
-3. **本机输入与远端输入并行研究：**验证本机常用 IME，保留画面内远端键盘；若只能可靠提交一段文字，则按真实能力呈现，不承诺所有字段无感。密码与禁粘贴字段、焦点切换不得旁路认证，不新增查看模式或主控调试。C3/C5 驱动对应设计状态。
-
-执行入口见输入任务（历史路径 `../../.scratch/interop/issues/08-mobile-input-and-windows.md`）与剪贴板、音源和分享任务（历史路径 `../../.scratch/interop/issues/13-device-targets-and-sharing.md`）。
-
 ## 补充：主控通过本机 ADB 启动 shell 辅助进程
 
-本节保留曾调查的候选路线。**Q33 用户已明确否决：主控始终不要求开启调试，因此本项目不提供该增强入口。**以下源码事实不构成实施建议；既定被控设备 ADB 方案不受影响。
+本节保留曾调查的候选路线。[ADR 0006](../adr/0006-controller-without-debugging.md)已排除要求主控开启调试的路线。以下源码事实不构成实施建议；既定被控设备 ADB 方案不受影响。
 
 **事实：有现成一手实现，不能再把主控后台剪贴板概括为没有可行路径。** LADB 的官方 README 说明其内嵌 ADB 经无线调试连接本机；`ADB.kt` 实际执行 `pair localhost:配对端口` 与 `connect localhost:连接端口`，`DnsDiscover.kt` 用 NSD 发现 `_adb-tls-connect._tcp`。这是 Android11+ 无 root、无外部电脑自连接的现成实现证据，并非 AOSP 对所有手机的兼容承诺。[LADB README](https://github.com/tytydraco/LADB#how-does-it-work)、[本机连接源码](https://github.com/tytydraco/LADB/blob/main/app/src/main/java/com/draco/ladb/utils/ADB.kt)、[端口发现源码](https://github.com/tytydraco/LADB/blob/main/app/src/main/java/com/draco/ladb/utils/DnsDiscover.kt)。
 
 **额外前提与恢复限制：** 主控本身需开启开发者选项和无线调试，允许所用网络，并首次输入系统配对码／配对端口；LADB 要求配对设置对话框在完成前保持打开。配对端口与正常 TLS 连接端口不同，后者由系统随机选择；重启／重新启动无线调试后应重新发现，不能保存端口当身份。`localhost` 避免数据绕行路由器，却不使系统无线调试的 Wi-Fi 前提消失：AOSP Android11 在 Wi-Fi 关闭／断开时会停无线调试，热点单独开启、仅蜂窝或完全离线能否启用不能据此保证。Android17 的 ADB Wi-Fi2.0 改善可信网络自动重连，仍需按版本／厂商验证。Android10及以下的官方 TCP 路径需先由已授权 USB 主机开启，不能宣传同样的纯本机首次配对。[官方 ADB 无线说明与旧版本前置 USB 流程](https://developer.android.com/tools/adb#wireless)、[AOSP TLS／mDNS／动态端口架构](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/docs/dev/adb_wifi.md)、[Android11 Wi-Fi 生命周期源码](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android11-release/services/core/java/com/android/server/adb/AdbDebuggingManager.java)。
 
-**工程推论：可复用本项目 Rust ADB 协议能力连接主控自身，经 `adb shell` 临时启动本机 JAR，代理主控剪贴板监听／读取。** 生产设备 adbd 降权至 `AID_SHELL`，由它启动的辅助进程以 shell 身份工作；Shell 的后台剪贴板权限与普通 App 的 UID 权限是两套资格，结果经受控本机通道交回 App，不是把 shell 权限授予 Flutter。须沿用正确 shell 调用身份、检查实际 UID／Binder 调用、锁屏／profile 和 OEM 限制。这是待 POC 的组合方案；本机 shell 或 scrcpy 的按键／粘贴能力仍不能证明已获得任意 App 的完整 InputConnection。[AOSP adbd 身份处理](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/daemon/main.cpp)、[Shell 权限](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/Shell/AndroidManifest.xml)、[剪贴板服务检查](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/clipboard/ClipboardService.java)。
+ADB shell 子进程使用 shell UID，和普通主控 App 的剪贴板访问资格不同；经本机通道代理不会把 shell 权限授予 Flutter，也不能证明已获得任意应用的 InputConnection。[adbd 身份处理](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/daemon/main.cpp)、[Shell 权限](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/Shell/AndroidManifest.xml)。
 
-**仍需验证：** 配对授权持久化与端口重发现、mDNS 失败回退、Wi-Fi／热点／切网、锁屏、主控 App 被回收、adbd 停止及重启后的 JAR 重新启动与单实例归属；辅助进程存活不等于 App 的后台网络／调度限制消失。配对信任通常可保留，“重启后重新启动辅助进程”不等于每次重新配对，只有授权失效／撤销等情况才需重新授权。Shizuku 的官方手册同样给出 Android11+ 本机无线启动、一次配对、重启后重新启动及 OEM 后台差异，可作第二份一手运行经验；不能由此承诺永久免维护常驻。[Shizuku 官方手册](https://shizuku.rikka.app/guide/setup/)。本轮未配对、安装或启动任何辅助进程，也未将 LADB 选为依赖；当前 LADB main 的 LICENSE 含 Google Play 分发限制，不能仅凭“GPL”标签推定可直接复用。[当前许可证](https://github.com/tytydraco/LADB/blob/main/LICENSE)。
-
-**现行边界：** [ADR 0006](../adr/0006-controller-without-debugging.md)规定主控不要求开启调试；本机 ADB 方案仅保留为技术比较，不是可选产品入口。剪贴板按当前设备的自动同步开关处理，不提供固定对象。前台同步与系统分享分别受普通应用权限约束，远端 shell 的权限不属于主控。
+Shizuku 的官方手册同样给出 Android11+ 本机无线启动、一次配对、重启后重新启动及 OEM 后台差异，可作第二份一手运行经验；不能由此承诺永久免维护常驻。[Shizuku 官方手册](https://shizuku.rikka.app/guide/setup/)。本轮未配对、安装或启动任何辅助进程，也未将 LADB 选为依赖；当前 LADB main 的 LICENSE 含 Google Play 分发限制，不能仅凭“GPL”标签推定可直接复用。[当前许可证](https://github.com/tytydraco/LADB/blob/main/LICENSE)。

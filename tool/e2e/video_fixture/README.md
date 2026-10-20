@@ -53,7 +53,7 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 归一化`ptsUs`，每次完整输入的`VIDEO_INPUT_SAMPLE`日志保留对应阶段与帧回执，
 避免原生崩溃抹掉全部已完成输入。源PTS不是编码完成时间，跨设备时钟不可直接
 相减；同目标onDraw回调也不是GPU／合成／物理呈现完成。
-[时钟定义、对照与边界](../../../docs/implementation/video-performance.md#目标输入绘制与源pts观测2026-10-18)。
+[时钟定义、对照与边界](../../../docs/implementation/video-performance.md#时钟与帧身份)。
 
 同时开启上述时间线、逐帧观测与`CONNECT_PERF_TRACE_CLOCK=true`，每轮输入循环前后
 各执行三次有界`session.clock.probe`。目标输入／绘制另保留BOOTTIME／nanoTime／BOOTTIME
@@ -61,7 +61,7 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 此分析以本轮连续运行、偏移稳定为条件；非空区间不证明没有VM暂停或时钟变化。
 源PTS同nanoTime时钟域另列假设，不把它当编码完成时间。探针开销在输入计时之外，
 仍会影响预热时间。缺失、逆序或不相容数据会保存报告并使观测验收失败。
-[算法、来源及实际结果](../../../docs/implementation/video-performance.md#时钟括号与surface输入实验2026-10-18)。
+[算法、来源及实际结果](../../../docs/implementation/video-performance.md#时钟与帧身份)。
 
 `CONNECT_PERF_ADB_BURST=true`仅用于ADB传输对照，默认关闭。每次初始化显式写入
 该开关，避免持久偏好污染下一组；每轮新连接记录`adbBurstActive`并断言实际协商值
@@ -70,13 +70,13 @@ Flutter合成画面；仅收到resume回执或保留旧帧无法通过。结果`
 
 从release切回E2E后，先在应用目录执行`flutter pub get --offline`恢复测试插件注册，
 再运行--no-pub drive；没有缓存时使用正常pub get。不要手改生成注册文件。
-默认高清80次、当前仍失败的1秒首帧门槛及原始证据见
+性能门槛与已测环境的结果见
 [视频性能记录](../../../docs/implementation/video-performance.md)。
 
 `analyze_codec_trace.dart`离线分析目标Perfetto中的CCodec `onWorkDone(...@ts=...)`，
 与独立宿主raw-drain回执的原始PTS关联；不操作设备或下载工具。
 需要官方`trace_processor query`，输入示例和本次原件见
-[目标侧分段记录](../../../docs/implementation/video-performance.md#目标ccodec完成边界与源年龄2026-10-18)。
+[目标侧分段记录](../../../docs/implementation/video-performance.md#独立实验的结果)。
 分析器按唯一进程名筛选，拒绝trace data-loss、PTS歧义／接收缺项和时钟不相容，
 保留全部匹配及固定最后1/3统计。时钟snapshot是相继读取、并非严格误差括号；
 该结果不是纯编码耗时或主控实际呈现延迟，不能代替真实新像素E2E。
@@ -107,7 +107,7 @@ proxy-events.json、cleanup.json及截图仅存/tmp；EOF代理不代替物理�
 使独占fixture产生一帧，再还原计数0，严格要求两个方向实际丢字节；这不会进入产品。
 默认不设置该变量仍为EOF断线。清理前验证controller先结束旧连接及新accept顺序，
 原30秒自动恢复、新session、真实Flutter图案0→1和停止后不重建断言均保留。
-完整命令、失败覆盖和证据见[连接健康验收](../../../docs/implementation/connection-health.md#实际adbd与可见视频的应用停转故障2026-10-18)。
+完整命令、失败覆盖和证据见[连接健康验收](../../../docs/implementation/connection-health.md#已执行故障验证)。
 
 普通调度性能入口为`tool/benchmark/live_video_performance.dart`，host为
 `tool/driver/live_video_performance.dart`。窗口校验默认继续使用PNG；可设置
@@ -138,15 +138,14 @@ work队列长度。`--output`必须是新文件，避免覆盖原始证据。
 转成保留微秒PTS的MKV，再由`analyze_first_counter.dart`调用宿主FFmpeg逐帧识别。
 要求完整唯一的一包一帧、计数连续、时钟区间有效且采集／清理最终成功；始终选最早
 含新计数的包，不能用后来的snapshot选帧代替。宿主直收未包含Rust／Flutter路径，
-不能当产品延迟验收或与产品组直接相减。命令、实际308包／帧及限制见
-[最早新计数帧核查](../../../docs/implementation/video-performance.md#最早新计数帧与快照选帧的区别)。
+不能当产品延迟验收或与产品组直接相减。方法与限制见
+[最早新计数帧核查](../../../docs/implementation/video-performance.md#时钟与帧身份)。
 校验：`flutter test --no-pub tool/e2e/tests/analyze_first_counter_test.dart`。
 
 同一实际Rust／Flutter播放路径的核查使用`CONNECT_PERF_TRACE_PACKETS=true`（同时
 启用traceFrames／traceClock，单轮）。它限量保留实际HTTP发送的完整Matroska前缀，
 8次输入及实际窗口结束后才封存和导出，默认不开启，不增加产品录屏入口。
-`analyze_player_archive.dart --run <本次/tmp目录> --ffmpeg <宿主FFmpeg>`要求381包这类
-完整序列逐项PTS／新计数匹配，再关联各输入保存的raw窗口和onVideo／snapshot。
+`analyze_player_archive.dart --run <本次/tmp目录> --ffmpeg <宿主FFmpeg>`要求完整序列逐项PTS／新计数匹配，再关联各输入保存的raw窗口和onVideo／snapshot。
 没有早帧回调时明确缺席，不补造呈现；最早包和快照选中包可以不同。完整结果、
-32MiB／单档案限制及命令见[实际播放器前缀](../../../docs/implementation/video-performance.md#实际播放器完整帧前缀与最早新像素)。
+32MiB／单档案限制及命令见[实际播放器前缀](../../../docs/implementation/video-performance.md#时钟与帧身份)。
 校验：`flutter test --no-pub tool/e2e/tests/analyze_player_archive_test.dart`。

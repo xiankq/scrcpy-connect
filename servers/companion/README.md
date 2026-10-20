@@ -102,9 +102,7 @@ AppOps 优先使用当前字符串接口；AOSP 5.0 定义剪贴板整数操作�
 `clipboard.unavailable`，不终止通知服务。断开会注销 listener 并清除临时进程。
 内容仅在当前 RPC、内存与实时事件里传输，不写日志或持久化存储。
 
-实际 API 36 AVD 已通过：无视频 session 的 Unicode／换行／引号文本往返，
-第二个独立 companion 写入触发第一个实例实时事件，启动期间断开取消，
-以及断开后的读取拒绝。旧 Android 设备运行、OEM、锁屏及多用户矩阵尚未因此得到验证。
+剪贴板设备运行证据及未验平台见[验收记录](../../docs/implementation/validation.md)。
 
 ## 已启动应用任务与目标图标
 
@@ -207,12 +205,6 @@ JAR 固定条目顺序、ZIP 时间戳、权限、存储方式和 manifest 内�
 摘要也不能绕过重建比较。`tool/check.sh` 已接入此门禁。修改源码或构建脚本后需
 重建并提交 JAR 与 manifest，再运行 `dart servers/package.dart` 同步共享压缩资源及 Rust 使用的清单；打包规则见[工具链契约](../../docs/implementation/repository-tooling.md#被控执行产物的共享打包)。
 
-2026-10-18 本批增加构建门禁时，将既有 JAR 重新封装为上述确定性格式。对照受控
-原 JAR，`classes.dex` 逐字节未变，SHA-256 仍为
-`6019f7ea51ca4f8c0bfd6f99e15d1ca608f56913809bbc804789ea35d1193464`。
-当时整个产品 JAR 的 SHA-256 更新为
-`4fbb0f076dfd31472d82d48f0257accae0d1fc20c6e7d0b0fd6ed4ad53531a19`。
-本次构建与 `--check` 本地通过；这项归档一致性验证不新增设备运行验收结论。
 当前产物摘要与完整构建输入以同目录 `manifest.json` 为准。
 
 `dart servers/companion/tests/compatibility.dart` 在临时目录编译并运行宿主
@@ -224,14 +216,6 @@ AIDL 形状验证 API 21、23、30、31+ 的 listener 注册／注销、旧系�
 图片／stat 类没有直接引用新版本视频 API；这些断言先重现了实际兼容缺口，
 再用于检查修复后的调用归属与类加载边界。
 同一检查还阻止重新引入 API 21 缺失的 `OsConstants.O_CLOEXEC` 字段引用。
-
-上述观察生命周期已通过 Runtime／真实 actor 提交回归，并重建 JAR。
-2026-10-17随后在API36目标AVD执行 `observation_android`：无需页面查询即收到live观察，
-stop后共享helper剪贴板仍可get/set、列表与断线重连均不恢复观察，显式start后再次收到真实通知；
-11.10秒通过。精确清除本次唯一tag、恢复原文字剪贴板并断开测试连接。
-首轮因目标没有文字ClipData而在写入前明确失败，准备隔离AVD文字基线后复验；
-不是产品故障或被跳过的通过。OEM、主控后台OS通知与通话音频未因此验收。
-下列其余既有AVD证据仍按各自功能和版本边界记录。
 
 ```sh
 dart servers/companion/build.dart
@@ -253,50 +237,17 @@ INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
 cargo test -p interop-core --test companion_clipboard -- --ignored --nocapture --test-threads=1
 ```
 
-实际目标是 API 36 / Android 16，fingerprint：
-`google/sdk_gphone64_x86_64/emu64xa:16/BE2A.250530.026.F3/13894323:userdebug/dev-keys`。
-只有 target `emulator-5556` 被操作；没有操作主控 AVD、安装 APK、改权限或 AppOps。
+## 设备验收边界
 
-真实证据包括：UID 2000、通知 listener 注册和实时 Binder 事件、原 PI 打开
-Settings、原通知更新后的旧引用拒绝、实际远端清除、immutable 无回复能力、
-认证 action 拒绝、已取消 PI 拒绝、启动中断开不复活，以及虚拟 modem 的来电状态。
-快速结束来电再产生新来电的回归要求旧动作不能结束新来电，并通过真实 Telecom
-状态确认仍 ringing、测试结束后恢复 idle；产品全局动作始终拒绝。测试 harness
-仅通过官方 dumpsys 等待 modem 完成取消，再发起下一通，不在间隔调用 Rust 刷新。
-此 AVD 在取消后立即发起下一通时会返回 OK，但 Telecom 可能拒绝创建新来电，
-因此这种早期尝试不作为真实替换证据。观察引用始终不当作安全通话引用。
+API 36 / Android 16 AVD 的通知、观察启停、剪贴板及系统提醒结果统一见
+[验收记录](../../docs/implementation/validation.md)。虚拟 modem 能调用全局
+Telecom API 不代表能安全定位具体通话，产品仍拒绝这些全局控制动作。
 
-`--skip-receiver` 是明确未证项：RemoteInput 原动作已由系统接受，但无 APK 的
-测试动态广播 receiver 没有确认收到，不能声称应用送达。取消该参数会执行这条
-当前未通过的更强断言。真实第三方消息应用的接收／认证／锁屏与 ROM 矩阵尚未验证。
+旧 JAR probe 的 `--skip-receiver` 仅验证系统接受 RemoteInput，不验证原应用收到。
+没有对应 ApplicationThread 的 shell receiver 被 AMS 拒绝注册，不能以系统回执
+代替接收证据。需要实际接收验证时使用独立的
+[通知接收夹具](../../tool/e2e/notification_fixture/README.md)：仅在隔离目标安装测试 APK，
+不进入产品分发，也不是用户使用通知功能的前提。
 
-此前实验曾以虚拟 modem 验证 Telecom 全局接听／挂断 API 可以调用，并观察到
-active/idle；安全审查发现它们无法可靠绑定具体通话，产品路径已删除。这段实验
-只能作为底层可行性证据，不能计作安全产品通话控制通过。
-
-还需验证系统服务重启、多用户/工作资料、真实 OEM 权限与 SELinux 差异、
-敏感通知脱敏、应用认证、通知权限拒绝、平台锁屏隐私投影和长期运行资源表现。
-当前声明限于上述实际 AVD，不外推所有 Android 或所有应用。
-
-
-### API36接收端验收的更正与补充
-
-本轮修复`tests/build-fixture.sh`遗漏MediaJobs/Thumbnail源码导致的编译失败；
-产物仍仅在tmp，未替换产品JAR。未跳过receiver的旧JAR probe连续两次在实际
-接收处超时。主代理复核logcat明确记录`registerReceiverWithFeature: no app for null`；
-[固定Android16 BroadcastController](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-16.0.0_r1/services/core/java/com/android/server/am/BroadcastController.java#L291)
-在没有对应ApplicationThread进程记录时直接拒绝注册。因此旧probe的系统接受回执
-不能代表原receiver收到，诊断保留严格失败，未把skip-receiver变成通过。
-
-现新增独立[API36通知接收验收夹具](../../tool/e2e/notification_fixture/README.md)，
-仅在隔离目标AVD临时安装测试APK，由AMS实际管理receiver；本次安装才授予它自己
-声明的POST_NOTIFICATIONS，退出精确清理并卸载。它不进入主控/companion分发，
-不是被控用户的新前提，没有更改产品权限、AppOps或JAR摘要。
-
-两轮Flutter真实通知UI→原RemoteInput→离页重进→精确清除→过期route复制均约16秒
-通过，独立私有receipt及清理前最终snapshot原文一致、count=1；最终轮确认恢复主控
-文字剪贴板基线并移除本次设备记录。日志及截图仅在tmp，完整命令与边界见
-[验证记录](../../docs/implementation/validation.md)。这只证明该合成原接收器实际收到，
-不代表真实聊天应用、消息服务、锁屏/OEM或后台OS提醒已完成。
-
-后续为系统提醒补`groupSummary`安全元数据（公开FLAG_GROUP_SUMMARY）；汇总项仍保留原列表/动作，共享主控不额外提醒。新JAR由上述脚本构建并同步Rust摘要。双AVD无需测试APK即可实际验收系统源通知、主控HOME发布/精确撤回/真实通知栏点击，详见[最新验证](../../docs/implementation/validation.md#画质实像素与主控系统通知)。
+合成接收器通过不代表真实聊天应用、消息服务、认证／锁屏或 OEM 已通过。
+系统服务重启、多用户／工作资料、通话音频及长期资源表现仍需分别验收。

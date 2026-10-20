@@ -2,7 +2,7 @@
 
 面向 Android 被控设备的跨设备互联应用，优先服务手机主控。设备列表是首页；远控全屏呈现真实任务，文件、相册和通信分别提供任务入口。主控不要求开启调试；被控设备使用系统 USB／无线调试授权，不安装配套 APK。
 
-功能规则、代码实现和运行验收分别记录。Android 模拟器已验证的具体链路见[产品验收](docs/implementation/product-refinement.md)与[专项记录](docs/implementation/validation.md)；低版本条件和实测范围见[被控兼容边界](docs/implementation/android-target-compatibility.md)；物理 USB、OEM 后台、其他宿主和生产密码安全需要各自证据。
+支持条件与实测范围见[被控兼容边界](docs/implementation/android-target-compatibility.md)和[验收记录](docs/implementation/validation.md)。已验证的模拟器链路不代表物理 USB、OEM 后台或其他宿主已经验收。
 
 ## 工作区
 
@@ -22,28 +22,13 @@
 | `app/test`、`app/integration_test` | Flutter 单元／组件测试与设备端集成测试 |
 | `tool` | Dart 生成／构建／校验入口、主机驱动、性能基准及测试夹具 |
 
-```text
-app/
-  pubspec.yaml
-  lib/
-  test/
-  integration_test/
-  android/  ios/  macos/  windows/  linux/
-packages/
-crates/
-servers/
-tool/
-pubspec.yaml
-pubspec.lock
-```
-
 根 `pubspec.yaml` 只声明 workspace 与工具依赖；`app/pubspec.yaml` 声明主应用。整个 Dart workspace 共用根 `pubspec.lock` 和 `.dart_tool`。
 
 ## 本地开发
 
-固定工具链：Rust 1.99.1、Flutter 3.47.7／Dart 3.13.5、JDK 21。Android 应用继承 Flutter 的 SDK／NDK 配置，本次验证为 SDK 36、NDK 28.2.13676358；被控原生助手单独使用 NDK 30.0.16248370。依赖版本及验证范围见[升级记录](docs/implementation/dependency-upgrade-2026-10-20.md)。Flutter、Android SDK 与 NDK 需提前安装；`ANDROID_HOME` 指向 SDK，Flutter、Rust 在 PATH 中。
+准备 Flutter、Rust、JDK 21 和 Android SDK；`ANDROID_HOME` 指向 SDK，Flutter 与 Rust 位于 PATH。Rust 版本由 `rust-toolchain.toml` 固定，Dart/Flutter 依赖由 workspace 清单和锁文件约束。SDK/NDK、原生依赖与生成职责见[工具链契约](docs/implementation/repository-tooling.md)。
 
-自有构建与诊断脚本使用 Dart；Node 用于官方 DESIGN.md 工具。日常工程检查不要求安装 Python。
+构建与诊断的主要入口使用 Dart；Node 用于官方 DESIGN.md 工具。日常工程检查不要求安装 Python。
 
 ```sh
 flutter pub get
@@ -55,36 +40,18 @@ flutter test
 flutter run -d <android-device>
 ```
 
-Android 运行时通过 Flutter native assets 自动构建 Rust 库，不调用或分发外部 `adb` 可执行文件。实际设备测试中的官方 adb 仅用于部署、独立读取系统结果和对照。
-
-在 `app/` 执行：
-
-```sh
-flutter build apk --debug --target-platform android-x64
-```
-
-生成绑定使用固定 `flutter_rust_bridge_codegen 2.13.0`。修改共享命令契约后运行 `dart tool/protocol_codegen.dart`，生成设计 token、FRB／Dart 代码运行 `dart tool/generate.dart`；两者的 `--check` 均检查生成结果且不改工作区。设计 token 经固定官方 `@google/design.md 0.4.0` 解析，自动输出到 `packages/design_system/lib/src/design_tokens.g.dart`，不手工维护 Dart 数值；单独生成可运行 `node tool/design_tokens/generate.mjs`。临时 JAR／助手的构建、源码与产物哈希见各自 `servers/*/README.md`。当前模块职责与资源归属见[架构说明](docs/implementation/architecture.md)。
+Flutter native assets 自动构建 Rust 库；产品不调用或分发外部 `adb`。测试中的官方 adb 仅用于部署和独立核验。修改共享命令契约运行 `dart tool/protocol_codegen.dart`；其余生成运行 `dart tool/generate.dart`，验证时添加 `--check`。视觉值修改 `designs/design.md` 后生成，不手改 Dart 常量。JAR／助手构建见各自 `servers/*/README.md`。
 
 ### Android 安装包
 
-首次在仓库根目录执行以下命令，生成本机持久的侧载签名，再构建并验证通用 release 安装包。默认架构和原生库压缩策略见[工具链契约](docs/implementation/repository-tooling.md#应用与-workspace-职责)：
+在仓库根生成本机持久的侧载签名，再构建通用 release 包：
 
 ```sh
 dart tool/android.dart init-signing
 dart tool/android.dart build
 ```
 
-已配置的签名不会被替换；私钥与 `key.properties` 不进入 Git，请自行私密备份这两份文件，后续更新需要同一身份。正式分发时可按 [配置示例](app/android/key.properties.example) 换成自己的发布密钥。缺少签名会在编译前明确失败，不再生成未签名的“成功”包，也不会悄悄用 debug 密钥签 release。
-
-特定主控架构的测试可使用 `--abi x64`、`--abi arm64` 或 `--abi arm`，普通交付保留默认通用模式。单架构模式也会过滤插件的其他架构库，避免只有插件、没有 Flutter／Rust 的不完整 ABI。
-
-最终 APK 在 `app/build/app/outputs/flutter-apk/app-release.apk`。可独立复核：
-
-```sh
-dart tool/android.dart verify app/build/app/outputs/flutter-apk/app-release.apk
-```
-
-验证包括 ZIP 完整性、签名、16KB ZIP 对齐、包名／启动入口、实际 Flutter／Rust ELF 架构及共享执行产物。`build` 自动执行上述检查，并打印包摘要与耗时。首次／换架构编译与重复编译分别记录；不要在每次构建前 `flutter clean` 或删除 `.dart_tool/hooks_runner`。调试结束清理过期 `app/build` 产物，保留正在复用的 native hooks／Gradle 缓存；Gradle 已开启本机任务缓存。[缩包实测与限制](docs/implementation/android-package-size.md)。
+已有签名不会被替换；私钥与 `key.properties` 不进入 Git，更新安装需要同一身份，请私密备份。发布签名见[配置示例](app/android/key.properties.example)。`build` 自动验证包并打印摘要，输出 `app/build/app/outputs/flutter-apk/app-release.apk`。架构、独立验证和分发规则见[Android 打包](docs/implementation/android-packaging.md)；缓存与清理规则见[工具链契约](docs/implementation/repository-tooling.md#构建与产物边界)。
 
 ## 设计与验收
 
@@ -95,10 +62,8 @@ dart tool/android.dart verify app/build/app/outputs/flutter-apk/app-release.apk
 | [视觉规范](designs/design.md)与 [Pencil 源稿](designs/mobile.pen) | 视觉 token、组件语义和代表状态 |
 | [架构](docs/implementation/architecture.md)与[工具链](docs/implementation/repository-tooling.md) | 实现职责、资源所有权和生成契约 |
 | [研究索引](docs/research/README.md) | 固定来源下的事实、比较与推论 |
-| [产品验收](docs/implementation/product-refinement.md)、[视觉审计](docs/implementation/ios-visual-audit.md)、[专项记录](docs/implementation/validation.md) | 指定版本、环境、状态和证据范围 |
+| [验收记录](docs/implementation/validation.md)与[设计还原](docs/implementation/design-fidelity.md) | 指定版本、环境、状态和证据范围 |
 
 规则在责任文档中维护，研究建议和历史验收不替代当前规范。源稿 Frame 可表达同一产品页面的多个状态，不与路由数量一一对应。预览与 E2E 资产放系统临时目录；临时日志的生命周期不等于永久归档。
-
-播放器精确使用社区发布的 [fvp 0.39.1](https://pub.dev/packages/fvp/versions/0.39.1)，不保留本地源码副本、补丁或 path override。MDK 下载与平台版本规则继承该发布包；原版 snapshot 空结果未判空的已知限制、原生依赖和历史验证边界见[工具链契约](docs/implementation/repository-tooling.md#社区原版-fvp-0391)。
 
 `tool/check.sh` 执行 Rust 格式／Clippy／默认测试、Flutter 分析／组件测试和固定官方 DESIGN.md NPM 校验。真实 AVD、无线配对、媒体、文件及故障测试需要对应环境和显式测试参数，方法与证据见验收记录。跨 target 的 Rust 检查与各宿主整包链接分别记录。

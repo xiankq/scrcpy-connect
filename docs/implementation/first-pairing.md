@@ -1,73 +1,45 @@
-# 首次配对、加密连接与撤权
+# 首次配对、加密连接与撤权验证
 
-产品使用自己的 Rust 身份，通过被控 Android 系统的配对码窗口完成 PAKE，再使用独立连接端口建立 Required TLS。宿主测试工具只操作系统设置、读取当次码和准备网络转发；不执行 `adb pair`，不导入产品私钥，不在被控设备安装 APK。配对成功与连接成功分别确认。
+产品用自己的Rust身份，经被控系统配对码窗口完成PAKE，再用独立连接端口建立Required TLS。宿主只协调系统界面/当次码/转发，不执行adb pair、不导入产品私钥或在目标安装APK。配对、连接、授权拒绝分别核验；当前用户规则见[设备连接](../../designs/prod/device-connection.md)。
 
 ## 可重复的产品链路
 
-`app/integration_test/first_pairing_test.dart` 启动真实 app.main、FRB 和 Runtime，经 typed route/实际表单验证：
+`app/integration_test/first_pairing_test.dart`与 `tool/driver/first_pairing.dart`经过app.main/FRB/Runtime及真实表单：
 
-1. 未配对时访问实际 TLS listener，要求明确的证书授权拒绝，不能以超时/拒绝连接代替。
-2. 输入由当前码改一位的错误码，确认真实配对失败且未保存 GUID。
-3. 宿主重新打开系统配对窗口，把新码交给测试；真实表单配对并保存 GUID。
-4. 使用独立连接端口，读取真实设备能力，确认连接与配对是两个完成点。
-5. 主动断开；宿主从系统设置读取本次新增 `interop-controller` 的指纹，关闭设置页后调用系统撤权接口，只撤销该身份；产品再次连接必须被拒，状态为未授权且不自动重连。
-6. 精确删除本次设备记录、配对项、转发和临时 XML，保留基线设备及其他已配对身份。补收集和单项删除失败不会跳过其余已知记录。
+1. 新身份访问真实TLS listener，要求明确证书授权拒绝，不以超时代替。
+2. 错码失败且无GUID；重新打开系统窗口，用新码完成PAKE。
+3. 使用独立连接端口，确认真实连接和设备能力。
+4. 断开后仅撤销本次新增产品身份，再连接必须unauthorized且关闭自动重连。
+5. 精确清理自有记录/信任/转发，保留基线身份；配对码、私钥和公钥原文不入报告或截图。
 
-宿主 driver 用 VM service extension 协调步骤；码不进入 extension 响应、报告或截图。初始拒绝阶段不截图，避免晚到的截图拍到后续配对码。工作台截图发生在实际连接仍保持的 `need-connected-capture` 等待点；撤权拒绝截图也通过专用握手等待完成，两者均不含码。报告中的证书错误只用于证明真实拒绝原因。
-
-以下命令从仓库根目录开始，PATH 含 Rust/Flutter，目标已按下面条件准备；图片/日志仍只在 tmp：
-
-```sh
-cd app
-env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
-  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5558 \
-  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/first-pairing \
-  flutter drive -d emulator-5554 --no-pub \
-  --driver=../tool/driver/first_pairing.dart \
-  --target=integration_test/first_pairing_test.dart
-```
-
-driver 要求明确、不同的两个 AVD；目标开发者选项、Wi-Fi 与无线调试已开启，系统界面为该夹具验证过的英文 API36。没有预存的同名产品配对项才允许撤销本次项；基线存在同名项时拒绝准备且不修改它。所有必要产品回执、系统精确撤权及清理回执齐备才通过；不能把局部结果称为完整产品验收。
+从 `app/` 用上述driver/target执行drive，并设CONNECT_E2E_ADB、CONNECT_E2E_DEVICE、CONNECT_E2E_TARGET、CONNECT_E2E_CAPTURE_DIR。夹具仅接受明确不同的隔离AVD和已验证英文API36系统UI；已有同名产品配对项时拒绝准备，不修改既有信任。
 
 ## 安全测试环境
 
-本机原 API36 Google APIs GSI 的 `/system_ext/etc/build.prop` 明确包含 `ro.adb.secure=0`。AOSP adbd 在可调试/解锁环境读取该属性决定是否要求认证，见 [daemon/main.cpp](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/daemon/main.cpp)。旧目标接受未配对身份的负例失败仍保留，不能用配对正例覆盖。
+原API36 Google APIs镜像 `ro.adb.secure=0`，实际未配对身份拒绝负例失败，配对正例不能覆盖。2026-10-17/18仅为独立目标建立可写覆盖层，将secure设1后重启；SDK原镜像和其他AVD未改。实测userdebug/dev-keys、debuggable=1、verifiedbootstate=orange、shell UID2000；不是量产锁定/OEM安全证明，也不是产品root前提。
 
-本轮仅为第三台 `interop-target-b` 构造隔离测试环境：以 `-writable-system -no-snapshot` 启动，临时 root/remount、重启挂载覆盖层，仅将该文件中的 `ro.adb.secure=0` 改为 `1` 后再次重启。原文件保存在 `/tmp/connect-first-trust-fixture/system_ext-build.prop.original`；原摘要 `c71f1bbdea16cceed528cfa4a7d761ebee0aed2b985790dec33be649b1633540`，改后 `8b62fa8e92715aa3611c64c55abe2dc77146bd0396409c3191eea7bd10989023`。SDK 原镜像未编辑，不修改前两台的认证配置，不将测试准备变成产品 root 前提。
+Emulator37.2.12忽略非qemu的 `-prop ro.adb.secure=1`，不能以参数出现当设置成功；镜像的 `service.adb.tls.port`为空，使用系统页面实际端口及当次动态转发。安全条件必须由新身份真实被拒绝验证。[adbd入口](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/daemon/main.cpp)解释认证属性路径，但分支源码不冒充镜像二进制完全同源。
 
-emulator37.2.12 对 `-prop ro.adb.secure=1` 明确报告只支持 qemu.*，实际属性仍0，不能以该参数出现作为成功证据。系统完成启动、Wi-Fi 连上 AndroidWifi、允许此网络无线调试后，使用系统页面显示的实际连接端口；本镜像 `getprop service.adb.tls.port` 为空，不能依赖它。宿主只为当次端口创建动态转发。
-
-实际记录为 API36、`google/sdk_gphone64_x86_64/emu64xa:16/BE2A.250530.026.F3/13894323:userdebug/dev-keys`，`ro.adb.secure=1`、`ro.debuggable=1`、verifiedbootstate=orange，重启后实际 shell UID2000。这是修改过的可调试模拟器，不能声称量产锁定镜像、OEM 或硬件安全已验收。
-
-仅属性不足以证明安全。先用真实 Android 新身份拒绝用例，再用公开 Runtime 回归确认状态与重连行为；初始测试记录在 `/tmp/connect-first-trust-unpaired.log`、`connect-first-trust-core-status-red.log`、`connect-first-trust-core-green.log`。Core 先真实失败：`CertificateUnknown` 被误标 offline；补入授权拒绝分类后，unauthorized/autoReconnect=false 通过。
+Core曾将CertificateUnknown记成offline并继续重连；实际Runtime红测后修复为unauthorized/autoReconnect=false，保留真实原因。可显式复验：
 
 ```sh
-# endpoint 是系统连接端口的本次宿主转发，绝不是配对端口。
-env ANDROID_TLS_ENDPOINT=127.0.0.1:<当次宿主转发端口> \
+ANDROID_TLS_ENDPOINT=<实际TLS连接端口的宿主转发> \
   cargo test -p interop-adb --test android_wireless \
   android_unpaired_identity_cannot_open_tls_transport -- --include-ignored --exact
-env ANDROID_TLS_ENDPOINT=127.0.0.1:<当次宿主转发端口> \
+ANDROID_TLS_ENDPOINT=<同一端点> \
   cargo test -p interop-core --test first_trust_android -- --include-ignored
 ```
 
-结果、工具失败与视觉边界另记[验收记录](validation.md)。QR 系统扫码、跨 AVD 真实 mDNS、系统码过期/切网/切后台、USB、身份重装/备份、四端密钥与密码实现发布资格仍需分别验证。本链路不替代这些要求，也不关闭首次设置与完整 ADB 任务。
+## API36系统撤权竞争
 
-## API36 系统设置撤权竞争
+直接点击Settings Forget的完整链路曾失败：公钥移除后元数据残留，重启恢复信任，日志出现AtomicFile重命名失败。固定阅读的[AOSP AdbDebuggingManager](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/services/core/java/com/android/server/adb/AdbDebuggingManager.java)和[AtomicFile](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/core/java/android/util/AtomicFile.java)支持设置返回页读取与异步持久化竞争这一原因，未修改框架证明所有时序。
 
-直接点击设置页 Forget 的完整测试失败，不能记为通过：系统先移除 `adb_keys` 中本次公钥，但 `adb_temp_keys.xml` 与列表仍残留；重启后公钥恢复。目标日志明确出现 `AtomicFile: Failed to rename /data/misc/adb/adb_temp_keys.xml.new to /data/misc/adb/adb_temp_keys.xml`。独立读取只显示公钥摘要/存在性，未读取产品私钥。该负例不是仅凭列表推断。
+独立实验停止设置页后调用同一IAdbManager.unpairDevice，确认本次公钥/元数据消失、宿主基线保留，不编辑授权文件。host因此仅在API36用事务7，取唯一指纹、停止设置、发请求并等真实清除；拒绝其他API，不把事务号当通用产品API。
 
-[AOSP AdbDebuggingManager](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/services/core/java/com/android/server/adb/AdbDebuggingManager.java) 的 `getPairedDevices` 新建 keystore，`MSG_REQ_UNPAIR` 删除并异步持久化；[AtomicFile.openRead](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/core/java/android/util/AtomicFile.java) 明确要求调用者同步，且读取旧文件时会删除现有 `.new`。结合实际日志，设置返回页读取与持久化相撞是得到支持的原因；未修改系统框架来证明所有可能时序。
+最终连续两轮完成未授权拒绝、错码、PAKE、Required TLS、该系统接口撤权及旧身份拒绝，所有清理/基线保留回执齐备。通过的是“接口精确撤权后产品拒绝”，不是直接Settings Forget、量产安全或任意OEM撤权。
 
-独立最小实验先重启加载残留身份，然后停留主屏，调用同一个 [IAdbManager.unpairDevice](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/core/java/android/debug/IAdbManager.aidl) 接口，结果 Parcel 无异常；2秒后 dumpsys 中产品公钥和元数据均消失，原有宿主仍保留。没有编辑授权文件。由此将 host driver 的撤权动作固定为 **API36 的事务7**：先在唯一产品详情读取指纹，停止系统设置进程后发接口请求，不让设置页在提交间隙重读文件；等待元数据及授权文件移除、基线公钥保留，再回设置核对。driver 会拒绝其他 API，不把事务编号当成通用跨版本产品API。此操作只属于宿主测试夹具，普通主控不调用该特权服务、不需要调试或root。
+## 错误反馈与剩余范围
 
-最终完整 E2E 已连续两轮64秒通过，范围是“系统接口精确撤权后产品拒绝旧身份”，**不能称直接 Settings Forget 路径或量产镜像已通过**。默认自动检查也不执行该设备夹具；完整结果见验收记录。
+中文失败展示仍保留结构化原始原因：明确配对拒绝不笼统称码错，EOF只说明中断。真实安全AVD复验覆盖唯一中文提示、重新配对保留设备/地址、端口/码重新填写及再次TLS/撤权；初次英文回退错误修复后才记录通过。
 
-本次下载的 android16-release 源内容 SHA-256：AdbDebuggingManager `428b0cec9a84ba5c29bb43553fca05f2f127e23f41a39a82f935e918e3e45fd7`、AtomicFile `90e1cc85e92e53e6c257e49156677de354a79d2b6caf65d826cb77d0cffab70e`、IAdbManager `34759f2a5dde1b67874e61d9a1970bdbc1a67c0d14c658213085db6221858ca6`。分支名不是不可变提交；摘要固定本次阅读内容，不声称等同 AVD 内二进制源码。
-
-## 中文错误与重新配对入口复验
-
-实际表单保留结构化原始失败，分别显示未授权、配对验证未通过、连接中断和连接超时的中文指导。配对码提交时立即清空；连接失败重试复用本次设备记录，重新配对沿用同一设备／地址，配对端口与码重新填写。明确配对拒绝不笼统归因于码输入错误；EOF只说明连接中断，不能伪造密码学结论。
-
-公开表单／错误组件16项通过。第一轮真实安全AVD复验发现明确`pairing authentication failed`仍落入英文提示，实际失败日志`/tmp/connect-oct17-connection-feedback.log`保留；补公开组件先红后绿回归后，再跑相同真实系统链路66秒全通过：`/tmp/connect-oct17-connection-feedback-r2.log`、`/tmp/connect-e2e/connection-feedback-r2/result.json`。E2E独立核验raw peer拒绝，再按该类型精确匹配唯一中文；实际点击“重新配对”，核验同设备／地址、空端口／码，错码无GUID，重新开启系统窗口后成功配对／Required TLS，再通过系统接口精确撤权确认旧身份被拒。报告所有必须布尔项为true、hostErrors为空、基线信任保留、当次信任／转发清理完成。
-
-已目视`paired-connected-workspace.png`和`revoked-rejected.png`：真实连接工作台及完整中文拒绝／重新配对入口，没有配对码截图。截图仍只位于上述临时目录。这不替代码过期／切网／后台、直接Settings Forget、量产OEM或全页面设计验收。
+码过期、切网/后台、真实QR系统扫码、跨设备mDNS、USB、重装/密钥迁移、纯Rust密码提供器发布安全及四宿主均分别验证。2026-10-20设备专用扫码身份和TCP失败记录保护只有[逻辑回归证据](validation.md#2026-10-20-设备工作台与连接管理)，不借旧配对链路宣称已在实体设备互操作。

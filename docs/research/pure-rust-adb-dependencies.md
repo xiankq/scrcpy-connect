@@ -4,8 +4,6 @@
 
 方法：先查 Context7 的 rustls、nusb 文档，再核对作者仓库、发布 crate 清单与源码、AOSP 和平台文档。Context7 的 rustls 主分支已出现 0.24 开发接口，因此最终以固定 0.23 源码为准。本次未安装工具、运行 Cargo、编译或做真机测试；“可组合”均不是已验证发布方案。
 
-**后续访谈更新：** Q32 用户未确定严格纯度口径，强调四端都必须可编译。因此下文的纯度分层是分析工具，不是用户已接受的硬约束；跨端构建需实际验收，尚未通过。Q33 要求主控始终不启用调试；本文的 Android 系统 USB 授权和 Keystore 候选不要求主控调试，不能与已否决的本机 ADB 路线混淆。
-
 ## 1. 先区分三个口径
 
 | 口径 | 含义 | 本次事实判断 |
@@ -94,7 +92,7 @@ JNI 0.22.4 默认不启用 JVM invocation；Rust 通过已有 JNIEnv 函数表�
 
 mdns-sd **0.21.5**，固定源码 `a25148c4d7adea836316dac2eca6c5bbdd79aa15`，通过 Rust UDP socket 实现 DNS-SD，不要求外置 Bonjour daemon。清单使用 socket2、mio、if-addrs、socket-pktinfo 等平台接口；所检正常依赖没有 C 实现构建项，仍须对最终目标闭包复核。[源码与清单](https://github.com/keepsimple1/mdns-sd/tree/a25148c4d7adea836316dac2eca6c5bbdd79aa15)
 
-上述为研究候选版本。2026-10-18实际锁版核对发现工程原为0.17.2，存在上游已修复的HINFO解析器panic；本批生产／测试统一精确0.21.2修复线，不是已经使用0.21.5。具体API／feature差异、系统依赖和已执行／未验边界见[实际mDNS锁版契约](locked-mdns-contract.md)。
+0.21.5 是本研究候选；工程曾使用的 0.17.2 包含 HINFO 解析器 panic，修复版本及契约差异见[mDNS 解析器研究](locked-mdns-contract.md)。实际锁定版本以 Cargo 清单与 lockfile 为准。
 
 Android Wi-Fi 默认组播过滤可能影响原始 UDP 接收，须管理 MulticastLock 与 CHANGE_WIFI_MULTICAST_STATE；Android 17 target 37 的本地网络权限也覆盖本地 socket 活动。NsdManager 的系统服务行为不能直接当作 mdns-sd 原始 socket 已获相同待遇的证据。发现失败需要区分权限、网络接口和无设备。[MulticastLock](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock)、[本地网络权限](https://developer.android.com/privacy-and-security/local-network-permission)、[NsdManager](https://developer.android.com/reference/android/net/nsd/NsdManager)
 
@@ -113,33 +111,6 @@ Android Wi-Fi 默认组播过滤可能影响原始 UDP 接收，须管理 Multic
 
 工程推论：Brotli/LZ4 的源码路径较直接；Zstd 可以优先验证已有流式结构的 ruzstd，并评估修复错误/取消 API及上游维护，而不是新写压缩算法。压缩率和速度不同不自动代表线协议能力减少；但必须验证参考 ADB 输出的 frame、输入限制、损坏数据、内存上界、空文件、结束帧和多任务公平性。停止宣告某算法或退回无压缩不能算本项目“完整纯 Rust 压缩已完成”。
 
-## 8. 工程推论：目前可验证的组合
+## 8. 组合判断
 
-| 组合 | 组成 | 满足的纯度口径 | 尚未闭合的条件 |
-| --- | --- | --- | --- |
-| A：尽量全部软件 Rust | 改造 libadb 或 DroidMux + rustls 自定义 RustCrypto provider + 已有 SPAKE2 Rust 变体 + nusb + mdns-sd + Brotli/LZ4/ruzstd | 可能实现不捆绑 C/C++/手写汇编；仍调用系统 I/O | provider 生产成熟度、软件 RSA 私钥路径审查、AOSP 互操作、Zstd 错误 API、目标 feature 图；不能现在宣告可发布 |
-| B：Rust 依赖与系统密钥组合 | A 的协议/传输/压缩，AUTH/TLS 私钥改走 Keystore 外部 signer | 可不捆绑 C 密码库；密码运算并非全由 Rust 执行 | 硬件 signer 参数、证书生成、异步调度、同一主控身份覆盖 AUTH/TLS；provider 其他密码路径仍需验收 |
-| C：保留经批准的有限例外 | 其余保持 Rust，若特定密码层阻塞再讨论 ring/AWS-LC 等受控例外 | 项目源码 Rust；不满足严格依赖纯度 | **当前未获用户接受**；需要先给出 A/B 的失败证据、例外范围与后续替换边界，不能默认采用 |
-
-A/B 均未要求削减 USB、配对、发现或压缩能力。B 也没有由“身份不自动迁移”自动推导获得授权；Q26 只确定产品行为。当前证据支持“技术路线值得做完整 POC”，不足以支持“纯 Rust 全链已经生产就绪”，也不足以支持“原生密码库必不可少”。
-
-## 9. 尚需 POC 与依赖验收
-
-| 验证 | 能证伪什么／通过条件 |
-| --- | --- |
-| 目标 feature 闭包 | 在有工具链的后续阶段，对 Android 各 ABI 解析普通/构建依赖，区分 dev/optional；记录 Cargo.lock、`cargo tree -e features --target …` 与实际构建日志。确认谁激活 ring/aws-lc/libusb/zstd-sys、是否含 C/ASM；本次没有执行 |
-| TLS/SPAKE2 互操作 | Android 11–17 所选矩阵与官方 ADB 对照；覆盖配对 TLS exporter、角色/NUL、错误码、STLS、TLS1.3 RSA-PSS、重连、取消；双方自测通过不能替代对 AOSP 验证 |
-| 密码学发布门槛 | 固定 provider/原语版本和实际调用图；分别审查软件私钥与仅公钥验证路径。记录上游生产警告及 advisory 处置依据，不能用“能连上”替代安全评估 |
-| Keystore 完整身份 | 同一不可导出 RSA 身份完成 legacy AUTH、配对及 TLS；校验 DigestInfo、PSS salt/参数、自签证书、TEE/StrongBox 不支持时原因；证明无软件私钥旁路 |
-| Android USB | UsbManager 授权 FD 到 nusb；所有权/dup/close、ZLP、读写队列、取消、拔插、权限撤销、后台恢复；不要求 root 或原始 /dev 权限 |
-| 压缩与并行传输 | 三算法双向对照 AOSP；大文件/空文件/截断/坏帧/取消与限内存。尤其 ruzstd I/O 错误不 panic、按块输出可承受背压，多任务不整文件占内存 |
-| 发现与平台约束 | Android multicast lock、本地网络权限、接口切换、IPv6 link-local scope；mDNS 不通仍可手动连接；未来平台先保留后端接口，不声称现在已验证 |
-
-## 10. 当前研究决策顺序（不是重复问卷）
-
-1. **按纯度层次列实际闭包。**用户Q32未选严格定义但要求四端可编译；当前研究优先尽量不捆绑C/C++/手写汇编，系统socket、UsbManager/JNI、WinUSB/IOKit和signer单列。这是研究优先级，不冒充用户已经接受严格禁令或原生后端例外。先给证据，不再要求用户选算法。
-2. **选择密码学方案的发布门槛。**建议先验证 A/B；保留上游“不用于生产”的 provider 时，不仅做连通性测试，还需解决版本维护和安全审查依据。若不达标，再带具体失败证据讨论有限例外或继续投入，不现在默认接受原生依赖。依赖：第 1 项。
-3. **确定主控授权身份是否优先交给 Keystore。**建议比较 B 与软件 Rust 身份的兼容矩阵后决定；其收益是私钥不可导出与调用路径隔离，代价是系统密码 API 和硬件参数差异。依赖：第 1、2 项及已确认 Q26；无需重新询问是否默认迁移。
-4. **确定现有实现的复用与维护责任。**建议允许组合上游 crate 或维护有边界的 fork，补齐 provider、USB、Zstd 接口与完整度验收；“Rust 重写”不应未经确认解释为全部从零。依赖：第 1、2 项；决定是否承诺长期跟进上游协议、依赖安全和跨平台构建。
-
-当前执行入口为任务02（历史路径 `../../.scratch/interop/issues/02-pure-rust-crypto-dependencies.md`）、身份任务15（历史路径 `../../.scratch/interop/issues/15-identity-trust-and-transports.md`）和四端构建任务03（历史路径 `../../.scratch/interop/issues/03-workspace-bridge-platform-builds.md`）。上述比较由代理开展，不把常规库复用或signer候选反复交用户投票；只有具体例外超出既有授权才带证据沟通。
+候选代码表明协议核心、SPAKE2 变体、nusb、mDNS 和压缩均有 Rust 实现路径；TLS provider、软件私钥运算、Zstd 的错误接口与各目标依赖闭包仍需分别评估。Keystore 外部 signer 可以隔离私钥，却会增加系统签名、证书与调用生命周期责任。源码语言、互操作成功、生产安全和四端构建不是同一证据。当前选择与实际依赖见[ADR 0002](../adr/0002-rust-adb-and-flutter-monorepo.md)、[ADB 库](../../crates/adb/README.md)和[工具链](../implementation/repository-tooling.md)。

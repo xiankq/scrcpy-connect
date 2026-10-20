@@ -1,11 +1,10 @@
 # MDK snapshot 与异步解码后续核查
 
-2026-10-18。问题：当前 renderer snapshot 的历史 native 崩溃是否已有明确修复版本，
-以及能否通过升级 SDK 替代本项目已有的生命周期保护和显式异步解码配置。
+2026-10-18。核查 renderer snapshot 历史 native 崩溃的公开修复与异步解码默认值。
 
-## 当前版本与结论
+## 版本快照与结论
 
-官方最新正式 SDK 仍为 [MDK 0.39.0](https://github.com/wang-bin/mdk-sdk/releases/tag/v0.39.0)，
+核查时官方正式 SDK 为 [MDK 0.39.0](https://github.com/wang-bin/mdk-sdk/releases/tag/v0.39.0)，
 发布于2026-09-30；[fvp 包 API](https://pub.dev/api/packages/fvp) 的最新版本为0.39.1，
 发布时间2026-10-15。SDK 仓库核查到的 HEAD 为
 `f038eb2c67141e6d71ef067f11a9a3c68dd5ab95`。没有找到晚于当前基线的正式 SDK
@@ -23,8 +22,7 @@ snapshot JPEG 失败和 Android native-window GL context 释放后使用修复�
 2024-11-04关闭，报告者11-06表示未再复现；其展示的 `Player::onStateChanged` 栈不能
 直接等同当前 renderer snapshot 栈。[MDK #117](https://github.com/wang-bin/mdk-sdk/issues/117)
 中的连续 snapshot 崩溃仍开放，维护者要求日志和复现材料，没有给出已修复版本。
-因此继续保留本项目已有 NULL／生命周期保护，历史 native 崩溃仍待最小复现和验证，
-不把未找到对应修复解释为不存在修复。
+这不能证明历史 renderer 崩溃已修复，也不能把未找到对应修复解释为不存在修复。原版 fvp 的空结果限制见[故障复核](scrcpy-first-frame-performance.md#fvp空结果故障与可复现交付2026-10-18)，当前依赖规则见[工具链契约](../implementation/repository-tooling.md)。
 
 ## async 默认值不能替代实际回执
 
@@ -38,11 +36,3 @@ codec async buffer release／flush 修复均非当前新候选。
 公开资料尚不能解释本机基线为何表现为同步路径；保留本项目已实际 A/B/A 验证的
 `AMediaCodec:async=1`，实测范围见[异步解码记录](../implementation/android-decoder-async.md)。
 不以文档默认值否定运行证据，也不据此声称所有真机路径均已验证。
-
-## 检索范围
-
-后台只读检索覆盖官方 SDK／fvp 变更记录、上述版本 API、相关 issues 以及 Decoders
-Wiki；检索词包括 snapshot、bad_function_call、std::function、async、SIGABRT。
-Context7 的 MDK 查询未返回匹配内容后转向官方来源；一次 API 限流后改用官方网页
-核对关键 issue 和 Wiki。未穷举所有 Discussions，未联系上游，未测试新 SDK 二进制。
-此笔记是升级候选核查，不是 native 崩溃已解决的验收证据。

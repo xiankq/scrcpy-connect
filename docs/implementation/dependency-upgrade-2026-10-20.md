@@ -1,6 +1,6 @@
 # 依赖升级记录（2026-10-20）
 
-对象：本次工作区，在 [ADB 性能修复回归](adb-performance-2026-10-19.md)之后升级依赖。核对时间为北京时间 2026-10-19 至 20 日；版本结论是该时间的上游快照。Flutter SDK 由使用者升级，本次没有执行 `flutter upgrade`；验证时使用 Flutter 3.47.7、Dart 3.13.5、Rust 1.99.1、Linux x86_64、JDK 21。
+对象：本次工作区，在协议/持久化回归后升级依赖，结果归[验证记录](validation.md#协议与持久化回归)。核对时间为北京时间 2026-10-19 至 20 日；版本结论是该时间的上游快照。Flutter SDK 由使用者升级，本次没有执行 `flutter upgrade`；验证时使用 Flutter 3.47.7、Dart 3.13.5、Rust 1.99.1、Linux x86_64、JDK 21。
 
 ## 实际升级
 
@@ -16,7 +16,7 @@
 | Android 应用与 JAR 构建 | AGP 9.1.0 → 9.4.1；Gradle 9.3.1 → 9.8.1；Kotlin 2.4.0 → 2.4.21；desugar_jdk_libs / configuration 2.1.4 → 2.1.5 |
 | 被控产物构建输入 | Build Tools 36.0.0 → 37.0.0；D8/R8/L8 9.1.31 → 9.4.24；助手 NDK 28.2.13676358 → 30.0.16248370 |
 
-其余直接依赖也核对了注册表。FRB runtime / hooks / codegen 与 Cargo 均保持已是最新版的 2.13.0，fvp 保持社区原版 0.39.1，scrcpy 保持已是最新的 5.0.1；Node 官方 DESIGN.md 解析器保持 0.4.0，`npm update --package-lock-only --ignore-scripts` 无锁文件差异。RSA 0.9.10、rustls 0.23.46、Tokio 1.53.3 等升级前已解析到这些版本，部分 manifest 仅同步最低要求。
+当次核对还覆盖其余直接依赖；下述“最新”仅指2026-10-19至20日注册表快照。FRB runtime / hooks / codegen 与 Cargo 均保持已是最新版的 2.13.0，fvp 保持社区原版 0.39.1，scrcpy 保持已是最新的 5.0.1；Node 官方 DESIGN.md 解析器保持 0.4.0，`npm update --package-lock-only --ignore-scripts` 无锁文件差异。RSA 0.9.10、rustls 0.23.46、Tokio 1.53.3 等升级前已解析到这些版本，部分 manifest 仅同步最低要求。
 
 ## 上游约束与保留项
 
@@ -46,26 +46,12 @@ NDK r30 的实际 API 下限由 [固定 r30 元数据](https://android.googlesou
 
 AGP 与工具版本依据为 [Google Maven](https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml)、[Gradle 发布记录](https://gradle.org/releases/)、[Kotlin Gradle 兼容表](https://kotlinlang.org/docs/gradle-configure-project.html)。Kotlin 2.4.21 文档中的完整支持上限低于这次最新 AGP/Gradle 组合，因此是否可用需要以下实际构建结果，不能仅凭解析成功判断。
 
-## 验证回执
+## 验证范围
 
-| 验证 | 结果 |
-| --- | --- |
-| `cargo test --workspace` | 391 passed、0 failed、72 ignored，含文档测试 |
-| 严格 Clippy、Rust 格式、ADB 无默认 feature 编译 | 全部退出 0 |
-| 应用 / 桥接层 / 设计系统 Flutter 测试 | 分别 373 / 148 / 28 项全过 |
-| `flutter test --no-pub tool/test tool/e2e/tests` | 58 项全过，含真实同名 ZIP、CRC 与来源漂移检查 |
-| Flutter 全仓静态分析、最后 ZIP 改动的定向分析 | 均无问题 |
-| `dart tool/generate.dart --check` | 压缩资产、FRB 2.13.0 Rust/Dart、build_runner 均通过，无生成漂移；DESIGN.md 官方解析器保留原有 68 项警告 |
-| 服务端 tooling / package 回归及最终 package `--check` | 全过，覆盖固定 ZIP 字节、CRC、重复项、链接/路径、六资源摘要及只读漂移检查 |
-| vendor / companion / helpers 重建 | 全过；vendor 从全新源码目录重建逐字节一致，四 ABI helper 重建也一致 |
-| helper 宿主与 companion 旧 API 夹具 | helper 7 项通过，companion API 21/23/30/31 签名与生命周期检查通过；scrcpy API 21 探针编译通过 |
-| Node | 生成器 4 项测试通过，官方 lint 退出 0，锁文件无变化 |
-| Android 应用 | Gradle 9.8.1 配置及普通 `lib/main.dart` 三 ABI debug APK 实际构建通过；ZIP/CRC、Flutter/Rust ELF、六资源、签名、16 KB 对齐与 Manifest 独立核验全过；三 ABI `libfvp.so` 均无 `libass.so` 必需依赖 |
+升级后的workspace测试、严格Clippy/格式、ADB无默认feature、Flutter应用/桥接/设计系统/工具测试、分析与token/FRB/builder生成检查通过。ZIP真实重名、损坏CRC、来源漂移与链接/路径负例覆盖于工具回归；没有把旧的 `.duplicate` 不同名样本当作重复条目证明。
 
-ZIP 校验补强后再次更新 vendor manifest 并重建；scrcpy JAR 仍为 2,954,916 字节，SHA-256 `8b17b95193943be3ce16682d0ca69890a7f4078d87a4f8c61afc2a4dff620d8b`。manifest 来源摘要与当前构建器一致。
+vendor/companion/helpers重建通过；vendor在全新源码目录逐字节一致，四ABI helper也一致。固定API21/23/30/31的Java签名/生命周期夹具及scrcpy API21探针编译通过，不替代各系统设备运行。
 
-最终 [Android APK](/home/xiankq/git/scrcpy-connect/app/build/app/outputs/flutter-apk/app-debug.apk) 为 137,219,824 字节，SHA-256 `9c7740d909f3790a59d9fd5a7974b9c8c2cd82f96831be0e91bc42b05a5539e8`，包含 armeabi-v7a、arm64-v8a、x86_64。`flutter build apk --debug --no-pub --target-platform android-arm,android-arm64,android-x64` 退出 0，Gradle 阶段耗时 813.7 秒，含新版 Flutter 引擎的首次下载。独立验证命令为 `dart tool/check_android.dart`，回执在 `android-apk-receipt.json`；原生播放器库的必要依赖和实际分发字节摘要另记 `android-native-links.log`。保留此普通 debug APK，已删除相同字节的 Gradle 中间 APK；没有覆盖或删除既有 release APK。
+同轮实际构建普通 `app/lib/main.dart` 三ABI debug APK，独立核对ZIP/CRC、签名、16KiB对齐、Manifest、Flutter/Rust ELF、六共享资源及libfvp无libass必需依赖。升级记录只证明该工作区/Flutter3.47.7组合可构建；未覆盖物理设备、其他主控整包、实机吞吐或长稳，ignored条件仍按各测试声明。
 
-日志目录为本机临时验收产物 `/tmp/connect-dependency-upgrade-lzxfg3va/`，主要日志：`workspace-tests.log`、`clippy.log`、`app-tests.log`、`bridge-tests-final.log`、`flutter-tools-tests-final.log`、`generate-check-final.log`、`android-build.log`。早期的助手资源尚未重打包导致的测试失败，已在资源同步后完整重跑通过。首次 APK 构建与配置检查并行，因 Gradle 项目锁超时退出；后续单独构建，不修改锁超时门槛。
-
-默认主机测试、受控产物重建、Android APK 构建与真实设备运行是不同证据层级。本次没有将 ignored 设备测试、未运行宿主、实机吞吐或长时间稳定性记为通过；也没有将当前 Flutter 的验证结果外推到使用者后续升级的 SDK。升级依赖本身不能作为 ADB 实机性能改善的证据。
+重复APK和过期中间输出按[产物边界](repository-tooling.md#构建与产物边界)处理；来源、许可证和对应源码仍保留。具体运行证据层级见[验证记录](validation.md)，不把依赖升级视为ADB实机性能改善。

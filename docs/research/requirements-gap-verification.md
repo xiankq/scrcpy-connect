@@ -10,15 +10,13 @@
 | [scrcpy 媒体与服务端](scrcpy-media-and-server.md) | v5.0.1、Android 10 虚拟显示、11 音频、13 duplication、单应用任务与多实例、协议版本 | 明确复核基础 Android 5+ 是否真的被最新上游放弃；区分启动应用与独立应用窗口，避免误删历史承诺 |
 | [四端编译约束](cross-platform-build-contract.md) | 三层构建证据、iOS 排除 nusb、正式 feature 闭包、编译与运行分开 | Apple 本地网络首次授权、系统 Bonjour 与自行 UDP mDNS 的 entitlement 差异，应形成运行专项验收 |
 
-依据是当前规格（历史路径 `../../.scratch/interop/spec.md`）、访谈汇总（历史路径 `../../.scratch/interop/interview.md`）与 ADR [0001](../adr/0001-apk-free-controlled-device.md)、[0003](../adr/0003-reachable-cross-network-adb.md)、[0006](../adr/0006-controller-without-debugging.md)。本文不恢复查看模式，不增加被控 APK、主控调试、公共中继等已排除条件。
-
 ## 1. scrcpy：未发现 Android 5+ 基础目标与当前上游矛盾
 
 **已证：**调查时官方 `releases/latest` 指向 **v5.0.1**，2026-10-08 发布，release 指向源码 `a60891a…`。这与现有研究锁定版本一致。[官方 release](https://github.com/Genymobile/scrcpy/releases/tag/v5.0.1)
 
 **已证：**v5.0.1 README 仍声明 API 21 / Android 5.0 最低要求；同 tag 的 `server/build.gradle` 仍为 `minSdkVersion 21`，不是将主控 Flutter SDK 的下限当成被控下限。[固定 README](https://github.com/Genymobile/scrcpy/blob/v5.0.1/README.md#prerequisites)、[固定构建配置](https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/build.gradle)
 
-因此，本次没有证据认定 Q11 的“被控 Android 5+ 基础投控”与最新 scrcpy 冲突。需要补的是本产品真实兼容验收，不能从功能门槛倒推放弃 Android 5–9，也不能从 `minSdkVersion` 直接宣布所有旧机已经通过。
+因此，本次没有证据认定“被控 Android 5+ 基础投控”与最新 scrcpy 冲突。需要补的是本产品真实兼容验收，不能从功能门槛倒推放弃 Android 5–9，也不能从 `minSdkVersion` 直接宣布所有旧机已经通过。
 
 | 被控能力 | v5.0.1 可核实门槛 | 对现有需求的含义 |
 | --- | --- | --- |
@@ -28,7 +26,7 @@
 | 音频捕获 | Android 11+；11 启动时需解锁；12+ 无该额外步骤；10 以下自动禁用 | 视频与声音分别记录状态；Android 11 锁屏有画面但无声音是单独场景。[音频说明](https://github.com/Genymobile/scrcpy/blob/v5.0.1/doc/audio.md) |
 | 被控本机同时播放的 duplication | Android 13+，应用可拒绝捕获 | 不将可投屏等同于可保留全部声音；设备音源与窗口音轨仍分开。[音频说明](https://github.com/Genymobile/scrcpy/blob/v5.0.1/doc/audio.md#duplication) |
 
-**待实验：**固定官方 JAR、摘要与 Rust 协议实现，对 API 21/22、23、24/25、26–28、29、30、33、较新系统分别记录启动、首帧、触控、多点、导航、旋转、重连与退出清理。模拟器可查 API/异常分支，最低版本基础兼容与厂商输入条件须有真机证据。既有主控 Android 7+ 也是待依赖闭包验证的目标，不受被控 API21 自动证明。
+**待实验：**固定官方 JAR、摘要与 Rust 协议实现，对 API 21/22、23、24/25、26–28、29、30、33、较新系统分别记录启动、首帧、触控、多点、导航、旋转、重连与退出清理。模拟器可查 API/异常分支，最低版本基础兼容与厂商输入条件须有真机证据。主控最低版本不受被控 API21 自动证明，按宿主依赖闭包确定。
 
 ## 2. 官方无线优化：改进重连，首次信任仍存在
 
@@ -69,17 +67,3 @@
 **已证与限制：**Apple 提供按任务类型选择后台运行策略；系统调度后台任务不构成任意 TCP/ADB 连接永久运行的许可。后台下载的系统机制也不能未经验证就等价于私有 ADB sync。现有规格用“系统允许条件下”表述后台保持是合适的，需为持续音频、文件传输、普通待机分别研究。[Apple 后台策略](https://developer.apple.com/documentation/BackgroundTasks/choosing-background-strategies-for-your-app)、[系统后台下载](https://developer.apple.com/documentation/Foundation/downloading-files-in-the-background)
 
 本次未重新穷尽 Apple 新 USB API，故不新增“iPhone 永远不能 USB ADB”的断言；现有候选 nusb 无 iOS backend 的源码事实只证明当前依赖方案需隔离。iOS 当前交付仍按[编译约束](cross-platform-build-contract.md)实际构建；TCP/TLS、权限、发现、媒体及后台运行保持单独证据。
-
-## 5. 补充研究任务与可验收产物
-
-以下适合主代理登记到研究任务账本；与既有 POC 合并，避免重复标题。状态均为**未实验**，不是本次完成项。
-
-| ID | 补充任务 | 完成判据 |
-| --- | --- | --- |
-| G1 | 固定 v5.0.1 的被控版本与功能兼容矩阵 | API21 基础投控真机结果；主控/被控最低版本分列；应用启动、虚拟显示、声音、duplication 独立状态；失败不得直接改掉 Android5+ 目标 |
-| G2 | 官方 37.0.1 与嵌入式 Rust 无线行为对照 | 发行包摘要与源码快照分列；Android11–16/17 分组；配对端口/连接端口与mDNS变动；每组重连及失败恢复日志；覆盖旧后端文档差异 |
-| G3 | 无 APK/no root、主控不开调试的首次普通用户流程 | 两台全新或撤销过授权的真机，从安装主控到首帧全程记录；USB、现代无线、旧系统USB转无线分别验收；码过期/拒绝USB/拒绝网络/授权撤销均有恢复；不夹带开发电脑预授权 |
-| G4 | iOS/macOS 本地网络与发现适配运行 POC | 正式签名配置下，未询问/允许/拒绝/设置恢复、具体 Bonjour 服务、手动LAN IP、切网各有结果；选择系统Bonjour或说明自行multicast entitlement；不能以四端编译替代 |
-| G5 | iOS 持续活动后台边界 | 普通待机、主动音频、用户启动传输分别记录锁屏/切后台/恢复与系统终止；确定可恢复语义，未获资格不承诺后台永久连接 |
-
-调查方法补充：Context7 查询 `/genymobile/scrcpy` 用于交叉发现来源；其结果仍指向 `master`/5.0，因此最终版本与能力判断全部回查上文 v5.0.1 固定官方文件。AOSP Gitiles 页面在浏览工具中失败后，以只读 HTTP `?format=TEXT` 读取上述固定提交原文；未以二手描述补齐。

@@ -1,28 +1,16 @@
 # 共享 Rust 媒体封装与跨端播放器
 
-核查日期：2026-10-17。对应实现：`crates/interop_core/src/media/`。本记录区分已验证的容器输出、播放器接口事实和仍需平台验收的生命周期，不能用 FFmpeg 解码成功代替手机首帧、音频焦点或后台行为验收。
-
-本文的 MDK 二进制固定建议与完成度属于该研究阶段。当前播放器直接使用社区原版 fvp 0.39.1，MDK 下载和平台约束继承发布包，不维护本地 fork 或额外固定回归；现行规则与 snapshot 限制见[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)。历史实测不自动成为当前依赖切换后的运行证据。
-
-## 决策与边界
-
-Rust 继续负责 ADB、scrcpy 帧边界、配置包、PTS 和有界输出；将压缩视频或 PCM 封装为标准 Matroska，通过带随机凭据的 localhost HTTP 流交给 `package:fvp/mdk.dart` 的公开 `Player.media`。Flutter 负责展示 Texture 和输入坐标映射；系统权限、音频焦点、前台服务、SAF 等仍保留薄平台适配。首轮使用每端点一个 Track，视频属于控制会话，音频属于设备共享音源；两个独立 Player 不等于已实现音画同步。
-
-这条路线可替代自维护解码/PCM 写入循环，但不意味着可以立即删除所有 Android 原生代码。此前后台音源由原生 owner 保持；当前改为applicationContext创建并保留Flutter engine，Dart Player/channel不随Activity销毁，Activity只弱引用提供UI适配。真实HOME两轮与Activity身份改变/同PID恢复已通过；真实外部App焦点临时/永久loss与双设备并行已通过；拔耳机、长后台、重连和系统回收仍分项验收，不能据此声称进程死亡后继续运行。
+核查日期：2026-10-17、19。记录 fvp/MDK 输入接口和 Matroska 封装的源码事实、实验与限制。当前媒体所有权见[架构](../implementation/architecture.md)，依赖分发见[工具链契约](../implementation/repository-tooling.md)。
 
 ## 固定依赖与接口事实
 
-`fvp` 固定 0.39.1；pub 归档 SHA-256 为 `2f4607e07748856dbe268a3b968efe973c27f85ea4e7621c4209783a6dad26a0`。核查本机 pub cache 与归档中的公开 Player、生成绑定、callback 和依赖 CMake 一致。公开入口导出 Player，可设置 `media`、播放状态、音量/静音、buffer range 和 texture；`nativeHandle` 是 getter。**公开 Dart Player 没有 appendBuffer 方法**，包内存在的是内部生成的 C API 表槽。可利用 `nativeHandle` 编写本仓库自己的 native adapter 接入 MDK，**无需 fork fvp**；但需维护 SDK ABI size 守卫与 native 生命周期，不能视为现成的公开 Dart 流输入。[固定版本](https://pub.dev/packages/fvp/versions/0.39.1)、[Player 源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/player.dart)、[生成绑定](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/generated_bindings.dart)。
+fvp 的 pub lock 不同时锁定各平台 MDK 二进制。0.39.1 下载逻辑支持 `FVP_DEPS_URL`/`FVP_DEPS_SHA256`；Dart 包版本不能代替实际 native SDK 身份。[固定下载源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/cmake/deps.cmake)。
 
-MDK 的 `stream:`/appendBuffer 接收字节，不接独立的 scrcpy packet PTS；官方流示例输入为封装后的 FLV。它不能把原始 scrcpy 12 字节私有帧头解释成媒体时间轴，因此使用标准容器仍有必要。公开 C++ enqueue 是已解码 VideoFrame 路径，不能据此推断存在压缩包或 PCM AudioFrame 播放入口。[官方输入示例](https://github.com/wang-bin/mdk-examples/blob/316e06d31d2556892f5eaa93464fd1a3a4993c9f/Native/stream.cpp)、[Player API](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)。
-
-fvp 的 pub lock 不同时锁定各平台 MDK 二进制。0.39.1 依赖下载逻辑允许指定 `FVP_DEPS_URL`/`FVP_DEPS_SHA256`，默认来源包含可变 SDK 下载地址；当时据此建议为正式四平台发布固定平台归档及摘要，现行选择为直接继承原版平台规则。核查时 Android cache SDK stamp 为 `70d9dffb289a26054567e51088786af730bb1ffc46bffdf2f09e10d7ebf7b012`，这只是本机本次证据，不代表其它平台已验证。[依赖下载源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/cmake/deps.cmake)。
-
-低延迟不能依赖默认 buffer。MDK 的 buffer 最大值 0 表示不设上限，而不是零延迟；当前使用min=0/max=150/drop。min=0允许尽快解码；max/drop受关键帧间隔限制，不能把150写成严格队列时长上限。应结合实测选择demux选项。硬件解码器存在不代表成功配置/首帧，仍需按设备检查。fvp 当前 texture 尺寸缓存也要求应用显式处理变化，不能将固定尺寸 POC 写成已支持旋转热切换。[Player API](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)、[解码器文档](https://github.com/wang-bin/mdk-sdk/wiki/Decoders)。
+MDK buffer 最大值0表示无上限，不是零延迟；`max/drop` 受关键帧间隔限制，不能解释为严格的队列时长上限。Texture 尺寸变化也需应用处理，接口存在不证明旋转热切换已验证。[Player API](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs)。
 
 ## 2026-10-19 输入链路复核
 
-当前实现确实增加了本机 I/O、封装与解封装。随后完成的[MDK内存输入对照](mdk-memory-input-experiment.md)已验证原版 fvp 下的 `stream:` / appendBuffer 能实际解码渲染，但在指定Android AVD、相同录像和供数节拍下，没有测出明显的输入到解码延迟或CPU收益；该指标也不是端到端显示延迟。生产继续保留HTTP，实验与诊断工具已合入 `dev`，通过独立入口运行。
+当前实现确实增加了本机 I/O、封装与解封装。随后完成的[MDK内存输入对照](mdk-memory-input-experiment.md)已验证原版 fvp 下的 `stream:` / appendBuffer 能实际解码渲染，但在指定Android AVD、相同录像和供数节拍下，没有测出明显的输入到解码延迟或CPU收益；该指标也不是端到端显示延迟。实验通过独立入口运行，未替代产品链路。
 
 初次两组共用AMediaCodec后端。继续诊断时，相同HTTP/容器输入仅更换为FFmpeg slice，输入到onVideo从约95ms降至约1.6ms；软件后端下HTTP与append的P95也均在约1.7ms。最初的高等待已缩小到本机AMediaCodec解码/输出边界，不能写作HTTP传输成本或正常性能。单变量方法、反证和物理设备限制见上述实验记录；官方客户端差异见[scrcpy路径研究](scrcpy-client-latency-path.md)。
 
@@ -66,8 +54,6 @@ bool (*appendBuffer)(struct mdkPlayer*, const uint8_t* data,
 | `mem:addr+size` | 固定内存内容可无 socket 读取 | 官方给出的是地址和有限长度，未承诺可扩容直播 ring buffer 或持续 append；无法据此替代无限实时输入。内存须保持有效、禁止重分配/提前释放，具体保留期限仍需确认。 |
 
 协议能力依据[固定 MDK Player API 修订](https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs/82b2c09b7892711a9f1e319424e258d3fb5d9978)；TCP 字节流实现可参考[FFmpeg n8.0 的 tcp.c](https://github.com/FFmpeg/FFmpeg/blob/n8.0/libavformat/tcp.c)，但它不证明本项目每个平台的 MDK 运行包都已包含并验收同一实现。
-
-后续对照应保持 codec、分辨率、码率、关键帧间隔、MDK build、buffer 与 renderer 一致，分别测首帧和稳态，覆盖静止屏、音频、暂停/恢复、generation 切换、慢消费者及停止。至少分开记录 scrcpy packet 进入 Rust、封装完成、播放器入口、解码/渲染事件与实际显示；比较 p50/p95、CPU、复制量和队列深度，才能判断少一层传输带来的收益。比较实验可以使用临时替代输入，生产仍只保留一条选定链路，本研究不引入并行播放模式。
 
 ## 纯 Rust 容器实现
 
@@ -118,6 +104,4 @@ env INTEROP_ADBD_PORT=15556 INTEROP_FFMPEG=/absolute/ffmpeg cargo +stable test -
 # 可按测试名 real_avcc / pcm_samples 只跑host两项，不需要设备。
 ```
 
-共享HTTP视频已在Android双AVD经公开fvp Player通过五种codec的首帧、实际暂停、捕获暂停/恢复、再次snapshot、非单色PNG与停止释放；没有调用自维护Kotlin视频方法。初始同步waitFor0阻塞和AV1默认decoder缺失已定位并修正，详见[首帧与状态等待](scrcpy-first-frame-and-latency.md)。
-
-真实产品 HOME/返回以及同一会话旋转 generation 交接、新代像素、触控尺寸已通过。删除旧 Native 视频实现后，产品页面五种编码再测全部通过；视频不再维护 Android 自写解码循环。待完成门槛仍含 PCM真实播放、长后台/系统回收、物理路由变化与长期音频生命周期、长期时钟漂移、慢消费者/断线全链路、四平台二进制锁定。共享PCM公开fvp生命周期已4秒通过，实际产品HOME和Activity重建14秒通过；旧313行Native音频播放循环已删除。暂停时钟先推进约80ms后稳定，恢复后继续前进；这不是扬声器采样证明。OS权限和后台适配按系统要求保留。
+播放器首帧、状态等待与历史暂停实验见[首帧研究](scrcpy-first-frame-and-latency.md)和[协作暂停实验](cooperative-capture-pause.md)。上述 FFmpeg 验证证明容器与 codec 输入兼容，不证明物理显示、声音输出、长期后台或四平台运行全部通过。

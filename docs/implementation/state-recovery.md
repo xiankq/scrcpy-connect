@@ -26,7 +26,7 @@ AppController 在同步通知页面监听器之前落地不可变快照，校准
 
 ## 回复与系统提醒
 
-回复临时状态参与权威恢复：`state.resynced` 先按设备列表移除已遗忘来源，再用 companion 实时通知快照失效旧动作。submitting/unknown/accepted 跨页保留，迟到结果只能更新仍存在的同 device/id/revision 条目。恢复不重建已移除内容，也不自动重发；只有确定原动作执行前已被认证或观察条件拒绝时，才保留用户重新提交的资格。证据见 [通知回复验收](validation.md#连接入口设备归属与原通知回复闭环)。
+回复临时状态参与权威恢复：`state.resynced` 先按设备列表移除已遗忘来源，再用 companion 实时通知快照失效旧动作。submitting/unknown/accepted 跨页保留，迟到结果只能更新仍存在的同 device/id/revision 条目。恢复不重建已移除内容，也不自动重发；只有确定原动作执行前已被认证或观察条件拒绝时，才保留用户重新提交的资格。证据见 [通知回复验收](validation.md#历史设备流程证据)。
 
 主控系统提醒在事件缺口时精确撤回；权威快照形成安静基线，旧 payload 不授权远端动作。平台发布、点击与冷启动边界见 [系统提醒](system-notifications.md)。
 

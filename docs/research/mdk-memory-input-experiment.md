@@ -80,7 +80,7 @@ HTTP prepare耗时8～16ms，append为3～5ms；这是准备回执，不是实�
 | 3 | append | 1.520ms | 1.691ms |
 | 4 | HTTP | 1.561ms | 1.767ms |
 
-每组两轮的中位数取两个中心值的平均：HTTP为1.574/1.757ms，append为1.522/1.683ms。差异远小于最初约一帧等待，不支持以绕过HTTP解释或解决那94ms。完整回执为 `/tmp/connect-mdk-latency-software/run-YYAQXE/`；该批20ms断言实际返回true/退出0，未仅回放旧数值作通过声明。
+每组两轮的中位数取两个中心值的平均：HTTP为1.574/1.757ms，append为1.522/1.683ms。差异远小于最初约一帧等待，不支持以绕过HTTP解释或解决那94ms。该批20ms断言实际通过。
 
 第一批原AMediaCodec首个编码帧进入到onVideo为342.167ms，软件slice为6.682ms，加low_delay为5.192ms。各轮prepare回执仅8～10ms，说明prepare不能代替首帧。这里仍不含部署、连接、被控编码器启动、Flutter/GPU与物理显示，不能写作整个远控首屏已优化到5ms。
 
@@ -90,8 +90,6 @@ HTTP prepare耗时8～16ms，append为3～5ms；这是准备回执，不是实�
 
 官方scrcpy的完整包直送、LOW_DELAY及默认不额外缓冲的源码依据，以及上述候选的反证，见[客户端路径研究](scrcpy-client-latency-path.md)。参考FFmpeg的Matroska H264 parser本就使用完整帧模式；未知Cluster可立即交付内部SimpleBlock。软件slice与slice+low_delay本次也近似，不能把本次改善再归因于后加的low_delay标志。
 
-本次回执：`/tmp/connect-mdk-finite-cluster/run-ZHEBVE/`、`/tmp/connect-mdk-latency-options/run-CISJSA/`、`/tmp/connect-mdk-latency-native/run-NMHSWY/`。诊断driver支持逐轮配置及 `CONNECT_MDK_INPUT_MAX_P95_US` 预算，写出原始回执后才判断超限，避免只以进程正常结束判定低延迟通过。生产修复、物理设备与完整首屏对照仍未完成。
-
 ## 失败记录与生命周期边界
 
 最早一次 HTTP 试验要求在保持连接、不发EOF时等待完整36秒夹具的最后PTS。全部382个chunk已写入、无拒收，但未在预算内得到指定末帧回执，该次失败未保存完整逐帧回执，不能据此确定原因。随后将直播性能测量改为源仍供数的窗口；**有限流 EOF 收尾仍未验证**，没有猜测使用空指针/零长度EOF协议。
@@ -100,38 +98,16 @@ HTTP prepare耗时8～16ms，append为3～5ms；这是准备回执，不是实�
 
 正常路径每轮确认供数线程实际退出、无在途native调用、释放借用token，再确认 stopped、分离Texture并请求 fvp dispose。8轮及最终cleanup均通过，夹具删除成功；未发现 Dart runtime error。原版 fvp dispose为async void，故回执明确 `nativeDeleteConfirmed=false`，不宣称已独立确认原生对象删除。
 
-失败路径保留未结算的纹理创建Future；超时不会被当成取消。停止后仍无法结算的操作会使cleanup失败并保留Player，避免提前销毁被借用地址。Rust测试覆盖阻塞append期间取消不能提前release、实际HTTP chunk/凭据/保持连接及ABI布局；interop-bridge库25项测试通过。新增Dart工具分析通过。实验profile应用不支持hot restart（VM返回unknown method），不将它写作热重启通过。
+失败路径保留未结算的纹理创建Future；超时不会被当成取消。停止后仍无法结算的操作会使cleanup失败并保留Player，避免提前销毁被借用地址。Rust测试覆盖阻塞append期间取消不能提前release、实际HTTP chunk/凭据/保持连接及ABI布局；实验profile应用不支持hot restart（VM返回unknown method），不将它写作热重启通过。
 
 本轮没有验证音频、慢消费者、长期内存增长、暂停恢复、重连/旋转generation、其他Android版本或其他宿主。尚不具备将该适配器替换生产链路的依据。
 
-## 复现与证据
+## 复现入口
 
-当前 `dev` 复跑时，夹具生成和结果汇总仍从仓库根执行；Flutter构建与drive从 `app/` 执行，入口改用 `--target=../tool/benchmark/native_input_probe.dart`、`--driver=../tool/driver/native_input.dart`。下列命令用于重现原提交的目录布局。
+实验工具保留在仓库，依赖原版 fvp 0.39.1：
 
-实验代码保留在本地提交 `2f5123d`，包含fixture生成器、独立Flutter入口、host driver和按共同PTS汇总的Dart工具；依赖仍为原版 fvp 0.39.1。在该实验提交、已有完整录像归档的条件下，从该提交的仓库根目录执行（下列路径保留实验提交布局）：
+- [夹具生成](../../tool/benchmark/native_input_fixture.dart)：输入完整录像归档，输出 `.mdkp` 与 defines JSON。
+- [独立 Flutter 入口](../../tool/benchmark/native_input_probe.dart)和[主机 driver](../../tool/driver/native_input.dart)：从 `app/` 构建与运行，target/driver 使用 `../tool/` 路径。
+- [共同 PTS 比较](../../tool/benchmark/native_input_compare.dart)：从仓库根运行，输入 driver 的运行目录。
 
-```sh
-flutter pub get --offline --enforce-lockfile
-dart tool/benchmark/native_input_fixture.dart /absolute/archive-directory \
-  --bundle /tmp/native-input.mdkp --defines /tmp/native-input-defines.json
-flutter build apk --profile --no-pub --target-platform android-x64 \
-  --target=tool/benchmark/native_input_probe.dart \
-  --dart-define-from-file=/tmp/native-input-defines.json
-CONNECT_E2E_ADB=/absolute/adb CONNECT_E2E_DEVICE=emulator-5554 \
-CONNECT_MDK_INPUT_BUNDLE=/tmp/native-input.mdkp \
-CONNECT_E2E_CAPTURE_DIR=/tmp/connect-mdk-input-abba \
-CONNECT_MDK_INPUT_ORDER=http,append,http,append,append,http,http,append \
-flutter drive -d emulator-5554 --profile --no-pub --keep-app-running \
-  --use-application-binary=build/app/outputs/flutter-apk/app-profile.apk \
-  --target=tool/benchmark/native_input_probe.dart \
-  --driver=tool/driver/native_input.dart
-dart tool/benchmark/native_input_compare.dart /tmp/connect-mdk-input-abba/run-XXXXXX
-```
-
-原始归档：`/tmp/connect-e2e/product-packet-diagnostic/round-1-archive-AQYDHG/`。正式回执、每轮JSON/PNG、cleanup与comparison：`/tmp/connect-mdk-input-abba/run-RJPMZR/`，驱动日志`/tmp/connect-mdk-input-abba.log`。临时路径用于追溯本轮运行，不保证跨机器存在；上面的环境、输入摘要和结果表保留独立可读的记录。
-
-初次输入比较结束后回到 `dev`，普通 `lib/main.dart` APK已覆盖安装并启动，pid22980；MCP hot restart成功、runtime error查询为空。热重启时观察到两条FRB向旧isolate投递的failpost警告，未将其写作零告警。随后detach，普通应用仍运行。
-
-普通APK仍为125,062,865字节、SHA-256 `ab5fcf9b9d796d53297c3e290573de132c489cae87f1cf06474b03a0ae853967`。已删除测试夹具、重复profile APK、过期build/Flutter与native hook单元输出和临时分析脚本，净清理1,417,018,559字节；保留普通APK、原始录像与测量回执，以及共享原生/Rust/Gradle/pub复用缓存。既有模拟器、其他调试资源未停止或清理。
-
-继续定位阶段共18轮实际输入对照完成，其中最后4轮额外通过20ms诊断预算；该阶段不是生产AMediaCodec延迟修复。实验profile仍不支持hot restart，runtime error查询为空。结束再次回到 `dev`，普通APK覆盖安装、MCP hot restart通过、runtime error查询为空，detach后pid24365仍运行；APK摘要未变。清理该阶段重复profile包、过期build/Flutter/native hook单元输出和两份生成夹具，净1,305,212,943字节。保留原录像、逐轮回执及共享编译缓存，未停止既有模拟器。
+驱动通过 `CONNECT_MDK_INPUT_BUNDLE` 指定输入、`CONNECT_MDK_INPUT_ORDER` 指定轮序，`CONNECT_MDK_INPUT_MAX_P95_US` 设置诊断预算。预算在原始回执写出后判断，避免以程序正常退出代替延迟通过。原始临时归档不作为长期复现前提；输入摘要与测量定义见前文。

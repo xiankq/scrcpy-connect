@@ -12,11 +12,13 @@ dart tool/e2e/share_fixture/build.dart
 
 The default output is `/tmp/connect-share-fixture/share-fixture.apk`. The generated
 test signing key and intermediates stay outside the repository. The key is for
-this fixture only. Install/operate only the controller assigned by the E2E owner:
+this fixture only. On the assigned controller, first check `pm path dev.scrcpyconnect.sharefixture`;
+if installed, stop instead of replacing it. Install a fresh fixture, record ownership,
+and uninstall only that installation when finished:
 
 ```sh
-/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 install -r /tmp/connect-share-fixture/share-fixture.apk
-/home/xiankq/Android/Sdk/platform-tools/adb -s emulator-5554 shell am start -n dev.scrcpyconnect.sharefixture/.ShareFixtureActivity --es mode image
+/absolute/android-sdk/platform-tools/adb -s emulator-5554 install /tmp/connect-share-fixture/share-fixture.apk
+/absolute/android-sdk/platform-tools/adb -s emulator-5554 shell am start -n dev.scrcpyconnect.sharefixture/.ShareFixtureActivity --es mode image
 ```
 
 Replace `image` with a mode below. Each launch targets the real product Activity.
@@ -48,8 +50,6 @@ the eight-batch visible guard rejects the next request. Confirm no directory/fil
 appears for the rejected request. For consume/transfer ownership, first submit a
 ready batch through normal UI, consume it while its transfer is running, and
 assert its registered source remains until the complete transfer reconciliation.
-An Activity recreation should keep the same playing source ID without a new
-remote audio capture; full process death is a separate boundary.
 
 The automated driver launches the sender with `CLEAR_TOP | SINGLE_TOP` and the
 sender accepts `onNewIntent`. Without those flags, Android may only foreground
@@ -60,7 +60,7 @@ acceptance signal. The nine-mode run is:
 ```sh
 cd app
 env CONNECT_E2E_DEVICE=emulator-5554 \
-  CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
+  CONNECT_E2E_ADB=/absolute/android-sdk/platform-tools/adb \
   flutter drive -d emulator-5554 --no-pub \
   --driver=../tool/driver/incoming_share.dart \
   --target=integration_test/incoming_share_test.dart

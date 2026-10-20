@@ -5,7 +5,7 @@ declared request/result fields, and state-verification policy. `owner: core`
 crosses FRB; `owner: bridge` is resolved by the main device's local coordinator.
 Platform MethodChannel methods and companion RPC methods are separate protocols.
 
-Run `python3 tool/protocol_codegen.py` after changing the contract.
+Run `dart tool/protocol_codegen.dart` from the repository root after changing the contract.
 `--check` formats expected outputs in memory and compares them without writing.
 The main check script checks this contract and independently checks FRB output.
 

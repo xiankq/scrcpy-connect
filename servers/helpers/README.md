@@ -124,7 +124,7 @@ must refresh; the operation is never repeated through copy/delete.
 
 ```sh
 env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
-  /home/xiankq/.cargo/bin/cargo test -p interop-core --test remote_helper_android \
+  cargo test -p interop-core --test remote_helper_android \
   -- --ignored --nocapture
 ```
 

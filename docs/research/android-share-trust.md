@@ -1,36 +1,9 @@
 # Android share trust and process engine ownership
 
-Checked: 2026-10-17, against the current working tree. Rust owns incoming-file
-copying, journals, transfer source leases and reconciliation. Android validates
-URI authority and lends descriptors; Dart coordinates that handoff. Audio uses
-engine-owned public fvp players and a thin Android focus/service adapter.
-
-The current real Android nine-mode import/presentation/Cancel suite passed in
-20 seconds: `/tmp/connect-incoming-share-final.log` contains passing app
-assertions, and `/tmp/connect-e2e/incoming-share/result.json` lists every mode
-with `shareAcceptanceComplete:true`. This verifies the exercised incoming-share
-flow, not actual submission to a 被控设备, adversarial-provider pressure or every
-task-return arrangement. The fixture corrections and remaining boundaries are
-recorded below.
-
-## Ownership and the actual handoff
-
-| Layer | Current responsibility | Source |
-| --- | --- | --- |
-| Android `IncomingShares` | Validate incoming intents/grants; keep pending URI metadata; query/open a provider with cancellation; lend and close original asset FDs | [IncomingShares.kt](../../app/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/IncomingShares.kt) |
-| Dart `ShareIntake` | Configure the app cache root, deduplicate concurrent delivery by share ID, open each source, await Rust adoption, then consume native pending metadata and release originals | [share_intake.dart](../../packages/interop_bridge/lib/src/share_intake.dart) |
-| Rust `ImportManager` and `Policy` | Reserve capacity, adopt sources, copy bytes, publish readiness, persist ownership, prevent duplicate task publication and reconcile durable transfers | [sharing/mod.rs](../../crates/interop_core/src/sharing/mod.rs), [policy.rs](../../crates/interop_core/src/sharing/policy.rs) |
-| Rust `Source` | Validate exactly one FD/path, duplicate borrowed Android/Linux FDs, apply asset offset/length and validate source metadata | [source.rs](../../crates/interop_core/src/sharing/source.rs) |
-| Process Flutter host | Keep one engine and platform/event channels; route Activity-dependent operations to the current weak Activity reference | [ProcessFlutterHost.kt](../../app/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/ProcessFlutterHost.kt) |
-
-`sharing.platform.*` methods belong to the Android adapter; `sharing.*` methods
-belong to Rust. They are different ownership boundaries. A successful
-`sharing.import` response means Rust has duplicated/adopted every accepted source
-and scheduled the job; its initial status is `starting`, not proof of completed
-copying. The final Rust `share.received` event and `sharing.pending` snapshot
-report `ready` or `error`. Dart releases original FD leases in `finally`, including
-when another original fails to close. Concurrent handoff deduplication is covered
-by [the Dart intake tests](../../packages/interop_bridge/test/share_intake_test.dart).
+Checked: 2026-10-17. This study records URI/grant trust, descriptor handoff and
+Android task-reuse counterexamples. Current ownership and entrypoints are maintained
+in [architecture](../implementation/architecture.md) and
+[content delivery](../implementation/content-delivery.md).
 
 ## A received URI is not permission to read app-private data
 
@@ -159,7 +132,7 @@ Android cache storage. Interrupted imports are restored as failures when safe;
 unknown ownership is retained. Android may remove cache files independently, and
 a missing transfer source must remain a real error.
 
-## Activity and audio boundaries
+## Activity task reuse and fixture pitfalls
 
 `ProcessFlutterHost` retains one Flutter engine and installs its custom channels
 once. MainActivity supplies that engine and opts out of destroying it with the
@@ -230,52 +203,6 @@ nullable `Long` and assigns known sizes explicitly. The final run therefore
 reached an actual `importing` slow pipe before UI cancellation, rather than
 mistaking that provider exception for cancellation coverage.
 
-The accompanying native ownership correction gives each Activity/service an
-independent discovery-lock token. USB descriptor handoff uses a process registry
-capped at 16: Activity destruction abandons only its unhanded leases; once a
-descriptor is handed to the asynchronous Rust operation, only the exact lease
-acknowledgement releases that original. This prevents a late old Activity cleanup
-from closing another Activity's resources. The E2E owner reports JVM contracts
-and complete Kotlin compilation passed; physical USB remains unverified.
-[NativeLeaseOwnership.kt](../../app/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/NativeLeaseOwnership.kt),
-[DiscoveryNetwork.kt](../../app/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/DiscoveryNetwork.kt).
-
-Audio players now live in Dart `PortableAudioOutputs`/`FvpAudioPlayer` in that
-retained engine. `NativeAudioRuntime` owns OS focus leases, visibility and media
-foreground-service eligibility; it owns no PCM copy loop or AudioTrack player.
-Owner IDs and monotonic focus epochs reject stale cross-owner cleanup/events.
-An unfinished focus acquire and its actual release remain barriers before a new
-acquire, including after caller timeout. Manual, focus and visibility/background
-pause reasons are combined in Dart. Playback readiness requires media information,
-confirmed playing state, source PCM packets and an advancing native clock;
-receipts explicitly do not claim verified speaker samples.
-[portable_audio.dart](../../packages/interop_bridge/lib/src/media/portable_audio.dart),
-[fvp_audio_player.dart](../../packages/interop_bridge/lib/src/media/fvp_audio_player.dart),
-[NativeAudioRuntime.kt](../../app/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/NativeAudioRuntime.kt).
-
-There is no `audio.attach` adoption of old native players. A Dart isolate restart
-loses its player objects and one-use streams; bridge initialization retires
-unowned Rust captures. Engine restart/destruction releases native system leases.
-Explicit Stop stops the OS owner, Rust activities and Dart outputs; Activity
-detach alone does not stop approved background audio. Process death, long
-background/system reclamation and other platforms remain separate boundaries.
-For targets API 35+, Android requires top-app or foreground-service eligibility
-for audio-focus requests; requesting a background preference alone is insufficient.
-[Android audio focus guide](https://developer.android.com/media/optimize/audio-focus).
-
-Separate real Android evidence is complete for the exercised audio scenarios:
-`/tmp/connect-shared-audio-recreate-final.log` records HOME with default pause and
-explicit background playback, each with a changed MainActivity identity in the
-same PID, followed by passing app assertions. Its
-`/tmp/connect-e2e/shared-audio-recreate-final/result.json` contains
-`audioAcceptanceComplete:true`. Two real device audio outputs exercised transient
-loss, manual pause, gain and permanent loss against an independent AudioManager
-fixture; `/tmp/connect-shared-audio-focus-fixed.log` and
-`/tmp/connect-e2e/shared-audio-focus-fixed/audio-focus-result.json` record passing
-assertions and `audioFocusAcceptanceComplete:true`. These temporary evidence files
-were read for this note; they are not committed artifacts and do not verify
-speaker content or process recovery.
-
 ## Checks and remaining acceptance
 
 The source-level regression suites are now Rust
@@ -308,22 +235,6 @@ no-grant/self-sentinel/too-many/oversize error/0, and slow importing/0 before
 Cancel. The source test checks imported image/text bytes and lengths, the expected
 error reasons, empty pending shares after Cancel, and deletion of the unsubmitted
 ready files. Its completion marker is written only after the whole loop passes.
-
-The standalone nine-mode evidence is `/tmp/connect-incoming-share-final.log`.
-The final combined nine-mode, HOME and launcher run passed in 16 seconds in
-`/tmp/connect-share-acceptance-final.log`; that log and the final
-`/tmp/connect-e2e/incoming-share/result.json` were read for this note. The receipt
-contains all nine outcomes above, `launcherResumeWaitMs:4` and
-`shareAcceptanceComplete:true`. Host dumpsys confirmed one Android UI host, and
-Dart required the real resumed lifecycle and usable device-list UI. The E2E owner
-also visually inspected `/tmp/connect-e2e/incoming-share/incoming-image-share.png`:
-the shared Unicode filename, 68-byte file and no-connected-device prompt displayed
-normally. The same owner visually checked
-`/tmp/connect-e2e/incoming-share/devices-after-share-launcher-return.png` and
-confirmed the device-list empty state displayed normally after launcher return.
-The earlier `/tmp/connect-incoming-share-real.log` is failed diagnostic
-evidence, not the acceptance result. APK builds, `am start` exit zero and a
-screenshot alone are not substitutes for the complete app assertions/receipt.
 
 Still unverified by this suite: submitting a share to a real 被控设备, retaining
 sources through an actual in-flight transfer and process restart, saturation and

@@ -22,10 +22,11 @@ dart tool/e2e/content_delivery_fixture/build.dart --output /tmp/connect-content-
 
 ## 实际系统分享验收
 
-仅在已明确授权的主控 API 36 AVD 上手工安装测试 APK，例如：
+仅在已明确授权的主控 API 36 AVD 上操作。先用 `pm path dev.scrcpyconnect.deliveryfixture`
+确认包不存在；已有安装时停止，不覆盖。记录本轮新安装的所有权，完成后仅卸载自己的安装：
 
 ```bash
-adb -s <controller-avd-serial> install -r /tmp/connect-content-delivery-fixture/content-delivery-fixture.apk
+adb -s <controller-avd-serial> install /tmp/connect-content-delivery-fixture/content-delivery-fixture.apk
 ```
 
 从主控应用执行真实内容交付，打开 Android 系统 Sharesheet，并手动选择

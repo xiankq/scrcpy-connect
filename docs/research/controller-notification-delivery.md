@@ -4,7 +4,7 @@
 
 ## 结论与版本基线
 
-**推荐候选：`flutter_local_notifications: 22.3.2`，先采用普通即时通知和只导航的点击响应。** 通知策略、隐私裁剪、去重和路由放在共享 Dart；插件承担 OS 发布。先不加后台通知动作、CallKit／Telecom、全屏来电、定时通知或新保活服务。它们不是普通提醒的必要条件。此选择尚未经过本项目依赖解析、四端构建或真机运行。
+**研究候选为 `flutter_local_notifications: 22.3.2`，用途是普通即时通知和只导航的点击响应。** 通知策略、隐私裁剪、去重和路由放在共享 Dart；插件承担 OS 发布。先不加后台通知动作、CallKit／Telecom、全屏来电、定时通知或新保活服务。它们不是普通提醒的必要条件。实现与运行边界见[系统通知记录](../implementation/system-notifications.md)。
 
 2026-10-17 查询 [pub.dev 官方包元数据](https://pub.dev/api/packages/flutter_local_notifications)，最新稳定版为 **22.3.2**，发布时间 **2026-10-12T09:13:53.013844Z**；预发布为 23.0.0-dev.4，不作为本次候选。[22.3.2 版本页](https://pub.dev/packages/flutter_local_notifications/versions/22.3.2)
 
@@ -30,8 +30,6 @@ Context7 已查询 `/maikub/flutter_local_notifications`，但索引和 `master`
 
 Android 还需要应用开启 core library desugaring，配置 `com.android.tools:desugar_jdk_libs:2.1.4`；即时 `show` 也不能省略这个构建要求。稳定版 README 建议 AGP 至少使用其自身的 **8.11.1**。README文字仍写 compileSdk 最低35，而同页示例及实际 Gradle 使用36；采用36作为本项目候选基线，不能把这个文档差异当成已证明35能编译。[22.3.2 Gradle 设置](https://pub.dev/packages/flutter_local_notifications/versions/22.3.2#gradle-setup)、[实际 Gradle](https://github.com/MaikuB/flutter_local_notifications/blob/flutter_local_notifications-v22.3.2/flutter_local_notifications/android/build.gradle)
 
-本项目只读核对：`pubspec.yaml` 为 Dart ^3.13.5；Android应用已有Java/JVM17、AGP9.1.0，并使用当前本地 Flutter 的默认 compileSdk36/minSdk24/targetSdk36。应用尚无 desugaring 配置；接入时仍需改构建配置并实际构建验证，不能宣称现在已兼容插件。iOS当前 AppDelegate 也没有设置 UNUserNotificationCenter delegate；按插件官方设置需加一处 delegate 连接，使用当前 UIScene/implicit-engine 生命周期验证点击回调。macOS和Windows工程存在，但本次没有构建。[本地应用 Gradle](../../app/android/app/build.gradle.kts)、[本地插件版本](../../app/android/settings.gradle.kts)、[本地 iOS AppDelegate](../../app/ios/Runner/AppDelegate.swift)、[官方 iOS 设置](https://pub.dev/packages/flutter_local_notifications/versions/22.3.2#ios-setup)
-
 ## 可直接使用的 Dart API
 
 以下接口均按22.3.2发布源码核对，参数名不是旧版本示例：
@@ -56,7 +54,7 @@ Windows初始化需要稳定的 `WindowsInitializationSettings(appName: ..., app
 
 Android13/API33+ 的普通通知需要 `POST_NOTIFICATIONS`；拒绝后普通通知被阻止。权限不授予读取别的应用通知的能力。Android8/API26+必须使用渠道；渠道建立后的声音、重要性等由用户控制，不能靠重复创建或换渠道绕过关闭。应用允许、渠道允许、用户可见是三个不同结果。[Android通知权限](https://developer.android.com/develop/ui/compose/notifications/notification-permission)、[Android渠道](https://developer.android.com/develop/ui/compose/notifications/channels)
 
-建议分开“远端实时通知”和“来电提醒”渠道，继续保留已有低重要性的 `connections` 后台保持渠道及其前台服务通知。显示“系统通知已关闭／渠道已关闭／权限待授权／未知”之类准确状态，并提供系统设置入口；不把静默或未投递视为设备连接错误。渠道级检查不适用于API24/25，需按平台能力降级。
+远端通知、来电与后台保持渠道有不同职责。显示“系统通知已关闭／渠道已关闭／权限待授权／未知”之类准确状态，并提供系统设置入口；不把静默或未投递视为设备连接错误。渠道级检查不适用于API24/25，需按平台能力降级。
 
 Apple用户可随时修改授权和展示类型；首次请求后再调用不一定重弹系统对话框，应读取状态并提供设置入口。provisional授权只安静进入Notification Center历史，不是无历史投递方案。[Apple官方授权说明](https://developer.apple.com/documentation/usernotifications/asking-permission-to-use-notifications)
 
@@ -94,7 +92,7 @@ Android普通提醒只需普通发布条件；`USE_FULL_SCREEN_INTENT`、录音�
 
 ## 尚待实际验证的验收点
 
-本次只读源码与官方资料，**未执行pubget、生成、构建、Flutter测试或AVD／真机操作**。下列是后续候选验收，不是已通过结论：
+以下矩阵用于评估该候选在目标平台的完整性，当前执行状态由[系统通知记录](../implementation/system-notifications.md)维护：
 
 1. 固定版本解析后四端编译，Android release资源裁剪／desugar，当前AGP9.1与Flutter项目的实际兼容性。
 2. Android API24/26/33+和主流OEM：应用拒绝、单渠道关闭、DND、锁屏各种用户选项，默认通用内容始终不泄漏正文；权限拒绝不会误报观察失效。
@@ -102,5 +100,3 @@ Android普通提醒只需普通发布条件；`USE_FULL_SCREEN_INTENT`、录音�
 4. 来源撤回、断连、resync失败／成功、授权撤销、快速切换设备、更新后旧点击：只校验当前对象，不重放动作；晚回调不能恢复旧owner或发布旧通知。
 5. Windows MSIX身份下show/update/cancel和实际清理；未打包模式明确不承诺撤回。Apple权限关闭、预览及Notification Center表现分别验证。
 6. 关闭应用后不声称仍能接收；系统已有安全提醒的点击可进入应用，失效目标不执行操作。日志、payload、持久化存储不含敏感正文和OTP。
-
-后续实施已采用22.3.2并取得Android构建、公开系统源双AVD发布/撤回/点击证据；本报告前述“未执行”指研究当时，不覆盖后续交付。当前实现与尚未验证矩阵见[实现记录](../implementation/system-notifications.md)及[运行验证](../implementation/validation.md#画质实像素与主控系统通知)。

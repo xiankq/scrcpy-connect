@@ -1,8 +1,6 @@
 # Android、iOS、Windows、macOS 编译交付约束
 
-研究日期：2026-10-16。依据用户最新回答：四个平台都能编译是交付要求；当前功能实施和真机验证仍优先 Android。主控设备始终不要求开启开发者选项或调试，不能把开发电脑的构建/部署步骤转成普通用户的使用条件。本文只研究编译边界，不实施工程，也不承诺尚未决定的 CPU 架构、模拟器或最低系统版本。
-
-方法：Context7 查询 FRB、Flutter，再核对官方文档及固定候选源码。未安装工具、生成工程、运行 Cargo/Flutter 或执行任何平台构建。下面的验收是交付约束，**不是已经通过的结果**。[Rust ADB ADR](../adr/0002-rust-adb-and-flutter-monorepo.md) 已按最新用户要求更新为四端实际编译要求。
+研究日期：2026-10-16。核对 Flutter、FRB 和固定 ADB 候选源码的目标平台约束。当前交付矩阵见[ADR 0002](../adr/0002-rust-adb-and-flutter-monorepo.md)，实际构建入口与结果见[工具链契约](../implementation/repository-tooling.md)。本研究未执行平台构建。
 
 ## 1. 目标矩阵：三层分别通过，运行能力另记
 
@@ -15,14 +13,12 @@
 
 Flutter 官方支持四种目标，但 iOS/macOS 的完整 Flutter 构建在 macOS 上，Windows 在 Windows 上；“Rust 可交叉编译”不能替代这些宿主要求。[Flutter 平台与构建宿主](https://docs.flutter.dev/platform-integration)
 
-Rust target 名称需要在架构决定后锁定：例如 Android `aarch64-linux-android`，iOS 真机 `aarch64-apple-ios`，Apple Silicon 模拟器 `aarch64-apple-ios-sim`，Windows `x86_64-pc-windows-msvc`，macOS `aarch64-apple-darwin`。这些只是对应关系示例，**没有据此决定只支持这些架构**；arm64 Windows、Intel macOS、Android 32 位及移动模拟器是否纳入交付矩阵仍待定。[Rust 官方 target 表](https://doc.rust-lang.org/rustc/platform-support.html)
-
 ## 2. 已证事实：iOS USB 不能拖垮核心与绑定
 
 | 候选/固定源码 | 已证接口与问题 | 可绕开边界；尚未验证什么 |
 | --- | --- | --- |
 | libadb 0.5.0，`bc681df985967e083cdd7c02df45f942495393a5` | USB 后端是可选 feature；`Transport` 与 `UsbBackend` 抽象提供 `NoUsb`。`usb` 别名启用 nusb；仅依赖 feature 判断，库不会自动按 iOS 关闭它 | iOS 使用无 USB 的 feature 集与 `NoUsb`，共用 TCP/认证/服务。Android/Windows/macOS 另选 USB 后端。没有本项目 iOS 编译记录，不能宣布 TCP 核心已通过。[清单](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/Cargo.toml)、[transport](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/transport.rs) |
-| nusb 0.2.8，`c80218d342740321190436bc45304ebbbf16bef0`；libadb 当前 nusb 0.1.14，`c4415cb2684ae98e7a2c432b00f2482dc6dae5c8` | 两版都没有 iOS backend；0.1 选择 Linux/Android、Windows、macOS，0.2 另有 wasm。上层使用 `platform::Device` 等类型，不能指望在 iOS 启用 nusb 后自动退化为无 USB | iOS 目标闭包排除 nusb；不能只在 Dart 隐藏 USB 入口。这是源码层面的阻塞证据，本次没有执行编译器复现。[0.1 平台选择](https://github.com/kevinmehall/nusb/blob/c4415cb2684ae98e7a2c432b00f2482dc6dae5c8/src/platform/mod.rs)、[0.2 平台选择](https://github.com/kevinmehall/nusb/blob/c80218d342740321190436bc45304ebbbf16bef0/src/platform/mod.rs)、[Device](https://github.com/kevinmehall/nusb/blob/c80218d342740321190436bc45304ebbbf16bef0/src/device.rs) |
+| nusb 0.2.8，`c80218d342740321190436bc45304ebbbf16bef0`；该版 libadb 的 nusb 0.1.14，`c4415cb2684ae98e7a2c432b00f2482dc6dae5c8` | 两版都没有 iOS backend；0.1 选择 Linux/Android、Windows、macOS，0.2 另有 wasm。上层使用 `platform::Device` 等类型，不能指望在 iOS 启用 nusb 后自动退化为无 USB | iOS 目标闭包排除 nusb；不能只在 Dart 隐藏 USB 入口。这是源码层面的阻塞证据，本次没有执行编译器复现。[0.1 平台选择](https://github.com/kevinmehall/nusb/blob/c4415cb2684ae98e7a2c432b00f2482dc6dae5c8/src/platform/mod.rs)、[0.2 平台选择](https://github.com/kevinmehall/nusb/blob/c80218d342740321190436bc45304ebbbf16bef0/src/platform/mod.rs)、[Device](https://github.com/kevinmehall/nusb/blob/c80218d342740321190436bc45304ebbbf16bef0/src/device.rs) |
 | DroidMux 0.1.0 工作区，`9adeb6258166e9b88808bc6e67845c73763f070c` | `droidmux-transport` 的 AdbTransport trait 独立；USB 在单独 `droidmux-transport-usb` crate，依赖 vendored rusb；顶层 `usb` 可选，`full` 会启用它及 control/media | iOS 可不选 USB，或直接组合底层 crates；不能在所有平台统一开 `full`。现有证据证明可隔离，不证明其完整依赖闭包已在 iOS 编译；也没有证据断言 TCP 核心必然失败。[顶层 features](https://github.com/poapoauu/DroidMux/blob/9adeb6258166e9b88808bc6e67845c73763f070c/crates/droidmux/Cargo.toml)、[独立 trait](https://github.com/poapoauu/DroidMux/blob/9adeb6258166e9b88808bc6e67845c73763f070c/crates/droidmux-transport/src/lib.rs)、[USB crate](https://github.com/poapoauu/DroidMux/blob/9adeb6258166e9b88808bc6e67845c73763f070c/crates/droidmux-transport-usb/Cargo.toml) |
 
 工程推论：需要“共同协议核心 + 目标平台适配”的边界。iOS 缺少通用 USB 不应让包失败，也不应伪装 USB 成功；公开接口保留同一连接/能力模型，平台返回明确功能支持状态。USB 库、JNI 类型、IOKit handle 不暴露到 FRB 共用 DTO。这样保留完整产品能力清单，同时按平台诚实报告实际能力。
@@ -55,10 +51,3 @@ FRB 官方当前支持 Cargokit（默认）或 Native Assets 集成；两者都�
 建议把四端正式构建作为变更门禁：锁定版本、正式 feature profile、生成代码一致性、干净构建、产物留存。`cargo check --target` 不执行最终 native 链接，不能单独满足整包可编译；开发宿主上 `cargo test` 也不能替代移动目标。发生平台能力缺失时应调整适配或依赖边界，不能把某平台作业永久跳过后仍声称四端通过。
 
 编译 CI 不需要普通用户主控开启调试。开发者给测试设备部署 debug app 所用 ADB/Xcode，与发布后主控使用 TCP/UsbManager 连接被控设备是两件事；产品流程只要求被控设备完成相应授权。运行/商店发布/权限与 entitlement/后台策略需要各自验证，不能由“无签名编译成功”代替。
-
-## 6. 仍需明确的交付参数与未验证项
-
-- 四平台正式 CPU 目标需要结合完整依赖闭包确定；Windows x64/arm64、macOS Intel/Apple Silicon/universal、Android ABI 的具体范围尚未冻结，不能将文中示例当作排除其他架构的决定。
-- iOS 真机与模拟器、Android 模拟器是否均属于编译承诺；它们是不同 target/SDK，不能彼此代替。
-- 各平台最低 OS/SDK、Flutter/FRB/Rust/provider 固定版本及 Native Assets/Cargokit 选择，需结合插件完整闭包再冻结，本文不新增最低 OS 承诺。
-- 本次只获得平台与源码依据，四端实际编译均未执行。必须后续用真实宿主 CI 把“可适配”转换成“已通过”；运行功能继续按功能支持状态和平台实测分级记录。

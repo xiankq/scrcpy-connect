@@ -21,19 +21,6 @@ Android Developers API 页面为 2026-10-17 在线版本，下面同时使用固
 
 另外对照 Android 16 `android-16.0.0_r1`：frameworks/base 为 `99b01a65cc4c104933788b3143285ab6bae65827`，DocumentsUI 为 `b0f64324499a3f65aca817d3f221c716d953a800`。下面关键结果一致；Android 17 的 `FileUtils` 改为枚举模式字符串，没有给 ContentResolver 增加一个通用“不可截断的流”请求。
 
-本仓库源码核查基于工作区、HEAD `b9bfe2a9a898738b33c85445aefda4f252104c91`；以下行号直接从源码检索，后续实施可能移动：
-
-| 位置 | 当前行为 |
-| --- | --- |
-| `packages/interop_bridge/lib/src/documents/documents_coordinator.dart:661`，`_writeFile` | 查询同一 document ID、非目录/虚拟文档、已知大小必须为零、具备写能力，然后用 `rw` |
-| 同文件 `:346`，`_copy` | `document.copy` 后才释放 lease；复制成功而释放报错时返回 `result_unknown`，不重试、不删除目标 |
-| `app/android/app/src/main/kotlin/dev/scrcpyconnect/scrcpy_connect/PlatformDocuments.kt:110` | 只允许 `r`、`rw`，保留 PFD 所有权，向 Rust 借出整数 FD |
-| 同文件 `:66`、`:229` | `releaseFd` 仅 `close()`；取消也仅 `close()`；没有 `checkError()` 或 `closeWithError()` |
-| `crates/interop_core/src/documents/mod.rs:432` | `fstat` 要求目标为大小零的普通文件，然后 `lseek(0)`；`:499` 要求 `fsync` 成功 |
-| 同文件 `:211` | Rust 对借用 FD 做 `F_DUPFD_CLOEXEC`，设置非阻塞；原 PFD 应在复制真正结束后才关闭 |
-
-此方案与 [ADR 0002](../adr/0002-rust-adb-and-flutter-monorepo.md) 的 Flutter/共享 Rust 主体、薄平台能力适配相容；与 [ADR 0006](../adr/0006-controller-without-debugging.md) 的主控普通应用权限约束相容。下面不提出主控调试授权、提供方白名单特权或新的常驻业务服务。
-
 ## 模式与 FD 类型的真实契约
 
 [ContentResolver.openFileDescriptor](https://developer.android.com/reference/android/content/ContentResolver#openFileDescriptor(android.net.Uri,%20java.lang.String,%20android.os.CancellationSignal)) 明确：独占 `r`/`w` 可以返回 pipe 或 socket；`rw` 表示可 seek 的文件语义。`w` 是否截断取决于提供方。`openOutputStream(uri)` 默认也是 `w`，不能绕过此问题。
@@ -102,25 +89,6 @@ Android Developers API 页面为 2026-10-17 在线版本，下面同时使用固
 
 [ProxyFileDescriptorCallback](https://developer.android.com/reference/android/os/ProxyFileDescriptorCallback)（API 26）可在 `onWrite`、`onFsync` 抛出带 errno 的错误，`onRelease` 是关闭后的回调。固定 [ProxyFileDescriptorCallback.java:88](https://android.googlesource.com/platform/frameworks/base/+/94b4c163b7dfe5ce3607f7bb8456f9573f7de57d/core/java/android/os/ProxyFileDescriptorCallback.java#88) 默认 `onFsync` 就抛 `EINVAL`；没有实现同步的 proxy 被当前基线拒绝是兼容限制，不是应忽略错误的理由。生产自建 proxy 如果只在 `onFsync` 同步本地缓存、随后后台上传，就不能把 fsync 成功包装成远端已保存。
 
-## 产品必须实现与平台约束
-
-产品必须完成：
-
-- 给文件、相册等入口接上真正系统保存；只在 `documents.export` 的结果为已保存时显示完成。分享交给系统目标也不能当作“已保存到本机”。
-- 保留原始本机来源；取消、部分完成、结果未知和提供方不支持都应有可见结果。列出目标名称/URI、已完成项及不确定项；明确本次不会自动重试或清理不确定目标。
-- 结果需要跨页面导航保留；操作中途退出或进程中断后，曾创建/曾开始写入的目标不能被遗忘并自动再次保存。若声称支持进程重启恢复，需要持久化任务回执和本机源的持有关系；当前 operation 内存记录本身不构成此承诺。
-- 创建调用失败、写入后失败、同步失败、关闭/peer 错误、完成回执丢失，都不能折叠为“用户取消，未产生文件”。部分目标可能已经存在。
-- 同名处理由共享 coordinator 决定；本轮不提供无证据的覆盖。`ACTION_CREATE_DOCUMENT` 实际选到非空已有项时拒绝写入并保留旧文件。
-
-平台真实约束：
-
-- SAF 可写不等于可随机访问；不支持 `rw` 是合法提供方行为。不能通过增加一个 mode 绕过其能力。
-- 通用 SAF 没有把创建、检查空文件、写入、原子发布、远端持久确认合在一起的事务；同名/并发写者检查只能降低风险。
-- 一般系统保存完成可表示当前平台流程成功，不表示云端同步已完成。存在已知错误或完成证据丢失时必须呈现未知/部分结果；不能靠“API没抛异常”压掉已知状态。
-- 非事务提供方无法保证中途取消撤销已写数据。为避免删除未知或被替换的用户文档，不应自动清理结果未知的 URI。
-
-因此，“接上系统保存并如实提供结果”是必须交付的产品能力；“同时支持所有合法管道/云提供方且保证不可截断和远端持久提交”不属于通用平台能直接提供的保证。不能把前者以平台限制为由推迟，也不能把后者写成已经实现。
-
 ## 可检验的真实 fixture 与验收证据
 
 以下是后续实施的真实 Android fixture 设计，**本报告未执行**。应放在独立测试 APK 或 debug/instrumentation 提供方中，通过真实系统 picker、ContentResolver、PFD 与 Rust 绑定运行；只模拟 Dart MethodChannel 回复不足以验证这些契约。
@@ -146,12 +114,6 @@ fixture 提供一个可写根和固定样本，记录 `create/open(mode)/read/wr
 
 还需真实系统提供方最小烟测：系统本机“下载”位置正常保存，同名新建/显式选择已有项，取消 picker，以及一个正常返回 `rw` 的设备存储位置。记录 Android build、DocumentsUI 包版本、提供方 authority、实际请求 mode、文件内容核验、页面结果截图/日志。测试用自建 provider 的成功不能冒充实际云提供方兼容结论；只测系统本机目录也不能写成全提供方支持。
 
-## 推荐落地顺序
+## 实施入口
 
-1. 当前交付保留 `rw`，接通共享系统保存入口，补错误通道和完成/取消信号，给出支持范围与保留内容的结果体验。用上表普通文件、已有文件、w-only 拒绝和关闭错误 fixture 验收。
-2. 产品确实需要流提供方时，再实现 `createDocument` 来源约束和共享 Rust 的显式流输出契约；不要把单文件 picker 返回 URI直接授权给该路径。单文件 w-only 可以引导用户选父目录后由本次操作创建新文档，这是新增路径而非偷偷更换打开模式。
-3. 需要关闭后可见内容一致的承诺时，加有界回读比较和持久回执；需要远端上传确认时另行接入提供方明确协议。保持原生层只持有 URI、grant、PFD 与平台调用，复制、限额、比较和结果决策留在共享层。
-
-## 后续落地证据
-
-上述调研保留为实施前基线。后续已接通共享单项保存入口、success/abort完成信号、PFD错误检查和未知回执保护；真实API36 Downloads取消/保存以及独立外部接收器读取授权和字节/hash均通过。见[实现与命令](../implementation/content-delivery.md)和[完整失败/复验记录](../implementation/validation.md#原文件系统保存与外部分享交付)。此证据没有关闭上表自建provider/云端/pipe/撤权/写入中故障矩阵，也不意味着提供方提供持久提交ACK。
+系统保存的当前接口、完成信号与运行证据见[内容交付](../implementation/content-delivery.md)。上述 provider 矩阵用于区分通用 SAF 契约与具体提供方保证；本地 Downloads 成功不等于 pipe、proxy 或云端提交均已验证。

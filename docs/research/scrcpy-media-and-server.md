@@ -1,10 +1,6 @@
 # scrcpy 媒体、server 与 Flutter 接入调查
 
-调查日期：2026-10-16。用途：为 grill-with-docs 提供可追溯事实和后续问题；不是已批准的架构决策。
-
-约束来自当前访谈：Rust + Flutter + FRB；先实现 Android 主控端，主控 Android 7+；被控 Android 5+ 按能力分级；被控端不装 APK、不 root，允许临时 shell JAR；完整功能目标不裁成 MVP；未来保留 iOS / Windows / macOS 接口，本轮不声称验证这些平台。用户已接受 fvp 底层 MDK 闭源，要求媒体实现可替换。
-
-本文标记：**已证**是官方文档或固定源码直接说明；**推论**是从已证事实得到的工程判断；**需 POC**表示尚未执行设备验证，不能写入产品保证。不存在把若干单独能力组合后就当作可以同时工作的默认假设。
+调查日期：2026-10-16、17。核对固定scrcpy5.0.1、fvp0.39.1、MDK及平台官方源码，区分协议事实与平台推论。当前产品任务见[ADR0005](../adr/0005-real-application-tasks-in-linked-windows.md)，媒体所有权与生命周期见[架构](../implementation/architecture.md)。
 
 ## 来源与版本边界
 
@@ -75,30 +71,9 @@
 - 原生 MediaCodec 输入 API 接受每包 presentation-time；Flutter Texture 只用 texture ID 表示后端纹理，到帧自动重绘通常不执行 Dart。把解码像素逐帧经 FRB 回传再构造 Dart Image，不是使用 Texture 的必经路线。[A05]、[A06]
 - FRB 官方 zero-copy 文档明确其保证有场景限制，Rust → Dart 异步 / stream 的 typed byte arrays 是典型支持情形。它没有保证 Dart → 后续播放器输入、FFmpeg demux、codec input buffer、GPU / Flutter 合成全过程都零拷贝。[R02]
 
-### 候选 A：Rust 解 scrcpy 包后直接进原生媒体适配器
+### 接入路线的判断
 
-```text
-ADB stream → Rust 协议/session/config/PTS → native media adapter → decoder → Surface / Flutter Texture
-                                 └────→ recorder（保持设备时间戳）
-Flutter / FRB：控制、状态、指标、纹理句柄；不要求逐帧传像素
-```
-
-**推论：**此路线可以把带 PTS 的 packet 边界保留到 decoder / recorder，媒体适配器可切换直接 MediaCodec 或 MDK 的适当入口；但只有“接口存在”的证据，不等于已实现跨端框架。Android texture / Surface 的创建、重建、释放仍需原生插件。若选 MDK `appendBuffer` 入口，它仍是下述 B 的字节流问题，不因调用者改为 Rust 就自动保留 PTS。
-
-### 候选 B：Rust 输出到 fvp / MDK 字节输入
-
-```text
-ADB stream → Rust 解协议 → 裸 elementary stream 或重新封装的流 → MDK appendBuffer / 本地标准流 URL
-                           （可经 Dart 扩展绑定，也可原生 shim）             → fvp texture
-```
-
-**已证：**scrcpy 提供 `raw_stream=true`，去掉设备 / 流 / 帧元数据，官方用裸 H.264 TCP 给 VLC 的示例；因此本地转封装不是 H.264 的理论必需步骤。**推论：**正常模式保留 header，在 Rust 解析后只向 MDK 追加 codec payload 也可作为实验。但这两者都会使 `appendBuffer` 本身拿不到 scrcpy 的逐帧 PTS 和视频 session 事件：其签名没有 PTS / stream-id / dimensions 参数。播放器从裸流重新探测 / 推断时序不等于恢复设备原时间线。[S03]、[M02]
-
-**需 POC：**对 H.264 / H.265 / AV1 分别验证 raw demux 格式、config、首帧、可变帧率、长时间静态、旋转 / flex resize / codec reset，以及 EOF / 取消。若音视频要精确同步或无重编码录制，需证明重新封装能保留原始 PTS（且容器接受 codec、音频 codec 和尺寸变化），或找到明确的 packet-level decoder 接口。`video_player.networkUrl(...)` 存在，不构成可播放 scrcpy 私有协议的证据。
-
-**低延迟的限制：**fvp `lowLatency=1` 配置零最小缓冲及降低探测；`2` 另设 1000ms 上限与 drop。源码注释 `+nobuffer` 可能丢首个关键帧包。MDK 可以进一步设置 buffer range；Android AMediaCodec 的专门 `low_latency` 模式要求 API 30+。这些选项没有给本项目端到端延迟上界，Android 7 主控不能假设具备 API 30 decoder 模式。[F06]、[M02]、[M04]
-
-**Surface 生命周期：**fvp 原生实现区分普通 GL/Texture 与 decoder 直连 Surface；直连 Surface 销毁前要释放 codec，源码直接记录顺序错误可能导致 decoder 卡住、下一个 Surface 不出帧。**推论：**后台、锁屏、窗口转移、旋转、Flutter view 重建必须触发媒体生命周期处理，不能仅保留旧 texture ID。不同 renderer / 路径的 GPU 零拷贝也不能代替整条网络到显示链路的拷贝测量。[F05]、[A06]
+Rust直接接平台解码器可保留逐packet/PTS控制，但自行承担decoder、纹理、声音与平台生命周期；fvp/MDK减少播放器维护，却需标准输入及可验证时序。`appendBuffer`接字节而非scrcpy私有包头/独立PTS，FRB零复制也不会自动把Rust buffer变成Flutter Texture。完整ABI、nativeHandle借用和容器映射见[共享媒体研究](cross-platform-media-pipeline.md)，输入路线的实测反证见[MDK输入实验](mdk-memory-input-experiment.md)。
 
 ## 已证：音频、回传、通话与录制
 
@@ -123,95 +98,21 @@ ADB stream → Rust 解协议 → 裸 elementary stream 或重新封装的流 �
 - capture-orientation 会改变收到的画面；客户端 record-orientation 是 MP4 / MKV 的显示变换，不重编码像素；record 不支持 flip。播放方向和录制方向可以分开。[S21]
 - **推论 / 需 POC：**播放器正确显示一次旋转，不代表输出文件所有消费软件都正确支持流中尺寸变化。固定录制方向、重编码固定 canvas、遇变化分段、原包单文件各有不同结果；须测用户实际的系统相册 / 分享 / 编辑器。应用被杀或磁盘满导致 trailer 未写完后的可恢复性也未证实，不能宣称所有 MP4 都可恢复。[S30]
 
-## 需要带回访谈的具体约束 / 故障场景
+## 跨会话与资源风险
 
-以下不是删功能清单；是完整目标必须定义行为的场景。
+SCID区分socket命名，不会提供无限encoder、IME焦点或同应用多实例。MediaCodec并发数受实时资源影响；一个会话保存/恢复stay-awake等全局设置时，也没有跨会话仲裁。两个进程复用同一JAR路径的清理时序需独立处理，不能由SCID推导安全。[S13]、[S16]、[A01]、[A03]
 
-| 编号 | 场景 / 约束 | 证据等级与含义 |
-| --- | --- | --- |
-| C01 | video 已连，主控等设备名才连 audio | **已证**启动死锁；所有启用通道建连有先后要求。[S06]、[S08] |
-| C02 | 更换 JAR 但没更换协议解析器 | **已证**版本拒绝或包格式错读；升级应成套。[S04]、[S07] |
-| C03 | 被控旋转 / 折叠 / flex resize 后仍按旧头解析 | **已证**新的 session 包可能被误当 payload 长度；同时旧坐标可被丢弃。[S05]、[S12] |
-| C04 | Android 5–9 上要求真正独立 app display | **已证**不满足新虚拟显示版本条件；需明确不可用原因而不是永远重试。[S08] |
-| C05 | 打开第二个同 app 窗口，原窗口移动或消失 | **推论**task / launch mode 决定，不是 SCID 能隔离。[S16]、[A01] |
-| C06 | 用户关小窗口时 app 被销毁，或突然出现在主屏 | **已证**两种关闭策略行为不同；需选语义。[S15] |
-| C07 | 两个虚拟窗口争键盘焦点 / IME 出主屏 | **已证 + 需 POC**不同 Android 版本 display flags 不同。[S11]、[S15] |
-| C08 | 第三路视频 configure 失败，前两路仍在工作 | **已证资源限制 + 推论场景**并发 codec 数量受实时资源限制。[A03] |
-| C09 | 选 AV1 但目标只有 decoder，没有 encoder | **已证能力区分**不能按 Android 版本或 codec 名称承诺双端硬件路径。[S10]、[S22] |
-| C10 | 目标宣告支持分辨率，但 encoder 首帧失败 | **已证**官方仍有 configure / 约束 / 降尺寸恢复。[S10] |
-| C11 | UI / Dart GC 卡顿后视频越来越落后 | **推论**无界 packet / event 队列积压，需有界队列与观测；FRB stream 本身不是实时背压策略。[S24]、[R02] |
-| C12 | 为追实时随意丢 P 帧，随后花屏到下一 IDR | **推论**压缩参考链被破坏；已解码帧替换策略不能直接搬到编码包。[S25]、[A04] |
-| C13 | 原始 payload 能播放，但静态时长 / A/V / 录制错位 | **推论 + 需 POC**appendBuffer 没有逐帧 PTS 参数，裸流再探测可能失去源时序。[M02]、[S29] |
-| C14 | 从后台回前台仍黑屏，网络与控制正常 | **已证风险 + 需 POC**Surface 失效 / codec 释放顺序需处理；旧 texture ID 不保活。[F05]、[A06] |
-| C15 | Android 11 锁屏启动：有画面无声音 | **已证**音频 foreground workaround 条件；默认可降级视频继续。[S26]、[S27] |
-| C16 | 两个 app 窗口都在播同一份全机声音 | **推论**原音频无窗口 / app 隔离选择。[S26]、[S28] |
-| C17 | 为保留被控本机声音启用 duplication，却录不到某 app | **已证**Android 13+ 且 app 可 opt-out。[S26] |
-| C18 | 按“麦克风回传”后声音只从被控扬声器出 | **未证目标能力**不等于任意被控 app 获得虚拟 mic；需拆分定义。 |
-| C19 | 主控接电话 / 蓝牙切通信路由，远程音频突然静音 | **已证系统规则 + 需 POC**焦点、route、输入抢占有独立状态。[A08]、[A09]、[A10] |
-| C20 | 相机列表能列出组合，但被控相机 app 同时开后断流 | **已证边界**跨客户端并发不保证；相机与屏幕单实例互斥。[A02]、[S08] |
-| C21 | 息屏断开网络后远端进程未退出 | **已证官方 watchdog 背景 + 需 POC**Android ADB 库的 shell cancellation 行为未核实。[S14] |
-| C22 | 两会话恢复 stay-awake，把仍用中的另一会话设置改掉 | **推论**cleanup 保存旧值但没有跨会话仲裁。[S13] |
-| C23 | 两进程共用上传路径，cleanup 提前删 JAR | **推论**已加载进程与未来 class load / cleanup 启动时序需测，独立 SCID 不解决路径复用。[S04]、[S13] |
-| C24 | 录制中旋转后，第三方播放器显示错方向 / 尺寸 | **需 POC**容器变换与动态分辨率支持并非同一问题。[S21]、[S30] |
-| C25 | 录制遇磁盘满 / app 被杀，文件打不开 | **已证需 trailer + 需 POC**需定义结束、分段、恢复和失败提示。[S30] |
-| C26 | 设备静止几秒不更新画面，被判定“连接断开” | **已证可变帧率**媒体无新帧不能独立作为活性检测。[S21] |
-| C27 | camera 会话仍接受 screen touch / clipboard 命令 | **已证**camera Controller 只处理该模式的命令子集，不是全屏控制会话。[S12]、[S18] |
-
-## 需 POC：可证伪的验证包
-
-这些是当前范围内的验证顺序和测量范围，不是实现已通过或未来平台运行已验证。C18、C20、C24、C25、C27等录制/专用相机/通用虚拟麦克风资料仅归档，不属于执行清单；通话所需双向音频保留独立验证。
-
-1. **协议与关闭**：在 Android 主控用选定 ADB 库跑固定 JAR；组合 video / audio / control 开关、forward / reverse 等价路径，验证 dummy、首通道设备名、错误码、session/config/PTS；逐阶段取消启动。输出每个阶段时序与远端 PID / socket / 设置恢复证据。
-2. **三 codec 原生输入**：相同设备 / 场景比较 Rust → native decoder、Rust → MDK stream（裸流 / 保 PTS 封装）和经 Dart 扩展输入；记录 codec、实际硬解、原始 PTS 到呈现的关系、首帧、队列深度、内存与丢帧。避免把本地主控时钟减设备 PTS 当延迟；用双端视觉计时或可校准方法。
-3. **重配置与生命周期**：持续旋转、折叠、flex resize、切后台、屏幕锁定、Flutter Surface 重建、主动 reset、编码器异常；记录有没有必须重连 / 丢音频 / 花屏 / 错点；区分“可恢复”“降质量”“会话结束”。
-4. **同设备并行**：主屏 + 两个不同 app display + 同 app 两实例，逐项增加负载，不预设可以同时成功。测 encoder 配额、GPU / 温升、task / IME / focus、关闭顺序、全局设置、每条音频语义；把失败保留为具体能力结果。
-5. **声音与通话矩阵**：被控 Android 11 / 12 / 13+，output / playback / dup / mic、Opus / AAC、双方来电、主控蓝牙、VoIP / 媒体 app 切换。双向通话音频依shell通话专项验证，不做通用虚拟麦克风或对讲扬声器产品实验；普通音频播放不能证明电话上行成功。
-6. **录制验证包已归档**：不执行录屏容器、录屏保存或恢复实验；当前相册中的已有视频播放与手动取回另见任务10。
-
-7. **扩展 JAR 边界**：独立版本握手、权限探测、异常退出、ADB 断线、重连撞旧实例；核实清理只作用本会话、官方 JAR 与扩展 JAR 相互不覆盖、不误删，不依赖不受支持的跨进程对象操作。
+编码包PTS、主控onVideo与最终呈现是不同时间点；远端可变帧率/静止无更新不能单独作为连接失活判断。输入、解码及呈现的测量方法见[首帧与传输研究](scrcpy-first-frame-performance.md)。
 
 ## 许可、替换接口与平台下限：沿用事实
 
 - fvp 为 BSD-3-Clause；MDK 有自己的许可，官方明确 Flutter 用户可免费用于商业软件且包含 key。已接受闭源不等于把 MDK 改成 BSD，也不自动覆盖将来脱离 Flutter 的独立原生产品。FFmpeg 及可选 dav1d / libass 等应按实际分发物保留各自声明；FFmpeg 构建可因 GPL 组件改变许可，锁定二进制后仍需核对。[F07]、[M01]、[M05]
 - **推论：**可替换边界至少要保留 codec config、设备 PTS、session/dimensions、解码 / 渲染状态、音频 clock / route、统计与 shutdown 语义；如果接口只暴露 `play(url)`，将来的 packet decoder 替换会被迫重做协议 / 同步层。这里只记录边界必须表达的信息，不决定最终模块 API。
-- fvp 自身 Android minSdk 21；Darwin podspec iOS12 / macOS10.13；FRB模板更低值只是模板。当前 Flutter 官方支持页对应 3.47：Android API24+、iOS15+、Windows10+、macOS12+。因此当前 Flutter 的 Android7+ 主控基线一致；被控 Android5+ 是 JAR 功能分级，不能和主控运行平台混为一谈。未来 Apple / Windows 仅有依赖支持证据，本轮未验证构建和行为。[F08]、[F09]、[R03]、[R04]、[A11]
+- fvp 自身 Android minSdk 21；Darwin podspec iOS12 / macOS10.13；FRB模板更低值只是模板。当前 Flutter 官方支持页对应 3.47：Android API24+、iOS15+、Windows10+、macOS12+。这些是核查时依赖的版本下限；当前主控最低版本以工具链责任文档为准。被控 Android5+ 是 JAR 功能分级，不能和主控运行平台混为一谈。依赖支持不能代替Apple/Windows完整构建与运行验收。[F08]、[F09]、[R03]、[R04]、[A11]
 
-## 2026-10-17 多编码与设备级质量实施验收
+## 编码验证的独立边界
 
-以下是该日实施事实。2026-10-18默认主屏H264自动编码器的冷目录策略已调整为
-直接尝试实际捕获，不把unknown标成available；已知不支持及非默认格式／named
-encoder／独立应用窗口继续预检。质量选项和设置保存仍枚举验证。实际范围、失败
-样本及后续验收见[冷启动实施](../implementation/video-cold-start.md#默认主屏直接捕获实施2026-10-18)。
-
-Rust core 现使用自己的 ADB 连接运行校验过 SHA 的官方 5.0.1 JAR，传入 `list_encoders=true`，解析设备返回的 `--video-codec` / `--video-encoder`，不按 Android 版本硬编码支持状态。枚举解析遵循固定提交的 [LogUtils](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/util/LogUtils.java)。编码器名称限制为 1–256 个 ASCII 字母、数字、点、下划线或连字符，传给远端 shell 前还会引用整个参数；枚举不兼容的 codec / encoder 组合在启动前拒绝。
-
-`session.quality.options{deviceId?}` 返回五种 codec、MIME、实际 encoder 列表与 `unknown/available/unavailable`、原因。没有设备或探测失败时不返回 `available=true`；已枚举也仅证明设备报告了 encoder，不保证其参数、当前资源或本机 decoder 可配置成功。五种 wire ID 分别为 `h264`、`h265`、`\0av1`、`\0vp8`、`\0vp9`，core 对请求与实际四字节 ID 作一致性校验；默认保持 H.264。[固定 VideoCodec](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/video/VideoCodec.java)
-
-质量保存在 `settings.deviceQuality[deviceId]`，最多 256 项；未设置的设备继承全局默认。`session.quality` 先验证完整参数及目标实际枚举组合，再仅保存这台设备的下次启动设置，返回 `appliesNextSession/needsRestart`，不隐式停止、替换或迁移任何当前会话/应用任务。元数据恢复生成新设备 UUID 时清空旧质量映射。单次 `session.start/apps.launch` 可提供经过相同验证的覆盖参数，不修改持久化偏好。`videoEncoder:null` 表示由平台选择，不把它虚报为已知的实际 encoder 名称。
-
-官方 `SurfaceEncoder` 在 MediaCodec 配置前就写 codec header，因此 header 不能作为编码成功证据。core 还等待有界的实际编码关键帧：8 秒、最多 64 个包、32 MiB 首帧缓冲；结果标记 `encodedKeyFrameReady`，不冒充主控已经渲染。主控首帧仍由实际 decoder 回报；仅有目标关键帧不足以保证更换本机 decoder 不失败，所以此版没有“无损热切换”承诺。[SurfaceEncoder](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java#L102)
-
-真实验收使用 `emulator-5556` 的授权 adbd `127.0.0.1:15556`，独立临时 Runtime/会话，不操作主控 `5554`、不安装被控 APK、不重启系统、不改变目标屏幕状态。官方 JAR 实际列出 8 个软件 encoder：H.264 两个、H.265 一个、AV1 一个、VP8 两个、VP9 两个。五种 codec 均收到实际标识、尺寸与关键帧，FFmpeg 强制 `-frames:v 1` 后均产生经 PNG 头核对尺寸的 **324×720** 图像；显式使用 `c2.android.avc.encoder`、`c2.android.hevc.encoder`、`c2.android.av1.encoder`、`c2.android.vp8.encoder`、`c2.android.vp9.encoder`。这验证目标编码与宿主 FFmpeg 解码，不等于 Android 本机五种 decoder 的实际渲染验收。[真实测试](../../crates/interop_core/tests/video_quality_android.rs)
-
-AV1 的原始 packet 不能在测试中随意拼接为无边界 OBU 输入：本次 raw OBU demux 曾失败；保持 access-unit 边界并使用测试专用 IVF `AV01` 封装后真实解码通过。VP8/VP9 同样使用测试 IVF，H.264/H.265 使用原始 Annex B。该封装仅存在测试，不加入产品播放链路。静止画面不保证定时产生后续关键帧，负例保活通过旧 scrcpy 控制通道真实回复验证；测试不伪造 Native 纹理确认。不存在 encoder 返回 `encoder_unavailable` 后原 session ID/codec 不变；有效质量保存后原会话仍保留旧尺寸参数。
-
-测试工具是临时 `imageio-ffmpeg==0.6.0` 提供的 `ffmpeg 7.0.2-static`，SHA-256 为 `e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99`，不作为产品依赖或分发二进制。执行命令：
-
-```sh
-env INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
-  INTEROP_FFMPEG=/tmp/interop-test-tools/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2 \
-  /home/xiankq/.cargo/bin/cargo +stable test -p interop-core --test video_quality_android -- --ignored --nocapture
-```
-
-补充真实同次启动覆盖：持久化设置保持 VP8 / maxSize 720 时，单次请求 H.264 / maxSize 640，实际解码 **288×640**，随后读取持久化设置仍未改变；含此项完整测试退出 0、耗时 12.79 秒。默认测试另覆盖无设备未知状态、非法参数原子拒绝、设备级偏好隔离/恢复清理、五种 wire ID、解析错误及 codec/encoder 不兼容。AVD 的软件 encoder 成功不代表厂商硬编、长时间运行、多窗口资源或目标设备所有分辨率/FPS 都通过；也没有对未枚举组合实施伪回退。
-
-## 产品与实施边界
-
-真实任务及单实例迁移见[ADR 0005](../adr/0005-real-application-tasks-in-linked-windows.md)；窗口关闭、资源保护和设备声音规则在[交互规则](../../designs/prod/interaction-rules.md)维护。声音按实际打开的控制页面确定设备播放意图，同设备去重，多设备自动混音；固定音源和手动混音模式不属于当前产品。
-
-通话控制与双向语音分别验证；源码接口或普通声音播放不证明目标 HAL、麦克风路由和主控权限均已满足。播放器的实际时间轴、全屏、旋转与 surface 行为以[共享媒体实施](../implementation/architecture.md)及对应运行记录为准。
-
-官方 JAR 与扩展服务的固定版本、源码差异和生命周期见 [servers](../../servers/)。复用服务端 JAR 不等于复用完整客户端；四端依赖说明也不等于[实际整包编译](cross-platform-build-contract.md)通过。
+2026-10-17 API36 x86_64 AVD的8个软件encoder列出H264/H265/AV1/VP8/VP9，五种实际输出均经宿主FFmpeg7.0.2解码为324×720像素；这证明目标编码与宿主解码，不能代替Android本机decoder实际渲染。AV1 raw OBU拼接曾失败，保持access-unit边界并用测试专用IVF AV01后通过；VP8/VP9也用IVF，H264/H265用Annex B。该封装只用于[真实测试](../../crates/interop_core/tests/video_quality_android.rs)，不是播放链路的容器选择。
 
 ## 一手来源索引
 

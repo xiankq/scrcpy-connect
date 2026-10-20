@@ -1,8 +1,8 @@
 # Android MDK / FFmpeg 缩包可行性
 
-本文保留研究与基线测量阶段的事实；后续已实施共享资源、字幕库链接调整及原生库压缩，实际通用包与验证结果见[缩包验收](../implementation/android-package-size.md)。当前打包规则以工具链契约为准。
+基线测量对应提交 `8853d975b00abb157b55d05bf3f4a794fef84416`。共享资源、字幕库链接与压缩候选的后续结果见[缩包验收](../implementation/android-packaging.md#三架构包体对照)。
 
-核查日期：2026-10-19。项目检出为 `8853d975b00abb157b55d05bf3f4a794fef84416`。本文包含既有 debug 产物检查、上游资料研究、ARM64 release 辅助分析及三 ABI release 交付基线构建，没有构建裁剪版、安装应用或完成设备验收。用户要求通用 APK，单 ABI 数据仅用于拆解来源，不能替代交付包体积。当前依赖规则仍以[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)为准；以下候选不代表已采用的新规范。
+核查日期：2026-10-19。本文包含既有 debug 产物检查、上游资料研究、ARM64 release 辅助分析及三 ABI release 交付基线构建，没有构建裁剪版、安装应用或完成设备验收。用户要求通用 APK，单 ABI 数据仅用于拆解来源，不能替代交付包体积。当前依赖规则仍以[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)为准；以下候选不代表已采用的新规范。
 
 ## 实测基线
 
@@ -19,7 +19,7 @@
 
 读取本机 fvp 0.39.1 SDK 的 ARM64 `libffmpeg.so` 内嵌配置，已包含 `--enable-small`、`--enable-lto`、`--disable-debug` 和 `--disable-doc`；ELF 无 `.debug*` / `.symtab`。其功能白名单仍覆盖大量字幕、图片、音视频 codec、封装、滤镜和网络协议，包括项目远控不使用的 HLS、FTP 等。它已经经过通用精简，不能把再次 strip 或打开 small 当成新的主要收益。官方 [avbuild](https://github.com/wang-bin/avbuild/tree/30ba3796c1c3cadad5afa9542d476945b9876c45)提供 lite 构建及 `config-lite.sh`，但仍需与本次实际配置比较，不能仅改用“lite”名称就推断会变小。
 
-## 项目实际使用边界
+## 研究基线的使用边界
 
 - [视频适配器](../../packages/interop_bridge/lib/src/media/fvp_video_player.dart)明确将输入设为 Matroska，经本机 HTTP 打开；Android 优先 `AMediaCodec:async=1`，保留 `FFmpeg:thread_type=slice` 软件后备。
 - [视频 codec 模型](../../crates/interop_core/src/media/codec.rs)处理 H.264、H.265、AV1、VP8、VP9。仅保留 H.264 会缩减现有能力，不能作为透明的体积优化。
@@ -62,9 +62,9 @@ Android 改用系统 MediaCodec / AudioTrack 是更大的架构候选，可减�
 
 ## ARM64 release 完整基线与其他主要占用
 
-用户继续询问约 140 MB 的来源后，实际在 `app/` 执行 `flutter build apk --release --target-platform android-arm64 --analyze-size`，使用既有 release 签名，没有修改源码。Flutter 3.47.6 / Dart 3.13.5；构建输出约 88.6 秒。该阶段 `app-release.apk` 为 **51,294,946 字节（51.3 MB / 48.919 MiB）**，SHA-256 `189dc90f169d3b68f84320236810bc3199d42fd7c05f4476258942672daeb903`。构建通用包前将其保留为 `app/build/app/outputs/flutter-apk/app-arm64-release.apk`，当前 `app-release.apk` 已是下文的三 ABI 通用包。
+用户继续询问约 140 MB 的来源后，实际在 `app/` 执行 `flutter build apk --release --target-platform android-arm64 --analyze-size`，使用既有 release 签名，没有修改源码。Flutter 3.47.6 / Dart 3.13.5；构建输出约 88.6 秒。该阶段 `app-release.apk` 为 **51,294,946 字节（51.3 MB / 48.919 MiB）**，SHA-256 `189dc90f169d3b68f84320236810bc3199d42fd7c05f4476258942672daeb903`。构建通用包前将其保留为 `app/build/app/outputs/flutter-apk/app-arm64-release.apk`，
 
-根目录执行 `dart tool/android.dart verify app/build/app/outputs/flutter-apk/app-release.apk` 通过 ZIP 完整性、签名、单 ARM64 ABI、原生 ELF 及 16 KiB ZIP 对齐检查。没有安装或运行这个包。Flutter 导出的分析文件为 `/home/xiankq/.flutter-devtools/apk-code-size-analysis_01.json`。
+该 ARM64 包通过签名、ZIP、ELF 和16KiB对齐检查，未安装运行。
 
 以下统计来自最终 APK 的 ZIP 条目大小，不是 SDK 缓存或中间产物体积：
 
@@ -81,7 +81,7 @@ Android 改用系统 MediaCodec / AudioTrack 是更大的架构候选，可减�
 | 全部 DEX | 1.131 |
 | JNI、fvp、其余资源和 ZIP 开销 | 0.551 |
 
-历史 `/tmp/connect-final-main-apk.json` 回执对应 147,239,422 字节（140.419 MiB）的 **x86_64 debug** 包；该文件已不在当前产物目录，不能用当前包的细项冒充它的精确分解。当前三 ABI debug 包中，单套 x86_64 Flutter 引擎为 38.226 MiB，ARM64 为 37.030 MiB；共享的 Dart debug kernel 与 isolate snapshot 占 APK 40.486 MiB。release 包不含这些 debug 数据，Dart 改为 AOT。当前 ARM64 debug 包还包含约 14.534 MiB 的 Vulkan validation layer，release 中不存在。因此空包比较必须注明架构和 debug / release 模式，140 MiB 历史包与 48.919 MiB 新包并非同模式、同架构的优化前后对照。
+历史 `/tmp/connect-final-main-apk.json` 回执对应 147,239,422 字节（140.419 MiB）的 **x86_64 debug** 包；该文件已不在当前产物目录，不能用当前包的细项冒充它的精确分解。该三 ABI debug 包中，单套 x86_64 Flutter 引擎为 38.226 MiB，ARM64 为 37.030 MiB；共享的 Dart debug kernel 与 isolate snapshot 占 APK 40.486 MiB。release 包不含这些 debug 数据，Dart 改为 AOT。该 ARM64 debug 包还包含约 14.534 MiB 的 Vulkan validation layer，release 中不存在。因此空包比较必须注明架构和 debug / release 模式，140 MiB 历史包与 48.919 MiB 新包并非同模式、同架构的优化前后对照。
 
 ### Rust 内嵌产物占一半，且 JAR 存在重复
 
@@ -96,7 +96,7 @@ Android 改用系统 MediaCodec / AudioTrack 是更大的架构候选，可减�
 
 嵌入产物合计 **6.789 MiB，约占 Rust ELF 的 49.97%**，位于约 7.123 MiB 的 `.rodata` 中；`.text` 为 5,278,580 字节。scrcpy 的两处偏移为 `0xbc395` / `0x3a6b84`，companion 为 `0x38dd9e` / `0x67858d`，每处均匹配完整文件，不只是命中相同字符串。
 
-[scrcpy](../../crates/interop_core/src/scrcpy.rs)和[companion](../../crates/interop_core/src/companion.rs)各有一处 `const SERVER: &[u8] = include_bytes!(...)`。可实验唯一 `static` 或共享产物引用能否消除常量副本；**副本事实已确认，编译器产生副本的机制和消重修复尚未验证**。额外完整副本共 3,012,783 字节（2.873 MiB），是明确的优化候选上界。
+基线中 scrcpy 与 companion 各通过 `const SERVER: &[u8] = include_bytes!(...)` 引入；额外完整副本共3,012,783字节（2.873MiB）。这是当时二进制的候选收益上界，后续共享资源实现与实测另见[缩包验收](../implementation/android-packaging.md#三架构包体对照)。
 
 另一个候选是无损压缩后内嵌、部署前恢复原始字节。只读内存 zlib level 9 测试中，单份 scrcpy 产物从 2,955,092 字节降到 968,185 字节，companion 从 57,691 降到 29,007，四 helper 合计从 1,093,196 降到 599,970；这尚未扣除解压代码和运行成本，也未实现产物摘要与部署校验，不能当作已实现节省。应保留原始供应链输入及精确还原字节。
 
@@ -108,7 +108,7 @@ release 已将 MaterialIcons 从约 1.57 MiB 裁到 1,824 字节，将主 Lucide
 
 ## 用户交付口径：三 ABI 通用 release 实测
 
-用户明确需要多架构汇集 APK 后，执行 `dart tool/android.dart build --abi universal`。实际包含 `armeabi-v7a`、`arm64-v8a`、`x86_64`，构建约 113.84 秒。当前 `app/build/app/outputs/flutter-apk/app-release.apk` 为 **142,854,555 字节（142.9 MB / 136.237 MiB）**，SHA-256 `630e77df116e0b8d63dd641e9ecef3776e87fa0a3a254087abb87ca7a2db5b32`。工具自带的签名、ZIP 完整性、三 ABI、ELF 与 16 KiB ZIP 对齐检查全部通过，没有安装运行。
+用户明确需要多架构汇集 APK 后，执行 `dart tool/android.dart build --abi universal`。实际包含 `armeabi-v7a`、`arm64-v8a`、`x86_64`，构建约 113.84 秒。该阶段通用包为 **142,854,555 字节（142.9 MB / 136.237 MiB）**，SHA-256 `630e77df116e0b8d63dd641e9ecef3776e87fa0a3a254087abb87ca7a2db5b32`。工具自带的签名、ZIP 完整性、三 ABI、ELF 与 16 KiB ZIP 对齐检查全部通过，没有安装运行。
 
 这证明正式通用包本身约为 140 MB，不能将该量级仅归因于 debug，也不能将 ARM64 的 51.3 MB 报为用户要求的交付体积。
 
@@ -129,4 +129,4 @@ release 已将 MaterialIcons 从约 1.57 MiB 裁到 1,824 字节，将主 Lucide
 
 因此，在通用 APK 中将这些与主控 ABI 无关的公共执行产物改为共享资源、让三种 Rust 架构复用，是比仅消除各 ELF 内的常量副本更完整的候选。它需要调整资源加载和部署接缝；文件字节差额不是已完成优化，也未扣除适配代码成本。保持四种被控 ABI helper，不按主控 ABI 丢弃能力。共享资源再压缩的净收益同样需构建验证。
 
-本次没有构建同 Flutter 版本、同三 ABI 模式的空应用，因此不把泛指的“空包 20 MB”作为已测对照数据。已清理本次生成的重复 Gradle APK 和临时 size trace，保留通用交付包、ARM64 对照包、导出的 DevTools 分析及可复用编译缓存。
+本次没有构建同 Flutter 版本、同三 ABI 模式的空应用，因此不把泛指的“空包 20 MB”作为已测对照数据。
