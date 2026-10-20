@@ -9,9 +9,11 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 import 'glass_material.dart' show readGlassSceneMarker;
 
 const _scenes = [
+  'background-light',
   'tab-light-rest',
   'tab-light-held',
   'tab-light-dragged',
+  'background-dark',
   'tab-dark-rest',
   'tab-dark-held',
   'tab-dark-dragged',

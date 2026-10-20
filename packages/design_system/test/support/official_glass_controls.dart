@@ -44,10 +44,7 @@ Widget officialGlassNavigation(
           : DesignTokens.colorGlassSelected,
       settings: GlassMaterial.settings(context),
       quality: GlassMaterial.quality(context),
-      indicatorSettings: opaque
-          ? GlassMaterial.settings(context)
-                .copyWith(glassColor: DesignTokens.colorTransparent)
-          : null,
+      indicatorSettings: GlassMaterial.navigationLensSettings(context),
       pressScale: reducedMotion
           ? 1
           : DesignTokens.componentGlassInteractionScale,

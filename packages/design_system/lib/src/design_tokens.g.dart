@@ -23,6 +23,7 @@ abstract final class DesignTokens {
   static const colorBlack = Color(0xff000000);
   static const colorCanvas = Color(0xfff2f2f7);
   static const colorCanvasDark = Color(0xff000000);
+  static const colorCanvasLabel = Color(0xff808080);
   static const colorDanger = Color(0xffff3b30);
   static const colorDangerContainer = Color(0xffffebea);
   static const colorDangerContainerDark = Color(0xff332021);
@@ -136,11 +137,10 @@ abstract final class DesignTokens {
   );
   static const componentCallAvatarSize = 104.0;
   static const componentCanvasHeadingHeight = 96.0;
+  static const componentCanvasHeadingTextColor = Color(0xff808080);
   static const componentChipHeight = 32.0;
   static const componentChipPadding = 12.0;
   static const componentChipRounded = 999.0;
-  static const componentComponentBoardHeight = 420.0;
-  static const componentComponentBoardWidth = 1848.0;
   static const componentConnectionFieldBackgroundColor = Color(0xffffffff);
   static const componentConnectionFieldHeight = 52.0;
   static const componentConnectionFieldPadding = 16.0;
@@ -249,6 +249,9 @@ abstract final class DesignTokens {
   static const componentNavigationDarkBackgroundColor = Color(0x991c1c1e);
   static const componentNavigationDarkTextColor = Color(0xffffffff);
   static const componentNavigationHeight = 64.0;
+  static const componentNavigationLensOpticalDepth = 20.0;
+  static const componentNavigationLensRefractionIndex = 1.1;
+  static const componentNavigationLensSpecularIntensity = 2.0;
   static const componentNavigationPadding = 8.0;
   static const componentNavigationRounded = 999.0;
   static const componentPageBodyHeight = 632.0;

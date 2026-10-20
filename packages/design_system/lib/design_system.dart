@@ -585,6 +585,13 @@ abstract final class GlassMaterial {
     );
   }
 
+  /// The tab bar's local clear lens, separate from its regular glass track.
+  static liquid.LiquidGlassSettings navigationLensSettings(
+    BuildContext context,
+  ) => opaque(context)
+      ? settings(context).copyWith(glassColor: DesignTokens.colorTransparent)
+      : liquid.AnimatedGlassIndicator.baseIndicatorSettings;
+
   /// Registers Material brightness and system accessibility with the backend.
   /// Backdrop groups belong to local control groups, never the root Navigator.
   static Widget wrap({required Widget child}) => liquid.LiquidGlassWidgets.wrap(

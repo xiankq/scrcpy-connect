@@ -114,6 +114,7 @@ void main() {
           'brightness': state.brightness.name,
           'reduceTransparency': state.opaque,
           'selectedIndex': state.selected,
+          'navigationBounds': _rect(tester.getRect(find.byKey(_bar))),
           'selectionCount': state.selections.length,
           'renderer': renderer,
           'indicators': indicators,
@@ -130,6 +131,11 @@ void main() {
         await _settle(tester);
         final suffix = brightness.name;
         expect(find.byType(liquid.GlassTabBar), findsOneWidget);
+        state.revealBackground(true);
+        await _settle(tester);
+        await capture('background-$suffix');
+        state.revealBackground(false);
+        await _settle(tester);
         await capture('tab-$suffix-rest');
         final rect = tester.getRect(find.byKey(_bar));
         final first = Offset(rect.left + rect.width / 6, rect.center.dy);
@@ -277,6 +283,7 @@ class _ComponentsHarness extends StatefulWidget {
 class _ComponentsHarnessState extends State<_ComponentsHarness> {
   Brightness brightness = Brightness.light;
   bool opaque = false;
+  bool backgroundOnly = false;
   int selected = 0;
   int marker = 0;
   int iconActivations = 0;
@@ -289,6 +296,7 @@ class _ComponentsHarnessState extends State<_ComponentsHarness> {
         selected = 0;
         selections.clear();
       });
+  void revealBackground(bool value) => setState(() => backgroundOnly = value);
   void setMarker(int code) => setState(() => marker = code);
 
   @override
@@ -384,61 +392,74 @@ class _ComponentsHarnessState extends State<_ComponentsHarness> {
                     const Spacer(),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-                      child: GlassTabBar.bottom(
+                      child: SizedBox(
                         key: _bar,
-                        tabs: const [
-                          GlassTab(icon: Icon(Icons.devices), label: '设备'),
-                          GlassTab(icon: Icon(Icons.swap_vert), label: '传输'),
-                          GlassTab(icon: Icon(Icons.settings), label: '设置'),
-                        ],
-                        selectedIndex: selected,
-                        onTabSelected: (index) => setState(() {
-                          selected = index;
-                          selections.add(index);
-                        }),
+                        height: GlassMaterial.navigationHeight(context),
+                        child: Visibility(
+                          visible: !backgroundOnly,
+                          maintainState: true,
+                          maintainAnimation: true,
+                          maintainSize: true,
+                          child: GlassTabBar.bottom(
+                            tabs: const [
+                              GlassTab(icon: Icon(Icons.devices), label: '设备'),
+                              GlassTab(
+                                icon: Icon(Icons.swap_vert),
+                                label: '传输',
+                              ),
+                              GlassTab(icon: Icon(Icons.settings), label: '设置'),
+                            ],
+                            selectedIndex: selected,
+                            onTabSelected: (index) => setState(() {
+                              selected = index;
+                              selections.add(index);
+                            }),
 
-                        horizontalPadding: 0,
-                        verticalPadding: 0,
-                        barHeight: GlassMaterial.navigationHeight(context),
-                        barBorderRadius:
-                            DesignTokens.componentNavigationRounded,
-                        tabPadding: const EdgeInsets.symmetric(
-                          horizontal: DesignTokens.componentNavigationPadding,
+                            horizontalPadding: 0,
+                            verticalPadding: 0,
+                            barHeight: GlassMaterial.navigationHeight(context),
+                            barBorderRadius:
+                                DesignTokens.componentNavigationRounded,
+                            tabPadding: const EdgeInsets.symmetric(
+                              horizontal:
+                                  DesignTokens.componentNavigationPadding,
+                            ),
+                            iconLabelSpacing: DesignTokens.spacingMicro,
+                            iconSize: DesignTokens.componentIconSize,
+                            labelFontSize: Theme.of(context)
+                                .textTheme
+                                .labelLarge!
+                                .fontSize!,
+                            textStyle: Theme.of(context).textTheme.labelLarge,
+                            selectedIconColor: Theme.of(context)
+                                .colorScheme
+                                .primary,
+                            selectedLabelColor: Theme.of(context)
+                                .colorScheme
+                                .primary,
+                            unselectedIconColor: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                            unselectedLabelColor: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                            indicatorColor: GlassMaterial.opaque(context)
+                                ? Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHigh
+                                : Theme.of(context).brightness ==
+                                      Brightness.dark
+                                ? DesignTokens.colorGlassSelectedDark
+                                : DesignTokens.colorGlassSelected,
+                            settings: GlassMaterial.settings(context),
+                            quality: GlassMaterial.quality(context),
+                            indicatorSettings:
+                                GlassMaterial.navigationLensSettings(context),
+                            pressScale: GlassMaterial.reduceMotion(context)
+                                ? 1
+                                : DesignTokens.componentGlassInteractionScale,
+                          ),
                         ),
-                        iconLabelSpacing: DesignTokens.spacingMicro,
-                        iconSize: DesignTokens.componentIconSize,
-                        labelFontSize: Theme.of(context)
-                            .textTheme
-                            .labelLarge!
-                            .fontSize!,
-                        textStyle: Theme.of(context).textTheme.labelLarge,
-                        selectedIconColor: Theme.of(context)
-                            .colorScheme
-                            .primary,
-                        selectedLabelColor: Theme.of(context)
-                            .colorScheme
-                            .primary,
-                        unselectedIconColor: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant,
-                        unselectedLabelColor: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant,
-                        indicatorColor: GlassMaterial.opaque(context)
-                            ? Theme.of(context).colorScheme.surfaceContainerHigh
-                            : Theme.of(context).brightness == Brightness.dark
-                            ? DesignTokens.colorGlassSelectedDark
-                            : DesignTokens.colorGlassSelected,
-                        settings: GlassMaterial.settings(context),
-                        quality: GlassMaterial.quality(context),
-                        indicatorSettings: GlassMaterial.opaque(context)
-                            ? GlassMaterial.settings(context).copyWith(
-                                glassColor: DesignTokens.colorTransparent,
-                              )
-                            : null,
-                        pressScale: GlassMaterial.reduceMotion(context)
-                            ? 1
-                            : DesignTokens.componentGlassInteractionScale,
                       ),
                     ),
                   ],

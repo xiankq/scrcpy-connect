@@ -176,14 +176,25 @@ class HomePage extends HookConsumerWidget {
                             : theme.brightness == Brightness.dark
                             ? DesignTokens.colorGlassSelectedDark
                             : DesignTokens.colorGlassSelected,
-                        settings: GlassMaterial.settings(context),
+                        settings: GlassMaterial.settings(context).copyWith(
+                          shadow:
+                              !opaque && theme.brightness == Brightness.light
+                              ? const [
+                                  BoxShadow(
+                                    color: ConnectTokens.shadow,
+                                    blurRadius: ConnectTokens.shadowBlur,
+                                    offset: Offset(
+                                      0,
+                                      ConnectTokens.shadowOffset,
+                                    ),
+                                  ),
+                                ]
+                              : const [],
+                        ),
                         quality: GlassMaterial.quality(context),
-                        // Keep the official clear interactive lens defaults.
-                        indicatorSettings: opaque
-                            ? GlassMaterial.settings(context).copyWith(
-                                glassColor: DesignTokens.colorTransparent,
-                              )
-                            : null,
+                        indicatorSettings: GlassMaterial.navigationLensSettings(
+                          context,
+                        ),
                         pressScale: reducedMotion
                             ? 1
                             : DesignTokens.componentGlassInteractionScale,
