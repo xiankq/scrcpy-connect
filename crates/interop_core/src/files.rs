@@ -678,6 +678,74 @@ impl Runtime {
             json!({"transfers":tasks.iter().map(transfer_value).collect::<Vec<_>>(),"batches":batch_values(&tasks)}),
         )
     }
+
+    /// Forget durable history only, after every selected batch has stopped.
+    /// Files and cache leases belong to their existing owners, not this action.
+    pub(crate) async fn remove_transfer_record(&self, p: &Value) -> CoreResult<Value> {
+        let transfer = p["transferId"].as_str().filter(|id| !id.is_empty());
+        let batch = p["batchId"].as_str().filter(|id| !id.is_empty());
+        if transfer.is_some() == batch.is_some() {
+            return Err(CoreError::new(
+                "invalid_argument",
+                "请选择一条任务或一批传输。",
+            ));
+        }
+        // Settle incoming-share ownership before its transfer evidence disappears.
+        self.reconcile_shares_from_transfers().await?;
+        let _cache = self.media_cache.gate.lock().await;
+        let _persistence = self.persistence.lock().await;
+        let mut tasks = self.activities.transfers.lock().await;
+        let target_batch = match transfer {
+            Some(id) => tasks.get(id).map(|task| task.batch_id.as_str()),
+            None => batch,
+        }
+        .ok_or_else(|| CoreError::new("not_found", "传输记录已不存在。"))?
+        .to_owned();
+        if tasks.values().any(|task| {
+            task.batch_id == target_batch
+                && (!terminal(&task.status)
+                    || (task.kind == "directory"
+                        && task.status == "completed"
+                        && !task.tree_verified))
+        }) {
+            return Err(CoreError::new(
+                "transfer_active",
+                "同批传输尚未结束，请先停止传输。",
+            ));
+        }
+        let mut ids: std::collections::HashSet<String> = tasks
+            .values()
+            .filter(|task| match transfer {
+                Some(id) => task.id == id,
+                None => task.batch_id == target_batch,
+            })
+            .map(|task| task.id.clone())
+            .collect();
+        if ids.is_empty() {
+            return Err(CoreError::new("not_found", "传输记录已不存在。"));
+        }
+        // Removing a directory row includes its descendants, never orphaning them.
+        loop {
+            let children: Vec<_> = tasks
+                .values()
+                .filter(|task| task.parent_id.as_ref().is_some_and(|id| ids.contains(id)))
+                .map(|task| task.id.clone())
+                .collect();
+            let before = ids.len();
+            ids.extend(children);
+            if ids.len() == before {
+                break;
+            }
+        }
+        let ids: Vec<_> = ids.into_iter().collect();
+        self.transfer_store.lock().await.remove(ids.clone()).await?;
+        for id in &ids {
+            tasks.remove(id);
+        }
+        drop(tasks);
+        self.emit("transfer.changed", None, json!({"removedIds":ids}));
+        Ok(json!({"removedIds":ids,"filesRemoved":false}))
+    }
     pub(crate) async fn start_transfer(
         self: &Arc<Self>,
         command: &str,

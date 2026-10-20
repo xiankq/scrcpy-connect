@@ -222,7 +222,10 @@
     },
     {
       "name": "devices.pair.qr",
-      "owner": "core"
+      "owner": "core",
+      "optional": {
+        "deviceId": "string"
+      }
     },
     {
       "name": "devices.rename",
@@ -246,7 +249,11 @@
       "name": "devices.wireless",
       "owner": "core",
       "required": {
-        "deviceId": "string"
+        "deviceId": "string",
+        "address": "string"
+      },
+      "optional": {
+        "port": "integer"
       }
     },
     {
@@ -395,6 +402,67 @@
         "path": "string",
         "query": "text",
         "filter": "string"
+      }
+    },
+    {
+      "name": "identity.device.get",
+      "owner": "core",
+      "result": {
+        "scope": "string",
+        "fingerprint": "string"
+      },
+      "required": {
+        "deviceId": "string"
+      }
+    },
+    {
+      "name": "identity.device.import",
+      "owner": "core",
+      "result": {
+        "scope": "string",
+        "fingerprint": "string"
+      },
+      "required": {
+        "deviceId": "string",
+        "privateKeyPem": "string"
+      }
+    },
+    {
+      "name": "identity.device.useGlobal",
+      "owner": "core",
+      "result": {
+        "scope": "string",
+        "fingerprint": "string"
+      },
+      "required": {
+        "deviceId": "string"
+      }
+    },
+    {
+      "name": "identity.global.get",
+      "owner": "core",
+      "result": {
+        "scope": "string",
+        "fingerprint": "string"
+      }
+    },
+    {
+      "name": "identity.global.import",
+      "owner": "core",
+      "result": {
+        "scope": "string",
+        "fingerprint": "string"
+      },
+      "required": {
+        "privateKeyPem": "string"
+      }
+    },
+    {
+      "name": "identity.global.reset",
+      "owner": "core",
+      "result": {
+        "scope": "string",
+        "fingerprint": "string"
       }
     },
     {
@@ -848,6 +916,14 @@
       "owner": "core",
       "result": {
         "transfers": "array"
+      }
+    },
+    {
+      "name": "transfers.remove",
+      "owner": "core",
+      "optional": {
+        "transferId": "string",
+        "batchId": "string"
       }
     },
     {

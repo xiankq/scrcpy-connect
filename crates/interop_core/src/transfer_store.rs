@@ -212,6 +212,10 @@ impl TransferStore {
         self.persist_delta(upserts, removed).await
     }
 
+    pub(crate) async fn remove(&mut self, ids: Vec<String>) -> CoreResult<()> {
+        self.persist_delta(HashMap::new(), ids).await
+    }
+
     async fn persist_delta(
         &mut self,
         upserts: HashMap<String, Value>,

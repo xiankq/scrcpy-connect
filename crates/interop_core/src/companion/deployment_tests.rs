@@ -170,10 +170,20 @@ async fn real_companion_transport_loss_removes_its_jar_after_process_exit() {
     let inspection = Client::connect_tcp(
         &endpoint,
         interop_adb::ConnectOptions {
-            identity: Some(runtime.identity.clone()),
+            identity: Some(
+                runtime
+                    .identities
+                    .selected(None)
+                    .await
+                    .unwrap()
+                    .identity
+                    .clone(),
+            ),
             tls: Some(
-                interop_adb::wireless::TlsConfig::experimental_rustcrypto(&runtime.identity)
-                    .unwrap(),
+                interop_adb::wireless::TlsConfig::experimental_rustcrypto(
+                    &runtime.identities.selected(None).await.unwrap().identity,
+                )
+                .unwrap(),
             ),
             operations: OperationOptions {
                 timeout: Duration::from_secs(5),
@@ -269,9 +279,20 @@ async fn real_managed_launcher_preserves_exit_and_reaps_interrupted_children() {
     let root = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(root.path()).await.unwrap();
     let options = interop_adb::ConnectOptions {
-        identity: Some(runtime.identity.clone()),
+        identity: Some(
+            runtime
+                .identities
+                .selected(None)
+                .await
+                .unwrap()
+                .identity
+                .clone(),
+        ),
         tls: Some(
-            interop_adb::wireless::TlsConfig::experimental_rustcrypto(&runtime.identity).unwrap(),
+            interop_adb::wireless::TlsConfig::experimental_rustcrypto(
+                &runtime.identities.selected(None).await.unwrap().identity,
+            )
+            .unwrap(),
         ),
         operations: OperationOptions {
             timeout: Duration::from_secs(5),

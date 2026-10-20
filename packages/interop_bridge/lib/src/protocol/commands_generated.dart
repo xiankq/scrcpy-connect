@@ -104,7 +104,10 @@ enum InteropCommand {
   ),
   devicesList("devices.list", result: {'devices': ProtocolFieldType.array}),
   devicesPair("devices.pair"),
-  devicesPairQr("devices.pair.qr"),
+  devicesPairQr(
+    "devices.pair.qr",
+    optional: {'deviceId': ProtocolFieldType.string},
+  ),
   devicesRename(
     "devices.rename",
     required: {'deviceId': ProtocolFieldType.string},
@@ -113,7 +116,11 @@ enum InteropCommand {
   devicesWake("devices.wake", required: {'deviceId': ProtocolFieldType.string}),
   devicesWireless(
     "devices.wireless",
-    required: {'deviceId': ProtocolFieldType.string},
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'address': ProtocolFieldType.string,
+    },
+    optional: {'port': ProtocolFieldType.integer},
   ),
   documentCancel("document.cancel"),
   documentCommit(
@@ -194,6 +201,55 @@ enum InteropCommand {
       'path': ProtocolFieldType.string,
       'query': ProtocolFieldType.text,
       'filter': ProtocolFieldType.string,
+    },
+  ),
+  identityDeviceGet(
+    "identity.device.get",
+    required: {'deviceId': ProtocolFieldType.string},
+    result: {
+      'scope': ProtocolFieldType.string,
+      'fingerprint': ProtocolFieldType.string,
+    },
+  ),
+  identityDeviceImport(
+    "identity.device.import",
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'privateKeyPem': ProtocolFieldType.string,
+    },
+    result: {
+      'scope': ProtocolFieldType.string,
+      'fingerprint': ProtocolFieldType.string,
+    },
+  ),
+  identityDeviceUseGlobal(
+    "identity.device.useGlobal",
+    required: {'deviceId': ProtocolFieldType.string},
+    result: {
+      'scope': ProtocolFieldType.string,
+      'fingerprint': ProtocolFieldType.string,
+    },
+  ),
+  identityGlobalGet(
+    "identity.global.get",
+    result: {
+      'scope': ProtocolFieldType.string,
+      'fingerprint': ProtocolFieldType.string,
+    },
+  ),
+  identityGlobalImport(
+    "identity.global.import",
+    required: {'privateKeyPem': ProtocolFieldType.string},
+    result: {
+      'scope': ProtocolFieldType.string,
+      'fingerprint': ProtocolFieldType.string,
+    },
+  ),
+  identityGlobalReset(
+    "identity.global.reset",
+    result: {
+      'scope': ProtocolFieldType.string,
+      'fingerprint': ProtocolFieldType.string,
     },
   ),
   mediaCacheAcquire(
@@ -492,6 +548,13 @@ enum InteropCommand {
   transfersList(
     "transfers.list",
     result: {'transfers': ProtocolFieldType.array},
+  ),
+  transfersRemove(
+    "transfers.remove",
+    optional: {
+      'transferId': ProtocolFieldType.string,
+      'batchId': ProtocolFieldType.string,
+    },
   ),
   transfersResolve(
     "transfers.resolve",

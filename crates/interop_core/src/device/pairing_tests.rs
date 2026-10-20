@@ -495,3 +495,159 @@ async fn pairing_attempt_aliases_cannot_collide_with_device_operations() {
         "invalid pairing aliases must fail before opening any network socket"
     );
 }
+
+#[tokio::test]
+async fn qr_reauthorization_requires_the_selected_device_identity() {
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let device = blank_device("phone.local".into(), 0, TransportKind::Tls);
+    let id = device.id.clone();
+    runtime.store.write().await.devices.push(device);
+    let key = Identity::generate().unwrap();
+    runtime
+        .invoke(
+            "identity.device.import",
+            json!({"deviceId":id,"privateKeyPem":key.to_pkcs8_pem().unwrap().as_str()}),
+        )
+        .await
+        .unwrap();
+    drop(runtime);
+    tokio::fs::remove_file(directory.path().join("device_identities.json"))
+        .await
+        .unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let error = runtime
+        .invoke("devices.pair.qr", json!({"deviceId":id}))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "identity_unavailable");
+    assert!(runtime.qr_attempt.lock().await.is_none());
+    assert!(runtime.device_operations.lock().await.is_empty());
+    assert_eq!(runtime.store.read().await.devices.len(), 1);
+    let error = runtime
+        .invoke("devices.pair.qr", json!({"deviceId":"missing"}))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "not_found");
+
+    // Adding a new device has no device-specific identity to recover.
+    let generated = runtime.invoke("devices.pair.qr", json!({})).await.unwrap();
+    assert!(
+        generated["payload"]
+            .as_str()
+            .unwrap()
+            .starts_with("WIFI:T:ADB;")
+    );
+    runtime
+        .invoke(
+            "devices.cancel",
+            json!({"attemptId":generated["attemptId"]}),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn qr_reauthorization_disconnect_cancels_the_original_attempt() {
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let device = blank_device("phone.local".into(), 0, TransportKind::Tls);
+    let id = device.id.clone();
+    runtime.store.write().await.devices.push(device);
+    runtime
+        .invoke("devices.pair.qr", json!({"deviceId":id}))
+        .await
+        .unwrap();
+    let token = runtime.qr_attempt.lock().await.as_ref().unwrap().1.clone();
+    assert_eq!(
+        runtime.device_operations.lock().await.get(&id),
+        Some(&token)
+    );
+    runtime.disconnect_device(&id, false).await.unwrap();
+    assert!(token.is_cancelled());
+    let fingerprint = runtime
+        .identities
+        .selected(Some(&id))
+        .await
+        .unwrap()
+        .fingerprint
+        .clone();
+    let error = runtime
+        .finish_pairing_with_identity(
+            "late-guid".into(),
+            "other.local".into(),
+            Some(&id),
+            &token,
+            Some(&fingerprint),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "cancelled");
+    assert_eq!(runtime.device(&id).await.unwrap().address, "phone.local");
+    assert_eq!(runtime.store.read().await.devices.len(), 1);
+}
+
+#[tokio::test]
+async fn qr_reauthorization_commits_only_the_selected_identity_to_the_original_record() {
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let device = blank_device("phone.local".into(), 0, TransportKind::Tls);
+    let id = device.id.clone();
+    runtime.store.write().await.devices.push(device);
+    let original = runtime.identities.selected(Some(&id)).await.unwrap();
+    let key = Identity::generate().unwrap();
+    let imported = runtime
+        .invoke(
+            "identity.device.import",
+            json!({"deviceId":id,"privateKeyPem":key.to_pkcs8_pem().unwrap().as_str()}),
+        )
+        .await
+        .unwrap();
+    let token = CancellationToken::new();
+    let error = runtime
+        .finish_pairing_with_identity(
+            "late-guid".into(),
+            "other.local".into(),
+            Some(&id),
+            &token,
+            Some(&original.fingerprint),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "identity_changed");
+    assert!(runtime.device(&id).await.unwrap().guid.is_none());
+
+    let (transport, _peer) = tokio::io::duplex(4096);
+    let client = Client::from_negotiated_transport(
+        transport,
+        interop_adb::DeviceInfo {
+            version: protocol::VERSION,
+            max_payload: 4096,
+            banner: "device::\0".into(),
+            features: Default::default(),
+        },
+    )
+    .unwrap();
+    runtime
+        .connections
+        .lock()
+        .await
+        .insert(id.clone(), client.clone());
+    let result = runtime
+        .finish_pairing_with_identity(
+            "paired-guid".into(),
+            "other.local".into(),
+            Some(&id),
+            &token,
+            imported["fingerprint"].as_str(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result["deviceId"], id);
+    assert_eq!(result["connected"], true);
+    let store = runtime.store.read().await;
+    assert_eq!(store.devices.len(), 1);
+    assert_eq!(store.devices[0].guid.as_deref(), Some("paired-guid"));
+    assert_eq!(store.devices[0].address, "other.local");
+    client.close();
+}

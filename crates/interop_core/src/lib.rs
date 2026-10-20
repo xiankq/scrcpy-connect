@@ -17,6 +17,7 @@ mod file_search;
 mod file_tree;
 mod files;
 mod gallery_index;
+mod host_identity;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod local_publication;
 pub mod media;
@@ -32,6 +33,7 @@ mod runtime;
 mod scrcpy;
 pub mod sharing;
 mod snapshot;
+mod tcpip;
 mod transfer_store;
 
 pub use model::{CoreError, CoreResult};

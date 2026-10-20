@@ -57,6 +57,12 @@ pub(crate) enum Command {
     FilesSearchCancel,
     FilesSearchGet,
     FilesSearchStart,
+    IdentityDeviceGet,
+    IdentityDeviceImport,
+    IdentityDeviceUseGlobal,
+    IdentityGlobalGet,
+    IdentityGlobalImport,
+    IdentityGlobalReset,
     MediaCacheAcquire,
     MediaCacheClear,
     MediaCacheConfigure,
@@ -119,6 +125,7 @@ pub(crate) enum Command {
     TransfersCancel,
     TransfersGet,
     TransfersList,
+    TransfersRemove,
     TransfersResolve,
     TransfersResume,
 }
@@ -179,6 +186,12 @@ impl Command {
             "files.search.cancel" => Self::FilesSearchCancel,
             "files.search.get" => Self::FilesSearchGet,
             "files.search.start" => Self::FilesSearchStart,
+            "identity.device.get" => Self::IdentityDeviceGet,
+            "identity.device.import" => Self::IdentityDeviceImport,
+            "identity.device.useGlobal" => Self::IdentityDeviceUseGlobal,
+            "identity.global.get" => Self::IdentityGlobalGet,
+            "identity.global.import" => Self::IdentityGlobalImport,
+            "identity.global.reset" => Self::IdentityGlobalReset,
             "media.cache.acquire" => Self::MediaCacheAcquire,
             "media.cache.clear" => Self::MediaCacheClear,
             "media.cache.configure" => Self::MediaCacheConfigure,
@@ -241,6 +254,7 @@ impl Command {
             "transfers.cancel" => Self::TransfersCancel,
             "transfers.get" => Self::TransfersGet,
             "transfers.list" => Self::TransfersList,
+            "transfers.remove" => Self::TransfersRemove,
             "transfers.resolve" => Self::TransfersResolve,
             "transfers.resume" => Self::TransfersResume,
             _ => return None,
@@ -302,6 +316,12 @@ impl Command {
             Self::FilesSearchCancel => "files.search.cancel",
             Self::FilesSearchGet => "files.search.get",
             Self::FilesSearchStart => "files.search.start",
+            Self::IdentityDeviceGet => "identity.device.get",
+            Self::IdentityDeviceImport => "identity.device.import",
+            Self::IdentityDeviceUseGlobal => "identity.device.useGlobal",
+            Self::IdentityGlobalGet => "identity.global.get",
+            Self::IdentityGlobalImport => "identity.global.import",
+            Self::IdentityGlobalReset => "identity.global.reset",
             Self::MediaCacheAcquire => "media.cache.acquire",
             Self::MediaCacheClear => "media.cache.clear",
             Self::MediaCacheConfigure => "media.cache.configure",
@@ -364,6 +384,7 @@ impl Command {
             Self::TransfersCancel => "transfers.cancel",
             Self::TransfersGet => "transfers.get",
             Self::TransfersList => "transfers.list",
+            Self::TransfersRemove => "transfers.remove",
             Self::TransfersResolve => "transfers.resolve",
             Self::TransfersResume => "transfers.resume",
         }
@@ -448,10 +469,16 @@ impl Command {
                 name: "deviceId",
                 kind: FieldType::String,
             }],
-            Self::DevicesWireless => &[Field {
-                name: "deviceId",
-                kind: FieldType::String,
-            }],
+            Self::DevicesWireless => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "address",
+                    kind: FieldType::String,
+                },
+            ],
             Self::DocumentCommit => &[
                 Field {
                     name: "path",
@@ -568,6 +595,28 @@ impl Command {
                     kind: FieldType::String,
                 },
             ],
+            Self::IdentityDeviceGet => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
+            Self::IdentityDeviceImport => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "privateKeyPem",
+                    kind: FieldType::String,
+                },
+            ],
+            Self::IdentityDeviceUseGlobal => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
+            Self::IdentityGlobalImport => &[Field {
+                name: "privateKeyPem",
+                kind: FieldType::String,
+            }],
             Self::MediaCacheAcquire => &[Field {
                 name: "transferId",
                 kind: FieldType::String,
@@ -733,6 +782,14 @@ impl Command {
                     kind: FieldType::Boolean,
                 },
             ],
+            Self::DevicesPairQr => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
+            Self::DevicesWireless => &[Field {
+                name: "port",
+                kind: FieldType::Integer,
+            }],
             Self::MediaCacheConfigure => &[
                 Field {
                     name: "outgoingDirectory",
@@ -929,6 +986,16 @@ impl Command {
                     kind: FieldType::Number,
                 },
             ],
+            Self::TransfersRemove => &[
+                Field {
+                    name: "transferId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "batchId",
+                    kind: FieldType::String,
+                },
+            ],
             _ => &[],
         }
     }
@@ -972,6 +1039,66 @@ impl Command {
                 name: "devices",
                 kind: FieldType::Array,
             }],
+            Self::IdentityDeviceGet => &[
+                Field {
+                    name: "scope",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "fingerprint",
+                    kind: FieldType::String,
+                },
+            ],
+            Self::IdentityDeviceImport => &[
+                Field {
+                    name: "scope",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "fingerprint",
+                    kind: FieldType::String,
+                },
+            ],
+            Self::IdentityDeviceUseGlobal => &[
+                Field {
+                    name: "scope",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "fingerprint",
+                    kind: FieldType::String,
+                },
+            ],
+            Self::IdentityGlobalGet => &[
+                Field {
+                    name: "scope",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "fingerprint",
+                    kind: FieldType::String,
+                },
+            ],
+            Self::IdentityGlobalImport => &[
+                Field {
+                    name: "scope",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "fingerprint",
+                    kind: FieldType::String,
+                },
+            ],
+            Self::IdentityGlobalReset => &[
+                Field {
+                    name: "scope",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "fingerprint",
+                    kind: FieldType::String,
+                },
+            ],
             Self::SessionList => &[Field {
                 name: "sessions",
                 kind: FieldType::Array,

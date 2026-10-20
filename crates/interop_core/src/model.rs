@@ -143,6 +143,8 @@ fn observation_default() -> bool {
 pub struct Store {
     pub version: u32,
     pub identity_fingerprint: String,
+    #[serde(default)]
+    pub device_identity_fingerprints: std::collections::HashMap<String, String>,
     pub devices: Vec<Device>,
     pub settings: Value,
 }

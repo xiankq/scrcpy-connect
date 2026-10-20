@@ -17,8 +17,7 @@ use tokio::{
 
 pub struct Runtime {
     pub(crate) root: PathBuf,
-    pub(crate) identity: Identity,
-    pub(crate) tls_config: tokio::sync::OnceCell<interop_adb::wireless::TlsConfig>,
+    pub(crate) identities: crate::host_identity::IdentityOwner,
     pub(crate) metadata_updates: tokio::sync::mpsc::Sender<crate::device_metadata::Request>,
     _metadata_owner: tokio_util::sync::DropGuard,
     pub(crate) store: RwLock<Store>,
@@ -75,6 +74,7 @@ impl Runtime {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Store {
                 version: 1,
                 identity_fingerprint: fingerprint.clone(),
+                device_identity_fingerprints: HashMap::new(),
                 devices: Vec::new(),
                 settings: crate::preferences::defaults(),
             },
@@ -97,7 +97,12 @@ impl Runtime {
         }
         let identity_changed = store.identity_fingerprint != fingerprint;
         store.identity_fingerprint = fingerprint;
+        let (identities, changed_custom) =
+            crate::host_identity::IdentityOwner::load(&root, identity, &mut store).await?;
         for device in &mut store.devices {
+            let identity_changed = (identity_changed
+                && !store.device_identity_fingerprints.contains_key(&device.id))
+                || changed_custom.contains(&device.id);
             device.status = if identity_changed {
                 "unauthorized"
             } else {
@@ -123,8 +128,7 @@ impl Runtime {
         let metadata_lifetime = tokio_util::sync::CancellationToken::new();
         let runtime = Arc::new(Self {
             root,
-            identity,
-            tls_config: tokio::sync::OnceCell::new(),
+            identities,
             metadata_updates,
             _metadata_owner: metadata_lifetime.clone().drop_guard(),
             store: RwLock::new(store),
@@ -267,6 +271,9 @@ impl Runtime {
             }))
             .await;
         }
+        if command.starts_with("identity.") {
+            return self.identity_command(command, &params).await;
+        }
         match command {
             "observation.start" | "observation.stop" | "observation.status"
             | "observation.list" => self.observation_command(command, &params).await,
@@ -292,7 +299,7 @@ impl Runtime {
             "devices.rename" => Box::pin(self.rename_device(&params)).await,
             "devices.discover" => Box::pin(self.discover_devices()).await,
             "devices.pair" => Box::pin(self.pair_device(&params)).await,
-            "devices.pair.qr" => Box::pin(self.qr_pairing()).await,
+            "devices.pair.qr" => Box::pin(self.qr_pairing(&params)).await,
             "devices.usb" => Box::pin(self.usb_devices(&params)).await,
             "devices.wireless" => Box::pin(self.enable_wireless(&params)).await,
             "devices.wake" => Box::pin(self.wake_device(required(&params, "deviceId")?)).await,
@@ -311,6 +318,7 @@ impl Runtime {
                 Box::pin(self.mutate_files(command, &params)).await
             }
             "files.pull" | "files.push" => Box::pin(self.start_transfer(command, params)).await,
+            "transfers.remove" => Box::pin(self.remove_transfer_record(&params)).await,
             "transfers.list" => Box::pin(self.list_transfers()).await,
             "transfers.get" | "transfers.cancel" | "transfers.resume" | "transfers.resolve" => {
                 Box::pin(self.transfer_command(command, &params)).await

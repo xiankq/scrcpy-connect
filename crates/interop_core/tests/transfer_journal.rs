@@ -5,6 +5,25 @@ use serde_json::json;
 mod transfer_store;
 
 #[tokio::test]
+async fn explicit_history_removal_survives_reopen_and_preserves_other_rows() {
+    let root = tempfile::tempdir().unwrap();
+    let mut store = transfer_store::TransferStore::open(root.path()).unwrap();
+    for id in ["removed", "retained"] {
+        store
+            .persist_one(id, &json!({"id":id,"status":"completed"}))
+            .await
+            .unwrap();
+    }
+    store.remove(vec!["removed".into()]).await.unwrap();
+    drop(store);
+    let reopened = transfer_store::TransferStore::open(root.path()).unwrap();
+    assert_eq!(
+        reopened.snapshot(),
+        vec![json!({"id":"retained","status":"completed"})]
+    );
+}
+
+#[tokio::test]
 async fn durable_task_changes_survive_reopen_without_rewriting_untouched_tasks() {
     let root = tempfile::tempdir().unwrap();
     let mut store = transfer_store::TransferStore::open(root.path()).unwrap();
