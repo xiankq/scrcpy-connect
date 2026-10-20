@@ -4,38 +4,38 @@
     {
       "id": "scrcpy",
       "file": "scrcpy.zlib",
-      "sha256": "201fa96f6643e08fce7fb750e6bec30dc7aa6862b369c88ca82b4d1c65b0903a",
-      "size": 2955092
+      "sha256": "8b17b95193943be3ce16682d0ca69890a7f4078d87a4f8c61afc2a4dff620d8b",
+      "size": 2954916
     },
     {
       "id": "companion",
       "file": "companion.zlib",
-      "sha256": "07963f1126ce525f65a2ac154187e2766ef1173d8be70f5bfe1d45e1104690af",
-      "size": 57691
+      "sha256": "442bad1ae674eea0991f0ad2c984ef58b474dedfe92c5e3b20daaae79dd06e2e",
+      "size": 58927
     },
     {
       "id": "arm64-v8a",
       "file": "arm64-v8a.zlib",
-      "sha256": "0c725f3b4042a50be09b0482dfae0b61157084c080ff56eb313ff58c27b26aeb",
-      "size": 274632
+      "sha256": "2fad306ad2222fd5a0456b2af5aecd1ca7b9795ff7b64bd9600d7dcf3a59ec8b",
+      "size": 274776
     },
     {
       "id": "armeabi-v7a",
       "file": "armeabi-v7a.zlib",
-      "sha256": "e648d3f51ab284e1fdcab1b865b06ab2e23d3271fcf5ceaa90a4fbcb6bfe1282",
-      "size": 207636
+      "sha256": "d1e716714d54be17d09653325bd13f2cedbcc34dca9c3d6ddfdd4c66135eb673",
+      "size": 207836
     },
     {
       "id": "x86_64",
       "file": "x86_64.zlib",
-      "sha256": "1ad5076fe343994031360005d490b518e637c195ec0b79ea68c4d8d892fa25f3",
-      "size": 303920
+      "sha256": "ccfe7dc18bd690d9b1cb12718d7187b51b87aed396951a1217c61baebf6ca0c9",
+      "size": 303480
     },
     {
       "id": "x86",
       "file": "x86.zlib",
-      "sha256": "fb02a8225335bbae2df74d0e0ec0c042bda20476b19ea6789123ffd43bea0069",
-      "size": 307008
+      "sha256": "58426b80c3dc5348dc982eabce23a128f2f7eefbfeed1fd98c92a59d22e65adb",
+      "size": 306888
     }
   ]
 }

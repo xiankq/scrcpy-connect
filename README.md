@@ -41,7 +41,7 @@ pubspec.lock
 
 ## 本地开发
 
-固定工具链：Rust 1.99.1、Flutter 3.47.6／Dart 3.13.5、JDK 21；当前 Android 验证使用 SDK 36、NDK 28.2.13676358。Flutter、Android SDK 与 NDK 需提前安装；`ANDROID_HOME` 指向 SDK，Flutter、Rust 在 PATH 中。
+固定工具链：Rust 1.99.1、Flutter 3.47.7／Dart 3.13.5、JDK 21。Android 应用继承 Flutter 的 SDK／NDK 配置，本次验证为 SDK 36、NDK 28.2.13676358；被控原生助手单独使用 NDK 30.0.16248370。依赖版本及验证范围见[升级记录](docs/implementation/dependency-upgrade-2026-10-20.md)。Flutter、Android SDK 与 NDK 需提前安装；`ANDROID_HOME` 指向 SDK，Flutter、Rust 在 PATH 中。
 
 自有构建与诊断脚本使用 Dart；Node 用于官方 DESIGN.md 工具。日常工程检查不要求安装 Python。
 

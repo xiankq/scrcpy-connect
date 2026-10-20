@@ -60,7 +60,7 @@ Sources: [Bionic syscall declarations](https://android.googlesource.com/platform
 
 ## Rebuild
 
-Install Rust **1.99.1**, NDK **28.2.13676358**, and Rust targets
+Install Rust **1.99.1**, NDK **30.0.16248370**, and Rust targets
 `aarch64-linux-android`, `armv7-linux-androideabi`, `x86_64-linux-android`,
 `i686-linux-android`. On Linux x86_64:
 

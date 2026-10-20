@@ -136,7 +136,7 @@ void archiveBundle(Directory bundle, String platform, Directory artifacts) {
       }
     }
     File(p.join(artifacts.path, 'windows-release.zip'))
-        .writeAsBytesSync(ZipEncoder().encode(archive)!);
+        .writeAsBytesSync(ZipEncoder().encode(archive));
   } else {
     // Native tar preserves executable modes and framework symlinks. Never
     // traverse framework links or rebuild the archive from plain file bytes.

@@ -226,7 +226,7 @@ Future<void> buildFixture(String fixture, List<String> arguments) async {
       ArchiveFile.noCompress('classes.dex', dexBytes.length, dexBytes),
     );
     final unsigned = p.join(work.path, 'unsigned.apk');
-    File(unsigned).writeAsBytesSync(ZipEncoder().encode(apkArchive)!);
+    File(unsigned).writeAsBytesSync(ZipEncoder().encode(apkArchive));
     final aligned = p.join(work.path, 'aligned.apk');
     await run(sdkTool('zipalign'), ['-p', '4', unsigned, aligned]);
     final apk = p.join(resolvedOutput, '$fixture-fixture.apk');

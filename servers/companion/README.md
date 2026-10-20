@@ -173,7 +173,7 @@ API 21 验证图片／stat 类时解析缺失的视频父类。工作队列以 `
 先在仓库根目录运行 `flutter pub get` 准备固定 Dart 依赖；脚本通过自身位置定位仓库，从其他工作目录以绝对路径调用也可运行。
 
 `dart servers/companion/build.dart` 使用现有 JDK 21、Android SDK 36 和
-build-tools 36.0.0 的 javac/d8，在临时目录编译，输出确定性的 `companion.jar`
+build-tools 37.0.0 的 javac/d8，在临时目录编译，输出确定性的 `companion.jar`
 与 `manifest.json`；不联网安装工具。`build.sh` 保留为同一入口的包装脚本。
 JAR 固定条目顺序、ZIP 时间戳、权限、存储方式和 manifest 内容，避免宿主 ZIP
 元数据或 JDK 的 `Created-By` 文本改变归档。测试 Fixture 不编入产品 JAR。

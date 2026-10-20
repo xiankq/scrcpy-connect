@@ -2,6 +2,8 @@
 
 本文记录仓库工具链的职责边界。当前产品修订的验证索引见 [产品验收记录](product-refinement.md)；下文测试数、APK 摘要与临时路径是注明阶段的历史产物，不是当前检出的自动通过声明。
 
+2026-10-20 的依赖版本核对、上游升级约束及构建结果见[依赖升级记录](dependency-upgrade-2026-10-20.md)。
+
 ## 视觉 token 的权威来源
 
 `designs/design.md` 是视觉值来源。`tool/design_tokens` 固定官方 `@google/design.md@0.4.0`，从公开 `lint(markdown).designSystem` 解析模型生成 `packages/design_system/lib/src/design_tokens.g.dart`。官方该版本没有直接生成 Dart 的 CLI，DTCG 输出也未覆盖组件属性；项目只维护 Dart emitter，不另建 YAML 解析器或第二套 token 值。

@@ -32,7 +32,7 @@ void check(Directory root) {
   require(
     manifest['protocol'] == 1 &&
         manifest['rust'] == '1.99.1' &&
-        manifest['ndk'] == '28.2.13676358' &&
+        manifest['ndk'] == '30.0.16248370' &&
         manifest['minAndroidApi'] == 21,
     'Android helper toolchain/protocol pin mismatch',
   );
@@ -97,13 +97,13 @@ Future<void> main(List<String> arguments) => cli(() async {
   final crate = Directory(p.join(root.path, 'crates', 'android_helper'));
   final ndk = Directory(
     Platform.environment['ANDROID_NDK_HOME'] ??
-        p.join(userHome, 'Android', 'Sdk', 'ndk', '28.2.13676358'),
+        p.join(userHome, 'Android', 'Sdk', 'ndk', '30.0.16248370'),
   );
   require(
     File(p.join(ndk.path, 'source.properties'))
         .readAsStringSync()
-        .contains('Pkg.Revision = 28.2.13676358'),
-    'NDK 28.2.13676358 is required',
+        .contains('Pkg.Revision = 30.0.16248370'),
+    'NDK 30.0.16248370 is required',
   );
   final toolchain = p.join(
     ndk.path,
@@ -184,7 +184,7 @@ Future<void> main(List<String> arguments) => cli(() async {
     writeJson(File(p.join(here.path, 'manifest.json')), {
       'protocol': 1,
       'rust': '1.99.1',
-      'ndk': '28.2.13676358',
+      'ndk': '30.0.16248370',
       'minAndroidApi': 21,
       'sources': inputs(root),
       'artifacts': artifacts,

@@ -16,7 +16,7 @@
 dart servers/vendor/build.dart --check
 ```
 
-源码构建需要 仓库固定 Dart SDK、OpenJDK 21、Android SDK platform 36 与 build-tools 36.0.0。脚本固定 Gradle 9.3.1（下载包 SHA-256）、AGP 9.1.0 / D8-L8-R8 9.1.31、desugar_jdk_libs 与 configuration 2.1.4（各自 JAR SHA-256），并核对本地 API 36 android.jar 摘要。设置 `JAVA_HOME`、`ANDROID_HOME` 后执行：
+源码构建需要 仓库固定 Dart SDK、OpenJDK 21、Android SDK platform 36 与 build-tools 37.0.0。脚本固定 Gradle 9.8.1（下载包 SHA-256）、AGP 9.4.1 / D8-L8-R8 9.4.24、desugar_jdk_libs 与 configuration 2.1.5（各自 JAR SHA-256），并核对本地 API 36 android.jar 摘要。设置 `JAVA_HOME`、`ANDROID_HOME` 后执行：
 
 ```sh
 # 干净临时源码构建，与当前 JAR 逐字节比较，不修改 vendor。
@@ -27,13 +27,13 @@ dart servers/vendor/build.dart --update
 
 `--gradle /path/to/gradle` 可复用已安装的同版本 Gradle；`--offline` 让 Gradle 使用已填充的依赖缓存（固定 scrcpy 源码归档仍需下载）。网络代理由环境与 Gradle 用户配置控制，必要时可显式传 `--gradle-arg=-Dhttps.proxyHost=` 等参数。脚本只在系统临时目录展开固定来源源码，结束即清理，使用 `--no-daemon` 退出本次 Gradle 进程。
 
-构建只追加 `buildToolsVersion`、Java 8 source/target、`coreLibraryDesugaringEnabled` 和固定依赖配置；不修改任何上游 Java 文件。JAR 包装只保留两个 DEX 和许可证，统一 ZIP 时间、权限并使用不压缩存储，消除 APK 包装时间与压缩器差异。`--rebuild` 是当前工具链下的逐字节复现检查；不同 JDK 21 补丁版或 SDK 内容不能预先保证得到相同字节，差异会明确失败，manifest 记录实际构建 JDK 版本。
+构建在临时源树替换上游 AGP 构建声明，并追加 `buildToolsVersion`、Java 8 source/target、`coreLibraryDesugaringEnabled` 和固定依赖配置；不修改任何上游 Java 文件。JAR 包装只保留两个 DEX 和许可证，统一 ZIP 时间、权限并使用不压缩存储，消除 APK 包装时间与压缩器差异。`--rebuild` 是当前工具链下的逐字节复现检查；不同 JDK 21 补丁版或 SDK 内容不能预先保证得到相同字节，差异会明确失败，manifest 记录实际构建 JDK 版本。
 
 ## API 21 回归与边界
 
 官方源码的 [Size.constrain](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/model/Size.java) 在编码失败后获得 capabilities，创建实现 `java.util.function.Predicate` 的 lambda，调用 [BinarySearch.findHighestTrue](https://github.com/Genymobile/scrcpy/blob/a60891aea193d92e7e5c3942700eca63f9d19a5f/server/src/main/java/com/genymobile/scrcpy/util/BinarySearch.java)。该平台接口从 API 24 才存在；仅有语言 lambda 脱糖不足以支持 API 21。
 
-2.1.4 官方 configuration 使用 `maintain_type` 策略：`Size$$ExternalSyntheticLambda0` 仍实现 `java.util.function.Predicate`，但 `classes2.dex` 实际定义 `Predicate`、`Supplier` 等接口，默认方法实现位于 `j$.util.function.*`。因此不以“所有接口名字必须改为 j$”作为成功条件。离线检查读取 DEX 类定义与接口表，要求这些回填类实际存在，并核对 D8/L8/R8 `min-api:21` 标记；不是只搜索字符串。实现依据参见 [Android 官方 API desugaring 说明](https://developer.android.com/studio/write/java8-support#library-desugaring)。
+官方 configuration 的 `maintain_type` 策略允许 `Size$$ExternalSyntheticLambda0` 仍实现 `java.util.function.Predicate`，同时由 `classes2.dex` 定义 `Predicate`、`Supplier` 等接口，默认方法实现位于 `j$.util.function.*`。因此不以“所有接口名字必须改为 j$”作为成功条件。离线检查读取 DEX 类定义与接口表，要求这些回填类实际存在，并核对 D8/L8/R8 `min-api:21` 标记；不是只搜索字符串。2.1.5 升级也沿用此门禁，实际构建结果见 manifest。实现依据参见 [Android 官方 API desugaring 说明](https://developer.android.com/studio/write/java8-support#library-desugaring)。
 
 可编译保留的诊断探针：
 
@@ -48,7 +48,7 @@ dart servers/vendor/test/build_probe.dart /tmp/scrcpy-api21-probe.jar
 ## 许可证与对应源码
 
 - scrcpy：原样保留 [LICENSE-scrcpy](LICENSE-scrcpy)，Apache-2.0。
-- desugar_jdk_libs 2.1.4：保留 [LICENSE-desugar_jdk_libs](LICENSE-desugar_jdk_libs)（GPLv2 + Classpath Exception）、[ASSEMBLY_EXCEPTION](ASSEMBLY_EXCEPTION-desugar_jdk_libs) 与 [ADDITIONAL_LICENSE_INFO](ADDITIONAL_LICENSE_INFO-desugar_jdk_libs)。完整对应源码归档 [desugar_jdk_libs-2.1.4-source.tar.gz](desugar_jdk_libs-2.1.4-source.tar.gz) 来自固定 [50d9c1fb3e85fa4c00161525a45484f712c1f003](https://github.com/google/desugar_jdk_libs/tree/50d9c1fb3e85fa4c00161525a45484f712c1f003)，摘要见 manifest；归档包含原始来源声明与构建文件，未修改。
+- desugar_jdk_libs 2.1.5：保留 [LICENSE-desugar_jdk_libs](LICENSE-desugar_jdk_libs)（GPLv2 + Classpath Exception）、[ASSEMBLY_EXCEPTION](ASSEMBLY_EXCEPTION-desugar_jdk_libs) 与 [ADDITIONAL_LICENSE_INFO](ADDITIONAL_LICENSE_INFO-desugar_jdk_libs)。完整对应源码归档 [desugar_jdk_libs-2.1.5-source.tar.gz](desugar_jdk_libs-2.1.5-source.tar.gz) 来自固定 [73170c345e6a762fc6a1f0301bb15218850023ef](https://github.com/google/desugar_jdk_libs/tree/73170c345e6a762fc6a1f0301bb15218850023ef)，摘要见 manifest；归档包含原始来源声明与构建文件，未修改。
 - desugar_jdk_libs_configuration：保留原 [BSD-3-Clause 许可证](LICENSE-desugar_jdk_libs_configuration)。
 
 上述许可证也嵌入唯一 server JAR 的 `META-INF/`，随运行产物分发。发布包含回填库的二进制时，同时提供这里固定的完整对应源码归档及构建脚本；该归档是来源材料，不是构建缓存。

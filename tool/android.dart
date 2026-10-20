@@ -180,10 +180,16 @@ void initializeSigning({Directory? android}) {
 List<String> verifyApkArchive(List<int> bytes, [List<String>? expectedAbis]) {
   final decoder = ZipDecoder();
   final archive = decoder.decodeBytes(bytes, verify: true);
-  // archive 3 verifies local header/data descriptor CRCs. Python's ZIP gate
-  // also used central directory CRCs, so require both records to agree.
+  // archive 4 does not check entry CRCs through decodeBytes(verify: true).
+  // Check raw directory entries before archive.files hides duplicate names,
+  // and verify actual decompressed bytes plus central/local CRC agreement.
+  final names = <String>{};
   for (final header in decoder.directory.fileHeaders) {
-    if (header.crc32 != header.file?.crc32) {
+    if (!names.add(header.filename)) {
+      throw StateError('Duplicate APK entry: ${header.filename}');
+    }
+    final file = header.file;
+    if (file == null || header.crc32 != file.crc32 || !file.verifyCrc32()) {
       throw StateError('Corrupt APK entry: ${header.filename}');
     }
   }
@@ -233,7 +239,7 @@ List<String> verifyApkArchive(List<int> bytes, [List<String>? expectedAbis]) {
         }
         throw StateError('Release APK lacks its Dart AOT library: $name');
       }
-      final header = (entries[name]?.content as List<int>?)?.take(20).toList();
+      final header = entries[name]?.content.take(20).toList();
       if (header == null ||
           header.length != 20 ||
           header[0] != 0x7f ||

@@ -12,5 +12,5 @@ mkdir -p "$build_dir/classes" "$build_dir/dex"
 mapfile -t sources < <(find src/com/interop/companion -maxdepth 1 -type f -name '*.java' -print | sort)
 "$java_bin/javac" --release 8 -encoding UTF-8 -cp "$sdk/platforms/android-36/android.jar" -d "$build_dir/classes" "${sources[@]}" tests/Fixture.java
 mapfile -t classes < <(find "$build_dir/classes" -name '*.class' -print | sort)
-"$sdk/build-tools/36.0.0/d8" --min-api 26 --lib "$sdk/platforms/android-36/android.jar" --output "$build_dir/dex" "${classes[@]}"
+"$sdk/build-tools/37.0.0/d8" --min-api 26 --lib "$sdk/platforms/android-36/android.jar" --output "$build_dir/dex" "${classes[@]}"
 "$java_bin/jar" --create --file "${1:-/tmp/interop-companion-fixture.jar}" --date=2026-10-16T00:00:00Z -C "$build_dir/dex" classes.dex

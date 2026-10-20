@@ -15,25 +15,25 @@ const sourceSha =
     'a0d699fc7388b8252416c49e6293639de39ab76a03e7302ddced56c284d45200';
 const officialSha =
     '764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536';
-const gradleVersion = '9.3.1';
+const gradleVersion = '9.8.1';
 const gradleSha =
-    'b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06';
-const desugarCommit = '50d9c1fb3e85fa4c00161525a45484f712c1f003';
+    'dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f';
+const desugarCommit = '73170c345e6a762fc6a1f0301bb15218850023ef';
 const desugarSourceSha =
-    '70d37b80e367a57f642597aec25dd2a1d30a30817148eb978f2a02579db97278';
-const desugarSourceName = 'desugar_jdk_libs-2.1.4-source.tar.gz';
+    '4cd2faa88ecb2450522fd4f0dcd11d6df878d7197b2276fb35532c50267f7a64';
+const desugarSourceName = 'desugar_jdk_libs-2.1.5-source.tar.gz';
 const dependencies = {
   'desugar_jdk_libs':
-      'd7604feeef3a771d5d616b68fcc2c42f516243311ea286cfd41e1962829a6d28',
+      'd8044befae095781b9a80bf1faa92edc30382d75d437476784c1bf991598a976',
   'desugar_jdk_libs_configuration':
-      '5d770c1ba225c2cdf09086bf662954ae765ee481f901b02cd7b1dc3c8077c3f4',
+      '7bc9051b3a1ec19806311dcb6aa9b9ba7ef9c22caa6f4810da55bde285fb7770',
 };
 const androidJarSha =
     'd9eb9da824d9e247a352f570f01e1169e725b2954bca9e283a71786c59b59f9a';
 const buildAddition = '''
 // Build-only core library API desugaring. Upstream Java sources are unchanged.
 android {
-    buildToolsVersion '36.0.0'
+    buildToolsVersion '37.0.0'
     compileOptions {
         coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -41,7 +41,7 @@ android {
     }
 }
 dependencies {
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }
 ''';
 const licenseFiles = [
@@ -111,19 +111,30 @@ dexInfo(List<int> bytes) {
   for (final marker in markers) {
     final metadata = jsonDecode(marker.substring(4)) as Map<String, dynamic>;
     require(metadata['min-api'] == 21, 'DEX was not built with min API 21');
-    require(metadata['version'] == '9.1.31', 'Unexpected D8/L8/R8 version');
+    require(metadata['version'] == '9.4.24', 'Unexpected D8/L8/R8 version');
   }
   return (definitions: definitions, types: types, markers: markers);
 }
 
-Map<String, Object?> verifyArtifact(List<int> bytes) {
+Archive _verifiedZip(List<int> bytes) {
   final decoder = ZipDecoder();
   final archive = decoder.decodeBytes(bytes, verify: true);
-  // Archive.addFile replaces duplicate names; inspect original ZIP headers.
-  final names = decoder.directory.fileHeaders
-      .map((file) => file.filename)
-      .toList();
-  require(names.length == names.toSet().length, 'Duplicate ZIP entries');
+  final names = <String>{};
+  // archive 4 deduplicates names and no longer verifies CRCs during decode.
+  for (final header in decoder.directory.fileHeaders) {
+    require(names.add(header.filename), 'Duplicate ZIP entries');
+    final file = header.file;
+    require(
+      file != null && header.crc32 == file.crc32 && file.verifyCrc32(),
+      'Corrupt ZIP entry: ${header.filename}',
+    );
+  }
+  return archive;
+}
+
+Map<String, Object?> verifyArtifact(List<int> bytes) {
+  final archive = _verifiedZip(bytes);
+  final names = archive.files.map((file) => file.name).toList();
   final dexNames =
       names
           .where(
@@ -200,7 +211,7 @@ Map<String, Object?> verifyArtifact(List<int> bytes) {
 }
 
 Uint8List package(File apk) {
-  final source = ZipDecoder().decodeBytes(apk.readAsBytesSync(), verify: true);
+  final source = _verifiedZip(apk.readAsBytesSync());
   final contents = <String, List<int>>{
     for (final file in source.where((file) => file.name.endsWith('.dex')))
       file.name: archiveBytes(file),
@@ -270,10 +281,7 @@ Future<File> getGradle(ArgResults options, Directory temporary) async {
       'https://services.gradle.org/distributions/gradle-$gradleVersion-bin.zip',
       gradleSha,
     );
-    await extractArchive(
-      ZipDecoder().decodeBytes(bytes, verify: true),
-      temporary,
-    );
+    await extractArchive(_verifiedZip(bytes), temporary);
     executable = File(
       p.join(
         temporary.path,
@@ -314,11 +322,11 @@ Future<void> build(ArgResults options) async {
       p.join(
         sdk.path,
         'build-tools',
-        '36.0.0',
+        '37.0.0',
         Platform.isWindows ? 'aapt2.exe' : 'aapt2',
       ),
     ).existsSync(),
-    'Install Android build-tools 36.0.0',
+    'Install Android build-tools 37.0.0',
   );
   await withTemporary('scrcpy-vendor-build-', (temporary) async {
     final gradle = await getGradle(options, temporary);
@@ -336,6 +344,19 @@ Future<void> build(ArgResults options) async {
         relative(file.path, root.path): digest(file),
     };
     final originalSources = javaSources();
+    final upstreamBuild = File(p.join(root.path, 'build.gradle'));
+    const upstreamAgp = 'com.android.tools.build:gradle:9.1.0';
+    final upstreamBuildText = upstreamBuild.readAsStringSync();
+    require(
+      upstreamBuildText.contains(upstreamAgp),
+      'Unexpected upstream Android Gradle plugin declaration',
+    );
+    await upstreamBuild.writeAsString(
+      upstreamBuildText.replaceAll(
+        upstreamAgp,
+        'com.android.tools.build:gradle:9.4.1',
+      ),
+    );
     final buildFile = File(p.join(root.path, 'server', 'build.gradle'));
     await buildFile.writeAsString(
       '${buildFile.readAsStringSync()}$buildAddition',
@@ -369,7 +390,7 @@ Future<void> build(ArgResults options) async {
           'files-2.1',
           'com.android.tools',
           entry.key,
-          '2.1.4',
+          '2.1.5',
         ),
       );
       final jars = directory.existsSync() ? files(directory, '.jar') : <File>[];
@@ -429,23 +450,23 @@ Future<void> build(ArgResults options) async {
       'toolchain': {
         'gradle': gradleVersion,
         'gradleDistributionSha256': gradleSha,
-        'agp': '9.1.0',
-        'd8L8R8': '9.1.31',
+        'agp': '9.4.1',
+        'd8L8R8': '9.4.24',
         'jdkMajor': 21,
         'buildJdk': const LineSplitter().convert(javaVersion).first,
         'compileSdk': 36,
         'androidJarSha256': androidJarSha,
-        'buildTools': '36.0.0',
+        'buildTools': '37.0.0',
         'minApi': 21,
         'targetApi': 36,
         'javaSourceTarget': '1.8',
       },
       'desugaring': {
-        'version': '2.1.4',
+        'version': '2.1.5',
         'dependencies': {
           for (final entry in dependencies.entries)
             'com.android.tools:${entry.key}': {
-              'version': '2.1.4',
+              'version': '2.1.5',
               'sha256': entry.value,
             },
         },

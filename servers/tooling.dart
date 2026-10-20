@@ -217,13 +217,13 @@ Uint8List storedZip(
   return output.takeBytes();
 }
 
-List<int> archiveBytes(ArchiveFile file) => file.content as List<int>;
+List<int> archiveBytes(ArchiveFile file) => file.content;
 
 Future<void> extractArchive(Archive archive, Directory destination) async {
   for (final entry in archive) {
     final parts = p.posix.split(entry.name);
     require(
-      !entry.isSymbolicLink && entry.nameOfLinkedFile.isEmpty,
+      entry.symbolicLink == null,
       'Unexpected archive link: ${entry.name}',
     );
     require(

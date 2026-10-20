@@ -9,7 +9,7 @@ license = "Apache-2.0"
 [workspace]
 
 [dependencies]
-libc = "=0.2.190"
+libc = "=0.2.191"
 
 [profile.release]
 opt-level = "z"

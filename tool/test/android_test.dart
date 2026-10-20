@@ -46,9 +46,8 @@ void main() {
     bool duplicateServer = false,
   }) {
     final archive = Archive();
-    void entry(String name, List<int> bytes) => archive.addFile(
-      ArchiveFile(name, bytes.length, bytes)..compress = false,
-    );
+    void entry(String name, List<int> bytes) =>
+        archive.addFile(ArchiveFile.noCompress(name, bytes.length, bytes));
     for (final name in [
       'AndroidManifest.xml',
       'classes.dex',
@@ -88,7 +87,7 @@ void main() {
         }
       }
     }
-    return ZipEncoder().encode(archive)!;
+    return ZipEncoder().encode(archive);
   }
 
   test('APK checks reject mismatched requested and native architectures', () {
@@ -114,7 +113,7 @@ void main() {
     final nameLength = bytes[26] | bytes[27] << 8;
     final extraLength = bytes[28] | bytes[29] << 8;
     bytes[30 + nameLength + extraLength] ^= 1;
-    expect(() => android.verifyApkArchive(bytes), throwsA(anything));
+    expect(() => android.verifyApkArchive(bytes), throwsStateError);
   });
 
   test('APK rejects missing, corrupt, or duplicated shared server assets', () {
@@ -132,6 +131,43 @@ void main() {
     );
   });
 
+  test('APK rejects actual same-name ZIP entries with valid CRCs', () {
+    for (final corruptDuplicate in [false, true]) {
+      final archive = ZipDecoder().decodeBytes(apk());
+      final original = archive.files.singleWhere(
+        (file) => file.name.endsWith('/scrcpy.zlib'),
+      );
+      final content = original.content.toList();
+      if (corruptDuplicate) content[0] ^= 1;
+      final duplicate = ArchiveFile.noCompress(
+        '${original.name}.shadow',
+        content.length,
+        content,
+      );
+      // Archive.addFile deduplicates by name. Rename after insertion so the
+      // encoder writes two real entries, each with its own correct CRC.
+      archive.addFile(duplicate);
+      duplicate.name = original.name;
+      final bytes = ZipEncoder().encode(archive);
+      final decoder = ZipDecoder()..decodeBytes(bytes);
+      final headers = decoder.directory.fileHeaders.where(
+        (header) => header.filename == original.name,
+      );
+      expect(headers, hasLength(2));
+      expect(headers.every((header) => header.file!.verifyCrc32()), isTrue);
+      expect(
+        () => android.verifyApkArchive(bytes),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('Duplicate APK entry'),
+          ),
+        ),
+      );
+    }
+  });
+
   test('APK rejects server payloads embedded again in native libraries', () {
     expect(
       () => android.verifyApkArchive(apk(embedServer: true)),
@@ -141,6 +177,28 @@ void main() {
 
   test('APK CRC verification includes central directory records', () {
     final bytes = apk();
+    for (var index = 0; index + 20 < bytes.length; index++) {
+      if (bytes[index] == 0x50 &&
+          bytes[index + 1] == 0x4b &&
+          bytes[index + 2] == 0x01 &&
+          bytes[index + 3] == 0x02) {
+        bytes[index + 16] ^= 1;
+        expect(() => android.verifyApkArchive(bytes), throwsStateError);
+        return;
+      }
+    }
+    fail('Fixture lacks a ZIP central directory');
+  });
+
+  test('APK CRC verification includes local header records', () {
+    final bytes = apk();
+    bytes[14] ^= 1;
+    expect(() => android.verifyApkArchive(bytes), throwsStateError);
+  });
+
+  test('APK CRC verification rejects matching incorrect header CRCs', () {
+    final bytes = apk();
+    bytes[14] ^= 1;
     for (var index = 0; index + 20 < bytes.length; index++) {
       if (bytes[index] == 0x50 &&
           bytes[index + 1] == 0x4b &&

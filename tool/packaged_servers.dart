@@ -28,14 +28,13 @@ void verifyPackagedServers(Archive apk, Directory repository) {
     );
   }
   final entries = {for (final entry in packaged) entry.name: entry};
-  if (sha256.convert(entries['${prefix}manifest.json']!.content as List<int>) !=
+  if (sha256.convert(entries['${prefix}manifest.json']!.content) !=
       sha256.convert(manifestBytes)) {
     throw StateError('APK shared server manifest differs from this build.');
   }
   final embeddedPatterns = <String>[];
   for (final artifact in artifacts) {
-    final compressed =
-        entries['$prefix${artifact['file']}']!.content as List<int>;
+    final compressed = entries['$prefix${artifact['file']}']!.content;
     if (sha256.convert(compressed) !=
         sha256.convert(
           File('${source.path}/${artifact['file']}').readAsBytesSync(),
@@ -52,7 +51,7 @@ void verifyPackagedServers(Archive apk, Directory repository) {
   for (final library in apk.files.where(
     (entry) => entry.name.endsWith('/libinterop_bridge.so'),
   )) {
-    final bytes = latin1.decode(library.content as List<int>);
+    final bytes = latin1.decode(library.content);
     if (embeddedPatterns.any(bytes.contains)) {
       throw StateError(
         'Android Rust library duplicates server assets: ${library.name}',

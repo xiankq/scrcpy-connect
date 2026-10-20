@@ -1,82 +1,82 @@
 {
-  "schema": 1,
-  "version": "5.0.1",
-  "kind": "source-built-core-library-desugared",
-  "source": {
-    "commit": "a60891aea193d92e7e5c3942700eca63f9d19a5f",
-    "archiveUrl": "https://codeload.github.com/Genymobile/scrcpy/tar.gz/a60891aea193d92e7e5c3942700eca63f9d19a5f",
-    "archiveSha256": "a0d699fc7388b8252416c49e6293639de39ab76a03e7302ddced56c284d45200",
-    "javaSourcesSha256": "d15245dc8cfbb104e04d7b3a272de3684359f77a00687f044e4095734b03a76d",
-    "javaSourcesUnmodified": true
-  },
-  "officialRelease": {
-    "url": "https://github.com/Genymobile/scrcpy/releases/download/v5.0.1/scrcpy-server-v5.0.1",
-    "sha256": "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536",
-    "bundled": false
-  },
   "artifact": {
+    "bytes": 2954916,
     "file": "scrcpy-server-v5.0.1",
-    "sha256": "201fa96f6643e08fce7fb750e6bec30dc7aa6862b369c88ca82b4d1c65b0903a",
-    "bytes": 2955092
-  },
-  "toolchain": {
-    "gradle": "9.3.1",
-    "gradleDistributionSha256": "b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06",
-    "agp": "9.1.0",
-    "d8L8R8": "9.1.31",
-    "jdkMajor": 21,
-    "buildJdk": "openjdk version \"21.0.12.1\" 2026-08-18",
-    "compileSdk": 36,
-    "androidJarSha256": "d9eb9da824d9e247a352f570f01e1169e725b2954bca9e283a71786c59b59f9a",
-    "buildTools": "36.0.0",
-    "minApi": 21,
-    "targetApi": 36,
-    "javaSourceTarget": "1.8"
+    "sha256": "8b17b95193943be3ce16682d0ca69890a7f4078d87a4f8c61afc2a4dff620d8b"
   },
   "desugaring": {
-    "version": "2.1.4",
     "dependencies": {
       "com.android.tools:desugar_jdk_libs": {
-        "version": "2.1.4",
-        "sha256": "d7604feeef3a771d5d616b68fcc2c42f516243311ea286cfd41e1962829a6d28"
+        "sha256": "d8044befae095781b9a80bf1faa92edc30382d75d437476784c1bf991598a976",
+        "version": "2.1.5"
       },
       "com.android.tools:desugar_jdk_libs_configuration": {
-        "version": "2.1.4",
-        "sha256": "5d770c1ba225c2cdf09086bf662954ae765ee481f901b02cd7b1dc3c8077c3f4"
+        "sha256": "7bc9051b3a1ec19806311dcb6aa9b9ba7ef9c22caa6f4810da55bde285fb7770",
+        "version": "2.1.5"
       }
     },
-    "sourceCommit": "50d9c1fb3e85fa4c00161525a45484f712c1f003",
-    "sourceArchive": "desugar_jdk_libs-2.1.4-source.tar.gz",
-    "sourceUrl": "https://codeload.github.com/google/desugar_jdk_libs/tar.gz/50d9c1fb3e85fa4c00161525a45484f712c1f003",
-    "sourceSha256": "70d37b80e367a57f642597aec25dd2a1d30a30817148eb978f2a02579db97278",
-    "functionStrategy": "Official maintain_type: java.util.function definitions in classes2.dex; default methods in j$.util.function"
+    "functionStrategy": "Official maintain_type: java.util.function definitions in classes2.dex; default methods in j$.util.function",
+    "sourceArchive": "desugar_jdk_libs-2.1.5-source.tar.gz",
+    "sourceCommit": "73170c345e6a762fc6a1f0301bb15218850023ef",
+    "sourceSha256": "4cd2faa88ecb2450522fd4f0dcd11d6df878d7197b2276fb35532c50267f7a64",
+    "sourceUrl": "https://codeload.github.com/google/desugar_jdk_libs/tar.gz/73170c345e6a762fc6a1f0301bb15218850023ef",
+    "version": "2.1.5"
   },
   "dex": {
     "classes.dex": {
-      "sha256": "486d658f3682a25446d9f7e786972049f5873d858e1a7c27b56f3ab85c9a70bf",
       "classes": 1246,
       "markers": [
-        "~~D8{\"backend\":\"dex\",\"compilation-mode\":\"release\",\"desugared-library-identifiers\":[\"com.tools.android:desugar_jdk_libs_configuration:2.1.4\"],\"has-checksums\":false,\"min-api\":21,\"version\":\"9.1.31\"}"
-      ]
+        "~~D8{\"backend\":\"dex\",\"compilation-mode\":\"release\",\"desugared-library-identifiers\":[\"com.tools.android:desugar_jdk_libs_configuration:2.1.5\"],\"has-checksums\":false,\"min-api\":21,\"version\":\"9.4.24\"}"
+      ],
+      "sha256": "a49bb6394d85e67052be9842c072fc5d1a415e96fb8d83cba9323e30321d76a3"
     },
     "classes2.dex": {
-      "sha256": "def434e2b52f09c1970fab33fbfd355c9dcca10a37e5fa50d6c87516d7c357ed",
-      "classes": 856,
+      "classes": 857,
       "markers": [
-        "~~L8{\"backend\":\"cf\",\"compilation-mode\":\"release\",\"desugared-library-identifiers\":[\"com.tools.android:desugar_jdk_libs_configuration:2.1.4\"],\"has-checksums\":false,\"min-api\":21,\"version\":\"9.1.31\"}",
-        "~~R8{\"backend\":\"dex\",\"compilation-mode\":\"release\",\"has-checksums\":false,\"min-api\":21,\"r8-mode\":\"full\",\"version\":\"9.1.31\"}"
-      ]
+        "~~L8{\"backend\":\"cf\",\"compilation-mode\":\"release\",\"desugared-library-identifiers\":[\"com.tools.android:desugar_jdk_libs_configuration:2.1.5\"],\"has-checksums\":false,\"min-api\":21,\"version\":\"9.4.24\"}",
+        "~~R8{\"backend\":\"dex\",\"compilation-mode\":\"release\",\"has-checksums\":false,\"min-api\":21,\"r8-mode\":\"full\",\"version\":\"9.4.24\"}"
+      ],
+      "sha256": "1fdb78fbfea474468ce184e5b9c9ae1108ed762582f9b11d2360967e3fc86ccc"
     }
   },
   "inputs": {
-    "build.dart": "30856e46849cc397908f67ed45ac179ea7e9c6937796d3f068dc6d07192c9069",
-    "test/ScrcpyApi21Probe.java": "6ad3c7e1e5563d92a38558987c4e034c1e693f014ca36c5d6e59dc67674ebe88",
-    "test/build_probe.dart": "74d811e68438b0908f772f89095f80fe418eb9bb1feb7fce90e963415287072f",
-    "LICENSE-scrcpy": "01c12035bf35af37241298dc7ad538eb2a07e5c940437bc6876feeaa9d1951d0",
-    "LICENSE-desugar_jdk_libs": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726",
-    "ASSEMBLY_EXCEPTION-desugar_jdk_libs": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb",
+    "../tooling.dart": "1f2d1917f8bd3bc4bf1fc9776ad45bd593ee99047f6f022008dd54518cce79a5",
     "ADDITIONAL_LICENSE_INFO-desugar_jdk_libs": "a69bce275ba7a3570af6579cb0f55682cd75fedfcd49e0e8e9022270c447c916",
+    "ASSEMBLY_EXCEPTION-desugar_jdk_libs": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb",
+    "LICENSE-desugar_jdk_libs": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726",
     "LICENSE-desugar_jdk_libs_configuration": "68834f116f8ff545f05d14753357b620748156d60ee36b26beab4cb3f317efe4",
-    "../tooling.dart": "665147573f38e4e70f3cee1af8c42b042a56ec6e22c3174a5f7de96b2cf420e6"
-  }
+    "LICENSE-scrcpy": "01c12035bf35af37241298dc7ad538eb2a07e5c940437bc6876feeaa9d1951d0",
+    "build.dart": "24bf644035498fd6d52674cc1cb11d4558fc3e693fbab7f92f8d961b55742544",
+    "test/ScrcpyApi21Probe.java": "6ad3c7e1e5563d92a38558987c4e034c1e693f014ca36c5d6e59dc67674ebe88",
+    "test/build_probe.dart": "786750cf64aa1c43480d19beb2c7deece6c741fd1c512e6fc63768e29e4d9e8b"
+  },
+  "kind": "source-built-core-library-desugared",
+  "officialRelease": {
+    "bundled": false,
+    "sha256": "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536",
+    "url": "https://github.com/Genymobile/scrcpy/releases/download/v5.0.1/scrcpy-server-v5.0.1"
+  },
+  "schema": 1,
+  "source": {
+    "archiveSha256": "a0d699fc7388b8252416c49e6293639de39ab76a03e7302ddced56c284d45200",
+    "archiveUrl": "https://codeload.github.com/Genymobile/scrcpy/tar.gz/a60891aea193d92e7e5c3942700eca63f9d19a5f",
+    "commit": "a60891aea193d92e7e5c3942700eca63f9d19a5f",
+    "javaSourcesSha256": "d15245dc8cfbb104e04d7b3a272de3684359f77a00687f044e4095734b03a76d",
+    "javaSourcesUnmodified": true
+  },
+  "toolchain": {
+    "agp": "9.4.1",
+    "androidJarSha256": "d9eb9da824d9e247a352f570f01e1169e725b2954bca9e283a71786c59b59f9a",
+    "buildJdk": "openjdk version \"21.0.12.1\" 2026-08-18",
+    "buildTools": "37.0.0",
+    "compileSdk": 36,
+    "d8L8R8": "9.4.24",
+    "gradle": "9.8.1",
+    "gradleDistributionSha256": "dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f",
+    "javaSourceTarget": "1.8",
+    "jdkMajor": 21,
+    "minApi": 21,
+    "targetApi": 36
+  },
+  "version": "5.0.1"
 }

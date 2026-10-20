@@ -8,7 +8,7 @@ import '../tooling.dart';
 
 const tools = <String, Object>{
   'androidPlatform': '36',
-  'buildTools': '36.0.0',
+  'buildTools': '37.0.0',
   'javaRelease': 8,
   'minApi': 21,
 };
@@ -76,7 +76,7 @@ Future<void> build(File destination, {Directory? sourceRoot}) async {
       p.join(
         sdk.path,
         'build-tools',
-        '36.0.0',
+        '37.0.0',
         Platform.isWindows ? 'd8.bat' : 'd8',
       ),
       [

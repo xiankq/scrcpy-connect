@@ -42,6 +42,11 @@ Future<void> main(List<String> arguments) => cli(() async {
   );
   vendor.verifyArtifact(vendorBytes);
 
+  final corruptLocalCrc = Uint8List.fromList(vendorBytes)..[14] ^= 1;
+  await rejects(() async {
+    vendor.verifyArtifact(corruptLocalCrc);
+  }, 'Corrupt ZIP entry');
+
   final duplicate = storedZip({
     'first.dex': [1],
     'other.dex': [2],
@@ -156,8 +161,21 @@ Future<void> main(List<String> arguments) => cli(() async {
       !File(p.join(work.path, 'escape')).existsSync(),
       'Archive escaped its extraction root',
     );
+    for (final link in [
+      ArchiveFile.symlink('link', '../escape'),
+      ArchiveFile.symlink('empty-link', ''),
+    ]) {
+      await rejects(
+        () => extractArchive(Archive()..addFile(link), extraction),
+        'Unexpected archive link',
+      );
+      require(
+        !FileSystemEntity.isLinkSync(p.join(extraction.path, link.name)),
+        'Archive created a symbolic link',
+      );
+    }
   });
   stdout.writeln(
-    'PASS: pinned ZIP bytes, duplicate ZIP/min-api rejection, manifest script/shared-tool/JAR drift and archive traversal',
+    'PASS: pinned ZIP bytes, duplicate ZIP/min-api rejection, manifest script/shared-tool/JAR drift, archive traversal and symbolic links',
   );
 });

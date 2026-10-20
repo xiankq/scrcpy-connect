@@ -50,7 +50,7 @@ Future<void> main(List<String> arguments) => cli(() async {
       p.join(
         sdk.path,
         'build-tools',
-        '36.0.0',
+        '37.0.0',
         Platform.isWindows ? 'd8.bat' : 'd8',
       ),
       [
