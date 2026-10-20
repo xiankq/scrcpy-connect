@@ -262,14 +262,8 @@ class ConnectionSetupCoordinator {
   Future<SetupJson> _usb(_SetupFlow flow, SetupJson params) async {
     SetupJson authorized = params;
     try {
-      if (!params.containsKey('fd')) {
-        final authorize = authorizeUsb;
-        if (authorize == null) {
-          throw const InteropException(
-            'usb_permission_required',
-            '需要主控系统USB授权。',
-          );
-        }
+      final authorize = authorizeUsb;
+      if (!params.containsKey('fd') && authorize != null) {
         authorized = {
           ...params,
           ...await authorize({...params, 'attemptId': flow.attempt}),
@@ -277,6 +271,10 @@ class ConnectionSetupCoordinator {
       }
       _check(flow);
       final opened = await _request('adb.usb.open', _lease(flow, authorized));
+      if (opened['selectionRequired'] == true) {
+        _check(flow);
+        return opened;
+      }
       flow.operation = opened['operationId'] as String;
       _check(flow);
       var id = flow.deviceId;

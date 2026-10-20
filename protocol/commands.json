@@ -99,11 +99,12 @@
       "name": "adb.usb.open",
       "owner": "core",
       "required": {
-        "fd": "integer",
         "attemptId": "string",
         "leaseMs": "integer"
       },
       "optional": {
+        "fd": "integer",
+        "usbDeviceId": "string",
         "deviceId": "string"
       }
     },

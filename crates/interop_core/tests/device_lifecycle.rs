@@ -255,15 +255,23 @@ async fn invalid_usb_fd_does_not_take_ownership_of_the_platform_descriptor() {
     let file = std::fs::File::open("/dev/null").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(dir.path()).await.unwrap();
-    assert!(
-        runtime
+    for _ in 0..2 {
+        let error = runtime
             .invoke(
                 "adb.usb.open",
-                json!({"fd":file.as_raw_fd(),"leaseMs":1000})
+                json!({"fd":file.as_raw_fd(),"attemptId":"invalid-usb-fd","leaseMs":1000}),
             )
             .await
-            .is_err()
-    );
+            .unwrap_err();
+        assert_ne!(
+            error.code, "invalid_argument",
+            "the test must reach FD import"
+        );
+        assert_ne!(
+            error.code, "operation_limit",
+            "a failed import must release its attempt"
+        );
+    }
     assert!(file.metadata().is_ok());
 }
 

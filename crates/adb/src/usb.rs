@@ -65,11 +65,19 @@ mod backend {
         info: DeviceInfo,
     }
     impl UsbDevice {
+        /// Opaque identity for this attachment, independent of an optional serial.
+        pub fn id(&self) -> String {
+            format!("{:?}", self.info.id())
+        }
+
         pub fn vendor_id(&self) -> u16 {
             self.info.vendor_id()
         }
         pub fn product_id(&self) -> u16 {
             self.info.product_id()
+        }
+        pub fn product_name(&self) -> Option<&str> {
+            self.info.product_string()
         }
         pub fn serial_number(&self) -> Option<&str> {
             self.info.serial_number()

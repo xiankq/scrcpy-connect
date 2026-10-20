@@ -60,8 +60,11 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         current = java.lang.ref.WeakReference(this)
         ProcessFlutterHost.attach(this)
-        if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, IntentFilter(usbAction), RECEIVER_NOT_EXPORTED)
-        else @Suppress("DEPRECATION") registerReceiver(usbReceiver, IntentFilter(usbAction))
+        // Permission PendingIntents carry a URI to isolate attempts. An action-only
+        // filter rejects every such result, leaving both grant and denial pending.
+        val usbFilter = IntentFilter(usbAction).apply { addDataScheme("scrcpyconnect") }
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, usbFilter, RECEIVER_NOT_EXPORTED)
+        else @Suppress("DEPRECATION") registerReceiver(usbReceiver, usbFilter)
         acceptIncoming(intent, false)
     }
 

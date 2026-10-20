@@ -73,11 +73,14 @@ enum InteropCommand {
   adbUsbOpen(
     "adb.usb.open",
     required: {
-      'fd': ProtocolFieldType.integer,
       'attemptId': ProtocolFieldType.string,
       'leaseMs': ProtocolFieldType.integer,
     },
-    optional: {'deviceId': ProtocolFieldType.string},
+    optional: {
+      'fd': ProtocolFieldType.integer,
+      'usbDeviceId': ProtocolFieldType.string,
+      'deviceId': ProtocolFieldType.string,
+    },
   ),
   appsIcon(
     "apps.icon",

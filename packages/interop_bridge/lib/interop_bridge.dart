@@ -68,12 +68,20 @@ class InteropBridge {
     },
     authorizeUsb: Platform.isAndroid
         ? (params) async {
-            final permission = await _platform
-                .invokeMethod<Map<dynamic, dynamic>>('usb.authorize', params);
-            if (permission == null) {
-              throw const InteropException('cancelled', '尚未允许 USB 访问。');
+            try {
+              final permission = await _platform
+                  .invokeMethod<Map<dynamic, dynamic>>('usb.authorize', params);
+              if (permission == null) {
+                throw const InteropException('cancelled', '尚未允许 USB 访问。');
+              }
+              return Map<String, dynamic>.from(permission);
+            } on PlatformException catch (error) {
+              throw InteropException(
+                error.code,
+                error.message ?? 'USB 访问未完成，请重新检查。',
+                error.details,
+              );
             }
-            return Map<String, dynamic>.from(permission);
           }
         : null,
     cancelUsb: Platform.isAndroid

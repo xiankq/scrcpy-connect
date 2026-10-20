@@ -18,6 +18,10 @@
 
 播放器现为社区原版 fvp 0.39.1；旧本地 snapshot 补丁、固定 MDK、协作暂停捕获 JAR 的测量只能作为历史样本。当前官方 scrcpy JAR 的暂停只停止本地呈现，`capturePaused=false`，恢复通过 `RESET_VIDEO` 重新取得画面。旧“远端捕获已经暂停”的通过记录不证明当前实现有该能力。
 
+## 2026-10-21 USB 与系统扫码配对
+
+桌面 USB 入口、无序列号候选选择、Android USB 授权广播遗漏 URI scheme、USB 离线重连及二维码多地址超时已修复。双 API36 AVD 实际通过系统相机扫码、应用自己的 PAKE 配对、自动发现连接端口及加密连接。另以 USB/IP 导入内核软件 USB，实际通过主控系统拒绝／允许、nusb FD 交接、真实被控 adbd 与 shell/sync 探测、拔除重连；普通 release APK 的 USB 工作台正例也通过。环境、红绿回归、清理与未验证范围见[本轮记录](usb-qr-pairing-2026-10-21.md)。这不补齐物理线缆、OTG／厂商 USB HAL、被控 RSA 授权或实体 Wi-Fi 验收。
+
 ## 2026-10-20 设备工作台与连接管理
 
 同日后续的屏幕比例、通知、列表与 ADB 调度重构有独立的[验证记录](display-notifications-adb-2026-10-20.md)，不继承下表旧版本的测试数量或运行结论。

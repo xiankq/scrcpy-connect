@@ -63,7 +63,7 @@ class UsbGuidePage extends HookWidget {
       }
     }
 
-    Future<void> check([String? serial]) async {
+    Future<void> check({String? serial, String? usbDeviceId}) async {
       final id =
           'usb-${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(attempt)}';
       attempt.value = id;
@@ -75,7 +75,8 @@ class UsbGuidePage extends HookWidget {
           'attemptId': id,
           'deviceId': ?deviceId,
           'serial': ?serial,
-          if (serial != null) 'connect': true,
+          'usbDeviceId': ?usbDeviceId,
+          if (serial != null || usbDeviceId != null) 'connect': true,
         });
         if (!context.mounted || attempt.value != id) return;
         state.value = result;
@@ -168,16 +169,27 @@ class UsbGuidePage extends HookWidget {
           return trailing[deviceIndex - devices.length];
         }
         final d = devices[deviceIndex];
+        final usbDeviceId = value(d, 'usbDeviceId');
+        final serial = value(d, 'serial');
+        final name = value(d, 'name');
+        final label = serial.isNotEmpty
+            ? serial
+            : name.isNotEmpty
+            ? name
+            : 'USB 设备 ${deviceIndex + 1}';
         return ActionRow(
-          key: ValueKey('usb-${value(d, 'serial', value(d, 'id'))}'),
+          key: ValueKey('usb-${usbDeviceId.isNotEmpty ? usbDeviceId : label}'),
           icon: LucideIcons.smartphone,
-          title: value(d, 'serial', deviceName(d)),
+          title: label,
           onTap: d['status'] == 'connected'
               ? () =>
                     WorkspaceRoute(deviceId: value(d, 'id'))
                         .pushReplacement(context)
-              : value(d, 'serial').isNotEmpty && !busy.value
-              ? () => check(value(d, 'serial'))
+              : (usbDeviceId.isNotEmpty || serial.isNotEmpty) && !busy.value
+              ? () => check(
+                  usbDeviceId: usbDeviceId.isNotEmpty ? usbDeviceId : null,
+                  serial: serial.isNotEmpty ? serial : null,
+                )
               : null,
         );
       },

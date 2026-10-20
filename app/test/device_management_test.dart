@@ -62,6 +62,48 @@ Future<void> reveal(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  for (final remoteAction in [false, true]) {
+    testWidgets(
+      'offline USB ${remoteAction ? 'remote action' : 'workspace connect'} requests a fresh system descriptor',
+      (tester) async {
+        final calls = <(String, Json)>[];
+        final usb = {...phone, 'transport': 'usb', 'status': 'offline'};
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          calls.add((command, params));
+          return command == 'devices.usb'
+              ? {'devices': <Json>[]}
+              : <String, dynamic>{};
+        });
+        addTearDown(controller.dispose);
+        controller.devices = [usb];
+        await pump(
+          tester,
+          controller,
+          DeviceWorkspacePage(controller: controller, device: usb),
+        );
+        final action = find.text(remoteAction ? '文件管理' : '连接手机');
+        await reveal(tester, action);
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        if (remoteAction) {
+          await tester.tap(find.text('连接设备'));
+          await tester.pumpAndSettle();
+        }
+        expect(calls.where((call) => call.$1 == 'devices.connect'), isEmpty);
+        await reveal(tester, find.text('检查连接'));
+        await tester.tap(find.text('检查连接'));
+        await tester.pumpAndSettle();
+        expect(
+          calls.where((call) => call.$1 == 'devices.usb').single.$2['deviceId'],
+          'phone',
+        );
+        expect(calls.where((call) => call.$1 == 'files.list'), isEmpty);
+      },
+    );
+  }
   testWidgets(
     'device menu removal confirms its exact record and cancellation changes nothing',
     (tester) async {

@@ -34,6 +34,8 @@ class DeviceHero extends HookWidget {
                 : () async {
                     if (online) {
                       await openRemoteRoute(context, deviceId: id);
+                    } else if (device['transport'] == 'usb') {
+                      await UsbGuideRoute(deviceId: id).push<void>(context);
                     } else if (unauthorized) {
                       await AddDeviceRoute(deviceId: id).push<void>(context);
                     } else {

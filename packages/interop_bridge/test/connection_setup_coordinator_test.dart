@@ -273,6 +273,53 @@ void main() {
     );
   });
 
+  test('desktop USB without platform authorization opens and admits the native selection', () async {
+    final host = Host();
+    host.respond = (command, params) async => switch (command) {
+      'adb.usb.open' => {
+        'operationId': 'desktop-usb',
+        'metadata': {'serial': 'serial'},
+      },
+      'adb.usb.attach' => {'connected': true, 'deviceId': 'phone'},
+      _ => {},
+    };
+    final owner = host.owner();
+    addTearDown(owner.dispose);
+    final result = await owner.request('devices.usb', {
+      'attemptId': 'desktop',
+      'usbDeviceId': 'attached-device',
+    });
+    expect(result['connected'], true);
+    final opened = host.calls
+        .where((call) => call.$1 == 'adb.usb.open')
+        .single
+        .$2;
+    expect(opened.containsKey('fd'), false);
+    expect(opened['usbDeviceId'], 'attached-device');
+    expect(host.calls.where((call) => call.$1 == 'adb.usb.attach').single.$2, {
+      'operationId': 'desktop-usb',
+      'deviceId': 'phone',
+    });
+    expect(host.calls.last.$1, 'adb.operation.release');
+    expect(host.calls.last.$2, {'operationId': 'desktop-usb'});
+  });
+
+  test('desktop USB selection is returned without admitting or releasing a nonexistent operation', () async {
+    final host = Host();
+    final selection = {
+      'selectionRequired': true,
+      'devices': [
+        {'usbDeviceId': 'first'},
+        {'usbDeviceId': 'second'},
+      ],
+    };
+    host.respond = (command, params) async => selection;
+    final owner = host.owner();
+    addTearDown(owner.dispose);
+    expect(await owner.request('devices.usb', {}), selection);
+    expect(host.calls.map((call) => call.$1), ['adb.usb.open']);
+  });
+
   test('ambiguous USB record association closes native pending lease and always releases platform handoff', () async {
     final host = Host()
       ..devices = [

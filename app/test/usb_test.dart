@@ -29,7 +29,7 @@ void main() {
         }
         if (command == 'devices.usb') {
           requests.add(params);
-          if (params['connect'] == true) {
+          if (params['usbDeviceId'] == 'attachment-a') {
             return {
               'connected': true,
               'deviceId': 'usb-phone',
@@ -42,13 +42,14 @@ void main() {
           }
           return {
             'supported': true,
+            'selectionRequired': true,
             'devices': [
               {
-                'serial': 'serial-a',
+                'usbDeviceId': 'attachment-a',
                 'vendorId': 6353,
                 'productId': 20199,
-                'permission': true,
               },
+              {'usbDeviceId': 'attachment-b', 'serial': 'serial-b'},
             ],
           };
         }
@@ -66,13 +67,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(requests, hasLength(1));
       expect(find.text('打开设备工作台'), findsNothing);
-      await tester.scrollUntilVisible(find.text('serial-a'), 200);
-      await tester.ensureVisible(find.text('serial-a'));
+      await tester.scrollUntilVisible(find.text('USB 设备 1'), 200);
+      await tester.ensureVisible(find.text('USB 设备 1'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('serial-a'));
+      expect(find.text('attachment-a'), findsNothing);
+      await tester.tap(find.text('USB 设备 1'));
       await tester.pumpAndSettle();
       expect(requests.last['connect'], isTrue);
-      expect(requests.last['serial'], 'serial-a');
+      expect(requests.last['usbDeviceId'], 'attachment-a');
+      expect(requests.last.containsKey('serial'), false);
       expect(requests.last['attemptId'], isNotEmpty);
       await tester.scrollUntilVisible(find.text('打开设备工作台'), 200);
       await tester.ensureVisible(find.text('打开设备工作台'));

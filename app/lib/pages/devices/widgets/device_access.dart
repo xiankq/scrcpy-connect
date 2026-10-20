@@ -24,7 +24,9 @@ Future<void> offerDeviceConnection(
       !context.mounted) {
     return;
   }
-  if (unauthorized) {
+  if (device['transport'] == 'usb') {
+    await UsbGuideRoute(deviceId: value(device, 'id')).push<void>(context);
+  } else if (unauthorized) {
     await AddDeviceRoute(deviceId: value(device, 'id')).push<void>(context);
   } else {
     await perform(context, controller, 'devices.connect', {

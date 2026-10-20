@@ -502,10 +502,6 @@ impl Command {
             }],
             Self::AdbUsbOpen => &[
                 Field {
-                    name: "fd",
-                    kind: FieldType::Integer,
-                },
-                Field {
                     name: "attemptId",
                     kind: FieldType::String,
                 },
@@ -909,10 +905,20 @@ impl Command {
                 name: "deviceId",
                 kind: FieldType::String,
             }],
-            Self::AdbUsbOpen => &[Field {
-                name: "deviceId",
-                kind: FieldType::String,
-            }],
+            Self::AdbUsbOpen => &[
+                Field {
+                    name: "fd",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "usbDeviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+            ],
             Self::AppsList => &[Field {
                 name: "filter",
                 kind: FieldType::String,

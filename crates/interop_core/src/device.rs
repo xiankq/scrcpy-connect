@@ -1,5 +1,12 @@
 //! Persistent device identity and live connection lifecycle. Network locations
 //! never serve as device identifiers; discovery changes endpoints, not trust.
+#[cfg(test)]
+#[path = "device/qr_pairing_tests.rs"]
+mod qr_pairing_tests;
+
+#[path = "device/qr_pairing.rs"]
+mod qr_pairing;
+
 use crate::{
     CoreError, CoreResult, Runtime,
     model::{Device, TransportKind, now, required},
@@ -367,6 +374,42 @@ mod pairing_tests;
 #[cfg(test)]
 #[path = "device/metadata_tests.rs"]
 mod metadata_tests;
+
+#[cfg(all(
+    test,
+    any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "windows",
+        target_os = "macos"
+    )
+))]
+#[path = "device/usb_tests.rs"]
+mod usb_tests;
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "windows",
+    target_os = "macos"
+))]
+fn select_usb_device(ids: &[String], requested: Option<&str>) -> CoreResult<Option<usize>> {
+    if let Some(requested) = requested {
+        return ids
+            .iter()
+            .position(|id| id == requested)
+            .map(Some)
+            .ok_or_else(|| CoreError::new("usb_removed", "所选 USB 设备已断开，请重新检查连接。"));
+    }
+    match ids.len() {
+        0 => Err(CoreError::new(
+            "usb_not_found",
+            "未识别到 ADB 设备，请检查数据线、USB 角色和被控手机的 USB 调试。",
+        )),
+        1 => Ok(Some(0)),
+        _ => Ok(None),
+    }
+}
 
 pub(crate) fn host(params: &Value) -> CoreResult<String> {
     let value = required(params, "address")?.trim();
@@ -1451,77 +1494,72 @@ impl Runtime {
             task,
         })
     }
-    pub(crate) async fn qr_pairing(self: &Arc<Self>, params: &Value) -> CoreResult<Value> {
-        let device = params["deviceId"].as_str().map(str::to_owned);
-        if let Some(id) = &device {
-            self.device(id).await?;
-        }
-        let material = self.identities.selected(device.as_deref()).await?;
-        let op = self
-            .new_setup_operation(params, device.as_deref(), material.fingerprint.clone())
-            .await?;
-        let qr = QrPairing::generate();
-        let response = json!({"payload":qr.payload().as_str(),"serviceName":qr.service_name(),"attemptId":op.attempt_id,"operationId":op.id,"expiresAt":now()+self.connection_policy.qr_pairing_timeout_ms.div_ceil(1000)});
-        let runtime = self.clone();
-        tokio::spawn(async move {
-            let options = OperationOptions {
-                timeout: Duration::from_millis(runtime.connection_policy.qr_pairing_timeout_ms),
-                cancellation: op.token.clone(),
-            };
-            let result = tokio::select! {
-                _ = op.token.cancelled() => Err(CoreError::new("cancelled","配对执行已取消。")),
-                result = tokio::time::timeout(options.timeout, async {
-                    let discovery = Discovery::new()?;
-                    let tls = material.tls().await?;
-                    loop {
-                        if let DiscoveryEvent::Resolved(service) = discovery.next(&options).await?
-                            && service.kind == ServiceKind::Pairing && service.instance == qr.service_name() {
-                            let mut last = None;
-                            for address in service.endpoints {
-                                let paired = async {
-                                    let socket = tokio::net::TcpStream::connect(address).await?;
-                                    Ok::<_, CoreError>(wireless::pair(socket,qr.password(),&material.identity,&tls,&runtime.connection_policy.public_key_comment,&options).await?)
-                                }.await;
-                                match paired {
-                                    Ok(paired) => return runtime.finish_pairing_record(paired.guid,address_of(address),device.as_deref(),&op).await,
-                                    Err(error) => { if authorization_failed(&error) { return Err(error); } last = Some(error); }
-                                }
-                            }
-                            return Err(last.unwrap_or_else(||CoreError::new("unreachable","配对服务没有可达地址。")));
-                        }
-                    }
-                }) => result.unwrap_or_else(|_|Err(CoreError::new("expired","配对执行已过期。"))),
-            };
-            runtime.setup_outcome(&op, &result);
-        });
-        Ok(response)
-    }
     pub(crate) async fn usb_open(&self, params: &Value) -> CoreResult<Value> {
-        #[cfg(any(target_os = "linux", target_os = "android"))]
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "windows",
+            target_os = "macos"
+        ))]
         {
-            use std::os::fd::FromRawFd;
             let explicit = params["deviceId"].as_str();
             if let Some(id) = explicit {
                 self.device(id).await?;
             }
-            let fd = params["fd"]
-                .as_i64()
-                .and_then(|v| i32::try_from(v).ok())
-                .filter(|v| *v >= 0)
-                .ok_or_else(|| CoreError::new("invalid_fd", "USB描述符无效。"))?;
-            let duplicate = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 0) };
-            if duplicate < 0 {
-                return Err(std::io::Error::last_os_error().into());
-            }
-            let owned = unsafe { std::os::fd::OwnedFd::from_raw_fd(duplicate) };
             let material = self.identities.selected(explicit).await?;
             let op = self
                 .new_setup_operation(params, explicit, material.fingerprint.clone())
                 .await?;
             let result = async {
                 let options = self.connect_options_for(explicit, op.token.clone()).await?;
-                let transport =
-                    interop_adb::usb::from_owned_fd(owned, options.operations.clone()).await?;
+                let transport = if params.get("fd").is_some() {
+                    #[cfg(any(target_os = "linux", target_os = "android"))]
+                    {
+                        use std::os::fd::FromRawFd;
+                        let fd = params["fd"]
+                            .as_i64()
+                            .and_then(|v| i32::try_from(v).ok())
+                            .filter(|v| *v >= 0)
+                            .ok_or_else(|| CoreError::new("invalid_fd", "USB描述符无效。"))?;
+                        // The Java lease remains alive until the caller acknowledges
+                        // this execution. Rust only owns this duplicate.
+                        let duplicate = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 0) };
+                        if duplicate < 0 {
+                            return Err(std::io::Error::last_os_error().into());
+                        }
+                        let owned = unsafe { std::os::fd::OwnedFd::from_raw_fd(duplicate) };
+                        interop_adb::usb::from_owned_fd(owned, options.operations.clone()).await?
+                    }
+                    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+                    {
+                        return Err(CoreError::new(
+                            "unsupported_platform",
+                            "当前宿主不接收USB描述符。",
+                        ));
+                    }
+                } else {
+                    let devices =
+                        interop_adb::usb::list_devices(options.operations.clone()).await?;
+                    op.check()?;
+                    let ids = devices.iter().map(|device| device.id()).collect::<Vec<_>>();
+                    let index = select_usb_device(&ids, params["usbDeviceId"].as_str())?;
+                    let Some(index) = index else {
+                        let devices = devices
+                            .iter()
+                            .map(|device| {
+                                json!({
+                                    "usbDeviceId": device.id(),
+                                    "name": device.product_name(),
+                                    "serial": device.serial_number(),
+                                    "vendorId": device.vendor_id(),
+                                    "productId": device.product_id(),
+                                })
+                            })
+                            .collect::<Vec<_>>();
+                        return Ok(json!({"selectionRequired":true,"devices":devices}));
+                    };
+                    devices[index].open(options.operations.clone()).await?
+                };
                 let client = Client::connect_transport(transport, options).await?;
                 let mut info = metadata(&client, op.token.clone()).await;
                 info.host_identity = Some(op.identity.clone());
@@ -1540,14 +1578,32 @@ impl Runtime {
             }
             .await;
             self.setup_outcome(&op, &result);
+            // Neither selection receipts nor errors hand an operation ID to
+            // Dart. Reclaim their lease immediately, including cancellation.
+            if result.is_err()
+                || result
+                    .as_ref()
+                    .is_ok_and(|value| value["selectionRequired"] == true)
+            {
+                self.setup_operations.release_alias(&op.id).await;
+                self.device_operations
+                    .lock()
+                    .await
+                    .retain(|_, current| current != &op.token);
+            }
             result
         }
-        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        #[cfg(not(any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "windows",
+            target_os = "macos"
+        )))]
         {
             let _ = params;
             Err(CoreError::new(
                 "unsupported_platform",
-                "当前宿主不接收USB描述符。",
+                "当前宿主不支持USB连接。",
             ))
         }
     }

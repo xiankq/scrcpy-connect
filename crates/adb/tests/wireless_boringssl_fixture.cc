@@ -111,6 +111,12 @@ int main(int argc, char** argv) {
     try {
         check(argc >= 2, "expected mode: pair, wrong, stls");
         std::string mode = argv[1];
+        // QR tests supply the generated secret over a private stdin pipe, never
+        // command arguments or logs. Existing modes retain their fixed code.
+        std::string code = "123456";
+        if (mode == "qr") {
+            check(bool(std::getline(std::cin, code)) && !code.empty(), "missing QR password");
+        }
         auto* ctx = SSL_CTX_new(TLS_server_method()); check(ctx != nullptr, "TLS context");
         check(SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION) && SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION), "TLS1.3");
         SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, [](int, X509_STORE_CTX*) { return 1; });
@@ -127,6 +133,9 @@ int main(int argc, char** argv) {
         X509_free(cert); EVP_PKEY_free(key);
         int listener = socket(AF_INET, SOCK_STREAM, 0); check(listener >= 0, "socket");
         sockaddr_in addr{}; addr.sin_family = AF_INET; addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (mode == "qr") {
+            check(argc == 3 && inet_pton(AF_INET, argv[2], &addr.sin_addr) == 1, "expected QR bind address");
+        }
         check(bind(listener, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0 && listen(listener, 1) == 0, "bind");
         socklen_t size = sizeof(addr); getsockname(listener, reinterpret_cast<sockaddr*>(&addr), &size);
         std::cout << ntohs(addr.sin_port) << std::endl;
@@ -138,7 +147,7 @@ int main(int argc, char** argv) {
         if (mode == "stls") {
             std::string banner("device::features=shell_v2,cmd"); Bytes bytes(banner.begin(), banner.end()); bytes.push_back(0);
             send_adb(ssl, -1, "CNXN", 0x01000001, 1048576, bytes);
-        } else { pair(ssl, "123456"); }
+        } else { pair(ssl, code); }
         SSL_free(ssl); SSL_CTX_free(ctx); close(fd);
         std::cout << "BORINGSSL_INTEROP_OK" << std::endl; return 0;
     } catch (const std::exception& e) { std::cerr << e.what() << std::endl; return 1; }
