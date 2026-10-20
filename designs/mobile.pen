@@ -3628,7 +3628,7 @@
                       "reusable": true,
                       "width": 354,
                       "height": 56,
-                      "fill": "$surface",
+                      "fill": "$transparent",
                       "gap": 12,
                       "padding": [
                         8,
@@ -4730,6 +4730,185 @@
                           "icon": "chevron-down",
                           "library": "lucide",
                           "fill": "$secondary"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Cyzll",
+                  "name": "组件 / 独立通知卡片",
+                  "context": "独立通知对象；点击整卡打开原内容，列表没有总卡片",
+                  "reusable": true,
+                  "width": 370,
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "qFBMF",
+                      "name": "通知来源与操作",
+                      "width": "fill_container",
+                      "height": 44,
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "LdOaG",
+                          "name": "信息 · 被控应用原始图标",
+                          "fill": {
+                            "type": "image",
+                            "enabled": true,
+                            "url": "assets/com.google.android.apps.messaging-api36.png",
+                            "mode": "contain"
+                          },
+                          "width": 36,
+                          "height": 36
+                        },
+                        {
+                          "type": "text",
+                          "id": "d9KNVt",
+                          "name": "来源应用名称",
+                          "fill": "$text",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "信息",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        },
+                        {
+                          "type": "text",
+                          "id": "i5oXv",
+                          "name": "通知收到时间",
+                          "fill": "$secondary",
+                          "content": "现在",
+                          "lineHeight": "$line-caption",
+                          "fontFamily": "$font-caption",
+                          "fontSize": "$size-caption",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zfriU",
+                      "name": "通知内容间距",
+                      "width": "fill_container",
+                      "height": 12
+                    },
+                    {
+                      "type": "text",
+                      "id": "CuEsc",
+                      "name": "通知发件人",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "小林",
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-heading"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TAsnh",
+                      "name": "通知内容间距",
+                      "width": "fill_container",
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "jZprG",
+                      "name": "实际通知正文",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "我们下午三点在车站见。",
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jg3Rs",
+                      "name": "通知内容间距",
+                      "width": "fill_container",
+                      "height": 12
+                    },
+                    {
+                      "type": "frame",
+                      "id": "agtbB",
+                      "name": "通知尾部操作",
+                      "width": "fill_container",
+                      "height": 44,
+                      "gap": 12,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "P8bftb",
+                          "name": "已读清除 · 44命中",
+                          "height": 44,
+                          "gap": 4,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "Q9Gt7A",
+                              "name": "清除同步标识",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "check-check",
+                              "library": "lucide",
+                              "fill": "$secondary"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ZY1JH",
+                              "name": "已读清除标签",
+                              "fill": "$secondary",
+                              "content": "已读（清除）",
+                              "lineHeight": "$line-label",
+                              "fontFamily": "$font-label",
+                              "fontSize": "$size-label",
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "EAMWX",
+                          "name": "快捷回复 · 44命中",
+                          "width": 76,
+                          "height": 44,
+                          "padding": [
+                            0,
+                            12
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ftOt1",
+                              "name": "回复入口",
+                              "fill": "$text",
+                              "textGrowth": "fixed-width",
+                              "width": 52,
+                              "content": "快捷回复",
+                              "lineHeight": "$line-label",
+                              "fontFamily": "$font-label",
+                              "fontSize": "$size-label",
+                              "fontWeight": "$weight-label"
+                            }
+                          ]
                         }
                       ]
                     }
@@ -7385,10 +7564,9 @@
                               "type": "frame",
                               "id": "t9PUI",
                               "name": "连接偏好",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -8247,10 +8425,9 @@
                               "type": "frame",
                               "id": "PgUdG",
                               "name": "正在进行的活动",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -10952,10 +11129,9 @@
                               "type": "frame",
                               "id": "gDo90",
                               "name": "实体屏幕",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -13336,10 +13512,9 @@
                               "type": "frame",
                               "id": "E75gxb",
                               "name": "紧凑传输列表",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -13754,10 +13929,9 @@
                               "type": "frame",
                               "id": "MoKDI",
                               "name": "逐项传输结果",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -15064,6 +15238,7 @@
                   "type": "frame",
                   "id": "a7A57",
                   "name": "通知与接续 / 实时通知",
+                  "context": "真实应用名与原始图标；整卡点击接续；已读清除与目标同步，右上全部已读",
                   "theme": {
                     "mode": "light"
                   },
@@ -15095,6 +15270,7 @@
                           "context": "首屏避让置于滚动内容内部；滚动时正文经过透明页头与玻璃控制背后。",
                           "width": "fill_container",
                           "layout": "vertical",
+                          "gap": 12,
                           "padding": [
                             126,
                             0,
@@ -15103,282 +15279,75 @@
                           ],
                           "children": [
                             {
-                              "type": "frame",
-                              "id": "JRpKz",
-                              "name": "通知真实性边界",
-                              "width": "fill_container",
-                              "gap": 8,
-                              "padding": [
-                                12,
-                                0
-                              ],
-                              "children": [
-                                {
-                                  "type": "icon",
-                                  "id": "GfHz3",
-                                  "name": "提示图标",
-                                  "width": 19,
-                                  "height": 19,
-                                  "icon": "info",
-                                  "library": "lucide",
-                                  "fill": "$secondary"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "vRXAg",
-                                  "name": "通知范围说明",
-                                  "fill": "$secondary",
-                                  "textGrowth": "fixed-width",
-                                  "width": "fill_container",
-                                  "content": "通知来自被控手机；清除不等于已读。涉及认证时请在手机真实界面完成。",
-                                  "lineHeight": "$line-caption",
-                                  "fontFamily": "$font-caption",
-                                  "fontSize": "$size-caption",
-                                  "fontWeight": "$weight-caption"
-                                }
-                              ]
+                              "id": "S5BtJ",
+                              "type": "ref",
+                              "ref": "Cyzll",
+                              "name": "信息 · 小林",
+                              "width": "fill_container"
                             },
                             {
-                              "type": "frame",
-                              "id": "Cyzll",
-                              "name": "信息 · 小林 · 当前通知",
+                              "id": "bdKcm",
+                              "type": "ref",
+                              "ref": "Cyzll",
+                              "name": "日历 · 即将开始",
                               "width": "fill_container",
-                              "layout": "vertical",
-                              "padding": [
-                                16,
-                                0,
-                                32,
-                                0
-                              ],
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "qFBMF",
-                                  "name": "通知来源与操作",
-                                  "width": "fill_container",
-                                  "height": 44,
-                                  "gap": 12,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "frame",
-                                      "id": "UXpNn",
-                                      "name": "来源应用符号",
-                                      "width": 40,
-                                      "height": 40,
-                                      "fill": {
-                                        "type": "gradient",
-                                        "gradientType": "linear",
-                                        "enabled": true,
-                                        "opacity": 0.1,
-                                        "rotation": 0,
-                                        "size": {
-                                          "height": 1
-                                        },
-                                        "colors": [
-                                          {
-                                            "color": "$primary",
-                                            "position": 0
-                                          },
-                                          {
-                                            "color": "$primary",
-                                            "position": 1
-                                          }
-                                        ]
-                                      },
-                                      "cornerRadius": "$radius-md",
-                                      "layout": "vertical",
-                                      "justifyContent": "center",
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "icon",
-                                          "id": "yRaJR",
-                                          "name": "信息",
-                                          "width": 23,
-                                          "height": 23,
-                                          "icon": "message-square",
-                                          "library": "lucide",
-                                          "fill": "$text"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "d9KNVt",
-                                      "name": "来源应用名称",
-                                      "fill": "$text",
-                                      "textGrowth": "fixed-width",
-                                      "width": "fill_container",
-                                      "content": "信息",
-                                      "lineHeight": "$line-body",
-                                      "fontFamily": "$font-body",
-                                      "fontSize": "$size-body",
-                                      "fontWeight": "$weight-heading"
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "PcZgb",
-                                      "name": "通知操作 · 44命中",
-                                      "width": 44,
-                                      "height": 44,
-                                      "layout": "vertical",
-                                      "justifyContent": "center",
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "icon",
-                                          "id": "mPXND",
-                                          "name": "通知更多",
-                                          "width": 22,
-                                          "height": 22,
-                                          "icon": "ellipsis-vertical",
-                                          "library": "lucide",
-                                          "fill": "$text"
-                                        }
-                                      ]
-                                    }
-                                  ]
+                              "descendants": {
+                                "LdOaG": {
+                                  "fill": {
+                                    "type": "image",
+                                    "enabled": true,
+                                    "url": "assets/com.google.android.calendar-api36.png",
+                                    "mode": "contain"
+                                  }
                                 },
-                                {
-                                  "type": "frame",
-                                  "id": "zfriU",
-                                  "name": "通知内容间距",
-                                  "width": "fill_container",
-                                  "height": 12
+                                "d9KNVt": {
+                                  "content": "日历"
                                 },
-                                {
-                                  "type": "text",
-                                  "id": "CuEsc",
-                                  "name": "通知发件人",
-                                  "fill": "$text",
-                                  "textGrowth": "fixed-width",
-                                  "width": "fill_container",
-                                  "content": "小林",
-                                  "lineHeight": "$line-body",
-                                  "fontFamily": "$font-body",
-                                  "fontSize": "$size-body",
-                                  "fontWeight": "$weight-heading"
+                                "i5oXv": {
+                                  "content": "2分钟前"
                                 },
-                                {
-                                  "type": "frame",
-                                  "id": "TAsnh",
-                                  "name": "通知内容间距",
-                                  "width": "fill_container",
-                                  "height": 6
+                                "CuEsc": {
+                                  "content": "项目讨论"
                                 },
-                                {
-                                  "type": "text",
-                                  "id": "jZprG",
-                                  "name": "实际通知正文",
-                                  "fill": "$text",
-                                  "textGrowth": "fixed-width",
-                                  "width": "fill_container",
-                                  "content": "我们下午三点在车站见。",
-                                  "lineHeight": "$line-body",
-                                  "fontFamily": "$font-body",
-                                  "fontSize": "$size-body",
-                                  "fontWeight": "$weight-body"
+                                "jZprG": {
+                                  "content": "15:00–16:00 · 会议室"
                                 },
-                                {
-                                  "type": "frame",
-                                  "id": "jg3Rs",
-                                  "name": "通知内容间距",
-                                  "width": "fill_container",
-                                  "height": 12
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "agtbB",
-                                  "name": "通知尾部操作",
-                                  "width": "fill_container",
-                                  "height": 44,
-                                  "gap": 12,
-                                  "justifyContent": "end",
-                                  "children": [
-                                    {
-                                      "type": "frame",
-                                      "id": "awA5d",
-                                      "name": "进入手机原应用 · 44命中",
-                                      "width": 143,
-                                      "height": 44,
-                                      "gap": 8,
-                                      "padding": [
-                                        0,
-                                        12
-                                      ],
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "gLjAD",
-                                          "name": "原应用入口",
-                                          "fill": "$text",
-                                          "textGrowth": "fixed-width",
-                                          "width": 91,
-                                          "content": "进入手机原应用",
-                                          "lineHeight": "$line-label",
-                                          "fontFamily": "$font-label",
-                                          "fontSize": "$size-label",
-                                          "fontWeight": "$weight-label"
-                                        },
-                                        {
-                                          "type": "icon",
-                                          "id": "c1Y76",
-                                          "name": "进入原应用",
-                                          "width": 16,
-                                          "height": 16,
-                                          "icon": "arrow-up-right",
-                                          "library": "lucide",
-                                          "fill": "$text"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "EAMWX",
-                                      "name": "快捷回复 · 44命中",
-                                      "width": 76,
-                                      "height": 44,
-                                      "padding": [
-                                        0,
-                                        12
-                                      ],
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "ftOt1",
-                                          "name": "回复入口",
-                                          "fill": "$text",
-                                          "textGrowth": "fixed-width",
-                                          "width": 52,
-                                          "content": "快捷回复",
-                                          "lineHeight": "$line-label",
-                                          "fontFamily": "$font-label",
-                                          "fontSize": "$size-label",
-                                          "fontWeight": "$weight-label"
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "hZ2y2",
-                                  "name": "通知内容间距",
-                                  "width": "fill_container",
-                                  "height": 16
-                                },
-                                {
-                                  "type": "rectangle",
-                                  "id": "f7XUR",
-                                  "name": "通知结束细线",
-                                  "fill": "$muted",
-                                  "width": "fill_container",
-                                  "height": 1
+                                "EAMWX": {
+                                  "enabled": false
                                 }
-                              ]
+                              }
+                            },
+                            {
+                              "id": "x6Y4VU",
+                              "type": "ref",
+                              "ref": "Cyzll",
+                              "name": "Chrome · 下载完成",
+                              "width": "fill_container",
+                              "descendants": {
+                                "LdOaG": {
+                                  "fill": {
+                                    "type": "image",
+                                    "enabled": true,
+                                    "url": "assets/com.android.chrome-api36.png",
+                                    "mode": "contain"
+                                  }
+                                },
+                                "d9KNVt": {
+                                  "content": "Chrome"
+                                },
+                                "i5oXv": {
+                                  "content": "5分钟前"
+                                },
+                                "CuEsc": {
+                                  "content": "旅行清单.pdf"
+                                },
+                                "jZprG": {
+                                  "content": "下载完成 · 2.4 MB"
+                                },
+                                "EAMWX": {
+                                  "enabled": false
+                                }
+                              }
                             }
                           ]
                         }
@@ -15488,16 +15457,17 @@
                           "content": "实时通知"
                         },
                         "BiHE4": {
-                          "enabled": false
+                          "enabled": true
                         },
                         "eVp4v": {
                           "enabled": true,
                           "fill": "$transparent",
                           "stroke": "$transparent",
-                          "effect": []
+                          "effect": [],
+                          "name": "全部已读 · 清除目标可清通知"
                         },
                         "eVp4v/alBho": {
-                          "icon": "ellipsis",
+                          "icon": "check-check",
                           "fill": "$text"
                         }
                       }
@@ -16574,10 +16544,9 @@
                               "type": "frame",
                               "id": "YANYL",
                               "name": "连接与活动",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -16667,10 +16636,9 @@
                               "type": "frame",
                               "id": "PSNi9",
                               "name": "本机数据",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -17070,10 +17038,9 @@
                               "type": "frame",
                               "id": "OUSLQ",
                               "name": "外观",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "gap": "$space-zero",
                               "children": [
@@ -17471,10 +17438,9 @@
                               "type": "frame",
                               "id": "HqVyk",
                               "name": "系统提醒",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -17573,10 +17539,9 @@
                               "type": "frame",
                               "id": "FS8Vd",
                               "name": "活动说明",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -18061,10 +18026,9 @@
                               "type": "frame",
                               "id": "bb1nF",
                               "name": "真实空间去向",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -18493,10 +18457,9 @@
                               "type": "frame",
                               "id": "psrrZ",
                               "name": "名称与偏好",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -19244,10 +19207,9 @@
                               "type": "frame",
                               "id": "Cgz5Z",
                               "name": "画质预设分组",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "gap": "$space-zero",
                               "children": [
@@ -19352,10 +19314,9 @@
                               "type": "frame",
                               "id": "SRYvS",
                               "name": "详细选项分组",
-                              "clip": true,
+                              "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                               "width": "fill_container",
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-lg",
+                              "fill": "$transparent",
                               "layout": "vertical",
                               "children": [
                                 {
@@ -20597,12 +20558,10 @@
                       "type": "frame",
                       "id": "leh5k",
                       "name": "当前设备已启动后台应用任务宫格",
-                      "context": "只列此设备已启动且仍存在的后台真实应用任务；图标来自设备包，不以已安装/常用应用冒充。",
+                      "context": "按行延迟构建的活跃应用宫格；直接进入页面滚动流，不使用总卡片",
                       "width": "fill_container",
-                      "fill": "$surface",
-                      "cornerRadius": "$radius-lg",
+                      "fill": "$transparent",
                       "gap": 16,
-                      "padding": 16,
                       "children": [
                         {
                           "type": "frame",
@@ -20826,10 +20785,9 @@
                       "type": "frame",
                       "id": "EPxks",
                       "name": "设备设置",
-                      "clip": true,
+                      "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                       "width": "fill_container",
-                      "fill": "$surface",
-                      "cornerRadius": "$radius-lg",
+                      "fill": "$transparent",
                       "layout": "vertical",
                       "children": [
                         {
@@ -20863,6 +20821,76 @@
                             "wQhjE": {
                               "fill": "$primary-action",
                               "justifyContent": "end"
+                            }
+                          }
+                        },
+                        {
+                          "id": "ShcqG",
+                          "type": "ref",
+                          "ref": "OuAnF",
+                          "name": "远控屏幕比例",
+                          "width": "fill_container",
+                          "descendants": {
+                            "i9kceM": {
+                              "fill": "$list-icon-blue"
+                            },
+                            "n4qgqg": {
+                              "icon": "ratio"
+                            },
+                            "nyAaN": {
+                              "content": "远控屏幕比例"
+                            },
+                            "kQv79": {
+                              "enabled": true,
+                              "content": "原始比例"
+                            }
+                          }
+                        },
+                        {
+                          "id": "D3A2T",
+                          "type": "ref",
+                          "ref": "D11Zj",
+                          "name": "连接后自动点亮屏幕",
+                          "width": "fill_container",
+                          "descendants": {
+                            "eAJnv": {
+                              "content": "连接后自动点亮屏幕"
+                            },
+                            "wQhjE": {
+                              "fill": "$muted",
+                              "justifyContent": "start"
+                            }
+                          }
+                        },
+                        {
+                          "id": "nIKBB",
+                          "type": "ref",
+                          "ref": "D11Zj",
+                          "name": "关闭前自动锁屏",
+                          "width": "fill_container",
+                          "descendants": {
+                            "eAJnv": {
+                              "content": "关闭前自动锁屏"
+                            },
+                            "wQhjE": {
+                              "fill": "$muted",
+                              "justifyContent": "start"
+                            }
+                          }
+                        },
+                        {
+                          "id": "mJV1m",
+                          "type": "ref",
+                          "ref": "D11Zj",
+                          "name": "远控期间保持唤醒",
+                          "width": "fill_container",
+                          "descendants": {
+                            "eAJnv": {
+                              "content": "保持手机唤醒"
+                            },
+                            "wQhjE": {
+                              "fill": "$muted",
+                              "justifyContent": "start"
                             }
                           }
                         }
@@ -20900,10 +20928,9 @@
                       "type": "frame",
                       "id": "aX7Ao",
                       "name": "连接与能力",
-                      "clip": true,
+                      "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                       "width": "fill_container",
-                      "fill": "$surface",
-                      "cornerRadius": "$radius-lg",
+                      "fill": "$transparent",
                       "layout": "vertical",
                       "children": [
                         {
@@ -21097,10 +21124,9 @@
                       "type": "frame",
                       "id": "BBXRS",
                       "name": "设备管理",
-                      "clip": true,
+                      "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                       "width": "fill_container",
-                      "fill": "$surface",
-                      "cornerRadius": "$radius-lg",
+                      "fill": "$transparent",
                       "layout": "vertical",
                       "children": [
                         {
@@ -21204,11 +21230,10 @@
                   "type": "frame",
                   "id": "OApmp",
                   "name": "组件 / 目标手机全部应用目录",
+                  "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                   "reusable": true,
-                  "clip": true,
                   "width": 370,
-                  "fill": "$surface",
-                  "cornerRadius": "$radius-lg",
+                  "fill": "$transparent",
                   "layout": "vertical",
                   "children": [
                     {
@@ -23670,56 +23695,6 @@
                       ]
                     }
                   ]
-                },
-                {
-                  "type": "frame",
-                  "id": "Ik4yj",
-                  "name": "局部状态 / 需授权设备卡",
-                  "theme": {
-                    "mode": "light"
-                  },
-                  "width": 402,
-                  "fill": "$canvas",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "gap": 16,
-                  "padding": 16,
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "IjjNa",
-                      "name": "需授权设备状态标题",
-                      "fill": "$text",
-                      "content": "需授权",
-                      "fontFamily": "$font-heading",
-                      "fontSize": "$size-heading",
-                      "fontWeight": "$weight-heading"
-                    },
-                    {
-                      "id": "v3oiJ",
-                      "type": "ref",
-                      "ref": "RTx0Z",
-                      "name": "需授权设备卡",
-                      "width": "fill_container",
-                      "descendants": {
-                        "Ok1ty/mNfsm": {
-                          "icon": "shield-alert",
-                          "fill": "$warning"
-                        },
-                        "IkThw": {
-                          "content": "Galaxy S24"
-                        },
-                        "ayJJ4": {
-                          "icon": "shield-alert",
-                          "fill": "$warning",
-                          "enabled": false
-                        },
-                        "Go5Bw": {
-                          "content": "需要重新授权 · 在手机上允许调试"
-                        }
-                      }
-                    }
-                  ]
                 }
               ]
             },
@@ -25280,47 +25255,6 @@
                           ]
                         }
                       }
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "m6p7C",
-                  "name": "局部状态 / 发现结果",
-                  "width": 402,
-                  "fill": "$canvas",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "gap": 16,
-                  "padding": 16,
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "yXsGq",
-                      "name": "状态名称",
-                      "fill": "$text",
-                      "content": "发现结果",
-                      "fontFamily": "$font-heading",
-                      "fontSize": "$size-heading",
-                      "fontWeight": "$weight-heading"
-                    },
-                    {
-                      "type": "text",
-                      "id": "h6pgGT",
-                      "name": "状态定位",
-                      "fill": "$secondary",
-                      "content": "来源 yMlVd · 状态 m6p7C",
-                      "fontFamily": "$font-micro",
-                      "fontSize": "$size-micro",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "id": "nrlcj",
-                      "type": "ref",
-                      "ref": "ALKza",
-                      "name": "附近设备二级页局部状态",
-                      "width": "fill_container",
-                      "height": 112
                     }
                   ]
                 }
@@ -28856,39 +28790,6 @@
                       ]
                     }
                   ]
-                },
-                {
-                  "type": "frame",
-                  "id": "kte7J",
-                  "name": "全部应用 · 深色外观",
-                  "theme": {
-                    "mode": "dark"
-                  },
-                  "width": 402,
-                  "fill": "$canvas",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "gap": 16,
-                  "padding": 16,
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "xrVUo",
-                      "name": "全部应用深色标题",
-                      "fill": "$text",
-                      "content": "全部应用",
-                      "fontFamily": "$font-heading",
-                      "fontSize": "$size-heading",
-                      "fontWeight": "$weight-heading"
-                    },
-                    {
-                      "id": "WPJzi",
-                      "type": "ref",
-                      "ref": "OApmp",
-                      "name": "目标手机全部应用目录",
-                      "width": "fill_container"
-                    }
-                  ]
                 }
               ]
             }
@@ -29420,9 +29321,9 @@
                           "type": "frame",
                           "id": "rt9A4",
                           "name": "文件选择",
+                          "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                           "width": "fill_container",
-                          "fill": "$surface",
-                          "cornerRadius": "$radius-lg",
+                          "fill": "$transparent",
                           "layout": "vertical",
                           "children": [
                             {
@@ -29600,344 +29501,6 @@
                               "content": "取消"
                             }
                           }
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "aVAri",
-                  "name": "局部状态 / Download",
-                  "theme": {
-                    "mode": "light"
-                  },
-                  "width": 402,
-                  "fill": "$canvas",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "gap": 16,
-                  "padding": 16,
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "w7190c",
-                      "name": "状态名称",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "Download",
-                      "fontFamily": "$font-heading",
-                      "fontSize": "$size-heading",
-                      "fontWeight": "$weight-heading"
-                    },
-                    {
-                      "type": "text",
-                      "id": "LoMf9",
-                      "name": "状态定位",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "来源 MaHXL · 状态 aVAri",
-                      "fontFamily": "$font-micro",
-                      "fontSize": "$size-micro",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "SHMFY",
-                      "name": "页面内容",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "gap": "$space-md",
-                      "children": [
-                        {
-                          "id": "L6Nsao",
-                          "type": "ref",
-                          "ref": "Nrkcq",
-                          "name": "表单 / 搜索",
-                          "width": "fill_container",
-                          "descendants": {
-                            "Th2Ov": {
-                              "content": "搜索",
-                              "enabled": false
-                            },
-                            "MJtjI": {
-                              "stroke": "$muted"
-                            },
-                            "MfqEL": {
-                              "enabled": true,
-                              "icon": "search",
-                              "width": 19,
-                              "height": 19
-                            },
-                            "S7RAIQ": {
-                              "content": "筛选当前目录",
-                              "fill": "$secondary",
-                              "fontFamily": "$font-body",
-                              "fontSize": "$size-body",
-                              "fontWeight": "$weight-body",
-                              "lineHeight": "$line-body"
-                            },
-                            "t8HMH": {
-                              "content": "",
-                              "enabled": false,
-                              "fill": "$secondary"
-                            }
-                          }
-                        },
-                        {
-                          "id": "oaUj6",
-                          "type": "ref",
-                          "ref": "anf55",
-                          "name": "搜索子文件夹入口 / 保留目录筛选",
-                          "width": "fill_container",
-                          "height": 44,
-                          "descendants": {
-                            "gcunj": {
-                              "content": "搜索子文件夹"
-                            }
-                          }
-                        },
-                        {
-                          "type": "frame",
-                          "id": "kHWcW",
-                          "name": "位置与选择",
-                          "width": "fill_container",
-                          "gap": "$space-sm",
-                          "justifyContent": "space_between",
-                          "children": [
-                            {
-                              "type": "frame",
-                              "id": "JAqsx",
-                              "name": "内部存储 / Download",
-                              "height": 32,
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-full",
-                              "layout": "vertical",
-                              "gap": "$space-sm",
-                              "padding": [
-                                "$space-xxs",
-                                "$space-sm"
-                              ],
-                              "justifyContent": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "hyPGu",
-                                  "name": "内部存储 / Download",
-                                  "fill": "$text",
-                                  "content": "内部存储 / Download",
-                                  "lineHeight": "$line-caption",
-                                  "fontFamily": "$font-caption",
-                                  "fontSize": "$size-caption",
-                                  "fontWeight": "$weight-caption"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
-                              "id": "a8nlC",
-                              "name": "选择",
-                              "height": 32,
-                              "fill": "$surface",
-                              "cornerRadius": "$radius-full",
-                              "layout": "vertical",
-                              "gap": "$space-sm",
-                              "padding": [
-                                "$space-xxs",
-                                "$space-sm"
-                              ],
-                              "justifyContent": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "zeEBs",
-                                  "name": "选择",
-                                  "fill": "$text",
-                                  "content": "选择",
-                                  "lineHeight": "$line-caption",
-                                  "fontFamily": "$font-caption",
-                                  "fontSize": "$size-caption",
-                                  "fontWeight": "$weight-caption"
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "Wlgtw",
-                          "name": "目录内容",
-                          "width": "fill_container",
-                          "fill": "$surface",
-                          "cornerRadius": "$radius-lg",
-                          "layout": "vertical",
-                          "children": [
-                            {
-                              "id": "Nb6pB",
-                              "type": "ref",
-                              "ref": "OuAnF",
-                              "name": "旅行资料",
-                              "width": "fill_container",
-                              "height": 56,
-                              "descendants": {
-                                "i9kceM": {
-                                  "fill": "$list-icon-amber",
-                                  "width": 28,
-                                  "height": 28,
-                                  "cornerRadius": 6
-                                },
-                                "n4qgqg": {
-                                  "icon": "folder",
-                                  "fill": "$white",
-                                  "width": 20,
-                                  "height": 20
-                                },
-                                "VsAGH": {
-                                  "strokeWidth": 0
-                                },
-                                "nyAaN": {
-                                  "content": "旅行资料",
-                                  "fontWeight": "$weight-body"
-                                },
-                                "kb9Ts": {
-                                  "enabled": true
-                                },
-                                "LN3WS": {
-                                  "enabled": false
-                                }
-                              }
-                            },
-                            {
-                              "id": "hLmJ0",
-                              "type": "ref",
-                              "ref": "OuAnF",
-                              "name": "演示文稿.pdf",
-                              "width": "fill_container",
-                              "height": 56,
-                              "descendants": {
-                                "i9kceM": {
-                                  "fill": "$list-icon-amber",
-                                  "width": 28,
-                                  "height": 28,
-                                  "cornerRadius": 6
-                                },
-                                "n4qgqg": {
-                                  "icon": "file-text",
-                                  "fill": "$white",
-                                  "width": 20,
-                                  "height": 20
-                                },
-                                "VsAGH": {
-                                  "strokeWidth": 0
-                                },
-                                "nyAaN": {
-                                  "content": "演示文稿.pdf",
-                                  "fontWeight": "$weight-body"
-                                },
-                                "kb9Ts": {
-                                  "enabled": true
-                                },
-                                "LN3WS": {
-                                  "enabled": false
-                                }
-                              }
-                            },
-                            {
-                              "id": "v0WAgr",
-                              "type": "ref",
-                              "ref": "OuAnF",
-                              "name": "行程清单.txt",
-                              "width": "fill_container",
-                              "height": 56,
-                              "descendants": {
-                                "i9kceM": {
-                                  "fill": "$list-icon-amber",
-                                  "width": 28,
-                                  "height": 28,
-                                  "cornerRadius": 6
-                                },
-                                "n4qgqg": {
-                                  "icon": "file-text",
-                                  "fill": "$white",
-                                  "width": 20,
-                                  "height": 20
-                                },
-                                "VsAGH": {
-                                  "strokeWidth": 0
-                                },
-                                "nyAaN": {
-                                  "content": "行程清单.txt",
-                                  "fontWeight": "$weight-body"
-                                },
-                                "kb9Ts": {
-                                  "enabled": true
-                                },
-                                "LN3WS": {
-                                  "enabled": false
-                                }
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "id": "n0BgBw",
-                          "type": "ref",
-                          "ref": "anf55",
-                          "name": "新建文件夹",
-                          "width": "fill_container",
-                          "height": 44,
-                          "descendants": {
-                            "gcunj": {
-                              "content": "新建文件夹"
-                            }
-                          }
-                        },
-                        {
-                          "id": "YaSxK",
-                          "type": "ref",
-                          "ref": "QXIw5",
-                          "name": "发送文件到此目录",
-                          "width": "fill_container",
-                          "height": 44,
-                          "descendants": {
-                            "mpPvv": {
-                              "content": "发送文件到此目录"
-                            }
-                          }
-                        },
-                        {
-                          "type": "frame",
-                          "id": "D83sfo",
-                          "name": "说明",
-                          "width": "fill_container",
-                          "gap": "$space-xs",
-                          "children": [
-                            {
-                              "type": "icon",
-                              "id": "x4PM9O",
-                              "name": "info",
-                              "width": 16,
-                              "height": 16,
-                              "icon": "info",
-                              "library": "lucide",
-                              "fill": "$secondary"
-                            },
-                            {
-                              "type": "text",
-                              "id": "b5AUS",
-                              "name": "长按选择后可取回、重命名或删除。",
-                              "fill": "$secondary",
-                              "textGrowth": "fixed-width",
-                              "width": "fill_container",
-                              "content": "长按选择后可取回、重命名或删除。",
-                              "lineHeight": "$line-caption",
-                              "fontFamily": "$font-caption",
-                              "fontSize": "$size-caption",
-                              "fontWeight": "$weight-caption"
-                            }
-                          ]
                         }
                       ]
                     }
@@ -33312,215 +32875,6 @@
                 },
                 {
                   "type": "frame",
-                  "id": "OLDRn",
-                  "name": "局部状态 / 森林片段",
-                  "theme": {
-                    "mode": "dark"
-                  },
-                  "width": 402,
-                  "fill": "$canvas",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "gap": 16,
-                  "padding": 16,
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "SMOfM",
-                      "name": "状态名称",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "视频播放控制",
-                      "fontFamily": "$font-heading",
-                      "fontSize": "$size-heading",
-                      "fontWeight": "$weight-heading"
-                    },
-                    {
-                      "type": "text",
-                      "id": "Y76T7",
-                      "name": "状态定位",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "来源 sepTa · 状态 OLDRn",
-                      "fontFamily": "$font-micro",
-                      "fontSize": "$size-micro",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "v5rESU",
-                      "name": "页面内容",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "frame",
-                          "id": "atBVA",
-                          "name": "真实主控局部 / OLDRn",
-                          "clip": true,
-                          "width": 370,
-                          "height": 85,
-                          "fill": "#000000",
-                          "layout": "none",
-                          "children": [
-                            {
-                              "type": "rectangle",
-                              "cornerRadius": 20,
-                              "id": "O2jdIA",
-                              "x": 0,
-                              "y": 0,
-                              "name": "视频控制玻璃底",
-                              "fill": {
-                                "type": "shader",
-                                "enabled": true,
-                                "url": "assets/liquid-glass.glsl",
-                                "uniforms": {
-                                  "u_ior": "$glass-refractionIndex",
-                                  "u_refractionWidth": "$glass-refractionWidth",
-                                  "u_blur": "$glass-blur",
-                                  "u_tint": "$glass",
-                                  "u_edgeLight": "$glass-edge",
-                                  "u_specularThickness": "$glass-specularThickness",
-                                  "u_specularSharpness": "$glass-specularSharpness",
-                                  "u_specularAngle": "$glass-angle",
-                                  "u_specularSpread": "$glass-specularSpread",
-                                  "u_specularIntensity": "$glass-specularIntensity",
-                                  "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
-                                  "u_glowThickness": "$glass-glowThickness",
-                                  "u_glowAngle": "$glass-glowAngle",
-                                  "u_glowSpread": "$glass-glowSpread",
-                                  "u_glowIntensity": "$glass-glowIntensity",
-                                  "u_glowOppositeIntensity": "$glass-glowOppositeIntensity",
-                                  "u_opticalDepth": "$glass-opticalDepth"
-                                }
-                              },
-                              "width": 370,
-                              "height": 85,
-                              "stroke": "$glass-edge",
-                              "strokeWidth": 1,
-                              "strokeAlignment": "inner"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "uY03z",
-                              "x": 0,
-                              "y": 0,
-                              "name": "内容流",
-                              "width": 370,
-                              "height": 85,
-                              "layout": "vertical",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "G24HJ",
-                                  "name": "内容间距",
-                                  "width": "fill_container",
-                                  "height": 35
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "t7GVDo",
-                                  "name": "内容行",
-                                  "width": "fill_container",
-                                  "height": 24,
-                                  "children": [
-                                    {
-                                      "type": "frame",
-                                      "id": "gYYHA",
-                                      "name": "行内对齐",
-                                      "width": 26.000038146972656,
-                                      "height": 1
-                                    },
-                                    {
-                                      "type": "icon",
-                                      "id": "Jg64I",
-                                      "name": "pause",
-                                      "width": 23.999923706054688,
-                                      "height": 24,
-                                      "icon": "pause",
-                                      "library": "lucide",
-                                      "fill": "$white"
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "X8vdth",
-                                      "name": "行内对齐",
-                                      "width": 10.000038146972656,
-                                      "height": 1
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "zGK94",
-                                      "name": "单行文字约束",
-                                      "width": 250,
-                                      "height": 20,
-                                      "layout": "vertical",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "Qkq0R",
-                                          "name": "0:39 / 1:18",
-                                          "fill": "$white",
-                                          "content": "0:39 / 1:18",
-                                          "lineHeight": 1.4,
-                                          "fontFamily": "$font-body",
-                                          "fontSize": 14,
-                                          "fontWeight": "normal"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "x5ULy4",
-                                      "name": "行内对齐",
-                                      "width": 10.000038146972656,
-                                      "height": 1
-                                    },
-                                    {
-                                      "type": "icon",
-                                      "id": "d2WNy",
-                                      "name": "volume-x",
-                                      "width": 23.999923706054688,
-                                      "height": 24,
-                                      "icon": "volume-x",
-                                      "library": "lucide",
-                                      "fill": "$white"
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "type": "rectangle",
-                              "id": "BIG1i",
-                              "x": 16,
-                              "y": 21,
-                              "name": "播放进度轨道",
-                              "fill": "#636366",
-                              "width": 338,
-                              "height": 4
-                            },
-                            {
-                              "type": "rectangle",
-                              "id": "frGn9",
-                              "x": 16,
-                              "y": 21,
-                              "name": "当前播放进度",
-                              "fill": "#FFFFFF",
-                              "width": 169,
-                              "height": 4
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
                   "id": "w4Qqmf",
                   "name": "局部状态 / 无法预览视频",
                   "theme": {
@@ -34189,6 +33543,215 @@
                               "icon": "chevron-up",
                               "library": "lucide",
                               "fill": "$primary"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nSfCV",
+                  "name": "局部状态 / 森林片段",
+                  "theme": {
+                    "mode": "dark"
+                  },
+                  "width": 402,
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "kbcbj",
+                      "name": "状态名称",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "视频播放控制",
+                      "fontFamily": "$font-heading",
+                      "fontSize": "$size-heading",
+                      "fontWeight": "$weight-heading"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Al9NO",
+                      "name": "状态定位",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "来源 sepTa · 状态 nSfCV",
+                      "fontFamily": "$font-micro",
+                      "fontSize": "$size-micro",
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YoNst",
+                      "name": "页面内容",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "OKBn2",
+                          "name": "真实主控局部 / nSfCV",
+                          "clip": true,
+                          "width": 370,
+                          "height": 85,
+                          "fill": "#000000",
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "cornerRadius": 20,
+                              "id": "wWslX",
+                              "x": 0,
+                              "y": 0,
+                              "name": "视频控制玻璃底",
+                              "fill": {
+                                "type": "shader",
+                                "enabled": true,
+                                "url": "assets/liquid-glass.glsl",
+                                "uniforms": {
+                                  "u_ior": "$glass-refractionIndex",
+                                  "u_refractionWidth": "$glass-refractionWidth",
+                                  "u_blur": "$glass-blur",
+                                  "u_tint": "$glass",
+                                  "u_edgeLight": "$glass-edge",
+                                  "u_specularThickness": "$glass-specularThickness",
+                                  "u_specularSharpness": "$glass-specularSharpness",
+                                  "u_specularAngle": "$glass-angle",
+                                  "u_specularSpread": "$glass-specularSpread",
+                                  "u_specularIntensity": "$glass-specularIntensity",
+                                  "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                                  "u_glowThickness": "$glass-glowThickness",
+                                  "u_glowAngle": "$glass-glowAngle",
+                                  "u_glowSpread": "$glass-glowSpread",
+                                  "u_glowIntensity": "$glass-glowIntensity",
+                                  "u_glowOppositeIntensity": "$glass-glowOppositeIntensity",
+                                  "u_opticalDepth": "$glass-opticalDepth"
+                                }
+                              },
+                              "width": 370,
+                              "height": 85,
+                              "stroke": "$glass-edge",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "z6AL9D",
+                              "x": 0,
+                              "y": 0,
+                              "name": "内容流",
+                              "width": 370,
+                              "height": 85,
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "gDjTP",
+                                  "name": "内容间距",
+                                  "width": "fill_container",
+                                  "height": 35
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "alWyF",
+                                  "name": "内容行",
+                                  "width": "fill_container",
+                                  "height": 24,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "u6AZ6M",
+                                      "name": "行内对齐",
+                                      "width": 26.000038146972656,
+                                      "height": 1
+                                    },
+                                    {
+                                      "type": "icon",
+                                      "id": "kCwBt",
+                                      "name": "pause",
+                                      "width": 23.999923706054688,
+                                      "height": 24,
+                                      "icon": "pause",
+                                      "library": "lucide",
+                                      "fill": "$white"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "i1wH5p",
+                                      "name": "行内对齐",
+                                      "width": 10.000038146972656,
+                                      "height": 1
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "zqgnn",
+                                      "name": "单行文字约束",
+                                      "width": 250,
+                                      "height": 20,
+                                      "layout": "vertical",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "X28Kzq",
+                                          "name": "0:39 / 1:18",
+                                          "fill": "$white",
+                                          "content": "0:39 / 1:18",
+                                          "lineHeight": 1.4,
+                                          "fontFamily": "$font-body",
+                                          "fontSize": 14,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "u2m6o5",
+                                      "name": "行内对齐",
+                                      "width": 10.000038146972656,
+                                      "height": 1
+                                    },
+                                    {
+                                      "type": "icon",
+                                      "id": "ZIzkQ",
+                                      "name": "volume-x",
+                                      "width": 23.999923706054688,
+                                      "height": 24,
+                                      "icon": "volume-x",
+                                      "library": "lucide",
+                                      "fill": "$white"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "yp4uq",
+                              "x": 16,
+                              "y": 21,
+                              "name": "播放进度轨道",
+                              "fill": "#636366",
+                              "width": 338,
+                              "height": 4
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "eGiN5",
+                              "x": 16,
+                              "y": 21,
+                              "name": "当前播放进度",
+                              "fill": "#FFFFFF",
+                              "width": 169,
+                              "height": 4
                             }
                           ]
                         }
@@ -38144,137 +37707,6 @@
               "children": [
                 {
                   "type": "frame",
-                  "id": "FkCjb",
-                  "name": "局部状态 / 画质",
-                  "theme": {
-                    "mode": "light"
-                  },
-                  "width": 402,
-                  "fill": "$canvas",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "gap": 16,
-                  "padding": 16,
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "G6WdO4",
-                      "name": "状态名称",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "画质预设",
-                      "fontFamily": "$font-heading",
-                      "fontSize": "$size-heading",
-                      "fontWeight": "$weight-heading"
-                    },
-                    {
-                      "type": "text",
-                      "id": "PmPHs",
-                      "name": "状态定位",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "来源 XPceX · 状态 FkCjb",
-                      "fontFamily": "$font-micro",
-                      "fontSize": "$size-micro",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "gd4vX",
-                      "name": "画质预设实际页面片段",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "children": [
-                        {
-                          "type": "frame",
-                          "id": "bLYf8",
-                          "name": "画质预设 / 页面内容",
-                          "clip": true,
-                          "width": "fill_container",
-                          "fill": "$surface",
-                          "cornerRadius": "$radius-lg",
-                          "layout": "vertical",
-                          "gap": "$space-zero",
-                          "children": [
-                            {
-                              "id": "IUSDp",
-                              "type": "ref",
-                              "ref": "A8DPa",
-                              "name": "流畅",
-                              "width": "fill_container",
-                              "padding": [
-                                8,
-                                16
-                              ],
-                              "descendants": {
-                                "v6mdwF": {
-                                  "stroke": "$muted",
-                                  "strokeWidth": 0
-                                },
-                                "Kq9Wf": {
-                                  "content": "流畅"
-                                },
-                                "XWQ5H": {
-                                  "enabled": false
-                                }
-                              }
-                            },
-                            {
-                              "id": "kYlXA",
-                              "type": "ref",
-                              "ref": "A8DPa",
-                              "name": "均衡",
-                              "width": "fill_container",
-                              "padding": [
-                                8,
-                                16
-                              ],
-                              "descendants": {
-                                "v6mdwF": {
-                                  "stroke": "$muted",
-                                  "strokeWidth": 0
-                                },
-                                "Kq9Wf": {
-                                  "content": "均衡"
-                                },
-                                "XWQ5H": {
-                                  "enabled": true
-                                }
-                              }
-                            },
-                            {
-                              "id": "dsCIZ",
-                              "type": "ref",
-                              "ref": "A8DPa",
-                              "name": "清晰",
-                              "width": "fill_container",
-                              "padding": [
-                                8,
-                                16
-                              ],
-                              "descendants": {
-                                "v6mdwF": {
-                                  "stroke": "$transparent",
-                                  "strokeWidth": 0
-                                },
-                                "Kq9Wf": {
-                                  "content": "清晰"
-                                },
-                                "XWQ5H": {
-                                  "enabled": false
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
                   "id": "zLQT5",
                   "name": "局部状态 / 断线重连",
                   "theme": {
@@ -38629,10 +38061,9 @@
                           "type": "frame",
                           "id": "ORfr6",
                           "name": "缓存状态列表",
-                          "clip": true,
+                          "context": "开放列表；实现逐项延迟构建，不使用总卡片裁切",
                           "width": "fill_container",
-                          "fill": "$surface",
-                          "cornerRadius": "$radius-lg",
+                          "fill": "$transparent",
                           "layout": "vertical",
                           "children": [
                             {
@@ -38820,6 +38251,135 @@
                       "type": "ref",
                       "ref": "s4kwU2",
                       "width": "fill_container"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Wp1CG",
+                  "name": "局部设置 / 远控屏幕比例",
+                  "context": "来源设备工作台；自动模式扣除主控导航键及安全区，实际修改被控显示；关闭原会话后生效",
+                  "width": 402,
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "o8g8qw",
+                      "name": "比例选项标题",
+                      "fill": "$text",
+                      "content": "远控屏幕比例",
+                      "fontFamily": "$font-heading",
+                      "fontSize": "$size-heading",
+                      "fontWeight": "$weight-heading"
+                    },
+                    {
+                      "id": "J2f2g",
+                      "type": "ref",
+                      "ref": "A8DPa",
+                      "name": "原始比例",
+                      "width": "fill_container",
+                      "descendants": {
+                        "Kq9Wf": {
+                          "content": "原始比例"
+                        },
+                        "XWQ5H": {
+                          "enabled": true
+                        }
+                      }
+                    },
+                    {
+                      "id": "CWrq6",
+                      "type": "ref",
+                      "ref": "A8DPa",
+                      "name": "自动适应可用空间",
+                      "width": "fill_container",
+                      "descendants": {
+                        "Kq9Wf": {
+                          "content": "自动适应可用空间"
+                        },
+                        "XWQ5H": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "id": "IlCgY",
+                      "type": "ref",
+                      "ref": "A8DPa",
+                      "name": "9:16",
+                      "width": "fill_container",
+                      "descendants": {
+                        "Kq9Wf": {
+                          "content": "9:16"
+                        },
+                        "XWQ5H": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "id": "FYfwC",
+                      "type": "ref",
+                      "ref": "A8DPa",
+                      "name": "3:4",
+                      "width": "fill_container",
+                      "descendants": {
+                        "Kq9Wf": {
+                          "content": "3:4"
+                        },
+                        "XWQ5H": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "id": "oHNYO",
+                      "type": "ref",
+                      "ref": "A8DPa",
+                      "name": "1:1",
+                      "width": "fill_container",
+                      "descendants": {
+                        "Kq9Wf": {
+                          "content": "1:1"
+                        },
+                        "XWQ5H": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "id": "yOKDP",
+                      "type": "ref",
+                      "ref": "A8DPa",
+                      "name": "16:9",
+                      "width": "fill_container",
+                      "descendants": {
+                        "Kq9Wf": {
+                          "content": "16:9"
+                        },
+                        "XWQ5H": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "id": "JSwhV",
+                      "type": "ref",
+                      "ref": "A8DPa",
+                      "name": "自定义…",
+                      "width": "fill_container",
+                      "descendants": {
+                        "Kq9Wf": {
+                          "content": "自定义…"
+                        },
+                        "XWQ5H": {
+                          "enabled": false
+                        }
+                      }
                     }
                   ]
                 }
@@ -39275,6 +38835,62 @@
                       }
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "EWW1a",
+                  "name": "局部设置 / 自定义屏幕比例",
+                  "context": "来源 Wp1CG · 自定义比例输入及校验，不复制完整页面",
+                  "width": 402,
+                  "fill": "$canvas",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "DCOgQ",
+                      "name": "自定义比例标题",
+                      "fill": "$text",
+                      "content": "自定义屏幕比例",
+                      "fontFamily": "$font-heading",
+                      "fontSize": "$size-heading",
+                      "fontWeight": "$weight-heading"
+                    },
+                    {
+                      "id": "LAX5h",
+                      "type": "ref",
+                      "ref": "Nrkcq",
+                      "name": "自定义宽高比字段",
+                      "width": "fill_container",
+                      "descendants": {
+                        "Th2Ov": {
+                          "content": "宽:高"
+                        },
+                        "S7RAIQ": {
+                          "content": "9:16"
+                        },
+                        "t8HMH": {
+                          "content": "比例范围 1:5 至 5:1",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container"
+                        }
+                      }
+                    },
+                    {
+                      "id": "lj7mp",
+                      "type": "ref",
+                      "ref": "QXIw5",
+                      "name": "保存自定义比例",
+                      "width": "fill_container",
+                      "descendants": {
+                        "mpPvv": {
+                          "content": "保存"
+                        }
+                      }
+                    }
+                  ]
                 }
               ]
             }
@@ -39323,198 +38939,6 @@
               "width": "fill_container",
               "gap": 80,
               "children": [
-                {
-                  "type": "frame",
-                  "id": "OxyeM",
-                  "name": "局部状态 / 深色外观",
-                  "theme": {
-                    "mode": "dark"
-                  },
-                  "width": 402,
-                  "fill": "$canvas",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "gap": 16,
-                  "padding": 16,
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "OOMkN",
-                      "name": "状态名称",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "深色外观",
-                      "fontFamily": "$font-heading",
-                      "fontSize": "$size-heading",
-                      "fontWeight": "$weight-heading"
-                    },
-                    {
-                      "type": "text",
-                      "id": "Q8Acl",
-                      "name": "状态定位",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "来源 lUDPa · 状态 OxyeM",
-                      "fontFamily": "$font-micro",
-                      "fontSize": "$size-micro",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "id": "XDO8M",
-                      "type": "ref",
-                      "ref": "RTx0Z",
-                      "name": "设备 / Pixel 9 Pro",
-                      "width": "fill_container",
-                      "height": 108,
-                      "x": 16,
-                      "y": 89,
-                      "descendants": {
-                        "akAwb": {
-                          "width": 52,
-                          "height": 72,
-                          "fill": "$transparent",
-                          "cornerRadius": "$radius-md"
-                        },
-                        "e2gc36": {
-                          "fill": "$text",
-                          "width": 32,
-                          "height": 32
-                        },
-                        "Ok1ty/mNfsm": {
-                          "icon": "circle-check",
-                          "fill": "$success"
-                        },
-                        "IkThw": {
-                          "content": "我的手机"
-                        },
-                        "ayJJ4": {
-                          "icon": "circle-check",
-                          "fill": "$success",
-                          "enabled": false
-                        },
-                        "Go5Bw": {
-                          "content": "已连接 · 无线调试"
-                        }
-                      }
-                    },
-                    {
-                      "id": "P6kZv",
-                      "type": "ref",
-                      "ref": "Ffm0s",
-                      "name": "全局导航",
-                      "x": 16,
-                      "y": 213,
-                      "width": "fill_container",
-                      "height": 64,
-                      "fill": {
-                        "type": "shader",
-                        "enabled": true,
-                        "url": "assets/liquid-glass.glsl",
-                        "uniforms": {
-                          "u_ior": "$glass-refractionIndex",
-                          "u_refractionWidth": "$glass-refractionWidth",
-                          "u_blur": "$glass-blur",
-                          "u_tint": "$glass",
-                          "u_edgeLight": "$glass-edge",
-                          "u_specularThickness": "$glass-specularThickness",
-                          "u_specularSharpness": "$glass-specularSharpness",
-                          "u_specularAngle": "$glass-angle",
-                          "u_specularSpread": "$glass-specularSpread",
-                          "u_specularIntensity": "$glass-specularIntensity",
-                          "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
-                          "u_glowThickness": "$glass-glowThickness",
-                          "u_glowAngle": "$glass-glowAngle",
-                          "u_glowSpread": "$glass-glowSpread",
-                          "u_glowIntensity": "$glass-glowIntensity",
-                          "u_glowOppositeIntensity": "$glass-glowOppositeIntensity",
-                          "u_opticalDepth": "$glass-opticalDepth"
-                        }
-                      },
-                      "stroke": "$transparent",
-                      "strokeWidth": 0,
-                      "strokeAlignment": "inner",
-                      "effect": {
-                        "type": "shadow",
-                        "shadowType": "outer",
-                        "color": "$shadow",
-                        "offset": {
-                          "x": 0,
-                          "y": "$glass-shadowOffset"
-                        },
-                        "blur": "$glass-shadowBlur"
-                      },
-                      "padding": "$space-xs",
-                      "context": "官方原版导航能力：父栏保持regular；静止用淡色选中面，按压/拖动内部clear镜片采样已绘制的父栏，不能绕过其底色与磨砂。受控目的地由宿主维护；静态稿不证明动态或像素等效。",
-                      "descendants": {
-                        "fQuah": {
-                          "fill": "$glass-selected",
-                          "stroke": "$transparent",
-                          "layout": "vertical",
-                          "gap": "$space-micro",
-                          "height": "fill_container",
-                          "effect": [],
-                          "context": "静止淡色选中面；官方组件没有常驻原页面clear window。"
-                        },
-                        "jXXaF": {
-                          "fill": "$primary",
-                          "width": 22,
-                          "height": 22
-                        },
-                        "WyQbC": {
-                          "fill": "$primary",
-                          "fontSize": "$size-label",
-                          "textGrowth": "auto",
-                          "lineHeight": "$line-label",
-                          "fontWeight": "$weight-label"
-                        },
-                        "Kf0bo": {
-                          "fill": "$transparent",
-                          "stroke": "$transparent",
-                          "layout": "vertical",
-                          "gap": "$space-micro",
-                          "height": "fill_container",
-                          "effect": [],
-                          "context": "图标与文字槽；未选中为透明背景。"
-                        },
-                        "WanPn": {
-                          "fill": "$secondary",
-                          "width": 22,
-                          "height": 22
-                        },
-                        "MetC5": {
-                          "fill": "$secondary",
-                          "fontSize": "$size-label",
-                          "textGrowth": "auto",
-                          "lineHeight": "$line-label",
-                          "fontWeight": "$weight-label"
-                        },
-                        "IfRlW": {
-                          "fill": "$transparent",
-                          "stroke": "$transparent",
-                          "layout": "vertical",
-                          "gap": "$space-micro",
-                          "height": "fill_container",
-                          "effect": [],
-                          "context": "图标与文字槽；未选中为透明背景。"
-                        },
-                        "tfKLy": {
-                          "fill": "$secondary",
-                          "width": 22,
-                          "height": 22
-                        },
-                        "bXjxp": {
-                          "fill": "$secondary",
-                          "fontSize": "$size-label",
-                          "textGrowth": "auto",
-                          "lineHeight": "$line-label",
-                          "fontWeight": "$weight-label"
-                        }
-                      }
-                    }
-                  ]
-                },
                 {
                   "type": "frame",
                   "id": "W7Lua",
