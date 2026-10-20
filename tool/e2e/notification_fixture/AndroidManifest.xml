@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.scrcpyconnect.notificationfixture">
     <uses-sdk android:minSdkVersion="36" android:targetSdkVersion="36"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <application android:label="Connect notification test fixture" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:debuggable="true">
+    <application android:icon="@drawable/fixture_icon" android:label="Connect notification test fixture" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:debuggable="true">
         <activity android:name=".NotificationFixtureActivity" android:exported="true"/>
         <receiver android:name=".ReplyReceiver" android:exported="false"/>
     </application>

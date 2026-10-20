@@ -87,6 +87,36 @@ public final class NotificationFixtureActivity extends Activity {
             .put("tag", tag).put("channel", tag).put("notificationIds", new JSONArray(new int[]{0, 1, 2, 3})));
     }
 
+    private void postRequirement(String runId, int id, boolean ongoing) throws Exception {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        String tag = FixtureStore.tag(runId);
+        manager.createNotificationChannel(new NotificationChannel(tag,
+            "Temporary notification requirements test", NotificationManager.IMPORTANCE_DEFAULT));
+        Notification notification = new Notification.Builder(this, tag)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(runId + "-" + id)
+            .setContentText("Synthetic requirements source " + id)
+            .setContentIntent(open(runId, id)).setOngoing(ongoing).build();
+        if (ongoing) notification.flags |= Notification.FLAG_NO_CLEAR;
+        manager.notify(tag, id, notification);
+    }
+
+    private void createRequirements(String runId) throws Exception {
+        AtomicFile state = FixtureStore.file(this, "runs", runId);
+        if (state.getBaseFile().exists()
+            || FixtureStore.file(this, "cleanup", runId).getBaseFile().exists()) {
+            throw new IllegalStateException("runId already exists");
+        }
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            throw new IllegalStateException("The isolated fixture requires notification permission");
+        }
+        postRequirement(runId, 0, false);
+        postRequirement(runId, 1, false);
+        postRequirement(runId, 4, true);
+        FixtureStore.write(state, new JSONObject().put("runId", runId).put("status", "ready")
+            .put("tag", FixtureStore.tag(runId)).put("notificationIds", new JSONArray(new int[]{0, 1, 4})));
+    }
+
     private void cleanup(String runId) throws Exception {
         NotificationManager manager = getSystemService(NotificationManager.class);
         String tag = FixtureStore.tag(runId);
@@ -100,7 +130,7 @@ public final class NotificationFixtureActivity extends Activity {
             JSONObject closing = FixtureStore.read(state).put("status", "closing");
             FixtureStore.write(state, closing);
         }
-        for (int id = 0; id < 4; id++) {
+        for (int id = 0; id < 6; id++) {
             manager.cancel(tag, id);
             // These identities include runId; no other run's actions are touched.
             open(runId, id).cancel();
@@ -116,6 +146,7 @@ public final class NotificationFixtureActivity extends Activity {
                 .put("status", "cleaned").put("finalReceipt", finalReceipt));
         }
         receipt.delete();
+        FixtureStore.file(this, "opens", runId).delete();
         state.delete();
         finishAndRemoveTask();
     }
@@ -129,7 +160,20 @@ public final class NotificationFixtureActivity extends Activity {
                 cleanup(runId);
                 return;
             }
-            if ((FixtureStore.PREFIX + "CREATE").equals(action)) {
+            if ((FixtureStore.PREFIX + "CREATE_REQUIREMENTS").equals(action)) {
+                createRequirements(runId);
+            } else if ((FixtureStore.PREFIX + "POST_REQUIREMENT").equals(action)) {
+                JSONObject active = FixtureStore.read(FixtureStore.file(this, "runs", runId));
+                if (!"ready".equals(active.optString("status"))) throw new IllegalStateException("Inactive run");
+                postRequirement(runId, 5, false);
+            } else if ((FixtureStore.PREFIX + "WITHDRAW_REQUIREMENT").equals(action)) {
+                getSystemService(NotificationManager.class).cancel(FixtureStore.tag(runId), 5);
+            } else if ((FixtureStore.PREFIX + "OPEN").equals(action)) {
+                AtomicFile receipt = FixtureStore.file(this, "opens", runId);
+                int count = receipt.getBaseFile().exists() ? FixtureStore.read(receipt).getInt("count") : 0;
+                FixtureStore.write(receipt, new JSONObject().put("runId", runId)
+                    .put("notificationId", intent.getIntExtra("notificationId", -1)).put("count", count + 1));
+            } else if ((FixtureStore.PREFIX + "CREATE").equals(action)) {
                 create(runId);
             } else if (!(FixtureStore.PREFIX + "OPEN").equals(action)) {
                 throw new IllegalArgumentException("Use an explicit CREATE, OPEN or CLEANUP action");

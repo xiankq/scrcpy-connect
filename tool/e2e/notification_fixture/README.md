@@ -144,3 +144,33 @@ Unicode reply. Missing UI/report/receipt, a duplicate, mismatched text, failure
 to restore the text baseline, or unconfirmed cleanup fails acceptance.
 `notificationReplyComplete` is scoped to this fixture; neither a product-wide
 completion nor delivery by a real chat application/message service is claimed.
+
+
+## Notification requirements mode
+
+`CREATE_REQUIREMENTS` creates two clearable sources (IDs 0 and 1) and a source
+with Android's `FLAG_NO_CLEAR` (ID 4). `POST_REQUIREMENT` adds ID 5;
+`WITHDRAW_REQUIREMENT` cancels ID 5 from inside the source application. These
+commands use a fresh run ID and are separate from the original reply scenario.
+The application declares its actual application icon so `apps.icon` can return
+it; the source small icon is not substituted for the application icon.
+An original content PendingIntent writes `files/opens/<runId>.json` with the run,
+notification ID and invocation count. CLEANUP deletes that receipt as well as
+the run and reply receipts and cancels IDs 0 through 5.
+
+The scoped driver is `tool/driver/notification_requirements.dart`, paired with
+`app/integration_test/notification_requirements_test.dart`. It requires distinct
+isolated API36 controller and target AVDs, the same endpoint defines as above,
+and `CONNECT_E2E_DEVICE` for the controller. The target must contain only test
+data because the real **全部已读** UI intentionally clears all clearable sources.
+The driver checks independent Android source/host records and the original OPEN
+receipt, including a temporary target PIN/keyguard round trip. Its finally path
+removes that PIN, cancels only its own sources and removes only its owned APK.
+The target AVD is kept running for subsequent acceptance.
+
+When Flutter integration instrumentation owns Android UiAutomation, set
+`CONNECT_E2E_MANUAL_SYSTEM_UI=1` to leave normal notification-permission and ADB
+authorization dialogs to the operator. Approve the visible system dialogs; do
+not grant the product permission or authorization with shell commands. The
+source, OPEN, keyguard, clearing, OS mirror and withdrawal assertions still run
+automatically. The report records this mode.

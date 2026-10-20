@@ -292,6 +292,22 @@ public final class Main {
         }
         return -1;
     }
+    private String notificationAppName(StatusBarNotification notification) {
+        try {
+            // Resolve the original package in its actual profile. Notification
+            // extras may contain a substitute label and are not app identity.
+            Class<?> handle=Class.forName("android.os.UserHandle");
+            Object user=handle.getConstructor(int.class).newInstance(notification.getUserId());
+            Context application=(Context)Context.class.getMethod("createPackageContextAsUser",String.class,int.class,handle)
+                .invoke(shellContext,notification.getPackageName(),0,user);
+            CharSequence label=application.getPackageManager().getApplicationLabel(application.getApplicationInfo());
+            String name=text(label,512).trim();
+            if(!name.isEmpty() && !name.equals(notification.getPackageName())) return name;
+        } catch(Exception unavailable) {
+            // Metadata failure must not invalidate otherwise actionable content.
+        }
+        return "手机通知";
+    }
     private void refreshNotifications(boolean event) throws Exception {
         if(!observationEnabled || !notificationsListening || notificationError!=null) return;
         Object slice=invoke(notificationManager,"getActiveNotificationsFromListener",notificationToken,null,0);
@@ -302,7 +318,7 @@ public final class Main {
             if(next.size()>=1000) {notificationsTruncated=true;break;}
             Notification n=sbn.getNotification();Bundle extras=n.extras;
             JSONObject data=new JSONObject().put("key",sbn.getKey()).put("packageName",sbn.getPackageName())
-                .put("appName",sbn.getPackageName()).put("userId",sbn.getUserId()).put("uid",sbn.getUid())
+                .put("appName",notificationAppName(sbn)).put("userId",sbn.getUserId()).put("uid",sbn.getUid())
                 .put("title",text(extras.getCharSequence(Notification.EXTRA_TITLE),4096))
                 .put("body",text(extras.getCharSequence(Notification.EXTRA_BIG_TEXT,extras.getCharSequence(Notification.EXTRA_TEXT)),16384))
                 .put("postedAt",sbn.getPostTime()).put("canOpen",n.contentIntent!=null)
@@ -351,7 +367,7 @@ public final class Main {
         if(keyguardLocked()) throw new Failure("authentication_required","Unlock the target device before continuing this notification action");
         if(command.equals("notifications.open")) {
             if(notification.contentIntent==null) throw new Failure("no_original_action","The original notification has no content PendingIntent");
-            notification.contentIntent.send();
+            notification.contentIntent.send(shellContext,0,null);
             return new JSONObject().put("acceptedBySystem",true).put("located",true).put("requiresRemoteView",true).put("applicationConfirmed",false);
         }
         int index=replyAction(notification);
