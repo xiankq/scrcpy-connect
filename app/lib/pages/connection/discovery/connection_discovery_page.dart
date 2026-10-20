@@ -12,15 +12,34 @@ import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class DiscoveryPage extends StatelessWidget {
-  const DiscoveryPage({super.key, required this.controller});
+  const DiscoveryPage({
+    super.key,
+    required this.controller,
+    this.returnSelection = false,
+  });
   final AppController controller;
+  final bool returnSelection;
+
+  void chooseMode(BuildContext context, String mode) {
+    if (returnSelection) {
+      Navigator.of(context).pop(<String, dynamic>{'mode': mode});
+    } else if (mode == 'usb') {
+      UsbGuideRoute().push<void>(context);
+    } else if (mode == 'pairing') {
+      WirelessGuideRoute().push<void>(context);
+    } else {
+      const ConnectionFormRoute(transport: ConnectionTransport.tcp)
+          .push<void>(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => PageFrame(
     title: '附近设备',
     actions: [
       GlassActionIcon(
-        onPressed: () => ConnectionFormRoute().push<void>(context),
-        tooltip: '手动连接',
+        onPressed: () => chooseMode(context, 'ip'),
+        tooltip: 'IP连接',
         icon: const Icon(LucideIcons.plus),
       ),
     ],
@@ -63,19 +82,19 @@ class DiscoveryPage extends StatelessWidget {
               FilledButton(onPressed: refresh, child: const Text('重新查找')),
               const SizedBox(height: DesignTokens.spacingMd),
               OutlinedButton(
-                onPressed: () => ConnectionFormRoute().push<void>(context),
-                child: const Text('手动连接'),
+                onPressed: () => chooseMode(context, 'ip'),
+                child: const Text('IP连接'),
               ),
               const SizedBox(height: DesignTokens.spacingMd),
               ActionRow(
                 icon: LucideIcons.info,
-                title: '无线调试设置方法',
-                onTap: () => WirelessGuideRoute().push<void>(context),
+                title: '使用无线配对码',
+                onTap: () => chooseMode(context, 'pairing'),
               ),
               ActionRow(
                 icon: LucideIcons.usb,
                 title: '改用 USB',
-                onTap: () => UsbGuideRoute().push<void>(context),
+                onTap: () => chooseMode(context, 'usb'),
               ),
             ],
           );
@@ -88,20 +107,35 @@ class DiscoveryPage extends StatelessWidget {
               final endpoints = objects(d['endpoints']);
               final endpoint = endpoints.isEmpty ? d : endpoints.first;
               final pairingService = d['kind'] == 'pairing';
-              return ActionRow(
-                icon: LucideIcons.smartphone,
-                title: value(d, 'name', value(d, 'instance', '附近 Android 设备')),
-                onTap: () => ConnectionFormRoute(
-                  pairing: pairingService,
-                  transport: pairingService
-                      ? null
-                      : d['kind'] == 'tcp'
-                      ? ConnectionTransport.tcp
-                      : ConnectionTransport.tls,
-                  address: value(endpoint, 'address'),
-                  port: value(endpoint, 'port'),
-                  deviceId: responseDeviceId(d),
-                ).push<void>(context),
+              return ListTile(
+                leading: const Icon(LucideIcons.smartphone),
+                title: Text(
+                  value(d, 'name', value(d, 'instance', '附近 Android 设备')),
+                ),
+                subtitle: Text(
+                  pairingService
+                      ? '等待配对'
+                      : d['trusted'] == true
+                      ? '已有配对信任，仍需检查连接'
+                      : '需要核对授权',
+                ),
+                onTap: () {
+                  if (returnSelection) {
+                    Navigator.of(context).pop(<String, dynamic>{'service': d});
+                    return;
+                  }
+                  ConnectionFormRoute(
+                    pairing: pairingService,
+                    transport: pairingService
+                        ? null
+                        : d['kind'] == 'tcp'
+                        ? ConnectionTransport.tcp
+                        : ConnectionTransport.tls,
+                    address: value(endpoint, 'address'),
+                    port: value(endpoint, 'port'),
+                    deviceId: responseDeviceId(d),
+                  ).push<void>(context);
+                },
               );
             }),
           ],

@@ -106,6 +106,29 @@ AppOps 优先使用当前字符串接口；AOSP 5.0 定义剪贴板整数操作�
 第二个独立 companion 写入触发第一个实例实时事件，启动期间断开取消，
 以及断开后的读取拒绝。旧 Android 设备运行、OEM、锁屏及多用户矩阵尚未因此得到验证。
 
+## 已启动应用任务与目标图标
+
+`apps.list` 的 `filter:"running"` 由同一共享 companion 读取目标系统的真实
+`ActivityManager.getRunningTasks` 快照；不传 filter 仍使用既有 scrcpy 已安装
+应用目录。运行列表需要 Android 10/API29 的任务类型、运行状态和用户元数据，
+低版本或缺少接口返回 `apps_running_unavailable`。读取前核验真实
+`REAL_GET_TASKS` 或具有 privileged UID 的 `GET_TASKS` 权限，避免 Android 静默
+返回调用者/桌面子集后冒充已确认空列表；权限拒绝不回退到安装目录。
+
+列表只含当前用户的标准应用任务，排除桌面、最近任务、空任务和不再运行的任务，
+按包名保留最近一项。这里的运行任务表示系统仍保留的已启动任务，不表示其进程
+持续占用 CPU；前台和后台任务均可列出。最多读取511项任务，达到512项边界明确
+失败而不伪报完整。每项保留 `name/packageName/system/taskId/userId`，结果带
+`source:"runningTasks"`、`live:true` 和 Rust 注入的 `deviceId`。
+
+`apps.icon` 接收目标 `packageName`，按目标当前用户的 PackageManager 读取该包
+实际声明的资源，绘制为96×96透明PNG；adaptive drawable同样由目标平台绘制。
+返回 `packageName/userId/mimeType/dataBase64/width/height/deviceId`，Dart可将
+base64解码后交给 `Image.memory`。缺包返回 `app_not_found`，无声明或资源缺失
+返回 `app_icon_unavailable`，不使用主控素材或缺包默认图标替代。PNG上限128KiB，
+不缓存图标或合并不同设备状态；主控缓存需保留设备、用户和包名归属。
+两个读取入口不创建控制会话，也不隐式启动通知或通话观察。
+
 ## 目标端媒体缩略图
 
 `media.stat` 和 `media.thumbnail` 使用独立的有界媒体队列：一个正在运行的

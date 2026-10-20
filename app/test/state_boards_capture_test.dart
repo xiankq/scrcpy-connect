@@ -213,7 +213,7 @@ void main() {
             },
           },
           prepare: (t) async {
-            await t.tap(find.text('已连接，检查授权'));
+            await t.tap(find.text('检查连接'));
             await _frames(t);
           },
           expected: ['等待被控手机授权'],

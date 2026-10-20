@@ -3,7 +3,7 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/settings/appearance/settings_appearance_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
@@ -82,7 +82,7 @@ void main() {
         RouterTestApp(
           controller: controller,
           theme: ConnectTokens.theme(Brightness.light),
-          home: DeviceDetailsPage(
+          home: DeviceWorkspacePage(
             controller: controller,
             device: const {'id': 'phone', 'name': '手机'},
           ),
@@ -90,7 +90,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       final clipboard = find.widgetWithText(ConnectSwitchRow, '自动同步剪贴板');
-      final navigation = find.widgetWithText(ConnectSwitchRow, '显示底部导航');
+      final navigation = find.widgetWithText(ConnectSwitchRow, '显示导航键');
       await tester.scrollUntilVisible(clipboard, 200);
       expect(tester.widget<ConnectSwitchRow>(clipboard).value, isFalse);
       expect(tester.widget<ConnectSwitchRow>(navigation).value, isTrue);
@@ -151,17 +151,17 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('IP 地址连接'), 200);
+      await tester.ensureVisible(find.text('IP连接'));
       await tester.pumpAndSettle();
       await Scrollable.ensureVisible(
-        tester.element(find.text('IP 地址连接')),
+        tester.element(find.text('IP连接')),
         alignment: .5,
       );
       await tester.pumpAndSettle();
-      expect(find.text('IP 地址连接').hitTestable(), findsOneWidget);
-      await tester.tap(find.text('IP 地址连接'));
+      expect(find.text('IP连接').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('IP连接'));
       await tester.pumpAndSettle();
-      expect(find.text('填写 IP 地址与连接端口'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNWidgets(2));
       final portField = find.widgetWithText(TextFormField, '连接端口');
       final verticalScroll = find.byWidgetPredicate(
         (widget) =>

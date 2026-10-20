@@ -61,8 +61,8 @@ void main() {
           home: UsbGuidePage(controller: controller),
         ),
       );
-      await tester.scrollUntilVisible(find.text('已连接，检查授权'), 250);
-      await tester.tap(find.text('已连接，检查授权'));
+      await tester.scrollUntilVisible(find.text('检查连接'), 250);
+      await tester.tap(find.text('检查连接'));
       await tester.pumpAndSettle();
       expect(requests, hasLength(1));
       expect(find.text('打开设备工作台'), findsNothing);
@@ -110,9 +110,9 @@ void main() {
           home: UsbGuidePage(controller: controller),
         ),
       );
-      await tester.scrollUntilVisible(find.text('已连接，检查授权'), 250);
+      await tester.scrollUntilVisible(find.text('检查连接'), 250);
       await tester.pump();
-      await tester.tap(find.text('已连接，检查授权'));
+      await tester.tap(find.text('检查连接'));
       await tester.pump();
       expect(attempts.single['attemptId'], isNotEmpty);
       await tester.scrollUntilVisible(find.text('取消本次检查'), 200);
@@ -120,7 +120,7 @@ void main() {
       await tester.tap(find.text('取消本次检查'));
       await tester.pumpAndSettle();
       expect(cancellations.single['attemptId'], attempts.single['attemptId']);
-      await tester.tap(find.text('已连接，检查授权'));
+      await tester.tap(find.text('检查连接'));
       await tester.pump();
       expect(attempts, hasLength(2));
       expect(attempts[1]['attemptId'], isNot(attempts[0]['attemptId']));

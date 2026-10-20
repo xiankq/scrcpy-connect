@@ -320,7 +320,18 @@ impl Runtime {
             "media.preview" => Box::pin(self.preview_media(&params)).await,
             "media.thumbnail" => Box::pin(self.thumbnail_media(&params)).await,
             "media.thumbnail.cancel" => Box::pin(self.cancel_thumbnail_media(&params)).await,
-            "apps.list" => Box::pin(self.list_apps(&params)).await,
+            "apps.list" if params["filter"] == "running" => {
+                Box::pin(self.companion_command(command, &params)).await
+            }
+            "apps.icon" => Box::pin(self.companion_command(command, &params)).await,
+            "apps.list" => match params.get("filter").and_then(Value::as_str) {
+                None if params.get("filter").is_none() => Box::pin(self.list_apps(&params)).await,
+                Some("installed") => Box::pin(self.list_apps(&params)).await,
+                _ => Err(CoreError::new(
+                    "invalid_argument",
+                    "应用列表 filter 必须为 running 或 installed。",
+                )),
+            },
             "apps.launch" => Box::pin(self.launch_app(&params)).await,
             "session.start" => Box::pin(self.start_session(&params)).await,
             "session.stop"

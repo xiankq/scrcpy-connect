@@ -1,85 +1,40 @@
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:flutter/material.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
-import 'package:scrcpy_connect/widgets/page_frame.dart';
-import 'package:scrcpy_connect/widgets/section_title.dart';
-import 'package:scrcpy_connect/widgets/state_note.dart';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:design_system/design_system.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-
-class AddDevicePage extends HookWidget {
+class AddDevicePage extends StatelessWidget {
   const AddDevicePage({
     super.key,
     required this.controller,
     this.initialDevice,
+    this.initialMode = AddDeviceMode.pairing,
+    this.address = '',
+    this.port = '',
+    this.transport,
+    this.deviceId,
   });
   final AppController controller;
   final Json? initialDevice;
+  final AddDeviceMode initialMode;
+  final String address;
+  final String port;
+  final ConnectionTransport? transport;
+  final String? deviceId;
+
   @override
-  Widget build(BuildContext context) => PageFrame(
-    title: initialDevice == null ? '添加设备' : '重新授权',
-    child: GroupedListView(
-      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-      children: [
-        Text(
-          initialDevice == null
-              ? '在另一台 Android 手机上完成调试设置与授权。本机无需开启调试。'
-              : '${deviceName(initialDevice!)} 的旧记录不代表当前授权。请在被控手机重新确认。',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: DesignTokens.spacingLg),
-        ContentPanel(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              ActionRow(
-                icon: LucideIcons.wifi,
-                title: '无线调试连接',
-                onTap: () => WirelessGuideRoute(
-                  address: value(initialDevice ?? {}, 'address'),
-                  deviceId: responseDeviceId(initialDevice),
-                ).push<void>(context),
-              ),
-              ActionRow(
-                icon: LucideIcons.usb,
-                title: 'USB 数据线',
-                onTap: () => UsbGuideRoute().push<void>(context),
-              ),
-              ActionRow(
-                icon: LucideIcons.network,
-                title: 'IP 地址连接',
-                onTap: () => ConnectionFormRoute(
-                  address: value(initialDevice ?? {}, 'address'),
-                  deviceId: responseDeviceId(initialDevice),
-                  transport: ConnectionTransport.tcp,
-                ).push<void>(context),
-              ),
-            ],
-          ),
-        ),
-        const SectionTitle('已有连接信息'),
-        ActionRow(
-          icon: LucideIcons.radar,
-          title: '发现附近设备',
-
-          onTap: () => DiscoveryRoute().push<void>(context),
-        ),
-        ActionRow(
-          icon: LucideIcons.network,
-          title: '手动填写无线调试地址',
-
-          onTap: () => ConnectionFormRoute(
-            address: value(initialDevice ?? {}, 'address'),
-            deviceId: responseDeviceId(initialDevice),
-          ).push<void>(context),
-        ),
-        const StateNote('仅连接你拥有或获准使用的手机。配对信任与当前设备连接分别建立。'),
-      ],
-    ),
+  Widget build(BuildContext context) => ConnectionFormPage(
+    controller: controller,
+    reauthorizing: initialDevice != null,
+    initialMode: initialMode,
+    pairing: initialMode == AddDeviceMode.pairing,
+    address: address.isNotEmpty
+        ? address
+        : value(initialDevice ?? {}, 'address'),
+    port: port,
+    deviceId: deviceId ?? responseDeviceId(initialDevice),
+    transport: initialDevice == null
+        ? transport
+        : connectionTransportForRecord(initialDevice!),
   );
 }

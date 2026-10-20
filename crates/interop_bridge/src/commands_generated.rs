@@ -5,6 +5,7 @@ pub(crate) const PROTOCOL_VERSION: u64 = 1;
 pub(crate) enum Command {
     ActivitiesList,
     ActivitiesStop,
+    AppsIcon,
     AppsLaunch,
     AppsList,
     AudioPause,
@@ -126,6 +127,7 @@ impl Command {
         Some(match value {
             "activities.list" => Self::ActivitiesList,
             "activities.stop" => Self::ActivitiesStop,
+            "apps.icon" => Self::AppsIcon,
             "apps.launch" => Self::AppsLaunch,
             "apps.list" => Self::AppsList,
             "audio.pause" => Self::AudioPause,
@@ -248,6 +250,7 @@ impl Command {
         match self {
             Self::ActivitiesList => "activities.list",
             Self::ActivitiesStop => "activities.stop",
+            Self::AppsIcon => "apps.icon",
             Self::AppsLaunch => "apps.launch",
             Self::AppsList => "apps.list",
             Self::AudioPause => "audio.pause",
@@ -371,6 +374,16 @@ impl Command {
                 name: "activityId",
                 kind: FieldType::String,
             }],
+            Self::AppsIcon => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "packageName",
+                    kind: FieldType::String,
+                },
+            ],
             Self::AppsLaunch => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
@@ -706,6 +719,10 @@ impl Command {
     }
     pub(crate) fn optional(self) -> &'static [Field] {
         match self {
+            Self::AppsList => &[Field {
+                name: "filter",
+                kind: FieldType::String,
+            }],
             Self::AudioVolume => &[
                 Field {
                     name: "volume",
@@ -921,6 +938,32 @@ impl Command {
                 name: "activities",
                 kind: FieldType::Array,
             }],
+            Self::AppsIcon => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "packageName",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "mimeType",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "dataBase64",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "width",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "height",
+                    kind: FieldType::Integer,
+                },
+            ],
             Self::AudioSources => &[Field {
                 name: "sources",
                 kind: FieldType::Array,

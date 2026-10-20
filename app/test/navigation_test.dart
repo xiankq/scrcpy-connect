@@ -61,6 +61,10 @@ void main() {
               )
               .first,
         );
+        await Scrollable.ensureVisible(
+          tester.element(find.text('文件管理')),
+          alignment: .5,
+        );
         await tester.pump(const Duration(milliseconds: 100));
         await tester.tap(find.text('文件管理'));
         // Deliberately leave both routes in transition, as a fast real listing

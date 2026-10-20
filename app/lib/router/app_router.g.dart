@@ -448,11 +448,25 @@ RouteBase get $discoveryRoute => GoRouteData.$route(
 );
 
 mixin $DiscoveryRoute on GoRouteData {
-  static DiscoveryRoute _fromState(GoRouterState state) =>
-      const DiscoveryRoute();
+  static DiscoveryRoute _fromState(GoRouterState state) => DiscoveryRoute(
+    selection:
+        _$convertMapValue(
+          'selection',
+          state.uri.queryParameters,
+          _$boolConverter,
+        ) ??
+        false,
+  );
+
+  DiscoveryRoute get _self => this as DiscoveryRoute;
 
   @override
-  String get location => GoRouteData.$location('/connection/discovery');
+  String get location => GoRouteData.$location(
+    '/connection/discovery',
+    queryParams: {
+      if (_self.selection != false) 'selection': _self.selection.toString(),
+    },
+  );
 
   @override
   void go(BuildContext context) => context.go(location);

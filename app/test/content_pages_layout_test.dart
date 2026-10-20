@@ -10,13 +10,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/connection/discovery/connection_discovery_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
-import 'package:scrcpy_connect/pages/connection/wireless/index/connection_wireless_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_workspace_gallery_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/settings/background/settings_background_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -86,7 +85,7 @@ void main() {
           key: const ValueKey('device-facts'),
           controller: controller,
           theme: fixtures.captureTheme(Brightness.light),
-          home: DeviceDetailsPage(
+          home: DeviceWorkspacePage(
             controller: controller,
             device: fixtures.device,
           ),
@@ -94,8 +93,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        tester.getBottomRight(find.text('Pixel 9')).dx,
-        closeTo(402 - DesignTokens.spacingMd, .01),
+        tester.getBottomRight(find.text('Pixel 9').last).dx,
+        closeTo(402 - DesignTokens.spacingMd * 2, .01),
       );
       await tester.pumpWidget(
         RouterTestApp(
@@ -357,8 +356,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(discoveries, before + 1);
         for (final recovery in [
-          ('手动连接', ConnectionFormPage),
-          ('无线调试设置方法', WirelessGuidePage),
+          ('IP连接', ConnectionFormPage),
+          ('使用无线配对码', ConnectionFormPage),
           ('改用 USB', UsbGuidePage),
         ]) {
           final action = find.text(recovery.$1).last;
@@ -496,7 +495,7 @@ void main() {
                 controller: controller,
                 theme: fixtures.captureTheme(brightness),
                 home: isDevice
-                    ? DeviceDetailsPage(
+                    ? DeviceWorkspacePage(
                         controller: controller,
                         device: fixtures.device,
                       )

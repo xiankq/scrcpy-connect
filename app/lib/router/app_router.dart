@@ -20,7 +20,6 @@ import 'package:scrcpy_connect/pages/devices/details/capabilities/devices_detail
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/settings/data_preferences/settings_data_preferences_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
@@ -38,7 +37,6 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_w
 import 'package:scrcpy_connect/pages/settings/media_cache/settings_media_cache_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/reply/devices_workspace_notifications_reply_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
-import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
@@ -48,8 +46,6 @@ import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/devices_workspace_files_directory_picker_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
 import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
-import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
-import 'package:scrcpy_connect/pages/connection/wireless/index/connection_wireless_index_page.dart';
 
 part 'app_router.g.dart';
 
@@ -331,7 +327,8 @@ class WirelessGuideRoute extends GoRouteData with $WirelessGuideRoute {
     final records = _records(context);
     Widget page(BuildContext _, GoRouterState state) {
       final id = deviceId;
-      Widget guide() => WirelessGuidePage(
+      Widget guide([Json? record]) => AddDevicePage(
+        initialDevice: record,
         controller: controller,
         deviceId: id,
         address: address,
@@ -341,7 +338,7 @@ class WirelessGuideRoute extends GoRouteData with $WirelessGuideRoute {
           : RecordRoute(
               identity: 'wireless:$id',
               load: () => records.device(id),
-              builder: (_, device) => guide(),
+              builder: (_, device) => guide(device),
             );
     }
 
@@ -376,15 +373,15 @@ class ConnectionFormRoute extends GoRouteData with $ConnectionFormRoute {
     final controller = _controller(context);
     final records = _records(context);
     Widget page(BuildContext _, GoRouterState state) {
-      Widget form([Json? record]) => ConnectionFormPage(
+      Widget form([Json? record]) => AddDevicePage(
         key: state.pageKey,
         controller: controller,
-        pairing: pairing,
+        initialMode: pairing ? AddDeviceMode.pairing : AddDeviceMode.ip,
         address: address,
         port: port,
         deviceId: deviceId,
         transport: record == null
-            ? transport
+            ? transport ?? ConnectionTransport.tls
             : connectionTransportForRecord(record) == ConnectionTransport.tls
             ? ConnectionTransport.tls
             : transport ?? ConnectionTransport.tcp,
@@ -409,13 +406,14 @@ class ConnectionFormRoute extends GoRouteData with $ConnectionFormRoute {
 
 @TypedGoRoute<DiscoveryRoute>(path: '/connection/discovery', name: 'discovery')
 class DiscoveryRoute extends GoRouteData with $DiscoveryRoute {
-  const DiscoveryRoute();
+  const DiscoveryRoute({this.selection = false});
+  final bool selection;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state) =>
-        DiscoveryPage(controller: controller);
+        DiscoveryPage(controller: controller, returnSelection: selection);
     return page(context, state);
   }
 
@@ -432,7 +430,7 @@ class UsbGuideRoute extends GoRouteData with $UsbGuideRoute {
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state) =>
-        UsbGuidePage(controller: controller);
+        AddDevicePage(controller: controller, initialMode: AddDeviceMode.usb);
     return page(context, state);
   }
 
@@ -449,7 +447,7 @@ class QrPairRoute extends GoRouteData with $QrPairRoute {
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state) =>
-        QrPairPage(controller: controller);
+        AddDevicePage(controller: controller, initialMode: AddDeviceMode.qr);
     return page(context, state);
   }
 
@@ -485,16 +483,8 @@ class DeviceDetailsRoute extends GoRouteData with $DeviceDetailsRoute {
   final String deviceId;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    Widget page(BuildContext _, GoRouterState state, Json device) =>
-        DeviceDetailsPage(controller: controller, device: device);
-    return _deviceRecord(context, state, deviceId, 'device-details', page);
-  }
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
+  String redirect(BuildContext context, GoRouterState state) =>
+      WorkspaceRoute(deviceId: deviceId).location;
 }
 
 @TypedGoRoute<DeviceConnectionRoute>(

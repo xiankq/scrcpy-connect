@@ -108,13 +108,6 @@ class DevicesPage extends HookConsumerWidget {
                             appDeviceError,
                             icon: LucideIcons.circleAlert,
                           ),
-                        if (!appLoading &&
-                            appDevices.isNotEmpty &&
-                            appDevices.every((d) => d['status'] != 'connected'))
-                          const StateNote(
-                            '设备当前均不在线。连接后即可继续使用应用和内容。',
-                            icon: LucideIcons.wifiOff,
-                          ),
                         const SizedBox(height: DesignTokens.spacingMd),
                       ],
                     ),

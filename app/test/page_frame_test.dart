@@ -122,11 +122,18 @@ void main() {
       );
       final gradient =
           (protection.decoration as BoxDecoration).gradient! as LinearGradient;
-      final protectionHeight = tester.getSize(
-        find.byType(PageChromeProtection),
-      ).height;
-      expect(protectionHeight, header.height + DesignTokens.spacingLg);
-      expect(gradient.stops![1] * protectionHeight, header.height);
+      final protectionHeight = tester
+          .getSize(find.byType(PageChromeProtection))
+          .height;
+      expect(protectionHeight, header.height);
+      expect(
+        tester.getRect(find.byType(PageChromeProtection)).bottom,
+        header.bottom,
+      );
+      expect(
+        gradient.stops![1] * protectionHeight,
+        header.height - DesignTokens.spacingLg,
+      );
       expect(gradient.colors[1].a, DesignTokens.componentScrollEdgeOpacity);
       expect(gradient.colors.last.a, 0);
       expect(tester.takeException(), isNull);

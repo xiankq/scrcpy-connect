@@ -99,20 +99,28 @@ void main() {
             GlassVariant.regular,
           );
           await tester.scrollUntilVisible(
-            find.text('地图'),
+            find.text('Chrome'),
             80,
             scrollable: find
                 .descendant(
                   of: find.byType(AppsPage),
-                  matching: find.byType(Scrollable),
+                  matching: find.byWidgetPredicate(
+                    (widget) =>
+                        widget is Scrollable &&
+                        widget.axisDirection == AxisDirection.down,
+                  ),
                 )
                 .last,
           );
+          await Scrollable.ensureVisible(
+            tester.element(find.text('Chrome')),
+            alignment: .5,
+          );
           await tester.pumpAndSettle();
-          expect(find.text('地图').hitTestable(), findsOneWidget);
-          await tester.tap(find.text('地图'));
+          expect(find.text('Chrome').hitTestable(), findsOneWidget);
+          await tester.tap(find.text('Chrome'));
           await tester.pumpAndSettle();
-          expect(find.text('打开“地图”'), findsOneWidget);
+          expect(find.text('打开“Chrome”'), findsOneWidget);
           expect(find.text('在独立窗口打开'), findsOneWidget);
           expect(find.text('在手机屏幕打开'), findsOneWidget);
           expect(find.text('在手机屏幕打开会切换手机当前的前台应用。'), findsOneWidget);
@@ -243,7 +251,7 @@ void main() {
                   .where((call) => call.$1 == 'session.start')
                   .single
                   .$2['packageName'],
-              'com.google.android.apps.maps',
+              'com.android.chrome',
             );
             // The recovery confirmation must precede any phone-screen launch.
             await tester.ensureVisible(find.text('在手机屏幕继续'));

@@ -31,12 +31,15 @@ void main() {
           home: ConnectionFormPage(
             controller: controller,
             address: 'phone.local',
+            transport: ConnectionTransport.tls,
           ),
         ),
       );
+      await tester.ensureVisible(find.text('尚未配对？使用配对码'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('尚未配对？使用配对码'));
       await tester.pumpAndSettle();
-      expect(find.text('使用配对码'), findsOneWidget);
+      expect(find.text('无线配对码'), findsOneWidget);
       expect(find.text('phone.local'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
@@ -76,19 +79,17 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.text('无线调试连接'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('使用配对码'));
-      await tester.tap(find.text('使用配对码'));
-      await tester.pumpAndSettle();
+
       await tester.enterText(find.byType(TextFormField).at(1), '37123');
       await tester.enterText(find.byType(TextFormField).at(2), '123456');
-      await tester.ensureVisible(find.text('配对并检查连接'));
-      await tester.tap(find.text('配对并检查连接'));
+      await tester.ensureVisible(find.text('配对并连接'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('配对并连接'));
       await tester.pump(const Duration(milliseconds: 200));
       expect(pairParams?['deviceId'], 'restored-id');
       expect(pairParams?['address'], 'phone.local');
       await tester.ensureVisible(find.text('取消本次尝试'));
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.text('取消本次尝试'));
       await tester.pumpAndSettle();
       expect(cancelParams?['attemptId'], pairParams?['attemptId']);
@@ -197,8 +198,8 @@ void main() {
       expect(calls.where((call) => call.startsWith('session.')), isEmpty);
       await tester.tap(find.text('添加设备').last);
       await tester.pumpAndSettle();
-      expect(find.text('无线调试连接'), findsOneWidget);
-      expect(find.text('手动填写无线调试地址'), findsOneWidget);
+      expect(find.text('无线配对码'), findsOneWidget);
+      expect(find.text('手动填写无线调试地址'), findsNothing);
     },
   );
   testWidgets('invalid connection port cannot reach device backend', (
@@ -221,10 +222,12 @@ void main() {
     );
     await tester.enterText(find.byType(TextFormField).at(0), '192.168.1.8');
     await tester.enterText(find.byType(TextFormField).at(1), '65536');
+    await tester.ensureVisible(find.text('连接设备'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('连接设备'));
     await tester.pumpAndSettle();
     expect(find.text('端口应为 1–65535 的整数'), findsOneWidget);
-    expect(calls, isEmpty);
+    expect(calls.where((call) => call != 'devices.discover'), isEmpty);
   });
   testWidgets(
     'metadata-only device stays unauthorized and has no live battery',
@@ -255,7 +258,9 @@ void main() {
       await tester.tap(find.text('恢复的手机'));
       await tester.pumpAndSettle();
       expect(find.text('重新授权'), findsOneWidget);
-      expect(find.textContaining('旧记录不代表当前授权'), findsOneWidget);
+      expect(find.text('需要重新授权'), findsOneWidget);
+      expect(find.textContaining('97%'), findsNothing);
+      expect(find.text('连接后查看后台应用'), findsOneWidget);
     },
   );
   testWidgets('missing live texture reports failure and blocks remote input', (

@@ -12,12 +12,31 @@ enum InteropCommand {
     "activities.stop",
     required: {'activityId': ProtocolFieldType.string},
   ),
+  appsIcon(
+    "apps.icon",
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'packageName': ProtocolFieldType.string,
+    },
+    result: {
+      'deviceId': ProtocolFieldType.string,
+      'packageName': ProtocolFieldType.string,
+      'mimeType': ProtocolFieldType.string,
+      'dataBase64': ProtocolFieldType.string,
+      'width': ProtocolFieldType.integer,
+      'height': ProtocolFieldType.integer,
+    },
+  ),
   appsLaunch(
     "apps.launch",
     requiresVerifiedState: true,
     required: {'deviceId': ProtocolFieldType.string},
   ),
-  appsList("apps.list", required: {'deviceId': ProtocolFieldType.string}),
+  appsList(
+    "apps.list",
+    required: {'deviceId': ProtocolFieldType.string},
+    optional: {'filter': ProtocolFieldType.string},
+  ),
   audioPause("audio.pause"),
   audioPresentation("audio.presentation"),
   audioReady("audio.ready"),

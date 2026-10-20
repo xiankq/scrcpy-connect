@@ -5,7 +5,6 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
@@ -279,7 +278,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final detail = tester.element(find.byType(DeviceDetailsPage));
+      final detail = tester.element(find.byType(DeviceWorkspacePage));
       unawaited(
         router.pushNamed(
           'files',
@@ -292,15 +291,12 @@ void main() {
       expect(find.text('Download'), findsOneWidget);
       expect(
         backend.calls.where((call) => call.$1 == 'device.info'),
-        hasLength(3),
+        hasLength(2),
       );
       router.pop();
       await tester.pumpAndSettle();
-      expect(tester.element(find.byType(DeviceDetailsPage)), same(detail));
-      expect(
-        router.routeInformationProvider.value.uri.path,
-        '/devices/phone/details',
-      );
+      expect(tester.element(find.byType(DeviceWorkspacePage)), same(detail));
+      expect(router.routeInformationProvider.value.uri.path, '/devices/phone');
       await _disposeRouter(tester, router, backend);
     },
   );
@@ -495,6 +491,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextFormField).at(0), 'phone.local');
       await tester.enterText(find.byType(TextFormField).at(1), '37123');
+      await tester.ensureVisible(find.text('连接设备'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('连接设备'));
       await tester.pumpAndSettle();
       expect(

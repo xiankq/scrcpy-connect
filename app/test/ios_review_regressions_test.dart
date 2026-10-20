@@ -158,31 +158,30 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
-  testWidgets(
-    'guide and import feature icons remain square under list constraints',
-    (tester) async {
-      final controller = createTestController(fixtureRequest);
-      await controller.initialize();
-      for (final page in ['document_import', 'usb_guide', 'wireless_guide']) {
-        await tester.pumpWidget(
-          RouterTestApp(
-            key: ValueKey(page),
-            controller: controller,
-            theme: ConnectTokens.theme(Brightness.light),
-            home: pageFixtures(controller)[page]!,
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(
-          tester.getSize(find.byType(FeatureIcon).first),
-          const Size.square(DesignTokens.componentFeatureIconSize),
-          reason: page,
-        );
-      }
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
+  testWidgets('import feature icons remain square under list constraints', (
+    tester,
+  ) async {
+    final controller = createTestController(fixtureRequest);
+    await controller.initialize();
+    for (final page in ['document_import']) {
+      await tester.pumpWidget(
+        RouterTestApp(
+          key: ValueKey(page),
+          controller: controller,
+          theme: ConnectTokens.theme(Brightness.light),
+          home: pageFixtures(controller)[page]!,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(find.byType(FeatureIcon).first),
+        const Size.square(DesignTokens.componentFeatureIconSize),
+        reason: page,
+      );
+    }
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
   for (final brightness in Brightness.values) {
     testWidgets(
       'call state is localized and reject text is readable in ${brightness.name}',
@@ -358,7 +357,7 @@ void main() {
       });
       for (final entry in {
         'connection_form': '连接设备',
-        'pairing_form': '配对并检查连接',
+        'pairing_form': '配对并连接',
       }.entries) {
         await tester.pumpWidget(
           RouterTestApp(
@@ -369,7 +368,12 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text(entry.value));
+        await tester.enterText(find.byType(TextFormField).at(1), '');
+        await Scrollable.ensureVisible(
+          tester.element(find.text(entry.value)),
+          alignment: .5,
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.text(entry.value));
         await tester.pumpAndSettle();
         expect(find.text('请输入被控手机的地址'), findsOneWidget);
@@ -380,7 +384,11 @@ void main() {
       }
       expect(
         requests.where(
-          (command) => ['devices.connect', 'devices.pair'].contains(command),
+          (command) => [
+            'devices.add',
+            'devices.connect',
+            'devices.pair',
+          ].contains(command),
         ),
         isEmpty,
       );

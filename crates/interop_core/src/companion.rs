@@ -22,6 +22,10 @@ const RPC_TIMEOUT: Duration = Duration::from_secs(20);
 #[path = "companion/deployment_tests.rs"]
 mod deployment_tests;
 
+#[cfg(test)]
+#[path = "companion/apps_tests.rs"]
+mod apps_tests;
+
 struct Request {
     payload: Value,
     action: bool,
@@ -295,6 +299,7 @@ impl Companion {
         payload["command"] = json!(command);
         payload["requestId"] = json!(uuid::Uuid::new_v4().to_string());
         let action = !command.ends_with(".list")
+            && command != "apps.icon"
             && command != "clipboard.get"
             && command != "observation.set"
             && !command.starts_with("media.");
@@ -578,6 +583,30 @@ impl Runtime {
         params: &Value,
     ) -> CoreResult<Value> {
         let id = required(params, "deviceId")?;
+        if command == "apps.icon" {
+            let package = required(params, "packageName")?;
+            if package.is_empty()
+                || package.len() > 255
+                || !package.split('.').all(|part| {
+                    !part.is_empty()
+                        && part
+                            .bytes()
+                            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                })
+            {
+                return Err(CoreError::new(
+                    "invalid_argument",
+                    "请指定有效的目标应用包名。",
+                ));
+            }
+        }
+        // Application snapshots belong to the transport admitted when the read
+        // began. A later connection for this device cannot validate this read.
+        let app_read_client = if matches!(command, "apps.list" | "apps.icon") {
+            Some(self.client(id).await?)
+        } else {
+            None
+        };
         if command == "calls.open" {
             if params.get("callId").is_some() {
                 return Err(CoreError::new(
@@ -725,11 +754,35 @@ impl Runtime {
             ));
         }
         result["deviceId"] = json!(id);
-        if let Some(calls) = result["calls"].as_array_mut() {
+        if let Some(calls) = result.get_mut("calls").and_then(Value::as_array_mut) {
             let device = self.device(id).await?;
             for call in calls {
                 call["deviceId"] = json!(id);
                 call["deviceName"] = json!(device.name);
+            }
+        }
+        if let Some(request_client) = app_read_client {
+            // Match device publication's lock order and hold all ownership
+            // guards through the final check. Even a success already delivered
+            // into the oneshot must be discarded after stop or replacement.
+            let store = self.store.read().await;
+            let connections = self.connections.lock().await;
+            let companions = self.companions.lock().await;
+            if !store
+                .devices
+                .iter()
+                .any(|device| device.id == id && device.status == "connected")
+                || !connections.get(id).is_some_and(|client| {
+                    !client.is_closed() && client.same_connection(&request_client)
+                })
+                || !companions
+                    .get(id)
+                    .is_some_and(|current| Arc::ptr_eq(current, &companion) && current.is_active())
+            {
+                return Err(CoreError::new(
+                    "cancelled",
+                    "此应用读取所属的设备连接或互联服务已改变。",
+                ));
             }
         }
         Ok(result)

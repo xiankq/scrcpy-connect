@@ -1,5 +1,3 @@
-import 'support/page_back.dart';
-
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +6,6 @@ import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_i
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/index/widgets/device_card.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
-import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 
@@ -157,16 +154,16 @@ void main() {
       );
       final scrollable = find.byType(Scrollable).first;
       await tester.scrollUntilVisible(
-        find.byTooltip('设备 8 很长的设备名称详情'),
+        find.text('设备 8 很长的设备名称'),
         300,
         scrollable: scrollable,
         maxScrolls: 30,
       );
-      final more = find.byTooltip('设备 8 很长的设备名称详情');
+      final more = find.text('设备 8 很长的设备名称');
       await tester.ensureVisible(more);
       await tester.pumpAndSettle();
       expect(more.hitTestable(), findsOneWidget);
-      expect(tester.getSize(more), const Size(44, 44));
+      expect(more.hitTestable(), findsOneWidget);
       final card = find.ancestor(of: more, matching: find.byType(DeviceCard));
       expect(tester.getSize(card).height, greaterThanOrEqualTo(108));
       expect(tester.takeException(), isNull);
@@ -184,8 +181,6 @@ void main() {
           DeviceWorkspacePage(controller: controller, device: _device),
           size,
         );
-        expect(find.text('2 / 3 项功能可用'), findsOneWidget);
-        expect(find.text('1 个已保留会话'), findsOneWidget);
         expect(find.text('已连接'), findsOneWidget);
         await Scrollable.ensureVisible(
           tester.element(find.text('打开手机屏幕')),
@@ -203,7 +198,10 @@ void main() {
           scrollable: find.byType(Scrollable).first,
           maxScrolls: 30,
         );
-        await tester.ensureVisible(find.text('功能支持状态'));
+        await Scrollable.ensureVisible(
+          tester.element(find.text('功能支持状态')),
+          alignment: .5,
+        );
         await tester.pumpAndSettle();
         expect(find.text('功能支持状态').hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
@@ -212,7 +210,7 @@ void main() {
     );
   }
 
-  testWidgets('device and its separate more action keep their destinations', (
+  testWidgets('every device card enters the combined workspace', (
     tester,
   ) async {
     final controller = createTestController(_request);
@@ -223,46 +221,41 @@ void main() {
       Scaffold(body: DevicesPage(controller: controller)),
       const Size(393, 852),
     );
-    await tester.tap(find.byTooltip('我的 Android 手机详情'));
-    await tester.pumpAndSettle();
-    expect(find.text('设备详情'), findsOneWidget);
-    expect(find.byType(DeviceDetailsPage), findsNothing);
-    expect(find.byType(DeviceWorkspacePage), findsNothing);
-    await tester.tap(find.text('设备详情'));
-    await tester.pumpAndSettle();
-    expect(find.byType(DeviceDetailsPage), findsOneWidget);
-    expect(find.byType(DeviceWorkspacePage), findsNothing);
-    await tester.tap(pageBackButton(tester).first);
-    await tester.pumpAndSettle();
+    expect(find.text('设备详情'), findsNothing);
     await tester.tap(find.text('我的 Android 手机'));
     await tester.pumpAndSettle();
     expect(find.byType(DeviceWorkspacePage), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('移除此设备'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 30,
+    );
+    expect(find.text('移除此设备').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets(
-    'unavailable summary stays unknown while screen action survives',
-    (tester) async {
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        throw const RequestFailure('unavailable', '暂时无法核验');
-      });
-      controller.devices = [_device];
-      await _pump(
-        tester,
-        controller,
-        DeviceWorkspacePage(controller: controller, device: _device),
-        const Size(393, 852),
-      );
-      expect(find.text('功能状态待核验'), findsOneWidget);
-      expect(find.text('会话状态待核验'), findsOneWidget);
-      expect(find.text('暂无已保留会话'), findsNothing);
-      expect(find.text('打开手机屏幕'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
+  testWidgets('unavailable background apps retain the screen action', (
+    tester,
+  ) async {
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      throw const RequestFailure('unavailable', '暂时无法核验');
+    });
+    controller.devices = [_device];
+    await _pump(
+      tester,
+      controller,
+      DeviceWorkspacePage(controller: controller, device: _device),
+      const Size(393, 852),
+    );
+    expect(find.text('暂时无法读取后台应用'), findsOneWidget);
+    expect(find.text('没有已启动的应用'), findsNothing);
+    expect(find.text('打开手机屏幕'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

@@ -13,18 +13,19 @@
 
 不使用 `part` 聚合页面。生产 imports 直接指向所属文件；只有生成器产物使用标准的 `.g.dart` part。
 
-设置归 `settings/`，连接建立流程归 `connection/`，设备详情与工作台分别归 `devices/details/`、`devices/workspace/`，任务接收与导出归 `transfers/details/`。同一页面的多个入口复用同一实现；目录表达业务归属，不机械复制路由 URL 或每条跳转路径。页面类名与 typed route 身份不因目录迁移而改变。
+设置归 `settings/`，连接建立流程归 `connection/`，设备工作台归 `devices/workspace/`，连接偏好、能力及诊断页暂归 `devices/details/`（没有独立详情页），任务接收与导出归 `transfers/details/`。同一页面的多个入口复用同一实现；目录表达业务归属，不机械复制路由 URL 或每条跳转路径。页面类名与 typed route 身份不因目录迁移而改变。
 
 ## 页面身份
 
 | 路由名 | 路径 | 解析依据 |
 | --- | --- | --- |
 | devices / transfers / settings | `/devices` / `/transfers` / `/settings` | 有恢复身份的 StatefulShellRoute 分支 |
-| add-device | `/connection/add` | 可选 deviceId，用于重新授权 |
-| wireless-guide / connection-form | `/connection/wireless` / `/connection/form` | 可选 deviceId，地址、端口只是待确认表单值 |
-| discovery / usb-guide / qr-pair | `/connection/discovery` / `/connection/usb` / `/connection/qr` | 页面各自拥有尝试与取消生命周期 |
+| add-device | `/connection/add` | 统一添加设备页；发现二级页入口在上，四种表单形式原位切换；可选 deviceId 用于重新授权 |
+| wireless-guide / connection-form | `/connection/wireless` / `/connection/form` | 兼容地址呈现同一添加页并预选配对或 IP 形式；可选 deviceId，地址、端口只是待确认表单值 |
+| discovery | `/connection/discovery` | 独立发现二级页，选中结果以 typed 返回值回填原添加表单 |
+| usb-guide / qr-pair | `/connection/usb` / `/connection/qr` | 兼容地址呈现同一添加页并预选 USB 或扫码形式 |
 | workspace | `/devices/:deviceId` | `device.info` |
-| device-details / device-connection / capabilities / diagnostics | `/devices/:deviceId/<功能>` | `device.info` |
+| device-connection / capabilities / diagnostics | `/devices/:deviceId/<功能>` | `device.info` |
 | files / file-details / file-search / gallery / media-preview | `/devices/:deviceId/<功能>` | deviceId；文件 path 经当前目录清单重新核对 |
 | apps / notifications / calls / quality / session-tools / sessions | `/devices/:deviceId/<功能>` | deviceId；通知回复额外按 notificationId 查当前通知 |
 | remote / remote-app | `/devices/:deviceId/remote` / `/devices/:deviceId/apps/:packageName/remote` | 显式打开意图；URL 恢复不会自动创建会话 |
@@ -34,6 +35,10 @@
 | incoming-share | `/sharing/:shareId` | 本机尚未消费的 pending share |
 | appearance / background / activities / data-preferences / media-cache | `/settings/<功能>` | 本机设置与实际服务状态；声音和剪贴板没有专用设置路由 |
 | transfer-center / settings-page | `/activity/transfers` / `/preferences` | 从业务页覆盖打开的独立页面 |
+
+添加设备的方式切换由页面内状态负责，不 push 另一层表单路由。配对码与地址字段草稿在统一外壳保留；二维码配对、USB 检查及发现请求各自持有尝试身份，切换后旧回执不得更新新形式或导航。配对后补全连接端口仍在同页，并携带已配对设备身份与加密连接方式。
+
+旧 `/devices/:deviceId/details` 地址只重定向到该设备工作台，用于已有链接恢复，不建立第二个设备详情页面。
 
 `app_router.dart` 使用 `@TypedGoRoute` 和 `@TypedStatefulShellRoute` 声明完整路由图，生产调用直接使用生成的 `FilesRoute(deviceId: id).push<void>(context)`、`ConnectionFormRoute(...).pushReplacement(context)` 等 API。路径参数、查询参数与返回结果均有类型。`navigation.dart` 只保留带显式启动意图的远控入口、typed 返回和回设备页，不保留字符串命名路由分派表。
 

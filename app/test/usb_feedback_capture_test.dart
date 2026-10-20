@@ -7,7 +7,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
-import 'package:scrcpy_connect/pages/connection/wireless/index/connection_wireless_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
@@ -91,7 +90,7 @@ void main() {
             );
             await tester.pumpAndSettle();
             expect(find.byType(UsbGuidePage), findsOneWidget);
-            final check = find.widgetWithText(FilledButton, '已连接，检查授权');
+            final check = find.widgetWithText(FilledButton, '检查连接');
             for (var attempt = 0; attempt < 2; attempt++) {
               await tester.scrollUntilVisible(
                 check,
@@ -121,20 +120,37 @@ void main() {
               requests.every((request) => request['connect'] != true),
               isTrue,
             );
-            // The actual recovery route remains reachable after either result.
-            await tester.scrollUntilVisible(
-              find.text('改用无线连接'),
-              180,
-              scrollable: find.byType(Scrollable).first,
+            // Recovery changes only the shared form mode. Returning to USB
+            // starts a fresh check against the actual platform result.
+            await Scrollable.ensureVisible(
+              tester.element(find.text('无线配对码')),
+              alignment: .5,
             );
-            await tester.ensureVisible(find.text('改用无线连接'));
             await tester.pumpAndSettle();
-            await tester.tap(find.text('改用无线连接'));
+            await tester.tap(find.text('无线配对码'));
             await tester.pumpAndSettle();
-            expect(find.byType(WirelessGuidePage), findsOneWidget);
-            await tester.pageBack();
+            expect(find.byType(TextFormField), findsNWidgets(3));
+            expect(find.byType(UsbGuidePage), findsNothing);
+            await Scrollable.ensureVisible(
+              tester.element(find.text('USB')),
+              alignment: .5,
+            );
             await tester.pumpAndSettle();
+            await tester.tap(find.text('USB'));
+            await tester.pumpAndSettle();
+            expect(find.byType(UsbGuidePage), findsOneWidget);
+            expect(find.text(scenario.$3), findsNothing);
+            await Scrollable.ensureVisible(
+              tester.element(check),
+              alignment: .5,
+            );
+            await tester.pumpAndSettle();
+            await tester.tap(check);
+            await tester.pumpAndSettle();
+            expect(requests, hasLength(3));
+            expect(requests.last['attemptId'], isNot(requests[1]['attemptId']));
             expect(find.text(scenario.$3), findsOneWidget);
+            expect(find.text('取消本次检查'), findsNothing);
             final position = tester
                 .state<ScrollableState>(find.byType(Scrollable).first)
                 .position;
@@ -186,7 +202,7 @@ void main() {
               await tester.pumpAndSettle();
               await capture('-feedback');
             }
-            expect(requests, hasLength(2));
+            expect(requests, hasLength(3));
             await tester.pumpWidget(const SizedBox());
             await tester.pumpAndSettle();
             controller.dispose();

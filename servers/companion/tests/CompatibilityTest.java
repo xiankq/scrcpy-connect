@@ -83,6 +83,14 @@ public final class CompatibilityTest {
         public void destroy() { exited = true; }
     }
     public static void main(String[] args) throws Exception {
+        if (!Apps.applicationTask(true, 1, 1, 10, 10)) throw new AssertionError("Running standard task missing");
+        if (Apps.applicationTask(false, 1, 1, 10, 10)
+            || Apps.applicationTask(true, 0, 1, 10, 10)
+            || Apps.applicationTask(true, 1, 1, 0, 10)) throw new AssertionError("Inactive or other-user task leaked");
+        for (int type : new int[]{0, 2, 3, 4, 5}) {
+            if (Apps.applicationTask(true, 1, type, 10, 10)) throw new AssertionError("Non-application task leaked");
+        }
+        System.out.println("PASS: application task type, lifecycle and user filtering");
         LegacyProcess process = new LegacyProcess();
         if (!Processes.alive(process)) throw new AssertionError("Running process reported exited");
         long start = System.nanoTime();

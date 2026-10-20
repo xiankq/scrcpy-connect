@@ -1,10 +1,13 @@
+import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
+
 import 'dart:ui' as ui;
 
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -126,14 +129,19 @@ void main() {
       );
       await tester.tap(find.byTooltip('添加设备'));
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(
-        find.text(transport == 'tcp' ? 'IP 地址连接' : '手动填写无线调试地址'),
-      );
+      await tester.tap(find.text('IP连接'));
       await waitFor(
         tester,
         () => find.byType(ConnectionFormPage).evaluate().isNotEmpty,
         reason: 'The actual connection form must finish its route loading.',
       );
+      if (transport == 'tls') {
+        // The harness supplies an already authorized encrypted endpoint; the new
+        // IP tab itself never guesses encryption from a port number.
+        const ConnectionFormRoute(transport: ConnectionTransport.tls)
+            .pushReplacement(tester.element(find.byType(ConnectionFormPage)));
+        await tester.pumpAndSettle();
+      }
       await tester.enterText(find.byType(TextFormField).at(0), address);
       await tester.enterText(find.byType(TextFormField).at(1), '65536');
       await tester.ensureVisible(find.text('连接设备'));
@@ -168,14 +176,13 @@ void main() {
       await returnFromFiles(tester);
       // Follow the real navigation and JSON projection, rather than invoking
       // diagnose or quality mutations directly through the bridge.
-      await tester.tap(find.byTooltip('设备详情'));
       await waitFor(
         tester,
         () =>
             find.text('Android 版本').evaluate().isNotEmpty &&
             find
                 .descendant(
-                  of: find.byType(DeviceDetailsPage),
+                  of: find.byType(DeviceWorkspacePage),
                   matching: find.byType(CircularProgressIndicator),
                 )
                 .evaluate()
@@ -184,7 +191,7 @@ void main() {
       );
       await tapPageAction(
         tester,
-        find.byType(DeviceDetailsPage),
+        find.byType(DeviceWorkspacePage),
         find.text('连接诊断'),
       );
       await waitFor(
@@ -201,15 +208,19 @@ void main() {
       await waitFor(
         tester,
         () => find.byType(DiagnosticsPage).evaluate().isEmpty,
-        reason: 'Diagnostics must return to the same device details.',
+        reason: 'Diagnostics must return to the same device workspace.',
       );
-      await tester.pageBack();
-      await tester.pump(const Duration(milliseconds: 500));
       await tapPageAction(
         tester,
         find.byType(DeviceWorkspacePage),
-        find.text('画质'),
+        find.text('控制窗口'),
       );
+      await waitFor(
+        tester,
+        () => find.byType(SessionsPage).evaluate().isNotEmpty,
+        reason: 'Window management owns new-window quality.',
+      );
+      await tester.tap(find.text('画质'));
       await waitFor(
         tester,
         () => find.text('编码格式').evaluate().isNotEmpty,
@@ -260,7 +271,13 @@ void main() {
       await waitFor(
         tester,
         () => find.byType(QualityPage).evaluate().isEmpty,
-        reason: 'Quality must return to the device workspace.',
+        reason: 'Quality must return to window management.',
+      );
+      await tester.pageBack();
+      await waitFor(
+        tester,
+        () => find.byType(SessionsPage).evaluate().isEmpty,
+        reason: 'Window management returns to its device workspace.',
       );
       await tapPageAction(
         tester,

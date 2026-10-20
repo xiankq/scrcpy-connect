@@ -61,35 +61,6 @@
       ]
     },
     {
-      "id": "connection_form",
-      "pencilFrame": "YvzMk",
-      "pencil": "YvzMk.png",
-      "flutter": "connection_form-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "ConnectionFormRoute()",
-      "captureScope": "production-router",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Reference export should be checked against capture-contract device identity and test data; image completion does not imply content or visual acceptance."
-      ]
-    },
-    {
       "id": "settings",
       "pencilFrame": "w6WUAT",
       "pencil": "w6WUAT.png",
@@ -227,35 +198,6 @@
       "fixtureContentDifferences": []
     },
     {
-      "id": "device_details",
-      "pencilFrame": "TMxVJ",
-      "pencil": "TMxVJ.png",
-      "flutter": "device_details-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "DeviceDetailsPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Both references use the fixture identity 我的手机 / Pixel 9 / Android 15 at 192.168.1.8; battery metadata is not fabricated."
-      ]
-    },
-    {
       "id": "device_connection_preferences",
       "pencilFrame": "q3bM72",
       "pencil": "q3bM72.png",
@@ -372,33 +314,6 @@
       ]
     },
     {
-      "id": "wireless_guide",
-      "pencilFrame": "c0wxY",
-      "pencil": "c0wxY.png",
-      "flutter": "wireless_guide-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "WirelessGuidePage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
       "id": "usb_guide",
       "pencilFrame": "OxUaB",
       "pencil": "OxUaB.png",
@@ -420,7 +335,7 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "UsbGuidePage",
+      "route": "AddDevicePage(initialMode: usb)",
       "captureScope": "isolated-page-fixture",
       "comparisonScope": "host-content-excluding-system-bars",
       "fixtureContentDifferences": []
@@ -447,17 +362,15 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "ConnectionFormPage(transport: tcp)",
+      "route": "AddDevicePage(initialMode: ip, transport: tcp)",
       "captureScope": "isolated-page-fixture",
       "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Fixture uses production form defaults; compare source transport fields/defaults separately from geometry."
-      ]
+      "fixtureContentDifferences": []
     },
     {
       "id": "pairing_form",
-      "pencilFrame": "XQZRD",
-      "pencil": "XQZRD.png",
+      "pencilFrame": "W3GRn",
+      "pencil": "W3GRn.png",
       "flutter": "pairing_form-light.png",
       "sourceWidth": 402,
       "sourceHeight": 874,
@@ -476,12 +389,10 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "ConnectionFormPage(pairing: true)",
+      "route": "AddDevicePage(initialMode: pairing)",
       "captureScope": "isolated-page-fixture",
       "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Fixture uses production form defaults; source address, port and pairing code may differ."
-      ]
+      "fixtureContentDifferences": []
     },
     {
       "id": "qr_pair",
@@ -505,7 +416,7 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "QrPairPage",
+      "route": "AddDevicePage(initialMode: qr)",
       "captureScope": "isolated-page-fixture",
       "comparisonScope": "host-content-excluding-system-bars",
       "fixtureContentDifferences": [
@@ -1154,6 +1065,8 @@
     "startup_error": "No dedicated complete source frame.",
     "home": "Alias of devices root; responsive large-text variants have no matching source viewport.",
     "session_tools": "Unselected-session picker. XvviW is paired with selected_session_tools, preserving the distinct picker state.",
-    "diagnostics": "Successful diagnosis. eWu3m is paired only with diagnostics_failed."
+    "diagnostics": "Successful diagnosis. eWu3m is paired only with diagnostics_failed.",
+    "connection_form": "Compatibility encrypted-address context uses the shared add-device form; no separate complete reference viewport.",
+    "wireless_guide": "Wireless setup is now a local help dialog (c0wxY), not a separate complete page."
   }
 }

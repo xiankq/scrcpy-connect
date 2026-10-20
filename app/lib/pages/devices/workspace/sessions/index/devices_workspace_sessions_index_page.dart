@@ -34,7 +34,12 @@ class SessionsPage extends HookWidget {
     );
     final event = useStream(stream);
     return PageFrame(
-      title: '控制会话',
+      title: '控制窗口',
+      trailingAction: TextButton(
+        onPressed: () =>
+            QualityRoute(deviceId: value(device, 'id')).push<void>(context),
+        child: const Text('画质'),
+      ),
       child: CommandView(
         controller: controller,
         command: 'session.list',

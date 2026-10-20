@@ -16,6 +16,22 @@
       }
     },
     {
+      "name": "apps.icon",
+      "owner": "core",
+      "required": {
+        "deviceId": "string",
+        "packageName": "string"
+      },
+      "result": {
+        "deviceId": "string",
+        "packageName": "string",
+        "mimeType": "string",
+        "dataBase64": "string",
+        "width": "integer",
+        "height": "integer"
+      }
+    },
+    {
       "name": "apps.launch",
       "owner": "core",
       "required": {
@@ -28,6 +44,9 @@
       "owner": "core",
       "required": {
         "deviceId": "string"
+      },
+      "optional": {
+        "filter": "string"
       }
     },
     {

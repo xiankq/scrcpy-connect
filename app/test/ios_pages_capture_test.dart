@@ -27,7 +27,6 @@ import 'package:scrcpy_connect/pages/devices/details/capabilities/devices_detail
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/settings/data_preferences/settings_data_preferences_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
@@ -43,7 +42,6 @@ import 'package:scrcpy_connect/pages/settings/media_cache/settings_media_cache_p
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/reply/devices_workspace_notifications_reply_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
-import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
@@ -55,7 +53,6 @@ import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/de
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
 import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
-import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
 import 'package:scrcpy_connect/pages/connection/wireless/index/connection_wireless_index_page.dart';
 
 // Root tabs and parity reference pages use the production app/router. Other
@@ -152,185 +149,216 @@ const notification = <String, dynamic>{
   'canDismiss': true,
 };
 
-Future<Json> fixtureRequest(String command, [Json params = const {}]) async =>
-    switch (command) {
-      'devices.list' => {
-        'devices': [
-          device,
-          {'id': 'offline', 'name': '备用手机', 'status': 'offline'},
-        ],
+Future<Json> fixtureRequest(
+  String command, [
+  Json params = const {},
+]) async => switch (command) {
+  'devices.list' => {
+    'devices': [
+      device,
+      {'id': 'offline', 'name': '备用手机', 'status': 'offline'},
+    ],
+  },
+  'settings.get' => {'appearance': 'light'},
+  'device.info' => device,
+  'device.diagnose' => {
+    'device': device,
+    'connected': true,
+    'tcpReachable': true,
+    'identityPresent': true,
+  },
+  'devices.discover' => {
+    'devices': [
+      {
+        'id': 'nearby',
+        'name': '客厅手机',
+        'kind': 'pairing',
+        'address': '192.168.1.9',
+        'port': 37000,
       },
-      'settings.get' => {'appearance': 'light'},
-      'device.info' => device,
-      'device.diagnose' => {
-        'device': device,
-        'connected': true,
-        'tcpReachable': true,
-        'identityPresent': true,
+    ],
+  },
+  'apps.list' when params['filter'] == 'running' => {
+    'deviceId': params['deviceId'],
+    'source': 'runningTasks',
+    'live': true,
+    'apps': [
+      {
+        'name': '设置',
+        'packageName': 'com.android.settings',
+        'userId': 0,
+        'taskId': 42,
       },
-      'devices.discover' => {
-        'devices': [
-          {
-            'id': 'nearby',
-            'name': '客厅手机',
-            'kind': 'pairing',
-            'address': '192.168.1.9',
-            'port': 37000,
-          },
-        ],
+    ],
+  },
+  'apps.list' => {
+    'apps': [
+      {'name': '信息', 'packageName': 'com.google.android.apps.messaging'},
+      {'name': '相机', 'packageName': 'com.android.camera2'},
+      {'name': 'Chrome', 'packageName': 'com.android.chrome'},
+      {'name': '设置', 'packageName': 'com.android.settings'},
+      {'name': '日历', 'packageName': 'com.google.android.calendar'},
+      {'name': '联系人', 'packageName': 'com.google.android.contacts'},
+      {'name': '电话', 'packageName': 'com.google.android.dialer'},
+      {'name': '相册', 'packageName': 'com.google.android.apps.photos'},
+    ],
+  },
+  'apps.icon' => {
+    'deviceId': params['deviceId'],
+    'packageName': params['packageName'],
+    'userId': 0,
+    'mimeType': 'image/png',
+    'width': 96,
+    'height': 96,
+    'dataBase64': base64Encode(
+      File(
+        '../designs/assets/${params['packageName'] == 'com.android.settings' ? 'android-settings' : params['packageName']}-api36.png',
+      ).readAsBytesSync(),
+    ),
+  },
+  'files.list' => {
+    'path': params['path'],
+    'entries': [
+      {'name': 'Download', 'path': '/sdcard/Download', 'isDirectory': true},
+      file,
+    ],
+  },
+  'files.search.start' || 'files.search.get' => {
+    'searchId': 'search',
+    'deviceId': 'fixture',
+    'path': searchPath,
+    'status': 'completed',
+    'entries': [file],
+    'items': [file],
+    'query': '旅行',
+    'filter': 'all',
+    'complete': true,
+    'visitedDirectories': 12,
+  },
+  'media.list' || 'media.scan.get' => {
+    'scanId': 'gallery',
+    'deviceId': 'fixture',
+    'status': 'completed',
+    'offset': 0,
+    'items': [photo],
+    'total': 1,
+    'scannedDirectories': 18,
+    'issueCount': 0,
+  },
+  'media.preview' || 'media.thumbnail' =>
+    params['path'] == photo['path']
+        ? {
+            'localPath': File('../designs/assets/sample-lake.jpg')
+                .absolute
+                .path,
+            'mime': 'image/jpeg',
+          }
+        : {'reason': '文件尚未完整取回，可保存原文件后查看。'},
+  'media.cache.status' => {
+    'usedBytes': 560000000,
+    'budgetBytes': 2000000000,
+    'protectedBytes': 120000000,
+    'reclaimableBytes': 440000000,
+    'reservedBytes': 24000000,
+  },
+  'session.list' => {
+    'sessions': [session],
+  },
+  'session.start' || 'session.resume' || 'session.get' => session,
+  'notifications.list' => {
+    'status': 'available',
+    'notifications': [notification],
+  },
+  'calls.list' => {
+    'status': 'available',
+    'live': true,
+    'controlStatus': 'available',
+    'audioStatus': 'limited',
+    'calls': [
+      {
+        'id': 'call',
+        'name': '小林',
+        'number': '138 0013 8000',
+        'state': 'ringing',
+        'canAnswer': true,
+        'canReject': true,
       },
-      'apps.list' => {
-        'apps': [
-          {'name': '信息', 'packageName': 'com.android.messaging'},
-          {'name': '相机', 'packageName': 'com.android.camera'},
-          {'name': '地图', 'packageName': 'com.google.android.apps.maps'},
-        ],
+    ],
+  },
+  'transfers.list' => {
+    'transfers': [task],
+  },
+  'transfers.get' => task,
+  'activities.list' => {
+    'activities': [
+      {
+        'id': 'connected',
+        'name': '设备连接',
+        'deviceName': '我的手机',
+        'status': 'connected',
       },
-      'files.list' => {
-        'path': params['path'],
-        'entries': [
-          {'name': 'Download', 'path': '/sdcard/Download', 'isDirectory': true},
-          file,
-        ],
+      {
+        'id': 'transfer',
+        'name': '照片传输',
+        'deviceName': '我的手机',
+        'status': 'running',
       },
-      'files.search.start' || 'files.search.get' => {
-        'searchId': 'search',
-        'deviceId': 'fixture',
-        'path': searchPath,
-        'status': 'completed',
-        'entries': [file],
-        'items': [file],
-        'query': '旅行',
-        'filter': 'all',
-        'complete': true,
-        'visitedDirectories': 12,
+    ],
+  },
+  'device.capabilities' => {
+    'capabilities': [
+      {'id': 'screen', 'name': '手机屏幕', 'status': 'available'},
+      {'id': 'files', 'name': '文件管理', 'status': 'available'},
+      {
+        'id': 'audio',
+        'name': '设备声音',
+        'status': 'limited',
+        'reason': '本机播放将在打开控制页面时检查。',
       },
-      'media.list' || 'media.scan.get' => {
-        'scanId': 'gallery',
-        'deviceId': 'fixture',
-        'status': 'completed',
-        'offset': 0,
-        'items': [photo],
-        'total': 1,
-        'scannedDirectories': 18,
-        'issueCount': 0,
+    ],
+  },
+  'background.status' => {
+    'title': '后台保持已就绪',
+    'reason': '系统允许当前设备连接继续运行。',
+    'canRequest': false,
+  },
+  'session.quality.options' => {
+    'current': {
+      'preset': 'balanced',
+      'maxSize': 1920,
+      'maxFps': 60,
+      'bitRate': 8000000,
+      'videoCodec': 'h264',
+    },
+    'presets': [
+      {'id': 'smooth', 'name': '流畅', 'available': true},
+      {'id': 'balanced', 'name': '均衡', 'available': true},
+      {'id': 'sharp', 'name': '清晰', 'available': true},
+    ],
+    'codecs': [
+      {
+        'id': 'h264',
+        'name': 'H.264',
+        'available': true,
+        'targetStatus': 'available',
+        'decoderStatus': 'available',
+        'encoders': <Json>[],
       },
-      'media.preview' || 'media.thumbnail' =>
-        params['path'] == photo['path']
-            ? {
-                'localPath': File('../designs/assets/sample-lake.jpg')
-                    .absolute
-                    .path,
-                'mime': 'image/jpeg',
-              }
-            : {'reason': '文件尚未完整取回，可保存原文件后查看。'},
-      'media.cache.status' => {
-        'usedBytes': 560000000,
-        'budgetBytes': 2000000000,
-        'protectedBytes': 120000000,
-        'reclaimableBytes': 440000000,
-        'reservedBytes': 24000000,
-      },
-      'session.list' => {
-        'sessions': [session],
-      },
-      'session.start' || 'session.resume' || 'session.get' => session,
-      'notifications.list' => {
-        'status': 'available',
-        'notifications': [notification],
-      },
-      'calls.list' => {
-        'status': 'available',
-        'live': true,
-        'controlStatus': 'available',
-        'audioStatus': 'limited',
-        'calls': [
-          {
-            'id': 'call',
-            'name': '小林',
-            'number': '138 0013 8000',
-            'state': 'ringing',
-            'canAnswer': true,
-            'canReject': true,
-          },
-        ],
-      },
-      'transfers.list' => {
-        'transfers': [task],
-      },
-      'transfers.get' => task,
-      'activities.list' => {
-        'activities': [
-          {
-            'id': 'connected',
-            'name': '设备连接',
-            'deviceName': '我的手机',
-            'status': 'connected',
-          },
-          {
-            'id': 'transfer',
-            'name': '照片传输',
-            'deviceName': '我的手机',
-            'status': 'running',
-          },
-        ],
-      },
-      'device.capabilities' => {
-        'capabilities': [
-          {'id': 'screen', 'name': '手机屏幕', 'status': 'available'},
-          {'id': 'files', 'name': '文件管理', 'status': 'available'},
-          {
-            'id': 'audio',
-            'name': '设备声音',
-            'status': 'limited',
-            'reason': '本机播放将在打开控制页面时检查。',
-          },
-        ],
-      },
-      'background.status' => {
-        'title': '后台保持已就绪',
-        'reason': '系统允许当前设备连接继续运行。',
-        'canRequest': false,
-      },
-      'session.quality.options' => {
-        'current': {
-          'preset': 'balanced',
-          'maxSize': 1920,
-          'maxFps': 60,
-          'bitRate': 8000000,
-          'videoCodec': 'h264',
-        },
-        'presets': [
-          {'id': 'smooth', 'name': '流畅', 'available': true},
-          {'id': 'balanced', 'name': '均衡', 'available': true},
-          {'id': 'sharp', 'name': '清晰', 'available': true},
-        ],
-        'codecs': [
-          {
-            'id': 'h264',
-            'name': 'H.264',
-            'available': true,
-            'targetStatus': 'available',
-            'decoderStatus': 'available',
-            'encoders': <Json>[],
-          },
-        ],
-        'maxSize': [
-          {'label': '1920', 'value': 1920, 'available': true},
-        ],
-      },
-      'devices.pair.qr' => {
-        'attemptId': 'qr',
-        'status': 'waiting',
-        'payload': qrPayload,
-        'expiresAt':
-            DateTime.now()
-                .add(const Duration(minutes: 3))
-                .millisecondsSinceEpoch ~/
-            1000,
-      },
-      _ => {},
-    };
+    ],
+    'maxSize': [
+      {'label': '1920', 'value': 1920, 'available': true},
+    ],
+  },
+  'devices.pair.qr' => {
+    'attemptId': 'qr',
+    'status': 'waiting',
+    'payload': qrPayload,
+    'expiresAt':
+        DateTime.now().add(const Duration(minutes: 3)).millisecondsSinceEpoch ~/
+        1000,
+  },
+  _ => {},
+};
 
 ThemeData captureTheme(Brightness brightness) {
   final theme = ConnectTokens.theme(brightness);
@@ -379,7 +407,6 @@ Map<String, Widget> pageFixtures(
     controller: controller,
     device: device,
   ),
-  'device_details': DeviceDetailsPage(controller: controller, device: device),
   'device_workspace': DeviceWorkspacePage(
     controller: controller,
     device: device,
@@ -447,7 +474,10 @@ Map<String, Widget> pageFixtures(
     notification: notification,
   ),
   'notifications': NotificationsPage(controller: controller, device: device),
-  'qr_pair': QrPairPage(controller: controller),
+  'qr_pair': AddDevicePage(
+    controller: controller,
+    initialMode: AddDeviceMode.qr,
+  ),
   'quality': QualityPage(controller: controller, device: device),
   'receive_content': ReceiveContentPage(controller: controller, task: task),
   'remote': RemotePage(controller: controller, device: device),
@@ -469,13 +499,17 @@ Map<String, Widget> pageFixtures(
     task: partialTask,
   ),
   'transfers': TransfersPage(controller: controller),
-  'usb_guide': UsbGuidePage(controller: controller),
+  'usb_guide': AddDevicePage(
+    controller: controller,
+    initialMode: AddDeviceMode.usb,
+  ),
   'wireless_guide': WirelessGuidePage(controller: controller),
-  'legacy_tcp': ConnectionFormPage(
+  'legacy_tcp': AddDevicePage(
+    initialMode: AddDeviceMode.ip,
     controller: controller,
     transport: ConnectionTransport.tcp,
   ),
-  'pairing_form': ConnectionFormPage(controller: controller, pairing: true),
+  'pairing_form': AddDevicePage(controller: controller),
   'selected_session_tools': SessionToolsPage(
     controller: controller,
     device: device,

@@ -217,7 +217,7 @@ void main() {
             await tester.enterText(find.byType(TextFormField).at(2), '123456');
           }
           FocusManager.instance.primaryFocus?.unfocus();
-          final submit = find.text(scene.pairing ? '配对并检查连接' : '连接设备');
+          final submit = find.text(scene.pairing ? '配对并连接' : '连接设备');
           await _expose(tester, submit);
           await tester.tap(submit);
           if (scene == _Scene.connecting) {
@@ -234,7 +234,7 @@ void main() {
             await tester.pumpAndSettle();
             switch (scene) {
               case _Scene.authorization:
-                expect(find.textContaining('被控设备未信任此主控的授权身份'), findsOneWidget);
+                expect(find.text('手机未授权本机，请重新配对。'), findsOneWidget);
                 await _expose(tester, find.text('重新配对'));
               case _Scene.port:
                 expect(find.text(validatePort('70000')!), findsOneWidget);
@@ -252,7 +252,7 @@ void main() {
                   isEmpty,
                 );
               case _Scene.paired:
-                expect(find.text('已配对，正在确认连接'), findsOneWidget);
+                expect(find.text('已配对，尚未连接'), findsOneWidget);
                 await _expose(tester, find.text('填写连接端口'));
               default:
                 break;

@@ -5,7 +5,6 @@ import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/index/devices_details_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/import/devices_workspace_files_import_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
@@ -84,7 +83,6 @@ class _RouterTestAppState extends State<RouterTestApp> {
 
 Json? _homeDevice(Widget page) => switch (page) {
   DeviceWorkspacePage p => p.device,
-  DeviceDetailsPage p => p.device,
   FilesPage p => p.device,
   FileDetailsPage p => p.device,
   AppsPage p => p.device,

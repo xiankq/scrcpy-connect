@@ -64,7 +64,7 @@ public final class Main {
         JSONObject json;
         String fingerprint;
     }
-    private static final class Failure extends Exception {
+    static final class Failure extends Exception {
         final String code;
         Failure(String code, String message) { super(message); this.code=code; }
     }
@@ -434,6 +434,11 @@ public final class Main {
         if(command.equals("calls.action")) return callAction(request);
         if(command.equals("clipboard.get")) return clipboardGet();
         if(command.equals("clipboard.set")) return clipboardSet(request);
+        if(command.equals("apps.list")) {
+            try {return Apps.running(shellContext);}
+            catch(NoSuchMethodException | NoSuchFieldException unavailable) {throw new Failure("apps_running_unavailable","Verified application task metadata is unavailable on this device");}
+        }
+        if(command.equals("apps.icon")) return Apps.icon(shellContext,request);
         throw new Failure("invalid_command","Unknown companion command");
     }
     private static String readLine(InputStream input) throws Exception {

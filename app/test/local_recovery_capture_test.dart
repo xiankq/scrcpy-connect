@@ -126,7 +126,7 @@ void main() {
           expect(find.text('正在检查设备'), findsOneWidget);
           expect(find.byType(LinearProgressIndicator), findsOneWidget);
         } else if (scenario == 'offline') {
-          expect(find.text('设备当前均不在线。连接后即可继续使用应用和内容。'), findsOneWidget);
+          expect(find.text('设备当前均不在线。连接后即可继续使用应用和内容。'), findsNothing);
           expect(find.textContaining('离线'), findsOneWidget);
         } else {
           expect(find.text('添加你的第一台设备'), findsOneWidget);
