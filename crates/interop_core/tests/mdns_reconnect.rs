@@ -181,6 +181,35 @@ fn publish(publisher: &ServiceDaemon, guid: &str, addresses: &str, port: u16) ->
     fullname
 }
 
+// The test acts as the Dart coordinator. Native discovery only updates its
+// candidate cache; each connection below is one explicit admitted execution.
+async fn automatic(runtime: &Arc<Runtime>, id: &str) -> interop_core::CoreResult<Value> {
+    runtime
+        .invoke(
+            "devices.reconnect.owner",
+            json!({"ownerId":"dart-mdns-fixture","active":true}),
+        )
+        .await?;
+    runtime
+        .invoke(
+            "devices.connect",
+            json!({
+                "deviceId":id,"automatic":true,"ownerId":"dart-mdns-fixture",
+                "attemptId":format!("fixture-{}", uuid::Uuid::new_v4())
+            }),
+        )
+        .await
+}
+
+fn start_automatic(
+    runtime: &Arc<Runtime>,
+    id: &str,
+) -> tokio::task::JoinHandle<interop_core::CoreResult<Value>> {
+    let runtime = runtime.clone();
+    let id = id.to_owned();
+    tokio::spawn(async move { automatic(&runtime, &id).await })
+}
+
 async fn connected(runtime: &Arc<Runtime>, id: &str, port: u16) -> Value {
     tokio::time::timeout(Duration::from_secs(18), async {
         loop {
@@ -223,7 +252,7 @@ async fn discovered(browser: &Discovery, fullname: &str, removed: bool) {
 
 #[tokio::test]
 #[ignore = "requires multicast-capable IPv4 networking"]
-async fn runtime_reconnects_using_a_trusted_services_second_address() {
+async fn caller_connects_using_a_trusted_services_second_address() {
     let address = network_address();
     let mut unavailable = address.octets();
     assert_ne!(unavailable[3], 0, "fixture needs a nonzero host octet");
@@ -253,6 +282,8 @@ async fn runtime_reconnects_using_a_trusted_services_second_address() {
         vec![(unavailable, port).into(), (address, port).into()],
         "the actual DNS answer must include the unreachable candidate before the reachable one"
     );
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert_eq!(automatic(&runtime, &id).await.unwrap()["connected"], true);
     let record = connected(&runtime, &id, port).await;
     assert_eq!(record["address"], address.to_string());
     assert_eq!(record["transport"], "tls");
@@ -283,12 +314,17 @@ async fn runtime_uses_changed_ports_and_does_not_retry_withdrawn_or_untrusted_se
     let browser = Discovery::new().unwrap();
     let fullname = publish(&publisher, &guid, &address.to_string(), first_port);
     let (runtime, id) = restored(directory.path(), &guid).await;
-    connected(&runtime, &id, first_port).await;
     discovered(&browser, &fullname, false).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert_eq!(automatic(&runtime, &id).await.unwrap()["connected"], true);
+    connected(&runtime, &id, first_port).await;
 
     let (second_port, second_server) = peer(address).await;
     publish(&publisher, &guid, &address.to_string(), second_port);
     first_server.abort();
+    let _ = first_server.await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert_eq!(automatic(&runtime, &id).await.unwrap()["connected"], true);
     let record = connected(&runtime, &id, second_port).await;
     assert_eq!(record["id"], id);
 
@@ -327,6 +363,10 @@ async fn runtime_uses_changed_ports_and_does_not_retry_withdrawn_or_untrusted_se
     })
     .await
     .unwrap();
+    assert!(
+        automatic(&runtime, &id).await.is_err(),
+        "a withdrawn trusted service cannot be retried"
+    );
     assert!(tokio::time::timeout(Duration::from_secs(5), async {
         tokio::select! { result = retired.accept() => result, result = attacker.accept() => result }
     }).await.is_err(), "a goodbye must suppress cached endpoints and a GUID prefix must not confer trust");
@@ -372,6 +412,8 @@ async fn discovered_candidates_never_accept_a_plaintext_daemon() {
     let publisher = ServiceDaemon::new().unwrap();
     let fullname = publish(&publisher, &guid, &address.to_string(), port);
     let (runtime, id) = restored(directory.path(), &guid).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert!(automatic(&runtime, &id).await.is_err());
     tokio::time::timeout(Duration::from_secs(15), server)
         .await
         .unwrap()
@@ -406,6 +448,10 @@ async fn an_obsolete_tls_attempt_cannot_publish_a_connected_device_after_an_addr
     let fullname = publish(&publisher, &guid, &address.to_string(), old_port);
     let (runtime, id) = restored(directory.path(), &guid).await;
     let mut events = runtime.subscribe();
+    // Discovery and scheduling have independent owners. Let the native browser
+    // consume the advertisement before the external caller starts its attempt.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let attempt = start_automatic(&runtime, &id);
     tokio::time::timeout(Duration::from_secs(15), started)
         .await
         .unwrap()
@@ -414,6 +460,11 @@ async fn an_obsolete_tls_attempt_cannot_publish_a_connected_device_after_an_addr
     publish(&publisher, &guid, &address.to_string(), current_port);
     tokio::time::sleep(Duration::from_secs(3)).await;
     release.send(()).unwrap();
+    assert_eq!(
+        attempt.await.unwrap().unwrap_err().code,
+        "discovery_changed"
+    );
+    assert_eq!(automatic(&runtime, &id).await.unwrap()["connected"], true);
     connected(&runtime, &id, current_port).await;
     while let Ok(event) = events.try_recv() {
         if event["type"] == "device.changed" && event["data"]["status"] == "connected" {
@@ -445,6 +496,10 @@ async fn a_cached_tls_attempt_cannot_connect_after_discovery_supplies_a_new_endp
     let guid = format!("adb-cached-{}", uuid::Uuid::new_v4());
     let (runtime, id) = restored_with_port(directory.path(), &guid, cached_port).await;
     let mut events = runtime.subscribe();
+    // Discovery and scheduling have independent owners. Let the native browser
+    // consume the advertisement before the external caller starts its attempt.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let attempt = start_automatic(&runtime, &id);
     tokio::time::timeout(Duration::from_secs(15), started)
         .await
         .unwrap()
@@ -457,6 +512,11 @@ async fn a_cached_tls_attempt_cannot_connect_after_discovery_supplies_a_new_endp
     discovered(&browser, &fullname, false).await;
     tokio::time::sleep(Duration::from_secs(3)).await;
     release.send(()).unwrap();
+    assert_eq!(
+        attempt.await.unwrap().unwrap_err().code,
+        "discovery_changed"
+    );
+    assert_eq!(automatic(&runtime, &id).await.unwrap()["connected"], true);
 
     let first_connected = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
@@ -495,6 +555,10 @@ async fn a_cached_tls_attempt_cannot_connect_after_a_discovery_goodbye() {
     let guid = format!("adb-cached-goodbye-{}", uuid::Uuid::new_v4());
     let (runtime, id) = restored_with_port(directory.path(), &guid, cached_port).await;
     let mut events = runtime.subscribe();
+    // Discovery and scheduling have independent owners. Let the native browser
+    // consume the advertisement before the external caller starts its attempt.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let attempt = start_automatic(&runtime, &id);
     tokio::time::timeout(Duration::from_secs(15), started)
         .await
         .unwrap()
@@ -514,6 +578,10 @@ async fn a_cached_tls_attempt_cannot_connect_after_a_discovery_goodbye() {
     discovered(&browser, &fullname, true).await;
     tokio::time::sleep(Duration::from_secs(3)).await;
     release.send(()).unwrap();
+    assert_eq!(
+        attempt.await.unwrap().unwrap_err().code,
+        "discovery_changed"
+    );
 
     tokio::time::timeout(Duration::from_secs(5), cached_server)
         .await
@@ -553,6 +621,10 @@ async fn withdrawing_and_reannouncing_the_same_endpoint_retires_its_old_attempt(
     let fullname = publish(&publisher, &guid, &address.to_string(), port);
     let (runtime, id) = restored(directory.path(), &guid).await;
     let mut events = runtime.subscribe();
+    // Discovery and scheduling have independent owners. Let the native browser
+    // consume the advertisement before the external caller starts its attempt.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let attempt = start_automatic(&runtime, &id);
     tokio::time::timeout(Duration::from_secs(15), started)
         .await
         .unwrap()
@@ -571,6 +643,10 @@ async fn withdrawing_and_reannouncing_the_same_endpoint_retires_its_old_attempt(
     discovered(&browser, &fullname, false).await;
     tokio::time::sleep(Duration::from_secs(3)).await;
     release.send(()).unwrap();
+    assert_eq!(
+        attempt.await.unwrap().unwrap_err().code,
+        "discovery_changed"
+    );
 
     tokio::time::timeout(Duration::from_secs(3), server)
         .await

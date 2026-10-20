@@ -86,7 +86,11 @@ async fn connection_is_usable_before_optional_battery_response() {
     let connecting = {
         let runtime = runtime.clone();
         let id = id.to_owned();
-        tokio::spawn(async move { runtime.connect_device_with_attempt(&id, None).await })
+        tokio::spawn(async move {
+            runtime
+                .connect_device_with_attempt(&id, None, false, None, None, None)
+                .await
+        })
     };
     // First witness the withheld query. RSA/TLS setup and parallel test load
     // must not be mistaken for a dependency on the optional battery response.

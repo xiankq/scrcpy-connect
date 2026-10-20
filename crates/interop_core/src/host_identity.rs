@@ -274,6 +274,9 @@ impl Runtime {
             }
         }
         drop(state);
+        self.setup_operations
+            .invalidate_devices(&affected, device.is_none())
+            .await;
         let mut failure = None;
         for id in &affected {
             if let Err(error) = self.invalidate_identity_connection(id).await {
@@ -290,7 +293,7 @@ impl Runtime {
         self.emit(
             "devices.changed",
             None,
-            json!({"devices":self.store.read().await.devices}),
+            json!({"devices":self.projected_devices().await}),
         );
         if let Some(error) = failure {
             return Err(error);

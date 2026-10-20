@@ -2,6 +2,7 @@
 //! bounded and may publish only to the exact connection that requested them.
 use crate::Runtime;
 use interop_adb::{Client, OperationOptions};
+#[cfg(test)]
 use serde_json::json;
 use std::{
     sync::{Arc, Weak},
@@ -100,7 +101,11 @@ async fn refresh(runtime: Weak<Runtime>, request: Request) {
             return;
         }
         device.battery = Some(battery);
-        runtime.emit("device.changed", Some(&request.id), json!(device));
+        runtime.emit(
+            "device.changed",
+            Some(&request.id),
+            crate::device::project_device(device, &connections),
+        );
     }
     let _ = runtime.persist().await;
 }

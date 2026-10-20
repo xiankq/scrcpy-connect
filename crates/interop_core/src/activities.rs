@@ -107,6 +107,7 @@ impl Runtime {
     }
 
     pub async fn stop_all(self: &Arc<Self>) {
+        self.setup_operations.release_all().await;
         let tokens: Vec<_> = self
             .device_operations
             .lock()
@@ -115,9 +116,6 @@ impl Runtime {
             .map(|(_, t)| t)
             .collect();
         for token in tokens {
-            token.cancel();
-        }
-        if let Some((_, token)) = self.qr_attempt.lock().await.take() {
             token.cancel();
         }
         let ids: Vec<_> = self

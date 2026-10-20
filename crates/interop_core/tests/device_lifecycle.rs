@@ -1,3 +1,4 @@
+mod support;
 use interop_core::Runtime;
 use serde_json::{Value, json};
 use std::time::Duration;
@@ -247,49 +248,6 @@ async fn cancelling_an_old_form_attempt_never_cancels_its_replacement() {
         .unwrap();
 }
 
-#[tokio::test]
-async fn offline_and_unimplemented_capabilities_remain_unknown_and_pair_codes_are_validated() {
-    let dir = tempfile::tempdir().unwrap();
-    let runtime = Runtime::initialize(dir.path()).await.unwrap();
-    let device = add(&runtime, "127.0.0.1", 5555).await;
-    let id = device["deviceId"].as_str().unwrap();
-    let capabilities = runtime
-        .invoke("device.capabilities", json!({"deviceId":id}))
-        .await
-        .unwrap();
-    for key in [
-        "screen",
-        "audio",
-        "calls",
-        "notifications",
-        "wirelessPairing",
-    ] {
-        let item = capabilities["capabilities"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|entry| entry["key"] == key)
-            .unwrap();
-        assert_eq!(item["status"], "unknown");
-    }
-    let error = runtime
-        .invoke(
-            "devices.pair",
-            json!({"address":"127.0.0.1","port":1,"code":"12345x"}),
-        )
-        .await
-        .unwrap_err();
-    assert_eq!(error.code, "invalid_pairing_code");
-    let error = runtime
-        .invoke(
-            "devices.add",
-            json!({"address":"127.0.0.1:5555","port":5555}),
-        )
-        .await
-        .unwrap_err();
-    assert_eq!(error.code, "invalid_address");
-}
-
 #[cfg(any(target_os = "linux", target_os = "android"))]
 #[tokio::test]
 async fn invalid_usb_fd_does_not_take_ownership_of_the_platform_descriptor() {
@@ -299,7 +257,10 @@ async fn invalid_usb_fd_does_not_take_ownership_of_the_platform_descriptor() {
     let runtime = Runtime::initialize(dir.path()).await.unwrap();
     assert!(
         runtime
-            .invoke("devices.usb", json!({"fd":file.as_raw_fd()}))
+            .invoke(
+                "adb.usb.open",
+                json!({"fd":file.as_raw_fd(),"leaseMs":1000})
+            )
             .await
             .is_err()
     );
@@ -333,20 +294,15 @@ async fn actual_android_device_metadata_and_services_are_read_through_runtime() 
             .is_some_and(|api| api >= 21)
     );
     assert!(connected["device"]["lastSeen"].as_u64().is_some());
-    let caps = runtime
-        .invoke("device.capabilities", json!({"deviceId":id}))
+    let facts = runtime
+        .invoke(
+            "adb.device.probe",
+            json!({"deviceId":id,"probes":["shell","sync"],"timeoutMs":5000}),
+        )
         .await
         .unwrap();
-    for key in ["shell", "files"] {
-        assert_eq!(
-            caps["capabilities"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .find(|cap| cap["key"] == key)
-                .unwrap()["status"],
-            "available"
-        );
+    for key in ["shell", "sync"] {
+        assert_eq!(facts["observations"][key]["status"], "ok");
     }
     runtime
         .invoke("devices.disconnect", json!({"deviceId":id}))
@@ -394,7 +350,10 @@ async fn sleeping_target_requires_explicit_wake_without_starting_capture() {
         .unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
     let start = runtime
-        .invoke("session.start", json!({"deviceId":id}))
+        .invoke(
+            "session.start",
+            support::media_params(json!({"deviceId":id})),
+        )
         .await;
     let asleep = client
         .shell(

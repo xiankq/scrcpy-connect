@@ -5,6 +5,15 @@ pub(crate) const PROTOCOL_VERSION: u64 = 1;
 pub(crate) enum Command {
     ActivitiesList,
     ActivitiesStop,
+    AdbDeviceProbe,
+    AdbOperationGet,
+    AdbOperationRelease,
+    AdbPair,
+    AdbPairQr,
+    AdbTcpipBegin,
+    AdbTcpipConnect,
+    AdbUsbAttach,
+    AdbUsbOpen,
     AppsIcon,
     AppsLaunch,
     AppsList,
@@ -24,8 +33,6 @@ pub(crate) enum Command {
     DeliveryBegin,
     DeliveryFinish,
     DeliveryGet,
-    DeviceCapabilities,
-    DeviceDiagnose,
     DeviceInfo,
     DevicesAdd,
     DevicesCancel,
@@ -34,12 +41,9 @@ pub(crate) enum Command {
     DevicesDiscover,
     DevicesForget,
     DevicesList,
-    DevicesPair,
-    DevicesPairQr,
+    DevicesReconnectOwner,
     DevicesRename,
-    DevicesUsb,
     DevicesWake,
-    DevicesWireless,
     DocumentCancel,
     DocumentCommit,
     DocumentCopy,
@@ -88,6 +92,7 @@ pub(crate) enum Command {
     ObservationStatus,
     ObservationStop,
     SessionClockProbe,
+    SessionDisplay,
     SessionFrame,
     SessionKey,
     SessionLaunch,
@@ -134,6 +139,15 @@ impl Command {
         Some(match value {
             "activities.list" => Self::ActivitiesList,
             "activities.stop" => Self::ActivitiesStop,
+            "adb.device.probe" => Self::AdbDeviceProbe,
+            "adb.operation.get" => Self::AdbOperationGet,
+            "adb.operation.release" => Self::AdbOperationRelease,
+            "adb.pair" => Self::AdbPair,
+            "adb.pair.qr" => Self::AdbPairQr,
+            "adb.tcpip.begin" => Self::AdbTcpipBegin,
+            "adb.tcpip.connect" => Self::AdbTcpipConnect,
+            "adb.usb.attach" => Self::AdbUsbAttach,
+            "adb.usb.open" => Self::AdbUsbOpen,
             "apps.icon" => Self::AppsIcon,
             "apps.launch" => Self::AppsLaunch,
             "apps.list" => Self::AppsList,
@@ -153,8 +167,6 @@ impl Command {
             "delivery.begin" => Self::DeliveryBegin,
             "delivery.finish" => Self::DeliveryFinish,
             "delivery.get" => Self::DeliveryGet,
-            "device.capabilities" => Self::DeviceCapabilities,
-            "device.diagnose" => Self::DeviceDiagnose,
             "device.info" => Self::DeviceInfo,
             "devices.add" => Self::DevicesAdd,
             "devices.cancel" => Self::DevicesCancel,
@@ -163,12 +175,9 @@ impl Command {
             "devices.discover" => Self::DevicesDiscover,
             "devices.forget" => Self::DevicesForget,
             "devices.list" => Self::DevicesList,
-            "devices.pair" => Self::DevicesPair,
-            "devices.pair.qr" => Self::DevicesPairQr,
+            "devices.reconnect.owner" => Self::DevicesReconnectOwner,
             "devices.rename" => Self::DevicesRename,
-            "devices.usb" => Self::DevicesUsb,
             "devices.wake" => Self::DevicesWake,
-            "devices.wireless" => Self::DevicesWireless,
             "document.cancel" => Self::DocumentCancel,
             "document.commit" => Self::DocumentCommit,
             "document.copy" => Self::DocumentCopy,
@@ -217,6 +226,7 @@ impl Command {
             "observation.status" => Self::ObservationStatus,
             "observation.stop" => Self::ObservationStop,
             "session.clock.probe" => Self::SessionClockProbe,
+            "session.display" => Self::SessionDisplay,
             "session.frame" => Self::SessionFrame,
             "session.key" => Self::SessionKey,
             "session.launch" => Self::SessionLaunch,
@@ -264,6 +274,15 @@ impl Command {
         match self {
             Self::ActivitiesList => "activities.list",
             Self::ActivitiesStop => "activities.stop",
+            Self::AdbDeviceProbe => "adb.device.probe",
+            Self::AdbOperationGet => "adb.operation.get",
+            Self::AdbOperationRelease => "adb.operation.release",
+            Self::AdbPair => "adb.pair",
+            Self::AdbPairQr => "adb.pair.qr",
+            Self::AdbTcpipBegin => "adb.tcpip.begin",
+            Self::AdbTcpipConnect => "adb.tcpip.connect",
+            Self::AdbUsbAttach => "adb.usb.attach",
+            Self::AdbUsbOpen => "adb.usb.open",
             Self::AppsIcon => "apps.icon",
             Self::AppsLaunch => "apps.launch",
             Self::AppsList => "apps.list",
@@ -283,8 +302,6 @@ impl Command {
             Self::DeliveryBegin => "delivery.begin",
             Self::DeliveryFinish => "delivery.finish",
             Self::DeliveryGet => "delivery.get",
-            Self::DeviceCapabilities => "device.capabilities",
-            Self::DeviceDiagnose => "device.diagnose",
             Self::DeviceInfo => "device.info",
             Self::DevicesAdd => "devices.add",
             Self::DevicesCancel => "devices.cancel",
@@ -293,12 +310,9 @@ impl Command {
             Self::DevicesDiscover => "devices.discover",
             Self::DevicesForget => "devices.forget",
             Self::DevicesList => "devices.list",
-            Self::DevicesPair => "devices.pair",
-            Self::DevicesPairQr => "devices.pair.qr",
+            Self::DevicesReconnectOwner => "devices.reconnect.owner",
             Self::DevicesRename => "devices.rename",
-            Self::DevicesUsb => "devices.usb",
             Self::DevicesWake => "devices.wake",
-            Self::DevicesWireless => "devices.wireless",
             Self::DocumentCancel => "document.cancel",
             Self::DocumentCommit => "document.commit",
             Self::DocumentCopy => "document.copy",
@@ -347,6 +361,7 @@ impl Command {
             Self::ObservationStatus => "observation.status",
             Self::ObservationStop => "observation.stop",
             Self::SessionClockProbe => "session.clock.probe",
+            Self::SessionDisplay => "session.display",
             Self::SessionFrame => "session.frame",
             Self::SessionKey => "session.key",
             Self::SessionLaunch => "session.launch",
@@ -395,6 +410,110 @@ impl Command {
                 name: "activityId",
                 kind: FieldType::String,
             }],
+            Self::AdbDeviceProbe => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "probes",
+                    kind: FieldType::Array,
+                },
+                Field {
+                    name: "timeoutMs",
+                    kind: FieldType::Integer,
+                },
+            ],
+            Self::AdbOperationGet => &[Field {
+                name: "operationId",
+                kind: FieldType::String,
+            }],
+            Self::AdbOperationRelease => &[Field {
+                name: "operationId",
+                kind: FieldType::String,
+            }],
+            Self::AdbPair => &[
+                Field {
+                    name: "address",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "port",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "code",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "attemptId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "leaseMs",
+                    kind: FieldType::Integer,
+                },
+            ],
+            Self::AdbPairQr => &[
+                Field {
+                    name: "attemptId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "leaseMs",
+                    kind: FieldType::Integer,
+                },
+            ],
+            Self::AdbTcpipBegin => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "connectionId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "port",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "attemptId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "leaseMs",
+                    kind: FieldType::Integer,
+                },
+            ],
+            Self::AdbTcpipConnect => &[
+                Field {
+                    name: "operationId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "address",
+                    kind: FieldType::String,
+                },
+            ],
+            Self::AdbUsbAttach => &[Field {
+                name: "operationId",
+                kind: FieldType::String,
+            }],
+            Self::AdbUsbOpen => &[
+                Field {
+                    name: "fd",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "attemptId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "leaseMs",
+                    kind: FieldType::Integer,
+                },
+            ],
             Self::AppsIcon => &[
                 Field {
                     name: "deviceId",
@@ -437,14 +556,6 @@ impl Command {
                 name: "deviceId",
                 kind: FieldType::String,
             }],
-            Self::DeviceCapabilities => &[Field {
-                name: "deviceId",
-                kind: FieldType::String,
-            }],
-            Self::DeviceDiagnose => &[Field {
-                name: "deviceId",
-                kind: FieldType::String,
-            }],
             Self::DeviceInfo => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
@@ -461,6 +572,16 @@ impl Command {
                 name: "deviceId",
                 kind: FieldType::String,
             }],
+            Self::DevicesReconnectOwner => &[
+                Field {
+                    name: "ownerId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "active",
+                    kind: FieldType::Boolean,
+                },
+            ],
             Self::DevicesRename => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
@@ -469,16 +590,6 @@ impl Command {
                 name: "deviceId",
                 kind: FieldType::String,
             }],
-            Self::DevicesWireless => &[
-                Field {
-                    name: "deviceId",
-                    kind: FieldType::String,
-                },
-                Field {
-                    name: "address",
-                    kind: FieldType::String,
-                },
-            ],
             Self::DocumentCommit => &[
                 Field {
                     name: "path",
@@ -699,6 +810,20 @@ impl Command {
                 name: "deviceId",
                 kind: FieldType::String,
             }],
+            Self::SessionDisplay => &[
+                Field {
+                    name: "sessionId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "displayWidth",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "displayHeight",
+                    kind: FieldType::Integer,
+                },
+            ],
             Self::SessionStart => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
@@ -768,6 +893,26 @@ impl Command {
     }
     pub(crate) fn optional(self) -> &'static [Field] {
         match self {
+            Self::AdbDeviceProbe => &[Field {
+                name: "connectionId",
+                kind: FieldType::String,
+            }],
+            Self::AdbPair => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
+            Self::AdbPairQr => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
+            Self::AdbUsbAttach => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
+            Self::AdbUsbOpen => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
             Self::AppsList => &[Field {
                 name: "filter",
                 kind: FieldType::String,
@@ -782,13 +927,31 @@ impl Command {
                     kind: FieldType::Boolean,
                 },
             ],
-            Self::DevicesPairQr => &[Field {
-                name: "deviceId",
+            Self::DevicesConnect => &[
+                Field {
+                    name: "automatic",
+                    kind: FieldType::Boolean,
+                },
+                Field {
+                    name: "ownerId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "attemptId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "candidateSource",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "parentOperationId",
+                    kind: FieldType::String,
+                },
+            ],
+            Self::DevicesWake => &[Field {
+                name: "connectionId",
                 kind: FieldType::String,
-            }],
-            Self::DevicesWireless => &[Field {
-                name: "port",
-                kind: FieldType::Integer,
             }],
             Self::MediaCacheConfigure => &[
                 Field {
@@ -946,6 +1109,24 @@ impl Command {
                 Field {
                     name: "deviceId",
                     kind: FieldType::String,
+                },
+            ],
+            Self::SessionStart => &[
+                Field {
+                    name: "displayWidth",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "displayHeight",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "displayAuto",
+                    kind: FieldType::Boolean,
+                },
+                Field {
+                    name: "keepActive",
+                    kind: FieldType::Boolean,
                 },
             ],
             Self::SessionStop => &[

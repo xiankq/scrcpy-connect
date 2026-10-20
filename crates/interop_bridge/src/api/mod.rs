@@ -15,16 +15,37 @@ pub fn init_app() {
     log::set_max_level(log::LevelFilter::Info);
 }
 
-pub async fn initialize(data_directory: String) -> Result<(), String> {
-    RUNTIME
+pub async fn initialize(
+    data_directory: String,
+    connection_policy_json: String,
+    settings_defaults_json: String,
+) -> Result<(), String> {
+    let policy: interop_core::ConnectionPolicy = serde_json::from_str(&connection_policy_json)
+        .map_err(|error| format!("invalid_connection_policy: {error}"))?;
+    policy.validate().map_err(|error| error.to_string())?;
+    let defaults: serde_json::Value = serde_json::from_str(&settings_defaults_json)
+        .map_err(|error| format!("invalid_settings_defaults: {error}"))?;
+    let runtime = RUNTIME
         .get_or_try_init(|| async {
-            let runtime = Runtime::initialize(data_directory)
-                .await
-                .map_err(|e| e.to_string())?;
+            let runtime =
+                Runtime::initialize_with_settings(data_directory, policy.clone(), defaults.clone())
+                    .await
+                    .map_err(|e| e.to_string())?;
             let _ = EXECUTOR.set(tokio::runtime::Handle::current());
             Ok::<_, String>(runtime)
         })
         .await?;
+    if runtime.connection_policy != policy {
+        return Err(
+            "runtime_connection_policy_mismatch: restart the host to change connection policy"
+                .into(),
+        );
+    }
+    if runtime.settings_defaults != defaults {
+        return Err(
+            "runtime_settings_defaults_mismatch: restart the host to change defaults".into(),
+        );
+    }
     Ok(())
 }
 
@@ -116,17 +137,36 @@ mod tests {
     async fn concurrent_initialization_shares_one_identity_and_runtime() {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path().to_string_lossy().into_owned();
-        let (first, second) =
-            tokio::join!(super::initialize(root.clone()), super::initialize(root));
+        let policy = serde_json::to_string(&interop_core::ConnectionPolicy::standalone()).unwrap();
+        let (first, second) = tokio::join!(
+            super::initialize(root.clone(), policy.clone(), "{}".into()),
+            super::initialize(root, policy.clone(), "{}".into())
+        );
         first.unwrap();
         second.unwrap();
+        let mut different = interop_core::ConnectionPolicy::standalone();
+        different.request_authorization = false;
+        assert!(
+            super::initialize(
+                directory.path().to_string_lossy().into_owned(),
+                serde_json::to_string(&different).unwrap(),
+                "{}".into(),
+            )
+            .await
+            .unwrap_err()
+            .contains("runtime_connection_policy_mismatch")
+        );
         let identity = tokio::fs::read(directory.path().join("host_identity.pem"))
             .await
             .unwrap();
         assert!(!identity.is_empty());
-        super::initialize(directory.path().to_string_lossy().into_owned())
-            .await
-            .unwrap();
+        super::initialize(
+            directory.path().to_string_lossy().into_owned(),
+            policy,
+            "{}".into(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             identity,
             tokio::fs::read(directory.path().join("host_identity.pem"))

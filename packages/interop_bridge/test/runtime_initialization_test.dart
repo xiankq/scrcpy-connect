@@ -16,7 +16,7 @@ void main() {
         bindingCalls++;
         initialized = true;
       },
-      initializeRuntime: (_) async {
+      initializeRuntime: (_, _) async {
         if (++coreCalls == 1) throw StateError('core attachment failed');
       },
     );
@@ -39,7 +39,7 @@ void main() {
         await gate.future;
         initialized = true;
       },
-      initializeRuntime: (_) async {},
+      initializeRuntime: (_, _) async {},
     );
     final first = runtime.attach('/private');
     final second = runtime.attach('/private');

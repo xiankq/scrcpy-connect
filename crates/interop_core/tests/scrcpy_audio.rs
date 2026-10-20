@@ -1,5 +1,6 @@
 //! Real output-capture test. The optional fixture produces a known 880Hz tone,
 //! proving capture content independently of the controller's playback adapter.
+mod support;
 use interop_adb::{Client, ConnectOptions, OperationOptions, sync::RemotePath};
 use interop_core::Runtime;
 use serde_json::json;
@@ -28,7 +29,10 @@ async fn real_audio_only_capture_and_known_tone() {
     // Device audio belongs to an opened control session. This source-capture
     // test does not fabricate a renderer-ready receipt for that session.
     let session = runtime
-        .invoke("session.start", json!({"deviceId":id}))
+        .invoke(
+            "session.start",
+            support::media_params(json!({"deviceId":id})),
+        )
         .await
         .unwrap();
     let source = runtime

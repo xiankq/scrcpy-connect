@@ -87,7 +87,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiInitApp();
 
-  Future<void> crateApiInitialize({required String dataDirectory});
+  Future<void> crateApiInitialize({
+    required String dataDirectory,
+    required String connectionPolicyJson,
+    required String settingsDefaultsJson,
+  });
 
   Future<String> crateApiInvoke({required String requestJson});
 
@@ -195,12 +199,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_app", argNames: []);
 
   @override
-  Future<void> crateApiInitialize({required String dataDirectory}) {
+  Future<void> crateApiInitialize({
+    required String dataDirectory,
+    required String connectionPolicyJson,
+    required String settingsDefaultsJson,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(dataDirectory, serializer);
+          sse_encode_String(connectionPolicyJson, serializer);
+          sse_encode_String(settingsDefaultsJson, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -213,14 +223,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiInitializeConstMeta,
-        argValues: [dataDirectory],
+        argValues: [dataDirectory, connectionPolicyJson, settingsDefaultsJson],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiInitializeConstMeta =>
-      const TaskConstMeta(debugName: "initialize", argNames: ["dataDirectory"]);
+  TaskConstMeta get kCrateApiInitializeConstMeta => const TaskConstMeta(
+    debugName: "initialize",
+    argNames: ["dataDirectory", "connectionPolicyJson", "settingsDefaultsJson"],
+  );
 
   @override
   Future<String> crateApiInvoke({required String requestJson}) {

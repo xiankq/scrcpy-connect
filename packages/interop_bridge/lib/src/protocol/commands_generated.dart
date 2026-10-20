@@ -12,6 +12,73 @@ enum InteropCommand {
     "activities.stop",
     required: {'activityId': ProtocolFieldType.string},
   ),
+  adbDeviceProbe(
+    "adb.device.probe",
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'probes': ProtocolFieldType.array,
+      'timeoutMs': ProtocolFieldType.integer,
+    },
+    optional: {'connectionId': ProtocolFieldType.string},
+  ),
+  adbOperationGet(
+    "adb.operation.get",
+    required: {'operationId': ProtocolFieldType.string},
+  ),
+  adbOperationRelease(
+    "adb.operation.release",
+    required: {'operationId': ProtocolFieldType.string},
+  ),
+  adbPair(
+    "adb.pair",
+    required: {
+      'address': ProtocolFieldType.string,
+      'port': ProtocolFieldType.integer,
+      'code': ProtocolFieldType.string,
+      'attemptId': ProtocolFieldType.string,
+      'leaseMs': ProtocolFieldType.integer,
+    },
+    optional: {'deviceId': ProtocolFieldType.string},
+  ),
+  adbPairQr(
+    "adb.pair.qr",
+    required: {
+      'attemptId': ProtocolFieldType.string,
+      'leaseMs': ProtocolFieldType.integer,
+    },
+    optional: {'deviceId': ProtocolFieldType.string},
+  ),
+  adbTcpipBegin(
+    "adb.tcpip.begin",
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'connectionId': ProtocolFieldType.string,
+      'port': ProtocolFieldType.integer,
+      'attemptId': ProtocolFieldType.string,
+      'leaseMs': ProtocolFieldType.integer,
+    },
+  ),
+  adbTcpipConnect(
+    "adb.tcpip.connect",
+    required: {
+      'operationId': ProtocolFieldType.string,
+      'address': ProtocolFieldType.string,
+    },
+  ),
+  adbUsbAttach(
+    "adb.usb.attach",
+    required: {'operationId': ProtocolFieldType.string},
+    optional: {'deviceId': ProtocolFieldType.string},
+  ),
+  adbUsbOpen(
+    "adb.usb.open",
+    required: {
+      'fd': ProtocolFieldType.integer,
+      'attemptId': ProtocolFieldType.string,
+      'leaseMs': ProtocolFieldType.integer,
+    },
+    optional: {'deviceId': ProtocolFieldType.string},
+  ),
   appsIcon(
     "apps.icon",
     required: {
@@ -80,10 +147,12 @@ enum InteropCommand {
   deliveryGet("delivery.get"),
   deviceCapabilities(
     "device.capabilities",
+    core: false,
     required: {'deviceId': ProtocolFieldType.string},
   ),
   deviceDiagnose(
     "device.diagnose",
+    core: false,
     required: {'deviceId': ProtocolFieldType.string},
   ),
   deviceInfo("device.info", required: {'deviceId': ProtocolFieldType.string}),
@@ -92,6 +161,13 @@ enum InteropCommand {
   devicesConnect(
     "devices.connect",
     required: {'deviceId': ProtocolFieldType.string},
+    optional: {
+      'automatic': ProtocolFieldType.boolean,
+      'ownerId': ProtocolFieldType.string,
+      'attemptId': ProtocolFieldType.string,
+      'candidateSource': ProtocolFieldType.string,
+      'parentOperationId': ProtocolFieldType.string,
+    },
   ),
   devicesDisconnect(
     "devices.disconnect",
@@ -103,19 +179,32 @@ enum InteropCommand {
     required: {'deviceId': ProtocolFieldType.string},
   ),
   devicesList("devices.list", result: {'devices': ProtocolFieldType.array}),
-  devicesPair("devices.pair"),
+  devicesPair("devices.pair", core: false),
   devicesPairQr(
     "devices.pair.qr",
+    core: false,
     optional: {'deviceId': ProtocolFieldType.string},
+  ),
+  devicesReconnectOwner(
+    "devices.reconnect.owner",
+    required: {
+      'ownerId': ProtocolFieldType.string,
+      'active': ProtocolFieldType.boolean,
+    },
   ),
   devicesRename(
     "devices.rename",
     required: {'deviceId': ProtocolFieldType.string},
   ),
-  devicesUsb("devices.usb"),
-  devicesWake("devices.wake", required: {'deviceId': ProtocolFieldType.string}),
+  devicesUsb("devices.usb", core: false),
+  devicesWake(
+    "devices.wake",
+    required: {'deviceId': ProtocolFieldType.string},
+    optional: {'connectionId': ProtocolFieldType.string},
+  ),
   devicesWireless(
     "devices.wireless",
+    core: false,
     required: {
       'deviceId': ProtocolFieldType.string,
       'address': ProtocolFieldType.string,
@@ -342,6 +431,15 @@ enum InteropCommand {
       'deviceId': ProtocolFieldType.string,
     },
   ),
+  sessionDisplay(
+    "session.display",
+    requiresVerifiedState: true,
+    required: {
+      'sessionId': ProtocolFieldType.string,
+      'displayWidth': ProtocolFieldType.integer,
+      'displayHeight': ProtocolFieldType.integer,
+    },
+  ),
   sessionFrame(
     "session.frame",
     optional: {
@@ -444,6 +542,12 @@ enum InteropCommand {
     "session.start",
     requiresVerifiedState: true,
     required: {'deviceId': ProtocolFieldType.string},
+    optional: {
+      'displayWidth': ProtocolFieldType.integer,
+      'displayHeight': ProtocolFieldType.integer,
+      'displayAuto': ProtocolFieldType.boolean,
+      'keepActive': ProtocolFieldType.boolean,
+    },
   ),
   sessionStop(
     "session.stop",

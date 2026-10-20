@@ -1,4 +1,5 @@
 //! Public Runtime commands with independently observed real Android task state.
+mod support;
 use interop_adb::{Client, ConnectOptions, OperationOptions};
 use interop_core::Runtime;
 use serde_json::json;
@@ -11,6 +12,11 @@ async fn invoke_runtime(
     command: &str,
     params: serde_json::Value,
 ) -> Result<serde_json::Value, interop_core::CoreError> {
+    let params = if matches!(command, "session.start" | "apps.launch") {
+        support::media_params(params)
+    } else {
+        params
+    };
     Box::pin(runtime.invoke(command, params)).await
 }
 
@@ -158,7 +164,7 @@ async fn lost_phone_screen_start_receipt_is_not_replayed_after_reentry_disconnec
     let screen = invoke_runtime(
         &runtime,
         "session.start",
-        json!({"deviceId":device,"maxSize":640,"maxFps":15}),
+        support::media_params(json!({"deviceId":device,"maxSize":640,"maxFps":15})),
     )
     .await
     .unwrap();
@@ -230,7 +236,7 @@ async fn lost_phone_screen_start_receipt_is_not_replayed_after_reentry_disconnec
     let resumed = invoke_runtime(
         &runtime,
         "session.start",
-        json!({"deviceId":device,"maxSize":640,"maxFps":15}),
+        support::media_params(json!({"deviceId":device,"maxSize":640,"maxFps":15})),
     )
     .await
     .unwrap();
@@ -315,7 +321,7 @@ async fn closed_queued_app_open_cannot_execute_after_an_earlier_write_recovers()
     let screen = invoke_runtime(
         &runtime,
         "session.start",
-        json!({"deviceId":device,"maxSize":640,"maxFps":15}),
+        support::media_params(json!({"deviceId":device,"maxSize":640,"maxFps":15})),
     )
     .await
     .unwrap();
@@ -377,7 +383,7 @@ async fn closed_queued_app_open_cannot_execute_after_an_earlier_write_recovers()
     let replacement = invoke_runtime(
         &runtime,
         "session.start",
-        json!({"deviceId":device,"maxSize":640,"maxFps":15}),
+        support::media_params(json!({"deviceId":device,"maxSize":640,"maxFps":15})),
     )
     .await
     .unwrap();
@@ -431,7 +437,7 @@ async fn open_real_application_on_the_existing_phone_screen() {
     let screen = invoke_runtime(
         &runtime,
         "session.start",
-        json!({"deviceId":id,"maxSize":640,"maxFps":15}),
+        support::media_params(json!({"deviceId":id,"maxSize":640,"maxFps":15})),
     )
     .await
     .unwrap();
@@ -496,7 +502,7 @@ async fn unknown_independent_app_open_is_not_replayed_before_or_after_encoded_fr
     let rejected = invoke_runtime(
         &runtime,
         "session.start",
-        json!({"deviceId":device,"packageName":"+com.android.settings"}),
+        support::media_params(json!({"deviceId":device,"packageName":"+com.android.settings"})),
     )
     .await
     .unwrap_err();
@@ -655,9 +661,9 @@ async fn unknown_independent_app_open_is_not_replayed_before_or_after_encoded_fr
     let primary = invoke_runtime(
         &runtime,
         "session.start",
-        json!({
+        support::media_params(json!({
             "deviceId":device,"maxSize":640,"maxFps":15
-        }),
+        })),
     )
     .await
     .unwrap();

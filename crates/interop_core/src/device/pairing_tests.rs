@@ -159,6 +159,25 @@ async fn tls_peer(address: Ipv4Addr) -> (u16, AbortTask<()>) {
     (port, AbortTask(task))
 }
 
+async fn wait_pair_candidates(runtime: &Runtime, guid: &str) {
+    tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            if runtime
+                .discovered_services
+                .read()
+                .await
+                .endpoints(guid)
+                .is_some_and(|addresses| !addresses.is_empty())
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("fixture DNS candidates must be observed before explicit execution");
+}
+
 #[tokio::test]
 #[ignore = "requires multicast-capable IPv4 networking"]
 async fn pairing_completion_tries_the_second_discovered_address() {
@@ -178,30 +197,32 @@ async fn pairing_completion_tries_the_second_discovered_address() {
         advertised.endpoints,
         vec![(unavailable, port).into(), (address, port).into()]
     );
-    let result = tokio::time::timeout(
-        Duration::from_secs(15),
-        runtime.finish_pairing(
+    let paired = runtime
+        .finish_pairing(
             guid.clone(),
             address.to_string(),
             None,
             &CancellationToken::new(),
-        ),
-    )
-    .await;
-    // Clean the real publisher and peer even when the original first-address
-    // implementation blocks for its full 60-second connect timeout.
+        )
+        .await
+        .unwrap();
+    assert_eq!(paired["paired"], true);
+    assert_eq!(
+        paired["connected"], false,
+        "native pairing must not start a connection"
+    );
+    assert_eq!(paired["device"]["port"], 0);
+    wait_pair_candidates(&runtime, &guid).await;
+    let result = tokio::time::timeout(Duration::from_secs(15),runtime.invoke("devices.connect",json!({
+        "deviceId":paired["deviceId"],"candidateSource":"discovery","parentOperationId":paired["operationId"]
+    }))).await.expect("one execution must try both candidate addresses").unwrap();
     drop(publisher);
-    if let Ok(Ok(value)) = &result {
-        runtime
-            .disconnect_device(value["deviceId"].as_str().unwrap(), false)
-            .await
-            .unwrap();
-    }
-    let result = result
-        .expect("first unreachable address must not consume the whole pairing completion")
+    runtime
+        .disconnect_device(result["deviceId"].as_str().unwrap(), false)
+        .await
         .unwrap();
     assert_eq!(result["connected"], true, "{result}");
-    assert_eq!(result["connectionPortRequired"], false);
+
     assert_eq!(result["device"]["address"], address.to_string());
     assert_eq!(result["device"]["port"], port);
     assert_eq!(result["device"]["guid"], guid);
@@ -221,55 +242,34 @@ async fn pairing_completion_disconnect_cancels_pending_discovery() {
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
     let guid = format!("adb-pair-cancel-{}", uuid::Uuid::new_v4());
-    let token = CancellationToken::new();
-    let mut finish = AbortTask(tokio::spawn({
-        let runtime = runtime.clone();
-        let guid = guid.clone();
-        let token = token.clone();
-        async move {
-            runtime
-                .finish_pairing(guid, address.to_string(), None, &token)
-                .await
-        }
-    }));
-    let id = tokio::time::timeout(Duration::from_secs(10), async {
-        loop {
-            // No advertisement exists yet. The device-operation registration
-            // witnesses the completion path entering its cancellable discovery
-            // phase, before any TCP connection can have been selected.
-            let pending = runtime.device_operations.lock().await;
-            let store = runtime.store.read().await;
-            if let Some(device) = store
-                .devices
-                .iter()
-                .find(|device| device.guid.as_deref() == Some(&guid))
-                && pending.contains_key(&device.id)
-            {
-                break device.id.clone();
-            }
-            drop(store);
-            drop(pending);
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("pairing completion must register discovery as a device operation");
+    let result = runtime
+        .finish_pairing(
+            guid.clone(),
+            address.to_string(),
+            None,
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    let id = result["deviceId"].as_str().unwrap().to_owned();
+    let op = runtime
+        .setup_operations
+        .get(result["operationId"].as_str().unwrap())
+        .await
+        .unwrap();
+    let token = op.token.clone();
     runtime.disconnect_device(&id, false).await.unwrap();
     assert!(
         token.is_cancelled(),
-        "disconnect must cancel the discovery's own token"
+        "disconnect must cancel the continuation's original token"
     );
-
     // Make the candidate observable after the explicit disconnect, using real
     // multicast rather than assuming that waiting a fixed delay resolves it.
     let browser = Discovery::new().unwrap();
     let publisher = Advertisement::new(&guid, &address.to_string(), port);
     resolved(&browser, &publisher.fullname).await;
-    let result = tokio::time::timeout(Duration::from_secs(3), &mut finish.0)
-        .await
-        .expect("cancelled discovery must finish promptly")
-        .unwrap()
-        .unwrap();
+    let error=runtime.invoke("devices.connect",json!({"deviceId":id,"candidateSource":"discovery","parentOperationId":result["operationId"]})).await.unwrap_err();
+    assert_eq!(error.code, "cancelled");
     assert_eq!(result["paired"], true);
     assert_eq!(result["connected"], false);
     assert_eq!(result["device"]["autoReconnect"], false);
@@ -316,28 +316,30 @@ async fn pairing_completion_rejects_plaintext_discovered_endpoint() {
     let browser = Discovery::new().unwrap();
     let publisher = Advertisement::new(&guid, &address.to_string(), port);
     resolved(&browser, &publisher.fullname).await;
-    let result = tokio::time::timeout(
-        Duration::from_secs(15),
-        runtime.finish_pairing(
+    let mut result = runtime
+        .finish_pairing(
             guid.clone(),
             address.to_string(),
             None,
             &CancellationToken::new(),
-        ),
-    )
-    .await
-    .unwrap()
-    .unwrap();
+        )
+        .await
+        .unwrap();
+    wait_pair_candidates(&runtime, &guid).await;
+    let error=runtime.invoke("devices.connect",json!({"deviceId":result["deviceId"],"candidateSource":"discovery","parentOperationId":result["operationId"]})).await.unwrap_err();
+    assert!(error.message.contains("TLS is required"), "{error:?}");
+    result["device"] = json!(
+        runtime
+            .device(result["deviceId"].as_str().unwrap())
+            .await
+            .unwrap()
+    );
     tokio::time::timeout(Duration::from_secs(3), observed_plaintext)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(result["paired"], true);
     assert_eq!(result["connected"], false);
-    assert_eq!(
-        result["connectionPortRequired"], false,
-        "a discovered service did exist"
-    );
     assert_eq!(result["device"]["guid"], guid);
     assert_eq!(result["device"]["transport"], "tls");
     assert_eq!(
@@ -396,7 +398,10 @@ async fn pairing_discovery_updates_and_goodbye_reject_stale_tls_publication() {
     let browser = Discovery::new().unwrap();
     let mut publisher = Advertisement::new(&guid, &address.to_string(), old_port);
     resolved(&browser, &publisher.fullname).await;
-    let discovery = runtime.find_connect_endpoints(&guid, &token).await.unwrap();
+    let discovery = runtime
+        .start_pairing_discovery(&guid, &token)
+        .await
+        .unwrap();
     let original = wait_for_endpoints(&discovery, vec![(address, old_port).into()]).await;
     let mut options = runtime.connect_options(token.clone()).await.unwrap();
     options.tls_policy = TlsPolicy::Required;
@@ -517,21 +522,33 @@ async fn qr_reauthorization_requires_the_selected_device_identity() {
         .unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
     let error = runtime
-        .invoke("devices.pair.qr", json!({"deviceId":id}))
+        .invoke(
+            "adb.pair.qr",
+            json!({"deviceId":id,"attemptId":uuid::Uuid::new_v4().to_string(),"leaseMs":180000}),
+        )
         .await
         .unwrap_err();
     assert_eq!(error.code, "identity_unavailable");
-    assert!(runtime.qr_attempt.lock().await.is_none());
+    assert!(runtime.setup_operations.snapshot().await.is_empty());
     assert!(runtime.device_operations.lock().await.is_empty());
     assert_eq!(runtime.store.read().await.devices.len(), 1);
     let error = runtime
-        .invoke("devices.pair.qr", json!({"deviceId":"missing"}))
+        .invoke(
+            "adb.pair.qr",
+            json!({"deviceId":"missing","attemptId":"missing-record","leaseMs":180000}),
+        )
         .await
         .unwrap_err();
     assert_eq!(error.code, "not_found");
 
     // Adding a new device has no device-specific identity to recover.
-    let generated = runtime.invoke("devices.pair.qr", json!({})).await.unwrap();
+    let generated = runtime
+        .invoke(
+            "adb.pair.qr",
+            json!({"attemptId":"new-qr","leaseMs":180000}),
+        )
+        .await
+        .unwrap();
     assert!(
         generated["payload"]
             .as_str()
@@ -554,32 +571,27 @@ async fn qr_reauthorization_disconnect_cancels_the_original_attempt() {
     let device = blank_device("phone.local".into(), 0, TransportKind::Tls);
     let id = device.id.clone();
     runtime.store.write().await.devices.push(device);
-    runtime
-        .invoke("devices.pair.qr", json!({"deviceId":id}))
+    let generated = runtime
+        .invoke(
+            "adb.pair.qr",
+            json!({"deviceId":id,"attemptId":"qr-disconnect","leaseMs":180000}),
+        )
         .await
         .unwrap();
-    let token = runtime.qr_attempt.lock().await.as_ref().unwrap().1.clone();
+    let op = runtime
+        .setup_operations
+        .get(generated["operationId"].as_str().unwrap())
+        .await
+        .unwrap();
+    let token = op.token.clone();
     assert_eq!(
         runtime.device_operations.lock().await.get(&id),
         Some(&token)
     );
     runtime.disconnect_device(&id, false).await.unwrap();
     assert!(token.is_cancelled());
-    let fingerprint = runtime
-        .identities
-        .selected(Some(&id))
-        .await
-        .unwrap()
-        .fingerprint
-        .clone();
     let error = runtime
-        .finish_pairing_with_identity(
-            "late-guid".into(),
-            "other.local".into(),
-            Some(&id),
-            &token,
-            Some(&fingerprint),
-        )
+        .finish_pairing_record("late-guid".into(), "other.local".into(), Some(&id), &op)
         .await
         .unwrap_err();
     assert_eq!(error.code, "cancelled");
@@ -603,15 +615,16 @@ async fn qr_reauthorization_commits_only_the_selected_identity_to_the_original_r
         )
         .await
         .unwrap();
-    let token = CancellationToken::new();
-    let error = runtime
-        .finish_pairing_with_identity(
-            "late-guid".into(),
-            "other.local".into(),
+    let old = runtime
+        .new_setup_operation(
+            &json!({"attemptId":"old-pairing","leaseMs":180000}),
             Some(&id),
-            &token,
-            Some(&original.fingerprint),
+            original.fingerprint.clone(),
         )
+        .await
+        .unwrap();
+    let error = runtime
+        .finish_pairing_record("late-guid".into(), "other.local".into(), Some(&id), &old)
         .await
         .unwrap_err();
     assert_eq!(error.code, "identity_changed");
@@ -633,14 +646,16 @@ async fn qr_reauthorization_commits_only_the_selected_identity_to_the_original_r
         .lock()
         .await
         .insert(id.clone(), client.clone());
-    let result = runtime
-        .finish_pairing_with_identity(
-            "paired-guid".into(),
-            "other.local".into(),
+    let op = runtime
+        .new_setup_operation(
+            &json!({"attemptId":"current-pairing","leaseMs":180000}),
             Some(&id),
-            &token,
-            imported["fingerprint"].as_str(),
+            imported["fingerprint"].as_str().unwrap().into(),
         )
+        .await
+        .unwrap();
+    let result = runtime
+        .finish_pairing_record("paired-guid".into(), "other.local".into(), Some(&id), &op)
         .await
         .unwrap();
     assert_eq!(result["deviceId"], id);
@@ -648,6 +663,9 @@ async fn qr_reauthorization_commits_only_the_selected_identity_to_the_original_r
     let store = runtime.store.read().await;
     assert_eq!(store.devices.len(), 1);
     assert_eq!(store.devices[0].guid.as_deref(), Some("paired-guid"));
-    assert_eq!(store.devices[0].address, "other.local");
+    assert_eq!(
+        store.devices[0].address, "phone.local",
+        "pairing does not commit an unverified connection endpoint"
+    );
     client.close();
 }

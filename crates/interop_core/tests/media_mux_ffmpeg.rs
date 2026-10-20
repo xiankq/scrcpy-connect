@@ -1,4 +1,5 @@
 //! Independent decoder tests. INTEROP_FFMPEG is mandatory, never an optional silent skip.
+mod support;
 use interop_core::media::{MatroskaMuxer, Track, VideoCodec, VideoTrack};
 use std::{
     process::{Output, Stdio},
@@ -184,7 +185,7 @@ async fn real_scrcpy_five_codec_packets_decode_through_matroska() {
             eprintln!("actual {name} target encoder not available: {option}");
             continue;
         }
-        let session = runtime.invoke("session.start",json!({"deviceId":id,"videoCodec":name,"maxSize":640,"maxFps":15,"videoBitRate":1_000_000})).await.unwrap();
+        let session = runtime.invoke("session.start",support::media_params(json!({"deviceId":id,"videoCodec":name,"maxSize":640,"maxFps":15,"videoBitRate":1_000_000}))).await.unwrap();
         let mut socket = tokio::net::TcpStream::connect((
             "127.0.0.1",
             session["videoPort"].as_u64().unwrap() as u16,

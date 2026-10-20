@@ -6,6 +6,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart'
+    show AppLifecycleListener, AppLifecycleState, WidgetsBinding;
 import 'package:open_filex/open_filex.dart';
 
 import 'src/rust/api.dart' as core;
@@ -24,20 +26,83 @@ import 'src/interop_exception.dart';
 import 'src/protocol/command_codec.dart';
 import 'src/runtime_initialization.dart';
 import 'src/native_runtime.dart';
+import 'src/connection_policy.dart';
+import 'src/video_quality_policy.dart';
+import 'src/virtual_display_policy.dart';
+import 'src/reconnection_coordinator.dart';
+import 'src/device_screen_coordinator.dart';
+import 'src/connection_setup_coordinator.dart';
+import 'src/device_capability_policy.dart';
 
 export 'src/interop_exception.dart';
+export 'src/connection_policy.dart';
 export 'src/protocol/commands_generated.dart' show InteropCommand;
 
 /// The application never invokes an external adb process. This is its only
 /// boundary to the persistent Rust runtime and ordinary platform permissions.
 class InteropBridge {
-  InteropBridge._(this._dataDirectory);
+  InteropBridge._(this._dataDirectory, this._connectionPolicy);
+
+  final ConnectionPolicy _connectionPolicy;
+  AppLifecycleListener? _connectionLifecycle;
+  late final _reconnections = ReconnectionCoordinator(
+    request: _invoke,
+    policy: _connectionPolicy,
+  );
+  late final _screens = DeviceScreenCoordinator(
+    request: _invoke,
+    emit: _emitScreenFailure,
+  );
+
+  late final _setup = ConnectionSetupCoordinator(
+    request: _invoke,
+    policy: _connectionPolicy,
+    emit: (event) {
+      if (_disposed) return;
+      _events.add(event);
+      final data = event['data'];
+      final result = data is Map ? data['result'] : null;
+      if (result is Map && result['connected'] == true) {
+        unawaited(_retainConnectionInBackground());
+      }
+    },
+    authorizeUsb: Platform.isAndroid
+        ? (params) async {
+            final permission = await _platform
+                .invokeMethod<Map<dynamic, dynamic>>('usb.authorize', params);
+            if (permission == null) {
+              throw const InteropException('cancelled', '尚未允许 USB 访问。');
+            }
+            return Map<String, dynamic>.from(permission);
+          }
+        : null,
+    cancelUsb: Platform.isAndroid
+        ? (params) async {
+            await _platform.invokeMethod<void>('usb.cancel', params);
+          }
+        : null,
+    releaseUsb: Platform.isAndroid
+        ? (params) async {
+            await _platform.invokeMethod<void>('usb.release', params);
+          }
+        : null,
+    holdDevice: (id) =>
+        _reconnections.beforeRequest('devices.connect', {'deviceId': id}),
+  );
+  late final _capabilities = DeviceCapabilityPolicy(
+    request: _invoke,
+    policy: _connectionPolicy,
+    localVideoCapabilities: _videoCapabilities,
+  );
 
   final String _dataDirectory;
 
   static const _platform = MethodChannel('dev.scrcpyconnect/platform');
   static const _mediaEvents = EventChannel('dev.scrcpyconnect/media_events');
-  final _events = StreamController<Map<String, dynamic>>.broadcast();
+  final _pendingScreenFailures = <String, Map<String, dynamic>>{};
+  late final _events = StreamController<Map<String, dynamic>>.broadcast(
+    onListen: () => scheduleMicrotask(_flushScreenFailures),
+  );
   final _textures = <String, Map<String, dynamic>>{};
   final _videoMonitors = <String, Timer>{};
   final _videoPolling = <String>{};
@@ -81,7 +146,12 @@ class InteropBridge {
       current: current,
     ),
     emit: (event) {
-      if (!_disposed) _events.add(event);
+      if (!_disposed) {
+        _screens.handleEvent(event);
+        _setup.handleEvent(event);
+        _reconnections.handleEvent(event);
+        _events.add(event);
+      }
     },
     isDisposed: () => _disposed,
   );
@@ -115,15 +185,21 @@ class InteropBridge {
 
   static Future<InteropBridge>? _initializing;
   static String? _initializingDirectory;
+  static String? _initializingPolicyJson;
   static InteropBridge? _active;
   static final _runtime = RuntimeInitialization(
     bindingsInitialized: () => RustLib.instance.initialized,
     initializeBindings: RustLib.init,
-    initializeRuntime: (directory) =>
-        initializeNativeRuntime(dataDirectory: directory),
+    initializeRuntime: (directory, policy) => initializeNativeRuntime(
+      dataDirectory: directory,
+      connectionPolicy: policy,
+    ),
   );
 
-  static Future<InteropBridge> initialize({required String dataDirectory}) {
+  static Future<InteropBridge> initialize({
+    required String dataDirectory,
+    ConnectionPolicy connectionPolicy = const ConnectionPolicy(),
+  }) {
     if (_active case final existing? when !existing._disposed) {
       return Future.error(
         const InteropException(
@@ -140,16 +216,37 @@ class InteropBridge {
         ),
       );
     }
+    final policyJson = jsonEncode(connectionPolicy.toJson());
+    if (_initializing != null && _initializingPolicyJson != policyJson) {
+      return Future.error(
+        const InteropException(
+          'runtime_connection_policy_mismatch',
+          '互联核心正在使用另一套连接策略，请重新启动应用。',
+        ),
+      );
+    }
+    _initializingPolicyJson = policyJson;
     _initializingDirectory = dataDirectory;
-    return _initializing ??= _initialize(dataDirectory).whenComplete(() {
-      _initializing = null;
-      _initializingDirectory = null;
-    });
+    return _initializing ??= _initialize(dataDirectory, connectionPolicy)
+        .whenComplete(() {
+          _initializing = null;
+          _initializingDirectory = null;
+          _initializingPolicyJson = null;
+        });
   }
 
-  static Future<InteropBridge> _initialize(String dataDirectory) async {
-    await _runtime.attach(dataDirectory);
-    final bridge = InteropBridge._(dataDirectory);
+  static Future<InteropBridge> _initialize(
+    String dataDirectory,
+    ConnectionPolicy policy,
+  ) async {
+    final previous = _active;
+    if (previous != null && previous._disposed) {
+      // A new attachment cannot claim retry ownership ahead of the old
+      // coordinator's pending native release.
+      await previous._disposing;
+    }
+    await _runtime.attach(dataDirectory, connectionPolicy: policy);
+    final bridge = InteropBridge._(dataDirectory, policy);
     try {
       bridge._eventSubscriptionId = await core.openEvents();
       bridge._coreSubscription = core
@@ -183,6 +280,7 @@ class InteropBridge {
           const {},
         );
         await bridge._audioOutputs.setVisible(state['visible'] == true);
+        bridge._reconnections.setVisible(state['visible'] == true);
         await bridge._shareIntake.configure();
         unawaited(
           bridge._shareIntake.attach().catchError((Object error) {
@@ -202,12 +300,36 @@ class InteropBridge {
       await bridge._audioOutputs.policy(
         settings['backgroundKeepAlive'] == true,
       );
+      bridge._connectionLifecycle = AppLifecycleListener(
+        onStateChange: (state) {
+          bridge._reconnections.setVisible(
+            state == AppLifecycleState.resumed ||
+                state == AppLifecycleState.inactive,
+          );
+        },
+      );
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle != null) {
+        bridge._reconnections.setVisible(
+          lifecycle == AppLifecycleState.resumed ||
+              lifecycle == AppLifecycleState.inactive,
+        );
+      }
+      // This trusted snapshot establishes screen preferences and old connection
+      // identities before its event may admit the first automatic reconnect.
+      await bridge._stateRecovery.refresh();
+      await bridge._reconnections.start();
       _active = bridge;
       return bridge;
     } catch (_) {
       // Failed attachment owns no new media. Detach these observers without
       // stopping an existing process-owned background source.
       bridge._disposed = true;
+      bridge._screens.dispose();
+      bridge._connectionLifecycle?.dispose();
+      final reconnectDisposal = bridge._reconnections.dispose();
+      final setupDisposal = bridge._setup.dispose();
+      await Future.wait([reconnectDisposal, setupDisposal]);
       await bridge._detachCoreEvents();
       await bridge._platformSubscription?.cancel();
       bridge._audioSources.clear();
@@ -221,6 +343,9 @@ class InteropBridge {
     // Transport heartbeats detect a dead Dart port; they are not product state.
     if (_disposed || event['type'] == 'runtime.heartbeat') return;
     if (!_stateRecovery.accept(event)) return;
+    _screens.handleEvent(event);
+    _setup.handleEvent(event);
+    _reconnections.handleEvent(event);
     _events.add(event);
     final data = event['data'] is Map
         ? Map<String, dynamic>.from(event['data'] as Map)
@@ -255,6 +380,10 @@ class InteropBridge {
     final data = event['data'] is Map
         ? Map<String, dynamic>.from(event['data'] as Map)
         : const <String, dynamic>{};
+    if (data['visible'] is bool &&
+        event['type'].toString().startsWith('audio.platform.')) {
+      _reconnections.setVisible(data['visible'] as bool);
+    }
     if (event['type'] == 'share.platform.pending') {
       try {
         await _shareIntake.receive(data);
@@ -396,6 +525,30 @@ class InteropBridge {
 
   Stream<Map<String, dynamic>> get events => _events.stream;
 
+  void _emitScreenFailure(Map<String, dynamic> event) {
+    if (_disposed) return;
+    if (_events.hasListener) {
+      _events.add(event);
+    } else {
+      _pendingScreenFailures[event['deviceId'] as String] = event;
+    }
+  }
+
+  void _flushScreenFailures() {
+    if (_disposed || !_events.hasListener) return;
+    final pending = _pendingScreenFailures.values.toList();
+    _pendingScreenFailures.clear();
+    for (final event in pending) {
+      final data = event['data'] as Map;
+      if (_screens.isConnectionCurrent(
+        event['deviceId'] as String,
+        data['connectionId'] as String,
+      )) {
+        _events.add(event);
+      }
+    }
+  }
+
   Future<Map<String, dynamic>> _platformRequest(
     String command,
     Map<String, dynamic> params,
@@ -427,15 +580,11 @@ class InteropBridge {
 
   Future<void> _ensureVideoDecoder(Map<String, dynamic> params) async {
     final settings = await _invoke('settings.get', const {});
-    final overrides = settings['deviceQuality'] is Map
-        ? (settings['deviceQuality'] as Map)[params['deviceId']]
-        : null;
-    final codec =
-        params['videoCodec'] ??
-        params['codec'] ??
-        (overrides is Map ? overrides['videoCodec'] : null) ??
-        settings['videoCodec'] ??
-        'h264';
+    final codec = VideoQualityPolicy.resolve(
+      settings,
+      params['deviceId'] as String?,
+      params,
+    )['videoCodec'];
     final capabilities = await _videoCapabilities();
     final supported = (capabilities['codecs'] as List? ?? const [])
         .whereType<Map<Object?, Object?>>()
@@ -456,6 +605,37 @@ class InteropBridge {
     String command,
     Map<String, dynamic> params,
   ) async {
+    if (command == 'settings.update') {
+      VideoQualityPolicy.validateSettings(params);
+    } else if (command == 'settings.import') {
+      final metadata = params['metadata'];
+      final settings = metadata is Map ? metadata['settings'] : null;
+      if (settings is Map) {
+        VideoQualityPolicy.validateSettings(
+          Map<String, dynamic>.from(settings),
+        );
+      }
+    }
+    if (const [
+      'session.start',
+      'apps.launch',
+      'session.quality',
+    ].contains(command)) {
+      final settings = await _invoke('settings.get', const {});
+      params = {
+        ...params,
+        ...VideoQualityPolicy.resolve(
+          settings,
+          params['deviceId'] as String?,
+          params,
+        ),
+      }..remove('preset');
+    }
+    params = await VirtualDisplayPolicy.prepare(
+      command,
+      params,
+      readSessions: (filter) => _invoke('session.list', filter),
+    );
     if (command == 'session.stop' &&
         const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
       debugPrint(
@@ -463,9 +643,23 @@ class InteropBridge {
       );
     }
     final request = CoreRequest.named(command, params);
-    return request.decodeResponse(
+    final result = request.decodeResponse(
       await core.invoke(requestJson: request.encode()),
     );
+    if (command == 'session.quality.options') {
+      return VideoQualityPolicy.options(
+        result,
+        await _invoke('settings.get', const {}),
+        params['deviceId'] as String?,
+      );
+    }
+    if (command == 'session.quality') {
+      return {
+        ...result,
+        'reason': '设置已保存到这台设备，新建屏幕或应用窗口时生效；已保留的窗口继续使用原设置，关闭后重新打开即可应用。',
+      };
+    }
+    return result;
   }
 
   /// Typed callers and the compatibility string entrypoint share one dispatcher.
@@ -479,6 +673,8 @@ class InteropBridge {
     Map<String, dynamic> params = const {},
   ]) async {
     if (_disposed) throw const InteropException('disposed', '连接界面已关闭。');
+    _setup.beforeRequest(command, params);
+    final finishReconnect = _reconnections.beforeRequest(command, params);
     if (command == 'session.stop' && params['sessionId'] is String) {
       _mediaIntents.stop(params['sessionId'] as String, audio: false);
     } else if (command == 'audio.stop' && params['sourceId'] is String) {
@@ -511,6 +707,7 @@ class InteropBridge {
       return await _request(command, params, intent: intent);
     } finally {
       if (intent != null) _mediaIntents.finish(intent);
+      await finishReconnect();
     }
   }
 
@@ -525,6 +722,16 @@ class InteropBridge {
     if (command == 'state.reconcile') return _stateRecovery.refresh();
     if (_stateRecovery.pending && needsVerifiedState(command, params)) {
       throw const InteropException('state_unverified', '正在重新核验设备状态，完成后再操作。');
+    }
+    if (_setup.handles(command)) {
+      final result = await _setup.request(command, params);
+      if (result['connected'] == true || result['status'] == 'connected') {
+        await _retainConnectionInBackground();
+      }
+      return result;
+    }
+    if (_capabilities.handles(command)) {
+      return _capabilities.request(command, params);
     }
     // Refreshing projections after a gap must not create a new helper. A
     // deliberate user verification may opt in with allowStart=true.
@@ -625,18 +832,6 @@ class InteropBridge {
     if (command == 'devices.cancel' && Platform.isAndroid) {
       await _platform.invokeMethod<void>('usb.cancel', params);
     }
-    if (command == 'devices.usb' &&
-        Platform.isAndroid &&
-        !params.containsKey('fd')) {
-      final permission = await _platform.invokeMethod<Map<dynamic, dynamic>>(
-        'usb.authorize',
-        params,
-      );
-      if (permission == null) {
-        throw const InteropException('cancelled', '尚未允许 USB 访问。');
-      }
-      params = {...params, ...Map<String, dynamic>.from(permission)};
-    }
     if (command == 'audio.volume') {
       final proposed = await _invoke(command, params);
       final applied = await _audioOutputs.volume(
@@ -664,21 +859,10 @@ class InteropBridge {
       });
       return {...updated, ...applied};
     }
-    final Map<String, dynamic> result;
-    try {
-      if (_disposed || intent?.cancelled == true) {
-        throw const InteropException('cancelled', '已停止本次打开，不会重新启动画面或声音。');
-      }
-      result = await _invoke(command, params);
-    } finally {
-      if (Platform.isAndroid &&
-          command == 'devices.usb' &&
-          params['usbLeaseId'] is String) {
-        await _platform.invokeMethod<void>('usb.release', {
-          'usbLeaseId': params['usbLeaseId'],
-        });
-      }
+    if (_disposed || intent?.cancelled == true) {
+      throw const InteropException('cancelled', '已停止本次打开，不会重新启动画面或声音。');
     }
+    final result = await _invoke(command, params);
     if (command == 'settings.get' || command == 'settings.update') {
       await _audioOutputs.policy(result['backgroundKeepAlive'] == true);
     }
@@ -875,25 +1059,28 @@ class InteropBridge {
         await _closeAudio(id);
       }
     }
-    if (Platform.isAndroid &&
-        (command == 'devices.connect' || command == 'devices.usb')) {
-      final settings = await _invoke('settings.get', const {});
-      if (settings['backgroundKeepAlive'] == true) {
-        try {
-          await _platform.invokeMethod<void>('background.request', {
-            'enabled': true,
-          });
-        } catch (error) {
-          if (!_disposed) {
-            _events.add({
-              'type': 'background.failed',
-              'data': {'reason': '$error'},
-            });
-          }
-        }
-      }
+    if (command == 'devices.connect') {
+      await _retainConnectionInBackground();
     }
     return result;
+  }
+
+  Future<void> _retainConnectionInBackground() async {
+    if (!Platform.isAndroid || _disposed) return;
+    final settings = await _invoke('settings.get', const {});
+    if (settings['backgroundKeepAlive'] != true) return;
+    try {
+      await _platform.invokeMethod<void>('background.request', {
+        'enabled': true,
+      });
+    } catch (error) {
+      if (!_disposed) {
+        _events.add({
+          'type': 'background.failed',
+          'data': {'reason': '$error'},
+        });
+      }
+    }
   }
 
   Future<void> _detachCoreEvents() async {
@@ -908,6 +1095,14 @@ class InteropBridge {
 
   Future<void> _dispose() async {
     _disposed = true;
+    _screens.dispose();
+    _pendingScreenFailures.clear();
+    _connectionLifecycle?.dispose();
+    // Freeze both scheduling owners before either release may yield. Releasing
+    // a setup hold must never schedule another reconnect during teardown.
+    final reconnectDisposal = _reconnections.dispose();
+    final setupDisposal = _setup.dispose();
+    await Future.wait([reconnectDisposal, setupDisposal]);
     _systemDelivery.close();
     _stateRecovery.dispose();
     await _documents.dispose();

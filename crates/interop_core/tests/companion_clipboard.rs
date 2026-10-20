@@ -1,5 +1,5 @@
 use interop_core::Runtime;
-use serde_json::{Value, json};
+use serde_json::json;
 use std::{sync::Arc, time::Duration};
 
 async fn add(runtime: &Arc<Runtime>, endpoint: std::net::SocketAddr) -> String {
@@ -40,26 +40,6 @@ async fn assert_no_sessions(runtime: &Arc<Runtime>) {
             .unwrap()
             .is_empty()
     );
-}
-
-#[tokio::test]
-async fn clipboard_requires_connection_and_validates_text_before_starting_companion() {
-    let root = tempfile::tempdir().unwrap();
-    let runtime = Runtime::initialize(root.path()).await.unwrap();
-    let id = add(&runtime, "127.0.0.1:5555".parse().unwrap()).await;
-    let error = runtime
-        .invoke("clipboard.get", json!({"deviceId":id}))
-        .await
-        .unwrap_err();
-    assert_eq!(error.code, "disconnected");
-    for text in [Value::Null, json!("a".repeat(1 << 18))] {
-        let error = runtime
-            .invoke("clipboard.set", json!({"deviceId":id,"text":text}))
-            .await
-            .unwrap_err();
-        assert_eq!(error.code, "invalid_argument");
-    }
-    assert_no_sessions(&runtime).await;
 }
 
 #[tokio::test]

@@ -1,4 +1,5 @@
 //! Selectively lose a control receipt while real Android video and sync survive.
+mod support;
 use interop_adb::{CancellationToken, protocol};
 use interop_core::Runtime;
 use serde_json::{Value, json};
@@ -151,7 +152,7 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
     let session = invoke(
         &runtime,
         "session.start",
-        json!({"deviceId":device,"maxSize":640,"maxFps":15}),
+        support::media_params(json!({"deviceId":device,"maxSize":640,"maxFps":15})),
     )
     .await
     .unwrap();

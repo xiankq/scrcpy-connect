@@ -1,24 +1,33 @@
 //! Idle connection health, independent of observation and control sessions.
-//! Only silence across two bounded ADB OPENs can retire a transport. A busy
+//! Only silence across the configured number of bounded ADB OPENs can retire a transport. A busy
 //! stream is stronger evidence of health than any individual service response.
 use interop_adb::{Client, Error, OperationOptions};
 use std::{collections::HashMap, time::Duration};
 use tokio::{sync::oneshot, task::JoinHandle, time::Instant};
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
 const IDLE: Duration = Duration::from_secs(10);
-const PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 
-#[derive(Default)]
 pub(crate) struct ConnectionHealth {
     connections: HashMap<String, Health>,
+    failure_limit: u32,
+}
+
+impl Default for ConnectionHealth {
+    fn default() -> Self {
+        Self {
+            connections: HashMap::new(),
+            failure_limit: 2,
+        }
+    }
 }
 
 struct Health {
     client: Client,
     activity: usize,
     last_activity: Instant,
-    timeouts: u8,
+    timeouts: u32,
     probe: Option<Probe>,
 }
 
@@ -67,8 +76,22 @@ impl Drop for Probe {
 impl ConnectionHealth {
     /// Called with the current connection map locked. Tasks only report their
     /// outcome; they can never close a replacement connection or retain Runtime.
-    pub(crate) fn tick(&mut self, connections: &HashMap<String, Client>) {
-        self.tick_at(connections, Instant::now(), IDLE, PROBE_TIMEOUT);
+    pub(crate) fn tick(
+        &mut self,
+        connections: &HashMap<String, Client>,
+        policy: &crate::ConnectionPolicy,
+    ) {
+        if !policy.health_enabled {
+            self.connections.clear();
+            return;
+        }
+        self.failure_limit = policy.health_failure_limit;
+        self.tick_at(
+            connections,
+            Instant::now(),
+            Duration::from_millis(policy.health_idle_ms),
+            Duration::from_millis(policy.health_probe_timeout_ms),
+        );
     }
 
     fn tick_at(
@@ -110,7 +133,7 @@ impl ConnectionHealth {
                         health.probe = None;
                         if timed_out {
                             health.timeouts += 1;
-                            if health.timeouts == 2 {
+                            if health.timeouts >= self.failure_limit {
                                 // Recheck after collecting the result, so traffic
                                 // racing this tick also rescues the connection.
                                 if client.inbound_activity() == health.activity {
@@ -197,6 +220,27 @@ mod tests {
         assert_eq!(close.command, protocol::CLSE);
         assert_eq!(close.arg0, open.arg0);
         tokio::task::yield_now().await;
+    }
+
+    #[tokio::test]
+    async fn host_policy_can_disable_health_and_select_failure_threshold() {
+        let (client, mut peer) = connection();
+        let connections = HashMap::from([("device".into(), client.clone())]);
+        let mut health = ConnectionHealth::default();
+        let mut policy = crate::ConnectionPolicy::standalone();
+        policy.health_enabled = false;
+        health.tick(&connections, &policy);
+        assert!(health.connections.is_empty());
+        policy.health_enabled = true;
+        policy.health_failure_limit = 1;
+        health.tick(&connections, &policy);
+        assert_eq!(health.failure_limit, 1);
+        let start = Instant::now();
+        health.tick_at(&connections, start + IDLE, IDLE, TIMEOUT);
+        let open = receive(&mut peer).await;
+        expired(&mut peer, &open).await;
+        health.tick_at(&connections, start + IDLE + TIMEOUT, IDLE, TIMEOUT);
+        assert!(client.is_closed());
     }
 
     #[tokio::test]

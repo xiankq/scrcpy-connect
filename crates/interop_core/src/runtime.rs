@@ -16,6 +16,8 @@ use tokio::{
 };
 
 pub struct Runtime {
+    pub connection_policy: crate::ConnectionPolicy,
+    pub settings_defaults: Value,
     pub(crate) root: PathBuf,
     pub(crate) identities: crate::host_identity::IdentityOwner,
     pub(crate) metadata_updates: tokio::sync::mpsc::Sender<crate::device_metadata::Request>,
@@ -38,12 +40,32 @@ pub struct Runtime {
     pub(crate) app_opens: crate::app_open::AppOpens,
     pub(crate) media: crate::media::http::MediaStreams,
     pub(crate) media_cache: crate::media_cache::MediaCache,
-    pub(crate) qr_attempt: Mutex<Option<(String, tokio_util::sync::CancellationToken)>>,
+    pub(crate) setup_operations: crate::connection_setup::SetupOperations,
+    pub(crate) discovered_services: crate::device::DiscoveredServices,
+    pub(crate) reconnect_owner: Mutex<Option<crate::connections::ReconnectLease>>,
     pub(crate) device_operations: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
 }
 
 impl Runtime {
     pub async fn initialize(root: impl AsRef<Path>) -> CoreResult<Arc<Self>> {
+        Self::initialize_with_connection_policy(root, crate::ConnectionPolicy::standalone()).await
+    }
+
+    pub async fn initialize_with_connection_policy(
+        root: impl AsRef<Path>,
+        connection_policy: crate::ConnectionPolicy,
+    ) -> CoreResult<Arc<Self>> {
+        Self::initialize_with_settings(root, connection_policy, json!({})).await
+    }
+
+    pub async fn initialize_with_settings(
+        root: impl AsRef<Path>,
+        connection_policy: crate::ConnectionPolicy,
+        settings_defaults: Value,
+    ) -> CoreResult<Arc<Self>> {
+        connection_policy.validate()?;
+        let settings_defaults =
+            crate::preferences::validated_settings(&json!({}), &settings_defaults)?;
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(&root).await?;
         let root = fs::canonicalize(&root).await?;
@@ -76,7 +98,7 @@ impl Runtime {
                 identity_fingerprint: fingerprint.clone(),
                 device_identity_fingerprints: HashMap::new(),
                 devices: Vec::new(),
-                settings: crate::preferences::defaults(),
+                settings: settings_defaults.clone(),
             },
             Err(e) => return Err(e.into()),
         };
@@ -87,12 +109,11 @@ impl Runtime {
             ));
         }
         crate::preferences::remove_retired_settings(&mut store.settings);
-        let defaults = crate::preferences::defaults();
         let settings = store
             .settings
             .as_object_mut()
             .ok_or_else(|| CoreError::new("invalid_data", "本机设置记录损坏。"))?;
-        for (key, value) in defaults.as_object().unwrap() {
+        for (key, value) in settings_defaults.as_object().unwrap() {
             settings.entry(key.clone()).or_insert_with(|| value.clone());
         }
         let identity_changed = store.identity_fingerprint != fingerprint;
@@ -127,6 +148,8 @@ impl Runtime {
         let (metadata_updates, metadata_requests) = tokio::sync::mpsc::channel(64);
         let metadata_lifetime = tokio_util::sync::CancellationToken::new();
         let runtime = Arc::new(Self {
+            connection_policy,
+            settings_defaults,
             root,
             identities,
             metadata_updates,
@@ -149,7 +172,9 @@ impl Runtime {
             app_opens,
             media: crate::media::http::MediaStreams::default(),
             media_cache,
-            qr_attempt: Mutex::new(None),
+            setup_operations: Default::default(),
+            discovered_services: Default::default(),
+            reconnect_owner: Mutex::new(None),
             device_operations: Mutex::new(HashMap::new()),
         });
         runtime.restore_transfers().await?;
@@ -275,18 +300,26 @@ impl Runtime {
             return self.identity_command(command, &params).await;
         }
         match command {
+            command if command.starts_with("adb.") => {
+                Box::pin(self.adb_command(command, &params)).await
+            }
             "observation.start" | "observation.stop" | "observation.status"
             | "observation.list" => self.observation_command(command, &params).await,
             "state.snapshot" => Box::pin(self.state_snapshot()).await,
-            "devices.list" => Ok(json!({"devices":self.store.read().await.devices})),
+            "devices.list" => Ok(json!({"devices":self.projected_devices().await})),
             "devices.add" => Box::pin(self.add_device(&params)).await,
             "devices.connect" => {
                 Box::pin(self.connect_device_with_attempt(
                     required(&params, "deviceId")?,
                     params["attemptId"].as_str(),
+                    params["automatic"] == true,
+                    params["ownerId"].as_str(),
+                    params["candidateSource"].as_str(),
+                    params["parentOperationId"].as_str(),
                 ))
                 .await
             }
+            "devices.reconnect.owner" => self.reconnect_owner_command(&params).await,
             "devices.disconnect" | "devices.forget" => {
                 Box::pin(
                     self.disconnect_device(
@@ -298,18 +331,16 @@ impl Runtime {
             }
             "devices.rename" => Box::pin(self.rename_device(&params)).await,
             "devices.discover" => Box::pin(self.discover_devices()).await,
-            "devices.pair" => Box::pin(self.pair_device(&params)).await,
-            "devices.pair.qr" => Box::pin(self.qr_pairing(&params)).await,
-            "devices.usb" => Box::pin(self.usb_devices(&params)).await,
-            "devices.wireless" => Box::pin(self.enable_wireless(&params)).await,
-            "devices.wake" => Box::pin(self.wake_device(required(&params, "deviceId")?)).await,
+            "devices.wake" => {
+                Box::pin(self.wake_device(
+                    required(&params, "deviceId")?,
+                    params["connectionId"].as_str(),
+                ))
+                .await
+            }
             "device.info" => Ok(serde_json::to_value(
                 self.device(required(&params, "deviceId")?).await?,
             )?),
-            "device.capabilities" => {
-                Box::pin(self.capabilities(required(&params, "deviceId")?)).await
-            }
-            "device.diagnose" => Box::pin(self.diagnose(required(&params, "deviceId")?)).await,
             "files.list" => Box::pin(self.list_files(&params)).await,
             "files.search.start" | "files.search.get" | "files.search.cancel" => {
                 self.file_search_command(command, &params).await
@@ -347,6 +378,7 @@ impl Runtime {
             | "session.key"
             | "session.text"
             | "session.screen"
+            | "session.display"
             | "session.quality"
             | "session.screenshot"
             | "session.ready"

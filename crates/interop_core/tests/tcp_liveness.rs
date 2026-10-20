@@ -221,7 +221,7 @@ async fn state_event(events: &mut broadcast::Receiver<Value>, id: &str, status: 
 
 #[tokio::test]
 #[ignore = "requires SO_ATTACH_FILTER permission; Android AVD shell su 0 or a permitted Linux process"]
-async fn runtime_reconnects_after_tls_tcp_blackhole_and_disconnect_prevents_revival() {
+async fn caller_recovers_after_tls_tcp_blackhole_and_disconnect_prevents_revival() {
     let mut peer = Peer::start().await;
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
@@ -269,13 +269,29 @@ async fn runtime_reconnects_after_tls_tcp_blackhole_and_disconnect_prevents_revi
         .expect("first accepted socket must stay alive")
         .expect("this ignored test requires socket-filter permission");
 
-    let (offline, reconnected) = tokio::time::timeout(RECOVERY_DEADLINE, async {
-        let offline = state_event(&mut events, &id, "offline").await;
-        let reconnected = state_event(&mut events, &id, "connected").await;
-        (offline, reconnected)
-    })
+    let offline = tokio::time::timeout(RECOVERY_DEADLINE, state_event(&mut events, &id, "offline"))
+        .await
+        .expect("native transport policy must retire the blackholed TLS connection");
+    assert!(
+        peer.accepted.try_recv().is_err(),
+        "native has no automatic retry scheduler"
+    );
+    invoke(
+        &runtime,
+        "devices.reconnect.owner",
+        json!({"ownerId":"dart-tcp-fixture","active":true}),
+    )
     .await
-    .expect("blackholed TLS transport must become offline and automatically reconnect");
+    .unwrap();
+    assert_eq!(invoke(&runtime, "devices.connect", json!({
+        "deviceId":id,"automatic":true,"ownerId":"dart-tcp-fixture","attemptId":"tcp-recovery"
+    })).await.unwrap()["connected"], true);
+    let reconnected = tokio::time::timeout(
+        Duration::from_secs(3),
+        state_event(&mut events, &id, "connected"),
+    )
+    .await
+    .unwrap();
     assert!(reconnected["sequence"].as_u64().unwrap() > offline["sequence"].as_u64().unwrap());
     assert_eq!(
         tokio::time::timeout(Duration::from_secs(2), peer.accepted.recv())
@@ -310,6 +326,10 @@ async fn runtime_reconnects_after_tls_tcp_blackhole_and_disconnect_prevents_revi
         Some(2),
         "explicit disconnect must close the replacement transport",
     );
+    let late = invoke(&runtime, "devices.connect", json!({
+        "deviceId":id,"automatic":true,"ownerId":"dart-tcp-fixture","attemptId":"late-tcp-recovery"
+    })).await.unwrap_err();
+    assert_eq!(late.code, "cancelled");
     // Observe actual accept events for more than two monitor periods, instead
     // of sleeping and merely checking a remembered connection status.
     assert!(

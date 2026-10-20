@@ -1,5 +1,6 @@
 //! Opt-in tests use the Rust ADB host and the pinned official scrcpy JAR.
 //! Official adb is only used by the external harness to expose authorized adbd.
+mod support;
 use interop_core::Runtime;
 use serde_json::{Value, json};
 use std::{process::Stdio, time::Duration};
@@ -191,9 +192,10 @@ async fn enumerate_actual_encoders_decode_multiple_codecs_and_preserve_old_sessi
             continue;
         }
         let encoder = entry["encoders"][0]["name"].as_str().unwrap();
-        runtime.invoke("session.quality", json!({"deviceId":id,"videoCodec":codec,"videoEncoder":encoder,"maxSize":720,"maxFps":15,"videoBitRate":1_000_000})).await.unwrap();
+        runtime.invoke("session.quality", support::media_params(json!({"deviceId":id,"videoCodec":codec,"videoEncoder":encoder,"maxSize":720,"maxFps":15,"videoBitRate":1_000_000}))).await.unwrap();
         let session = match runtime
-            .invoke("session.start", json!({"deviceId":id}))
+            .invoke("session.start", support::media_params(json!({"deviceId":id,
+                "videoCodec":codec,"videoEncoder":encoder,"maxSize":720,"maxFps":15,"videoBitRate":1_000_000})))
             .await
         {
             Ok(session) => session,
@@ -210,7 +212,7 @@ async fn enumerate_actual_encoders_decode_multiple_codecs_and_preserve_old_sessi
         let mut socket = video_socket(&session).await;
         let packets = keyframe(&mut socket).await;
         if codec == "h264" {
-            let bad = runtime.invoke("session.quality", json!({"deviceId":id,"sessionId":session["sessionId"],"videoCodec":"h265","videoEncoder":"interop.no.such.encoder"})).await.unwrap_err();
+            let bad = runtime.invoke("session.quality", support::media_params(json!({"deviceId":id,"sessionId":session["sessionId"],"videoCodec":"h265","videoEncoder":"interop.no.such.encoder"}))).await.unwrap_err();
             assert_eq!(bad.code, "encoder_unavailable");
             let still = runtime
                 .invoke("session.list", json!({"deviceId":id}))
@@ -228,7 +230,7 @@ async fn enumerate_actual_encoders_decode_multiple_codecs_and_preserve_old_sessi
                 .await
                 .unwrap();
             assert!(clipboard["text"].is_string());
-            let same = runtime.invoke("session.quality", json!({"deviceId":id,"sessionId":session["sessionId"],"videoCodec":"h264","videoEncoder":encoder,"maxSize":1280})).await.unwrap();
+            let same = runtime.invoke("session.quality", support::media_params(json!({"deviceId":id,"sessionId":session["sessionId"],"videoCodec":"h264","videoEncoder":encoder,"maxSize":1280}))).await.unwrap();
             assert_eq!(same["appliesNextSession"], true);
             assert_eq!(same["needsRestart"], true);
             let current = runtime
@@ -247,25 +249,19 @@ async fn enumerate_actual_encoders_decode_multiple_codecs_and_preserve_old_sessi
     }
     // Explicit start options affect only this new session, not whichever
     // per-device selection the actual device exposed in the loop above.
-    let saved = runtime
-        .invoke("session.quality.options", json!({"deviceId":id}))
-        .await
-        .unwrap();
+    let saved = runtime.invoke("settings.get", json!({})).await.unwrap();
     let h264 = available
         .iter()
         .find(|entry| entry["id"] == "h264")
         .unwrap();
-    let override_session = runtime.invoke("session.start", json!({"deviceId":id,"videoCodec":"h264","videoEncoder":h264["encoders"][0]["name"],"maxSize":640})).await.unwrap();
+    let override_session = runtime.invoke("session.start", support::media_params(json!({"deviceId":id,"videoCodec":"h264","videoEncoder":h264["encoders"][0]["name"],"maxSize":640}))).await.unwrap();
     assert_eq!(override_session["codec"], "h264");
     assert_eq!(override_session["quality"]["maxSize"], 640);
     let mut socket = video_socket(&override_session).await;
     let packets = keyframe(&mut socket).await;
     decode("h264", &packets, &override_session).await;
-    let unchanged = runtime
-        .invoke("session.quality.options", json!({"deviceId":id}))
-        .await
-        .unwrap();
-    assert_eq!(unchanged["current"], saved["current"]);
+    let unchanged = runtime.invoke("settings.get", json!({})).await.unwrap();
+    assert_eq!(unchanged["deviceQuality"][id], saved["deviceQuality"][id]);
     runtime
         .invoke(
             "session.stop",

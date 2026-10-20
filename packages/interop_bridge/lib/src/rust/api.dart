@@ -7,8 +7,15 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-Future<void> initialize({required String dataDirectory}) =>
-    RustLib.instance.api.crateApiInitialize(dataDirectory: dataDirectory);
+Future<void> initialize({
+  required String dataDirectory,
+  required String connectionPolicyJson,
+  required String settingsDefaultsJson,
+}) => RustLib.instance.api.crateApiInitialize(
+  dataDirectory: dataDirectory,
+  connectionPolicyJson: connectionPolicyJson,
+  settingsDefaultsJson: settingsDefaultsJson,
+);
 
 Future<String> invoke({required String requestJson}) =>
     RustLib.instance.api.crateApiInvoke(requestJson: requestJson);

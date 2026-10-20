@@ -1,6 +1,7 @@
 //! Runtime activity behavior against an ADB wire peer. The peer accepts the
 //! real server upload and exposes scrcpy's raw-audio handshake; it does not
 //! assert Android capture or native playback support.
+mod support;
 use interop_adb::protocol::{self, Frame};
 use interop_core::Runtime;
 use serde_json::{Value, json};
@@ -197,7 +198,10 @@ impl Peer {
         // Audio ownership requires an opened control session. This wire peer
         // models its process/video/control handshake without claiming decoding.
         runtime
-            .invoke("session.start", json!({"deviceId":device}))
+            .invoke(
+                "session.start",
+                support::media_params(json!({"deviceId":device})),
+            )
             .await
             .unwrap();
         device

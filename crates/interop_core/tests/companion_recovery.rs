@@ -27,7 +27,7 @@ async fn recovery_queries_do_not_start_an_observer_or_require_a_connection() {
         assert_eq!(result["live"], false);
         assert_eq!(result[collection], json!([]));
     }
-    for command in ["clipboard.get", "notifications.dismiss"] {
+    for command in ["clipboard.get", "notifications.dismiss", "calls.open"] {
         let error = runtime
             .invoke(command, json!({"deviceId":id,"allowStart":false}))
             .await
@@ -39,6 +39,7 @@ async fn recovery_queries_do_not_start_an_observer_or_require_a_connection() {
         "recovery must not start a helper"
     );
     let snapshot = runtime.invoke("state.snapshot", json!({})).await.unwrap();
+    assert_eq!(snapshot["observations"][0]["calls"]["live"], false);
     assert_eq!(
         snapshot["companions"][0]["state"]["notifications"]["live"],
         false

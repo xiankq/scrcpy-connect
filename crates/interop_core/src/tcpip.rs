@@ -1,12 +1,14 @@
-//! Explicit adbd TCP listener transition. A restart receipt is never connection proof.
+//! Native TCP listener execution and verified endpoint admission. No retry scheduler.
 use crate::{
     CoreError, CoreResult, Runtime,
+    connection_setup::PendingResource,
     device::{endpoint, host, metadata, port},
     model::required,
 };
 use interop_adb::{Client, OperationOptions};
 use serde_json::{Value, json};
 use std::time::Duration;
+#[cfg(test)]
 use tokio_util::sync::CancellationToken;
 
 struct SourceConnection(Client);
@@ -16,227 +18,209 @@ impl Drop for SourceConnection {
     }
 }
 
-fn requested_port(params: &Value) -> CoreResult<u16> {
-    if params.get("port").is_some() {
-        port(params)
-    } else {
-        Ok(5555)
-    }
-}
-fn restart_confirmed(response: &[u8], port: u16) -> bool {
-    std::str::from_utf8(response)
-        .is_ok_and(|value| value.trim() == format!("restarting in TCP mode port: {port}"))
-}
-async fn request_restart(client: &Client, port: u16, token: CancellationToken) -> CoreResult<()> {
-    let options = OperationOptions {
-        timeout: Duration::from_secs(10),
-        cancellation: token,
-    };
-    let cancellation = options.cancellation.clone();
-    let mut stream = client
-        .open(&format!("tcpip:{port}"), options)
-        .await
-        .map_err(|_| {
-            CoreError::new(
-                "wireless_setup_unknown",
-                "未能确认设备是否接收监听切换请求，请核对设备当前监听状态。",
-            )
-        })?;
-    let mut bytes = Vec::new();
-    let read_result = tokio::time::timeout(Duration::from_secs(10), async {
-        let mut buffer = [0; 1024];
-        loop {
-            match stream.read(&mut buffer).await {
-                Ok(0) => break,
-                Ok(count) if bytes.len() + count <= 8192 => {
-                    bytes.extend_from_slice(&buffer[..count])
-                }
-                Ok(_) => {
-                    return Err(CoreError::new(
-                        "wireless_setup_unknown",
-                        "设备返回了过长的监听切换结果，请核对设备当前监听状态。",
-                    ));
-                }
-                Err(interop_adb::Error::Closed) if !bytes.is_empty() => break,
-                Err(_) => {
-                    return Err(CoreError::new(
-                        "wireless_setup_unknown",
-                        "连接在确认监听切换前中断，请核对设备当前监听状态。",
-                    ));
-                }
-            }
-        }
-        if restart_confirmed(&bytes, port) {
-            Ok(())
-        } else {
-            Err(CoreError::new(
-                "wireless_setup_failed",
-                "设备未确认在指定端口开启 TCP 监听，请检查设备设置后重试。",
-            ))
-        }
-    });
-    tokio::select! {
-        _ = cancellation.cancelled() => Err(CoreError::new("cancelled", "监听切换已取消，请核对设备当前监听状态。")),
-        result = read_result => result.map_err(|_| CoreError::new("wireless_setup_unknown", "等待监听切换结果超时，请核对设备当前监听状态。"))?,
-    }
-}
 impl Runtime {
-    pub(crate) async fn enable_wireless(&self, params: &Value) -> CoreResult<Value> {
+    pub(crate) async fn tcpip_begin(&self, params: &Value) -> CoreResult<Value> {
         let id = required(params, "deviceId")?;
-        let address = host(params)?;
-        let port = requested_port(params)?;
-        let token = CancellationToken::new();
-        // Cancellation owns this token before any source I/O or transition wait.
-        // Never install a fresh token after a cancelled metadata request returns.
-        if let Some(previous) = self
-            .device_operations
-            .lock()
-            .await
-            .insert(id.into(), token.clone())
-        {
-            previous.cancel();
-        }
-        let mut cleanup = self.connections.transition(id).await;
-        if token.is_cancelled() {
-            return Err(CoreError::new("cancelled", "连接切换已取消。"));
-        }
-        let record = self.device(id).await?;
-        let client = self.client(id).await?;
+        let expected = required(params, "connectionId")?;
+        let port = port(params)?;
         let material = self.identities.selected(Some(id)).await?;
-        let source = metadata(&client, token.clone()).await;
-        if token.is_cancelled() {
-            return Err(CoreError::new("cancelled", "连接切换已取消。"));
-        }
-        let serial = source.serial.as_deref().ok_or_else(|| {
-            CoreError::new(
-                "device_identity_unverified",
-                "无法读取当前设备序列号，暂不能安全切换连接。",
-            )
-        })?;
-        if record
-            .serial
-            .as_deref()
-            .is_some_and(|known| known != serial)
-        {
-            return Err(CoreError::new(
-                "device_identity_mismatch",
-                "当前连接的设备身份与记录不同。",
-            ));
-        }
-        {
-            let _pending = self.device_operations.lock().await;
-            if token.is_cancelled() {
-                return Err(CoreError::new("cancelled", "连接切换已取消。"));
+        let op = self
+            .new_setup_operation(params, Some(id), material.fingerprint.clone())
+            .await?;
+        let result = async {
+            let mut cleanup = self.connections.transition(id).await;
+            op.check()?;
+            let record = self.device(id).await?;
+            let client = self.client(id).await?;
+            if client.connection_id().to_string() != expected {
+                return Err(CoreError::new("stale_connection", "源连接已替换。"));
             }
-            let mut store = self.store.write().await;
-            let mut connections = self.connections.lock().await;
-            *cleanup = true;
-            connections.remove(id);
-            if let Some(record) = store.devices.iter_mut().find(|record| record.id == id) {
-                record.serial = Some(serial.into());
-                record.status = "connecting".into();
-                record.auto_reconnect = false;
-                record.reason = Some("正在切换 TCP 监听；原连接活动已停止。".into());
-            }
-        }
-        let _source_owner = SourceConnection(client.clone());
-        self.stop_device_activities(id).await?;
-        self.changed_devices().await?;
-        let restart = request_restart(&client, port, token.clone()).await;
-        client.close();
-        *cleanup = false;
-        if let Err(error) = restart {
-            self.tcpip_failed(id, &token, &error).await?;
-            return Err(error);
-        }
-        {
-            let _pending = self.device_operations.lock().await;
-            if token.is_cancelled() {
+            let source = metadata(&client, op.token.clone()).await;
+            op.check()?;
+            let serial = source.serial.ok_or_else(|| {
+                CoreError::new("device_identity_unverified", "源设备序列号不可用。")
+            })?;
+            if record.serial.as_ref().is_some_and(|known| known != &serial) {
                 return Err(CoreError::new(
-                    "cancelled",
-                    "连接切换已取消，请核对设备当前监听状态。",
+                    "device_identity_mismatch",
+                    "源设备序列号不匹配。",
                 ));
             }
-            let mut store = self.store.write().await;
-            let record = store
-                .devices
-                .iter_mut()
-                .find(|device| device.id == id)
-                .ok_or_else(|| CoreError::new("not_found", "设备记录已移除。"))?;
-            record.status = "connecting".into();
-            record.reason = Some("设备已确认 TCP 监听，正在核验目标设备身份。".into());
-        }
-        self.changed_devices().await?;
-        drop(cleanup);
-        let result = tokio::time::timeout(Duration::from_secs(20), async {
-            loop {
-                if token.is_cancelled() { return Err(CoreError::new("cancelled", "连接切换已取消。")); }
-                let mut options = self.connect_options_for(Some(id), token.clone()).await?;
-                if crate::host_identity::fingerprint(options.identity.as_ref().expect("selected identity"))? != material.fingerprint {
-                    return Err(CoreError::new("identity_changed", "授权身份已改变，请重新连接。"));
-                }
-                options.operations.timeout = Duration::from_secs(4);
-                match Client::connect_tcp(endpoint(&address, port), options).await {
-                    Ok(client) => {
-                        let mut info = metadata(&client, token.clone()).await;
-                        if info.serial.as_deref() != Some(serial) {
-                            client.close();
-                            return Err(CoreError::new(if info.serial.is_some() {"device_identity_mismatch"} else {"device_identity_unverified"}, "目标地址的设备身份无法与原设备核验，请检查地址后重试。"));
-                        }
-                        info.host_identity = Some(material.fingerprint.clone());
-                        return Ok((client, info));
-                    }
-                    Err(interop_adb::Error::AuthorizationRequired) => return Err(CoreError::new("authorization_required", "TCP 连接需要在被控设备重新确认授权。")),
-                    Err(interop_adb::Error::Cancelled) => return Err(CoreError::new("cancelled", "连接切换已取消。")),
-                    Err(_) => tokio::select! {
-                        _ = token.cancelled() => return Err(CoreError::new("cancelled", "连接切换已取消。")),
-                        _ = tokio::time::sleep(Duration::from_millis(300)) => {},
-                    },
-                }
-            }
-        }).await.unwrap_or_else(|_| Err(CoreError::new("timeout", "TCP 监听已开启，但目标地址尚未连接；请核对地址和端口后重试。")));
-        let result = match result {
-            Ok((client, info)) => {
-                self.attach_tcpip_client(id, client, info, &token, (address, port))
+            {
+                let _pending = self.device_operations.lock().await;
+                op.check()?;
+                self.identities
+                    .state
+                    .read()
                     .await
-            }
-            Err(error) => Err(error),
-        };
-        match result {
-            Ok(mut receipt) => {
-                receipt["enabled"] = json!(true);
-                receipt["port"] = json!(port);
-                receipt["encrypted"] = json!(false);
-                Ok(receipt)
-            }
-            Err(error) => {
-                self.tcpip_failed(id, &token, &error).await?;
-                Err(error)
-            }
-        }
-    }
-    async fn tcpip_failed(
-        &self,
-        id: &str,
-        token: &CancellationToken,
-        error: &CoreError,
-    ) -> CoreResult<()> {
-        let _pending = self.device_operations.lock().await;
-        if !token.is_cancelled() {
-            let mut store = self.store.write().await;
-            if let Some(record) = store.devices.iter_mut().find(|device| device.id == id) {
-                record.status = if error.code == "authorization_required" {
-                    "unauthorized"
-                } else {
-                    "offline"
+                    .validate(id, &op.identity)?;
+                let mut store = self.store.write().await;
+                let mut connections = self.connections.lock().await;
+                if !connections
+                    .get(id)
+                    .is_some_and(|current| current.same_connection(&client))
+                {
+                    return Err(CoreError::new("stale_connection", "源连接已替换。"));
                 }
-                .into();
+                *cleanup = true;
+                connections.remove(id);
+                let record = store
+                    .devices
+                    .iter_mut()
+                    .find(|d| d.id == id)
+                    .ok_or_else(|| CoreError::new("not_found", "设备记录已移除。"))?;
+                record.serial = Some(serial.clone());
+                record.status = "connecting".into();
                 record.auto_reconnect = false;
-                record.reason = Some(error.message.clone());
+                record.reason = None;
             }
+            let source_owner = SourceConnection(client.clone());
+            self.stop_device_activities(id).await?;
+            self.changed_devices().await?;
+            let response = client
+                .tcpip(
+                    port,
+                    OperationOptions {
+                        timeout: Duration::from_millis(
+                            self.connection_policy.tcpip_restart_timeout_ms,
+                        ),
+                        cancellation: op.token.clone(),
+                    },
+                )
+                .await;
+            drop(source_owner);
+            *cleanup = false;
+            {
+                let mut store = self.store.write().await;
+                if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
+                    record.status = "offline".into();
+                }
+            }
+            self.changed_devices().await?;
+            let response = response.map_err(|error| {
+                CoreError::new(
+                    if matches!(error, interop_adb::Error::Cancelled) {
+                        "cancelled"
+                    } else {
+                        "wireless_setup_unknown"
+                    },
+                    "监听切换执行未取得完整响应。",
+                )
+            })?;
+            op.check()?;
+            *op.resource.lock().expect("operation resource poisoned") =
+                PendingResource::Tcpip { serial, port };
+            Ok(json!({"operationId":op.id,"deviceId":id,"port":port,"responseBytes":response}))
         }
-        drop(_pending);
-        self.changed_devices().await
+        .await;
+        self.setup_outcome(&op, &result);
+        result
+    }
+    pub(crate) async fn tcpip_connect(&self, params: &Value) -> CoreResult<Value> {
+        let op = self
+            .setup_operations
+            .get(required(params, "operationId")?)
+            .await?;
+        let _execution = op
+            .execution
+            .try_lock()
+            .map_err(|_| CoreError::new("operation_busy", "执行正在进行。"))?;
+        let id = op
+            .device_id()
+            .ok_or_else(|| CoreError::new("invalid_operation", "执行没有设备身份。"))?;
+        let address = host(params)?;
+        let (serial, port) = {
+            let resource = op.resource.lock().expect("operation resource poisoned");
+            match &*resource {
+                PendingResource::Tcpip { serial, port } => (serial.clone(), *port),
+                _ => return Err(CoreError::new("invalid_operation", "执行不是TCP监听转换。")),
+            }
+        };
+        let result = async {
+            op.check()?;
+            let mut options = self
+                .connect_options_for(Some(&id), op.token.clone())
+                .await?;
+            if crate::host_identity::fingerprint(options.identity.as_ref().expect("identity"))?
+                != op.identity
+            {
+                return Err(CoreError::new("identity_changed", "授权身份已改变。"));
+            }
+            options.operations.timeout =
+                Duration::from_millis(self.connection_policy.tcpip_attempt_timeout_ms);
+            {
+                let pending = self.device_operations.lock().await;
+                op.check()?;
+                if pending.get(&id) != Some(&op.token) {
+                    return Err(CoreError::new("cancelled", "执行已被替换。"));
+                }
+                let mut store = self.store.write().await;
+                let record = store
+                    .devices
+                    .iter_mut()
+                    .find(|d| d.id == id)
+                    .ok_or_else(|| CoreError::new("not_found", "设备记录已移除。"))?;
+                record.status = "connecting".into();
+            }
+            self.changed_devices().await?;
+            let client = Client::connect_tcp(endpoint(&address, port), options)
+                .await
+                .map_err(|error| match error {
+                    interop_adb::Error::Io(error) => CoreError::new(
+                        if error.kind() == std::io::ErrorKind::PermissionDenied {
+                            "permission_denied"
+                        } else {
+                            "unreachable"
+                        },
+                        error.to_string(),
+                    ),
+                    other => CoreError::from(other),
+                })?;
+            let guarded = client.clone();
+            let mut info = metadata(&client, op.token.clone()).await;
+            if info.serial.as_deref() != Some(&serial) {
+                guarded.close();
+                return Err(CoreError::new(
+                    if info.serial.is_some() {
+                        "device_identity_mismatch"
+                    } else {
+                        "device_identity_unverified"
+                    },
+                    "目标设备序列号无法与源设备核对。",
+                ));
+            }
+            info.host_identity = Some(op.identity.clone());
+            let receipt = self
+                .attach_tcpip_client(&id, client, info, &op.token, (address, port))
+                .await;
+            if receipt.is_err() {
+                guarded.close();
+            }
+            if receipt.is_ok() {
+                *op.resource.lock().expect("operation resource poisoned") = PendingResource::None;
+            }
+            receipt
+        }
+        .await;
+        if let Err(error) = &result {
+            let pending = self.device_operations.lock().await;
+            if !op.token.is_cancelled() && pending.get(&id) == Some(&op.token) {
+                let mut store = self.store.write().await;
+                if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
+                    record.status = if error.code == "authorization_required" {
+                        "unauthorized"
+                    } else {
+                        "offline"
+                    }
+                    .into();
+                    record.reason = Some(error.message.clone());
+                }
+            }
+            drop(pending);
+            self.changed_devices().await?;
+        }
+        self.setup_outcome(&op, &result);
+        result
     }
 }
 
@@ -244,25 +228,24 @@ impl Runtime {
 mod tests {
     use super::*;
     use crate::model::TransportKind;
-    #[test]
-    fn listener_port_is_validated_and_receipt_binds_exact_requested_port() {
-        assert_eq!(requested_port(&json!({})).unwrap(), 5555);
-        assert_eq!(requested_port(&json!({"port":65535})).unwrap(), 65535);
-        for value in [json!(0), json!(-1), json!(65536), json!(1.5), json!("bad")] {
-            assert!(requested_port(&json!({"port":value})).is_err());
+    impl Runtime {
+        // This test driver models the two explicit caller-owned stages, with
+        // no retry: source/target fixtures are already listening.
+        async fn raw_tcpip(&self, params: Value) -> CoreResult<Value> {
+            let id = required(&params, "deviceId")?;
+            let client = self.client(id).await?;
+            let port = params["port"].as_u64().unwrap_or(5555);
+            let begin=self.tcpip_begin(&json!({"deviceId":id,"connectionId":client.connection_id().to_string(),"port":port,"attemptId":uuid::Uuid::new_v4().to_string(),"leaseMs":180000})).await?;
+            let mut receipt = self
+                .tcpip_connect(
+                    &json!({"operationId":begin["operationId"],"address":params["address"]}),
+                )
+                .await?;
+            receipt["enabled"] = json!(true);
+            receipt["port"] = json!(port);
+            receipt["encrypted"] = json!(false);
+            Ok(receipt)
         }
-        assert!(restart_confirmed(
-            b"restarting in TCP mode port: 5555\n",
-            5555
-        ));
-        assert!(!restart_confirmed(
-            b"restarting in TCP mode port: 5556\n",
-            5555
-        ));
-        assert!(!restart_confirmed(
-            b"error: restarting in TCP mode port: 5555",
-            5555
-        ));
     }
     use interop_adb::{
         DeviceInfo,
@@ -437,10 +420,7 @@ mod tests {
         let (port, _target) = target("serial-original").await;
         let receipt = tokio::time::timeout(
             Duration::from_secs(8),
-            runtime.invoke(
-                "devices.wireless",
-                json!({"deviceId":id,"address":"127.0.0.1","port":port}),
-            ),
+            runtime.raw_tcpip(json!({"deviceId":id,"address":"127.0.0.1","port":port})),
         )
         .await
         .unwrap()
@@ -465,10 +445,7 @@ mod tests {
         let before = remember_tls_source(&runtime, &id).await;
         let (port, _target) = target("another-device").await;
         let error = runtime
-            .invoke(
-                "devices.wireless",
-                json!({"deviceId":id,"address":"127.0.0.1","port":port}),
-            )
+            .raw_tcpip(json!({"deviceId":id,"address":"127.0.0.1","port":port}))
             .await
             .unwrap_err();
         assert_eq!(error.code, "device_identity_mismatch");
@@ -489,10 +466,7 @@ mod tests {
         let mut events = runtime.subscribe();
         let (port, _target) = target("serial-original").await;
         let receipt = runtime
-            .invoke(
-                "devices.wireless",
-                json!({"deviceId":id,"address":"127.0.0.1","port":port}),
-            )
+            .raw_tcpip(json!({"deviceId":id,"address":"127.0.0.1","port":port}))
             .await
             .unwrap();
         let expected = json!({"address":"127.0.0.1","port":port,"transport":"tcp","guid":null});
@@ -534,10 +508,7 @@ mod tests {
         let before = remember_tls_source(&runtime, &id).await;
         let (port, _target) = target("unknown").await;
         let error = runtime
-            .invoke(
-                "devices.wireless",
-                json!({"deviceId":id,"address":"127.0.0.1","port":port}),
-            )
+            .raw_tcpip(json!({"deviceId":id,"address":"127.0.0.1","port":port}))
             .await
             .unwrap_err();
         assert_eq!(error.code, "device_identity_unverified");
@@ -591,10 +562,7 @@ mod tests {
         let (id, old, _source) = source(&runtime, false, None).await;
         let before = remember_tls_source(&runtime, &id).await;
         let error = runtime
-            .invoke(
-                "devices.wireless",
-                json!({"deviceId":id,"address":"127.0.0.1","port":5555}),
-            )
+            .raw_tcpip(json!({"deviceId":id,"address":"127.0.0.1","port":5555}))
             .await
             .unwrap_err();
         assert_eq!(error.code, "wireless_setup_unknown");
@@ -636,10 +604,7 @@ mod tests {
         let target_id = id.clone();
         let converting = tokio::spawn(async move {
             owner
-                .invoke(
-                    "devices.wireless",
-                    json!({"deviceId":target_id,"address":"127.0.0.1","port":port}),
-                )
+                .raw_tcpip(json!({"deviceId":target_id,"address":"127.0.0.1","port":port}))
                 .await
         });
         tokio::time::timeout(Duration::from_secs(8), waiting)
@@ -714,10 +679,7 @@ mod tests {
         let target_id = id.clone();
         let converting = tokio::spawn(async move {
             owner
-                .invoke(
-                    "devices.wireless",
-                    json!({"deviceId":target_id,"address":"127.0.0.1","port":port}),
-                )
+                .raw_tcpip(json!({"deviceId":target_id,"address":"127.0.0.1","port":port}))
                 .await
         });
         tokio::time::timeout(Duration::from_secs(5), ready)

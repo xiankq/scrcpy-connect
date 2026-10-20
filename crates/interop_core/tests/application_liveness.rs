@@ -252,17 +252,30 @@ async fn application_stall_recovers_and_explicit_disconnect_prevents_revival() {
         .unwrap()
         .unwrap();
 
-    let recovery = tokio::time::timeout(RECOVERY_DEADLINE, async {
-        let offline = state_event(&mut events, &id, "offline").await;
-        let online = state_event(&mut events, &id, "connected").await;
-        (offline, online)
-    })
-    .await;
+    let offline = tokio::time::timeout(RECOVERY_DEADLINE, state_event(&mut events, &id, "offline"))
+        .await
+        .expect("native protocol probes must retire an application-stalled transport");
     assert!(
-        recovery.is_ok(),
-        "an ADB application stall with healthy TCP ACKs must become offline and reconnect"
+        peer.accepted.try_recv().is_err(),
+        "native must not schedule a replacement"
     );
-    let (offline, online) = recovery.unwrap();
+    // Simulate the Dart coordinator: claim its lifetime, then execute exactly
+    // one automatic attempt after observing the offline state.
+    invoke(
+        &runtime,
+        "devices.reconnect.owner",
+        json!({"ownerId":"dart-fixture","active":true}),
+    )
+    .await;
+    assert_eq!(invoke(&runtime, "devices.connect", json!({
+        "deviceId":id,"automatic":true,"ownerId":"dart-fixture","attemptId":"recovery-attempt"
+    })).await["connected"], true);
+    let online = tokio::time::timeout(
+        Duration::from_secs(3),
+        state_event(&mut events, &id, "connected"),
+    )
+    .await
+    .unwrap();
     assert!(online["sequence"].as_u64().unwrap() > offline["sequence"].as_u64().unwrap());
     assert_eq!(peer.accepted.recv().await, Some(2));
     assert_eq!(peer.closed.recv().await, Some(1));
@@ -282,6 +295,19 @@ async fn application_stall_recovers_and_explicit_disconnect_prevents_revival() {
     assert_eq!(
         invoke(&runtime, "device.info", json!({"deviceId":id})).await["autoReconnect"],
         false
+    );
+    let late = runtime
+        .invoke(
+            "devices.connect",
+            json!({
+                "deviceId":id,"automatic":true,"ownerId":"dart-fixture","attemptId":"late-recovery"
+            }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        late.code, "cancelled",
+        "persisted user stop rejects an old owner's late retry"
     );
     assert!(
         tokio::time::timeout(Duration::from_secs(5), peer.accepted.recv())

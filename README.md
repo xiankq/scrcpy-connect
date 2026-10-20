@@ -11,7 +11,7 @@
 | 仓库根目录 | Dart workspace、统一依赖解析与仓库工具配置 |
 | `app` | Flutter 主控源码、测试与 Android、iOS、macOS、Windows、Linux runner |
 | `packages/design_system` | 中性主题、玻璃材质与共享界面组件 |
-| `packages/interop_bridge` | Dart／Rust 边界、媒体与系统能力适配 |
+| `packages/interop_bridge` | Dart 产品编排与配置、Rust 边界、媒体与系统能力适配 |
 | `crates/adb` | 独立 Rust ADB 主机协议、配对、TLS、USB、shell、sync 等服务 |
 | `crates/interop_core` | 设备、会话、传输及免安装协同活动 |
 | `crates/interop_bridge` | Rust FRB 入口、共享命令校验与有界事件观察者 |

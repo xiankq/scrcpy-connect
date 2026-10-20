@@ -13,11 +13,19 @@ impl Runtime {
                 let store = self.store.read().await;
                 (store.devices.clone(), store.settings.clone())
             };
+            let projected_devices = {
+                let clients = self.connections.lock().await;
+                devices
+                    .iter()
+                    .map(|device| crate::device::project_device(device, &clients))
+                    .collect::<Vec<_>>()
+            };
             let sessions = self.session_command("session.list", &Value::Null).await?;
             let sources = self.audio_command("audio.sources", &Value::Null).await?;
             let transfers = self.list_transfers().await?;
             let activities = self.activities().await?;
             let observations = self.observation_list().await?;
+            let adb_operations = self.setup_operations.snapshot().await;
             let shares = match self.sharing.lock().await.clone() {
                 Some(manager) => {
                     manager.command("sharing.pending", &Value::Null)?["shares"].clone()
@@ -47,10 +55,11 @@ impl Runtime {
                 return Ok(json!({
                     "sequence":after.sequence,
                     "consistency":"event-fenced",
-                    "devices":devices,"settings":settings,
+                    "devices":projected_devices,"settings":settings,
                     "sessions":sessions["sessions"],"sources":sources["sources"],
                     "transfers":transfers["transfers"],"activities":activities["activities"],
-                    "shares":shares,"companions":companions,"observations":observations
+                    "shares":shares,"companions":companions,"observations":observations,
+                    "adbOperations":adb_operations
                 }));
             }
             tokio::task::yield_now().await;

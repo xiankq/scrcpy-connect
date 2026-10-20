@@ -1,16 +1,25 @@
 use interop_core::Runtime;
 use serde_json::json;
 
+async fn configured_runtime(root: &std::path::Path) -> std::sync::Arc<Runtime> {
+    Runtime::initialize_with_settings(root, interop_core::ConnectionPolicy::standalone(), json!({
+        "videoCodec":"h264", "videoEncoder":null,"maxSize":1280,"maxFps":60,"videoBitRate":8_000_000,
+    })).await.unwrap()
+}
+
 #[tokio::test]
 async fn unprobed_quality_is_unknown_and_invalid_settings_are_atomic() {
     let directory = tempfile::tempdir().unwrap();
-    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let runtime = configured_runtime(directory.path()).await;
     let initial = runtime
         .invoke("session.quality.options", json!({}))
         .await
         .unwrap();
     assert_eq!(initial["probe"]["status"], "unknown");
-    assert_eq!(initial["current"]["videoCodec"], "h264");
+    assert!(
+        initial.get("current").is_none(),
+        "native probe does not choose product settings"
+    );
     let codecs = initial["codecs"].as_array().unwrap();
     assert_eq!(codecs.len(), 5);
     assert!(
@@ -36,18 +45,15 @@ async fn unprobed_quality_is_unknown_and_invalid_settings_are_atomic() {
             .await
             .is_err()
     );
-    let after = runtime
-        .invoke("session.quality.options", json!({}))
-        .await
-        .unwrap();
-    assert_eq!(after["current"]["videoCodec"], "vp9");
-    assert_eq!(after["current"]["maxFps"], 60);
+    let after = runtime.invoke("settings.get", json!({})).await.unwrap();
+    assert_eq!(after["videoCodec"], "vp9");
+    assert_eq!(after["maxFps"], 60);
 }
 
 #[tokio::test]
 async fn per_device_quality_is_isolated_and_not_restored_to_new_identities() {
     let directory = tempfile::tempdir().unwrap();
-    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let runtime = configured_runtime(directory.path()).await;
     let a = runtime
         .invoke("devices.add", json!({"address":"127.0.0.1","port":15556}))
         .await
@@ -67,8 +73,9 @@ async fn per_device_quality_is_isolated_and_not_restored_to_new_identities() {
         .invoke("session.quality.options", json!({"deviceId":b}))
         .await
         .unwrap();
-    assert_eq!(qa["current"]["videoCodec"], "h265");
-    assert_eq!(qb["current"]["videoCodec"], "av1");
+    let stored = runtime.invoke("settings.get", json!({})).await.unwrap();
+    assert_eq!(stored["deviceQuality"][a]["videoCodec"], "h265");
+    assert_eq!(stored["deviceQuality"][b]["videoCodec"], "av1");
     assert_eq!(qa["probe"]["status"], "unknown");
     assert_eq!(qb["probe"]["status"], "unknown");
     assert!(

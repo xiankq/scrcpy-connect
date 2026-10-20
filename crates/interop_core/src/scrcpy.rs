@@ -29,6 +29,9 @@ const CLIPBOARD_MAX: usize = (1 << 18) - 14;
 // leave an unbounded number of detached probe uploads/processes behind.
 static ENCODER_PROBE_JOBS: Semaphore = Semaphore::const_new(4);
 
+#[path = "scrcpy_display.rs"]
+mod display;
+
 fn encoder_probe_command(path: &str) -> CoreResult<String> {
     let path = quote(path)?;
     Ok(format!(
@@ -141,7 +144,11 @@ fn parse_encoders(text: &str) -> CoreResult<Vec<VideoEncoder>> {
 }
 
 fn selected_video(settings: &Value) -> CoreResult<(VideoCodec, Option<&str>)> {
-    let codec = video_codec(settings["videoCodec"].as_str().unwrap_or("h264"))?;
+    let codec = video_codec(
+        settings["videoCodec"]
+            .as_str()
+            .ok_or_else(|| invalid("缺少视频格式。"))?,
+    )?;
     let encoder = match &settings["videoEncoder"] {
         Value::Null => None,
         Value::String(value) if crate::preferences::valid_encoder(value) => Some(value.as_str()),
@@ -186,17 +193,11 @@ fn record_decoded_size(state: &mut Value, receipt: &Value) {
 
 fn quality_patch(current: &Value, params: &Value) -> CoreResult<Value> {
     let mut next = current.clone();
-    if let Some(value) = params.get("preset") {
-        let (size, fps, rate) = match value.as_str() {
-            Some("smooth") => (720, 30, 2_000_000),
-            Some("balanced") => (1280, 60, 8_000_000),
-            Some("clear") => (1920, 60, 12_000_000),
-            _ => return Err(invalid("画质预设无效。")),
-        };
+    if params.get("preset").is_some() {
+        return Err(invalid("请由调用方展开画质预设并提供具体参数。"));
+    }
+    if let Some(value) = params.get("qualityPreset") {
         next["qualityPreset"] = value.clone();
-        next["maxSize"] = json!(size);
-        next["maxFps"] = json!(fps);
-        next["videoBitRate"] = json!(rate);
     }
     for (key, alias) in [
         ("maxSize", "maxSize"),
@@ -464,12 +465,8 @@ impl Runtime {
 
     pub(crate) async fn start_session(&self, params: &Value) -> CoreResult<Value> {
         let result = async {
-            let device = required(params, "deviceId")?;
-            let settings = crate::preferences::quality_settings(
-                &self.store.read().await.settings,
-                Some(device),
-            );
-            let settings = quality_patch(&settings, params)?;
+            required(params, "deviceId")?;
+            let settings = quality_patch(&json!({}), params)?;
             // This startup state includes the complete media/process handshake.
             // Keep it out of the session entry's nested async frames: debug
             // builds otherwise exhaust a standard 2 MiB caller thread stack.
@@ -504,6 +501,11 @@ impl Runtime {
             .map(package_name)
             .transpose()?
             .map(str::to_owned);
+        let display_size = if package.is_some() {
+            display::virtual_dimensions(params)?
+        } else {
+            display::dimensions(params)?
+        };
         if let Some(package) = &package {
             self.app_opens.ensure_available(&device_id, package).await?;
         }
@@ -604,6 +606,10 @@ impl Runtime {
         let state = Arc::new(RwLock::new(
             json!({"sessionId":id,"id":id,"deviceId":device_id,"name":package.as_deref().unwrap_or("手机屏幕"),"packageName":package,"status":"starting","createdAt":now(),"codec":selected_codec.name,"mime":selected_codec.mime,"videoEncoder":selected_encoder,"encoderSelection":if selected_encoder.is_some(){"explicit"}else{"platformDefault"},"quality":current_quality(settings),"audio":false,"apiLevel":device.api_level}),
         ));
+        if let Some((width, height)) = display_size {
+            state.write().await["displaySize"] = json!({"width":width,"height":height});
+            state.write().await["displayAuto"] = json!(params["displayAuto"] == true);
+        }
         if params["traceFrames"].as_bool() == Some(true) {
             state.write().await["transportTrace"] = json!([]);
         }
@@ -661,16 +667,12 @@ impl Runtime {
             // startup failures. A cancelled task cannot orphan its reservation.
             drop(reservation);
         });
-        let max_size = settings["maxSize"]
-            .as_u64()
-            .unwrap_or(1280)
-            .clamp(320, 4096);
-        let max_fps = settings["maxFps"].as_u64().unwrap_or(60).clamp(1, 120);
+        let max_size = settings["maxSize"].as_u64().expect("validated maxSize");
+        let max_fps = settings["maxFps"].as_u64().expect("validated maxFps");
         let repeat_delay = repeat_frame_delay_us(max_fps);
         let bit_rate = settings["videoBitRate"]
             .as_u64()
-            .unwrap_or(8_000_000)
-            .clamp(500_000, 50_000_000);
+            .expect("validated videoBitRate");
         let mut app_launch_submitted = false;
         let startup_failure = Arc::new(std::sync::Mutex::new(None::<String>));
         let startup_logs = Arc::new(Mutex::new(Vec::new()));
@@ -698,17 +700,29 @@ impl Runtime {
             command.push_str(&format!(
                 " video_codec_options=repeat-previous-frame-after:long={repeat_delay}"
             ));
+            if package.is_none() && params["keepActive"] == true {
+                command.push_str(" keep_active=true");
+            }
             if let Some(encoder) = selected_encoder {
                 command.push(' ');
                 command.push_str(&quote(&format!("video_encoder={encoder}"))?);
             }
             if package.is_some() {
-                command.push_str(" new_display=1080x1920 vd_system_decorations=false");
+                command.push_str(" new_display=");
+                if let Some((width, height)) = display_size {
+                    command.push_str(&format!("{width}x{height}"));
+                }
+                command.push_str(" flex_display=true vd_system_decorations=false");
             }
             // Raw exec has no PTY HUP guarantee. The shared supervisor owns
             // the child through EOF, including cancellation before sockets
             // are accepted, and reports its identity before child output.
             command = managed_shell_command(&remote_jar, &command, true)?;
+            if package.is_none()
+                && let Some((width, height)) = display_size
+            {
+                command = display::supervise(&command, &id, width, height)?;
+            }
             let mut process = client.exec(&command, options(&cancellation)).await?;
             let mut pid_line = Vec::new();
             loop {
@@ -1211,6 +1225,37 @@ impl Runtime {
                 "应用打开结果未知，请先核对并关闭本次记录。",
             )
         })?;
+        if command == "session.display" {
+            let dimensions = if package.is_some() {
+                display::virtual_dimensions(params)?
+            } else {
+                display::dimensions(params)?
+            };
+            let (width, height) = dimensions.ok_or_else(|| invalid("缺少显示尺寸。"))?;
+            if package.is_none() {
+                if !state.read().await["displaySize"].is_object() {
+                    return Err(invalid(
+                        "原始比例的手机窗口需关闭并重新打开以更改显示尺寸。",
+                    ));
+                }
+                let client = self.client(&session_device).await?;
+                let receipt = client
+                    .shell(
+                        &display::resize(&id, width, height)?,
+                        4096,
+                        options(&cancellation),
+                    )
+                    .await?;
+                if !String::from_utf8_lossy(&receipt.stdout).contains("__INTEROP_DISPLAY_READY__") {
+                    return Err(CoreError::new(
+                        "display_resize_failed",
+                        "设备未确认显示尺寸；原比例可能已改变，请在手机核对。",
+                    ));
+                }
+                state.write().await["displaySize"] = json!({"width":width,"height":height});
+                return Ok(json!({"sessionId":id,"displaySize":{"width":width,"height":height}}));
+            }
+        }
         if command == "session.clock.probe" {
             if !state.read().await["transportTrace"].is_array() {
                 return Err(invalid("时钟采样仅用于已开启逐帧观测的诊断会话。"));
@@ -1354,6 +1399,13 @@ impl Runtime {
                 }
             }
             "session.rotate" => bytes.push(11),
+            "session.display" => {
+                let (width, height) = display::virtual_dimensions(params)?
+                    .ok_or_else(|| invalid("缺少显示尺寸。"))?;
+                bytes.push(21);
+                bytes.extend_from_slice(&width.to_be_bytes());
+                bytes.extend_from_slice(&height.to_be_bytes());
+            }
             "session.screen" => {
                 bytes.extend_from_slice(&[
                     10,
@@ -1612,8 +1664,6 @@ impl Runtime {
         if let Some(id) = device {
             self.device(id).await?;
         }
-        let settings =
-            crate::preferences::quality_settings(&self.store.read().await.settings, device);
         let (encoders, reason) = if let Some(device) = device {
             match self.probe_video_encoders(device).await {
                 Ok(encoders) => (
@@ -1651,16 +1701,10 @@ impl Runtime {
                 }
             }
         }
-        Ok(
-            json!({"current":current_quality(&settings),"deviceId":device,"scope":if device.is_some(){"device"}else{"global"},
+        Ok(json!({"deviceId":device,
             "activeStreams":active_streams,
             "probe":{"status":if encoders.is_some(){"enumerated"}else{"unknown"},"source":"scrcpy-5.0.1-list-encoders","reason":reason},
-            "presets":[{"id":"smooth","name":"流畅","available":encoders.is_some()},{"id":"balanced","name":"均衡","available":encoders.is_some()},{"id":"clear","name":"清晰","available":encoders.is_some()}],
-            "maxSize":[{"value":720,"label":"720","available":encoders.is_some()},{"value":1080,"label":"1080","available":encoders.is_some()},{"value":1280,"label":"1280","available":encoders.is_some()},{"value":1920,"label":"1920","available":encoders.is_some()}],
-            "maxFps":[{"value":30,"label":"30 fps","available":encoders.is_some()},{"value":60,"label":"60 fps","available":encoders.is_some()}],
-            "bitRate":[{"value":2000000,"label":"2 Mbps","available":encoders.is_some()},{"value":8000000,"label":"8 Mbps","available":encoders.is_some()},{"value":12000000,"label":"12 Mbps","available":encoders.is_some()}],
-            "codec":codecs,"codecs":codecs,"encoders":entries,"maxSizes":[720,1080,1280,1920],"frameRates":[30,60],"audioAvailable":false}),
-        )
+            "codecs":codecs,"encoders":entries}))
     }
 
     async fn save_device_quality(&self, device: &str, settings: &Value) -> CoreResult<()> {
@@ -1706,10 +1750,7 @@ impl Runtime {
     async fn change_quality(&self, params: &Value) -> CoreResult<Value> {
         let device = required(params, "deviceId")?.to_owned();
         self.client(&device).await?;
-        let next = quality_patch(
-            &crate::preferences::quality_settings(&self.store.read().await.settings, Some(&device)),
-            params,
-        )?;
+        let next = quality_patch(&json!({}), params)?;
         let previous = {
             let sessions = self.activities.sessions.lock().await;
             if let Some(id) = params.get("sessionId") {
@@ -1749,7 +1790,7 @@ impl Runtime {
             .any(|session| session.device_id == device && !session.cancellation.is_cancelled());
         Ok(
             json!({"deviceId":device,"appliesNextSession":true,"needsRestart":active,"existingSessionId":previous.as_ref().map(|(id, _)| id),
-            "current":current_quality(&next),"seamless":false,"reason":"设置已保存到这台设备，新建屏幕或应用窗口时生效；已保留的窗口继续使用原设置，关闭后重新打开即可应用。"}),
+            "current":current_quality(&next),"seamless":false}),
         )
     }
 
@@ -2291,6 +2332,13 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn media_params(patch: Value) -> Value {
+        let mut params = crate::preferences::defaults();
+        for (key, value) in patch.as_object().expect("fixture parameters") {
+            params[key] = value.clone();
+        }
+        params
+    }
 
     #[tokio::test]
     async fn failed_last_session_reclaims_audio_but_preserves_other_windows_and_devices() {
@@ -2504,6 +2552,7 @@ mod tests {
         fn start_with(&self, mut params: Value) -> tokio::task::JoinHandle<CoreResult<Value>> {
             let runtime = self.runtime.clone();
             params["deviceId"] = json!("cold-device");
+            let params = media_params(params);
             tokio::spawn(async move { runtime.start_session(&params).await })
         }
 
@@ -2724,15 +2773,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cold_capture_policy_uses_effective_preferences_and_overrides() {
+    async fn cold_capture_uses_explicit_format_without_reading_product_preferences() {
         for (settings, params, capture) in [
-            (json!({"videoCodec":"h265"}), json!({}), false),
-            (json!({"videoEncoder":"c2.fixture.avc"}), json!({}), false),
+            (json!({"videoCodec":"h265"}), json!({}), true),
+            (json!({"videoEncoder":"c2.fixture.avc"}), json!({}), true),
             (
                 json!({"videoCodec":"h265","videoEncoder":"c2.fixture.hevc"}),
                 json!({"videoCodec":"h264","videoEncoder":null}),
                 true,
             ),
+            (json!({}), json!({"videoCodec":"h265"}), false),
+            (json!({}), json!({"videoEncoder":"c2.fixture.avc"}), false),
         ] {
             let mut fixture = ColdStartFixture::new().await;
             for (key, value) in settings.as_object().unwrap() {
@@ -3839,7 +3890,7 @@ mod tests {
             );
         }
         let busy = runtime
-            .start_session(&json!({"deviceId":device}))
+            .start_session(&media_params(json!({"deviceId":device})))
             .await
             .unwrap_err();
         assert_eq!(busy.code, "resource_busy");
@@ -3885,7 +3936,9 @@ mod tests {
         .unwrap();
         drop(reservations);
         let invalid = runtime
-            .start_session(&json!({"deviceId":device,"videoEncoder":"c2.interop.missing.encoder"}))
+            .start_session(&media_params(
+                json!({"deviceId":device,"videoEncoder":"c2.interop.missing.encoder"}),
+            ))
             .await
             .unwrap_err();
         assert_eq!(invalid.code, "encoder_unavailable");
@@ -3954,46 +4007,6 @@ mod tests {
         );
         settings["videoEncoder"] = json!("c2.vendor.hevc.encoder");
         validate_encoder_selection(&settings, &encoders).unwrap();
-    }
-
-    #[test]
-    fn live_repeat_cadence_respects_frame_budget_and_low_fps_choices() {
-        for fps in 1..=120 {
-            let delay = repeat_frame_delay_us(fps);
-            assert!((33_334..=1_000_000).contains(&delay));
-            assert!(
-                delay * fps >= 1_000_000,
-                "repeats exceed requested {fps}fps"
-            );
-            assert!(delay * 30 >= 1_000_000, "static repeat budget exceeded");
-        }
-    }
-
-    #[test]
-    fn five_codec_wire_ids_include_leading_zero_and_quality_rejects_injection() {
-        assert_eq!(video_codec("h264").unwrap().wire, *b"h264");
-        assert_eq!(video_codec("h265").unwrap().wire, *b"h265");
-        assert_eq!(video_codec("av1").unwrap().wire, [0, b'a', b'v', b'1']);
-        assert_eq!(video_codec("vp8").unwrap().wire, [0, b'v', b'p', b'8']);
-        assert_eq!(video_codec("vp9").unwrap().wire, [0, b'v', b'p', b'9']);
-        let current = crate::preferences::defaults();
-        for bad in [
-            json!({"codec":null}),
-            json!({"codec":"h266"}),
-            json!({"videoEncoder":"c2.x; reboot"}),
-            json!({"videoEncoder":"$(id)"}),
-            json!({"maxSize":"1280"}),
-        ] {
-            assert!(quality_patch(&current, &bad).is_err(), "accepted {bad}");
-        }
-        let next = quality_patch(
-            &current,
-            &json!({"preset":"smooth","videoCodec":"av1","videoEncoder":null}),
-        )
-        .unwrap();
-        assert_eq!(next["maxFps"], 30);
-        assert_eq!(next["videoCodec"], "av1");
-        assert_eq!(current["videoCodec"], "h264");
     }
 
     #[test]

@@ -16,6 +16,98 @@
       }
     },
     {
+      "name": "adb.device.probe",
+      "owner": "core",
+      "required": {
+        "deviceId": "string",
+        "probes": "array",
+        "timeoutMs": "integer"
+      },
+      "optional": {
+        "connectionId": "string"
+      }
+    },
+    {
+      "name": "adb.operation.get",
+      "owner": "core",
+      "required": {
+        "operationId": "string"
+      }
+    },
+    {
+      "name": "adb.operation.release",
+      "owner": "core",
+      "required": {
+        "operationId": "string"
+      }
+    },
+    {
+      "name": "adb.pair",
+      "owner": "core",
+      "required": {
+        "address": "string",
+        "port": "integer",
+        "code": "string",
+        "attemptId": "string",
+        "leaseMs": "integer"
+      },
+      "optional": {
+        "deviceId": "string"
+      }
+    },
+    {
+      "name": "adb.pair.qr",
+      "owner": "core",
+      "required": {
+        "attemptId": "string",
+        "leaseMs": "integer"
+      },
+      "optional": {
+        "deviceId": "string"
+      }
+    },
+    {
+      "name": "adb.tcpip.begin",
+      "owner": "core",
+      "required": {
+        "deviceId": "string",
+        "connectionId": "string",
+        "port": "integer",
+        "attemptId": "string",
+        "leaseMs": "integer"
+      }
+    },
+    {
+      "name": "adb.tcpip.connect",
+      "owner": "core",
+      "required": {
+        "operationId": "string",
+        "address": "string"
+      }
+    },
+    {
+      "name": "adb.usb.attach",
+      "owner": "core",
+      "required": {
+        "operationId": "string"
+      },
+      "optional": {
+        "deviceId": "string"
+      }
+    },
+    {
+      "name": "adb.usb.open",
+      "owner": "core",
+      "required": {
+        "fd": "integer",
+        "attemptId": "string",
+        "leaseMs": "integer"
+      },
+      "optional": {
+        "deviceId": "string"
+      }
+    },
+    {
       "name": "apps.icon",
       "owner": "core",
       "required": {
@@ -157,14 +249,14 @@
     },
     {
       "name": "device.capabilities",
-      "owner": "core",
+      "owner": "bridge",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "device.diagnose",
-      "owner": "core",
+      "owner": "bridge",
       "required": {
         "deviceId": "string"
       }
@@ -189,6 +281,13 @@
       "owner": "core",
       "required": {
         "deviceId": "string"
+      },
+      "optional": {
+        "automatic": "boolean",
+        "ownerId": "string",
+        "attemptId": "string",
+        "candidateSource": "string",
+        "parentOperationId": "string"
       }
     },
     {
@@ -218,13 +317,21 @@
     },
     {
       "name": "devices.pair",
-      "owner": "core"
+      "owner": "bridge"
     },
     {
       "name": "devices.pair.qr",
-      "owner": "core",
+      "owner": "bridge",
       "optional": {
         "deviceId": "string"
+      }
+    },
+    {
+      "name": "devices.reconnect.owner",
+      "owner": "core",
+      "required": {
+        "ownerId": "string",
+        "active": "boolean"
       }
     },
     {
@@ -236,18 +343,21 @@
     },
     {
       "name": "devices.usb",
-      "owner": "core"
+      "owner": "bridge"
     },
     {
       "name": "devices.wake",
       "owner": "core",
       "required": {
         "deviceId": "string"
+      },
+      "optional": {
+        "connectionId": "string"
       }
     },
     {
       "name": "devices.wireless",
-      "owner": "core",
+      "owner": "bridge",
       "required": {
         "deviceId": "string",
         "address": "string"
@@ -634,6 +744,16 @@
       }
     },
     {
+      "name": "session.display",
+      "owner": "core",
+      "required": {
+        "sessionId": "string",
+        "displayWidth": "integer",
+        "displayHeight": "integer"
+      },
+      "requiresVerifiedState": true
+    },
+    {
       "name": "session.frame",
       "owner": "core",
       "optional": {
@@ -752,7 +872,13 @@
       "required": {
         "deviceId": "string"
       },
-      "requiresVerifiedState": true
+      "requiresVerifiedState": true,
+      "optional": {
+        "displayWidth": "integer",
+        "displayHeight": "integer",
+        "displayAuto": "boolean",
+        "keepActive": "boolean"
+      }
     },
     {
       "name": "session.stop",

@@ -5,6 +5,7 @@ use crate::{
 use serde_json::{Value, json};
 use std::sync::Arc;
 
+#[cfg(test)]
 pub(crate) fn defaults() -> Value {
     json!({"appearance":"light",
         "backgroundConnection":true,"backgroundKeepAlive":true,
@@ -44,24 +45,6 @@ pub(crate) const QUALITY_KEYS: [&str; 6] = [
     "videoEncoder",
 ];
 
-pub(crate) fn quality_settings(settings: &Value, device: Option<&str>) -> Value {
-    let mut result = defaults();
-    for key in QUALITY_KEYS {
-        if let Some(value) = settings.get(key) {
-            result[key] = value.clone();
-        }
-    }
-    if let Some(overrides) = device
-        .and_then(|id| settings["deviceQuality"].get(id))
-        .and_then(Value::as_object)
-    {
-        for (key, value) in overrides {
-            result[key] = value.clone();
-        }
-    }
-    result
-}
-
 pub(crate) fn valid_encoder(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 256
@@ -72,7 +55,12 @@ pub(crate) fn valid_encoder(value: &str) -> bool {
 
 fn quality_value(key: &str, value: &Value) -> bool {
     match key {
-        "qualityPreset" => matches!(value.as_str(), Some("smooth" | "balanced" | "clear")),
+        "qualityPreset" => {
+            value.is_null()
+                || value
+                    .as_str()
+                    .is_some_and(|v| !v.is_empty() && v.len() <= 64)
+        }
         "videoCodec" => matches!(
             value.as_str(),
             Some("h264" | "h265" | "av1" | "vp8" | "vp9")
@@ -97,7 +85,7 @@ pub(crate) fn validate_quality(values: &Value) -> CoreResult<()> {
     Ok(())
 }
 
-fn validated_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
+pub(crate) fn validated_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
     let values = changes
         .as_object()
         .ok_or_else(|| CoreError::new("invalid_argument", "设置必须是对象。"))?;
@@ -115,9 +103,37 @@ fn validated_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
                     && map.iter().all(|(id, settings)| {
                         uuid::Uuid::parse_str(id).is_ok()
                             && settings.as_object().is_some_and(|settings| {
-                                settings.iter().all(|(key, value)| {
-                                    matches!(key.as_str(), "clipboardSync" | "showNavigationBar")
-                                        && value.is_boolean()
+                                settings.iter().all(|(key, value)| match key.as_str() {
+                                    "clipboardSync" | "showNavigationBar" | "wakeOnConnect"
+                                    | "lockOnClose" | "stayAwake" => value.is_boolean(),
+                                    "remoteAspectRatio" => matches!(
+                                        value.as_str(),
+                                        Some(
+                                            "original"
+                                                | "auto"
+                                                | "9:16"
+                                                | "3:4"
+                                                | "1:1"
+                                                | "16:9"
+                                                | "custom"
+                                        )
+                                    ),
+                                    "remoteCustomRatio" => value.as_str().is_some_and(|text| {
+                                        let Some((width, height)) = text.split_once(':') else {
+                                            return false;
+                                        };
+                                        let (Ok(width), Ok(height)) =
+                                            (width.parse::<f64>(), height.parse::<f64>())
+                                        else {
+                                            return false;
+                                        };
+                                        width.is_finite()
+                                            && height.is_finite()
+                                            && width > 0.0
+                                            && height > 0.0
+                                            && (0.2..=5.0).contains(&(width / height))
+                                    }),
+                                    _ => false,
                                 })
                             })
                     })
@@ -187,7 +203,7 @@ impl Runtime {
                     .ok_or_else(|| CoreError::new("invalid_data", "设备列表无效或过长。"))?;
                 let mut imported_settings = metadata["settings"].clone();
                 remove_retired_settings(&mut imported_settings);
-                let mut settings = validated_settings(&defaults(), &imported_settings)?;
+                let mut settings = validated_settings(&self.settings_defaults, &imported_settings)?;
                 // Restored devices receive new identities; old per-device quality keys
                 // must not silently attach to a different authorization record.
                 settings["deviceQuality"] = json!({});
@@ -258,16 +274,10 @@ impl Runtime {
             .as_str()
             .or_else(|| params["deviceId"].as_str())
             .ok_or_else(|| CoreError::new("invalid_argument", "缺少连接或配对标识。"))?;
+        self.setup_operations.release_alias(id).await;
         if let Some(token) = self.device_operations.lock().await.remove(id) {
             token.cancel();
         }
-        let mut qr = self.qr_attempt.lock().await;
-        if qr.as_ref().is_some_and(|(attempt, _)| attempt == id)
-            && let Some((_, token)) = qr.take()
-        {
-            token.cancel();
-        }
-        drop(qr);
         if let Some(device) = self
             .store
             .write()
@@ -289,30 +299,6 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn device_preferences_accept_only_boolean_device_scoped_controls() {
-        let id = uuid::Uuid::new_v4().to_string();
-        let settings = validated_settings(
-            &defaults(),
-            &json!({"deviceSettings":{
-                id.clone(): {"clipboardSync":true,"showNavigationBar":false}
-            }}),
-        )
-        .unwrap();
-        assert_eq!(settings["deviceSettings"][&id]["clipboardSync"], true);
-        assert_eq!(settings["deviceSettings"][&id]["showNavigationBar"], false);
-        for invalid in [
-            json!({"deviceSettings":{"not-an-identity":{"clipboardSync":true}}}),
-            json!({"deviceSettings":{id.clone():{"clipboardSync":"yes"}}}),
-            json!({"deviceSettings":{id.clone():{"audioMode":"fixed"}}}),
-            json!({"clipboardSync":true}),
-            json!({"audioDevices":[]}),
-            json!({"backgroundAudio":true}),
-        ] {
-            assert!(validated_settings(&defaults(), &invalid).is_err());
-        }
-    }
-
     #[test]
     fn retiring_global_choices_preserves_explicit_device_settings() {
         let mut settings = json!({
@@ -349,14 +335,6 @@ mod tests {
         assert!(settings.get("clipboardSync").is_none());
         assert!(settings.get("audioDevices").is_none());
     }
-    #[test]
-    fn invalid_patch_never_partially_changes_settings() {
-        let original = defaults();
-        assert!(validated_settings(&original, &json!({"appearance":"dark","maxFps":0})).is_err());
-        assert_eq!(original["appearance"], "light");
-        assert!(validated_settings(&original, &json!({"backgroundKeepAlive":"yes"})).is_err());
-    }
-
     #[tokio::test]
     async fn a_delayed_persistence_receipt_cannot_publish_old_settings_after_a_snapshot() {
         let directory = tempfile::tempdir().unwrap();

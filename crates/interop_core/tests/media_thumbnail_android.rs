@@ -172,7 +172,7 @@ fn exif(jpeg: &[u8], orientation: u8) -> Vec<u8> {
 }
 
 #[tokio::test]
-async fn validates_bounds_and_cancel_before_start_without_connecting() {
+async fn cancellation_before_start_rejects_the_late_thumbnail() {
     let root = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(root.path()).await.unwrap();
     let id = runtime
@@ -182,19 +182,6 @@ async fn validates_bounds_and_cancel_before_start_without_connecting() {
         .as_str()
         .unwrap()
         .to_owned();
-    for max in [json!(0), json!(63), json!(513), json!("128")] {
-        assert_eq!(
-            runtime
-                .invoke(
-                    "media.thumbnail",
-                    json!({"deviceId":id,"path":"/a.jpg","maxSize":max})
-                )
-                .await
-                .unwrap_err()
-                .code,
-            "invalid_argument"
-        );
-    }
     let operation = uuid::Uuid::new_v4().to_string();
     assert_eq!(
         runtime

@@ -1,5 +1,6 @@
 //! Real scrcpy JAR/device tests. No adb executable is used by this test or runtime.
 //! Run with INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 and a reachable authorized adbd.
+mod support;
 use interop_core::Runtime;
 use serde_json::json;
 use std::time::Duration;
@@ -29,7 +30,10 @@ async fn jar_video_authentication_framing_and_h264_decode() {
         .unwrap();
     eprintln!("scrcpy E2E: start session");
     let started = runtime
-        .invoke("session.start", json!({"deviceId":id}))
+        .invoke(
+            "session.start",
+            support::media_params(json!({"deviceId":id})),
+        )
         .await;
     if started.is_err() {
         eprintln!(
@@ -180,7 +184,7 @@ async fn real_application_display_clipboard_and_task_survive_session_stop() {
     let session = runtime
         .invoke(
             "session.start",
-            json!({"deviceId":id,"packageName":"com.android.settings"}),
+            support::media_params(json!({"deviceId":id,"packageName":"com.android.settings"})),
         )
         .await
         .unwrap();
@@ -304,7 +308,10 @@ async fn real_scrcpy_touch_and_ascii_unicode_text_reach_android_edit_text() {
         .await
         .unwrap();
     let session = runtime
-        .invoke("session.start", json!({"deviceId":id}))
+        .invoke(
+            "session.start",
+            support::media_params(json!({"deviceId":id})),
+        )
         .await
         .unwrap();
     let mut video = tokio::net::TcpStream::connect((
@@ -449,7 +456,10 @@ async fn main_and_application_start(paused: bool) {
         .await
         .unwrap();
     let main = runtime
-        .invoke("session.start", json!({"deviceId":id,"maxSize":720}))
+        .invoke(
+            "session.start",
+            support::media_params(json!({"deviceId":id,"maxSize":720})),
+        )
         .await
         .unwrap();
     let mut socket =
@@ -483,7 +493,9 @@ async fn main_and_application_start(paused: bool) {
     let app = runtime
         .invoke(
             "session.start",
-            json!({"deviceId":id,"packageName":"com.android.settings","maxSize":720}),
+            support::media_params(
+                json!({"deviceId":id,"packageName":"com.android.settings","maxSize":720}),
+            ),
         )
         .await;
     runtime

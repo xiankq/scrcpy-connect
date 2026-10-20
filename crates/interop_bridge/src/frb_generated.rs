@@ -180,11 +180,18 @@ fn wire__crate__api__initialize_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_data_directory = <String>::sse_decode(&mut deserializer);
+            let api_connection_policy_json = <String>::sse_decode(&mut deserializer);
+            let api_settings_defaults_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, String>(
                     (move || async move {
-                        let output_ok = crate::api::initialize(api_data_directory).await?;
+                        let output_ok = crate::api::initialize(
+                            api_data_directory,
+                            api_connection_policy_json,
+                            api_settings_defaults_json,
+                        )
+                        .await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
