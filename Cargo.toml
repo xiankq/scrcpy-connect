@@ -7,6 +7,11 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
 
+# Test binaries link the full core. Line tables keep panic locations readable
+# without duplicating type and variable debug info for every test target.
+[profile.dev]
+debug = 1
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

@@ -16,13 +16,28 @@ class ConnectionContent extends StatelessWidget {
     final caption = theme.textTheme.bodySmall!.copyWith(
       fontWeight: FontWeight.w400,
     );
+    TextStyle labelStyle(TextStyle style, Set<WidgetState> states) =>
+        style.copyWith(
+          color: states.contains(WidgetState.error)
+              ? theme.colorScheme.error
+              : states.contains(WidgetState.focused)
+              ? theme.colorScheme.onSurface
+              : theme.colorScheme.onSurfaceVariant,
+        );
     return Theme(
       data: theme.copyWith(
         inputDecorationTheme: theme.inputDecorationTheme.copyWith(
-          labelStyle: body.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          labelStyle: WidgetStateTextStyle.resolveWith(
+            (states) => labelStyle(body, states),
+          ),
           // InputDecorator scales a floating label by 0.75.
-          floatingLabelStyle: caption.copyWith(
-            fontSize: DesignTokens.typographyCaptionFontSize / .75,
+          floatingLabelStyle: WidgetStateTextStyle.resolveWith(
+            (states) => labelStyle(
+              caption.copyWith(
+                fontSize: DesignTokens.typographyCaptionFontSize / .75,
+              ),
+              states,
+            ),
           ),
           hintStyle: body.copyWith(color: theme.colorScheme.onSurfaceVariant),
           helperStyle: caption,
