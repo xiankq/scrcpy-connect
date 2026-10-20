@@ -22,7 +22,9 @@
 | 扫码设备归属与转IP失败保护 | `G4CpTk`、`XszXp/gHHmj/vPWPs` | `device.rs`扫码贯通原deviceId与所选身份；`tcpip.rs`目标核验后原子提交，失败/取消保留原method/address/port/GUID |
 | 传输历史与单设备活动 | `W6enLf/R759qi/fKBPB`、`mDL3I` | `transfer_history_row.dart`、`files.rs`及设备`activities/`；活动先停止，移除记录不删保存文件 |
 | 底栏原版镜片与无固定描边 | 母`Ffm0s`、材料/交互板`N70xWl`，明暗按压/拖动集中对照 | `home_page.dart` / `GlassMaterial.navigationLensSettings`；沿用上游合成能力，运行证据见玻璃记录 |
-| 画布组织与标注 | `KTHuP/B3uE9/w4TjN`；共享板`Rie7E/TfjoF` | 此轮完整屏幕按类型每行至多8张，局部板容量5项，尾行分别5/5/3和5/5/1；中灰标注使用canvas-label，未改产品文字语义 |
+| 画布组织与标注 | `KTHuP/B3uE9/w4TjN`；共享板`Rie7E/TfjoF` | 完整屏幕按类型排列，局部板按自然内容收紧；保留被完整页面引用的母组件，删除已由页面或材料板覆盖的重复小样；中灰标注使用canvas-label |
+
+通知卡片母组件为 `Cyzll`，页面 `a7A57` 展开真实应用图标／名称、整卡接续与同步清除；右上全部已读使用图标。设备工作台 `uESR9` 的列表分组与活跃应用改成开放内容流，比例选项 `Wp1CG` 与自定义输入 `EWW1a` 复用现有选项行与字段。六组重复状态收敛到对应完整页面或材料板；视频播放控制仍保留独立状态 `nSfCV`。本次静态稿与源码验证的环境边界见[显示、通知与 ADB 分层记录](display-notifications-adb-2026-10-20.md)。
 
 ## 静态布局核查
 
@@ -38,15 +40,13 @@
 
 手机参考402×874/DPR1，常态安全区top54/bottom34，普通主控内容按配置裁剪。照片预览与远控保留全屏，不能用常规裁剪漏掉边缘操作；远控黑底暂停夹具不冒充远端native纹理。平板1194×834、桌面1440×960使用各自完整视口和零安全区，不缩放手机稿。最终数值以每次捕获合同和配置为准。
 
-- `capture-contract.json`：视口、安全区、字体、渲染后端、设备/场景和生产路由范围。
-- `layout-contract.json`：RenderObject的全局几何、文字行框与字号/行高/字距/溢出，绑定PNG的SHA-256；排除Offstage和非当前路由。
-- 明暗及响应变体PNG；没有相同源视口的变体不混进正常视口像素比较。
+保留的历史捕获可能包含 `capture-contract.json`（视口、安全区、字体、设备及路由身份）和 `layout-contract.json`（与 PNG 哈希绑定的 RenderObject 几何及文字行框）。比较器继续读取这些可选附件；当前按实际变更范围捕获，不再维护遍历所有页面、主题和尺寸的截图测试。没有相同源视口的变体不混进正常视口像素比较。
 
 几何坐标不能单独证明未遮挡；`intersectsViewport`不证明主要动作可达。夹具的设备/通知/文件状态按实际合同核对，内容差异会改变行数和动作集合，不能因“仅文字不同”一概忽略，也不能伪造状态匹配图片。
 
 ## 可重复操作与报告判读
 
-从 `app/` 捕获 `test/ios_pages_capture_test.dart`，设置新的 `CONNECT_CAPTURE_DIR`。局部状态另用 `local_recovery_capture_test.dart`、`content_pages_layout_test.dart`、`state_boards_capture_test.dart`、`connection_states_capture_test.dart`、`video_preview_test.dart` 和 `document_results_capture_test.dart`，各入口的输出变量以测试声明为准。
+按本次变更在实际运行应用中捕获对应页面或交互状态，记录设备、视口、安全区、主题和数据来源；截图保存在新的系统临时目录。旧整页采集矩阵及其隔离 fixture 已移除，不能再按历史测试名生成当前画面。需要核对玻璃与弹层时使用下述保留的 GPU 入口。
 
 经对象API将配置中Frame按1×导出后，从仓库根运行：
 

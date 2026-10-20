@@ -7,6 +7,10 @@
 
 Flutter 页面通过 `AppDependencies` 调用 Dart `InteropBridge`，经 FRB 进入 Rust `Runtime`，再调用独立 `interop-adb`。设计系统不依赖互联业务。主控系统能力由平台适配实现；被控设备临时 JAR/helper 集中在 `servers/`。媒体字节通过本机流交给播放器，不在 JSON 事件通道逐帧复制。
 
+`interop-adb` 暴露 transport、认证、service、shell、sync、forward 与发现等协议能力；`tcpip`／`usb` 返回原始 adbd 响应，不定义产品重连事件或应用默认超时。Dart `ConnectionPolicy` 区分产品编排参数与原生执行参数，仅后者传入 Runtime；同一进程重新附着须使用相同配置。`ConnectionSetupCoordinator` 组织配对后发现、USB 记录选择、转 IP 后重试及取消；`ReconnectionCoordinator` 拥有网络连接的自动重连计时、退避及前后台决策；USB 离线后等待显式系统授权，不进入网络重试。Runtime 通过 `adb.*` 命令提供单次执行、显式操作租约、探测事实及资源准入，保留健康探测与可信发现缓存。独立 Rust 宿主的兼容初始化只提供执行参数，不启动产品调度。
+
+产品默认设置由 Dart `applicationSettings` 注入持久化层；独立 Runtime 默认空设置。`VideoQualityPolicy` 在 Dart 合并全局、设备和本次参数，展开预设并生成界面选项；`VirtualDisplayPolicy` 提供独立窗口默认尺寸，并在当前会话的画质上限内等比解析实际虚拟尺寸，避免 scrcpy flex 分别约束两轴导致比例失真。Rust 接收具体媒体参数，核验目标编码器并执行；原始虚拟显示调用未传尺寸时保持上游默认。`DeviceCapabilityPolicy` 根据原始探测事实与本机解码能力形成产品状态和说明，Rust 不生成这些产品说明。
+
 被控兼容按 ADB feature、系统接口与实际权限分别判断，不能把音频或独立应用窗口的下限施加到基础连接与整机远控。无宽元数据／目录协议的设备使用同一个临时原生文件服务；旧 shell 的未知退出码不能作为文件变更成功证据。固定服务端、部署授权、资源回收及当前验证范围见[被控兼容边界](android-target-compatibility.md)。
 
 被控执行产物在 Android 安装包中由三种主控架构共享，Flutter 宿主准备私有资源缓存，Rust 校验后持有不可变原始字节并负责远端部署；其他宿主和独立 Rust 保留压缩内置资源。生成链、摘要与缓存规则见[共享打包](repository-tooling.md#被控执行产物的共享打包)。被控 ABI 与主控 ABI 独立。
@@ -23,6 +27,9 @@ Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/`
 | TransferStore | 传输检查点、按任务追加日志、持久化屏障与恢复校验 |
 | 领域实现 | 各类活动的协议流程、具体容器与资源释放 |
 | Dart InteropBridge | 核心观察者与本机输出协调；授权身份属于 Rust 持久存储 |
+| ConnectionSetupCoordinator | 配对、USB、转 IP 的产品步骤、重试和系统授权租约 |
+| DeviceCapabilityPolicy / VideoQualityPolicy / VirtualDisplayPolicy | 探测解释、画质偏好合并、预设与选项、虚拟窗口尺寸解析 |
+| ReconnectionCoordinator | 自动重连计时、退避、快照补偿与调度租约；释放时取消旧尝试 |
 | RuntimeInitialization | 复用进程 FRB 绑定；界面重新附着保持原身份目录 |
 | bootstrapApplication | 配置完成前持有 bridge；失败等待释放，成功交给 ProviderScope |
 | AppController | 应用级不可变状态投影、订阅和打开页面的设备音源租约 |
@@ -32,6 +39,8 @@ Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/`
 | Android ProcessFlutterHost | 进程 FlutterEngine 与通道；Activity 提供当下 UI/授权 |
 
 慢设备清理在独立任务进行；同一设备仍受转换栅栏约束。旧清理不能释放新连接，重连不能覆盖尚未发布的离线结果。Activity 重建与进程死亡分别验收；后者终止内存活动。
+
+连接快照中的 `connectionId` 只标识当前存活连接，不持久化。连接后屏幕策略由 Dart `DeviceScreenCoordinator` 在自动连接前建立可信基线，按该标识去重，点亮请求由 Runtime 核验标识后执行，旧连接的迟到请求不能作用于新连接。屏幕比例与关闭前锁屏由页面／会话协调器按设备偏好组织；Rust 持有 scrcpy 控制通道与临时显示覆盖租约，负责恢复和精确释放。
 
 Runtime 在私有存储中维护默认全局授权身份及显式设置的设备独立身份，TLS 配置按实际身份缓存；替换身份只失效使用该身份的连接、活动及在途准入，旧身份的迟到连接不能附着。私钥仅通过专用导入命令输入，不进入普通设置、快照和事件。连接的加密策略仍单独判断。可选设备信息由 Runtime 拥有的有界队列处理，最多四个查询并行，结果仅能更新同一存活连接；Runtime 释放时取消在途任务并丢弃排队请求。连接准入仍完成必要身份检查。
 
@@ -43,13 +52,13 @@ Runtime 在私有存储中维护默认全局授权身份及显式设置的设备
 
 ## 契约与生成
 
-`protocol/commands.json` 生成 Dart/Rust 命令枚举、字段形状和核验策略。统一 codec 负责版本、UTF-8 请求限额、命令和结果信封；领域实现负责权限、范围、默认值及 generation。保留 String/JSON 兼容入口与 typed execute 入口，动态业务 payload 尚未全部变为静态 DTO。
+`protocol/commands.json` 生成 Dart/Rust 命令枚举、字段形状和核验策略。统一 codec 负责版本、UTF-8 请求限额、命令和结果信封；执行层负责权限、范围和 generation；产品默认值与编排由 Dart 负责。保留 String/JSON 兼容入口与 typed execute 入口，动态业务 payload 尚未全部变为静态 DTO。
 
 `TransportKind` 在保存、导出与恢复中区分 tcp、wireless、tls、usb。TLS 的明确授权拒绝映射为结构化错误，产品策略不解析展示文本。新增活动通过 activities 统一投影和停止；新增远控转换由 RemotePresentation 协调，页面不另建平行恢复状态。
 
 生成文件与来源一起维护，修改来源后重新生成。共享命令、FRB、Dart builder 和 companion 源码/产物检查由 `tool/check.sh` 汇总；视觉 token 的官方解析与自有 Dart emitter、社区原版 fvp 的依赖边界见 [工具链契约](repository-tooling.md)。
 
-共享播放器使用 pub.dev 精确版本 `fvp: 0.39.1`，不维护本地 fork 或原生补丁。MDK 的实际来源、版本与下载行为由该发布包的平台构建文件决定；锁定 Dart 包不等于所有平台 MDK 二进制也已锁定。历史本地补丁的 snapshot 接缝与 MDK 固定回归不再是当前门禁，普通宿主产物检查继续保留；原版空结果回调限制见工具链契约。
+共享播放器使用 pub.dev 精确版本 `fvp: 0.39.1`，不维护本地 fork 或原生补丁。MDK 的实际来源、版本与下载行为由该发布包的平台构建文件决定；锁定 Dart 包不等于所有平台 MDK 二进制也已锁定。普通视频像素回读由 Bridge 的原生适配核验空结果、大小与生命周期，复用诊断回读的请求所有权，逐帧诊断仍按需开启；不调用上游未判空的 MdkSnapshot。历史本地补丁的 snapshot 接缝与 MDK 固定回归不再是当前门禁，普通宿主产物检查继续保留；原版回调与适配边界见工具链契约。
 
 ## 材质启动与渲染
 
@@ -69,4 +78,4 @@ Runtime 在私有存储中维护默认全局授权身份及显式设置的设备
 
 ## 平台交付边界
 
-`tool/check.sh --android` 覆盖工程检查与三 ABI Android APK；`tool/build_host.dart` 由对应宿主执行 iOS、macOS、Windows 整包及库检查。CI 配置存在不代表作业通过；平台功能支持、物理设备/OEM、媒体性能、后台回收和生产密码提供器分别留证。
+仓库当前不配置自动 CI/CD。`tool/check.sh --android` 供手动执行工程检查与三 ABI Android APK 核验；`tool/build_host.dart` 由对应宿主手动执行 iOS、macOS、Windows 整包及库检查。平台功能支持、物理设备/OEM、媒体性能、后台回收和生产密码提供器分别留证。

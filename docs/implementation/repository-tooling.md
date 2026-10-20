@@ -26,13 +26,15 @@ dart tool/generate.dart --check
 
 `app/pubspec.yaml` 是唯一 Flutter 应用入口，`app/` 直接包含 `lib/`、`test/`、`integration_test/` 与平台 runner。根 `pubspec.yaml` 仅声明 Dart workspace 与仓库工具依赖；`app`、`packages/design_system` 与 `packages/interop_bridge` 共享根 `pubspec.lock` 和 `.dart_tool`，依赖从仓库根统一解析。`crates/` 为 Cargo workspace。
 
-应用运行、构建和 Flutter 测试在 `app/` 执行。主机驱动保留在 `tool/driver/`，性能基准入口保留在 `tool/benchmark/`；从 `app/` 运行时显式指定 `--driver=../tool/driver/<入口>.dart` 与 `--target=../tool/benchmark/<入口>.dart`。仓库工具、生成命令与 CI 编排入口仍从仓库根执行，工具负责将 Flutter 子进程的工作目录设为 `app/`。普通 APK 输出位于 `app/build/app/outputs/flutter-apk/`。
+应用运行、构建和 Flutter 测试在 `app/` 执行。主机驱动保留在 `tool/driver/`，性能基准入口保留在 `tool/benchmark/`；从 `app/` 运行时显式指定 `--driver=../tool/driver/<入口>.dart` 与 `--target=../tool/benchmark/<入口>.dart`。仓库工具、生成命令与手动检查入口仍从仓库根执行，工具负责将 Flutter 子进程的工作目录设为 `app/`。仓库当前不配置自动 CI/CD。普通 APK 输出位于 `app/build/app/outputs/flutter-apk/`。
 
 本机 Linux/X11 的玻璃成像回归使用 `dart tool/glass_emulator.dart --avd <名称>` 启动既有 AVD；该入口固定已验证的 host GL 配置并清除图形覆盖环境，不创建或清空设备。Emulator 37.2.12 原生崩溃证据、display 参数、实际 Mesa 软件 renderer 及适用边界见[组件运行记录](glass-components-2026-10-20.md#模拟器崩溃定位与运行配置)。
 
 `dart tool/android.dart build` 默认构建 ARM32、ARM64、x86_64 通用 release APK，并压缩包内原生库，以下载体积为优先。Android 安装时会解压匹配架构的库，需将下载大小与安装后的总占用分别衡量。`--no-compress-native` 保留库在 APK 中直接加载，`--abi` 可用于特定架构分析；这些对照构建不能替代通用交付包。
 
 仓库自有生成、构建、诊断及主机测试编排统一使用 Dart；服务端构建器随其产物保存在 `servers/`，其余入口在 `tool/`。工具回归使用同一锁定的 `flutter_test`，不另建测试依赖环境。Node 仅用于官方 DESIGN.md 解析及其 Dart emitter；原生源码和系统构建器保持平台要求的语言。第三方来源归档内的上游脚本不属于自有工具，不改写归档以消除文件扩展名。
+
+测试围绕具体失败风险和可观察结果保留，优先通过责任接口覆盖。常量表、简单透传、框架默认行为、源码字符串和已由生成检查或同一流程覆盖的稳定逻辑不单独维护测试；同一场景不复制到多个层级。取消与迟到回执、资源所有权、协议互操作、持久化未知结果及真实故障回归仍保留独立断言；截图按实际改动采集，不维护所有页面／主题／尺寸的常驻矩阵。
 
 工具迁移后的历史回执仍只证明原版本的运行结果。本文与专项记录中的复现入口随目录调整，原日志、版本、环境及已知限制不因迁移改变。
 
@@ -60,7 +62,7 @@ MDK 的规则直接继承该发布包，不再由本仓库统一固定正式版�
 
 Android 仅对 fvp 插件链接启用 `--as-needed`，去掉可选运行库的冗余硬依赖后，应用打包排除 `libass.so`。远控输入没有字幕轨，普通视频预览使用平台播放器；其他宿主不排除字幕库。FFmpeg 仍随包分发并由 MDK 运行时加载。此配置不修改社区包源码、SDK 缓存或下载来源，最终 ELF 必须没有缺失的 `libass.so` 必需依赖。
 
-原版 `MdkSnapshot` 对 MDK 失败回调的空 `ret` 未判空，构造 Dart typed data 时直接读取其 stride、height 和 data。此前宿主源边界探针曾注入该空结果并得到原生 SIGSEGV；这是空结果路径的已知限制，区别于 renderer 内部的历史空 `std::function` 崩溃，Dart 异常处理不能拦截该原生解引用。当前选择直接使用原版，不保留本地修补。[原版回调源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/callbacks.cpp)、[历史调查](../research/scrcpy-first-frame-performance.md#fvp空结果故障与可复现交付2026-10-18)。
+原版 `MdkSnapshot` 对 MDK 失败回调的空 `ret` 未判空，构造 Dart typed data 时直接读取其 stride、height 和 data。此前宿主源边界探针曾注入该空结果并得到原生 SIGSEGV；Android 实际关闭会话时也复现于该回调，符号化结果见[本轮验收](display-notifications-adb-2026-10-20.md)。这是空结果路径的上游限制，区别于 renderer 内部的历史空 `std::function` 崩溃，Dart 异常处理不能拦截该原生解引用。本项目保留社区原版，普通快照改用 Bridge 的有界 MDK 回读适配，在原生线程检查空结果与跨度并复制到受请求所有者保护的存储；Dart 轮询和排空回读后才销毁 Player，逐帧诊断仍为可选。[原版回调源码](https://github.com/wang-bin/fvp/blob/a6e59bdaa690fc7bbd2d80f5e299ad9e0515be93/lib/src/callbacks.cpp)、[历史调查](../research/scrcpy-first-frame-performance.md#fvp空结果故障与可复现交付2026-10-18)。
 
 本地补丁及其 `fvp_snapshot_regression`、`check_native_deps` 专用工具与 MDK 固定回归已移除。普通宿主产物的链接、库架构和打包验证继续保留。下文及专项记录中的补丁版测试、APK、SDK 摘要均保留历史身份，不继承为社区原版验证；切换后的实际结果另记[验收记录](validation.md)。
 
