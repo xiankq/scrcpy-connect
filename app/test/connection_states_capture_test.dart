@@ -208,8 +208,15 @@ void main() {
           expect(find.byType(Texture), findsNothing);
         } else if (scene == _Scene.reauthorize) {
           expect(find.text('重新授权'), findsOneWidget);
-          expect(find.textContaining('旧记录不代表当前授权'), findsOneWidget);
-          for (final label in ['无线调试连接', 'USB 数据线', 'IP 地址连接']) {
+          expect(find.byType(TextFormField), findsNWidgets(3));
+          expect(
+            tester
+                .widget<TextFormField>(find.byType(TextFormField).first)
+                .controller!
+                .text,
+            '192.168.1.8',
+          );
+          for (final label in ['无线配对码', '扫码配对', 'USB', 'IP连接']) {
             expect(find.text(label), findsOneWidget);
           }
         } else {
@@ -243,7 +250,7 @@ void main() {
                   isEmpty,
                 );
               case _Scene.pairingFailure:
-                expect(find.textContaining('配对验证未通过'), findsOneWidget);
+                expect(find.text('配对失败，请使用手机当前显示的配对端口和配对码。'), findsOneWidget);
                 expect(
                   tester
                       .widget<TextFormField>(find.byType(TextFormField).at(2))

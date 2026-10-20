@@ -88,23 +88,29 @@ void main() {
     await tester.tap(find.byTooltip('添加设备'));
     await tester.pumpAndSettle();
     await capture('add-device');
-    await tester.tap(find.text('无线调试连接'));
+    await Scrollable.ensureVisible(
+      tester.element(find.text('连接帮助')),
+      alignment: .5,
+    );
     await tester.pumpAndSettle();
-    await capture('wireless-guide');
-    await tester.pageBack();
+    await tester.tap(find.text('连接帮助'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('IP 地址连接'), 200);
+    await capture('connection-help');
+    await Scrollable.ensureVisible(
+      tester.element(find.text('知道了')),
+      alignment: .5,
+    );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('IP 地址连接'));
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(
+      tester.element(find.text('IP连接')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('IP连接'));
     await tester.pumpAndSettle();
     await capture('ip-address-form');
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('手动填写无线调试地址'));
-    await tester.pumpAndSettle();
-    await capture('connection-form');
-    await tester.pageBack();
-    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.text('设置').hitTestable().first);
@@ -122,7 +128,7 @@ void main() {
         'name': '测试手机 A',
         'model': 'Android 测试设备',
         'status': 'connected',
-        'transport': '无线连接',
+        'transport': 'tls',
         'battery': 78,
       },
       {
@@ -138,14 +144,10 @@ void main() {
     await tester.tap(find.text('测试手机 A'));
     await tester.pumpAndSettle();
     await capture('workspace-fixture');
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('测试手机 A详情'));
-    await tester.pumpAndSettle();
-    await capture('device-settings-top-fixture');
+    await capture('workspace-settings-top-fixture');
     await tester.scrollUntilVisible(find.text('自动同步剪贴板'), 160);
     await tester.pumpAndSettle();
-    await capture('device-settings-fixture');
+    await capture('workspace-settings-fixture');
     await tester.pageBack();
     await tester.pumpAndSettle();
     await controller.updateSetting('appearance', 'dark');
@@ -162,13 +164,12 @@ void main() {
     await tester.tap(find.byTooltip('添加设备'));
     await tester.pumpAndSettle();
     await capture('narrow-large-text-add-device');
-    await tester.tap(find.text('无线调试连接'));
+    await Scrollable.ensureVisible(
+      tester.element(find.text('IP连接')),
+      alignment: .5,
+    );
     await tester.pumpAndSettle();
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('IP 地址连接'), 200);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('IP 地址连接'));
+    await tester.tap(find.text('IP连接'));
     await tester.pumpAndSettle();
     await capture('narrow-large-text-ip-form');
     tester.view.physicalSize = const Size(620, 280);

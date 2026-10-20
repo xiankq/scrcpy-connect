@@ -1,18 +1,16 @@
-import 'package:scrcpy_connect/widgets/page_chrome.dart';
-import 'package:scrcpy_connect/widgets/recovery_status.dart';
-import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:design_system/design_system.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/pages/transfers/index/widgets/transfer_batch_panel.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/pages/transfers/index/widgets/transfer_history_row.dart';
+import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/transfer_state.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
-import 'package:scrcpy_connect/widgets/state_note.dart';
-
-import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:design_system/design_system.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
 class TransfersPage extends HookConsumerWidget {
   const TransfersPage({
@@ -24,139 +22,13 @@ class TransfersPage extends HookConsumerWidget {
   final bool embedded;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final appEventRevision = ref.watch(
-      appControllerProvider.select((state) => state.eventRevision),
+    final events = ref.watch(
+      appControllerProvider.select((s) => s.eventRevision),
     );
     final revision = useState(0);
-    final content = CommandView(
-      refreshKey: '$appEventRevision:${revision.value}',
-      controller: controller,
-      command: 'transfers.list',
-      emptyTitle: '暂时无法读取传输任务',
-      builder: (context, data, refresh) {
-        final tasks = objects(data['transfers']);
-        final batches = objects(data['batches']);
-        if (tasks.isEmpty && batches.isEmpty) {
-          return const PageChromeBody(
-            child: EmptyContent(
-              icon: LucideIcons.arrowUpDown,
-              title: '暂无传输任务',
-              message: '在设备的文件管理或相册中取回内容，或发送本机文件。任务会在这里显示实际进度与结果。',
-            ),
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: () async => refresh(),
-          child: ListView.separated(
-            padding:
-                EdgeInsets.fromLTRB(
-                  DesignTokens.spacingMd,
-                  DesignTokens.spacingSm,
-                  DesignTokens.spacingMd,
-                  DesignTokens.spacingLg,
-                ) +
-                PageChromePadding.of(context),
-            itemCount: batches.length + tasks.length + 1,
-            separatorBuilder: (_, index) =>
-                SizedBox(height: index == 0 ? 0 : DesignTokens.spacingMd),
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return const RecoveryStatus(padding: EdgeInsets.zero);
-              }
-              final i = index - 1;
-              if (i < batches.length) {
-                return TransferBatchPanel(
-                  controller: controller,
-                  batch: batches[i],
-                  refresh: refresh,
-                );
-              }
-              final task = transferView(controller, tasks[i - batches.length]);
-              return InkWell(
-                borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-                onTap: () => TransferDetailsRoute(
-                  taskId: value(task, 'id', value(task, 'transferId')),
-                ).push<void>(context),
-                child: ContentPanel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          FeatureIcon(
-                            task['kind'] == 'directory'
-                                ? LucideIcons.folder
-                                : task['direction'] == 'push'
-                                ? LucideIcons.upload
-                                : LucideIcons.download,
-                            color: ConnectTokens.amber,
-                            size: DesignTokens.componentFileIconSize,
-                          ),
-                          const SizedBox(width: DesignTokens.spacingSm),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  value(task, 'name', '文件传输'),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium,
-                                ),
-                                Text(
-                                  '${value(task, 'sourceLabel', value(task, 'deviceName'))} → ${value(task, 'destinationLabel', value(task, 'destination'))}',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(
-                            LucideIcons.chevronRight,
-                            size: DesignTokens.componentIconActionSize,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: DesignTokens.spacingMd),
-                      Text(
-                        statusText(value(task, 'status')),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      if (num.tryParse('${task['totalBytes']}')
-                          case final total? when total > 0) ...[
-                        const SizedBox(height: DesignTokens.spacingXs),
-                        LinearProgressIndicator(
-                          value:
-                              ((num.tryParse('${task['completedBytes']}') ??
-                                          0) /
-                                      total)
-                                  .clamp(0, 1)
-                                  .toDouble(),
-                          minHeight: 3,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        const SizedBox(height: DesignTokens.spacingTight),
-                        Text(
-                          '${bytes(task['completedBytes'])} / ${bytes(total)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                      if (value(task, 'error').isNotEmpty)
-                        StateNote(
-                          value(task, 'error'),
-                          icon: LucideIcons.circleAlert,
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
     return PageFrame(
       root: embedded,
-      title: embedded ? '传输' : '传输中心',
+      title: '传输',
       actions: [
         GlassActionIcon(
           tooltip: '刷新任务',
@@ -164,7 +36,159 @@ class TransfersPage extends HookConsumerWidget {
           icon: const Icon(LucideIcons.refreshCw),
         ),
       ],
-      child: content,
+      child: CommandView(
+        refreshKey: '$events:${revision.value}',
+        controller: controller,
+        command: 'transfers.list',
+        emptyTitle: '暂时无法读取传输任务',
+        builder: (context, data, refresh) {
+          final rows = transferHistoryRows(controller, data);
+          if (rows.isEmpty) {
+            return const PageChromeBody(
+              child: EmptyContent(
+                icon: LucideIcons.arrowUpDown,
+                title: '暂无传输',
+                message: '发送或接收文件后，可在这里查看进度和结果。',
+              ),
+            );
+          }
+          return RefreshIndicator(
+            onRefresh: () async => refresh(),
+            child: ListView(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                    DesignTokens.spacingMd,
+                    DesignTokens.spacingSm,
+                    DesignTokens.spacingMd,
+                    DesignTokens.spacingLg,
+                  ) +
+                  PageChromePadding.of(context),
+              children: [
+                const RecoveryStatus(padding: EdgeInsets.zero),
+                ContentPanel(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (final row in rows)
+                        TransferHistoryRow(
+                          key: ValueKey(row['historyId']),
+                          controller: controller,
+                          row: row,
+                          refresh: refresh,
+                          onOpen: () => _open(context, row),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
+
+  void _open(BuildContext context, Json row) {
+    final members = objects(row['members']);
+    if (members.length == 1) {
+      TransferDetailsRoute(taskId: value(members.single, 'id'))
+          .push<void>(context);
+      return;
+    }
+    showGlassModalSheet<void>(
+      context: context,
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * .7,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(DesignTokens.spacingMd),
+              child: Text(
+                value(row, 'name'),
+                style: Theme.of(sheetContext).textTheme.bodyMedium,
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final member in members)
+                    ListTile(
+                      leading: Icon(
+                        member['kind'] == 'directory'
+                            ? LucideIcons.folder
+                            : LucideIcons.file,
+                        color: ConnectTokens.amber,
+                        size: DesignTokens.componentIconSize,
+                      ),
+                      title: Text(
+                        value(member, 'name', '文件'),
+                        style: Theme.of(sheetContext).textTheme.bodyMedium,
+                      ),
+                      subtitle: Text(
+                        transferHistoryStatus(member),
+                        style: Theme.of(sheetContext).textTheme.bodySmall,
+                      ),
+                      trailing: const Icon(
+                        LucideIcons.chevronRight,
+                        size: DesignTokens.componentIconSmallSize,
+                      ),
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        TransferDetailsRoute(taskId: value(member, 'id'))
+                            .push<void>(context);
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Each selection appears once; batch children live in its details.
+List<Json> transferHistoryRows(AppController controller, Json data) {
+  final groups = <String, List<Json>>{};
+  for (final raw in objects(data['transfers'])) {
+    final task = transferView(controller, raw);
+    final batch = value(task, 'batchId');
+    groups
+        .putIfAbsent(
+          batch.isEmpty ? 'task:${task['id']}' : 'batch:$batch',
+          () => [],
+        )
+        .add(task);
+  }
+  final summaries = {
+    for (final b in objects(data['batches'])) value(b, 'batchId'): b,
+  };
+  return [
+    for (final group in groups.entries)
+      (() {
+        final members = group.value;
+        final roots = members
+            .where((t) => value(t, 'parentId').isEmpty)
+            .toList();
+        final first = roots.isEmpty ? members.first : roots.first;
+        final batch = value(first, 'batchId');
+        final summary = summaries[batch];
+        final multiple = members.length > 1;
+        return <String, dynamic>{
+          ...first,
+          if (multiple && summary != null) ...summary,
+          'historyId': group.key,
+          'members': members,
+          'name':
+              '${value(first, 'name', '文件传输')}${roots.length > 1 ? ' 等 ${roots.length} 项' : ''}',
+          if (multiple) 'completedBytes': summary?['transferred'] ?? 0,
+          if (multiple) 'totalBytes': summary?['total'],
+          'removeParams': batch.isEmpty
+              ? {'transferId': first['id']}
+              : {'batchId': batch},
+        };
+      })(),
+  ];
 }

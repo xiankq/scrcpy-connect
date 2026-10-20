@@ -1275,8 +1275,9 @@ class _RemotePageState extends State<RemotePage>
                                     if (presentation.errorCode ==
                                         'resource_busy')
                                       FilledButton(
-                                        onPressed: () => ActivitiesRoute()
-                                            .push<void>(context),
+                                        onPressed: () => DeviceActivitiesRoute(
+                                          deviceId: value(widget.device, 'id'),
+                                        ).push<void>(context),
                                         child: const Text('管理当前活动'),
                                       ),
                                     if (presentation.errorCode ==

@@ -10,7 +10,7 @@ import 'package:scrcpy_connect/router/record_route.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/widgets/visible_device_focus.dart';
 
-import 'package:scrcpy_connect/pages/settings/activities/settings_activities_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/pages/settings/appearance/settings_appearance_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
@@ -46,6 +46,9 @@ import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/devices_workspace_files_directory_picker_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
 import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
+
+import 'package:scrcpy_connect/pages/settings/adb_identity/settings_adb_identity_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';
 
 part 'app_router.g.dart';
 
@@ -424,14 +427,27 @@ class DiscoveryRoute extends GoRouteData with $DiscoveryRoute {
 
 @TypedGoRoute<UsbGuideRoute>(path: '/connection/usb', name: 'usb-guide')
 class UsbGuideRoute extends GoRouteData with $UsbGuideRoute {
-  const UsbGuideRoute();
+  const UsbGuideRoute({this.deviceId});
+  final String? deviceId;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    Widget page(BuildContext _, GoRouterState state) =>
-        AddDevicePage(controller: controller, initialMode: AddDeviceMode.usb);
-    return page(context, state);
+    final id = deviceId;
+    Widget page([Json? record]) => AddDevicePage(
+      controller: controller,
+      initialMode: AddDeviceMode.usb,
+      deviceId: id,
+      initialDevice: record,
+    );
+    if (id == null) return page();
+    return _deviceRecord(
+      context,
+      state,
+      id,
+      'usb-guide',
+      (_, _, record) => page(record),
+    );
   }
 
   @override
@@ -1185,16 +1201,8 @@ class ActivitiesRoute extends GoRouteData with $ActivitiesRoute {
   const ActivitiesRoute();
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    Widget page(BuildContext _, GoRouterState state) =>
-        ActivitiesPage(controller: controller);
-    return page(context, state);
-  }
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
+  String? redirect(BuildContext context, GoRouterState state) =>
+      const DevicesRoute().location;
 }
 
 @TypedGoRoute<DataPreferencesRoute>(
@@ -1227,6 +1235,84 @@ class MediaCacheRoute extends GoRouteData with $MediaCacheRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       MediaCachePage(controller: _controller(context));
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
+@TypedGoRoute<DeviceActivitiesRoute>(
+  path: '/devices/:deviceId/activities',
+  name: 'device-activities',
+)
+class DeviceActivitiesRoute extends GoRouteData with $DeviceActivitiesRoute {
+  const DeviceActivitiesRoute({required this.deviceId});
+  final String deviceId;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
+    context,
+    state,
+    deviceId,
+    'device-activities',
+    (_, _, _) =>
+        ActivitiesPage(controller: _controller(context), deviceId: deviceId),
+  );
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
+@TypedGoRoute<AdbIdentityRoute>(path: '/settings/adb-key', name: 'adb-key')
+class AdbIdentityRoute extends GoRouteData with $AdbIdentityRoute {
+  const AdbIdentityRoute();
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      AdbIdentityPage(controller: _controller(context));
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
+@TypedGoRoute<DeviceIdentityRoute>(
+  path: '/devices/:deviceId/adb-key',
+  name: 'device-adb-key',
+)
+class DeviceIdentityRoute extends GoRouteData with $DeviceIdentityRoute {
+  const DeviceIdentityRoute({required this.deviceId});
+  final String deviceId;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
+    context,
+    state,
+    deviceId,
+    'device-adb-key',
+    (_, _, device) =>
+        AdbIdentityPage(controller: _controller(context), device: device),
+  );
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
+@TypedGoRoute<DeviceIpRoute>(
+  path: '/devices/:deviceId/convert-ip',
+  name: 'device-convert-ip',
+)
+class DeviceIpRoute extends GoRouteData with $DeviceIpRoute {
+  const DeviceIpRoute({required this.deviceId});
+  final String deviceId;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
+    context,
+    state,
+    deviceId,
+    'device-convert-ip',
+    (_, _, device) =>
+        DeviceConvertIpPage(controller: _controller(context), device: device),
+  );
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) =>
       _page(state, build(context, state));

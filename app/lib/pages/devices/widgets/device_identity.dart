@@ -7,15 +7,29 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 class DeviceIdentity extends StatelessWidget {
   const DeviceIdentity({
     super.key,
+    required this.device,
     this.compact = false,
     this.showcase = false,
   });
+  final Json device;
   final bool compact;
   final bool showcase;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final (statusIcon, statusColor) = switch (value(
+      device,
+      'status',
+      'offline',
+    )) {
+      'connected' => (LucideIcons.circleCheck, ConnectTokens.mint),
+      'connecting' ||
+      'reconnecting' ||
+      'checking' => (LucideIcons.loaderCircle, ConnectTokens.blue),
+      'unauthorized' => (LucideIcons.shieldAlert, ConnectTokens.amber),
+      _ => (LucideIcons.wifiOff, colors.onSurfaceVariant),
+    };
     final width = showcase
         ? DesignTokens.componentDeviceIdentityShowcaseWidth
         : DesignTokens.componentDeviceIdentityWidth;
@@ -49,8 +63,8 @@ class DeviceIdentity extends StatelessWidget {
                     alignment: Alignment.center,
                     children: [
                       Icon(
-                        LucideIcons.link,
-                        color: colors.onSurfaceVariant,
+                        statusIcon,
+                        color: statusColor,
                         size: showcase
                             ? DesignTokens.componentIconLargeSize
                             : DesignTokens.componentIconActionSize,

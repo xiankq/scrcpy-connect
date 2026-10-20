@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:scrcpy_connect/pages/devices/widgets/device_access.dart';
+
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -84,13 +86,15 @@ class RunningApps extends HookWidget {
             children: [
               Expanded(
                 child: Text(
-                  '手机应用',
+                  '活跃应用',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
               IconButton(
                 tooltip: '刷新后台应用',
-                onPressed: online ? refresh : null,
+                onPressed: online
+                    ? refresh
+                    : () => offerDeviceConnection(context, controller, device),
                 icon: const Icon(
                   LucideIcons.refreshCw,
                   size: DesignTokens.componentIconSmallSize,
@@ -99,7 +103,7 @@ class RunningApps extends HookWidget {
               TextButton(
                 onPressed: online
                     ? () => AppsRoute(deviceId: id).push<void>(context)
-                    : null,
+                    : () => offerDeviceConnection(context, controller, device),
                 child: const Text('全部应用'),
               ),
             ],

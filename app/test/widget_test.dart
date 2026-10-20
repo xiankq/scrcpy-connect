@@ -35,9 +35,9 @@ void main() {
           ),
         ),
       );
-      await tester.ensureVisible(find.text('尚未配对？使用配对码'));
+      await tester.ensureVisible(find.text('使用无线配对码'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('尚未配对？使用配对码'));
+      await tester.tap(find.text('使用无线配对码'));
       await tester.pumpAndSettle();
       expect(find.text('无线配对码'), findsOneWidget);
       expect(find.text('phone.local'), findsOneWidget);
@@ -96,7 +96,8 @@ void main() {
       expect(cancelParams?['attemptId'], isNotEmpty);
       pending.completeError(StateError('cancelled'));
       await tester.pumpAndSettle();
-      expect(find.text('本次尝试已取消。已建立的配对信任会保留。'), findsOneWidget);
+      expect(find.text('已取消本次尝试。'), findsOneWidget);
+      expect(find.byType(ConnectionFailureNote), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

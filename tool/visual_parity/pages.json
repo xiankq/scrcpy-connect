@@ -113,7 +113,7 @@
       "captureScope": "production-router",
       "comparisonScope": "host-content-excluding-system-bars",
       "fixtureContentDifferences": [
-        "Both references represent one running directory task at 65% (14.9/22.9 MB), without completed tasks."
+        "The Flutter fixture contains one running directory task at 65% (14.9/22.9 MB); the source task list must be checked separately."
       ]
     },
     {
@@ -223,7 +223,7 @@
       "captureScope": "isolated-page-fixture",
       "comparisonScope": "host-content-excluding-system-bars",
       "fixtureContentDifferences": [
-        "The edit action preserves the recorded connection transport; the visible label is 编辑连接地址."
+        "The edit action preserves the recorded connection transport; the visible label is 编辑地址与端口."
       ]
     },
     {

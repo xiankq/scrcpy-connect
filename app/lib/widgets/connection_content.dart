@@ -1,8 +1,8 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 
-/// Connection forms use body text for input and captions for field feedback.
-/// The scope also covers embedded USB and QR content without changing the app.
+/// Connection and authorization forms share body text and field feedback.
+/// Applies to device settings as well as embedded USB and QR content.
 class ConnectionContent extends StatelessWidget {
   const ConnectionContent({super.key, required this.child});
   final Widget child;
@@ -26,6 +26,7 @@ class ConnectionContent extends StatelessWidget {
         );
     return Theme(
       data: theme.copyWith(
+        textTheme: theme.textTheme.copyWith(titleLarge: body, bodyLarge: body),
         inputDecorationTheme: theme.inputDecorationTheme.copyWith(
           labelStyle: WidgetStateTextStyle.resolveWith(
             (states) => labelStyle(body, states),
@@ -51,3 +52,37 @@ class ConnectionContent extends StatelessWidget {
     );
   }
 }
+
+/// Authorization and connection changes retain the form's readable type scale.
+Future<bool> confirmConnectionChange(
+  BuildContext context,
+  String title,
+  String message, {
+  required String action,
+  bool danger = false,
+}) async =>
+    await showGlassDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConnectionContent(
+        child: GlassAlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: danger
+                  ? FilledButton.styleFrom(
+                      backgroundColor: ConnectTokens.danger,
+                    )
+                  : null,
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(action),
+            ),
+          ],
+        ),
+      ),
+    ) ??
+    false;

@@ -231,6 +231,11 @@ void main() {
       scrollable: find.byType(Scrollable).first,
       maxScrolls: 30,
     );
+    await Scrollable.ensureVisible(
+      tester.element(find.text('移除此设备')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('移除此设备').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

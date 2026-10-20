@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/settings/activities/settings_activities_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/test_controller.dart';
@@ -57,14 +57,16 @@ void main() {
       await tester.pumpWidget(
         TestProviderScope(
           controller: controller,
-          child: MaterialApp(home: ActivitiesPage(controller: controller)),
+          child: MaterialApp(
+            home: ActivitiesPage(controller: controller, deviceId: 'device-a'),
+          ),
         ),
       );
       await tester.pumpAndSettle();
       expect(find.text('手机 A'), findsOneWidget);
-      expect(find.text('手机 B'), findsOneWidget);
-      expect(find.text('设备声音'), findsNWidgets(2));
-      expect(find.byTooltip('正在播放'), findsNWidgets(2));
+      expect(find.text('手机 B'), findsNothing);
+      expect(find.text('设备声音'), findsOneWidget);
+      expect(find.byTooltip('正在播放'), findsOneWidget);
       final rowA = find.byKey(const ValueKey('activities:id:device-a'));
       await tester.tap(find.descendant(of: rowA, matching: find.text('停止')));
       await tester.pumpAndSettle();
@@ -75,9 +77,15 @@ void main() {
       expect(requests.where((r) => r.$1 == 'activities.stop'), hasLength(1));
       expect(lists, greaterThan(1));
       expect(find.textContaining('手机 A'), findsNothing);
-      expect(find.textContaining('手机 B'), findsOneWidget);
-      expect(find.text('设备声音'), findsOneWidget);
-      expect(find.byTooltip('正在播放'), findsOneWidget);
+      expect(find.textContaining('手机 B'), findsNothing);
+      expect(find.text('设备声音'), findsNothing);
+      expect(find.text('暂无正在进行的活动'), findsOneWidget);
+      expect(
+        requests
+            .where((r) => r.$1 == 'activities.list')
+            .every((r) => r.$2['deviceId'] == 'device-a'),
+        isTrue,
+      );
       expect(
         requests.where(
           (r) =>

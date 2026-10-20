@@ -2,6 +2,7 @@ import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
 import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
+import 'package:scrcpy_connect/pages/transfers/index/widgets/transfer_history_row.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
@@ -151,50 +152,55 @@ void main() {
     },
   );
   testWidgets(
-    'directory batches show actual counts and cancel the entire selected batch only when permitted',
+    'compact history groups batch children and stops before removing only the confirmed batch',
     (tester) async {
-      Json? cancelled;
+      final requests = <(String, Json)>[];
+      var stopped = false;
+      var removed = false;
       final controller = createTestController((
         command, [
         params = const {},
       ]) async {
-        if (command == 'transfers.cancel') cancelled = params;
+        requests.add((command, params));
+        if (command == 'transfers.cancel') stopped = true;
+        if (command == 'transfers.remove') removed = true;
         if (command == 'transfers.list') {
           return {
             'transfers': [
+              if (!removed) ...[
+                {
+                  'id': 'folder',
+                  'batchId': 'batch-a',
+                  'name': 'Documents',
+                  'kind': 'directory',
+                  'status': stopped ? 'cancelled' : 'running',
+                  'direction': 'push',
+                  'treeVerified': true,
+                },
+                {
+                  'id': 'child',
+                  'parentId': 'folder',
+                  'batchId': 'batch-a',
+                  'name': 'child.pdf',
+                  'status': stopped ? 'cancelled' : 'conflict',
+                  'direction': 'push',
+                },
+              ],
               {
-                'id': 'folder',
-                'batchId': 'batch-a',
-                'name': 'Documents',
-                'kind': 'directory',
+                'id': 'other',
+                'batchId': 'batch-b',
+                'name': 'Other.pdf',
                 'status': 'completed',
-                'direction': 'push',
-                'total': 0,
+                'direction': 'pull',
               },
             ],
             'batches': [
               {
                 'batchId': 'batch-a',
-                'direction': 'push',
-                'status': 'conflict',
-                'fileCount': 2,
-                'directoryCount': 1,
-                'completed': 1,
-                'itemCount': 3,
+                'status': stopped ? 'cancelled' : 'conflict',
+                'canCancel': !stopped,
                 'transferred': 4,
                 'total': 10,
-                'canCancel': true,
-              },
-              {
-                'batchId': 'batch-b',
-                'direction': 'pull',
-                'status': 'completedWithSkips',
-                'fileCount': 1,
-                'directoryCount': 0,
-                'completed': 0,
-                'skipped': 1,
-                'itemCount': 1,
-                'canCancel': false,
               },
             ],
           };
@@ -209,14 +215,103 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('2 个文件 · 1 个文件夹'), findsOneWidget);
-      expect(find.text('部分内容已跳过'), findsOneWidget);
-      expect(find.text('取消本批传输'), findsOneWidget);
-      await tester.tap(find.text('取消本批传输'));
+      expect(find.byType(TransferHistoryRow), findsNWidgets(2));
+      expect(find.text('child.pdf'), findsNothing);
+      expect(
+        tester.getSize(find.byType(TransferHistoryRow).first).height,
+        lessThanOrEqualTo(90),
+      );
+      await tester.tap(find.byTooltip('传输操作').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('取消传输').last);
+      await tester.tap(find.text('停止并移除…'));
       await tester.pumpAndSettle();
-      expect(cancelled, {'batchId': 'batch-a'});
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(
+        requests.where(
+          (r) => r.$1 == 'transfers.cancel' || r.$1 == 'transfers.remove',
+        ),
+        isEmpty,
+      );
+      await tester.tap(find.byTooltip('传输操作').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('停止并移除…'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('停止并移除'));
+      await tester.pumpAndSettle();
+      final mutations = requests
+          .where(
+            (r) => r.$1 == 'transfers.cancel' || r.$1 == 'transfers.remove',
+          )
+          .toList();
+      expect(mutations.map((r) => r.$1), [
+        'transfers.cancel',
+        'transfers.remove',
+      ]);
+      expect(mutations.map((r) => r.$2), [
+        {'batchId': 'batch-a'},
+        {'batchId': 'batch-a'},
+      ]);
+      expect(find.text('Documents'), findsNothing);
+      expect(find.text('Other.pdf'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
+  testWidgets(
+    'finished history removal is confirmed and never deletes the saved file',
+    (tester) async {
+      final requests = <(String, Json)>[];
+      var removed = false;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        requests.add((command, params));
+        if (command == 'transfers.remove') removed = true;
+        if (command == 'transfers.list') {
+          return {
+            'transfers': [
+              if (!removed)
+                {
+                  'id': 'saved',
+                  'name': 'Saved.pdf',
+                  'direction': 'pull',
+                  'status': 'completed',
+                  'destinationScope': 'system',
+                },
+            ],
+          };
+        }
+        return {};
+      });
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          theme: ConnectTokens.theme(Brightness.light),
+          home: TransfersPage(controller: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('传输操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('移除记录'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('已保存文件不受影响'), findsOneWidget);
+      expect(requests.where((r) => r.$1 == 'transfers.remove'), isEmpty);
+      await tester.tap(find.text('移除记录').last);
+      await tester.pumpAndSettle();
+      expect(requests.where((r) => r.$1 == 'transfers.remove').single.$2, {
+        'transferId': 'saved',
+      });
+      expect(
+        requests.where(
+          (r) => r.$1 == 'transfers.cancel' || r.$1.startsWith('files.'),
+        ),
+        isEmpty,
+      );
+      expect(find.text('暂无传输'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },

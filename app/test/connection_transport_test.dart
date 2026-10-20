@@ -379,7 +379,7 @@ void main() {
       expect(find.text('连接超时，请检查地址、连接端口和网络。'), findsOneWidget);
       expect(find.text('重新配对'), findsNothing);
       expect(find.textContaining('未信任'), findsNothing);
-      expect(find.text('尚未配对？使用配对码'), findsOneWidget);
+      expect(find.text('使用无线配对码'), findsOneWidget);
     },
   );
 
@@ -405,11 +405,11 @@ void main() {
       expect(find.text('重新配对'), findsNothing);
       expect(find.textContaining('未信任'), findsNothing);
       await Scrollable.ensureVisible(
-        tester.element(find.text('尚未配对？使用配对码')),
+        tester.element(find.text('使用无线配对码')),
         alignment: .5,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('尚未配对？使用配对码'));
+      await tester.tap(find.text('使用无线配对码'));
       await tester.pumpAndSettle();
       expect(
         router.routeInformationProvider.value.uri.queryParameters['device-id'],

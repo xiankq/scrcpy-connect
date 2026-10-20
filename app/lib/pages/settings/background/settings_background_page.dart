@@ -176,8 +176,8 @@ class BackgroundPage extends HookConsumerWidget {
             '系统停止、强行结束或回收应用后，不保证活动仍在进行。再次打开会核验状态；用户主动停止的活动保持停止，未知结果的回复、删除和拨号不会自动重复。',
           ),
           OutlinedButton(
-            onPressed: () => ActivitiesRoute().push<void>(context),
-            child: const Text('查看并停止当前活动'),
+            onPressed: () => const DevicesRoute().push<void>(context),
+            child: const Text('选择设备查看活动'),
           ),
         ],
       ),

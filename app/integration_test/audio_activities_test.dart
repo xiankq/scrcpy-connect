@@ -6,7 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
-import 'package:scrcpy_connect/pages/settings/activities/settings_activities_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -172,9 +172,8 @@ void main() {
         expect(audioActivity['sourceId'], sourceId);
         expect(audioActivity['name'], '设备声音');
         expect(audioActivity['canStop'], isTrue);
-        const ActivitiesRoute().push<void>(
-          tester.element(find.byType(Scaffold).first),
-        );
+        DeviceActivitiesRoute(deviceId: deviceId)
+            .push<void>(tester.element(find.byType(Scaffold).first));
         await waitFor(
           tester,
           () => find.byType(ActivitiesPage).evaluate().isNotEmpty,

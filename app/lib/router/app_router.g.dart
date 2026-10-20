@@ -51,6 +51,10 @@ List<RouteBase> get $appRoutes => [
   $activitiesRoute,
   $dataPreferencesRoute,
   $mediaCacheRoute,
+  $deviceActivitiesRoute,
+  $adbIdentityRoute,
+  $deviceIdentityRoute,
+  $deviceIpRoute,
 ];
 
 RouteBase get $rootRoute => GoRouteData.$route(
@@ -491,10 +495,16 @@ RouteBase get $usbGuideRoute => GoRouteData.$route(
 );
 
 mixin $UsbGuideRoute on GoRouteData {
-  static UsbGuideRoute _fromState(GoRouterState state) => const UsbGuideRoute();
+  static UsbGuideRoute _fromState(GoRouterState state) =>
+      UsbGuideRoute(deviceId: state.uri.queryParameters['device-id']);
+
+  UsbGuideRoute get _self => this as UsbGuideRoute;
 
   @override
-  String get location => GoRouteData.$location('/connection/usb');
+  String get location => GoRouteData.$location(
+    '/connection/usb',
+    queryParams: {if (_self.deviceId != null) 'device-id': _self.deviceId},
+  );
 
   @override
   void go(BuildContext context) => context.go(location);
@@ -1624,6 +1634,134 @@ mixin $MediaCacheRoute on GoRouteData {
 
   @override
   String get location => GoRouteData.$location('/settings/media-cache');
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $deviceActivitiesRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/activities',
+  name: 'device-activities',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: DeviceActivitiesRoute.$parentNavigatorKey,
+  factory: $DeviceActivitiesRoute._fromState,
+);
+
+mixin $DeviceActivitiesRoute on GoRouteData {
+  static DeviceActivitiesRoute _fromState(GoRouterState state) =>
+      DeviceActivitiesRoute(deviceId: state.pathParameters['deviceId']!);
+
+  DeviceActivitiesRoute get _self => this as DeviceActivitiesRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/activities',
+  );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $adbIdentityRoute => GoRouteData.$route(
+  path: '/settings/adb-key',
+  name: 'adb-key',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: AdbIdentityRoute.$parentNavigatorKey,
+  factory: $AdbIdentityRoute._fromState,
+);
+
+mixin $AdbIdentityRoute on GoRouteData {
+  static AdbIdentityRoute _fromState(GoRouterState state) =>
+      const AdbIdentityRoute();
+
+  @override
+  String get location => GoRouteData.$location('/settings/adb-key');
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $deviceIdentityRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/adb-key',
+  name: 'device-adb-key',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: DeviceIdentityRoute.$parentNavigatorKey,
+  factory: $DeviceIdentityRoute._fromState,
+);
+
+mixin $DeviceIdentityRoute on GoRouteData {
+  static DeviceIdentityRoute _fromState(GoRouterState state) =>
+      DeviceIdentityRoute(deviceId: state.pathParameters['deviceId']!);
+
+  DeviceIdentityRoute get _self => this as DeviceIdentityRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/adb-key',
+  );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $deviceIpRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/convert-ip',
+  name: 'device-convert-ip',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: DeviceIpRoute.$parentNavigatorKey,
+  factory: $DeviceIpRoute._fromState,
+);
+
+mixin $DeviceIpRoute on GoRouteData {
+  static DeviceIpRoute _fromState(GoRouterState state) =>
+      DeviceIpRoute(deviceId: state.pathParameters['deviceId']!);
+
+  DeviceIpRoute get _self => this as DeviceIpRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/convert-ip',
+  );
 
   @override
   void go(BuildContext context) => context.go(location);

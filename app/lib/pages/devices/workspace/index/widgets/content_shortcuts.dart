@@ -8,9 +8,11 @@ class ContentShortcuts extends StatelessWidget {
     super.key,
     required this.deviceId,
     required this.enabled,
+    required this.onUnavailable,
   });
   final String deviceId;
   final bool enabled;
+  final VoidCallback onUnavailable;
 
   @override
   Widget build(BuildContext context) => ContentPanel(
@@ -61,7 +63,7 @@ class ContentShortcuts extends StatelessWidget {
               SizedBox(
                 width: constraints.maxWidth / columns,
                 child: InkWell(
-                  onTap: enabled ? item.$4 : null,
+                  onTap: enabled ? item.$4 : onUnavailable,
                   borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -71,22 +73,12 @@ class ContentShortcuts extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ListIconBadge(
-                          icon: item.$2,
-                          backgroundColor: enabled
-                              ? item.$3
-                              : Theme.of(context).disabledColor,
-                        ),
+                        ListIconBadge(icon: item.$2, backgroundColor: item.$3),
                         const SizedBox(height: DesignTokens.spacingXs),
                         Text(
                           item.$1,
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: enabled
-                                    ? null
-                                    : Theme.of(context).disabledColor,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
                     ),

@@ -12,8 +12,13 @@ import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ActivitiesPage extends HookConsumerWidget {
-  const ActivitiesPage({super.key, required this.controller});
+  const ActivitiesPage({
+    super.key,
+    required this.controller,
+    required this.deviceId,
+  });
   final AppController controller;
+  final String deviceId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appEventRevision = ref.watch(
@@ -25,15 +30,18 @@ class ActivitiesPage extends HookConsumerWidget {
         refreshKey: appEventRevision,
         controller: controller,
         command: 'activities.list',
+        params: {'deviceId': deviceId},
         emptyTitle: '暂时无法核验活动',
         builder: (context, data, refresh) {
-          final activities = objects(data['activities']);
+          final activities = objects(data['activities'])
+              .where((activity) => value(activity, 'deviceId') == deviceId)
+              .toList();
           if (activities.isEmpty) {
             return PageChromeBody(
               child: EmptyContent(
                 icon: LucideIcons.activity,
                 title: '暂无正在进行的活动',
-                message: '设备连接、控制会话、传输、声音与通话会分别显示在这里。',
+                message: '此设备的连接、控制会话、传输、声音与通话会显示在这里。',
                 action: TextButton(
                   onPressed: refresh,
                   child: const Text('重新检查'),

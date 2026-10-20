@@ -93,8 +93,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        tester.getBottomRight(find.text('Pixel 9').last).dx,
-        closeTo(402 - DesignTokens.spacingMd * 2, .01),
+        tester.getTopLeft(find.text('192.168.1.8').last).dx,
+        closeTo(tester.getTopLeft(find.text('Pixel 9').last).dx, .01),
       );
       await tester.pumpWidget(
         RouterTestApp(
@@ -349,14 +349,14 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('没有发现可连接的手机'), findsOneWidget);
+        expect(find.text('未发现设备'), findsOneWidget);
         final before = discoveries;
         await tester.ensureVisible(find.text('重新查找'));
         await tester.tap(find.text('重新查找'));
         await tester.pumpAndSettle();
         expect(discoveries, before + 1);
         for (final recovery in [
-          ('IP连接', ConnectionFormPage),
+          ('IP 连接', ConnectionFormPage),
           ('使用无线配对码', ConnectionFormPage),
           ('改用 USB', UsbGuidePage),
         ]) {

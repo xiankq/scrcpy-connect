@@ -17,7 +17,7 @@ import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'support/test_controller.dart';
 import 'support/router_test_app.dart';
 
-import 'package:scrcpy_connect/pages/settings/activities/settings_activities_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/pages/settings/appearance/settings_appearance_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
@@ -63,7 +63,7 @@ const device = <String, dynamic>{
   'name': '我的手机',
   'model': 'Pixel 9',
   'status': 'connected',
-  'transport': '无线连接',
+  'transport': 'tls',
   'androidVersion': '15',
   'address': '192.168.1.8',
   'apiLevel': 35,
@@ -293,12 +293,14 @@ Future<Json> fixtureRequest(
     'activities': [
       {
         'id': 'connected',
+        'deviceId': 'phone',
         'name': '设备连接',
         'deviceName': '我的手机',
         'status': 'connected',
       },
       {
         'id': 'transfer',
+        'deviceId': 'phone',
         'name': '照片传输',
         'deviceName': '我的手机',
         'status': 'running',
@@ -394,7 +396,7 @@ Map<String, Widget> pageFixtures(
   AppController? diagnosisController,
   AppController? partialTransferController,
 }) => <String, Widget>{
-  'activities': ActivitiesPage(controller: controller),
+  'activities': ActivitiesPage(controller: controller, deviceId: 'phone'),
   'add_device': AddDevicePage(controller: controller),
   'appearance': AppearancePage(controller: controller),
   'apps': AppsPage(controller: controller, device: device),

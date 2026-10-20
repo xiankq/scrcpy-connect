@@ -44,6 +44,9 @@ const _device = {
   'model': 'Pixel 9',
   'androidVersion': '15',
   'apiLevel': 35,
+  'transport': 'tls',
+  'address': '192.168.1.8',
+  'port': 37123,
   'status': 'connected',
 };
 
@@ -141,7 +144,34 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('连接手机'), findsOneWidget);
+      expect(find.text('我的手机'), findsOneWidget);
+      expect(find.text('设备信息'), findsNothing);
+      expect(find.text('信息来自本机记录'), findsOneWidget);
       expect(calls.where((c) => c == 'apps.list' || c == 'apps.icon'), isEmpty);
+      await tester.scrollUntilVisible(
+        find.text('文件管理'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.text('文件管理')),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('文件管理'));
+      await tester.pumpAndSettle();
+      expect(find.text('设备尚未连接'), findsOneWidget);
+      expect(
+        calls.where((c) => c == 'devices.connect' || c == 'files.list'),
+        isEmpty,
+      );
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(
+        calls.where((c) => c == 'devices.connect' || c == 'files.list'),
+        isEmpty,
+      );
+
       await tester.scrollUntilVisible(
         find.text('移除此设备'),
         300,
@@ -174,77 +204,105 @@ void main() {
         tester.view.resetDevicePixelRatio();
         tester.view.resetPadding();
         tester.view.resetViewPadding();
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
       });
       await tester.runAsync(() => Directory(output).create(recursive: true));
-      for (final state in [
-        'connected',
-        'offline',
-        'connecting',
-        'unauthorized',
+      for (final layout in [
+        ('phone', const Size(402, 874), 1.0),
+        ('narrow', const Size(280, 620), 2.0),
       ]) {
-        for (final brightness in Brightness.values) {
-          final controller = createTestController(
-            (command, [params = const {}]) async => switch (command) {
-              'apps.list' => _runningResult('phone'),
-              'apps.icon' => _iconResult('phone'),
-              _ => {},
-            },
-          );
-          final device = {..._device, 'status': state};
-          final boundary = GlobalKey();
-          await tester.pumpWidget(
-            RepaintBoundary(
-              key: boundary,
-              child: RouterTestApp(
-                controller: controller,
-                theme: captures.captureTheme(brightness),
-                home: DeviceWorkspacePage(
+        tester.view.physicalSize = layout.$2;
+        tester.platformDispatcher.textScaleFactorTestValue = layout.$3;
+        for (final (name, state, transport) in [
+          ('connected', 'connected', 'tls'),
+          ('offline', 'offline', 'tls'),
+          ('connecting', 'connecting', 'tls'),
+          ('unauthorized', 'unauthorized', 'tls'),
+          ('ip', 'connected', 'tcp'),
+          ('usb', 'connected', 'usb'),
+        ]) {
+          for (final brightness in Brightness.values) {
+            if (transport != 'tls' &&
+                (layout.$1 != 'phone' || brightness != Brightness.light)) {
+              continue;
+            }
+            final controller = createTestController(
+              (command, [params = const {}]) async => switch (command) {
+                'apps.list' => _runningResult('phone'),
+                'apps.icon' => _iconResult('phone'),
+                _ => {},
+              },
+            );
+            final device = {
+              ..._device,
+              'status': state,
+              'transport': transport,
+              if (transport == 'usb') 'address': 'R58M12345AB',
+              if (state == 'offline') 'lastSeen': 1792480000,
+              if (layout.$1 == 'narrow')
+                'address': state == 'connected'
+                    ? 'fe80::1234:5678:90ab:cdef%wlan0'
+                    : 'phone-with-a-long-network-name.office.example.local',
+            };
+            final boundary = GlobalKey();
+            await tester.pumpWidget(
+              RepaintBoundary(
+                key: boundary,
+                child: RouterTestApp(
                   controller: controller,
-                  device: device,
+                  theme: captures.captureTheme(brightness),
+                  home: DeviceWorkspacePage(
+                    controller: controller,
+                    device: device,
+                  ),
                 ),
               ),
-            ),
-          );
-          await tester.pumpAndSettle();
-          await tester.runAsync(() async {
-            final context = tester.element(find.byType(DeviceWorkspacePage));
-            for (final image in tester.widgetList<Image>(find.byType(Image))) {
-              await precacheImage(image.image, context);
-            }
-          });
-          await tester.pumpAndSettle();
-          expect(tester.takeException(), isNull);
-          Future<void> capture(String name) async {
-            await tester.runAsync(() async {
-              final image =
-                  await (boundary.currentContext!.findRenderObject()!
-                          as RenderRepaintBoundary)
-                      .toImage();
-              final data = await image.toByteData(
-                format: ui.ImageByteFormat.png,
-              );
-              await File('$output/$name.png')
-                  .writeAsBytes(data!.buffer.asUint8List());
-              image.dispose();
-            });
-          }
-
-          await capture('workspace-$state-${brightness.name}');
-          if (state == 'connected') {
-            await tester.scrollUntilVisible(
-              find.text('移除此设备'),
-              300,
-              scrollable: find.byType(Scrollable).first,
-            );
-            await Scrollable.ensureVisible(
-              tester.element(find.text('移除此设备')),
-              alignment: .5,
             );
             await tester.pumpAndSettle();
-            await capture('workspace-management-${brightness.name}');
+            await tester.runAsync(() async {
+              final context = tester.element(find.byType(DeviceWorkspacePage));
+              for (final image in tester.widgetList<Image>(
+                find.byType(Image),
+              )) {
+                await precacheImage(image.image, context);
+              }
+            });
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+            Future<void> capture(String name) async {
+              await tester.runAsync(() async {
+                final image =
+                    await (boundary.currentContext!.findRenderObject()!
+                            as RenderRepaintBoundary)
+                        .toImage();
+                final data = await image.toByteData(
+                  format: ui.ImageByteFormat.png,
+                );
+                await File('$output/$name.png')
+                    .writeAsBytes(data!.buffer.asUint8List());
+                image.dispose();
+              });
+            }
+
+            await capture('workspace-$name-${brightness.name}-${layout.$1}');
+            if (name == 'connected') {
+              await tester.scrollUntilVisible(
+                find.text('移除此设备'),
+                300,
+                scrollable: find.byType(Scrollable).first,
+              );
+              await Scrollable.ensureVisible(
+                tester.element(find.text('移除此设备')),
+                alignment: .5,
+              );
+              await tester.pumpAndSettle();
+              await capture(
+                'workspace-management-${brightness.name}-${layout.$1}',
+              );
+            }
+            await tester.pumpWidget(const SizedBox());
+            controller.dispose();
           }
-          await tester.pumpWidget(const SizedBox());
-          controller.dispose();
         }
       }
     },

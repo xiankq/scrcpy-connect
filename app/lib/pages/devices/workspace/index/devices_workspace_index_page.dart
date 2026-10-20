@@ -1,10 +1,10 @@
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/pages/devices/widgets/device_access.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_hero.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/running_apps.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_facts.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/content_shortcuts.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -62,18 +62,20 @@ class DeviceWorkspacePage extends ConsumerWidget {
             device: current,
           ),
           const SectionTitle('内容与通信'),
-          ContentShortcuts(deviceId: deviceId, enabled: online),
+          ContentShortcuts(
+            deviceId: deviceId,
+            enabled: online,
+            onUnavailable: () =>
+                offerDeviceConnection(context, controller, current),
+          ),
           const SizedBox(height: DesignTokens.spacingSm),
           ActionRow(
             icon: LucideIcons.panelsTopLeft,
             title: '控制窗口',
-            enabled: online,
             onTap: online
                 ? () => SessionsRoute(deviceId: deviceId).push<void>(context)
-                : null,
+                : () => offerDeviceConnection(context, controller, current),
           ),
-          const SectionTitle('设备信息'),
-          DeviceFacts(device: current),
           const SectionTitle('设备设置'),
           ConnectSwitchRow(
             title: const Text('自动同步剪贴板'),
@@ -88,6 +90,17 @@ class DeviceWorkspacePage extends ConsumerWidget {
             onChanged: (next) => save('showNavigationBar', next),
           ),
           const SectionTitle('连接与能力'),
+          ActionRow(
+            icon: LucideIcons.radio,
+            title: '转为 IP 连接',
+            onTap: () => DeviceIpRoute(deviceId: deviceId).push<void>(context),
+          ),
+          ActionRow(
+            icon: LucideIcons.activity,
+            title: '当前活动',
+            onTap: () =>
+                DeviceActivitiesRoute(deviceId: deviceId).push<void>(context),
+          ),
           ActionRow(
             icon: LucideIcons.network,
             title: '连接偏好',
@@ -164,24 +177,9 @@ class DeviceWorkspacePage extends ConsumerWidget {
 
             color: ConnectTokens.danger,
             onTap: () async {
-              if (await confirm(
-                    context,
-                    '移除 ${deviceName(current)}？',
-                    '将断开连接并删除本机设备记录与偏好。已完成文件不受影响。如需撤销授权，请在被控手机的调试设置中操作。',
-                    action: '移除设备',
-                    danger: true,
-                  ) &&
+              if (await removeSavedDevice(context, controller, current) &&
                   context.mounted) {
-                final result = await perform(
-                  context,
-                  controller,
-                  'devices.forget',
-                  {'deviceId': current['id']},
-                );
-                await controller.refreshDevices();
-                if (result != null && context.mounted) {
-                  goDevices(context);
-                }
+                goDevices(context);
               }
             },
           ),

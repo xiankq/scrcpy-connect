@@ -39,6 +39,8 @@ void main() {
         final events = StreamController<Json>.broadcast(sync: true);
         final retry = Completer<Json>();
         final requests = <(String, Json)>[];
+        var transferStopped = false;
+        var transferRemoved = false;
         final controller = createTestController((
           command, [
           params = const {},
@@ -50,23 +52,29 @@ void main() {
           }
           if (command == 'transfers.list') {
             return {
-              'transfers': <Json>[],
-              'batches': [
-                {
-                  'batchId': 'original-batch',
-                  'direction': 'push',
-                  'status': 'running',
-                  'canCancel': true,
-                },
+              'transfers': <Json>[
+                if (!transferRemoved)
+                  {
+                    'id': 'original-task',
+                    'batchId': 'original-batch',
+                    'deviceId': 'phone',
+                    'name': '原有文件.pdf',
+                    'kind': 'file',
+                    'direction': 'push',
+                    'status': transferStopped ? 'cancelled' : 'running',
+                    'canCancel': !transferStopped,
+                    'totalBytes': 100,
+                    'completedBytes': 20,
+                  },
               ],
             };
           }
-          if (command == 'activities.list') {
-            return {
-              'activities': [
-                {'id': 'original-activity', 'name': '原有连接', 'canStop': true},
-              ],
-            };
+          if (command == 'transfers.cancel') {
+            transferStopped = true;
+          }
+          if (command == 'transfers.remove') {
+            expect(transferStopped, isTrue);
+            transferRemoved = true;
           }
           return <String, dynamic>{};
         }, events: events.stream)..loading = false;
@@ -104,7 +112,8 @@ void main() {
           );
           await tester.pumpAndSettle();
           expect(find.text('重新核验').hitTestable(), findsOneWidget);
-          final action = find.text(settingsTab ? '当前活动' : '取消本批传输');
+          expect(find.text('当前活动'), findsNothing);
+          final action = settingsTab ? find.text('外观') : find.byTooltip('传输操作');
           final page = settingsTab
               ? find.byType(SettingsPage)
               : find.byType(TransfersPage);
@@ -122,32 +131,72 @@ void main() {
           await tester.tap(action);
           await tester.pumpAndSettle();
           if (settingsTab) {
-            await tester.tap(find.text('停止'));
-            await tester.pumpAndSettle();
-            await tester.tap(find.text('停止活动'));
-          } else {
-            await tester.tap(find.text('取消传输'));
-          }
-          await tester.pumpAndSettle();
-          final cleanup = requests.where(
-            (r) =>
-                r.$1 == (settingsTab ? 'activities.stop' : 'transfers.cancel'),
-          );
-          expect(
-            cleanup.single.$2,
-            settingsTab
-                ? {'activityId': 'original-activity'}
-                : {'batchId': 'original-batch'},
-          );
-          if (settingsTab) {
+            expect(find.text('浅色'), findsOneWidget);
+            expect(controller.snapshot().reconciliationPending, isTrue);
+            expect(
+              requests.where(
+                (r) => r.$1 == 'activities.list' || r.$1 == 'activities.stop',
+              ),
+              isEmpty,
+            );
             router.pop();
             await tester.pumpAndSettle();
+            await tester.scrollUntilVisible(
+              find.text('重新核验'),
+              -200,
+              scrollable: scrollable,
+            );
+          } else {
+            final stop = find.text('停止并移除…');
+            await Scrollable.ensureVisible(tester.element(stop), alignment: .5);
+            await tester.pumpAndSettle();
+            expect(stop.hitTestable(), findsOneWidget);
+            await tester.tap(stop);
+            await tester.pumpAndSettle();
+            expect(
+              requests.where(
+                (r) => r.$1 == 'transfers.cancel' || r.$1 == 'transfers.remove',
+              ),
+              isEmpty,
+            );
+            final confirm = find.text('停止并移除');
+            await Scrollable.ensureVisible(
+              tester.element(confirm),
+              alignment: .5,
+            );
+            await tester.pumpAndSettle();
+            expect(confirm.hitTestable(), findsOneWidget);
+            await tester.tap(confirm);
+            await tester.pumpAndSettle();
+            final cleanup = requests
+                .where(
+                  (r) =>
+                      r.$1 == 'transfers.cancel' || r.$1 == 'transfers.remove',
+                )
+                .toList();
+            expect(cleanup.map((r) => r.$1), [
+              'transfers.cancel',
+              'transfers.remove',
+            ]);
+            expect(
+              cleanup.every((r) => r.$2['batchId'] == 'original-batch'),
+              isTrue,
+            );
+            final cancelIndex = requests.indexWhere(
+              (r) => r.$1 == 'transfers.cancel',
+            );
+            final removeIndex = requests.indexWhere(
+              (r) => r.$1 == 'transfers.remove',
+            );
+            expect(
+              requests
+                  .sublist(cancelIndex + 1, removeIndex)
+                  .any((r) => r.$1 == 'transfers.list'),
+              isTrue,
+            );
+            expect(transferRemoved, isTrue);
+            expect(find.text('原有文件.pdf'), findsNothing);
           }
-          await tester.scrollUntilVisible(
-            find.text('重新核验'),
-            -200,
-            scrollable: scrollable,
-          );
           await tester.pumpAndSettle();
           await Scrollable.ensureVisible(
             tester.element(find.text('重新核验')),

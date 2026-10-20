@@ -1,8 +1,8 @@
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
-import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
@@ -20,41 +20,52 @@ class DeviceConnectionPreferencesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => PageFrame(
     title: '连接偏好',
-    child: GroupedListView(
-      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-      children: [
-        const StateNote('切换连接路径可能重建会话。未确认结果的发送、删除与回复不会自动重试。'),
-        ActionRow(
-          icon: LucideIcons.wifi,
-          title: '编辑连接地址',
+    child: ConnectionContent(
+      child: GroupedListView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        children: [
+          const StateNote('切换连接方式可能重建会话；未确认的操作不会自动重试。'),
+          ActionRow(
+            icon: LucideIcons.wifi,
+            title: '编辑地址与端口',
 
-          onTap: () => ConnectionFormRoute(
-            address: value(device, 'address'),
-            deviceId: value(device, 'id'),
-          ).push<void>(context),
-        ),
-        ActionRow(
-          icon: LucideIcons.usb,
-          title: '使用 USB 连接',
-          onTap: () => UsbGuideRoute().push<void>(context),
-        ),
-        ActionRow(
-          icon: LucideIcons.radio,
-          title: '检查 USB 转无线',
-
-          onTap: () async {
-            final result = await perform(
-              context,
-              controller,
-              'devices.wireless',
-              {'deviceId': device['id']},
-            );
-            if (result != null && context.mounted) {
-              feedback(context, value(result, 'message', '已完成检查，请确认实际连接状态'));
-            }
-          },
-        ),
-      ],
+            onTap: () => ConnectionFormRoute(
+              address: value(device, 'address'),
+              port: device['port'] == 0 ? '' : value(device, 'port'),
+              deviceId: value(device, 'id'),
+            ).push<void>(context),
+          ),
+          ActionRow(
+            icon: LucideIcons.usb,
+            title: '使用 USB 连接',
+            onTap: () =>
+                UsbGuideRoute(deviceId: value(device, 'id'))
+                    .push<void>(context),
+          ),
+          ListTile(
+            leading: const ListIconBadge(
+              icon: LucideIcons.keyRound,
+              backgroundColor: DesignTokens.colorListIconBlue,
+            ),
+            title: const Text('ADB 私钥'),
+            subtitle: const Text('继承全局私钥或为此设备设置专用私钥。'),
+            onTap: () =>
+                DeviceIdentityRoute(deviceId: value(device, 'id'))
+                    .push<void>(context),
+          ),
+          ListTile(
+            leading: const ListIconBadge(
+              icon: LucideIcons.radio,
+              backgroundColor: DesignTokens.colorListIconBlue,
+            ),
+            title: const Text('转为 IP 连接'),
+            subtitle: const Text('通过当前连接启用 IP 调试并验证新连接。'),
+            onTap: () =>
+                DeviceIpRoute(deviceId: value(device, 'id'))
+                    .push<void>(context),
+          ),
+        ],
+      ),
     ),
   );
 }

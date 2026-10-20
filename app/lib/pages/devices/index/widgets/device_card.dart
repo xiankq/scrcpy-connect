@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/pages/devices/widgets/device_access.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
@@ -37,16 +38,43 @@ class DeviceCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              DeviceIdentity(compact: compact),
+              DeviceIdentity(device: device, compact: compact),
               const SizedBox(width: DesignTokens.spacingMd),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      deviceName(device),
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            deviceName(device),
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        const SizedBox(width: DesignTokens.spacingXs),
+                        GlassMenuButton(
+                          tooltip: '设备操作',
+                          icon: const Icon(
+                            LucideIcons.ellipsis,
+                            size: DesignTokens.componentIconSmallSize,
+                          ),
+                          actions: [
+                            GlassMenuAction(
+                              label: '移除此设备',
+                              icon: const Icon(LucideIcons.trash2),
+                              destructive: true,
+                              onPressed: () => removeSavedDevice(
+                                context,
+                                controller,
+                                device,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     SizedBox(
                       height: compact
@@ -70,11 +98,6 @@ class DeviceCard extends StatelessWidget {
                     ],
                   ],
                 ),
-              ),
-              const SizedBox(width: DesignTokens.spacingXs),
-              const Icon(
-                LucideIcons.chevronRight,
-                size: DesignTokens.componentIconSmallSize,
               ),
             ],
           ),

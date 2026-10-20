@@ -1,8 +1,7 @@
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
-import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_facts.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -27,43 +26,7 @@ class DeviceHero extends HookWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const DeviceIdentity(showcase: true),
-              const SizedBox(width: DesignTokens.spacingLg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      deviceName(device),
-                      style: Theme.of(context).textTheme.displaySmall,
-                    ),
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    if (value(device, 'model').isNotEmpty) ...[
-                      Text(
-                        value(device, 'model'),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: DesignTokens.spacingSm),
-                    ],
-                    DeviceStatus(
-                      device: busy.value
-                          ? {...device, 'status': 'connecting'}
-                          : device,
-                    ),
-                    if (device['status'] == 'offline') ...[
-                      const SizedBox(height: DesignTokens.spacingXs),
-                      Text(
-                        deviceConnectionLabel(device).replaceFirst('离线 · ', ''),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
+          DeviceFacts(device: device, connecting: busy.value),
           const SizedBox(height: DesignTokens.spacingLg),
           FilledButton.icon(
             onPressed: connecting

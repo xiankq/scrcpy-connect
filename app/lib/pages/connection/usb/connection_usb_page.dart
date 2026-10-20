@@ -4,7 +4,7 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
-import 'package:scrcpy_connect/pages/connection/widgets/connection_content.dart';
+import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import 'dart:async';
@@ -19,10 +19,12 @@ class UsbGuidePage extends HookWidget {
     super.key,
     required this.controller,
     this.embedded = false,
+    this.deviceId,
     this.onUseWireless,
   });
   final AppController controller;
   final bool embedded;
+  final String? deviceId;
   final VoidCallback? onUseWireless;
   @override
   Widget build(BuildContext context) {
@@ -53,7 +55,7 @@ class UsbGuidePage extends HookWidget {
         if (!context.mounted || attempt.value != id) return;
         attempt.value = null;
         busy.value = false;
-        message.value = '本次 USB 授权检查已取消。';
+        message.value = '检查已取消。';
       } catch (error) {
         if (context.mounted) message.value = '$error';
       } finally {
@@ -71,6 +73,7 @@ class UsbGuidePage extends HookWidget {
       try {
         final result = await controller.execute(InteropCommand.devicesUsb, {
           'attemptId': id,
+          'deviceId': ?deviceId,
           'serial': ?serial,
           if (serial != null) 'connect': true,
         });
@@ -118,7 +121,7 @@ class UsbGuidePage extends HookWidget {
                   'message',
                   state.value!['connected'] == true
                       ? 'USB 连接已建立'
-                      : '请选择要连接的 USB 设备，并在手机上确认调试授权。',
+                      : '选择 USB 设备，并在手机上允许调试。',
                 ),
               ),
               if (state.value!['connected'] == true &&

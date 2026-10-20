@@ -46,7 +46,7 @@ class SettingsPage extends HookConsumerWidget {
             ],
           ),
         ),
-        const SectionTitle('连接与活动'),
+        const SectionTitle('连接'),
         ContentPanel(
           padding: EdgeInsets.zero,
           child: Column(
@@ -57,9 +57,9 @@ class SettingsPage extends HookConsumerWidget {
                 onTap: () => BackgroundRoute().push<void>(context),
               ),
               ActionRow(
-                icon: LucideIcons.activity,
-                title: '当前活动',
-                onTap: () => ActivitiesRoute().push<void>(context),
+                icon: LucideIcons.keyRound,
+                title: 'ADB 私钥',
+                onTap: () => const AdbIdentityRoute().push<void>(context),
               ),
             ],
           ),

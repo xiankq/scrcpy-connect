@@ -53,6 +53,46 @@ Future<GoRouter> mount(
 
 void main() {
   testWidgets(
+    'QR reauthorization carries the original device while new QR pairing has no device selector',
+    (tester) async {
+      for (final deviceId in ['original', null]) {
+        final calls = <Json>[];
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          if (command == 'device.info') {
+            return {
+              'id': 'original',
+              'address': 'original.local',
+              'transport': 'tls',
+            };
+          }
+          if (command == 'devices.pair.qr') {
+            calls.add(params);
+            return {
+              'attemptId': 'qr-original',
+              'payload': 'WIFI:T:ADB;S:test;P:123456;;',
+            };
+          }
+          return {};
+        });
+        await mount(
+          tester,
+          controller,
+          location: AddDeviceRoute(deviceId: deviceId).location,
+        );
+        await tapText(tester, '扫码配对');
+        await tester.pumpAndSettle();
+        expect(calls, [
+          if (deviceId == null) <String, dynamic>{} else {'deviceId': deviceId},
+        ]);
+        await tester.pumpWidget(const SizedBox());
+      }
+    },
+  );
+
+  testWidgets(
     'discovery is a secondary page and returns to the original reauthorization form',
     (tester) async {
       final calls = <(String, Json)>[];

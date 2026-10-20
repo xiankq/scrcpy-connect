@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/pages/connection/widgets/connection_content.dart';
+import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
 import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
@@ -75,6 +75,7 @@ class ConnectionFormPage extends HookWidget {
     final busy = useState(false);
     final result = useState<Json?>(null);
     final error = useState<Object?>(null);
+    final cancellation = useState<String?>(null);
     final activeAttempt = useRef<String?>(null);
     final cancelling = useState(false);
     final selectedTransport = useState(transport ?? ConnectionTransport.tcp);
@@ -108,7 +109,8 @@ class ConnectionFormPage extends HookWidget {
       if (cancelled != null && activeAttempt.value == attempt) {
         activeAttempt.value = null;
         busy.value = false;
-        error.value = '本次尝试已取消。已建立的配对信任会保留。';
+        error.value = null;
+        cancellation.value = '已取消本次尝试。';
         await controller.refreshDevices();
       }
     }
@@ -120,6 +122,7 @@ class ConnectionFormPage extends HookWidget {
       activeAttempt.value = attempt;
       busy.value = true;
       error.value = null;
+      cancellation.value = null;
       try {
         final targetDeviceId = host.text.trim() == identityAddress.value
             ? currentDeviceId.value
@@ -200,6 +203,7 @@ class ConnectionFormPage extends HookWidget {
       busy.value = false;
       cancelling.value = false;
       error.value = null;
+      cancellation.value = null;
       mode.value = next;
     }
 
@@ -213,6 +217,7 @@ class ConnectionFormPage extends HookWidget {
       portField.clear();
       result.value = null;
       error.value = null;
+      cancellation.value = null;
       mode.value = AddDeviceMode.pairing;
     }
 
@@ -403,6 +408,7 @@ class ConnectionFormPage extends HookWidget {
                   if (mode.value == AddDeviceMode.qr)
                     QrPairPage(
                       controller: controller,
+                      deviceId: currentDeviceId.value,
                       embedded: true,
                       onUsePairingCode: () => selectMode(AddDeviceMode.pairing),
                       onConnectionPort: completePairing,
@@ -429,11 +435,19 @@ class ConnectionFormPage extends HookWidget {
                   else if (mode.value == AddDeviceMode.usb)
                     UsbGuidePage(
                       controller: controller,
+                      deviceId: currentDeviceId.value,
                       embedded: true,
                       onUseWireless: () => selectMode(AddDeviceMode.pairing),
                     )
                   else ...[
                     if (!pairing) ...[
+                      if (completingPairing.value) ...[
+                        Text(
+                          '已配对，尚未连接',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: DesignTokens.spacingXs),
+                      ],
                       Text(
                         legacyTcp
                             ? '先通过 USB 授权并允许按地址连接，仅在可信网络使用。'
@@ -489,6 +503,8 @@ class ConnectionFormPage extends HookWidget {
                         decoration: const InputDecoration(labelText: '配对码'),
                       ),
                     ],
+                    if (cancellation.value != null)
+                      StateNote(cancellation.value!),
                     if (error.value != null)
                       ConnectionFailureNote(
                         failure: error.value!,
@@ -540,7 +556,10 @@ class ConnectionFormPage extends HookWidget {
                         ),
                       ),
                     const SizedBox(height: DesignTokens.spacingMd),
-                    if (!pairing && !legacyTcp)
+                    if (!pairing &&
+                        !legacyTcp &&
+                        (!completingPairing.value ||
+                            _authorizationRejected(error.value)))
                       TextButton(
                         onPressed: () {
                           completingPairing.value = false;
@@ -549,7 +568,7 @@ class ConnectionFormPage extends HookWidget {
                         child: Text(
                           _authorizationRejected(error.value)
                               ? '重新配对'
-                              : '尚未配对？使用配对码',
+                              : '使用无线配对码',
                         ),
                       ),
                   ],
@@ -557,12 +576,13 @@ class ConnectionFormPage extends HookWidget {
                     onPressed: () => showGlassDialog<void>(
                       context: context,
                       builder: (dialogContext) => GlassAlertDialog(
-                        title: const Text('连接帮助'),
-                        content: SingleChildScrollView(
-                          child: Text(
-                            _connectionHelp(mode.value, legacyTcp: legacyTcp),
-                            style: Theme.of(dialogContext).textTheme.bodyMedium,
-                          ),
+                        title: Text(
+                          '连接帮助',
+                          style: Theme.of(dialogContext).textTheme.bodyMedium,
+                        ),
+                        content: Text(
+                          _connectionHelp(mode.value, legacyTcp: legacyTcp),
+                          style: Theme.of(dialogContext).textTheme.bodyMedium,
                         ),
                         actions: [
                           TextButton(
@@ -642,7 +662,7 @@ String _failureMessage(
 
 String _connectionHelp(AddDeviceMode mode, {required bool legacyTcp}) =>
     switch (mode) {
-      AddDeviceMode.usb => '使用支持数据传输的数据线，本机需要支持 USB 主机角色。\n\n在本机允许应用访问 USB 设备；在被控手机开启开发者选项与 USB 调试，并在系统弹窗中允许此主控。两端授权都以实际系统结果为准，点击“检查连接”只会重新检查。\n\n拒绝或超时后，重新插线并检查授权。本机无需开启调试。',
-      AddDeviceMode.ip when legacyTcp => '先通过 USB 完成被控手机的调试授权，并允许按地址连接。填写手机当前的地址与连接端口；端口取决于设备设置，不凭端口判断连接方式。\n\n此方式不使用无线调试的加密连接，仅在可信网络使用。跨网连接需已有可达路径，例如 VPN；无线调试不会自动提供互联网穿透。',
-      _ => '在被控手机的“设置 → 关于手机”连续点击版本号，开启开发者选项，再打开无线调试。\n\n使用配对码时，填写配对窗口的地址、配对端口与当前配对码；扫码时，在手机选择“使用二维码配对设备”，扫描本机显示的二维码。\n\n配对端口与连接端口不同。配对后，使用无线调试主页面的连接端口；已配对但未连接时无需重复配对。\n\n手机没有无线调试时，改用 USB 完成授权。本机无需开启调试。跨网连接需已有可达路径，例如 VPN，不会自动穿透网络。',
+      AddDeviceMode.usb => '使用数据线连接，本机需支持 USB 主机角色。\n\n本机：允许应用访问 USB 设备。手机：开启 USB 调试，在系统弹窗中允许此主控。\n\n“检查连接”只读取实际授权结果。拒绝或超时后，重新插线并检查授权。本机无需开启调试。',
+      AddDeviceMode.ip when legacyTcp => '先通过 USB 完成手机的调试授权，并允许按地址连接。填写手机当前的地址和连接端口。\n\n此方式不使用无线调试加密，仅在可信网络使用。跨网需已有 VPN 等可达路径，不会自动穿透网络。',
+      _ => '手机：在“设置 → 关于手机”连续点击版本号，开启开发者选项，再打开无线调试。\n\n配对码：填写配对窗口的地址、配对端口和当前配对码。扫码：在手机选择“使用二维码配对设备”，扫描本机二维码。\n\n连接端口在无线调试主页面，与配对端口不同。已配对但未连接时，填写连接端口，无需重复配对。\n\n手机没有无线调试时，改用 USB 授权。本机无需开启调试。跨网需已有 VPN 等可达路径，不会自动穿透网络。',
     };

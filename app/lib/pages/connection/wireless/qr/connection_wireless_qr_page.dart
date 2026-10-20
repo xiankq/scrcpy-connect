@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/pages/connection/widgets/connection_content.dart';
+import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -18,12 +18,14 @@ class QrPairPage extends HookWidget {
   const QrPairPage({
     super.key,
     required this.controller,
+    this.deviceId,
     this.embedded = false,
     this.onUsePairingCode,
     this.onConnectionPort,
     this.onPaired,
   });
   final AppController controller;
+  final String? deviceId;
   final bool embedded;
   final VoidCallback? onUsePairingCode;
   final ValueChanged<Json>? onPaired;
@@ -66,7 +68,7 @@ class QrPairPage extends HookWidget {
           attempt.value = null;
         case 'failed':
         case 'cancelled':
-          message.value = value(payload, 'message', '本次配对已结束，请重新生成。');
+          message.value = value(payload, 'message', '配对已结束，请重新生成。');
           attempt.value = null;
       }
     }
@@ -86,7 +88,9 @@ class QrPairPage extends HookWidget {
             'attemptId': old,
           });
         }
-        final result = await controller.execute(InteropCommand.devicesPairQr);
+        final result = await controller.execute(InteropCommand.devicesPairQr, {
+          'deviceId': ?deviceId,
+        });
         final id = value(result, 'attemptId');
         if (!context.mounted || generation.value != current) {
           if (id.isNotEmpty) {
@@ -143,12 +147,19 @@ class QrPairPage extends HookWidget {
 
     final paired = outcome.value;
     final pairedDevice = paired?['device'];
+    final hasQr =
+        !busy.value &&
+        attempt.value != null &&
+        (value(data.value ?? {}, 'payload').isNotEmpty ||
+            data.value?['imageBase64'] != null);
     final children = <Widget>[
-      Text(
-        '在手机的无线调试中选择“使用二维码配对设备”，扫描此二维码。',
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      const SizedBox(height: DesignTokens.spacingXl),
+      if (hasQr) ...[
+        Text(
+          '在手机的无线调试中选择“使用二维码配对设备”，扫描此二维码。',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: DesignTokens.spacingXl),
+      ],
       if (busy.value) const Center(child: CircularProgressIndicator()),
       if (!busy.value &&
           attempt.value != null &&
@@ -174,7 +185,7 @@ class QrPairPage extends HookWidget {
           ),
         )
       else if (!busy.value && message.value == null)
-        StateNote(value(data.value ?? {}, 'reason', '扫码配对尚未提供有效二维码，请使用配对码。')),
+        StateNote(value(data.value ?? {}, 'reason', '未生成二维码，可改用配对码。')),
       if (message.value != null) StateNote(message.value!),
       if (paired != null && responseDeviceId(paired) != null)
         FilledButton(
@@ -229,7 +240,7 @@ class QrPairPage extends HookWidget {
                     }
                     if (!context.mounted) return;
                     attempt.value = null;
-                    message.value = '本次扫码已取消。返回后可重新生成二维码。';
+                    message.value = '扫码已取消，可重新生成。';
                     busy.value = false;
                     if (onUsePairingCode != null) {
                       onUsePairingCode!();
