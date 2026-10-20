@@ -68,128 +68,139 @@ class DocumentExportForm extends HookWidget {
           ? StateNote('无法保留这份暂存：${cacheLease.error}。请返回原设备重新取回。')
           : const Center(child: CircularProgressIndicator.adaptive());
     }
-    return GroupedListView(
-      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-      children: [
-        OriginalFileHeader(name: name, kind: kind),
-        const SizedBox(height: DesignTokens.spacingLg),
-        if (partial)
-          const StateNote(
-            '这是已核验但不完整的本机暂存。请核对缺失项目，系统保存不会补齐尚未取回的内容。',
-            icon: LucideIcons.circleAlert,
-          ),
-        const Text('选择系统位置保存一份。只有系统确认写入完成后，才显示保存成功。本机暂存仍保留。'),
-        const SizedBox(height: DesignTokens.spacingLg),
-        if (waiting) ...[
-          const LinearProgressIndicator(),
-          const StateNote('正在等待系统选择或实际写入结果…'),
-          TextButton(
-            onPressed: operation.cancelling ? null : operation.cancel,
-            child: Text(operation.cancelling ? '正在取消…' : '取消本次保存'),
-          ),
-          if ((operation.operationId ?? operation.recordOperationId)
-              case final owner?)
-            DocumentConflictPanel(controller: controller, operationId: owner),
-        ],
-        if (operation.error != null)
-          StateNote(operation.error!, icon: LucideIcons.circleAlert),
-        if (operation.refreshing) const StateNote('正在核验这份原件的系统保存记录…'),
-        if (!operation.loaded || status == 'pending' || unknown)
-          TextButton(
-            onPressed: operation.refreshing ? null : operation.refresh,
-            child: const Text('重新核验系统保存'),
-          ),
-        if (result != null)
-          ContentPanel(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(switch (status) {
-                  'saved' => '已保存到系统位置',
-                  'partial' =>
-                    hasSavedContent
-                        ? '部分内容已保存，请核对'
-                        : confirmedEmpty
-                        ? '本次未保存内容'
-                        : '保存未完成，请核对',
-                  'cancelled' => '本次系统保存已取消',
-                  'failed' => '本次保存未开始',
-                  'pending' => '上次系统保存尚未结束',
-                  _ => '系统保存结果待核对',
-                }, style: Theme.of(context).textTheme.titleLarge),
-                if (status == 'saved') const Text('如保存到了云盘，云端同步结果请在对应应用核对。'),
-                if (value(result, 'name').isNotEmpty)
-                  Text('系统名称：${value(result, 'name')}'),
-                if (result['files'] is num && result['directories'] is num)
-                  Text(
-                    '${result['files']} 个文件 · ${result['directories']} 个文件夹 · ${bytes(result['bytes'])}',
-                  ),
-                if (result['skipped'] is num && (result['skipped'] as num) > 0)
-                  Text('跳过 ${result['skipped']} 项'),
-                for (final error in objects(result['errors']))
-                  StateNote(
-                    '${value(error, 'path')}：${value(error, 'message', '系统尚未确认结果')}',
-                    icon: LucideIcons.circleAlert,
-                  ),
-                if (status == 'partial' || unknown)
-                  const StateNote('请先在系统文件应用核对实际内容，已有结果不会自动重复写入。'),
-                if (result['partialDestinationPossible'] == true &&
-                    status != 'saved')
-                  const StateNote('系统位置可能已留下部分内容。请在系统文件应用核对；本机暂存未被删除。'),
-              ],
-            ),
-          ),
-        if (unknown)
-          CheckboxListTile(
-            value: acknowledgedUnknown,
-            onChanged: (v) => reviewedOperation.value = v == true
-                ? operation.recordOperationId
-                : null,
-            title: const Text('我已在系统文件应用核对，仍需重新保存'),
-          ),
-        if (!waiting && status != 'saved')
-          FilledButton(
-            onPressed:
-                !operation.loaded ||
-                    operation.refreshing ||
-                    (unknown && !acknowledgedUnknown)
-                ? null
-                : () {
-                    final reviewed = acknowledgedUnknown;
-                    reviewedOperation.value = null;
-                    operation.run('documents.export', {
-                      'localPath': localPath,
-                      'name': name,
-                      'kind': kind,
-                      'conflict': 'ask',
-                    }, reviewed: reviewed);
-                  },
-            child: Text(result == null ? '选择系统位置并保存' : '重新选择系统位置'),
-          ),
-        if (!waiting && status == 'saved')
-          OutlinedButton(
-            onPressed: !operation.loaded || operation.refreshing
-                ? null
-                : () async {
-                    if (!await confirm(
-                          context,
-                          '再保存一份？',
-                          '已经保存过这份原件。继续会重新选择系统位置并保存额外副本，不会自动覆盖已有内容。',
-                          action: '选择新位置',
-                        ) ||
-                        !context.mounted) {
-                      return;
-                    }
-                    await operation.run('documents.export', {
-                      'localPath': localPath,
-                      'name': name,
-                      'kind': kind,
-                      'conflict': 'ask',
-                    }, additionalCopy: true);
-                  },
-            child: const Text('再保存一份'),
-          ),
+    final errors = objects(result?['errors']);
+    final leading = <Widget>[
+      OriginalFileHeader(name: name, kind: kind),
+      const SizedBox(height: DesignTokens.spacingLg),
+      if (partial)
+        const StateNote(
+          '这是已核验但不完整的本机暂存。请核对缺失项目，系统保存不会补齐尚未取回的内容。',
+          icon: LucideIcons.circleAlert,
+        ),
+      const Text('选择系统位置保存一份。只有系统确认写入完成后，才显示保存成功。本机暂存仍保留。'),
+      const SizedBox(height: DesignTokens.spacingLg),
+      if (waiting) ...[
+        const LinearProgressIndicator(),
+        const StateNote('正在等待系统选择或实际写入结果…'),
+        TextButton(
+          onPressed: operation.cancelling ? null : operation.cancel,
+          child: Text(operation.cancelling ? '正在取消…' : '取消本次保存'),
+        ),
+        if ((operation.operationId ?? operation.recordOperationId)
+            case final owner?)
+          DocumentConflictPanel(controller: controller, operationId: owner),
       ],
+      if (operation.error != null)
+        StateNote(operation.error!, icon: LucideIcons.circleAlert),
+      if (operation.refreshing) const StateNote('正在核验这份原件的系统保存记录…'),
+      if (!operation.loaded || status == 'pending' || unknown)
+        TextButton(
+          onPressed: operation.refreshing ? null : operation.refresh,
+          child: const Text('重新核验系统保存'),
+        ),
+      if (result != null)
+        ContentPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(switch (status) {
+                'saved' => '已保存到系统位置',
+                'partial' =>
+                  hasSavedContent
+                      ? '部分内容已保存，请核对'
+                      : confirmedEmpty
+                      ? '本次未保存内容'
+                      : '保存未完成，请核对',
+                'cancelled' => '本次系统保存已取消',
+                'failed' => '本次保存未开始',
+                'pending' => '上次系统保存尚未结束',
+                _ => '系统保存结果待核对',
+              }, style: Theme.of(context).textTheme.titleLarge),
+              if (status == 'saved') const Text('如保存到了云盘，云端同步结果请在对应应用核对。'),
+              if (value(result, 'name').isNotEmpty)
+                Text('系统名称：${value(result, 'name')}'),
+              if (result['files'] is num && result['directories'] is num)
+                Text(
+                  '${result['files']} 个文件 · ${result['directories']} 个文件夹 · ${bytes(result['bytes'])}',
+                ),
+              if (result['skipped'] is num && (result['skipped'] as num) > 0)
+                Text('跳过 ${result['skipped']} 项'),
+              if (status == 'partial' || unknown)
+                const StateNote('请先在系统文件应用核对实际内容，已有结果不会自动重复写入。'),
+              if (result['partialDestinationPossible'] == true &&
+                  status != 'saved')
+                const StateNote('系统位置可能已留下部分内容。请在系统文件应用核对；本机暂存未被删除。'),
+            ],
+          ),
+        ),
+    ];
+    final trailing = <Widget>[
+      if (unknown)
+        CheckboxListTile(
+          value: acknowledgedUnknown,
+          onChanged: (v) => reviewedOperation.value = v == true
+              ? operation.recordOperationId
+              : null,
+          title: const Text('我已在系统文件应用核对，仍需重新保存'),
+        ),
+      if (!waiting && status != 'saved')
+        FilledButton(
+          onPressed:
+              !operation.loaded ||
+                  operation.refreshing ||
+                  (unknown && !acknowledgedUnknown)
+              ? null
+              : () {
+                  final reviewed = acknowledgedUnknown;
+                  reviewedOperation.value = null;
+                  operation.run('documents.export', {
+                    'localPath': localPath,
+                    'name': name,
+                    'kind': kind,
+                    'conflict': 'ask',
+                  }, reviewed: reviewed);
+                },
+          child: Text(result == null ? '选择系统位置并保存' : '重新选择系统位置'),
+        ),
+      if (!waiting && status == 'saved')
+        OutlinedButton(
+          onPressed: !operation.loaded || operation.refreshing
+              ? null
+              : () async {
+                  if (!await confirm(
+                        context,
+                        '再保存一份？',
+                        '已经保存过这份原件。继续会重新选择系统位置并保存额外副本，不会自动覆盖已有内容。',
+                        action: '选择新位置',
+                      ) ||
+                      !context.mounted) {
+                    return;
+                  }
+                  await operation.run('documents.export', {
+                    'localPath': localPath,
+                    'name': name,
+                    'kind': kind,
+                    'conflict': 'ask',
+                  }, additionalCopy: true);
+                },
+          child: const Text('再保存一份'),
+        ),
+    ];
+    return GroupedListView.builder(
+      padding: const EdgeInsets.all(DesignTokens.spacingMd),
+      itemCount: leading.length + errors.length + trailing.length,
+      itemBuilder: (context, index) {
+        if (index < leading.length) return leading[index];
+        final errorIndex = index - leading.length;
+        if (errorIndex < errors.length) {
+          final error = errors[errorIndex];
+          return StateNote(
+            '${value(error, 'path')}：${value(error, 'message', '系统尚未确认结果')}',
+            icon: LucideIcons.circleAlert,
+          );
+        }
+        return trailing[errorIndex - errors.length];
+      },
     );
   }
 }

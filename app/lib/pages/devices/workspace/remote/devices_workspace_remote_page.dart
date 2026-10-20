@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handl
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/remote_input.dart';
+import 'package:scrcpy_connect/services/remote_display_settings.dart';
 
 import 'remote_connection_recovery.dart';
 import 'remote_presentation.dart';
@@ -61,6 +62,20 @@ class _RemotePageState extends State<RemotePage>
   bool restoringConnection = false;
   final remoteMessenger = GlobalKey<ScaffoldMessengerState>();
   late final void Function() releaseDeviceView;
+  bool Function()? releasePhonePage;
+  late final RemoteDisplaySettings displaySettings;
+  final initialViewport = Completer<Size>();
+  Size? displayViewport;
+  ({int width, int height})? appliedDisplaySize;
+  ({int width, int height})? requestedDisplaySize;
+  ({int width, int height})? scheduledDisplaySize;
+  RemoteBinding? scheduledDisplayBinding;
+  ({int width, int height})? lastRemoteGeometry;
+  bool resizingDisplay = false;
+  Timer? resizeTimer;
+  bool waitingForIme = false;
+  Size? imeRequestedWindowSize;
+  bool autoDisplay = false;
 
   void trace(String detail) {
     if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
@@ -73,7 +88,8 @@ class _RemotePageState extends State<RemotePage>
   bool get acceptsInput =>
       WidgetsBinding.instance.lifecycleState == null ||
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-  bool get canSendInput => presentation.canSendInput(
+  bool get canSendInput => !resizingDisplay && hasInputAuthority;
+  bool get hasInputAuthority => presentation.canSendInput(
     foreground: acceptsInput,
     ownerCurrent: view?.isCurrent == true,
   );
@@ -128,6 +144,19 @@ class _RemotePageState extends State<RemotePage>
     super.initState();
     releaseDeviceView = controller.claimRemoteDeviceView(
       value(widget.device, 'id'),
+    );
+    if (widget.packageName == null) {
+      releasePhonePage = controller.claimPhoneControlPage(
+        value(widget.device, 'id'),
+      );
+    }
+    displaySettings = RemoteDisplaySettings(
+      jsonObject(
+        jsonObject(controller.snapshot().settings['deviceSettings'])[value(
+          widget.device,
+          'id',
+        )],
+      ),
     );
     // IMEs can finish composition without changing text; onChanged misses it.
     text.addListener(textChanged);
@@ -191,11 +220,23 @@ class _RemotePageState extends State<RemotePage>
         return;
       }
       submittedAppStart = retained == null && widget.packageName != null;
+      final viewport = displaySettings.mode == 'auto'
+          ? await initialViewport.future
+          : Size.zero;
+      if (!mounted || !presentation.acceptsStart(attempt)) return;
+      final dimensions = displaySettings.dimensions(viewport);
       final result =
           retained ??
           await controller.execute(InteropCommand.sessionStart, {
             'deviceId': widget.device['id'],
             if (widget.packageName != null) 'packageName': widget.packageName,
+            if (widget.packageName == null)
+              'keepActive': displaySettings.values['stayAwake'] == true,
+            if (dimensions != null) ...{
+              'displayWidth': dimensions.width,
+              'displayHeight': dimensions.height,
+              'displayAuto': displaySettings.mode == 'auto',
+            },
           });
       if (!mounted || !presentation.acceptsStart(attempt)) {
         if (mounted && presentation.requiresVerification(attempt)) {
@@ -226,6 +267,15 @@ class _RemotePageState extends State<RemotePage>
         'start.return status=${value(result, 'status')} hasTexture=${result['textureId'] != null} boundBefore=${sessionId.isNotEmpty} lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
       );
       setState(() {
+        autoDisplay = result['displayAuto'] == true;
+        final size = jsonObject(result['displaySize']);
+        if (size['width'] is int && size['height'] is int) {
+          appliedDisplaySize = (
+            width: size['width'] as int,
+            height: size['height'] as int,
+          );
+          requestedDisplaySize = appliedDisplaySize;
+        }
         presentation.bindStart(
           result,
           retained: retained != null,
@@ -234,7 +284,7 @@ class _RemotePageState extends State<RemotePage>
         );
         if (widget.requestKeyboard && result['textureId'] != null) ime = true;
       });
-      if (ime && widget.requestKeyboard) inputFocus.requestFocus();
+      if (ime && widget.requestKeyboard) requestImeFocus();
       if (sessionId.isEmpty || result['textureId'] == null) return;
       view = controller.claimSessionView(
         sessionId,
@@ -250,6 +300,7 @@ class _RemotePageState extends State<RemotePage>
         }
       }
       if (presentation.covered) await pauseView();
+      if (displayViewport != null) observeViewport(displayViewport!);
       await applyPendingInitialAction();
       if (widget.packageName == null && !presentation.appLaunchUnknown) {
         connectionRecovery.viewed();
@@ -548,6 +599,7 @@ class _RemotePageState extends State<RemotePage>
         showResourceAdjustment();
         if (!presentation.output(data)) return;
         setState(() {});
+        observeRemoteGeometry();
         trace(
           'frame.applied paused=${presentation.paused} hasTexture=${presentation.session?['textureId'] != null}',
         );
@@ -568,8 +620,9 @@ class _RemotePageState extends State<RemotePage>
           sensitive = data['sensitive'] == true;
         });
         if (ime) {
-          inputFocus.requestFocus();
+          requestImeFocus();
         } else {
+          waitingForIme = false;
           inputFocus.unfocus();
         }
     }
@@ -756,6 +809,9 @@ class _RemotePageState extends State<RemotePage>
     if (state != AppLifecycleState.resumed) unawaited(releaseInputs());
     if (state == AppLifecycleState.inactive || sessionId.isEmpty) return;
     if (state == AppLifecycleState.resumed) {
+      // A brief inactive transition keeps the stream live but can defer a
+      // viewport adjustment. Resume it even when no visibility change is due.
+      if (displayViewport != null) observeViewport(displayViewport!);
       if (!presentation.lifecycleVisibility(true)) return;
       if (connectionRecovery.pending) {
         recoverConnection();
@@ -880,8 +936,25 @@ class _RemotePageState extends State<RemotePage>
     }
   }
 
+  void requestImeFocus() {
+    // Android reveals system bars before reporting the keyboard inset. Keep
+    // the confirmed display through both parts of that transition.
+    waitingForIme = true;
+    imeRequestedWindowSize = MediaQuery.sizeOf(context);
+    resizeTimer?.cancel();
+    inputFocus.requestFocus();
+  }
+
+  bool get imeBlocksDisplaySizing =>
+      waitingForIme || MediaQuery.viewInsetsOf(context).bottom > 0;
+
   void inputFocusChanged() {
-    if (!inputFocus.hasFocus) resetTextInput();
+    if (!inputFocus.hasFocus) {
+      resetTextInput();
+      if (mounted && waitingForIme) {
+        setState(() => waitingForIme = false);
+      }
+    }
   }
 
   void resetTextInput() {
@@ -1002,10 +1075,55 @@ class _RemotePageState extends State<RemotePage>
     final feedback = ScaffoldMessenger.maybeOf(context);
     final deviceLabel = deviceName(widget.device);
     final left = Completer<void>();
+    final lock =
+        widget.packageName == null &&
+        view?.isCurrent == true &&
+        presentation.controlAvailable &&
+        !presentation.stateUnverified &&
+        jsonObject(
+              jsonObject(
+                controller.snapshot().settings['deviceSettings'],
+              )[value(widget.device, 'id')],
+            )['lockOnClose'] ==
+            true;
+    final lastPhonePage = releasePhonePage?.call() == true;
     if (sessionId.isNotEmpty) {
       // Input release and pause stay ordered for this exact session. Leaving
       // local presentation must not wait for a remote acknowledgement.
-      final cleanup = view?.release(afterInput: releaseInputs());
+      final releases = releaseInputs();
+      final beforePause = lock && lastPhonePage
+          ? releases.then((_) async {
+              if (view?.ownsBinding != true ||
+                  controller.hasPhoneControlPages(value(widget.device, 'id'))) {
+                return;
+              }
+              try {
+                await controller.execute(InteropCommand.sessionKey, {
+                  'sessionId': sessionId,
+                  'keyCode': 223,
+                  'action': 'down',
+                });
+                await controller.execute(InteropCommand.sessionKey, {
+                  'sessionId': sessionId,
+                  'keyCode': 223,
+                  'action': 'up',
+                });
+              } catch (failure) {
+                unawaited(
+                  left.future.then((_) {
+                    if (feedback?.mounted == true) {
+                      feedback!.showSnackBar(
+                        glassSnackBar(
+                          '已退出 $deviceLabel 的画面，锁屏尚未确认：${remoteFailure(failure)}。请在手机核对。',
+                        ),
+                      );
+                    }
+                  }),
+                );
+              }
+            })
+          : releases;
+      final cleanup = view?.release(afterInput: beforePause);
       presentation.revokeControl();
       if (cleanup != null) {
         unawaited(
@@ -1014,7 +1132,7 @@ class _RemotePageState extends State<RemotePage>
             if (feedback?.mounted == true) {
               feedback!.showSnackBar(
                 glassSnackBar(
-                  '已退出 $deviceLabel 的画面，暂停窗口尚未确认：${remoteFailure(failure)}。可在控制会话中核对。',
+                  '已退出 $deviceLabel 的画面，${lock && lastPhonePage ? '锁屏或暂停' : '暂停窗口'}尚未确认：${remoteFailure(failure)}。可在控制会话中核对。',
                 ),
               );
             }
@@ -1032,6 +1150,9 @@ class _RemotePageState extends State<RemotePage>
 
   @override
   void dispose() {
+    resizeTimer?.cancel();
+    releasePhonePage?.call();
+    if (!initialViewport.isCompleted) initialViewport.complete(Size.zero);
     releaseDeviceView();
     presentation.invalidateStart();
     final release = releaseInputs();
@@ -1055,8 +1176,107 @@ class _RemotePageState extends State<RemotePage>
     super.dispose();
   }
 
+  void observeViewport(Size size) {
+    if (imeBlocksDisplaySizing) {
+      resizeTimer?.cancel();
+      return;
+    }
+    if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) return;
+    displayViewport = size;
+    if (!initialViewport.isCompleted) initialViewport.complete(size);
+    if (!autoDisplay || sessionId.isEmpty || !canSendInput || resizingDisplay) {
+      return;
+    }
+    final target = const RemoteDisplaySettings({'remoteAspectRatio': 'auto'})
+        .dimensions(size);
+    if (target == null || target == requestedDisplaySize) {
+      resizeTimer?.cancel();
+      return;
+    }
+    final binding = presentation.binding;
+    // Frames can rebuild this layout faster than the debounce interval. Only
+    // a changed target or binding restarts the pending adjustment.
+    if (resizeTimer?.isActive == true &&
+        scheduledDisplaySize == target &&
+        scheduledDisplayBinding == binding) {
+      return;
+    }
+    resizeTimer?.cancel();
+    scheduledDisplaySize = target;
+    scheduledDisplayBinding = binding;
+    resizeTimer = Timer(const Duration(milliseconds: 250), () async {
+      if (!mounted ||
+          !canSendInput ||
+          binding != presentation.binding ||
+          imeBlocksDisplaySizing) {
+        return;
+      }
+      setState(() => resizingDisplay = true);
+      try {
+        await releaseInputs();
+        if (!mounted ||
+            !hasInputAuthority ||
+            binding != presentation.binding ||
+            imeBlocksDisplaySizing) {
+          return;
+        }
+        requestedDisplaySize = target;
+        await controller.execute(InteropCommand.sessionDisplay, {
+          'sessionId': binding.$1,
+          'displayWidth': target.width,
+          'displayHeight': target.height,
+        });
+        if (mounted && binding == presentation.binding) {
+          appliedDisplaySize = target;
+        }
+      } catch (failure) {
+        if (mounted && binding == presentation.binding) {
+          remoteMessenger.currentState?.showSnackBar(
+            glassSnackBar('屏幕比例调整未确认：${remoteFailure(failure)}'),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => resizingDisplay = false);
+        if (mounted && displayViewport != null) {
+          observeViewport(displayViewport!);
+        }
+      }
+    });
+  }
+
+  void observeRemoteGeometry() {
+    if (!autoDisplay || displayViewport == null) return;
+    final width = int.tryParse('${presentation.session?['width']}');
+    final height = int.tryParse('${presentation.session?['height']}');
+    if (width == null || height == null || width <= 0 || height <= 0) return;
+    final geometry = (width: width, height: height);
+    if (geometry == lastRemoteGeometry) return;
+    lastRemoteGeometry = geometry;
+    final target = const RemoteDisplaySettings({'remoteAspectRatio': 'auto'})
+        .dimensions(displayViewport!);
+    if (target != null &&
+        (width / height - target.width / target.height).abs() > .005) {
+      // Physical device rotation changes natural-coordinate mapping even when
+      // this host's viewport did not change. Reapply once for that geometry.
+      requestedDisplaySize = null;
+      observeViewport(displayViewport!);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Scaffold removes the inherited bottom viewInset after resizing its body.
+    // Read the route's original inset so an IME cannot redefine display size.
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (keyboardVisible ||
+        (waitingForIme &&
+            imeRequestedWindowSize != MediaQuery.sizeOf(context))) {
+      // A hardware keyboard need not produce an IME inset. A real host resize
+      // still adapts; transient system bars in the same window never end this
+      // wait merely because the IME took longer to appear.
+      waitingForIme = false;
+    }
+    if (keyboardVisible || waitingForIme) resizeTimer?.cancel();
     final width = (num.tryParse('${presentation.session?['width']}') ?? 0)
         .toDouble();
     final height = (num.tryParse('${presentation.session?['height']}') ?? 0)
@@ -1065,311 +1285,331 @@ class _RemotePageState extends State<RemotePage>
     final valid = texture != null && width > 0 && height > 0;
     // The app messenger carries feedback between routes. A remote session has
     // its own scope so results from local pages cannot cover the phone screen.
-    return ScaffoldMessenger(
-      key: remoteMessenger,
-      child: PopScope(
-        canPop: presentation.exiting,
-        onPopInvokedWithResult: (popped, _) {
-          if (!popped) pressNavigationKey(4);
-        },
-        child: Focus(
-          autofocus: true,
-          focusNode: keyboardFocus,
-          onKeyEvent: key,
-          onFocusChange: (focused) {
-            if (!focused) unawaited(releaseInputs());
-          },
-          child: Scaffold(
-            backgroundColor: Colors.black,
-            resizeToAvoidBottomInset: true,
-            bottomNavigationBar: Consumer(
-              builder: (context, ref, _) {
-                final showNavigationBar = ref.watch(
-                  appControllerProvider.select(
-                    (state) =>
-                        jsonObject(
-                          jsonObject(state.settings['deviceSettings'])[value(
-                            widget.device,
-                            'id',
-                          )],
-                        )['showNavigationBar'] !=
-                        false,
-                  ),
-                );
-                if (!showNavigationBar) return const SizedBox.shrink();
-                return SafeArea(
-                  top: false,
-                  child: SizedBox(
-                    height: DesignTokens.componentPageHeaderHeight,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        GlassActionIcon(
-                          tooltip: '返回',
-                          onPressed: canSendInput
-                              ? () => pressNavigationKey(4)
-                              : null,
-                          icon: const Icon(
-                            Icons.arrow_back,
-                            color: Colors.white,
-                          ),
-                        ),
-                        GlassActionIcon(
-                          tooltip: '主屏幕',
-                          onPressed: canSendInput
-                              ? () => pressNavigationKey(3)
-                              : null,
-                          icon: const Icon(
-                            Icons.circle_outlined,
-                            color: Colors.white,
-                          ),
-                        ),
-                        GlassActionIcon(
-                          tooltip: '最近任务',
-                          onPressed: canSendInput
-                              ? () => pressNavigationKey(187)
-                              : null,
-                          icon: const Icon(
-                            Icons.crop_square,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
+    return Consumer(
+      builder: (context, ref, _) {
+        final showNavigationBar = ref.watch(
+          appControllerProvider.select(
+            (state) =>
+                jsonObject(
+                  jsonObject(state.settings['deviceSettings'])[value(
+                    widget.device,
+                    'id',
+                  )],
+                )['showNavigationBar'] !=
+                false,
+          ),
+        );
+        return ScaffoldMessenger(
+          key: remoteMessenger,
+          child: PopScope(
+            canPop: presentation.exiting,
+            onPopInvokedWithResult: (popped, _) {
+              if (!popped) pressNavigationKey(4);
+            },
+            child: Focus(
+              autofocus: true,
+              focusNode: keyboardFocus,
+              onKeyEvent: key,
+              onFocusChange: (focused) {
+                if (!focused) unawaited(releaseInputs());
               },
-            ),
-            body: Stack(
-              children: [
-                Positioned.fill(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => Listener(
-                      behavior: HitTestBehavior.opaque,
-                      onPointerDown: (event) => pointer(
-                        event,
-                        'down',
-                        constraints.biggest,
-                        Size(width, height),
-                      ),
-                      onPointerMove: (event) => pointer(
-                        event,
-                        'move',
-                        constraints.biggest,
-                        Size(width, height),
-                      ),
-                      onPointerUp: (event) => pointer(
-                        event,
-                        'up',
-                        constraints.biggest,
-                        Size(width, height),
-                      ),
-                      onPointerCancel: (event) => pointer(
-                        event,
-                        'cancel',
-                        constraints.biggest,
-                        Size(width, height),
-                      ),
-                      child: valid
-                          ? Center(
-                              child: AspectRatio(
-                                aspectRatio: width / height,
-                                child: Texture(textureId: texture),
-                              ),
-                            )
-                          : const SizedBox.expand(),
-                    ),
-                  ),
-                ),
-                if (presentation.connecting)
-                  const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
-                if (presentation.error != null || presentation.paused)
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final media = MediaQuery.of(context);
-                      final exit = ExitHandle.initialBoundsFor(
-                        constraints.biggest,
-                        media,
-                      );
-                      final belowExit = exit.bottom + DesignTokens.spacingSm;
-                      final bottom = math.max(
-                        DesignTokens.spacingXl,
-                        media.padding.bottom,
-                      );
-                      final roomBelow =
-                          constraints.maxHeight - belowExit - bottom;
-                      // A short landscape viewport can use the space beside
-                      // the exit control; taller layouts reserve its top band.
-                      final below =
-                          roomBelow >= DesignTokens.componentRowHeight * 2;
-                      return Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          below
-                              ? math.max(
-                                  DesignTokens.spacingXl,
-                                  media.padding.left,
-                                )
-                              : exit.right + DesignTokens.spacingSm,
-                          below
-                              ? belowExit
-                              : math.max(
-                                  DesignTokens.spacingXl,
-                                  media.padding.top,
-                                ),
-                          math.max(DesignTokens.spacingXl, media.padding.right),
-                          bottom,
-                        ),
-                        child: Center(
-                          child: SingleChildScrollView(
-                            key: const ValueKey('remote-recovery-content'),
-                            child: Glass(
-                              radius: DesignTokens.roundedLg,
-                              padding: const EdgeInsets.all(
-                                DesignTokens.spacingLg,
-                              ),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 360,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      presentation.paused
-                                          ? LucideIcons.pause
-                                          : LucideIcons.monitorOff,
-                                      size: DesignTokens.componentIconLargeSize,
-                                    ),
-                                    const SizedBox(
-                                      height: DesignTokens.spacingMd,
-                                    ),
-                                    Text(
-                                      presentation.sessionEnded
-                                          ? '控制会话已结束'
-                                          : presentation.appLaunchUnknown
-                                          ? '应用打开结果待核对'
-                                          : presentation.stateUnverified
-                                          ? '正在核验会话状态'
-                                          : presentation.errorCode ==
-                                                'device_asleep'
-                                          ? '手机处于休眠状态'
-                                          : presentation.paused
-                                          ? '画面已暂停'
-                                          : '暂时无法打开实时画面',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge,
-                                    ),
-                                    const SizedBox(
-                                      height: DesignTokens.spacingXs,
-                                    ),
-                                    Text(
-                                      presentation.error ?? '等待连接恢复后的首帧。',
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(
-                                      height: DesignTokens.spacingMd,
-                                    ),
-                                    if (presentation.errorCode ==
-                                        'resource_busy')
-                                      FilledButton(
-                                        onPressed: () => DeviceActivitiesRoute(
-                                          deviceId: value(widget.device, 'id'),
-                                        ).push<void>(context),
-                                        child: const Text('管理当前活动'),
-                                      ),
-                                    if (presentation.errorCode ==
-                                        'device_asleep')
-                                      FilledButton(
-                                        onPressed: presentation.connecting
-                                            ? null
-                                            : wakeAndStart,
-                                        child: const Text('唤醒手机'),
-                                      ),
-                                    if (widget.packageName != null &&
-                                        presentation.error != null &&
-                                        !presentation.appLaunchUnknown &&
-                                        !presentation.stateUnverified)
-                                      FilledButton(
-                                        onPressed: presentation.connecting
-                                            ? null
-                                            : continueOnPhoneScreen,
-                                        child: const Text('在手机屏幕继续'),
-                                      ),
-                                    if (presentation.appLaunchUnknown)
-                                      FilledButton(
-                                        onPressed: presentation.connecting
-                                            ? null
-                                            : closeUnknownAppLaunch,
-                                        child: const Text('关闭本次打开记录'),
-                                      ),
-                                    OutlinedButton(
-                                      onPressed: presentation.connecting
-                                          ? null
-                                          : presentation.appLaunchUnknown
-                                          ? checkAppLaunch
-                                          : (presentation.reconcileOnly
-                                                ? reconcileState
-                                                : start),
-                                      child: Text(
-                                        presentation.appLaunchUnknown
-                                            ? '只读检查'
-                                            : presentation.appLaunchClosed
-                                            ? '重新打开'
-                                            : '重新检查',
-                                      ),
-                                    ),
-                                  ],
+              child: Scaffold(
+                backgroundColor: Colors.black,
+                resizeToAvoidBottomInset: true,
+                bottomNavigationBar: showNavigationBar
+                    ? SafeArea(
+                        top: false,
+                        child: SizedBox(
+                          height: DesignTokens.componentPageHeaderHeight,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              GlassActionIcon(
+                                tooltip: '返回',
+                                onPressed: canSendInput
+                                    ? () => pressNavigationKey(4)
+                                    : null,
+                                icon: const Icon(
+                                  Icons.arrow_back,
+                                  color: Colors.white,
                                 ),
                               ),
-                            ),
+                              GlassActionIcon(
+                                tooltip: '主屏幕',
+                                onPressed: canSendInput
+                                    ? () => pressNavigationKey(3)
+                                    : null,
+                                icon: const Icon(
+                                  Icons.circle_outlined,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              GlassActionIcon(
+                                tooltip: '最近任务',
+                                onPressed: canSendInput
+                                    ? () => pressNavigationKey(187)
+                                    : null,
+                                icon: const Icon(
+                                  Icons.crop_square,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    },
+                      )
+                    : null,
+                body: SafeArea(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            if (!keyboardVisible && !waitingForIme) {
+                              observeViewport(constraints.biggest);
+                            }
+                            return Listener(
+                              behavior: HitTestBehavior.opaque,
+                              onPointerDown: (event) => pointer(
+                                event,
+                                'down',
+                                constraints.biggest,
+                                Size(width, height),
+                              ),
+                              onPointerMove: (event) => pointer(
+                                event,
+                                'move',
+                                constraints.biggest,
+                                Size(width, height),
+                              ),
+                              onPointerUp: (event) => pointer(
+                                event,
+                                'up',
+                                constraints.biggest,
+                                Size(width, height),
+                              ),
+                              onPointerCancel: (event) => pointer(
+                                event,
+                                'cancel',
+                                constraints.biggest,
+                                Size(width, height),
+                              ),
+                              child: valid
+                                  ? Center(
+                                      child: AspectRatio(
+                                        aspectRatio: width / height,
+                                        child: Texture(textureId: texture),
+                                      ),
+                                    )
+                                  : const SizedBox.expand(),
+                            );
+                          },
+                        ),
+                      ),
+                      if (presentation.connecting)
+                        const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                      if (presentation.error != null || presentation.paused)
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final media = MediaQuery.of(context);
+                            final exit = ExitHandle.initialBoundsFor(
+                              constraints.biggest,
+                              media,
+                            );
+                            final belowExit =
+                                exit.bottom + DesignTokens.spacingSm;
+                            final bottom = math.max(
+                              DesignTokens.spacingXl,
+                              media.padding.bottom,
+                            );
+                            final roomBelow =
+                                constraints.maxHeight - belowExit - bottom;
+                            // A short landscape viewport can use the space beside
+                            // the exit control; taller layouts reserve its top band.
+                            final below =
+                                roomBelow >=
+                                DesignTokens.componentRowHeight * 2;
+                            return Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                below
+                                    ? math.max(
+                                        DesignTokens.spacingXl,
+                                        media.padding.left,
+                                      )
+                                    : exit.right + DesignTokens.spacingSm,
+                                below
+                                    ? belowExit
+                                    : math.max(
+                                        DesignTokens.spacingXl,
+                                        media.padding.top,
+                                      ),
+                                math.max(
+                                  DesignTokens.spacingXl,
+                                  media.padding.right,
+                                ),
+                                bottom,
+                              ),
+                              child: Center(
+                                child: SingleChildScrollView(
+                                  key: const ValueKey(
+                                    'remote-recovery-content',
+                                  ),
+                                  child: Glass(
+                                    radius: DesignTokens.roundedLg,
+                                    padding: const EdgeInsets.all(
+                                      DesignTokens.spacingLg,
+                                    ),
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 360,
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            presentation.paused
+                                                ? LucideIcons.pause
+                                                : LucideIcons.monitorOff,
+                                            size: DesignTokens
+                                                .componentIconLargeSize,
+                                          ),
+                                          const SizedBox(
+                                            height: DesignTokens.spacingMd,
+                                          ),
+                                          Text(
+                                            presentation.sessionEnded
+                                                ? '控制会话已结束'
+                                                : presentation.appLaunchUnknown
+                                                ? '应用打开结果待核对'
+                                                : presentation.stateUnverified
+                                                ? '正在核验会话状态'
+                                                : presentation.errorCode ==
+                                                      'device_asleep'
+                                                ? '手机处于休眠状态'
+                                                : presentation.paused
+                                                ? '画面已暂停'
+                                                : '暂时无法打开实时画面',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleLarge,
+                                          ),
+                                          const SizedBox(
+                                            height: DesignTokens.spacingXs,
+                                          ),
+                                          Text(
+                                            presentation.error ?? '等待连接恢复后的首帧。',
+                                            textAlign: TextAlign.center,
+                                          ),
+                                          const SizedBox(
+                                            height: DesignTokens.spacingMd,
+                                          ),
+                                          if (presentation.errorCode ==
+                                              'resource_busy')
+                                            FilledButton(
+                                              onPressed: () =>
+                                                  DeviceActivitiesRoute(
+                                                    deviceId: value(
+                                                      widget.device,
+                                                      'id',
+                                                    ),
+                                                  ).push<void>(context),
+                                              child: const Text('管理当前活动'),
+                                            ),
+                                          if (presentation.errorCode ==
+                                              'device_asleep')
+                                            FilledButton(
+                                              onPressed: presentation.connecting
+                                                  ? null
+                                                  : wakeAndStart,
+                                              child: const Text('唤醒手机'),
+                                            ),
+                                          if (widget.packageName != null &&
+                                              presentation.error != null &&
+                                              !presentation.appLaunchUnknown &&
+                                              !presentation.stateUnverified)
+                                            FilledButton(
+                                              onPressed: presentation.connecting
+                                                  ? null
+                                                  : continueOnPhoneScreen,
+                                              child: const Text('在手机屏幕继续'),
+                                            ),
+                                          if (presentation.appLaunchUnknown)
+                                            FilledButton(
+                                              onPressed: presentation.connecting
+                                                  ? null
+                                                  : closeUnknownAppLaunch,
+                                              child: const Text('关闭本次打开记录'),
+                                            ),
+                                          OutlinedButton(
+                                            onPressed: presentation.connecting
+                                                ? null
+                                                : presentation.appLaunchUnknown
+                                                ? checkAppLaunch
+                                                : (presentation.reconcileOnly
+                                                      ? reconcileState
+                                                      : start),
+                                            child: Text(
+                                              presentation.appLaunchUnknown
+                                                  ? '只读检查'
+                                                  : presentation.appLaunchClosed
+                                                  ? '重新打开'
+                                                  : '重新检查',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      if (ime)
+                        Positioned(
+                          left: 0,
+                          bottom: 0,
+                          width: 1,
+                          height: 1,
+                          child: TextField(
+                            focusNode: inputFocus,
+                            controller: text,
+                            autofocus: true,
+                            obscureText: sensitive,
+                            enableSuggestions: !sensitive,
+                            autocorrect: !sensitive,
+                            enableInteractiveSelection: !sensitive,
+                            onSubmitted: (_) {
+                              if (!canSendInput) return;
+                              unawaited(
+                                send(InteropCommand.sessionKey, {
+                                  'keyCode': 66,
+                                  'action': 'down',
+                                }),
+                              );
+                              unawaited(
+                                send(InteropCommand.sessionKey, {
+                                  'keyCode': 66,
+                                  'action': 'up',
+                                }),
+                              );
+                            },
+                          ),
+                        ),
+                      ExitHandle(
+                        onExit: leave,
+                        deviceLabel: deviceName(widget.device),
+                      ),
+                    ],
                   ),
-                if (ime)
-                  Positioned(
-                    left: 0,
-                    bottom: 0,
-                    width: 1,
-                    height: 1,
-                    child: TextField(
-                      focusNode: inputFocus,
-                      controller: text,
-                      autofocus: true,
-                      obscureText: sensitive,
-                      enableSuggestions: !sensitive,
-                      autocorrect: !sensitive,
-                      enableInteractiveSelection: !sensitive,
-                      onSubmitted: (_) {
-                        if (!canSendInput) return;
-                        unawaited(
-                          send(InteropCommand.sessionKey, {
-                            'keyCode': 66,
-                            'action': 'down',
-                          }),
-                        );
-                        unawaited(
-                          send(InteropCommand.sessionKey, {
-                            'keyCode': 66,
-                            'action': 'up',
-                          }),
-                        );
-                      },
-                    ),
-                  ),
-                ExitHandle(
-                  onExit: leave,
-                  deviceLabel: deviceName(widget.device),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
-import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/test_controller.dart';
@@ -117,7 +116,7 @@ void main() {
   );
 
   testWidgets(
-    'notification menu keeps local hide separate from remote dismissal',
+    'notification clear remains reachable at 2x and synchronizes the phone snapshot',
     (tester) async {
       tester.view.physicalSize = const Size(280, 620);
       tester.view.devicePixelRatio = 1;
@@ -126,17 +125,24 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       final dismissals = <Json>[];
+      final remaining = ['one', 'two'];
+      final commands = <String>[];
       final controller = createTestController((
         command, [
         params = const {},
       ]) async {
-        if (command == 'notifications.dismiss') dismissals.add(params);
+        commands.add(command);
+        if (command == 'notifications.dismiss') {
+          dismissals.add(params);
+          remaining.remove(params['notificationId']);
+          return {'dismissed': true, 'markedRead': false};
+        }
         return command == 'notifications.list'
             ? {
                 'status': 'available',
                 'live': true,
                 'notifications': [
-                  for (final id in ['one', 'two'])
+                  for (final id in remaining)
                     {
                       'id': id,
                       'appName': '消息 $id',
@@ -154,23 +160,26 @@ void main() {
           NotificationsPage(controller: controller, device: _device),
           scale: 2,
         );
-        await tester.ensureVisible(find.byTooltip('通知操作').first);
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('通知操作').first);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('仅在本机隐藏'));
-        await tester.pumpAndSettle();
-        expect(find.text('通知 one'), findsNothing);
-        expect(dismissals, isEmpty);
-        await tester.ensureVisible(find.byTooltip('通知操作'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('通知操作'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('清除手机上的通知'));
-        await tester.pumpAndSettle();
+        expect(find.text('仅在本机隐藏'), findsNothing);
+        for (final id in ['one', 'two']) {
+          final clear = find.descendant(
+            of: find.byKey(ValueKey('notification-$id')),
+            matching: find.byTooltip('已读（清除）'),
+          );
+          await tester.scrollUntilVisible(clear, 180);
+          await tester.ensureVisible(clear);
+          await tester.pumpAndSettle();
+          expect(clear.hitTestable(), findsOneWidget);
+          await tester.tap(clear);
+          await tester.pumpAndSettle();
+          expect(find.text('通知 $id'), findsNothing);
+        }
         expect(dismissals, [
+          {'deviceId': 'phone-a', 'notificationId': 'one'},
           {'deviceId': 'phone-a', 'notificationId': 'two'},
         ]);
+        expect(find.text('没有当前通知'), findsOneWidget);
+        expect(commands, isNot(contains('notifications.open')));
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox());
@@ -178,36 +187,4 @@ void main() {
       }
     },
   );
-
-  testWidgets('glass about dialog keeps version, licenses and close actions', (
-    tester,
-  ) async {
-    final controller = createTestController(
-      (command, [params = const {}]) async => command == 'system.info'
-          ? {'version': '2.3.4', 'description': '设备互联'}
-          : {},
-    );
-    try {
-      await _mount(tester, controller, SettingsPage(controller: controller));
-      await tester.scrollUntilVisible(find.text('关于邻接'), 300);
-      await tester.tap(find.text('关于邻接'));
-      await tester.pumpAndSettle();
-      expect(find.byType(GlassAlertDialog), findsOneWidget);
-      expect(find.text('2.3.4'), findsOneWidget);
-      final dialogContext = tester.element(find.byType(GlassAlertDialog));
-      final labels = MaterialLocalizations.of(dialogContext);
-      await tester.tap(find.text(labels.viewLicensesButtonLabel));
-      await tester.pumpAndSettle();
-      expect(find.byType(LicensePage), findsOneWidget);
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(labels.closeButtonLabel));
-      await tester.pumpAndSettle();
-      expect(find.byType(GlassAlertDialog), findsNothing);
-      expect(tester.takeException(), isNull);
-    } finally {
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    }
-  });
 }

@@ -1,19 +1,13 @@
-import 'dart:io';
-import 'dart:ui' as ui;
-
+import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
-import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/settings/adb_identity/settings_adb_identity_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
-import 'ios_pages_capture_test.dart' as captures;
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
 
@@ -27,8 +21,6 @@ const phone = <String, dynamic>{
   'port': 37123,
   'status': 'connected',
 };
-final output = Platform.environment['CONNECT_MANAGEMENT_CAPTURE_DIR'];
-final boundary = GlobalKey();
 
 Future<void> pump(
   WidgetTester tester,
@@ -46,18 +38,12 @@ Future<void> pump(
     tester.view.resetDevicePixelRatio();
     tester.platformDispatcher.clearTextScaleFactorTestValue();
   });
-  if (output != null) await captures.loadCaptureFonts();
   await tester.pumpWidget(
-    RepaintBoundary(
-      key: boundary,
-      child: RouterTestApp(
-        controller: controller,
-        devices: [phone],
-        theme: captures.captureTheme(
-          narrow ? Brightness.dark : Brightness.light,
-        ),
-        home: page,
-      ),
+    RouterTestApp(
+      controller: controller,
+      devices: [phone],
+      theme: ConnectTokens.theme(narrow ? Brightness.dark : Brightness.light),
+      home: page,
     ),
   );
   await tester.pumpAndSettle();
@@ -73,20 +59,6 @@ Future<void> reveal(WidgetTester tester, Finder finder) async {
   }
   await Scrollable.ensureVisible(tester.element(finder), alignment: .5);
   await tester.pumpAndSettle();
-}
-
-Future<void> capture(WidgetTester tester, String name) async {
-  if (output == null) return;
-  await tester.runAsync(() async {
-    await Directory(output!).create(recursive: true);
-    final image =
-        await (boundary.currentContext!.findRenderObject()!
-                as RenderRepaintBoundary)
-            .toImage();
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    await File('$output/$name.png').writeAsBytes(data!.buffer.asUint8List());
-    image.dispose();
-  });
 }
 
 void main() {
@@ -112,10 +84,8 @@ void main() {
       await pump(tester, controller, DevicesPage(controller: controller));
       await tester.tap(find.byTooltip('设备操作'));
       await tester.pumpAndSettle();
-      await capture(tester, 'device-menu');
       await tester.tap(find.text('移除此设备'));
       await tester.pumpAndSettle();
-      await capture(tester, 'device-remove-confirm');
       expect(calls.where((c) => c.$1 == 'devices.forget'), isEmpty);
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
@@ -154,10 +124,8 @@ void main() {
       });
       addTearDown(controller.dispose);
       await pump(tester, controller, AdbIdentityPage(controller: controller));
-      await capture(tester, 'global-key');
       await tester.tap(find.widgetWithText(OutlinedButton, '重置密钥'));
       await tester.pumpAndSettle();
-      await capture(tester, 'global-key-reset-confirm');
       expect(calls.where((c) => c.$1 == 'identity.global.reset'), isEmpty);
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
@@ -202,7 +170,6 @@ void main() {
         AdbIdentityPage(controller: controller, device: phone),
         narrow: true,
       );
-      await capture(tester, 'device-key-dark-narrow');
       await reveal(tester, find.text('导入私钥'));
       await tester.tap(find.text('导入私钥'));
       await tester.pumpAndSettle();
@@ -212,7 +179,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('PEM 私钥格式无效'), findsOneWidget);
       expect(calls.where((c) => c.$1 == 'identity.device.import'), isEmpty);
-      await capture(tester, 'key-invalid-dark-narrow');
       await reveal(tester, find.text('取消'));
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
@@ -264,7 +230,6 @@ void main() {
         narrow: true,
       );
       expect(find.textContaining('设备专用授权私钥不可用'), findsOneWidget);
-      await capture(tester, 'device-key-missing-dark-narrow');
       await reveal(tester, find.widgetWithText(OutlinedButton, '使用全局私钥'));
       await tester.tap(find.widgetWithText(OutlinedButton, '使用全局私钥'));
       await tester.pumpAndSettle();
@@ -275,7 +240,6 @@ void main() {
       await reveal(tester, find.widgetWithText(OutlinedButton, '使用全局私钥'));
       await tester.tap(find.widgetWithText(OutlinedButton, '使用全局私钥'));
       await tester.pumpAndSettle();
-      await capture(tester, 'device-key-missing-restore-confirm');
       await reveal(tester, find.widgetWithText(FilledButton, '使用全局私钥'));
       await tester.tap(find.widgetWithText(FilledButton, '使用全局私钥'));
       await tester.pumpAndSettle();
@@ -327,7 +291,6 @@ void main() {
         controller,
         DeviceConvertIpPage(controller: controller, device: phone),
       );
-      await capture(tester, 'convert-ip');
       final fields = find.byType(TextFormField);
       await tester.enterText(fields.first, '');
       await tester.enterText(fields.last, '99999');
@@ -340,7 +303,6 @@ void main() {
       await tester.enterText(fields.last, '5666');
       await tester.tap(find.text('切换并连接'));
       await tester.pumpAndSettle();
-      await capture(tester, 'convert-ip-confirm');
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
       expect(calls.where((c) => c.$1 == 'devices.wireless'), isEmpty);
@@ -354,7 +316,6 @@ void main() {
       await submit();
       expect(find.text('已转为 IP 连接'), findsNothing);
       expect(find.textContaining('连接超时'), findsOneWidget);
-      await capture(tester, 'convert-ip-failed');
       await submit();
       expect(find.text('已转为 IP 连接'), findsNothing);
       expect(find.textContaining('尚未验证 IP 连接'), findsOneWidget);
@@ -396,7 +357,6 @@ void main() {
       await reveal(tester, find.text('文件管理'));
       await tester.tap(find.text('文件管理'));
       await tester.pumpAndSettle();
-      await capture(tester, 'offline-action-connect');
       expect(
         calls.where((c) => c.$1 == 'files.list' || c.$1 == 'devices.connect'),
         isEmpty,
@@ -445,101 +405,4 @@ void main() {
       );
     },
   );
-  if (output == null) return;
-  testWidgets('capture scoped management pages and large text recovery', (
-    tester,
-  ) async {
-    for (final narrow in [false, true]) {
-      for (final name in [
-        'settings',
-        'preferences',
-        'activities',
-        'global-key',
-        'inherited-key',
-        'workspace',
-      ]) {
-        final controller = createTestController(
-          (command, [params = const {}]) async => switch (command) {
-            'identity.global.get' => {
-              'scope': 'global',
-              'fingerprint': 'SHA256:global-public-fingerprint',
-            },
-            'identity.device.get' => {
-              'deviceId': 'phone',
-              'scope': 'global',
-              'fingerprint': 'SHA256:global-public-fingerprint',
-            },
-            'activities.list' => {
-              'activities': [
-                {
-                  'id': 'connection:phone',
-                  'deviceId': 'phone',
-                  'deviceName': '我的手机',
-                  'name': '设备连接',
-                  'status': 'connected',
-                  'canStop': true,
-                },
-                {
-                  'id': 'connection:other',
-                  'deviceId': 'other',
-                  'deviceName': '另一台手机',
-                  'name': '其他设备的活动',
-                  'status': 'connected',
-                  'canStop': true,
-                },
-              ],
-            },
-            _ => {},
-          },
-        );
-        final device = {
-          ...phone,
-          'status': 'offline',
-          if (narrow) 'address': 'fe80::1234:5678:90ab:cdef%wlan0',
-        };
-        final page = switch (name) {
-          'settings' => SettingsPage(controller: controller),
-          'preferences' => DeviceConnectionPreferencesPage(
-            controller: controller,
-            device: device,
-          ),
-          'activities' => ActivitiesPage(
-            controller: controller,
-            deviceId: 'phone',
-          ),
-          'global-key' => AdbIdentityPage(controller: controller),
-          'inherited-key' => AdbIdentityPage(
-            controller: controller,
-            device: device,
-          ),
-          _ => DeviceWorkspacePage(controller: controller, device: device),
-        };
-        await pump(tester, controller, page, narrow: narrow);
-        final suffix = narrow ? 'dark-narrow' : 'light';
-        await capture(tester, '$name-$suffix');
-        if (name == 'activities') expect(find.text('其他设备的活动'), findsNothing);
-        if (name == 'workspace') {
-          await reveal(tester, find.text('文件管理'));
-          await tester.tap(find.text('文件管理'));
-          await tester.pumpAndSettle();
-          await capture(tester, 'offline-action-$suffix');
-        }
-        if (name == 'global-key' && narrow) {
-          await reveal(tester, find.widgetWithText(OutlinedButton, '重置密钥'));
-          await tester.tap(find.widgetWithText(OutlinedButton, '重置密钥'));
-          await tester.pumpAndSettle();
-          await capture(tester, 'global-key-confirm-$suffix');
-          await reveal(tester, find.widgetWithText(FilledButton, '重置密钥'));
-          expect(
-            find.widgetWithText(FilledButton, '重置密钥').hitTestable(),
-            findsOneWidget,
-          );
-          await capture(tester, 'global-key-confirm-actions-$suffix');
-        }
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(const SizedBox());
-        controller.dispose();
-      }
-    }
-  });
 }

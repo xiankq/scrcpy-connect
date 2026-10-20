@@ -60,180 +60,195 @@ class TransferDetailsPage extends HookConsumerWidget {
                     ? value(current, 'id', value(current, 'transferId'))
                     : null,
               );
-              return GroupedListView(
-                padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                children: [
-                  Text(
-                    value(current, 'name', '文件传输'),
-                    style: Theme.of(context).textTheme.headlineMedium,
+              final leading = <Widget>[
+                Text(
+                  value(current, 'name', '文件传输'),
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const SizedBox(height: DesignTokens.spacingSm),
+                Text(statusText(status)),
+                const SizedBox(height: DesignTokens.spacingXs),
+                Text(
+                  '${value(current, 'sourceLabel', value(current, 'source'))}\n→ ${value(current, 'destinationLabel', value(current, 'destination'))}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: DesignTokens.spacingMd),
+                if (current['kind'] == 'directory' && status == 'finalizing')
+                  const StateNote('目录结构已建立，仍在核验所选内容。请等待批次实际结果。'),
+                if (value(current, 'exportReason').isNotEmpty)
+                  StateNote(value(current, 'exportReason')),
+                if (cacheLease.hasError)
+                  StateNote('暂存原件不可用：${cacheLease.error}。请重新取回原件后再保存或分享。'),
+              ];
+              final trailing = <Widget>[
+                if (status == 'conflict')
+                  ConflictPanel(
+                    key: ValueKey(('transfer-conflict', value(current, 'id'))),
+                    onResolve: (policy, all) async {
+                      await perform(context, controller, 'transfers.resolve', {
+                        'transferId': current['id'],
+                        'policy': policy,
+                        'applyToAll': all,
+                      });
+                      refresh();
+                    },
                   ),
-                  const SizedBox(height: DesignTokens.spacingSm),
-                  Text(statusText(status)),
-                  const SizedBox(height: DesignTokens.spacingXs),
-                  Text(
-                    '${value(current, 'sourceLabel', value(current, 'source'))}\n→ ${value(current, 'destinationLabel', value(current, 'destination'))}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: DesignTokens.spacingMd),
-                  if (current['kind'] == 'directory' && status == 'finalizing')
-                    const StateNote('目录结构已建立，仍在核验所选内容。请等待批次实际结果。'),
-                  if (value(current, 'exportReason').isNotEmpty)
-                    StateNote(value(current, 'exportReason')),
-                  if (cacheLease.hasError)
-                    StateNote('暂存原件不可用：${cacheLease.error}。请重新取回原件后再保存或分享。'),
-                  for (final item in objects(current['items']))
-                    ActionRow(
-                      icon: item['status'] == 'completed'
-                          ? LucideIcons.circleCheck
-                          : LucideIcons.circleAlert,
-                      title: value(item, 'name'),
-                      trailing: Text(
-                        statusText(value(item, 'status')),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-
-                      color: item['status'] == 'completed'
-                          ? ConnectTokens.mint
-                          : ConnectTokens.amber,
-                    ),
-                  if (status == 'conflict')
-                    ConflictPanel(
-                      onResolve: (policy, all) async {
-                        await perform(
-                          context,
-                          controller,
-                          'transfers.resolve',
-                          {
-                            'transferId': current['id'],
-                            'policy': policy,
-                            'applyToAll': all,
-                          },
-                        );
+                if (current['canCancel'] == true)
+                  OutlinedButton(
+                    onPressed: () async {
+                      if (await confirm(
+                            context,
+                            '取消未完成的传输？',
+                            '已完成内容会保留。未完成的临时项将按实际情况清理，不会作为完整文件保存。',
+                            action: '取消传输',
+                          ) &&
+                          context.mounted) {
+                        await perform(context, controller, 'transfers.cancel', {
+                          'transferId': current['id'],
+                        });
                         refresh();
-                      },
-                    ),
-                  if (current['canCancel'] == true)
-                    OutlinedButton(
-                      onPressed: () async {
-                        if (await confirm(
-                              context,
-                              '取消未完成的传输？',
-                              '已完成内容会保留。未完成的临时项将按实际情况清理，不会作为完整文件保存。',
-                              action: '取消传输',
-                            ) &&
-                            context.mounted) {
-                          await perform(
+                      }
+                    },
+                    child: const Text('取消传输'),
+                  ),
+                if (current['canRestart'] == true)
+                  FilledButton(
+                    onPressed: () async {
+                      if (await confirm(
                             context,
-                            controller,
-                            'transfers.cancel',
-                            {'transferId': current['id']},
-                          );
-                          refresh();
-                        }
-                      },
-                      child: const Text('取消传输'),
+                            '从头重新传输？',
+                            '本次将从 0 开始，并重新检查来源与目标。来源已经变化时，需要重新确认，已有内容不会作为续传进度。',
+                            action: '重新传输',
+                          ) &&
+                          context.mounted) {
+                        await perform(context, controller, 'transfers.resume', {
+                          'transferId': current['id'],
+                          'restart': true,
+                        });
+                        refresh();
+                      }
+                    },
+                    child: const Text('重新传输'),
+                  ),
+                if (current['canExport'] == true &&
+                    (current['destinationScope'] != 'privateCache' ||
+                        cacheLease.hasData && !cacheLease.hasError) &&
+                    value(current, 'localPath').isNotEmpty) ...[
+                  StateNote(
+                    current['destinationScope'] == 'privateCache'
+                        ? '已取回本机暂存，尚未保存到系统位置。系统可能清理暂存内容。'
+                        : '已保存至 ${value(current, 'localPath')}',
+                  ),
+                  if (Platform.isAndroid &&
+                      current['destinationScope'] == 'privateCache')
+                    FilledButton.icon(
+                      onPressed: () => DocumentExportRoute(
+                        taskId: value(task, 'id', value(task, 'transferId')),
+                        partial: false,
+                      ).push<void>(context),
+                      icon: const Icon(LucideIcons.folderOutput),
+                      label: const Text('保存到系统位置'),
                     ),
-                  if (current['canRestart'] == true)
-                    FilledButton(
-                      onPressed: () async {
-                        if (await confirm(
-                              context,
-                              '从头重新传输？',
-                              '本次将从 0 开始，并重新检查来源与目标。来源已经变化时，需要重新确认，已有内容不会作为续传进度。',
-                              action: '重新传输',
-                            ) &&
-                            context.mounted) {
-                          await perform(
-                            context,
-                            controller,
-                            'transfers.resume',
-                            {'transferId': current['id'], 'restart': true},
-                          );
-                          refresh();
-                        }
-                      },
-                      child: const Text('重新传输'),
-                    ),
-                  if (current['canExport'] == true &&
-                      (current['destinationScope'] != 'privateCache' ||
-                          cacheLease.hasData && !cacheLease.hasError) &&
-                      value(current, 'localPath').isNotEmpty) ...[
+                  if (current['kind'] == 'directory')
                     StateNote(
                       current['destinationScope'] == 'privateCache'
-                          ? '已取回本机暂存，尚未保存到系统位置。系统可能清理暂存内容。'
-                          : '已保存至 ${value(current, 'localPath')}',
+                          ? '文件夹结构已取回。保存到系统位置后，可在文件应用中查看。'
+                          : '文件夹结构已取回，请在保存位置查看。',
                     ),
-                    if (Platform.isAndroid &&
-                        current['destinationScope'] == 'privateCache')
-                      FilledButton.icon(
-                        onPressed: () => DocumentExportRoute(
-                          taskId: value(task, 'id', value(task, 'transferId')),
-                          partial: false,
-                        ).push<void>(context),
-                        icon: const Icon(LucideIcons.folderOutput),
-                        label: const Text('保存到系统位置'),
+                  if (current['kind'] != 'directory') ...[
+                    FilledButton.icon(
+                      onPressed: () => perform(
+                        context,
+                        controller,
+                        'files.open',
+                        {'localPath': value(current, 'localPath')},
                       ),
-                    if (current['kind'] == 'directory')
-                      StateNote(
-                        current['destinationScope'] == 'privateCache'
-                            ? '文件夹结构已取回。保存到系统位置后，可在文件应用中查看。'
-                            : '文件夹结构已取回，请在保存位置查看。',
+                      icon: const Icon(
+                        LucideIcons.externalLink,
+                        size: DesignTokens.componentIconActionSize,
                       ),
-                    if (current['kind'] != 'directory') ...[
-                      FilledButton.icon(
-                        onPressed: () => perform(
-                          context,
-                          controller,
-                          'files.open',
-                          {'localPath': value(current, 'localPath')},
-                        ),
-                        icon: const Icon(
-                          LucideIcons.externalLink,
-                          size: DesignTokens.componentIconActionSize,
-                        ),
-                        label: const Text('用本机应用打开'),
-                      ),
-                      const SizedBox(height: DesignTokens.spacingSm),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          try {
-                            if (current['destinationScope'] == 'privateCache') {
-                              await controller.execute(
-                                InteropCommand.mediaCacheRetain,
-                                {'localPath': value(current, 'localPath')},
-                              );
-                            }
-                            await SharePlus.instance.share(
-                              ShareParams(
-                                files: [XFile(value(current, 'localPath'))],
-                              ),
+                      label: const Text('用本机应用打开'),
+                    ),
+                    const SizedBox(height: DesignTokens.spacingSm),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        try {
+                          if (current['destinationScope'] == 'privateCache') {
+                            await controller.execute(
+                              InteropCommand.mediaCacheRetain,
+                              {'localPath': value(current, 'localPath')},
                             );
-                          } catch (error) {
-                            if (context.mounted) {
-                              feedback(context, '系统分享失败：$error');
-                            }
                           }
-                        },
-                        icon: const Icon(
-                          LucideIcons.share2,
-                          size: DesignTokens.componentIconActionSize,
-                        ),
-                        label: const Text('系统分享'),
+                          await SharePlus.instance.share(
+                            ShareParams(
+                              files: [XFile(value(current, 'localPath'))],
+                            ),
+                          );
+                        } catch (error) {
+                          if (context.mounted) {
+                            feedback(context, '系统分享失败：$error');
+                          }
+                        }
+                      },
+                      icon: const Icon(
+                        LucideIcons.share2,
+                        size: DesignTokens.componentIconActionSize,
                       ),
-                    ],
-                  ],
-                  if (['failed', 'partial', 'paused'].contains(status))
-                    StateNote(
-                      value(
-                        current,
-                        'error',
-                        '请核对逐项结果。已完成与未完成内容分别保留，不会自动重复有未知结果的操作。',
-                      ),
-                      icon: LucideIcons.circleAlert,
+                      label: const Text('系统分享'),
                     ),
-                  const SizedBox(height: DesignTokens.spacingMd),
-                  TextButton(onPressed: refresh, child: const Text('重新检查结果')),
+                  ],
                 ],
+                if (['failed', 'partial', 'paused'].contains(status))
+                  StateNote(
+                    value(
+                      current,
+                      'error',
+                      '请核对逐项结果。已完成与未完成内容分别保留，不会自动重复有未知结果的操作。',
+                    ),
+                    icon: LucideIcons.circleAlert,
+                  ),
+                const SizedBox(height: DesignTokens.spacingMd),
+                TextButton(onPressed: refresh, child: const Text('重新检查结果')),
+              ];
+              final items = objects(current['items']);
+              return GroupedListView.builder(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                itemCount: leading.length + items.length + trailing.length,
+                findChildIndexCallback: (key) {
+                  final index = trailing.indexWhere(
+                    (widget) => widget.key == key,
+                  );
+                  return index < 0
+                      ? null
+                      : leading.length + items.length + index;
+                },
+                itemBuilder: (context, index) {
+                  if (index < leading.length) return leading[index];
+                  final row = index - leading.length;
+                  if (row >= items.length) return trailing[row - items.length];
+                  final item = items[row];
+                  return ActionRow(
+                    key: ValueKey((
+                      'transfer-item',
+                      value(current, 'id'),
+                      value(item, 'source'),
+                      value(item, 'destination'),
+                      row,
+                    )),
+                    icon: item['status'] == 'completed'
+                        ? LucideIcons.circleCheck
+                        : LucideIcons.circleAlert,
+                    title: value(item, 'name'),
+                    trailing: Text(
+                      statusText(value(item, 'status')),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+
+                    color: item['status'] == 'completed'
+                        ? ConnectTokens.mint
+                        : ConnectTokens.amber,
+                  );
+                },
               );
             },
           );

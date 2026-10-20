@@ -1,6 +1,5 @@
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/file_row_title.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
@@ -435,103 +434,96 @@ class FilesPage extends HookWidget {
                               }
                             }
 
-                            return GroupedItem(
-                              index: i,
-                              count: entries.length,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  ListTile(
-                                    leading: selected.value.isNotEmpty
-                                        ? Checkbox(
-                                            value: selected.value.contains(
-                                              entryPath,
-                                            ),
-                                            onChanged: manageable
-                                                ? (_) => toggle()
-                                                : null,
-                                          )
-                                        : ListIconBadge(
-                                            icon: folder
-                                                ? LucideIcons.folder
-                                                : LucideIcons.file,
-                                            backgroundColor:
-                                                DesignTokens.colorListIconAmber,
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ListTile(
+                                  leading: selected.value.isNotEmpty
+                                      ? Checkbox(
+                                          value: selected.value.contains(
+                                            entryPath,
                                           ),
-                                    title: FileRowTitle(
-                                      tooltipTriggerMode:
-                                          TooltipTriggerMode.manual,
-                                      name: value(entry, 'name'),
-                                      path: value(entry, 'path'),
-                                      size: folder
-                                          ? null
-                                          : bytes(entry['size']),
-                                    ),
+                                          onChanged: manageable
+                                              ? (_) => toggle()
+                                              : null,
+                                        )
+                                      : ListIconBadge(
+                                          icon: folder
+                                              ? LucideIcons.folder
+                                              : LucideIcons.file,
+                                          backgroundColor:
+                                              DesignTokens.colorListIconAmber,
+                                        ),
+                                  title: FileRowTitle(
+                                    tooltipTriggerMode:
+                                        TooltipTriggerMode.manual,
+                                    name: value(entry, 'name'),
+                                    path: value(entry, 'path'),
+                                    size: folder ? null : bytes(entry['size']),
+                                  ),
 
-                                    onLongPress: manageable ? toggle : null,
-                                    onTap: !openable && !manageable
-                                        ? null
-                                        : () {
-                                            if (selected.value.isNotEmpty) {
-                                              toggle();
-                                            } else if (folder && openable) {
-                                              path.value = entryPath;
-                                              query.clear();
-                                            } else if (openable) {
-                                              FileDetailsRoute(
-                                                deviceId: value(device, 'id'),
-                                                path: value(entry, 'path'),
-                                              ).push<void>(context);
-                                            }
-                                          },
-                                    trailing: GlassMenuButton(
-                                      icon: const Icon(
-                                        LucideIcons.ellipsisVertical,
+                                  onLongPress: manageable ? toggle : null,
+                                  onTap: !openable && !manageable
+                                      ? null
+                                      : () {
+                                          if (selected.value.isNotEmpty) {
+                                            toggle();
+                                          } else if (folder && openable) {
+                                            path.value = entryPath;
+                                            query.clear();
+                                          } else if (openable) {
+                                            FileDetailsRoute(
+                                              deviceId: value(device, 'id'),
+                                              path: value(entry, 'path'),
+                                            ).push<void>(context);
+                                          }
+                                        },
+                                  trailing: GlassMenuButton(
+                                    icon: const Icon(
+                                      LucideIcons.ellipsisVertical,
+                                    ),
+                                    tooltip: '文件操作',
+                                    enabled: openable || manageable,
+                                    actions: [
+                                      GlassMenuAction(
+                                        label: '选择',
+                                        onPressed: manageable
+                                            ? () => handleFileAction('select')
+                                            : null,
                                       ),
-                                      tooltip: '文件操作',
-                                      enabled: openable || manageable,
-                                      actions: [
-                                        GlassMenuAction(
-                                          label: '选择',
-                                          onPressed: manageable
-                                              ? () => handleFileAction('select')
-                                              : null,
-                                        ),
-                                        GlassMenuAction(
-                                          label: '重命名',
-                                          onPressed: manageable
-                                              ? () => handleFileAction('rename')
-                                              : null,
-                                        ),
-                                        GlassMenuAction(
-                                          label: '取回本机',
-                                          onPressed: openable
-                                              ? () =>
-                                                    handleFileAction('download')
-                                              : null,
-                                        ),
-                                        GlassMenuAction(
-                                          label: '删除',
-                                          destructive: true,
-                                          onPressed: manageable
-                                              ? () => handleFileAction('delete')
-                                              : null,
-                                        ),
-                                      ],
+                                      GlassMenuAction(
+                                        label: '重命名',
+                                        onPressed: manageable
+                                            ? () => handleFileAction('rename')
+                                            : null,
+                                      ),
+                                      GlassMenuAction(
+                                        label: '取回本机',
+                                        onPressed: openable
+                                            ? () => handleFileAction('download')
+                                            : null,
+                                      ),
+                                      GlassMenuAction(
+                                        label: '删除',
+                                        destructive: true,
+                                        onPressed: manageable
+                                            ? () => handleFileAction('delete')
+                                            : null,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!openable && !manageable)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: DesignTokens.spacingMd,
+                                    ),
+                                    child: StateNote(
+                                      fileUnavailableReason(entry),
+                                      icon: LucideIcons.circleAlert,
                                     ),
                                   ),
-                                  if (!openable && !manageable)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: DesignTokens.spacingMd,
-                                      ),
-                                      child: StateNote(
-                                        fileUnavailableReason(entry),
-                                        icon: LucideIcons.circleAlert,
-                                      ),
-                                    ),
-                                ],
-                              ),
+                              ],
                             );
                           },
                         ),

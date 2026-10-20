@@ -46,29 +46,47 @@ class SessionToolsPage extends HookWidget {
               )
               .toList();
           if (selected.value == null) {
-            return GroupedListView(
+            return GroupedListView.builder(
               padding: const EdgeInsets.all(DesignTokens.spacingMd),
-              children: [
-                const StateNote('选择要操作的窗口。截图和输入只会作用于所选会话。'),
-                for (final session in sessions)
-                  ActionRow(
-                    icon: LucideIcons.appWindow,
-                    title: value(session, 'name', '手机屏幕'),
-
-                    onTap: () => selected.value = value(
-                      session,
-                      'sessionId',
-                      value(session, 'id'),
-                    ),
-                  ),
-                if (sessions.isEmpty)
-                  ActionRow(
+              itemCount: 1 + (sessions.isEmpty ? 1 : sessions.length),
+              findChildIndexCallback: (key) {
+                final index = sessions.indexWhere(
+                  (session) =>
+                      ValueKey((
+                        'session-choice',
+                        value(session, 'sessionId', value(session, 'id')),
+                      )) ==
+                      key,
+                );
+                return index < 0 ? null : index + 1;
+              },
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return const StateNote('选择要操作的窗口。截图和输入只会作用于所选会话。');
+                }
+                if (sessions.isEmpty) {
+                  return ActionRow(
                     icon: LucideIcons.smartphone,
                     title: '打开手机屏幕',
                     onTap: () =>
                         openRemoteRoute(context, deviceId: value(device, 'id')),
+                  );
+                }
+                final session = sessions[index - 1];
+                return ActionRow(
+                  key: ValueKey((
+                    'session-choice',
+                    value(session, 'sessionId', value(session, 'id')),
+                  )),
+                  icon: LucideIcons.appWindow,
+                  title: value(session, 'name', '手机屏幕'),
+                  onTap: () => selected.value = value(
+                    session,
+                    'sessionId',
+                    value(session, 'id'),
                   ),
-              ],
+                );
+              },
             );
           }
           final matches = sessions.where(

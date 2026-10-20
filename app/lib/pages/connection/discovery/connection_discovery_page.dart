@@ -91,48 +91,47 @@ class DiscoveryPage extends StatelessWidget {
               ],
             );
           }
-          return GroupedListView(
+          return GroupedListView.builder(
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            children: [
-              ...list.map((d) {
-                final endpoints = objects(d['endpoints']);
-                final endpoint = endpoints.isEmpty ? d : endpoints.first;
-                final pairingService = d['kind'] == 'pairing';
-                return ListTile(
-                  leading: const Icon(LucideIcons.smartphone),
-                  title: Text(
-                    value(d, 'name', value(d, 'instance', '附近 Android 设备')),
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  subtitle: Text(
-                    pairingService
-                        ? '等待配对'
-                        : d['trusted'] == true
-                        ? '已配对，检查连接'
-                        : '需确认授权',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  onTap: () {
-                    if (returnSelection) {
-                      Navigator.of(context)
-                          .pop(<String, dynamic>{'service': d});
-                      return;
-                    }
-                    ConnectionFormRoute(
-                      pairing: pairingService,
-                      transport: pairingService
-                          ? null
-                          : d['kind'] == 'tcp'
-                          ? ConnectionTransport.tcp
-                          : ConnectionTransport.tls,
-                      address: value(endpoint, 'address'),
-                      port: value(endpoint, 'port'),
-                      deviceId: responseDeviceId(d),
-                    ).push<void>(context);
-                  },
-                );
-              }),
-            ],
+            itemCount: list.length,
+            itemBuilder: (context, index) {
+              final d = list[index];
+              final endpoints = objects(d['endpoints']);
+              final endpoint = endpoints.isEmpty ? d : endpoints.first;
+              final pairingService = d['kind'] == 'pairing';
+              return ListTile(
+                leading: const Icon(LucideIcons.smartphone),
+                title: Text(
+                  value(d, 'name', value(d, 'instance', '附近 Android 设备')),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                subtitle: Text(
+                  pairingService
+                      ? '等待配对'
+                      : d['trusted'] == true
+                      ? '已配对，检查连接'
+                      : '需确认授权',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                onTap: () {
+                  if (returnSelection) {
+                    Navigator.of(context).pop(<String, dynamic>{'service': d});
+                    return;
+                  }
+                  ConnectionFormRoute(
+                    pairing: pairingService,
+                    transport: pairingService
+                        ? null
+                        : d['kind'] == 'tcp'
+                        ? ConnectionTransport.tcp
+                        : ConnectionTransport.tls,
+                    address: value(endpoint, 'address'),
+                    port: value(endpoint, 'port'),
+                    deviceId: responseDeviceId(d),
+                  ).push<void>(context);
+                },
+              );
+            },
           );
         },
       ),

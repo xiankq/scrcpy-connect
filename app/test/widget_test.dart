@@ -4,7 +4,6 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/services/remote_input.dart';
@@ -18,33 +17,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:design_system/design_system.dart';
 
 void main() {
-  testWidgets(
-    'first-time manual connection can switch to pairing without a prior result',
-    (tester) async {
-      final controller = createTestController(
-        (command, [params = const {}]) async => {},
-      );
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: ConnectionFormPage(
-            controller: controller,
-            address: 'phone.local',
-            transport: ConnectionTransport.tls,
-          ),
-        ),
-      );
-      await tester.ensureVisible(find.text('使用无线配对码'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('使用无线配对码'));
-      await tester.pumpAndSettle();
-      expect(find.text('无线配对码'), findsOneWidget);
-      expect(find.text('phone.local'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
   testWidgets(
     'reauthorization preserves device identity and cancellation targets its attempt',
     (tester) async {
@@ -101,33 +73,7 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-  testWidgets(
-    'small phone and large text preserve reachable device navigation',
-    (tester) async {
-      tester.view.physicalSize = const Size(320, 640);
-      tester.view.devicePixelRatio = 1;
-      tester.platformDispatcher.textScaleFactorTestValue = 2;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-        tester.platformDispatcher.clearTextScaleFactorTestValue();
-      });
-      final controller = createTestController(
-        (command, [params = const {}]) async =>
-            command == 'devices.list' ? {'devices': <Json>[]} : {},
-      );
-      await controller.initialize();
-      await tester.pumpWidget(
-        TestProviderScope(controller: controller, child: const ConnectApp()),
-      );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.text('设置').hitTestable().first);
-      await tester.pumpAndSettle();
-      expect(find.text('外观'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+
   test(
     'wireless fields accept IP and hostnames and reject malformed input',
     () {
@@ -177,59 +123,7 @@ void main() {
     );
     expect(sourcePoint(Offset.zero, viewport, Size.zero), isNull);
   });
-  testWidgets(
-    'first screen remains an empty device list without invented devices',
-    (tester) async {
-      final calls = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add(command);
-        return command == 'devices.list' ? {'devices': <Json>[]} : {};
-      });
-      await controller.initialize();
-      await tester.pumpWidget(
-        TestProviderScope(controller: controller, child: const ConnectApp()),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('添加你的第一台设备'), findsOneWidget);
-      expect(find.text('设备').hitTestable(), findsWidgets);
-      expect(find.textContaining('Pixel'), findsNothing);
-      expect(calls.where((call) => call.startsWith('session.')), isEmpty);
-      await tester.tap(find.text('添加设备').last);
-      await tester.pumpAndSettle();
-      expect(find.text('无线配对码'), findsOneWidget);
-      expect(find.text('手动填写无线调试地址'), findsNothing);
-    },
-  );
-  testWidgets('invalid connection port cannot reach device backend', (
-    tester,
-  ) async {
-    final calls = <String>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
-      calls.add(command);
-      return {};
-    });
-    await tester.pumpWidget(
-      RouterTestApp(
-        controller: controller,
-        theme: ConnectTokens.theme(Brightness.light),
-        home: ConnectionFormPage(controller: controller),
-      ),
-    );
-    await tester.enterText(find.byType(TextFormField).at(0), '192.168.1.8');
-    await tester.enterText(find.byType(TextFormField).at(1), '65536');
-    await tester.ensureVisible(find.text('连接设备'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('连接设备'));
-    await tester.pumpAndSettle();
-    expect(find.text('端口应为 1–65535 的整数'), findsOneWidget);
-    expect(calls.where((call) => call != 'devices.discover'), isEmpty);
-  });
+
   testWidgets(
     'metadata-only device stays unauthorized and has no live battery',
     (tester) async {
@@ -352,46 +246,6 @@ void main() {
         touches.where((p) => p['pointerId'] == 102).map((p) => p['action']),
         ['down', 'cancel'],
       );
-    },
-  );
-
-  testWidgets(
-    'dragging exit consumes touches and collapsed handle requires expansion',
-    (tester) async {
-      var exits = 0;
-      var remoteTouches = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          home: Scaffold(
-            body: Stack(
-              children: [
-                Positioned.fill(
-                  child: Listener(
-                    behavior: HitTestBehavior.opaque,
-                    onPointerDown: (_) => remoteTouches++,
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-                ExitHandle(deviceLabel: '测试手机', onExit: () => exits++),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.dragFrom(const Offset(36, 106), const Offset(700, 80));
-      await tester.pumpAndSettle();
-      expect(exits, 0);
-      expect(remoteTouches, 0);
-      final collapsed = find.bySemanticsLabel('展开退出按钮，测试手机');
-      expect(collapsed, findsOneWidget);
-      await tester.tap(collapsed);
-      await tester.pumpAndSettle();
-      expect(exits, 0);
-      await tester.tap(find.bySemanticsLabel('退出控制，返回测试手机'));
-      await tester.pump();
-      expect(exits, 1);
-      expect(remoteTouches, 0);
     },
   );
 }

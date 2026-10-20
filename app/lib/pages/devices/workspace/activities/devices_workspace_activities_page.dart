@@ -49,78 +49,59 @@ class ActivitiesPage extends HookConsumerWidget {
               ),
             );
           }
-          final groups = <String, List<Json>>{};
-          for (final activity in activities) {
-            final id = value(activity, 'deviceId');
-            final name = value(activity, 'deviceName');
-            final owner = id.isNotEmpty ? 'id:$id' : 'name:$name';
-            (groups[owner] ??= []).add(activity);
-          }
-          return GroupedListView(
+          return GroupedListView.builder(
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            children: [
-              for (final entry in groups.entries) ...[
-                Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: DesignTokens.spacingSm,
-                  ),
+            itemCount: activities.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return Padding(
+                  padding: const EdgeInsets.all(DesignTokens.spacingSm),
                   child: Text(
-                    value(entry.value.first, 'deviceName').isEmpty
-                        ? '未标明设备'
-                        : value(entry.value.first, 'deviceName'),
+                    value(activities.first, 'deviceName', '此设备'),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                ),
-                ContentPanel(
-                  padding: EdgeInsets.zero,
-                  key: ValueKey('activities:${entry.key}'),
-                  child: Column(
-                    children: [
-                      for (final activity in entry.value)
-                        ActionRow(
-                          icon: LucideIcons.activity,
-                          title: value(activity, 'name', '当前活动'),
-
-                          trailing: GlassTooltip(
-                            message: value(
-                              activity,
-                              'statusLabel',
-                              statusText(value(activity, 'status')),
-                            ),
-                            child: TextButton(
-                              onPressed: activity['canStop'] == false
-                                  ? null
-                                  : () async {
-                                      if (await confirm(
-                                            context,
-                                            '停止“${value(activity, 'name')}”？',
-                                            value(
-                                              activity,
-                                              'stopImpact',
-                                              '主动停止后不会自动恢复该活动。其他设备的活动保持各自状态。',
-                                            ),
-                                            action: '停止活动',
-                                          ) &&
-                                          context.mounted) {
-                                        await perform(
-                                          context,
-                                          controller,
-                                          'activities.stop',
-                                          {'activityId': activity['id']},
-                                        );
-                                        refresh();
-                                      }
-                                    },
-                              child: const Text('停止'),
-                            ),
-                          ),
-                        ),
-                    ],
+                );
+              }
+              final activity = activities[index - 1];
+              return ActionRow(
+                key: ValueKey(value(activity, 'id')),
+                icon: LucideIcons.activity,
+                title: value(activity, 'name', '当前活动'),
+                trailing: GlassTooltip(
+                  message: value(
+                    activity,
+                    'statusLabel',
+                    statusText(value(activity, 'status')),
+                  ),
+                  child: TextButton(
+                    onPressed: activity['canStop'] == false
+                        ? null
+                        : () async {
+                            if (await confirm(
+                                  context,
+                                  '停止“${value(activity, 'name')}”？',
+                                  value(
+                                    activity,
+                                    'stopImpact',
+                                    '主动停止后不会自动恢复该活动。其他设备的活动保持各自状态。',
+                                  ),
+                                  action: '停止活动',
+                                ) &&
+                                context.mounted) {
+                              await perform(
+                                context,
+                                controller,
+                                'activities.stop',
+                                {'activityId': activity['id']},
+                              );
+                              refresh();
+                            }
+                          },
+                    child: const Text('停止'),
                   ),
                 ),
-                const SizedBox(height: DesignTokens.spacingMd),
-              ],
-            ],
+              );
+            },
           );
         },
       ),

@@ -135,6 +135,56 @@ void main() {
     expect(sink.cancelled, [sink.shown.single.id]);
   });
 
+  test('foreground notifications keep a quiet first snapshot and deduplicate live changes', () async {
+    final events = StreamController<Json>.broadcast(sync: true);
+    final controller = createTestController(
+      (_, [params = const {}]) async => {},
+      events: events.stream,
+      initialState: AppState(
+        loading: false,
+        devices: [
+          {'id': 'phone', 'status': 'connected'},
+        ],
+        settings: {'notificationAlerts': true, 'callAlerts': true},
+      ),
+    );
+    final sink = FakeSink();
+    final coordinator = SystemNotificationCoordinator(controller, sink);
+    addTearDown(() async {
+      coordinator.dispose();
+      controller.dispose();
+      await events.close();
+      await sink.taps.close();
+    });
+    await coordinator.initialize();
+    events.add(observation(notifications: [notification('existing')]));
+    await coordinator.drain();
+    expect(sink.shown, isEmpty);
+    final update = {
+      'type': 'notifications.changed',
+      'deviceId': 'phone',
+      'data': section([
+        notification('existing'),
+        notification('new', key: 'new-key'),
+      ]),
+    };
+    events.add(update);
+    events.add(update);
+    await coordinator.drain();
+    expect(sink.shown, hasLength(1));
+    expect(
+      SystemNotificationTarget.decode(sink.shown.single.payload)?.objectId,
+      'new',
+    );
+    events.add({
+      'type': 'notifications.changed',
+      'deviceId': 'phone',
+      'data': section([notification('existing')]),
+    });
+    await coordinator.drain();
+    expect(sink.cancelled, [sink.shown.single.id]);
+  });
+
   test('updates retain a local identity and stopping observation rejects queued old generations', () async {
     final events = StreamController<Json>.broadcast(sync: true);
     final controller = createTestController(
@@ -377,7 +427,7 @@ void main() {
     expect(sink.shown, hasLength(2));
   });
 
-  test('a changed revision updates the same OS item and foreground changes retire its stale payload', () async {
+  test('changed revisions update the same OS item in both foreground and background', () async {
     final events = StreamController<Json>.broadcast(sync: true);
     final controller = createTestController(
       (_, [params = const {}]) async => {},
@@ -426,10 +476,13 @@ void main() {
       ]),
     });
     await coordinator.drain();
-    expect(sink.shown, hasLength(2));
-    expect(sink.cancelled, [sink.shown.first.id]);
-    sink.taps.add(sink.shown.last.payload);
+    expect(sink.shown, hasLength(3));
+    expect(sink.shown.last.id, sink.shown.first.id);
+    expect(sink.cancelled, isEmpty);
+    sink.taps.add(sink.shown.first.payload);
     expect(coordinator.takeActivation()?.available, isFalse);
+    sink.taps.add(sink.shown.last.payload);
+    expect(coordinator.takeActivation()?.available, isTrue);
   });
 
   test('truncated snapshots retain missing owners, but unverified snapshots withdraw without replay', () async {

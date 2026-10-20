@@ -1,5 +1,4 @@
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/file_row_title.dart';
 import 'package:design_system/design_system.dart';
 
@@ -55,6 +54,50 @@ class FileSearchPage extends HookWidget {
     final entries = objects(result?['entries']);
     final issues = objects(result?['issues']);
     final status = value(result ?? {}, 'status');
+    final scopeExpanded = useMemoized(() => ValueNotifier(issues.isNotEmpty), [
+      operation,
+      status,
+      issues.length,
+    ]);
+    useEffect(() => scopeExpanded.dispose, [scopeExpanded]);
+    useListenable(scopeExpanded);
+    final scopeLeading = <Widget>[
+      if (entries.isEmpty && !operation.running && result != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Text(result['complete'] == true ? '没有匹配的文件' : '已检查范围内没有匹配结果'),
+        ),
+      if (result != null)
+        Semantics(
+          expanded: scopeExpanded.value,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const ListIconBadge(
+              icon: LucideIcons.info,
+              backgroundColor: DesignTokens.colorListIconBlue,
+            ),
+            trailing: Icon(
+              scopeExpanded.value
+                  ? LucideIcons.chevronUp
+                  : LucideIcons.chevronDown,
+              size: DesignTokens.componentIconActionSize,
+            ),
+            title: const Text('搜索范围与跳过项'),
+            onTap: () => scopeExpanded.value = !scopeExpanded.value,
+          ),
+        ),
+      if (result != null &&
+          scopeExpanded.value &&
+          value(result, 'limitation').isNotEmpty)
+        StateNote(value(result, 'limitation')),
+    ];
+    final visibleIssues = result != null && scopeExpanded.value
+        ? issues.length
+        : 0;
+    final scopeTrailing = <Widget>[
+      if (result != null && scopeExpanded.value)
+        const StateNote('文件可能随后变化；打开时会重新核验。子文件夹的符号链接不会跟随。'),
+    ];
     final dirty =
         result != null &&
         (result['query'] != query.text.trim() ||
@@ -268,104 +311,71 @@ class FileSearchPage extends HookWidget {
                 DesignTokens.spacingMd,
               ),
               sliver: SliverList.separated(
-                itemCount: entries.length + 1,
+                itemCount:
+                    entries.length +
+                    scopeLeading.length +
+                    visibleIssues +
+                    scopeTrailing.length,
                 separatorBuilder: (_, _) => const SizedBox.shrink(),
                 itemBuilder: (context, index) {
-                  if (index == entries.length) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (entries.isEmpty &&
-                            !operation.running &&
-                            result != null)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            child: Text(
-                              result['complete'] == true
-                                  ? '没有匹配的文件'
-                                  : '已检查范围内没有匹配结果',
-                            ),
-                          ),
-                        if (result != null)
-                          ExpansionTile(
-                            key: ValueKey('$status:${issues.length}'),
-                            tilePadding: EdgeInsets.zero,
-                            leading: const ListIconBadge(
-                              icon: LucideIcons.info,
-                              backgroundColor: DesignTokens.colorListIconBlue,
-                            ),
-                            trailing: const Icon(
-                              LucideIcons.chevronDown,
-                              size: DesignTokens.componentIconActionSize,
-                            ),
-                            title: const Text('搜索范围与跳过项'),
-
-                            initiallyExpanded: issues.isNotEmpty,
-                            children: [
-                              if (value(result, 'limitation').isNotEmpty)
-                                StateNote(value(result, 'limitation')),
-                              for (final issue in issues)
-                                StateNote(
-                                  '${value(issue, 'path')}\n${value(issue, 'reason')}',
-                                ),
-                              const StateNote(
-                                '文件可能随后变化；打开时会重新核验。子文件夹的符号链接不会跟随。',
-                              ),
-                            ],
-                          ),
-                      ],
-                    );
+                  if (index >= entries.length) {
+                    final scopeIndex = index - entries.length;
+                    if (scopeIndex < scopeLeading.length) {
+                      return scopeLeading[scopeIndex];
+                    }
+                    final issueIndex = scopeIndex - scopeLeading.length;
+                    if (issueIndex < visibleIssues) {
+                      final issue = issues[issueIndex];
+                      return StateNote(
+                        '${value(issue, 'path')}\n${value(issue, 'reason')}',
+                      );
+                    }
+                    return scopeTrailing[issueIndex - visibleIssues];
                   }
                   final file = entries[index];
                   final path = value(file, 'path');
                   final folder = file['isDirectory'] == true;
-                  return GroupedItem(
-                    index: index,
-                    count: entries.length,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ListTile(
-                          leading: ListIconBadge(
-                            icon: folder
-                                ? LucideIcons.folder
-                                : LucideIcons.file,
-                            backgroundColor: DesignTokens.colorListIconAmber,
-                          ),
-                          title: FileRowTitle(
-                            name: value(file, 'name'),
-                            path: value(file, 'path'),
-                            size: folder ? null : bytes(file['size']),
-                          ),
-
-                          onTap: !fileCanOpen(file)
-                              ? null
-                              : () {
-                                  if (folder) {
-                                    FilesRoute(
-                                      deviceId: value(device, 'id'),
-                                      path: path,
-                                    ).push<void>(context);
-                                  } else {
-                                    FileDetailsRoute(
-                                      deviceId: value(device, 'id'),
-                                      path: path,
-                                    ).push<void>(context);
-                                  }
-                                },
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ListTile(
+                        leading: ListIconBadge(
+                          icon: folder ? LucideIcons.folder : LucideIcons.file,
+                          backgroundColor: DesignTokens.colorListIconAmber,
                         ),
-                        if (!fileCanOpen(file))
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: DesignTokens.spacingMd,
-                            ),
-                            child: StateNote(
-                              fileUnavailableReason(file),
-                              icon: LucideIcons.circleAlert,
-                            ),
+                        title: FileRowTitle(
+                          name: value(file, 'name'),
+                          path: value(file, 'path'),
+                          size: folder ? null : bytes(file['size']),
+                        ),
+
+                        onTap: !fileCanOpen(file)
+                            ? null
+                            : () {
+                                if (folder) {
+                                  FilesRoute(
+                                    deviceId: value(device, 'id'),
+                                    path: path,
+                                  ).push<void>(context);
+                                } else {
+                                  FileDetailsRoute(
+                                    deviceId: value(device, 'id'),
+                                    path: path,
+                                  ).push<void>(context);
+                                }
+                              },
+                      ),
+                      if (!fileCanOpen(file))
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: DesignTokens.spacingMd,
                           ),
-                      ],
-                    ),
+                          child: StateNote(
+                            fileUnavailableReason(file),
+                            icon: LucideIcons.circleAlert,
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),

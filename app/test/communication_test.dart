@@ -122,8 +122,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('当前可用通知'), findsOneWidget);
       expect(find.text('部分通知未同步，请进入手机查看。'), findsOneWidget);
-      await tester.ensureVisible(find.text('在手机上查看'));
-      await tester.tap(find.text('在手机上查看'));
+      expect(find.text('此通知没有可接续的原始动作；点击将仅打开手机界面。'), findsOneWidget);
+      await tester.ensureVisible(find.text('当前可用通知'));
+      await tester.tap(find.text('当前可用通知'));
       await tester.pumpAndSettle();
       expect(commands, isNot(contains('notifications.open')));
       expect(commands, contains('session.start'));

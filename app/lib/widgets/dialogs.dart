@@ -48,53 +48,83 @@ Future<String?> askText(
   String? label,
   String action = '保存',
   int lines = 1,
-}) async {
-  final controller = TextEditingController(text: initial);
-  final result = await showGlassDialog<String>(
-    context: context,
-    builder: (context) => GlassAlertDialog(
-      title: Text(title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (label != null) ...[
-            ExcludeSemantics(child: Text(label)),
-            const SizedBox(height: DesignTokens.spacingXs),
-          ],
-          Semantics(
-            label: label,
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              minLines: lines,
-              maxLines: lines + 3,
-              onSubmitted: (s) {
-                if (s.trim().isNotEmpty) Navigator.pop(context, s.trim());
-              },
-            ),
-          ),
+}) => showGlassDialog<String>(
+  context: context,
+  builder: (_) => _TextDialog(
+    title: title,
+    initial: initial,
+    label: label,
+    action: action,
+    lines: lines,
+  ),
+);
+
+class _TextDialog extends StatefulWidget {
+  const _TextDialog({
+    required this.title,
+    required this.initial,
+    required this.label,
+    required this.action,
+    required this.lines,
+  });
+
+  final String title, initial, action;
+  final String? label;
+  final int lines;
+
+  @override
+  State<_TextDialog> createState() => _TextDialogState();
+}
+
+class _TextDialogState extends State<_TextDialog> {
+  late final controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => GlassAlertDialog(
+    title: Text(widget.title),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.label != null) ...[
+          ExcludeSemantics(child: Text(widget.label!)),
+          const SizedBox(height: DesignTokens.spacingXs),
         ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (controller.text.trim().isNotEmpty) {
-              Navigator.pop(context, controller.text.trim());
-            }
-          },
-          child: Text(action),
+        Semantics(
+          label: widget.label,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            minLines: widget.lines,
+            maxLines: widget.lines + 3,
+            onSubmitted: (s) {
+              if (s.trim().isNotEmpty) Navigator.pop(context, s.trim());
+            },
+          ),
         ),
       ],
     ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (controller.text.trim().isNotEmpty) {
+            Navigator.pop(context, controller.text.trim());
+          }
+        },
+        child: Text(widget.action),
+      ),
+    ],
   );
-  // A route can still be completing its closing transition; disposal is deferred.
-  Future<void>.delayed(const Duration(milliseconds: 400), controller.dispose);
-  return result;
 }
 
 Future<bool> confirm(

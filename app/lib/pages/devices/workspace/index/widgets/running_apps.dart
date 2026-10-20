@@ -74,152 +74,160 @@ class RunningApps extends HookWidget {
         online &&
         result.connectionState != ConnectionState.done &&
         !result.hasData;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(
-            top: DesignTokens.spacingLg,
-            bottom: DesignTokens.spacingXs,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '活跃应用',
-                  style: Theme.of(context).textTheme.titleMedium,
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(
+              top: DesignTokens.spacingLg,
+              bottom: DesignTokens.spacingXs,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '活跃应用',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: '刷新后台应用',
-                onPressed: online
-                    ? refresh
-                    : () => offerDeviceConnection(context, controller, device),
-                icon: const Icon(
-                  LucideIcons.refreshCw,
-                  size: DesignTokens.componentIconSmallSize,
+                IconButton(
+                  tooltip: '刷新后台应用',
+                  onPressed: online
+                      ? refresh
+                      : () =>
+                            offerDeviceConnection(context, controller, device),
+                  icon: const Icon(
+                    LucideIcons.refreshCw,
+                    size: DesignTokens.componentIconSmallSize,
+                  ),
                 ),
-              ),
-              TextButton(
-                onPressed: online
-                    ? () => AppsRoute(deviceId: id).push<void>(context)
-                    : () => offerDeviceConnection(context, controller, device),
-                child: const Text('全部应用'),
-              ),
-            ],
+                TextButton(
+                  onPressed: online
+                      ? () => AppsRoute(deviceId: id).push<void>(context)
+                      : () =>
+                            offerDeviceConnection(context, controller, device),
+                  child: const Text('全部应用'),
+                ),
+              ],
+            ),
           ),
         ),
-        ContentPanel(
-          child: !online || loading || result.hasError || apps.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: DesignTokens.spacingMd,
+        if (!online || loading || result.hasError || apps.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: DesignTokens.spacingMd,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    !online
+                        ? '连接后查看后台应用'
+                        : loading
+                        ? '正在读取后台应用'
+                        : result.hasError
+                        ? '暂时无法读取后台应用'
+                        : '没有已启动的应用',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  child: Column(
+                  if (result.hasError) ...[
+                    const SizedBox(height: DesignTokens.spacingXs),
+                    Text(switch (result.error) {
+                      RequestFailure(code: 'apps_running_unavailable') =>
+                        '这台手机暂不支持读取后台应用，可从全部应用或手机屏幕继续。',
+                      RequestFailure(code: 'permission_denied') =>
+                        '手机系统未允许读取后台应用，可从全部应用继续。',
+                      _ => '请确认手机连接正常后重新读取。',
+                    }, style: Theme.of(context).textTheme.bodySmall),
+                    if (result.error case RequestFailure(
+                      code: 'apps_running_unavailable' || 'permission_denied',
+                    ))
+                      const SizedBox.shrink()
+                    else
+                      TextButton(onPressed: refresh, child: const Text('重新读取')),
+                  ],
+                ],
+              ),
+            ),
+          )
+        else
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              final scale =
+                  MediaQuery.textScalerOf(context)
+                      .scale(DesignTokens.typographyBodyFontSize) /
+                  DesignTokens.typographyBodyFontSize;
+              final columns =
+                  (constraints.crossAxisExtent /
+                          (DesignTokens.componentAppCellWidth *
+                              scale.clamp(1, 2)))
+                      .floor()
+                      .clamp(1, 6);
+              return SliverList.builder(
+                itemCount: (apps.length / columns).ceil(),
+                itemBuilder: (context, row) => Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: DesignTokens.spacingMd,
+                  ),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        !online
-                            ? '连接后查看后台应用'
-                            : loading
-                            ? '正在读取后台应用'
-                            : result.hasError
-                            ? '暂时无法读取后台应用'
-                            : '没有已启动的应用',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      if (result.hasError) ...[
-                        const SizedBox(height: DesignTokens.spacingXs),
-                        Text(switch (result.error) {
-                          RequestFailure(code: 'apps_running_unavailable') =>
-                            '这台手机暂不支持读取后台应用，可从全部应用或手机屏幕继续。',
-                          RequestFailure(code: 'permission_denied') =>
-                            '手机系统未允许读取后台应用，可从全部应用继续。',
-                          _ => '请确认手机连接正常后重新读取。',
-                        }, style: Theme.of(context).textTheme.bodySmall),
-                        if (result.error case RequestFailure(
-                          code: 'apps_running_unavailable' ||
-                              'permission_denied',
-                        ))
-                          const SizedBox.shrink()
-                        else
-                          TextButton(
-                            onPressed: refresh,
-                            child: const Text('重新读取'),
-                          ),
-                      ],
+                      for (var column = 0; column < columns; column++)
+                        Expanded(
+                          child: row * columns + column < apps.length
+                              ? _app(
+                                  context,
+                                  apps[row * columns + column],
+                                  id,
+                                  refresh,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                     ],
                   ),
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final scale =
-                        MediaQuery.textScalerOf(context)
-                            .scale(DesignTokens.typographyBodyFontSize) /
-                        DesignTokens.typographyBodyFontSize;
-                    final columns =
-                        (constraints.maxWidth /
-                                (DesignTokens.componentAppCellWidth *
-                                    scale.clamp(1, 2)))
-                            .floor()
-                            .clamp(1, 6);
-                    return Wrap(
-                      spacing: 0,
-                      runSpacing: DesignTokens.spacingMd,
-                      children: [
-                        for (final app in apps)
-                          SizedBox(
-                            width: constraints.maxWidth / columns,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(
-                                DesignTokens.roundedMd,
-                              ),
-                              onTap: () async {
-                                await openPhoneApp(context, device, app);
-                                if (context.mounted) refresh();
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: DesignTokens.spacingXxs,
-                                  vertical: DesignTokens.spacingXs,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    PhoneAppIcon(
-                                      key: ValueKey(
-                                        '$id:${value(app, 'userId')}:${value(app, 'packageName')}',
-                                      ),
-                                      controller: controller,
-                                      deviceId: id,
-                                      packageName: value(app, 'packageName'),
-                                      userId: value(app, 'userId'),
-                                    ),
-                                    const SizedBox(
-                                      height: DesignTokens.spacingXs,
-                                    ),
-                                    Text(
-                                      value(
-                                        app,
-                                        'name',
-                                        value(app, 'packageName'),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
                 ),
-        ),
+              );
+            },
+          ),
       ],
     );
   }
+
+  Widget _app(
+    BuildContext context,
+    Json app,
+    String id,
+    VoidCallback refresh,
+  ) => InkWell(
+    key: ValueKey('$id:${value(app, 'userId')}:${value(app, 'packageName')}'),
+    borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+    onTap: () async {
+      await openPhoneApp(context, device, app);
+      if (context.mounted) refresh();
+    },
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: DesignTokens.spacingXxs,
+        vertical: DesignTokens.spacingXs,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PhoneAppIcon(
+            controller: controller,
+            deviceId: id,
+            packageName: value(app, 'packageName'),
+            userId: value(app, 'userId'),
+          ),
+          const SizedBox(height: DesignTokens.spacingXs),
+          Text(
+            value(app, 'name', value(app, 'packageName')),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    ),
+  );
 }

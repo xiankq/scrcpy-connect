@@ -5,6 +5,7 @@ import 'package:interop_bridge/interop_bridge.dart' show InteropCommand;
 export 'package:interop_bridge/interop_bridge.dart' show InteropCommand;
 
 import 'package:scrcpy_connect/services/session_views.dart';
+import 'package:scrcpy_connect/services/device_screen_policy.dart';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/services/app_dependencies.dart';
@@ -99,6 +100,33 @@ class AppController extends _$AppController {
   late AppDependencies _dependencies;
   late StreamController<Json> _events;
   late SessionViews _sessionViews;
+  late DeviceScreenPolicy _screenPolicy;
+  ({String deviceId, String connectionId, String reason})? _screenFailure;
+
+  String? _screenFailureFor(List<Json> devices) {
+    final failure = _screenFailure;
+    if (failure == null) return null;
+    if (!devices.any(
+      (device) =>
+          device['id'] == failure.deviceId &&
+          device['connectionId'] == failure.connectionId,
+    )) {
+      _screenFailure = null;
+      return null;
+    }
+    return '未能自动点亮设备：${failure.reason}';
+  }
+
+  /// The caller releases once; only the last phone page may request locking.
+  bool Function() claimPhoneControlPage(String deviceId) {
+    final policy = _screenPolicy;
+    final token = policy.claimPhonePage(deviceId);
+    return () => policy.releasePhonePage(token);
+  }
+
+  bool hasPhoneControlPages(String deviceId) =>
+      _screenPolicy.hasPhonePages(deviceId);
+
   SessionView claimSessionView(String sessionId, {required bool visible}) {
     final view = _sessionViews.claim(sessionId, visible: visible);
     _scheduleDeviceAudio();
@@ -143,6 +171,8 @@ class AppController extends _$AppController {
     final dependencies = ref.watch(appDependenciesProvider);
     _dependencies = dependencies;
     _sessionViews = SessionViews(dependencies.request);
+    _screenPolicy = DeviceScreenPolicy();
+    _screenFailure = null;
     final ownedViews = _sessionViews;
     final generation = ++_generation;
     _disposed = false;
@@ -205,7 +235,7 @@ class AppController extends _$AppController {
                 )
                 .toList(),
             loading: false,
-            deviceError: () => null,
+            deviceError: () => _screenFailureFor(objects(snapshot['devices'])),
             settingsError: () => null,
             reconciliationPending: false,
             reconciliationError: () => null,
@@ -253,13 +283,24 @@ class AppController extends _$AppController {
           );
         }
         state = next;
+        if (event['type'] == 'device.screen.failed') {
+          _screenFailure = (
+            deviceId: value(event, 'deviceId'),
+            connectionId: value(data, 'connectionId'),
+            reason: value(data, 'reason'),
+          );
+          state = state.copyWith(
+            deviceError: () => '未能自动点亮设备：${data['reason']}',
+          );
+        }
         // Bound pages must see the calibrated state while handling this event.
         events.add(frozen);
         if (value(event, 'type').startsWith('session.') ||
             ['state.resynced', 'devices.changed'].contains(event['type'])) {
           _scheduleDeviceAudio();
         }
-        if (value(event, 'type').startsWith('device')) {
+        if (value(event, 'type').startsWith('device') &&
+            event['type'] != 'device.screen.failed') {
           unawaited(refreshDevices());
         }
       },
@@ -535,7 +576,7 @@ class AppController extends _$AppController {
       state = state.copyWith(
         devices: objects(result['devices']),
         loading: false,
-        deviceError: () => null,
+        deviceError: () => _screenFailureFor(objects(result['devices'])),
       );
       _scheduleDeviceAudio();
     } catch (error) {

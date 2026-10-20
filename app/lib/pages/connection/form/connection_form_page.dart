@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
@@ -226,376 +226,436 @@ class ConnectionFormPage extends HookWidget {
       child: ConnectionContent(
         child: Form(
           key: form,
-          child: GroupedListView(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ContentPanel(
-                    padding: EdgeInsets.zero,
-                    child: ActionRow(
-                      icon: LucideIcons.radar,
-                      title: '发现设备',
-                      onTap: busy.value
-                          ? null
-                          : () async {
-                              final previousMode = mode.value;
-                              if (mode.value == AddDeviceMode.qr ||
-                                  mode.value == AddDeviceMode.usb) {
-                                selectMode(AddDeviceMode.pairing);
-                              }
-                              final selection = await const DiscoveryRoute(
-                                selection: true,
-                              ).push<Json>(context);
-                              if (!context.mounted) return;
-                              if (selection == null) {
-                                selectMode(previousMode);
-                                return;
-                              }
-                              final service = selection['service'];
-                              if (service is! Map<Object?, Object?>) {
-                                selectMode(switch (selection['mode']) {
-                                  'usb' => AddDeviceMode.usb,
-                                  'pairing' => AddDeviceMode.pairing,
-                                  _ => AddDeviceMode.ip,
-                                });
-                                return;
-                              }
-                              result.value = null;
-                              error.value = null;
-                              final device = jsonObject(service);
-                              final endpoints = objects(device['endpoints']);
-                              final endpoint = endpoints.isEmpty
-                                  ? device
-                                  : endpoints.first;
-                              final isPairing = device['kind'] == 'pairing';
-                              selectMode(
-                                isPairing
-                                    ? AddDeviceMode.pairing
-                                    : AddDeviceMode.ip,
-                              );
-                              completingPairing.value = false;
-                              host.text = value(endpoint, 'address');
-                              if (isPairing) portField.clear();
-                              (isPairing ? pairingPort : portField).text =
-                                  value(endpoint, 'port');
-                              currentDeviceId.value =
-                                  deviceId ?? responseDeviceId(device);
-                              identityAddress.value = host.text.trim();
-                              tlsLocked.value =
-                                  transport == ConnectionTransport.tls ||
-                                  device['kind'] != 'tcp';
-                              selectedTransport.value = device['kind'] == 'tcp'
-                                  ? ConnectionTransport.tcp
-                                  : ConnectionTransport.tls;
-                            },
-                    ),
-                  ),
-                  const SizedBox(height: DesignTokens.spacingLg),
-                  ContentPanel(
-                    padding: EdgeInsets.zero,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) => SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (final entry in const [
-                              (
-                                AddDeviceMode.pairing,
-                                '无线配对码',
-                                LucideIcons.keyRound,
-                                ConnectTokens.blue,
-                              ),
-                              (
-                                AddDeviceMode.qr,
-                                '扫码配对',
-                                LucideIcons.qrCode,
-                                ConnectTokens.mint,
-                              ),
-                              (
-                                AddDeviceMode.usb,
-                                'USB',
-                                LucideIcons.usb,
-                                ConnectTokens.amber,
-                              ),
-                              (
-                                AddDeviceMode.ip,
-                                'IP连接',
-                                LucideIcons.network,
-                                ConnectTokens.coral,
-                              ),
-                            ])
-                              Semantics(
-                                key: modeKeys[entry.$1],
-                                label: entry.$2,
-                                button: true,
-                                selected: mode.value == entry.$1,
-                                child: InkWell(
-                                  onTap: () => selectMode(entry.$1),
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      minWidth: constraints.maxWidth / 4,
-                                      minHeight: DesignTokens
-                                          .componentNavigationHeight,
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: DesignTokens.spacingXs,
-                                        vertical: DesignTokens.spacingTight,
+          child: CustomScrollView(
+            slivers: [
+              const PageChromeSliver(),
+              SliverPadding(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                sliver: SliverMainAxisGroup(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ContentPanel(
+                            padding: EdgeInsets.zero,
+                            child: ActionRow(
+                              icon: LucideIcons.radar,
+                              title: '发现设备',
+                              onTap: busy.value
+                                  ? null
+                                  : () async {
+                                      final previousMode = mode.value;
+                                      if (mode.value == AddDeviceMode.qr ||
+                                          mode.value == AddDeviceMode.usb) {
+                                        selectMode(AddDeviceMode.pairing);
+                                      }
+                                      final selection =
+                                          await const DiscoveryRoute(
+                                            selection: true,
+                                          ).push<Json>(context);
+                                      if (!context.mounted) return;
+                                      if (selection == null) {
+                                        selectMode(previousMode);
+                                        return;
+                                      }
+                                      final service = selection['service'];
+                                      if (service is! Map<Object?, Object?>) {
+                                        selectMode(switch (selection['mode']) {
+                                          'usb' => AddDeviceMode.usb,
+                                          'pairing' => AddDeviceMode.pairing,
+                                          _ => AddDeviceMode.ip,
+                                        });
+                                        return;
+                                      }
+                                      result.value = null;
+                                      error.value = null;
+                                      final device = jsonObject(service);
+                                      final endpoints = objects(
+                                        device['endpoints'],
+                                      );
+                                      final endpoint = endpoints.isEmpty
+                                          ? device
+                                          : endpoints.first;
+                                      final isPairing =
+                                          device['kind'] == 'pairing';
+                                      selectMode(
+                                        isPairing
+                                            ? AddDeviceMode.pairing
+                                            : AddDeviceMode.ip,
+                                      );
+                                      completingPairing.value = false;
+                                      host.text = value(endpoint, 'address');
+                                      if (isPairing) portField.clear();
+                                      (isPairing ? pairingPort : portField)
+                                          .text = value(
+                                        endpoint,
+                                        'port',
+                                      );
+                                      currentDeviceId.value =
+                                          deviceId ?? responseDeviceId(device);
+                                      identityAddress.value = host.text.trim();
+                                      tlsLocked.value =
+                                          transport ==
+                                              ConnectionTransport.tls ||
+                                          device['kind'] != 'tcp';
+                                      selectedTransport.value =
+                                          device['kind'] == 'tcp'
+                                          ? ConnectionTransport.tcp
+                                          : ConnectionTransport.tls;
+                                    },
+                            ),
+                          ),
+                          const SizedBox(height: DesignTokens.spacingLg),
+                          ContentPanel(
+                            padding: EdgeInsets.zero,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) => SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    for (final entry in const [
+                                      (
+                                        AddDeviceMode.pairing,
+                                        '无线配对码',
+                                        LucideIcons.keyRound,
+                                        ConnectTokens.blue,
                                       ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            entry.$3,
-                                            size:
-                                                DesignTokens.componentIconSize,
-                                            color: entry.$4,
-                                          ),
-                                          const SizedBox(
-                                            height: DesignTokens.spacingXxs,
-                                          ),
-                                          Text(
-                                            entry.$2,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(
-                                                  fontSize: DesignTokens
-                                                      .typographyCaptionFontSize,
-                                                  fontWeight:
-                                                      mode.value == entry.$1
-                                                      ? FontWeight.w600
-                                                      : FontWeight.w400,
-                                                  color: mode.value == entry.$1
-                                                      ? Theme.of(context)
-                                                            .colorScheme
-                                                            .onSurface
-                                                      : Theme.of(context)
-                                                            .colorScheme
-                                                            .onSurfaceVariant,
-                                                ),
-                                          ),
-                                          const SizedBox(
-                                            height: DesignTokens.spacingXxs,
-                                          ),
-                                          Container(
-                                            width:
-                                                DesignTokens.componentIconSize,
-                                            height:
-                                                DesignTokens.spacingHairline *
-                                                2,
-                                            color: mode.value == entry.$1
-                                                ? Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurface
-                                                : Colors.transparent,
-                                          ),
-                                        ],
+                                      (
+                                        AddDeviceMode.qr,
+                                        '扫码配对',
+                                        LucideIcons.qrCode,
+                                        ConnectTokens.mint,
                                       ),
-                                    ),
-                                  ),
+                                      (
+                                        AddDeviceMode.usb,
+                                        'USB',
+                                        LucideIcons.usb,
+                                        ConnectTokens.amber,
+                                      ),
+                                      (
+                                        AddDeviceMode.ip,
+                                        'IP连接',
+                                        LucideIcons.network,
+                                        ConnectTokens.coral,
+                                      ),
+                                    ])
+                                      Semantics(
+                                        key: modeKeys[entry.$1],
+                                        label: entry.$2,
+                                        button: true,
+                                        selected: mode.value == entry.$1,
+                                        child: InkWell(
+                                          onTap: () => selectMode(entry.$1),
+                                          child: ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              minWidth:
+                                                  constraints.maxWidth / 4,
+                                              minHeight: DesignTokens
+                                                  .componentNavigationHeight,
+                                            ),
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal:
+                                                        DesignTokens.spacingXs,
+                                                    vertical: DesignTokens
+                                                        .spacingTight,
+                                                  ),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    entry.$3,
+                                                    size: DesignTokens
+                                                        .componentIconSize,
+                                                    color: entry.$4,
+                                                  ),
+                                                  const SizedBox(
+                                                    height:
+                                                        DesignTokens.spacingXxs,
+                                                  ),
+                                                  Text(
+                                                    entry.$2,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelSmall
+                                                        ?.copyWith(
+                                                          fontSize: DesignTokens
+                                                              .typographyCaptionFontSize,
+                                                          fontWeight:
+                                                              mode.value ==
+                                                                  entry.$1
+                                                              ? FontWeight.w600
+                                                              : FontWeight.w400,
+                                                          color:
+                                                              mode.value ==
+                                                                  entry.$1
+                                                              ? Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurface
+                                                              : Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurfaceVariant,
+                                                        ),
+                                                  ),
+                                                  const SizedBox(
+                                                    height:
+                                                        DesignTokens.spacingXxs,
+                                                  ),
+                                                  Container(
+                                                    width: DesignTokens
+                                                        .componentIconSize,
+                                                    height:
+                                                        DesignTokens
+                                                            .spacingHairline *
+                                                        2,
+                                                    color:
+                                                        mode.value == entry.$1
+                                                        ? Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurface
+                                                        : Colors.transparent,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: DesignTokens.spacingLg),
-                  if (mode.value == AddDeviceMode.qr)
-                    QrPairPage(
-                      controller: controller,
-                      deviceId: currentDeviceId.value,
-                      embedded: true,
-                      onUsePairingCode: () => selectMode(AddDeviceMode.pairing),
-                      onConnectionPort: completePairing,
-                      onPaired: (paired) {
-                        final device = paired['device'];
-                        final record = device is Map<Object?, Object?>
-                            ? jsonObject(device)
-                            : <String, dynamic>{};
-                        host.text = value(
-                          paired,
-                          'address',
-                          value(record, 'address', host.text),
-                        );
-                        identityAddress.value = host.text.trim();
-                        currentDeviceId.value = responseDeviceId(
-                          paired,
-                          currentDeviceId.value,
-                        );
-                        tlsLocked.value = true;
-                        selectedTransport.value = ConnectionTransport.tls;
-                        portField.clear();
-                      },
-                    )
-                  else if (mode.value == AddDeviceMode.usb)
-                    UsbGuidePage(
-                      controller: controller,
-                      deviceId: currentDeviceId.value,
-                      embedded: true,
-                      onUseWireless: () => selectMode(AddDeviceMode.pairing),
-                    )
-                  else ...[
-                    if (!pairing) ...[
-                      if (completingPairing.value) ...[
-                        Text(
-                          '已配对，尚未连接',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: DesignTokens.spacingXs),
-                      ],
-                      Text(
-                        legacyTcp
-                            ? '先通过 USB 授权并允许按地址连接，仅在可信网络使用。'
-                            : '使用手机无线调试主页面的连接端口。',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: DesignTokens.spacingMd),
-                    ],
-                    TextFormField(
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      controller: host,
-                      onChanged: (next) {
-                        if (next.trim() != identityAddress.value) {
-                          result.value = null;
-                          error.value = null;
-                        }
-                      },
-                      validator: validateAddress,
-                      enabled: !busy.value,
-                      autocorrect: false,
-                      decoration: const InputDecoration(
-                        labelText: 'IP 地址或主机名',
-                        hintText: '192.168.1.8',
-                      ),
-                    ),
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    TextFormField(
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      controller: activePort,
-                      validator: validatePort,
-                      enabled: !busy.value,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: pairing ? '配对端口' : '连接端口',
-                        helperText: pairing
-                            ? '配对窗口中的端口'
-                            : legacyTcp
-                            ? null
-                            : '无线调试主页面中的端口',
-                      ),
-                    ),
-                    if (pairing) ...[
-                      const SizedBox(height: DesignTokens.spacingMd),
-                      TextFormField(
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        controller: code,
-                        enabled: !busy.value,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        validator: (s) => RegExp(r'^\d{6}$').hasMatch(s ?? '')
-                            ? null
-                            : '请输入六位配对码',
-                        decoration: const InputDecoration(labelText: '配对码'),
-                      ),
-                    ],
-                    if (cancellation.value != null)
-                      StateNote(cancellation.value!),
-                    if (error.value != null)
-                      ConnectionFailureNote(
-                        failure: error.value!,
-                        pairing: pairing,
-                        legacyTcp: legacyTcp,
-                      ),
-                    const SizedBox(height: DesignTokens.spacingSectionTitle),
-                    FilledButton(
-                      onPressed: busy.value ? null : submit,
-                      child: busy.value
-                          ? const SizedBox(
-                              width: DesignTokens.spacingMd,
-                              height: DesignTokens.spacingMd,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(pairing ? '配对并连接' : '连接设备'),
-                    ),
-                    if (busy.value)
-                      TextButton(
-                        onPressed: cancelling.value ? null : cancel,
-                        child: Text(cancelling.value ? '正在取消…' : '取消本次尝试'),
-                      ),
-                    if (result.value != null && pairing)
-                      ContentPanel(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '已配对，尚未连接',
-                              style: Theme.of(context).textTheme.bodyMedium,
                             ),
-                            const SizedBox(height: DesignTokens.spacingXs),
-                            Text(
-                              '填写手机无线调试主页面的连接端口。',
-                              style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: DesignTokens.spacingLg),
+                          if (mode.value == AddDeviceMode.qr)
+                            QrPairPage(
+                              controller: controller,
+                              deviceId: currentDeviceId.value,
+                              embedded: true,
+                              onUsePairingCode: () =>
+                                  selectMode(AddDeviceMode.pairing),
+                              onConnectionPort: completePairing,
+                              onPaired: (paired) {
+                                final device = paired['device'];
+                                final record = device is Map<Object?, Object?>
+                                    ? jsonObject(device)
+                                    : <String, dynamic>{};
+                                host.text = value(
+                                  paired,
+                                  'address',
+                                  value(record, 'address', host.text),
+                                );
+                                identityAddress.value = host.text.trim();
+                                currentDeviceId.value = responseDeviceId(
+                                  paired,
+                                  currentDeviceId.value,
+                                );
+                                tlsLocked.value = true;
+                                selectedTransport.value =
+                                    ConnectionTransport.tls;
+                                portField.clear();
+                              },
+                            )
+                          else if (mode.value != AddDeviceMode.usb) ...[
+                            if (!pairing) ...[
+                              if (completingPairing.value) ...[
+                                Text(
+                                  '已配对，尚未连接',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                const SizedBox(height: DesignTokens.spacingXs),
+                              ],
+                              Text(
+                                legacyTcp
+                                    ? '先通过 USB 授权并允许按地址连接，仅在可信网络使用。'
+                                    : '使用手机无线调试主页面的连接端口。',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: DesignTokens.spacingMd),
+                            ],
+                            TextFormField(
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              controller: host,
+                              onChanged: (next) {
+                                if (next.trim() != identityAddress.value) {
+                                  result.value = null;
+                                  error.value = null;
+                                }
+                              },
+                              validator: validateAddress,
+                              enabled: !busy.value,
+                              autocorrect: false,
+                              decoration: const InputDecoration(
+                                labelText: 'IP 地址或主机名',
+                                hintText: '192.168.1.8',
+                              ),
                             ),
                             const SizedBox(height: DesignTokens.spacingMd),
-                            OutlinedButton(
-                              onPressed: () => completePairing(
-                                host.text,
-                                responseDeviceId(
-                                  result.value,
-                                  currentDeviceId.value,
+                            TextFormField(
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              controller: activePort,
+                              validator: validatePort,
+                              enabled: !busy.value,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: pairing ? '配对端口' : '连接端口',
+                                helperText: pairing
+                                    ? '配对窗口中的端口'
+                                    : legacyTcp
+                                    ? null
+                                    : '无线调试主页面中的端口',
+                              ),
+                            ),
+                            if (pairing) ...[
+                              const SizedBox(height: DesignTokens.spacingMd),
+                              TextFormField(
+                                style: Theme.of(context).textTheme.bodyMedium,
+                                controller: code,
+                                enabled: !busy.value,
+                                keyboardType: TextInputType.number,
+                                maxLength: 6,
+                                validator: (s) =>
+                                    RegExp(r'^\d{6}$').hasMatch(s ?? '')
+                                    ? null
+                                    : '请输入六位配对码',
+                                decoration: const InputDecoration(
+                                  labelText: '配对码',
                                 ),
                               ),
-                              child: const Text('填写连接端口'),
+                            ],
+                            if (cancellation.value != null)
+                              StateNote(cancellation.value!),
+                            if (error.value != null)
+                              ConnectionFailureNote(
+                                failure: error.value!,
+                                pairing: pairing,
+                                legacyTcp: legacyTcp,
+                              ),
+                            const SizedBox(
+                              height: DesignTokens.spacingSectionTitle,
                             ),
+                            FilledButton(
+                              onPressed: busy.value ? null : submit,
+                              child: busy.value
+                                  ? const SizedBox(
+                                      width: DesignTokens.spacingMd,
+                                      height: DesignTokens.spacingMd,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Text(pairing ? '配对并连接' : '连接设备'),
+                            ),
+                            if (busy.value)
+                              TextButton(
+                                onPressed: cancelling.value ? null : cancel,
+                                child: Text(
+                                  cancelling.value ? '正在取消…' : '取消本次尝试',
+                                ),
+                              ),
+                            if (result.value != null && pairing)
+                              ContentPanel(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '已配对，尚未连接',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium,
+                                    ),
+                                    const SizedBox(
+                                      height: DesignTokens.spacingXs,
+                                    ),
+                                    Text(
+                                      '填写手机无线调试主页面的连接端口。',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall,
+                                    ),
+                                    const SizedBox(
+                                      height: DesignTokens.spacingMd,
+                                    ),
+                                    OutlinedButton(
+                                      onPressed: () => completePairing(
+                                        host.text,
+                                        responseDeviceId(
+                                          result.value,
+                                          currentDeviceId.value,
+                                        ),
+                                      ),
+                                      child: const Text('填写连接端口'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: DesignTokens.spacingMd),
+                            if (!pairing &&
+                                !legacyTcp &&
+                                (!completingPairing.value ||
+                                    _authorizationRejected(error.value)))
+                              TextButton(
+                                onPressed: () {
+                                  completingPairing.value = false;
+                                  selectMode(AddDeviceMode.pairing);
+                                },
+                                child: Text(
+                                  _authorizationRejected(error.value)
+                                      ? '重新配对'
+                                      : '使用无线配对码',
+                                ),
+                              ),
                           ],
-                        ),
-                      ),
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    if (!pairing &&
-                        !legacyTcp &&
-                        (!completingPairing.value ||
-                            _authorizationRejected(error.value)))
-                      TextButton(
-                        onPressed: () {
-                          completingPairing.value = false;
-                          selectMode(AddDeviceMode.pairing);
-                        },
-                        child: Text(
-                          _authorizationRejected(error.value)
-                              ? '重新配对'
-                              : '使用无线配对码',
-                        ),
-                      ),
-                  ],
-                  TextButton(
-                    onPressed: () => showGlassDialog<void>(
-                      context: context,
-                      builder: (dialogContext) => GlassAlertDialog(
-                        title: Text(
-                          '连接帮助',
-                          style: Theme.of(dialogContext).textTheme.bodyMedium,
-                        ),
-                        content: Text(
-                          _connectionHelp(mode.value, legacyTcp: legacyTcp),
-                          style: Theme.of(dialogContext).textTheme.bodyMedium,
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            child: const Text('知道了'),
-                          ),
                         ],
                       ),
                     ),
-                    child: const Text('连接帮助'),
-                  ),
-                ],
+                    if (mode.value == AddDeviceMode.usb)
+                      UsbGuidePage(
+                        controller: controller,
+                        deviceId: currentDeviceId.value,
+                        embedded: true,
+                        onUseWireless: () => selectMode(AddDeviceMode.pairing),
+                      ),
+                    SliverToBoxAdapter(
+                      child: TextButton(
+                        onPressed: () => showGlassDialog<void>(
+                          context: context,
+                          builder: (dialogContext) => GlassAlertDialog(
+                            title: Text(
+                              '连接帮助',
+                              style: Theme.of(dialogContext)
+                                  .textTheme
+                                  .bodyMedium,
+                            ),
+                            content: Text(
+                              _connectionHelp(mode.value, legacyTcp: legacyTcp),
+                              style: Theme.of(dialogContext)
+                                  .textTheme
+                                  .bodyMedium,
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(),
+                                child: const Text('知道了'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        child: const Text('连接帮助'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const PageChromeBottomSliver(),
             ],
           ),
         ),

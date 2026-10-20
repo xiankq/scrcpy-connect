@@ -71,16 +71,19 @@ class ShareDirectoryPickerPage extends HookWidget {
                           entry['type'] == 'directory',
                     )
                     .toList();
-                return GroupedListView(
+                return GroupedListView.builder(
                   padding: const EdgeInsets.fromLTRB(
                     DesignTokens.spacingMd,
                     DesignTokens.spacingZero,
                     DesignTokens.spacingMd,
                     DesignTokens.spacingMd,
                   ),
-                  children: [
-                    for (final directory in directories)
-                      ActionRow(
+                  itemCount: directories.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index < directories.length) {
+                      final directory = directories[index];
+                      return ActionRow(
+                        key: ValueKey(directory['path']),
                         icon: LucideIcons.folder,
                         title: value(directory, 'name'),
                         onTap:
@@ -88,21 +91,25 @@ class ShareDirectoryPickerPage extends HookWidget {
                                 directory['canOpen'] == false
                             ? null
                             : () => path.value = value(directory, 'path'),
-                      ),
-                    if (directories.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(DesignTokens.spacingMd),
-                        child: Text('此目录没有子文件夹'),
-                      ),
-                    const SizedBox(height: DesignTokens.spacingLg),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () => closePage<String>(context, path.value),
-                        child: const Text('使用这个目录'),
-                      ),
-                    ),
-                  ],
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (directories.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(DesignTokens.spacingMd),
+                            child: Text('此目录没有子文件夹'),
+                          ),
+                        const SizedBox(height: DesignTokens.spacingLg),
+                        FilledButton(
+                          onPressed: () =>
+                              closePage<String>(context, path.value),
+                          child: const Text('使用这个目录'),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),

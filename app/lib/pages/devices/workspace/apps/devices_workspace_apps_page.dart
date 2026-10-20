@@ -1,5 +1,4 @@
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
@@ -81,20 +80,16 @@ class AppsPage extends HookWidget {
                     itemCount: apps.length,
                     itemBuilder: (context, index) {
                       final app = apps[index];
-                      return GroupedItem(
-                        index: index,
-                        count: apps.length,
-                        child: ListTile(
-                          leading: PhoneAppIcon(
-                            controller: controller,
-                            deviceId: value(device, 'id'),
-                            packageName: value(app, 'packageName'),
-                          ),
-                          title: Text(
-                            value(app, 'name', value(app, 'packageName')),
-                          ),
-                          onTap: () => openPhoneApp(context, device, app),
+                      return ListTile(
+                        leading: PhoneAppIcon(
+                          controller: controller,
+                          deviceId: value(device, 'id'),
+                          packageName: value(app, 'packageName'),
                         ),
+                        title: Text(
+                          value(app, 'name', value(app, 'packageName')),
+                        ),
+                        onTap: () => openPhoneApp(context, device, app),
                       );
                     },
                   ),

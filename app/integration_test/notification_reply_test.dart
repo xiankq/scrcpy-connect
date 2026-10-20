@@ -131,9 +131,7 @@ void main() {
       }
 
       Future<void> leaveReply() async {
-        await tester.tap(
-          find.descendant(of: replyPage, matching: find.byType(BackButton)),
-        );
+        await tester.binding.handlePopRoute();
         await waitFor(
           tester,
           () => replyPage.evaluate().isEmpty,
@@ -142,6 +140,17 @@ void main() {
       }
 
       Future<Finder> fixtureCard() async {
+        final current = await request('notifications.list', {
+          'deviceId': deviceId,
+        });
+        final original = objects(current['notifications'])
+            .singleWhere((item) => item['title'] == title);
+        expect(
+          original['packageName'],
+          'dev.scrcpyconnect.notificationfixture',
+        );
+        expect(original['appName'], 'Connect notification test fixture');
+        binding.reportData!['fixtureAppNameVerified'] = true;
         await tester.scrollUntilVisible(
           find.text(title),
           300,
@@ -278,10 +287,9 @@ void main() {
         await tapPageAction(
           tester,
           notificationsPage,
-          find.descendant(of: card, matching: find.byTooltip('通知操作')),
+          find.descendant(of: card, matching: find.byTooltip('已读（清除）')),
         );
         await tester.pump(const Duration(milliseconds: 300));
-        await tester.tap(find.text('清除手机上的通知'));
         final dismissDeadline = DateTime.now().add(const Duration(seconds: 30));
         var dismissed = false;
         while (!dismissed && DateTime.now().isBefore(dismissDeadline)) {

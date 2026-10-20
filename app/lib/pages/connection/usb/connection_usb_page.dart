@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
+import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -138,23 +138,12 @@ class UsbGuidePage extends HookWidget {
                   ).pushReplacement(context),
                   child: const Text('打开设备工作台'),
                 ),
-              for (final d in objects(state.value!['devices']))
-                ActionRow(
-                  contentPadding: EdgeInsets.zero,
-                  icon: LucideIcons.smartphone,
-                  title: value(d, 'serial', deviceName(d)),
-
-                  onTap: d['status'] == 'connected'
-                      ? () =>
-                            WorkspaceRoute(deviceId: value(d, 'id'))
-                                .pushReplacement(context)
-                      : value(d, 'serial').isNotEmpty && !busy.value
-                      ? () => check(value(d, 'serial'))
-                      : null,
-                ),
             ],
           ),
         ),
+    ];
+    final devices = objects(state.value?['devices']);
+    final trailing = <Widget>[
       if (!embedded)
         TextButton(
           onPressed: () async {
@@ -170,18 +159,42 @@ class UsbGuidePage extends HookWidget {
           child: const Text('改用无线连接'),
         ),
     ];
-    if (embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      );
-    }
+    final rows = SliverList.builder(
+      itemCount: children.length + devices.length + trailing.length,
+      itemBuilder: (context, index) {
+        if (index < children.length) return children[index];
+        final deviceIndex = index - children.length;
+        if (deviceIndex >= devices.length) {
+          return trailing[deviceIndex - devices.length];
+        }
+        final d = devices[deviceIndex];
+        return ActionRow(
+          key: ValueKey('usb-${value(d, 'serial', value(d, 'id'))}'),
+          icon: LucideIcons.smartphone,
+          title: value(d, 'serial', deviceName(d)),
+          onTap: d['status'] == 'connected'
+              ? () =>
+                    WorkspaceRoute(deviceId: value(d, 'id'))
+                        .pushReplacement(context)
+              : value(d, 'serial').isNotEmpty && !busy.value
+              ? () => check(value(d, 'serial'))
+              : null,
+        );
+      },
+    );
+    if (embedded) return rows;
     return PageFrame(
       title: '添加设备',
       child: ConnectionContent(
-        child: GroupedListView(
-          padding: const EdgeInsets.all(DesignTokens.spacingMd),
-          children: children,
+        child: CustomScrollView(
+          slivers: [
+            const PageChromeSliver(),
+            SliverPadding(
+              padding: const EdgeInsets.all(DesignTokens.spacingMd),
+              sliver: rows,
+            ),
+            const PageChromeBottomSliver(),
+          ],
         ),
       ),
     );

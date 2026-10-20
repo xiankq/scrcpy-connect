@@ -122,36 +122,40 @@ class QualityPage extends HookWidget {
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.sizeOf(context).height * .8,
+                  minHeight: options.length > 8
+                      ? MediaQuery.sizeOf(context).height * .8
+                      : 0,
                 ),
-                child: GroupedListView(
-                  shrinkWrap: true,
+                child: GroupedListView.builder(
+                  shrinkWrap: options.length <= 8,
                   padding: const EdgeInsets.only(
                     bottom: DesignTokens.spacingMd,
                   ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    for (final item in options)
-                      GlassTooltip(
-                        message: value(item, 'reason'),
-                        child: ListTile(
-                          title: Text(
-                            value(item, 'label', value(item, 'name')),
-                          ),
-
-                          enabled: item['available'] == true,
-                          trailing: selected == item['value']
-                              ? const Icon(LucideIcons.check)
-                              : null,
-                          onTap: () => Navigator.pop(context, item),
+                  itemCount: options.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
+                      );
+                    }
+                    final item = options[index - 1];
+                    return GlassTooltip(
+                      message: value(item, 'reason'),
+                      child: ListTile(
+                        title: Text(value(item, 'label', value(item, 'name'))),
+
+                        enabled: item['available'] == true,
+                        trailing: selected == item['value']
+                            ? const Icon(LucideIcons.check)
+                            : null,
+                        onTap: () => Navigator.pop(context, item),
                       ),
-                  ],
+                    );
+                  },
                 ),
               ),
             ),

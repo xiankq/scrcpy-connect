@@ -67,7 +67,7 @@ void main() {
       expect(find.text('手机 B'), findsNothing);
       expect(find.text('设备声音'), findsOneWidget);
       expect(find.byTooltip('正在播放'), findsOneWidget);
-      final rowA = find.byKey(const ValueKey('activities:id:device-a'));
+      final rowA = find.byKey(const ValueKey('audio:source-a'));
       await tester.tap(find.descendant(of: rowA, matching: find.text('停止')));
       await tester.pumpAndSettle();
       expect(find.text('仅停止手机 A 的设备声音，连接和手机 B 保持原状。'), findsOneWidget);

@@ -583,13 +583,11 @@ class SystemNotificationCoordinator {
       }
       final changed =
           owner.notifications[key] != id || owner.revisions[id] != revision;
-      if (changed &&
-          (_foreground || !_allowed(SystemNotificationKind.notification))) {
+      if (changed && !_allowed(SystemNotificationKind.notification)) {
         _cancel(localKey);
       }
       if (changed &&
           !baseline &&
-          !_foreground &&
           _allowed(SystemNotificationKind.notification)) {
         final target = SystemNotificationTarget(
           kind: SystemNotificationKind.notification,
@@ -603,7 +601,6 @@ class SystemNotificationCoordinator {
         final payload = target.encode();
         _enqueue(() async {
           if (_disposed ||
-              _foreground ||
               !_connected(deviceId) ||
               !_allowed(target.kind) ||
               _deliveries[localKey] != delivery ||

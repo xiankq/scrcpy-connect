@@ -1,18 +1,15 @@
+import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/running_apps.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
-import 'ios_pages_capture_test.dart' as captures;
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
 
@@ -24,19 +21,6 @@ Json _iconResult(String id) => {
   'userId': 0,
   'mimeType': 'image/png',
   'dataBase64': base64Encode(_icon),
-};
-Json _runningResult(String id) => {
-  'deviceId': id,
-  'source': 'runningTasks',
-  'live': true,
-  'apps': [
-    {
-      'name': '设置',
-      'packageName': 'com.android.settings',
-      'userId': 0,
-      'taskId': 42,
-    },
-  ],
 };
 const _device = {
   'id': 'phone',
@@ -72,8 +56,8 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: SingleChildScrollView(
-              child: RunningApps(controller: controller, device: _device),
+            body: CustomScrollView(
+              slivers: [RunningApps(controller: controller, device: _device)],
             ),
           ),
         ),
@@ -86,6 +70,82 @@ void main() {
       expect(find.text('暂时无法读取后台应用'), findsOneWidget);
       expect(find.text('没有已启动的应用'), findsNothing);
       await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'one thousand running apps request icons only around the visible rows',
+    (tester) async {
+      tester.view.physicalSize = const Size(402, 874);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final iconRequests = <String>[];
+      final image = base64Encode(_icon);
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'apps.list') {
+          return {
+            'deviceId': 'phone',
+            'source': 'runningTasks',
+            'live': true,
+            'apps': List.generate(
+              1000,
+              (index) => {
+                'name': '应用 $index',
+                'packageName': 'dev.fixture.app$index',
+                'userId': 0,
+                'taskId': index,
+              },
+            ),
+          };
+        }
+        if (command == 'apps.icon') {
+          iconRequests.add(value(params, 'packageName'));
+          return {
+            'deviceId': 'phone',
+            'packageName': params['packageName'],
+            'userId': 0,
+            'mimeType': 'image/png',
+            'dataBase64': image,
+          };
+        }
+        return {};
+      });
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ConnectTokens.theme(Brightness.light),
+            home: Scaffold(
+              body: CustomScrollView(
+                slivers: [RunningApps(controller: controller, device: _device)],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(iconRequests, isNotEmpty);
+        expect(
+          iconRequests.length,
+          lessThanOrEqualTo(72),
+          reason: 'A viewport plus its cache must not request all one thousand package icons.',
+        );
+        expect(iconRequests, isNot(contains('dev.fixture.app999')));
+        expect(find.text('应用 999'), findsNothing);
+        final initial = iconRequests.length;
+        await tester.drag(find.byType(Scrollable), const Offset(0, -650));
+        await tester.pumpAndSettle();
+        expect(iconRequests.length, greaterThan(initial));
+        expect(iconRequests.length, lessThanOrEqualTo(120));
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
     },
   );
 
@@ -186,125 +246,6 @@ void main() {
       expect(find.text('移除此设备').hitTestable(), findsOneWidget);
       expect(find.text('断开设备连接'), findsNothing);
       expect(tester.takeException(), isNull);
-    },
-  );
-
-  final output = Platform.environment['CONNECT_WORKSPACE_CAPTURE_DIR'];
-  if (output == null) return;
-  testWidgets(
-    'capture redesigned workspace in light dark and connection states',
-    (tester) async {
-      await captures.loadCaptureFonts();
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(402, 874);
-      tester.view.padding = const FakeViewPadding(top: 54, bottom: 34);
-      tester.view.viewPadding = const FakeViewPadding(top: 54, bottom: 34);
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-        tester.view.resetPadding();
-        tester.view.resetViewPadding();
-        tester.platformDispatcher.clearTextScaleFactorTestValue();
-      });
-      await tester.runAsync(() => Directory(output).create(recursive: true));
-      for (final layout in [
-        ('phone', const Size(402, 874), 1.0),
-        ('narrow', const Size(280, 620), 2.0),
-      ]) {
-        tester.view.physicalSize = layout.$2;
-        tester.platformDispatcher.textScaleFactorTestValue = layout.$3;
-        for (final (name, state, transport) in [
-          ('connected', 'connected', 'tls'),
-          ('offline', 'offline', 'tls'),
-          ('connecting', 'connecting', 'tls'),
-          ('unauthorized', 'unauthorized', 'tls'),
-          ('ip', 'connected', 'tcp'),
-          ('usb', 'connected', 'usb'),
-        ]) {
-          for (final brightness in Brightness.values) {
-            if (transport != 'tls' &&
-                (layout.$1 != 'phone' || brightness != Brightness.light)) {
-              continue;
-            }
-            final controller = createTestController(
-              (command, [params = const {}]) async => switch (command) {
-                'apps.list' => _runningResult('phone'),
-                'apps.icon' => _iconResult('phone'),
-                _ => {},
-              },
-            );
-            final device = {
-              ..._device,
-              'status': state,
-              'transport': transport,
-              if (transport == 'usb') 'address': 'R58M12345AB',
-              if (state == 'offline') 'lastSeen': 1792480000,
-              if (layout.$1 == 'narrow')
-                'address': state == 'connected'
-                    ? 'fe80::1234:5678:90ab:cdef%wlan0'
-                    : 'phone-with-a-long-network-name.office.example.local',
-            };
-            final boundary = GlobalKey();
-            await tester.pumpWidget(
-              RepaintBoundary(
-                key: boundary,
-                child: RouterTestApp(
-                  controller: controller,
-                  theme: captures.captureTheme(brightness),
-                  home: DeviceWorkspacePage(
-                    controller: controller,
-                    device: device,
-                  ),
-                ),
-              ),
-            );
-            await tester.pumpAndSettle();
-            await tester.runAsync(() async {
-              final context = tester.element(find.byType(DeviceWorkspacePage));
-              for (final image in tester.widgetList<Image>(
-                find.byType(Image),
-              )) {
-                await precacheImage(image.image, context);
-              }
-            });
-            await tester.pumpAndSettle();
-            expect(tester.takeException(), isNull);
-            Future<void> capture(String name) async {
-              await tester.runAsync(() async {
-                final image =
-                    await (boundary.currentContext!.findRenderObject()!
-                            as RenderRepaintBoundary)
-                        .toImage();
-                final data = await image.toByteData(
-                  format: ui.ImageByteFormat.png,
-                );
-                await File('$output/$name.png')
-                    .writeAsBytes(data!.buffer.asUint8List());
-                image.dispose();
-              });
-            }
-
-            await capture('workspace-$name-${brightness.name}-${layout.$1}');
-            if (name == 'connected') {
-              await tester.scrollUntilVisible(
-                find.text('移除此设备'),
-                300,
-                scrollable: find.byType(Scrollable).first,
-              );
-              await Scrollable.ensureVisible(
-                tester.element(find.text('移除此设备')),
-                alignment: .5,
-              );
-              await tester.pumpAndSettle();
-              await capture(
-                'workspace-management-${brightness.name}-${layout.$1}',
-              );
-            }
-            await tester.pumpWidget(const SizedBox());
-            controller.dispose();
-          }
-        }
-      }
     },
   );
 }

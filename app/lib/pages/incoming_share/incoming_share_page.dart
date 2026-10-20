@@ -149,6 +149,112 @@ class IncomingSharePage extends HookConsumerWidget {
       }
     }
 
+    final errors = strings(share['errors']);
+    final leading = <Widget>[
+      const StateNote('明确选择本次接收设备。切换当前操作设备不会改变已提交任务的目标。'),
+      if (importing) ...[
+        const LinearProgressIndicator(),
+        const StateNote('正在读取分享内容，完成后即可发送。你也可以取消本次分享。'),
+      ],
+    ];
+    final fileHeader = <Widget>[
+      if (files.isNotEmpty)
+        ConnectSwitchRow(
+          title: Text('传入 ${files.length} 个文件'),
+          value: includeFiles.value,
+          onChanged: busy.value || locked
+              ? null
+              : (v) => includeFiles.value = v,
+        ),
+    ];
+    final middle = <Widget>[
+      if (text.isNotEmpty) ...[
+        ConnectSwitchRow(
+          title: const Text('写入设备剪贴板'),
+
+          value: includeText.value,
+          onChanged: busy.value || locked ? null : (v) => includeText.value = v,
+        ),
+        ContentPanel(child: SelectableText(text)),
+        const SizedBox(height: DesignTokens.spacingMd),
+      ],
+      const SectionTitle('接收设备'),
+      if (devices.isEmpty)
+        const StateNote('当前没有已连接设备。先恢复设备连接，再返回这里选择；也可以取消本次分享。'),
+    ];
+    final trailing = <Widget>[
+      if (includeFiles.value && files.isNotEmpty) ...[
+        const SectionTitle('目标目录'),
+        TextField(
+          controller: path,
+          enabled: !busy.value && !locked,
+          decoration: const InputDecoration(
+            labelText: '设备上的完整目录',
+            helperText: '同名文件会在传输中心等待你确认',
+          ),
+        ),
+        const SizedBox(height: DesignTokens.spacingSm),
+        OutlinedButton.icon(
+          onPressed: selected == null || busy.value || locked
+              ? null
+              : () async {
+                  final directory = await ShareDirectoryRoute(
+                    deviceId: value(selected, 'id'),
+                    path: path.text,
+                  ).push<String>(context);
+                  if (directory != null && context.mounted) {
+                    path.text = directory;
+                  }
+                },
+          icon: const Icon(
+            LucideIcons.folderOpen,
+            size: DesignTokens.componentIconActionSize,
+          ),
+          label: const Text('浏览设备目录'),
+        ),
+      ],
+      if (selected != null)
+        StateNote(
+          '本次目标：${deviceName(selected)}${includeFiles.value ? ' · ${path.text}' : ' · 剪贴板'}',
+        ),
+      if (pushed.value) const StateNote('文件任务已提交；再次确认不会重复提交这批文件。'),
+      if (copied.value) const StateNote('文字已写入指定设备剪贴板。'),
+      if (error.value != null)
+        StateNote(error.value!, icon: LucideIcons.circleAlert),
+      const SizedBox(height: DesignTokens.spacingMd),
+      FilledButton(
+        onPressed: canSubmit ? submit : null,
+        child: Text(
+          busy.value
+              ? '正在提交…'
+              : locked
+              ? '继续完成'
+              : '确认提交',
+        ),
+      ),
+      if (busy.value)
+        const Padding(
+          padding: EdgeInsets.all(DesignTokens.spacingMd),
+          child: LinearProgressIndicator(),
+        ),
+    ];
+    final errorsStart = leading.length;
+    final fileHeaderStart = errorsStart + errors.length;
+    final filesStart = fileHeaderStart + fileHeader.length;
+    final middleStart = filesStart + files.length;
+    final devicesStart = middleStart + middle.length;
+    final trailingStart = devicesStart + devices.length;
+    final indices = <Key, int>{
+      for (var index = 0; index < errors.length; index++)
+        ValueKey(('incoming-error', index)): errorsStart + index,
+      for (var index = 0; index < files.length; index++)
+        ValueKey(('incoming-file', value(share, 'shareId'), index)):
+            filesStart + index,
+      for (var index = 0; index < devices.length; index++)
+        ValueKey(('incoming-device', value(devices[index], 'id'))):
+            devicesStart + index,
+    };
+
     return PopScope(
       canPop: finished.value,
       onPopInvokedWithResult: (popped, _) {
@@ -161,106 +267,42 @@ class IncomingSharePage extends HookConsumerWidget {
           onPressed: busy.value ? null : cancel,
           child: Text(locked ? '关闭' : '取消'),
         ),
-        child: GroupedListView(
+        child: GroupedListView.builder(
           padding: const EdgeInsets.all(DesignTokens.spacingMd),
-          children: [
-            const StateNote('明确选择本次接收设备。切换当前操作设备不会改变已提交任务的目标。'),
-            if (importing) ...[
-              const LinearProgressIndicator(),
-              const StateNote('正在读取分享内容，完成后即可发送。你也可以取消本次分享。'),
-            ],
-            for (final message in strings(share['errors']))
-              StateNote(message, icon: LucideIcons.circleAlert),
-            if (files.isNotEmpty) ...[
-              ConnectSwitchRow(
-                title: Text('传入 ${files.length} 个文件'),
-                value: includeFiles.value,
-                onChanged: busy.value || locked
-                    ? null
-                    : (v) => includeFiles.value = v,
-              ),
-              for (final file in files)
-                ActionRow(icon: LucideIcons.file, title: value(file, 'name')),
-            ],
-            if (text.isNotEmpty) ...[
-              ConnectSwitchRow(
-                title: const Text('写入设备剪贴板'),
-
-                value: includeText.value,
-                onChanged: busy.value || locked
-                    ? null
-                    : (v) => includeText.value = v,
-              ),
-              ContentPanel(child: SelectableText(text)),
-              const SizedBox(height: DesignTokens.spacingMd),
-            ],
-            const SectionTitle('接收设备'),
-            if (devices.isEmpty)
-              const StateNote('当前没有已连接设备。先恢复设备连接，再返回这里选择；也可以取消本次分享。'),
-            for (final device in devices)
-              ChoiceRow<String>(
-                value: value(device, 'id'),
-                groupValue: deviceId.value,
-                onChanged: busy.value || locked
-                    ? null
-                    : (v) => deviceId.value = v,
-                title: Text(deviceName(device)),
-              ),
-            if (includeFiles.value && files.isNotEmpty) ...[
-              const SectionTitle('目标目录'),
-              TextField(
-                controller: path,
-                enabled: !busy.value && !locked,
-                decoration: const InputDecoration(
-                  labelText: '设备上的完整目录',
-                  helperText: '同名文件会在传输中心等待你确认',
-                ),
-              ),
-              const SizedBox(height: DesignTokens.spacingSm),
-              OutlinedButton.icon(
-                onPressed: selected == null || busy.value || locked
-                    ? null
-                    : () async {
-                        final directory = await ShareDirectoryRoute(
-                          deviceId: value(selected, 'id'),
-                          path: path.text,
-                        ).push<String>(context);
-                        if (directory != null && context.mounted) {
-                          path.text = directory;
-                        }
-                      },
-                icon: const Icon(
-                  LucideIcons.folderOpen,
-                  size: DesignTokens.componentIconActionSize,
-                ),
-                label: const Text('浏览设备目录'),
-              ),
-            ],
-            if (selected != null)
-              StateNote(
-                '本次目标：${deviceName(selected)}${includeFiles.value ? ' · ${path.text}' : ' · 剪贴板'}',
-              ),
-            if (pushed.value) const StateNote('文件任务已提交；再次确认不会重复提交这批文件。'),
-            if (copied.value) const StateNote('文字已写入指定设备剪贴板。'),
-            if (error.value != null)
-              StateNote(error.value!, icon: LucideIcons.circleAlert),
-            const SizedBox(height: DesignTokens.spacingMd),
-            FilledButton(
-              onPressed: canSubmit ? submit : null,
-              child: Text(
-                busy.value
-                    ? '正在提交…'
-                    : locked
-                    ? '继续完成'
-                    : '确认提交',
-              ),
-            ),
-            if (busy.value)
-              const Padding(
-                padding: EdgeInsets.all(DesignTokens.spacingMd),
-                child: LinearProgressIndicator(),
-              ),
-          ],
+          itemCount: trailingStart + trailing.length,
+          findChildIndexCallback: (key) => indices[key],
+          itemBuilder: (context, index) {
+            if (index < errorsStart) return leading[index];
+            if (index < fileHeaderStart) {
+              final row = index - errorsStart;
+              return StateNote(
+                errors[row],
+                key: ValueKey(('incoming-error', row)),
+                icon: LucideIcons.circleAlert,
+              );
+            }
+            if (index < filesStart) return fileHeader[index - fileHeaderStart];
+            if (index < middleStart) {
+              final row = index - filesStart;
+              return ActionRow(
+                key: ValueKey(('incoming-file', value(share, 'shareId'), row)),
+                icon: LucideIcons.file,
+                title: value(files[row], 'name'),
+              );
+            }
+            if (index < devicesStart) return middle[index - middleStart];
+            if (index >= trailingStart) return trailing[index - trailingStart];
+            final device = devices[index - devicesStart];
+            return ChoiceRow<String>(
+              key: ValueKey(('incoming-device', value(device, 'id'))),
+              value: value(device, 'id'),
+              groupValue: deviceId.value,
+              onChanged: busy.value || locked
+                  ? null
+                  : (v) => deviceId.value = v,
+              title: Text(deviceName(device)),
+            );
+          },
         ),
       ),
     );

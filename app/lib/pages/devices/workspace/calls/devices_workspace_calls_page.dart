@@ -81,146 +81,143 @@ class CallsPage extends HookConsumerWidget {
             }
           }
 
-          return GroupedListView(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            children: [
-              ContentPanel(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '通话与声音',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Text(
-                      '通话控制：${statusText(value(data, 'controlStatus', value(data, 'status', 'unknown')))}',
-                    ),
-                    Text(
-                      '主控双向语音：${statusText(value(data, 'audioStatus', 'unknown'))}',
-                    ),
-                    if (value(data, 'reason').isNotEmpty)
-                      StateNote(value(data, 'reason')),
-                    if (value(data, 'systemCallUiReason').isNotEmpty)
-                      StateNote(value(data, 'systemCallUiReason')),
-                    if (callUiFailure.value != null)
-                      StateNote(callUiFailure.value!),
-                    if (verified &&
-                        calls.isNotEmpty &&
-                        (data['canOpenSystemCallUi'] == true ||
-                            data['canRetrySystemCallUi'] == true))
-                      TextButton.icon(
-                        onPressed: openingCallUi.value
-                            ? null
-                            : openCurrentCallUi,
-                        icon: const Icon(LucideIcons.phone),
-                        label: Text(
-                          openingCallUi.value
-                              ? '正在打开…'
-                              : data['canRetrySystemCallUi'] == true
-                              ? '重试打开系统通话界面'
-                              : '打开系统通话界面',
-                        ),
+          final leading = <Widget>[
+            ContentPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('通话与声音', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: DesignTokens.spacingXs),
+                  Text(
+                    '通话控制：${statusText(value(data, 'controlStatus', value(data, 'status', 'unknown')))}',
+                  ),
+                  Text(
+                    '主控双向语音：${statusText(value(data, 'audioStatus', 'unknown'))}',
+                  ),
+                  if (value(data, 'reason').isNotEmpty)
+                    StateNote(value(data, 'reason')),
+                  if (value(data, 'systemCallUiReason').isNotEmpty)
+                    StateNote(value(data, 'systemCallUiReason')),
+                  if (callUiFailure.value != null)
+                    StateNote(callUiFailure.value!),
+                  if (verified &&
+                      calls.isNotEmpty &&
+                      (data['canOpenSystemCallUi'] == true ||
+                          data['canRetrySystemCallUi'] == true))
+                    TextButton.icon(
+                      onPressed: openingCallUi.value ? null : openCurrentCallUi,
+                      icon: const Icon(LucideIcons.phone),
+                      label: Text(
+                        openingCallUi.value
+                            ? '正在打开…'
+                            : data['canRetrySystemCallUi'] == true
+                            ? '重试打开系统通话界面'
+                            : '打开系统通话界面',
                       ),
-                    Text(
-                      value(data, 'audioRoute', '声音与麦克风继续由被控手机处理'),
-                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ],
-                ),
+                  Text(
+                    value(data, 'audioRoute', '声音与麦克风继续由被控手机处理'),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
-              if (calls.isEmpty)
-                EmptyContent(
-                  icon: LucideIcons.phone,
-                  title: state == 'stopped'
-                      ? '来电观察已停止'
-                      : verified
-                      ? '没有可控制的当前通话'
-                      : '通话状态尚未核验',
-                  message: state == 'stopped'
-                      ? '已停止同步此设备的通知与来电。需要时可主动启用观察。'
-                      : verified
-                      ? '主动拨号、联系人与通话记录请进入手机的原电话应用。'
-                      : '尚未核实手机当前通话；启动观察后仍需等待实时状态。',
-                ),
-              for (final call in calls)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: ContentPanel(
-                    child: Column(
-                      children: [
-                        const FeatureIcon(
-                          LucideIcons.userRound,
-                          color: ConnectTokens.mint,
+            ),
+            if (calls.isEmpty)
+              EmptyContent(
+                icon: LucideIcons.phone,
+                title: state == 'stopped'
+                    ? '来电观察已停止'
+                    : verified
+                    ? '没有可控制的当前通话'
+                    : '通话状态尚未核验',
+                message: state == 'stopped'
+                    ? '已停止同步此设备的通知与来电。需要时可主动启用观察。'
+                    : verified
+                    ? '主动拨号、联系人与通话记录请进入手机的原电话应用。'
+                    : '尚未核实手机当前通话；启动观察后仍需等待实时状态。',
+              ),
+          ];
+          final trailing = <Widget>[
+            const SizedBox(height: DesignTokens.spacingLg),
+            FilledButton.icon(
+              onPressed: () =>
+                  openRemoteRoute(context, deviceId: value(device, 'id')),
+              icon: const Icon(
+                LucideIcons.smartphone,
+                size: DesignTokens.componentIconActionSize,
+              ),
+              label: const Text('在手机上继续处理'),
+            ),
+            TextButton(
+              onPressed: starting.value ? null : verify,
+              child: Text(state == 'stopped' ? '启用通知与来电观察' : '重新核验通话'),
+            ),
+            const StateNote('新的来电不会自动接听、抢占麦克风或结束已有通话。无法可靠针对某次呼叫操作时，请使用原手机界面。'),
+          ];
+          final indices = <Key, int>{
+            for (var index = 0; index < calls.length; index++)
+              ValueKey((
+                'call',
+                value(device, 'id'),
+                value(calls[index], 'id'),
+              )): leading.length + index,
+          };
+          return GroupedListView.builder(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
+            itemCount: leading.length + calls.length + trailing.length,
+            findChildIndexCallback: (key) => indices[key],
+            itemBuilder: (context, index) {
+              if (index < leading.length) return leading[index];
+              final row = index - leading.length;
+              if (row >= calls.length) return trailing[row - calls.length];
+              final call = calls[row];
+              return Padding(
+                key: ValueKey(('call', value(device, 'id'), value(call, 'id'))),
+                padding: const EdgeInsets.only(top: DesignTokens.spacingLg),
+                child: ContentPanel(
+                  child: Column(
+                    children: [
+                      const FeatureIcon(
+                        LucideIcons.userRound,
+                        color: ConnectTokens.mint,
 
-                          size: DesignTokens.componentEmptyContentIconSize,
-                        ),
-                        const SizedBox(height: DesignTokens.spacingMd),
-                        Text(
-                          value(call, 'name', value(call, 'number', '当前通话')),
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        const SizedBox(height: DesignTokens.spacingXs),
-                        Text(
-                          '${value(call, 'deviceName', deviceName(device))} · ${statusText(value(call, 'state'))}',
-                        ),
-                        const SizedBox(height: DesignTokens.spacingLg),
-                        Wrap(
-                          spacing: DesignTokens.spacingMd,
-                          runSpacing: DesignTokens.spacingSm,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            if (call['canAnswer'] == true)
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  backgroundColor: ConnectTokens.mint
-                                      .withValues(alpha: .1),
+                        size: DesignTokens.componentEmptyContentIconSize,
+                      ),
+                      const SizedBox(height: DesignTokens.spacingMd),
+                      Text(
+                        value(call, 'name', value(call, 'number', '当前通话')),
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: DesignTokens.spacingXs),
+                      Text(
+                        '${value(call, 'deviceName', deviceName(device))} · ${statusText(value(call, 'state'))}',
+                      ),
+                      const SizedBox(height: DesignTokens.spacingLg),
+                      Wrap(
+                        spacing: DesignTokens.spacingMd,
+                        runSpacing: DesignTokens.spacingSm,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          if (call['canAnswer'] == true)
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: ConnectTokens.mint.withValues(
+                                  alpha: .1,
                                 ),
-                                onPressed: () async {
-                                  if (calls.any(
-                                        (other) => other['state'] == 'active',
-                                      ) &&
-                                      !await confirm(
-                                        context,
-                                        '切换到这通来电？',
-                                        '已有通话的麦克风和路由将按设备支持情况调整。不会自动结束其他通话。',
-                                        action: '切换通话',
-                                      )) {
-                                    return;
-                                  }
-                                  if (context.mounted) {
-                                    await perform(
-                                      context,
-                                      controller,
-                                      'calls.action',
-                                      {
-                                        'deviceId': device['id'],
-                                        'callId': call['id'],
-                                        'action': 'answer',
-                                      },
-                                    );
-                                    refresh();
-                                  }
-                                },
-                                icon: const Icon(
-                                  LucideIcons.phone,
-
-                                  size: DesignTokens.componentIconActionSize,
-                                ),
-                                label: const Text('接听'),
                               ),
-                            if (call['canReject'] == true ||
-                                call['canHangup'] == true)
-                              FilledButton.icon(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .errorContainer,
-                                  foregroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .onErrorContainer,
-                                ),
-                                onPressed: () async {
+                              onPressed: () async {
+                                if (calls.any(
+                                      (other) => other['state'] == 'active',
+                                    ) &&
+                                    !await confirm(
+                                      context,
+                                      '切换到这通来电？',
+                                      '已有通话的麦克风和路由将按设备支持情况调整。不会自动结束其他通话。',
+                                      action: '切换通话',
+                                    )) {
+                                  return;
+                                }
+                                if (context.mounted) {
                                   await perform(
                                     context,
                                     controller,
@@ -228,50 +225,31 @@ class CallsPage extends HookConsumerWidget {
                                     {
                                       'deviceId': device['id'],
                                       'callId': call['id'],
-                                      'action': call['canReject'] == true
-                                          ? 'reject'
-                                          : 'hangup',
+                                      'action': 'answer',
                                     },
                                   );
                                   refresh();
-                                },
-                                icon: Icon(
-                                  LucideIcons.phoneOff,
-                                  color: Theme.of(context).colorScheme.error,
-                                  size: DesignTokens.componentIconActionSize,
-                                ),
-                                label: Text(
-                                  call['canReject'] == true ? '拒接' : '挂断',
-                                ),
+                                }
+                              },
+                              icon: const Icon(
+                                LucideIcons.phone,
+
+                                size: DesignTokens.componentIconActionSize,
                               ),
-                          ],
-                        ),
-                        if (call['canSetRoute'] == true)
-                          TextButton(
-                            onPressed: () async {
-                              final route = await showGlassModalSheet<String>(
-                                context: context,
-                                builder: (context) => SafeArea(
-                                  child: SingleChildScrollView(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        for (final route in objects(
-                                          call['routes'],
-                                        ))
-                                          ListTile(
-                                            title: Text(value(route, 'name')),
-                                            onTap: () => Navigator.pop(
-                                              context,
-                                              value(route, 'id'),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                              if (route != null && context.mounted) {
+                              label: const Text('接听'),
+                            ),
+                          if (call['canReject'] == true ||
+                              call['canHangup'] == true)
+                            FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .errorContainer,
+                                foregroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .onErrorContainer,
+                              ),
+                              onPressed: () async {
                                 await perform(
                                   context,
                                   controller,
@@ -279,37 +257,73 @@ class CallsPage extends HookConsumerWidget {
                                   {
                                     'deviceId': device['id'],
                                     'callId': call['id'],
-                                    'action': 'route',
-                                    'route': route,
+                                    'action': call['canReject'] == true
+                                        ? 'reject'
+                                        : 'hangup',
                                   },
                                 );
                                 refresh();
-                              }
-                            },
-                            child: const Text('声音路由'),
-                          ),
-                      ],
-                    ),
+                              },
+                              icon: Icon(
+                                LucideIcons.phoneOff,
+                                color: Theme.of(context).colorScheme.error,
+                                size: DesignTokens.componentIconActionSize,
+                              ),
+                              label: Text(
+                                call['canReject'] == true ? '拒接' : '挂断',
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (call['canSetRoute'] == true)
+                        TextButton(
+                          onPressed: () async {
+                            final routes = objects(call['routes']);
+                            final route = await showGlassModalSheet<String>(
+                              context: context,
+                              builder: (context) => SafeArea(
+                                child: ListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: routes.length,
+                                  itemBuilder: (context, index) {
+                                    final route = routes[index];
+                                    return ListTile(
+                                      key: ValueKey((
+                                        'call-route',
+                                        value(route, 'id'),
+                                      )),
+                                      title: Text(value(route, 'name')),
+                                      onTap: () => Navigator.pop(
+                                        context,
+                                        value(route, 'id'),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            );
+                            if (route != null && context.mounted) {
+                              await perform(
+                                context,
+                                controller,
+                                'calls.action',
+                                {
+                                  'deviceId': device['id'],
+                                  'callId': call['id'],
+                                  'action': 'route',
+                                  'route': route,
+                                },
+                              );
+                              refresh();
+                            }
+                          },
+                          child: const Text('声音路由'),
+                        ),
+                    ],
                   ),
                 ),
-              const SizedBox(height: DesignTokens.spacingLg),
-              FilledButton.icon(
-                onPressed: () =>
-                    openRemoteRoute(context, deviceId: value(device, 'id')),
-                icon: const Icon(
-                  LucideIcons.smartphone,
-                  size: DesignTokens.componentIconActionSize,
-                ),
-                label: const Text('在手机上继续处理'),
-              ),
-              TextButton(
-                onPressed: starting.value ? null : verify,
-                child: Text(state == 'stopped' ? '启用通知与来电观察' : '重新核验通话'),
-              ),
-              const StateNote(
-                '新的来电不会自动接听、抢占麦克风或结束已有通话。无法可靠针对某次呼叫操作时，请使用原手机界面。',
-              ),
-            ],
+              );
+            },
           );
         },
       ),

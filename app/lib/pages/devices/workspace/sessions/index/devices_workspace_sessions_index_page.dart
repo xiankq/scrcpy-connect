@@ -68,95 +68,97 @@ class SessionsPage extends HookWidget {
               ),
             );
           }
-          return GroupedListView(
+          return GroupedListView.builder(
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            children: [
-              const StateNote('返回工作台会保留窗口并暂停不可见画面。关闭窗口会把应用任务交回手机，不会强制停止应用。'),
-              for (final session in sessions)
-                ContentPanel(
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    children: [
-                      ActionRow(
-                        key: ValueKey(
-                          'open-session:${value(session, 'sessionId', value(session, 'id'))}',
-                        ),
-                        icon: LucideIcons.appWindow,
-                        title: value(session, 'name', '手机屏幕'),
-                        trailing: Text(
-                          sessionStatusText(value(session, 'status')),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+            itemCount: sessions.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return const StateNote(
+                  '返回工作台会保留窗口并暂停不可见画面。关闭窗口会把应用任务交回手机，不会强制停止应用。',
+                );
+              }
+              final session = sessions[index - 1];
+              return Column(
+                children: [
+                  ActionRow(
+                    key: ValueKey(
+                      'open-session:${value(session, 'sessionId', value(session, 'id'))}',
+                    ),
+                    icon: LucideIcons.appWindow,
+                    title: value(session, 'name', '手机屏幕'),
+                    trailing: Text(
+                      sessionStatusText(value(session, 'status')),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
 
-                        onTap: () async {
-                          await openRemoteRoute(
-                            context,
+                    onTap: () async {
+                      await openRemoteRoute(
+                        context,
+                        deviceId: value(device, 'id'),
+                        sessionId: value(
+                          session,
+                          'sessionId',
+                          value(session, 'id'),
+                        ),
+                      );
+                      if (context.mounted) refresh();
+                    },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DesignTokens.spacingMd,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        GlassActionIcon(
+                          tooltip: '窗口工具',
+                          color: Theme.of(context).colorScheme.onSurface,
+                          key: ValueKey(
+                            'tools-session:${value(session, 'sessionId', value(session, 'id'))}',
+                          ),
+                          icon: const Icon(LucideIcons.slidersHorizontal),
+                          onPressed: () => SessionToolsRoute(
                             deviceId: value(device, 'id'),
                             sessionId: value(
                               session,
                               'sessionId',
                               value(session, 'id'),
                             ),
-                          );
-                          if (context.mounted) refresh();
-                        },
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: DesignTokens.spacingMd,
+                          ).push<void>(context),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            GlassActionIcon(
-                              tooltip: '窗口工具',
-                              color: Theme.of(context).colorScheme.onSurface,
-                              key: ValueKey(
-                                'tools-session:${value(session, 'sessionId', value(session, 'id'))}',
-                              ),
-                              icon: const Icon(LucideIcons.slidersHorizontal),
-                              onPressed: () => SessionToolsRoute(
-                                deviceId: value(device, 'id'),
-                                sessionId: value(
+                        GlassActionIcon(
+                          tooltip: '关闭窗口',
+                          color: Theme.of(context).colorScheme.onSurface,
+                          key: ValueKey(
+                            'close-session:${value(session, 'sessionId', value(session, 'id'))}',
+                          ),
+                          icon: const Icon(LucideIcons.x),
+                          onPressed: () async {
+                            final result = await perform(
+                              context,
+                              controller,
+                              'session.stop',
+                              {
+                                'sessionId': value(
                                   session,
                                   'sessionId',
                                   value(session, 'id'),
                                 ),
-                              ).push<void>(context),
-                            ),
-                            GlassActionIcon(
-                              tooltip: '关闭窗口',
-                              color: Theme.of(context).colorScheme.onSurface,
-                              key: ValueKey(
-                                'close-session:${value(session, 'sessionId', value(session, 'id'))}',
-                              ),
-                              icon: const Icon(LucideIcons.x),
-                              onPressed: () async {
-                                final result = await perform(
-                                  context,
-                                  controller,
-                                  'session.stop',
-                                  {
-                                    'sessionId': value(
-                                      session,
-                                      'sessionId',
-                                      value(session, 'id'),
-                                    ),
-                                    'keepTask': true,
-                                  },
-                                );
-                                if (context.mounted && result != null) {
-                                  refresh();
-                                }
+                                'keepTask': true,
                               },
-                            ),
-                          ],
+                            );
+                            if (context.mounted && result != null) {
+                              refresh();
+                            }
+                          },
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-            ],
+                ],
+              );
+            },
           );
         },
       ),

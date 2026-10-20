@@ -1,26 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
+import 'package:design_system/design_system.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/settings/adb_identity/settings_adb_identity_page.dart';
 import 'package:scrcpy_connect/services/adb_identity_validation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
-import 'ios_pages_capture_test.dart' as captures;
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
 
 // Synthetic payload exercises UI transport only; RSA validity is backend-owned.
 const pem = '-----BEGIN PRIVATE KEY-----\nMAMCAQA=\n-----END PRIVATE KEY-----';
 const device = <String, dynamic>{'id': 'phone', 'name': '我的手机'};
-final output = Platform.environment['CONNECT_IDENTITY_PICKER_CAPTURE_DIR'];
-final boundary = GlobalKey();
 
 final class _MemoryFile extends PlatformFile {
   _MemoryFile(this.bytes, {this.knownLength, this.failure});
@@ -92,38 +87,18 @@ Future<void> open(
     tester.view.resetDevicePixelRatio();
     tester.platformDispatcher.clearTextScaleFactorTestValue();
   });
-  if (output != null) await captures.loadCaptureFonts();
   await tester.pumpWidget(
-    RepaintBoundary(
-      key: boundary,
-      child: RouterTestApp(
-        controller: controller,
-        devices: [device],
-        theme: captures.captureTheme(
-          narrow ? Brightness.dark : Brightness.light,
-        ),
-        home: AdbIdentityPage(controller: controller, device: target),
-      ),
+    RouterTestApp(
+      controller: controller,
+      devices: [device],
+      theme: ConnectTokens.theme(narrow ? Brightness.dark : Brightness.light),
+      home: AdbIdentityPage(controller: controller, device: target),
     ),
   );
   await tester.pumpAndSettle();
   await reveal(tester, find.widgetWithText(FilledButton, '导入私钥'));
   await tester.tap(find.widgetWithText(FilledButton, '导入私钥'));
   await tester.pumpAndSettle();
-}
-
-Future<void> snapshot(WidgetTester tester, String name) async {
-  if (output == null) return;
-  await tester.runAsync(() async {
-    await Directory(output!).create(recursive: true);
-    final image =
-        await (boundary.currentContext!.findRenderObject()!
-                as RenderRepaintBoundary)
-            .toImage();
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    await File('$output/$name.png').writeAsBytes(data!.buffer.asUint8List());
-    image.dispose();
-  });
 }
 
 void main() {
@@ -178,12 +153,10 @@ void main() {
           pem,
         );
         expect(mutations, hasLength(count));
-        await snapshot(tester, '${scenario.$1}-filled');
         await reveal(tester, find.text('继续'));
         await tester.tap(find.text('继续'));
         await tester.pumpAndSettle();
         expect(mutations, hasLength(count));
-        await snapshot(tester, '${scenario.$1}-confirm');
         await reveal(tester, find.text('导入并更换'));
         await tester.tap(find.text('导入并更换'));
         await tester.pumpAndSettle();
@@ -234,7 +207,6 @@ void main() {
             .text,
         'my draft text',
       );
-      await snapshot(tester, 'cancel-preserves-dark-narrow');
       await reveal(tester, find.text('继续'));
       await tester.tap(find.text('继续'));
       await tester.pumpAndSettle();
@@ -246,9 +218,7 @@ void main() {
             .text,
         'my draft text',
       );
-      await snapshot(tester, 'invalid-retained-dark-narrow');
       await reveal(tester, find.text('继续'));
-      await snapshot(tester, 'invalid-actions-dark-narrow');
       expect(find.text('导入并更换'), findsNothing);
       expect(calls.where((c) => c.endsWith('.import')), isEmpty);
     },
@@ -291,7 +261,7 @@ void main() {
           '无法读取所选文件，请重新选择。',
         ),
       ];
-      for (final (name, file, message) in cases) {
+      for (final (_, file, message) in cases) {
         picker.next = () async => file;
         await reveal(tester, find.text('从文件选择'));
         await tester.tap(find.text('从文件选择'));
@@ -306,7 +276,6 @@ void main() {
         );
         expect(find.textContaining('not-to-be-logged'), findsNothing);
         expect(find.textContaining('SECRET'), findsNothing);
-        await snapshot(tester, 'file-$name');
       }
       picker.next = () async => _MemoryFile(utf8.encode('not a PEM key'));
       await reveal(tester, find.text('从文件选择'));
@@ -320,7 +289,6 @@ void main() {
         'not a PEM key',
       );
       expect(find.text('PEM 私钥格式无效'), findsOneWidget);
-      await snapshot(tester, 'file-bad-format');
       await reveal(tester, find.text('继续'));
       await tester.tap(find.text('继续'));
       await tester.pumpAndSettle();

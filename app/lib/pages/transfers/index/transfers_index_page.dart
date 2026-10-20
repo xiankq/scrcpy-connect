@@ -54,7 +54,7 @@ class TransfersPage extends HookConsumerWidget {
           }
           return RefreshIndicator(
             onRefresh: () async => refresh(),
-            child: ListView(
+            child: ListView.builder(
               padding:
                   const EdgeInsets.fromLTRB(
                     DesignTokens.spacingMd,
@@ -63,24 +63,20 @@ class TransfersPage extends HookConsumerWidget {
                     DesignTokens.spacingLg,
                   ) +
                   PageChromePadding.of(context),
-              children: [
-                const RecoveryStatus(padding: EdgeInsets.zero),
-                ContentPanel(
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    children: [
-                      for (final row in rows)
-                        TransferHistoryRow(
-                          key: ValueKey(row['historyId']),
-                          controller: controller,
-                          row: row,
-                          refresh: refresh,
-                          onOpen: () => _open(context, row),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+              itemCount: rows.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return const RecoveryStatus(padding: EdgeInsets.zero);
+                }
+                final row = rows[index - 1];
+                return TransferHistoryRow(
+                  key: ValueKey(row['historyId']),
+                  controller: controller,
+                  row: row,
+                  refresh: refresh,
+                  onOpen: () => _open(context, row),
+                );
+              },
             ),
           );
         },
@@ -110,36 +106,37 @@ class TransfersPage extends HookConsumerWidget {
               ),
             ),
             Expanded(
-              child: ListView(
-                children: [
-                  for (final member in members)
-                    ListTile(
-                      leading: Icon(
-                        member['kind'] == 'directory'
-                            ? LucideIcons.folder
-                            : LucideIcons.file,
-                        color: ConnectTokens.amber,
-                        size: DesignTokens.componentIconSize,
-                      ),
-                      title: Text(
-                        value(member, 'name', '文件'),
-                        style: Theme.of(sheetContext).textTheme.bodyMedium,
-                      ),
-                      subtitle: Text(
-                        transferHistoryStatus(member),
-                        style: Theme.of(sheetContext).textTheme.bodySmall,
-                      ),
-                      trailing: const Icon(
-                        LucideIcons.chevronRight,
-                        size: DesignTokens.componentIconSmallSize,
-                      ),
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        TransferDetailsRoute(taskId: value(member, 'id'))
-                            .push<void>(context);
-                      },
+              child: ListView.builder(
+                itemCount: members.length,
+                itemBuilder: (context, index) {
+                  final member = members[index];
+                  return ListTile(
+                    leading: Icon(
+                      member['kind'] == 'directory'
+                          ? LucideIcons.folder
+                          : LucideIcons.file,
+                      color: ConnectTokens.amber,
+                      size: DesignTokens.componentIconSize,
                     ),
-                ],
+                    title: Text(
+                      value(member, 'name', '文件'),
+                      style: Theme.of(sheetContext).textTheme.bodyMedium,
+                    ),
+                    subtitle: Text(
+                      transferHistoryStatus(member),
+                      style: Theme.of(sheetContext).textTheme.bodySmall,
+                    ),
+                    trailing: const Icon(
+                      LucideIcons.chevronRight,
+                      size: DesignTokens.componentIconSmallSize,
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      TransferDetailsRoute(taskId: value(member, 'id'))
+                          .push<void>(context);
+                    },
+                  );
+                },
               ),
             ),
           ],

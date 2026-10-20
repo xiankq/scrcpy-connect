@@ -137,7 +137,7 @@ Widget _remoteView(
     controller: _controller(context),
     device: device,
     existingSession: session,
-    packageName: packageName,
+    packageName: packageName ?? (session?['packageName'] as String?),
     requestKeyboard: keyboard,
     initialAction:
         action ?? (intent is RemoteLaunchIntent ? intent.action : null),

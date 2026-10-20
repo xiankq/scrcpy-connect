@@ -34,35 +34,21 @@ class SettingsPage extends HookConsumerWidget {
       ),
       children: [
         if (appSettingsError != null) StateNote('偏好尚未读取：$appSettingsError'),
-        ContentPanel(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              ActionRow(
-                icon: LucideIcons.sunMoon,
-                title: '外观',
-                onTap: () => AppearanceRoute().push<void>(context),
-              ),
-            ],
-          ),
+        ActionRow(
+          icon: LucideIcons.sunMoon,
+          title: '外观',
+          onTap: () => AppearanceRoute().push<void>(context),
         ),
         const SectionTitle('连接'),
-        ContentPanel(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              ActionRow(
-                icon: LucideIcons.radio,
-                title: '后台与连接',
-                onTap: () => BackgroundRoute().push<void>(context),
-              ),
-              ActionRow(
-                icon: LucideIcons.keyRound,
-                title: 'ADB 私钥',
-                onTap: () => const AdbIdentityRoute().push<void>(context),
-              ),
-            ],
-          ),
+        ActionRow(
+          icon: LucideIcons.radio,
+          title: '后台与连接',
+          onTap: () => BackgroundRoute().push<void>(context),
+        ),
+        ActionRow(
+          icon: LucideIcons.keyRound,
+          title: 'ADB 私钥',
+          onTap: () => const AdbIdentityRoute().push<void>(context),
         ),
         const SectionTitle('本机数据'),
         ActionRow(

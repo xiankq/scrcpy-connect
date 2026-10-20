@@ -1,17 +1,13 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
-import 'ios_pages_capture_test.dart' as captures;
 import 'support/test_controller.dart';
 
 Future<void> tapText(WidgetTester tester, String text) async {
@@ -360,84 +356,6 @@ void main() {
       expect(find.text('端口应为 1–65535 的整数'), findsOneWidget);
       expect(find.text('请输入六位配对码'), findsOneWidget);
       expect(calls, isEmpty);
-    },
-  );
-
-  testWidgets(
-    'capture four modes and narrow large-text selection and submission',
-    (tester) async {
-      final output = Platform.environment['CONNECT_ADD_CAPTURE_DIR'];
-      if (output != null) await captures.loadCaptureFonts();
-      tester.view.devicePixelRatio = 1;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-        tester.platformDispatcher.clearTextScaleFactorTestValue();
-      });
-      final boundary = GlobalKey();
-      for (final brightness in Brightness.values) {
-        for (final size in [const Size(402, 874), const Size(280, 620)]) {
-          tester.view.physicalSize = size;
-          tester.platformDispatcher.textScaleFactorTestValue = size.width < 300
-              ? 2
-              : 1;
-          final controller = createTestController(
-            (command, [params = const {}]) async =>
-                captures.fixtureRequest(command, params),
-          );
-          await tester.pumpWidget(
-            RepaintBoundary(
-              key: boundary,
-              child: TestProviderScope(
-                controller: controller,
-                child: MaterialApp(
-                  debugShowCheckedModeBanner: false,
-                  theme: captures.captureTheme(brightness),
-                  home: AddDevicePage(controller: controller),
-                ),
-              ),
-            ),
-          );
-          await tester.pumpAndSettle();
-          for (final label in ['无线配对码', '扫码配对', 'USB', 'IP连接']) {
-            await tapText(tester, label);
-            await tester.pumpAndSettle();
-            expect(find.text(label).hitTestable(), findsOneWidget);
-            expect(
-              find.byWidgetPredicate(
-                (widget) =>
-                    widget is Semantics &&
-                    widget.properties.label == label &&
-                    widget.properties.selected == true,
-              ),
-              findsOneWidget,
-            );
-            expect(tester.takeException(), isNull);
-            if (output != null) {
-              await tester.runAsync(() async {
-                final image =
-                    await (boundary.currentContext!.findRenderObject()!
-                            as RenderRepaintBoundary)
-                        .toImage();
-                final bytes = await image.toByteData(
-                  format: ui.ImageByteFormat.png,
-                );
-                await Directory('$output/${brightness.name}')
-                    .create(recursive: true);
-                await File(
-                  '$output/${brightness.name}/${size.width.toInt()}-$label.png',
-                ).writeAsBytes(bytes!.buffer.asUint8List());
-                image.dispose();
-              });
-            }
-          }
-          await tapText(tester, '连接设备');
-          await tester.pumpAndSettle();
-          expect(find.text('请输入被控手机的地址'), findsOneWidget);
-          await tester.pumpWidget(const SizedBox());
-          controller.dispose();
-        }
-      }
     },
   );
 }

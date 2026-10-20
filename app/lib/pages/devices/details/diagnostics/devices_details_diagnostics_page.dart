@@ -89,74 +89,76 @@ class DiagnosticsPage extends StatelessWidget {
                   : '检查本机授权身份，并在手机上确认授权。',
             },
           ];
-          return GroupedListView(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            children: [
-              if (!usb && value(current, 'address').isNotEmpty)
-                StateNote(
-                  '当前地址：${value(current, 'address')} · 连接端口：${value(current, 'port', '未记录')}',
-                ),
-              ContentPanel(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    for (final check in checks)
-                      ListTile(
-                        leading: Icon(
-                          check['ok'] == true
-                              ? LucideIcons.circleCheck
-                              : LucideIcons.circleAlert,
-                          size: DesignTokens.componentIconSize,
-                          color: check['ok'] == true
-                              ? ConnectTokens.mint
-                              : ConnectTokens.amber,
-                        ),
-                        title: Text(
-                          value(check, 'name'),
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        subtitle: check['ok'] == true
-                            ? null
-                            : Text(
-                                value(check, 'message'),
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                      ),
-                  ],
-                ),
+          final notes = strings(data['notes']);
+          final details = <Widget>[
+            if (!usb && value(current, 'address').isNotEmpty)
+              StateNote(
+                '当前地址：${value(current, 'address')} · 连接端口：${value(current, 'port', '未记录')}',
               ),
-              if (value(current, 'reason').isNotEmpty)
-                StateNote(value(current, 'reason')),
-              for (final note in strings(data['notes'])) StateNote(note),
-              const SizedBox(height: DesignTokens.spacingMd),
-              FilledButton(onPressed: refresh, child: const Text('重新检查')),
-              if (unauthorized)
-                TextButton(
-                  onPressed: () => AddDeviceRoute(
-                    deviceId: value(current, 'id', value(device, 'id')),
-                  ).push<void>(context),
-                  child: const Text('重新授权'),
+            for (final check in checks)
+              ListTile(
+                leading: Icon(
+                  check['ok'] == true
+                      ? LucideIcons.circleCheck
+                      : LucideIcons.circleAlert,
+                  size: DesignTokens.componentIconSize,
+                  color: check['ok'] == true
+                      ? ConnectTokens.mint
+                      : ConnectTokens.amber,
                 ),
-              const SizedBox(height: DesignTokens.spacingXs),
-              OutlinedButton(
-                onPressed: () => ConnectionFormRoute(
-                  address: value(current, 'address'),
-                  port: current['port'] == 0 ? '' : value(current, 'port'),
+                title: Text(
+                  value(check, 'name'),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                subtitle: check['ok'] == true
+                    ? null
+                    : Text(
+                        value(check, 'message'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+              ),
+            if (value(current, 'reason').isNotEmpty)
+              StateNote(value(current, 'reason')),
+          ];
+          final actions = <Widget>[
+            const SizedBox(height: DesignTokens.spacingMd),
+            FilledButton(onPressed: refresh, child: const Text('重新检查')),
+            if (unauthorized)
+              TextButton(
+                onPressed: () => AddDeviceRoute(
                   deviceId: value(current, 'id', value(device, 'id')),
                 ).push<void>(context),
-                child: const Text('编辑地址与端口'),
+                child: const Text('重新授权'),
               ),
-              if (data['usbBackendAvailable'] != false)
-                TextButton(
-                  onPressed: () => UsbGuideRoute().push<void>(context),
-                  child: const Text('改用 USB'),
-                )
-              else
-                TextButton(
-                  onPressed: () => WirelessGuideRoute().push<void>(context),
-                  child: const Text('改用无线连接'),
-                ),
-            ],
+            const SizedBox(height: DesignTokens.spacingXs),
+            OutlinedButton(
+              onPressed: () => ConnectionFormRoute(
+                address: value(current, 'address'),
+                port: current['port'] == 0 ? '' : value(current, 'port'),
+                deviceId: value(current, 'id', value(device, 'id')),
+              ).push<void>(context),
+              child: const Text('编辑地址与端口'),
+            ),
+            if (data['usbBackendAvailable'] != false)
+              TextButton(
+                onPressed: () => UsbGuideRoute().push<void>(context),
+                child: const Text('改用 USB'),
+              )
+            else
+              TextButton(
+                onPressed: () => WirelessGuideRoute().push<void>(context),
+                child: const Text('改用无线连接'),
+              ),
+          ];
+          return GroupedListView.builder(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
+            itemCount: details.length + notes.length + actions.length,
+            itemBuilder: (context, index) {
+              if (index < details.length) return details[index];
+              index -= details.length;
+              if (index < notes.length) return StateNote(notes[index]);
+              return actions[index - notes.length];
+            },
           );
         },
       ),

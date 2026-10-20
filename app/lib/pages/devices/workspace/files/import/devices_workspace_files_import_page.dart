@@ -45,131 +45,136 @@ class DocumentImportPage extends HookWidget {
             0);
     final target =
         '${destination.endsWith('/') ? destination.substring(0, destination.length - 1) : destination}/$name';
+    final errors = objects(result?['errors']);
+    final leading = <Widget>[
+      const Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: FeatureIcon(
+          LucideIcons.folderUp,
+          color: ConnectTokens.amber,
+
+          size: DesignTokens.componentFeatureIconSize,
+        ),
+      ),
+      const SizedBox(height: DesignTokens.spacingMd),
+      Text('选择要发送的文件夹', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: DesignTokens.spacingSm),
+      const Text('系统只授权读取你选择的文件夹。内容先取回本机暂存，核对后再发送到设备；保留目录结构与空目录。'),
+      const SizedBox(height: DesignTokens.spacingMd),
+      if (operation.busy) ...[
+        const LinearProgressIndicator(),
+        const StateNote('正在等待系统选择或读取实际内容…'),
+        TextButton(
+          onPressed: operation.cancelling ? null : operation.cancel,
+          child: Text(operation.cancelling ? '正在取消…' : '取消本次读取'),
+        ),
+      ],
+      if (operation.error != null)
+        StateNote(operation.error!, icon: LucideIcons.circleAlert),
+      if (result != null)
+        ContentPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                partial
+                    ? '部分内容已取回，请先核对'
+                    : result['status'] == 'imported'
+                    ? '已取回本机暂存，尚未发送'
+                    : result['status'] == 'cancelled'
+                    ? '本次选择已取消'
+                    : '尚未取得可发送内容',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              if (name.isNotEmpty) Text(name),
+              if (result['files'] is num && result['directories'] is num)
+                Text(
+                  '${result['files']} 个文件 · ${result['directories']} 个文件夹 · ${bytes(result['bytes'])}',
+                ),
+              if (result['skipped'] is num && (result['skipped'] as num) > 0)
+                Text('跳过 ${result['skipped']} 项'),
+              if (usable) Text('发送位置：$target'),
+              if (imported && !usable)
+                const StateNote('系统未提供有效的文件夹名称、路径或可发送内容，请重新选择。'),
+            ],
+          ),
+        ),
+    ];
+    final trailing = <Widget>[
+      if (partial && usable)
+        CheckboxListTile(
+          value: reviewed.value,
+          onChanged: sending.value ? null : (v) => reviewed.value = v ?? false,
+          title: const Text('我已核对，只发送已取回的内容'),
+        ),
+      if (usable)
+        FilledButton(
+          onPressed: sending.value || partial && !reviewed.value
+              ? null
+              : () async {
+                  if (!await confirm(
+                        context,
+                        '发送此文件夹？',
+                        '将“$name”发送到 ${deviceName(device)} 的 $target。同名内容逐项确认，不会自动覆盖。',
+                        action: '确认发送',
+                      ) ||
+                      !context.mounted) {
+                    return;
+                  }
+                  sending.value = true;
+                  final response = await perform(
+                    context,
+                    controller,
+                    'files.push',
+                    {
+                      'deviceId': device['id'],
+                      'items': [
+                        {'source': result!['localPath'], 'destination': target},
+                      ],
+                      'conflict': 'ask',
+                    },
+                  );
+                  if (context.mounted) {
+                    sending.value = false;
+                    if (response != null) onSubmitted();
+                  }
+                },
+          child: Text(
+            sending.value
+                ? '正在建立传输…'
+                : partial
+                ? '发送已核对的内容'
+                : '发送此文件夹',
+          ),
+        ),
+      if (!operation.busy)
+        OutlinedButton(
+          onPressed: sending.value
+              ? null
+              : () {
+                  reviewed.value = false;
+                  operation.run('documents.importDirectory', {});
+                },
+          child: Text(result == null ? '选择系统文件夹' : '重新选择文件夹'),
+        ),
+    ];
     return PageFrame(
       title: '发送本机文件夹',
-      child: GroupedListView(
+      child: GroupedListView.builder(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
-        children: [
-          const Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: FeatureIcon(
-              LucideIcons.folderUp,
-              color: ConnectTokens.amber,
-
-              size: DesignTokens.componentFeatureIconSize,
-            ),
-          ),
-          const SizedBox(height: DesignTokens.spacingMd),
-          Text('选择要发送的文件夹', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: DesignTokens.spacingSm),
-          const Text('系统只授权读取你选择的文件夹。内容先取回本机暂存，核对后再发送到设备；保留目录结构与空目录。'),
-          const SizedBox(height: DesignTokens.spacingMd),
-          if (operation.busy) ...[
-            const LinearProgressIndicator(),
-            const StateNote('正在等待系统选择或读取实际内容…'),
-            TextButton(
-              onPressed: operation.cancelling ? null : operation.cancel,
-              child: Text(operation.cancelling ? '正在取消…' : '取消本次读取'),
-            ),
-          ],
-          if (operation.error != null)
-            StateNote(operation.error!, icon: LucideIcons.circleAlert),
-          if (result != null)
-            ContentPanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    partial
-                        ? '部分内容已取回，请先核对'
-                        : result['status'] == 'imported'
-                        ? '已取回本机暂存，尚未发送'
-                        : result['status'] == 'cancelled'
-                        ? '本次选择已取消'
-                        : '尚未取得可发送内容',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  if (name.isNotEmpty) Text(name),
-                  if (result['files'] is num && result['directories'] is num)
-                    Text(
-                      '${result['files']} 个文件 · ${result['directories']} 个文件夹 · ${bytes(result['bytes'])}',
-                    ),
-                  if (result['skipped'] is num &&
-                      (result['skipped'] as num) > 0)
-                    Text('跳过 ${result['skipped']} 项'),
-                  for (final error in objects(result['errors']))
-                    StateNote(
-                      '${value(error, 'path')}：${value(error, 'message', '系统无法读取此项')}',
-                      icon: LucideIcons.circleAlert,
-                    ),
-                  if (usable) Text('发送位置：$target'),
-                  if (imported && !usable)
-                    const StateNote('系统未提供有效的文件夹名称、路径或可发送内容，请重新选择。'),
-                ],
-              ),
-            ),
-          if (partial && usable)
-            CheckboxListTile(
-              value: reviewed.value,
-              onChanged: sending.value
-                  ? null
-                  : (v) => reviewed.value = v ?? false,
-              title: const Text('我已核对，只发送已取回的内容'),
-            ),
-          if (usable)
-            FilledButton(
-              onPressed: sending.value || partial && !reviewed.value
-                  ? null
-                  : () async {
-                      if (!await confirm(
-                            context,
-                            '发送此文件夹？',
-                            '将“$name”发送到 ${deviceName(device)} 的 $target。同名内容逐项确认，不会自动覆盖。',
-                            action: '确认发送',
-                          ) ||
-                          !context.mounted) {
-                        return;
-                      }
-                      sending.value = true;
-                      final response = await perform(
-                        context,
-                        controller,
-                        'files.push',
-                        {
-                          'deviceId': device['id'],
-                          'items': [
-                            {
-                              'source': result!['localPath'],
-                              'destination': target,
-                            },
-                          ],
-                          'conflict': 'ask',
-                        },
-                      );
-                      if (context.mounted) {
-                        sending.value = false;
-                        if (response != null) onSubmitted();
-                      }
-                    },
-              child: Text(
-                sending.value
-                    ? '正在建立传输…'
-                    : partial
-                    ? '发送已核对的内容'
-                    : '发送此文件夹',
-              ),
-            ),
-          if (!operation.busy)
-            OutlinedButton(
-              onPressed: sending.value
-                  ? null
-                  : () {
-                      reviewed.value = false;
-                      operation.run('documents.importDirectory', {});
-                    },
-              child: Text(result == null ? '选择系统文件夹' : '重新选择文件夹'),
-            ),
-        ],
+        itemCount: leading.length + errors.length + trailing.length,
+        itemBuilder: (context, index) {
+          if (index < leading.length) return leading[index];
+          final errorIndex = index - leading.length;
+          if (errorIndex < errors.length) {
+            final error = errors[errorIndex];
+            return StateNote(
+              '${value(error, 'path')}：${value(error, 'message', '系统无法读取此项')}',
+              icon: LucideIcons.circleAlert,
+            );
+          }
+          return trailing[errorIndex - errors.length];
+        },
       ),
     );
   }
