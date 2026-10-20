@@ -69,7 +69,7 @@ impl Runtime {
             }
             Err(e) => return Err(e.into()),
         };
-        let fingerprint = format!("{:x}", Sha256::digest(identity.public_key("interop")?));
+        let fingerprint = hex::encode(Sha256::digest(identity.public_key("interop")?));
         let mut store = match fs::read(root.join("devices.json")).await {
             Ok(bytes) => serde_json::from_slice::<Store>(&bytes)?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Store {

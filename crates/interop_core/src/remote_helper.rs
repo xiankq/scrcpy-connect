@@ -64,7 +64,7 @@ fn artifact(abis: &str) -> CoreResult<(&'static [u8], String)> {
     for abi in abis.split(|c: char| c == ',' || c.is_ascii_whitespace()) {
         if matches!(abi, "arm64-v8a" | "armeabi-v7a" | "x86_64" | "x86") {
             let bytes = crate::bundled_servers::get(abi)?;
-            let hash = format!("{:x}", Sha256::digest(bytes));
+            let hash = hex::encode(Sha256::digest(bytes));
             return Ok((bytes, hash));
         }
     }
@@ -1023,7 +1023,7 @@ printf() {{ return 127; }}
         for (path, bytes) in sources {
             assert_eq!(
                 manifest["sources"][path],
-                format!("{:x}", Sha256::digest(bytes)),
+                hex::encode(Sha256::digest(bytes)),
                 "rebuild helper after editing {path}"
             );
         }
@@ -1056,7 +1056,7 @@ printf() {{ return 127; }}
             ] {
                 let (bytes, hash) = artifact(&abis).unwrap();
                 assert_eq!(bytes, original, "wrong deployment for {abis}");
-                assert_eq!(hash, format!("{:x}", Sha256::digest(original)));
+                assert_eq!(hash, hex::encode(Sha256::digest(original)));
             }
         }
         for abis in ["", "unknown", "arm64", "x86_64extra"] {

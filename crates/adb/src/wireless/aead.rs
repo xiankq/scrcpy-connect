@@ -9,8 +9,8 @@
 
 use std::vec::Vec;
 
+use aes_gcm::Aes128Gcm;
 use aes_gcm::aead::{Aead, KeyInit, Payload};
-use aes_gcm::{Aes128Gcm, Key, Nonce};
 use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::Zeroizing;
@@ -28,10 +28,8 @@ pub(crate) const TAG_LEN: usize = 16;
 /// The cipher for one pairing session. Each direction counts its
 /// own nonces from zero, as the peer does.
 ///
-/// Dropping it wipes the AES key schedule, but not the GHASH subkey.
-/// `polyval`, which holds that, clears it only with a feature of its
-/// own, and on x86 not even then: there its state sits behind
-/// `ManuallyDrop` so that the backend can be picked at run time.
+/// Dropping it wipes the AES key schedule and GHASH state through the
+/// enabled `aes-gcm/zeroize` feature.
 pub(crate) struct Cipher {
     key: Aes128Gcm,
     encrypt_counter: u64,
@@ -48,7 +46,7 @@ impl Cipher {
             .expect("HKDF-SHA256 stretches to 8160 bytes, and the key is 16");
         Self {
             // By reference: `into()` would leave an unwiped copy behind.
-            key: Aes128Gcm::new(Key::<Aes128Gcm>::from_slice(key.as_ref())),
+            key: Aes128Gcm::new_from_slice(key.as_ref()).expect("AES-128 uses a 16-byte key"),
             encrypt_counter: 0,
             decrypt_counter: 0,
         }
@@ -68,7 +66,7 @@ impl Cipher {
         let sealed = self
             .key
             .encrypt(
-                Nonce::from_slice(&nonce),
+                (&nonce).into(),
                 Payload {
                     msg: plaintext,
                     aad: &[],
@@ -88,7 +86,7 @@ impl Cipher {
         let opened = self
             .key
             .decrypt(
-                Nonce::from_slice(&nonce),
+                (&nonce).into(),
                 Payload {
                     msg: ciphertext,
                     aad: &[],
@@ -106,11 +104,11 @@ mod tests {
 
     #[test]
     fn the_key_schedule_wipes_itself_on_drop() {
-        // `aes` clears its round keys only with its own `zeroize`
-        // feature, and `aes-gcm` has no switch that turns it on. A
-        // build without it still pairs, and leaves the key behind.
+        // The AES-GCM zeroize feature must clear both the round keys and
+        // the authentication state when the pairing session is dropped.
         fn wiped_on_drop<T: zeroize::ZeroizeOnDrop>() {}
         wiped_on_drop::<aes::Aes128>();
+        wiped_on_drop::<Aes128Gcm>();
     }
 
     fn pair() -> (Cipher, Cipher) {

@@ -345,10 +345,7 @@ fn thumbnail_claim(key: &str, cancelled: bool) -> CoreResult<bool> {
 }
 fn thumbnail_identity(root: &Path, device: &str, operation: &str) -> (String, String) {
     let active = format!("thumbnail:{device}:{operation}");
-    let seen = format!(
-        "{:x}",
-        Sha256::digest(format!("{}:{active}", root.display()))
-    );
+    let seen = hex::encode(Sha256::digest(format!("{}:{active}", root.display())));
     (active, seen)
 }
 struct ThumbnailOperation {
@@ -412,7 +409,7 @@ async fn file_digest(path: &Path) -> CoreResult<String> {
         }
         hash.update(&buffer[..n]);
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(hex::encode(hash.finalize()))
 }
 
 struct ProgressIo<T> {
@@ -1879,14 +1876,13 @@ impl Runtime {
             self.root.display()
         ))?;
         let _guard = gate.lock().await;
-        let key = format!(
-            "{:x}",
-            Sha256::digest(format!("thumbnail-v1\0{device}\0{path}\0{max_size}"))
-        );
+        let key = hex::encode(Sha256::digest(format!(
+            "thumbnail-v1\0{device}\0{path}\0{max_size}"
+        )));
         let params = json!({"deviceId":device,"path":path,"kind":kind,"maxSize":max_size,"ownerOperationId":operation});
         let before = Box::pin(self.thumbnail_rpc("media.stat", params.clone(), phase)).await?;
         let source = ThumbnailSource::parse(&before["sourceStamp"])?;
-        let version = format!("{:x}", Sha256::digest(serde_json::to_vec(&source)?));
+        let version = hex::encode(Sha256::digest(serde_json::to_vec(&source)?));
         let cache = self
             .root
             .join("media")
@@ -1923,7 +1919,7 @@ impl Runtime {
                 .await
                 .is_ok_and(|meta| meta.is_file() && meta.len() == cached.jpeg_bytes)
                 && let Ok(bytes) = fs::read(&target).await
-                && format!("{:x}", Sha256::digest(&bytes)) == cached.sha256
+                && hex::encode(Sha256::digest(&bytes)) == cached.sha256
                 && jpeg_dimensions(&bytes).is_ok_and(|dimensions| {
                     dimensions == (cached.width, cached.height)
                         && dimensions.0 <= max_size
@@ -1963,7 +1959,7 @@ impl Runtime {
         let jpeg = base64::engine::general_purpose::STANDARD
             .decode(encoded)
             .map_err(|_| CoreError::new("invalid_thumbnail", "缩略图编码无效。"))?;
-        let sha256 = format!("{:x}", Sha256::digest(&jpeg));
+        let sha256 = hex::encode(Sha256::digest(&jpeg));
         let (width, height) = jpeg_dimensions(&jpeg)?;
         if jpeg.len() > MAX_THUMBNAIL
             || response["sha256"] != sha256
@@ -2014,7 +2010,7 @@ impl Runtime {
         let path = remote_path(required(p, "path")?)?;
         let id = required(p, "deviceId")?;
         let client = self.client(id).await?;
-        let key = format!("{:x}", Sha256::digest(format!("{id}\0{path}")));
+        let key = hex::encode(Sha256::digest(format!("{id}\0{path}")));
         let lock = cache_lock(&format!("{}:{key}", self.root.display()))?;
         let _guard = lock.lock().await;
         let cache = self.root.join("media");
@@ -2036,7 +2032,7 @@ impl Runtime {
         }
         // Version the artifact by the observed source stamp, and use a fresh
         // filename on repair. An existing player's file is never replaced.
-        let version = format!("{:x}", Sha256::digest(serde_json::to_vec(&source)?));
+        let version = hex::encode(Sha256::digest(serde_json::to_vec(&source)?));
         let cache = cache.join(format!("{key}-{version}"));
         let lookup = self.cache_writer(cache.clone(), 0).await?;
         fs::create_dir_all(&cache).await?;

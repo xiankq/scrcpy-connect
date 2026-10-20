@@ -4,7 +4,7 @@ use interop_adb::{
     CancellationToken, Client, ConnectOptions, Error, OperationOptions,
     sync::{Compression, RemotePath},
 };
-use rand::{RngCore, SeedableRng};
+use rand::{Rng, SeedableRng};
 use std::time::Duration;
 
 #[tokio::test]

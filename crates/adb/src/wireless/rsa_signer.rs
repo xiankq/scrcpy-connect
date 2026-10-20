@@ -2,6 +2,7 @@
 //! The upstream experimental provider uses unblinded `rsa::pss::SigningKey`.
 //! All mathematics remains in the pinned RustCrypto RSA implementation. Blinding
 //! does not resolve that implementation's outstanding timing-security advisory.
+use rsa::sha2::{Sha256, Sha384, Sha512};
 use rsa::{
     RsaPrivateKey,
     pkcs8::DecodePrivateKey,
@@ -14,7 +15,6 @@ use rustls::{
     pki_types::PrivateKeyDer,
     sign::{Signer, SigningKey},
 };
-use sha2::{Sha256, Sha384, Sha512};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -71,7 +71,7 @@ impl std::fmt::Debug for BlindedRsaSigner {
 }
 impl Signer for BlindedRsaSigner {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
-        let mut rng = rand::rngs::OsRng;
+        let mut rng = rsa::rand_core::OsRng;
         let result = match self.scheme {
             SignatureScheme::RSA_PSS_SHA256 => {
                 BlindedSigningKey::<Sha256>::new((*self.key).clone())

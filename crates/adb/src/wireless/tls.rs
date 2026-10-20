@@ -39,7 +39,7 @@ impl TlsConfig {
         let key =
             RsaPrivateKey::from_pkcs8_pem(&pem).map_err(|e| Error::Identity(e.to_string()))?;
         let certificate = CertificateDer::from(
-            super::cert::build(&key, &mut rand::rngs::OsRng)
+            super::cert::build(&key, &mut rsa::rand_core::OsRng)
                 .map_err(|e| Error::Identity(e.to_string()))?,
         );
         let private = key

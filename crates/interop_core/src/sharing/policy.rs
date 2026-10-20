@@ -793,7 +793,7 @@ fn request_fingerprint(request: &Value) -> Value {
     }
     let mut hasher = Sha256::new();
     visit(&mut hasher, request);
-    json!(format!("sha256:{:x}", hasher.finalize()))
+    json!(format!("sha256:{}", hex::encode(hasher.finalize())))
 }
 fn bounded_read(path: &Path, limit: u64) -> CoreResult<Vec<u8>> {
     let meta = fs::symlink_metadata(path)?;

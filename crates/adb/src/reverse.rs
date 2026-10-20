@@ -1,7 +1,7 @@
 //! Device-side reverse listeners plus an allowlisted host TCP bridge. This is
 //! the adbd `reverse:` protocol, not adb server's host:forward protocol.
 use crate::{Client, Error, OperationOptions, Result, error::bounded};
-use rand::RngCore;
+use rsa::rand_core::RngCore;
 use std::{collections::HashMap, net::SocketAddr, sync::Mutex, time::Duration};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -203,7 +203,7 @@ impl Client {
         })
         .await?;
         let mut random = [0; 16];
-        rand::rngs::OsRng.fill_bytes(&mut random);
+        rsa::rand_core::OsRng.fill_bytes(&mut random);
         let token = format!(
             "localabstract:interop-reverse-{}",
             random

@@ -71,7 +71,7 @@ fn verify(entry: &Artifact, bytes: &[u8]) -> CoreResult<()> {
     if bytes.len() != entry.size {
         return Err(integrity(&entry.id, "长度不符。"));
     }
-    if format!("{:x}", Sha256::digest(bytes)) != entry.sha256 {
+    if hex::encode(Sha256::digest(bytes)) != entry.sha256 {
         return Err(integrity(&entry.id, "SHA-256 不符。"));
     }
     Ok(())

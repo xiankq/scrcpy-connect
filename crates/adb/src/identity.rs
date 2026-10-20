@@ -21,7 +21,7 @@ impl std::fmt::Debug for Identity {
 
 impl Identity {
     pub fn generate() -> Result<Self> {
-        RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048)
+        RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048)
             .map(|key| Self { key })
             .map_err(|e| Error::Identity(e.to_string()))
     }
@@ -54,7 +54,7 @@ impl Identity {
         }
         self.key
             .sign_with_rng(
-                &mut rand::rngs::OsRng,
+                &mut rsa::rand_core::OsRng,
                 Pkcs1v15Sign::new::<sha1::Sha1>(),
                 token,
             )
