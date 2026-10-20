@@ -11,6 +11,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 class ConnectApp extends HookConsumerWidget {
   const ConnectApp({super.key});
@@ -250,6 +251,15 @@ class ConnectApp extends HookConsumerWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: mode,
+      builder: (context, child) => liquid.GlassTheme(
+        data: GlassMaterial.theme(context),
+        child: liquid.GlassAccessibilityScope(
+          reduceTransparency:
+              MediaQuery.highContrastOf(context) ||
+              liquid.GlassAccessibilityData.of(context).reduceTransparency,
+          child: child!,
+        ),
+      ),
     );
   }
 }

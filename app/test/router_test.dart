@@ -203,7 +203,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('设置').last);
+      await tester.tap(find.text('设置').hitTestable().first);
       await tester.pumpAndSettle();
       expect(find.text('外观'), findsOneWidget);
       await tester.restartAndRestore();
@@ -243,10 +243,10 @@ void main() {
       expect(router.routeInformationProvider.value.uri.path, '/devices');
       expect(find.text('路由测试手机'), findsOneWidget);
       await tester.enterText(find.byType(TextField), '保留搜索');
-      await tester.tap(find.text('传输').last);
+      await tester.tap(find.text('传输').hitTestable().first);
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/transfers');
-      await tester.tap(find.text('设置').last);
+      await tester.tap(find.text('设置').hitTestable().first);
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/settings');
       await tester.binding.handlePopRoute();

@@ -28,6 +28,8 @@ dart tool/generate.dart --check
 
 应用运行、构建和 Flutter 测试在 `app/` 执行。主机驱动保留在 `tool/driver/`，性能基准入口保留在 `tool/benchmark/`；从 `app/` 运行时显式指定 `--driver=../tool/driver/<入口>.dart` 与 `--target=../tool/benchmark/<入口>.dart`。仓库工具、生成命令与 CI 编排入口仍从仓库根执行，工具负责将 Flutter 子进程的工作目录设为 `app/`。普通 APK 输出位于 `app/build/app/outputs/flutter-apk/`。
 
+本机 Linux/X11 的玻璃成像回归使用 `dart tool/glass_emulator.dart --avd <名称>` 启动既有 AVD；该入口固定已验证的 host GL 配置并清除图形覆盖环境，不创建或清空设备。Emulator 37.2.12 原生崩溃证据、display 参数、实际 Mesa 软件 renderer 及适用边界见[组件运行记录](glass-components-2026-10-20.md#模拟器崩溃定位与运行配置)。
+
 `dart tool/android.dart build` 默认构建 ARM32、ARM64、x86_64 通用 release APK，并压缩包内原生库，以下载体积为优先。Android 安装时会解压匹配架构的库，需将下载大小与安装后的总占用分别衡量。`--no-compress-native` 保留库在 APK 中直接加载，`--abi` 可用于特定架构分析；这些对照构建不能替代通用交付包。
 
 仓库自有生成、构建、诊断及主机测试编排统一使用 Dart；服务端构建器随其产物保存在 `servers/`，其余入口在 `tool/`。工具回归使用同一锁定的 `flutter_test`，不另建测试依赖环境。Node 仅用于官方 DESIGN.md 解析及其 Dart emitter；原生源码和系统构建器保持平台要求的语言。第三方来源归档内的上游脚本不属于自有工具，不改写归档以消除文件扩展名。

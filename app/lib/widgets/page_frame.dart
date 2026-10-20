@@ -107,6 +107,8 @@ class _PageFrameState extends State<PageFrame> {
               ].contains(router.routeInformationProvider.value.uri.path));
       final toolbarHeight = _toolbarHeight(context, constraints);
       final top = MediaQuery.paddingOf(context).top + toolbarHeight;
+      final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
+      final reduceMotion = GlassMaterial.reduceMotion(context);
       final appBar = AppBar(
         toolbarHeight: toolbarHeight,
         backgroundColor: Colors.transparent,
@@ -122,11 +124,21 @@ class _PageFrameState extends State<PageFrame> {
             ? Padding(
                 padding: const EdgeInsets.only(left: DesignTokens.spacingMd),
                 child: Center(
-                  child: GlassIconButton(
-                    tooltip: MaterialLocalizations.of(context)
-                        .backButtonTooltip,
-                    onPressed: () => closePage<void>(context),
-                    icon: const Icon(LucideIcons.chevronLeft),
+                  child: GlassTooltip(
+                    message: backLabel,
+                    child: GlassIconButton(
+                      semanticLabel: backLabel,
+                      size: DesignTokens.componentIconButtonSize,
+                      iconSize: DesignTokens.componentIconSize,
+                      settings: GlassMaterial.settings(context),
+                      quality: GlassMaterial.quality(context),
+                      interactionScale: reduceMotion
+                          ? 1
+                          : DesignTokens.componentGlassInteractionScale,
+                      anchorStretch: !reduceMotion,
+                      onPressed: () => closePage<void>(context),
+                      icon: const Icon(LucideIcons.chevronLeft),
+                    ),
                   ),
                 ),
               )

@@ -254,6 +254,7 @@
           "x": 988,
           "y": 152,
           "name": "组件 / 悬浮导航",
+          "context": "Flutter现成GlassTabBar.bottom：静止为glass-selected淡色面；按压/横向拖动由组件内部局部液态镜片响应，释放后归位。currentIndex由导航宿主控制。整栏外不再包Glass；子项不各建玻璃或重复阴影。减少动态/降低透明度见材料板与系统偏好。",
           "reusable": true,
           "width": 354,
           "height": 64,
@@ -302,6 +303,7 @@
               "type": "frame",
               "id": "fQuah",
               "name": "设备",
+              "context": "静止选中面；不是常驻独立玻璃。按压和拖动时可由现成导航内部局部镜片承载交互反馈。",
               "width": "fill_container",
               "height": "fill_container",
               "fill": "$glass-selected",
@@ -4533,6 +4535,7 @@
           },
           "padding": 8,
           "layoutPosition": "absolute",
+          "context": "引用Ffm0s的静止代表状态。内部按压/拖动镜片见材料与交互板；真实选择由宿主currentIndex控制。辅助偏好按本实例实体分支与运行状态核验。",
           "descendants": {
             "fQuah": {
               "fill": "$glass-selected",
@@ -8681,6 +8684,7 @@
           "height": 64,
           "padding": 8,
           "layoutPosition": "absolute",
+          "context": "引用Ffm0s的静止代表状态。内部按压/拖动镜片见材料与交互板；真实选择由宿主currentIndex控制。辅助偏好按本实例实体分支与运行状态核验。",
           "descendants": {
             "fQuah": {
               "fill": "$transparent",
@@ -10858,6 +10862,7 @@
           "height": 64,
           "padding": 8,
           "layoutPosition": "absolute",
+          "context": "引用Ffm0s的静止代表状态。内部按压/拖动镜片见材料与交互板；真实选择由宿主currentIndex控制。辅助偏好按本实例实体分支与运行状态核验。",
           "descendants": {
             "fQuah": {
               "fill": "$transparent",
@@ -30615,6 +30620,7 @@
                     "blur": "$glass-shadowBlur"
                   },
                   "padding": "$space-xs",
+                  "context": "引用Ffm0s的静止代表状态。内部按压/拖动镜片见材料与交互板；真实选择由宿主currentIndex控制。辅助偏好按本实例实体分支与运行状态核验。",
                   "descendants": {
                     "fQuah": {
                       "fill": "$glass-selected",
@@ -30772,13 +30778,15 @@
                   "strokeWidth": "$space-hairline",
                   "strokeAlignment": "inner",
                   "padding": "$space-xs",
+                  "context": "引用Ffm0s的静止代表状态。内部按压/拖动镜片见材料与交互板；真实选择由宿主currentIndex控制。辅助偏好按本实例实体分支与运行状态核验。",
                   "descendants": {
                     "fQuah": {
-                      "fill": "$glass-selected",
+                      "fill": "$tint",
                       "stroke": "$transparent",
                       "layout": "vertical",
                       "gap": "$space-micro",
-                      "height": "fill_container"
+                      "height": "fill_container",
+                      "context": "降低透明度：使用现有中性实体tint，不依赖半透明选中面。"
                     },
                     "jXXaF": {
                       "fill": "$primary",
@@ -38808,7 +38816,8 @@
                       "height": 64,
                       "layoutPosition": "absolute",
                       "x": 16,
-                      "y": 278
+                      "y": 278,
+                      "context": "引用Ffm0s的静止代表状态。内部按压/拖动镜片见材料与交互板；真实选择由宿主currentIndex控制。辅助偏好按本实例实体分支与运行状态核验。"
                     },
                     {
                       "type": "frame",
@@ -39193,7 +39202,14 @@
                       "fill": "$surface",
                       "effect": [],
                       "stroke": "$outline",
-                      "strokeWidth": 1
+                      "strokeWidth": 1,
+                      "context": "引用Ffm0s的静止代表状态。内部按压/拖动镜片见材料与交互板；真实选择由宿主currentIndex控制。辅助偏好按本实例实体分支与运行状态核验。",
+                      "descendants": {
+                        "fQuah": {
+                          "fill": "$tint",
+                          "context": "降低透明度：使用现有中性实体tint，不挂载局部光学镜片。"
+                        }
+                      }
                     },
                     {
                       "type": "frame",
@@ -39430,6 +39446,228 @@
                   "fontFamily": "$font-caption",
                   "fontSize": "$size-caption",
                   "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "N70xWl",
+          "name": "底部导航 / 静止、按压与拖动",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "p3bT4",
+              "name": "静止 / 淡色选中",
+              "width": 370,
+              "fill": "$canvas",
+              "cornerRadius": "$radius-lg",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "JCYL1",
+                  "name": "静止 / 淡色选中标题",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "静止 / 淡色选中",
+                  "fontFamily": "$font-heading",
+                  "fontSize": "$size-heading",
+                  "fontWeight": "$weight-heading"
+                },
+                {
+                  "id": "imM4A",
+                  "type": "ref",
+                  "ref": "Ffm0s",
+                  "name": "静止 / 淡色选中导航",
+                  "width": "fill_container",
+                  "height": 64,
+                  "context": "同一现成导航的静态交互意图，不证明GPU或连续动态通过。"
+                },
+                {
+                  "type": "text",
+                  "id": "JYWn2",
+                  "name": "静止 / 淡色选中说明",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "当前设备目的地使用淡色选中面。整栏由现成组件承载，不再外包玻璃。",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "dpTfr",
+              "name": "按压 / 内部局部镜片",
+              "width": 370,
+              "fill": "$canvas",
+              "cornerRadius": "$radius-lg",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ySHG3",
+                  "name": "按压 / 内部局部镜片标题",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "按压 / 内部局部镜片",
+                  "fontFamily": "$font-heading",
+                  "fontSize": "$size-heading",
+                  "fontWeight": "$weight-heading"
+                },
+                {
+                  "id": "IhBFe",
+                  "type": "ref",
+                  "ref": "Ffm0s",
+                  "name": "按压 / 内部局部镜片导航",
+                  "width": "fill_container",
+                  "height": 64,
+                  "context": "同一现成导航的静态交互意图，不证明GPU或连续动态通过。",
+                  "descendants": {
+                    "fQuah": {
+                      "fill": {
+                        "type": "shader",
+                        "enabled": true,
+                        "url": "assets/liquid-glass.glsl",
+                        "uniforms": {
+                          "u_ior": "$glass-refractionIndex",
+                          "u_refractionWidth": "$glass-refractionWidth",
+                          "u_blur": "$glass-clear-blur",
+                          "u_tint": "$glass-clear",
+                          "u_edgeLight": "$glass-edge",
+                          "u_specularThickness": "$glass-specularThickness",
+                          "u_specularSharpness": "$glass-specularSharpness",
+                          "u_specularAngle": "$glass-angle",
+                          "u_specularSpread": "$glass-specularSpread",
+                          "u_specularIntensity": "$glass-specularIntensity",
+                          "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                          "u_glowThickness": "$glass-glowThickness",
+                          "u_glowAngle": "$glass-glowAngle",
+                          "u_glowSpread": "$glass-glowSpread",
+                          "u_glowIntensity": "$glass-glowIntensity",
+                          "u_glowOppositeIntensity": "$glass-glowOppositeIntensity",
+                          "u_opticalDepth": "$glass-opticalDepth"
+                        }
+                      },
+                      "effect": [],
+                      "context": "现成导航内部采用clear交互镜片；这里只沿用既有clear token表达静态意图，无额外阴影。"
+                    }
+                  }
+                },
+                {
+                  "type": "text",
+                  "id": "IxIwo",
+                  "name": "按压 / 内部局部镜片说明",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "镜片在按压时出现并响应触点；这里只表达静态目标，形变与归位需运行核验。",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "j70oXL",
+              "name": "拖动 / 镜片跟随目的地",
+              "width": 370,
+              "fill": "$canvas",
+              "cornerRadius": "$radius-lg",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "mOtoU",
+                  "name": "拖动 / 镜片跟随目的地标题",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "拖动 / 镜片跟随目的地",
+                  "fontFamily": "$font-heading",
+                  "fontSize": "$size-heading",
+                  "fontWeight": "$weight-heading"
+                },
+                {
+                  "id": "ZJSuG",
+                  "type": "ref",
+                  "ref": "Ffm0s",
+                  "name": "拖动 / 镜片跟随目的地导航",
+                  "width": "fill_container",
+                  "height": 64,
+                  "context": "同一现成导航的静态交互意图，不证明GPU或连续动态通过。",
+                  "descendants": {
+                    "fQuah": {
+                      "fill": "$transparent"
+                    },
+                    "jXXaF": {
+                      "fill": "$secondary"
+                    },
+                    "WyQbC": {
+                      "fill": "$secondary"
+                    },
+                    "Kf0bo": {
+                      "fill": {
+                        "type": "shader",
+                        "enabled": true,
+                        "url": "assets/liquid-glass.glsl",
+                        "uniforms": {
+                          "u_ior": "$glass-refractionIndex",
+                          "u_refractionWidth": "$glass-refractionWidth",
+                          "u_blur": "$glass-clear-blur",
+                          "u_tint": "$glass-clear",
+                          "u_edgeLight": "$glass-edge",
+                          "u_specularThickness": "$glass-specularThickness",
+                          "u_specularSharpness": "$glass-specularSharpness",
+                          "u_specularAngle": "$glass-angle",
+                          "u_specularSpread": "$glass-specularSpread",
+                          "u_specularIntensity": "$glass-specularIntensity",
+                          "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                          "u_glowThickness": "$glass-glowThickness",
+                          "u_glowAngle": "$glass-glowAngle",
+                          "u_glowSpread": "$glass-glowSpread",
+                          "u_glowIntensity": "$glass-glowIntensity",
+                          "u_glowOppositeIntensity": "$glass-glowOppositeIntensity",
+                          "u_opticalDepth": "$glass-opticalDepth"
+                        }
+                      },
+                      "effect": [],
+                      "context": "现成导航内部采用clear交互镜片；这里只沿用既有clear token表达静态意图，无额外阴影。"
+                    },
+                    "WanPn": {
+                      "fill": "$primary"
+                    },
+                    "MetC5": {
+                      "fill": "$primary"
+                    }
+                  }
+                },
+                {
+                  "type": "text",
+                  "id": "BaRDQ",
+                  "name": "拖动 / 镜片跟随目的地说明",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "横向拖动镜片到传输；宿主接纳切换后更新选中项，拒绝时回到当前目的地。",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
                 }
               ]
             }

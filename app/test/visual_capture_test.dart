@@ -107,7 +107,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('设置'));
+    await tester.tap(find.text('设置').hitTestable().first);
     await tester.pumpAndSettle();
     await capture('settings');
     await tester.tap(find.text('外观'));

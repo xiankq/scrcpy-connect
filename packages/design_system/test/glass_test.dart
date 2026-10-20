@@ -2,12 +2,60 @@ import 'dart:ui';
 
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
+import 'support/official_glass_controls.dart';
+
 void main() {
+  testWidgets('official icon drag stays still when motion is reduced', (
+    tester,
+  ) async {
+    for (final reduced in [false, true]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(reduced),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: reduced),
+            child: Builder(
+              builder: (context) => liquid.GlassTheme(
+                data: GlassMaterial.theme(context),
+                child: child!,
+              ),
+            ),
+          ),
+          home: Builder(
+            builder: (context) => Center(
+              child: GlassIconButton(
+                icon: const Icon(Icons.arrow_back),
+                semanticLabel: '返回',
+                onPressed: () {},
+                useOwnLayer: true,
+                anchorStretch: false,
+                interactionScale: 1,
+                settings: GlassMaterial.settings(context),
+                quality: GlassMaterial.quality(context),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final icon = find.byIcon(Icons.arrow_back);
+      final rest = tester.getCenter(icon);
+      final gesture = await tester.startGesture(rest);
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump(const Duration(milliseconds: 100));
+      final distance = (tester.getCenter(icon) - rest).distance;
+      expect(distance, reduced ? closeTo(0, .01) : greaterThan(.5));
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+  });
   test('clear uses direct tint while regular preserves adaptive luminance', () {
     for (final brightness in Brightness.values) {
       expect(
@@ -338,21 +386,25 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Center(
-          child: GlassIconButton(
-            icon: const Icon(Icons.add),
-            tooltip: '添加',
-            onPressed: () {},
+          child: Builder(
+            builder: (context) => officialGlassIconButton(
+              context,
+              icon: const Icon(Icons.add),
+              label: '添加',
+              onPressed: () {},
+            ),
           ),
         ),
       ),
     );
-    expect(tester.getSize(find.byType(Glass)), const Size(44, 44));
+    expect(tester.getSize(find.byType(GlassIconButton)), const Size(44, 44));
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
     'floating navigation keeps its standard height and grows for large text',
     (tester) async {
+      final semantics = tester.ensureSemantics();
       var selected = 0;
       for (final brightness in Brightness.values) {
         for (final scale in [1.0, 2.0]) {
@@ -364,14 +416,12 @@ void main() {
                 child: Center(
                   child: SizedBox(
                     width: 280,
-                    child: GlassTabBar(
-                      destinations: const [
-                        GlassDestination(icon: Icons.devices, label: '设备'),
-                        GlassDestination(icon: Icons.swap_vert, label: '传输'),
-                        GlassDestination(icon: Icons.settings, label: '设置'),
-                      ],
-                      selectedIndex: selected,
-                      onSelected: (index) => selected = index,
+                    child: Builder(
+                      builder: (context) => officialGlassNavigation(
+                        context,
+                        selectedIndex: selected,
+                        onTabSelected: (index) => selected = index,
+                      ),
                     ),
                   ),
                 ),
@@ -384,18 +434,16 @@ void main() {
               .height;
           expect(navigationHeight, scale == 1 ? 64 : greaterThan(64));
           for (final label in ['设备', '传输', '设置']) {
-            final button = find.ancestor(
-              of: find.text(label),
-              matching: find.byType(CupertinoButton),
-            );
+            final button = find.bySemanticsLabel(label);
             final size = tester.getSize(button);
             expect(size.width, greaterThanOrEqualTo(44));
             expect(size.height, greaterThanOrEqualTo(44));
           }
-          await tester.tap(find.text('传输'));
+          await tester.tap(find.bySemanticsLabel('传输'));
           expect(selected, 1);
         }
       }
+      semantics.dispose();
     },
   );
 
@@ -456,20 +504,23 @@ void main() {
           home: GlassPreferences(
             reduceTransparency: true,
             child: Center(
-              child: GlassIconButton(
-                icon: const Icon(Icons.close),
-                tooltip: '退出控制',
-                onPressed: () => activations++,
+              child: Builder(
+                builder: (context) => officialGlassIconButton(
+                  context,
+                  icon: const Icon(Icons.close),
+                  label: '退出控制',
+                  onPressed: () => activations++,
+                ),
               ),
             ),
           ),
         ),
       );
       expect(find.byTooltip('退出控制'), findsOneWidget);
-      final size = tester.getSize(find.byType(CupertinoButton));
+      final size = tester.getSize(find.byType(GlassIconButton));
       expect(size.width, greaterThanOrEqualTo(44));
       expect(size.height, greaterThanOrEqualTo(44));
-      await tester.tap(find.byType(CupertinoButton));
+      await tester.tap(find.byType(GlassIconButton));
       expect(activations, 1);
       expect(find.byType(BackdropFilter), findsNothing);
       semantics.dispose();
@@ -627,9 +678,10 @@ void main() {
           builder: (context, setState) {
             rebuild = setState;
             return Center(
-              child: GlassIconButton(
+              child: officialGlassIconButton(
+                context,
                 icon: const Icon(Icons.add),
-                tooltip: '添加',
+                label: '添加',
                 onPressed: enabled ? () => activations++ : null,
               ),
             );
@@ -682,14 +734,13 @@ void main() {
               child: Center(
                 child: SizedBox(
                   width: 280,
-                  child: GlassTabBar(
-                    destinations: const [
-                      GlassDestination(icon: Icons.devices, label: '设备'),
-                      GlassDestination(icon: Icons.swap_vert, label: '传输'),
-                      GlassDestination(icon: Icons.settings, label: '设置'),
-                    ],
-                    selectedIndex: selected,
-                    onSelected: (index) => setState(() => selected = index),
+                  child: Builder(
+                    builder: (context) => officialGlassNavigation(
+                      context,
+                      selectedIndex: selected,
+                      onTabSelected: (index) =>
+                          setState(() => selected = index),
+                    ),
                   ),
                 ),
               ),
@@ -698,31 +749,28 @@ void main() {
         ),
       ),
     );
-    final indicator = find.byKey(const ValueKey('glass-navigation-selection'));
-    final initial = tester.getRect(indicator);
-    await tester.tap(find.text('设置'));
+    final indicator = find.byType(liquid.AnimatedGlassIndicator).first;
+    double alignment() => tester
+        .widget<liquid.AnimatedGlassIndicator>(indicator)
+        .alignment
+        .resolve(TextDirection.ltr)
+        .x;
+    final initial = alignment();
+    final bar = tester.getRect(find.byType(GlassTabBar));
+    await tester.tapAt(Offset(bar.left + bar.width * 5 / 6, bar.center.dy));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 64));
-    final moving = tester.getRect(indicator);
-    expect(moving.left, greaterThan(initial.left));
-    expect(
-      moving.right,
-      lessThan(tester.getRect(find.byType(GlassTabBar)).right),
-    );
-    await tester.tap(find.text('传输'));
+    final moving = alignment();
+    expect(moving, greaterThan(initial));
+    expect(moving, lessThan(1));
+    await tester.tapAt(bar.center);
     await tester.pump();
-    expect(tester.getRect(indicator).left, closeTo(moving.left, .01));
+    expect(alignment(), closeTo(moving, .01));
     update(() => reduced = true);
     await tester.pump();
-    final destination = tester.getRect(
-      find.ancestor(
-        of: find.text('传输'),
-        matching: find.byType(CupertinoButton),
-      ),
-    );
-    expect(tester.getRect(indicator).left, closeTo(destination.left, .01));
+    expect(alignment(), closeTo(0, .01));
     await tester.pump(const Duration(seconds: 1));
-    expect(tester.getRect(indicator).left, closeTo(destination.left, .01));
+    expect(alignment(), closeTo(0, .01));
     expect(tester.takeException(), isNull);
   });
 

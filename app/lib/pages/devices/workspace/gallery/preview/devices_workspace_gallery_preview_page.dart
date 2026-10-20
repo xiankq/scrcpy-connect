@@ -188,12 +188,30 @@ class MediaPreviewPage extends HookWidget {
                         variant: GlassVariant.clear,
                         child: Row(
                           children: [
-                            GlassIconButton(
-                              variant: GlassVariant.clear,
-                              tooltip: MaterialLocalizations.of(context)
+                            GlassTooltip(
+                              message: MaterialLocalizations.of(context)
                                   .backButtonTooltip,
-                              onPressed: () => closePage<void>(context),
-                              icon: const Icon(LucideIcons.chevronLeft),
+                              child: GlassIconButton(
+                                semanticLabel: MaterialLocalizations.of(context)
+                                    .backButtonTooltip,
+                                size: DesignTokens.componentIconButtonSize,
+                                iconSize: DesignTokens.componentIconSize,
+                                settings: GlassMaterial.settings(
+                                  context,
+                                  variant: GlassVariant.clear,
+                                ),
+                                quality: GlassMaterial.quality(context),
+                                interactionScale:
+                                    GlassMaterial.reduceMotion(context)
+                                    ? 1
+                                    : DesignTokens
+                                          .componentGlassInteractionScale,
+                                anchorStretch: !GlassMaterial.reduceMotion(
+                                  context,
+                                ),
+                                onPressed: () => closePage<void>(context),
+                                icon: const Icon(LucideIcons.chevronLeft),
+                              ),
                             ),
                             const SizedBox(width: DesignTokens.spacingXs),
                             Expanded(

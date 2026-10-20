@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 class HomePage extends HookConsumerWidget {
   const HomePage({super.key, required this.navigationShell});
@@ -11,6 +12,9 @@ class HomePage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tab = navigationShell.currentIndex;
+    final theme = Theme.of(context);
+    final opaque = GlassMaterial.opaque(context);
+    final reducedMotion = GlassMaterial.reduceMotion(context);
     final history = useRef(<int>[0]);
     if (history.value.last != tab) history.value.add(tab);
     void selectTab(int index) {
@@ -139,16 +143,53 @@ class HomePage extends HookConsumerWidget {
                         DesignTokens.spacingMd,
                         DesignTokens.spacingMd,
                       ),
-                      child: GlassTabBar(
-                        destinations: [
+                      child: liquid.GlassTabBar.bottom(
+                        key: ValueKey(reducedMotion),
+                        tabs: [
                           for (final destination in destinations)
-                            GlassDestination(
-                              icon: destination.$1,
+                            liquid.GlassTab(
+                              icon: Icon(destination.$1),
                               label: destination.$2,
                             ),
                         ],
                         selectedIndex: tab,
-                        onSelected: selectTab,
+                        onTabSelected: selectTab,
+                        horizontalPadding: 0,
+                        verticalPadding: 0,
+                        barHeight: GlassMaterial.navigationHeight(context),
+                        barBorderRadius:
+                            DesignTokens.componentNavigationRounded,
+                        tabPadding: const EdgeInsets.symmetric(
+                          horizontal: DesignTokens.componentNavigationPadding,
+                        ),
+                        iconLabelSpacing: DesignTokens.spacingMicro,
+                        iconSize: DesignTokens.componentIconSize,
+                        labelFontSize: theme.textTheme.labelLarge!.fontSize!,
+                        textStyle: theme.textTheme.labelLarge,
+                        selectedIconColor: theme.colorScheme.primary,
+                        selectedLabelColor: theme.colorScheme.primary,
+                        unselectedIconColor: theme.colorScheme.onSurfaceVariant,
+                        unselectedLabelColor:
+                            theme.colorScheme.onSurfaceVariant,
+                        indicatorColor: opaque
+                            ? theme.colorScheme.surfaceContainerHigh
+                            : theme.brightness == Brightness.dark
+                            ? DesignTokens.colorGlassSelectedDark
+                            : DesignTokens.colorGlassSelected,
+                        settings: GlassMaterial.settings(context),
+                        quality: GlassMaterial.quality(context),
+                        // Keep the official clear interactive lens defaults.
+                        indicatorSettings: opaque
+                            ? GlassMaterial.settings(context).copyWith(
+                                glassColor: DesignTokens.colorTransparent,
+                              )
+                            : null,
+                        pressScale: reducedMotion
+                            ? 1
+                            : DesignTokens.componentGlassInteractionScale,
+                        interactionBehavior: reducedMotion
+                            ? liquid.GlassInteractionBehavior.glowOnly
+                            : liquid.GlassInteractionBehavior.full,
                       ),
                     ),
                   ),

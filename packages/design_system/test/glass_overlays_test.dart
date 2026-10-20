@@ -81,6 +81,80 @@ void main() {
     },
   );
 
+  testWidgets(
+    'alert retains arbitrary actions and route-local opaque preferences',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 480);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      int? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ConnectTokens.theme(Brightness.dark),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: GlassPreferences(
+            reduceTransparency: true,
+            child: Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () async {
+                    result = await showGlassDialog<int>(
+                      context: context,
+                      builder: (context) => GlassAlertDialog(
+                        title: const Text.rich(
+                          TextSpan(
+                            text: '选择操作',
+                            children: [TextSpan(text: '类型')],
+                          ),
+                        ),
+                        content: const Text('保留全部可用操作，文字放大后可滚动访问。'),
+                        actions: [
+                          for (var i = 0; i < 4; i++)
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, i),
+                              child: Text('执行操作 $i'),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                  child: const Text('打开'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开'));
+      await tester.pumpAndSettle();
+      expect(find.byType(liquid.GlassCard), findsNothing);
+      expect(find.byType(liquid.AdaptiveGlass), findsNothing);
+      expect(find.byType(BackdropFilter), findsNothing);
+      final surface = find.byType(Glass);
+      expect(
+        GlassPreferences.reduced(tester.element(surface)),
+        isTrue,
+        reason: 'A modal route must retain the invoking subtree preference.',
+      );
+      final plane = find.ancestor(
+        of: surface,
+        matching: find.byType(GlassSurfaceGroup),
+      );
+      expect(plane, findsOneWidget);
+      expect(tester.getRect(plane), tester.getRect(surface));
+      await tester.ensureVisible(find.text('执行操作 3'));
+      await tester.tap(find.text('执行操作 3'));
+      await tester.pumpAndSettle();
+      expect(result, 3);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('sheet keeps result and externally owned scrolling controller', (
     tester,
   ) async {

@@ -56,7 +56,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('设置'));
+      await tester.tap(find.text('设置').hitTestable().first);
       await tester.pumpAndSettle();
       expect(find.text('在独立窗口打开'), findsNothing);
       expect(find.text('在手机屏幕打开'), findsOneWidget);

@@ -120,7 +120,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('设置'));
+      await tester.tap(find.text('设置').hitTestable().first);
       await tester.pumpAndSettle();
       expect(find.text('外观'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -192,7 +192,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('添加你的第一台设备'), findsOneWidget);
-      expect(find.text('设备'), findsNWidgets(2));
+      expect(find.text('设备').hitTestable(), findsWidgets);
       expect(find.textContaining('Pixel'), findsNothing);
       expect(calls.where((call) => call.startsWith('session.')), isEmpty);
       await tester.tap(find.text('添加设备').last);

@@ -880,11 +880,22 @@ class _GlassHarnessState extends State<_GlassHarness>
                   children: [
                     GlassIconButton(
                       key: _closeKey,
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Close test control',
-                      variant: variant,
-                      color: mediaColor,
+                      icon: Icon(Icons.close, color: mediaColor),
+                      semanticLabel: 'Close test control',
                       onPressed: () => setState(() => closeCount++),
+
+                      size: DesignTokens.componentIconButtonSize,
+                      iconSize: DesignTokens.componentIconSize,
+                      quality: GlassMaterial.quality(context),
+                      settings: GlassMaterial.settings(
+                        context,
+                        variant: variant,
+                      ),
+                      useOwnLayer: true,
+                      interactionScale: GlassMaterial.reduceMotion(context)
+                          ? 1
+                          : DesignTokens.componentGlassInteractionScale,
+                      anchorStretch: !GlassMaterial.reduceMotion(context),
                     ),
                     GlassToolbarGroup(
                       key: _toolbarKey,
@@ -1062,27 +1073,83 @@ class _GlassHarnessState extends State<_GlassHarness>
                                 ),
                               ),
                               if (!media)
-                                GlassTabBar(
+                                GlassTabBar.bottom(
                                   key: _tabsKey,
-                                  destinations: const [
-                                    GlassDestination(
-                                      icon: Icons.devices,
+                                  tabs: const [
+                                    GlassTab(
+                                      icon: Icon(Icons.devices),
                                       label: 'Devices',
                                     ),
-                                    GlassDestination(
-                                      icon: Icons.folder,
+                                    GlassTab(
+                                      icon: Icon(Icons.folder),
                                       label: 'Files',
                                     ),
-                                    GlassDestination(
-                                      icon: Icons.settings,
+                                    GlassTab(
+                                      icon: Icon(Icons.settings),
                                       label: 'Settings',
                                     ),
                                   ],
                                   selectedIndex: selectedIndex,
-                                  onSelected: (index) => setState(() {
+                                  onTabSelected: (index) => setState(() {
                                     selectedIndex = index;
                                     tabCount++;
                                   }),
+
+                                  horizontalPadding: 0,
+                                  verticalPadding: 0,
+                                  barHeight: GlassMaterial.navigationHeight(
+                                    context,
+                                  ),
+                                  barBorderRadius:
+                                      DesignTokens.componentNavigationRounded,
+                                  tabPadding: const EdgeInsets.symmetric(
+                                    horizontal:
+                                        DesignTokens.componentNavigationPadding,
+                                  ),
+                                  iconLabelSpacing: DesignTokens.spacingMicro,
+                                  iconSize: DesignTokens.componentIconSize,
+                                  labelFontSize: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge!
+                                      .fontSize!,
+                                  textStyle: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge,
+                                  selectedIconColor: Theme.of(context)
+                                      .colorScheme
+                                      .primary,
+                                  selectedLabelColor: Theme.of(context)
+                                      .colorScheme
+                                      .primary,
+                                  unselectedIconColor: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  unselectedLabelColor: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  indicatorColor: GlassMaterial.opaque(context)
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHigh
+                                      : Theme.of(context).brightness ==
+                                            Brightness.dark
+                                      ? DesignTokens.colorGlassSelectedDark
+                                      : DesignTokens.colorGlassSelected,
+                                  settings: GlassMaterial.settings(context),
+                                  quality: GlassMaterial.quality(context),
+                                  indicatorSettings:
+                                      GlassMaterial.opaque(context)
+                                      ? GlassMaterial.settings(context)
+                                            .copyWith(
+                                              glassColor:
+                                                  DesignTokens.colorTransparent,
+                                            )
+                                      : null,
+                                  pressScale:
+                                      GlassMaterial.reduceMotion(context)
+                                      ? 1
+                                      : DesignTokens
+                                            .componentGlassInteractionScale,
                                 ),
                             ],
                           ),

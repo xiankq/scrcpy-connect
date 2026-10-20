@@ -152,24 +152,80 @@ class _GlassTooltipMaterial extends StatelessWidget {
       return liquid.GlassMaterializeTransition(
         animation: animation,
         scaleFrom: DesignTokens.componentGlassMaterializeScale,
-        child: GlassSurfaceGroup.isolated(
-          clipExpansion: expansion,
-          child: GlassPreferences(
-            reduceTransparency: reduceTransparency,
-            child: Glass(
-              solid: !ImageFilter.isShaderFilterSupported,
-              radius: DesignTokens.roundedMd,
-              clipExpansion: expansion,
-              padding: const EdgeInsets.symmetric(
-                horizontal: DesignTokens.spacingSm,
-                vertical: DesignTokens.spacingXs,
-              ),
-              child: RichText(textScaler: textScaler, text: span),
+        child: GlassPreferences(
+          reduceTransparency: reduceTransparency,
+          child: _GlassOverlayCard(
+            radius: DesignTokens.roundedMd,
+            clipExpansion: expansion,
+            padding: const EdgeInsets.symmetric(
+              horizontal: DesignTokens.spacingSm,
+              vertical: DesignTokens.spacingXs,
             ),
+            child: RichText(textScaler: textScaler, text: span),
           ),
         ),
       );
     },
+  );
+}
+
+/// The library card owns the glass surface; Flutter retains overlay layout,
+/// focus and scrolling. Its local layer supplies the animation's texture
+/// headroom because GlassCard does not expose clipExpansion itself.
+class _GlassOverlayCard extends StatelessWidget {
+  const _GlassOverlayCard({
+    required this.child,
+    required this.radius,
+    required this.padding,
+    required this.clipExpansion,
+  });
+
+  final Widget child;
+  final double radius;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsets clipExpansion;
+
+  @override
+  Widget build(BuildContext context) => GlassSurfaceGroup.isolated(
+    clipExpansion: clipExpansion,
+    child: Builder(
+      builder: (context) {
+        if (_opaqueGlass(context) || !ImageFilter.isShaderFilterSupported) {
+          return Glass(
+            solid: !ImageFilter.isShaderFilterSupported,
+            radius: radius,
+            padding: padding,
+            clipExpansion: clipExpansion,
+            child: child,
+          );
+        }
+        if (!GlassMaterial.isInitialized) {
+          throw StateError(
+            'Await GlassMaterial.initialize() before mounting glass overlays.',
+          );
+        }
+        final dark = Theme.of(context).brightness == Brightness.dark;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            boxShadow: [
+              BoxShadow(
+                color: dark ? ConnectTokens.shadowDark : ConnectTokens.shadow,
+                blurRadius: ConnectTokens.shadowBlur,
+                offset: const Offset(0, ConnectTokens.shadowOffset),
+              ),
+            ],
+          ),
+          child: liquid.GlassCard(
+            shape: liquid.LiquidRoundedSuperellipse(borderRadius: radius),
+            padding: padding,
+            quality: liquid.GlassQuality.premium,
+            clipBehavior: Clip.antiAlias,
+            child: Material(type: MaterialType.transparency, child: child),
+          ),
+        );
+      },
+    ),
   );
 }
 
@@ -207,8 +263,7 @@ class GlassAlertDialog extends StatelessWidget {
     elevation: 0,
     clipBehavior: Clip.none,
     child: LayoutBuilder(
-      builder: (context, constraints) => Glass(
-        solid: !ImageFilter.isShaderFilterSupported,
+      builder: (context, constraints) => _GlassOverlayCard(
         clipExpansion: _glassMotionExpansion(
           Size(constraints.maxWidth, constraints.maxHeight),
           DesignTokens.componentGlassMaterializeScale,

@@ -12,6 +12,7 @@ import 'dart:math' as math;
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 import 'ios_pages_capture_test.dart' show fixtureRequest, pageFixtures;
 import 'support/router_test_app.dart';
@@ -38,15 +39,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       if (page == 'gallery') {
-        final back = find
-            .descendant(
-              of: find.ancestor(
-                of: pageBackButton(tester),
-                matching: find.byType(GlassIconButton),
-              ),
-              matching: find.byType(Glass),
-            )
-            .first;
+        final back = find.descendant(
+          of: pageBackButton(tester),
+          matching: find.byType(GlassIconButton),
+        );
         final width =
             tester.view.physicalSize.width / tester.view.devicePixelRatio;
         final columnLeft = math.max(
@@ -57,6 +53,22 @@ void main() {
         expect(
           tester.getSize(back),
           const Size.square(DesignTokens.componentIconButtonSize),
+        );
+        final button = tester.widget<GlassIconButton>(back);
+        final context = tester.element(back);
+        expect(button.settings, GlassMaterial.settings(context));
+        expect(
+          button.settings!.blur,
+          button.quality == liquid.GlassQuality.minimal
+              ? 0
+              : DesignTokens.componentGlassBlur,
+        );
+        expect(button.quality, GlassMaterial.quality(context));
+        expect(button.useOwnLayer, isFalse);
+        expect(button.iconSize, DesignTokens.componentIconSize);
+        expect(
+          button.semanticLabel,
+          MaterialLocalizations.of(context).backButtonTooltip,
         );
         expect(
           tester.getRect(find.text('手机相册')).left,
@@ -84,9 +96,30 @@ void main() {
           find.ancestor(of: title, matching: find.byType(Glass)),
           findsNothing,
         );
+        final back = find.byType(GlassIconButton);
+        final button = tester.widget<GlassIconButton>(back);
+        final context = tester.element(back);
         expect(
-          tester.widget<GlassIconButton>(find.byType(GlassIconButton)).variant,
-          GlassVariant.clear,
+          button.settings,
+          GlassMaterial.settings(context, variant: GlassVariant.clear),
+        );
+        expect(
+          button.settings!.blur,
+          button.quality == liquid.GlassQuality.minimal
+              ? 0
+              : DesignTokens.componentGlassClearBlur,
+        );
+        expect(
+          button.settings!.glassColor,
+          button.quality == liquid.GlassQuality.minimal
+              ? Theme.of(context).colorScheme.surface
+              : DesignTokens.colorGlassClearDark,
+        );
+        expect(button.quality, GlassMaterial.quality(context));
+        expect(button.useOwnLayer, isFalse);
+        expect(
+          button.semanticLabel,
+          MaterialLocalizations.of(context).backButtonTooltip,
         );
       }
     }

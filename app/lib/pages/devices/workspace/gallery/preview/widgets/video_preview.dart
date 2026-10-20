@@ -80,58 +80,67 @@ class VideoPreview extends HookWidget {
                 top: false,
                 child: Padding(
                   padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                  child: Glass(
-                    variant: GlassVariant.clear,
-                    padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                    child: Column(
-                      children: [
-                        VideoProgressIndicator(
-                          player,
-                          allowScrubbing: true,
-                          colors: VideoProgressColors(
-                            playedColor: Theme.of(context).colorScheme.primary,
-                            bufferedColor: Theme.of(context).colorScheme.primary
-                                .withValues(alpha: .24),
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: .08),
+                  child: GlassPressFeedback(
+                    radius: DesignTokens.roundedLg,
+                    child: Glass(
+                      variant: GlassVariant.clear,
+                      padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                      child: Column(
+                        children: [
+                          VideoProgressIndicator(
+                            player,
+                            allowScrubbing: true,
+                            colors: VideoProgressColors(
+                              playedColor: Theme.of(context)
+                                  .colorScheme
+                                  .primary,
+                              bufferedColor: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: .24),
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: .08),
+                            ),
                           ),
-                        ),
-                        Row(
-                          children: [
-                            GlassActionIcon(
-                              tooltip: player.value.isPlaying ? '暂停' : '播放',
-                              color: Theme.of(context).colorScheme.onSurface,
-                              onPressed: () => player.value.isPlaying
-                                  ? player.pause()
-                                  : player.play(),
-                              icon: Icon(
-                                player.value.isPlaying
-                                    ? LucideIcons.pause
-                                    : LucideIcons.play,
+                          Row(
+                            children: [
+                              GlassActionIcon(
+                                tooltip: player.value.isPlaying ? '暂停' : '播放',
+                                color: Theme.of(context).colorScheme.onSurface,
+                                onPressed: () => player.value.isPlaying
+                                    ? player.pause()
+                                    : player.play(),
+                                icon: Icon(
+                                  player.value.isPlaying
+                                      ? LucideIcons.pause
+                                      : LucideIcons.play,
+                                ),
                               ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                '${player.value.position.inMinutes}:${(player.value.position.inSeconds % 60).toString().padLeft(2, '0')} / ${player.value.duration.inMinutes}:${(player.value.duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                              Expanded(
+                                child: Text(
+                                  '${player.value.position.inMinutes}:${(player.value.position.inSeconds % 60).toString().padLeft(2, '0')} / ${player.value.duration.inMinutes}:${(player.value.duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                                ),
                               ),
-                            ),
-                            GlassActionIcon(
-                              tooltip: player.value.volume == 0 ? '打开声音' : '静音',
-                              color: Theme.of(context).colorScheme.onSurface,
-                              onPressed: () => player.setVolume(
-                                player.value.volume == 0 ? 1 : 0,
+                              GlassActionIcon(
+                                tooltip: player.value.volume == 0
+                                    ? '打开声音'
+                                    : '静音',
+                                color: Theme.of(context).colorScheme.onSurface,
+                                onPressed: () => player.setVolume(
+                                  player.value.volume == 0 ? 1 : 0,
+                                ),
+                                icon: Icon(
+                                  player.value.volume == 0
+                                      ? LucideIcons.volumeX
+                                      : LucideIcons.volume2,
+                                ),
                               ),
-                              icon: Icon(
-                                player.value.volume == 0
-                                    ? LucideIcons.volumeX
-                                    : LucideIcons.volume2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

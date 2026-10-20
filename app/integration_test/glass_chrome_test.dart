@@ -608,8 +608,21 @@ class _ChromeHarnessState extends State<_ChromeHarness> {
             trailingAction: GlassIconButton(
               key: _press,
               icon: const Icon(Icons.add, key: _glyph),
-              tooltip: '按压测试',
+              semanticLabel: '按压测试',
               onPressed: () => setState(() => activations++),
+
+              size: DesignTokens.componentIconButtonSize,
+              iconSize: DesignTokens.componentIconSize,
+              quality: GlassMaterial.quality(context),
+              settings: GlassMaterial.settings(
+                context,
+                variant: GlassVariant.regular,
+              ),
+              useOwnLayer: true,
+              interactionScale: GlassMaterial.reduceMotion(context)
+                  ? 1
+                  : DesignTokens.componentGlassInteractionScale,
+              anchorStretch: !GlassMaterial.reduceMotion(context),
             ),
             child: GroupedListView(
               controller: scroll,
