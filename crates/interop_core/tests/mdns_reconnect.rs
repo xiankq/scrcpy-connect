@@ -115,7 +115,7 @@ async fn peer_with_gates(
         .write(&mut encrypted)
         .await
         .unwrap();
-        while let Ok(frame) = Frame::read(&mut encrypted, 4096, false).await {
+        while let Ok(frame) = Frame::read(&mut encrypted, 4096, true).await {
             if frame.command == protocol::OPEN {
                 if let Some((ready, release)) = metadata_gate.take() {
                     ready.send(()).unwrap();

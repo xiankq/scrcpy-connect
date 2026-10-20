@@ -9,7 +9,7 @@ async fn connect_record(
     transport: &str,
     paired: bool,
     public_add: bool,
-) -> (CoreResult<Value>, Value, usize) {
+) -> (CoreResult<Value>, Value, Vec<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = tokio::spawn(async move {
@@ -27,10 +27,10 @@ async fn connect_record(
         .write(&mut socket)
         .await
         .unwrap();
-        let mut services = 0;
-        while let Ok(frame) = Frame::read(&mut socket, 4096, false).await {
+        let mut services = Vec::new();
+        while let Ok(frame) = Frame::read(&mut socket, 4096, true).await {
             if frame.command == protocol::OPEN {
-                services += 1;
+                services.push(String::from_utf8(frame.payload).unwrap());
                 // Metadata absence is not proof of a matching device identity.
                 Frame::new(protocol::CLSE, 0, frame.arg0, Vec::new())
                     .write(&mut socket)
@@ -112,7 +112,8 @@ async fn paired_records_refuse_plaintext_even_when_metadata_has_no_serial() {
         assert!(error.message.contains("TLS is required"), "{error:?}");
         assert_ne!(record["status"], "connected");
         assert_eq!(
-            services, 0,
+            services.len(),
+            0,
             "must reject before querying any device service"
         );
     }
@@ -123,7 +124,20 @@ async fn legacy_tcp_records_still_accept_a_plaintext_daemon() {
     let (result, record, services) = connect_record("tcp", false, false).await;
     assert_eq!(result.unwrap()["connected"], true);
     assert_eq!(record["status"], "connected");
-    assert_eq!(services, 1, "the legacy connection proceeds to metadata");
+    assert_eq!(
+        services
+            .iter()
+            .filter(|service| service.contains("getprop ro.serialno"))
+            .count(),
+        1,
+        "the legacy connection proceeds to identity metadata"
+    );
+    assert!(
+        services
+            .iter()
+            .all(|service| service.contains("getprop ro.serialno")
+                || service == "shell,v2,raw:dumpsys battery\0")
+    );
 }
 
 #[tokio::test]
@@ -132,7 +146,11 @@ async fn explicit_tls_add_and_tcp_update_refuse_plaintext_without_a_paired_guid(
     let error = result.expect_err("an explicitly added modern endpoint must require TLS");
     assert!(error.message.contains("TLS is required"), "{error:?}");
     assert_eq!(record["transport"], "tls");
-    assert_eq!(services, 0, "must reject before querying a device service");
+    assert_eq!(
+        services.len(),
+        0,
+        "must reject before querying a device service"
+    );
 }
 
 #[tokio::test]

@@ -98,11 +98,22 @@ pub(crate) async fn remote_rename(
     target: &str,
     replace: bool,
 ) -> CoreResult<Value> {
-    let mut result = Box::pin(remote_rename_bytes(
+    remote_rename_with_options(client, source, target, replace, OperationOptions::default()).await
+}
+
+pub(crate) async fn remote_rename_with_options(
+    client: &Client,
+    source: &str,
+    target: &str,
+    replace: bool,
+    options: OperationOptions,
+) -> CoreResult<Value> {
+    let mut result = Box::pin(rename_bytes_with_options(
         client,
         source.as_bytes(),
         target.as_bytes(),
         replace,
+        options,
     ))
     .await?;
     result["path"] = json!(target);
@@ -289,11 +300,12 @@ fn parse_result(output: &[u8], target: &[u8], replace: bool) -> CoreResult<Value
     Err(error)
 }
 
-pub(crate) async fn remote_rename_bytes(
+pub(crate) async fn rename_bytes_with_options(
     client: &Client,
     source: &[u8],
     target: &[u8],
     replace: bool,
+    options: OperationOptions,
 ) -> CoreResult<Value> {
     let operation = if replace {
         "publish-replace"
@@ -306,7 +318,7 @@ pub(crate) async fn remote_rename_bytes(
         target,
         operation,
         1024,
-        OperationOptions::default(),
+        options,
     )
     .await
     .and_then(|output| parse_result(&output, target, replace))
@@ -373,17 +385,11 @@ fn parse_metadata(output: &[u8]) -> CoreResult<Value> {
     if errno == 0 {
         return Ok(reply);
     }
-    let (code, message) = match errno {
-        1 | 13 => ("permission_denied", "设备系统拒绝读取文件元数据。"),
-        2 => ("not_found", "设备文件路径不存在。"),
-        20 => ("not_directory", "设备路径不是目录。"),
-        36 => ("invalid_path", "设备文件路径过长。"),
-        38 | 95 => ("unsupported", "设备不支持读取所需文件元数据。"),
-        _ => ("remote_error", "设备系统未返回文件元数据。"),
-    };
-    let mut error = CoreError::new(code, message);
-    error.details = json!({"errno":errno});
-    Err(error)
+    Err(interop_adb::Error::RemoteErrno {
+        operation: "metadata",
+        errno: errno as u32,
+    }
+    .into())
 }
 
 async fn execute_helper(
@@ -462,6 +468,55 @@ async fn execute_unbounded(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn rename_honors_task_cancellation_and_keeps_result_unknown() {
+        use interop_adb::{
+            DeviceInfo,
+            protocol::{self, Frame},
+        };
+        let (transport, mut peer) = tokio::io::duplex(4096);
+        let client = Client::from_negotiated_transport(
+            transport,
+            DeviceInfo {
+                version: protocol::VERSION,
+                max_payload: 4096,
+                banner: "device::".into(),
+                features: Default::default(),
+            },
+        )
+        .unwrap();
+        let options = OperationOptions::default();
+        let cancellation = options.cancellation.clone();
+        let active = client.clone();
+        let operation = tokio::spawn(async move {
+            remote_rename_with_options(&active, "/source", "/target", false, options).await
+        });
+        let open = tokio::time::timeout(Duration::from_secs(1), Frame::read(&mut peer, 4096, true))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(open.command, protocol::OPEN);
+        assert!(String::from_utf8_lossy(&open.payload).contains("getprop ro.product.cpu"));
+        Frame::new(protocol::OKAY, 100, open.arg0, [])
+            .write(&mut peer)
+            .await
+            .unwrap();
+        // Stall the real ABI shell rather than waiting for the default 30s.
+        cancellation.cancel();
+        let error = tokio::time::timeout(Duration::from_secs(1), operation)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.code, "result_unknown");
+        assert!(
+            !client.is_closed(),
+            "cancelling commit service must not close its device connection"
+        );
+        client.close();
+    }
+
     // Exercise the real raw ADB bootstrap and generated shell script against a
     // local shell with only API21-era tools, without an Android device.
     #[cfg(unix)]

@@ -20,6 +20,7 @@ Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/`
 | Rust Runtime | 初始化、持久授权身份、跨模块协调与命令分发 |
 | ConnectionOwner | 已准入连接、每设备转换栅栏、去重的在途清理 |
 | ActivityOwner / activities | 会话、音源、传输活动的准入、引用、统一投影与停止 |
+| TransferStore | 传输检查点、按任务追加日志、持久化屏障与恢复校验 |
 | 领域实现 | 各类活动的协议流程、具体容器与资源释放 |
 | Dart InteropBridge | 核心观察者与本机输出协调；授权身份属于 Rust 持久存储 |
 | RuntimeInitialization | 复用进程 FRB 绑定；界面重新附着保持原身份目录 |
@@ -31,6 +32,10 @@ Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/`
 | Android ProcessFlutterHost | 进程 FlutterEngine 与通道；Activity 提供当下 UI/授权 |
 
 慢设备清理在独立任务进行；同一设备仍受转换栅栏约束。旧清理不能释放新连接，重连不能覆盖尚未发布的离线结果。Activity 重建与进程死亡分别验收；后者终止内存活动。
+
+Runtime 按自身不变的授权身份缓存成功创建的 TLS 配置；连接的加密策略仍单独判断。可选设备信息由 Runtime 拥有的有界队列处理，最多四个查询并行，结果仅能更新同一存活连接；Runtime 释放时取消在途任务并丢弃排队请求。连接准入仍完成必要身份检查。
+
+传输持久状态由 `TransferStore` 统一写入：`transfers.json` 为版本化检查点，`transfers.journal` 为连续序号的任务变更；兼容读取原有数组格式。逐项完成与提交前 `finalizing` 保留持久化屏障，定期按存量阈值压缩日志，不以延迟保存换吞吐。检查点先同步文件、原子替换并同步目录，再截断旧日志；失败或取消中的追加禁止继续复用，损坏或截断日志拒绝猜测恢复。`finalizing` 恢复仍为 `result_unknown`，分享来源只在相关任务持久化后回收。本轮变更及主机验证见 [ADB 性能修复记录](adb-performance-2026-10-19.md)。
 
 远控页面租约、控制会话和设备连接具有不同生命周期。AppController 按设备合并页面租约；最后一个页面释放时立即撤销该设备声音启动意图，并精确停止对应音源。保留会话或保持连接不产生页面租约。剪贴板协调器拥有前台同步代次，设备偏好与可见页面焦点决定对象；切换后旧轮询、系统读回及远端事件失效。具体用户行为统一见交互规则。
 

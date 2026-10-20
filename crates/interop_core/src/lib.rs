@@ -9,6 +9,7 @@ mod connection_health;
 mod connections;
 mod delivery;
 mod device;
+mod device_metadata;
 pub mod documents;
 mod encoder_catalog;
 mod events;
@@ -31,6 +32,7 @@ mod runtime;
 mod scrcpy;
 pub mod sharing;
 mod snapshot;
+mod transfer_store;
 
 pub use model::{CoreError, CoreResult};
 pub use runtime::Runtime;

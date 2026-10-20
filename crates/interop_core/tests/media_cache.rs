@@ -200,7 +200,7 @@ impl Peer {
             let (mut input, mut socket) = socket.into_split();
             let (frames, mut received) = tokio::sync::mpsc::unbounded_channel();
             let _reader = AbortOnDrop(tokio::spawn(async move {
-                while let Ok(frame) = Frame::read(&mut input, 1024 * 1024, false).await {
+                while let Ok(frame) = Frame::read(&mut input, 1024 * 1024, true).await {
                     if frames.send(frame).is_err() {
                         break;
                     }

@@ -335,9 +335,15 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
     let mut raw_target = format!("{root}/moved-").into_bytes();
     raw_target.extend_from_slice(b"\xfe\n\n");
     put(&client, &raw_source, b"arbitrary path bytes").await;
-    remote_helper::remote_rename_bytes(&client, &raw_source, &raw_target, false)
-        .await
-        .unwrap();
+    remote_helper::rename_bytes_with_options(
+        &client,
+        &raw_source,
+        &raw_target,
+        false,
+        OperationOptions::default(),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         get(&client, &raw_target).await.unwrap(),
         b"arbitrary path bytes"

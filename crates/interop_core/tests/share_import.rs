@@ -646,7 +646,7 @@ async fn completed_memory_snapshot_cannot_reclaim_until_the_same_snapshot_is_dur
     assert!(!Path::new(&path).exists());
     let durable: Value =
         serde_json::from_slice(&fs::read(root.path().join("transfers.json")).unwrap()).unwrap();
-    assert_eq!(durable[0]["status"], "completed");
+    assert_eq!(durable["transfers"][0]["status"], "completed");
 }
 
 #[tokio::test]

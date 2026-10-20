@@ -579,12 +579,14 @@ impl Runtime {
     }
 
     pub(crate) async fn restore_transfers(&self) -> CoreResult<()> {
-        let bytes = match fs::read(self.root.join("transfers.json")).await {
-            Ok(bytes) => bytes,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(e) => return Err(e.into()),
-        };
-        let transfers: Vec<Transfer> = serde_json::from_slice(&bytes)?;
+        let transfers: Vec<Transfer> = self
+            .transfer_store
+            .lock()
+            .await
+            .snapshot()
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<Result<_, _>>()?;
         let mut store = self.activities.transfers.lock().await;
         for mut task in transfers {
             if task.kind == "directory" && task.status == "completed" && !task.tree_verified {
@@ -639,19 +641,31 @@ impl Runtime {
     }
     pub(crate) async fn persist_transfers(&self) -> CoreResult<()> {
         let _guard = self.persistence.lock().await;
-        let tasks: Vec<_> = self
-            .activities
-            .transfers
-            .lock()
+        let tasks = self.activities.transfers.lock().await;
+        self.transfer_store.lock().await.persist_all(&tasks).await
+    }
+    async fn persist_transfer(&self, id: &str) -> CoreResult<()> {
+        let _guard = self.persistence.lock().await;
+        let tasks = self.activities.transfers.lock().await;
+        if let Some(task) = tasks.get(id) {
+            self.transfer_store
+                .lock()
+                .await
+                .persist_one(id, task)
+                .await?;
+        }
+        Ok(())
+    }
+    async fn persist_transfer_ids(&self, ids: &[String]) -> CoreResult<()> {
+        let _guard = self.persistence.lock().await;
+        let tasks = self.activities.transfers.lock().await;
+        let mut store = self.transfer_store.lock().await;
+        store
+            .persist_selected(
+                ids.iter()
+                    .filter_map(|id| tasks.get(id).map(|task| (id.as_str(), task))),
+            )
             .await
-            .values()
-            .cloned()
-            .collect();
-        Self::private_write(
-            &self.root.join("transfers.json"),
-            &serde_json::to_vec(&tasks)?,
-        )
-        .await
     }
     pub(crate) async fn list_transfers(&self) -> CoreResult<Value> {
         let mut tasks: Vec<_> = self
@@ -824,7 +838,7 @@ impl Runtime {
                 stored.insert(task.id.clone(), task.clone());
             }
         }
-        self.persist_transfers().await?;
+        self.persist_transfer_ids(&ids).await?;
         if let Some(first) = tasks.iter().find(|task| task.status == "queued") {
             self.spawn_transfer(first.id.clone(), 0);
         }
@@ -859,10 +873,15 @@ impl Runtime {
                     None
                 }
             };
+            let mut reconcile = false;
             if let Some(data) = data {
                 runtime.emit("transfer.changed", data["deviceId"].as_str(), data.clone());
                 let batch = data["batchId"].as_str().unwrap_or_default();
-                runtime.verify_completed_tree(batch).await;
+                let mut dirty = runtime.verify_completed_tree(batch).await;
+                dirty.push(id.clone());
+                if runtime.persist_transfer_ids(&dirty).await.is_err() {
+                    return;
+                }
                 let next = {
                     let tasks = runtime.activities.transfers.lock().await;
                     let pending = tasks
@@ -877,23 +896,25 @@ impl Runtime {
                 // next item queued until the explicit resolution completes.
                 if let Some((id, generation)) = next {
                     runtime.spawn_transfer(id, generation);
+                } else {
+                    reconcile = true;
                 }
             }
             // The shared owner reclaims only fully confirmed batches. This
             // must run without a Flutter engine or an attached event listener.
-            if runtime.persist_transfers().await.is_ok() {
+            if reconcile {
                 let _ = runtime.reconcile_shares_from_transfers().await;
             }
         });
     }
-    async fn verify_completed_tree(&self, batch: &str) {
+    async fn verify_completed_tree(&self, batch: &str) -> Vec<String> {
         let directories = {
             let tasks = self.activities.transfers.lock().await;
             if tasks
                 .values()
                 .any(|task| task.batch_id == batch && !terminal(&task.status))
             {
-                return;
+                return Vec::new();
             }
             tasks
                 .values()
@@ -993,6 +1014,11 @@ impl Runtime {
                 );
             }
         }
+        tasks
+            .values()
+            .filter(|task| task.batch_id == batch && task.kind == "directory")
+            .map(|task| task.id.clone())
+            .collect()
     }
     async fn run_transfer(self: &Arc<Self>, id: &str, generation: u64) -> CoreResult<()> {
         // A batch runs in order. A conflict pauses later files, so its selected
@@ -1136,7 +1162,7 @@ impl Runtime {
         task.error_code = None;
         task.partial_destination_possible = false;
         self.save_attempt(&task).await?;
-        self.persist_transfers().await?;
+        self.persist_transfer(&task.id).await?;
         let progress = Arc::new(AtomicU64::new(0));
         let ticker_cancel = CancellationToken::new();
         let ticker = {
@@ -1240,16 +1266,20 @@ impl Runtime {
             task.status = "finalizing".into();
             task.transferred = count;
             self.save_attempt(task).await?;
-            self.persist_transfers().await?;
+            self.persist_transfer(&task.id).await?;
             check_cancel(&task.cancellation)?;
             // Keep the completed part private until one atomic rename commits
             // it. Android shared storage often rejects hard links; renameat2
             // still provides no-clobber semantics without exposing partial data.
-            crate::remote_helper::remote_rename(
+            crate::remote_helper::remote_rename_with_options(
                 client,
                 &temp,
                 &task.destination,
                 task.policy == "replace",
+                OperationOptions {
+                    cancellation: task.cancellation.clone(),
+                    ..Default::default()
+                },
             )
             .await?;
             let mode = "atomicRename".to_owned();
@@ -1292,7 +1322,7 @@ impl Runtime {
             task.status = "finalizing".into();
             task.transferred = count;
             self.save_attempt(task).await?;
-            self.persist_transfers().await?;
+            self.persist_transfer(&task.id).await?;
             check_cancel(&task.cancellation)?;
             let mode = if task.policy == "replace" {
                 fs::rename(&temp, &destination).await?;
@@ -1463,7 +1493,7 @@ impl Runtime {
         }
         task.status = "finalizing".into();
         self.save_attempt(task).await?;
-        self.persist_transfers().await?;
+        self.persist_transfer(&task.id).await?;
         check_cancel(&task.cancellation)?;
         if existing != Some(true) {
             if push {
@@ -1550,8 +1580,10 @@ impl Runtime {
         {
             let mut tasks = self.activities.transfers.lock().await;
             let mut found = false;
+            let mut dirty = Vec::new();
             for task in tasks.values_mut().filter(|task| task.batch_id == batch) {
                 found = true;
+                dirty.push(task.id.clone());
                 if terminal(&task.status) {
                     if task.kind == "directory" {
                         task.tree_verified = true;
@@ -1570,7 +1602,7 @@ impl Runtime {
                 return Err(CoreError::new("not_found", "批任务已不存在。"));
             }
             drop(tasks);
-            self.persist_transfers().await?;
+            self.persist_transfer_ids(&dirty).await?;
             return Ok(json!({"batchId":batch,"status":"cancelling"}));
         }
         let id = required(p, "transferId")?;
@@ -1597,7 +1629,7 @@ impl Runtime {
                 .filter(|task| task.status == "queued")
                 .map(|task| (task.id.clone(), task.generation));
             drop(tasks);
-            self.persist_transfers().await?;
+            self.persist_transfer(id).await?;
             if let Some((id, generation)) = next {
                 self.spawn_transfer(id, generation);
             }
@@ -1650,6 +1682,7 @@ impl Runtime {
         let batch = task.batch_id.clone();
         let index = task.item_index;
         let mut parent = task.parent_id.clone();
+        let mut dirty = vec![id.to_owned()];
         for _ in 0..64 {
             let Some(id) = parent else {
                 break;
@@ -1659,6 +1692,7 @@ impl Runtime {
             };
             directory.tree_verified = false;
             directory.tree_complete = false;
+            dirty.push(directory.id.clone());
             parent = directory.parent_id.clone();
         }
         if resolve && p["applyToAll"] == true {
@@ -1668,10 +1702,11 @@ impl Runtime {
             {
                 candidate.policy = policy.clone();
                 candidate.default_policy = Some(policy.clone());
+                dirty.push(candidate.id.clone());
             }
         }
         drop(tasks);
-        self.persist_transfers().await?;
+        self.persist_transfer_ids(&dirty).await?;
         self.spawn_transfer(id.into(), generation);
         Ok(
             json!({"status":"queued","transferId":id,"batchId":batch,"restartFromBeginning":!resolve}),

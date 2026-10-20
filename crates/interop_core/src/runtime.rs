@@ -18,11 +18,15 @@ use tokio::{
 pub struct Runtime {
     pub(crate) root: PathBuf,
     pub(crate) identity: Identity,
+    pub(crate) tls_config: tokio::sync::OnceCell<interop_adb::wireless::TlsConfig>,
+    pub(crate) metadata_updates: tokio::sync::mpsc::Sender<crate::device_metadata::Request>,
+    _metadata_owner: tokio_util::sync::DropGuard,
     pub(crate) store: RwLock<Store>,
     pub(crate) connections: crate::connections::ConnectionOwner,
     pub(crate) encoder_catalog: crate::encoder_catalog::EncoderCatalog,
     pub(crate) events: crate::events::EventBus,
     pub(crate) persistence: Mutex<()>,
+    pub(crate) transfer_store: Mutex<crate::transfer_store::TransferStore>,
     pub(crate) activities: Arc<crate::activities::ActivityOwner>,
     pub(crate) companions: Mutex<HashMap<String, Arc<crate::companion::Companion>>>,
     pub(crate) observations: Mutex<HashMap<String, crate::observation::Observation>>,
@@ -109,14 +113,26 @@ impl Runtime {
         let deliveries = crate::delivery::DeliveryJournal::open(&root).await?;
         let app_opens = crate::app_open::AppOpens::open(&root).await?;
         let media_cache = crate::media_cache::MediaCache::open(&root).await?;
+        let transfer_root = root.clone();
+        let transfer_store = tokio::task::spawn_blocking(move || {
+            crate::transfer_store::TransferStore::open(&transfer_root)
+        })
+        .await
+        .map_err(|error| CoreError::new("storage_error", error.to_string()))??;
+        let (metadata_updates, metadata_requests) = tokio::sync::mpsc::channel(64);
+        let metadata_lifetime = tokio_util::sync::CancellationToken::new();
         let runtime = Arc::new(Self {
             root,
             identity,
+            tls_config: tokio::sync::OnceCell::new(),
+            metadata_updates,
+            _metadata_owner: metadata_lifetime.clone().drop_guard(),
             store: RwLock::new(store),
             connections: crate::connections::ConnectionOwner::default(),
             encoder_catalog: crate::encoder_catalog::EncoderCatalog::default(),
             events,
             persistence: Mutex::new(()),
+            transfer_store: Mutex::new(transfer_store),
             activities: Arc::new(crate::activities::ActivityOwner::default()),
             companions: Mutex::new(HashMap::new()),
             observations: Mutex::new(HashMap::new()),
@@ -134,6 +150,7 @@ impl Runtime {
         });
         runtime.restore_transfers().await?;
         runtime.persist().await?;
+        crate::device_metadata::spawn(&runtime, metadata_requests, metadata_lifetime);
         runtime.spawn_connection_monitor();
         runtime.spawn_observation_supervisor();
         Ok(runtime)

@@ -153,8 +153,18 @@ impl Peer {
                                         stalled = true;
                                         let _ = armed.take().unwrap().send(());
                                     }
-                                    incoming = Frame::read(&mut encrypted, 4096, false) => {
+                                    incoming = Frame::read(&mut encrypted, 4096, true) => {
                                         let Ok(frame) = incoming else {break};
+                                        if frame.command == protocol::OPEN
+                                            && frame.payload == b"shell,v2,raw:dumpsys battery\0"
+                                        {
+                                            // Optional background metadata is a separate
+                                            // service; rejecting it must not satisfy or
+                                            // replace the sync health-probe observation.
+                                            if Frame::new(protocol::CLSE, 0, frame.arg0, vec![])
+                                                .write(&mut encrypted).await.is_err() {break;}
+                                            continue;
+                                        }
                                         if stalled {
                                             if frame.command == protocol::OPEN {
                                                 let _ = ignored_tx.send(frame.payload);

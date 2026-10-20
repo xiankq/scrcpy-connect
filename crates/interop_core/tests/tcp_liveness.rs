@@ -88,7 +88,7 @@ async fn handshake(
 }
 
 async fn metadata_peer(socket: &mut tokio_rustls::server::TlsStream<TcpStream>) {
-    while let Ok(frame) = Frame::read(socket, 4096, false).await {
+    while let Ok(frame) = Frame::read(socket, 4096, true).await {
         if frame.command == protocol::OPEN {
             // Unsupported metadata is a valid ADB service response and does
             // not close the authenticated transport or prevent attachment.

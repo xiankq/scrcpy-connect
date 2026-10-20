@@ -49,7 +49,7 @@ impl Peer {
             let mut sync = HashMap::<u32, Vec<u8>>::new();
             let mut ending = HashSet::new();
             let mut media = HashMap::<String, (bool, usize)>::new();
-            while let Ok(frame) = Frame::read(&mut socket, 1024 * 1024, false).await {
+            while let Ok(frame) = Frame::read(&mut socket, 1024 * 1024, true).await {
                 let id = frame.arg0;
                 if frame.command == protocol::OPEN {
                     let service = String::from_utf8(frame.payload).unwrap();

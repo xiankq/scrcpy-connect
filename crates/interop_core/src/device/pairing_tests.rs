@@ -147,7 +147,7 @@ async fn tls_peer(address: Ipv4Addr) -> (u16, AbortTask<()>) {
         .write(&mut socket)
         .await
         .unwrap();
-        while let Ok(frame) = Frame::read(&mut socket, 4096, false).await {
+        while let Ok(frame) = Frame::read(&mut socket, 4096, true).await {
             if frame.command == protocol::OPEN {
                 Frame::new(protocol::CLSE, 0, frame.arg0, vec![])
                     .write(&mut socket)
@@ -307,7 +307,7 @@ async fn pairing_completion_rejects_plaintext_discovered_endpoint() {
         .await
         .unwrap();
         // Keep the socket alive until the client actively refuses plaintext.
-        assert!(Frame::read(&mut socket, 4096, false).await.is_err());
+        assert!(Frame::read(&mut socket, 4096, true).await.is_err());
         let _ = plaintext.send(());
     }));
     let directory = tempfile::tempdir().unwrap();

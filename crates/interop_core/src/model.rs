@@ -25,9 +25,27 @@ impl CoreError {
             format!("{feature}尚未提供，请稍后再试。"),
         )
     }
+
+    pub(crate) fn remote_metadata_errno(errno: u32) -> Self {
+        let (code, message) = match errno {
+            1 | 13 => ("permission_denied", "设备系统拒绝读取文件元数据。"),
+            2 => ("not_found", "设备文件路径不存在。"),
+            20 => ("not_directory", "设备路径不是目录。"),
+            28 => ("no_space", "设备空间不足。"),
+            36 => ("invalid_path", "设备文件路径过长。"),
+            38 | 95 => ("unsupported", "设备不支持读取所需文件元数据。"),
+            _ => ("remote_error", "设备系统未返回文件元数据。"),
+        };
+        let mut error = Self::new(code, message);
+        error.details = serde_json::json!({"errno":errno});
+        error
+    }
 }
 impl From<interop_adb::Error> for CoreError {
     fn from(e: interop_adb::Error) -> Self {
+        if let interop_adb::Error::RemoteErrno { errno, .. } = &e {
+            return Self::remote_metadata_errno(*errno);
+        }
         let code = match &e {
             interop_adb::Error::AuthorizationRequired => "authorization_required",
             interop_adb::Error::Cancelled => "cancelled",

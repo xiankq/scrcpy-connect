@@ -834,18 +834,36 @@ mod tests {
     async fn a_list_receipt_cannot_overwrite_a_newer_observed_change() {
         let (_directory, runtime, device, companion, mut requests) = cached_companion().await;
         runtime.store.write().await.devices[0].status = "connected".into();
-        let started = runtime
+        runtime
             .invoke("observation.start", json!({"deviceId":device}))
             .await
             .unwrap();
-        let generation = started["generation"].as_u64().unwrap();
-        assert!(
-            runtime
-                .bind_observation(&device, generation, companion.id)
-                .await
-        );
-        let cache = companion.capability_state().await;
-        assert!(runtime.commit_observation(&device,companion.id,&json!({"observationEpoch":generation,"observationEnabled":true,"notifications":cache["notifications"],"calls":cache["calls"]}),None,None,&companion.state).await);
+        // Let the real supervisor establish its epoch before exercising list
+        // receipts. Manually binding an epoch races its queued observation.set.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let request = requests.recv().await.unwrap();
+                assert_eq!(request.payload["command"], "observation.set");
+                let epoch = request.payload["epoch"].clone();
+                wire_response(
+                    &runtime,
+                    &device,
+                    &companion,
+                    request,
+                    json!({
+                        "observationEpoch":epoch,"observationEnabled":true,
+                        "notifications":{"notifications":[],"status":"available","live":true},
+                        "calls":{"calls":[],"status":"available","live":true}
+                    }),
+                )
+                .await;
+                if runtime.observation_status(&device).await.unwrap()["phase"] == "observing" {
+                    break;
+                }
+            }
+        })
+        .await
+        .expect("the observation supervisor must receive its actual startup receipt");
         for (command, section) in [
             ("notifications.list", "notifications"),
             ("calls.list", "calls"),
@@ -857,7 +875,28 @@ mod tests {
                     .invoke(command, json!({"deviceId":id,"allowStart":false}))
                     .await
             });
-            let request = requests.recv().await.unwrap();
+            let request = loop {
+                let request = requests.recv().await.unwrap();
+                if request.payload["command"] == command {
+                    break request;
+                }
+                // A superseded startup may already have been enqueued when the
+                // explicit start changed epoch. Its receipt must remain stale.
+                assert_eq!(request.payload["command"], "observation.set");
+                let epoch = request.payload["epoch"].clone();
+                wire_response(
+                    &runtime,
+                    &device,
+                    &companion,
+                    request,
+                    json!({
+                        "observationEpoch":epoch,"observationEnabled":true,
+                        "notifications":{"notifications":[],"status":"available","live":true},
+                        "calls":{"calls":[],"status":"available","live":true}
+                    }),
+                )
+                .await;
+            };
             let old = json!({section:[],"status":"available","live":true});
             let newer = json!({section:[{"id":"newer"}],"status":"available","live":true});
             // Use the real actor commit boundary without an Android socket:

@@ -281,6 +281,10 @@ mod connection_cleanup_tests;
 #[path = "device/pairing_tests.rs"]
 mod pairing_tests;
 
+#[cfg(test)]
+#[path = "device/metadata_tests.rs"]
+mod metadata_tests;
+
 fn host(params: &Value) -> CoreResult<String> {
     let value = required(params, "address")?.trim();
     if value.is_empty()
@@ -379,7 +383,7 @@ fn nonempty(value: Option<&str>) -> Option<String> {
         .map(str::to_owned)
 }
 async fn metadata(client: &Client, token: CancellationToken) -> Metadata {
-    let command = "getprop ro.product.model; getprop ro.build.version.release; getprop ro.build.version.sdk; getprop ro.serialno; dumpsys battery";
+    let command = "getprop ro.product.model; getprop ro.build.version.release; getprop ro.build.version.sdk; getprop ro.serialno";
     let output = match client.shell(command, 64 * 1024, operations(8, token)).await {
         Ok(output) => output,
         Err(error) => {
@@ -395,22 +399,12 @@ async fn metadata(client: &Client, token: CancellationToken) -> Metadata {
     let release = nonempty(lines.next());
     let api = lines.next().and_then(|s| s.trim().parse().ok());
     let serial = nonempty(lines.next());
-    let rest = lines.collect::<Vec<_>>();
-    let number = |key: &str| {
-        rest.iter()
-            .find_map(|line| line.trim().strip_prefix(key)?.trim().parse::<u32>().ok())
-    };
-    let battery = number("level:").and_then(|level| {
-        number("scale:")
-            .filter(|n| *n > 0)
-            .map(|scale| (u64::from(level) * 100 / u64::from(scale)).min(100) as u32)
-    });
     Metadata {
         model,
         release,
         api,
         serial,
-        battery,
+        battery: None,
         error: None,
     }
 }
@@ -426,11 +420,16 @@ impl Runtime {
         Ok(())
     }
     async fn tls_config(&self) -> CoreResult<TlsConfig> {
-        let identity = self.identity.clone();
-        tokio::task::spawn_blocking(move || TlsConfig::experimental_rustcrypto(&identity))
+        self.tls_config
+            .get_or_try_init(|| async {
+                let identity = self.identity.clone();
+                tokio::task::spawn_blocking(move || TlsConfig::experimental_rustcrypto(&identity))
+                    .await
+                    .map_err(|e| CoreError::new("tls_error", e.to_string()))?
+                    .map_err(Into::into)
+            })
             .await
-            .map_err(|e| CoreError::new("tls_error", e.to_string()))?
-            .map_err(Into::into)
+            .cloned()
     }
     async fn connect_options(&self, token: CancellationToken) -> CoreResult<ConnectOptions> {
         Ok(ConnectOptions {
@@ -828,6 +827,7 @@ impl Runtime {
             ));
         }
         let burst_active = client.burst_mode();
+        let metadata_client = client.clone();
         let device = {
             let mut store = self.store.write().await;
             // Keep the generation check atomic with the record/client update.
@@ -899,6 +899,12 @@ impl Runtime {
                 self.emit("device.changed", Some(id), json!(current));
             }
         }
+        let _ = self
+            .metadata_updates
+            .try_send(crate::device_metadata::Request {
+                id: id.to_owned(),
+                client: metadata_client,
+            });
         Ok(json!({"connected":true,"deviceId":id,"device":device,"adbBurstActive":burst_active}))
     }
     pub(crate) async fn disconnect_device(&self, id: &str, forget: bool) -> CoreResult<Value> {

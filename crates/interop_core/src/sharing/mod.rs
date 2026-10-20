@@ -570,18 +570,35 @@ impl Runtime {
             .filter_map(Value::as_str)
             .map(String::from)
             .collect();
+        if known.is_empty() {
+            return manager.command(
+                "sharing.reconcile",
+                &json!({"transfers":[],"complete":true}),
+            );
+        }
         // Match transfer persistence's lock order. Keep the snapshot stable until
         // journal reconciliation finishes: a memory-only completed transition is
         // never evidence that a resumable source may be deleted.
         let _persistence = self.persistence.lock().await;
         let tasks = self.activities.transfers.lock().await;
-        let snapshot: Vec<_> = tasks.values().collect();
         let persisted = async {
-            Self::private_write(
-                &self.root.join("transfers.json"),
-                &serde_json::to_vec(&snapshot)?,
-            )
-            .await?;
+            let batches: std::collections::HashSet<_> = tasks
+                .values()
+                .filter(|task| task.direction == "push" && known.contains(&task.source))
+                .map(|task| task.batch_id.as_str())
+                .collect();
+            self.transfer_store
+                .lock()
+                .await
+                .persist_selected(
+                    tasks
+                        .iter()
+                        .filter(|(_, task)| {
+                            task.direction == "push" && batches.contains(task.batch_id.as_str())
+                        })
+                        .map(|(id, task)| (id.as_str(), task)),
+                )
+                .await?;
             #[cfg(unix)]
             {
                 let root = self.root.clone();

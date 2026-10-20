@@ -48,6 +48,7 @@ pub(super) async fn serve(
     // only protocols actually encoded below: LST2/STA2, LIS2/DNT2 and shell_v2.
     let legacy = files.lock().unwrap().legacy_root_alias;
     let features = if legacy { "" } else { "shell_v2,stat_v2,ls_v2" };
+    let skip_checksum = !legacy && connect.arg0 >= protocol::VERSION;
     Frame::new(
         protocol::CNXN,
         if legacy {
@@ -63,7 +64,7 @@ pub(super) async fn serve(
     let mut streams = HashMap::<u32, Stream>::new();
     let mut deployed = HashMap::<String, Vec<u8>>::new();
     let mut directories = HashSet::<String>::new();
-    while let Ok(frame) = Frame::read(&mut socket, 4096, false).await {
+    while let Ok(frame) = Frame::read(&mut socket, 4096, skip_checksum).await {
         match frame.command {
             protocol::OPEN => {
                 let id = frame.arg0;

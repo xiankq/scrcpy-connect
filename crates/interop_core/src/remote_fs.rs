@@ -108,7 +108,18 @@ pub(crate) async fn stat(
     let mut sync = client.sync(options.clone()).await?;
     match sync.lstat(&RemotePath::new(&resolved)?).await {
         Ok(stat) => Ok(stat),
-        Err(_) => metadata(&remote_metadata(client, &resolved, "lstat", 1, options).await?),
+        Err(
+            interop_adb::Error::RemoteErrno {
+                errno: 1 | 13 | 38 | 95,
+                ..
+            }
+            | interop_adb::Error::Remote(_)
+            | interop_adb::Error::Unsupported(_),
+        ) => metadata(&remote_metadata(client, &resolved, "lstat", 1, options).await?),
+        // SYNC v2 already returned an authoritative result for absence and
+        // invalid paths. Transport errors cannot be repaired by deploying a
+        // second service on that same connection either.
+        Err(error) => Err(error.into()),
     }
 }
 
@@ -235,6 +246,148 @@ fn listing(reply: &Value, limit: usize) -> CoreResult<Listing> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    async fn stat_fixture(
+        errno: Option<u32>,
+    ) -> (
+        Client,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        tokio::task::JoinHandle<()>,
+    ) {
+        use interop_adb::{
+            DeviceInfo,
+            protocol::{self, Frame},
+        };
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let (transport, mut peer) = tokio::io::duplex(4096);
+        let client = Client::from_negotiated_transport(
+            transport,
+            DeviceInfo {
+                version: protocol::VERSION,
+                max_payload: 4096,
+                banner: "device::features=stat_v2;\0".into(),
+                features: ["stat_v2".into()].into(),
+            },
+        )
+        .unwrap();
+        let opens = Arc::new(AtomicUsize::new(0));
+        let seen = opens.clone();
+        let server = tokio::spawn(async move {
+            while let Ok(frame) = Frame::read(&mut peer, 4096, true).await {
+                match frame.command {
+                    protocol::OPEN => {
+                        seen.fetch_add(1, Ordering::SeqCst);
+                        let accepted = frame.payload == b"sync:\0";
+                        Frame::new(
+                            if accepted {
+                                protocol::OKAY
+                            } else {
+                                protocol::CLSE
+                            },
+                            frame.arg0 + 100,
+                            frame.arg0,
+                            [],
+                        )
+                        .write(&mut peer)
+                        .await
+                        .unwrap();
+                    }
+                    protocol::WRTE => {
+                        assert_eq!(&frame.payload[..4], b"LST2");
+                        Frame::new(protocol::OKAY, frame.arg1, frame.arg0, [])
+                            .write(&mut peer)
+                            .await
+                            .unwrap();
+                        if let Some(errno) = errno {
+                            let mut reply = b"LST2".to_vec();
+                            reply.extend_from_slice(&errno.to_le_bytes());
+                            reply.extend_from_slice(&[0; 64]);
+                            Frame::new(protocol::WRTE, frame.arg1, frame.arg0, reply)
+                                .write(&mut peer)
+                                .await
+                                .unwrap();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+        (client, opens, server)
+    }
+
+    #[tokio::test]
+    async fn authoritative_sync_errno_does_not_deploy_a_metadata_helper() {
+        use std::sync::atomic::Ordering;
+        for (errno, expected) in [
+            (2, "not_found"),
+            (20, "not_directory"),
+            (36, "invalid_path"),
+        ] {
+            let (client, opens, server) = stat_fixture(Some(errno)).await;
+            let error = stat(
+                &client,
+                "/sdcard/missing",
+                false,
+                OperationOptions::default(),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.code, expected, "errno {errno}");
+            assert_eq!(error.details["errno"], errno);
+            assert_eq!(
+                opens.load(Ordering::SeqCst),
+                1,
+                "an authoritative errno needs only SYNC"
+            );
+            client.close();
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn denied_sync_metadata_still_uses_the_verified_helper_path() {
+        use std::sync::atomic::Ordering;
+        for errno in [1, 13, 38, 95] {
+            let (client, opens, server) = stat_fixture(Some(errno)).await;
+            let result = stat(
+                &client,
+                "/sdcard/denied",
+                false,
+                OperationOptions::default(),
+            )
+            .await;
+            // This peer refuses the ABI shell OPEN; observing it proves the
+            // helper path is retained without executing a remote program.
+            assert!(result.is_err());
+            assert_eq!(
+                opens.load(Ordering::SeqCst),
+                2,
+                "errno {errno} must retain fallback"
+            );
+            client.close();
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn silent_sync_metadata_timeout_does_not_start_another_service() {
+        use std::{sync::atomic::Ordering, time::Duration};
+        let (client, opens, server) = stat_fixture(None).await;
+        let options = OperationOptions {
+            timeout: Duration::from_millis(25),
+            ..Default::default()
+        };
+        let error = stat(&client, "/sdcard/stalled", false, options)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "timeout");
+        assert_eq!(opens.load(Ordering::SeqCst), 1);
+        client.close();
+        server.abort();
+    }
 
     #[test]
     fn metadata_preserves_wide_sizes_and_signed_times() {
