@@ -6,6 +6,7 @@ import 'package:fvp/mdk.dart' as mdk;
 
 import '../interop_exception.dart';
 import 'native_frame_trace.dart';
+import 'native_video_readback.dart';
 import 'video_player_port.dart';
 import 'playback_confirmation.dart';
 import 'video_player_operations.dart';
@@ -31,6 +32,7 @@ class FvpVideoPlayer implements VideoPlayerPort {
   final List<String>? _videoDecoders;
   final bool _traceFrames;
   NativeFrameTrace? _frameTrace;
+  NativeVideoReadback? _readback;
   int? _texture;
 
   /// Diagnostic snapshots and decoded observations share this native clock.
@@ -254,7 +256,7 @@ class FvpVideoPlayer implements VideoPlayerPort {
     _check();
     final watch = Stopwatch()..start();
     final trace = _frameTrace;
-    if (trace != null) {
+    if (trace != null && width <= 256 && height <= 256) {
       final pixels = await trace.snapshot(
         texture: _texture!,
         width: width,
@@ -263,15 +265,19 @@ class FvpVideoPlayer implements VideoPlayerPort {
       _check();
       return pixels;
     }
-    final pixels = await _player.snapshot(width: width, height: height);
+    final readback = _readback ??= NativeVideoReadback(_player.nativeHandle);
+    final pixels = await readback.snapshot(
+      texture: _texture!,
+      width: width,
+      height: height,
+    );
     _emit({
       'kind': 'diagnostic',
       'category': 'video.snapshot',
       'elapsedMs': watch.elapsedMilliseconds,
     });
     _check();
-    if (pixels == null) return null;
-    return VideoPixels(width, height, pixels);
+    return pixels;
   }
 
   @override
@@ -297,6 +303,8 @@ class FvpVideoPlayer implements VideoPlayerPort {
     final cleanup = () async {
       await drained;
       await queriesClosed;
+      _readback?.close();
+      _readback = null;
       _frameTrace?.close();
       _frameTrace = null;
       final stoppedEvent = Completer<void>();

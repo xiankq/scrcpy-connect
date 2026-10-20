@@ -1,4 +1,4 @@
-//! Opt-in MDK diagnostics; these exports are deliberately outside FRB generation.
+//! NULL-safe MDK readback and opt-in diagnostics, outside FRB generation.
 //!
 //! # Foreign caller contract
 //! `player` must be the app-owned, live fvp `Player.nativeHandle` (mdkPlayerAPI*),
@@ -38,6 +38,8 @@ const MAX_TRACES: usize = 16;
 const MAX_DECODED: usize = 256;
 const MAX_SIDE: i32 = 256;
 const MAX_SNAPSHOT_BYTES: usize = 256 * 256 * 4;
+const MAX_READBACK_SIDE: i32 = 4096;
+const MAX_READBACK_PIXELS: usize = 8 * 1024 * 1024;
 const MAX_METRICS_BYTES: usize = 65_536;
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 const CLOSED: i32 = -1;
@@ -203,6 +205,7 @@ struct TraceState {
 
 struct Trace {
     player: u64,
+    diagnostic: bool,
     start_us: u64,
     closed: AtomicBool,
     drops: AtomicU64,
@@ -210,6 +213,14 @@ struct Trace {
 }
 
 impl Trace {
+    fn snapshot_limits(&self) -> (i32, usize) {
+        if self.diagnostic {
+            (MAX_SIDE, MAX_SNAPSHOT_BYTES)
+        } else {
+            (MAX_READBACK_SIDE, MAX_READBACK_PIXELS * 4)
+        }
+    }
+
     fn elapsed_us(&self) -> u64 {
         interop_core::media::monotonic_micros().saturating_sub(self.start_us)
     }
@@ -222,6 +233,7 @@ struct Request {
     height: i32,
     submitted: Instant,
     submitted_us: u64,
+    native_pending: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -373,10 +385,18 @@ unsafe extern "C" fn snapshot_callback(
         // A snapshot is a request/response, not a droppable frame metric. MDK
         // invokes it on a dedicated thread; short registry/state locks ensure
         // a concurrent Dart poll cannot discard its only completion.
-        let Ok(registry) = registry().lock() else {
+        let Ok(mut registry) = registry().lock() else {
             return ptr::null_mut();
         };
-        registry.requests.get(&request_id).cloned()
+        let request = registry.requests.get(&request_id).cloned();
+        if let Some(request) = &request {
+            request.native_pending.store(false, Ordering::Release);
+            if request.trace.closed.load(Ordering::Acquire) {
+                registry.requests.remove(&request_id);
+                return ptr::null_mut();
+            }
+        }
+        request
     };
     let Some(request) = request else {
         return ptr::null_mut();
@@ -435,10 +455,11 @@ unsafe fn copy_snapshot(
     let height = usize::try_from(result.height).ok()?;
     let length = row.checked_mul(height)?;
     let source_length = stride.checked_mul(height)?;
+    let (max_side, max_bytes) = request.trace.snapshot_limits();
     if stride < row
-        || stride > MAX_SIDE as usize * 4
-        || source_length > MAX_SNAPSHOT_BYTES
-        || length > MAX_SNAPSHOT_BYTES
+        || stride > max_side as usize * 4
+        || source_length > max_bytes
+        || length > max_bytes
     {
         return None;
     }
@@ -462,6 +483,19 @@ unsafe fn copy_snapshot(
 /// `player` must satisfy this module's live, app-owned MDK handle contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn trace_open(player: u64, mdk_version: i32) -> u64 {
+    unsafe { open(player, mdk_version, true) }
+}
+
+/// Opens ordinary pixel readback without installing an onVideo observer.
+/// A diagnostic owner may coexist; both share the player's snapshot admission.
+/// # Safety
+/// `player` must satisfy this module's live, app-owned MDK handle contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn readback_open(player: u64, mdk_version: i32) -> u64 {
+    unsafe { open(player, mdk_version, false) }
+}
+
+unsafe fn open(player: u64, mdk_version: i32, diagnostic: bool) -> u64 {
     // MDK_VERSION_INT(0,39,patch), per c/global.h. Reject before dereferencing.
     if mdk_version & !0xff != 0x2700
         || player == 0
@@ -471,10 +505,7 @@ pub unsafe extern "C" fn trace_open(player: u64, mdk_version: i32) -> u64 {
         return 0;
     }
     let api = unsafe { &*(player as usize as *const PlayerApi) };
-    let Some(on_video) = api.on_video else {
-        return 0;
-    };
-    if api.object.is_null() || api.snapshot.is_none() {
+    if api.object.is_null() || api.snapshot.is_none() || (diagnostic && api.on_video.is_none()) {
         return 0;
     }
     let Some(token) = next_token() else {
@@ -485,7 +516,10 @@ pub unsafe extern "C" fn trace_open(player: u64, mdk_version: i32) -> u64 {
             return 0;
         };
         if registry.traces.len() >= MAX_TRACES
-            || registry.traces.values().any(|trace| trace.player == player)
+            || registry
+                .traces
+                .values()
+                .any(|trace| trace.player == player && trace.diagnostic == diagnostic)
         {
             return 0;
         }
@@ -493,11 +527,12 @@ pub unsafe extern "C" fn trace_open(player: u64, mdk_version: i32) -> u64 {
             token,
             Arc::new(Trace {
                 player,
+                diagnostic,
                 start_us: interop_core::media::monotonic_micros(),
                 closed: AtomicBool::new(false),
                 drops: AtomicU64::new(0),
                 state: Mutex::new(TraceState {
-                    decoded: VecDeque::with_capacity(MAX_DECODED),
+                    decoded: VecDeque::with_capacity(if diagnostic { MAX_DECODED } else { 0 }),
                     request: None,
                     latest_snapshot: None,
                 }),
@@ -506,19 +541,23 @@ pub unsafe extern "C" fn trace_open(player: u64, mdk_version: i32) -> u64 {
     }
     // SAFETY: caller owns the live handle; no Rust lock is held. Do not construct
     // mdk::Player: even its non-owning destructor resets existing fvp callbacks.
-    unsafe {
-        on_video(
-            api.object,
-            VideoCallback {
-                cb: Some(video_callback),
-                opaque: token as usize as *mut c_void,
-            },
-        )
-    };
+    if let Some(on_video) = api.on_video.filter(|_| diagnostic) {
+        unsafe {
+            on_video(
+                api.object,
+                VideoCallback {
+                    cb: Some(video_callback),
+                    opaque: token as usize as *mut c_void,
+                },
+            )
+        };
+    }
     token
 }
 
-/// Revokes this generation only; intentionally performs no MDK call.
+/// Revokes this generation only; intentionally performs no MDK call or onVideo
+/// unregistration. A revoked in-flight request keeps the player's admission until
+/// its actual callback; it can never read borrowed result memory after revocation.
 #[unsafe(no_mangle)]
 pub extern "C" fn trace_close(player: u64, token: u64) {
     let Ok(mut registry) = registry().lock() else {
@@ -533,13 +572,13 @@ pub extern "C" fn trace_close(player: u64, token: u64) {
     }
     if let Some(trace) = registry.traces.remove(&token) {
         trace.closed.store(true, Ordering::Release);
-        registry
-            .requests
-            .retain(|_, request| !Arc::ptr_eq(&request.trace, &trace));
+        registry.requests.retain(|_, request| {
+            !Arc::ptr_eq(&request.trace, &trace) || request.native_pending.load(Ordering::Acquire)
+        });
     }
 }
 
-/// One outstanding request per trace; dimensions must both be in 1..=256.
+/// One outstanding request per player; dimensions must both be in 1..=256.
 /// # Safety
 /// `player` and `vo` must be live app-owned MDK handles, with calls serialized
 /// against close/dispose. MDK copies this request during snapshot(), as in fvp.
@@ -551,34 +590,66 @@ pub unsafe extern "C" fn trace_snapshot(
     width: i32,
     height: i32,
 ) -> u64 {
-    if !(1..=MAX_SIDE).contains(&width)
-        || !(1..=MAX_SIDE).contains(&height)
+    unsafe { snapshot(player, token, vo, width, height, true) }
+}
+
+/// Ordinary readback: sides in 1..=4096 and at most 8*1024*1024 pixels.
+/// Poll and close use trace_poll and trace_close. No frame observer is installed.
+/// # Safety
+/// The same live handle, renderer and serialized owner contract as trace_snapshot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn readback_snapshot(
+    player: u64,
+    token: u64,
+    vo: u64,
+    width: i32,
+    height: i32,
+) -> u64 {
+    unsafe { snapshot(player, token, vo, width, height, false) }
+}
+
+unsafe fn snapshot(
+    player: u64,
+    token: u64,
+    vo: u64,
+    width: i32,
+    height: i32,
+    diagnostic: bool,
+) -> u64 {
+    let Some(trace) = get_trace(token) else {
+        return 0;
+    };
+    if trace.player != player
+        || trace.diagnostic != diagnostic
+        || trace.closed.load(Ordering::Acquire)
         || usize::try_from(vo).is_err()
     {
         return 0;
     }
-    let Some(trace) = get_trace(token) else {
-        return 0;
-    };
-    if trace.player != player || trace.closed.load(Ordering::Acquire) {
+    let (max_side, max_bytes) = trace.snapshot_limits();
+    if !(1..=max_side).contains(&width)
+        || !(1..=max_side).contains(&height)
+        || width as usize * height as usize > max_bytes / 4
+    {
         return 0;
     }
     let Some(request_id) = next_token() else {
         return 0;
     };
     {
-        let Ok(mut state) = trace.state.lock() else {
-            return 0;
-        };
-        if state.request.is_some() {
-            return 0;
-        }
-        state.request = Some((request_id, SnapshotState::Pending));
-    }
-    {
         let Ok(mut registry) = registry().lock() else {
             return 0;
         };
+        // MDK has one slot per player, even when ordinary readback and frame
+        // diagnostics are separately owned. Retain admission through timeout.
+        if registry.requests.len() >= MAX_TRACES
+            || registry
+                .requests
+                .values()
+                .any(|request| request.trace.player == player)
+        {
+            return 0;
+        }
         registry.requests.insert(
             request_id,
             Request {
@@ -587,8 +658,15 @@ pub unsafe extern "C" fn trace_snapshot(
                 height,
                 submitted: Instant::now(),
                 submitted_us: trace.elapsed_us(),
+                native_pending: Arc::new(AtomicBool::new(true)),
             },
         );
+    }
+    {
+        let Ok(mut state) = trace.state.lock() else {
+            return 0;
+        };
+        state.request = Some((request_id, SnapshotState::Pending));
     }
     let api = unsafe { &*(player as usize as *const PlayerApi) };
     let mut request = SnapshotRequest {
@@ -619,7 +697,8 @@ pub unsafe extern "C" fn trace_snapshot(
 /// 0=pending, >0=tightly packed native RGBA/BGRA byte count; consumes on success.
 /// -1=closed/unknown/consumed, -2=failed, -3=capacity, -4=pending beyond 5s.
 /// -4 is nonterminal: a caller timeout cannot cancel an MDK snapshot. Keep its
-/// admission and callback token until actual completion or explicit trace close.
+/// admission until actual completion. Explicit close revokes result delivery,
+/// while its native slot remains occupied until the callback actually arrives.
 /// A capacity error preserves the result for a subsequent sufficiently sized poll.
 /// # Safety
 /// `out` must be writable for `capacity` bytes when a result is copied.
@@ -800,8 +879,8 @@ mod tests {
         let player = unsafe { &*(object.cast::<FakePlayer>()) };
         let request = unsafe { &*request };
         assert!(request.data.is_null());
-        assert!((1..=256).contains(&request.width));
-        assert!((1..=256).contains(&request.height));
+        assert!((1..=MAX_READBACK_SIDE).contains(&request.width));
+        assert!((1..=MAX_READBACK_SIDE).contains(&request.height));
         player.snapshots.lock().unwrap().push(callback);
     }
 
@@ -810,10 +889,19 @@ mod tests {
         player: Box<FakePlayer>,
         api: Box<PlayerApi>,
         token: u64,
+        diagnostic: bool,
     }
 
     impl Fixture {
         fn new() -> Self {
+            Self::with_mode(true)
+        }
+
+        fn readback() -> Self {
+            Self::with_mode(false)
+        }
+
+        fn with_mode(diagnostic: bool) -> Self {
             let serial = TEST_SERIAL
                 .lock()
                 .unwrap_or_else(|error| error.into_inner());
@@ -821,15 +909,24 @@ mod tests {
             // All fields are nullable C function pointers/raw pointers.
             let mut api: Box<PlayerApi> = Box::new(unsafe { std::mem::zeroed() });
             api.object = (&mut *player as *mut FakePlayer).cast();
-            api.on_video = Some(register_video);
+            // Ordinary readback must also work when onVideo is unavailable.
+            api.on_video = diagnostic.then_some(register_video);
             api.snapshot = Some(request_snapshot);
-            let token = unsafe { trace_open((&*api as *const PlayerApi) as u64, 0x2700) };
+            let handle = (&*api as *const PlayerApi) as u64;
+            let token = unsafe {
+                if diagnostic {
+                    trace_open(handle, 0x2700)
+                } else {
+                    readback_open(handle, 0x2700)
+                }
+            };
             assert_ne!(token, 0);
             Self {
                 _serial: serial,
                 player,
                 api,
                 token,
+                diagnostic,
             }
         }
 
@@ -850,7 +947,13 @@ mod tests {
         }
 
         fn snapshot(&self, width: i32, height: i32) -> (u64, SnapshotCallback) {
-            let request = unsafe { trace_snapshot(self.handle(), self.token, 0, width, height) };
+            let request = unsafe {
+                if self.diagnostic {
+                    trace_snapshot(self.handle(), self.token, 0, width, height)
+                } else {
+                    readback_snapshot(self.handle(), self.token, 0, width, height)
+                }
+            };
             assert_ne!(request, 0);
             let callback = *self.player.snapshots.lock().unwrap().last().unwrap();
             (request, callback)
@@ -861,6 +964,132 @@ mod tests {
         fn drop(&mut self) {
             trace_close(self.handle(), self.token);
         }
+    }
+
+    #[test]
+    fn ordinary_readback_handles_null_and_late_callbacks_without_registering_video() {
+        let fixture = Fixture::readback();
+        assert!(fixture.player.video.lock().unwrap().is_none());
+        assert_eq!(unsafe { readback_open(fixture.handle(), 0x2700) }, 0);
+        assert_eq!(unsafe { readback_open(1, 0x2600) }, 0);
+        let (request, callback) = fixture.snapshot(32, 32);
+        assert_eq!(
+            unsafe { trace_poll(fixture.token, request, ptr::null_mut(), 0) },
+            0
+        );
+        unsafe { callback.cb.unwrap()(ptr::null_mut(), 0.0, callback.opaque) };
+        assert_eq!(
+            unsafe { trace_poll(fixture.token, request, ptr::null_mut(), 0) },
+            FAILED
+        );
+        let (late_request, late) = fixture.snapshot(1, 1);
+        trace_close(fixture.handle(), fixture.token);
+        // Revocation precedes examining borrowed memory, including NULL or
+        // invalid results delivered after a decoder/source has stopped.
+        unsafe { late.cb.unwrap()(ptr::dangling_mut(), 1.0, late.opaque) };
+        assert_eq!(
+            unsafe { trace_poll(fixture.token, late_request, ptr::null_mut(), 0) },
+            CLOSED
+        );
+        assert!(fixture.player.video.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn ordinary_readback_accepts_both_4096_side_boundaries_and_rejects_excess_pixels() {
+        let fixture = Fixture::readback();
+        for (width, height) in [
+            (0, 1),
+            (1, -1),
+            (4097, 1),
+            (1, 4097),
+            (4096, 2049),
+            (2049, 4096),
+            (4096, 4096),
+            (i32::MAX, i32::MAX),
+        ] {
+            assert_eq!(
+                unsafe { readback_snapshot(fixture.handle(), fixture.token, 0, width, height) },
+                0
+            );
+        }
+        assert!(fixture.player.snapshots.lock().unwrap().is_empty());
+        let mut pixels = vec![17_u8; MAX_READBACK_PIXELS * 4];
+        let mut output = vec![0; pixels.len()];
+        for (width, height) in [(4096, 2048), (2048, 4096)] {
+            let (request, callback) = fixture.snapshot(width, height);
+            let mut result = SnapshotRequest {
+                data: pixels.as_mut_ptr(),
+                width,
+                height,
+                stride: width * 4,
+                subtitle: false,
+            };
+            unsafe { callback.cb.unwrap()(&mut result, 1.0, callback.opaque) };
+            assert_eq!(
+                unsafe {
+                    trace_poll(
+                        fixture.token,
+                        request,
+                        output.as_mut_ptr(),
+                        output.len() as u32,
+                    )
+                },
+                pixels.len() as i32
+            );
+            assert_eq!(output, pixels);
+        }
+        assert!(fixture.metrics()["decoded"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn readback_and_diagnostics_share_snapshot_admission_without_sharing_revocation() {
+        let fixture = Fixture::new();
+        let video = fixture.callback();
+        let ordinary = unsafe { readback_open(fixture.handle(), 0x2700) };
+        assert_ne!(ordinary, 0);
+        assert_eq!(fixture.callback().opaque, video.opaque);
+        // Neither API may use the other owner's mode or MDK's occupied slot.
+        assert_eq!(
+            unsafe { trace_snapshot(fixture.handle(), ordinary, 0, 1, 1) },
+            0
+        );
+        assert_eq!(
+            unsafe { readback_snapshot(fixture.handle(), fixture.token, 0, 1, 1) },
+            0
+        );
+        let (diagnostic_request, diagnostic_callback) = fixture.snapshot(1, 1);
+        assert_eq!(
+            unsafe { readback_snapshot(fixture.handle(), ordinary, 0, 1, 1) },
+            0
+        );
+        unsafe {
+            diagnostic_callback.cb.unwrap()(ptr::null_mut(), 0.0, diagnostic_callback.opaque)
+        };
+        // A completed result keeps its slot until the owner consumes it.
+        assert_eq!(
+            unsafe { readback_snapshot(fixture.handle(), ordinary, 0, 1, 1) },
+            0
+        );
+        assert_eq!(
+            unsafe { trace_poll(fixture.token, diagnostic_request, ptr::null_mut(), 0) },
+            FAILED
+        );
+        let request = unsafe { readback_snapshot(fixture.handle(), ordinary, 0, 1, 1) };
+        assert_ne!(request, 0);
+        let late = *fixture.player.snapshots.lock().unwrap().last().unwrap();
+        trace_close(fixture.handle(), ordinary);
+        assert_eq!(fixture.callback().opaque, video.opaque);
+        assert_eq!(
+            unsafe { trace_snapshot(fixture.handle(), fixture.token, 0, 1, 1) },
+            0,
+            "revoking a token cannot cancel MDK's occupied snapshot slot"
+        );
+        unsafe { late.cb.unwrap()(ptr::dangling_mut(), 1.0, late.opaque) };
+        let (_new, diagnostic) = fixture.snapshot(1, 1);
+        unsafe {
+            diagnostic.cb.unwrap()(ptr::null_mut(), 0.0, diagnostic.opaque);
+        }
+        assert!(fixture.metrics()["decoded"].as_array().unwrap().is_empty());
     }
 
     struct Frame {

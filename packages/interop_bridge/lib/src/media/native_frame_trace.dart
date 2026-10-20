@@ -44,8 +44,8 @@ external int _metrics(int token, Pointer<Uint8> output, int capacity);
 /// Opt-in measurement of MDK decoded frames and renderer snapshots on one Rust
 /// monotonic clock. No Dart callbacks run on decoder/render threads.
 ///
-/// The pinned fvp 0.39.1 native renderer export is used only by this diagnostic
-/// adapter; ordinary playback and snapshots use public Dart APIs. A successful
+/// The pinned fvp 0.39.1 native renderer export selects the same surface as the
+/// ordinary null-safe readback adapter. Decoder tracing remains opt-in. A
 /// snapshot is a renderer observation, not a physical display scan-out time.
 final class NativeFrameTrace {
   NativeFrameTrace(int player)
