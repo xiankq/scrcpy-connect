@@ -9,6 +9,7 @@
 | 文档 | 重点 |
 | --- | --- |
 | [ADB 主机、连接与身份](adb-host-and-connectivity.md) | AOSP 版本快照、无线配对/TLS、主控密钥、USB、多路复用、现有 Rust 库、完整度验收 |
+| [ADB 性能与参考实现对照](adb-reference-performance.md) | 固定 AOSP／Tango／libadb 参考；协议正常成本、SYNC 写合并、受控实验和实机证据边界 |
 | [实际mDNS锁版契约](locked-mdns-contract.md) | 实际0.17.2与研究0.21.5的区别、HINFO解析器缺陷、0.21.2修复线及实际验收边界 |
 | [纯 Rust ADB 依赖链](pure-rust-adb-dependencies.md) | 两个候选的实际 feature、TLS provider 成熟度、nusb、双向压缩、系统 API 边界与验证矩阵 |
 | [四端编译交付约束](cross-platform-build-contract.md) | 核心、FRB 链接与 Flutter 整包三层验收，平台依赖隔离、宿主 SDK 与 CI |

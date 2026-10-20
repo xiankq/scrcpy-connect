@@ -18,6 +18,8 @@ pub enum Error {
     AuthorizationRequired,
     #[error("ADB service failed: {0}")]
     Remote(String),
+    #[error("ADB {operation} failed with errno {errno}")]
+    RemoteErrno { operation: &'static str, errno: u32 },
     #[error("ADB feature is unavailable: {0}")]
     Unsupported(&'static str),
     #[error("RSA identity: {0}")]

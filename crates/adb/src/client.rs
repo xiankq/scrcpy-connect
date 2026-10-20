@@ -87,6 +87,7 @@ pub struct DeviceInfo {
 }
 
 struct Route {
+    closed: CancellationToken,
     remote: u32,
     awaiting_ack: bool,
     data: mpsc::Sender<ReceivedPayload>,
@@ -94,14 +95,26 @@ struct Route {
     trace: Option<Subscription>,
     burst: Option<crate::burst::Flow>,
 }
+impl Drop for Route {
+    fn drop(&mut self) {
+        self.closed.cancel();
+    }
+}
 type Routes = Arc<Mutex<HashMap<u32, Route>>>;
+
+enum ControlResponse {
+    // Must follow frames already accepted for an existing logical stream.
+    OrderedClose(Frame),
+    // This device-initiated stream was never admitted, so it has no data order.
+    RejectOpen(Frame),
+}
 
 struct Inner {
     info: DeviceInfo,
     burst_mode: bool,
     receive_budget: crate::burst::Budget,
     writer: mpsc::Sender<Frame>,
-    reverse_rejections: mpsc::Sender<Frame>,
+    control_responses: mpsc::Sender<ControlResponse>,
     routes: Routes,
     next_id: AtomicU32,
     cancellation: CancellationToken,
@@ -111,6 +124,16 @@ struct Inner {
     reverses: Arc<crate::reverse::Registry>,
 }
 impl Inner {
+    fn queue_control(&self, response: ControlResponse) {
+        // Reader and stream drops never wait for writer capacity or spawn tasks.
+        // A peer that exceeds the finite control allowance loses the connection.
+        if self.control_responses.try_send(response).is_err() {
+            *self.failure.lock().expect("failure mutex") =
+                Some("control response queue exhausted or closed".into());
+            self.cancellation.cancel();
+        }
+    }
+
     fn next_stream_id(&self) -> Result<u32> {
         let mut id = self.next_id.load(Ordering::Relaxed);
         loop {
@@ -326,9 +349,10 @@ impl Client {
         // Credit never bypasses this shared bounded writer. With one frame in
         // flight, outgoing payload storage is at most 65 * max_payload bytes.
         let (tx, mut rx) = mpsc::channel::<Frame>(64);
-        // Rejected device OPENs must not disconnect healthy streams when the
-        // data writer is full. Only empty CLSEs enter this bounded control queue.
-        let (reject_tx, mut reject_rx) = mpsc::channel::<Frame>(128);
+        // Empty CLSEs have a separate bounded allowance, so a full data
+        // writer cannot suspend inbound routing. Flooding this queue closes
+        // the connection instead of allocating tasks or unbounded storage.
+        let (control_tx, mut control_rx) = mpsc::channel::<ControlResponse>(128);
         let routes: Routes = Arc::new(Mutex::new(HashMap::new()));
         let cancellation = CancellationToken::new();
         let failure = Arc::new(Mutex::new(None));
@@ -337,7 +361,7 @@ impl Client {
             burst_mode,
             receive_budget: Default::default(),
             writer: tx.clone(),
-            reverse_rejections: reject_tx,
+            control_responses: control_tx,
             routes: routes.clone(),
             next_id: AtomicU32::new(1),
             cancellation: cancellation.clone(),
@@ -346,17 +370,34 @@ impl Client {
             inbound_activity: Arc::new(AtomicUsize::new(0)),
             reverses: Default::default(),
         });
+        let skip_checksum = inner.info.version >= protocol::VERSION;
         let writer_failure = failure.clone();
         let writer_cancel = cancellation.clone();
         tokio::spawn(async move {
             loop {
-                let frame = tokio::select! {
+                let (frame, preceding) = tokio::select! {
                     biased;
                     _ = writer_cancel.cancelled() => break,
-                    Some(frame) = reject_rx.recv() => frame,
-                    frame = rx.recv() => match frame { Some(frame) => frame, None => break },
+                    Some(response) = control_rx.recv() => match response {
+                        ControlResponse::OrderedClose(frame) => (frame, rx.len()),
+                        ControlResponse::RejectOpen(frame) => (frame, 0),
+                    },
+                    frame = rx.recv() => match frame { Some(frame) => (frame, 0), None => break },
                 };
-                let result = tokio::select! { _ = writer_cancel.cancelled() => break, result = frame.write(&mut writer) => result };
+                // A control response must follow WRTE/OPEN/OKAY frames already
+                // accepted for that stream. Route removal and data enqueue are
+                // serialized by the route mutex. Snapshotting the bounded queue
+                // preserves that order without starving control on later writes.
+                let result = async {
+                    for _ in 0..preceding {
+                        let queued = rx.recv().await.ok_or(Error::Closed)?;
+                        queued
+                            .write_with_checksum(&mut writer, skip_checksum)
+                            .await?;
+                    }
+                    frame.write_with_checksum(&mut writer, skip_checksum).await
+                };
+                let result = tokio::select! { _ = writer_cancel.cancelled() => break, result = result => result };
                 if let Err(error) = result {
                     *writer_failure.lock().expect("failure mutex") =
                         Some(format!("transport write: {error}"));
@@ -367,7 +408,7 @@ impl Client {
         });
         let read_cancel = cancellation.clone();
         let read_routes = routes.clone();
-        let read_tx = tx.clone();
+        let read_control = inner.control_responses.clone();
         let max_payload = inner.info.max_payload.min(protocol::MAX_PAYLOAD);
         let skip_checksum = inner.info.version >= protocol::VERSION;
         let read_failure = failure.clone();
@@ -561,8 +602,12 @@ impl Client {
                     break;
                 }
                 if let Some(response) = response
-                    && read_tx.send(response).await.is_err()
+                    && read_control
+                        .try_send(ControlResponse::OrderedClose(response))
+                        .is_err()
                 {
+                    *read_failure.lock().expect("failure mutex") =
+                        Some("control response queue exhausted or closed".into());
                     break;
                 }
             }
@@ -642,6 +687,7 @@ impl Client {
             2
         });
         let (ack_tx, ack) = mpsc::channel(2);
+        let closed = CancellationToken::new();
         {
             let mut routes = self.inner.routes.lock().expect("route mutex poisoned");
             if routes.len() >= 128 {
@@ -652,6 +698,7 @@ impl Client {
             routes.insert(
                 local,
                 Route {
+                    closed: closed.clone(),
                     remote: 0,
                     awaiting_ack: true,
                     data: data_tx,
@@ -665,6 +712,7 @@ impl Client {
         }
         let mut stream = AdbStream {
             inner: self.inner.clone(),
+            closed,
             local,
             remote: 0,
             data,
@@ -685,7 +733,7 @@ impl Client {
         let open_options = stream.options.clone();
         let result = bounded(open_options.timeout, &open_options.cancellation, async {
             stream
-                .send(Frame::new(
+                .send_open(Frame::new(
                     protocol::OPEN,
                     local,
                     if self.inner.burst_mode {
@@ -709,12 +757,12 @@ impl Client {
 }
 
 async fn reject_reverse(inner: &Inner, remote: u32) {
-    tokio::select! {
-        _ = inner.cancellation.cancelled() => {},
-        result = inner.reverse_rejections.send(Frame::new(protocol::CLSE, 0, remote, Vec::new())) => {
-            if result.is_err() { inner.cancellation.cancel(); }
-        },
-    }
+    inner.queue_control(ControlResponse::RejectOpen(Frame::new(
+        protocol::CLSE,
+        0,
+        remote,
+        Vec::new(),
+    )));
 }
 
 async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
@@ -753,6 +801,7 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
         2
     });
     let (ack_tx, ack) = mpsc::channel(2);
+    let closed = CancellationToken::new();
     let inserted = {
         let mut routes = inner.routes.lock().expect("route mutex poisoned");
         if routes.len() >= 128 || routes.values().any(|route| route.remote == frame.arg0) {
@@ -761,6 +810,7 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
             routes.insert(
                 local,
                 Route {
+                    closed: closed.clone(),
                     remote: frame.arg0,
                     awaiting_ack: false,
                     data: data_tx,
@@ -780,6 +830,7 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
     }
     let mut stream = AdbStream {
         inner: inner.clone(),
+        closed,
         local,
         remote: frame.arg0,
         data,
@@ -884,13 +935,17 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
 }
 
 async fn write_burst_frame(inner: &Inner, local: u32, remote: u32, bytes: &[u8]) -> Result<()> {
-    let changed = inner
+    let (changed, closed) = inner
         .routes
         .lock()
         .expect("route mutex poisoned")
         .get(&local)
-        .and_then(|route| route.burst.as_ref())
-        .map(|flow| flow.changed.clone())
+        .and_then(|route| {
+            route
+                .burst
+                .as_ref()
+                .map(|flow| (flow.changed.clone(), route.closed.clone()))
+        })
         .ok_or(Error::Closed)?;
     loop {
         let notified = changed.notified();
@@ -905,6 +960,7 @@ async fn write_burst_frame(inner: &Inner, local: u32, remote: u32, bytes: &[u8])
         if ready {
             let permit = tokio::select! {
                 _ = inner.cancellation.cancelled() => return Err(Error::Closed),
+                _ = closed.cancelled() => return Err(Error::Closed),
                 permit = inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
             };
             let mut routes = inner.routes.lock().expect("route mutex poisoned");
@@ -936,6 +992,18 @@ async fn write_stream_frames(
             write_burst_frame(inner, local, remote, chunk).await?;
             continue;
         }
+        let closed = inner
+            .routes
+            .lock()
+            .expect("route mutex poisoned")
+            .get(&local)
+            .map(|route| route.closed.clone())
+            .ok_or(Error::Closed)?;
+        let permit = tokio::select! {
+            _ = inner.cancellation.cancelled() => return Err(Error::Closed),
+            _ = closed.cancelled() => return Err(Error::Closed),
+            permit = inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
+        };
         {
             let mut routes = inner.routes.lock().expect("route mutex poisoned");
             let route = routes.get_mut(&local).ok_or(Error::Closed)?;
@@ -945,12 +1013,7 @@ async fn write_stream_frames(
                 ));
             }
             route.awaiting_ack = true;
-        }
-        tokio::select! {
-            _ = inner.cancellation.cancelled() => return Err(Error::Closed),
-            result = inner.writer.send(Frame::new(protocol::WRTE, local, remote, chunk.to_vec())) => {
-                result.map_err(|_| Error::Closed)?;
-            }
+            permit.send(Frame::new(protocol::WRTE, local, remote, chunk.to_vec()));
         }
         let acknowledged_remote = acknowledgments.recv().await.ok_or(Error::Closed)?;
         if acknowledged_remote != remote {
@@ -966,6 +1029,7 @@ async fn write_stream_frames(
 /// packets in classic mode), providing per-stream backpressure.
 /// An interrupted write closes this stream because the peer's ACK state is then uncertain.
 pub struct AdbStream {
+    closed: CancellationToken,
     inner: Arc<Inner>,
     local: u32,
     remote: u32,
@@ -984,9 +1048,14 @@ pub struct AdbStream {
 }
 
 impl AdbStream {
+    pub(crate) fn max_payload(&self) -> usize {
+        self.inner.info.max_payload
+    }
+
     async fn accept_reverse(&self) -> Result<()> {
         let permit = tokio::select! {
             _ = self.inner.cancellation.cancelled() => return Err(Error::Closed),
+            _ = self.closed.cancelled() => return Err(Error::Closed),
             permit = self.inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
         };
         let mut routes = self.inner.routes.lock().expect("route mutex poisoned");
@@ -999,6 +1068,18 @@ impl AdbStream {
         };
         permit.send(Frame::new(protocol::OKAY, self.local, self.remote, payload));
         Ok(())
+    }
+
+    fn return_packet_ack(&self, permit: mpsc::Permit<'_, Frame>) {
+        let routes = self.inner.routes.lock().expect("route mutex poisoned");
+        if routes.contains_key(&self.local) {
+            permit.send(Frame::new(
+                protocol::OKAY,
+                self.local,
+                self.remote,
+                Vec::new(),
+            ));
+        }
     }
 
     fn try_return_credit(&mut self) {
@@ -1090,6 +1171,23 @@ impl AdbStream {
         self.read_trace
     }
 
+    async fn send_open(&self, frame: Frame) -> Result<()> {
+        let permit = tokio::select! {
+            _ = self.inner.cancellation.cancelled() => return Err(Error::Closed),
+            _ = self.closed.cancelled() => return Err(Error::Closed),
+            permit = self.inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
+        };
+        // Serialize OPEN enqueue with route removal, just like WRTE/OKAY.
+        // A close received while waiting for capacity must not be followed by
+        // a late OPEN for that local ID after the ordered close response.
+        let routes = self.inner.routes.lock().expect("route mutex poisoned");
+        if !routes.contains_key(&self.local) {
+            return Err(Error::Closed);
+        }
+        permit.send(frame);
+        Ok(())
+    }
+
     async fn send(&self, frame: Frame) -> Result<()> {
         tokio::select! { _ = self.inner.cancellation.cancelled() => Err(Error::Closed), result = self.inner.writer.send(frame) => result.map_err(|_| Error::Closed) }
     }
@@ -1114,8 +1212,10 @@ impl AdbStream {
                     }
                     if self.offset == self.buffer.len() && self.pending_ack {
                         // Try synchronously so cancelling read cannot lose already-copied bytes.
-                        let ack = Frame::new(protocol::OKAY, self.local, self.remote, Vec::new());
-                        if self.inner.writer.try_send(ack).is_ok() {
+                        if self.closed.is_cancelled() {
+                            self.pending_ack = false;
+                        } else if let Ok(permit) = self.inner.writer.try_reserve() {
+                            self.return_packet_ack(permit);
                             self.pending_ack = false;
                         }
                     }
@@ -1126,14 +1226,12 @@ impl AdbStream {
                 }
                 if self.pending_ack {
                     // A close can follow the final WRTE; consume queued tail before reporting EOF.
-                    if !self.inner.cancellation.is_cancelled() {
-                        self.send(Frame::new(
-                            protocol::OKAY,
-                            self.local,
-                            self.remote,
-                            Vec::new(),
-                        ))
-                        .await?;
+                    tokio::select! {
+                        _ = self.inner.cancellation.cancelled() => {},
+                        _ = self.closed.cancelled() => {},
+                        permit = self.inner.writer.reserve() => {
+                            self.return_packet_ack(permit.map_err(|_| Error::Closed)?);
+                        },
                     }
                     self.pending_ack = false;
                 }
@@ -1239,7 +1337,7 @@ impl AdbStream {
             .expect("route mutex poisoned")
             .remove(&self.local);
         if self.remote == 0
-            && let Some(route) = route
+            && let Some(route) = route.as_ref()
         {
             self.remote = route.remote;
         }
@@ -1247,14 +1345,9 @@ impl AdbStream {
             return;
         }
         let frame = Frame::new(protocol::CLSE, self.local, self.remote, Vec::new());
-        if let Err(mpsc::error::TrySendError::Full(frame)) = self.inner.writer.try_send(frame) {
-            let tx = self.inner.writer.clone();
-            let cancel = self.inner.cancellation.clone();
-            if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-                runtime.spawn(async move {
-                    tokio::select! { _ = cancel.cancelled() => {}, _ = tx.send(frame) => {} }
-                });
-            }
+        if route.is_some() {
+            self.inner
+                .queue_control(ControlResponse::OrderedClose(frame));
         }
         self.eof = true;
     }

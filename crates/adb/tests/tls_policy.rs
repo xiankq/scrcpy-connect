@@ -189,7 +189,7 @@ async fn required_tls_completes_stls_and_reads_cnxn_inside_tls() {
         .write(&mut encrypted)
         .await
         .unwrap();
-        let open = Frame::read(&mut encrypted, 4096, false).await.unwrap();
+        let open = Frame::read(&mut encrypted, 4096, true).await.unwrap();
         assert_eq!(open.command, protocol::OPEN);
         assert_eq!(open.payload, b"shell:encrypted-only\0");
         Frame::new(protocol::CLSE, 0, open.arg0, Vec::new())

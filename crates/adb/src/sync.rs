@@ -9,6 +9,53 @@ const MAX_PATH: usize = 1024;
 const MAX_DATA: usize = 64 * 1024;
 const MAX_ERROR: usize = 64 * 1024;
 
+/// A push owns this buffer only until its completion response. Aggregate SYNC
+/// records, not arbitrary interactive stream writes, and never send on drop.
+struct PushWriter<'a> {
+    stream: &'a mut AdbStream,
+    bytes: Vec<u8>,
+    max_payload: usize,
+}
+
+impl<'a> PushWriter<'a> {
+    fn new(stream: &'a mut AdbStream) -> Self {
+        let max_payload = stream.max_payload();
+        Self {
+            stream,
+            bytes: Vec::with_capacity(max_payload),
+            max_payload,
+        }
+    }
+
+    async fn write(&mut self, mut bytes: &[u8]) -> Result<()> {
+        while !bytes.is_empty() {
+            let count = bytes.len().min(self.max_payload - self.bytes.len());
+            self.bytes.extend_from_slice(&bytes[..count]);
+            bytes = &bytes[count..];
+            if self.bytes.len() == self.max_payload {
+                self.flush().await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn request(&mut self, id: &[u8; 4], body: &[u8]) -> Result<()> {
+        let mut header = [0; 8];
+        header[..4].copy_from_slice(id);
+        header[4..].copy_from_slice(&(body.len() as u32).to_le_bytes());
+        self.write(&header).await?;
+        self.write(body).await
+    }
+
+    async fn flush(&mut self) -> Result<()> {
+        if !self.bytes.is_empty() {
+            self.stream.write_all(&self.bytes).await?;
+            self.bytes.clear();
+        }
+        Ok(())
+    }
+}
+
 /// A remote Linux pathname, represented as bytes (Android paths need not be UTF-8).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemotePath(Vec<u8>);
@@ -80,11 +127,12 @@ impl Sync {
         self.healthy = false;
         let options = self.options.clone();
         let result = bounded(options.timeout, &options.cancellation, async {
-            self.request(b"SND2", path.as_bytes()).await?;
+            let mut writer = PushWriter::new(&mut self.stream);
+            writer.request(b"SND2", path.as_bytes()).await?;
             let mut setup = b"SND2".to_vec();
             setup.extend_from_slice(&(0o100000 | permissions).to_le_bytes());
             setup.extend_from_slice(&compression.flag().to_le_bytes());
-            self.stream.write_all(&setup).await?;
+            writer.write(&setup).await?;
             let Worker {
                 input: sender,
                 mut output,
@@ -112,14 +160,15 @@ impl Sync {
             };
             let consumer = async {
                 while let Some(bytes) = output.recv().await {
-                    self.request(b"DATA", &bytes).await?;
+                    writer.request(b"DATA", &bytes).await?;
                 }
                 finished(task).await
             };
             let (total, ()) = tokio::try_join!(producer, consumer)?;
             let mut done = b"DONE".to_vec();
             done.extend_from_slice(&modified_seconds.to_le_bytes());
-            self.stream.write_all(&done).await?;
+            writer.write(&done).await?;
+            writer.flush().await?;
             let id = self.id().await?;
             if &id == b"FAIL" {
                 return Err(self.fail().await?);
@@ -307,7 +356,10 @@ impl Sync {
                 };
                 let errno = u32_at(0);
                 if errno != 0 {
-                    return Err(Error::Remote(format!("stat errno {errno}")));
+                    return Err(Error::RemoteErrno {
+                        operation: "stat",
+                        errno,
+                    });
                 }
                 Ok(FileStat {
                     mode: u32_at(20),
@@ -373,10 +425,10 @@ impl Sync {
                         )
                     };
                     if &id != b"DONE" && u32_at(0) != 0 {
-                        return Err(Error::Remote(format!(
-                            "directory entry errno {}",
-                            u32_at(0)
-                        )));
+                        return Err(Error::RemoteErrno {
+                            operation: "list",
+                            errno: u32_at(0),
+                        });
                     }
                     (
                         FileStat {
@@ -508,7 +560,8 @@ impl Sync {
                     "push path plus mode exceeds sync limit",
                 ));
             }
-            self.request(b"SEND", &destination).await?;
+            let mut writer = PushWriter::new(&mut self.stream);
+            writer.request(b"SEND", &destination).await?;
             let mut buffer = vec![0; MAX_DATA];
             let mut total = 0u64;
             loop {
@@ -520,11 +573,12 @@ impl Sync {
                 if total > max_bytes {
                     return Err(Error::OutputLimit);
                 }
-                self.request(b"DATA", &buffer[..count]).await?;
+                writer.request(b"DATA", &buffer[..count]).await?;
             }
             let mut done = b"DONE".to_vec();
             done.extend_from_slice(&modified_seconds.to_le_bytes());
-            self.stream.write_all(&done).await?;
+            writer.write(&done).await?;
+            writer.flush().await?;
             let id = self.id().await?;
             if &id == b"FAIL" {
                 return Err(self.fail().await?);

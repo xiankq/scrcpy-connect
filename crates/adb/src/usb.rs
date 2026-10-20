@@ -46,11 +46,7 @@ pub const fn supported() -> bool {
 mod backend {
     use super::*;
     use crate::{Error, Result};
-    use crate::{
-        OperationOptions,
-        error::bounded,
-        protocol::{Frame, MAX_PAYLOAD},
-    };
+    use crate::{OperationOptions, error::bounded, protocol::read_wire_packet};
     use nusb::{
         Device, DeviceInfo,
         descriptors::TransferType,
@@ -262,13 +258,11 @@ mod backend {
         tokio::spawn(async move {
             let operation = async {
                 loop {
-                    let frame = Frame::read(&mut bridge_read, MAX_PAYLOAD, true).await?;
-                    let mut serialized = Vec::with_capacity(24 + frame.payload.len());
-                    frame.write(&mut serialized).await?;
-                    writer.write_all(&serialized[..24]).await?;
+                    let (header, payload) = read_wire_packet(&mut bridge_read).await?;
+                    writer.write_all(&header).await?;
                     writer.flush_end_async().await.map_err(Error::Io)?;
-                    if !frame.payload.is_empty() {
-                        writer.write_all(&serialized[24..]).await?;
+                    if !payload.is_empty() {
+                        writer.write_all(&payload).await?;
                         writer.flush_end_async().await.map_err(Error::Io)?;
                     }
                 }

@@ -28,6 +28,13 @@ failed sync operations close their affected stream rather than reuse uncertain
 protocol state. Callers should drop a sync object when abandoning an in-progress
 operation.
 
+The data writer holds at most 64 queued frames. Reader-generated close/reject
+responses use a separate 128-entry control queue and never wait for data queue
+capacity; overflowing it closes the connection. Accepted same-stream frames
+retain their order before close. A closed route cannot enqueue a late OPEN or
+WRTE. Modern negotiated transports omit payload checksums; handshake and ADB
+1.0.0 frames retain them. USB preserves those wire bytes and transfer boundaries.
+
 Legacy adbd's ADB 1.0.0 transport retains checksum validation and 4 KiB payload
 fragmentation when that is the daemon's advertised limit. Wire fixtures cover
 both unauthenticated connections and RSA AUTH, legacy shell and sync v1
@@ -91,6 +98,14 @@ metadata has 32-bit size/time and cannot distinguish permission errors from
 absence. The tested Android SELinux policy denies adbd metadata access to some
 shell-created symlinks; this remains a remote permission error. A system symlink
 was verified to remain a symlink with LST2 and become its target with STA2.
+
+Push operations coalesce SEND/SND2, DATA and DONE records into at most one
+negotiated maximum-payload buffer, flushing before reading the final reply.
+Individual DATA records remain limited to 64 KiB. Metadata/list/pull requests
+and interactive streams do not wait for coalescing. Abandoning a push discards
+pending bytes and does not synthesize a DONE record. Stat/list v2 errno replies
+are returned as `Error::RemoteErrno { operation, errno }`; callers can distinguish
+absence, permission and capability failures without parsing display text.
 
 `reverse_forward` installs an adbd device-side TCP or Unix listener and bridges
 accepted connections to an explicitly supplied host TCP address. TCP port zero

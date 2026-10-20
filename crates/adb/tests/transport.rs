@@ -79,7 +79,8 @@ use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 
 async fn read(socket: &mut TcpStream) -> Frame {
-    Frame::read(socket, protocol::MAX_PAYLOAD, false)
+    // All service fixtures below have negotiated ADB 1.0.1.
+    Frame::read(socket, protocol::MAX_PAYLOAD, true)
         .await
         .unwrap()
 }
@@ -91,7 +92,10 @@ async fn send(socket: &mut TcpStream, command: u32, local: u32, remote: u32, dat
 }
 async fn handshake(socket: &mut TcpStream, features: &str) {
     socket.set_nodelay(true).unwrap();
-    assert_eq!(read(socket).await.command, protocol::CNXN);
+    assert_eq!(
+        Frame::read(socket, 4096, false).await.unwrap().command,
+        protocol::CNXN
+    );
     send(
         socket,
         protocol::CNXN,
@@ -437,10 +441,13 @@ async fn authorization_is_explicit_and_signature_is_not_double_hashed() {
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
         let (mut socket, _) = listener.accept().await.unwrap();
-        assert_eq!(read(&mut socket).await.command, protocol::CNXN);
+        assert_eq!(
+            Frame::read(&mut socket, 4096, false).await.unwrap().command,
+            protocol::CNXN
+        );
         let token = [0x42; 20];
         send(&mut socket, protocol::AUTH, 1, 0, &token).await;
-        let signed = read(&mut socket).await;
+        let signed = Frame::read(&mut socket, 4096, false).await.unwrap();
         assert_eq!((signed.command, signed.arg0), (protocol::AUTH, 2));
         key.verify(Pkcs1v15Sign::new::<sha1::Sha1>(), &token, &signed.payload)
             .unwrap();

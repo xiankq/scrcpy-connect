@@ -423,7 +423,9 @@ async fn checksum_validation_follows_the_negotiated_wire_version() {
         let server = tokio::spawn(async move {
             assert_eq!(read(&mut peer).await.command, protocol::CNXN);
             send(&mut peer, protocol::CNXN, version, 4096, b"device::\0").await;
-            let open = read(&mut peer).await;
+            let open = Frame::read(&mut peer, 4096, version >= protocol::VERSION)
+                .await
+                .unwrap();
             send(&mut peer, protocol::OKAY, 41, open.arg0, &[]).await;
             let mut corrupted = Vec::new();
             Frame::new(protocol::WRTE, 41, open.arg0, b"checksum".to_vec())

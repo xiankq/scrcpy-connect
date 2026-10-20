@@ -183,7 +183,10 @@ async fn actual_lstat_is_single_path_nofollow_and_preserves_permission_errors() 
             .await
         {
             Ok(metadata) => assert_eq!(metadata.mode & 0o170000, 0o120000),
-            Err(Error::Remote(message)) if message == "stat errno 13" => {
+            Err(Error::RemoteErrno {
+                operation: "stat",
+                errno: 13,
+            }) => {
                 eprintln!("official adbd SELinux denies lstat of shell-created {name}: errno 13");
             }
             result => panic!("unexpected lstat result for {name}: {result:?}"),
@@ -221,14 +224,26 @@ async fn actual_lstat_is_single_path_nofollow_and_preserves_permission_errors() 
         .lstat(&RemotePath::new(format!("{root}/blocked/file")).unwrap())
         .await;
     assert!(
-        matches!(permission, Err(Error::Remote(ref message)) if message == "stat errno 13"),
+        matches!(
+            permission,
+            Err(Error::RemoteErrno {
+                operation: "stat",
+                errno: 13
+            })
+        ),
         "expected permission denial: {permission:?}"
     );
     let mut missing = client.sync(OperationOptions::default()).await.unwrap();
     let absence = missing
         .lstat(&RemotePath::new(format!("{root}/absent")).unwrap())
         .await;
-    assert!(matches!(absence, Err(Error::Remote(ref message)) if message == "stat errno 2"));
+    assert!(matches!(
+        absence,
+        Err(Error::RemoteErrno {
+            operation: "stat",
+            errno: 2
+        })
+    ));
     let cleanup = client
         .shell(
             &format!("chmod 700 {root}/blocked; rm -rf -- {root}"),

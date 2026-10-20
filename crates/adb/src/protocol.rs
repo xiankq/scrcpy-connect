@@ -61,24 +61,11 @@ impl Frame {
     ) -> Result<(Self, Option<crate::read_trace::PayloadTiming>)> {
         let mut header = [0; 24];
         read_exact_progress(reader, &mut header, &mut progress).await?;
-        let word = |offset| {
-            u32::from_le_bytes(header[offset..offset + 4].try_into().expect("header word"))
-        };
-        let command = word(0);
-        if word(20) != command ^ u32::MAX {
-            return Err(Error::Protocol("invalid frame magic".into()));
-        }
-        if !matches!(command, CNXN | AUTH | OPEN | OKAY | WRTE | CLSE | STLS) {
-            return Err(Error::Protocol("unknown frame command".into()));
-        }
-        let length = word(12) as usize;
-        if length > limit.min(MAX_PAYLOAD) {
-            return Err(Error::Protocol(
-                "frame exceeds negotiated payload limit".into(),
-            ));
-        }
+        let words = validate_header(&header, limit)?;
+        let [command, arg0, arg1, length, wire_checksum, _] = words;
+        let length = length as usize;
         let mut payload = vec![0; length];
-        let clock = observe(command, word(4), word(8));
+        let clock = observe(command, arg0, arg1);
         let started_us = clock.as_ref().map(|clock| (clock.read)());
         read_exact_progress(reader, &mut payload, &mut progress).await?;
         let timing =
@@ -89,14 +76,14 @@ impl Frame {
                     read_us: (clock.read)(),
                     clock,
                 });
-        if !skip_checksum && checksum(&payload) != word(16) {
+        if !skip_checksum && checksum(&payload) != wire_checksum {
             return Err(Error::Protocol("invalid frame checksum".into()));
         }
         Ok((
             Self {
                 command,
-                arg0: word(4),
-                arg1: word(8),
+                arg0,
+                arg1,
                 payload,
             },
             timing,
@@ -104,6 +91,14 @@ impl Frame {
     }
 
     pub async fn write<W: AsyncWrite + Unpin>(&self, writer: &mut W) -> Result<()> {
+        self.write_with_checksum(writer, false).await
+    }
+
+    pub(crate) async fn write_with_checksum<W: AsyncWrite + Unpin>(
+        &self,
+        writer: &mut W,
+        skip_checksum: bool,
+    ) -> Result<()> {
         if self.payload.len() > MAX_PAYLOAD {
             return Err(Error::InvalidArgument("frame too large"));
         }
@@ -113,7 +108,11 @@ impl Frame {
             self.arg0,
             self.arg1,
             self.payload.len() as u32,
-            checksum(&self.payload),
+            if skip_checksum {
+                0
+            } else {
+                checksum(&self.payload)
+            },
             self.command ^ u32::MAX,
         ]
         .iter()
@@ -126,6 +125,51 @@ impl Frame {
         writer.flush().await?;
         Ok(())
     }
+}
+
+/// Preserve outgoing wire bytes while splitting ADB header and payload into
+/// separate USB transfers. In particular, never recompute a negotiated checksum.
+#[cfg(all(
+    feature = "usb",
+    any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "windows",
+        target_os = "macos"
+    )
+))]
+pub(crate) async fn read_wire_packet<R: AsyncRead + Unpin>(
+    reader: &mut R,
+) -> Result<([u8; 24], Vec<u8>)> {
+    let mut header = [0; 24];
+    reader.read_exact(&mut header).await?;
+    let words = validate_header(&header, MAX_PAYLOAD)?;
+    let mut payload = vec![0; words[3] as usize];
+    reader.read_exact(&mut payload).await?;
+    Ok((header, payload))
+}
+
+fn validate_header(header: &[u8; 24], limit: usize) -> Result<[u32; 6]> {
+    let words = std::array::from_fn(|index| {
+        u32::from_le_bytes(
+            header[index * 4..index * 4 + 4]
+                .try_into()
+                .expect("header word"),
+        )
+    });
+    let command = words[0];
+    if words[5] != command ^ u32::MAX {
+        return Err(Error::Protocol("invalid frame magic".into()));
+    }
+    if !matches!(command, CNXN | AUTH | OPEN | OKAY | WRTE | CLSE | STLS) {
+        return Err(Error::Protocol("unknown frame command".into()));
+    }
+    if words[3] as usize > limit.min(MAX_PAYLOAD) {
+        return Err(Error::Protocol(
+            "frame exceeds negotiated payload limit".into(),
+        ));
+    }
+    Ok(words)
 }
 
 async fn read_exact_progress<R: AsyncRead + Unpin>(
@@ -153,6 +197,39 @@ fn checksum(bytes: &[u8]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(all(
+        feature = "usb",
+        any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "windows",
+            target_os = "macos"
+        )
+    ))]
+    #[tokio::test]
+    async fn usb_packet_split_preserves_legacy_and_omitted_checksums() {
+        let frame = Frame::new(WRTE, 1, 2, b"usb payload");
+        for skip_checksum in [false, true] {
+            let mut bytes = Vec::new();
+            frame
+                .write_with_checksum(&mut bytes, skip_checksum)
+                .await
+                .unwrap();
+            let (header, payload) = read_wire_packet(&mut bytes.as_slice()).await.unwrap();
+            assert_eq!(&header[..], &bytes[..24]);
+            assert_eq!(payload, frame.payload);
+            let actual = u32::from_le_bytes(header[16..20].try_into().unwrap());
+            assert_eq!(
+                actual,
+                if skip_checksum {
+                    0
+                } else {
+                    checksum(&frame.payload)
+                }
+            );
+        }
+    }
+
     #[tokio::test]
     async fn verifies_magic_checksum_and_limits() {
         let frame = Frame::new(WRTE, 1, 2, b"hello".to_vec());
