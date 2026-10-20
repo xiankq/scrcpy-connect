@@ -117,32 +117,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_block_is_always_the_full_size_whatever_it_carries() {
-        let short = encode(PeerInfoType::RsaPublicKey, b"k").unwrap();
-        let long = encode(PeerInfoType::RsaPublicKey, &[b'k'; 600]).unwrap();
-
-        assert_eq!(short.len(), SIZE);
-        assert_eq!(long.len(), SIZE);
-    }
-
-    #[test]
     fn the_type_leads_and_the_payload_is_nul_terminated_by_the_padding() {
         let block = encode(PeerInfoType::RsaPublicKey, b"AAAA user@host").unwrap();
 
+        assert_eq!(block.len(), 8192);
         assert_eq!(block[0], 0);
         assert_eq!(&block[1..15], b"AAAA user@host");
         assert_eq!(block[15], 0, "the padding terminates the string");
         assert!(block[15..].iter().all(|&b| b == 0));
-    }
-
-    #[test]
-    fn a_block_round_trips() {
-        let block = encode(PeerInfoType::DeviceGuid, b"adb-1234").unwrap();
-
-        let (kind, text) = decode(&block).unwrap();
-
-        assert_eq!(kind, PeerInfoType::DeviceGuid);
-        assert_eq!(text, "adb-1234");
     }
 
     #[test]

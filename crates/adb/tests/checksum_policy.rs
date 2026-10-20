@@ -16,39 +16,6 @@ fn checksum(payload: &[u8]) -> u32 {
     payload.iter().map(|byte| *byte as u32).sum()
 }
 
-async fn negotiated_open_checksum(version: u32) -> (u32, u32) {
-    let (transport, mut peer) = tokio::io::duplex(4096);
-    let client = Client::from_negotiated_transport(
-        transport,
-        DeviceInfo {
-            version,
-            max_payload: 4096,
-            banner: "device::".into(),
-            features: Default::default(),
-        },
-    )
-    .unwrap();
-    let opener = client.clone();
-    let task =
-        tokio::spawn(async move { opener.open("fixture:", OperationOptions::default()).await });
-    let (open, wire_checksum) = wire_frame(&mut peer).await;
-    client.close();
-    task.abort();
-    (wire_checksum, checksum(&open.payload))
-}
-
-#[tokio::test]
-async fn legacy_transport_sends_payload_checksum() {
-    let (actual, expected) = negotiated_open_checksum(protocol::LEGACY_VERSION).await;
-    assert_eq!(actual, expected);
-    assert_ne!(actual, 0);
-}
-
-#[tokio::test]
-async fn modern_transport_omits_payload_checksum() {
-    assert_eq!(negotiated_open_checksum(protocol::VERSION).await.0, 0);
-}
-
 #[tokio::test]
 async fn handshake_has_checksum_before_modern_negotiation() {
     let (transport, mut peer) = tokio::io::duplex(4096);
@@ -81,18 +48,7 @@ async fn handshake_has_checksum_before_modern_negotiation() {
 }
 
 #[tokio::test]
-async fn public_frame_write_keeps_checksum() {
-    let frame = Frame::new(protocol::WRTE, 1, 2, b"payload");
-    let mut bytes = Vec::new();
-    frame.write(&mut bytes).await.unwrap();
-    assert_eq!(
-        wire_frame(&mut bytes.as_slice()).await.1,
-        checksum(&frame.payload)
-    );
-}
-
-#[tokio::test]
-async fn negotiated_checksum_policy_covers_stream_data() {
+async fn negotiated_checksum_policy_covers_open_and_stream_data() {
     for version in [protocol::LEGACY_VERSION, protocol::VERSION] {
         let (transport, mut peer) = tokio::io::duplex(4096);
         let client = Client::from_negotiated_transport(
@@ -112,7 +68,19 @@ async fn negotiated_checksum_policy_covers_stream_data() {
                 .await
                 .unwrap()
         });
-        let (open, _) = wire_frame(&mut peer).await;
+        let (open, actual) = wire_frame(&mut peer).await;
+        assert_eq!(open.command, protocol::OPEN);
+        assert_eq!(
+            actual,
+            if version >= protocol::VERSION {
+                0
+            } else {
+                checksum(&open.payload)
+            }
+        );
+        if version == protocol::LEGACY_VERSION {
+            assert_ne!(actual, 0);
+        }
         Frame::new(protocol::OKAY, 41, open.arg0, [])
             .write(&mut peer)
             .await

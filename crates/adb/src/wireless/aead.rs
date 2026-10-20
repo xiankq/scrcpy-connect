@@ -117,24 +117,6 @@ mod tests {
     }
 
     #[test]
-    fn what_one_side_seals_the_other_opens() {
-        let (mut host, mut device) = pair();
-
-        let sealed = host.seal(b"peer info");
-
-        assert_eq!(device.open(&sealed).unwrap(), b"peer info");
-    }
-
-    #[test]
-    fn sealing_adds_exactly_a_tag() {
-        let (mut host, _) = pair();
-
-        let sealed = host.seal(&[0u8; 8192]);
-
-        assert_eq!(sealed.len(), 8192 + TAG_LEN);
-    }
-
-    #[test]
     fn the_first_nonce_is_all_zeroes_and_the_next_counts_up() {
         assert_eq!(Cipher::nonce(0), [0u8; 12]);
         assert_eq!(

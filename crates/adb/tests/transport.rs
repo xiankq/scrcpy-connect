@@ -113,6 +113,69 @@ fn options() -> OperationOptions {
 }
 
 #[tokio::test]
+async fn classic_readiness_is_idempotent_without_precrediting_future_writes() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (flushed, ready) = tokio::sync::oneshot::channel();
+    let (release, released) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        handshake(&mut socket, "").await;
+        let first = read(&mut socket).await;
+        send(&mut socket, protocol::OKAY, 81, first.arg0, &[]).await;
+        let frame = read(&mut socket).await;
+        assert_eq!(frame.command, protocol::WRTE);
+        assert_eq!(frame.payload, vec![7; 4096]);
+        // AOSP can send readiness after each partial local socket flush of
+        // this one packet. These are readiness notifications, not byte credit.
+        send(&mut socket, protocol::OKAY, 81, first.arg0, &[]).await;
+        send(&mut socket, protocol::OKAY, 81, first.arg0, &[]).await;
+        send(&mut socket, protocol::OKAY, 81, first.arg0, &[]).await;
+        let sibling = read(&mut socket).await;
+        assert_eq!(sibling.command, protocol::OPEN);
+        send(&mut socket, protocol::OKAY, 82, sibling.arg0, &[]).await;
+        send(&mut socket, protocol::WRTE, 82, sibling.arg0, b"healthy").await;
+        flushed.send(()).unwrap();
+        let next = loop {
+            let frame = read(&mut socket).await;
+            if frame.command == protocol::WRTE {
+                break frame;
+            }
+        };
+        assert_eq!(next.payload, b"next");
+        released.await.unwrap();
+        send(&mut socket, protocol::OKAY, 81, first.arg0, &[]).await;
+        while Frame::read(&mut socket, protocol::MAX_PAYLOAD, true)
+            .await
+            .is_ok()
+        {}
+    });
+    let client = Client::connect_tcp(address, ConnectOptions::default())
+        .await
+        .unwrap();
+    let mut stream = client.open("sync:", options()).await.unwrap();
+    stream.write_all(&vec![7; 4096]).await.unwrap();
+    let mut sibling = client.open("shell:alive", options()).await.unwrap();
+    let mut bytes = [0; 7];
+    sibling.read_exact(&mut bytes).await.unwrap();
+    assert_eq!(&bytes, b"healthy");
+    ready.await.unwrap();
+    let pending = stream.write_all(b"next");
+    tokio::pin!(pending);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(30), &mut pending)
+            .await
+            .is_err(),
+        "old readiness must not acknowledge a future write"
+    );
+    release.send(()).unwrap();
+    pending.await.unwrap();
+    assert!(!client.is_closed());
+    client.close();
+    server.await.unwrap();
+}
+
+#[tokio::test]
 async fn sync_lstat_selects_nofollow_protocol_and_preserves_metadata_widths() {
     for modern in [false, true] {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -744,5 +807,60 @@ async fn excess_unacknowledged_data_is_a_protocol_failure() {
     assert_eq!(stream.read(&mut data).await.unwrap(), 5);
     assert_eq!(stream.read(&mut data).await.unwrap(), 4);
     assert!(matches!(stream.read(&mut data).await, Err(Error::Closed)));
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn daemon_restart_services_preserve_responses_and_do_not_reconnect() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        handshake(&mut socket, "").await;
+        for (service, response) in [
+            (
+                b"tcpip:4321\0".as_slice(),
+                b"restarting in TCP mode port: 4321\n".as_slice(),
+            ),
+            (b"usb:\0".as_slice(), b"daemon rejected switch\n".as_slice()),
+            (b"oversize:\0".as_slice(), b"abcdef".as_slice()),
+        ] {
+            let open = loop {
+                let frame = read(&mut socket).await;
+                if frame.command == protocol::OPEN {
+                    break frame;
+                }
+            };
+            assert_eq!(open.payload, service);
+            send(&mut socket, protocol::OKAY, 88, open.arg0, &[]).await;
+            send(&mut socket, protocol::WRTE, 88, open.arg0, response).await;
+            send(&mut socket, protocol::CLSE, 88, open.arg0, &[]).await;
+        }
+        loop {
+            if read(&mut socket).await.command == protocol::CLSE {
+                break;
+            }
+        }
+    });
+    let client = Client::connect_tcp(address, ConnectOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        client.tcpip(4321, options()).await.unwrap(),
+        b"restarting in TCP mode port: 4321\n"
+    );
+    assert_eq!(
+        client.usb(options()).await.unwrap(),
+        b"daemon rejected switch\n"
+    );
+    assert!(matches!(
+        client.service_response("oversize:", 3, options()).await,
+        Err(Error::OutputLimit)
+    ));
+    assert!(matches!(
+        client.tcpip(0, options()).await,
+        Err(Error::InvalidArgument(_))
+    ));
+    assert!(!client.is_closed());
     server.await.unwrap();
 }

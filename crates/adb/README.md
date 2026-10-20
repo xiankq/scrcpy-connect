@@ -45,17 +45,24 @@ after Android's authorization framework becomes ready; the connection deadline
 and cancellation still bound the handshake. These fixtures establish protocol
 compatibility, not a tested minimum Android release for every service.
 
+`ConnectOptions::tcp` exposes nodelay, optional keepalive and Android/Linux
+TCP user timeout. The library defaults to nodelay with keepalive and user timeout
+disabled; applications choose their own transport-loss policy. These options
+apply only to `connect_tcp`; externally supplied transports retain their socket
+configuration.
+
 `Client::is_closed()` reports an observed close/cancellation, not proof that the
 remote daemon is responsive. `inbound_activity()` provides an opaque snapshot:
 compare only for equality on the same connection. It advances on nonempty reads,
 including partial headers and payloads; it is neither a validated-frame count nor
-a timestamp. The library does not start application health probes. The product
-Core uses this signal to probe idle connections without interrupting active reads.
+a timestamp. The library does not start application health probes. Applications can use this signal to probe idle connections without interrupting active reads.
 
 `ConnectOptions::burst_mode` opts into AOSP's experimental `delayed_ack` byte-credit
 flow control; it defaults to `false`. Both peers must advertise support, and
 `Client::burst_mode()` reports the actual negotiated mode. Without mutual support
-the connection retains classic per-packet acknowledgements. External connectors
+the connection retains classic readiness flow control. Empty OKAY notifications
+are idempotent: adbd may send several while partially flushing one WRTE; idle
+readiness never accumulates credit for future writes. External connectors
 must use `from_negotiated_transport_with_burst` only when their own handshake
 advertised the feature; `from_negotiated_transport` always keeps classic framing.
 Changing an application's preference does not renegotiate an existing connection.
@@ -80,6 +87,10 @@ receipts, while retaining data. A payload already in flight may finish one call
 to its old clock before its receipt is discarded. With no subscriptions, new
 WRTEs do not sample clocks or take an additional route lock; an atomic check and
 the optional metadata fields remain.
+
+`tcpip` and `usb` return the daemon's original response bytes. They never
+reconnect, persist a device record or treat the response as proof that a new
+connection is usable. `service_response` permits other bounded adbd replies.
 
 `shell` preserves stdout/stderr bytes and shell_v2 exit status; legacy shell has
 no exit status. `shell_session` exposes raw/PTY stdin, close-stdin, terminal resize
@@ -162,8 +173,7 @@ does not require encryption. Set `tls_policy: TlsPolicy::Required` for a modern
 wireless endpoint. This rejects plaintext CNXN and AUTH before sending a
 signature or public key, and rejects missing TLS configuration before sending
 the initial handshake. `TlsPolicy::Optional` is the default for legacy TCP/USB
-compatibility and may accept plaintext AUTH/CNXN. `Discovery::reconnect_next`
-always requires TLS for its selected `_adb-tls-connect` services.
+compatibility and may accept plaintext AUTH/CNXN. Callers selecting `_adb-tls-connect` services must explicitly require TLS.
 
 This follows the fixed AOSP TLS negotiation path: adbd sends STLS as the first
 response in TLS mode even when host authorization is disabled, and AUTH does
@@ -177,7 +187,8 @@ explicitly experimental; applications must deliberately call
 Software RSA uses the RustCrypto rsa crate with blinding for private operations;
 its outstanding timing advisory and the provider's maturity require a release
 security assessment. Successful interoperability alone is not that assessment.
-The discovery module exposes mDNS events and trusted-GUID reconnect selection.
+The discovery module exposes raw mDNS events and resolver restart. Trust, endpoint
+selection and reconnect scheduling belong to callers.
 Mobile applications manage local-network/multicast authorization outside this
 crate.
 

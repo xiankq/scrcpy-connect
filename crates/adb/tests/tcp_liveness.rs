@@ -2,7 +2,7 @@
 #![cfg(any(target_os = "linux", target_os = "android"))]
 
 use interop_adb::{
-    Client, ConnectOptions, OperationOptions,
+    Client, ConnectOptions, KeepaliveOptions, OperationOptions, TcpOptions,
     protocol::{self, Frame},
 };
 use socket2::{SockFilter, SockRef};
@@ -32,9 +32,23 @@ async fn connected() -> (Client, TcpStream) {
         .unwrap();
         socket
     });
-    let client = Client::connect_tcp(address, ConnectOptions::default())
-        .await
-        .unwrap();
+    let client = Client::connect_tcp(
+        address,
+        ConnectOptions {
+            tcp: TcpOptions {
+                nodelay: true,
+                keepalive: Some(KeepaliveOptions {
+                    idle: Duration::from_secs(1),
+                    interval: Duration::from_secs(1),
+                    retries: 10,
+                }),
+                user_timeout: Some(Duration::from_secs(11)),
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     (client, peer.await.unwrap())
 }
 

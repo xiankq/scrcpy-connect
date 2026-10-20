@@ -194,6 +194,46 @@ impl ShellSession {
 }
 
 impl Client {
+    /// Read an adbd service response without interpreting its outcome.
+    /// A restart response does not prove that a new transport is available.
+    pub async fn service_response(
+        &self,
+        service: &str,
+        max_output: usize,
+        options: OperationOptions,
+    ) -> Result<Vec<u8>> {
+        bounded(options.timeout, &options.cancellation, async {
+            let mut stream = self.open(service, options.clone()).await?;
+            let mut result = Vec::new();
+            let mut buffer = [0; 4096];
+            loop {
+                let count = stream.read(&mut buffer).await?;
+                if count == 0 {
+                    return Ok(result);
+                }
+                if count > max_output.saturating_sub(result.len()) {
+                    return Err(Error::OutputLimit);
+                }
+                result.extend_from_slice(&buffer[..count]);
+            }
+        })
+        .await
+    }
+
+    /// Ask adbd to listen over TCP. Returns the daemon's unmodified response.
+    pub async fn tcpip(&self, port: u16, options: OperationOptions) -> Result<Vec<u8>> {
+        if port == 0 {
+            return Err(Error::InvalidArgument("TCP port must be nonzero"));
+        }
+        self.service_response(&format!("tcpip:{port}"), 8192, options)
+            .await
+    }
+
+    /// Ask adbd to return to USB mode. Returns the daemon's unmodified response.
+    pub async fn usb(&self, options: OperationOptions) -> Result<Vec<u8>> {
+        self.service_response("usb:", 8192, options).await
+    }
+
     /// Execute Android's cmd utility with individually quoted arguments.
     pub async fn cmd(
         &self,

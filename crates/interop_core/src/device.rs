@@ -441,6 +441,7 @@ impl Runtime {
     ) -> CoreResult<ConnectOptions> {
         let material = self.identities.selected(id).await?;
         Ok(ConnectOptions {
+            tcp: Default::default(),
             identity: Some(material.identity.clone()),
             tls: Some(material.tls().await?),
             tls_policy: TlsPolicy::Optional,

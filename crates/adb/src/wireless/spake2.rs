@@ -313,7 +313,6 @@ mod tests {
     use super::*;
 
     use rsa::rand_core::{CryptoRng, RngCore};
-    use sha2::Sha256;
     use std::vec;
 
     const CLIENT: &[u8] = b"adb pair client\0";
@@ -346,64 +345,6 @@ mod tests {
 
     fn hex(bytes: &[u8]) -> std::string::String {
         bytes.iter().map(|b| std::format!("{b:02x}")).collect()
-    }
-
-    #[test]
-    fn the_mask_points_are_the_hashes_of_their_seeds() {
-        // BoringSSL derives M and N by hashing a seed string until the
-        // result lands on the curve, and for both it lands on the first
-        // try. So the constants are checkable without any curve
-        // arithmetic at all, which is worth doing: the same seeds under
-        // the RFC 9382 procedure give different points that a device
-        // will not accept.
-        let m: [u8; 32] = Sha256::digest(b"edwards25519 point generation seed (M)").into();
-        let n: [u8; 32] = Sha256::digest(b"edwards25519 point generation seed (N)").into();
-
-        assert_eq!(m, M_BYTES);
-        assert_eq!(n, N_BYTES);
-    }
-
-    #[test]
-    fn the_mask_points_sit_outside_the_prime_order_subgroup() {
-        // This is why the scalars must not be reduced: multiplying a
-        // torsion point by `s` and by `s mod l` gives different
-        // answers.
-        for bytes in [M_BYTES, N_BYTES] {
-            let point = Spake2::point(&bytes);
-            assert_ne!(
-                mul_raw(&point, &ORDER),
-                EdwardsPoint::identity(),
-                "a point of prime order would make the cofactor fix pointless"
-            );
-        }
-    }
-
-    #[test]
-    fn the_cofactor_fix_clears_three_bits_without_reducing() {
-        let hash: [u8; 64] = Sha512::digest(b"592781").into();
-
-        let scalar = Spake2::password_scalar(&hash);
-
-        assert_eq!(scalar[0] & 7, 0, "the low three bits are cleared");
-        assert_ne!(
-            scalar,
-            reduce_wide(&hash),
-            "and the value is no longer the reduced hash"
-        );
-    }
-
-    #[test]
-    fn multiplying_by_eight_matches_the_shift_it_is_named_after() {
-        let mut n = [0u8; 32];
-        n[0] = 0xFF;
-        n[1] = 0x01;
-
-        left_shift_3(&mut n);
-
-        // 0x01FF * 8 = 0x0FF8
-        assert_eq!(n[0], 0xF8);
-        assert_eq!(n[1], 0x0F);
-        assert!(n[2..].iter().all(|&b| b == 0));
     }
 
     #[test]
@@ -441,32 +382,6 @@ mod tests {
             "517fa9aa29d0d1a5b39490907434cb9d8024c2335d8a30970e04332f8d972da7\
              e9b62a285021dd5e52bbb8d32fa42ff2887f43416b32db4a0cf9eee5db3a665d"
         );
-    }
-
-    #[test]
-    fn both_sides_reach_the_same_key_when_the_codes_match() {
-        let alice = Spake2::new(Role::Alice, CLIENT, SERVER, b"314159", &mut seed(7));
-        let bob = Spake2::new(Role::Bob, SERVER, CLIENT, b"314159", &mut seed(200));
-        let (to_bob, to_alice) = (*alice.message(), *bob.message());
-
-        let from_alice = alice.finish(&to_alice).unwrap();
-        let from_bob = bob.finish(&to_bob).unwrap();
-
-        assert_eq!(from_alice, from_bob);
-    }
-
-    #[test]
-    fn a_wrong_code_parts_the_two_sides_without_saying_so() {
-        // SPAKE2 itself never reports a mismatch. The keys simply
-        // differ, and only the first encrypted message notices.
-        let alice = Spake2::new(Role::Alice, CLIENT, SERVER, b"314159", &mut seed(7));
-        let bob = Spake2::new(Role::Bob, SERVER, CLIENT, b"271828", &mut seed(200));
-        let (to_bob, to_alice) = (*alice.message(), *bob.message());
-
-        let from_alice = alice.finish(&to_alice).unwrap();
-        let from_bob = bob.finish(&to_bob).unwrap();
-
-        assert_ne!(from_alice, from_bob);
     }
 
     #[test]

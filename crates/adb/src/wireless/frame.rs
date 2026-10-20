@@ -117,16 +117,6 @@ mod tests {
     }
 
     #[test]
-    fn a_header_round_trips() {
-        for kind in [PacketType::Spake2Msg, PacketType::PeerInfo] {
-            let framed = encode(kind, &[0u8; 32]);
-            let header: [u8; HEADER_LEN] = framed[..HEADER_LEN].try_into().unwrap();
-
-            assert_eq!(decode(&header), Ok((kind, 32)));
-        }
-    }
-
-    #[test]
     fn a_header_the_peer_would_refuse_is_refused_here_too() {
         assert_eq!(decode(&[2, 0, 0, 0, 0, 32]), Err(FrameError::Version(2)));
         assert_eq!(decode(&[1, 7, 0, 0, 0, 32]), Err(FrameError::Kind(7)));

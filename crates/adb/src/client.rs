@@ -8,7 +8,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -39,6 +39,7 @@ impl Default for OperationOptions {
 
 #[derive(Debug, Clone)]
 pub struct ConnectOptions {
+    pub tcp: crate::TcpOptions,
     pub identity: Option<Identity>,
     /// Advertise experimental AOSP delayed_ack. Active only when the peer also supports it.
     /// Uses a conservative 64 KiB receive window per stream (plus one negotiated
@@ -67,6 +68,7 @@ pub enum TlsPolicy {
 impl Default for ConnectOptions {
     fn default() -> Self {
         Self {
+            tcp: crate::TcpOptions::default(),
             identity: None,
             burst_mode: false,
             request_authorization: false,
@@ -109,7 +111,10 @@ enum ControlResponse {
     RejectOpen(Frame),
 }
 
+static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+
 struct Inner {
+    connection_id: u64,
     info: DeviceInfo,
     burst_mode: bool,
     receive_budget: crate::burst::Budget,
@@ -168,7 +173,7 @@ impl Client {
             &options.operations.cancellation,
             async {
                 let stream = TcpStream::connect(address).await?;
-                crate::tcp::configure(&stream)?;
+                crate::tcp::configure(&stream, &options.tcp)?;
                 Self::connect_transport(stream, options.clone()).await
             },
         )
@@ -356,7 +361,23 @@ impl Client {
         let routes: Routes = Arc::new(Mutex::new(HashMap::new()));
         let cancellation = CancellationToken::new();
         let failure = Arc::new(Mutex::new(None));
+        let mut connection_id = NEXT_CONNECTION_ID.load(Ordering::Relaxed);
+        loop {
+            let next = connection_id
+                .checked_add(1)
+                .ok_or_else(|| Error::Protocol("connection ID space exhausted".into()))?;
+            match NEXT_CONNECTION_ID.compare_exchange_weak(
+                connection_id,
+                next,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(current) => connection_id = current,
+            }
+        }
         let inner = Arc::new(Inner {
+            connection_id,
             info,
             burst_mode,
             receive_budget: Default::default(),
@@ -492,13 +513,18 @@ impl Client {
                                         }
                                     }
                                 }
-                                protocol::OKAY
-                                    if frame.payload.is_empty() && route.awaiting_ack =>
-                                {
-                                    route.remote = frame.arg0;
-                                    route.awaiting_ack = false;
-                                    if route.ack.try_send(frame.arg0).is_err() {
-                                        invalid = true;
+                                protocol::OKAY if frame.payload.is_empty() => {
+                                    // Classic ADB signals socket readiness, not byte
+                                    // credit: adbd can send several OKAYs while
+                                    // partially flushing a single WRTE. Coalesce
+                                    // readiness while idle; it cannot pre-authorize
+                                    // a later write or accumulate channel entries.
+                                    if route.awaiting_ack {
+                                        route.remote = frame.arg0;
+                                        route.awaiting_ack = false;
+                                        if route.ack.try_send(frame.arg0).is_err() {
+                                            invalid = true;
+                                        }
                                     }
                                 }
                                 protocol::WRTE if route.remote != 0 => {
@@ -635,6 +661,12 @@ impl Client {
     pub fn inbound_activity(&self) -> usize {
         self.inner.inbound_activity.load(Ordering::Relaxed)
     }
+    /// Opaque process-local transport identifier. Clones share it; new connections never reuse it.
+    /// It is not a persistent device identity.
+    pub fn connection_id(&self) -> u64 {
+        self.inner.connection_id
+    }
+
     /// Whether both handles share this exact transport. Clones do; reconnects
     /// do not, even when their device banners match. This is not a liveness test.
     pub fn same_connection(&self, other: &Self) -> bool {

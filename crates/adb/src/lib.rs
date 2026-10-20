@@ -24,4 +24,5 @@ pub use processes::JdwpTracker;
 pub use read_trace::ReadTrace;
 pub use reverse::{ReverseBinding, ReverseMapping, ReverseSocket};
 pub use services::{RebootTarget, RemoteSocket, ShellEvent, ShellMode, ShellOutput, ShellSession};
+pub use tcp::{KeepaliveOptions, TcpOptions};
 pub use tokio_util::sync::CancellationToken;

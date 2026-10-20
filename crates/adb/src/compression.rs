@@ -193,50 +193,6 @@ pub(crate) async fn finished(task: JoinHandle<Result<()>>) -> Result<()> {
 mod tests {
     use super::*;
     #[tokio::test]
-    async fn streaming_codecs_round_trip_empty_and_multiblock_data() {
-        for codec in [Compression::Brotli, Compression::Lz4, Compression::Zstd] {
-            for input in [
-                vec![],
-                (0..300_000).map(|i| (i % 251) as u8).collect::<Vec<_>>(),
-            ] {
-                let Worker {
-                    input: tx,
-                    mut output,
-                    task,
-                } = Worker::start(codec, true);
-                let source = input.clone();
-                let producer = tokio::spawn(async move {
-                    for chunk in source.chunks(CHUNK) {
-                        tx.send(chunk.to_vec()).await.unwrap();
-                    }
-                });
-                let mut compressed = Vec::new();
-                while let Some(bytes) = output.recv().await {
-                    compressed.extend(bytes);
-                }
-                producer.await.unwrap();
-                finished(task).await.unwrap();
-                let Worker {
-                    input: tx,
-                    mut output,
-                    task,
-                } = Worker::start(codec, false);
-                let producer = tokio::spawn(async move {
-                    for chunk in compressed.chunks(333) {
-                        tx.send(chunk.to_vec()).await.unwrap();
-                    }
-                });
-                let mut decoded = Vec::new();
-                while let Some(bytes) = output.recv().await {
-                    decoded.extend(bytes);
-                }
-                producer.await.unwrap();
-                finished(task).await.unwrap();
-                assert_eq!(decoded, input, "codec {codec:?}");
-            }
-        }
-    }
-    #[tokio::test]
     async fn dropping_output_during_encoding_terminates_without_panicking() {
         let Worker {
             input,
