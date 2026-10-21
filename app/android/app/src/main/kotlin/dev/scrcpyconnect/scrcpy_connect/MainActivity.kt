@@ -75,6 +75,8 @@ class MainActivity : FlutterActivity() {
         super.onStart()
         audio.visible(this, true)
         DiscoveryNetwork.acquire(this, activityLease)
+        ConnectionService.appEntered(this)
+        AudioPlaybackService.refreshNotification(this)
     }
 
     override fun onStop() {
@@ -145,7 +147,7 @@ class MainActivity : FlutterActivity() {
                             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 2102)
                         }
                     }
-                    ConnectionService.keepConnections(this, enabled)
+                    ConnectionService.keepConnections(this, enabled, automatic = call.argument<Boolean>("automatic") == true)
                     result.success(backgroundStatus() + mapOf("requested" to enabled))
                 }
                 else -> result.notImplemented()
@@ -154,20 +156,16 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun backgroundStatus(): Map<String, Any> {
-        val allowed = Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        return mapOf("supported" to true, "running" to ConnectionService.running,
-            "connectionRequested" to ConnectionService.connectionRequested,
-            "audioRequested" to ConnectionService.audioRequested,
-            "notificationPermission" to allowed, "canRequest" to (!allowed || !ConnectionService.running || !ConnectionService.connectionRequested),
-            "title" to (if (ConnectionService.running) "设备活动正在保持" else "后台保持尚未启动"),
-            "reason" to (if (!allowed) "尚未允许显示连接通知。系统任务管理器仍可停止活动；允许通知后，可从通知栏返回或停止连接。"
-                else if (ConnectionService.running) "已启动系统前台服务。后台活动仍受系统电量与网络策略影响。"
-                else "可在有设备活动时启用后台保持；不会自动重启已主动停止的连接。"))
+        return ConnectionService.status(this)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 2102) emit(mapOf("type" to "background.changed", "data" to backgroundStatus()))
+        if (requestCode == 2102) {
+            ConnectionService.refreshNotification(this)
+            AudioPlaybackService.refreshNotification(this)
+            emit(mapOf("type" to "background.changed", "data" to backgroundStatus()))
+        }
     }
 
     private fun authorizeUsb(call: MethodCall, result: MethodChannel.Result) {

@@ -169,6 +169,8 @@ Future<void> main(List<String> arguments) async {
         ]);
     if (kind != 'audio') {
       await compile([
+        path.join(source, 'BackgroundKeepAliveState.kt'),
+        path.join(tests, 'BackgroundKeepAliveTest.kt'),
         path.join(source, 'AudioSessionOwnership.kt'),
         path.join(source, 'NativeLeaseOwnership.kt'),
         path.join(tests, 'NativeOwnershipTest.kt'),
@@ -177,6 +179,7 @@ Future<void> main(List<String> arguments) async {
         path.join(tests, 'documents/DocumentPickerReplyTest.kt'),
       ]);
       await execute('NativeOwnershipTest');
+      await execute('BackgroundKeepAliveTest');
       await execute('ActivityLeaseTest');
       await execute('DocumentPickerReplyTest', embedding: true);
     }

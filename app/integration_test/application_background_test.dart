@@ -1,0 +1,95 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:interop_bridge/interop_bridge.dart';
+
+// Runs the production bridge and actual Android services with an isolated
+// private directory. No device, remote page, capture or audio output is opened.
+void main() {
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  const platform = MethodChannel('dev.scrcpyconnect/platform');
+
+  testWidgets(
+    'application entry, explicit preference and engine reattachment keep background independent of media',
+    (tester) async {
+      expect(
+        Platform.isAndroid,
+        true,
+        reason: 'This acceptance requires an actual Android host.',
+      );
+      final directory = await Directory.systemTemp.createTemp(
+        'background-acceptance-',
+      );
+      InteropBridge? bridge;
+      Future<Map<String, dynamic>> nativeStatus() async =>
+          Map<String, dynamic>.from(
+            await platform.invokeMethod<Map<Object?, Object?>>(
+                  'background.status',
+                ) ??
+                {},
+          );
+      Future<Map<String, dynamic>> waitRunning(bool running) async {
+        final deadline = DateTime.now().add(const Duration(seconds: 8));
+        var status = await nativeStatus();
+        while (status['running'] != running &&
+            DateTime.now().isBefore(deadline)) {
+          await tester.pump(const Duration(milliseconds: 100));
+          status = await nativeStatus();
+        }
+        expect(status['running'], running, reason: '$status');
+        return status;
+      }
+
+      try {
+        bridge = await InteropBridge.initialize(dataDirectory: directory.path);
+        expect(
+          (await bridge.request('settings.get'))['backgroundKeepAlive'],
+          true,
+        );
+        var status = await waitRunning(true);
+        expect(status['connectionRequested'], true);
+        expect(status['audioRequested'], false);
+        expect(status['mediaPlaybackReady'], false);
+        expect((await bridge.request('session.list'))['sessions'], isEmpty);
+        expect((await bridge.request('audio.sources'))['sources'], isEmpty);
+
+        await bridge.request('settings.update', {'backgroundKeepAlive': false});
+        await waitRunning(false);
+        await bridge.request('settings.get');
+        await tester.pump(const Duration(milliseconds: 300));
+        expect((await nativeStatus())['running'], false);
+
+        await bridge.request('settings.update', {'backgroundKeepAlive': true});
+        await waitRunning(true);
+        await bridge.dispose();
+        bridge = null;
+        // Disposing outputs/observers must not retire application background.
+        await waitRunning(true);
+        bridge = await InteropBridge.initialize(dataDirectory: directory.path);
+        status = await waitRunning(true);
+        expect(status['audioRequested'], false);
+        expect(status['mediaPlaybackReady'], false);
+        expect((await bridge.request('session.list'))['sessions'], isEmpty);
+        expect((await bridge.request('audio.sources'))['sources'], isEmpty);
+        binding.reportData = {
+          'backgroundApplicationEntry': true,
+          'backgroundExplicitPreference': true,
+          'backgroundEngineReattachment': true,
+          'noMediaStarted': true,
+        };
+      } finally {
+        if (bridge != null) {
+          await bridge.request('settings.update', {
+            'backgroundKeepAlive': false,
+          });
+          await waitRunning(false);
+          await bridge.dispose();
+        }
+        if (await directory.exists()) await directory.delete(recursive: true);
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+}

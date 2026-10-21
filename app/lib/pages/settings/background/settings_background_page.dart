@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -25,6 +27,25 @@ class BackgroundPage extends HookConsumerWidget {
     );
     final changing = useState(false);
     final revision = useState(0);
+    useEffect(() {
+      var active = true;
+      void refresh() {
+        if (active) revision.value++;
+      }
+
+      final subscription = controller.eventStream().listen((event) {
+        if (event['type'] == 'background.changed' ||
+            event['type'] == 'background.failed') {
+          refresh();
+        }
+      });
+      final lifecycle = AppLifecycleListener(onResume: refresh);
+      return () {
+        active = false;
+        lifecycle.dispose();
+        unawaited(subscription.cancel());
+      };
+    }, [controller]);
     final alerts = ref.watch(systemNotificationCoordinatorProvider);
     useListenable(alerts.changes);
     final alertStatus = alerts.status;

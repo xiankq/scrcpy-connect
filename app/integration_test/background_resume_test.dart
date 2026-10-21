@@ -117,9 +117,12 @@ void main() {
         await binding.convertFlutterSurfaceToImage();
         await tester.pump(const Duration(milliseconds: 300));
         await binding.takeScreenshot('remote-after-actual-background');
-        final exit = find.bySemanticsLabel(RegExp('退出控制，返回'));
+        final exit = find.bySemanticsLabel(RegExp('展开画面工具，'));
         expect(exit, findsOneWidget);
         await tester.tap(exit);
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
         await waitFor(
           tester,
           () => find.byType(RemotePage).evaluate().isEmpty,
