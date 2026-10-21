@@ -23,10 +23,14 @@ class QrPairPage extends HookWidget {
     this.onUsePairingCode,
     this.onConnectionPort,
     this.onPaired,
+    this.prepareConnection,
+    this.autoGenerate = true,
   });
   final AppController controller;
   final String? deviceId;
   final bool embedded;
+  final bool autoGenerate;
+  final Future<Json?> Function()? prepareConnection;
   final VoidCallback? onUsePairingCode;
   final ValueChanged<Json>? onPaired;
   final void Function(String address, String? deviceId)? onConnectionPort;
@@ -57,9 +61,18 @@ class QrPairPage extends HookWidget {
           outcome.value = payload['result'] is Map<Object?, Object?>
               ? jsonObject(payload['result'])
               : {};
+          if (deviceId != null && responseDeviceId(outcome.value) != deviceId) {
+            outcome.value = null;
+            message.value = '配对结果不属于原设备，请重新检查。';
+            attempt.value = null;
+            return;
+          }
           onPaired?.call(outcome.value!);
+          final failure = outcome.value!['connectionFailure'];
           message.value = outcome.value!['connected'] == true
               ? '配对与连接已完成。'
+              : failure is Map<Object?, Object?>
+              ? '已配对，尚未连接。${value(jsonObject(failure), 'message')}'
               : '已配对，尚未连接';
           attempt.value = null;
           controller.refreshDevices();
@@ -88,7 +101,14 @@ class QrPairPage extends HookWidget {
             'attemptId': old,
           });
         }
+        final params =
+            await prepareConnection?.call() ??
+            (prepareConnection == null ? <String, dynamic>{} : null);
+        if (params == null || !context.mounted || generation.value != current) {
+          return;
+        }
         final result = await controller.execute(InteropCommand.devicesPairQr, {
+          ...params,
           'deviceId': ?deviceId,
         });
         final id = value(result, 'attemptId');
@@ -131,7 +151,7 @@ class QrPairPage extends HookWidget {
           }).ignore();
         }
       });
-      Future.microtask(generate);
+      if (autoGenerate) Future.microtask(generate);
       return () {
         subscription.cancel();
         timer.cancel();
@@ -158,7 +178,7 @@ class QrPairPage extends HookWidget {
           '在手机的无线调试中选择“使用二维码配对设备”，扫描此二维码。',
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        const SizedBox(height: DesignTokens.spacingXl),
+        const SizedBox(height: DesignTokens.spacingLg),
       ],
       if (busy.value) const Center(child: CircularProgressIndicator()),
       if (!busy.value &&
@@ -185,7 +205,7 @@ class QrPairPage extends HookWidget {
           ),
         )
       else if (!busy.value && message.value == null)
-        StateNote(value(data.value ?? {}, 'reason', '未生成二维码，可改用配对码。')),
+        StateNote(value(data.value ?? {}, 'reason', '点击重新生成以获取配对二维码。')),
       if (message.value != null) StateNote(message.value!),
       if (paired != null && responseDeviceId(paired) != null)
         FilledButton(
@@ -258,9 +278,13 @@ class QrPairPage extends HookWidget {
                 },
           child: const Text('使用配对码'),
         ),
-      TextButton(
-        onPressed: busy.value ? null : generate,
-        child: const Text('重新生成'),
+      const SizedBox(height: DesignTokens.spacingSectionTitle),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: busy.value ? null : generate,
+          child: const Text('重新生成'),
+        ),
       ),
     ];
     if (embedded) {

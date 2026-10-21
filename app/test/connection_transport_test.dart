@@ -20,7 +20,8 @@ class _Backend {
 
   Future<Json> request(String command, [Json params = const {}]) async {
     calls.add((command, Map<String, dynamic>.from(params)));
-    if (command == 'devices.connect' && connectFailure != null) {
+    if ((command == 'devices.connect' || command == 'devices.configure') &&
+        connectFailure != null) {
       throw connectFailure!;
     }
     if (command == 'devices.pair' && pairFailure != null) {
@@ -31,6 +32,11 @@ class _Backend {
         'devices': [if (service != null) service],
       },
       'device.info' => record ?? {},
+      'devices.configure' => {
+        'deviceId': params['deviceId'],
+        'connected': true,
+        'device': {'id': params['deviceId'], 'status': 'connected'},
+      },
       'devices.add' => {
         'deviceId': record?['id'] ?? 'new-device',
         'device': {'id': record?['id'] ?? 'new-device', 'status': 'offline'},
@@ -66,7 +72,18 @@ Future<GoRouter> _mount(
   return router;
 }
 
+Future<void> _confirmConfiguration(WidgetTester tester) async {
+  final action = find.widgetWithText(FilledButton, '应用并连接');
+  if (action.evaluate().isNotEmpty) {
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+  }
+}
+
 Future<Json> _submit(WidgetTester tester, _Backend backend) async {
+  final editing = tester
+      .widget<ConnectionFormPage>(find.byType(ConnectionFormPage))
+      .reauthorizing;
   await Scrollable.ensureVisible(
     tester.element(find.text('连接设备')),
     alignment: .5,
@@ -74,12 +91,23 @@ Future<Json> _submit(WidgetTester tester, _Backend backend) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('连接设备'));
   await tester.pumpAndSettle();
-  final added = backend.calls.singleWhere((call) => call.$1 == 'devices.add');
-  final connected = backend.calls.singleWhere(
-    (call) => call.$1 == 'devices.connect',
+  await _confirmConfiguration(tester);
+  final added = backend.calls.singleWhere(
+    (call) => call.$1 == (editing ? 'devices.configure' : 'devices.add'),
   );
-  expect(connected.$2['attemptId'], added.$2['attemptId']);
-  expect(connected.$2['deviceId'], backend.record?['id'] ?? 'new-device');
+  if (editing) {
+    expect(
+      backend.calls.where((c) => c.$1 == 'devices.connect'),
+      isEmpty,
+      reason: 'configuration already verifies and connects the candidate transactionally',
+    );
+  } else {
+    final connected = backend.calls.singleWhere(
+      (call) => call.$1 == 'devices.connect',
+    );
+    expect(connected.$2['attemptId'], added.$2['attemptId']);
+    expect(connected.$2['deviceId'], backend.record?['id'] ?? 'new-device');
+  }
   return added.$2;
 }
 
@@ -303,6 +331,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('配对并连接'));
     await tester.pumpAndSettle();
+    await _confirmConfiguration(tester);
     expect(
       tester
           .widget<ConnectionFailureNote>(find.byType(ConnectionFailureNote))
@@ -342,6 +371,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('配对并连接'));
     await tester.pumpAndSettle();
+    await _confirmConfiguration(tester);
     expect(
       tester
           .widget<TextFormField>(find.byType(TextFormField).at(2))
@@ -351,6 +381,7 @@ void main() {
     );
     await tester.tap(find.text('配对并连接'));
     await tester.pumpAndSettle();
+    await _confirmConfiguration(tester);
     expect(
       backend.calls.where((call) => call.$1 == 'devices.pair'),
       hasLength(1),
@@ -432,6 +463,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('配对并连接'));
       await tester.pumpAndSettle();
+      await _confirmConfiguration(tester);
       final paired = backend.calls.singleWhere(
         (call) => call.$1 == 'devices.pair',
       );
@@ -622,6 +654,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('配对并连接'));
       await tester.pumpAndSettle();
+      await _confirmConfiguration(tester);
       final paired = backend.calls.singleWhere(
         (call) => call.$1 == 'devices.pair',
       );

@@ -12,9 +12,8 @@ import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class AdbIdentityPage extends HookWidget {
-  const AdbIdentityPage({super.key, required this.controller, this.device});
+  const AdbIdentityPage({super.key, required this.controller});
   final AppController controller;
-  final Json? device;
 
   @override
   Widget build(BuildContext context) {
@@ -22,35 +21,22 @@ class AdbIdentityPage extends HookWidget {
     final busy = useState(false);
     final failure = useState<String?>(null);
     final notice = useState<String?>(null);
-    final id = device == null ? null : value(device!, 'id');
-    final global = id == null;
     final future = useMemoized(
-      () => controller.request(
-        global ? 'identity.global.get' : 'identity.device.get',
-        {'deviceId': ?id},
-      ),
-      [id, revision.value],
+      () => controller.request('identity.global.get'),
+      [revision.value],
     );
     final result = useFuture(future);
     final data = result.data;
-    final scope = value(data ?? {}, 'scope');
-    final missingPrivateKey =
-        result.error is RequestFailure &&
-        (result.error! as RequestFailure).code == 'identity_unavailable';
-    final warning = global
-        ? '生成或导入新全局私钥后，使用全局私钥的连接将断开，需要在手机上重新授权。使用设备专用私钥的设备不受影响。'
-        : '更换此设备的私钥将断开其当前连接，需要在手机上重新授权。其他设备不受影响。';
+    const warning = '生成或导入新全局私钥后，使用全局私钥的连接将断开，需要在手机上重新授权。使用设备专用私钥的设备不受影响。';
     Future<void> change(String command, [String? pem]) async {
       busy.value = true;
       failure.value = null;
       notice.value = null;
       try {
         final response = await controller.request(command, {
-          'deviceId': ?id,
           'privateKeyPem': ?pem,
         });
-        if (value(response, 'fingerprint').isEmpty ||
-            (id != null && response['deviceId'] != id)) {
+        if (value(response, 'fingerprint').isEmpty) {
           throw const RequestFailure(
             'identity_result_invalid',
             '无法核验私钥更新结果，请重新读取。',
@@ -77,16 +63,7 @@ class AdbIdentityPage extends HookWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    global
-                        ? '全局私钥'
-                        : scope == 'device'
-                        ? '设备专用私钥'
-                        : scope == 'global'
-                        ? '继承全局私钥'
-                        : '私钥作用范围尚未读取',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  Text('全局私钥', style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(height: DesignTokens.spacingXs),
                   SelectableText(
                     value(
@@ -98,13 +75,6 @@ class AdbIdentityPage extends HookWidget {
                     ),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  if (!global) ...[
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Text(
-                      '用于此设备的调试授权身份。',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -138,53 +108,29 @@ class AdbIdentityPage extends HookWidget {
                           !context.mounted) {
                         return;
                       }
-                      await change(
-                        global
-                            ? 'identity.global.import'
-                            : 'identity.device.import',
-                        pem,
-                      );
+                      await change('identity.global.import', pem);
                     },
               child: Text(busy.value ? '正在更新…' : '导入私钥'),
             ),
             const SizedBox(height: DesignTokens.spacingXs),
-            if (global)
-              OutlinedButton(
-                onPressed: busy.value
-                    ? null
-                    : () async {
-                        if (!await confirmConnectionChange(
-                              context,
-                              '重置全局 ADB 私钥？',
-                              '将生成新的全局私钥。使用全局私钥的设备连接将断开，需在手机上重新授权；设备专用私钥不受影响。',
-                              action: '重置密钥',
-                              danger: true,
-                            ) ||
-                            !context.mounted) {
-                          return;
-                        }
-                        await change('identity.global.reset');
-                      },
-                child: const Text('重置密钥'),
-              )
-            else if (scope == 'device' || missingPrivateKey)
-              OutlinedButton(
-                onPressed: busy.value
-                    ? null
-                    : () async {
-                        if (!await confirmConnectionChange(
-                              context,
-                              '使用全局私钥？',
-                              warning,
-                              action: '使用全局私钥',
-                            ) ||
-                            !context.mounted) {
-                          return;
-                        }
-                        await change('identity.device.useGlobal');
-                      },
-                child: const Text('使用全局私钥'),
-              ),
+            OutlinedButton(
+              onPressed: busy.value
+                  ? null
+                  : () async {
+                      if (!await confirmConnectionChange(
+                            context,
+                            '重置全局 ADB 私钥？',
+                            '将生成新的全局私钥。使用全局私钥的设备连接将断开，需在手机上重新授权；设备专用私钥不受影响。',
+                            action: '重置密钥',
+                            danger: true,
+                          ) ||
+                          !context.mounted) {
+                        return;
+                      }
+                      await change('identity.global.reset');
+                    },
+              child: const Text('重置密钥'),
+            ),
           ],
         ),
       ),

@@ -74,7 +74,6 @@ Future<void> reveal(WidgetTester tester, Finder finder) async {
 Future<void> open(
   WidgetTester tester,
   AppController controller, {
-  Json? target,
   bool narrow = false,
 }) async {
   tester.view.physicalSize = narrow
@@ -92,7 +91,7 @@ Future<void> open(
       controller: controller,
       devices: [device],
       theme: ConnectTokens.theme(narrow ? Brightness.dark : Brightness.light),
-      home: AdbIdentityPage(controller: controller, device: target),
+      home: AdbIdentityPage(controller: controller),
     ),
   );
   await tester.pumpAndSettle();
@@ -113,11 +112,7 @@ void main() {
     'file and text follow the same confirmed import contract without paths or settings writes',
     (tester) async {
       final mutations = <(String, Json)>[];
-      for (final scenario in [
-        ('global-file', false, true),
-        ('global-text', false, false),
-        ('device-file', true, true),
-      ]) {
+      for (final scenario in [('global-file', true), ('global-text', false)]) {
         final calls = <String>[];
         final controller = createTestController((
           command, [
@@ -126,16 +121,12 @@ void main() {
           calls.add(command);
           if (command.endsWith('.import')) mutations.add((command, params));
           return command.startsWith('identity.')
-              ? {
-                  'scope': scenario.$2 ? 'device' : 'global',
-                  'fingerprint': 'SHA256:public-only',
-                  if (scenario.$2) 'deviceId': 'phone',
-                }
+              ? {'scope': 'global', 'fingerprint': 'SHA256:public-only'}
               : <String, dynamic>{};
         });
-        await open(tester, controller, target: scenario.$2 ? device : null);
+        await open(tester, controller);
         final count = mutations.length;
-        if (scenario.$3) {
+        if (scenario.$2) {
           picker.next = () async => _MemoryFile(
             utf8.encode('\uFEFF${pem.replaceAll('\n', '\r\n')}\r\n'),
           );
@@ -160,14 +151,9 @@ void main() {
         await reveal(tester, find.text('导入并更换'));
         await tester.tap(find.text('导入并更换'));
         await tester.pumpAndSettle();
-        expect(
-          mutations.last.$1,
-          scenario.$2 ? 'identity.device.import' : 'identity.global.import',
-        );
-        expect(mutations.last.$2, {
-          'privateKeyPem': pem,
-          if (scenario.$2) 'deviceId': 'phone',
-        });
+        expect(mutations.last.$1, 'identity.global.import');
+        expect(mutations.last.$2, {'privateKeyPem': pem});
+        expect(calls.where((c) => c.startsWith('identity.device.')), isEmpty);
         expect(
           calls.where(
             (c) =>

@@ -50,6 +50,7 @@ Future<void> pump(
 }
 
 Future<void> reveal(WidgetTester tester, Finder finder) async {
+  await tester.pumpAndSettle();
   if (finder.evaluate().isEmpty) {
     await tester.scrollUntilVisible(
       finder,
@@ -59,6 +60,7 @@ Future<void> reveal(WidgetTester tester, Finder finder) async {
   }
   await Scrollable.ensureVisible(tester.element(finder), alignment: .5);
   await tester.pumpAndSettle();
+  expect(finder.hitTestable(), findsOneWidget);
 }
 
 void main() {
@@ -96,6 +98,11 @@ void main() {
         await reveal(tester, find.text('检查连接'));
         await tester.tap(find.text('检查连接'));
         await tester.pumpAndSettle();
+        final confirm = find.widgetWithText(FilledButton, '应用并连接');
+        if (confirm.evaluate().isNotEmpty) {
+          await tester.tap(confirm);
+          await tester.pumpAndSettle();
+        }
         expect(
           calls.where((call) => call.$1 == 'devices.usb').single.$2['deviceId'],
           'phone',
@@ -186,30 +193,23 @@ void main() {
   );
 
   testWidgets(
-    'device key rejects a password and inheritance changes only the selected device',
+    'global import rejects a password and confirmation cancellation never replaces a key',
     (tester) async {
       final calls = <(String, Json)>[];
-      var scope = 'device';
       final controller = createTestController((
         command, [
         params = const {},
       ]) async {
         calls.add((command, params));
-        if (command == 'identity.device.useGlobal') scope = 'global';
-        if (command.startsWith('identity.device.')) {
-          return {
-            'deviceId': 'phone',
-            'scope': scope,
-            'fingerprint': 'SHA256:device-public-fingerprint',
-          };
-        }
-        return {};
+        return command.startsWith('identity.global.')
+            ? {'scope': 'global', 'fingerprint': 'SHA256:public-fingerprint'}
+            : <String, dynamic>{};
       });
       addTearDown(controller.dispose);
       await pump(
         tester,
         controller,
-        AdbIdentityPage(controller: controller, device: phone),
+        AdbIdentityPage(controller: controller),
         narrow: true,
       );
       await reveal(tester, find.text('导入私钥'));
@@ -220,81 +220,96 @@ void main() {
       await tester.tap(find.text('继续'));
       await tester.pumpAndSettle();
       expect(find.text('PEM 私钥格式无效'), findsOneWidget);
-      expect(calls.where((c) => c.$1 == 'identity.device.import'), isEmpty);
+      expect(calls.where((c) => c.$1 == 'identity.global.import'), isEmpty);
+      await tester.enterText(
+        find.byType(TextFormField),
+        '-----BEGIN PRIVATE KEY-----\nMAMCAQA=\n-----END PRIVATE KEY-----',
+      );
+      await reveal(tester, find.text('继续'));
+      await tester.tap(find.text('继续'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextFormField), findsNothing);
+      expect(find.text('导入 ADB 私钥？'), findsOneWidget);
+      expect(find.textContaining('使用设备专用私钥的设备不受影响'), findsWidgets);
+      expect(calls.where((c) => c.$1 == 'identity.global.import'), isEmpty);
       await reveal(tester, find.text('取消'));
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
-      await reveal(tester, find.widgetWithText(OutlinedButton, '使用全局私钥'));
-      await tester.tap(find.widgetWithText(OutlinedButton, '使用全局私钥'));
-      await tester.pumpAndSettle();
-      await reveal(tester, find.widgetWithText(FilledButton, '使用全局私钥'));
-      await tester.tap(find.widgetWithText(FilledButton, '使用全局私钥'));
-      await tester.pumpAndSettle();
-      expect(
-        calls.where((c) => c.$1 == 'identity.device.useGlobal').single.$2,
-        {'deviceId': 'phone'},
-      );
-      expect(calls.where((c) => c.$1.startsWith('identity.global.')), isEmpty);
-    },
-  );
-
-  testWidgets(
-    'a missing device private key can explicitly recover through global inheritance',
-    (tester) async {
-      final calls = <(String, Json)>[];
-      var recovered = false;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add((command, params));
-        if (command == 'identity.device.useGlobal') recovered = true;
-        if (command.startsWith('identity.device.')) {
-          if (!recovered) {
-            throw const RequestFailure(
-              'identity_unavailable',
-              '设备专用授权私钥不可用，请重新导入或明确选择全局密钥。',
-            );
-          }
-          return {
-            'deviceId': 'phone',
-            'scope': 'global',
-            'fingerprint': 'SHA256:global-public-fingerprint',
-          };
-        }
-        return {};
-      });
-      addTearDown(controller.dispose);
-      await pump(
-        tester,
-        controller,
-        AdbIdentityPage(controller: controller, device: phone),
-        narrow: true,
-      );
-      expect(find.textContaining('设备专用授权私钥不可用'), findsOneWidget);
-      await reveal(tester, find.widgetWithText(OutlinedButton, '使用全局私钥'));
-      await tester.tap(find.widgetWithText(OutlinedButton, '使用全局私钥'));
-      await tester.pumpAndSettle();
-      await reveal(tester, find.text('取消'));
-      await tester.tap(find.text('取消'));
-      await tester.pumpAndSettle();
-      expect(calls.where((c) => c.$1 == 'identity.device.useGlobal'), isEmpty);
-      await reveal(tester, find.widgetWithText(OutlinedButton, '使用全局私钥'));
-      await tester.tap(find.widgetWithText(OutlinedButton, '使用全局私钥'));
-      await tester.pumpAndSettle();
-      await reveal(tester, find.widgetWithText(FilledButton, '使用全局私钥'));
-      await tester.tap(find.widgetWithText(FilledButton, '使用全局私钥'));
-      await tester.pumpAndSettle();
-      expect(
-        calls.where((c) => c.$1 == 'identity.device.useGlobal').single.$2,
-        {'deviceId': 'phone'},
-      );
-      expect(find.text('继承全局私钥'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, '使用全局私钥'), findsNothing);
-      expect(calls.where((c) => c.$1.startsWith('identity.global.')), isEmpty);
+      expect(calls.where((c) => c.$1 == 'identity.global.import'), isEmpty);
+      expect(calls.where((c) => c.$1.startsWith('identity.device.')), isEmpty);
+      expect(find.text('使用全局私钥'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final unavailable in [false, true]) {
+    testWidgets(
+      'existing device identity is read-only even when ${unavailable ? 'unavailable' : 'device scoped'}',
+      (tester) async {
+        final calls = <(String, Json)>[];
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          calls.add((command, params));
+          if (command == 'identity.device.get') {
+            if (unavailable) {
+              throw const RequestFailure('identity_unavailable', '设备专用授权私钥不可用');
+            }
+            return {
+              'scope': 'device',
+              'fingerprint': 'SHA256:device-public-fingerprint',
+            };
+          }
+          return <String, dynamic>{};
+        });
+        addTearDown(controller.dispose);
+        await pump(
+          tester,
+          controller,
+          DeviceConnectionPreferencesPage(
+            controller: controller,
+            device: phone,
+          ),
+          narrow: true,
+        );
+        expect(calls.singleWhere((c) => c.$1 == 'identity.device.get').$2, {
+          'deviceId': 'phone',
+        });
+        expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+        expect(find.text('从文件选择'), findsNothing);
+        expect(find.text('导入私钥'), findsNothing);
+        expect(find.text('使用全局私钥'), findsNothing);
+        expect(find.widgetWithText(TextFormField, 'PEM 私钥'), findsNothing);
+        if (unavailable) {
+          expect(find.textContaining('设备专用授权私钥不可用'), findsOneWidget);
+        } else {
+          expect(find.text('设备专属私钥'), findsOneWidget);
+          expect(find.text('SHA256:device-public-fingerprint'), findsNothing);
+          final tooltip = tester.widget<GlassTooltip>(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is GlassTooltip &&
+                  widget.message == 'SHA256:device-public-fingerprint',
+            ),
+          );
+          expect(tooltip.message, 'SHA256:device-public-fingerprint');
+          await tester.longPress(find.text('设备专属私钥'));
+          await tester.pumpAndSettle();
+          expect(find.text('SHA256:device-public-fingerprint'), findsOneWidget);
+        }
+        expect(
+          calls.where(
+            (c) =>
+                c.$1.startsWith('identity.') && c.$1 != 'identity.device.get',
+          ),
+          isEmpty,
+        );
+        expect(calls.where((c) => c.$1 == 'devices.configure'), isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'convert IP validates before requesting and never treats an unverified response as success',
@@ -309,6 +324,15 @@ void main() {
         if (command == 'devices.list') {
           return {
             'devices': [phone],
+          };
+        }
+        if (command == 'device.network.get') {
+          return {
+            'deviceId': 'phone',
+            'connectionId': 'live-phone',
+            'addresses': [
+              {'address': '192.168.1.5', 'interface': 'wlan0'},
+            ],
           };
         }
         if (command == 'devices.wireless') {
@@ -334,14 +358,11 @@ void main() {
         DeviceConvertIpPage(controller: controller, device: phone),
       );
       final fields = find.byType(TextFormField);
-      await tester.enterText(fields.first, '');
       await tester.enterText(fields.last, '99999');
       await tester.tap(find.text('切换并连接'));
       await tester.pumpAndSettle();
       expect(calls.where((c) => c.$1 == 'devices.wireless'), isEmpty);
-      expect(find.text('请输入被控手机的地址'), findsOneWidget);
       expect(find.text('端口应为 1–65535 的整数'), findsOneWidget);
-      await tester.enterText(fields.first, '192.168.1.5');
       await tester.enterText(fields.last, '5666');
       await tester.tap(find.text('切换并连接'));
       await tester.pumpAndSettle();
@@ -430,10 +451,12 @@ void main() {
         controller,
         DeviceConnectionPreferencesPage(controller: controller, device: phone),
       );
-      await tester.tap(find.text('使用 USB 连接'));
+      await tester.tap(find.text('USB'));
       await tester.pumpAndSettle();
       await reveal(tester, find.text('检查连接'));
       await tester.tap(find.text('检查连接'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '应用并连接'));
       await tester.pumpAndSettle();
       expect(
         calls.where((c) => c.$1 == 'devices.usb').single.$2['deviceId'],

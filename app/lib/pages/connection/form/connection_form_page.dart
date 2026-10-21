@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/adb_identity_validation.dart';
+import 'package:scrcpy_connect/pages/connection/form/connection_identity_fields.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -30,6 +32,7 @@ class ConnectionFormPage extends HookWidget {
     this.transport,
     this.initialMode,
     this.reauthorizing = false,
+    this.configuring = false,
   });
   final AppController controller;
   final bool pairing;
@@ -39,6 +42,7 @@ class ConnectionFormPage extends HookWidget {
   final ConnectionTransport? transport;
   final AddDeviceMode? initialMode;
   final bool reauthorizing;
+  final bool configuring;
   @override
   Widget build(BuildContext context) {
     final mode = useState(
@@ -60,6 +64,7 @@ class ConnectionFormPage extends HookWidget {
     final identityAddress = useRef(address.trim());
     final tlsLocked = useState(transport == ConnectionTransport.tls);
     final host = useTextEditingController(text: address);
+    useListenable(host);
     final pairingPort = useTextEditingController(
       text: this.pairing ? port : '',
     );
@@ -71,6 +76,10 @@ class ConnectionFormPage extends HookWidget {
           : '',
     );
     final code = useTextEditingController();
+    final privateKeyPem = useTextEditingController();
+    final identityScope = useState('global');
+    final identityRevision = useState(0);
+    final loadingIdentityFile = useState(false);
     final form = useMemoized(() => GlobalKey<FormState>());
     final busy = useState(false);
     final result = useState<Json?>(null);
@@ -115,8 +124,38 @@ class ConnectionFormPage extends HookWidget {
       }
     }
 
+    String? targetDeviceId() => host.text.trim() == identityAddress.value
+        ? currentDeviceId.value
+        : deviceId;
+
+    Future<Json?> prepareConnection() async {
+      if (loadingIdentityFile.value ||
+          !(form.currentState?.validate() ?? false)) {
+        return null;
+      }
+      if ((configuring || reauthorizing) &&
+          !await confirmConnectionChange(
+            context,
+            '应用连接配置？',
+            '将沿用此设备的授权身份并核验目标。当前连接及活动可能中断；验证成功后才更新原设备记录。',
+            action: '应用并连接',
+          )) {
+        return null;
+      }
+      if (!context.mounted) return null;
+      return {
+        if (targetDeviceId() == null && identityScope.value == 'device')
+          'identity': {
+            'scope': 'device',
+            'privateKeyPem': normalizeAdbPrivateKeyPem(privateKeyPem.text),
+          },
+      };
+    }
+
     Future<void> submit() async {
-      if (!form.currentState!.validate()) return;
+      if (busy.value) return;
+      final identity = await prepareConnection();
+      if (identity == null || !context.mounted || busy.value) return;
       final attempt =
           '${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(form)}';
       activeAttempt.value = attempt;
@@ -124,32 +163,52 @@ class ConnectionFormPage extends HookWidget {
       error.value = null;
       cancellation.value = null;
       try {
-        final targetDeviceId = host.text.trim() == identityAddress.value
-            ? currentDeviceId.value
-            : deviceId;
+        final targetId = targetDeviceId();
         final pairingCode = code.text.trim();
         if (pairing) code.clear();
         final response = await controller.request(
-          pairing ? 'devices.pair' : 'devices.add',
+          pairing
+              ? 'devices.pair'
+              : configuring || reauthorizing
+              ? 'devices.configure'
+              : 'devices.add',
           {
+            ...identity,
             'address': host.text.trim(),
             'attemptId': attempt,
-            'deviceId': ?targetDeviceId,
+            'deviceId': ?targetId,
             'port': int.parse(activePort.text.trim()),
             if (pairing) 'code': pairingCode,
             if (!pairing) 'transport': effectiveTransport.name,
           },
         );
         if (!context.mounted || activeAttempt.value != attempt) return;
+        if (configuring || reauthorizing) {
+          if (responseDeviceId(response) != targetId ||
+              (!pairing && response['connected'] != true)) {
+            throw const RequestFailure(
+              'configuration_unverified',
+              '尚未核验原设备的连接配置，请重新检查。',
+            );
+          }
+        }
         result.value = response;
-        currentDeviceId.value = responseDeviceId(response, targetDeviceId);
+        final connectionFailure = response['connectionFailure'];
+        if (connectionFailure is Map<Object?, Object?>) {
+          final failure = jsonObject(connectionFailure);
+          error.value = RequestFailure(
+            value(failure, 'code', 'connection_failed'),
+            value(failure, 'message', '配对已完成，连接尚未建立。'),
+          );
+        }
+        currentDeviceId.value = responseDeviceId(response, targetId);
         identityAddress.value = host.text.trim();
         if (pairing) {
           tlsLocked.value = true;
           selectedTransport.value = ConnectionTransport.tls;
           portField.clear();
         }
-        if (!pairing) {
+        if (!pairing && !configuring && !reauthorizing) {
           final device = response['device'] is Map<Object?, Object?>
               ? jsonObject(response['device'])
               : response;
@@ -222,7 +281,11 @@ class ConnectionFormPage extends HookWidget {
     }
 
     return PageFrame(
-      title: reauthorizing ? '重新授权' : '添加设备',
+      title: configuring
+          ? '连接配置'
+          : reauthorizing
+          ? '重新授权'
+          : '添加设备',
       child: ConnectionContent(
         child: Form(
           key: form,
@@ -237,76 +300,83 @@ class ConnectionFormPage extends HookWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          ContentPanel(
-                            padding: EdgeInsets.zero,
-                            child: ActionRow(
-                              icon: LucideIcons.radar,
-                              title: '发现设备',
-                              onTap: busy.value
-                                  ? null
-                                  : () async {
-                                      final previousMode = mode.value;
-                                      if (mode.value == AddDeviceMode.qr ||
-                                          mode.value == AddDeviceMode.usb) {
-                                        selectMode(AddDeviceMode.pairing);
-                                      }
-                                      final selection =
-                                          await const DiscoveryRoute(
-                                            selection: true,
-                                          ).push<Json>(context);
-                                      if (!context.mounted) return;
-                                      if (selection == null) {
-                                        selectMode(previousMode);
-                                        return;
-                                      }
-                                      final service = selection['service'];
-                                      if (service is! Map<Object?, Object?>) {
-                                        selectMode(switch (selection['mode']) {
-                                          'usb' => AddDeviceMode.usb,
-                                          'pairing' => AddDeviceMode.pairing,
-                                          _ => AddDeviceMode.ip,
-                                        });
-                                        return;
-                                      }
-                                      result.value = null;
-                                      error.value = null;
-                                      final device = jsonObject(service);
-                                      final endpoints = objects(
-                                        device['endpoints'],
-                                      );
-                                      final endpoint = endpoints.isEmpty
-                                          ? device
-                                          : endpoints.first;
-                                      final isPairing =
-                                          device['kind'] == 'pairing';
-                                      selectMode(
-                                        isPairing
-                                            ? AddDeviceMode.pairing
-                                            : AddDeviceMode.ip,
-                                      );
-                                      completingPairing.value = false;
-                                      host.text = value(endpoint, 'address');
-                                      if (isPairing) portField.clear();
-                                      (isPairing ? pairingPort : portField)
-                                          .text = value(
-                                        endpoint,
-                                        'port',
-                                      );
-                                      currentDeviceId.value =
-                                          deviceId ?? responseDeviceId(device);
-                                      identityAddress.value = host.text.trim();
-                                      tlsLocked.value =
-                                          transport ==
-                                              ConnectionTransport.tls ||
-                                          device['kind'] != 'tcp';
-                                      selectedTransport.value =
-                                          device['kind'] == 'tcp'
-                                          ? ConnectionTransport.tcp
-                                          : ConnectionTransport.tls;
-                                    },
+                          if (!configuring) ...[
+                            ContentPanel(
+                              padding: EdgeInsets.zero,
+                              child: ActionRow(
+                                icon: LucideIcons.radar,
+                                title: '发现设备',
+                                onTap: busy.value
+                                    ? null
+                                    : () async {
+                                        final previousMode = mode.value;
+                                        if (mode.value == AddDeviceMode.qr ||
+                                            mode.value == AddDeviceMode.usb) {
+                                          selectMode(AddDeviceMode.pairing);
+                                        }
+                                        final selection =
+                                            await const DiscoveryRoute(
+                                              selection: true,
+                                            ).push<Json>(context);
+                                        if (!context.mounted) return;
+                                        if (selection == null) {
+                                          selectMode(previousMode);
+                                          return;
+                                        }
+                                        final service = selection['service'];
+                                        if (service is! Map<Object?, Object?>) {
+                                          selectMode(
+                                            switch (selection['mode']) {
+                                              'usb' => AddDeviceMode.usb,
+                                              'pairing' =>
+                                                AddDeviceMode.pairing,
+                                              _ => AddDeviceMode.ip,
+                                            },
+                                          );
+                                          return;
+                                        }
+                                        result.value = null;
+                                        error.value = null;
+                                        final device = jsonObject(service);
+                                        final endpoints = objects(
+                                          device['endpoints'],
+                                        );
+                                        final endpoint = endpoints.isEmpty
+                                            ? device
+                                            : endpoints.first;
+                                        final isPairing =
+                                            device['kind'] == 'pairing';
+                                        selectMode(
+                                          isPairing
+                                              ? AddDeviceMode.pairing
+                                              : AddDeviceMode.ip,
+                                        );
+                                        completingPairing.value = false;
+                                        host.text = value(endpoint, 'address');
+                                        if (isPairing) portField.clear();
+                                        (isPairing ? pairingPort : portField)
+                                            .text = value(
+                                          endpoint,
+                                          'port',
+                                        );
+                                        currentDeviceId.value =
+                                            deviceId ??
+                                            responseDeviceId(device);
+                                        identityAddress.value = host.text
+                                            .trim();
+                                        tlsLocked.value =
+                                            transport ==
+                                                ConnectionTransport.tls ||
+                                            device['kind'] != 'tcp';
+                                        selectedTransport.value =
+                                            device['kind'] == 'tcp'
+                                            ? ConnectionTransport.tcp
+                                            : ConnectionTransport.tls;
+                                      },
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: DesignTokens.spacingLg),
+                            const SizedBox(height: DesignTokens.spacingMd),
+                          ],
                           ContentPanel(
                             padding: EdgeInsets.zero,
                             child: LayoutBuilder(
@@ -433,11 +503,32 @@ class ConnectionFormPage extends HookWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(height: DesignTokens.spacingLg),
+                          const SizedBox(height: DesignTokens.spacingMd),
+                          ConnectionIdentityFields(
+                            controller: controller,
+                            deviceId: targetDeviceId(),
+                            pem: privateKeyPem,
+                            scope: identityScope.value,
+                            enabled: !busy.value,
+                            onDraftChanged: () => identityRevision.value++,
+                            onFileLoadingChanged: (loading) =>
+                                loadingIdentityFile.value = loading,
+                            onScopeChanged: (next) {
+                              identityScope.value = next;
+                              identityRevision.value++;
+                            },
+                          ),
+                          const SizedBox(height: DesignTokens.spacingMd),
                           if (mode.value == AddDeviceMode.qr)
                             QrPairPage(
+                              key: ValueKey('qr-${identityRevision.value}'),
+                              autoGenerate:
+                                  identityRevision.value == 0 &&
+                                  !configuring &&
+                                  !reauthorizing,
+                              prepareConnection: prepareConnection,
                               controller: controller,
-                              deviceId: currentDeviceId.value,
+                              deviceId: targetDeviceId(),
                               embedded: true,
                               onUsePairingCode: () =>
                                   selectMode(AddDeviceMode.pairing),
@@ -542,7 +633,9 @@ class ConnectionFormPage extends HookWidget {
                               height: DesignTokens.spacingSectionTitle,
                             ),
                             FilledButton(
-                              onPressed: busy.value ? null : submit,
+                              onPressed: busy.value || loadingIdentityFile.value
+                                  ? null
+                                  : submit,
                               child: busy.value
                                   ? const SizedBox(
                                       width: DesignTokens.spacingMd,
@@ -596,9 +689,9 @@ class ConnectionFormPage extends HookWidget {
                                   ],
                                 ),
                               ),
-                            const SizedBox(height: DesignTokens.spacingMd),
                             if (!pairing &&
                                 !legacyTcp &&
+                                error.value != null &&
                                 (!completingPairing.value ||
                                     _authorizationRejected(error.value)))
                               TextButton(
@@ -618,11 +711,16 @@ class ConnectionFormPage extends HookWidget {
                     ),
                     if (mode.value == AddDeviceMode.usb)
                       UsbGuidePage(
+                        key: ValueKey('usb-${identityRevision.value}'),
+                        prepareConnection: prepareConnection,
                         controller: controller,
-                        deviceId: currentDeviceId.value,
+                        deviceId: targetDeviceId(),
                         embedded: true,
                         onUseWireless: () => selectMode(AddDeviceMode.pairing),
                       ),
+                    const SliverToBoxAdapter(
+                      child: SizedBox(height: DesignTokens.spacingMd),
+                    ),
                     SliverToBoxAdapter(
                       child: TextButton(
                         onPressed: () => showGlassDialog<void>(

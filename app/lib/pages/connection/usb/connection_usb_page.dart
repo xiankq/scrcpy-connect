@@ -21,9 +21,11 @@ class UsbGuidePage extends HookWidget {
     this.embedded = false,
     this.deviceId,
     this.onUseWireless,
+    this.prepareConnection,
   });
   final AppController controller;
   final bool embedded;
+  final Future<Json?> Function()? prepareConnection;
   final String? deviceId;
   final VoidCallback? onUseWireless;
   @override
@@ -64,6 +66,11 @@ class UsbGuidePage extends HookWidget {
     }
 
     Future<void> check({String? serial, String? usbDeviceId}) async {
+      if (busy.value) return;
+      final params =
+          await prepareConnection?.call() ??
+          (prepareConnection == null ? <String, dynamic>{} : null);
+      if (params == null || !context.mounted || busy.value) return;
       final id =
           'usb-${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(attempt)}';
       attempt.value = id;
@@ -72,6 +79,7 @@ class UsbGuidePage extends HookWidget {
       message.value = null;
       try {
         final result = await controller.execute(InteropCommand.devicesUsb, {
+          ...params,
           'attemptId': id,
           'deviceId': ?deviceId,
           'serial': ?serial,
@@ -79,6 +87,14 @@ class UsbGuidePage extends HookWidget {
           if (serial != null || usbDeviceId != null) 'connect': true,
         });
         if (!context.mounted || attempt.value != id) return;
+        if (deviceId != null &&
+            responseDeviceId(result) != null &&
+            responseDeviceId(result) != deviceId) {
+          throw const RequestFailure(
+            'device_identity_mismatch',
+            'USB连接结果不属于原设备，请重新检查。',
+          );
+        }
         state.value = result;
         await controller.refreshDevices();
       } catch (error) {
@@ -100,7 +116,7 @@ class UsbGuidePage extends HookWidget {
         '被控手机：开启 USB 调试，并在系统弹窗中允许调试。',
         style: Theme.of(context).textTheme.bodyMedium,
       ),
-      const SizedBox(height: DesignTokens.spacingMd),
+      const SizedBox(height: DesignTokens.spacingSectionTitle),
       FilledButton(
         onPressed: busy.value ? null : () => check(),
         child: Text(busy.value ? '正在检查…' : '检查连接'),

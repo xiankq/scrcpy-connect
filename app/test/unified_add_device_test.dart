@@ -18,6 +18,11 @@ Future<void> tapText(WidgetTester tester, String text) async {
   await tester.pump(const Duration(milliseconds: 200));
   await tester.tap(find.text(text).last);
   await tester.pump(const Duration(milliseconds: 200));
+  final confirmation = find.widgetWithText(FilledButton, '应用并连接');
+  if (confirmation.evaluate().isNotEmpty) {
+    await tester.tap(confirmation);
+    await tester.pumpAndSettle();
+  }
 }
 
 Future<GoRouter> mount(
@@ -79,6 +84,7 @@ void main() {
           location: AddDeviceRoute(deviceId: deviceId).location,
         );
         await tapText(tester, '扫码配对');
+        if (deviceId != null) await tapText(tester, '重新生成');
         await tester.pumpAndSettle();
         expect(calls, [
           if (deviceId == null) <String, dynamic>{} else {'deviceId': deviceId},

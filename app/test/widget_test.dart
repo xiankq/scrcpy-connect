@@ -57,6 +57,8 @@ void main() {
       await tester.ensureVisible(find.text('配对并连接'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('配对并连接'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '应用并连接'));
       await tester.pump(const Duration(milliseconds: 200));
       expect(pairParams?['deviceId'], 'restored-id');
       expect(pairParams?['address'], 'phone.local');

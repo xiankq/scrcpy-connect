@@ -28,6 +28,11 @@ class ConnectionContent extends StatelessWidget {
       data: theme.copyWith(
         textTheme: theme.textTheme.copyWith(titleLarge: body, bodyLarge: body),
         inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: DesignTokens.componentConnectionFieldPadding,
+            vertical: DesignTokens.spacingXs,
+          ),
           labelStyle: WidgetStateTextStyle.resolveWith(
             (states) => labelStyle(body, states),
           ),
