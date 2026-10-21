@@ -117,10 +117,10 @@ class AppController extends _$AppController {
     return '未能自动点亮设备：${failure.reason}';
   }
 
-  /// The caller releases once; only the last phone page may request locking.
-  bool Function() claimPhoneControlPage(String deviceId) {
+  /// The caller releases once; only the last actual picture may request locking.
+  bool Function() claimPhoneControlPage(String deviceId, {String? sessionId}) {
     final policy = _screenPolicy;
-    final token = policy.claimPhonePage(deviceId);
+    final token = policy.claimPhonePage(deviceId, sessionId: sessionId);
     return () => policy.releasePhonePage(token);
   }
 
@@ -619,7 +619,10 @@ class AppController extends _$AppController {
     return operation;
   }
 
-  Future<void> updateDeviceSetting(String deviceId, String key, Object? next) {
+  Future<void> updateDeviceSetting(String deviceId, String key, Object? next) =>
+      updateDeviceSettings(deviceId, {key: next});
+
+  Future<void> updateDeviceSettings(String deviceId, Json patch) {
     final generation = _generation;
     _settingsRequest++;
     final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
@@ -628,7 +631,7 @@ class AppController extends _$AppController {
       final settings = jsonObject(state.settings['deviceSettings']);
       final devices = <String, dynamic>{
         ...settings,
-        deviceId: {...jsonObject(settings[deviceId]), key: next},
+        deviceId: {...jsonObject(settings[deviceId]), ...patch},
       };
       final result = await execute(InteropCommand.settingsUpdate, {
         'deviceSettings': devices,

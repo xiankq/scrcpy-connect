@@ -1,17 +1,19 @@
 typedef SessionJson = Map<String, dynamic>;
 typedef SessionRequest = Future<SessionJson> Function(String, [SessionJson]);
 
-/// A view borrows a persistent control session; it never owns its lifetime.
+/// Routes own their open control windows; visibility and explicit close differ.
 /// Per-session ordering drains old input before another view resumes display.
 class SessionViews {
   SessionViews(this.request);
   final SessionRequest request;
   final _owners = <String, SessionView>{};
   final _tails = <String, Future<void>>{};
+  final _closed = <String>{};
   bool _uncertain = false;
 
   SessionView claim(String id, {required bool visible}) {
     if (id.isEmpty) throw ArgumentError.value(id, 'id');
+    if (_closed.contains(id)) throw StateError('控制窗口已关闭，请明确打开新画面。');
     final view = SessionView._(this, id, visible);
     _owners[id] = view;
     return view;
@@ -30,7 +32,9 @@ class SessionViews {
   void reconcile(List<SessionJson> sessions) {
     final current = <String, SessionJson>{
       for (final session in sessions)
-        if (!['stopped', 'failed', 'error'].contains(session['status']))
+        if (!['stopped', 'failed', 'error'].contains(session['status']) ||
+            (session['status'] == 'failed' &&
+                session['qualityRetryable'] == true))
           (session['sessionId'] ?? session['id']).toString(): session,
     };
     _uncertain = false;
@@ -40,6 +44,29 @@ class SessionViews {
       entry.value._revision++;
       entry.value._visible = session['status'] != 'paused';
     }
+  }
+
+  Future<SessionJson> _close(SessionView view, Future<void>? afterInput) {
+    final operation = Future<void>.value().then((_) async {
+      await afterInput;
+      if (!identical(_owners[view.id], view)) return <String, dynamic>{};
+      try {
+        return await request('session.stop', {
+          'sessionId': view.id,
+          'keepTask': true,
+        });
+      } finally {
+        if (identical(_owners[view.id], view)) _owners.remove(view.id);
+      }
+    });
+    final tail = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _tails[view.id] = tail;
+    return operation.whenComplete(() {
+      if (identical(_tails[view.id], tail)) _tails.remove(view.id);
+    });
   }
 
   Future<SessionJson> _visibility(
@@ -118,6 +145,14 @@ class SessionView {
   Future<SessionJson> pause({Future<void>? afterInput}) => _released
       ? Future.value({})
       : _views._visibility(this, false, afterInput: afterInput);
+  Future<SessionJson> close({Future<void>? afterInput}) {
+    if (_released) return Future.value({});
+    _released = true;
+    _revision++;
+    if (ownsBinding) _views._closed.add(id);
+    return _views._close(this, afterInput);
+  }
+
   Future<SessionJson> release({Future<void>? afterInput}) {
     if (_released) return Future.value({});
     _released = true;

@@ -4,6 +4,65 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/services/session_views.dart';
 
 void main() {
+  test('a retryable quality failure retains the same owner through snapshots and closes exactly', () async {
+    final calls = <(String, SessionJson)>[];
+    final views = SessionViews((command, [params = const {}]) async {
+      calls.add((command, params));
+      return {};
+    });
+    final owner = views.claim('window', visible: true);
+    views.markUncertain();
+    views.reconcile([
+      {'sessionId': 'window', 'status': 'failed', 'qualityRetryable': true},
+    ]);
+    expect(owner.isCurrent, isTrue);
+    await owner.close();
+    expect(calls.single.$1, 'session.stop');
+    expect(calls.single.$2, {'sessionId': 'window', 'keepTask': true});
+  });
+  test(
+    'explicit close stops only its exact window and preserves the real task',
+    () async {
+      final calls = <(String, SessionJson)>[];
+      final views = SessionViews((command, [params = const {}]) async {
+        calls.add((command, params));
+        return {};
+      });
+      final one = views.claim('one', visible: true);
+      final two = views.claim('two', visible: true);
+      await one.close();
+      await one.resume();
+      await one.close();
+      expect(calls, hasLength(1));
+      expect(calls.single.$1, 'session.stop');
+      expect(calls.single.$2, {'sessionId': 'one', 'keepTask': true});
+      expect(one.isCurrent, isFalse);
+      expect(() => views.claim('one', visible: true), throwsStateError);
+      expect(two.isCurrent, isTrue);
+    },
+  );
+  test(
+    'close releases a window even while its prior pause receipt is blocked',
+    () async {
+      final pause = Completer<SessionJson>();
+      final calls = <String>[];
+      final views = SessionViews((command, [params = const {}]) async {
+        calls.add(command);
+        return command == 'session.pause' ? pause.future : {};
+      });
+      final window = views.claim('one', visible: true);
+      final pendingPause = window.pause();
+      await Future<void>.delayed(Duration.zero);
+      await window.close();
+      expect(calls, ['session.pause', 'session.stop']);
+      expect(window.isCurrent, isFalse);
+      pause.complete({});
+      await pendingPause;
+      await window.resume();
+      expect(calls, ['session.pause', 'session.stop']);
+    },
+  );
+
   test('ended transport revokes queued old visibility without touching a successor', () async {
     final commands = <String>[];
     final gate = Completer<void>();
