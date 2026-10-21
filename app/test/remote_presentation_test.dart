@@ -39,6 +39,259 @@ bool _queued(
 );
 
 void main() {
+  test('capture resize preserves decoded image proportions and fences input until output catches up', () {
+    final state = _viewed();
+    state.output({
+      ..._pixels,
+      'decodedWidth': 200,
+      'decodedHeight': 400,
+    }, verified: true);
+    final outgoing = state.binding;
+    expect(state.updateSession({'width': 400, 'height': 200}), isTrue);
+    expect(state.imageWidth / state.imageHeight, .5);
+    expect(_input(state), isFalse);
+    expect(
+      _queued(state, outgoing, 'session.touch', {'action': 'down'}),
+      isFalse,
+    );
+    expect(
+      state.output({'decodedWidth': 400, 'decodedHeight': 200}, verified: true),
+      isTrue,
+    );
+    expect(state.imageWidth / state.imageHeight, 2);
+    expect(_input(state), isTrue);
+  });
+
+  test('a retained older texture in a new snapshot is a display placeholder until matching output verifies', () {
+    final state = _viewed();
+    state.beginReconciliation();
+    state.reconcile(
+      {
+        'sequence': 100,
+        'sessions': [
+          {
+            ..._pixels,
+            'captureGeneration': 2,
+            'rendererGeneration': 20,
+            'generation': 20,
+            'qualityRebuilding': false,
+            'qualityRebuildOutcome': 'applied',
+            'qualityRebuildTarget': 2,
+            'width': 400,
+            'height': 200,
+            'decodedWidth': 200,
+            'decodedHeight': 400,
+            'outputCaptureGeneration': 1,
+            'outputGeneration': 10,
+            'outputRetained': true,
+            'firstFrameDecoded': false,
+            'evidence': 'retained_previous_output',
+          },
+        ],
+      },
+      packageName: null,
+      deviceId: 'phone',
+    );
+    expect(_input(state), isFalse);
+    expect(state.session?['textureId'], 1);
+    expect(state.session?['width'], 200);
+    expect(state.session?['height'], 400);
+    state.output({
+      ..._pixels,
+      'captureGeneration': 1,
+      'generation': 999,
+    }, verified: true);
+    expect(_input(state), isFalse);
+    state.output({
+      ..._pixels,
+      'captureGeneration': 2,
+      'generation': 20,
+      'textureId': 2,
+      'width': 400,
+      'height': 200,
+      'decodedWidth': 400,
+      'decodedHeight': 200,
+      'outputCaptureGeneration': 2,
+      'outputGeneration': 20,
+    }, verified: true);
+    expect(_input(state), isTrue);
+    expect(state.session?['textureId'], 2);
+    expect(state.session?['width'], 400);
+  });
+  test('retryable quality failure snapshot retains its window without resume or launch permission', () {
+    final state = _viewed()..beginReconciliation();
+    state.reconcile(
+      {
+        'sequence': 101,
+        'sessions': [
+          {
+            ..._pixels,
+            'status': 'failed',
+            'qualityRetryable': true,
+            'qualityRebuildOutcome': 'failed',
+          },
+        ],
+      },
+      packageName: null,
+      deviceId: 'phone',
+    );
+    expect(state.sessionEnded, isFalse);
+    expect(state.qualityRetryable, isTrue);
+    expect(state.sessionId, 'original');
+    expect(state.session?['textureId'], 1);
+    expect(_input(state), isFalse);
+    expect(state.canResume(foreground: true), isFalse);
+  });
+  for (final readyFirst in [false, true]) {
+    test(
+      'quality barrier requires matching core ready and verified output, readyFirst=$readyFirst',
+      () {
+        final state = _viewed();
+        state.updateSession({'captureGeneration': 1, 'generation': 10});
+        final old = state.binding;
+        expect(
+          state.updateSession({
+            'qualityRebuilding': true,
+            'qualityRebuildTarget': 2,
+          }),
+          isTrue,
+        );
+        expect(_input(state), isFalse);
+        expect(state.binding, isNot(old));
+        expect(state.session?['textureId'], 1);
+        expect(_queued(state, old, 'session.key', {'action': 'up'}), isTrue);
+        expect(
+          _queued(state, old, 'session.touch', {'action': 'cancel'}),
+          isTrue,
+        );
+        expect(_queued(state, old, 'session.rotate', {}), isFalse);
+        final fresh = {
+          ..._pixels,
+          'captureGeneration': 2,
+          'generation': 20,
+          'textureId': 2,
+        };
+        final ready = {
+          ...fresh,
+          'qualityRebuilding': false,
+          'qualityRebuildOutcome': 'applied',
+        };
+        if (readyFirst) {
+          state.updateSession(ready);
+        } else {
+          state.output(fresh, verified: true);
+        }
+        expect(_input(state), isFalse);
+        expect(state.session?['textureId'], 1);
+        if (readyFirst) {
+          state.output(fresh, verified: true);
+        } else {
+          state.updateSession(ready);
+        }
+        expect(_input(state), isTrue);
+        expect(state.sessionId, 'original');
+        expect(state.session?['textureId'], 2);
+        expect(_queued(state, old, 'session.text', {'text': 'late'}), isFalse);
+      },
+    );
+  }
+  test(
+    'old capture output and ready cannot unlock quality; explicit rollback can',
+    () {
+      final state = _viewed();
+      state.updateSession({'captureGeneration': 1, 'generation': 10});
+      final resume = state.beginResume();
+      state.updateSession({
+        'qualityRebuilding': true,
+        'qualityRebuildTarget': 2,
+      });
+      expect(
+        state.completeResume(resume, _pixels, ownerCurrent: true),
+        RemoteResumeResult.stale,
+      );
+      expect(
+        state.output({
+          ..._pixels,
+          'captureGeneration': 1,
+          'generation': 999,
+        }, verified: true),
+        isFalse,
+      );
+      state.updateSession({
+        'qualityRebuilding': false,
+        'status': 'streaming',
+        'captureGeneration': 1,
+        'generation': 10,
+      });
+      expect(_input(state), isFalse);
+      expect(
+        state.acceptsFailure({'captureGeneration': 1, 'generation': 999}),
+        isFalse,
+      );
+      state.updateSession({
+        'qualityRebuilding': false,
+        'qualityRebuildOutcome': 'restored',
+        'status': 'streaming',
+        'captureGeneration': 1,
+        'generation': 10,
+      });
+      expect(_input(state), isTrue);
+      expect(state.session?['textureId'], 1);
+    },
+  );
+  test(
+    'lost quality capture stays unavailable until an explicit retry succeeds',
+    () {
+      final state = _viewed();
+      state.updateSession({'captureGeneration': 1, 'generation': 10});
+      state.updateSession({
+        'qualityRebuilding': true,
+        'qualityRebuildTarget': 2,
+      });
+      state.updateSession({
+        'qualityRebuilding': false,
+        'qualityRebuildOutcome': 'failed',
+        'qualityRetryable': true,
+        'status': 'failed',
+        'reason': 'encoder failed',
+        'captureGeneration': 1,
+        'generation': 10,
+      });
+      expect(_input(state), isFalse);
+      expect(state.qualityRetryable, isTrue);
+      expect(state.session?['textureId'], 1);
+      state.output({
+        ..._pixels,
+        'captureGeneration': 1,
+        'generation': 10,
+      }, verified: true);
+      state.updateSession({
+        'status': 'streaming',
+        'captureGeneration': 1,
+        'generation': 10,
+      });
+      expect(_input(state), isFalse);
+      expect(state.canResume(foreground: true), isFalse);
+      state.updateSession({
+        'qualityRebuilding': true,
+        'qualityRebuildTarget': 2,
+      });
+      final fresh = {
+        ..._pixels,
+        'captureGeneration': 2,
+        'generation': 20,
+        'textureId': 2,
+      };
+      state.updateSession({
+        ...fresh,
+        'qualityRebuilding': false,
+        'qualityRebuildOutcome': 'applied',
+      });
+      state.output(fresh, verified: true);
+      expect(_input(state), isTrue);
+      expect(state.qualityRetryable, isFalse);
+    },
+  );
   test('only current visible foreground ownership admits new input', () {
     final state = _viewed();
     expect(_input(state), isTrue);

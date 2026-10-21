@@ -4,6 +4,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'expanded actions remain beside the handle in a short landscape viewport',
+    (tester) async {
+      final harness = await _pumpHandle(
+        tester,
+        size: const Size(600, 240),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+      );
+      await tester.tap(harness.control);
+      await tester.pumpAndSettle();
+      final handle = tester.getRect(harness.control);
+      final panel = tester.getRect(
+        find.byKey(const ValueKey('remote-tool-panel')),
+      );
+      expect(panel.overlaps(handle), isFalse);
+      expect(panel.left, greaterThanOrEqualTo(24));
+      expect(panel.right, lessThanOrEqualTo(576));
+      expect(panel.top, greaterThanOrEqualTo(32));
+      expect(panel.bottom, lessThanOrEqualTo(208));
+      await tester.ensureVisible(find.text('关闭画面'));
+      await tester.tap(find.text('关闭画面'));
+      await tester.pump();
+      expect(harness.exits, 1);
+      expect(harness.remoteTouches, 0);
+    },
+  );
+
   testWidgets('pointer cancellation clears press feedback without exiting', (
     tester,
   ) async {
@@ -17,7 +44,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(harness.exits, 0);
     expect(harness.remoteTouches, 0);
-    expect(find.bySemanticsLabel('退出控制，返回手机'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('(?:展开|收起)画面工具，手机')), findsOneWidget);
 
     final drag = await tester.startGesture(tester.getCenter(harness.control));
     await drag.moveBy(const Offset(100, 70));
@@ -26,12 +53,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(harness.exits, 0);
     expect(harness.remoteTouches, 0);
-    expect(find.bySemanticsLabel('展开退出按钮，手机'), findsOneWidget);
+    expect(find.bySemanticsLabel('展开画面工具，手机'), findsOneWidget);
 
     await tester.tap(harness.control);
     await tester.pumpAndSettle();
     expect(harness.exits, 0);
-    await tester.tap(harness.control);
+    await tester.ensureVisible(find.text('关闭画面'));
+    await tester.tap(find.text('关闭画面'));
     await tester.pump();
     expect(harness.exits, 1);
   });
@@ -46,12 +74,12 @@ void main() {
       );
       await tester.drag(harness.control, const Offset(0, 100));
       await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('展开退出按钮，手机'), findsOneWidget);
+      expect(find.bySemanticsLabel('展开画面工具，手机'), findsOneWidget);
 
       await tester.drag(harness.control, const Offset(100, 0));
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('退出控制，返回手机'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('(?:展开|收起)画面工具，手机')), findsOneWidget);
       expect(tester.getRect(harness.control).left, greaterThan(44));
       expect(harness.exits, 0);
       expect(harness.remoteTouches, 0);
@@ -69,7 +97,7 @@ void main() {
       await tester.drag(harness.control, const Offset(-100, 0));
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('退出控制，返回手机'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('(?:展开|收起)画面工具，手机')), findsOneWidget);
       expect(tester.getRect(harness.control).right, lessThan(349));
       expect(harness.exits, 0);
       expect(harness.remoteTouches, 0);
@@ -83,7 +111,7 @@ void main() {
     await tester.fling(harness.control, const Offset(60, 0), 2000);
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('展开退出按钮，手机'), findsOneWidget);
+    expect(find.bySemanticsLabel('展开画面工具，手机'), findsOneWidget);
     expect(tester.getRect(harness.control).left, closeTo(0, .1));
     expect(harness.exits, 0);
     expect(harness.remoteTouches, 0);
@@ -110,7 +138,7 @@ void main() {
       expect(collapsed.top, greaterThanOrEqualTo(32));
       await tester.tap(harness.control);
       await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('退出控制，返回手机'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('(?:展开|收起)画面工具，手机')), findsOneWidget);
       expect(tester.getRect(harness.control).right, lessThanOrEqualTo(826));
       expect(harness.exits, 0);
       expect(harness.remoteTouches, 0);
@@ -123,13 +151,13 @@ void main() {
       final harness = await _pumpHandle(tester, disableAnimations: true);
       await tester.drag(harness.control, const Offset(80, 100));
       await tester.pump();
-      expect(find.bySemanticsLabel('展开退出按钮，手机'), findsOneWidget);
+      expect(find.bySemanticsLabel('展开画面工具，手机'), findsOneWidget);
       expect(tester.getRect(harness.control).left, 0);
 
       await tester.drag(harness.control, const Offset(100, 0));
       await tester.pump();
       final expanded = tester.getRect(harness.control);
-      expect(find.bySemanticsLabel('退出控制，返回手机'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('(?:展开|收起)画面工具，手机')), findsOneWidget);
       await tester.pump(const Duration(seconds: 2));
       expect(tester.getRect(harness.control), expanded);
       expect(harness.exits, 0);
@@ -152,9 +180,10 @@ void main() {
         size: const Size(393, 600),
         viewInsets: const EdgeInsets.only(bottom: 260),
       );
-      expect(find.bySemanticsLabel('退出控制，返回手机'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('(?:展开|收起)画面工具，手机')), findsOneWidget);
       expect(tester.getRect(harness.control).bottom, lessThanOrEqualTo(328));
-      await tester.tap(harness.control);
+      await tester.ensureVisible(find.text('关闭画面'));
+      await tester.tap(find.text('关闭画面'));
       await tester.pump();
       expect(harness.exits, 1);
       expect(harness.remoteTouches, 0);
@@ -192,23 +221,21 @@ void main() {
           ),
         ),
       );
-      final handle = find.descendant(
-        of: find.byType(ExitHandle),
-        matching: find.byType(GestureDetector),
-      );
+      final handle = find.byKey(const ValueKey('remote-tool-handle'));
       await tester.drag(handle, const Offset(393 * .72, 100));
       await tester.pump(const Duration(milliseconds: 1200));
-      final collapsed = find.bySemanticsLabel(RegExp('展开退出按钮，'));
+      final collapsed = find.bySemanticsLabel(RegExp('展开画面工具，'));
       expect(collapsed, findsOneWidget);
       expect(tester.getSize(handle).width, 44);
       expect(tester.getRect(collapsed), tester.getRect(handle));
       await tester.tap(collapsed);
       await tester.pump(const Duration(milliseconds: 300));
-      final expanded = find.bySemanticsLabel(RegExp('退出控制，返回'));
+      final expanded = find.bySemanticsLabel(RegExp('收起画面工具，'));
       expect(expanded, findsOneWidget);
       expect(exits, 0);
       expect(remoteTouches, 0);
-      await tester.tap(expanded);
+      await tester.ensureVisible(find.text('关闭画面'));
+      await tester.tap(find.text('关闭画面'));
       await tester.pump();
       expect(exits, 1);
       semantics.dispose();
@@ -231,10 +258,7 @@ void main() {
           ),
         ),
       );
-      final handle = find.descendant(
-        of: find.byType(ExitHandle),
-        matching: find.byType(GestureDetector),
-      );
+      final handle = find.byKey(const ValueKey('remote-tool-handle'));
       await tester.drag(handle, const Offset(393 * .72, 100));
       await tester.pump(const Duration(milliseconds: 40));
       await tester.tap(handle);
@@ -250,10 +274,7 @@ class _HandleHarness {
   var exits = 0;
   var remoteTouches = 0;
 
-  Finder get control => find.descendant(
-    of: find.byType(ExitHandle),
-    matching: find.byType(GestureDetector),
-  );
+  Finder get control => find.byKey(const ValueKey('remote-tool-handle'));
 }
 
 Future<_HandleHarness> _pumpHandle(

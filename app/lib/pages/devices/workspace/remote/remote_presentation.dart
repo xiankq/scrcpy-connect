@@ -29,6 +29,12 @@ class RemotePresentation {
   bool _lifecyclePaused = false;
   bool _covered = false;
   bool _controlAvailable = false;
+  bool _qualityRebuilding = false;
+  bool _qualityFailed = false;
+  RemoteData? _qualityOriginal;
+  RemoteData? _qualityOutput;
+  RemoteData? _qualityReady;
+  int? _qualityTarget;
   int _bindingGeneration = 0;
   int _startAttempt = 0;
   int _visibilityEpoch = 0;
@@ -60,6 +66,27 @@ class RemotePresentation {
   bool get stateUnverified => _verification != _Verification.verified;
   bool get sessionEnded => _verification == _Verification.ended;
   bool get reconcileOnly => _reconcileOnly;
+  bool get qualityRebuilding => _qualityRebuilding;
+  bool get qualityRetryable => _qualityFailed;
+
+  double _dimension(String decoded, String capture) =>
+      (num.tryParse('${_session?[decoded]}') ??
+              num.tryParse('${_session?[capture]}') ??
+              0)
+          .toDouble();
+
+  double get imageWidth => _dimension('decodedWidth', 'width');
+  double get imageHeight => _dimension('decodedHeight', 'height');
+
+  bool get imageGeometryReady {
+    final width = num.tryParse('${_session?['width']}') ?? 0;
+    final height = num.tryParse('${_session?['height']}') ?? 0;
+    return width <= 0 ||
+        height <= 0 ||
+        imageWidth <= 0 ||
+        imageHeight <= 0 ||
+        (width / height - imageWidth / imageHeight).abs() < .005;
+  }
 
   void checking() => _connecting = true;
 
@@ -106,6 +133,9 @@ class RemotePresentation {
       _controlAvailable &&
       !_paused &&
       !_connecting &&
+      !_qualityRebuilding &&
+      !_qualityFailed &&
+      imageGeometryReady &&
       !_exiting &&
       _error == null &&
       ownerCurrent &&
@@ -133,6 +163,8 @@ class RemotePresentation {
 
   bool canResume({required bool foreground}) =>
       !appLaunchUnknown &&
+      !_qualityRebuilding &&
+      !_qualityFailed &&
       !stateUnverified &&
       sessionId.isNotEmpty &&
       !_covered &&
@@ -176,13 +208,28 @@ class RemotePresentation {
     required bool recoveringConnection,
     required bool submittedAppStart,
   }) {
-    _session = result;
+    _session = _retainedImage(result);
     if (recoveringConnection) _reconcileOnly = false;
-    _controlAvailable = sessionId.isNotEmpty && result['textureId'] != null;
+    _controlAvailable =
+        sessionId.isNotEmpty &&
+        result['textureId'] != null &&
+        result['outputRetained'] != true;
     _visibility = _Visibility.visible;
     _lifecyclePaused = false;
     _connecting = retained && result['textureId'] != null;
     _paused = result['status'] == 'paused';
+    if (result['qualityRebuilding'] == true) _beginQuality(result);
+    if (result['outputRetained'] == true &&
+        result['captureGeneration'] is int) {
+      _beginQuality({
+        ...result,
+        'qualityRebuildTarget': result['captureGeneration'],
+      });
+      if (result['qualityRebuilding'] == false) updateSession(result);
+    }
+    if (result['status'] == 'failed' && result['qualityRetryable'] == true) {
+      _failQuality(result);
+    }
     if (result['textureId'] == null) {
       if (submittedAppStart) _launch = _Launch.unknown;
       _error = result['reason']?.toString() ?? '尚未获得设备的实时画面。请检查设备连接和视频能力。';
@@ -320,24 +367,197 @@ class RemotePresentation {
     if (_visibility == _Visibility.resuming) _visibility = _Visibility.visible;
     _controlAvailable = false;
     if (existing == null ||
-        const ['stopped', 'failed', 'error'].contains(existing['status'])) {
+        (const ['stopped', 'failed', 'error'].contains(existing['status']) &&
+            !(existing['status'] == 'failed' &&
+                existing['qualityRetryable'] == true))) {
       _session = {...?_session}..remove('textureId');
       _verification = _Verification.ended;
       _error = '原会话已结束或无法核验。请检查当前活动，不会自动创建新窗口。';
     } else {
-      _session = existing;
+      if (existing['status'] == 'failed' &&
+          existing['qualityRetryable'] == true) {
+        _failQuality(_retainedImage(existing));
+      } else if (_qualityRebuilding && existing['qualityRebuilding'] == false) {
+        updateSession(existing);
+        output(
+          existing,
+          verified:
+              existing['firstFrameDecoded'] == true &&
+              existing['evidence'] == 'mdk.snapshot',
+        );
+      } else {
+        if (!_qualityRebuilding) _session = _retainedImage(existing);
+        if (existing['qualityRebuilding'] == true) {
+          _beginQuality(existing);
+        } else if (existing['outputRetained'] == true &&
+            existing['captureGeneration'] is int) {
+          _beginQuality({
+            ...existing,
+            'qualityRebuildTarget': existing['captureGeneration'],
+          });
+          updateSession(existing);
+        }
+      }
       _verification = _Verification.verified;
-      _error = null;
+      if (!_qualityFailed) _error = null;
+      _controlAvailable = false;
+      _paused = true;
     }
     return true;
   }
 
-  bool output(RemoteData data) {
+  static (int, int)? _generation(RemoteData? data) {
+    final capture = data?['captureGeneration'];
+    final renderer = data?['rendererGeneration'] ?? data?['generation'];
+    return capture is int && renderer is int ? (capture, renderer) : null;
+  }
+
+  static (int, int)? _outputGeneration(RemoteData? data) {
+    final capture = data?['outputCaptureGeneration'];
+    final renderer = data?['outputGeneration'];
+    return capture is int && renderer is int
+        ? (capture, renderer)
+        : _generation(data);
+  }
+
+  static RemoteData _retainedImage(RemoteData data) {
+    if (data['outputRetained'] != true) return data;
+    // Input remains blocked. Size this placeholder by the retained texture,
+    // rather than stretching its old pixels to the new capture's dimensions.
+    return {
+      ...data,
+      if (data['decodedWidth'] is num && (data['decodedWidth'] as num) > 0)
+        'width': data['decodedWidth'],
+      if (data['decodedHeight'] is num && (data['decodedHeight'] as num) > 0)
+        'height': data['decodedHeight'],
+    };
+  }
+
+  void _failQuality(RemoteData data) {
+    _session = data;
+    _qualityRebuilding = false;
+    _qualityFailed = true;
+    _controlAvailable = false;
+    _paused = true;
+    _connecting = false;
+    _error = data['reason']?.toString() ?? '画面调整未完成，请在画面设置中重试。';
+    _errorCode = 'quality_rebuild_failed';
+  }
+
+  bool _older(RemoteData data) {
+    final incoming = _generation(data);
+    final current = _generation(_session);
+    return incoming != null &&
+        current != null &&
+        (incoming.$1 < current.$1 ||
+            (incoming.$1 == current.$1 && incoming.$2 < current.$2));
+  }
+
+  /// Errors from a retired capture cannot end this logical window.
+  bool acceptsFailure(RemoteData data) {
+    if (_older(data)) return false;
+    if (!_qualityRebuilding) return true;
+    final incoming = _generation(data);
+    return incoming != null && incoming.$1 >= (_qualityTarget ?? 0);
+  }
+
+  void _beginQuality(RemoteData data) {
+    if (_qualityRebuilding) {
+      final target = data['qualityRebuildTarget'];
+      if (target is int && target > (_qualityTarget ?? 0)) {
+        _qualityTarget = target;
+        _qualityOutput = null;
+        _qualityReady = null;
+        _visibilityEpoch++;
+        _bindingGeneration++;
+      }
+      return;
+    }
+    _qualityOriginal = {...?_session};
+    _qualityOutput = null;
+    _qualityReady = null;
+    _qualityTarget =
+        data['qualityRebuildTarget'] as int? ??
+        ((_generation(_session)?.$1 ?? 0) + 1);
+    _qualityRebuilding = true;
+    _qualityFailed = false;
+    _controlAvailable = false;
+    _visibilityEpoch++;
+    _bindingGeneration++;
+    if (_visibility == _Visibility.resuming) _visibility = _Visibility.visible;
+    _paused =
+        _session?['status'] == 'paused' ||
+        _visibility != _Visibility.visible ||
+        _covered ||
+        _lifecyclePaused;
+    _error = null;
+    _errorCode = null;
+  }
+
+  bool _completeQuality() {
+    final ready = _qualityReady;
+    final output = _qualityOutput;
+    if (ready == null ||
+        output == null ||
+        _generation(ready) != _outputGeneration(output)) {
+      return false;
+    }
+    _session = {
+      ...?_qualityOriginal,
+      ...ready,
+      ...output,
+      'qualityRebuilding': false,
+      'qualityRetryable': false,
+      'qualityRebuildOutcome': 'applied',
+      'captureGeneration': _generation(ready)!.$1,
+      'rendererGeneration': _generation(ready)!.$2,
+      'generation': _generation(ready)!.$2,
+      'status': ready['status'],
+      'outputRetained': false,
+    };
+    _qualityRebuilding = false;
+    _qualityFailed = false;
+    _qualityOriginal = null;
+    _qualityOutput = null;
+    _qualityReady = null;
+    _qualityTarget = null;
+    _connecting = false;
+    _paused =
+        ready['status'] == 'paused' ||
+        _visibility != _Visibility.visible ||
+        _covered ||
+        _lifecyclePaused;
+    _controlAvailable =
+        _session?['textureId'] != null && ready['status'] == 'streaming';
+    _error = null;
+    _errorCode = null;
+    return true;
+  }
+
+  bool output(RemoteData data, {bool verified = false}) {
+    if (_qualityFailed || _older(data)) return false;
+    if (_qualityRebuilding) {
+      final incoming = _outputGeneration(data);
+      if (!verified ||
+          data['firstFrameDecoded'] != true ||
+          data['evidence'] != 'mdk.snapshot' ||
+          data['textureId'] == null ||
+          data['outputRetained'] == true ||
+          incoming == null ||
+          incoming.$1 < (_qualityTarget ?? 0)) {
+        return false;
+      }
+      _qualityOutput = data;
+      return _completeQuality();
+    }
     final next = {...?_session, ...data};
     if (!_paused &&
         _error == null &&
+        _generation(next) == _generation(_session) &&
         next['width'] == _session?['width'] &&
         next['height'] == _session?['height'] &&
+        next['decodedWidth'] == _session?['decodedWidth'] &&
+        next['decodedHeight'] == _session?['decodedHeight'] &&
         next['textureId'] == _session?['textureId']) {
       return false;
     }
@@ -353,7 +573,65 @@ class RemotePresentation {
 
   /// Returns whether the page must release its held physical input.
   bool updateSession(RemoteData data) {
+    if (data['qualityRebuilding'] == true) {
+      if (_older(data)) return false;
+      final outgoing = binding;
+      _beginQuality(data);
+      // Keep the last verified image and its dimensions until the new local
+      // renderer and core ready receipt agree on both generations.
+      _session = {...?_session, 'qualityRebuilding': true};
+      return outgoing != binding;
+    }
+    if (_qualityRebuilding) {
+      if (data['qualityRebuilding'] != false) return false;
+      final incoming = _generation(data);
+      final outcome = data['qualityRebuildOutcome'];
+      if (outcome == 'restored' &&
+          incoming != null &&
+          incoming == _outputGeneration(_qualityOriginal)) {
+        _session = {...?_qualityOriginal, ...data, 'qualityRetryable': false};
+        _qualityRebuilding = false;
+        _qualityFailed = false;
+        _controlAvailable =
+            _session?['textureId'] != null && data['status'] == 'streaming';
+        _paused =
+            data['status'] == 'paused' ||
+            _visibility != _Visibility.visible ||
+            _covered ||
+            _lifecyclePaused;
+        _qualityOriginal = null;
+        _qualityOutput = null;
+        _qualityReady = null;
+        _qualityTarget = null;
+        return false;
+      }
+      if (outcome == 'failed' &&
+          data['status'] == 'failed' &&
+          data['qualityRetryable'] == true &&
+          (incoming == null ||
+              incoming.$1 >= (_generation(_qualityOriginal)?.$1 ?? 0))) {
+        _failQuality({...?_qualityOriginal, ...data});
+        return false;
+      }
+      if (outcome == 'applied' &&
+          incoming != null &&
+          incoming.$1 >= (_qualityTarget ?? 0) &&
+          const ['streaming', 'paused'].contains(data['status'])) {
+        _qualityReady = data;
+        _completeQuality();
+      }
+      return false;
+    }
+    if (_older(data)) return false;
+    if (data['status'] == 'failed' && data['qualityRetryable'] == true) {
+      _failQuality({...?_session, ...data});
+      return true;
+    }
+    if (_qualityFailed) return false;
+    final previousGeometryReady = imageGeometryReady;
     _session = {...?_session, ...data};
+    final geometryChanged = previousGeometryReady && !imageGeometryReady;
+    if (geometryChanged) _bindingGeneration++;
     if (data['status'] == 'streaming' && data['connected'] != false) {
       _controlAvailable = true;
     }
@@ -374,7 +652,7 @@ class RemotePresentation {
         ].contains(data['status']) ||
         data['connected'] == false;
     if (release) _paused = true;
-    return release;
+    return release || geometryChanged;
   }
 
   void disconnect(String reason) {
@@ -404,6 +682,9 @@ class RemotePresentation {
     required bool ownerCurrent,
   }) {
     if (!_receiptCurrent(epoch, ownerCurrent: ownerCurrent)) {
+      return RemoteResumeResult.stale;
+    }
+    if (_qualityRebuilding || _qualityFailed || _older(receipt)) {
       return RemoteResumeResult.stale;
     }
     if (receipt['firstFrameDecoded'] != true ||
@@ -440,7 +721,8 @@ class RemotePresentation {
         (command == 'session.touch' &&
             const ['up', 'cancel'].contains(params['action']));
     final detached = cleanup && _detachedCleanupBindings.contains(captured);
-    if ((!cleanup && !_controlAvailable) ||
+    if ((!cleanup &&
+            (!_controlAvailable || _qualityRebuilding || _qualityFailed)) ||
         captured.$1.isEmpty ||
         (captured.$1 != sessionId && !detached) ||
         (!cleanup && captured.$2 != _bindingGeneration)) {

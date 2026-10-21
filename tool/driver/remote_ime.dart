@@ -87,8 +87,32 @@ Future<void> main() async {
 
   Future<String> editText(String stage) async {
     try {
-      await shell(['uiautomator', 'dump', remoteDump]);
-      final xml = await shell(['cat', remoteDump]);
+      String? xml;
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        final dump = await shell(['uiautomator', 'dump', remoteDump]);
+        final read = await Process.run(adb, [
+          '-s',
+          target,
+          'shell',
+          'cat',
+          remoteDump,
+        ]).timeout(const Duration(seconds: 15));
+        await File('${directory.path}/$stage-dump-$attempt.txt').writeAsString(
+          'uiautomator:\n$dump\nread exit=${read.exitCode}\n${read.stderr}',
+        );
+        if (read.exitCode == 0 && '${read.stdout}'.contains('<hierarchy')) {
+          xml = read.stdout as String;
+          break;
+        }
+        if (attempt < 3) {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
+      }
+      if (xml == null) {
+        throw StateError(
+          'Android uiautomator did not produce an actual hierarchy at $stage after three attempts; see captured dump receipts.',
+        );
+      }
       await File('${directory.path}/$stage.xml').writeAsString(xml);
       final fields = RegExp(r'<node\b[^>]*>')
           .allMatches(xml)

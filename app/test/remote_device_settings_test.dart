@@ -15,7 +15,86 @@ import 'support/test_controller.dart';
 
 void main() {
   testWidgets(
-    'restoring an application session keeps its identity and never locks the physical screen on exit',
+    'a rejected viewport resize reports failure and preserves its last confirmed size',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final commands = <(String, Json)>[];
+      final controller = createTestController(
+        (command, [params = const {}]) async {
+          commands.add((command, params));
+          if (command == 'session.start') {
+            return {
+              'sessionId': 'screen',
+              'textureId': 1,
+              'width': params['displayWidth'],
+              'height': params['displayHeight'],
+              'displayAuto': true,
+              'displaySize': {
+                'width': params['displayWidth'],
+                'height': params['displayHeight'],
+              },
+            };
+          }
+          if (command == 'session.display') {
+            throw const RequestFailure(
+              'display_resize_failed',
+              'fixture rejected resize',
+            );
+          }
+          return {};
+        },
+        initialState: AppState(
+          settings: const {
+            'deviceSettings': {
+              'phone': {
+                'remoteAspectRatio': 'auto',
+                'showNavigationBar': false,
+              },
+            },
+          },
+        ),
+      );
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: RemotePage(
+              controller: controller,
+              device: const {'id': 'phone'},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final dynamic state = tester.state(find.byType(RemotePage));
+        final Object? confirmed = state.appliedDisplaySize;
+        tester.view.physicalSize = const Size(800, 400);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump();
+        expect(find.textContaining('fixture rejected resize'), findsOneWidget);
+        expect(commands.where((c) => c.$1 == 'session.display'), hasLength(1));
+        expect(state.requestedDisplaySize, isNot(confirmed));
+        expect(state.appliedDisplaySize, confirmed);
+        expect(state.resizingDisplay, isFalse);
+        await tester.pump(const Duration(seconds: 6));
+        expect(
+          commands.where((c) => c.$1 == 'session.display'),
+          hasLength(1),
+          reason: 'An unconfirmed mutation is not automatically replayed.',
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'closing the final application window keeps its task and locks by device preference',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final semantics = tester.ensureSemantics();
@@ -82,15 +161,22 @@ void main() {
           tester.widget<RemotePage>(find.byType(RemotePage)).packageName,
           'com.example.app',
         );
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
         await tester.pumpAndSettle();
         expect(find.byType(RemotePage), findsNothing);
         expect(
           commands.where(
             (c) => c.$1 == 'session.key' && c.$2['keyCode'] == 223,
           ),
-          isEmpty,
+          hasLength(2),
         );
+        expect(commands.where((c) => c.$1 == 'session.stop').single.$2, {
+          'sessionId': 'app',
+          'keepTask': true,
+        });
         expect(commands.where((c) => c.$1 == 'session.start'), isEmpty);
       } finally {
         await tester.pumpWidget(const SizedBox());
@@ -211,13 +297,16 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.text('打开'));
           await tester.pumpAndSettle();
-          await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+          await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+          await tester.pump();
+          await tester.ensureVisible(find.text('关闭画面'));
+          await tester.tap(find.text('关闭画面'));
           await tester.pumpAndSettle();
           expect(find.byType(RemotePage), findsNothing);
           final sleep = commands.indexWhere(
             (c) => c.$1 == 'session.key' && c.$2['keyCode'] == 223,
           );
-          final pause = commands.indexWhere((c) => c.$1 == 'session.pause');
+          final pause = commands.indexWhere((c) => c.$1 == 'session.stop');
           if (anotherPhonePage) {
             expect(sleep, -1);
             expect(pause, greaterThanOrEqualTo(0));
@@ -318,7 +407,7 @@ void main() {
                 .$2;
             expect(
               resized['displayWidth'] / resized['displayHeight'],
-              closeTo(800 / 376, .005),
+              closeTo(800 / 400, .005),
               reason:
                   'A real host resize must adapt even without an IME inset.',
             );
@@ -349,6 +438,7 @@ void main() {
   testWidgets(
     'auto sizes the remote display from space below navigation and adapts after navigation hides',
     (tester) async {
+      final semantics = tester.ensureSemantics();
       final events = StreamController<Json>.broadcast(sync: true);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       tester.view.physicalSize = const Size(400, 800);
@@ -402,7 +492,7 @@ void main() {
         final start = commands.singleWhere((c) => c.$1 == 'session.start').$2;
         final expected = const RemoteDisplaySettings({
           'remoteAspectRatio': 'auto',
-        }).dimensions(const Size(400, 700))!;
+        }).dimensions(const Size(400, 724))!;
         expect(start['displayWidth'], expected.width);
         expect(start['displayHeight'], expected.height);
         controller.settings = const {
@@ -418,7 +508,7 @@ void main() {
             .$2;
         expect(
           resized['displayWidth'] / resized['displayHeight'],
-          closeTo(400 / 756, .002),
+          closeTo(400 / 800, .002),
         );
         tester.view.viewInsets = const FakeViewPadding(bottom: 300);
         await tester.pump();
@@ -453,7 +543,7 @@ void main() {
             .$2;
         expect(
           landscape['displayWidth'] / landscape['displayHeight'],
-          closeTo(800 / 356, .005),
+          closeTo(800 / 400, .005),
         );
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.inactive,
@@ -472,10 +562,24 @@ void main() {
           hasLength(3),
           reason: 'A short inactive transition cannot lose a pending viewport.',
         );
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pumpAndSettle();
+        tester.view.physicalSize = const Size(800, 400);
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
+        await tester.pumpAndSettle();
+        expect(
+          commands.where((c) => c.$1 == 'session.display'),
+          hasLength(3),
+          reason: 'Closing cancels the pending viewport adjustment.',
+        );
+        expect(commands.where((c) => c.$1 == 'session.stop'), hasLength(1));
       } finally {
         await tester.pumpWidget(const SizedBox());
         controller.dispose();
         await events.close();
+        semantics.dispose();
       }
     },
   );

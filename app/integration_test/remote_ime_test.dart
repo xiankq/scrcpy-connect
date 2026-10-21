@@ -9,7 +9,6 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/tools/devices_workspace_sessions_tools_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -43,6 +42,7 @@ void main() {
   testWidgets(
     'committed Chinese and emoji reach the real Android EditText once',
     (tester) async {
+      final semantics = tester.ensureSemantics();
       // IntegrationTest normally leaves the platform IME installed. Register
       // the Flutter input protocol mock explicitly for this editing sequence.
       tester.testTextInput.register();
@@ -141,6 +141,9 @@ void main() {
           (item) => item['id'] == deviceId && item['status'] == 'connected',
         );
         await request('devices.connect', {'deviceId': deviceId});
+        await controller.updateSetting('deviceSettings', {
+          deviceId: {'wakeOnConnect': true},
+        });
         initialSessionIds.addAll(
           (await sessions()).where((s) => s['status'] != 'stopped').map(id),
         );
@@ -163,35 +166,15 @@ void main() {
           find.text('打开手机屏幕'),
         );
         await live();
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
-        await waitFor(
-          tester,
-          () => find.byType(RemotePage).evaluate().isEmpty,
-          reason: 'Return to the workspace retaining this exact session.',
-        );
-        SessionToolsRoute(
-          deviceId: deviceId,
-          sessionId: sessionId,
-        ).push<void>(tester.element(find.byType(Scaffold).first));
-        await waitFor(
-          tester,
-          () =>
-              find.byType(SessionToolsPage).evaluate().isNotEmpty &&
-              find.text('使用本机键盘').evaluate().isNotEmpty &&
-              find
-                  .descendant(
-                    of: find.byType(SessionToolsPage),
-                    matching: find.byType(Scrollable),
-                  )
-                  .evaluate()
-                  .isNotEmpty,
-          reason:
-              'The public input tools must finish loading before scrolling.',
-        );
-        await tapPageAction(
-          tester,
-          find.byType(SessionToolsPage),
-          find.text('使用本机键盘'),
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('键盘'));
+        await tester.tap(find.text('键盘'));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.byKey(const ValueKey('remote-tool-panel')),
+          findsNothing,
+          reason: 'Choosing keyboard closes the tool panel before touching the target.',
         );
         final current = await live();
         final coordinates = await host('prepare-settings');
@@ -207,20 +190,28 @@ void main() {
                     (coordinates['height'] as num))
                 .round()
                 .clamp(0, height - 1);
-        // Actual scrcpy touch via the public runtime; this is not a tester tap
-        // against the Flutter video surface. The host never taps the target.
-        for (final action in ['down', 'up']) {
-          await request('session.touch', {
-            'sessionId': sessionId,
-            'action': action,
-            'pointerId': 41,
-            'x': x,
-            'y': y,
-            'screenWidth': width,
-            'screenHeight': height,
-            'pressure': action == 'up' ? 0.0 : 1.0,
-          });
-        }
+        final texture = tester.getRect(find.byType(Texture));
+        final viewport = tester.getRect(
+          find
+              .ancestor(
+                of: find.byType(Texture),
+                matching: find.byType(Listener),
+              )
+              .first,
+        );
+        expect(
+          viewport.top,
+          0,
+          reason: 'Video input includes the host top safe area.',
+        );
+        expect(texture.width / texture.height, closeTo(width / height, .005));
+        final touch = Offset(
+          texture.left + x * texture.width / width,
+          texture.top + y * texture.height / height,
+        );
+        // Traverse the production video Listener and sourcePoint conversion;
+        // the independent host proves this tap focused the real target field.
+        await tester.tapAt(touch);
         await host('focused-empty');
         targetFocused = true;
         final fieldFinder = find.descendant(
@@ -265,8 +256,25 @@ void main() {
           'committedText': committed,
           'inputMethod':
               'Flutter TestTextInput editing values; no Gboard candidate UI',
-          'targetFocusMethod':
-              'session.touch through real scrcpy control transport',
+          'targetFocusMethod': 'Flutter video surface pointer through production sourcePoint and scrcpy transport',
+          'viewport': {
+            'left': viewport.left,
+            'top': viewport.top,
+            'width': viewport.width,
+            'height': viewport.height,
+          },
+          'texture': {
+            'left': texture.left,
+            'top': texture.top,
+            'width': texture.width,
+            'height': texture.height,
+          },
+          'targetFocusPoint': {
+            'x': x,
+            'y': y,
+            'width': width,
+            'height': height,
+          },
           'decodedFrameVerified': true,
           'publicKeyboardActionVerified': true,
         });
@@ -317,6 +325,7 @@ void main() {
               }
             } finally {
               tester.testTextInput.unregister();
+              semantics.dispose();
             }
           }
         }

@@ -10,9 +10,17 @@ class ExitHandle extends StatefulWidget {
     super.key,
     required this.onExit,
     required this.deviceLabel,
+    this.onLock,
+    this.onScreenshot,
+    this.onConvert,
+    this.onKeyboard,
+    this.onRotate,
+    this.independent = false,
   });
   final VoidCallback onExit;
   final String deviceLabel;
+  final VoidCallback? onLock, onScreenshot, onConvert, onKeyboard, onRotate;
+  final bool independent;
   static const initialOffset = Offset(12, 80);
 
   /// The initial overlay footprint also reserves space in recovery content.
@@ -55,6 +63,7 @@ class _ExitHandleState extends State<ExitHandle>
       });
   Offset offset = ExitHandle.initialOffset;
   bool collapsed = false;
+  bool expanded = false;
   bool dragging = false;
   bool right = false;
   bool dragStartedCollapsed = false;
@@ -65,11 +74,12 @@ class _ExitHandleState extends State<ExitHandle>
   void activateControl() {
     animation.stop();
     if (!collapsed) {
-      widget.onExit();
+      setState(() => expanded = !expanded);
       return;
     }
     setState(() {
       collapsed = false;
+      expanded = true;
       dragging = false;
       offset = Offset(
         (right ? dragBounds.right - 12 : dragBounds.left + 12).clamp(
@@ -85,11 +95,12 @@ class _ExitHandleState extends State<ExitHandle>
     dragging = false;
     final movedInward = right ? offset.dx < dragStartX : offset.dx > dragStartX;
     if (dragStartedCollapsed && movedInward) {
-      setState(() {});
+      setState(() => expanded = true);
       return;
     }
     right = offset.dx > (dragBounds.left + dragBounds.right) / 2;
     collapsed = true;
+    expanded = false;
     final target = right ? collapsedRight : dragBounds.left;
     if (MediaQuery.disableAnimationsOf(context)) {
       setState(() {
@@ -115,6 +126,19 @@ class _ExitHandleState extends State<ExitHandle>
     super.dispose();
   }
 
+  Widget _action(String label, IconData icon, VoidCallback? callback) =>
+      ListTile(
+        leading: Icon(icon),
+        title: Text(label),
+        onTap: callback == null
+            ? null
+            : () {
+                setState(() => expanded = false);
+                callback();
+              },
+        enabled: callback != null,
+      );
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
@@ -130,8 +154,58 @@ class _ExitHandleState extends State<ExitHandle>
       );
       final dx = offset.dx.clamp(dragBounds.left, dragBounds.right).toDouble();
       final dy = offset.dy.clamp(dragBounds.top, dragBounds.bottom).toDouble();
+      final roomRight = viewport.width - rightInset - dx - 52;
+      final roomLeft = dx - dragBounds.left;
+      final growRight = roomRight >= roomLeft;
+      final panelWidth = math.min(
+        244.0,
+        math.max(48.0, (growRight ? roomRight : roomLeft) - 8),
+      );
+      final panelLeft = (growRight ? dx + 60 : dx - panelWidth - 8)
+          .clamp(
+            dragBounds.left,
+            math.max(dragBounds.left, viewport.width - rightInset - panelWidth),
+          )
+          .toDouble();
+      final panelTop = math.max(
+        dragBounds.top,
+        math.min(dy, dragBounds.bottom - 120),
+      );
       return Stack(
         children: [
+          if (expanded && !dragging)
+            Positioned(
+              left: panelLeft,
+              top: panelTop,
+              width: panelWidth,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: math.max(48, dragBounds.bottom - panelTop + 52),
+                ),
+                child: Glass(
+                  key: const ValueKey('remote-tool-panel'),
+                  radius: DesignTokens.roundedLg,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _action('锁屏', LucideIcons.lock, widget.onLock),
+                        _action('截图', LucideIcons.camera, widget.onScreenshot),
+                        if (!widget.independent)
+                          _action(
+                            '转为独立窗口',
+                            LucideIcons.appWindow,
+                            widget.onConvert,
+                          ),
+                        _action('键盘', LucideIcons.keyboard, widget.onKeyboard),
+                        _action('旋转', LucideIcons.rotateCw, widget.onRotate),
+                        _action('关闭画面', LucideIcons.x, widget.onExit),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             left: collapsed && right && !dragging ? collapsedRight : dx,
             top: dy,
@@ -142,11 +216,14 @@ class _ExitHandleState extends State<ExitHandle>
             child: Semantics(
               container: true,
               label: collapsed
-                  ? '展开退出按钮，${widget.deviceLabel}'
-                  : '退出控制，返回${widget.deviceLabel}',
+                  ? '展开画面工具，${widget.deviceLabel}'
+                  : expanded
+                  ? '收起画面工具，${widget.deviceLabel}'
+                  : '展开画面工具，${widget.deviceLabel}',
               button: true,
               child: GlassPressFeedback(
                 child: GestureDetector(
+                  key: const ValueKey('remote-tool-handle'),
                   behavior: HitTestBehavior.opaque,
                   onTapDown: (_) => animation.stop(),
                   onPanStart: (_) {
@@ -155,6 +232,7 @@ class _ExitHandleState extends State<ExitHandle>
                       dragStartedCollapsed = collapsed;
                       dragStartX = dx;
                       dragging = true;
+                      expanded = false;
                       collapsed = false;
                       offset = Offset(dx, dy);
                     });
@@ -202,8 +280,10 @@ class _ExitHandleState extends State<ExitHandle>
                                   ),
                                 ),
                               )
-                            : const Icon(
-                                LucideIcons.x,
+                            : Icon(
+                                expanded
+                                    ? LucideIcons.chevronUp
+                                    : LucideIcons.ellipsis,
                                 size: DesignTokens.componentIconFeatureSize,
                               ),
                       ),

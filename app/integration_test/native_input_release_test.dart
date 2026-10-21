@@ -21,6 +21,7 @@ void main() {
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
   const port = String.fromEnvironment('CONNECT_E2E_PORT');
   final runId = 'input-${DateTime.now().millisecondsSinceEpoch}';
+  binding.reportData = {'nativeInputReleaseComplete': false};
   var stage = 'starting';
   String? sessionId;
   final acknowledgements = <String>{};
@@ -40,26 +41,49 @@ void main() {
     (tester) async {
       final semantics = tester.ensureSemantics();
       await app.main();
-      await tester.pump(const Duration(milliseconds: 300));
+      await waitFor(
+        tester,
+        () => find.byType(ConnectApp).evaluate().isNotEmpty,
+        reason: 'The production app must initialize.',
+      );
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
       ).read(appControllerProvider.notifier);
+      await waitFor(
+        tester,
+        () =>
+            !controller.snapshot().loading &&
+            !controller.snapshot().reconciliationPending,
+        reason: 'Startup reconciliation must finish before fixture changes.',
+      );
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)
               .timeout(const Duration(seconds: 40));
       Future<void> host(String next, String ack) async {
         stage = next;
-        await waitFor(
-          tester,
-          () => acknowledgements.contains(ack),
-          timeout: const Duration(seconds: 75),
+        final deadline = DateTime.now().add(const Duration(seconds: 75));
+        while (!acknowledgements.contains(ack) &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        expect(
+          acknowledgements,
+          contains(ack),
           reason:
               'Independent host must verify real input fixture stage $next.',
         );
       }
 
       final originalSettings = {...controller.snapshot().settings};
+      final initialDevices = objects(
+        (await request('devices.list'))['devices'],
+      );
+      final originalFocus = controller.snapshot().focusedDeviceId;
+      String? deviceId;
+      var createdDevice = false;
+      var initiallyConnected = false;
+      var isolated = false;
       final observed = <Json>[];
       final subscription = controller
           .eventStream()
@@ -69,7 +93,7 @@ void main() {
         await controller.updateSetting('deviceSettings', <String, dynamic>{});
 
         await host('prepare', 'prepared');
-        final deviceId = responseDeviceId(
+        deviceId = responseDeviceId(
           await request('devices.add', {
             'address': address,
             'port': int.parse(port),
@@ -77,12 +101,22 @@ void main() {
           }),
         );
         expect(deviceId, isNotEmpty);
+        createdDevice = !initialDevices.any(
+          (device) => device['id'] == deviceId,
+        );
+        initiallyConnected = initialDevices.any(
+          (device) =>
+              device['id'] == deviceId && device['status'] == 'connected',
+        );
         final connected = await request('devices.connect', {
           'deviceId': deviceId,
         });
         expect(connected['device'], isA<Map<Object?, Object?>>());
         final device = jsonObject(connected['device']);
         expect(device['status'], 'connected');
+        await controller.updateSetting('deviceSettings', {
+          deviceId!: {'wakeOnConnect': true},
+        });
         expect(
           objects(
             (await request('session.list'))['sessions'],
@@ -90,6 +124,7 @@ void main() {
           isEmpty,
           reason: 'The fixture must use an isolated target without disrupting existing sessions.',
         );
+        isolated = true;
         openRemoteRoute(
           tester.element(find.byType(Scaffold).first),
           deviceId: value(device, 'id'),
@@ -98,22 +133,27 @@ void main() {
           tester,
           () =>
               find.byType(Texture).evaluate().isNotEmpty &&
-              observed.any(
-                (e) =>
-                    e['type'] == 'session.frame' &&
-                    e['deviceId'] == deviceId &&
-                    ((e['data'] as Map<Object?, Object?>?)?['framesDecoded']
-                                as num? ??
-                            0) >
-                        0,
-              ),
+              find.text('画面已暂停').evaluate().isEmpty &&
+              find
+                  .descendant(
+                    of: find.byType(RemotePage),
+                    matching: find.byType(CircularProgressIndicator),
+                  )
+                  .evaluate()
+                  .isEmpty,
           reason:
               'Actual native rendering must precede the physical input test.',
         );
-        final frame = observed.lastWhere(
-          (e) => e['type'] == 'session.frame' && e['deviceId'] == deviceId,
+        final rendered = objects(
+          (await request('session.list', {'deviceId': deviceId}))['sessions'],
+        ).singleWhere((session) => session['status'] == 'streaming');
+        expect(rendered['firstFrameDecoded'], isTrue);
+        expect(rendered['evidence'], 'mdk.snapshot');
+        expect(
+          rendered['textureId'],
+          tester.widget<Texture>(find.byType(Texture)).textureId,
         );
-        sessionId = value(jsonObject(frame['data']), 'sessionId');
+        sessionId = value(rendered, 'sessionId');
         expect(sessionId, isNotEmpty);
         expectHealthyRemote();
         await host('arm', 'armed');
@@ -157,15 +197,9 @@ void main() {
                     .any(
                       (e) =>
                           owns(e) &&
-                          e['type'] == 'session.frame' &&
-                          ((e['data']
-                                          as Map<
-                                            Object?,
-                                            Object?
-                                          >?)?['framesDecoded']
-                                      as num? ??
-                                  0) >
-                              0,
+                          e['type'] == 'session.output.resumed' &&
+                          jsonObject(e['data'])['firstFrameDecoded'] == true &&
+                          jsonObject(e['data'])['evidence'] == 'mdk.snapshot',
                     );
           },
           reason: 'The same real session must pause, resume and render a new actual native frame.',
@@ -182,22 +216,39 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         expectHealthyRemote();
         await binding.takeScreenshot('remote-after-native-key-release');
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
         await waitFor(
           tester,
           () => find.byType(RemotePage).evaluate().isEmpty,
           reason: 'The real session must exit normally after release.',
         );
+        final closeDeadline = DateTime.now().add(const Duration(seconds: 10));
+        List<Json> remaining;
+        do {
+          remaining = objects((await request('session.list'))['sessions'])
+              .where(
+                (s) =>
+                    value(s, 'sessionId', value(s, 'id')) == sessionId &&
+                    s['status'] != 'stopped',
+              )
+              .toList();
+          if (remaining.isEmpty) break;
+          await tester.pump(const Duration(milliseconds: 100));
+        } while (DateTime.now().isBefore(closeDeadline));
         expect(
-          objects((await request('session.list'))['sessions']).where(
-            (s) =>
-                value(s, 'sessionId', value(s, 'id')) == sessionId &&
-                s['status'] != 'stopped',
-          ),
+          remaining,
           isEmpty,
+          reason: 'Close releases the exact window after draining input.',
         );
         await host('verify-exit', 'verified');
         stage = 'complete';
+        binding.reportData!.addAll({
+          'nativeInputReleaseComplete': true,
+          'sessionId': sessionId,
+        });
         expect(tester.takeException(), isNull);
       } finally {
         if (HardwareKeyboard.instance.logicalKeysPressed.contains(
@@ -207,7 +258,10 @@ void main() {
         }
         await subscription.cancel();
         try {
-          if (sessionId?.isNotEmpty == true) {
+          if (sessionId?.isNotEmpty == true &&
+              objects((await request('session.list'))['sessions']).any(
+                (s) => value(s, 'sessionId', value(s, 'id')) == sessionId,
+              )) {
             await request('session.stop', {
               'sessionId': sessionId,
               'keepTask': true,
@@ -218,6 +272,12 @@ void main() {
             'deviceSettings',
             jsonObject(originalSettings['deviceSettings']),
           );
+          await controller.focusDevice(originalFocus);
+          if (createdDevice && deviceId != null) {
+            await request('devices.forget', {'deviceId': deviceId});
+          } else if (!initiallyConnected && isolated && deviceId != null) {
+            await request('devices.disconnect', {'deviceId': deviceId});
+          }
           semantics.dispose();
         }
       }

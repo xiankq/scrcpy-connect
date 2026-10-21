@@ -9,6 +9,43 @@ import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
 
 void main() {
+  testWidgets(
+    'remote image uses the complete viewport beneath host top safe area',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = const FakeViewPadding(top: 32);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      final controller = _controller([]);
+      controller.settings = {
+        'deviceSettings': {
+          'phone': {'showNavigationBar': false},
+        },
+      };
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: RemotePage(
+              controller: controller,
+              device: const {'id': 'phone'},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(find.byType(Texture)),
+          const Rect.fromLTWH(0, 0, 400, 800),
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
+
   for (final showNavigationBar in [true, false]) {
     testWidgets(
       'system back controls Android and only close exits with navigation $showNavigationBar',
@@ -68,10 +105,13 @@ void main() {
             'keyCode': 4,
             'action': 'up',
           });
-          await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+          await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+          await tester.pump();
+          await tester.ensureVisible(find.text('关闭画面'));
+          await tester.tap(find.text('关闭画面'));
           await tester.pumpAndSettle();
           expect(find.byType(RemotePage), findsNothing);
-          expect(commands.where((c) => c.$1 == 'session.pause'), hasLength(1));
+          expect(commands.where((c) => c.$1 == 'session.stop'), hasLength(1));
         } finally {
           await tester.pumpWidget(const SizedBox());
           controller.dispose();

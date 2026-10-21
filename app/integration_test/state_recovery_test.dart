@@ -26,14 +26,33 @@ void main() {
       expect(port, inInclusiveRange(1, 65535));
       final semantics = tester.ensureSemantics();
       await app.main();
-      await tester.pump(const Duration(milliseconds: 400));
+      await waitFor(
+        tester,
+        () => find.byType(ConnectApp).evaluate().isNotEmpty,
+        reason: 'The production app must initialize.',
+      );
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
       ).read(appControllerProvider.notifier);
+      await waitFor(
+        tester,
+        () =>
+            !controller.snapshot().loading &&
+            !controller.snapshot().reconciliationPending,
+        reason: 'Startup reconciliation must finish before fixture changes.',
+      );
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)
               .timeout(const Duration(seconds: 40));
+      final initialDevices = objects(
+        (await request('devices.list'))['devices'],
+      );
+      final originalFocus = controller.snapshot().focusedDeviceId;
+      String? deviceId;
+      var createdDevice = false;
+      var initiallyConnected = false;
+      var isolated = false;
       final observed = <Json>[];
       final pendingAtMarkers = <bool>[];
       final subscription = controller.eventStream().listen((event) {
@@ -48,7 +67,7 @@ void main() {
       });
       String? ownedId;
       try {
-        final deviceId = responseDeviceId(
+        deviceId = responseDeviceId(
           await request('devices.add', {
             'address': address,
             'port': port,
@@ -56,6 +75,13 @@ void main() {
           }),
         )!;
         expect(deviceId, isNotEmpty);
+        createdDevice = !initialDevices.any(
+          (device) => device['id'] == deviceId,
+        );
+        initiallyConnected = initialDevices.any(
+          (device) =>
+              device['id'] == deviceId && device['status'] == 'connected',
+        );
         await request('devices.connect', {'deviceId': deviceId});
         final existing = objects((await request('session.list'))['sessions'])
             .where((session) => session['deviceId'] == deviceId);
@@ -64,6 +90,7 @@ void main() {
           isEmpty,
           reason: 'Use an isolated target with no preexisting sessions.',
         );
+        isolated = true;
         await request('devices.wake', {'deviceId': deviceId});
         openRemoteRoute(
           tester.element(find.byType(Scaffold).first),
@@ -130,29 +157,6 @@ void main() {
         await binding.convertFlutterSurfaceToImage();
         await tester.pump(const Duration(milliseconds: 300));
         await binding.takeScreenshot('state-recovery-active');
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
-        await waitFor(
-          tester,
-          () => find.byType(RemotePage).evaluate().isEmpty,
-          reason: 'Leaving retains the exact session.',
-        );
-        final paused = await request('state.reconcile');
-        final retained = objects(paused['sessions'])
-            .singleWhere((session) => session['sessionId'] == ownedId);
-        expect(retained['status'], 'paused');
-        expect(retained['capturePaused'], isTrue);
-        openRemoteRoute(
-          tester.element(find.byType(Scaffold).first),
-          deviceId: deviceId,
-          sessionId: ownedId,
-        );
-        await waitFor(
-          tester,
-          () =>
-              find.byType(Texture).evaluate().isNotEmpty &&
-              find.text('画面已暂停').evaluate().isEmpty,
-          reason: 'Reopen the retained session without creating a replacement.',
-        );
         await request('session.stop', {'sessionId': ownedId, 'keepTask': true});
         await request('state.reconcile');
         await waitFor(
@@ -184,6 +188,22 @@ void main() {
         expect(find.text('控制会话已结束'), findsOneWidget);
         expect(find.text('正在核验会话状态'), findsNothing);
         await binding.takeScreenshot('state-recovery-ended');
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
+        await waitFor(
+          tester,
+          () => find.byType(RemotePage).evaluate().isEmpty,
+          reason: 'Explicit close removes the ended window without retaining a route to resume.',
+        );
+        final afterClose = await request('state.reconcile');
+        expect(
+          objects(afterClose['sessions'])
+              .where((session) => session['sessionId'] == ownedId),
+          isEmpty,
+        );
+
         expect(pendingAtMarkers, isNotEmpty);
         expect(pendingAtMarkers.every((pending) => pending), isTrue);
         binding.reportData!.addAll({
@@ -212,6 +232,12 @@ void main() {
             'sessionId': ownedId,
             'keepTask': true,
           });
+        }
+        await controller.focusDevice(originalFocus);
+        if (createdDevice && deviceId != null) {
+          await request('devices.forget', {'deviceId': deviceId});
+        } else if (!initiallyConnected && isolated && deviceId != null) {
+          await request('devices.disconnect', {'deviceId': deviceId});
         }
         semantics.dispose();
       }

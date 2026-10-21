@@ -13,15 +13,36 @@ Future<void> main() async {
   );
   await directory.create(recursive: true);
   final driver = await FlutterDriver.connect();
-  final fixture = driveInputRelease(driver, directory);
-  unawaited(
-    fixture.catchError((Object error, StackTrace stack) {
-      stderr.writeln('Actual native input release test failed: $error');
-      exit(1);
-    }),
-  );
+  var appFinished = false;
+  Object? fixtureError;
+  final fixture =
+      driveInputRelease(
+        driver,
+        directory,
+        shouldStop: () => appFinished,
+      ).catchError((Object error) {
+        fixtureError = error;
+      });
   await integrationDriver(
     driver: driver,
+    writeResponseOnFailure: true,
+    responseDataCallback: (data) async {
+      appFinished = true;
+      // integrationDriver exits after this callback. Drain actual Android
+      // fixture cleanup here, before it can terminate a pending finally block.
+      await fixture;
+      final metadata = {...?data}..remove('screenshots');
+      metadata['fixtureCleanupComplete'] = fixtureError == null;
+      metadata['fixtureError'] = fixtureError?.toString();
+      await File('${directory.path}/result.json')
+          .writeAsString(jsonEncode(metadata));
+      if (fixtureError != null ||
+          metadata['nativeInputReleaseComplete'] != true) {
+        throw StateError(
+          'Native input acceptance incomplete: ${fixtureError ?? 'missing app receipt'}',
+        );
+      }
+    },
     onScreenshot: (name, bytes, [args]) async {
       final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       await File('${directory.path}/$safeName.png')
@@ -29,10 +50,13 @@ Future<void> main() async {
       return true;
     },
   );
-  await fixture;
 }
 
-Future<void> driveInputRelease(FlutterDriver driver, Directory captures) async {
+Future<void> driveInputRelease(
+  FlutterDriver driver,
+  Directory captures, {
+  bool Function()? shouldStop,
+}) async {
   final serial =
       Platform.environment['CONNECT_E2E_DEVICE'] ??
       Platform.environment['ANDROID_SERIAL'];
@@ -189,7 +213,7 @@ Future<void> driveInputRelease(FlutterDriver driver, Directory captures) async {
   final deadline = DateTime.now().add(const Duration(minutes: 6));
   var lastStage = '';
   try {
-    while (DateTime.now().isBefore(deadline)) {
+    while (shouldStop?.call() != true && DateTime.now().isBefore(deadline)) {
       Map<String, dynamic> current;
       try {
         current = await state();
@@ -333,6 +357,24 @@ Future<void> driveInputRelease(FlutterDriver driver, Directory captures) async {
               'after-exit',
             );
             verify(finalState, released: true);
+            final closeDeadline = DateTime.now().add(
+              const Duration(seconds: 10),
+            );
+            var processRemains = true;
+            do {
+              final listing =
+                  '${(await adbRun(target, ['shell', 'ps', '-A', '-o', 'ARGS'])).stdout}';
+              processRemains = listing.contains(
+                'interop-scrcpy-$sessionId.jar',
+              );
+              if (!processRemains) break;
+              await Future<void>.delayed(const Duration(milliseconds: 150));
+            } while (DateTime.now().isBefore(closeDeadline));
+            if (processRemains) {
+              throw StateError(
+                'The explicitly closed window still owns a target scrcpy process.',
+              );
+            }
             await state('verified');
             stdout.writeln(
               'Native target DOWN/UP, actual HOME and retained target task all verified.',

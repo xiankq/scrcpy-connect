@@ -182,7 +182,7 @@ void main() {
       expect(backend.starts, 0);
       expect(
         backend.calls
-            .where((call) => call.$1 == 'session.pause')
+            .where((call) => call.$1 == 'session.stop')
             .single
             .$2['sessionId'],
         'first',
@@ -373,26 +373,31 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.element(find.byType(RemotePage)), same(remote));
       expect(backend.starts, 1);
-      await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+      await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+      await tester.pump();
+      await tester.ensureVisible(find.text('关闭画面'));
+      await tester.tap(find.text('关闭画面'));
       await tester.pumpAndSettle();
       expect(find.byType(DeviceWorkspacePage), findsOneWidget);
       expect(
         backend.calls
-            .where((call) => call.$1 == 'session.pause')
+            .where((call) => call.$1 == 'session.stop')
             .map((call) => call.$2['sessionId']),
         ['session-1'],
       );
       expect(backend.sessions.map((item) => item['sessionId']).toSet(), {
         'other-session',
-        'session-1',
       });
-      expect(backend.calls.where((call) => call.$1 == 'session.stop'), isEmpty);
+      expect(
+        backend.calls.where((call) => call.$1 == 'session.pause'),
+        isEmpty,
+      );
       await _disposeRouter(tester, router, backend);
     },
   );
 
   testWidgets(
-    'an existing remote route reattaches once while declarative removal pauses and retains it',
+    'an existing remote route reattaches once while declarative removal closes its window',
     (tester) async {
       final backend = _Backend();
       backend.sessions.add({
@@ -414,7 +419,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         backend.calls
-            .where((call) => call.$1 == 'session.pause')
+            .where((call) => call.$1 == 'session.stop')
             .single
             .$2['sessionId'],
         'existing',

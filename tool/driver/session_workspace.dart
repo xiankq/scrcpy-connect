@@ -172,7 +172,10 @@ Future<void> main() async {
           metadata['sessionWorkspaceComplete'] != true ||
           metadata['phoneScreenAppResumed'] != true ||
           metadata['phoneScreenRenderedApp'] != true ||
-          processChecks.length < 7) {
+          metadata['releasedWindowsVerified'] != 4 ||
+          (metadata['closedWindowIds'] as List?)?.toSet().length != 4 ||
+          processChecks.map((check) => check['checkpoint']).join(',') !=
+              'session-main-live,session-closed-1,session-primary-app-live,session-closed-2,session-settings-live,session-closed-3,session-dialer-live,session-closed-4') {
         throw StateError(
           'The real multi-session workflow or independent process checks did not complete.',
         );

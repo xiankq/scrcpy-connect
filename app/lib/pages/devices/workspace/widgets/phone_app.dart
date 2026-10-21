@@ -17,12 +17,14 @@ class PhoneAppIcon extends HookWidget {
     required this.packageName,
     this.refreshKey,
     this.userId,
+    this.size = DesignTokens.componentAppIconSize,
   });
   final AppController controller;
   final String deviceId;
   final String packageName;
   final Object? refreshKey;
   final String? userId;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +55,7 @@ class PhoneAppIcon extends HookWidget {
           : '正在读取图标',
     );
     return SizedBox.square(
-      dimension: DesignTokens.componentAppIconSize,
+      dimension: size,
       child: result.data == null
           ? Center(child: placeholder())
           : Image.memory(
@@ -84,25 +86,22 @@ Future<void> openPhoneApp(BuildContext context, Json device, Json app) async {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: DesignTokens.spacingSm),
-              Text('继续 ${deviceName(device)} 上的真实应用与登录状态。'),
-              const SizedBox(height: DesignTokens.spacingSm),
-              Text(
-                api != null && api < 29
-                    ? '这台手机不支持独立应用窗口，可在手机屏幕继续使用。'
-                    : '独立窗口可能迁移应用现有的单实例任务；返回会保留窗口，关闭窗口会保留真实任务。',
-              ),
-              const SizedBox(height: DesignTokens.spacingMd),
+              if (api != null && api < 29) ...[
+                const Text('此设备不支持独立窗口'),
+                const SizedBox(height: DesignTokens.spacingSm),
+              ],
               if (api == null || api >= 29)
                 FilledButton(
                   onPressed: () => Navigator.pop(context, 'window'),
                   child: const Text('在独立窗口打开'),
                 ),
+              if (api == null || api >= 29)
+                const SizedBox(height: DesignTokens.spacingSm),
               OutlinedButton(
                 onPressed: () => Navigator.pop(context, 'phone'),
                 child: const Text('在手机屏幕打开'),
               ),
               const SizedBox(height: DesignTokens.spacingXs),
-              const Text('在手机屏幕打开会切换手机当前的前台应用。'),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('取消'),

@@ -159,14 +159,30 @@ Future<void> driveAudioLifecycle(
             'dumpsys',
             'activity',
             'services',
-            'dev.scrcpyconnect.scrcpy_connect/.ConnectionService',
+            'dev.scrcpyconnect.scrcpy_connect/.AudioPlaybackService',
           ]);
           final flags = RegExp(
             r'(?:foregroundServiceType|types)=0x([0-9a-fA-F]+)',
           ).firstMatch(service);
-          if (flags == null || (int.parse(flags[1]!, radix: 16) & 2) == 0) {
+          if (flags == null || int.parse(flags[1]!, radix: 16) != 2) {
             throw StateError(
               'Actual service did not declare active mediaPlayback type: $service',
+            );
+          }
+          final connections = await run([
+            'shell',
+            'dumpsys',
+            'activity',
+            'services',
+            'dev.scrcpyconnect.scrcpy_connect/.ConnectionService',
+          ]);
+          final connectionFlags = RegExp(
+            r'(?:foregroundServiceType|types)=0x([0-9a-fA-F]+)',
+          ).firstMatch(connections);
+          if (connectionFlags == null ||
+              int.parse(connectionFlags[1]!, radix: 16) != 16) {
+            throw StateError(
+              'Application service lost its independent connectedDevice type: $connections',
             );
           }
         }

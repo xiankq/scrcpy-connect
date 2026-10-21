@@ -10,7 +10,7 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -92,12 +92,14 @@ void main() {
           'sessionId': sessionId,
           ...details,
         };
-        await waitFor(
-          tester,
-          () => acknowledged == id,
-          timeout: const Duration(seconds: 50),
-          reason: 'Independent host must verify $name.',
-        );
+        // Host acknowledgements must also advance while Android has stopped
+        // producing frames for this Activity. tester.pump waits for a frame
+        // that cannot arrive until the later resume-controller checkpoint.
+        final deadline = DateTime.now().add(const Duration(seconds: 50));
+        while (acknowledged != id && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        expect(acknowledged, id, reason: 'Independent host must verify $name.');
         if (hostError != null) throw StateError(hostError!);
         return hostResult ?? {};
       }
@@ -133,7 +135,26 @@ void main() {
       }
 
       Future<void> ratio(String label, {String? custom}) async {
-        await tapSetting('远控屏幕比例');
+        await tapSetting('画面设置');
+        await waitFor(
+          tester,
+          () =>
+              find.byType(QualityPage).evaluate().isNotEmpty &&
+              find
+                  .descendant(
+                    of: find.byType(QualityPage),
+                    matching: find.byType(Scrollable),
+                  )
+                  .evaluate()
+                  .isNotEmpty &&
+              find.text('屏幕比例').evaluate().isNotEmpty,
+          reason: 'The real device screen options must load before choosing a ratio.',
+        );
+        await tapPageAction(
+          tester,
+          find.byType(QualityPage),
+          find.text('屏幕比例'),
+        );
         await waitFor(
           tester,
           () =>
@@ -175,6 +196,14 @@ void main() {
                   (custom == null || saved['remoteCustomRatio'] == custom);
             },
             reason: 'The selected ratio must be persisted before creating a window.',
+          );
+          await tester.pageBack();
+          await waitFor(
+            tester,
+            () =>
+                workspace.evaluate().isNotEmpty &&
+                find.byType(QualityPage).evaluate().isEmpty,
+            reason: 'Return from screen settings before opening a new window.',
           );
         }
       }
@@ -266,18 +295,35 @@ void main() {
               )
               .first,
         );
+        expect(
+          initialViewport.top,
+          0,
+          reason:
+              'The video drawable viewport includes the host top safe area.',
+        );
         final expectedRatio = auto
             ? initialViewport.width / initialViewport.height
             : ratio;
         final deadline = DateTime.now().add(const Duration(seconds: 15));
         bool coherentFrame() {
-          final nativeRatio =
+          final decodedWidth = session['decodedWidth'];
+          final decodedHeight = session['decodedHeight'];
+          if (decodedWidth is! num ||
+              decodedHeight is! num ||
+              decodedHeight <= 0) {
+            return false;
+          }
+          final nativeRatio = decodedWidth / decodedHeight;
+          final captureRatio =
               (session['width'] as num) / (session['height'] as num);
           final dynamic state = tester.state(find.byType(RemotePage));
           final Json presented = state.presentation.session as Json;
           final texture = tester.getRect(find.byType(Texture));
           return presented['width'] == session['width'] &&
               presented['height'] == session['height'] &&
+              presented['decodedWidth'] == decodedWidth &&
+              presented['decodedHeight'] == decodedHeight &&
+              (nativeRatio - captureRatio).abs() < .005 &&
               (texture.width / texture.height - nativeRatio).abs() < .005 &&
               (expectedRatio == null ||
                   (nativeRatio - expectedRatio).abs() < .008);
@@ -292,7 +338,9 @@ void main() {
           isTrue,
           reason: 'Native output, presentation state and laid-out texture must converge.',
         );
-        final actual = (session['width'] as num) / (session['height'] as num);
+        final actual =
+            (session['decodedWidth'] as num) /
+            (session['decodedHeight'] as num);
         final texture = tester.getRect(find.byType(Texture));
         expect(texture.width / texture.height, closeTo(actual, .005));
         final viewport = tester.getRect(
@@ -307,8 +355,13 @@ void main() {
         if (expected != null) expect(actual, closeTo(expected, .008));
         await host(label, {
           'ratio': expected,
-          'decodedWidth': session['width'],
-          'decodedHeight': session['height'],
+          'decodedWidth': session['decodedWidth'],
+          'decodedHeight': session['decodedHeight'],
+          'captureWidth': session['width'],
+          'captureHeight': session['height'],
+          'textureId': session['textureId'],
+          'captureGeneration': session['captureGeneration'],
+          'generation': session['generation'],
           'viewportWidth': viewport.width,
           'viewportHeight': viewport.height,
           'virtual': virtual,
@@ -316,62 +369,76 @@ void main() {
       }
 
       Future<void> leave() async {
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+        final closingId = sessionId;
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
         await waitFor(
           tester,
           () => find.byType(RemotePage).evaluate().isEmpty,
-          reason: 'Exit remains an actual UI operation.',
+          reason: 'Explicit close removes the real control page.',
         );
+        final deadline = DateTime.now().add(const Duration(seconds: 10));
+        List<Json> remaining;
+        do {
+          remaining =
+              objects(
+                    (await request('session.list', {
+                      'deviceId': deviceId,
+                    }))['sessions'],
+                  )
+                  .where(
+                    (entry) =>
+                        entry['sessionId'] == closingId &&
+                        entry['status'] != 'stopped',
+                  )
+                  .toList();
+          if (remaining.isEmpty) break;
+          await tester.pump(const Duration(milliseconds: 100));
+        } while (DateTime.now().isBefore(deadline));
+        expect(
+          remaining,
+          isEmpty,
+          reason: 'Closing must release this exact session instead of retaining it paused.',
+        );
+        owned.remove(closingId);
+        await host('restored', {'closedSessionId': closingId});
       }
 
-      Future<void> closeRetained() async {
-        if (find.byType(SessionsPage).evaluate().isEmpty) {
-          await tapSetting('控制窗口');
+      Future<void> checkTopGesture() async {
+        await host('top-shade-closed');
+        final current = await currentSession();
+        expect(current['sessionId'], sessionId);
+        final frame = tester.getRect(find.byType(Texture));
+        final start = Offset(frame.left + frame.width * .75, frame.top + 2);
+        final end = Offset(start.dx, frame.top + frame.height * .45);
+        final gesture = await tester.startGesture(start);
+        for (var step = 1; step <= 10; step++) {
+          await gesture.moveTo(Offset.lerp(start, end, step / 10)!);
+          await tester.pump(const Duration(milliseconds: 80));
         }
-        await waitFor(
-          tester,
-          () =>
-              find.byType(SessionsPage).evaluate().isNotEmpty &&
-              find
-                  .byKey(ValueKey('close-session:$sessionId'))
-                  .evaluate()
-                  .isNotEmpty,
-          reason: 'Open the real retained-session list.',
-        );
-        await waitFor(
-          tester,
-          () =>
-              ModalRoute.of(tester.element(find.byType(SessionsPage)))
-                  ?.animation
-                  ?.status ==
-              AnimationStatus.completed,
-          reason: 'The session list transition must complete before its controls are tapped.',
-        );
-        await tester.tap(find.byKey(ValueKey('close-session:$sessionId')));
-        await waitFor(
-          tester,
-          () => find
-              .byKey(ValueKey('close-session:$sessionId'))
-              .evaluate()
-              .isEmpty,
-          reason: 'The retained native session must actually stop.',
-        );
-        final remaining = objects(
-          (await request('session.list', {'deviceId': deviceId}))['sessions'],
-        );
-        expect(
-          remaining.where((entry) => entry['sessionId'] == sessionId),
-          isEmpty,
-        );
-        owned.remove(sessionId);
-        await tester.pageBack();
-        await waitFor(
-          tester,
-          () => workspace.evaluate().isNotEmpty,
-          reason: 'Return to workspace.',
-        );
-        await host('restored');
-        sessionId = null;
+        await gesture.up();
+        await tester.pump(const Duration(milliseconds: 600));
+        try {
+          await host('top-shade-open', {
+            'sourceSessionId': sessionId,
+            'textureTop': frame.top,
+            'touchX': start.dx,
+            'touchY': start.dy,
+            'decodedWidth': current['width'],
+            'decodedHeight': current['height'],
+          });
+        } finally {
+          // The actual system Back follows the product PopScope and remote
+          // key channel; it must collapse the target shade, not leave the page.
+          await tester.binding.handlePopRoute();
+          await tester.pump(const Duration(milliseconds: 600));
+        }
+        await host('top-shade-closed');
+        expect(find.byType(RemotePage), findsOneWidget);
+        expect((await currentSession())['sessionId'], sessionId);
+        binding.reportData!['topSurfaceGestureAndRemoteBackVerified'] = true;
       }
 
       final originalHitTestPolicy =
@@ -379,6 +446,12 @@ void main() {
       WidgetController.hitTestWarningShouldBeFatal = true;
       Object? primaryFailure;
       try {
+        expect(
+          objects((await request('audio.sources'))['sources']),
+          isEmpty,
+          reason:
+              'Use an isolated controller with no preexisting audio playback.',
+        );
         final initial = objects((await request('devices.list'))['devices']);
         final added = await request('devices.add', {
           'address': address,
@@ -394,6 +467,12 @@ void main() {
           reason: 'This test requires its own isolated target device record.',
         );
         await host('baseline');
+        await controller.updateSetting('backgroundKeepAlive', true);
+        await request('background.request', {
+          'enabled': true,
+          'askNotificationPermission': false,
+        });
+        binding.reportData!['backgroundKeepAliveTestEnabled'] = true;
         await request('observation.stop', {'deviceId': deviceId});
         await request('devices.connect', {'deviceId': deviceId});
         await controller.refreshDevices();
@@ -404,14 +483,14 @@ void main() {
           () => workspace.evaluate().isNotEmpty,
           reason: 'Open the real device settings.',
         );
-        await switchSetting('关闭前自动锁屏', false);
+        await switchSetting('关闭最后画面时锁屏', false);
         await switchSetting('保持手机唤醒', false);
         await switchSetting('显示导航键', true);
         await ratio('原始比例');
         await openPhone();
         await geometry('original');
+        await checkTopGesture();
         await leave();
-        await closeRetained();
         await ratio('自动适应可用空间');
         await openPhone();
         await geometry('auto-navigation', auto: true);
@@ -449,7 +528,6 @@ void main() {
         await geometry('auto-landscape', auto: true);
         await host('restore-controller');
         await leave();
-        await closeRetained();
         for (final preset in [
           ('9:16', 9 / 16),
           ('3:4', 3 / 4),
@@ -463,13 +541,11 @@ void main() {
             ratio: preset.$2,
           );
           await leave();
-          await closeRetained();
         }
         await ratio('自定义', custom: '2:3');
         await openPhone();
         await geometry('custom-2-3', ratio: 2 / 3);
         await leave();
-        await closeRetained();
         await ratio('自定义', custom: '0:1');
         expect(find.textContaining('请输入有效的宽:高'), findsOneWidget);
         expect(
@@ -480,8 +556,16 @@ void main() {
           )['remoteCustomRatio'],
           '2:3',
         );
+        if (find.text('取消').hitTestable().evaluate().isNotEmpty) {
+          await tester.tap(find.text('取消').hitTestable().last);
+          await tester.pumpAndSettle();
+        }
+        if (find.byType(QualityPage).evaluate().isNotEmpty) {
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+        }
         await host('sleep-target');
-        await switchSetting('连接后自动点亮屏幕', true);
+        await switchSetting('新画面启动时点亮屏幕', true);
         await host('still-asleep');
         await tapSetting('断开设备连接');
         await waitFor(
@@ -512,18 +596,40 @@ void main() {
           ),
           reason: 'The new device transport must connect without opening remote control.',
         );
-        await host('connected-awake');
+        await host('connected-asleep');
         await switchSetting('保持手机唤醒', true);
         await openPhone();
+        await host('new-screen-awake');
         await host('keep-active');
-        await leave();
-        expect((await currentSession())['status'], 'paused');
+        await host('pause-controller');
+        final pauseDeadline = DateTime.now().add(const Duration(seconds: 10));
+        Json paused;
+        do {
+          paused = await currentSession();
+          if (paused['status'] == 'paused') break;
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        } while (DateTime.now().isBefore(pauseDeadline));
+        expect(
+          paused['status'],
+          'paused',
+          reason: 'Actual host background pauses the still-open window.',
+        );
         await host('keep-active-paused');
-        await switchSetting('关闭前自动锁屏', true);
+        await host('resume-controller');
+        await waitFor(
+          tester,
+          () =>
+              find.byType(Texture).evaluate().isNotEmpty &&
+              find.text('画面已暂停').evaluate().isEmpty,
+          reason: 'The same unclosed window must resume its rendered frame.',
+        );
+        expect((await currentSession())['sessionId'], sessionId);
+        await leave();
+        await host('keep-active-released');
+        await switchSetting('关闭最后画面时锁屏', true);
         await openPhone();
         await leave();
         await host('exit-asleep');
-        await closeRetained();
         await host('wake-fixture');
         await tapPageAction(tester, workspace, find.text('全部应用'), delta: -300);
         await waitFor(
@@ -590,45 +696,67 @@ void main() {
         sessionId = value(application, 'sessionId');
         owned.add(sessionId!);
         await geometry('application-custom', ratio: 2 / 3, virtual: true);
+        final firstApplicationId = sessionId;
+        await host('application-new-awake');
         await leave();
-        await host('application-exit-awake');
-        await tester.pageBack();
+        await host('application-exit-asleep');
+        final retainedTasks = await request('apps.list', {
+          'deviceId': deviceId,
+          'filter': 'running',
+        });
+        expect(
+          objects(retainedTasks['apps'])
+              .any((app) => app['packageName'] == 'com.android.settings'),
+          isTrue,
+          reason: 'Closing preserves and returns the actual application task.',
+        );
+        await tester.tap(settingsApp);
         await waitFor(
           tester,
-          () => workspace.evaluate().isNotEmpty,
-          reason: 'Return from the application list to its workspace.',
+          () => find.text('在独立窗口打开').hitTestable().evaluate().isNotEmpty,
+          reason: 'Explicitly create a new application window from the application list.',
         );
-        await tapSetting('控制窗口');
-        await waitFor(
-          tester,
-          () => find
-              .byKey(ValueKey('open-session:$sessionId'))
-              .evaluate()
-              .isNotEmpty,
-          reason: 'The retained independent session must be available.',
-        );
-        await tester.tap(find.byKey(ValueKey('open-session:$sessionId')));
+        await tester.tap(find.text('在独立窗口打开').hitTestable());
         await waitFor(
           tester,
           () =>
               find.byType(Texture).evaluate().isNotEmpty &&
+              find.text('画面已暂停').evaluate().isEmpty &&
               find
                   .descendant(
                     of: find.byType(RemotePage),
                     matching: find.byType(CircularProgressIndicator),
                   )
                   .evaluate()
-                  .isEmpty &&
-              find.text('画面已暂停').evaluate().isEmpty,
-          reason: 'Restore the real independent application through the session route.',
+                  .isEmpty,
+          reason: 'The new application window must render real pixels.',
         );
+        final reopened =
+            objects(
+              (await request('session.list', {
+                'deviceId': deviceId,
+              }))['sessions'],
+            ).singleWhere(
+              (entry) => entry['packageName'] == 'com.android.settings',
+            );
+        sessionId = value(reopened, 'sessionId');
+        owned.add(sessionId!);
         expect(
-          tester.widget<RemotePage>(find.byType(RemotePage)).packageName,
-          'com.android.settings',
+          sessionId,
+          isNot(firstApplicationId),
+          reason:
+              'A closed window cannot be resumed under its former identity.',
         );
+        await geometry('application-new-custom', ratio: 2 / 3, virtual: true);
+        await host('application-new-awake');
         await leave();
-        await host('restored-application-exit-awake');
-        await closeRetained();
+        await host('application-exit-asleep');
+        await tester.pageBack();
+        await waitFor(
+          tester,
+          () => workspace.evaluate().isNotEmpty,
+          reason: 'Return from applications to the workspace.',
+        );
         binding.reportData!['remoteSettingsComplete'] = true;
       } catch (error, stack) {
         primaryFailure = error;
@@ -708,6 +836,15 @@ void main() {
             );
           }
         }
+        await clean('backgroundKeepAlive', () async {
+          final original = originalSettings['backgroundKeepAlive'] == true;
+          await controller.updateSetting('backgroundKeepAlive', original);
+          await request('background.request', {
+            'enabled': original,
+            'askNotificationPermission': false,
+          });
+          binding.reportData!['backgroundKeepAliveRestored'] = true;
+        });
         await clean('focus', () => controller.focusDevice(originalFocus));
         await clean('target/controller', () async {
           await host('cleanup');
@@ -718,5 +855,6 @@ void main() {
         if (primaryFailure == null) expect(cleanupErrors, isEmpty);
       }
     },
+    timeout: const Timeout(Duration(minutes: 15)),
   );
 }

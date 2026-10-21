@@ -185,7 +185,7 @@ void main() {
   }
   for (final hanging in [false, true]) {
     testWidgets(
-      'exit button remains reachable when capture pause ${hanging ? 'hangs' : 'fails'}',
+      'exit button remains reachable when window close ${hanging ? 'hangs' : 'fails'}',
       (tester) async {
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.resumed,
@@ -206,9 +206,9 @@ void main() {
               'height': 400,
             };
           }
-          if (command == 'session.pause') {
+          if (command == 'session.stop') {
             if (hanging) return pending.future;
-            throw const RequestFailure('disconnected', 'capture pause failed');
+            throw const RequestFailure('disconnected', 'window close failed');
           }
           return {};
         });
@@ -233,14 +233,14 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.text('返回的原页面'));
           await tester.pumpAndSettle();
-          await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+          await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+          await tester.pump();
+          await tester.ensureVisible(find.text('关闭画面'));
+          await tester.tap(find.text('关闭画面'));
           await tester.pumpAndSettle();
           expect(find.text('返回的原页面'), findsOneWidget);
           if (!hanging) {
-            expect(
-              find.textContaining('已退出 测试手机 的画面，暂停窗口尚未确认'),
-              findsOneWidget,
-            );
+            expect(find.textContaining('关闭窗口尚未确认'), findsOneWidget);
           }
           expect(
             find.byType(RemotePage),
@@ -249,11 +249,11 @@ void main() {
           );
           expect(
             commands
-                .where((c) => c.$1 == 'session.pause')
+                .where((c) => c.$1 == 'session.stop')
                 .map((c) => c.$2['sessionId']),
             ['original'],
           );
-          expect(commands.where((c) => c.$1 == 'session.stop'), isEmpty);
+          expect(commands.where((c) => c.$1 == 'session.pause'), isEmpty);
         } finally {
           if (!pending.isCompleted) pending.complete({});
           await tester.pumpAndSettle();
@@ -1081,79 +1081,79 @@ void main() {
     },
   );
 
-  testWidgets(
-    'return drains queued key-up before pausing and retaining its session',
-    (tester) async {
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      final semantics = tester.ensureSemantics();
-      final down = Completer<Json>();
-      final commands = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        commands.add((command, params));
-        if (command == 'session.start') {
-          return {
-            'sessionId': 'original',
-            'textureId': 1,
-            'width': 200,
-            'height': 400,
-          };
-        }
-        if (command == 'session.key' && params['action'] == 'down') {
-          return down.future;
-        }
-        return {};
-      });
-      try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: RemotePage(
-              controller: controller,
-              device: const {'id': 'phone'},
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
-        await tester.pump();
-        await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
-        await tester.pump();
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
-        await tester.pump();
-        expect(
-          commands.where((c) => c.$1 == 'session.pause'),
-          isEmpty,
-          reason:
-              'The live input queue still owes the original session a key-up.',
-        );
-        down.complete({});
-        await tester.pumpAndSettle();
-        expect(
-          commands
-              .where((c) => c.$1 == 'session.key')
-              .map((c) => c.$2['action']),
-          ['down', 'up'],
-        );
-        expect(commands.where((c) => c.$1 == 'session.pause'), hasLength(1));
-        expect(
-          commands.indexWhere(
-            (c) => c.$1 == 'session.key' && c.$2['action'] == 'up',
-          ),
-          lessThan(commands.indexWhere((c) => c.$1 == 'session.pause')),
-        );
-      } finally {
-        if (!down.isCompleted) down.complete({});
-        await tester.pumpAndSettle();
-        await tester.pumpWidget(const SizedBox());
-        controller.dispose();
-        semantics.dispose();
+  testWidgets('return drains queued key-up before closing its session', (
+    tester,
+  ) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final semantics = tester.ensureSemantics();
+    final down = Completer<Json>();
+    final commands = <(String, Json)>[];
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      commands.add((command, params));
+      if (command == 'session.start') {
+        return {
+          'sessionId': 'original',
+          'textureId': 1,
+          'width': 200,
+          'height': 400,
+        };
       }
-    },
-  );
-  testWidgets('return releases held keys before pausing its original session', (
+      if (command == 'session.key' && params['action'] == 'down') {
+        return down.future;
+      }
+      return {};
+    });
+    try {
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+      await tester.pump();
+      await tester.ensureVisible(find.text('关闭画面'));
+      await tester.tap(find.text('关闭画面'));
+      await tester.pump();
+      expect(
+        commands.where((c) => c.$1 == 'session.stop'),
+        isEmpty,
+        reason:
+            'The live input queue still owes the original session a key-up.',
+      );
+      down.complete({});
+      await tester.pumpAndSettle();
+      expect(
+        commands.where((c) => c.$1 == 'session.key').map((c) => c.$2['action']),
+        ['down', 'up'],
+      );
+      expect(commands.where((c) => c.$1 == 'session.stop'), hasLength(1));
+      expect(
+        commands.indexWhere(
+          (c) => c.$1 == 'session.key' && c.$2['action'] == 'up',
+        ),
+        lessThan(commands.indexWhere((c) => c.$1 == 'session.stop')),
+      );
+    } finally {
+      if (!down.isCompleted) down.complete({});
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      semantics.dispose();
+    }
+  });
+  testWidgets('return releases held keys before closing its original session', (
     tester,
   ) async {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -1182,14 +1182,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();
-    await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+    await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+    await tester.pump();
+    await tester.ensureVisible(find.text('关闭画面'));
+    await tester.tap(find.text('关闭画面'));
     await tester.pumpAndSettle();
     final keys = commands.where((c) => c.$1 == 'session.key').toList();
     expect(keys.map((c) => c.$2['action']), ['down', 'up']);
     expect(keys.every((c) => c.$2['sessionId'] == 'original'), isTrue);
     expect(
       commands.indexOf(keys.last),
-      lessThan(commands.indexWhere((c) => c.$1 == 'session.pause')),
+      lessThan(commands.indexWhere((c) => c.$1 == 'session.stop')),
     );
     await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpWidget(const SizedBox());
@@ -1446,7 +1449,7 @@ void main() {
     },
   );
   testWidgets(
-    'a sleeping phone wakes only after explicit screen-lighting confirmation',
+    'a sleeping phone exposes one direct idempotent wake action without modal confirmation',
     (tester) async {
       final commands = <String>[];
       var starts = 0;
@@ -1483,19 +1486,10 @@ void main() {
         commands.where((c) => c == 'session.start' || c == 'devices.wake'),
         ['session.start'],
       );
-      await tester.tap(find.text('唤醒手机'));
+      expect(find.text('手机处于休眠状态'), findsNothing);
+      await tester.tap(find.byTooltip('点亮屏幕'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('可能点亮被控手机的实体屏幕'), findsOneWidget);
-      await tester.tap(find.text('取消'));
-      await tester.pumpAndSettle();
-      expect(
-        commands.where((c) => c == 'session.start' || c == 'devices.wake'),
-        ['session.start'],
-      );
-      await tester.tap(find.text('唤醒手机'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('唤醒手机').last);
-      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
       expect(
         commands
             .where((c) => c == 'session.start' || c == 'devices.wake')

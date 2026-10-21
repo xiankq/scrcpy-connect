@@ -3,7 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:scrcpy_connect/widgets/action_row.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -13,8 +13,6 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/tools/devices_workspace_sessions_tools_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
@@ -40,21 +38,47 @@ void main() {
     );
   });
   testWidgets(
-    'main screen and two real apps survive returns, resume and close independently',
+    'phone and application windows release exact resources on close and keep real tasks',
     (tester) async {
+      final semantics = tester.ensureSemantics();
       expect(address, isNotEmpty);
       expect(port, inInclusiveRange(1, 65535));
       await app.main();
-      await tester.pump(const Duration(milliseconds: 500));
+      await waitFor(
+        tester,
+        () => find.byType(ConnectApp).evaluate().isNotEmpty,
+        reason: 'The production app must initialize.',
+      );
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
       ).read(appControllerProvider.notifier);
+      await waitFor(
+        tester,
+        () =>
+            !controller.snapshot().loading &&
+            !controller.snapshot().reconciliationPending,
+        reason: 'Startup reconciliation must finish before fixture changes.',
+      );
       Future<Json> request(String command, [Json params = const {}]) =>
           controller
               .request(command, params)
               .timeout(const Duration(seconds: 45));
+      final initialDevices = objects(
+        (await request('devices.list'))['devices'],
+      );
+      final originalSettings = {...controller.snapshot().settings};
+      final originalFocus = controller.snapshot().focusedDeviceId;
       String? deviceId;
+      var createdDevice = false;
+      var initiallyConnected = false;
       final ownedIds = <String>[];
+      final allIds = <String>[];
+      Finder appRow(String package) => find.ancestor(
+        of: find.byWidgetPredicate(
+          (widget) => widget is PhoneAppIcon && widget.packageName == package,
+        ),
+        matching: find.byType(ListTile),
+      );
       final closedIds = <String>[];
       final initialSessions = <String>{};
       Future<List<Json>> sessions() async => objects(
@@ -126,6 +150,7 @@ void main() {
         expect(active['evidence'], 'mdk.snapshot');
         expectHealthyRemote();
         if (!ownedIds.contains(idOf(active))) ownedIds.add(idOf(active));
+        if (!allIds.contains(idOf(active))) allIds.add(idOf(active));
         return active;
       }
 
@@ -194,33 +219,57 @@ void main() {
       }
 
       Future<void> leave(Json session) async {
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
         await waitFor(
           tester,
           () => find.byType(RemotePage).evaluate().isEmpty,
-          reason: 'Return must retain a paused window.',
+          reason: 'Close must release this exact window.',
         );
-        Json retained = {};
-        final pauseDeadline = DateTime.now().add(const Duration(seconds: 5));
+        final closeDeadline = DateTime.now().add(const Duration(seconds: 5));
+        var remaining = <Json>[];
         do {
-          retained = (await sessions()).singleWhere(
-            (item) => idOf(item) == idOf(session),
-          );
-          if (retained['status'] == 'paused') {
-            break;
-          }
+          remaining = (await sessions())
+              .where(
+                (item) =>
+                    idOf(item) == idOf(session) && item['status'] != 'stopped',
+              )
+              .toList();
+          if (remaining.isEmpty) break;
           await tester.pump(const Duration(milliseconds: 100));
-        } while (DateTime.now().isBefore(pauseDeadline));
-        expect(retained['status'], 'paused');
-        expect(retained['capturePaused'], isFalse);
-        expect(retained['presentationOnly'], isTrue);
-        expect(retained['textureId'], isNotNull);
+        } while (DateTime.now().isBefore(closeDeadline));
+        expect(remaining, isEmpty);
+        ownedIds.remove(idOf(session));
+        closedIds.add(idOf(session));
+        if (session['packageName'] != null) {
+          final tasks = await request('apps.list', {
+            'deviceId': deviceId,
+            'filter': 'running',
+          });
+          expect(
+            objects(tasks['apps'])
+                .any((app) => app['packageName'] == session['packageName']),
+            isTrue,
+            reason: 'Closing the control window must keep the actual application task.',
+          );
+        }
+        await screenshot('session-closed-${closedIds.length}');
       }
 
       Future<void> backFrom(Finder page) async {
-        await tester.tap(
-          find.descendant(of: page, matching: find.byType(BackButton)),
+        final label = MaterialLocalizations.of(tester.element(page))
+            .backButtonTooltip;
+        final back = find
+            .descendant(of: page, matching: find.bySemanticsLabel(label))
+            .hitTestable();
+        await waitFor(
+          tester,
+          () => back.evaluate().isNotEmpty,
+          reason: 'The current page must expose its real back action.',
         );
+        await tester.tap(back);
         await waitFor(
           tester,
           () => page.evaluate().isEmpty,
@@ -236,6 +285,13 @@ void main() {
             'attemptId': 'sessions-${DateTime.now().microsecondsSinceEpoch}',
           }),
         );
+        createdDevice = !initialDevices.any(
+          (device) => device['id'] == deviceId,
+        );
+        initiallyConnected = initialDevices.any(
+          (device) =>
+              device['id'] == deviceId && device['status'] == 'connected',
+        );
         await request('devices.connect', {'deviceId': deviceId});
         initialSessions.addAll((await sessions()).map(idOf));
         expect(
@@ -244,6 +300,10 @@ void main() {
           reason:
               'Use an isolated target; never close someone else’s sessions.',
         );
+        await controller.updateSetting('deviceSettings', {
+          ...jsonObject(originalSettings['deviceSettings']),
+          deviceId!: {'wakeOnConnect': true, 'lockOnClose': false},
+        });
         // Fixture configuration, not evidence for the quality or connection UI.
         await request('session.quality', {
           'deviceId': deviceId,
@@ -254,7 +314,7 @@ void main() {
           'bitRate': 2000000,
         });
         await request('devices.wake', {'deviceId': deviceId});
-        WorkspaceRoute(deviceId: deviceId!)
+        WorkspaceRoute(deviceId: deviceId)
             .go(tester.element(find.byType(Scaffold).first));
         await waitFor(
           tester,
@@ -280,19 +340,24 @@ void main() {
         await tapPageAction(
           tester,
           find.byType(DeviceWorkspacePage),
-          find.text('手机应用'),
+          find.text('全部应用'),
         );
         await waitFor(
           tester,
-          () => find.byType(AppsPage).evaluate().isNotEmpty,
+          () =>
+              find.byType(AppsPage).evaluate().isNotEmpty &&
+              find
+                  .descendant(
+                    of: find.byType(AppsPage),
+                    matching: find.byType(TextField),
+                  )
+                  .evaluate()
+                  .isNotEmpty,
           reason:
               'Open the real application list for phone-screen continuation.',
         );
         await tester.enterText(find.byType(TextField), 'com.android.settings');
-        final settingsApp = find.widgetWithText(
-          ActionRow,
-          'com.android.settings',
-        );
+        final settingsApp = appRow('com.android.settings');
         await waitFor(
           tester,
           () => settingsApp.evaluate().isNotEmpty,
@@ -302,10 +367,10 @@ void main() {
         await tester.pump(const Duration(milliseconds: 400));
         await tester.tap(find.text('在手机屏幕打开'));
         final continued = await current(null);
-        expect(idOf(continued), idOf(main));
-        expect((await sessions()).map(idOf).toList(), [idOf(main)]);
-        await waitForSettingsPixels(idOf(main));
-        await screenshot('session-primary-app-live', active: idOf(main));
+        expect(idOf(continued), isNot(idOf(main)));
+        expect((await sessions()).map(idOf).toList(), [idOf(continued)]);
+        await waitForSettingsPixels(idOf(continued));
+        await screenshot('session-primary-app-live', active: idOf(continued));
         binding.reportData!['phoneScreenAppResumed'] = true;
         binding.reportData!['phoneScreenRenderedApp'] = true;
         await leave(continued);
@@ -317,20 +382,28 @@ void main() {
           await tapPageAction(
             tester,
             find.byType(DeviceWorkspacePage),
-            find.text('手机应用'),
+            find.text('全部应用'),
           );
           await waitFor(
             tester,
-            () => find.byType(AppsPage).evaluate().isNotEmpty,
+            () =>
+                find.byType(AppsPage).evaluate().isNotEmpty &&
+                find
+                    .descendant(
+                      of: find.byType(AppsPage),
+                      matching: find.byType(TextField),
+                    )
+                    .evaluate()
+                    .isNotEmpty,
             reason: 'Open the actual app list.',
           );
           await tester.enterText(find.byType(TextField), package);
           await waitFor(
             tester,
-            () => find.widgetWithText(ActionRow, package).evaluate().isNotEmpty,
+            () => appRow(package).evaluate().isNotEmpty,
             reason: 'The target must actually expose the requested app.',
           );
-          await tester.tap(find.widgetWithText(ActionRow, package));
+          await tester.tap(appRow(package));
           await tester.pump(const Duration(milliseconds: 400));
           await tester.tap(find.text('在独立窗口打开'));
           final session = await current(package);
@@ -343,114 +416,20 @@ void main() {
           await leave(session);
           await backFrom(find.byType(AppsPage));
         }
-        expect(ownedIds, hasLength(3));
-        expect((await sessions()).map(idOf).toSet(), ownedIds.toSet());
+        expect(ownedIds, isEmpty);
+        expect(allIds.toSet(), hasLength(4));
         expect(
-          (await sessions()).every((item) => item['status'] == 'paused'),
-          isTrue,
+          (await sessions()).where((item) => item['status'] != 'stopped'),
+          isEmpty,
         );
-        await tapPageAction(
-          tester,
-          find.byType(DeviceWorkspacePage),
-          find.text('当前控制会话'),
-        );
-        await waitFor(
-          tester,
-          () =>
-              find.byType(SessionsPage).evaluate().isNotEmpty &&
-              find
-                  .byKey(ValueKey('open-session:${ownedIds.last}'))
-                  .evaluate()
-                  .isNotEmpty,
-          reason: 'All retained windows must be listed.',
-        );
-        for (final command in ['session.key', 'session.pause']) {
-          await expectLater(
-            request(command, {
-              'deviceId': deviceId,
-              if (command == 'session.key') ...{'keyCode': 3, 'action': 'up'},
-            }),
-            throwsA(
-              isA<RequestFailure>().having(
-                (failure) => failure.code,
-                'code',
-                'ambiguous_session',
-              ),
-            ),
-          );
-        }
-        await screenshot('workspace-three-paused');
-        final settingsId = ownedIds[1];
-        await tapPageAction(
-          tester,
-          find.byType(SessionsPage),
-          find.byKey(ValueKey('open-session:$settingsId')),
-        );
-        final resumed = await current('com.android.settings');
-        expect(idOf(resumed), settingsId);
-        expect(
-          (await sessions())
-              .where((item) => idOf(item) != settingsId)
-              .every((item) => item['status'] == 'paused'),
-          isTrue,
-        );
-        await screenshot('workspace-settings-resumed', active: settingsId);
-        await leave(resumed);
-        await tapPageAction(
-          tester,
-          find.byType(SessionsPage),
-          find.byKey(ValueKey('tools-session:$settingsId')),
-        );
-        await waitFor(
-          tester,
-          () => find.text('截取当前画面').evaluate().isNotEmpty,
-          reason: 'Tools must resolve the selected session.',
-        );
-        await tester.tap(find.text('截取当前画面'));
-        await waitFor(
-          tester,
-          () => find.byType(Image).evaluate().isNotEmpty,
-          reason: 'Read the selected window’s real rendered snapshot.',
-        );
-        await screenshot('workspace-settings-screenshot');
-        final toolContext = tester.element(find.byType(SessionToolsPage));
-        Navigator.of(toolContext).pop();
-        await tester.pump(const Duration(milliseconds: 400));
-        await backFrom(find.byType(SessionToolsPage));
-        await tapPageAction(
-          tester,
-          find.byType(SessionsPage),
-          find.byKey(ValueKey('close-session:$settingsId')),
-        );
-        await waitFor(
-          tester,
-          () => find
-              .byKey(ValueKey('open-session:$settingsId'))
-              .evaluate()
-              .isEmpty,
-          reason: 'Closing one window must refresh the actual session list.',
-        );
-        ownedIds.remove(settingsId);
-        closedIds.add(settingsId);
-        expect((await sessions()).map(idOf).toSet(), ownedIds.toSet());
-        await screenshot('workspace-one-closed');
-        await tapPageAction(
-          tester,
-          find.byType(SessionsPage),
-          find.byKey(ValueKey('open-session:${ownedIds.last}')),
-        );
-        final dialer = await current('com.google.android.dialer');
-        expect(idOf(dialer), ownedIds.last);
-        await screenshot('workspace-dialer-survives', active: idOf(dialer));
-        await leave(dialer);
         binding.reportData!.addAll({
-          'sessionIds': [...ownedIds, settingsId],
-          'pausedWindowsVerified': 3,
-          'closedWindowId': settingsId,
-          'survivingWindowId': idOf(dialer),
+          'sessionIds': allIds,
+          'closedWindowIds': closedIds,
+          'releasedWindowsVerified': 4,
           'sessionWorkspaceComplete': true,
         });
       } finally {
+        semantics.dispose();
         // Only this fixture’s exact identities; never stop by device or package.
         for (final id in ownedIds) {
           if (!initialSessions.contains(id)) {
@@ -462,8 +441,28 @@ void main() {
             } catch (_) {}
           }
         }
+        try {
+          await controller.updateSetting(
+            'deviceSettings',
+            jsonObject(originalSettings['deviceSettings']),
+          );
+          await controller.updateSetting(
+            'deviceQuality',
+            jsonObject(originalSettings['deviceQuality']),
+          );
+          await controller.focusDevice(originalFocus);
+        } finally {
+          if (createdDevice && deviceId != null) {
+            await request('devices.forget', {'deviceId': deviceId});
+          } else if (!initiallyConnected &&
+              deviceId != null &&
+              initialSessions.isEmpty) {
+            await request('devices.disconnect', {'deviceId': deviceId});
+          }
+        }
       }
       expect(tester.takeException(), isNull);
     },
+    timeout: const Timeout(Duration(minutes: 6)),
   );
 }

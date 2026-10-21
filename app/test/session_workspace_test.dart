@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/tools/devices_workspace_sessions_tools_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
+import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
@@ -45,110 +45,124 @@ List<Json> _sessions() => [
 ];
 
 void main() {
+  for (final oldAddress in [
+    '/devices/phone/sessions',
+    '/devices/phone/tools?session-id=B',
+  ]) {
+    testWidgets(
+      'old management address redirects to the workspace without replay: $oldAddress',
+      (tester) async {
+        final calls = <String>[];
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          calls.add(command);
+          return {};
+        });
+        try {
+          await tester.pumpWidget(
+            RouterTestApp(
+              controller: controller,
+              devices: const [_phone],
+              home: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => GoRouter.of(context).go(oldAddress),
+                  child: const Text('旧地址'),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('旧地址'));
+          await tester.pumpAndSettle();
+          expect(find.byType(DeviceWorkspacePage), findsOneWidget);
+          expect(find.byType(RemotePage), findsNothing);
+          expect(
+            calls.where(
+              (command) =>
+                  command.startsWith('session.') || command == 'devices.wake',
+            ),
+            isEmpty,
+          );
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          controller.dispose();
+        }
+      },
+    );
+  }
+
   testWidgets(
-    'a reconciled snapshot refreshes the session workspace without replay',
+    'closing the current B window releases its resources and preserves A',
     (tester) async {
-      final events = StreamController<Json>.broadcast(sync: true);
       final sessions = _sessions();
-      final commands = <String>[];
+      final calls = <(String, Json)>[];
       final controller = createTestController((
         command, [
         params = const {},
       ]) async {
-        commands.add(command);
-        return command == 'session.list'
-            ? {'sessions': sessions.map(Map<String, dynamic>.of).toList()}
-            : {};
-      }, events: events.stream);
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          home: SessionsPage(controller: controller, device: _phone),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('窗口 B'), findsOneWidget);
-      sessions.removeLast();
-      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
-      events.add({
-        'type': 'state.resynced',
-        'data': {
-          'sessions': sessions,
-          'devices': [_phone],
-          'settings': <String, dynamic>{},
-          'shares': <Json>[],
-          'sequence': 9,
-        },
+        calls.add((command, params));
+        if (command == 'session.list') {
+          return {'sessions': sessions.map(Map<String, dynamic>.of).toList()};
+        }
+        if (command == 'session.resume') {
+          return {
+            ...sessions[1],
+            'status': 'streaming',
+            'firstFrameDecoded': true,
+            'evidence': 'mdk.snapshot',
+          };
+        }
+        if (command == 'session.stop') {
+          sessions.removeWhere(
+            (item) => item['sessionId'] == params['sessionId'],
+          );
+          return {'sessionId': params['sessionId'], 'status': 'stopped'};
+        }
+        return {};
       });
-      await tester.pumpAndSettle();
-      expect(find.text('窗口 B'), findsNothing);
-      expect(commands.where((c) => c != 'session.list'), isEmpty);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-      await events.close();
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            theme: ConnectTokens.theme(Brightness.light),
+            home: RemotePage(
+              controller: controller,
+              device: _phone,
+              packageName: 'example.b',
+              existingSession: sessions[1],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
+        await tester.pumpAndSettle();
+
+        expect(
+          calls
+              .where((call) => call.$1 == 'session.stop')
+              .map((call) => call.$2),
+          [
+            {'sessionId': 'B', 'keepTask': true},
+          ],
+        );
+        expect(sessions.map((item) => item['sessionId']), ['A']);
+        expect(calls.where((call) => call.$1 == 'session.pause'), isEmpty);
+        expect(calls.where((call) => call.$1 == 'session.start'), isEmpty);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
     },
   );
 
-  testWidgets('closing B refreshes the session workspace and preserves A', (
-    tester,
-  ) async {
-    final sessions = _sessions();
-    final calls = <(String, Json)>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
-      calls.add((command, params));
-      if (command == 'session.list') {
-        return {'sessions': sessions.map(Map<String, dynamic>.of).toList()};
-      }
-      if (command == 'session.stop') {
-        sessions.removeWhere(
-          (item) => item['sessionId'] == params['sessionId'],
-        );
-        return {'sessionId': params['sessionId'], 'status': 'stopped'};
-      }
-      return {};
-    });
-    try {
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: SessionsPage(controller: controller, device: _phone),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('窗口 A'), findsOneWidget);
-      expect(find.text('窗口 B'), findsOneWidget);
-
-      await tester.tap(find.byKey(const ValueKey('close-session:B')));
-      await tester.pumpAndSettle();
-
-      expect(
-        calls.where((call) => call.$1 == 'session.stop').map((call) => call.$2),
-        [
-          {'sessionId': 'B', 'keepTask': true},
-        ],
-      );
-      expect(
-        calls.where((call) => call.$1 == 'session.list').length,
-        greaterThan(1),
-      );
-      expect(sessions.map((item) => item['sessionId']), ['A']);
-      expect(find.text('窗口 A'), findsOneWidget);
-      expect(find.text('窗口 B'), findsNothing);
-      expect(calls.where((call) => call.$1 == 'session.pause'), isEmpty);
-      expect(calls.where((call) => call.$1 == 'session.resume'), isEmpty);
-      expect(tester.takeException(), isNull);
-    } finally {
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    }
-  });
-
   testWidgets(
-    'selecting B in tools captures that session without a device fallback',
+    'the current window screenshot captures B without a device fallback',
     (tester) async {
       final calls = <(String, Json)>[];
       final controller = createTestController((
@@ -157,7 +171,17 @@ void main() {
       ]) async {
         calls.add((command, params));
         if (command == 'session.list') return {'sessions': _sessions()};
-        if (command == 'session.screenshot') return {'message': '窗口 B 截图已保存'};
+        if (command == 'session.screenshot') {
+          return {'localPath': '/tmp/window-b.png'};
+        }
+        if (command == 'session.resume') {
+          return {
+            ..._sessions()[1],
+            'status': 'streaming',
+            'firstFrameDecoded': true,
+            'evidence': 'mdk.snapshot',
+          };
+        }
         return {};
       });
       try {
@@ -166,14 +190,18 @@ void main() {
             controller: controller,
             devices: const [_phone],
             theme: ConnectTokens.theme(Brightness.light),
-            home: SessionToolsPage(controller: controller, device: _phone),
+            home: RemotePage(
+              controller: controller,
+              device: _phone,
+              packageName: 'example.b',
+              existingSession: _sessions()[1],
+            ),
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('截取当前画面'), findsNothing);
-        await tester.tap(find.text('窗口 B'));
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('截取当前画面'));
+        await tester.tap(find.text('截图'));
         await tester.pumpAndSettle();
 
         expect(
@@ -184,9 +212,12 @@ void main() {
             {'sessionId': 'B'},
           ],
         );
-        expect(find.text('窗口 B 截图已保存'), findsOneWidget);
+        expect(find.text('截图已保存：/tmp/window-b.png'), findsOneWidget);
         expect(calls.where((call) => call.$1 == 'session.start'), isEmpty);
-        expect(calls.where((call) => call.$1 == 'session.resume'), isEmpty);
+        expect(
+          calls.where((call) => call.$1 == 'session.resume'),
+          hasLength(1),
+        );
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox());
@@ -228,21 +259,16 @@ void main() {
             controller: controller,
             devices: const [_phone],
             theme: ConnectTokens.theme(Brightness.light),
-            home: SessionToolsPage(
+            home: RemotePage(
               controller: controller,
               device: _phone,
-              sessionId: 'B',
+              packageName: 'example.b',
+              existingSession: sessions[1],
+              initialAction: const RemoteControlIntent.key(3),
             ),
           ),
         );
-        await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(find.text('主屏幕'), 250);
-        await Scrollable.ensureVisible(
-          tester.element(find.text('主屏幕')),
-          alignment: .5,
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('主屏幕'));
+        await tester.pump();
         for (var attempt = 0; attempt < 20; attempt++) {
           await tester.pump(const Duration(milliseconds: 50));
           if (calls.any((call) => call.$1 == 'session.resume')) break;
@@ -295,10 +321,7 @@ void main() {
         ]);
 
         final router = GoRouter.of(tester.element(find.byType(RemotePage)));
-        expect(
-          router.routeInformationProvider.value.uri.path,
-          '/devices/phone/sessions/B',
-        );
+        expect(router.routeInformationProvider.value.uri.path, '/test');
         expect(
           router.routeInformationProvider.value.uri.queryParameters,
           isEmpty,
