@@ -1,8 +1,22 @@
 # Visual comparison captures
 
-`pages.json` pairs complete Pencil frames with Flutter captures. It records the
+`pages.json` contains the current scoped Pencil/Flutter pairs for the affected pages. It records the
 source viewport, crops and known content differences; local state boards are not
 stretched into page references. Export Pencil PNGs through the object API at 1×.
+
+For a repeatable 402×874/DPR1 software layout capture, run from `app/`:
+
+```sh
+DESIGN_REFINEMENT_CAPTURE_DIR=/tmp/connect-design/flutter \
+  flutter test --no-pub test/design_refinement_capture_test.dart
+```
+
+The opt-in test uses production pages and theme with an isolated controller,
+loads a declared Noto CJK font and the real app icon, and writes `layout.json`.
+It reserves the 54/34px safe areas without painting fake system bars. It does
+not prove native behavior or GPU optics; capture those from the running app in
+a separate directory. Local component boards and alternate scroll/mode states
+are listed as unmatched with explicit reasons, never stretched into full pages.
 
 Capture the changed production pages from the running app into a new system
 temporary directory. Record device, viewport, safe areas, theme and fixture

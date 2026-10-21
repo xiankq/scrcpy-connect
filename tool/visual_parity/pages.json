@@ -1,41 +1,12 @@
 {
   "version": 1,
-  "description": "Explicit full-page light reference pairs, exported at 1x without resizing. Per-case crops and fixture-content differences remain visible in reports; comparisons never imply visual acceptance.",
+  "description": "Current affected-page pairs at 402x874 DPR1, without scaling. This is a scoped refinement audit, not a complete product-page matrix.",
   "cases": [
     {
-      "id": "devices",
-      "pencilFrame": "lUDPa",
-      "pencil": "lUDPa.png",
-      "flutter": "devices-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "/devices",
-      "captureScope": "production-router",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Reference export should be checked against capture-contract device identity and test data; image completion does not imply content or visual acceptance."
-      ]
-    },
-    {
-      "id": "device_workspace",
+      "id": "workspace-main",
       "pencilFrame": "nqQEb",
       "pencil": "nqQEb.png",
-      "flutter": "device_workspace-light.png",
+      "flutter": "workspace-main.png",
       "sourceWidth": 402,
       "sourceHeight": 874,
       "width": 402,
@@ -53,298 +24,19 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "WorkspaceRoute(deviceId: fixture)",
-      "captureScope": "production-router",
-      "comparisonScope": "host-content-excluding-system-bars",
+      "route": "WorkspaceRoute(deviceId:phone)",
+      "captureScope": "production-pages-isolated-controller-fixture",
+      "comparisonScope": "host-content-excluding-system-bars-software-glass-fallback",
       "fixtureContentDifferences": [
-        "Reference export should be checked against capture-contract device identity and test data; image completion does not imply content or visual acceptance."
+        "Fixture contains one real Settings task and current battery sample; native refresh action and actual 44px hit targets retained.",
+        "Host Noto CJK font and explicit software glass fallback; no native system bars or GPU optical acceptance."
       ]
     },
     {
-      "id": "settings",
-      "pencilFrame": "w6WUAT",
-      "pencil": "w6WUAT.png",
-      "flutter": "settings-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "/settings",
-      "captureScope": "production-router",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "transfers",
-      "pencilFrame": "W6enLf",
-      "pencil": "W6enLf.png",
-      "flutter": "transfers-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "/transfers",
-      "captureScope": "production-router",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "The Flutter fixture contains one running directory task at 65% (14.9/22.9 MB); the source task list must be checked separately."
-      ]
-    },
-    {
-      "id": "appearance",
-      "pencilFrame": "PLzIA",
-      "pencil": "PLzIA.png",
-      "flutter": "appearance-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "AppearancePage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "add_device",
-      "pencilFrame": "W3GRn",
-      "pencil": "W3GRn.png",
-      "flutter": "add_device-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "AddDevicePage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "discovery",
-      "pencilFrame": "yMlVd",
-      "pencil": "yMlVd.png",
-      "flutter": "discovery-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "DiscoveryPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "device_connection_preferences",
-      "pencilFrame": "q3bM72",
-      "pencil": "q3bM72.png",
-      "flutter": "device_connection_preferences-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "DeviceConnectionPreferencesPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "The edit action preserves the recorded connection transport; the visible label is 编辑地址与端口."
-      ]
-    },
-    {
-      "id": "quality",
-      "pencilFrame": "XPceX",
-      "pencil": "XPceX.png",
-      "flutter": "quality-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "QualityPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Both references use the fixture resolution 1920 px; explanatory copy remains part of the layout comparison."
-      ]
-    },
-    {
-      "id": "capabilities",
-      "pencilFrame": "NVEMy",
-      "pencil": "NVEMy.png",
-      "flutter": "capabilities-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "CapabilitiesPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Both references represent 手机屏幕 and 文件管理 available, with 设备声音 limited."
-      ]
-    },
-    {
-      "id": "diagnostics_failed",
-      "pencilFrame": "eWu3m",
-      "pencil": "eWu3m.png",
-      "flutter": "diagnostics_failed-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "DiagnosticsPage(failed wireless endpoint)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Page-scoped diagnosis: connected=false, tcpReachable=false, identityPresent=true; endpoint 192.168.1.8:37123. The source failure structure must reflect these actual checks; the separate successful diagnostic capture is not compared to a failure frame."
-      ]
-    },
-    {
-      "id": "usb_guide",
-      "pencilFrame": "OxUaB",
-      "pencil": "OxUaB.png",
-      "flutter": "usb_guide-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "AddDevicePage(initialMode: usb)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "legacy_tcp",
+      "id": "add-ip",
       "pencilFrame": "OpFKk",
       "pencil": "OpFKk.png",
-      "flutter": "legacy_tcp-light.png",
+      "flutter": "add-ip.png",
       "sourceWidth": 402,
       "sourceHeight": 874,
       "width": 402,
@@ -362,16 +54,18 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "AddDevicePage(initialMode: ip, transport: tcp)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
+      "route": "ConnectionRoute(mode:ip)",
+      "captureScope": "production-pages-isolated-controller-fixture",
+      "comparisonScope": "host-content-excluding-system-bars-software-glass-fallback",
+      "fixtureContentDifferences": [
+        "Host Noto CJK font and explicit software glass fallback; no native system bars or GPU optical acceptance."
+      ]
     },
     {
-      "id": "pairing_form",
+      "id": "add-pairing",
       "pencilFrame": "W3GRn",
       "pencil": "W3GRn.png",
-      "flutter": "pairing_form-light.png",
+      "flutter": "add-pairing.png",
       "sourceWidth": 402,
       "sourceHeight": 874,
       "width": 402,
@@ -389,16 +83,47 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "AddDevicePage(initialMode: pairing)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
+      "route": "ConnectionRoute(mode:pairing)",
+      "captureScope": "production-pages-isolated-controller-fixture",
+      "comparisonScope": "host-content-excluding-system-bars-software-glass-fallback",
+      "fixtureContentDifferences": [
+        "Host Noto CJK font and explicit software glass fallback; no native system bars or GPU optical acceptance."
+      ]
     },
     {
-      "id": "qr_pair",
+      "id": "add-usb",
+      "pencilFrame": "OxUaB",
+      "pencil": "OxUaB.png",
+      "flutter": "add-usb.png",
+      "sourceWidth": 402,
+      "sourceHeight": 874,
+      "width": 402,
+      "height": 786,
+      "pencilCrop": [
+        0,
+        54,
+        402,
+        786
+      ],
+      "flutterCrop": [
+        0,
+        54,
+        402,
+        786
+      ],
+      "sourceCornerRadius": 38,
+      "route": "ConnectionRoute(mode:usb)",
+      "captureScope": "production-pages-isolated-controller-fixture",
+      "comparisonScope": "host-content-excluding-system-bars-software-glass-fallback",
+      "fixtureContentDifferences": [
+        "Host Noto CJK font and explicit software glass fallback; no native system bars or GPU optical acceptance."
+      ]
+    },
+    {
+      "id": "add-qr",
       "pencilFrame": "G4CpTk",
       "pencil": "G4CpTk.png",
-      "flutter": "qr_pair-light.png",
+      "flutter": "add-qr.png",
       "sourceWidth": 402,
       "sourceHeight": 874,
       "width": 402,
@@ -416,18 +141,19 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "AddDevicePage(initialMode: qr)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
+      "route": "ConnectionRoute(mode:qr)",
+      "captureScope": "production-pages-isolated-controller-fixture",
+      "comparisonScope": "host-content-excluding-system-bars-software-glass-fallback",
       "fixtureContentDifferences": [
-        "Payload WIFI:T:ADB;S:fixture;P:123456;;, QR automatic version and error correction L. Geometry exported to the temporary qr-pattern.json uses the same package:qr encoding as QrImageView; it is a real QR matrix rather than a Lucide placeholder."
+        "QR code payload differs; compare placement, dimensions and spacing, not the encoded pixels.",
+        "Host Noto CJK font and explicit software glass fallback; no native system bars or GPU optical acceptance."
       ]
     },
     {
-      "id": "apps",
-      "pencilFrame": "tbWkA",
-      "pencil": "tbWkA.png",
-      "flutter": "apps-light.png",
+      "id": "connection-config-pairing",
+      "pencilFrame": "q3bM72",
+      "pencil": "q3bM72.png",
+      "flutter": "connection-config-pairing.png",
       "sourceWidth": 402,
       "sourceHeight": 874,
       "width": 402,
@@ -445,628 +171,30 @@
         786
       ],
       "sourceCornerRadius": 38,
-      "route": "AppsPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "sessions",
-      "pencilFrame": "iEvoR",
-      "pencil": "iEvoR.png",
-      "flutter": "sessions-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "SessionsPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "selected_session_tools",
-      "pencilFrame": "XvviW",
-      "pencil": "XvviW.png",
-      "flutter": "selected_session_tools-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "SessionToolsPage(sessionId: screen)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
+      "route": "DeviceConnectionRoute(deviceId:phone)",
+      "captureScope": "production-pages-isolated-controller-fixture",
+      "comparisonScope": "host-content-excluding-system-bars-software-glass-fallback",
       "fixtureContentDifferences": [
-        "Selected phone-screen session screen is explicit. Source tool groups must match this selected-session context; the separate session picker is retained as an unmatched capture."
-      ]
-    },
-    {
-      "id": "files",
-      "pencilFrame": "MaHXL",
-      "pencil": "MaHXL.png",
-      "flutter": "files-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "FilesPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "file_search",
-      "pencilFrame": "lm0us",
-      "pencil": "lm0us.png",
-      "flutter": "file_search-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "FileSearchPage(initialPath: /sdcard/Download, initialQuery: 旅行)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Fixture starts before search with query 旅行 and root /sdcard/Download; current-directory/entire-storage scope controls are visible. Source must represent the same pre-search state rather than a result row."
-      ]
-    },
-    {
-      "id": "gallery",
-      "pencilFrame": "RqDYL",
-      "pencil": "RqDYL.png",
-      "flutter": "gallery-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "GalleryPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Both references show one lake photo with matching decoded repository content."
-      ]
-    },
-    {
-      "id": "media_preview",
-      "pencilFrame": "sepTa",
-      "pencil": "sepTa.png",
-      "flutter": "media_preview-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 874,
-      "pencilCrop": [
-        0,
-        0,
-        402,
-        874
-      ],
-      "flutterCrop": [
-        0,
-        0,
-        402,
-        874
-      ],
-      "sourceCornerRadius": 38,
-      "route": "MediaPreviewPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "full-screen-media",
-      "fixtureContentDifferences": [
-        "Both references show 湖边.jpg using the same repository lake photo.",
-        "Full-screen crop includes source system chrome absent from the Flutter widget capture."
-      ]
-    },
-    {
-      "id": "remote",
-      "pencilFrame": "DtZbX",
-      "pencil": "DtZbX.png",
-      "flutter": "remote-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 874,
-      "pencilCrop": [
-        0,
-        0,
-        402,
-        874
-      ],
-      "flutterCrop": [
-        0,
-        0,
-        402,
-        874
-      ],
-      "sourceCornerRadius": 38,
-      "route": "RemotePage(paused; renderer receipt unconfirmed)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "full-screen-host-overlays",
-      "fixtureContentDifferences": [
-        "Paused host view: 画面已暂停 / 尚未确认恢复后的画面，请重新检查。with retry, host navigation and floating exit. No native remote texture is substituted in widget captures.",
-        "Live target-app imagery remains illustrative source content outside this paused-host comparison."
-      ]
-    },
-    {
-      "id": "notifications",
-      "pencilFrame": "a7A57",
-      "pencil": "a7A57.png",
-      "flutter": "notifications-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "NotificationsPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "notification_reply",
-      "pencilFrame": "mVNnf",
-      "pencil": "mVNnf.png",
-      "flutter": "notification_reply-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "NotificationReplyPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": []
-    },
-    {
-      "id": "calls",
-      "pencilFrame": "a05tWj",
-      "pencil": "a05tWj.png",
-      "flutter": "calls-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "CallsPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Both references represent call control available and audio limited, with caller 小林 / 138 0013 8000."
-      ]
-    },
-    {
-      "id": "background",
-      "pencilFrame": "DtBNP",
-      "pencil": "DtBNP.png",
-      "flutter": "background-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "BackgroundPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Fixture reports background ready with no permission request; source status/toggle availability may differ."
-      ]
-    },
-    {
-      "id": "activities",
-      "pencilFrame": "mDL3I",
-      "pencil": "mDL3I.png",
-      "flutter": "activities-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "ActivitiesPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Both references group two activities under 我的手机: 设备连接 and 照片传输, retaining separate stop actions."
-      ]
-    },
-    {
-      "id": "media_cache",
-      "pencilFrame": "Q2ZaRT",
-      "pencil": "Q2ZaRT.png",
-      "flutter": "media_cache-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "MediaCachePage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Both references show formatted cache values 534.1/1907.3 MB, protected 114.4 MB, reclaimable 419.6 MB and reserved 22.9 MB."
-      ]
-    },
-    {
-      "id": "transfer_details",
-      "pencilFrame": "R759qi",
-      "pencil": "R759qi.png",
-      "flutter": "transfer_details-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "TransferDetailsPage(partial directory task)",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Page-scoped partial directory pull: completed 旅行清单.pdf; failed 视频.mp4 and 资料.zip; canRestart=true, canCancel=false, canExport=false. Restart begins from zero rather than resuming unverified progress.",
-        "Source counts and sizes may differ; partial-result controls must follow these explicit capabilities."
-      ]
-    },
-    {
-      "id": "receive_content",
-      "pencilFrame": "ERONu",
-      "pencil": "ERONu.png",
-      "flutter": "receive_content-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": "ReceiveContentPage",
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Running directory pull 旅行照片, 15.6/24 MB, canCancel=true; source must retain the cancellation action and source/destination identity. File/directory names and byte values may differ."
-      ]
-    },
-    {
-      "id": "data_preferences",
-      "pencilFrame": "XABsw",
-      "pencil": "XABsw.png",
-      "flutter": "data_preferences-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": null,
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Source and capture share the representative initial state; require visual review after export."
-      ]
-    },
-    {
-      "id": "document_import",
-      "pencilFrame": "MIxzU",
-      "pencil": "MIxzU.png",
-      "flutter": "document_import-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": null,
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Source and capture share the representative initial state; require visual review after export."
-      ]
-    },
-    {
-      "id": "file_details",
-      "pencilFrame": "Z5rvv",
-      "pencil": "Z5rvv.png",
-      "flutter": "file_details-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": null,
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Source and capture share the representative initial state; require visual review after export."
-      ]
-    },
-    {
-      "id": "share_directory_picker",
-      "pencilFrame": "FeFSp",
-      "pencil": "FeFSp.png",
-      "flutter": "share_directory_picker-light.png",
-      "sourceWidth": 402,
-      "sourceHeight": 874,
-      "width": 402,
-      "height": 786,
-      "pencilCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "flutterCrop": [
-        0,
-        54,
-        402,
-        786
-      ],
-      "sourceCornerRadius": 38,
-      "route": null,
-      "captureScope": "isolated-page-fixture",
-      "comparisonScope": "host-content-excluding-system-bars",
-      "fixtureContentDifferences": [
-        "Source and capture share the representative initial state; require visual review after export."
-      ]
-    },
-    {
-      "id": "devices-tablet",
-      "pencilFrame": "H0TFx",
-      "pencil": "H0TFx.png",
-      "flutter": "devices-tablet-light.png",
-      "sourceWidth": 1194,
-      "sourceHeight": 834,
-      "width": 1194,
-      "height": 834,
-      "pencilCrop": [
-        0,
-        0,
-        1194,
-        834
-      ],
-      "flutterCrop": [
-        0,
-        0,
-        1194,
-        834
-      ],
-      "sourceCornerRadius": 0,
-      "route": "/devices",
-      "captureScope": "production-router",
-      "comparisonScope": "full-responsive-host-viewport",
-      "fixtureContentDifferences": [
-        "Wide production route with the same device fixture; compare actual parent constraints without scaling."
-      ]
-    },
-    {
-      "id": "device_workspace-desktop",
-      "pencilFrame": "zLBrM",
-      "pencil": "zLBrM.png",
-      "flutter": "device_workspace-desktop-light.png",
-      "sourceWidth": 1440,
-      "sourceHeight": 960,
-      "width": 1440,
-      "height": 960,
-      "pencilCrop": [
-        0,
-        0,
-        1440,
-        960
-      ],
-      "flutterCrop": [
-        0,
-        0,
-        1440,
-        960
-      ],
-      "sourceCornerRadius": 0,
-      "route": "/devices/fixture",
-      "captureScope": "production-router",
-      "comparisonScope": "full-responsive-host-viewport",
-      "fixtureContentDifferences": [
-        "Wide production route with the same device fixture; compare actual parent constraints without scaling."
+        "Source header includes the sample device name; production header uses the route title. Bound source has a read-only fingerprint tooltip, hidden at rest.",
+        "Host Noto CJK font and explicit software glass fallback; no native system bars or GPU optical acceptance."
       ]
     }
   ],
-  "layoutContract": "layout-contract.json",
-  "unmatchedCaptures": {
-    "document_export": "Source export/save outcomes are local states.",
-    "file_search_results": "jcZXq/zD1BI are local states; fixture is completed, not progressive/stopped.",
-    "incoming_share": "No dedicated complete source frame.",
-    "media_preview_unavailable": "w4Qqmf is a local state.",
-    "route_error": "No dedicated complete source frame.",
-    "startup_error": "No dedicated complete source frame.",
-    "home": "Alias of devices root; responsive large-text variants have no matching source viewport.",
-    "session_tools": "Unselected-session picker. XvviW is paired with selected_session_tools, preserving the distinct picker state.",
-    "diagnostics": "Successful diagnosis. eWu3m is paired only with diagnostics_failed.",
-    "connection_form": "Compatibility encrypted-address context uses the shared add-device form; no separate complete reference viewport.",
-    "wireless_guide": "Wireless setup is now a local help dialog (c0wxY), not a separate complete page."
-  }
+  "unmatchedCaptures": [
+    {
+      "flutter": "app-open-method.png",
+      "pencilFrame": "tch6A",
+      "reason": "Source is a local component board with a 338px-wide action; production is a full-width modal with 370px actions. Compare roles, 44px button height and 12px gap manually; never stretch the board."
+    },
+    {
+      "flutter": "workspace-settings.png",
+      "pencilFrame": "YLhiR",
+      "reason": "Source is a tall local settings board, capture is a scrolled production page. Compare group/row spacing and values manually."
+    },
+    {
+      "flutter": "connection-config-ip.png",
+      "pencilFrame": "q3bM72",
+      "reason": "The same production configuration page is switched to IP mode; source representative remains pairing mode. Manual shared-form review."
+    }
+  ]
 }
