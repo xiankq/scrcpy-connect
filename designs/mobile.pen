@@ -2682,17 +2682,6 @@
                   "gap": "$space-xxs",
                   "children": [
                     {
-                      "type": "text",
-                      "id": "Th2Ov",
-                      "name": "地址",
-                      "fill": "$text",
-                      "content": "地址",
-                      "lineHeight": "$line-label",
-                      "fontFamily": "$font-label",
-                      "fontSize": "$size-label",
-                      "fontWeight": "$weight-label"
-                    },
-                    {
                       "type": "frame",
                       "id": "MJtjI",
                       "name": "输入框",
@@ -2702,13 +2691,24 @@
                       "cornerRadius": "$radius-md",
                       "stroke": "$transparent",
                       "strokeWidth": "$space-hairline",
-                      "gap": "$space-xs",
+                      "layout": "vertical",
                       "padding": [
-                        16,
+                        6,
                         20
                       ],
-                      "alignItems": "center",
+                      "justifyContent": "center",
                       "children": [
+                        {
+                          "type": "text",
+                          "id": "Th2Ov",
+                          "name": "地址",
+                          "fill": "$secondary",
+                          "content": "地址",
+                          "lineHeight": "$line-caption",
+                          "fontFamily": "$font-caption",
+                          "fontSize": "$size-caption",
+                          "fontWeight": "$weight-caption"
+                        },
                         {
                           "type": "icon",
                           "id": "MfqEL",
@@ -2998,10 +2998,13 @@
                   "name": "组件 / 工作台快捷入口",
                   "reusable": true,
                   "width": 78,
-                  "height": 84,
                   "fill": "$transparent",
                   "layout": "vertical",
                   "gap": 8,
+                  "padding": [
+                    8,
+                    4
+                  ],
                   "alignItems": "center",
                   "children": [
                     {
@@ -3033,10 +3036,10 @@
                       "name": "文件",
                       "fill": "$text",
                       "content": "文件",
-                      "lineHeight": "$line-label",
-                      "fontFamily": "$font-label",
-                      "fontSize": "$size-label",
-                      "fontWeight": "$weight-label"
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
                     }
                   ]
                 }
@@ -3136,6 +3139,11 @@
                       "name": "文件名子串",
                       "width": "fill_container",
                       "descendants": {
+                        "MJtjI": {
+                          "layout": "horizontal",
+                          "gap": "$space-xs",
+                          "alignItems": "center"
+                        },
                         "Th2Ov": {
                           "enabled": false
                         },
@@ -4004,8 +4012,8 @@
                               "height": "fill_container",
                               "descendants": {
                                 "mNfsm": {
-                                  "width": 32,
-                                  "height": 32,
+                                  "width": 19,
+                                  "height": 19,
                                   "icon": "circle-check",
                                   "fill": "$success"
                                 },
@@ -4022,7 +4030,7 @@
                           "name": "设备摘要",
                           "width": "fill_container",
                           "layout": "vertical",
-                          "gap": 6,
+                          "gap": 8,
                           "children": [
                             {
                               "type": "text",
@@ -4034,8 +4042,8 @@
                               "content": "Pixel 9",
                               "lineHeight": "$line-body",
                               "fontFamily": "$font-body",
-                              "fontSize": 16,
-                              "fontWeight": "600"
+                              "fontSize": "$size-body",
+                              "fontWeight": "$weight-body"
                             },
                             {
                               "type": "frame",
@@ -4049,12 +4057,12 @@
                                   "type": "text",
                                   "id": "DWVY3",
                                   "name": "设备连接状态",
-                                  "fill": "$success",
+                                  "fill": "$text",
                                   "content": "已连接",
                                   "lineHeight": "$line-body",
                                   "fontFamily": "$font-body",
-                                  "fontSize": 12,
-                                  "fontWeight": "normal"
+                                  "fontSize": "$size-body",
+                                  "fontWeight": "$weight-body"
                                 },
                                 {
                                   "type": "text",
@@ -4215,16 +4223,15 @@
                               "id": "lGIz1",
                               "name": "实时电量与充电",
                               "width": "fill_container",
-                              "height": 20,
-                              "gap": 6,
+                              "gap": 4,
                               "alignItems": "center",
                               "children": [
                                 {
                                   "type": "icon",
                                   "id": "Rdmbp",
                                   "name": "正在充电",
-                                  "width": 18,
-                                  "height": 18,
+                                  "width": 16,
+                                  "height": 16,
                                   "icon": "battery-charging",
                                   "library": "lucide",
                                   "fill": "$success"
@@ -4233,7 +4240,7 @@
                                   "type": "text",
                                   "id": "gMxAU",
                                   "name": "实时电量",
-                                  "fill": "$text",
+                                  "fill": "$secondary",
                                   "content": "78% · 正在充电",
                                   "fontFamily": "$font-caption",
                                   "fontSize": "$size-caption",
@@ -4263,7 +4270,8 @@
                       "width": "fill_container",
                       "descendants": {
                         "NXbD9": {
-                          "enabled": true
+                          "enabled": true,
+                          "icon": "smartphone"
                         },
                         "mpPvv": {
                           "content": "打开手机屏幕"
@@ -6699,11 +6707,7 @@
                       "width": "fill_container",
                       "fill": "$surface",
                       "cornerRadius": "$radius-lg",
-                      "gap": 8,
-                      "padding": [
-                        16,
-                        8
-                      ],
+                      "padding": 16,
                       "children": [
                         {
                           "id": "hfAJ8",
@@ -6731,7 +6735,7 @@
                           "width": "fill_container",
                           "descendants": {
                             "M5lvZ": {
-                              "fill": "$list-icon-blue"
+                              "fill": "$list-icon-purple"
                             },
                             "zYaI3": {
                               "icon": "images"
@@ -6786,38 +6790,92 @@
                   "id": "pxU0U",
                   "name": "手机应用标题",
                   "width": "fill_container",
-                  "padding": [
-                    28,
-                    0,
-                    12,
-                    0
-                  ],
                   "justifyContent": "space_between",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "text",
-                      "id": "U1FJF",
-                      "name": "手机应用",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
+                      "type": "frame",
+                      "id": "c9cQq3",
+                      "name": "活跃应用标题留白",
                       "width": "fill_container",
-                      "content": "活跃应用",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
+                      "layout": "vertical",
+                      "padding": [
+                        28,
+                        0,
+                        12,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "U1FJF",
+                          "name": "手机应用",
+                          "fill": "$secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "活跃应用",
+                          "lineHeight": "$line-caption",
+                          "fontFamily": "$font-caption",
+                          "fontSize": "$size-caption",
+                          "fontWeight": "$weight-caption"
+                        }
+                      ]
                     },
                     {
-                      "type": "text",
-                      "id": "ioTrA",
-                      "name": "全部应用次级入口",
-                      "fill": "$accent-blue",
-                      "content": "全部应用",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
+                      "type": "frame",
+                      "id": "ZQ91R",
+                      "name": "活跃应用动作与44px命中",
+                      "padding": [
+                        16,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "WTVTe",
+                          "name": "刷新后台应用",
+                          "width": 44,
+                          "height": 44,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "wbcOK",
+                              "name": "刷新",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "refresh-cw",
+                              "library": "lucide",
+                              "fill": "$secondary"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Ms4l5",
+                          "name": "全部应用44px命中",
+                          "width": 76,
+                          "height": 44,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ioTrA",
+                              "name": "全部应用次级入口",
+                              "fill": "$text",
+                              "content": "全部应用",
+                              "lineHeight": "$line-label",
+                              "fontFamily": "$font-label",
+                              "fontSize": "$size-label",
+                              "fontWeight": "$weight-label"
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 },
@@ -6829,21 +6887,29 @@
                   "width": "fill_container",
                   "fill": "$transparent",
                   "gap": 16,
+                  "padding": [
+                    0,
+                    0,
+                    16,
+                    0
+                  ],
                   "children": [
                     {
                       "type": "frame",
                       "id": "rSE00",
                       "name": "后台任务 / 设置",
                       "context": "com.android.settings；API36目标PackageManager提供原始图标。先打开设置再回到HOME，任务列表确认仍存在。",
-                      "width": 78,
-                      "height": 84,
+                      "width": 92.5,
                       "layout": "vertical",
                       "gap": 8,
+                      "padding": [
+                        8,
+                        4
+                      ],
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
-                          "cornerRadius": "$radius-md",
                           "id": "VacW7",
                           "name": "设置真实应用图标",
                           "fill": {
@@ -6861,10 +6927,10 @@
                           "name": "设置应用名称",
                           "fill": "$text",
                           "content": "设置",
-                          "lineHeight": "$line-caption",
-                          "fontFamily": "$font-caption",
-                          "fontSize": "$size-caption",
-                          "fontWeight": "$weight-caption"
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
                         }
                       ]
                     }
@@ -6992,7 +7058,7 @@
                           "fill": "$list-icon-blue"
                         },
                         "n4qgqg": {
-                          "icon": "network",
+                          "icon": "radio",
                           "fill": "$white",
                           "width": 20,
                           "height": 20
@@ -7744,7 +7810,6 @@
               "id": "XQZRD",
               "name": "组件 / 连接表单 · 无线配对码",
               "context": "统一添加设备页的无线配对码内容，非独立路由。",
-              "theme": {},
               "reusable": true,
               "width": 370,
               "fill": "$canvas",
@@ -7757,11 +7822,11 @@
                   "name": "IP 地址或主机名输入",
                   "width": "fill_container",
                   "descendants": {
-                    "Th2Ov": {
-                      "enabled": false
-                    },
                     "MJtjI": {
                       "stroke": "$transparent"
+                    },
+                    "Th2Ov": {
+                      "enabled": false
                     },
                     "MfqEL": {
                       "enabled": false
@@ -7798,11 +7863,11 @@
                   "name": "配对端口输入",
                   "width": "fill_container",
                   "descendants": {
-                    "Th2Ov": {
-                      "enabled": false
-                    },
                     "MJtjI": {
                       "stroke": "$transparent"
+                    },
+                    "Th2Ov": {
+                      "enabled": false
                     },
                     "MfqEL": {
                       "enabled": false
@@ -7856,11 +7921,11 @@
                   "name": "配对码输入",
                   "width": "fill_container",
                   "descendants": {
-                    "Th2Ov": {
-                      "enabled": false
-                    },
                     "MJtjI": {
                       "stroke": "$transparent"
+                    },
+                    "Th2Ov": {
+                      "enabled": false
                     },
                     "MfqEL": {
                       "enabled": false
@@ -7916,7 +7981,6 @@
               "id": "EBO24",
               "name": "组件 / 连接表单 · 扫码配对",
               "context": "本机展示二维码，被控手机系统无线调试扫描；无需主控相机或扫码权限。",
-              "theme": {},
               "reusable": true,
               "width": 370,
               "layout": "vertical",
@@ -8014,7 +8078,6 @@
               "id": "x6PaB4",
               "name": "组件 / 连接表单 · USB",
               "context": "同页USB模式。主控确认USB访问许可；被控手机确认USB调试信任，按钮仅重新检查真实授权。",
-              "theme": {},
               "reusable": true,
               "width": 370,
               "layout": "vertical",
@@ -8045,27 +8108,27 @@
                       "type": "text",
                       "id": "O7HBI",
                       "name": "连接后，允许本应用访问 USB 设备。此权限不要求本机开启调试。",
-                      "fill": "$secondary",
+                      "fill": "$text",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
                       "content": "本机：允许访问 USB 设备。",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
                     },
                     {
                       "type": "text",
                       "id": "m41ZU",
                       "name": "开启开发者选项与 USB 调试，在手机系统弹窗中允许此主控的调试授权。请核对授权对象。",
-                      "fill": "$secondary",
+                      "fill": "$text",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
                       "content": "被控手机：开启 USB 调试，并在系统弹窗中允许调试。",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
                     }
                   ]
                 },
@@ -8103,7 +8166,6 @@
               "id": "e3Pm1P",
               "name": "组件 / 连接表单 · IP 连接",
               "context": "同一添加页的IP 连接模式内容，非独立页面。",
-              "theme": {},
               "reusable": true,
               "width": 370,
               "layout": "vertical",
@@ -8135,11 +8197,11 @@
                   "name": "IP 地址或主机名输入",
                   "width": "fill_container",
                   "descendants": {
-                    "Th2Ov": {
-                      "enabled": false
-                    },
                     "MJtjI": {
                       "stroke": "$transparent"
+                    },
+                    "Th2Ov": {
+                      "enabled": false
                     },
                     "MfqEL": {
                       "enabled": false
@@ -8176,9 +8238,6 @@
                   "name": "连接端口输入",
                   "width": "fill_container",
                   "descendants": {
-                    "Th2Ov": {
-                      "enabled": false
-                    },
                     "MJtjI": {
                       "type": "frame",
                       "id": "HIz6K",
@@ -9089,14 +9148,14 @@
                   "ref": "Nrkcq",
                   "width": "fill_container",
                   "descendants": {
-                    "Th2Ov": {
-                      "content": "PEM 私钥",
-                      "fontSize": 14,
-                      "fontWeight": "normal"
-                    },
                     "MJtjI": {
                       "height": 112,
                       "alignItems": "start"
+                    },
+                    "Th2Ov": {
+                      "content": "PEM 私钥",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
                     },
                     "S7RAIQ": {
                       "content": "-----BEGIN PRIVATE KEY-----",
@@ -23736,12 +23795,15 @@
                   "name": "表单 / 搜索设备",
                   "width": "fill_container",
                   "descendants": {
+                    "MJtjI": {
+                      "stroke": "$transparent",
+                      "layout": "horizontal",
+                      "gap": "$space-xs",
+                      "alignItems": "center"
+                    },
                     "Th2Ov": {
                       "content": "搜索设备",
                       "enabled": false
-                    },
-                    "MJtjI": {
-                      "stroke": "$transparent"
                     },
                     "MfqEL": {
                       "enabled": true,
@@ -24210,7 +24272,7 @@
               "layout": "vertical",
               "gap": "$space-zero",
               "padding": [
-                118,
+                126,
                 0,
                 24,
                 0
@@ -24407,7 +24469,7 @@
               "layout": "vertical",
               "gap": "$space-zero",
               "padding": [
-                118,
+                126,
                 0,
                 24,
                 0
@@ -25706,8 +25768,8 @@
                   "descendants": {
                     "Th2Ov": {
                       "content": "连接端口",
-                      "fontSize": 14,
-                      "fontWeight": "normal"
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
                     },
                     "S7RAIQ": {
                       "content": "5555"
@@ -35826,10 +35888,13 @@
                   "width": 688,
                   "height": 52,
                   "descendants": {
+                    "MJtjI": {
+                      "layout": "horizontal",
+                      "gap": "$space-xs",
+                      "alignItems": "center"
+                    },
                     "Th2Ov": {
-                      "enabled": false,
-                      "textGrowth": "auto",
-                      "width": 0
+                      "enabled": false
                     },
                     "MfqEL": {
                       "enabled": true,
@@ -38925,9 +38990,6 @@
                       "name": "IP 地址或主机名输入",
                       "width": "fill_container",
                       "descendants": {
-                        "Th2Ov": {
-                          "enabled": false
-                        },
                         "MJtjI": {
                           "type": "frame",
                           "id": "Z7jYtr",
