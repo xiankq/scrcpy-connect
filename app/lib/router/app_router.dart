@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
@@ -40,8 +41,6 @@ import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devic
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/tools/devices_workspace_sessions_tools_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
 import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/devices_workspace_files_directory_picker_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
@@ -796,6 +795,28 @@ class CallsRoute extends GoRouteData with $CallsRoute {
       _page(state, build(context, state));
 }
 
+@TypedGoRoute<DeviceDataRoute>(
+  path: '/devices/:deviceId/data',
+  name: 'device-data',
+)
+class DeviceDataRoute extends GoRouteData with $DeviceDataRoute {
+  const DeviceDataRoute({required this.deviceId});
+  final String deviceId;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
+    context,
+    state,
+    deviceId,
+    'device-data',
+    (_, _, device) =>
+        DeviceDataPage(controller: _controller(context), device: device),
+  );
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
 @TypedGoRoute<QualityRoute>(path: '/devices/:deviceId/quality', name: 'quality')
 class QualityRoute extends GoRouteData with $QualityRoute {
   const QualityRoute({required this.deviceId});
@@ -824,20 +845,8 @@ class SessionToolsRoute extends GoRouteData with $SessionToolsRoute {
   final String? sessionId;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    Widget page(BuildContext _, GoRouterState state, Json device) =>
-        SessionToolsPage(
-          controller: controller,
-          device: device,
-          sessionId: sessionId,
-        );
-    return _deviceRecord(context, state, deviceId, 'session-tools', page);
-  }
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
+  String redirect(BuildContext context, GoRouterState state) =>
+      WorkspaceRoute(deviceId: deviceId).location;
 }
 
 @TypedGoRoute<SessionsRoute>(
@@ -849,16 +858,8 @@ class SessionsRoute extends GoRouteData with $SessionsRoute {
   final String deviceId;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    Widget page(BuildContext _, GoRouterState state, Json device) =>
-        SessionsPage(controller: controller, device: device);
-    return _deviceRecord(context, state, deviceId, 'sessions', page);
-  }
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
+  String redirect(BuildContext context, GoRouterState state) =>
+      WorkspaceRoute(deviceId: deviceId).location;
 }
 
 @TypedGoRoute<RemoteRoute>(path: '/devices/:deviceId/remote', name: 'remote')
@@ -1283,17 +1284,8 @@ class DeviceIdentityRoute extends GoRouteData with $DeviceIdentityRoute {
   final String deviceId;
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
-  Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
-    context,
-    state,
-    deviceId,
-    'device-adb-key',
-    (_, _, device) =>
-        AdbIdentityPage(controller: _controller(context), device: device),
-  );
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
+  String redirect(BuildContext context, GoRouterState state) =>
+      DeviceConnectionRoute(deviceId: deviceId).location;
 }
 
 @TypedGoRoute<DeviceIpRoute>(

@@ -9,6 +9,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
+import 'package:scrcpy_connect/widgets/section_title.dart';
 
 class RunningApps extends HookWidget {
   const RunningApps({
@@ -77,19 +78,11 @@ class RunningApps extends HookWidget {
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(
-              top: DesignTokens.spacingLg,
-              bottom: DesignTokens.spacingXs,
-            ),
-            child: Row(
+          child: SectionTitle(
+            '活跃应用',
+            action: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: Text(
-                    '活跃应用',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
                 IconButton(
                   tooltip: '刷新后台应用',
                   onPressed: online

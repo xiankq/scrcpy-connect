@@ -75,21 +75,34 @@ class AppsPage extends HookWidget {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: DesignTokens.spacingMd,
+                    vertical: DesignTokens.spacingXs,
                   ),
                   sliver: SliverList.builder(
                     itemCount: apps.length,
                     itemBuilder: (context, index) {
                       final app = apps[index];
-                      return ListTile(
-                        leading: PhoneAppIcon(
-                          controller: controller,
-                          deviceId: value(device, 'id'),
-                          packageName: value(app, 'packageName'),
+                      return Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: DesignTokens.spacingXxs,
                         ),
-                        title: Text(
-                          value(app, 'name', value(app, 'packageName')),
+                        child: ListTile(
+                          minTileHeight: DesignTokens.componentRowHeight,
+                          minLeadingWidth: DesignTokens.componentListIconSize,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: DesignTokens.spacingMd,
+                            vertical: DesignTokens.spacingXs,
+                          ),
+                          leading: PhoneAppIcon(
+                            size: DesignTokens.componentListIconSize,
+                            controller: controller,
+                            deviceId: value(device, 'id'),
+                            packageName: value(app, 'packageName'),
+                          ),
+                          title: Text(
+                            value(app, 'name', value(app, 'packageName')),
+                          ),
+                          onTap: () => openPhoneApp(context, device, app),
                         ),
-                        onTap: () => openPhoneApp(context, device, app),
                       );
                     },
                   ),

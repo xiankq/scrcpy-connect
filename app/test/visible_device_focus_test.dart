@@ -355,7 +355,10 @@ void main() {
       expect(find.byType(RemotePage), findsOneWidget);
       expect(find.byType(AppBar), findsNothing);
       expect(backend.controller.snapshot().focusedDeviceId, 'b');
-      await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+      await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+      await tester.pump();
+      await tester.ensureVisible(find.text('关闭画面'));
+      await tester.tap(find.text('关闭画面'));
       await tester.pumpAndSettle();
       expect(tester.element(find.byType(FilesPage)), same(filesA));
       expect(backend.controller.snapshot().focusedDeviceId, 'a');

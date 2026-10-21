@@ -22,35 +22,7 @@ class ActionRow extends StatelessWidget {
   final Color? color;
   final Widget? trailing;
   final EdgeInsetsGeometry contentPadding;
-  Color get _badgeColor {
-    if (color == ConnectTokens.danger ||
-        color == ConnectTokens.coral ||
-        color == DesignTokens.colorListIconCoral) {
-      return DesignTokens.colorListIconCoral;
-    }
-    if (color == ConnectTokens.amber ||
-        color == DesignTokens.colorListIconAmber) {
-      return DesignTokens.colorListIconAmber;
-    }
-    if (color == ConnectTokens.mint ||
-        color == DesignTokens.colorListIconMint) {
-      return DesignTokens.colorListIconMint;
-    }
-    return switch (icon) {
-      LucideIcons.folder ||
-      LucideIcons.folderOpen ||
-      LucideIcons.file ||
-      LucideIcons.hardDrive ||
-      LucideIcons.download ||
-      LucideIcons.upload ||
-      LucideIcons.usb ||
-      LucideIcons.fileInput ||
-      LucideIcons.fileOutput => DesignTokens.colorListIconAmber,
-      LucideIcons.phone ||
-      LucideIcons.phoneIncoming => DesignTokens.colorListIconMint,
-      _ => DesignTokens.colorListIconBlue,
-    };
-  }
+  Color get _badgeColor => functionalIconColor(icon, color: color);
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -76,4 +48,63 @@ class ActionRow extends StatelessWidget {
               )),
     onTap: onTap,
   );
+}
+
+/// Functional color belongs to the action, while the glyph stays white.
+Color functionalIconColor(IconData icon, {Color? color}) {
+  if (color == ConnectTokens.danger || color == ConnectTokens.coral) {
+    return DesignTokens.colorListIconCoral;
+  }
+  if (color == ConnectTokens.amber) return DesignTokens.colorListIconAmber;
+  if (color == ConnectTokens.mint) return DesignTokens.colorListIconMint;
+  if (color != null &&
+      [
+        DesignTokens.colorListIconBlue,
+        DesignTokens.colorListIconMint,
+        DesignTokens.colorListIconAmber,
+        DesignTokens.colorListIconCoral,
+        DesignTokens.colorListIconSlate,
+        DesignTokens.colorListIconPurple,
+      ].contains(color)) {
+    return color;
+  }
+  return switch (icon) {
+    LucideIcons.trash2 ||
+    LucideIcons.unplug ||
+    LucideIcons.lock ||
+    LucideIcons.moon => DesignTokens.colorListIconCoral,
+    LucideIcons.folder ||
+    LucideIcons.folderOpen ||
+    LucideIcons.file ||
+    LucideIcons.hardDrive ||
+    LucideIcons.download ||
+    LucideIcons.upload ||
+    LucideIcons.usb ||
+    LucideIcons.fileInput ||
+    LucideIcons.fileOutput ||
+    LucideIcons.clipboard ||
+    LucideIcons.sun ||
+    LucideIcons.alarmClock ||
+    LucideIcons.stethoscope ||
+    LucideIcons.keyRound ||
+    LucideIcons.cpu => DesignTokens.colorListIconAmber,
+    LucideIcons.phone ||
+    LucideIcons.phoneIncoming ||
+    LucideIcons.activity ||
+    LucideIcons.shieldCheck ||
+    LucideIcons.battery ||
+    LucideIcons.batteryCharging ||
+    LucideIcons.gauge ||
+    LucideIcons.refreshCw => DesignTokens.colorListIconMint,
+    LucideIcons.slidersHorizontal ||
+    LucideIcons.ratio ||
+    LucideIcons.monitor ||
+    LucideIcons.panelsTopLeft ||
+    LucideIcons.images => DesignTokens.colorListIconPurple,
+    LucideIcons.network ||
+    LucideIcons.wifi ||
+    LucideIcons.radio ||
+    LucideIcons.link => DesignTokens.colorListIconBlue,
+    _ => DesignTokens.colorListIconSlate,
+  };
 }

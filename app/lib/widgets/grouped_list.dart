@@ -1,6 +1,7 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
+import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
 /// An open content list. Each child is laid out independently by the viewport.
@@ -77,11 +78,15 @@ class ConnectSwitchRow extends StatelessWidget {
     required this.title,
     required this.value,
     required this.onChanged,
+    this.icon,
+    this.iconColor,
     this.contentPadding = const EdgeInsets.symmetric(
       horizontal: DesignTokens.spacingMd,
     ),
   });
   final Widget title;
+  final IconData? icon;
+  final Color? iconColor;
   final bool value;
   final ValueChanged<bool>? onChanged;
   final EdgeInsetsGeometry contentPadding;
@@ -100,6 +105,13 @@ class ConnectSwitchRow extends StatelessWidget {
           ),
           child: Row(
             children: [
+              if (icon != null) ...[
+                ListIconBadge(
+                  icon: icon!,
+                  backgroundColor: functionalIconColor(icon!, color: iconColor),
+                ),
+                const SizedBox(width: DesignTokens.spacingSm),
+              ],
               Expanded(
                 child: DefaultTextStyle(
                   style: Theme.of(context).textTheme.bodyLarge!,
@@ -112,6 +124,21 @@ class ConnectSwitchRow extends StatelessWidget {
           ),
         ),
       ),
+    ),
+  );
+}
+
+/// A bounded group of related settings, not a wrapper for dynamic results.
+class SettingsGroup extends StatelessWidget {
+  const SettingsGroup({super.key, required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => ContentPanel(
+    padding: const EdgeInsets.symmetric(vertical: DesignTokens.spacingXxs),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
     ),
   );
 }

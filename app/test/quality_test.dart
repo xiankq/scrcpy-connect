@@ -20,7 +20,7 @@ void main() {
       ]) async {
         if (command == 'session.quality') {
           selected = params;
-          return {'appliesNextSession': true};
+          return {'appliedSessions': <Json>[], 'failures': <Json>[]};
         }
         return {
           'current': {'videoCodec': 'h264'},
@@ -70,7 +70,7 @@ void main() {
   );
 
   testWidgets(
-    'codec changes reset the encoder and expose only its matching encoders for the next session',
+    'codec changes reset the encoder and expose only its matching encoders for all device sessions',
     (tester) async {
       final requests = <(String, Json)>[];
       final current = <String, dynamic>{
@@ -86,10 +86,8 @@ void main() {
         if (command == 'session.quality') {
           current.addAll({...params}..remove('deviceId'));
           return {
-            'appliesNextSession': true,
-            'needsRestart': true,
-            'existingSessionId': 'live-session',
-            'reason': '已保存，新建窗口时生效；已保留的窗口需关闭后重新打开。',
+            'appliedSessions': ['live-session'],
+            'failures': <Json>[],
           };
         }
         return {
@@ -137,7 +135,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('关闭后重新打开'), findsWidgets);
+      expect(find.text('画面设置'), findsOneWidget);
+      expect(find.text('屏幕比例'), findsOneWidget);
+      expect(find.textContaining('关闭后重新打开'), findsNothing);
       await tester.tap(find.text('编码格式'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('H.265'));
@@ -301,7 +301,7 @@ void main() {
         requests.add((command, params));
         if (command == 'session.quality') {
           selected = params['videoCodec'] as String;
-          return {'appliesNextSession': true};
+          return {'appliedSessions': <Json>[], 'failures': <Json>[]};
         }
         return {
           'current': {'videoCodec': selected},
@@ -344,9 +344,9 @@ void main() {
           (widget) =>
               (widget is Tooltip &&
                   ((widget.message ?? widget.richMessage?.toPlainText())
-                          ?.contains('新建窗口时确认') ??
+                          ?.contains('实际画面应用时确认') ??
                       false)) ||
-              (widget is Text && (widget.data?.contains('新建窗口时确认') ?? false)),
+              (widget is Text && (widget.data?.contains('实际画面应用时确认') ?? false)),
         ),
         findsWidgets,
       );
@@ -363,9 +363,9 @@ void main() {
           (widget) =>
               (widget is Tooltip &&
                   ((widget.message ?? widget.richMessage?.toPlainText())
-                          ?.contains('新建窗口时确认') ??
+                          ?.contains('实际画面应用时确认') ??
                       false)) ||
-              (widget is Text && (widget.data?.contains('新建窗口时确认') ?? false)),
+              (widget is Text && (widget.data?.contains('实际画面应用时确认') ?? false)),
         ),
         findsWidgets,
       );

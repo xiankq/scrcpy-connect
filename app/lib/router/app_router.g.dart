@@ -34,6 +34,7 @@ List<RouteBase> get $appRoutes => [
   $notificationsRoute,
   $notificationReplyRoute,
   $callsRoute,
+  $deviceDataRoute,
   $qualityRoute,
   $sessionToolsRoute,
   $sessionsRoute,
@@ -1012,6 +1013,39 @@ mixin $CallsRoute on GoRouteData {
   @override
   String get location => GoRouteData.$location(
     '/devices/${Uri.encodeComponent(_self.deviceId)}/calls',
+  );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $deviceDataRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/data',
+  name: 'device-data',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: DeviceDataRoute.$parentNavigatorKey,
+  factory: $DeviceDataRoute._fromState,
+);
+
+mixin $DeviceDataRoute on GoRouteData {
+  static DeviceDataRoute _fromState(GoRouterState state) =>
+      DeviceDataRoute(deviceId: state.pathParameters['deviceId']!);
+
+  DeviceDataRoute get _self => this as DeviceDataRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/data',
   );
 
   @override

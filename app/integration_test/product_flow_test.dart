@@ -1,13 +1,16 @@
+import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_facts.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 
 import 'dart:ui' as ui;
 
+import 'package:design_system/design_system.dart';
+
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -120,6 +123,16 @@ void main() {
     final originalHitTestPolicy = WidgetController.hitTestWarningShouldBeFatal;
     WidgetController.hitTestWarningShouldBeFatal = true;
     final semantics = tester.ensureSemantics();
+    var converted = false;
+    Future<void> capture(String name) async {
+      if (!converted) {
+        await binding.convertFlutterSurfaceToImage();
+        converted = true;
+      }
+      await tester.pump(const Duration(milliseconds: 300));
+      await binding.takeScreenshot(name);
+    }
+
     try {
       await app.main();
       await waitFor(
@@ -130,6 +143,7 @@ void main() {
       await tester.tap(find.byTooltip('添加设备'));
       await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text('IP连接'));
+      await tester.pumpAndSettle();
       await waitFor(
         tester,
         () => find.byType(ConnectionFormPage).evaluate().isNotEmpty,
@@ -142,23 +156,66 @@ void main() {
             .pushReplacement(tester.element(find.byType(ConnectionFormPage)));
         await tester.pumpAndSettle();
       }
+      await waitFor(
+        tester,
+        () =>
+            ModalRoute.of(tester.element(find.byType(ConnectionFormPage)))
+                ?.animation
+                ?.status ==
+            AnimationStatus.completed,
+        reason: 'The connection route must settle before attaching text input.',
+      );
       await tester.enterText(find.byType(TextFormField).at(0), address);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(0))
+            .controller
+            ?.text,
+        address,
+      );
       await tester.enterText(find.byType(TextFormField).at(1), '65536');
-      await tester.ensureVisible(find.text('连接设备'));
-      await tester.tap(find.text('连接设备'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(0))
+            .controller
+            ?.text,
+        address,
+        reason: 'Editing the port must retain the entered target address.',
+      );
+      await tapPageAction(
+        tester,
+        find.byType(ConnectionFormPage),
+        find.text('连接设备'),
+      );
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('端口应为 1–65535 的整数'), findsOneWidget);
       await tester.enterText(find.byType(TextFormField).at(1), port);
-      await tester.ensureVisible(find.text('连接设备'));
-      await tester.tap(find.text('连接设备'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(0))
+            .controller
+            ?.text,
+        address,
+        reason: 'Correcting an invalid port must retain the target address.',
+      );
+      await tapPageAction(
+        tester,
+        find.byType(ConnectionFormPage),
+        find.text('连接设备'),
+      );
       await waitFor(
         tester,
         () => find.text('打开手机屏幕').evaluate().isNotEmpty,
         reason: 'A real authorized target must establish a connection.',
       );
-      await tester.ensureVisible(find.text('文件管理'));
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.text('文件管理'));
+      await tapPageAction(
+        tester,
+        find.byType(DeviceWorkspacePage),
+        find.text('文件管理'),
+      );
       await waitFor(
         tester,
         () =>
@@ -178,16 +235,62 @@ void main() {
       // diagnose or quality mutations directly through the bridge.
       await waitFor(
         tester,
-        () =>
-            find.text('Android 版本').evaluate().isNotEmpty &&
-            find
-                .descendant(
-                  of: find.byType(DeviceWorkspacePage),
-                  matching: find.byType(CircularProgressIndicator),
-                )
-                .evaluate()
-                .isEmpty,
+        () => find
+            .descendant(
+              of: find.byType(DeviceWorkspacePage),
+              matching: find.byType(CircularProgressIndicator),
+            )
+            .evaluate()
+            .isEmpty,
         reason: 'Device information must finish before scrolling diagnostics.',
+      );
+      expect(find.text('Android 版本'), findsNothing);
+      await tapPageAction(
+        tester,
+        find.byType(DeviceWorkspacePage),
+        find
+            .ancestor(
+              of: find.byType(DeviceFacts),
+              matching: find.byType(InkWell),
+            )
+            .first,
+        delta: -250,
+      );
+      await waitFor(
+        tester,
+        () =>
+            find.byType(DeviceDataPage).evaluate().isNotEmpty &&
+            find.text('设备型号').evaluate().isNotEmpty,
+        reason: 'The summary opens actual read-only target facts.',
+      );
+      expect(find.text('ADB 私钥'), findsNothing);
+      expect(find.text('编辑地址与端口'), findsNothing);
+      final originalStamp = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data ?? '')
+          .firstWhere((text) => text.startsWith('更新于'));
+      await capture('real-device-data');
+      // Target observations use whole seconds. Cross that boundary before a
+      // single refresh so an equally fresh same-second reply is not rejected.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.byTooltip('刷新'));
+      await waitFor(
+        tester,
+        () => tester
+            .widgetList<Text>(find.byType(Text))
+            .any(
+              (text) =>
+                  (text.data ?? '').startsWith('更新于') &&
+                  text.data != originalStamp,
+            ),
+        reason: 'Refreshing facts must complete a new target observation.',
+      );
+      binding.reportData!['deviceDataRefreshVerified'] = true;
+      await tester.pageBack();
+      await waitFor(
+        tester,
+        () => find.byType(DeviceDataPage).evaluate().isEmpty,
+        reason: 'Device data returns to the same workspace.',
       );
       await tapPageAction(
         tester,
@@ -201,7 +304,6 @@ void main() {
       );
       expect(find.text('网络地址可达'), findsOneWidget);
       expect(find.text('本机授权身份已就绪'), findsOneWidget);
-      await binding.convertFlutterSurfaceToImage();
       await tester.pump(const Duration(milliseconds: 300));
       await binding.takeScreenshot('real-diagnostics');
       await tester.pageBack();
@@ -213,21 +315,19 @@ void main() {
       await tapPageAction(
         tester,
         find.byType(DeviceWorkspacePage),
-        find.text('控制窗口'),
+        find.text('画面设置'),
       );
       await waitFor(
         tester,
-        () => find.byType(SessionsPage).evaluate().isNotEmpty,
-        reason: 'Window management owns new-window quality.',
+        () => find.byType(QualityPage).evaluate().isNotEmpty,
+        reason: 'Device screen settings own the shared quality.',
       );
-      await tester.tap(find.text('画质'));
       await waitFor(
         tester,
         () => find.text('编码格式').evaluate().isNotEmpty,
         reason: 'The actual quality options must load.',
       );
-      await tester.ensureVisible(find.text('编码格式'));
-      await tester.tap(find.text('编码格式'));
+      await tapPageAction(tester, find.byType(QualityPage), find.text('编码格式'));
       await tester.pump(const Duration(milliseconds: 400));
       final hevc = find.widgetWithText(ListTile, 'H.265');
       expect(hevc, findsOneWidget);
@@ -245,12 +345,14 @@ void main() {
             find.widgetWithText(ListTile, 'H.265').evaluate().isNotEmpty &&
             find.text('编码格式').evaluate().isNotEmpty &&
             find.byType(BottomSheet).evaluate().isEmpty,
-        reason:
-            'The real quality page must persist H.265 for the next session.',
+        reason: 'The real screen settings page must persist device-wide H.265.',
       );
       if (minimumVideoEdge > 0) {
-        await tester.ensureVisible(find.text('分辨率上限'));
-        await tester.tap(find.text('分辨率上限'));
+        await tapPageAction(
+          tester,
+          find.byType(QualityPage),
+          find.text('分辨率上限'),
+        );
         await tester.pump(const Duration(milliseconds: 400));
         await tester.tap(
           find.descendant(
@@ -271,13 +373,7 @@ void main() {
       await waitFor(
         tester,
         () => find.byType(QualityPage).evaluate().isEmpty,
-        reason: 'Quality must return to window management.',
-      );
-      await tester.pageBack();
-      await waitFor(
-        tester,
-        () => find.byType(SessionsPage).evaluate().isEmpty,
-        reason: 'Window management returns to its device workspace.',
+        reason: 'Screen settings return to the same device workspace.',
       );
       await tapPageAction(
         tester,
@@ -333,11 +429,11 @@ void main() {
         final button = find.descendant(
           of: remote,
           matching: find.byWidgetPredicate(
-            (widget) => widget is IconButton && widget.tooltip == tooltip,
+            (widget) => widget is GlassActionIcon && widget.tooltip == tooltip,
           ),
         );
         expect(button, findsOneWidget);
-        expect(tester.widget<IconButton>(button).onPressed, isNotNull);
+        expect(tester.widget<GlassActionIcon>(button).onPressed, isNotNull);
       }
       binding.reportData!['defaultNavigationButtonsPresent'] = true;
       await binding.handlePopRoute();
@@ -418,16 +514,13 @@ void main() {
               'An encoded-size receipt alone does not prove decoded quality.',
         );
       }
-      final handle = find.descendant(
-        of: find.byType(ExitHandle),
-        matching: find.byType(GestureDetector),
-      );
+      final handle = find.byKey(const ValueKey('remote-tool-handle'));
       await tester.drag(
         handle,
         Offset(viewport.width * .72, viewport.height * .5),
       );
       await tester.pump(const Duration(milliseconds: 1200));
-      final collapsed = find.bySemanticsLabel(RegExp('展开退出按钮，'));
+      final collapsed = find.bySemanticsLabel(RegExp('展开画面工具，'));
       expect(collapsed, findsOneWidget);
       await binding.takeScreenshot('remote-handle-collapsed');
       expectHealthyRemote();
@@ -436,7 +529,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await binding.takeScreenshot('remote-handle-expanded');
       expectHealthyRemote();
-      final expanded = find.bySemanticsLabel(RegExp('退出控制，返回'));
+      final expanded = find.bySemanticsLabel(RegExp('收起画面工具，'));
       expect(
         expanded,
         findsOneWidget,
@@ -459,30 +552,30 @@ void main() {
       await binding.takeScreenshot('remote-handle-inward-expanded');
       binding.reportData!['inwardExitHandleExpanded'] = true;
       expectHealthyRemote();
-      await tester.tap(expanded);
+      await tester.ensureVisible(find.text('关闭画面'));
+      await tester.tap(find.text('关闭画面'));
       await waitFor(
         tester,
         () => find.byType(RemotePage).evaluate().isEmpty,
-        reason: 'Return must retain the session and return to the workspace.',
+        reason: 'Close must release the window and return to the workspace.',
       );
       expect(find.text('打开手机屏幕'), findsOneWidget);
-      Json retained = {};
-      final pauseDeadline = DateTime.now().add(const Duration(seconds: 5));
+      final closeDeadline = DateTime.now().add(const Duration(seconds: 5));
+      List<Json> remaining;
       do {
-        retained = objects(
-          (await controller.request('session.list'))['sessions'],
-        ).singleWhere((item) => item['sessionId'] == session['sessionId']);
-        if (retained['status'] == 'paused' &&
-            retained['presentationOnly'] == true &&
-            retained['capturePaused'] == false) {
-          break;
-        }
+        remaining =
+            objects((await controller.request('session.list'))['sessions'])
+                .where(
+                  (item) =>
+                      item['sessionId'] == session['sessionId'] &&
+                      item['status'] != 'stopped',
+                )
+                .toList();
+        if (remaining.isEmpty) break;
         await tester.pump(const Duration(milliseconds: 100));
-      } while (DateTime.now().isBefore(pauseDeadline));
-      expect(retained['status'], 'paused');
-      expect(retained['presentationOnly'], true);
-      expect(retained['capturePaused'], false);
-      binding.reportData!['exitPausesOnlyLocalPresentation'] = true;
+      } while (DateTime.now().isBefore(closeDeadline));
+      expect(remaining, isEmpty);
+      binding.reportData!['exitReleasesWindow'] = true;
       final remoteDeviceId = value(session, 'deviceId');
       expect(remoteDeviceId, isNotEmpty);
       List<Json> activeAudio = [];
@@ -502,17 +595,26 @@ void main() {
       expect(
         activeAudio,
         isEmpty,
-        reason: 'A retained paused session must not keep device audio playing after its page closes.',
+        reason: 'Closing the final picture must release its device audio.',
       );
       binding.reportData!['closedRemoteStopsDeviceAudio'] = true;
       await tester.pump(const Duration(milliseconds: 500));
       await binding.takeScreenshot('workspace-after-remote');
-      // The fixture owns this exact window; returning did not destroy it.
-      await controller.request('session.stop', {
-        'sessionId': session['sessionId'],
-        'keepTask': true,
-      });
       expect(tester.takeException(), isNull);
+    } catch (error) {
+      binding.reportData!['failure'] = '$error';
+      binding.reportData!['failureTexts'] = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data)
+          .whereType<String>()
+          .take(100)
+          .toList();
+      try {
+        await capture('product-flow-failed');
+      } catch (captureError) {
+        binding.reportData!['failureCaptureError'] = '$captureError';
+      }
+      rethrow;
     } finally {
       WidgetController.hitTestWarningShouldBeFatal = originalHitTestPolicy;
       semantics.dispose();

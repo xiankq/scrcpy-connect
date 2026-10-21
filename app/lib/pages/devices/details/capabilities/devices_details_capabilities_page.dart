@@ -37,59 +37,82 @@ class CapabilitiesPage extends StatelessWidget {
             label: const Text('重新检查'),
           ),
         ];
-        return GroupedListView.builder(
+        return GroupedListView(
           padding: const EdgeInsets.all(DesignTokens.spacingMd),
-          itemCount: 1 + capabilities.length + footer.length,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return const StateNote('已连接不代表每项功能都可用。支持状态以这台设备的实际检查结果为准。');
-            }
-            final item = index - 1;
-            if (item >= capabilities.length) {
-              return footer[item - capabilities.length];
-            }
-            final cap = capabilities[item];
-            return Padding(
-              key: ValueKey((
-                'capability',
-                value(device, 'id'),
-                value(cap, 'id', value(cap, 'key')),
-                item,
-              )),
-              padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
-              child: Padding(
-                padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            value(cap, 'name', value(cap, 'id')),
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                        ),
-                        Text(
-                          statusText(value(cap, 'status')),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+          children: [
+            const StateNote('已连接不代表每项功能都可用。支持状态以这台设备的实际检查结果为准。'),
+            if (capabilities.isNotEmpty)
+              SettingsGroup(
+                children: [
+                  for (final (item, cap) in capabilities.indexed)
+                    _CapabilityRow(
+                      key: ValueKey((
+                        'capability',
+                        value(device, 'id'),
+                        value(cap, 'id', value(cap, 'key')),
+                        item,
+                      )),
+                      capability: cap,
                     ),
-                    if (value(cap, 'reason').isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: DesignTokens.spacingXs,
-                        ),
-                        child: Text(value(cap, 'reason')),
-                      ),
-                  ],
-                ),
+                ],
               ),
-            );
-          },
+            ...footer,
+          ],
         );
       },
     ),
   );
+}
+
+class _CapabilityRow extends StatelessWidget {
+  const _CapabilityRow({super.key, required this.capability});
+  final Json capability;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color) = switch (value(
+      capability,
+      'id',
+      value(capability, 'key'),
+    )) {
+      'shell' => (LucideIcons.terminal, DesignTokens.colorListIconSlate),
+      'files' => (LucideIcons.folder, DesignTokens.colorListIconAmber),
+      'wirelessPairing' => (LucideIcons.wifi, DesignTokens.colorListIconBlue),
+      'screen' => (LucideIcons.monitor, DesignTokens.colorListIconPurple),
+      'clipboard' => (LucideIcons.clipboard, DesignTokens.colorListIconMint),
+      'apps' => (LucideIcons.layoutGrid, DesignTokens.colorListIconCoral),
+      'audio' => (LucideIcons.volume2, DesignTokens.colorListIconPurple),
+      _ => (LucideIcons.circleHelp, DesignTokens.colorListIconSlate),
+    };
+    return Padding(
+      padding: const EdgeInsets.all(DesignTokens.spacingMd),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListIconBadge(icon: icon, backgroundColor: color),
+          const SizedBox(width: DesignTokens.spacingSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value(capability, 'name', value(capability, 'id')),
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                Text(
+                  statusText(value(capability, 'status')),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (value(capability, 'reason').isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: DesignTokens.spacingXs),
+                    child: Text(value(capability, 'reason')),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

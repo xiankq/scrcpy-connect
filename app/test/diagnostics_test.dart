@@ -3,7 +3,6 @@ import 'support/test_controller.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
 
 void main() {
@@ -57,24 +56,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('网络地址可达'), findsOneWidget);
       expect(find.text('需要重新授权'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, '重新授权'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '重新授权'), findsNothing);
       expect(find.text('被控手机已撤销本机授权。'), findsOneWidget);
       expect(find.textContaining('192.0.2.2'), findsOneWidget);
-      expect(find.text('配对端口与连接端口不同。'), findsOneWidget);
+      expect(find.text('配对端口与连接端口不同。'), findsNothing);
       expect(find.textContaining('experimental provider'), findsNothing);
       await tester.ensureVisible(find.text('重新检查'));
       await tester.tap(find.text('重新检查'));
       await tester.pumpAndSettle();
       expect(checks, 2);
-      await tester.ensureVisible(find.text('编辑地址与端口'));
-      await tester.tap(find.text('编辑地址与端口'));
-      await tester.pumpAndSettle();
-      expect(find.byType(ConnectionFormPage), findsOneWidget);
-      final fields = tester
-          .widgetList<TextFormField>(find.byType(TextFormField))
-          .toList();
-      expect(fields[0].controller!.text, '192.0.2.2');
-      expect(fields[1].controller!.text, '37001');
+      expect(find.text('编辑地址与端口'), findsNothing);
+      expect(find.byType(TextFormField), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
@@ -110,7 +102,7 @@ void main() {
         expect(find.text(usb ? '当前平台无法使用 USB' : '无法访问设备地址'), findsOneWidget);
         expect(find.text('需要重新授权'), findsNothing);
         expect(find.widgetWithText(TextButton, '改用 USB'), findsNothing);
-        expect(find.widgetWithText(TextButton, '改用无线连接'), findsOneWidget);
+        expect(find.widgetWithText(TextButton, '改用无线连接'), findsNothing);
         expect(find.textContaining(usb ? '改用无线连接' : 'VPN'), findsWidgets);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());

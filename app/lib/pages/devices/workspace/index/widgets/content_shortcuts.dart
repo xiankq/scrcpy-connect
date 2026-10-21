@@ -43,7 +43,7 @@ class ContentShortcuts extends StatelessWidget {
               (
                 '手机相册',
                 LucideIcons.images,
-                DesignTokens.colorListIconBlue,
+                DesignTokens.colorListIconPurple,
                 () => GalleryRoute(deviceId: deviceId).push<void>(context),
               ),
               (
@@ -73,7 +73,21 @@ class ContentShortcuts extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ListIconBadge(icon: item.$2, backgroundColor: item.$3),
+                        Container(
+                          width: DesignTokens.componentAppIconSize,
+                          height: DesignTokens.componentAppIconSize,
+                          decoration: BoxDecoration(
+                            color: item.$3,
+                            borderRadius: BorderRadius.circular(
+                              DesignTokens.roundedMd,
+                            ),
+                          ),
+                          child: Icon(
+                            item.$2,
+                            color: DesignTokens.colorWhite,
+                            size: DesignTokens.componentIconLargeSize,
+                          ),
+                        ),
                         const SizedBox(height: DesignTokens.spacingXs),
                         Text(
                           item.$1,

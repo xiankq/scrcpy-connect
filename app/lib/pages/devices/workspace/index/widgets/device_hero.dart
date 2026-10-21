@@ -26,8 +26,22 @@ class DeviceHero extends HookWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DeviceFacts(device: device, connecting: busy.value),
-          const SizedBox(height: DesignTokens.spacingLg),
+          InkWell(
+            onTap: () => DeviceDataRoute(deviceId: id).push<void>(context),
+            borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DeviceFacts(device: device, connecting: busy.value),
+                ),
+                const Icon(
+                  LucideIcons.chevronRight,
+                  size: DesignTokens.componentIconSmallSize,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: DesignTokens.spacingMd),
           FilledButton.icon(
             onPressed: connecting
                 ? null

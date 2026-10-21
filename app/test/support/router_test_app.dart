@@ -15,7 +15,6 @@ import 'package:scrcpy_connect/pages/devices/workspace/notifications/reply/devic
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/sessions/index/devices_workspace_sessions_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/devices_workspace_files_directory_picker_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -93,7 +92,6 @@ Json? _homeDevice(Widget page) => switch (page) {
   CallsPage p => p.device,
   QualityPage p => p.device,
   RemotePage p => p.device,
-  SessionsPage p => p.device,
   ShareDirectoryPickerPage p => p.device,
   DocumentImportPage p => p.device,
   _ => null,

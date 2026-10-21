@@ -17,3 +17,11 @@ class DeviceStatus extends StatelessWidget {
     );
   }
 }
+
+String deviceTransportLabel(Json device) =>
+    switch (value(device, 'transport')) {
+      'usb' => 'USB',
+      'tls' => '无线调试',
+      'tcp' || 'wireless' => 'IP 连接',
+      _ => '连接方式未获取',
+    };
