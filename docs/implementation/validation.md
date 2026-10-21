@@ -18,6 +18,34 @@
 
 播放器现为社区原版 fvp 0.39.1；旧本地 snapshot 补丁、固定 MDK、协作暂停捕获 JAR 的测量只能作为历史样本。当前官方 scrcpy JAR 的暂停只停止本地呈现，`capturePaused=false`，恢复通过 `RESET_VIDEO` 重新取得画面。旧“远端捕获已经暂停”的通过记录不证明当前实现有该能力。
 
+## 2026-10-21 累计设计要求实施验收
+
+起点为 `e37cc51`。目标和85项跟踪保存在 `.scratch/design-implementation/`；本次授权实现范围已经落地，并按下列层级完成适用验收；物理设备、OEM与其他宿主的边界保留。
+
+| 范围 | 已执行证据 | 边界／剩余 |
+| --- | --- | --- |
+| 工程整合 | app全量406项、bridge190项、工具55项、token工具3项及lint通过；全仓fatal-infos分析无问题；Rust workspace404通过／85显式忽略，随后Android锁与paused重建改动有相关52项主机回归及目标实际复验；最终全workspace严格Clippy通过 | 正式生成一致性和394文件格式检查通过；远控五场实际矩阵和双MDK质量组合全部通过，product-06完整UI和普通main最终冷启动／热重载通过，运行错误为空，忽略项不计通过 |
+| 连接与身份 | Flutter组合58项、core device18pass/5ignored、身份8项、范围analysis通过；涵盖配置成功再提交、错误目标拒绝、专属四方式attempt、旧身份readonly、IP归属变化 | 物理USB、系统扫码与真实转IP互操作未由这些主机夹具证明 |
+| 远控 | 131项远控主机回归、全局密钥20项、画面协调器2项通过；顶部inset回归先失败后通过；新窗wake启动前发送与同session重附着计数有回归 | quality重建输入双代际屏障主机回归已通过。API36双AVD首场实际顶部视频／目标通知栏下拉／远端Back通过；横屏旧纹理拉宽已修布局与输入屏障；租约残留实际定位Android硬链接拒绝，改symlink后正常关闭、强杀迟到写及质量重建后resize实际通过。settings-05整页48独立检查点已通过，含两端横屏新像素、真实后台pause/resume、全部比例恢复和最后关闭锁屏；workspace-04、recovery-01、ime-04、input-01整场通过，涵盖4唯一窗口、同task接续、闭后不复活、中文emoji精确一次和实际HOME输入释放 |
+| 应用后台 | API36 emulator-5554 实跑 application_background_test：零设备/画面/音源进入即启连接FGS、显式开关、dispose/同进程重附着；正常main HOME/重入、Task Manager stop及再次进入已核对 | settings-05三次最后关窗的独立dumpsys确认connectedDevice FGS保留且AudioPlaybackService不前台；workspace-04多窗口精确关闭通过；不代表OEM后台长期存活 |
+| 后台恢复栅栏 | root15项应用后台／reconnection测试通过：原生stopped回执在首个快照前阻止自动重连，手动恢复仅放行对应设备 | 系统stop后的普通main重入UI真实状态已核对；workspace-04多窗口关闭场景通过 |
+| 通知内容 | API36 emulator-5556，独立APK真实BigText/Inbox/MessagingStyle+UID2000产品companion。RED：展开标题误用Collapsed title、Inbox正文空。修后GREEN：标题正文、更新、旧动作失效、源撤回、Binder事件及observation重新附着 | 真实Android合成样式，未宣称第三方消息服务/OEM通过；Rust真实通知端到端及Flutter notifications-02整场通过：创建／更新／撤回各先Binder事件驱动真实页面，再list核对；原应用图标／动作、锁屏不绕过、单清／全清、前台系统提醒与撤回同步，临时PIN／通知／APK清理确认 |
+| 通知产物 | companion确定性重建/check、compatibility、shared server package生成通过 | 原Java8编译弃用警告保留；所有可分发产物仍需最终构建核对 |
+| 设备数据 | 解析5项；API36 emulator-5556真实Rust读取系统、1080×2400/420dpi/60.000004Hz、电池、内存、内部存储及接口通过；三个只读命令错误connectionId拒绝；断开无旧动态值 | product-06首卡进入只读数据及新时间刷新通过；最终普通main无画面情况下目标BatteryService受控100%充电→37%不充电→恢复100%充电，首卡随周期自动同步，截图与Android回执核对且reset确认 |
+| 画面质量／独立密度 | 质量save-only RED后实现当前会话重建；API36 Settings实体411dp、独立原720dp的密度RED，修后不同分辨率均约411dp且保留真实task；实际resize→quality→resize及旧capture迟到拒绝通过 | quality-03真实双MDK通过：paused手机与playing Settings同720→1280重建，保持逻辑ID／task79／paused意图，各新capture／renderer与实际解码一致；未来窗口继承。paused转发首帧超时RED已修，不靠仅保存配置或移除暂停断言 |
+| 稳定玻璃与固定选项组 | API36 x86_64主控AVD，最终公开三层组合真实运行，静止、按住、拖动、归位、滚动背景、降透明、减少动态松手/按住共8张捕获及逻辑断言通过；逐图检查静止镜片轮廓可辨、glyph无旧碎字、减少动态按住仅一片镜片；设计系统23项、固定页窄屏大字5项通过，最终导航6项及相关分析通过 | Mesa llvmpipe软件渲染，非物理GPU；最终组合八状态来自独立底栏夹具，另有最终普通main首页与设置稳定选中态实捕；未测连续手感、多视频负载、读屏与性能。详见[10/21后续](glass-components-2026-10-20.md#2026-10-21-静止镜片与固定选项组后续) |
+
+通知实际probe入口：`dart tool/e2e/notification_fixture/build.dart` 后运行
+`dart servers/companion/tests/notification-snapshot.dart --adb /home/xiankq/Android/Sdk/platform-tools/adb --serial emulator-5556`。
+本轮只在明确隔离AVD安装新夹具，拒绝覆盖既有安装；finally确认移除本run通知、APK、JAR与forward。
+原始临时证据 `/tmp/connect-notification-snapshot/initial.json` 与 `android-notifications.txt` 为本轮合成数据，不作为长期规范。
+
+模拟器经 `tool/glass_emulator.dart` 启动host GL，但当前宿主提示硬件GPU不可用；实际渲染记录必须注明软件Mesa等具体后端，不能称物理GPU验收。
+
+### 累计任务的额外复核与纠漏
+
+用户随后要求重新逐项核实并额外视觉对照，本轮发现前述完成结论仍漏掉表单/工作台/主次动作细节及已有窗口的动态保活；已修复并以新版本重新验证，见[复核记录](design-refinement-reaudit-2026-10-21.md)。最终419项应用测试、25项设计系统、60项scrcpy范围、严格分析/Clippy/生成/格式检查通过；6组同尺寸图与另3个状态逐张核对。最新原生冷构建的双AVD保活13检查点再次通过，普通main恢复/热重载及运行错误空值已确认。上方原阶段数量与实际矩阵保留历史身份，不替代本轮纠漏证据。
+
 ## 2026-10-21 USB 与系统扫码配对
 
 桌面 USB 入口、无序列号候选选择、Android USB 授权广播遗漏 URI scheme、USB 离线重连及二维码多地址超时已修复。双 API36 AVD 实际通过系统相机扫码、应用自己的 PAKE 配对、自动发现连接端口及加密连接。另以 USB/IP 导入内核软件 USB，实际通过主控系统拒绝／允许、nusb FD 交接、真实被控 adbd 与 shell/sync 探测、拔除重连；普通 release APK 的 USB 工作台正例也通过。环境、红绿回归、清理与未验证范围见[本轮记录](usb-qr-pairing-2026-10-21.md)。这不补齐物理线缆、OTG／厂商 USB HAL、被控 RSA 授权或实体 Wi-Fi 验收。

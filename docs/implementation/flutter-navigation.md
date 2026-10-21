@@ -13,7 +13,7 @@
 
 不使用 `part` 聚合页面。生产 imports 直接指向所属文件；只有生成器产物使用标准的 `.g.dart` part。
 
-设置归 `settings/`，连接建立流程归 `connection/`，设备工作台归 `devices/workspace/`，连接偏好、能力及诊断页暂归 `devices/details/`（没有独立详情页），任务接收与导出归 `transfers/details/`。同一页面的多个入口复用同一实现；目录表达业务归属，不机械复制路由 URL 或每条跳转路径。页面类名与 typed route 身份不因目录迁移而改变。
+设置归 `settings/`，连接建立流程归 `connection/`，设备工作台归 `devices/workspace/`，连接配置、设备数据、能力及诊断页归 `devices/details/`（没有独立详情页），任务接收与导出归 `transfers/details/`。同一页面的多个入口复用同一实现；目录表达业务归属，不机械复制路由 URL 或每条跳转路径。页面类名与 typed route 身份不因目录迁移而改变。
 
 ## 页面身份
 
@@ -25,11 +25,13 @@
 | discovery | `/connection/discovery` | 独立发现二级页，选中结果以 typed 返回值回填原添加表单 |
 | usb-guide / qr-pair | `/connection/usb` / `/connection/qr` | 兼容地址呈现同一添加页并预选 USB 或扫码形式 |
 | workspace | `/devices/:deviceId` | `device.info` |
-| device-connection / capabilities / diagnostics | `/devices/:deviceId/<功能>` | `device.info` |
-| device-activities / device-adb-key / device-convert-ip | `/devices/:deviceId/activities` / `/devices/:deviceId/adb-key` / `/devices/:deviceId/convert-ip` | 核验同一 deviceId；活动按设备过滤，私钥与显式 IP 切换归当前设备 |
+| device-connection / device-data / capabilities / diagnostics | `/devices/:deviceId/<功能>` | `device.info` |
+| device-activities / device-convert-ip | `/devices/:deviceId/activities` / `/devices/:deviceId/convert-ip` | 核验同一 deviceId；活动按设备过滤，转IP只从当前连接的目标接口选择 |
+| device-adb-key（兼容） | `/devices/:deviceId/adb-key` | 仅重定向同设备连接配置；已有设备私钥只读 |
 | files / file-details / file-search / gallery / media-preview | `/devices/:deviceId/<功能>` | deviceId；文件 path 经当前目录清单重新核对 |
-| apps / notifications / calls / quality / session-tools / sessions | `/devices/:deviceId/<功能>` | deviceId；通知回复额外按 notificationId 查当前通知 |
+| apps / notifications / calls / quality | `/devices/:deviceId/<功能>` | deviceId；通知回复额外按 notificationId 查当前通知 |
 | remote / remote-app | `/devices/:deviceId/remote` / `/devices/:deviceId/apps/:packageName/remote` | 显式打开意图；URL 恢复不会自动创建会话 |
+| session-tools / sessions（兼容） | `/devices/:deviceId/tools` / `/devices/:deviceId/sessions` | 仅重定向设备工作台，不恢复关闭的窗口 |
 | remote-session | `/devices/:deviceId/sessions/:sessionId` | 当前 `session.list` 中匹配的会话 |
 | transfer-details / document-export / receive-content | `/transfers/:taskId` 及其 `/export`、`/receive` 子路径 | `transfers.get`；导出能力与本机路径重新核对 |
 | document-import / share-directory | `/devices/:deviceId/documents/import` / `/devices/:deviceId/share-directory` | deviceId 与明确目标目录 |
@@ -48,7 +50,7 @@
 
 ## 生命周期与返回
 
-三标签保留分支状态，返回按标签访问历史恢复。根路由使用显式 Flutter `MaterialPage`，保证桌面与移动端保留相同的页面过渡语义。全屏远控覆盖根 Navigator，底部标签和页面顶栏不会进入远控画面。主题更新、事件更新与 `router.refresh()` 保留同一路由的活动远控子树及其首次打开决定，临时 extra 被重新解码也不会丢失已绑定画面；新的进程恢复仍必须重新查找会话，不能自动创建画面。路由重建保留原 RemotePage 状态；普通退出或路由移除释放本次呈现意图，并请求暂停不可见画面，保留真实会话与应用任务；显式关闭才停止准确的 sessionId。暂停拒绝或挂起不得阻止离页；恢复只重新核对已有会话，不重放初始操作。
+三标签保留分支状态，返回按标签访问历史恢复。根路由使用显式 Flutter `MaterialPage`，保证桌面与移动端保留相同的页面过渡语义。全屏远控覆盖根 Navigator，底部标签和页面顶栏不会进入远控画面。主题更新、事件更新与 `router.refresh()` 保留同一路由的活动远控子树及其首次打开决定，临时 extra 被重新解码也不会丢失已绑定画面；新的进程恢复仍必须重新查找会话，不能自动创建画面。路由重建保留原 RemotePage 状态；明确关闭或路由移除释放本次窗口、输入和呈现意图，并停止准确的 sessionId；独立应用的真实任务保留交回手机。临时被路由覆盖或进入后台只暂停仍打开的窗口。挂起的暂停不得阻止明确关闭；重新附着只核对仍存在的会话，已关闭 ID 有终止屏障，不重放初始操作。
 
 新远控只接受短暂的 `RemoteLaunchIntent`，不把 Widget 放进 extra。该意图丢失后只显示明确重新打开入口。已有会话按 deviceId 与 sessionId 重新查找，不以页面恢复自动创建新流。
 
@@ -60,7 +62,7 @@
 
 `appDependenciesProvider` 在应用根 `ProviderScope` 注入真实 bridge request、events 和 close。生成的 `appControllerProvider` 使用 `ref.watch` 持有该依赖，并通过 `ref.onDispose` 取消唯一事件订阅、关闭事件流及释放 transport。异步设备/设置回执受请求序号和 provider 生命周期约束，旧回执不会覆盖新状态。`session.frame` 仅向持有 session 的页面事件流转发，不更新整个应用的状态快照。
 
-生成的 `clipboardCoordinatorProvider` 持有前台剪贴板协调器，并监听设备、偏好和焦点字段，销毁时取消 timer、事件和生命周期观察。普通文本控制器随页面释放；视频播放器和呈现意图通过共享 SessionViews 按真实会话及代际管理，页面取得与释放自己的呈现资格。页面销毁不等于停止真实会话。当前同runtime校准与呈现重建不等于进程死亡后完整恢复，具体边界见[状态恢复](state-recovery.md)。
+生成的 `clipboardCoordinatorProvider` 持有前台剪贴板协调器，并监听设备、偏好和焦点字段，销毁时取消 timer、事件和生命周期观察。普通文本控制器随页面释放；视频播放器和呈现意图通过共享 SessionViews 按真实会话及代际管理，页面取得与释放自己的呈现资格。远控路由销毁结束其所属窗口；临时遮挡不销毁路由。当前同runtime校准与呈现重建不等于进程死亡后完整恢复，具体边界见[状态恢复](state-recovery.md)。
 
 ## 当前设备归属
 

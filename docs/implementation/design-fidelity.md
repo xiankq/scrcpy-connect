@@ -69,6 +69,12 @@ dart tool/visual_parity/compare.dart \
 
 2026-10-20采用上游原版控件的运行环境、模拟器崩溃规避及新GPU样本见[玻璃运行记录](glass-components-2026-10-20.md)。旧easy后端的散射/静态shader与GPU图片不覆盖现有widgets；Pencil投影和Flutter运行库并非相同后端，也不证明Apple原生等效。
 
+2026-10-21静止镜片与固定设置组选项的后续不覆盖上述历史事实。当前底栏实现定位为 `home_page.dart`、`GlassMaterial.navigationLensSettings` 和公开组件组合 `NavigationSelectionLens`；固定选项定位为设置首页、外观、记录恢复、媒体暂存及设备功能支持页中的 `SettingsGroup`/`ListIconBadge`。组卡、图标与材料规则仍只由[视觉规范](../../designs/design.md#layout)维护，本文不另列 token 或放宽验收条件。设置与外观有普通入口实际捕获，其余固定页本轮仅验证窄屏大字 Widget 夹具。最终三层公开组件组合在独立底栏真实渲染夹具中完成八张样本：静止轮廓可辨、glyph无旧方案的碎字、减少动态按住只保留一片镜片。该结论限于软件 Mesa 后端及本轮静态/离散交互状态；最终普通main冷构建后另行核对首页与设置稳定镜片、明暗实体组卡和白glyph，并完成热重载且运行错误为空；连续手感、性能和物理GPU仍未验收，详见[后续运行记录](glass-components-2026-10-20.md#2026-10-21-静止镜片与固定选项组后续)。
+
+## 2026-10-21 累计需求的额外复核
+
+同尺寸生产页面采集、源稿母组件同步、逐图并排查看、普通main实际成像及动态保活补漏，见[额外复核记录](design-refinement-reaudit-2026-10-21.md)。当前配对配置已收敛为本轮受影响页面，不再引用已删除的控制窗口管理页；局部状态板与整页的差别保留在未配对理由中。
+
 ## 性能与未验范围
 
 widgets迁移阶段的诊断背景压力样本中，regular/clear/blend/reduced约33.582/16.999/29.739/3.842ms，前三项超过16.6667ms预算。后续成像捕获没有重测该性能场景，不能以“GPU截图通过”关闭缺口。

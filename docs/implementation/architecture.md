@@ -9,7 +9,7 @@ Flutter 页面通过 `AppDependencies` 调用 Dart `InteropBridge`，经 FRB 进
 
 `interop-adb` 暴露 transport、认证、service、shell、sync、forward 与发现等协议能力；`tcpip`／`usb` 返回原始 adbd 响应，不定义产品重连事件或应用默认超时。Dart `ConnectionPolicy` 区分产品编排参数与原生执行参数，仅后者传入 Runtime；同一进程重新附着须使用相同配置。`ConnectionSetupCoordinator` 组织配对后发现、USB 记录选择、转 IP 后重试及取消；`ReconnectionCoordinator` 拥有网络连接的自动重连计时、退避及前后台决策；USB 离线后等待显式系统授权，不进入网络重试。Runtime 通过 `adb.*` 命令提供单次执行、显式操作租约、探测事实及资源准入，保留健康探测与可信发现缓存。独立 Rust 宿主的兼容初始化只提供执行参数，不启动产品调度。
 
-产品默认设置由 Dart `applicationSettings` 注入持久化层；独立 Runtime 默认空设置。`VideoQualityPolicy` 在 Dart 合并全局、设备和本次参数，展开预设并生成界面选项；`VirtualDisplayPolicy` 提供独立窗口默认尺寸，并在当前会话的画质上限内等比解析实际虚拟尺寸，避免 scrcpy flex 分别约束两轴导致比例失真。Rust 接收具体媒体参数，核验目标编码器并执行；原始虚拟显示调用未传尺寸时保持上游默认。`DeviceCapabilityPolicy` 根据原始探测事实与本机解码能力形成产品状态和说明，Rust 不生成这些产品说明。
+产品默认设置由 Dart `applicationSettings` 注入持久化层；独立 Runtime 默认空设置。`VideoQualityPolicy` 在 Dart 合并全局与设备偏好，展开预设并生成界面选项；新画面不接受独立的质量覆盖。`DeviceQualityCoordinator` 将同设备的启动、偏好保存和当前画面重建串行，保存后逐个应用并分别报告成功、失败及已关闭跳过，不把保存成功当作全部应用成功。`VirtualDisplayPolicy` 将窗口比例、虚拟像素与质量上限分别处理，实际尺寸等比解析；Rust 按目标实体显示的逻辑宽度计算虚拟密度，避免降采样把手机布局变成平板。Rust 核验具体媒体参数和目标编码器后执行。`DeviceCapabilityPolicy` 根据原始探测事实与本机解码能力形成产品状态和说明，Rust 不生成这些产品说明。
 
 被控兼容按 ADB feature、系统接口与实际权限分别判断，不能把音频或独立应用窗口的下限施加到基础连接与整机远控。无宽元数据／目录协议的设备使用同一个临时原生文件服务；旧 shell 的未知退出码不能作为文件变更成功证据。固定服务端、部署授权、资源回收及当前验证范围见[被控兼容边界](android-target-compatibility.md)。
 
@@ -23,32 +23,38 @@ Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/`
 | --- | --- |
 | Rust Runtime | 初始化、持久授权身份、跨模块协调与命令分发 |
 | ConnectionOwner | 已准入连接、每设备转换栅栏、去重的在途清理 |
-| ActivityOwner / activities | 会话、音源、传输活动的准入、引用、统一投影与停止 |
+| ActivityOwner / activities | 会话、音源、传输活动的准入、引用、统一投影与停止；持有设备级保活租约所有者 |
+| KeepActiveOwner | 同设备仍开画面的保活意图、单个独立控制服务、连接与进程身份核验及取消释放 |
 | TransferStore | 传输检查点、按任务追加日志、持久化屏障与恢复校验 |
 | 领域实现 | 各类活动的协议流程、具体容器与资源释放 |
 | Dart InteropBridge | 核心观察者与本机输出协调；授权身份属于 Rust 持久存储 |
 | ConnectionSetupCoordinator | 配对、USB、转 IP 的产品步骤、重试和系统授权租约 |
-| DeviceCapabilityPolicy / VideoQualityPolicy / VirtualDisplayPolicy | 探测解释、画质偏好合并、预设与选项、虚拟窗口尺寸解析 |
+| DeviceCapabilityPolicy / VideoQualityPolicy / VirtualDisplayPolicy | 探测解释、设备共用质量偏好、预设与选项、虚拟窗口尺寸解析 |
+| DeviceQualityCoordinator | 同设备新画面与质量变更排序、当前窗口流重建及逐窗应用结果 |
 | ReconnectionCoordinator | 自动重连计时、退避、快照补偿与调度租约；释放时取消旧尝试 |
 | RuntimeInitialization | 复用进程 FRB 绑定；界面重新附着保持原身份目录 |
 | bootstrapApplication | 配置完成前持有 bridge；失败等待释放，成功交给 ProviderScope |
 | AppController | 应用级不可变状态投影、订阅和打开页面的设备音源租约 |
 | RemotePresentation | 单个远控路由的会话绑定、输入许可、可见性、恢复及启动结果 |
-| SessionViews | 页面对持久控制会话的呈现租约与替代视图协调 |
+| SessionViews | 页面对尚未关闭控制窗口的呈现租约、精确关闭及终止屏障 |
 | PortableVideo/AudioOutputs | 本机播放器、呈现回执与释放 |
 | Android ProcessFlutterHost | 进程 FlutterEngine 与通道；Activity 提供当下 UI/授权 |
 
 慢设备清理在独立任务进行；同一设备仍受转换栅栏约束。旧清理不能释放新连接，重连不能覆盖尚未发布的离线结果。Activity 重建与进程死亡分别验收；后者终止内存活动。
 
-连接快照中的 `connectionId` 只标识当前存活连接，不持久化。连接后屏幕策略由 Dart `DeviceScreenCoordinator` 在自动连接前建立可信基线，按该标识去重，点亮请求由 Runtime 核验标识后执行，旧连接的迟到请求不能作用于新连接。屏幕比例与关闭前锁屏由页面／会话协调器按设备偏好组织；Rust 持有 scrcpy 控制通道与临时显示覆盖租约，负责恢复和精确释放。
+连接快照中的 `connectionId` 只标识当前存活连接，不持久化。`DeviceScreenCoordinator` 只维护连接核验基线，ADB连接、断开与重连不触发屏幕动作。远控页按每次明确新建画面意图执行一次设备唤醒，`DeviceScreenPolicy` 合并同设备整机与独立窗口归属；仅主动关闭最后窗口按偏好锁屏。重新附着、后台和遮挡不触发。点亮请求由 Runtime 核验连接标识，旧连接迟到请求不能作用于新连接。保持唤醒独立于点亮／锁屏；Rust 的设备级 `KeepActiveOwner` 合并仍开画面（含暂时暂停）的生命周期，偏好变更立即协调已有画面。保活使用固定 scrcpy 的独立 control-only 服务，不绑定 capture 或虚拟任务代次，不随质量重建释放；最后关闭、禁用和断线取消自身服务，按原连接及 PID/start/nice-name 核验回收，不改永久超时、不发送亮屏／锁屏动作。应用失败独立于已保存偏好和成功画面；成功明确清空旧错误。窗口关闭事实与保活释放核验分别返回，未确认时保留租约并发布设备事件，界面在关闭后提示而不复活窗口。Rust 另持有媒体 scrcpy 控制通道与临时显示覆盖租约。显示租约归属具体 capture 代次，关闭先禁止后续尺寸请求，再等待该代次已经准入的实际系统尺寸操作结束；只恢复自身已应用或尚在提交的尺寸，保留外部变更。请求取消、进程身份复用和质量重建均不能转移恢复责任给另一代次。
 
-Runtime 在私有存储中维护默认全局授权身份及显式设置的设备独立身份，TLS 配置按实际身份缓存；替换身份只失效使用该身份的连接、活动及在途准入，旧身份的迟到连接不能附着。私钥仅通过专用导入命令输入，不进入普通设置、快照和事件。连接的加密策略仍单独判断。可选设备信息由 Runtime 拥有的有界队列处理，最多四个查询并行，结果仅能更新同一存活连接；Runtime 释放时取消在途任务并丢弃排队请求。连接准入仍完成必要身份检查。
+Runtime 在私有存储中维护默认全局授权身份及显式设置的设备独立身份，TLS 配置按实际身份缓存；替换身份只失效使用该身份的连接、活动及在途准入，旧身份的迟到连接不能附着。私钥通过专用导入或新建设备尝试的 identity 参数输入，不进入普通设置、快照和事件。设备已有绑定身份只读；配置候选在同一目标握手核验成功前不替换原端点。连接的加密策略仍单独判断。可选设备信息由 Runtime 拥有的有界队列处理，最多四个查询并行，电量／充电每30秒重新入队；结果仅能更新同一存活连接并携带采集时间。首卡不将过期或查询失败的电量显示为实时；电量必须处于有效level／scale范围，接入电源不替代正在充电的证据，未知状态不作推断，常量定义见[Android BatteryManager](https://developer.android.com/reference/android/os/BatteryManager)。设备数据页的只读命令使用有界查询并在返回前复核连接；动态值离线不复用，部分失败与未知独立呈现。Runtime 释放时取消在途任务并丢弃排队请求。连接准入仍完成必要身份检查。
 
 传输持久状态由 `TransferStore` 统一写入：`transfers.json` 为版本化检查点，`transfers.journal` 为连续序号的任务变更；兼容读取原有数组格式。逐项完成与提交前 `finalizing` 保留持久化屏障，定期按存量阈值压缩日志，不以延迟保存换吞吐。检查点先同步文件、原子替换并同步目录，再截断旧日志；失败或取消中的追加禁止继续复用，损坏或截断日志拒绝猜测恢复。`finalizing` 恢复仍为 `result_unknown`，分享来源只在相关任务持久化后回收。主机回归范围见[验证记录](validation.md#协议与持久化回归)。检查点和 journal 共同构成最新记录；不能只复制检查点或删除 journal 进行版本回退。
 
+画面质量重建保留逻辑sessionId和真实应用task，替换所属捕获进程及虚拟display，不重新启动应用。captureGeneration标识捕获所有者，renderer generation标识同捕获内CSD与本机解码输出；两者分别核验，旧捕获的迟到ready不能因renderer代次较大而更新新窗口。重建开始先发布qualityRebuilding并撤销旧输入绑定；新画面验证前禁止新的输入、尺寸与启动操作，释放按键／指针和明确关闭仍可用。恢复旧捕获、应用新捕获和不可恢复失败分别有明确终态，失败不重放打开请求。同一窗口保留的旧纹理不能被标记为新捕获首帧。资源达到窗口上限时，只为已拥有的同一逻辑窗口准入一次串行替换；普通新开窗口仍受原上限约束。
+
 当前官方 scrcpy JAR 不提供协作捕获暂停：页面暂停保留会话并停止本地呈现，`capturePaused=false`，恢复用 `RESET_VIDEO` 取得新画面；旧扩展 JAR 的暂停回执不适用于这一路径。
 
-远控页面租约、控制会话和设备连接具有不同生命周期。AppController 按设备合并页面租约；最后一个页面释放时立即撤销该设备声音启动意图，并精确停止对应音源。保留会话或保持连接不产生页面租约。剪贴板协调器拥有前台同步代次，设备偏好与可见页面焦点决定对象；切换后旧轮询、系统读回及远端事件失效。具体用户行为统一见交互规则。
+远控页面租约、控制会话和设备连接具有不同生命周期。AppController 按设备合并页面租约；最后一个页面释放时立即撤销该设备声音启动意图，并精确停止对应音源。没有打开窗口时保持连接不产生页面或声音租约。剪贴板协调器拥有前台同步代次，设备偏好与可见页面焦点决定对象；切换后旧轮询、系统读回及远端事件失效。具体用户行为统一见交互规则。
+
+应用级后台由 `ApplicationBackgroundPolicy` 在进入APP、恢复连接之前按保存偏好请求。Android `ConnectionService` 的 connectedDevice FGS 与 `AudioPlaybackService` 的 mediaPlayback FGS 分别拥有通知与资源，无画面不停止连接服务。显式关闭或系统 Task Manager stop 持久化停止状态，自动请求不清除它；重连协调器在首个恢复快照前建立停止屏障，只有用户明确操作才能重新准入对应设备。后台不自动创建画面或音源。
 
 ## 契约与生成
 
@@ -64,7 +70,11 @@ Runtime 在私有存储中维护默认全局授权身份及显式设置的设备
 
 `app/lib/main.dart` 在启动 `try` 内先等待 `GlassMaterial.initialize()`，再调用 `bootstrapApplication()`，生产应用通过 `GlassMaterial.wrap` 接入 `liquid_glass_widgets` 的主题亮度和系统辅助偏好。支持 shader 时初始化失败进入启动错误页；实际支持 `ImageFilter` shader 时使用 premium 光学路径，不支持时使用明确的磨砂回退。降低透明度、高对比或显式实体面使用不透明内容并移除光学与模糊；减少动态效果另行关闭弹性位移。
 
-`Glass` 和工具组保留项目的材料接口。项目不再定义 `GlassIconButton`、`GlassTabBar` 或 `GlassDestination` 组件；页面直接构造库的 `GlassIconButton` 与 `GlassTabBar.bottom`，设计系统导出类型并提供 token 配置值。底部导航由官方组件持有拖动、焦点与内部液态镜片，外围不再套整片玻璃或额外裁剪。普通材料与工具组仍在局部 `GlassSurfaceGroup` 中共享背景读取和融合形状，分组不跨 Navigator 或覆盖不同路由。实体内容卡片与列表使用原内容材料。整片材料的厚度、折射率、色散、着色、模糊和光照由生成 token 映射，角度按后端要求转换；`refractionWidth` 用于局部融合距离，不作为厚度的替代值。导航内部交互镜片由 `GlassMaterial.navigationLensSettings` 共用库的 clear 基线，不套用整栏 regular 的着色与模糊。静止选中面使用 `indicatorColor`，折射镜片仅在按压、拖动和归位时出现。当前原版镜片仍采样整栏之后的合成背景，公开接口不能单独挖去整栏底色/磨砂；不通过源码副本或自制渲染层补足这一能力。官方主题在应用 builder 中统一设置交互 stretch；减少动态效果时为零，按钮公开参数同步关闭缩放与 anchor stretch。透明度/高对比度偏好映射到官方 accessibility scope；实体分支使用 minimal、blur0 与实体色。组件专属尺寸和导航选中色在实际调用点配置，不为转发参数再定义组件类。
+`Glass` 和工具组保留项目的材料接口。项目不再定义 `GlassIconButton`、`GlassTabBar` 或 `GlassDestination` 组件；页面直接构造库的 `GlassIconButton` 与 `GlassTabBar.bottom`。底部导航由官方组件持有目的地手势、焦点、语义与移动镜片。浅色premium由设计系统的 `NavigationSelectionLens` 按绘制顺序组合三个公开组件：`AdaptiveGlass` 绘制唯一的regular轨道，`AnimatedGlassIndicator` 绘制静止选中镜片，原版 `GlassTabBar.bottom` 绘制glyph并管理交互。`navigationBarSettings` 将该前景栏的厚度、模糊设为零，glass/backer透明、body为clear、shadow为空，进入锁定版本premium渲染器的无光学快速路径，避免重复绘制轨道；仅透明着色不足以关闭原轨道。静止镜片位于glyph之前、原选中ClipPath/saveLayer之外，关闭背景填充、扩张与pinch；原静止选中填充透明化。按下时无论是否减少动态均撤下静止镜片，让位给原版移动镜片；释放后等待锁定版本弹簧尾程，再挂回静止镜片。该等待不是上游动画完成回执，升级库时需复核。暗色、降低透明度及不支持premium的分支保留原版轨道、内容与选中面，不使用零光学配置。当前组合的实际成像范围见[后续运行记录](glass-components-2026-10-20.md#2026-10-21-静止镜片与固定选项组后续)。
+
+普通材料与工具组仍在局部 `GlassSurfaceGroup` 中共享背景读取和融合形状，分组不跨 Navigator 或覆盖不同路由。实体内容卡片与列表使用原内容材料，固定设置选项通过应用层 `SettingsGroup` 组合实体 `ContentPanel`，行首功能图标复用 `ListIconBadge`；动态文件、通知与任务结果不因此统一包成设置组。整片材料的厚度、折射率、色散、着色、模糊和光照由生成 token 映射，角度按后端要求转换；`refractionWidth` 用于局部融合距离，不作为厚度的替代值。导航静止与交互镜片由 `GlassMaterial.navigationLensSettings` 共用库的 clear 基线，不套用整栏 regular 的着色与模糊。镜片采样包含整栏之后的合成背景及已绘制内容，公开接口不能单独挖去整栏底色/磨砂；不通过源码副本或自制 shader 补足这一能力。
+
+官方主题在应用 builder 中统一设置交互 stretch；减少动态效果时为零，按钮公开参数同步关闭缩放与 anchor stretch。底栏在减少动态时使用公开 `glowOnly`、无缩放、无镜片扩张、pinch与内容放大；按住时仍撤下静止镜片，避免与上游直接切换的镜片重叠。透明度/高对比度偏好映射到官方 accessibility scope；实体分支使用 minimal、blur0 与实体色。组件专属尺寸和导航选中色在实际调用点配置。真实渲染及辅助偏好的实际验收边界见[后续运行记录](glass-components-2026-10-20.md#2026-10-21-静止镜片与固定选项组后续)。
 
 光学层拥有轮廓与子内容裁剪，外层不叠加径向保护遮罩或固定白边。Pencil GLSL 是静态设计投影，与 Flutter 渲染分别核对。真实 shader、回退、辅助偏好与动态性能的验证结果见[设计与实现对照](design-fidelity.md)。
 
