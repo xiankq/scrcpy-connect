@@ -372,6 +372,9 @@ mod connection_cleanup_tests;
 mod pairing_tests;
 
 #[cfg(test)]
+#[path = "device/configuration_tests.rs"]
+mod configuration_tests;
+#[cfg(test)]
 #[path = "device/metadata_tests.rs"]
 mod metadata_tests;
 
@@ -475,6 +478,8 @@ fn blank_device(address: String, port: u16, transport: TransportKind) -> Device 
         android_version: None,
         api_level: None,
         battery: None,
+        charging: None,
+        battery_updated_at: None,
         last_seen: None,
         reason: None,
         auto_reconnect: false,
@@ -504,9 +509,32 @@ pub(crate) struct Metadata {
     pub(crate) host_identity: Option<String>,
 }
 enum AttachedEndpoint {
-    Usb { create: bool },
+    Usb {
+        create: bool,
+    },
     Tls(SocketAddr),
-    Tcp { address: String, port: u16 },
+    Tcp {
+        address: String,
+        port: u16,
+    },
+    Configured {
+        address: String,
+        port: u16,
+        transport: TransportKind,
+    },
+}
+fn verify_same_target(original: &Device, info: &Metadata) -> CoreResult<()> {
+    match (&original.serial, &info.serial) {
+        (Some(known), Some(actual)) if known == actual => Ok(()),
+        (Some(_), Some(_)) => Err(CoreError::new(
+            "device_identity_mismatch",
+            "连接目标与原设备身份不符，未更新连接配置。",
+        )),
+        _ => Err(CoreError::new(
+            "device_identity_unverified",
+            "无法核验原设备身份，请检查设备授权与连接。",
+        )),
+    }
 }
 fn nonempty(value: Option<&str>) -> Option<String> {
     value
@@ -582,6 +610,13 @@ impl Runtime {
         token: CancellationToken,
     ) -> CoreResult<ConnectOptions> {
         let material = self.identities.selected(id).await?;
+        self.connect_options_with_material(material, token).await
+    }
+    async fn connect_options_with_material(
+        &self,
+        material: std::sync::Arc<crate::host_identity::Material>,
+        token: CancellationToken,
+    ) -> CoreResult<ConnectOptions> {
         Ok(ConnectOptions {
             tcp: self.connection_policy.tcp.options(),
             identity: Some(material.identity.clone()),
@@ -612,6 +647,17 @@ impl Runtime {
             }
         };
         let explicit = params.get("deviceId").and_then(Value::as_str);
+        let (material, dedicated) = self.identities.for_attempt(params, explicit).await?;
+        let mut created = blank_device(
+            address.clone(),
+            port,
+            transport.clone().unwrap_or(TransportKind::Tcp),
+        );
+        if explicit.is_none() && dedicated {
+            self.identities
+                .bind_new(&self.root, &created.id, material.clone())
+                .await?;
+        }
         let device = {
             let mut store = self.store.write().await;
             if let Some(id) = explicit {
@@ -641,13 +687,97 @@ impl Runtime {
                 existing.reason = None;
                 existing.clone()
             } else {
-                let record = blank_device(address, port, transport.unwrap_or(TransportKind::Tcp));
-                store.devices.push(record.clone());
-                record
+                if dedicated {
+                    store
+                        .device_identity_fingerprints
+                        .insert(created.id.clone(), material.fingerprint.clone());
+                }
+                created.address = address;
+                store.devices.push(created.clone());
+                created
             }
         };
         self.changed_devices().await?;
         Ok(json!({"deviceId":device.id,"device":device}))
+    }
+    /// Validate a candidate using the bound identity before replacing any
+    /// endpoint or existing live transport. Failures leave the saved config.
+    pub(crate) async fn configure_device(&self, params: &Value) -> CoreResult<Value> {
+        let id = required(params, "deviceId")?;
+        let original = self.device(id).await?;
+        let address = host(params)?;
+        let port = port(params)?;
+        let requested = params["transport"]
+            .as_str()
+            .and_then(TransportKind::parse)
+            .filter(|kind| matches!(kind, TransportKind::Tcp | TransportKind::Tls))
+            .ok_or_else(|| CoreError::new("invalid_transport", "请选择有效的连接方式。"))?;
+        let transport = if original.transport.requires_tls(original.guid.as_deref()) {
+            TransportKind::Tls
+        } else {
+            requested
+        };
+        let (material, _) = self.identities.for_attempt(params, Some(id)).await?;
+        let token = CancellationToken::new();
+        let attempt = params["attemptId"].as_str();
+        if let Some(attempt) = attempt
+            && (attempt.is_empty() || attempt.len() > 200 || attempt == id)
+        {
+            return Err(CoreError::new("invalid_argument", "连接尝试标识无效。"));
+        }
+        self.register_connection_operation(id, true, &token).await?;
+        if let Some(attempt) = attempt {
+            let mut pending = self.device_operations.lock().await;
+            if let Some(old) = pending.insert(attempt.into(), token.clone()) {
+                old.cancel();
+            }
+        }
+        let result = async {
+            let mut options = self
+                .connect_options_with_material(material.clone(), token.clone())
+                .await?;
+            if transport.requires_tls(original.guid.as_deref()) {
+                options.tls_policy = TlsPolicy::Required;
+            }
+            let client = Client::connect_tcp(endpoint(&address, port), options).await?;
+            let guarded = client.clone();
+            let mut info = metadata(&client, token.clone()).await;
+            info.host_identity = Some(material.fingerprint.clone());
+            if token.is_cancelled() {
+                guarded.close();
+                return Err(CoreError::new("cancelled", "连接配置已取消。"));
+            }
+            if let Err(error) = verify_same_target(&original, &info) {
+                guarded.close();
+                return Err(error);
+            }
+            let result = self
+                .attach_client_at(
+                    id,
+                    client,
+                    info,
+                    &token,
+                    Some(AttachedEndpoint::Configured {
+                        address,
+                        port,
+                        transport,
+                    }),
+                    None,
+                )
+                .await;
+            if result.is_err() {
+                guarded.close();
+            }
+            result
+        }
+        .await;
+        if let Some(attempt) = attempt {
+            let mut pending = self.device_operations.lock().await;
+            if pending.get(attempt) == Some(&token) {
+                pending.remove(attempt);
+            }
+        }
+        result
     }
     pub(crate) async fn rename_device(&self, params: &Value) -> CoreResult<Value> {
         let id = required(params, "deviceId")?;
@@ -695,6 +825,12 @@ impl Runtime {
             let parent = self.setup_operations.get(operation).await?;
             if automatic || parent.device_id().as_deref() != Some(id) {
                 return Err(CoreError::new("invalid_operation", "父执行与设备不匹配。"));
+            }
+            if parent.reauthorizing() && self.device(id).await?.serial.is_none() {
+                return Err(CoreError::new(
+                    "device_identity_unverified",
+                    "无法核验原设备身份，请重新添加并授权。",
+                ));
             }
             Some(parent)
         } else {
@@ -749,8 +885,12 @@ impl Runtime {
         };
         let discovered = if automatic || candidate_source == Some("discovery") {
             let record = self.device(id).await?;
-            if !record.transport.is_usb() {
-                if let Some(guid) = record.guid {
+            if !record.transport.is_usb() || parent_discovery.is_some() {
+                if let Some(guid) = parent_discovery
+                    .as_ref()
+                    .map(|(_, guid)| guid.clone())
+                    .or(record.guid)
+                {
                     let services = parent_discovery
                         .as_ref()
                         .map(|(services, _)| services.clone())
@@ -818,7 +958,8 @@ impl Runtime {
         token: CancellationToken,
         discovered: Option<DiscoveredAttempt>,
     ) -> CoreResult<Value> {
-        if !token.is_cancelled()
+        if discovered.is_none()
+            && !token.is_cancelled()
             && let Ok(client) = self.client(id).await
         {
             return Ok(
@@ -872,7 +1013,9 @@ impl Runtime {
         if token.is_cancelled() {
             return Err(CoreError::new("cancelled", "连接已取消。"));
         }
-        if let Ok(client) = self.client(id).await {
+        if discovered.is_none()
+            && let Ok(client) = self.client(id).await
+        {
             return Ok(
                 json!({"connected":!client.is_closed(),"deviceId":id,"device":self.device(id).await?,"adbBurstActive":client.burst_mode()}),
             );
@@ -921,7 +1064,8 @@ impl Runtime {
             if device.transport.requires_tls(device.guid.as_deref()) {
                 options.tls_policy = TlsPolicy::Required;
             }
-            let (client, connected_endpoint) = if device.transport.is_usb() {
+            let (client, connected_endpoint) = if device.transport.is_usb() && discovered.is_none()
+            {
                 (self.connect_usb_record(&device, options).await?, None)
             } else if let Some((discovered, endpoints)) = discovered.as_ref().and_then(|answer| {
                 answer
@@ -1116,6 +1260,32 @@ impl Runtime {
         let mut transition = self.connections.transition(id).await;
         self.retire_closed_connection_locked(id, &mut transition)
             .await?;
+        if token.is_cancelled() {
+            client.close();
+            return Err(CoreError::new("cancelled", "连接配置已取消。"));
+        }
+        if connected_endpoint.is_some() {
+            if let Ok(original) = self.device(id).await
+                && original.serial.is_some()
+                && let Err(error) = verify_same_target(&original, &info)
+            {
+                client.close();
+                return Err(error);
+            }
+            let retired = self.connections.lock().await.remove(id);
+            if let Some(retired) = retired {
+                retired.close();
+                *transition = true;
+                {
+                    let mut store = self.store.write().await;
+                    if let Some(record) = store.devices.iter_mut().find(|d| d.id == id) {
+                        record.status = "offline".into();
+                    }
+                }
+                self.stop_device_activities(id).await?;
+                *transition = false;
+            }
+        }
         let _pending = self.device_operations.lock().await;
         if token.is_cancelled() {
             client.close();
@@ -1199,6 +1369,9 @@ impl Runtime {
                     record.transport = TransportKind::Usb;
                 }
                 Some(AttachedEndpoint::Tls(endpoint)) => {
+                    if let Some(discovered) = discovered {
+                        record.guid = Some(discovered.guid.clone());
+                    }
                     record.address = address_of(endpoint);
                     record.port = endpoint.port();
                     record.transport = TransportKind::Tls;
@@ -1211,9 +1384,20 @@ impl Runtime {
                     record.transport = TransportKind::Tcp;
                     record.guid = None;
                 }
+                Some(AttachedEndpoint::Configured {
+                    address,
+                    port,
+                    transport,
+                }) => {
+                    record.address = address;
+                    record.port = port;
+                    record.transport = transport;
+                }
                 None => {}
             }
             record.battery = info.battery;
+            record.charging = None;
+            record.battery_updated_at = None;
             record.status = "connected".into();
             record.reason = info.error;
             record.auto_reconnect = true;
@@ -1333,10 +1517,13 @@ impl Runtime {
                 "请输入设备当前显示的六位配对码。",
             ));
         }
-        let material = self.identities.selected(explicit).await?;
+        let (material, dedicated) = self.identities.for_attempt(params, explicit).await?;
         let op = self
             .new_setup_operation(params, explicit, material.fingerprint.clone())
             .await?;
+        if dedicated {
+            let _ = op.dedicated_identity.set(material.clone());
+        }
         let options = OperationOptions {
             timeout: Duration::from_millis(self.connection_policy.pairing_timeout_ms),
             cancellation: op.token.clone(),
@@ -1385,58 +1572,79 @@ impl Runtime {
         op: &crate::connection_setup::SetupOperation,
     ) -> CoreResult<Value> {
         op.check()?;
-        let live;
-        let identity = self.identities.state.read().await;
-        if identity.selected(explicit)?.fingerprint != op.identity {
-            return Err(CoreError::new("identity_changed", "配对授权身份已改变。"));
-        }
-        let mut pending = self.device_operations.lock().await;
-        let id = {
-            let mut store = self.store.write().await;
-            op.check()?;
-            let index = if let Some(id) = explicit {
+        let existing = {
+            let store = self.store.read().await;
+            if let Some(id) = explicit {
                 Some(
                     store
                         .devices
                         .iter()
-                        .position(|d| d.id == id)
-                        .ok_or_else(|| CoreError::new("not_found", "设备记录已移除。"))?,
+                        .find(|d| d.id == id)
+                        .ok_or_else(|| CoreError::new("not_found", "设备记录已移除。"))?
+                        .clone(),
                 )
             } else {
                 store
                     .devices
                     .iter()
-                    .position(|d| d.guid.as_deref() == Some(&guid))
-            };
-            let record = if let Some(index) = index {
-                &mut store.devices[index]
-            } else {
-                store
+                    .find(|d| d.guid.as_deref() == Some(&guid))
+                    .cloned()
+            }
+        };
+        if let Some(record) = &existing
+            && record.guid.as_ref().is_some_and(|known| known != &guid)
+        {
+            return Err(CoreError::new(
+                "device_identity_mismatch",
+                "配对的是另一台设备。",
+            ));
+        }
+        let mut created = blank_device(address.clone(), 0, TransportKind::Tls);
+        created.guid = Some(guid.clone());
+        let target_id = existing
+            .as_ref()
+            .map(|d| d.id.as_str())
+            .unwrap_or(&created.id)
+            .to_owned();
+        if existing.is_none()
+            && let Some(material) = op.dedicated_identity.get()
+        {
+            self.identities
+                .bind_new(&self.root, &target_id, material.clone())
+                .await?;
+        }
+        let outcome = async {
+        let identity = self.identities.state.read().await;
+        if op.dedicated_identity.get().is_none()
+            && identity.selected(explicit)?.fingerprint != op.identity
+        {
+            return Err(CoreError::new("identity_changed", "配对授权身份已改变。"));
+        }
+        identity.validate(&target_id, &op.identity)?;
+        let mut pending = self.device_operations.lock().await;
+        let id = {
+            let mut store = self.store.write().await;
+            op.check()?;
+            if existing.is_none() {
+                // Concurrent pairing to the same GUID must not create duplicates.
+                if store
                     .devices
-                    .push(blank_device(address, 0, TransportKind::Tls));
-                store.devices.last_mut().expect("pushed record")
-            };
-            identity.validate(&record.id, &op.identity)?;
-            if record.guid.as_ref().is_some_and(|known| known != &guid) {
-                return Err(CoreError::new(
-                    "device_identity_mismatch",
-                    "配对的是另一台设备。",
-                ));
+                    .iter()
+                    .any(|d| d.guid.as_deref() == Some(&guid))
+                {
+                    return Err(CoreError::new(
+                        "device_exists",
+                        "此设备已配对，请打开原设备记录。",
+                    ));
+                }
+                if op.dedicated_identity.get().is_some() {
+                    store
+                        .device_identity_fingerprints
+                        .insert(target_id.clone(), op.identity.clone());
+                }
+                store.devices.push(created);
             }
-            live = self
-                .connections
-                .lock()
-                .await
-                .get(&record.id)
-                .is_some_and(|client| !client.is_closed());
-            record.guid = Some(guid.clone());
-            if !live {
-                record.transport = TransportKind::Tls;
-                record.status = "offline".into();
-                record.auto_reconnect = false;
-                record.reason = None;
-            }
-            record.id.clone()
+            target_id.clone()
         };
         *op.device.lock().expect("operation device poisoned") = Some(id.clone());
         if let Some(old) = pending.insert(id.clone(), op.token.clone())
@@ -1451,8 +1659,17 @@ impl Runtime {
             crate::connection_setup::PendingResource::Pairing(discovery);
         self.changed_devices().await?;
         Ok(
-            json!({"paired":true,"deviceId":id,"device":self.device(&id).await?,"connected":live,"operationId":op.id}),
+            json!({"paired":true,"deviceId":id,"address":address,"device":self.device(&id).await?,"connected":false,"operationId":op.id}),
         )
+        }.await;
+        if outcome.is_err()
+            && existing.is_none()
+            && op.dedicated_identity.get().is_some()
+            && self.device(&target_id).await.is_err()
+        {
+            self.forget_device_identity(&target_id).await?;
+        }
+        outcome
     }
     async fn start_pairing_discovery(
         &self,
@@ -1460,8 +1677,7 @@ impl Runtime {
         token: &CancellationToken,
     ) -> CoreResult<PairingDiscovery> {
         let discovery = Discovery::new()?;
-        let services = self.discovered_services.clone();
-        let trusted = self
+        let trusted: HashSet<String> = self
             .store
             .read()
             .await
@@ -1469,6 +1685,17 @@ impl Runtime {
             .iter()
             .filter_map(|d| d.guid.clone())
             .collect();
+        // A reauthorization candidate is only trusted by its own operation.
+        // Persisted reconnection state must not acquire that GUID before the
+        // candidate's live target has been verified against the original.
+        let (services, trusted) = if trusted.contains(guid) {
+            (self.discovered_services.clone(), trusted)
+        } else {
+            (
+                Arc::new(tokio::sync::RwLock::new(DiscoveredState::default())),
+                HashSet::from([guid.to_owned()]),
+            )
+        };
         services.write().await.sync_trusted(trusted);
         let observed = services.clone();
         let options = OperationOptions {
@@ -1506,12 +1733,17 @@ impl Runtime {
             if let Some(id) = explicit {
                 self.device(id).await?;
             }
-            let material = self.identities.selected(explicit).await?;
+            let (material, dedicated) = self.identities.for_attempt(params, explicit).await?;
             let op = self
                 .new_setup_operation(params, explicit, material.fingerprint.clone())
                 .await?;
+            if dedicated {
+                let _ = op.dedicated_identity.set(material.clone());
+            }
             let result = async {
-                let options = self.connect_options_for(explicit, op.token.clone()).await?;
+                let options = self
+                    .connect_options_with_material(material.clone(), op.token.clone())
+                    .await?;
                 let transport = if params.get("fd").is_some() {
                     #[cfg(any(target_os = "linux", target_os = "android"))]
                     {
@@ -1653,6 +1885,21 @@ impl Runtime {
             } else {
                 uuid::Uuid::new_v4().to_string()
             };
+            if explicit.is_none() {
+                if let Some(material) = op.dedicated_identity.get() {
+                    self.identities
+                        .bind_new(&self.root, &id, material.clone())
+                        .await?;
+                    self.store
+                        .write()
+                        .await
+                        .device_identity_fingerprints
+                        .insert(id.clone(), material.fingerprint.clone());
+                }
+            } else {
+                let original = self.device(&id).await?;
+                verify_same_target(&original, &info)?;
+            }
             *op.device.lock().expect("operation device poisoned") = Some(id.clone());
             {
                 let mut pending = self.device_operations.lock().await;

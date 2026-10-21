@@ -136,6 +136,77 @@ impl IdentityOwner {
     pub(crate) async fn selected(&self, device: Option<&str>) -> CoreResult<Arc<Material>> {
         self.state.read().await.selected(device)
     }
+    /// Uncommitted setup identities never replace the global or an existing
+    /// device identity. PEM remains in the private setup owner until binding.
+    pub(crate) async fn for_attempt(
+        &self,
+        params: &Value,
+        device: Option<&str>,
+    ) -> CoreResult<(Arc<Material>, bool)> {
+        let Some(input) = params.get("identity") else {
+            return Ok((self.selected(device).await?, false));
+        };
+        if device.is_some() {
+            return Err(CoreError::new(
+                "identity_read_only",
+                "已有设备的授权私钥仅可查看。",
+            ));
+        }
+        match input.get("scope").and_then(Value::as_str) {
+            Some("global") if input.get("privateKeyPem").is_none() => {
+                Ok((self.selected(None).await?, false))
+            }
+            Some("device") => {
+                let pem = input
+                    .get("privateKeyPem")
+                    .and_then(Value::as_str)
+                    .filter(|pem| !pem.is_empty() && pem.len() <= 32 * 1024)
+                    .ok_or_else(|| {
+                        CoreError::new("invalid_identity", "请输入不超过32 KiB的PEM私钥。")
+                    })?;
+                let identity = Identity::from_pem(pem).map_err(|_| {
+                    CoreError::new(
+                        "invalid_identity",
+                        "请输入有效的ADB RSA-2048私钥PEM（指数65537）。",
+                    )
+                })?;
+                Ok((Material::new(identity)?, true))
+            }
+            _ => Err(CoreError::new("invalid_identity", "请选择有效的私钥来源。")),
+        }
+    }
+    pub(crate) async fn bind_new(
+        &self,
+        root: &Path,
+        id: &str,
+        material: Arc<Material>,
+    ) -> CoreResult<()> {
+        let _mutation = self.mutation.lock().await;
+        let mut state = self.state.write().await;
+        if state.custom.contains_key(id) {
+            return Err(CoreError::new(
+                "identity_read_only",
+                "已有设备的授权私钥不可更换。",
+            ));
+        }
+        let mut saved = HashMap::<String, String>::new();
+        for (device, existing) in &state.custom {
+            if let Some(existing) = existing {
+                saved.insert(
+                    device.clone(),
+                    existing.identity.to_pkcs8_pem()?.to_string(),
+                );
+            }
+        }
+        saved.insert(id.into(), material.identity.to_pkcs8_pem()?.to_string());
+        Runtime::private_write(
+            &root.join("device_identities.json"),
+            &serde_json::to_vec(&saved)?,
+        )
+        .await?;
+        state.custom.insert(id.into(), Some(material));
+        Ok(())
+    }
 }
 impl Runtime {
     async fn identity_projection(&self, device: Option<&str>) -> CoreResult<Value> {
@@ -393,6 +464,106 @@ mod tests {
         device.observation_wanted = false;
         (client, peer)
     }
+    #[tokio::test]
+    async fn setup_identity_is_private_and_does_not_replace_global_or_an_existing_device() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let global = runtime
+            .identities
+            .selected(None)
+            .await
+            .unwrap()
+            .fingerprint
+            .clone();
+        let key = fixture_key();
+        let custom = runtime
+            .add_device(&json!({
+                "address":"127.0.0.1","port":9,
+                "identity":{"scope":"device","privateKeyPem":key.to_pkcs8_pem().unwrap().as_str()},
+            }))
+            .await
+            .unwrap();
+        let id = custom["deviceId"].as_str().unwrap();
+        assert_eq!(
+            runtime.identities.selected(None).await.unwrap().fingerprint,
+            global
+        );
+        assert_eq!(
+            runtime.identity_projection(Some(id)).await.unwrap()["scope"],
+            "device"
+        );
+        assert_eq!(
+            runtime
+                .identities
+                .selected(Some(id))
+                .await
+                .unwrap()
+                .fingerprint,
+            fingerprint(&key).unwrap()
+        );
+        let snapshot = runtime
+            .invoke("state.snapshot", json!({}))
+            .await
+            .unwrap()
+            .to_string();
+        assert!(!snapshot.contains("PRIVATE KEY"));
+        assert!(!snapshot.contains("privateKeyPem"));
+        let replacement = json!({"deviceId":id,"identity":{"scope":"global"}});
+        assert_eq!(
+            runtime
+                .identities
+                .for_attempt(&replacement, Some(id))
+                .await
+                .err()
+                .unwrap()
+                .code,
+            "identity_read_only"
+        );
+        drop(runtime);
+        let restored = Runtime::initialize(directory.path()).await.unwrap();
+        assert_eq!(
+            restored
+                .identities
+                .selected(Some(id))
+                .await
+                .unwrap()
+                .fingerprint,
+            fingerprint(&key).unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_setup_private_keys_do_not_create_records_or_change_identity() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let before = runtime
+            .identities
+            .selected(None)
+            .await
+            .unwrap()
+            .fingerprint
+            .clone();
+        for input in [
+            "a password",
+            "-----BEGIN PUBLIC KEY-----\nAQID\n-----END PUBLIC KEY-----",
+        ] {
+            let error = runtime
+                .add_device(&json!({
+                    "address":"127.0.0.1","port":9,
+                    "identity":{"scope":"device","privateKeyPem":input},
+                }))
+                .await
+                .unwrap_err();
+            assert_eq!(error.code, "invalid_identity");
+            assert!(!format!("{error:?}").contains(input));
+        }
+        assert!(runtime.store.read().await.devices.is_empty());
+        assert_eq!(
+            runtime.identities.selected(None).await.unwrap().fingerprint,
+            before
+        );
+    }
+
     #[tokio::test]
     async fn invalid_import_never_changes_identity_connection_or_exposes_secret() {
         let dir = tempfile::tempdir().unwrap();

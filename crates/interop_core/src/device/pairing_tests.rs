@@ -659,10 +659,16 @@ async fn qr_reauthorization_commits_only_the_selected_identity_to_the_original_r
         .await
         .unwrap();
     assert_eq!(result["deviceId"], id);
-    assert_eq!(result["connected"], true);
+    assert_eq!(
+        result["connected"], false,
+        "the existing live client does not verify the newly paired candidate"
+    );
     let store = runtime.store.read().await;
     assert_eq!(store.devices.len(), 1);
-    assert_eq!(store.devices[0].guid.as_deref(), Some("paired-guid"));
+    assert_eq!(
+        store.devices[0].guid, None,
+        "reauthorization must not commit a new discovery identity before target connection"
+    );
     assert_eq!(
         store.devices[0].address, "phone.local",
         "pairing does not commit an unverified connection endpoint"

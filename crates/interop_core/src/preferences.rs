@@ -159,6 +159,26 @@ pub(crate) fn validated_settings(current: &Value, changes: &Value) -> CoreResult
     Ok(next)
 }
 
+fn changed_keep_active_devices(previous: &Value, next: &Value) -> Vec<String> {
+    let mut devices = std::collections::BTreeSet::new();
+    for settings in [previous, next] {
+        if let Some(map) = settings["deviceSettings"].as_object() {
+            devices.extend(map.keys().cloned());
+        }
+    }
+    devices
+        .into_iter()
+        .filter(|device| {
+            previous["deviceSettings"][device]["stayAwake"]
+                .as_bool()
+                .unwrap_or(false)
+                != next["deviceSettings"][device]["stayAwake"]
+                    .as_bool()
+                    .unwrap_or(false)
+        })
+        .collect()
+}
+
 impl Runtime {
     pub(crate) async fn preferences(
         self: &Arc<Self>,
@@ -168,7 +188,9 @@ impl Runtime {
         match command {
             "settings.update" => {
                 let mut store = self.store.write().await;
+                let previous = store.settings.clone();
                 store.settings = validated_settings(&store.settings, params)?;
+                let affected = changed_keep_active_devices(&previous, &store.settings);
                 drop(store);
                 self.persist().await?;
                 // Persistence may wait behind another writer. Publish while
@@ -177,6 +199,8 @@ impl Runtime {
                 let store = self.store.read().await;
                 let result = store.settings.clone();
                 self.emit("settings.changed", None, result.clone());
+                drop(store);
+                Box::pin(self.sync_changed_keep_active(affected)).await?;
                 Ok(result)
             }
             "settings.export" => {
@@ -244,6 +268,8 @@ impl Runtime {
                         android_version: None,
                         api_level: None,
                         battery: None,
+                        charging: None,
+                        battery_updated_at: None,
                         last_seen: None,
                         reason: Some("此记录来自恢复，请在被控手机重新核验授权。".into()),
                         auto_reconnect: false,
@@ -254,10 +280,12 @@ impl Runtime {
                 let mut store = self.store.write().await;
                 // A restored endpoint never merges into or overwrites an authenticated live identity.
                 store.devices.extend(restored);
+                let affected = changed_keep_active_devices(&store.settings, &settings);
                 store.settings = settings;
                 drop(store);
                 self.persist().await?;
                 self.emit("devices.changed", None, json!({"restored":count}));
+                Box::pin(self.sync_changed_keep_active(affected)).await?;
                 Ok(json!({"restored":count,"authorizationRestored":false}))
             }
             "system.info" => Ok(

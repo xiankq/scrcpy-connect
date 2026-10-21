@@ -40,6 +40,7 @@ pub(crate) struct SetupOperation {
     pub(crate) attempt_id: String,
     pub(crate) device: StdMutex<Option<String>>,
     pub(crate) identity: String,
+    pub(crate) dedicated_identity: tokio::sync::OnceCell<Arc<crate::host_identity::Material>>,
     selected_device: Option<String>,
     pub(crate) token: CancellationToken,
     pub(crate) execution: Mutex<()>,
@@ -56,6 +57,9 @@ impl SetupOperation {
         } else {
             Ok(())
         }
+    }
+    pub(crate) fn reauthorizing(&self) -> bool {
+        self.selected_device.is_some()
     }
     pub(crate) fn device_id(&self) -> Option<String> {
         self.device
@@ -115,7 +119,9 @@ impl SetupOperations {
         entries.retain(|_, op| {
             let id = op.device_id();
             let remove = id.as_ref().is_some_and(|id| affected.contains(id))
-                || (global && op.selected_device.is_none());
+                || (global
+                    && op.selected_device.is_none()
+                    && op.dedicated_identity.get().is_none());
             if remove {
                 op.cancel();
             }
@@ -163,6 +169,7 @@ impl Runtime {
             device: StdMutex::new(device.map(str::to_owned)),
             selected_device: device.map(str::to_owned),
             identity,
+            dedicated_identity: tokio::sync::OnceCell::new(),
             token: token.clone(),
             execution: Mutex::new(()),
             resource: StdMutex::new(PendingResource::None),
@@ -332,6 +339,18 @@ mod tests {
             .invoke("observation.stop", json!({"deviceId":id}))
             .await
             .unwrap();
+        // This is an existing-device handoff. Its prior verified identity must
+        // match the candidate; the lease assertion below does not waive that
+        // production ownership check.
+        runtime
+            .store
+            .write()
+            .await
+            .devices
+            .iter_mut()
+            .find(|device| device.id == id)
+            .unwrap()
+            .serial = Some("verified-serial".into());
         let identity = runtime.identities.selected(Some(id)).await.unwrap();
         let op = runtime
             .new_setup_operation(

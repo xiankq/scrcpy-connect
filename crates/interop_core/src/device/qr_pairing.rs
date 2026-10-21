@@ -6,10 +6,16 @@ impl Runtime {
         if let Some(id) = &device {
             self.device(id).await?;
         }
-        let material = self.identities.selected(device.as_deref()).await?;
+        let (material, dedicated) = self
+            .identities
+            .for_attempt(params, device.as_deref())
+            .await?;
         let op = self
             .new_setup_operation(params, device.as_deref(), material.fingerprint.clone())
             .await?;
+        if dedicated {
+            let _ = op.dedicated_identity.set(material.clone());
+        }
         let qr = QrPairing::generate();
         let response = json!({"payload":qr.payload().as_str(),"serviceName":qr.service_name(),"attemptId":op.attempt_id,"operationId":op.id,"expiresAt":now()+self.connection_policy.qr_pairing_timeout_ms.div_ceil(1000)});
         let runtime = self.clone();

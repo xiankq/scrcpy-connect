@@ -11,6 +11,7 @@ use std::{
 use tokio::{sync::mpsc, task::JoinSet};
 use tokio_util::sync::CancellationToken;
 
+#[derive(Clone)]
 pub(crate) struct Request {
     pub(crate) id: String,
     pub(crate) client: Client,
@@ -24,10 +25,24 @@ pub(crate) fn spawn(
     let runtime = Arc::downgrade(runtime);
     tokio::spawn(async move {
         let mut jobs = JoinSet::new();
+        let mut refresh_tick = tokio::time::interval(Duration::from_secs(30));
+        refresh_tick.tick().await;
+        let mut pending = std::collections::VecDeque::<Request>::new();
         loop {
             tokio::select! {
                 biased;
                 _ = lifetime.cancelled() => break,
+                _ = refresh_tick.tick(), if pending.is_empty() => {
+                    let Some(owner) = runtime.upgrade() else { break; };
+                    let clients = owner.connections.lock().await;
+                    pending.extend(clients.iter().filter(|(_, client)| !client.is_closed())
+                        .map(|(id,client)| Request { id:id.clone(), client:client.clone() }));
+                }
+                _ = std::future::ready(()), if !pending.is_empty() && jobs.len() < 4 => {
+                    if let Some(request) = pending.pop_front() {
+                        jobs.spawn(refresh(runtime.clone(), request));
+                    }
+                }
                 request = requests.recv(), if jobs.len() < 4 => {
                     let Some(request) = request else { break; };
                     let runtime = runtime.clone();
@@ -41,22 +56,11 @@ pub(crate) fn spawn(
     });
 }
 
-fn battery(bytes: &[u8]) -> Option<u32> {
-    let text = std::str::from_utf8(bytes).ok()?;
-    let number = |key: &str| {
-        text.lines()
-            .find_map(|line| line.trim().strip_prefix(key)?.trim().parse::<u32>().ok())
-    };
-    let level = number("level:")?;
-    let scale = number("scale:").filter(|scale| *scale > 0)?;
-    Some((u64::from(level) * 100 / u64::from(scale)).min(100) as u32)
-}
-
 async fn refresh(runtime: Weak<Runtime>, request: Request) {
     if runtime.strong_count() == 0 {
         return;
     }
-    let Ok(output) = request
+    let facts = request
         .client
         .shell(
             "dumpsys battery",
@@ -67,15 +71,14 @@ async fn refresh(runtime: Weak<Runtime>, request: Request) {
             },
         )
         .await
-    else {
-        return;
-    };
-    if output.exit_code.is_some_and(|code| code != 0) {
-        return;
-    }
-    let Some(battery) = battery(&output.stdout) else {
-        return;
-    };
+        .ok()
+        .filter(|output| !output.exit_code.is_some_and(|code| code != 0))
+        .and_then(|output| {
+            let text = std::str::from_utf8(&output.stdout).ok()?;
+            let facts = crate::device_details::battery_data(text);
+            facts["level"].as_u64()?;
+            Some(facts)
+        });
     let Some(runtime) = runtime.upgrade() else {
         return;
     };
@@ -97,10 +100,21 @@ async fn refresh(runtime: Weak<Runtime>, request: Request) {
         else {
             return;
         };
-        if device.battery == Some(battery) {
+        if facts.is_none()
+            && device.battery.is_none()
+            && device.charging.is_none()
+            && device.battery_updated_at.is_none()
+        {
             return;
         }
-        device.battery = Some(battery);
+        // A failed refresh revokes the last live sample immediately, while the
+        // connection fence above prevents an old failure clearing a new sample.
+        device.battery = facts
+            .as_ref()
+            .and_then(|facts| facts["level"].as_u64())
+            .map(|level| level as u32);
+        device.charging = facts.as_ref().and_then(|facts| facts["charging"].as_bool());
+        device.battery_updated_at = facts.as_ref().map(|_| crate::model::now());
         runtime.emit(
             "device.changed",
             Some(&request.id),
@@ -219,6 +233,64 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(runtime.device(&id).await.unwrap().battery, Some(42));
+            runtime.connections.lock().await.remove(&id);
+            server.abort();
+        }
+        runtime.stop_all().await;
+    }
+
+    #[tokio::test]
+    async fn failed_refresh_revokes_previously_live_battery() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let added = runtime
+            .add_device(&json!({"address":"127.0.0.1", "port":5555, "transport":"tcp"}))
+            .await
+            .unwrap();
+        let id = added["deviceId"].as_str().unwrap().to_owned();
+        for exit in [0, 1] {
+            let (client, mut peer) = connection();
+            runtime
+                .connections
+                .lock()
+                .await
+                .insert(id.clone(), client.clone());
+            {
+                let mut store = runtime.store.write().await;
+                let device = store.devices.iter_mut().find(|d| d.id == id).unwrap();
+                device.status = "connected".into();
+                device.battery = Some(42);
+                device.charging = Some(true);
+                device.battery_updated_at = Some(crate::model::now());
+                device.observation_wanted = false;
+            }
+            let server = tokio::spawn(async move {
+                let frame = Frame::read(&mut peer, 4096, true).await.unwrap();
+                Frame::new(protocol::OKAY, 100, frame.arg0, [])
+                    .write(&mut peer)
+                    .await
+                    .unwrap();
+                Frame::new(protocol::WRTE, 100, frame.arg0, [3, 1, 0, 0, 0, exit])
+                    .write(&mut peer)
+                    .await
+                    .unwrap();
+                while Frame::read(&mut peer, 4096, true).await.is_ok() {}
+            });
+            super::refresh(
+                Arc::downgrade(&runtime),
+                Request {
+                    id: id.clone(),
+                    client,
+                },
+            )
+            .await;
+            let device = runtime.device(&id).await.unwrap();
+            assert_eq!(
+                device.battery, None,
+                "failed/missing query cannot remain live"
+            );
+            assert_eq!(device.charging, None);
+            assert_eq!(device.battery_updated_at, None);
             runtime.connections.lock().await.remove(&id);
             server.abort();
         }

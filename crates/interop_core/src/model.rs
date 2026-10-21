@@ -125,6 +125,10 @@ pub struct Device {
     #[serde(default)]
     pub battery: Option<u32>,
     #[serde(default)]
+    pub charging: Option<bool>,
+    #[serde(default)]
+    pub battery_updated_at: Option<u64>,
+    #[serde(default)]
     pub last_seen: Option<u64>,
     #[serde(default)]
     pub reason: Option<String>,

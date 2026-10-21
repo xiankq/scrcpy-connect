@@ -11,6 +11,7 @@ mod connection_setup;
 mod connections;
 mod delivery;
 mod device;
+mod device_details;
 mod device_metadata;
 mod device_probe;
 pub mod documents;
