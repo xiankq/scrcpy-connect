@@ -42,6 +42,7 @@ pub struct ReservedActivity {
 pub enum BusyReason {
     AppSessionGuard,
     ActivityAlreadyReserved,
+    ReplacementUnavailable,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -73,6 +74,7 @@ struct Entry {
 struct State {
     entries: BTreeMap<String, Entry>,
     limit: usize,
+    replacement: Option<(String, String)>,
 }
 
 #[derive(Clone)]
@@ -92,6 +94,7 @@ impl ResourceAdmission {
             state: Arc::new(Mutex::new(State {
                 entries: BTreeMap::new(),
                 limit: limit.get(),
+                replacement: None,
             })),
         }
     }
@@ -112,9 +115,46 @@ impl ResourceAdmission {
         name: String,
         cancellation: CancellationToken,
     ) -> Result<ResourceReservation, ResourceBusy> {
+        self.reserve(id, device_id, name, cancellation, None)
+    }
+
+    /// One transient capture may coexist with its exact same-device source.
+    /// Only the quality executor uses this seam while holding quality_changes;
+    /// the admission lock independently bounds all replacements to one extra.
+    pub(crate) fn reserve_replacement(
+        &self,
+        previous_id: &str,
+        id: String,
+        device_id: String,
+        name: String,
+        cancellation: CancellationToken,
+    ) -> Result<ResourceReservation, ResourceBusy> {
+        self.reserve(id, device_id, name, cancellation, Some(previous_id))
+    }
+
+    fn reserve(
+        &self,
+        id: String,
+        device_id: String,
+        name: String,
+        cancellation: CancellationToken,
+        previous_id: Option<&str>,
+    ) -> Result<ResourceReservation, ResourceBusy> {
         let mut state = self.state();
         let reason = if state.entries.contains_key(&id) {
             Some(BusyReason::ActivityAlreadyReserved)
+        } else if let Some(previous_id) = previous_id {
+            if state.replacement.is_some()
+                || state.entries.len() > state.limit
+                || state
+                    .entries
+                    .get(previous_id)
+                    .is_none_or(|entry| entry.activity.device_id != device_id)
+            {
+                Some(BusyReason::ReplacementUnavailable)
+            } else {
+                None
+            }
         } else if state.entries.len() >= state.limit {
             Some(BusyReason::AppSessionGuard)
         } else {
@@ -133,6 +173,9 @@ impl ResourceAdmission {
                 existing_activities_preserved: true,
                 pause_releases_reservation: false,
             });
+        }
+        if let Some(previous_id) = previous_id {
+            state.replacement = Some((previous_id.to_owned(), id.clone()));
         }
         state.entries.insert(
             id.clone(),
@@ -222,7 +265,15 @@ impl ResourceReservation {
 
 impl Drop for ResourceReservation {
     fn drop(&mut self) {
-        let entry = self.admission.state().entries.remove(&self.id);
+        let mut state = self.admission.state();
+        if state
+            .replacement
+            .as_ref()
+            .is_some_and(|(old, new)| old == &self.id || new == &self.id)
+        {
+            state.replacement = None;
+        }
+        let entry = state.entries.remove(&self.id);
         if let Some(entry) = entry {
             entry.cancellation.cancel();
         }
@@ -278,5 +329,110 @@ impl NewSessionRetry {
         }
         self.used = true;
         true
+    }
+}
+
+#[cfg(test)]
+mod replacement_tests {
+    use super::*;
+    fn reserve(admission: &ResourceAdmission, id: &str, device: &str) -> ResourceReservation {
+        admission
+            .reserve_session(
+                id.into(),
+                device.into(),
+                id.into(),
+                CancellationToken::new(),
+            )
+            .unwrap()
+    }
+    #[test]
+    fn full_guard_accepts_exact_replacement_but_keeps_normal_start_limited() {
+        let admission = ResourceAdmission::new(NonZeroUsize::new(2).unwrap());
+        let first = reserve(&admission, "first", "phone");
+        let second = reserve(&admission, "second", "other");
+        let replacement = admission
+            .reserve_replacement(
+                "first",
+                "new".into(),
+                "phone".into(),
+                "phone".into(),
+                CancellationToken::new(),
+            )
+            .unwrap();
+        assert_eq!(admission.activities().len(), 3);
+        assert!(
+            admission
+                .reserve_session(
+                    "ordinary".into(),
+                    "phone".into(),
+                    "ordinary".into(),
+                    CancellationToken::new()
+                )
+                .is_err()
+        );
+        assert!(
+            admission
+                .reserve_replacement(
+                    "second",
+                    "extra".into(),
+                    "other".into(),
+                    "extra".into(),
+                    CancellationToken::new()
+                )
+                .is_err()
+        );
+        drop(first);
+        assert_eq!(admission.activities().len(), 2);
+        drop(replacement);
+        drop(second);
+        assert!(admission.activities().is_empty());
+    }
+    #[test]
+    fn replacement_is_bound_to_device_and_capture_and_failure_releases_peak() {
+        let admission = ResourceAdmission::new(NonZeroUsize::new(1).unwrap());
+        let _original = reserve(&admission, "old", "phone");
+        for (source, device) in [("missing", "phone"), ("old", "other")] {
+            assert!(
+                admission
+                    .reserve_replacement(
+                        source,
+                        "candidate".into(),
+                        device.into(),
+                        "candidate".into(),
+                        CancellationToken::new()
+                    )
+                    .is_err()
+            );
+        }
+        let token = CancellationToken::new();
+        let candidate = admission
+            .reserve_replacement(
+                "old",
+                "candidate".into(),
+                "phone".into(),
+                "candidate".into(),
+                token.clone(),
+            )
+            .unwrap();
+        admission.cancel("candidate");
+        assert!(token.is_cancelled());
+        assert_eq!(
+            admission.activities().len(),
+            2,
+            "teardown still owns capacity"
+        );
+        drop(candidate);
+        assert_eq!(admission.activities().len(), 1);
+        let retry = admission
+            .reserve_replacement(
+                "old",
+                "retry".into(),
+                "phone".into(),
+                "retry".into(),
+                CancellationToken::new(),
+            )
+            .unwrap();
+        drop(retry);
+        assert_eq!(admission.activities().len(), 1);
     }
 }

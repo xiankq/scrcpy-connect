@@ -31,6 +31,9 @@ static ENCODER_PROBE_JOBS: Semaphore = Semaphore::const_new(4);
 
 #[path = "scrcpy_display.rs"]
 mod display;
+#[path = "scrcpy_keep_active.rs"]
+mod keep_active;
+pub(crate) use keep_active::KeepActiveOwner;
 
 fn encoder_probe_command(path: &str) -> CoreResult<String> {
     let path = quote(path)?;
@@ -172,7 +175,7 @@ fn validate_encoder_selection(settings: &Value, encoders: &[VideoEncoder]) -> Co
 }
 
 fn current_quality(settings: &Value) -> Value {
-    json!({"preset":settings["qualityPreset"],"maxSize":settings["maxSize"],"maxFps":settings["maxFps"],
+    json!({"preset":settings["qualityPreset"],"qualityPreset":settings["qualityPreset"],"maxSize":settings["maxSize"],"maxFps":settings["maxFps"],
         "bitRate":settings["videoBitRate"],"videoBitRate":settings["videoBitRate"],"codec":settings["videoCodec"],
         "videoCodec":settings["videoCodec"],"videoEncoder":settings["videoEncoder"],"audio":false})
 }
@@ -229,6 +232,7 @@ pub(crate) struct Session {
     device_id: String,
     package: Option<String>,
     cancellation: CancellationToken,
+    lifetime: CancellationToken,
     control: mpsc::Sender<ControlRequest>,
     state: Arc<RwLock<Value>>,
     process_closed: Arc<AtomicBool>,
@@ -241,10 +245,22 @@ impl Session {
     }
     pub(crate) async fn activity_snapshot(&self) -> Option<Value> {
         let state = self.state.read().await;
-        (!self.cancellation.is_cancelled() || state["launchOutcome"] == "unknown")
+        (!self.cancellation.is_cancelled()
+            || state["launchOutcome"] == "unknown"
+            || state["qualityRetryable"] == true)
             .then(|| state.clone())
     }
 }
+#[derive(Clone)]
+struct Reconfiguration {
+    id: String,
+    generation: u64,
+    capture_generation: u64,
+    lifetime: CancellationToken,
+    previous: Arc<RwLock<Value>>,
+    task: Option<u32>,
+}
+
 #[derive(Clone)]
 struct OwnedProcess {
     pid: u32,
@@ -464,13 +480,33 @@ impl Runtime {
     }
 
     pub(crate) async fn start_session(&self, params: &Value) -> CoreResult<Value> {
-        let result = async {
+        let result: CoreResult<Value> = async {
             required(params, "deviceId")?;
             let settings = quality_patch(&json!({}), params)?;
             // This startup state includes the complete media/process handshake.
             // Keep it out of the session entry's nested async frames: debug
             // builds otherwise exhaust a standard 2 MiB caller thread stack.
-            Box::pin(self.start_session_with_settings(params, &settings)).await
+            let mut opened =
+                Box::pin(self.start_session_with_settings(params, &settings, None)).await?;
+            match Box::pin(self.sync_keep_active(
+                required(params, "deviceId")?,
+                params["keepActive"].as_bool(),
+            ))
+            .await
+            {
+                Ok(receipt) => {
+                    for (key, value) in receipt.as_object().expect("keep-active receipt") {
+                        opened[key] = value.clone();
+                    }
+                }
+                Err(error) => {
+                    // The real window has already opened; report this separate
+                    // policy failure without pretending its launch was undone.
+                    opened["keepActiveApplied"] = json!(false);
+                    opened["keepActiveError"] = json!({"code":error.code,"reason":error.message});
+                }
+            }
+            Ok(opened)
         }
         .await;
         result.map_err(|mut error| {
@@ -488,6 +524,7 @@ impl Runtime {
         &self,
         params: &Value,
         settings: &Value,
+        replacement: Option<Reconfiguration>,
     ) -> CoreResult<Value> {
         // Cumulative milestones use one local monotonic clock. They measure
         // startup work, never latency by subtracting the device's media PTS.
@@ -501,12 +538,14 @@ impl Runtime {
             .map(package_name)
             .transpose()?
             .map(str::to_owned);
-        let display_size = if package.is_some() {
+        let mut display_size = if package.is_some() {
             display::virtual_dimensions(params)?
         } else {
             display::dimensions(params)?
         };
-        if let Some(package) = &package {
+        if let Some(package) = &package
+            && replacement.is_none()
+        {
             self.app_opens.ensure_available(&device_id, package).await?;
         }
         let client = self.client(&device_id).await?;
@@ -534,16 +573,56 @@ impl Runtime {
             ));
         }
         let server = crate::bundled_servers::get("scrcpy")?;
-        let id = uuid::Uuid::new_v4().to_string();
-        let activity_id = crate::activities::ActivityRef::Session(&id).to_string();
-        let cancellation = CancellationToken::new();
+        let id = replacement
+            .as_ref()
+            .map(|value| value.id.clone())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let generation = replacement.as_ref().map_or(1, |value| value.generation);
+        let capture_generation = replacement
+            .as_ref()
+            .map_or(1, |value| value.capture_generation);
+        let capture_id = if replacement.is_some() {
+            format!("{id}-{}", uuid::Uuid::new_v4().simple())
+        } else {
+            id.clone()
+        };
+        let activity_id = crate::activities::ActivityRef::Session(&capture_id).to_string();
+        let lifetime = replacement
+            .as_ref()
+            .map(|value| value.lifetime.clone())
+            .unwrap_or_default();
+        let cancellation = lifetime.child_token();
         let mut guard = CancelOnDrop(Some(cancellation.clone()));
-        let reservation = match self.activities.admission.reserve_session(
-            activity_id.clone(),
-            device_id.clone(),
-            package.clone().unwrap_or_else(|| "手机屏幕".into()),
-            cancellation.clone(),
-        ) {
+        let previous_activity = if let Some(replacement) = &replacement {
+            replacement.previous.read().await["activityId"]
+                .as_str()
+                .map(str::to_owned)
+        } else {
+            None
+        };
+        let reserved = if let Some(previous) = previous_activity.as_deref().filter(|previous| {
+            self.activities
+                .admission
+                .activities()
+                .iter()
+                .any(|activity| activity.id == *previous)
+        }) {
+            self.activities.admission.reserve_replacement(
+                previous,
+                activity_id.clone(),
+                device_id.clone(),
+                package.clone().unwrap_or_else(|| "手机屏幕".into()),
+                cancellation.clone(),
+            )
+        } else {
+            self.activities.admission.reserve_session(
+                activity_id.clone(),
+                device_id.clone(),
+                package.clone().unwrap_or_else(|| "手机屏幕".into()),
+                cancellation.clone(),
+            )
+        };
+        let reservation = match reserved {
             Ok(reservation) => reservation,
             Err(busy) => return Err(self.session_resource_busy(busy).await),
         };
@@ -581,6 +660,25 @@ impl Runtime {
         if let Some(encoders) = encoders? {
             validate_encoder_selection(settings, &encoders)?;
         }
+        let display_metrics = if package.is_some() {
+            Some(display::physical_metrics(&client).await?)
+        } else {
+            None
+        };
+        if package.is_some() && display_size.is_none() {
+            let (width, height, _) = display_metrics.expect("virtual metrics");
+            let limit = settings["maxSize"].as_u64().unwrap_or(1920) as u32;
+            let scale = f64::from(limit.min(width.max(height))) / f64::from(width.max(height));
+            display_size = Some((
+                ((f64::from(width) * scale) as u16 / 2 * 2).max(2),
+                ((f64::from(height) * scale) as u16 / 2 * 2).max(2),
+            ));
+        }
+        let previous_displays = if package.is_some() {
+            display::virtual_ids(&client).await?
+        } else {
+            Vec::new()
+        };
         startup_timing.insert(
             "validatedMs".into(),
             json!(startup_clock.elapsed().as_millis() as u64),
@@ -602,11 +700,35 @@ impl Runtime {
                 .try_into()
                 .expect("UUID"),
         ) & 0x7fff_ffff;
-        let remote_jar = format!("/data/local/tmp/interop-scrcpy-{id}.jar");
+        let remote_jar = format!("/data/local/tmp/interop-scrcpy-{capture_id}.jar");
         let state = Arc::new(RwLock::new(
-            json!({"sessionId":id,"id":id,"deviceId":device_id,"name":package.as_deref().unwrap_or("手机屏幕"),"packageName":package,"status":"starting","createdAt":now(),"codec":selected_codec.name,"mime":selected_codec.mime,"videoEncoder":selected_encoder,"encoderSelection":if selected_encoder.is_some(){"explicit"}else{"platformDefault"},"quality":current_quality(settings),"audio":false,"apiLevel":device.api_level}),
+            json!({"sessionId":id,"id":id,"deviceId":device_id,"name":package.as_deref().unwrap_or("手机屏幕"),"packageName":package,"status":"starting","generation":generation,"captureGeneration":capture_generation,"createdAt":now(),"codec":selected_codec.name,"mime":selected_codec.mime,"videoEncoder":selected_encoder,"encoderSelection":if selected_encoder.is_some(){"explicit"}else{"platformDefault"},"quality":current_quality(settings),"audio":false,"apiLevel":device.api_level}),
         ));
+        state.write().await["activityId"] = json!(activity_id);
+        state.write().await["captureId"] = json!(capture_id);
+        state.write().await["internalReconfigure"] = json!(replacement.is_some());
+        state.write().await["qualityRebuilding"] = json!(replacement.is_some());
+        if replacement.is_some() {
+            state.write().await["qualityRebuildTarget"] = json!(capture_generation);
+            state.write().await["qualityRebuildOutcome"] = json!("pending");
+        }
+        state.write().await["keepActive"] = json!(params["keepActive"] == true);
+        if let Some(replacement) = &replacement {
+            let old = replacement.previous.read().await;
+            for key in ["createdAt", "launchOperationId", "launchOutcome"] {
+                if !old[key].is_null() {
+                    state.write().await[key] = old[key].clone();
+                }
+            }
+            if old["status"] == "paused" {
+                state.write().await["status"] = json!("paused");
+            }
+        }
         if let Some((width, height)) = display_size {
+            if let Some(metrics) = display_metrics {
+                state.write().await["displayDensity"] =
+                    json!(display::scaled_density(metrics, width, height));
+            }
             state.write().await["displaySize"] = json!({"width":width,"height":height});
             state.write().await["displayAuto"] = json!(params["displayAuto"] == true);
         }
@@ -625,7 +747,10 @@ impl Runtime {
             reservation.stopping();
             {
                 let mut data = cleanup_state.write().await;
-                if data["status"] != "failed" {
+                if data["status"] != "failed"
+                    && data["replaced"] != true
+                    && data["qualityRetryable"] != true
+                {
                     data["status"] = json!("stopped");
                 }
                 data.as_object_mut()
@@ -634,17 +759,30 @@ impl Runtime {
                 data.as_object_mut()
                     .expect("session state")
                     .remove("videoPort");
-                event(
-                    &cleanup_events,
-                    "session.disconnected",
-                    &cleanup_device,
-                    data.clone(),
-                );
+                if data["replaced"] != true
+                    && data["internalReconfigure"] != true
+                    && data["qualityRebuilding"] != true
+                {
+                    event(
+                        &cleanup_events,
+                        "session.disconnected",
+                        &cleanup_device,
+                        data.clone(),
+                    );
+                }
             }
             // Video/control can fail while ADB and output-audio remain live.
             // Reclaim sound when no remaining session owns this device, even
             // when the failed session stays as an unresolved application record.
             if let Some(cleanup_activities) = cleanup_activities.upgrade() {
+                // This helper emits an independent device receipt if target
+                // cleanup cannot be confirmed after its last window is gone.
+                let _ = keep_active::stop_unowned(
+                    &cleanup_activities,
+                    &cleanup_events,
+                    &cleanup_device,
+                )
+                .await;
                 crate::audio::stop_unowned_audio(
                     &cleanup_activities,
                     &cleanup_events,
@@ -700,9 +838,6 @@ impl Runtime {
             command.push_str(&format!(
                 " video_codec_options=repeat-previous-frame-after:long={repeat_delay}"
             ));
-            if package.is_none() && params["keepActive"] == true {
-                command.push_str(" keep_active=true");
-            }
             if let Some(encoder) = selected_encoder {
                 command.push(' ');
                 command.push_str(&quote(&format!("video_encoder={encoder}"))?);
@@ -710,7 +845,14 @@ impl Runtime {
             if package.is_some() {
                 command.push_str(" new_display=");
                 if let Some((width, height)) = display_size {
-                    command.push_str(&format!("{width}x{height}"));
+                    command.push_str(&format!(
+                        "{width}x{height}/{}",
+                        display::scaled_density(
+                            display_metrics.expect("virtual metrics"),
+                            width,
+                            height
+                        )
+                    ));
                 }
                 command.push_str(" flex_display=true vd_system_decorations=false");
             }
@@ -721,7 +863,7 @@ impl Runtime {
             if package.is_none()
                 && let Some((width, height)) = display_size
             {
-                command = display::supervise(&command, &id, width, height)?;
+                command = display::supervise(&command, &capture_id, width, height)?;
             }
             let mut process = client.exec(&command, options(&cancellation)).await?;
             let mut pid_line = Vec::new();
@@ -846,7 +988,17 @@ impl Runtime {
                 )
                 .await;
             });
-            if let Some(package_name) = &package {
+            if package.is_some() {
+                let target_display = display::new_virtual_id(&client, &previous_displays).await?;
+                state.write().await["displayId"] = json!(target_display);
+                if let Some(task) = replacement.as_ref().and_then(|value| value.task) {
+                    display::move_task(&client, task, target_display).await?;
+                    state.write().await["taskId"] = json!(task);
+                }
+            }
+            if let Some(package_name) = &package
+                && replacement.is_none()
+            {
                 // Persist the operation identity before a possibly partial write.
                 // START_APP has no application-completion acknowledgement. A
                 // timeout, cancellation or lost write receipt cannot justify replay.
@@ -872,6 +1024,7 @@ impl Runtime {
                         device_id: device_id.clone(),
                         package: package.clone(),
                         cancellation: cancellation.clone(),
+                        lifetime: lifetime.clone(),
                         control: control_tx.clone(),
                         state: state.clone(),
                         process_closed: process_closed.clone(),
@@ -904,6 +1057,16 @@ impl Runtime {
             };
             let (((preface, width, height), encoded_ms), (process, verified_ms)) =
                 tokio::try_join!(encoded, verified)?;
+            if replacement.is_none()
+                && let Some(package) = &package
+            {
+                let display_id = state.read().await["displayId"]
+                    .as_u64()
+                    .expect("virtual display") as u32;
+                if let Ok(task) = display::task(&client, package, display_id).await {
+                    state.write().await["taskId"] = json!(task);
+                }
+            }
             startup_timing.insert("encodedKeyFrameMs".into(), json!(encoded_ms));
             startup_timing.insert("processVerifiedMs".into(), json!(verified_ms));
             let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
@@ -1017,6 +1180,19 @@ impl Runtime {
         };
         result["videoToken"] = json!(return_token);
         let mut sessions = self.activities.sessions.lock().await;
+        if let Some(replacement) = &replacement {
+            let current = sessions
+                .get(&id)
+                .ok_or_else(|| CoreError::new("cancelled", "本窗口已明确关闭。"))?;
+            if lifetime.is_cancelled() || !Arc::ptr_eq(&current.state, &replacement.previous) {
+                return Err(CoreError::new(
+                    "cancelled",
+                    "本窗口已关闭或被其他请求更改。",
+                ));
+            }
+            current.state.write().await["replaced"] = json!(true);
+            state.write().await["internalReconfigure"] = json!(false);
+        }
         if app_launch_submitted {
             // Updating avoids dropping the provisional owner and cancelling
             // the live control service shared with the completed session.
@@ -1031,6 +1207,7 @@ impl Runtime {
                     device_id,
                     package,
                     cancellation,
+                    lifetime,
                     control,
                     state,
                     process_closed,
@@ -1039,6 +1216,7 @@ impl Runtime {
             );
         }
         guard.0 = None;
+        result["internalReconfigure"] = json!(false);
         Ok(result)
     }
 
@@ -1069,16 +1247,17 @@ impl Runtime {
             if keep_unknown {
                 continue;
             }
-            self.stop_session(&id).await;
+            let _ = self.stop_session(&id).await;
         }
     }
 
-    async fn stop_session(&self, id: &str) {
+    async fn stop_session(&self, id: &str) -> Option<Value> {
         let process_closed = {
             let mut sessions = self.activities.sessions.lock().await;
             if let Some(session) = sessions.remove(id) {
                 let device = session.device_id.clone();
                 let closed = session.process_closed.clone();
+                session.lifetime.cancel();
                 drop(session);
                 if !sessions
                     .values()
@@ -1086,19 +1265,26 @@ impl Runtime {
                 {
                     self.stop_device_audio(&device).await;
                 }
-                Some(closed)
+                Some((device, closed))
             } else {
                 None
             }
         };
-        if let Some(closed) = process_closed {
+        if let Some((device, closed)) = process_closed {
+            let cleanup =
+                match keep_active::stop_unowned(&self.activities, &self.events, &device).await {
+                    Ok(receipt) => (receipt["required"] == true).then_some(receipt),
+                    Err(error) => Some(error.details),
+                };
             let _ = tokio::time::timeout(Duration::from_secs(3), async {
                 while !closed.load(Ordering::Acquire) {
                     tokio::time::sleep(Duration::from_millis(10)).await;
                 }
             })
             .await;
+            return cleanup;
         }
+        None
     }
 
     pub(crate) async fn session_command(&self, command: &str, params: &Value) -> CoreResult<Value> {
@@ -1152,6 +1338,9 @@ impl Runtime {
         }
         if command == "session.quality.options" {
             return self.quality_options(params).await;
+        }
+        if command == "session.reconfigure" {
+            return Box::pin(self.reconfigure_session(params)).await;
         }
         if command == "session.quality" {
             return self.change_quality(params).await;
@@ -1216,8 +1405,12 @@ impl Runtime {
                 return Ok(observed.clone());
             }
             self.app_opens.close(&id, Some(&session_device)).await?;
-            self.stop_session(&id).await;
-            return Ok(json!({"sessionId":id,"status":"stopped","applicationStopped":false}));
+            let cleanup = self.stop_session(&id).await;
+            let mut receipt = json!({"sessionId":id,"status":"stopped","applicationStopped":false});
+            if let Some(cleanup) = cleanup {
+                receipt["keepActiveCleanup"] = cleanup;
+            }
+            return Ok(receipt);
         }
         let _process = process.ok_or_else(|| {
             CoreError::new(
@@ -1225,6 +1418,13 @@ impl Runtime {
                 "应用打开结果未知，请先核对并关闭本次记录。",
             )
         })?;
+        if state.read().await["qualityRebuilding"] == true && !quality_safe_command(command, params)
+        {
+            return Err(CoreError::new(
+                "quality_rebuilding",
+                "正在应用画面设置，请等待新画面确认。",
+            ));
+        }
         if command == "session.display" {
             let dimensions = if package.is_some() {
                 display::virtual_dimensions(params)?
@@ -1241,7 +1441,11 @@ impl Runtime {
                 let client = self.client(&session_device).await?;
                 let receipt = client
                     .shell(
-                        &display::resize(&id, width, height)?,
+                        &display::resize(
+                            state.read().await["captureId"].as_str().unwrap_or(&id),
+                            width,
+                            height,
+                        )?,
                         4096,
                         options(&cancellation),
                     )
@@ -1269,12 +1473,40 @@ impl Runtime {
                 .filter(|id| *id >= 0)
                 .ok_or_else(|| invalid("渲染纹理无效。"))?;
             let mut data = state.write().await;
+            if (data["qualityRebuilding"] == true
+                && params["captureGeneration"].as_u64() != data["qualityRebuildTarget"].as_u64())
+                || params["captureGeneration"]
+                    .as_u64()
+                    .zip(data["captureGeneration"].as_u64())
+                    .is_some_and(|(receipt, current)| receipt != current)
+                || params["generation"]
+                    .as_u64()
+                    .zip(data["rendererGeneration"].as_u64())
+                    .is_some_and(|(receipt, current)| receipt < current)
+            {
+                return Err(CoreError::new(
+                    "stale_generation",
+                    "画面归属或渲染版本已变化，忽略旧回执。",
+                ));
+            }
+            if let Some(generation) = params["generation"].as_u64() {
+                data["rendererGeneration"] = json!(generation);
+                data["generation"] = json!(generation);
+            }
             data["textureId"] = json!(texture);
             // A replacement renderer must preserve a local presentation pause.
-            let paused = data["status"] == "paused";
+            let paused = params["paused"]
+                .as_bool()
+                .unwrap_or(data["status"] == "paused");
+            if data["qualityRebuilding"] == true {
+                data["qualityRebuildOutcome"] = json!("applied");
+            }
+            data["qualityRebuilding"] = json!(false);
             data["status"] = json!(if paused { "paused" } else { "streaming" });
             self.activities.admission.set_status(
-                &crate::activities::ActivityRef::Session(&id).to_string(),
+                data["activityId"]
+                    .as_str()
+                    .unwrap_or(&crate::activities::ActivityRef::Session(&id).to_string()),
                 if paused {
                     ResourceStatus::Paused
                 } else {
@@ -1329,7 +1561,9 @@ impl Runtime {
             let mut data = state.write().await;
             data["status"] = json!(if pausing { "paused" } else { "streaming" });
             self.activities.admission.set_status(
-                &crate::activities::ActivityRef::Session(&id).to_string(),
+                data["activityId"]
+                    .as_str()
+                    .unwrap_or(&crate::activities::ActivityRef::Session(&id).to_string()),
                 if pausing {
                     ResourceStatus::Paused
                 } else {
@@ -1350,7 +1584,20 @@ impl Runtime {
         }
         let mut bytes = Vec::new();
         match command {
-            "session.touch" => bytes = touch_message(params, &*state.read().await)?,
+            "session.touch" => {
+                let observed = state.read().await;
+                let mut adjusted = params.clone();
+                if observed["qualityRebuilding"] == true
+                    && matches!(params["action"].as_str(), Some("up" | "cancel"))
+                {
+                    adjusted["screenWidth"] = observed["width"].clone();
+                    adjusted["screenHeight"] = observed["height"].clone();
+                    adjusted["x"] = json!(0);
+                    adjusted["y"] = json!(0);
+                    adjusted["pressure"] = json!(0);
+                }
+                bytes = touch_message(&adjusted, &observed)?;
+            }
             "session.key" => {
                 let key = params["keyCode"]
                     .as_u64()
@@ -1402,6 +1649,30 @@ impl Runtime {
             "session.display" => {
                 let (width, height) = display::virtual_dimensions(params)?
                     .ok_or_else(|| invalid("缺少显示尺寸。"))?;
+                let display_id = state.read().await["displayId"].as_u64().ok_or_else(|| {
+                    CoreError::new("display_identity_unverified", "无法核实独立窗口屏幕。")
+                })?;
+                let client = self.client(&session_device).await?;
+                let density = display::scaled_density(
+                    display::physical_metrics(&client).await?,
+                    width,
+                    height,
+                );
+                let receipt = client
+                    .shell(
+                        &format!("wm density {density} -d {display_id}"),
+                        4096,
+                        options(&cancellation),
+                    )
+                    .await?;
+                if receipt.exit_code != Some(0) {
+                    return Err(CoreError::new(
+                        "display_density_failed",
+                        "系统未确认独立窗口密度。",
+                    ));
+                }
+                state.write().await["displayDensity"] = json!(density);
+                state.write().await["displaySize"] = json!({"width":width,"height":height});
                 bytes.push(21);
                 bytes.extend_from_slice(&width.to_be_bytes());
                 bytes.extend_from_slice(&height.to_be_bytes());
@@ -1747,6 +2018,219 @@ impl Runtime {
         Ok(())
     }
 
+    async fn reconfigure_session(&self, params: &Value) -> CoreResult<Value> {
+        let _serial = self.quality_changes.lock().await;
+        let id = required(params, "sessionId")?.to_owned();
+        let device = required(params, "deviceId")?.to_owned();
+        let (previous, lifetime, package, capture_cancel, closed, old_control) = {
+            let sessions = self.activities.sessions.lock().await;
+            let session = sessions
+                .get(&id)
+                .ok_or_else(|| CoreError::new("session_required", "本窗口已关闭。"))?;
+            if session.device_id != device {
+                return Err(invalid("会话不属于所选设备。"));
+            }
+            if session.lifetime.is_cancelled() {
+                return Err(CoreError::new("cancelled", "本窗口已关闭。"));
+            }
+            (
+                session.state.clone(),
+                session.lifetime.clone(),
+                session.package.clone(),
+                session.cancellation.clone(),
+                session.process_closed.clone(),
+                session.control.clone(),
+            )
+        };
+        let old = previous.read().await.clone();
+        if old["launchOutcome"] == "unknown" {
+            return Err(unknown_app_launch(&old));
+        }
+        let settings = quality_patch(&old["quality"], params)?;
+        let client = self.client(&device).await?;
+        let old_display = old["displayId"].as_u64().map(|id| id as u32);
+        let task = if let Some(package) = &package {
+            let display = old_display.ok_or_else(|| {
+                CoreError::new(
+                    "display_identity_unverified",
+                    "无法核实原独立窗口的屏幕，未重启应用。",
+                )
+            })?;
+            let task = display::task(&client, package, display).await?;
+            if old["taskId"]
+                .as_u64()
+                .is_some_and(|expected| expected != u64::from(task))
+            {
+                return Err(CoreError::new(
+                    "task_identity_unverified",
+                    "原应用任务已变化，未重启应用。",
+                ));
+            }
+            Some(task)
+        } else {
+            None
+        };
+        let mut start = json!({"deviceId":device});
+        if let Some(package) = &package {
+            start["packageName"] = json!(package);
+        }
+        if let (Some(width), Some(height)) = (
+            old["displaySize"]["width"].as_u64(),
+            old["displaySize"]["height"].as_u64(),
+        ) {
+            let (width, height) = if package.is_some() {
+                let limit = settings["maxSize"].as_u64().unwrap_or(1920).min(4096);
+                let longest = width.max(height);
+                (
+                    ((width * limit / longest) / 2 * 2).max(2),
+                    ((height * limit / longest) / 2 * 2).max(2),
+                )
+            } else {
+                (width, height)
+            };
+            start["displayWidth"] = json!(width);
+            start["displayHeight"] = json!(height);
+            start["displayAuto"] = old["displayAuto"].clone();
+        }
+        previous.write().await["qualityRebuilding"] = json!(true);
+        previous.write().await["qualityRebuildTarget"] =
+            json!(old["captureGeneration"].as_u64().unwrap_or(1) + 1);
+        previous.write().await["qualityRebuildOutcome"] = json!("pending");
+        self.emit(
+            "session.updated",
+            Some(&device),
+            previous.read().await.clone(),
+        );
+        // This safe control barrier follows any already-writing old input.
+        // Queued unsafe input is rejected by the actor once the flag is set.
+        if !capture_cancel.is_cancelled()
+            && let Err(error) = request_control(&old_control, ControlRequest::Send, vec![17]).await
+        {
+            previous.write().await["qualityRebuilding"] = json!(false);
+            previous.write().await["qualityRebuildOutcome"] = json!("restored");
+            self.emit(
+                "session.updated",
+                Some(&device),
+                previous.read().await.clone(),
+            );
+            return Err(error);
+        }
+        if package.is_none() && old["displaySize"].is_object() {
+            // The old process owns a physical wm-size lease. Let its supervisor
+            // restore the baseline before the replacement obtains its own lease.
+            // Keep the logical window/lifetime registered throughout the handoff.
+            previous.write().await["replaced"] = json!(true);
+            previous.write().await["qualityRetryable"] = json!(true);
+            capture_cancel.cancel();
+            let released = tokio::time::timeout(Duration::from_secs(5), async {
+                while !closed.load(Ordering::Acquire) {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+                loop {
+                    let check = client
+                        .shell(
+                            "test ! -e /data/local/tmp/interop-display-0",
+                            4096,
+                            OperationOptions::default(),
+                        )
+                        .await;
+                    if check.is_ok_and(|receipt| receipt.exit_code == Some(0)) {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(30)).await;
+                }
+            })
+            .await;
+            if released.is_err() {
+                let error =
+                    CoreError::new("display_lease_busy", "原屏幕尺寸仍在恢复，当前窗口可重试。");
+                let mut observed = previous.write().await;
+                observed["qualityRebuilding"] = json!(false);
+                observed["status"] = json!("failed");
+                observed["qualityRebuildOutcome"] = json!("failed");
+                observed["reason"] = json!(error.message);
+                self.emit("session.updated", Some(&device), observed.clone());
+                return Err(error);
+            }
+        }
+        let operation_lifetime = lifetime.clone();
+        let replacement = Reconfiguration {
+            id,
+            generation: old["generation"].as_u64().unwrap_or(1) + 1,
+            capture_generation: old["captureGeneration"].as_u64().unwrap_or(1) + 1,
+            lifetime,
+            previous: previous.clone(),
+            task,
+        };
+        let mut result =
+            Box::pin(self.start_session_with_settings(&start, &settings, Some(replacement))).await;
+        if result.is_err()
+            && !operation_lifetime.is_cancelled()
+            && let (Some(task), Some(display)) = (task, old_display)
+        {
+            // A failed encoder must return the exact existing task to its live
+            // original display. Never issue START_APP as a recovery shortcut.
+            if let Err(rollback) = display::move_task(&client, task, display).await {
+                result = Err(CoreError::new(
+                    "quality_task_restore_failed",
+                    format!("画面调整失败且原任务位置未能恢复：{}", rollback.message),
+                ));
+            }
+        }
+        if result.is_ok()
+            && let Some(activity_id) = old["activityId"].as_str()
+        {
+            let _ = tokio::time::timeout(Duration::from_secs(5), async {
+                while self
+                    .activities
+                    .admission
+                    .activities()
+                    .iter()
+                    .any(|activity| activity.id == activity_id)
+                {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+            })
+            .await;
+        }
+        if result.is_err() {
+            previous.write().await["qualityRebuilding"] = json!(false);
+        }
+        if result.is_err() && !capture_cancel.is_cancelled() && !operation_lifetime.is_cancelled() {
+            previous.write().await["qualityRebuildOutcome"] = json!("restored");
+            self.emit(
+                "session.updated",
+                Some(&device),
+                previous.read().await.clone(),
+            );
+        }
+        if let Err(error) = &result
+            && !operation_lifetime.is_cancelled()
+            && capture_cancel.is_cancelled()
+        {
+            let mut state = previous.write().await;
+            state["status"] = json!("failed");
+            state["qualityRetryable"] = json!(true);
+            state["qualityRebuildOutcome"] = json!("failed");
+            state["reason"] = json!(error.message);
+            self.emit("session.updated", Some(&device), state.clone());
+        }
+        if let Ok(opened) = &mut result {
+            match Box::pin(self.sync_keep_active(&device, None)).await {
+                Ok(receipt) => {
+                    for (key, value) in receipt.as_object().expect("keep-active receipt") {
+                        opened[key] = value.clone();
+                    }
+                }
+                Err(error) => {
+                    opened["keepActiveApplied"] = json!(false);
+                    opened["keepActiveError"] = json!({"code":error.code,"reason":error.message});
+                }
+            }
+        }
+        result
+    }
+
     async fn change_quality(&self, params: &Value) -> CoreResult<Value> {
         let device = required(params, "deviceId")?.to_owned();
         self.client(&device).await?;
@@ -1776,9 +2260,9 @@ impl Runtime {
                 }
             }
         };
-        // A target keyframe does not prove a local decoder can render it.
-        // Keep every current session/task alive; the user explicitly closes and reopens
-        // after saving. This also avoids implicit migration of app tasks.
+        // This command persists concrete device preferences. The Dart quality
+        // coordinator applies each live capture via session.reconfigure and
+        // verifies its local renderer, reporting individual failures honestly.
         validate_encoder_selection(&next, &self.probe_video_encoders(&device).await?)?;
         self.save_device_quality(&device, &next).await?;
         let active = self
@@ -1979,6 +2463,21 @@ fn adb_read_timing(trace: Option<interop_adb::ReadTrace>) -> Value {
     })
 }
 
+// A replacement decoder needs the live stream before it can verify a frame
+// and restore the logical presentation pause. Admit only the target capture's
+// unverified handoff; ready clears the flag, and run_video's existing startup
+// deadline cancels an unconfirmed renderer. Retired/failed captures never gain
+// this exception merely by retaining the quality-rebuilding flag.
+fn rebuild_needs_video(data: &Value) -> bool {
+    data["qualityRebuilding"] == true
+        && data["qualityRebuildOutcome"] == "pending"
+        && data["replaced"] != true
+        && data["textureId"].is_null()
+        && data["qualityRebuildTarget"]
+            .as_u64()
+            .is_some_and(|target| data["captureGeneration"].as_u64() == Some(target))
+}
+
 async fn run_video(
     listener: TcpListener,
     token: String,
@@ -2051,8 +2550,10 @@ async fn run_video(
                     data["width"] = json!(width);
                     data["height"] = json!(height);
                     data["awaitingSession"] = json!(false);
-                    event(&events, "session.updated", &device, data.clone());
-                    data["status"] != "paused"
+                    if data["replaced"] != true && data["internalReconfigure"] != true {
+                        event(&events, "session.updated", &device, data.clone());
+                    }
+                    data["status"] != "paused" || rebuild_needs_video(&data)
                 };
                 // A slow presentation consumer must not hold the session state
                 // lock needed by control acknowledgements and cancellation.
@@ -2065,7 +2566,9 @@ async fn run_video(
             let last_adb_read = tracing.then(|| video.read_trace()).flatten();
             {
                 let data = state.read().await;
-                if data["status"] == "paused" || data["awaitingSession"] == true {
+                if (data["status"] == "paused" && !rebuild_needs_video(&data))
+                    || data["awaitingSession"] == true
+                {
                     continue;
                 }
             }
@@ -2154,6 +2657,16 @@ async fn run_control(
                 let Some(request) = request else { break; };
                 if request.reply().is_closed() { continue; }
                 let deadline = request.reply().deadline;
+                if state.read().await["qualityRebuilding"] == true {
+                    let safe = match &request {
+                        ControlRequest::Send(bytes, _) => quality_safe_bytes(bytes),
+                        _ => false,
+                    };
+                    if !safe {
+                        let reply = match request { ControlRequest::Send(_,reply)|ControlRequest::ClipboardSet(_,_,reply)|ControlRequest::Launch(_,_,reply) => reply };
+                        let _ = reply.send(Err(CoreError::new("quality_rebuilding", "画面正在重建，已取消旧输入。"))); continue;
+                    }
+                }
                 let (bytes, immediate) = match request {
                     ControlRequest::Launch(bytes, permit, reply) => {
                         if !permit.claim() {
@@ -2241,6 +2754,24 @@ async fn run_control(
         let _ = reply.send(Err(error));
     }
     cancellation.cancel();
+}
+
+fn quality_safe_command(command: &str, params: &Value) -> bool {
+    match command {
+        "session.touch" => matches!(params["action"].as_str(), Some("up" | "cancel")),
+        "session.key" => params["action"] == "up",
+        "session.ready"
+        | "session.frame"
+        | "session.refresh"
+        | "session.pause"
+        | "session.resume"
+        | "session.clock.probe" => true,
+        _ => false,
+    }
+}
+
+fn quality_safe_bytes(bytes: &[u8]) -> bool {
+    matches!(bytes, [17]) || matches!(bytes.get(..2), Some([0, 1] | [2, 1] | [2, 3]))
 }
 
 fn touch_message(params: &Value, state: &Value) -> CoreResult<Vec<u8>> {
@@ -2359,6 +2890,7 @@ mod tests {
                     device_id: "a".into(),
                     package: None,
                     cancellation,
+                    lifetime: CancellationToken::new(),
                     control,
                     state: Arc::new(RwLock::new(json!({"sessionId":id,"status":"streaming"}))),
                     process_closed: Arc::new(AtomicBool::new(true)),
@@ -2439,6 +2971,7 @@ mod tests {
                 device_id: "a-slow".into(),
                 package: None,
                 cancellation: slow_cancel.clone(),
+                lifetime: CancellationToken::new(),
                 control,
                 state: Arc::new(RwLock::new(
                     json!({"sessionId":"slow-session","status":"streaming"}),
@@ -3018,6 +3551,7 @@ mod tests {
         control: mpsc::Sender<ControlRequest>,
         cancellation: CancellationToken,
         running: tokio::task::JoinHandle<()>,
+        state: Arc<RwLock<Value>>,
         startup_failure: Arc<std::sync::Mutex<Option<String>>>,
     }
 
@@ -3056,13 +3590,14 @@ mod tests {
             let stream = opening.await.unwrap();
             let (control, requests) = mpsc::channel(64);
             let startup_failure = Arc::new(std::sync::Mutex::new(None));
+            let state = Arc::new(RwLock::new(json!({"sessionId":"fixture"})));
             let running = tokio::spawn(run_control(
                 stream,
                 requests,
                 cancellation.clone(),
                 crate::events::EventBus::new(8),
                 "fixture-device".into(),
-                Arc::new(RwLock::new(json!({"sessionId":"fixture"}))),
+                state.clone(),
                 startup_failure.clone(),
             ));
             Self {
@@ -3072,6 +3607,7 @@ mod tests {
                 control,
                 cancellation,
                 running,
+                state,
                 startup_failure,
             }
         }
@@ -3307,6 +3843,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn quality_fence_discards_queued_text_but_delivers_release() {
+        use interop_adb::protocol::{self, Frame};
+        let mut fixture = ControlTransportFixture::start().await;
+        let sender = fixture.control.clone();
+        let writing =
+            tokio::spawn(
+                async move { request_control(&sender, ControlRequest::Send, vec![17]).await },
+            );
+        assert_eq!(fixture.read().await.command, protocol::WRTE);
+        fixture.state.write().await["qualityRebuilding"] = json!(true);
+        let (denied, denied_receipt) = oneshot::channel();
+        fixture
+            .control
+            .send(ControlRequest::Send(
+                vec![1, b'x'],
+                ControlReply {
+                    deadline: Instant::now() + Duration::from_secs(6),
+                    sender: denied,
+                },
+            ))
+            .await
+            .unwrap();
+        let (release, release_receipt) = oneshot::channel();
+        fixture
+            .control
+            .send(ControlRequest::Send(
+                vec![0, 1],
+                ControlReply {
+                    deadline: Instant::now() + Duration::from_secs(6),
+                    sender: release,
+                },
+            ))
+            .await
+            .unwrap();
+        Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        writing.await.unwrap().unwrap();
+        assert_eq!(
+            denied_receipt.await.unwrap().unwrap_err().code,
+            "quality_rebuilding"
+        );
+        let sent = fixture.read().await;
+        assert_eq!(sent.command, protocol::WRTE);
+        assert_eq!(sent.payload, vec![0, 1]);
+        Frame::new(protocol::OKAY, 77, fixture.local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        release_receipt.await.unwrap().unwrap();
+        fixture.cancellation.cancel();
+        fixture.running.await.unwrap();
+        fixture.client.close();
+    }
+
+    #[tokio::test]
     async fn control_missing_protocol_reply_keeps_session_and_sequence_identity() {
         use interop_adb::protocol::{self, Frame};
         let mut fixture = ControlTransportFixture::start().await;
@@ -3526,6 +4119,93 @@ mod tests {
             );
             self.client.close();
         }
+    }
+
+    #[tokio::test]
+    async fn paused_quality_rebuild_forwards_real_video_until_renderer_confirmation() {
+        let mut fixture = VideoTransportFixture::start().await;
+        {
+            let mut state = fixture.state.write().await;
+            state["status"] = json!("paused");
+            state["textureId"] = Value::Null;
+            state["qualityRebuilding"] = json!(true);
+            state["qualityRebuildOutcome"] = json!("pending");
+            state["captureGeneration"] = json!(2);
+            state["qualityRebuildTarget"] = json!(2);
+        }
+        let metadata = |width: u32| {
+            [
+                0x8000_0000u32.to_be_bytes(),
+                width.to_be_bytes(),
+                1280u32.to_be_bytes(),
+            ]
+            .concat()
+        };
+        let packet = |pts: u64| {
+            [
+                pts.to_be_bytes().as_slice(),
+                1u32.to_be_bytes().as_slice(),
+                &[0x65],
+            ]
+            .concat()
+        };
+        fixture.deliver(metadata(576)).await;
+        fixture.deliver(packet(10)).await;
+        let mut received = [0; 25];
+        let receipt = tokio::time::timeout(
+            Duration::from_millis(250),
+            fixture.output.read_exact(&mut received),
+        )
+        .await;
+        if receipt.is_err() {
+            fixture.stop().await;
+        }
+        receipt.expect("paused replacement must deliver its session header and real post-preface frame for decoder verification").unwrap();
+        assert_eq!(received.as_slice(), [metadata(576), packet(10)].concat());
+        // Ready ends the handoff while preserving pause. Failure, retirement
+        // and a target belonging to another capture cannot reopen forwarding.
+        for fence in ["ready", "failed", "retired", "old-capture", "verified"] {
+            {
+                let mut state = fixture.state.write().await;
+                state["qualityRebuilding"] = json!(fence != "ready");
+                state["qualityRebuildOutcome"] = json!(if fence == "failed" {
+                    "failed"
+                } else {
+                    "pending"
+                });
+                state["replaced"] = json!(fence == "retired");
+                state["captureGeneration"] = json!(if fence == "old-capture" { 1 } else { 2 });
+                state["textureId"] = if fence == "verified" {
+                    json!(2)
+                } else {
+                    Value::Null
+                };
+                state["width"] = json!(576);
+            }
+            fixture.deliver(metadata(640)).await;
+            fixture.deliver(packet(20)).await;
+            // Consuming a later metadata unit proves the preceding frame has
+            // passed through run_video; WRTE acknowledgement alone cannot.
+            fixture.deliver(metadata(642)).await;
+            tokio::time::timeout(Duration::from_secs(1), async {
+                while fixture.state.read().await["width"] != 642 {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            let mut unexpected = [0];
+            assert!(
+                tokio::time::timeout(
+                    Duration::from_millis(50),
+                    fixture.output.read_exact(&mut unexpected)
+                )
+                .await
+                .is_err(),
+                "paused {fence} output kept receiving video"
+            );
+        }
+        fixture.stop().await;
     }
 
     #[tokio::test]
@@ -3751,6 +4431,7 @@ mod tests {
                 device_id: "device".into(),
                 package: None,
                 cancellation,
+                lifetime: CancellationToken::new(),
                 control,
                 state: state.clone(),
                 process_closed: Arc::new(AtomicBool::new(true)),
@@ -3934,6 +4615,34 @@ mod tests {
         })
         .await
         .unwrap();
+        // At the logical-window limit, one bounded replacement capture is
+        // admitted without opening another logical session or evicting a peer.
+        let rebuilt = runtime
+            .reconfigure_session(&json!({"deviceId":device,"sessionId":old_id,"maxSize":1280}))
+            .await
+            .unwrap();
+        assert_eq!(rebuilt["sessionId"], old_id);
+        assert_eq!(rebuilt["generation"], 2);
+        assert_eq!(
+            runtime.activities.admission.activities().len(),
+            crate::resource::APP_SESSION_LIMIT
+        );
+        assert_eq!(
+            runtime
+                .start_session(&media_params(json!({"deviceId":device})))
+                .await
+                .unwrap_err()
+                .code,
+            "resource_busy"
+        );
+        let stale = runtime
+            .session_command(
+                "session.ready",
+                &json!({"deviceId":device,"sessionId":old_id,"textureId":999,"generation":1,"captureGeneration":1}),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(stale.code, "stale_generation");
         drop(reservations);
         let invalid = runtime
             .start_session(&media_params(
@@ -3944,14 +4653,14 @@ mod tests {
         assert_eq!(invalid.code, "encoder_unavailable");
         let reserved = runtime.activities.admission.activities();
         assert_eq!(reserved.len(), 1);
-        assert_eq!(reserved[0].id, format!("session:{old_id}"));
+        assert_eq!(reserved[0].id, rebuilt["activityId"].as_str().unwrap());
         assert!(
             !runtime.activities.sessions.lock().await[old_id]
                 .cancellation
                 .is_cancelled()
         );
         drop(socket);
-        runtime.stop_session(old_id).await;
+        let _ = runtime.stop_session(old_id).await;
         tokio::time::timeout(Duration::from_secs(5), async {
             while !runtime.activities.admission.activities().is_empty() {
                 tokio::time::sleep(Duration::from_millis(10)).await;

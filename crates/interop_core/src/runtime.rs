@@ -38,6 +38,7 @@ pub struct Runtime {
     pub(crate) documents: crate::documents::CopyManager,
     pub(crate) deliveries: crate::delivery::DeliveryJournal,
     pub(crate) app_opens: crate::app_open::AppOpens,
+    pub(crate) quality_changes: Mutex<()>,
     pub(crate) media: crate::media::http::MediaStreams,
     pub(crate) media_cache: crate::media_cache::MediaCache,
     pub(crate) setup_operations: crate::connection_setup::SetupOperations,
@@ -170,6 +171,7 @@ impl Runtime {
             documents: crate::documents::CopyManager::default(),
             deliveries,
             app_opens,
+            quality_changes: Mutex::new(()),
             media: crate::media::http::MediaStreams::default(),
             media_cache,
             setup_operations: Default::default(),
@@ -338,6 +340,11 @@ impl Runtime {
                 ))
                 .await
             }
+            "device.network.get" => self.device_network(&params).await,
+            "device.screen.state" => self.device_screen_state(&params).await,
+            "device.data.get" => self.device_data(&params).await,
+            "apps.foreground" => self.device_foreground(&params).await,
+            "devices.configure" => self.configure_device(&params).await,
             "device.info" => Ok(serde_json::to_value(
                 self.device(required(&params, "deviceId")?).await?,
             )?),
@@ -380,6 +387,7 @@ impl Runtime {
             | "session.screen"
             | "session.display"
             | "session.quality"
+            | "session.reconfigure"
             | "session.screenshot"
             | "session.ready"
             | "session.clock.probe"

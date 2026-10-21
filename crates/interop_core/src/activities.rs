@@ -14,6 +14,7 @@ pub(crate) struct ActivityOwner {
     pub(crate) audio_sources: Mutex<HashMap<String, crate::audio::AudioSource>>,
     pub(crate) transfers: Mutex<HashMap<String, crate::files::Transfer>>,
     pub(crate) admission: crate::resource::ResourceAdmission,
+    pub(crate) keep_active: crate::scrcpy::KeepActiveOwner,
 }
 
 impl ActivityOwner {
