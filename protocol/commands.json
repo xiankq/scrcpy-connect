@@ -52,7 +52,8 @@
         "leaseMs": "integer"
       },
       "optional": {
-        "deviceId": "string"
+        "deviceId": "string",
+        "identity": "object"
       }
     },
     {
@@ -63,7 +64,8 @@
         "leaseMs": "integer"
       },
       "optional": {
-        "deviceId": "string"
+        "deviceId": "string",
+        "identity": "object"
       }
     },
     {
@@ -106,6 +108,16 @@
         "fd": "integer",
         "usbDeviceId": "string",
         "deviceId": "string"
+      }
+    },
+    {
+      "name": "apps.foreground",
+      "owner": "core",
+      "required": {
+        "deviceId": "string"
+      },
+      "optional": {
+        "connectionId": "string"
       }
     },
     {
@@ -256,6 +268,16 @@
       }
     },
     {
+      "name": "device.data.get",
+      "owner": "core",
+      "required": {
+        "deviceId": "string"
+      },
+      "optional": {
+        "connectionId": "string"
+      }
+    },
+    {
       "name": "device.diagnose",
       "owner": "bridge",
       "required": {
@@ -270,12 +292,48 @@
       }
     },
     {
+      "name": "device.network.get",
+      "owner": "core",
+      "required": {
+        "deviceId": "string"
+      },
+      "optional": {
+        "connectionId": "string"
+      }
+    },
+    {
+      "name": "device.screen.state",
+      "owner": "core",
+      "required": {
+        "deviceId": "string"
+      },
+      "optional": {
+        "connectionId": "string"
+      }
+    },
+    {
       "name": "devices.add",
-      "owner": "core"
+      "owner": "core",
+      "optional": {
+        "identity": "object"
+      }
     },
     {
       "name": "devices.cancel",
       "owner": "core"
+    },
+    {
+      "name": "devices.configure",
+      "owner": "core",
+      "required": {
+        "deviceId": "string",
+        "address": "string",
+        "port": "integer",
+        "transport": "string"
+      },
+      "optional": {
+        "attemptId": "string"
+      }
     },
     {
       "name": "devices.connect",
@@ -318,13 +376,17 @@
     },
     {
       "name": "devices.pair",
-      "owner": "bridge"
+      "owner": "bridge",
+      "optional": {
+        "identity": "object"
+      }
     },
     {
       "name": "devices.pair.qr",
       "owner": "bridge",
       "optional": {
-        "deviceId": "string"
+        "deviceId": "string",
+        "identity": "object"
       }
     },
     {
@@ -344,7 +406,10 @@
     },
     {
       "name": "devices.usb",
-      "owner": "bridge"
+      "owner": "bridge",
+      "optional": {
+        "identity": "object"
+      }
     },
     {
       "name": "devices.wake",
@@ -364,7 +429,8 @@
         "address": "string"
       },
       "optional": {
-        "port": "integer"
+        "port": "integer",
+        "attemptId": "string"
       }
     },
     {
@@ -821,7 +887,25 @@
       "owner": "core",
       "optional": {
         "sessionId": "string",
-        "deviceId": "string"
+        "deviceId": "string",
+        "captureGeneration": "integer"
+      }
+    },
+    {
+      "name": "session.reconfigure",
+      "owner": "core",
+      "required": {
+        "deviceId": "string",
+        "sessionId": "string"
+      },
+      "requiresVerifiedState": true,
+      "optional": {
+        "maxSize": "integer",
+        "maxFps": "integer",
+        "videoBitRate": "integer",
+        "videoCodec": "string",
+        "videoEncoder": "string",
+        "qualityPreset": "string"
       }
     },
     {

@@ -14,6 +14,7 @@ pub(crate) enum Command {
     AdbTcpipConnect,
     AdbUsbAttach,
     AdbUsbOpen,
+    AppsForeground,
     AppsIcon,
     AppsLaunch,
     AppsList,
@@ -33,9 +34,13 @@ pub(crate) enum Command {
     DeliveryBegin,
     DeliveryFinish,
     DeliveryGet,
+    DeviceDataGet,
     DeviceInfo,
+    DeviceNetworkGet,
+    DeviceScreenState,
     DevicesAdd,
     DevicesCancel,
+    DevicesConfigure,
     DevicesConnect,
     DevicesDisconnect,
     DevicesDiscover,
@@ -101,6 +106,7 @@ pub(crate) enum Command {
     SessionQuality,
     SessionQualityOptions,
     SessionReady,
+    SessionReconfigure,
     SessionRefresh,
     SessionResume,
     SessionRotate,
@@ -148,6 +154,7 @@ impl Command {
             "adb.tcpip.connect" => Self::AdbTcpipConnect,
             "adb.usb.attach" => Self::AdbUsbAttach,
             "adb.usb.open" => Self::AdbUsbOpen,
+            "apps.foreground" => Self::AppsForeground,
             "apps.icon" => Self::AppsIcon,
             "apps.launch" => Self::AppsLaunch,
             "apps.list" => Self::AppsList,
@@ -167,9 +174,13 @@ impl Command {
             "delivery.begin" => Self::DeliveryBegin,
             "delivery.finish" => Self::DeliveryFinish,
             "delivery.get" => Self::DeliveryGet,
+            "device.data.get" => Self::DeviceDataGet,
             "device.info" => Self::DeviceInfo,
+            "device.network.get" => Self::DeviceNetworkGet,
+            "device.screen.state" => Self::DeviceScreenState,
             "devices.add" => Self::DevicesAdd,
             "devices.cancel" => Self::DevicesCancel,
+            "devices.configure" => Self::DevicesConfigure,
             "devices.connect" => Self::DevicesConnect,
             "devices.disconnect" => Self::DevicesDisconnect,
             "devices.discover" => Self::DevicesDiscover,
@@ -235,6 +246,7 @@ impl Command {
             "session.quality" => Self::SessionQuality,
             "session.quality.options" => Self::SessionQualityOptions,
             "session.ready" => Self::SessionReady,
+            "session.reconfigure" => Self::SessionReconfigure,
             "session.refresh" => Self::SessionRefresh,
             "session.resume" => Self::SessionResume,
             "session.rotate" => Self::SessionRotate,
@@ -283,6 +295,7 @@ impl Command {
             Self::AdbTcpipConnect => "adb.tcpip.connect",
             Self::AdbUsbAttach => "adb.usb.attach",
             Self::AdbUsbOpen => "adb.usb.open",
+            Self::AppsForeground => "apps.foreground",
             Self::AppsIcon => "apps.icon",
             Self::AppsLaunch => "apps.launch",
             Self::AppsList => "apps.list",
@@ -302,9 +315,13 @@ impl Command {
             Self::DeliveryBegin => "delivery.begin",
             Self::DeliveryFinish => "delivery.finish",
             Self::DeliveryGet => "delivery.get",
+            Self::DeviceDataGet => "device.data.get",
             Self::DeviceInfo => "device.info",
+            Self::DeviceNetworkGet => "device.network.get",
+            Self::DeviceScreenState => "device.screen.state",
             Self::DevicesAdd => "devices.add",
             Self::DevicesCancel => "devices.cancel",
+            Self::DevicesConfigure => "devices.configure",
             Self::DevicesConnect => "devices.connect",
             Self::DevicesDisconnect => "devices.disconnect",
             Self::DevicesDiscover => "devices.discover",
@@ -370,6 +387,7 @@ impl Command {
             Self::SessionQuality => "session.quality",
             Self::SessionQualityOptions => "session.quality.options",
             Self::SessionReady => "session.ready",
+            Self::SessionReconfigure => "session.reconfigure",
             Self::SessionRefresh => "session.refresh",
             Self::SessionResume => "session.resume",
             Self::SessionRotate => "session.rotate",
@@ -510,6 +528,10 @@ impl Command {
                     kind: FieldType::Integer,
                 },
             ],
+            Self::AppsForeground => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
             Self::AppsIcon => &[
                 Field {
                     name: "deviceId",
@@ -552,10 +574,40 @@ impl Command {
                 name: "deviceId",
                 kind: FieldType::String,
             }],
+            Self::DeviceDataGet => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
             Self::DeviceInfo => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
             }],
+            Self::DeviceNetworkGet => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
+            Self::DeviceScreenState => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
+            Self::DevicesConfigure => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "address",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "port",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "transport",
+                    kind: FieldType::String,
+                },
+            ],
             Self::DevicesConnect => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
@@ -820,6 +872,16 @@ impl Command {
                     kind: FieldType::Integer,
                 },
             ],
+            Self::SessionReconfigure => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "sessionId",
+                    kind: FieldType::String,
+                },
+            ],
             Self::SessionStart => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
@@ -893,14 +955,26 @@ impl Command {
                 name: "connectionId",
                 kind: FieldType::String,
             }],
-            Self::AdbPair => &[Field {
-                name: "deviceId",
-                kind: FieldType::String,
-            }],
-            Self::AdbPairQr => &[Field {
-                name: "deviceId",
-                kind: FieldType::String,
-            }],
+            Self::AdbPair => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "identity",
+                    kind: FieldType::Object,
+                },
+            ],
+            Self::AdbPairQr => &[
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "identity",
+                    kind: FieldType::Object,
+                },
+            ],
             Self::AdbUsbAttach => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
@@ -919,6 +993,10 @@ impl Command {
                     kind: FieldType::String,
                 },
             ],
+            Self::AppsForeground => &[Field {
+                name: "connectionId",
+                kind: FieldType::String,
+            }],
             Self::AppsList => &[Field {
                 name: "filter",
                 kind: FieldType::String,
@@ -933,6 +1011,26 @@ impl Command {
                     kind: FieldType::Boolean,
                 },
             ],
+            Self::DeviceDataGet => &[Field {
+                name: "connectionId",
+                kind: FieldType::String,
+            }],
+            Self::DeviceNetworkGet => &[Field {
+                name: "connectionId",
+                kind: FieldType::String,
+            }],
+            Self::DeviceScreenState => &[Field {
+                name: "connectionId",
+                kind: FieldType::String,
+            }],
+            Self::DevicesAdd => &[Field {
+                name: "identity",
+                kind: FieldType::Object,
+            }],
+            Self::DevicesConfigure => &[Field {
+                name: "attemptId",
+                kind: FieldType::String,
+            }],
             Self::DevicesConnect => &[
                 Field {
                     name: "automatic",
@@ -1064,6 +1162,36 @@ impl Command {
                 },
                 Field {
                     name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "captureGeneration",
+                    kind: FieldType::Integer,
+                },
+            ],
+            Self::SessionReconfigure => &[
+                Field {
+                    name: "maxSize",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "maxFps",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "videoBitRate",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "videoCodec",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "videoEncoder",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "qualityPreset",
                     kind: FieldType::String,
                 },
             ],

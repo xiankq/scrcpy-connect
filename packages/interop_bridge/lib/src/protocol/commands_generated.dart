@@ -38,7 +38,10 @@ enum InteropCommand {
       'attemptId': ProtocolFieldType.string,
       'leaseMs': ProtocolFieldType.integer,
     },
-    optional: {'deviceId': ProtocolFieldType.string},
+    optional: {
+      'deviceId': ProtocolFieldType.string,
+      'identity': ProtocolFieldType.object,
+    },
   ),
   adbPairQr(
     "adb.pair.qr",
@@ -46,7 +49,10 @@ enum InteropCommand {
       'attemptId': ProtocolFieldType.string,
       'leaseMs': ProtocolFieldType.integer,
     },
-    optional: {'deviceId': ProtocolFieldType.string},
+    optional: {
+      'deviceId': ProtocolFieldType.string,
+      'identity': ProtocolFieldType.object,
+    },
   ),
   adbTcpipBegin(
     "adb.tcpip.begin",
@@ -81,6 +87,11 @@ enum InteropCommand {
       'usbDeviceId': ProtocolFieldType.string,
       'deviceId': ProtocolFieldType.string,
     },
+  ),
+  appsForeground(
+    "apps.foreground",
+    required: {'deviceId': ProtocolFieldType.string},
+    optional: {'connectionId': ProtocolFieldType.string},
   ),
   appsIcon(
     "apps.icon",
@@ -153,14 +164,39 @@ enum InteropCommand {
     core: false,
     required: {'deviceId': ProtocolFieldType.string},
   ),
+  deviceDataGet(
+    "device.data.get",
+    required: {'deviceId': ProtocolFieldType.string},
+    optional: {'connectionId': ProtocolFieldType.string},
+  ),
   deviceDiagnose(
     "device.diagnose",
     core: false,
     required: {'deviceId': ProtocolFieldType.string},
   ),
   deviceInfo("device.info", required: {'deviceId': ProtocolFieldType.string}),
-  devicesAdd("devices.add"),
+  deviceNetworkGet(
+    "device.network.get",
+    required: {'deviceId': ProtocolFieldType.string},
+    optional: {'connectionId': ProtocolFieldType.string},
+  ),
+  deviceScreenState(
+    "device.screen.state",
+    required: {'deviceId': ProtocolFieldType.string},
+    optional: {'connectionId': ProtocolFieldType.string},
+  ),
+  devicesAdd("devices.add", optional: {'identity': ProtocolFieldType.object}),
   devicesCancel("devices.cancel"),
+  devicesConfigure(
+    "devices.configure",
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'address': ProtocolFieldType.string,
+      'port': ProtocolFieldType.integer,
+      'transport': ProtocolFieldType.string,
+    },
+    optional: {'attemptId': ProtocolFieldType.string},
+  ),
   devicesConnect(
     "devices.connect",
     required: {'deviceId': ProtocolFieldType.string},
@@ -182,11 +218,18 @@ enum InteropCommand {
     required: {'deviceId': ProtocolFieldType.string},
   ),
   devicesList("devices.list", result: {'devices': ProtocolFieldType.array}),
-  devicesPair("devices.pair", core: false),
+  devicesPair(
+    "devices.pair",
+    core: false,
+    optional: {'identity': ProtocolFieldType.object},
+  ),
   devicesPairQr(
     "devices.pair.qr",
     core: false,
-    optional: {'deviceId': ProtocolFieldType.string},
+    optional: {
+      'deviceId': ProtocolFieldType.string,
+      'identity': ProtocolFieldType.object,
+    },
   ),
   devicesReconnectOwner(
     "devices.reconnect.owner",
@@ -199,7 +242,11 @@ enum InteropCommand {
     "devices.rename",
     required: {'deviceId': ProtocolFieldType.string},
   ),
-  devicesUsb("devices.usb", core: false),
+  devicesUsb(
+    "devices.usb",
+    core: false,
+    optional: {'identity': ProtocolFieldType.object},
+  ),
   devicesWake(
     "devices.wake",
     required: {'deviceId': ProtocolFieldType.string},
@@ -212,7 +259,10 @@ enum InteropCommand {
       'deviceId': ProtocolFieldType.string,
       'address': ProtocolFieldType.string,
     },
-    optional: {'port': ProtocolFieldType.integer},
+    optional: {
+      'port': ProtocolFieldType.integer,
+      'attemptId': ProtocolFieldType.string,
+    },
   ),
   documentCancel("document.cancel"),
   documentCommit(
@@ -501,6 +551,23 @@ enum InteropCommand {
     optional: {
       'sessionId': ProtocolFieldType.string,
       'deviceId': ProtocolFieldType.string,
+      'captureGeneration': ProtocolFieldType.integer,
+    },
+  ),
+  sessionReconfigure(
+    "session.reconfigure",
+    requiresVerifiedState: true,
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'sessionId': ProtocolFieldType.string,
+    },
+    optional: {
+      'maxSize': ProtocolFieldType.integer,
+      'maxFps': ProtocolFieldType.integer,
+      'videoBitRate': ProtocolFieldType.integer,
+      'videoCodec': ProtocolFieldType.string,
+      'videoEncoder': ProtocolFieldType.string,
+      'qualityPreset': ProtocolFieldType.string,
     },
   ),
   sessionRefresh(
