@@ -34,34 +34,46 @@ class SettingsPage extends HookConsumerWidget {
       ),
       children: [
         if (appSettingsError != null) StateNote('偏好尚未读取：$appSettingsError'),
-        ActionRow(
-          icon: LucideIcons.sunMoon,
-          title: '外观',
-          onTap: () => AppearanceRoute().push<void>(context),
+        SettingsGroup(
+          children: [
+            ActionRow(
+              icon: LucideIcons.sunMoon,
+              title: '外观',
+              onTap: () => AppearanceRoute().push<void>(context),
+            ),
+          ],
         ),
         const SectionTitle('连接'),
-        ActionRow(
-          icon: LucideIcons.radio,
-          title: '后台与连接',
-          onTap: () => BackgroundRoute().push<void>(context),
-        ),
-        ActionRow(
-          icon: LucideIcons.keyRound,
-          title: 'ADB 私钥',
-          onTap: () => const AdbIdentityRoute().push<void>(context),
+        SettingsGroup(
+          children: [
+            ActionRow(
+              icon: LucideIcons.radio,
+              title: '后台与连接',
+              onTap: () => BackgroundRoute().push<void>(context),
+            ),
+            ActionRow(
+              icon: LucideIcons.keyRound,
+              title: 'ADB 私钥',
+              onTap: () => const AdbIdentityRoute().push<void>(context),
+            ),
+          ],
         ),
         const SectionTitle('本机数据'),
-        ActionRow(
-          icon: LucideIcons.hardDrive,
-          title: '媒体暂存',
+        SettingsGroup(
+          children: [
+            ActionRow(
+              icon: LucideIcons.hardDrive,
+              title: '媒体暂存',
 
-          onTap: () => const MediaCacheRoute().push<void>(context),
-        ),
-        ActionRow(
-          icon: LucideIcons.database,
-          title: '设备记录与恢复',
+              onTap: () => const MediaCacheRoute().push<void>(context),
+            ),
+            ActionRow(
+              icon: LucideIcons.database,
+              title: '设备记录与恢复',
 
-          onTap: () => DataPreferencesRoute().push<void>(context),
+              onTap: () => DataPreferencesRoute().push<void>(context),
+            ),
+          ],
         ),
         const SizedBox(height: DesignTokens.spacingLg),
         TextButton(

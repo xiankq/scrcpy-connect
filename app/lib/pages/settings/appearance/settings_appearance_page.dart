@@ -30,21 +30,40 @@ class AppearancePage extends HookConsumerWidget {
       child: GroupedListView(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
-          for (final option in const [
-            ('light', '浅色', LucideIcons.sun),
-            ('dark', '深色', LucideIcons.moon),
-            ('system', '跟随系统', LucideIcons.monitor),
-          ])
-            ChoiceRow<String>(
-              leading: ListIconBadge(
-                icon: option.$3,
-                backgroundColor: DesignTokens.colorListIconBlue,
-              ),
-              title: Text(option.$2),
-              value: option.$1,
-              groupValue: value(appSettings, 'appearance', 'light'),
-              onChanged: (v) => save('appearance', v),
-            ),
+          SettingsGroup(
+            children: [
+              for (final option in const [
+                (
+                  'light',
+                  '浅色',
+                  LucideIcons.sun,
+                  DesignTokens.colorListIconAmber,
+                ),
+                (
+                  'dark',
+                  '深色',
+                  LucideIcons.moon,
+                  DesignTokens.colorListIconPurple,
+                ),
+                (
+                  'system',
+                  '跟随系统',
+                  LucideIcons.monitor,
+                  DesignTokens.colorListIconSlate,
+                ),
+              ])
+                ChoiceRow<String>(
+                  leading: ListIconBadge(
+                    icon: option.$3,
+                    backgroundColor: option.$4,
+                  ),
+                  title: Text(option.$2),
+                  value: option.$1,
+                  groupValue: value(appSettings, 'appearance', 'light'),
+                  onChanged: (v) => save('appearance', v),
+                ),
+            ],
+          ),
         ],
       ),
     );

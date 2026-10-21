@@ -75,34 +75,38 @@ class MediaCachePage extends HookWidget {
                 ),
               ),
               const SectionTitle('空间去向'),
-              ListTile(
-                leading: const ListIconBadge(
-                  icon: LucideIcons.shieldCheck,
-                  backgroundColor: DesignTokens.colorListIconMint,
-                ),
-                title: const Text('受保护'),
+              SettingsGroup(
+                children: [
+                  ListTile(
+                    leading: const ListIconBadge(
+                      icon: LucideIcons.shieldCheck,
+                      backgroundColor: DesignTokens.colorListIconMint,
+                    ),
+                    title: const Text('受保护'),
 
-                trailing: Text(_size(protected)),
-              ),
-              ListTile(
-                leading: const ListIconBadge(
-                  icon: LucideIcons.brushCleaning,
-                  backgroundColor: DesignTokens.colorListIconBlue,
-                ),
-                title: const Text('可回收'),
-
-                trailing: Text(_size(reclaimable)),
-              ),
-              if (reserved > 0)
-                ListTile(
-                  leading: const ListIconBadge(
-                    icon: LucideIcons.download,
-                    backgroundColor: DesignTokens.colorListIconAmber,
+                    trailing: Text(_size(protected)),
                   ),
-                  title: const Text('正在准备'),
+                  ListTile(
+                    leading: const ListIconBadge(
+                      icon: LucideIcons.brushCleaning,
+                      backgroundColor: DesignTokens.colorListIconBlue,
+                    ),
+                    title: const Text('可回收'),
 
-                  trailing: Text(_size(reserved)),
-                ),
+                    trailing: Text(_size(reclaimable)),
+                  ),
+                  if (reserved > 0)
+                    ListTile(
+                      leading: const ListIconBadge(
+                        icon: LucideIcons.download,
+                        backgroundColor: DesignTokens.colorListIconAmber,
+                      ),
+                      title: const Text('正在准备'),
+
+                      trailing: Text(_size(reserved)),
+                    ),
+                ],
+              ),
               const SizedBox(height: DesignTokens.spacingLg),
               FilledButton.icon(
                 onPressed: busy.value || reclaimable == 0
