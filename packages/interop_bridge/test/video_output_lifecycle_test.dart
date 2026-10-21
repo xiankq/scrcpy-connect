@@ -160,6 +160,38 @@ Future<void> _flush() async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('expected old relay end during quality rebuild keeps window, explicit close wins', () async {
+    final h = _Harness();
+    addTearDown(h.dispose);
+    await h.start('A');
+    h.lifecycle.beginReconfigure('A');
+    h.players.single.fail();
+    h.status = {'status': 'closed'};
+    await h.lifecycle.poll('A', current: () => true);
+    expect(h.stopped, isEmpty);
+    expect(h.receipts.keys, ['A']);
+    await h.close('A');
+    h.lifecycle.endReconfigure('A');
+    expect(h.receipts, isEmpty);
+    expect(h.players.single.releases, 1);
+  });
+  test('failed renderer replacement retains window for retry', () async {
+    final h = _Harness();
+    addTearDown(h.dispose);
+    await h.start('A');
+    h.lifecycle.beginReconfigure('A');
+    h.lifecycle.retainFailedOutput('A');
+    h.lifecycle.endReconfigure('A');
+    h.players.single.fail();
+    h.status = {'status': 'closed'};
+    await h.lifecycle.poll('A', current: () => true);
+    expect(h.stopped, isEmpty);
+    expect(h.receipts.keys, ['A']);
+    h.lifecycle.beginReconfigure('A');
+    await h.outputs.reattach('A', endpoint: _endpoint('relay-2', 2));
+    h.lifecycle.endReconfigure('A');
+    expect(h.receipts['A']?['generation'], 2);
+  });
 
   test(
     'opened player failure stops the committed session even while HTTP streams',

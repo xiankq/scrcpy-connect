@@ -47,10 +47,21 @@ class ConnectionSetupCoordinator {
   }.contains(command);
 
   void beforeRequest(String command, SetupJson params) {
-    if (command.startsWith('identity.') && !command.endsWith('.get') ||
-        command == 'settings.import') {
+    if (command == 'settings.import') {
       for (final flow in _flows.values.toList()) {
         _cancel(flow);
+      }
+      return;
+    }
+    if (command.startsWith('identity.') && !command.endsWith('.get')) {
+      for (final flow in _flows.values.toList()) {
+        // Core invalidates bound operations by their actual selected identity.
+        // Global changes must not cancel an unrelated dedicated setup identity.
+        if (command.startsWith('identity.device.')
+            ? flow.deviceId == params['deviceId']
+            : flow.deviceId == null && !flow.dedicatedIdentity) {
+          _cancel(flow);
+        }
       }
       return;
     }
@@ -111,6 +122,7 @@ class ConnectionSetupCoordinator {
       params['deviceId'] as String?,
       _revision,
       _now().add(policy.setupLeaseTimeout),
+      _object(params['identity'])['scope'] == 'device',
     );
     for (final previous in _flows.values.toList()) {
       if (previous.attempt == attempt ||
@@ -321,6 +333,16 @@ class ConnectionSetupCoordinator {
     if (connection is! String) {
       throw const InteropException('disconnected', '请先连接设备。');
     }
+    final network = await _request('device.network.get', {'deviceId': id});
+    _check(flow);
+    final address = params['address'];
+    if (network['deviceId'] != id || network['connectionId'] != connection) {
+      throw const InteropException('stale_connection', '目标设备连接已变化，请重新获取地址。');
+    }
+    final candidates = (network['addresses'] as List? ?? const []).map(_object);
+    if (!candidates.any((item) => item['address'] == address)) {
+      throw const InteropException('address_changed', '目标设备的网络地址已变化，请重新选择。');
+    }
     final port = params['port'] ?? 5555;
     final begin = await _request(
       'adb.tcpip.begin',
@@ -432,10 +454,17 @@ String _code(Object? error) =>
     error is InteropException ? error.code : 'setup_failed';
 
 class _SetupFlow {
-  _SetupFlow(this.attempt, this.deviceId, this.revision, this.deadline);
+  _SetupFlow(
+    this.attempt,
+    this.deviceId,
+    this.revision,
+    this.deadline,
+    this.dedicatedIdentity,
+  );
   final String attempt;
   final int revision;
   final DateTime deadline;
+  final bool dedicatedIdentity;
   String? deviceId, operation;
   Future<void> Function()? hold;
   Future<void>? cancelling;

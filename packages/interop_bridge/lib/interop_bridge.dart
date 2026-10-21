@@ -33,6 +33,7 @@ import 'src/reconnection_coordinator.dart';
 import 'src/device_screen_coordinator.dart';
 import 'src/connection_setup_coordinator.dart';
 import 'src/device_capability_policy.dart';
+import 'src/device_quality_coordinator.dart';
 
 export 'src/interop_exception.dart';
 export 'src/connection_policy.dart';
@@ -60,11 +61,6 @@ class InteropBridge {
     emit: (event) {
       if (_disposed) return;
       _events.add(event);
-      final data = event['data'];
-      final result = data is Map ? data['result'] : null;
-      if (result is Map && result['connected'] == true) {
-        unawaited(_retainConnectionInBackground());
-      }
     },
     authorizeUsb: Platform.isAndroid
         ? (params) async {
@@ -105,6 +101,16 @@ class InteropBridge {
 
   final String _dataDirectory;
 
+  late final _background = ApplicationBackgroundPolicy(
+    request: Platform.isAndroid ? _platformRequest : null,
+    audioPolicy: (enabled) async {
+      await _audioOutputs.policy(enabled);
+    },
+    emit: (event) {
+      if (!_disposed) _events.add(event);
+    },
+  );
+
   static const _platform = MethodChannel('dev.scrcpyconnect/platform');
   static const _mediaEvents = EventChannel('dev.scrcpyconnect/media_events');
   final _pendingScreenFailures = <String, Map<String, dynamic>>{};
@@ -124,6 +130,25 @@ class InteropBridge {
     platform: _audioPlatformRequest,
     emit: _handleAudioOutput,
     isDisposed: () => _disposed,
+  );
+  late final _deviceQuality = DeviceQualityCoordinator(
+    request: _invoke,
+    applyOutput: (stream) async {
+      final id = stream['sessionId'] as String;
+      Map<String, dynamic> output;
+      try {
+        output = await _videoOutputs.reconfigure(stream);
+      } catch (_) {
+        _videoLifecycle.retainFailedOutput(id);
+        rethrow;
+      }
+      final merged = {...stream, ...output};
+      if (_textures.containsKey(id)) _textures[id] = merged;
+      await _invoke('session.ready', merged);
+      return merged;
+    },
+    beginReconfigure: (id) => _videoLifecycle.beginReconfigure(id),
+    endReconfigure: (id) => _videoLifecycle.endReconfigure(id),
   );
   late final _videoOutputs = PortableVideoOutputs(
     core: _invoke,
@@ -305,9 +330,15 @@ class InteropBridge {
       // Retire orphaned captures rather than adopting an unverified playback.
       await bridge._retireUnownedAudio();
       final settings = await bridge._invoke('settings.get', const {});
-      await bridge._audioOutputs.policy(
+      final backgroundStatus = await bridge._background.apply(
         settings['backgroundKeepAlive'] == true,
+        automatic: true,
       );
+      // Apply the host's explicit/system stop before a recovered snapshot may
+      // schedule any saved connection. A later manual connect is still allowed.
+      if (backgroundStatus?['stopped'] == true) {
+        bridge._reconnections.stopAutomaticConnections();
+      }
       bridge._connectionLifecycle = AppLifecycleListener(
         onStateChange: (state) {
           bridge._reconnections.setVisible(
@@ -414,6 +445,7 @@ class InteropBridge {
   }
 
   Future<void> _closeVideo(String id) async {
+    _videoLifecycle.forget(id);
     if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
       debugPrint(
         '[connect.video] close session=$id from=${StackTrace.current}',
@@ -635,7 +667,7 @@ class InteropBridge {
         ...VideoQualityPolicy.resolve(
           settings,
           params['deviceId'] as String?,
-          params,
+          command == 'session.quality' ? params : const {},
         ),
       }..remove('preset');
     }
@@ -661,12 +693,6 @@ class InteropBridge {
         params['deviceId'] as String?,
       );
     }
-    if (command == 'session.quality') {
-      return {
-        ...result,
-        'reason': '设置已保存到这台设备，新建屏幕或应用窗口时生效；已保留的窗口继续使用原设置，关闭后重新打开即可应用。',
-      };
-    }
     return result;
   }
 
@@ -681,9 +707,11 @@ class InteropBridge {
     Map<String, dynamic> params = const {},
   ]) async {
     if (_disposed) throw const InteropException('disposed', '连接界面已关闭。');
+    _deviceQuality.beforeRequest(command, params);
     _setup.beforeRequest(command, params);
     final finishReconnect = _reconnections.beforeRequest(command, params);
     if (command == 'session.stop' && params['sessionId'] is String) {
+      _videoLifecycle.forget(params['sessionId'] as String);
       _mediaIntents.stop(params['sessionId'] as String, audio: false);
     } else if (command == 'audio.stop' && params['sourceId'] is String) {
       _mediaIntents.stop(params['sourceId'] as String, audio: true);
@@ -712,6 +740,12 @@ class InteropBridge {
           )
         : null;
     try {
+      if (command == 'session.start' || command == 'apps.launch') {
+        return await _deviceQuality.open(
+          '${params['deviceId']}',
+          () => _request(command, params, intent: intent),
+        );
+      }
       return await _request(command, params, intent: intent);
     } finally {
       if (intent != null) _mediaIntents.finish(intent);
@@ -732,11 +766,7 @@ class InteropBridge {
       throw const InteropException('state_unverified', '正在重新核验设备状态，完成后再操作。');
     }
     if (_setup.handles(command)) {
-      final result = await _setup.request(command, params);
-      if (result['connected'] == true || result['status'] == 'connected') {
-        await _retainConnectionInBackground();
-      }
-      return result;
+      return _setup.request(command, params);
     }
     if (_capabilities.handles(command)) {
       return _capabilities.request(command, params);
@@ -785,8 +815,13 @@ class InteropBridge {
       return _videoCapabilities();
     }
     if (['session.start', 'apps.launch', 'session.quality'].contains(command)) {
-      await _ensureVideoDecoder(params);
+      await _ensureVideoDecoder(
+        command == 'session.quality'
+            ? params
+            : {'deviceId': params['deviceId']},
+      );
     }
+    if (command == 'session.quality') return _deviceQuality.change(params);
     if (command.startsWith('documents.')) {
       if (!Platform.isAndroid) {
         throw const InteropException(
@@ -871,12 +906,19 @@ class InteropBridge {
       throw const InteropException('cancelled', '已停止本次打开，不会重新启动画面或声音。');
     }
     final result = await _invoke(command, params);
-    if (command == 'settings.get' || command == 'settings.update') {
-      await _audioOutputs.policy(result['backgroundKeepAlive'] == true);
+    if (command == 'settings.update' &&
+        params.containsKey('backgroundKeepAlive')) {
+      await _background.apply(
+        result['backgroundKeepAlive'] == true,
+        automatic: false,
+      );
     }
     if (command == 'settings.import') {
       final settings = await _invoke('settings.get', const {});
-      await _audioOutputs.policy(settings['backgroundKeepAlive'] == true);
+      await _background.apply(
+        settings['backgroundKeepAlive'] == true,
+        automatic: false,
+      );
     }
     if (command == 'session.quality.options') {
       final local = await _videoCapabilities();
@@ -1067,28 +1109,7 @@ class InteropBridge {
         await _closeAudio(id);
       }
     }
-    if (command == 'devices.connect') {
-      await _retainConnectionInBackground();
-    }
     return result;
-  }
-
-  Future<void> _retainConnectionInBackground() async {
-    if (!Platform.isAndroid || _disposed) return;
-    final settings = await _invoke('settings.get', const {});
-    if (settings['backgroundKeepAlive'] != true) return;
-    try {
-      await _platform.invokeMethod<void>('background.request', {
-        'enabled': true,
-      });
-    } catch (error) {
-      if (!_disposed) {
-        _events.add({
-          'type': 'background.failed',
-          'data': {'reason': '$error'},
-        });
-      }
-    }
   }
 
   Future<void> _detachCoreEvents() async {
@@ -1103,6 +1124,7 @@ class InteropBridge {
 
   Future<void> _dispose() async {
     _disposed = true;
+    _deviceQuality.dispose();
     _screens.dispose();
     _pendingScreenFailures.clear();
     _connectionLifecycle?.dispose();
@@ -1151,5 +1173,42 @@ class InteropBridge {
     }
     if (identical(_active, this)) _active = null;
     await _events.close();
+  }
+}
+
+/// Applies the application preference independently of device media outputs.
+/// The native host owns foreground-service lifetime and explicit stop state.
+class ApplicationBackgroundPolicy {
+  ApplicationBackgroundPolicy({
+    required this.request,
+    required this.audioPolicy,
+    required this.emit,
+  });
+
+  final AudioRequest? request;
+  final Future<void> Function(bool) audioPolicy;
+  final void Function(AudioJson) emit;
+
+  Future<AudioJson?> apply(bool enabled, {required bool automatic}) async {
+    AudioJson? receipt;
+    if (request case final platform?) {
+      try {
+        final status = await platform('background.request', {
+          'enabled': enabled,
+          'automatic': automatic,
+        });
+        receipt = status;
+        emit({'type': 'background.changed', 'data': status});
+      } catch (error) {
+        // Keep the saved preference and the rest of application startup usable.
+        // A platform refusal is a status, not permission to play media instead.
+        emit({
+          'type': 'background.failed',
+          'data': {'reason': '$error'},
+        });
+      }
+    }
+    await audioPolicy(enabled);
+    return receipt;
   }
 }

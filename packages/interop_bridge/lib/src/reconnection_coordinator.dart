@@ -28,6 +28,8 @@ class ReconnectionCoordinator {
   final _devices = <String, ReconnectJson>{};
   final _work = <String, _ReconnectWork>{};
   final _stopped = <String>{};
+  bool _hostStopped = false;
+  final _manuallyResumed = <String>{};
   final _commands = <String, int>{};
   ReconnectJson _settings = {};
   Future<void> _ownership = Future<void>.value();
@@ -129,6 +131,8 @@ class ReconnectionCoordinator {
         }
       }
     } else if (type == 'connections.stopped') {
+      _hostStopped = true;
+      _manuallyResumed.clear();
       _stopped.addAll(_devices.keys);
       _quiet(refresh());
     }
@@ -138,6 +142,15 @@ class ReconnectionCoordinator {
   void setVisible(bool visible) {
     if (_disposed || _visible == visible) return;
     _visible = visible;
+    _sync();
+  }
+
+  /// A native Task Manager/explicit stop also fences snapshots arriving during
+  /// attachment. It must not be undone merely by learning another device ID.
+  void stopAutomaticConnections() {
+    _hostStopped = true;
+    _manuallyResumed.clear();
+    _stopped.addAll(_devices.keys);
     _sync();
   }
 
@@ -159,6 +172,7 @@ class ReconnectionCoordinator {
         (command == 'devices.cancel' && id != null);
     final manual = const [
       'devices.connect',
+      'devices.configure',
       'devices.pair',
       'devices.pair.qr',
       'devices.usb',
@@ -170,8 +184,14 @@ class ReconnectionCoordinator {
     final affected = stop || manual;
     if (affected && id != null) {
       _commands[id] = (_commands[id] ?? 0) + 1;
-      if (stop) _stopped.add(id);
-      if (manual) _stopped.remove(id);
+      if (stop) {
+        _stopped.add(id);
+        _manuallyResumed.remove(id);
+      }
+      if (manual) {
+        _stopped.remove(id);
+        _manuallyResumed.add(id);
+      }
       _cancel(id);
     }
     if (authorityChange) _pauses++;
@@ -223,6 +243,11 @@ class ReconnectionCoordinator {
       final device = _object(entry);
       final id = device['id'];
       if (id is String) _devices[id] = device;
+    }
+    if (_hostStopped) {
+      _stopped.addAll(
+        _devices.keys.where((id) => !_manuallyResumed.contains(id)),
+      );
     }
   }
 

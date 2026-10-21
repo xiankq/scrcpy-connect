@@ -66,11 +66,14 @@ List<StateJson> _records(dynamic values, String id) {
 Set<String> _live(List<StateJson> records, String id) => {
   for (final record in records)
     if (!const [
-      'stopped',
-      'error',
-      'failed',
-      'closed',
-      'disconnected',
-    ].contains(record['status']))
+          'stopped',
+          'error',
+          'failed',
+          'closed',
+          'disconnected',
+        ].contains(record['status']) ||
+        (id == 'sessionId' &&
+            record['status'] == 'failed' &&
+            record['qualityRetryable'] == true))
       record[id] as String,
 };

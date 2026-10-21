@@ -100,6 +100,28 @@ class _Host {
 }
 
 void main() {
+  test('host stop fences the first and later snapshots until a device is manually resumed', () async {
+    final host = _Host();
+    final owner = host.coordinator();
+    addTearDown(owner.dispose);
+    owner.stopAutomaticConnections();
+    await owner.start();
+    await settle();
+    expect(host.active, isEmpty);
+    host.devices.add(_Host.device(id: 'second'));
+    host.publish(owner);
+    await settle();
+    expect(host.active, isEmpty);
+    final finish = owner.beforeRequest('devices.connect', {
+      'deviceId': 'phone',
+    });
+    await finish();
+    await settle();
+    expect(host.active, hasLength(1));
+    host.active.single.fire();
+    await settle();
+    expect(host.attempts.map((p) => p['deviceId']), ['phone']);
+  });
   test('offline USB records wait for explicit system authorization', () async {
     final host = _Host()
       ..devices = [

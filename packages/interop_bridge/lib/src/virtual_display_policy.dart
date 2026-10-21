@@ -83,8 +83,8 @@ class VirtualDisplayPolicy {
     if (candidates.length != 1 || candidates.single['packageName'] is! String) {
       return params;
     }
-    // A saved quality change applies to the next window. A retained window
-    // must resize against its own applied quality, not the current preference.
+    // Resize against the quality this generation actually applied. A failed
+    // quality rebuild may retain an older generation for an explicit retry.
     final quality = candidates.single['quality'] as Map?;
     return fit(params, quality?['maxSize']);
   }

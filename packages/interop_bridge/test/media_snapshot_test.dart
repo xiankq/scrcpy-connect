@@ -8,6 +8,32 @@ import 'package:interop_bridge/src/state_recovery.dart';
 import 'state_recovery_test.dart' show snapshot;
 
 void main() {
+  test('quality retry retains failed window but explicit stop and disconnect retire it', () async {
+    for (final status in ['failed', 'stopped', 'disconnected']) {
+      final videos = <String, StateJson>{
+        'A': {'textureId': 8},
+      };
+      final closed = <String>[];
+      await readMediaSnapshot(
+        read: () async => {
+          ...snapshot(1),
+          'sessions': [
+            {'sessionId': 'A', 'status': status, 'qualityRetryable': true},
+          ],
+        },
+        videos: videos,
+        audios: {},
+        closeVideo: (id) async {
+          closed.add(id);
+          videos.remove(id);
+        },
+        closeAudio: (_) async {},
+        current: () => true,
+      );
+      expect(closed, status == 'failed' ? isEmpty : ['A']);
+    }
+  });
+
   test(
     'only ended exact owners are retired and core state remains authoritative',
     () async {

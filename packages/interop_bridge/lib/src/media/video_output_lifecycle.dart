@@ -25,6 +25,21 @@ class VideoOutputLifecycle {
   final void Function(VideoJson) emit;
   final bool Function() isDisposed;
 
+  final _reconfiguring = <String>{};
+  final _retained = <String>{};
+  void beginReconfigure(String id) {
+    _retained.remove(id);
+    _reconfiguring.add(id);
+  }
+
+  void retainFailedOutput(String id) => _retained.add(id);
+  void forget(String id) {
+    _retained.remove(id);
+    _reconfiguring.remove(id);
+  }
+
+  void endReconfigure(String id) => _reconfiguring.remove(id);
+
   bool _owns(VideoJson output) {
     final current = outputs[output['sessionId']];
     return !isDisposed() &&
@@ -39,7 +54,12 @@ class VideoOutputLifecycle {
 
   Future<void> poll(String id, {required bool Function() current}) async {
     final output = outputs[id];
-    if (!current() || output == null || !_owns(output)) return;
+    if ((_reconfiguring.contains(id) || _retained.contains(id)) ||
+        !current() ||
+        output == null ||
+        !_owns(output)) {
+      return;
+    }
     try {
       final status = await core('media.status', {'relayId': output['relayId']});
       if (!current() || !_owns(output)) return;
@@ -61,7 +81,11 @@ class VideoOutputLifecycle {
 
   Future<void> fail(VideoJson output, String reason) async {
     final id = output['sessionId'];
-    if (id is! String || !_owns(output)) return;
+    if (id is! String ||
+        (_reconfiguring.contains(id) || _retained.contains(id)) ||
+        !_owns(output)) {
+      return;
+    }
     // Claim this exact committed output synchronously. A second failure or a
     // delayed poll cannot stop it twice, and cleanup never looks up a new owner
     // after awaiting the remote stop acknowledgement.
@@ -93,6 +117,13 @@ class VideoOutputLifecycle {
 
   void handle(VideoJson event) {
     if (isDisposed()) return;
+    final eventData = event['data'];
+    if (event['type'] == 'session.output.failed' &&
+        eventData is Map &&
+        (_reconfiguring.contains(eventData['sessionId']) ||
+            _retained.contains(eventData['sessionId']))) {
+      return;
+    }
     emit(event);
     if (event['type'] != 'session.output.changed' &&
         event['type'] != 'session.output.failed') {

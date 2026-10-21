@@ -6,26 +6,56 @@ import 'video_player_port.dart';
 /// Combines core session state with the renderer's latest output. Player
 /// receipts may also contain old core state from a resume request, so only
 /// rendering evidence may override the current session snapshot.
-VideoJson sessionWithVideoOutput(VideoJson session, VideoJson? output) => {
-  ...session,
-  for (final key in const [
-    'relayId',
-    'textureId',
-    'decodedWidth',
-    'decodedHeight',
-    'decoderName',
-    'hardwareAccelerated',
-    'generation',
-    'backend',
-    'firstFrameDecoded',
-    'evidence',
-    'snapshotReceipts',
-    'presentedToWidget',
-    'continuousFrameTelemetry',
-    'outputStartupTimingMs',
-  ])
-    if (output?.containsKey(key) == true) key: output![key],
-};
+VideoJson sessionWithVideoOutput(VideoJson session, VideoJson? output) {
+  final capture = session['captureGeneration'];
+  final outputCapture = output?['captureGeneration'];
+  final renderer = session['rendererGeneration'];
+  final outputRenderer = output?['generation'];
+  final previousCapture =
+      capture is int && output != null && capture != outputCapture;
+  final previousRenderer =
+      renderer is int && outputRenderer is int && outputRenderer < renderer;
+  if (previousCapture || previousRenderer) {
+    return {
+      ...session,
+      for (final key in const [
+        'textureId',
+        'decodedWidth',
+        'decodedHeight',
+        'backend',
+      ])
+        if (output?.containsKey(key) == true) key: output![key],
+      'outputCaptureGeneration': outputCapture,
+      'outputGeneration': outputRenderer,
+      'outputRetained': true,
+      'firstFrameDecoded': false,
+      'evidence': 'retained_previous_output',
+    };
+  }
+  return {
+    ...session,
+    for (final key in const [
+      'relayId',
+      'textureId',
+      'decodedWidth',
+      'decodedHeight',
+      'decoderName',
+      'hardwareAccelerated',
+      'generation',
+      'backend',
+      'firstFrameDecoded',
+      'evidence',
+      'snapshotReceipts',
+      'presentedToWidget',
+      'continuousFrameTelemetry',
+      'outputStartupTimingMs',
+    ])
+      if (output?.containsKey(key) == true) key: output![key],
+    if (outputCapture is int) 'outputCaptureGeneration': outputCapture,
+    if (outputCapture is int && outputRenderer is int)
+      'outputGeneration': outputRenderer,
+  };
+}
 
 /// Merges receipts for one session without replacing a newer renderer output.
 /// A delayed resume may finish after a generation change; its state and frame

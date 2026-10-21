@@ -122,7 +122,12 @@ class _Harness {
   Future<VideoJson> request(String command, VideoJson params) async {
     commands.add((command, {...params}));
     if (command == 'media.open') {
-      return opening == null ? _endpoint('relay-${++relays}') : opening!.future;
+      return opening == null
+          ? _endpoint(
+              'relay-${++relays}',
+              generation: params['generation'] as int? ?? 1,
+            )
+          : opening!.future;
     }
     if (command == 'media.close') return {'closed': true};
     if (command == 'session.refresh') return {'refreshRequested': true};
@@ -139,6 +144,73 @@ class _Harness {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'renderer resize generations stay independent of capture rebuilds',
+    () async {
+      final h = _Harness();
+      addTearDown(h.output.dispose);
+      await h.output.start({..._stream('A'), 'captureGeneration': 1});
+      final resized = await h.output.reattach(
+        'A',
+        endpoint: _endpoint('relay-1', generation: 6),
+      );
+      expect(resized['captureGeneration'], 1);
+      final rebuilt = await h.output.reconfigure({
+        ..._stream('A'),
+        'generation': 2,
+        'captureGeneration': 2,
+      });
+      expect(rebuilt['generation'], 7);
+      expect(rebuilt['captureGeneration'], 2);
+      final again = await h.output.reattach(
+        'A',
+        endpoint: _endpoint(rebuilt['relayId'] as String, generation: 8),
+      );
+      expect(again['generation'], 8);
+      expect(again['captureGeneration'], 2);
+    },
+  );
+
+  test(
+    'reconfigure consumes new input and keeps logical paused output',
+    () async {
+      final h = _Harness();
+      addTearDown(h.output.dispose);
+      await h.output.start(_stream('A'));
+      await h.output.pause('A');
+      final rebuilt = await h.output.reconfigure({
+        ..._stream('A'),
+        'generation': 2,
+      });
+      expect(rebuilt['generation'], 2);
+      expect(rebuilt['sessionId'], 'A');
+      expect(h.players.first.released, 1);
+      expect(h.players.last.calls, contains('pause'));
+      expect(h.commands.where((call) => call.$1 == 'media.open'), hasLength(2));
+    },
+  );
+
+  test('close beats a late one-use replacement relay', () async {
+    final h = _Harness();
+    addTearDown(h.output.dispose);
+    await h.output.start(_stream('A'));
+    h.opening = Completer();
+    final replacement = h.output.reconfigure({
+      ..._stream('A'),
+      'generation': 2,
+    });
+    final rejected = expectLater(replacement, throwsA(_code('cancelled')));
+    await h.output.stop('A');
+    h.opening!.complete(_endpoint('late-relay', generation: 2));
+    await rejected;
+    expect(
+      h.commands
+          .where((call) => call.$1 == 'media.close')
+          .map((call) => call.$2['relayId']),
+      contains('late-relay'),
+    );
+    expect(h.players, hasLength(1));
+  });
   test('first receipt requires actual pixels and never overwrites remote touch dimensions', () async {
     final h = _Harness();
     expect(

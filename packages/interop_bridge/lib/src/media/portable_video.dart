@@ -59,6 +59,7 @@ class PortableVideoOutputs {
       _generation(stream),
       _factory(),
       cancelled,
+      captureGeneration: stream['captureGeneration'] as int? ?? 1,
     );
     _entries[id] = entry;
     _armStartup(entry);
@@ -171,6 +172,81 @@ class PortableVideoOutputs {
     return _receipt(entry);
   }
 
+  /// Consume the replacement capture's one-use input while retaining the
+  /// existing logical output and its last verified texture until handover.
+  Future<VideoJson> reconfigure(VideoJson stream) async {
+    final id = _text(stream, 'sessionId');
+    final old = _entry(id);
+    _check(old);
+    if (_text(stream, 'deviceId') != old.device) {
+      throw const InteropException('session_changed', '新视频输入不属于当前设备。');
+    }
+    final generation = math.max(_generation(stream), old.generation + 1);
+    final captureGeneration =
+        stream['captureGeneration'] as int? ?? old.captureGeneration + 1;
+    if (captureGeneration <= old.captureGeneration) {
+      throw const InteropException('generation_changed', '新视频输入归属已经过期。');
+    }
+    final port = stream['videoPort'];
+    final token = stream['videoToken'];
+    if (port is! int ||
+        port < 1 ||
+        port > 65535 ||
+        token is! String ||
+        !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(token)) {
+      throw const InteropException('invalid_endpoint', '新视频输入缺少一次性连接信息。');
+    }
+    final opening = core('media.open', {
+      'kind': 'video',
+      'port': port,
+      'token': token,
+      'codec': _codec(stream),
+      'generation': generation,
+    });
+    var accepted = false;
+    var abandoned = false;
+    unawaited(
+      opening.then<void>((endpoint) {
+        if (!accepted &&
+            (abandoned ||
+                !_owns(old) ||
+                old.closed ||
+                _disposed ||
+                isDisposed())) {
+          final relay = endpoint['relayId'];
+          if (relay is String) {
+            unawaited(
+              core('media.close', {
+                'relayId': relay,
+              }).catchError((Object _) => <String, dynamic>{}),
+            );
+          }
+        }
+      }, onError: (Object _, StackTrace _) {}),
+    );
+    VideoJson? endpoint;
+    try {
+      endpoint = await opening.timeout(operationTimeout);
+      _check(old);
+      accepted = true;
+      return await reattach(
+        id,
+        endpoint: endpoint,
+        codec: _codec(stream),
+        captureGeneration: captureGeneration,
+      );
+    } catch (_) {
+      abandoned = true;
+      final relay = endpoint?['relayId'];
+      if (relay is String) {
+        try {
+          await core('media.close', {'relayId': relay});
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
+
   /// Attach a new core-owned generation without launching or stopping an app.
   /// The previous texture survives candidate failure and is released only after
   /// the candidate produces a verified decoded image.
@@ -178,6 +254,7 @@ class PortableVideoOutputs {
     String id, {
     required VideoJson endpoint,
     String? codec,
+    int? captureGeneration,
   }) async {
     final old = _entry(id);
     _check(old);
@@ -202,6 +279,7 @@ class PortableVideoOutputs {
       _factory(),
       old.cancelled,
       playback: old.playback,
+      captureGeneration: captureGeneration ?? old.captureGeneration,
     );
     candidate.relay = _text(endpoint, 'relayId');
     candidate.ownsRelay = candidate.relay != old.relay;
@@ -570,6 +648,7 @@ class PortableVideoOutputs {
     'decodedHeight': entry.texture!.height,
     'codec': entry.codec,
     'generation': entry.generation,
+    'captureGeneration': entry.captureGeneration,
     'backend': 'fvp',
     'firstFrameDecoded': true,
     'evidence': 'mdk.snapshot',
@@ -589,9 +668,10 @@ class _Output {
     this.player,
     this.cancelled, {
     _Playback? playback,
+    this.captureGeneration = 1,
   }) : playback = playback ?? _Playback();
   final String id, device, codec;
-  final int generation;
+  final int generation, captureGeneration;
   final VideoPlayerPort player;
   final bool Function()? cancelled;
   final _Playback playback;

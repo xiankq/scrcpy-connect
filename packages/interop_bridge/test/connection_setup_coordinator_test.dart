@@ -24,9 +24,20 @@ class Host {
   ];
   Future<SetupJson> Function(String, SetupJson)? respond;
   Future<void> Function(Duration)? waiting;
+  SetupJson? network;
   Future<SetupJson> request(String command, SetupJson params) async {
     calls.add((command, Map.of(params)));
     if (command == 'devices.list') return {'devices': devices};
+    if (command == 'device.network.get') {
+      return network ??
+          {
+            'deviceId': params['deviceId'],
+            'connectionId': 'c1',
+            'addresses': [
+              {'address': 'phone.local', 'interface': 'wlan0'},
+            ],
+          };
+    }
     return await respond?.call(command, params) ?? {};
   }
 
@@ -272,6 +283,73 @@ void main() {
       1,
     );
   });
+
+  test('TCPIP never restarts a target if its selected address or connection changed', () async {
+    for (final network in [
+      {
+        'deviceId': 'phone',
+        'connectionId': 'c2',
+        'addresses': [
+          {'address': 'phone.local'},
+        ],
+      },
+      {
+        'deviceId': 'phone',
+        'connectionId': 'c1',
+        'addresses': [
+          {'address': 'other.local'},
+        ],
+      },
+      {
+        'deviceId': 'other',
+        'connectionId': 'c1',
+        'addresses': [
+          {'address': 'phone.local'},
+        ],
+      },
+    ]) {
+      final host = Host()..network = network;
+      final owner = host.owner();
+      await expectLater(
+        owner.request('devices.wireless', {
+          'deviceId': 'phone',
+          'address': 'phone.local',
+        }),
+        throwsA(isA<InteropException>()),
+      );
+      expect(host.calls.where((c) => c.$1 == 'adb.tcpip.begin'), isEmpty);
+      await owner.dispose();
+    }
+  });
+
+  test(
+    'global identity reset preserves a dedicated unbound pairing attempt',
+    () async {
+      final host = Host();
+      final paired = Completer<SetupJson>();
+      host.respond = (command, params) async =>
+          command == 'adb.pair' ? paired.future : {};
+      final owner = host.owner();
+      addTearDown(owner.dispose);
+      final result = owner.request('devices.pair', {
+        'attemptId': 'dedicated',
+        'identity': {'scope': 'device', 'privateKeyPem': 'private-input'},
+      });
+      await settle();
+      owner.beforeRequest('identity.global.reset', {});
+      paired.complete({
+        'operationId': 'pair-op',
+        'deviceId': 'phone',
+        'connected': true,
+      });
+      expect((await result)['connected'], true);
+      expect(host.calls.where((c) => c.$1 == 'devices.cancel'), isEmpty);
+      expect(host.calls.singleWhere((c) => c.$1 == 'adb.pair').$2['identity'], {
+        'scope': 'device',
+        'privateKeyPem': 'private-input',
+      });
+    },
+  );
 
   test('desktop USB without platform authorization opens and admits the native selection', () async {
     final host = Host();

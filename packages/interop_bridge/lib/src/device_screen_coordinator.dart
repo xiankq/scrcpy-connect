@@ -1,18 +1,13 @@
-import 'dart:async';
-
-import 'interop_exception.dart';
-
 typedef ScreenJson = Map<String, dynamic>;
 
-/// One Dart owner consumes connection wake intents before automatic reconnect
-/// starts. Input events must already have passed StateRecovery's sequence fence.
+/// Tracks live connection identities without coupling ADB changes to screen
+/// actions. Window creation owns wake intent; reconnection never replays it.
 class DeviceScreenCoordinator {
   DeviceScreenCoordinator({required this.request, required this.emit});
 
   final Future<ScreenJson> Function(String command, ScreenJson params) request;
   final void Function(ScreenJson event) emit;
   final _connections = <String, String>{};
-  ScreenJson _settings = {};
   int _sequence = -1;
   bool _ready = false, _disposed = false;
 
@@ -31,8 +26,7 @@ class DeviceScreenCoordinator {
       final sequence = data['sequence'];
       if (sequence is! int || sequence < _sequence) return;
       _sequence = sequence;
-      _settings = _object(data['settings']);
-      _observe(data['devices'], baseline: true);
+      _observe(data['devices']);
       _ready = true;
       return;
     }
@@ -40,20 +34,14 @@ class DeviceScreenCoordinator {
     final sequence = event['sequence'];
     if (sequence is! int || sequence <= _sequence) return;
     _sequence = sequence;
-    if (type == 'settings.changed') {
-      _settings = data;
-    } else if (type == 'devices.changed') {
+    if (type == 'devices.changed') {
       _observe(data['devices']);
     } else if (type == 'device.changed') {
       _observe([data], complete: false);
     }
   }
 
-  void _observe(
-    Object? devices, {
-    bool baseline = false,
-    bool complete = true,
-  }) {
+  void _observe(Object? devices, {bool complete = true}) {
     if (devices is! List) return;
     final entries = devices
         .whereType<Map<Object?, Object?>>()
@@ -63,41 +51,21 @@ class DeviceScreenCoordinator {
       final ids = entries.map((device) => device['id']).toSet();
       _connections.removeWhere((id, _) => !ids.contains(id));
     }
-    final preferences = _object(_settings['deviceSettings']);
     for (final device in entries) {
       final id = device['id'];
       final token = device['connectionId'];
+      if (id is String && device['status'] != 'connected') {
+        _connections.remove(id);
+        continue;
+      }
       if (id is! String ||
-          device['status'] != 'connected' ||
           token is! String ||
           token.isEmpty ||
           _connections[id] == token) {
         continue;
       }
-      // Consume before submitting: a lost receipt must never replay input.
+      // The token is a live transport fact, never a screen action trigger.
       _connections[id] = token;
-      if (!baseline && _object(preferences[id])['wakeOnConnect'] == true) {
-        unawaited(_wake(id, token));
-      }
-    }
-  }
-
-  Future<void> _wake(String device, String token) async {
-    try {
-      await request('devices.wake', {
-        'deviceId': device,
-        'connectionId': token,
-      });
-    } catch (error) {
-      if (!isConnectionCurrent(device, token) ||
-          (error is InteropException && error.code == 'stale_connection')) {
-        return;
-      }
-      emit({
-        'type': 'device.screen.failed',
-        'deviceId': device,
-        'data': {'connectionId': token, 'reason': '$error'},
-      });
     }
   }
 

@@ -6,6 +6,35 @@ import 'package:interop_bridge/src/media/video_presentation.dart';
 
 void main() {
   test(
+    'retained old texture does not manufacture evidence for new capture',
+    () {
+      final combined = sessionWithVideoOutput(
+        {
+          'sessionId': 'A',
+          'captureGeneration': 2,
+          'generation': 7,
+          'qualityRebuilding': true,
+        },
+        {
+          'sessionId': 'A',
+          'captureGeneration': 1,
+          'generation': 6,
+          'textureId': 9,
+          'firstFrameDecoded': true,
+          'evidence': 'mdk.snapshot',
+        },
+      );
+      expect(combined['textureId'], 9);
+      expect(combined['captureGeneration'], 2);
+      expect(combined['generation'], 7);
+      expect(combined['outputCaptureGeneration'], 1);
+      expect(combined['outputGeneration'], 6);
+      expect(combined['firstFrameDecoded'], false);
+      expect(combined['outputRetained'], true);
+    },
+  );
+
+  test(
     'an unversioned receipt cannot overwrite a known renderer generation',
     () {
       const current = {'generation': 2, 'textureId': 8, 'paused': true};
