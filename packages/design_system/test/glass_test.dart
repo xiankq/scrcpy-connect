@@ -9,6 +9,95 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 import 'support/official_glass_controls.dart';
 
 void main() {
+  testWidgets('filled connection labels remain inside their surface', (
+    tester,
+  ) async {
+    for (final brightness in Brightness.values) {
+      for (final scale in [1.0, 2.0]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            key: ValueKey((brightness, scale)),
+            theme: ConnectTokens.theme(brightness),
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 280,
+                  child: MediaQuery(
+                    data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                    child: TextFormField(
+                      initialValue: '192.168.1.22',
+                      decoration: const InputDecoration(labelText: 'IP 地址或主机名'),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final surface = tester.getRect(find.byType(InputDecorator));
+        final label = tester.getRect(find.text('IP 地址或主机名'));
+        expect(label.top, greaterThanOrEqualTo(surface.top));
+        expect(label.bottom, lessThanOrEqualTo(surface.bottom));
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
+  testWidgets(
+    'read-only identity fields stay compact without a change affordance',
+    (tester) async {
+      for (final scenario in [(370.0, 1.0), (248.0, 2.0)]) {
+        var mutations = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            key: ValueKey(scenario),
+            theme: ConnectTokens.theme(Brightness.light),
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: scenario.$1,
+                  child: MediaQuery(
+                    data: MediaQueryData(
+                      textScaler: TextScaler.linear(scenario.$2),
+                    ),
+                    child: ConnectSelectionField<String>(
+                      label: 'ADB 私钥',
+                      value: 'device',
+                      readOnly: true,
+                      icon: const Icon(Icons.expand_more),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'device',
+                          child: Text('设备专属私钥'),
+                        ),
+                      ],
+                      onChanged: (_) => mutations++,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final field = find.byType(ConnectSelectionField<String>);
+        final bounds = tester.getRect(field);
+        expect(bounds.height, scenario.$2 == 1 ? 56 : greaterThan(56));
+        expect(
+          tester.getRect(find.text('ADB 私钥')).top,
+          greaterThanOrEqualTo(bounds.top),
+        );
+        expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+        expect(find.byIcon(Icons.expand_more), findsNothing);
+        await tester.tap(field);
+        await tester.pumpAndSettle();
+        expect(mutations, 0);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
   testWidgets('selection fields keep labels inside and grow for large text', (
     tester,
   ) async {

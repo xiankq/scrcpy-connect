@@ -13,44 +13,55 @@ Widget officialGlassNavigation(
   final reducedMotion = GlassMaterial.reduceMotion(context);
   return liquid.GlassAccessibilityScope(
     reduceTransparency: opaque,
-    child: GlassTabBar.bottom(
-      key: ValueKey(reducedMotion),
-      tabs: const [
-        liquid.GlassTab(icon: Icon(Icons.devices), label: '设备'),
-        liquid.GlassTab(icon: Icon(Icons.swap_vert), label: '传输'),
-        liquid.GlassTab(icon: Icon(Icons.settings), label: '设置'),
-      ],
+    child: NavigationSelectionLens(
       selectedIndex: selectedIndex,
-      onTabSelected: onTabSelected,
-      horizontalPadding: 0,
-      verticalPadding: 0,
-      barHeight: GlassMaterial.navigationHeight(context),
-      barBorderRadius: DesignTokens.componentNavigationRounded,
-      tabPadding: const EdgeInsets.symmetric(
-        horizontal: DesignTokens.componentNavigationPadding,
+      itemCount: 3,
+      child: GlassTabBar.bottom(
+        key: ValueKey(reducedMotion),
+        tabs: const [
+          liquid.GlassTab(icon: Icon(Icons.devices), label: '设备'),
+          liquid.GlassTab(icon: Icon(Icons.swap_vert), label: '传输'),
+          liquid.GlassTab(icon: Icon(Icons.settings), label: '设置'),
+        ],
+        indicatorExpansion: reducedMotion
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        indicatorPinchStrength: reducedMotion ? 0 : 0.4,
+        magnification: reducedMotion ? 1 : 1.15,
+        selectedIndex: selectedIndex,
+        onTabSelected: onTabSelected,
+        horizontalPadding: 0,
+        verticalPadding: 0,
+        barHeight: GlassMaterial.navigationHeight(context),
+        barBorderRadius: DesignTokens.componentNavigationRounded,
+        tabPadding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.componentNavigationPadding,
+        ),
+        iconLabelSpacing: DesignTokens.spacingMicro,
+        iconSize: DesignTokens.componentIconSize,
+        labelFontSize: theme.textTheme.labelLarge!.fontSize!,
+        textStyle: theme.textTheme.labelLarge,
+        selectedIconColor: theme.colorScheme.primary,
+        selectedLabelColor: theme.colorScheme.primary,
+        unselectedIconColor: theme.colorScheme.onSurfaceVariant,
+        unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+        indicatorColor: GlassMaterial.restingNavigationLens(context)
+            ? DesignTokens.colorTransparent
+            : opaque
+            ? theme.colorScheme.surfaceContainerHigh
+            : theme.brightness == Brightness.dark
+            ? DesignTokens.colorGlassSelectedDark
+            : DesignTokens.colorGlassSelected,
+        settings: GlassMaterial.navigationBarSettings(context),
+        quality: GlassMaterial.quality(context),
+        indicatorSettings: GlassMaterial.navigationLensSettings(context),
+        pressScale: reducedMotion
+            ? 1
+            : DesignTokens.componentGlassInteractionScale,
+        interactionBehavior: reducedMotion
+            ? liquid.GlassInteractionBehavior.glowOnly
+            : liquid.GlassInteractionBehavior.full,
       ),
-      iconLabelSpacing: DesignTokens.spacingMicro,
-      iconSize: DesignTokens.componentIconSize,
-      labelFontSize: theme.textTheme.labelLarge!.fontSize!,
-      textStyle: theme.textTheme.labelLarge,
-      selectedIconColor: theme.colorScheme.primary,
-      selectedLabelColor: theme.colorScheme.primary,
-      unselectedIconColor: theme.colorScheme.onSurfaceVariant,
-      unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-      indicatorColor: opaque
-          ? theme.colorScheme.surfaceContainerHigh
-          : theme.brightness == Brightness.dark
-          ? DesignTokens.colorGlassSelectedDark
-          : DesignTokens.colorGlassSelected,
-      settings: GlassMaterial.settings(context),
-      quality: GlassMaterial.quality(context),
-      indicatorSettings: GlassMaterial.navigationLensSettings(context),
-      pressScale: reducedMotion
-          ? 1
-          : DesignTokens.componentGlassInteractionScale,
-      interactionBehavior: reducedMotion
-          ? liquid.GlassInteractionBehavior.glowOnly
-          : liquid.GlassInteractionBehavior.full,
     ),
   );
 }

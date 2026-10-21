@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -387,7 +388,7 @@ abstract final class ConnectTokens {
         ),
         filled: true,
         fillColor: colors.surface,
-        border: OutlineInputBorder(
+        border: UnderlineInputBorder(
           borderRadius: BorderRadius.circular(
             DesignTokens.componentConnectionFieldRounded,
           ),
@@ -460,6 +461,7 @@ class ConnectSelectionField<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     required this.icon,
+    this.readOnly = false,
   });
 
   final String label;
@@ -467,16 +469,11 @@ class ConnectSelectionField<T> extends StatelessWidget {
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?>? onChanged;
   final Widget icon;
+  final bool readOnly;
 
   @override
-  Widget build(BuildContext context) => DropdownButtonFormField<T>(
-    initialValue: value,
-    isExpanded: true,
-    // Menu options grow independently from the compact selected-value field.
-    itemHeight: null,
-    style: Theme.of(context).textTheme.bodyLarge,
-    icon: icon,
-    decoration: InputDecoration(
+  Widget build(BuildContext context) {
+    final decoration = InputDecoration(
       labelText: label,
       floatingLabelBehavior: FloatingLabelBehavior.always,
       constraints: const BoxConstraints(
@@ -496,10 +493,33 @@ class ConnectSelectionField<T> extends StatelessWidget {
         ),
         borderSide: BorderSide.none,
       ),
-    ),
-    items: items,
-    onChanged: onChanged,
-  );
+    );
+    if (readOnly) {
+      final selected = items.where((item) => item.value == value).firstOrNull;
+      return Semantics(
+        enabled: false,
+        child: InputDecorator(
+          decoration: decoration.copyWith(enabled: false),
+          child: DefaultTextStyle(
+            style: Theme.of(context).textTheme.bodyLarge!
+                .copyWith(color: Theme.of(context).disabledColor),
+            child: selected?.child ?? const SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
+    return DropdownButtonFormField<T>(
+      initialValue: value,
+      isExpanded: true,
+      // Menu options grow independently from the compact selected-value field.
+      itemHeight: null,
+      style: Theme.of(context).textTheme.bodyLarge,
+      icon: icon,
+      decoration: decoration,
+      items: items,
+      onChanged: onChanged,
+    );
+  }
 }
 
 /// Regular separates floating controls from content; clear belongs over media.
@@ -592,12 +612,159 @@ abstract final class GlassMaterial {
       ? settings(context).copyWith(glassColor: DesignTokens.colorTransparent)
       : liquid.AnimatedGlassIndicator.baseIndicatorSettings;
 
+  static bool restingNavigationLens(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light &&
+      quality(context) == liquid.GlassQuality.premium;
+
+  /// The sole regular navigation track. It paints before the selection lens
+  /// and glyphs so the settled lens never reads its own foreground labels.
+  static liquid.LiquidGlassSettings navigationTrackSettings(
+    BuildContext context,
+  ) => settings(context).copyWith(
+    shadow: !opaque(context) && Theme.of(context).brightness == Brightness.light
+        ? const [
+            BoxShadow(
+              color: ConnectTokens.shadow,
+              blurRadius: ConnectTokens.shadowBlur,
+              offset: Offset(0, ConnectTokens.shadowOffset),
+            ),
+          ]
+        : const [],
+  );
+
+  /// Foreground bar retains the library's gestures and moving lens. On the
+  /// premium three-layer path, zero depth AND blur select the renderer's
+  /// no-optics fast path; transparency alone would still paint a glass track.
+  static liquid.LiquidGlassSettings navigationBarSettings(
+    BuildContext context,
+  ) => restingNavigationLens(context)
+      ? settings(context).copyWith(
+          thickness: 0,
+          blur: 0,
+          glassColor: DesignTokens.colorTransparent,
+          backerColor: DesignTokens.colorTransparent,
+          bodyMode: liquid.GlassBodyMode.clear,
+          shadow: const [],
+        )
+      : navigationTrackSettings(context);
+
   /// Registers Material brightness and system accessibility with the backend.
   /// Backdrop groups belong to local control groups, never the root Navigator.
   static Widget wrap({required Widget child}) => liquid.LiquidGlassWidgets.wrap(
     child: child,
     brightnessResolver: Theme.maybeBrightnessOf,
   );
+}
+
+/// Composes one regular track, a settled lens, then the official foreground bar.
+/// The bar retains gestures, focus and semantics with navigationBarSettings;
+/// its own moving lens takes over during a pointer gesture. No rim is painted.
+class NavigationSelectionLens extends StatefulWidget {
+  const NavigationSelectionLens({
+    super.key,
+    required this.selectedIndex,
+    required this.itemCount,
+    required this.child,
+  });
+
+  final int selectedIndex;
+  final int itemCount;
+  final Widget child;
+
+  @override
+  State<NavigationSelectionLens> createState() =>
+      _NavigationSelectionLensState();
+}
+
+class _NavigationSelectionLensState extends State<NavigationSelectionLens> {
+  // 1.13.0 keeps the moving lens alive for its 420 ms press window and
+  // alignment/thickness spring tails. Its public bar has no settle callback.
+  // Leave that complete release interval to the original lens before mounting
+  // the settled lens, so two optical surfaces do not overlap during release.
+  static const _releaseInterval = Duration(milliseconds: 1100);
+  final _pointers = <int>{};
+  Timer? _settle;
+  bool _interacting = false;
+
+  void _start(PointerDownEvent event) {
+    if (!GlassMaterial.restingNavigationLens(context)) return;
+    _settle?.cancel();
+    _pointers.add(event.pointer);
+    if (!_interacting) setState(() => _interacting = true);
+  }
+
+  void _end(PointerEvent event) {
+    _pointers.remove(event.pointer);
+    if (_pointers.isNotEmpty || !_interacting) return;
+    _settle?.cancel();
+    _settle = Timer(_releaseInterval, () {
+      if (mounted) setState(() => _interacting = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _settle?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = GlassMaterial.restingNavigationLens(context);
+    return Listener(
+      onPointerDown: _start,
+      onPointerUp: _end,
+      onPointerCancel: _end,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          if (enabled)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: liquid.AdaptiveGlass(
+                  shape: const liquid.LiquidRoundedRectangle(
+                    borderRadius: DesignTokens.componentNavigationRounded,
+                  ),
+                  settings: GlassMaterial.navigationTrackSettings(context),
+                  quality: liquid.GlassQuality.premium,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          if (enabled && !_interacting)
+            liquid.AnimatedGlassIndicator(
+              key: const ValueKey('resting-navigation-lens'),
+              velocity: 0,
+              itemCount: widget.itemCount,
+              alignment: AlignmentDirectional(
+                widget.itemCount == 1
+                    ? 0
+                    : -1 + 2 * widget.selectedIndex / (widget.itemCount - 1),
+                0,
+              ),
+              thickness: 1,
+              quality: liquid.GlassQuality.premium,
+              indicatorColor: DesignTokens.colorTransparent,
+              isBackgroundIndicator: false,
+              paintBackground: false,
+              padding: const EdgeInsets.all(DesignTokens.spacingXxs),
+              expansion: EdgeInsets.zero,
+              pinchStrength: 0,
+              settings: GlassMaterial.navigationLensSettings(context).copyWith(
+                shadow: const [
+                  BoxShadow(
+                    color: ConnectTokens.shadow,
+                    blurRadius: DesignTokens.spacingXs,
+                    offset: Offset(0, DesignTokens.spacingMicro),
+                  ),
+                ],
+              ),
+            ),
+          widget.child,
+        ],
+      ),
+    );
+  }
 }
 
 bool _opaqueGlass(BuildContext context, {bool solid = false}) =>
