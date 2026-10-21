@@ -26,6 +26,10 @@ Android 11 对照和更广泛权限研究见
 当前快照和清除使用注册 Binder token，分别调用
 [`getActiveNotificationsFromListener` 和 `cancelNotificationsFromListener`](https://android.googlesource.com/platform/frameworks/base/+/99b01a65cc4c104933788b3143285ab6bae65827/core/java/android/app/INotificationManager.aidl#152)。
 实时变化由 Binder callback 触发快照对账，没有 dumpsys 轮询或历史通知数据库。
+正文优先原通知展开内容：大文本读取 `EXTRA_TITLE_BIG/EXTRA_BIG_TEXT`，收件箱合并
+`EXTRA_TEXT_LINES`，普通与聊天预览保留系统提供的 `EXTRA_TITLE/EXTRA_TEXT`。
+不从自定义 RemoteViews 或其他应用数据库猜正文；未提供文本时明确无预览。
+字段含义依据 [Notification 官方 API](https://developer.android.com/reference/android/app/Notification#EXTRA_TEXT_LINES)。
 服务重新启动、通知更新或移除后，原动作引用会失效。
 
 打开使用原通知的 `contentIntent`，回复使用原 action 的 `RemoteInput`
@@ -251,3 +255,12 @@ Telecom API 不代表能安全定位具体通话，产品仍拒绝这些全局�
 
 合成接收器通过不代表真实聊天应用、消息服务、认证／锁屏或 OEM 已通过。
 系统服务重启、多用户／工作资料、通话音频及长期资源表现仍需分别验收。
+
+## 通知快照一致性回归
+
+`dart servers/companion/tests/notification-snapshot.dart --adb <绝对adb路径> --serial emulator-5556`
+使用已构建的独立通知APK（先运行 `dart tool/e2e/notification_fixture/build.dart`），拒绝覆盖既有安装。
+在显式隔离AVD发送BigText、Inbox和MessagingStyle原生通知，对照Android服务快照，
+验证展开标题与正文、同键更新、旧动作失效、源应用撤回及观察重新附着。
+finally精确清理本run通知、动作、安装、临时JAR和forward；不改变产品通知权限或AppOps。
+证据边界为真实API36合成通知，不代表第三方聊天服务或所有OEM已验证。

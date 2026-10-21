@@ -15,6 +15,7 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/services/system_notifications.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
@@ -142,6 +143,7 @@ void main() {
         );
       }
 
+      final semantics = tester.ensureSemantics();
       try {
         await coordinator.initialize();
         if ((await coordinator.refreshStatus()).permissionGranted != true) {
@@ -241,7 +243,10 @@ void main() {
         );
         await checkpoint('opened', 'opened');
         binding.reportData!['originalOpenConfirmed'] = true;
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
         await waitFor(
           tester,
           () =>
@@ -263,7 +268,10 @@ void main() {
         await capture('notification-requirements-locked-phone');
         binding.reportData!['lockedPhoneFallbackConfirmed'] = true;
         await checkpoint('unlock-target', 'target-unlocked');
-        await tester.tap(find.bySemanticsLabel(RegExp('退出控制，返回')));
+        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
+        await tester.pump();
+        await tester.ensureVisible(find.text('关闭画面'));
+        await tester.tap(find.text('关闭画面'));
         await waitFor(
           tester,
           () =>
@@ -344,22 +352,196 @@ void main() {
         await coordinator.drain();
         await checkpoint('withdrawn', 'withdrawn');
         binding.reportData!['targetWithdrawalConfirmed'] = true;
+        final snapshotTag = '|notification-fixture-$runId-snapshot|';
+        List<Json> ownedSnapshots(Json snapshot) =>
+            objects(snapshot['notifications'])
+                .where(
+                  (notice) =>
+                      notice['packageName'] ==
+                          'dev.scrcpyconnect.notificationfixture' &&
+                      value(notice, 'key').contains(snapshotTag),
+                )
+                .toList();
+        // The list owns keys for every record, including unbuilt lazy children.
+        // Inspect that owner rather than treating offscreen text as removed.
+        bool pageContainsIds(Iterable<dynamic> ids, {bool present = true}) {
+          final lists = tester
+              .widgetList<GroupedListView>(
+                find.descendant(
+                  of: page,
+                  matching: find.byType(GroupedListView),
+                ),
+              )
+              .toList();
+          if (lists.length != 1) return false;
+          final indexOf = lists.single.findChildIndexCallback;
+          if (indexOf == null) return false;
+          return ids.every(
+            (id) => (indexOf(ValueKey('$deviceId:$id')) != null) == present,
+          );
+        }
+
+        final snapshotEvents = <Json>[];
+        final snapshotSubscription = controller.eventStream().listen((event) {
+          if (event['type'] == 'notifications.changed' &&
+              event['deviceId'] == deviceId &&
+              jsonObject(event['data'])['live'] == true) {
+            snapshotEvents.add(event);
+          }
+        });
+        addTearDown(snapshotSubscription.cancel);
+        Future<List<Json>> waitSnapshotEvent(
+          int after,
+          bool Function(List<Json>) ready,
+          String phase,
+        ) async {
+          List<Json>? result;
+          await waitFor(
+            tester,
+            () {
+              for (final event in snapshotEvents.skip(after)) {
+                final records = ownedSnapshots(jsonObject(event['data']));
+                if (ready(records)) {
+                  result = records;
+                  return true;
+                }
+              }
+              return false;
+            },
+            reason:
+                'Target $phase must arrive through notifications.changed '
+                'before any test list query.',
+          );
+          return result!;
+        }
+
+        // Subscribe before asking the driver to post. Do not query the list or
+        // manually refresh the page until its event-driven UI has been checked.
+        await checkpoint('snapshot-create', 'snapshot-created');
+        final snapshots = await waitSnapshotEvent(
+          0,
+          (records) => records.length == 3,
+          'create',
+        );
+        Future<void> visibleText(String text) async {
+          final scrollable = find
+              .descendant(of: page, matching: find.byType(Scrollable))
+              .first;
+          tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+          await tester.pump();
+          await tester.scrollUntilVisible(
+            find.text(text),
+            200,
+            scrollable: scrollable,
+            maxScrolls: 30,
+          );
+          expect(find.text(text).hitTestable(), findsOneWidget);
+        }
+
+        expect(
+          snapshots.singleWhere((n) => n['title'] == 'Expanded title')['body'],
+          'Real expanded body',
+        );
+        expect(
+          snapshots.singleWhere((n) => n['title'] == 'Inbox title')['body'],
+          'Alice: first message\nBob: latest message',
+        );
+        await waitFor(
+          tester,
+          () => pageContainsIds(snapshots.map((notice) => notice['id'])),
+          reason: 'Source creation appears on the existing page automatically.',
+        );
+        await visibleText('Expanded title');
+        await visibleText('Real expanded body');
+        await capture('notification-expanded-bigtext');
+        await visibleText('Inbox title');
+        await visibleText('Alice: first message\nBob: latest message');
+        await capture('notification-expanded-inbox');
+        final previousId = snapshots.singleWhere(
+          (n) => n['title'] == 'Expanded title',
+        )['id'];
+        final createdSnapshot = ownedSnapshots(await current());
+        expect(createdSnapshot, unorderedEquals(snapshots));
+        binding.reportData!['snapshotCreateEventUiVerified'] = true;
+        final beforeUpdate = snapshotEvents.length;
+        await checkpoint('snapshot-update', 'snapshot-updated');
+        final updatedSnapshots = await waitSnapshotEvent(
+          beforeUpdate,
+          (records) =>
+              records.length == 3 &&
+              records.any(
+                (notice) =>
+                    notice['title'] == 'Updated expanded title' &&
+                    notice['body'] == 'Updated real expanded body' &&
+                    notice['id'] != previousId,
+              ),
+          'update',
+        );
+        await waitFor(
+          tester,
+          () =>
+              pageContainsIds(updatedSnapshots.map((notice) => notice['id'])) &&
+              pageContainsIds([previousId], present: false),
+          reason: 'An event updates the existing notification page.',
+        );
+        await visibleText('Updated real expanded body');
+        expect(find.text('Expanded title'), findsNothing);
+        expect(find.text('Real expanded body'), findsNothing);
+        await capture('notification-expanded-updated');
+        expect(
+          ownedSnapshots(await current()),
+          unorderedEquals(updatedSnapshots),
+        );
+        binding.reportData!['snapshotUpdateEventUiVerified'] = true;
+        final beforeWithdraw = snapshotEvents.length;
+        // The updated card is visible immediately before source withdrawal, so
+        // disappearance cannot pass merely because a lazy child was offscreen.
+        expect(
+          find.text('Updated real expanded body').hitTestable(),
+          findsOneWidget,
+        );
+        await checkpoint('snapshot-withdraw', 'snapshot-withdrawn');
+        await waitSnapshotEvent(
+          beforeWithdraw,
+          (records) => records.isEmpty,
+          'withdraw',
+        );
+        await waitFor(
+          tester,
+          () =>
+              pageContainsIds(
+                updatedSnapshots.map((notice) => notice['id']),
+                present: false,
+              ) &&
+              find.text('Updated expanded title').evaluate().isEmpty &&
+              find.text('Updated real expanded body').evaluate().isEmpty,
+          reason: 'Source withdrawal removes the visible card without a test list query.',
+        );
+        expect(ownedSnapshots(await current()), isEmpty);
+        binding.reportData!['snapshotWithdrawEventUiVerified'] = true;
+        await snapshotSubscription.cancel();
+        binding.reportData!['snapshotBinderEvents'] = snapshotEvents;
+        binding.reportData!['expandedSnapshotUiVerified'] = true;
         expect(tester.takeException(), isNull);
       } finally {
         try {
-          await checkpoint('cleanup', 'cleanup', cleanup: true);
+          try {
+            await checkpoint('cleanup', 'cleanup', cleanup: true);
+          } finally {
+            if (deviceId != null && created) {
+              await request('devices.forget', {'deviceId': deviceId});
+            } else if (deviceId != null && !initiallyConnected) {
+              await request('devices.disconnect', {'deviceId': deviceId});
+            }
+            if (initialSettings['notificationAlerts'] != true) {
+              await controller.updateSetting(
+                'notificationAlerts',
+                initialSettings['notificationAlerts'],
+              );
+            }
+          }
         } finally {
-          if (deviceId != null && created) {
-            await request('devices.forget', {'deviceId': deviceId});
-          } else if (deviceId != null && !initiallyConnected) {
-            await request('devices.disconnect', {'deviceId': deviceId});
-          }
-          if (initialSettings['notificationAlerts'] != true) {
-            await controller.updateSetting(
-              'notificationAlerts',
-              initialSettings['notificationAlerts'],
-            );
-          }
+          semantics.dispose();
         }
       }
       stage = 'complete';

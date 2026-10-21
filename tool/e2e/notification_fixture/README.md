@@ -174,3 +174,13 @@ authorization dialogs to the operator. Approve the visible system dialogs; do
 not grant the product permission or authorization with shell commands. The
 source, OPEN, keyguard, clearing, OS mirror and withdrawal assertions still run
 automatically. The report records this mode.
+
+## Snapshot consistency mode
+
+`CREATE_SNAPSHOT` posts BigText (different collapsed/expanded title), Inbox
+(two actual message lines), and MessagingStyle notifications for a fresh run.
+`UPDATE_SNAPSHOT` replaces only this run's ID0 with a new expanded title/body.
+The companion `notification-snapshot.dart` probe compares the real target
+service snapshot, checks stable ownership and changed action revisions, then
+uses CLEANUP and verifies removal before uninstalling its owned APK.
+These actions never enter the product APK or companion JAR.

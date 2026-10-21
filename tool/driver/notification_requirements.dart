@@ -36,9 +36,11 @@ Future<void> main() async {
     (_) => Random.secure().nextInt(256),
   ).map((n) => n.toRadixString(16).padLeft(2, '0')).join();
   final receipt = <String, dynamic>{'runId': runId};
+  final snapshotRunId = '$runId-snapshot';
   final errors = <String>[];
   var otherControllerNotices = <String>{};
   var installed = false;
+  var snapshotPosted = false;
   var temporaryPin = false;
   var cleaned = false;
   var finished = false;
@@ -77,7 +79,17 @@ Future<void> main() async {
         .writeAsBytes(result.stdout as List<int>, flush: true);
   }
 
-  Future<void> activity(String action) async {
+  Future<String> hierarchy(String serial) async {
+    final path = '/data/local/tmp/connect-notification-$runId.xml';
+    try {
+      await shell(serial, ['uiautomator', 'dump', path]);
+      return await shell(serial, ['cat', path]);
+    } finally {
+      await shell(serial, ['rm', '-f', path]);
+    }
+  }
+
+  Future<void> activity(String action, {String? fixtureRunId}) async {
     await shell(target, [
       'am',
       'start',
@@ -88,7 +100,7 @@ Future<void> main() async {
       '$fixturePackage.$action',
       '--es',
       'runId',
-      runId,
+      fixtureRunId ?? runId,
     ]);
   }
 
@@ -104,6 +116,19 @@ Future<void> main() async {
           .map((key) => int.parse(key.split('|')[2]))
           .toList()
         ..sort();
+  Future<Map<String, String>> snapshotSources() async {
+    final result = <String, String>{};
+    for (final key in await keys(target)) {
+      final parts = key.split('|');
+      if (parts.length > 3 &&
+          parts[1] == fixturePackage &&
+          parts[3] == 'notification-fixture-$snapshotRunId') {
+        result[key] = await shell(target, ['cmd', 'notification', 'get', key]);
+      }
+    }
+    return result;
+  }
+
   Future<Map<String, String>> mirrors() async {
     final result = <String, String>{};
     for (final key in await keys(controller)) {
@@ -145,6 +170,9 @@ Future<void> main() async {
     }
     try {
       await activity('CLEANUP');
+      if (snapshotPosted) {
+        await activity('CLEANUP', fixtureRunId: snapshotRunId);
+      }
     } catch (_) {
       failures.add('Fixture cleanup action failed.');
     }
@@ -240,11 +268,7 @@ Future<void> main() async {
             }
             if (stage == 'complete') return;
             if (stage == 'requesting-permission' && !manualSystemUi) {
-              final xml = await shell(controller, [
-                'uiautomator',
-                'dump',
-                '/dev/tty',
-              ]);
+              final xml = await hierarchy(controller);
               final match = RegExp(
                 r'resource-id="[^"]+:id/permission_allow_button"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
               ).firstMatch(xml);
@@ -262,11 +286,7 @@ Future<void> main() async {
             }
             if (stage == 'connecting' && !manualSystemUi) {
               // Confirm only the normal target-side ADB authorization dialog.
-              final xml = await shell(target, [
-                'uiautomator',
-                'dump',
-                '/dev/tty',
-              ]);
+              final xml = await hierarchy(target);
               if (xml.contains('Allow USB debugging?') ||
                   xml.contains('Allow debugging?')) {
                 final match = RegExp(
@@ -474,6 +494,77 @@ Future<void> main() async {
                     receipt['otherControllerNoticesRetained'] = true;
                     receipt['targetWithdrawalRetractsMirror'] = true;
                     ack = 'withdrawn';
+                  case 'snapshot-create':
+                    snapshotPosted = true;
+                    await activity(
+                      'CREATE_SNAPSHOT',
+                      fixtureRunId: snapshotRunId,
+                    );
+                    var records = <String, String>{};
+                    await wait(() async {
+                      records = await snapshotSources();
+                      if (records.length != 3) return false;
+                      final big = records.entries
+                          .singleWhere(
+                            (entry) => entry.key.split('|')[2] == '0',
+                          )
+                          .value;
+                      final inbox = records.entries
+                          .singleWhere(
+                            (entry) => entry.key.split('|')[2] == '1',
+                          )
+                          .value;
+                      final messages = records.entries
+                          .singleWhere(
+                            (entry) => entry.key.split('|')[2] == '2',
+                          )
+                          .value;
+                      return big.contains('Expanded title') &&
+                          big.contains('Real expanded body') &&
+                          inbox.contains('Alice: first message') &&
+                          inbox.contains('Bob: latest message') &&
+                          messages.contains('Team chat') &&
+                          messages.contains('Latest');
+                    }, 'Owned Android expanded notification records missing.');
+                    await File('${output.path}/target-snapshot-create.json')
+                        .writeAsString(jsonEncode(records), flush: true);
+                    receipt['snapshotCreateAndroidVerified'] = true;
+                    ack = 'snapshot-created';
+                  case 'snapshot-update':
+                    await activity(
+                      'UPDATE_SNAPSHOT',
+                      fixtureRunId: snapshotRunId,
+                    );
+                    var records = <String, String>{};
+                    await wait(() async {
+                      records = await snapshotSources();
+                      if (records.length != 3) return false;
+                      final big = records.entries
+                          .singleWhere(
+                            (entry) => entry.key.split('|')[2] == '0',
+                          )
+                          .value;
+                      return big.contains('Updated expanded title') &&
+                          big.contains('Updated real expanded body');
+                    }, 'Owned Android snapshot revision did not update.');
+                    await File('${output.path}/target-snapshot-update.json')
+                        .writeAsString(jsonEncode(records), flush: true);
+                    receipt['snapshotUpdateAndroidVerified'] = true;
+                    ack = 'snapshot-updated';
+                  case 'snapshot-withdraw':
+                    await activity('CLEANUP', fixtureRunId: snapshotRunId);
+                    await wait(
+                      () async => (await snapshotSources()).isEmpty,
+                      'Android snapshot notifications remain after withdrawal.',
+                    );
+                    await File('${output.path}/target-snapshot-withdraw.json')
+                        .writeAsString(
+                          jsonEncode(await snapshotSources()),
+                          flush: true,
+                        );
+                    receipt['snapshotWithdrawAndroidVerified'] = true;
+                    receipt['expandedSnapshotAndroidVerified'] = true;
+                    ack = 'snapshot-withdrawn';
                   case 'cleanup':
                     await cleanup();
                     ack = 'cleanup';
@@ -517,6 +608,12 @@ Future<void> main() async {
         reportWritten = true;
         if (errors.isNotEmpty ||
             report['notificationRequirementsComplete'] != true ||
+            report['snapshotCreateEventUiVerified'] != true ||
+            report['snapshotUpdateEventUiVerified'] != true ||
+            report['snapshotWithdrawEventUiVerified'] != true ||
+            receipt['snapshotCreateAndroidVerified'] != true ||
+            receipt['snapshotUpdateAndroidVerified'] != true ||
+            receipt['snapshotWithdrawAndroidVerified'] != true ||
             !cleaned) {
           throw StateError(
             'Notification requirements failed; see scoped result.json.',

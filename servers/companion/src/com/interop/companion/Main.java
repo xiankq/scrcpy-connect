@@ -319,8 +319,8 @@ public final class Main {
             Notification n=sbn.getNotification();Bundle extras=n.extras;
             JSONObject data=new JSONObject().put("key",sbn.getKey()).put("packageName",sbn.getPackageName())
                 .put("appName",notificationAppName(sbn)).put("userId",sbn.getUserId()).put("uid",sbn.getUid())
-                .put("title",text(extras.getCharSequence(Notification.EXTRA_TITLE),4096))
-                .put("body",text(extras.getCharSequence(Notification.EXTRA_BIG_TEXT,extras.getCharSequence(Notification.EXTRA_TEXT)),16384))
+                .put("title",NotificationContent.title(extras))
+                .put("body",NotificationContent.body(extras))
                 .put("postedAt",sbn.getPostTime()).put("canOpen",n.contentIntent!=null)
                 .put("groupSummary",(n.flags & Notification.FLAG_GROUP_SUMMARY)!=0)
                 .put("canDismiss",sbn.isClearable()).put("canReply",replyAction(n)>=0);
