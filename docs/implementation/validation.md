@@ -18,6 +18,173 @@
 
 播放器现为社区原版 fvp 0.39.1；旧本地 snapshot 补丁、固定 MDK、协作暂停捕获 JAR 的测量只能作为历史样本。当前官方 scrcpy JAR 的暂停只停止本地呈现，`capturePaused=false`，恢复通过 `RESET_VIDEO` 重新取得画面。旧“远端捕获已经暂停”的通过记录不证明当前实现有该能力。
 
+## 2026-10-21 远控输入录取与 ADB 控制优先
+
+远控页不再用无界 `Future` 链逐条保存所有 pointer move。`RemoteInputQueue`
+串行派发输入，每个触点只保留一个尚未发送的最新 move；down/up/cancel
+不合并，且同一触点出现边缘事件后，新的 move 不会跨越该事件回填到旧位置。
+队列项继续携带接纳时的 session 和 binding，派发前仍经
+`RemotePresentation.admitsQueuedInput` 核验前台、所有权和画质重建状态。
+
+Rust 对普通 touch/key/text 使用独立的录取路径：请求进入仍为 64 项的控制
+actor 队列后即返回 `accepted`，不再让 Dart 等待经典 ADB WRTE/OKAY。队列满
+明确返回 `control_busy`；接纳时间戳保留 6 秒上限，过期的 move 不补发。
+actor 等一次 ADB 回执期间，会合并后来到达的连续输入，每触点只保留最新
+move；down/up/cancel 仍是顺序屏障。出队消息再按协商 max payload 拼成一个
+WRTE，classic 模式不再为每个短控制消息分别等待 ACK；批内顺序、完整消息
+边界和最早6秒期限保持不变，画质重建先过滤非安全消息再拼接。实际写入失败
+取消所属会话并保留共享 Client，不回放结果未知的输入。launch、refresh、
+display 等完成型请求仍等待写回执，剪贴板继续等待自身 sequence。
+
+控制流在 ADB 传输层使用独立 16 项有界优先 writer；普通 writer 仍为 64 项，
+单流经典 ACK、burst credit 和有序关闭约束没有放宽。视频 ACK 仍走普通队列，
+因此控制帧可以越过尚未写出的普通帧，但不能越过已在 TCP 内核中的字节。
+
+弱网默认参数同时收敛：balanced 从 1280/60fps/8Mbps 改为
+1280/60fps/4Mbps，详细选项加入4Mbps；产品默认请求ADB delayed_ack，只有
+双方协商支持时启用，旧目标仍回退经典模式；静态重复帧超时从最高33ms改为
+官方scrcpy的100ms。8/12Mbps与流畅档仍可显式选择，不删除高画质路径。
+
+视频读取增加单向排队检测：以源PTS为基准观察“到达时间减源PTS”的相对增长，
+连续8帧达到约800ms时通过控制优先通道请求`RESET_VIDEO`。请求成功后
+`awaitingSession=true`，旧编码段在Rust停止转发，直到新session/关键帧出现；
+4秒冷却限制重复重置，8秒未确认则终止当前画面进入恢复。本机呈现socket的
+首帧前缀、session尺寸和完整视频单元写入均有3秒停滞期限。该机制不需要主机
+与设备时钟同源，也不在压缩码流中随意丢弃P/B帧。
+
+播放器缓冲改为 MDK 实时流的 `min=0, max=INT64_MAX, drop=true`（Dart
+传`max=0`）。旧配置`max=150ms`在通常数秒的关键帧间隔下无法丢弃可解码前缀，
+drop实际不生效；新配置只保留最新关键帧及其后续参考链，交给解码器继续处理。
+首个实时播放器初始化前另将进程级`videoout.buffer_frames`设为1，使renderer
+只保留一张最新待显示帧；该全局项同样作用于本进程其他MDK视频输出，诊断事件
+记录`maxFrames/processWide`，不声称已读回SDK内部值。
+该结论依据锁定 fvp/MDK 0.39.1 的`setBufferRange`契约和源码接线，仍须用实体
+弱网同一PTS样本核对收益与CPU。
+
+设备存储版本从1迁移到2时，旧默认签名`burst=false + balanced 1280/60/8Mbps`
+只迁移一次到`burst请求开启 + 4Mbps`。显式30fps、1920宽、清晰档等非旧默认
+组合保持原值；迁移后用户再次关闭burst不会被下次启动覆盖。元数据导入继续
+尊重文件中已经声明的显式设置。
+
+本轮主机证据：
+
+- `interop-adb` 全量 89 项通过、13 项按环境/设备条件忽略，新增优先 writer
+  在普通 FIFO 饱和时先发控制 WRTE 的回归通过；
+- `interop-core --lib scrcpy` 71 项通过、4 项按设备条件忽略，新增有界录取、
+  回执等待期间 move 合并、边缘前 move 保留、连续消息单 WRTE 批写、写入失败
+  撤销且不重放、时钟偏移积压检测和优先`RESET_VIDEO`回归通过；
+- 偏好默认与 Dart 画质策略回归通过，核对 burst 请求、4Mbps balanced 和
+  可选码率列表一致；重复帧100ms常量、旧存储版本迁移与显式自定义保留另有
+  回归；`preferences_lifecycle` 6项通过；
+- API36 x86_64 双AVD实际运行`fvp_video_lifecycle_test.dart` H.264：
+  取得288×640真实解码画面，Core启动1183ms、输出首帧确认788ms、其中
+  `fvp.open`79ms；等待确认156ms、可读帧785ms，pause/resume、实际截图和
+  准确停止通过，目标端无残留scrcpy进程。无窗口SwiftShader目标同时出现
+  System UI ANR，故该结果只证明真实Android解码/纹理/快照路径可用，不作为
+  延迟分布或性能通过；
+- 受控回环代理80ms双向延迟、1Mbps双向带宽、2Mbps视频与动态目标：输入到
+  新像素P50 345ms/P95 624ms，控制回执1–33ms；同一路径仅把视频降到
+  800kbps后P50 385ms/P95 706ms。该单变量样本不支持“无条件降码率改善尾延迟”，
+  且AVD出现Choreographer跳帧，不能外推实体设备或作为SLO；
+- 同一受控代理的ADB单变量对照：burst实际协商成功时为345/624ms，
+  classic为491/1308ms；另有15fps样本为385/618ms。每个配置只有一轮8次输入，
+  不能当作稳定分布，但方向支持保留burst默认，未支持以无条件降低帧率替代
+  传输流控；
+- `control_stall_android` 编译通过；其真实 adbd 入口仍需
+  `INTEROP_ADBD_PORT`，本轮未执行该控制故障用例，不计通过；
+- Flutter 主控应用全量 434 项通过、1 项按环境跳过；Bridge 全量 191 项通过；
+  相关 Dart 文件严格分析无问题；
+- `RUST_MIN_STACK=8388608 cargo test --workspace -- --test-threads=1` 的全部
+  非 ignored 用例通过；严格 Clippy `--workspace --all-targets -D warnings`、
+  Rust 格式和 `git diff --check` 通过。默认测试线程栈在既有 `host_identity`
+  用例上会 overflow；8 MiB 栈单例可通过，但并行全量仍可能因该用例的 Client
+  生命周期断言抖动，故 workspace 结果注明单线程环境。
+
+该结果证明本地调度、Rust录取/批写、ADB用户态优先级、AVD上的实际解码和
+纹理路径，以及受控回环代理的弱网压力可复现性，不证明物理链路端到端延迟已
+达标。未验证真实Wi-Fi RTT/丢包、实体ARM/OEM、弱网下解码/纹理延迟分布或
+逐步输入到可读像素分位数；AVD的System UI ANR和Choreographer跳帧样本不能用
+于性能比较。视频仍经过Matroska、
+loopback HTTP和播放器，下游反压仍可形成上游旧帧，后续实验和原生直送边界见
+[远控延迟研究](../research/remote-control-latency-optimization.md)。
+
+## 2026-10-22 设计稿与实现一致性复核
+
+本轮复核未提交的设计稿、产品规格与实现，修正了等待态、文件页和传输详情的
+不一致，并重新运行主机回归。
+
+等待态：`AmbientLoadingField` 首帧不再因为初始值比较而跳过动画，减少动态
+效果时冻结在固定构图；远控页在 `presentation.connecting` 期间不再叠加错误
+或暂停恢复面板，底部导航和退出把手也不出现。连接页在等待期保留页头返回，
+底部只有“取消本次尝试”；设计稿 `ScGZP`、`te8k9` 均按此状态绘制，`te8k9`
+不再包含主控系统状态栏或页面标题。`connection_loading_test` 覆盖动画实际
+运行、减少动态效果冻结、无中心文字和取消动作；`remote_loading_test` 覆盖
+整机与独立窗口的首帧前环境场。
+
+文件页：名称搜索由页头放大镜进入独立搜索页，文件页路径行保留“刷新目录”
+按钮；文件夹与文件共用四列自适应网格（手机参考宽度 370px 内容、三处
+12px 间隔、每列 83.5px），并共享页头的视图与排序菜单。类型入口只在共享
+存储首页出现并标注“仅筛当前目录”，为两列 60px `type-cell`、`surface-low`
+底，面包屑为 32px `chip`。设计稿 `C2ZhGv`、`fOtkV`、`MaHXL` 删除常驻搜索行、
+重复间距及“文件夹／文件”分组标题和数量；目录内容改为文件夹优先的一条连续
+排序流，页头补齐发送本机文件／文件夹入口。文件页页面底使用 `surface`，
+缩略区使用 `surface-low`；搜索页和通知页继续使用 `canvas`，保留白色字段与
+卡片边界。网格名称、日期与大小在缩略区下方居中，文件夹与文件按内容采用
+自然行高。文档使用 42×54px 预览图形，缩略图失败只在预览区内提供紧凑重试；
+文件大小使用紧凑格式，文件夹显示完整日期，文件网格和列表使用月/日。
+`file_browser_page_test` 覆盖四列、居中、自然行高、背景、文档预览、紧凑重试、
+长设备名／大字、顶部与系统返回的逐级退出以及新 controller 恢复持久偏好；
+`file_browser_model_test` 覆盖文件夹排序、条目缓存和紧凑格式。
+
+传输详情：批次以整批聚合摘要展示状态与取消能力，取消只结束该批次未完成
+项；批次不提供整体重放，逐项行可进入对应条目单独重新传输。逐项跳转使用
+原始条目 id，代表项自身不再自跳。`transfers.get` 返回同批次 `batch` 摘要，
+`files_state` 与 `transfer_test` 分别覆盖摘要字段、批次状态文案和逐项列表。
+设计稿 `R759qi` 移除了与“批次不会整体重放”矛盾的整批重传按钮，逐项行
+命名明确，失败项不显示进度条。列表与详情状态行现分别使用紧凑方向和完整
+方向文案，完成/停止项把真实字节并入结果行，批次行显示总项数与聚合进度；
+传输详情标题按设计使用正文层级，来源目标单行显示，逐项行不再重复大小行。
+上述修正同时覆盖 `W6enLf`、`R759qi`；`fKBPB` 的确认文案改为先停止再移除并
+保留已完成内容。
+
+传输协议与冲突：`transfers.cancel` 的 `transferId`/`batchId` 在共享契约中均
+改为可选，Rust 按 `batchId` 优先并保留单条 `transferId` 路径，Bridge 回归
+覆盖批次与单项请求均能通过前置字段校验；`session.start` 的 `packageName`
+也补入声明。`K950NO` 同名冲突面板现显示冲突文件名、来源与目标路径、替换
+影响，以“保留两份”为主按钮、“替换目标文件”为危险次按钮、“跳过此项”为
+中性动作，并保留本任务后续冲突选项。详情页的冲突面板从当前条目构造真实
+来源/目标标签，不再使用空占位。
+
+文件搜索与分享：文件搜索页固定为列表，名称输入与类型字段同行且同高，类型
+控件只显示当前选值；`jcZXq`/`zD1BI` 的结果行改为名称、完整父目录与大小，并
+显示进入箭头；运行态只保留全宽“停止搜索”，条件修改提示引用旧查询，进度
+读取后端返回的当前检查目录和已检查计数。搜索范围草稿不再改写旧结果的来源
+标签，设计稿 `lm0us` 的搜索范围标签统一为产品规格中的“手机内部存储”。
+`Y0LpW` 的接收设备改为设备卡，显示设备身份、真实状态与连接方式。
+`FileDeliveryPath` 在准备页、保存页与分享页共用；组件母版和 `ERONu`、
+`uhuiJ`、`mcRQa`、`vSjZS`、`Gfe22`、`pSoci`、`cdQol` 实例均已落到 Pencil，
+保存态第三阶段为“系统副本”，分享态为“接收应用”，异常态图标和标签使用
+危险色，来源标签来自当前任务。
+
+最终主机结果：Flutter 应用全量 438 项通过、1 项按环境跳过；`design_system`
+25 项、`interop_bridge` 191 项全量通过；`rtk dart analyze` 无问题，Dart 格式
+检查 211 文件 0 变化，`build_runner --only-check`、token 漂移检查、
+`git diff --check` 通过；设计规范检查为 0 错误、71 个既有警告。宿主 Widget
+实采 402×874 并核对文件网格、文件列表、独立搜索页和通知页；测试中的图片
+缩略图受本地图片解码路径／时序限制未显示，不能据此判断生产缩略图失败。
+
+Pencil 最终对象扫描核对 `MaHXL`、`C2ZhGv`、`Baclb` 使用 `$surface`，
+`lm0us`、`a7A57` 使用 `$canvas`，`XL2nI` 为 56px `$surface`；`RwXvW` 与
+126×56px 的 `ngnln` 同行。740 个文本对象中没有“Node ID:”或本次指定 ID 的
+可见标注，`Sjzxf`、`ftaRY`、`mVNnf` 节点已不存在，也没有快捷回复文案。
+这证明静态源稿的文本与语义背景，不替代实际 Flutter 明暗切换截图。
+
+当前环境没有 `cargo`/`rustfmt`。新增的 `preferences_lifecycle` 磁盘重启用例
+覆盖文件视图、排序键和方向恢复，但最终树没有在本轮复跑 Rust workspace、
+Clippy 或格式检查；前序 Cargo 通过数不能自动继承为本轮最终证据。现有证据
+仍不替代真实设备上的缩略图解码、大量目录滚动、持续主题切换、GPU 玻璃成像
+或弱网传输。
+
 ## 2026-10-21 累计设计要求实施验收
 
 起点为 `e37cc51`。目标和85项跟踪保存在 `.scratch/design-implementation/`；本次授权实现范围已经落地，并按下列层级完成适用验收；物理设备、OEM与其他宿主的边界保留。
@@ -96,7 +263,7 @@
 | 主控系统提醒，API36 双 AVD | 远端系统通知→通用隐私提示；精确撤回、SystemUI 点击后进入来源设备且不执行旧远端动作 | 拒权、渠道关闭、锁屏、真实来电、OEM/系统停止与 Windows 打包身份另验。见[系统提醒](system-notifications.md) |
 | 连接故障，实际 adbd/协议夹具 | 半包与HTTP背压期限、精确 Client 失活检测；应用层黑洞无注入EOF后，新会话及新像素自动恢复 | TCP ACK仍在的应用层停转，非真实 Wi-Fi 漫游或任意 adbd 内部挂起。见[连接健康](connection-health.md) |
 
-通知回复与可见设备归属的复现入口是 `app/integration_test/notification_reply_test.dart`、`tool/driver/notification_reply.dart` 与独立 `tool/e2e/notification_fixture/`。夹具核对 run/id/原文/count、原通知精确清除、基线剪贴板恢复及自有安装清理；缺少任一回执不能记为完整通过。
+通知页的原内容接续、已读（清除）与全部已读复现入口是 `app/integration_test/notification_requirements_test.dart` 与 `tool/driver/notification_requirements.dart`。快捷回复不属于当前产品范围，不建立对应 UI 或验收入口；通知夹具仍用于核对独立 Android 来源、精确清除和自有安装清理。
 
 ## 构建与渲染证据
 
