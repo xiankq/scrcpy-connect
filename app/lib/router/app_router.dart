@@ -36,7 +36,6 @@ import 'package:scrcpy_connect/pages/home/home_page.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/pages/settings/media_cache/settings_media_cache_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/notifications/reply/devices_workspace_notifications_reply_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
@@ -740,43 +739,6 @@ class NotificationsRoute extends GoRouteData with $NotificationsRoute {
       _page(state, build(context, state));
 }
 
-@TypedGoRoute<NotificationReplyRoute>(
-  path: '/devices/:deviceId/notifications/:notificationId/reply',
-  name: 'notification-reply',
-)
-class NotificationReplyRoute extends GoRouteData with $NotificationReplyRoute {
-  const NotificationReplyRoute({
-    required this.deviceId,
-    required this.notificationId,
-  });
-  final String deviceId;
-  final String notificationId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
-  @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final controller = _controller(context);
-    final records = _records(context);
-    Widget page(BuildContext _, GoRouterState state, Json device) {
-      final id = notificationId;
-      return RecordRoute(
-        identity: 'notification:${device['id']}:$id',
-        load: () => records.notificationReply(value(device, 'id'), id),
-        builder: (_, notification) => NotificationReplyPage(
-          controller: controller,
-          device: device,
-          notification: notification,
-        ),
-      );
-    }
-
-    return _deviceRecord(context, state, deviceId, 'notification-reply', page);
-  }
-
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
-}
-
 @TypedGoRoute<CallsRoute>(path: '/devices/:deviceId/calls', name: 'calls')
 class CallsRoute extends GoRouteData with $CallsRoute {
   const CallsRoute({required this.deviceId});
@@ -1032,6 +994,7 @@ class DocumentExportRoute extends GoRouteData with $DocumentExportRoute {
             transferId: id,
             partial: partial,
             localPath: localPath,
+            sourceLabel: value(task, 'sourceLabel', '被控设备'),
             name: value(task, 'name', '取回的文件'),
             kind: task['kind'] == 'directory' ? 'directory' : 'file',
           );

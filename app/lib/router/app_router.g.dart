@@ -32,7 +32,6 @@ List<RouteBase> get $appRoutes => [
   $galleryRoute,
   $mediaPreviewRoute,
   $notificationsRoute,
-  $notificationReplyRoute,
   $callsRoute,
   $deviceDataRoute,
   $qualityRoute,
@@ -944,42 +943,6 @@ mixin $NotificationsRoute on GoRouteData {
   @override
   String get location => GoRouteData.$location(
     '/devices/${Uri.encodeComponent(_self.deviceId)}/notifications',
-  );
-
-  @override
-  void go(BuildContext context) => context.go(location);
-
-  @override
-  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
-
-  @override
-  void pushReplacement(BuildContext context) =>
-      context.pushReplacement(location);
-
-  @override
-  void replace(BuildContext context) => context.replace(location);
-}
-
-RouteBase get $notificationReplyRoute => GoRouteData.$route(
-  path: '/devices/:deviceId/notifications/:notificationId/reply',
-  name: 'notification-reply',
-  hasOverriddenOnExit: false,
-  parentNavigatorKey: NotificationReplyRoute.$parentNavigatorKey,
-  factory: $NotificationReplyRoute._fromState,
-);
-
-mixin $NotificationReplyRoute on GoRouteData {
-  static NotificationReplyRoute _fromState(GoRouterState state) =>
-      NotificationReplyRoute(
-        deviceId: state.pathParameters['deviceId']!,
-        notificationId: state.pathParameters['notificationId']!,
-      );
-
-  NotificationReplyRoute get _self => this as NotificationReplyRoute;
-
-  @override
-  String get location => GoRouteData.$location(
-    '/devices/${Uri.encodeComponent(_self.deviceId)}/notifications/${Uri.encodeComponent(_self.notificationId)}/reply',
   );
 
   @override

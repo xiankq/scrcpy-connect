@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
-import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/widgets/notification_card.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
@@ -181,7 +181,7 @@ class NotificationsPage extends HookConsumerWidget {
           }
           final hasStatus =
               data['status'] == 'limited' && value(data, 'reason').isNotEmpty;
-          final offset = hasStatus ? 1 : 0;
+          final offset = hasStatus ? 2 : 1;
           Key notificationKey(Json item) =>
               ValueKey('${value(device, 'id')}:${value(item, 'id')}');
           final indices = <Key, int>{
@@ -196,7 +196,15 @@ class NotificationsPage extends HookConsumerWidget {
               itemCount: notifications.length + offset,
               findChildIndexCallback: (key) => indices[key],
               itemBuilder: (context, index) {
-                if (hasStatus && index == 0) {
+                if (index == 0) {
+                  return DeviceSourceRow(
+                    device: device,
+                    padding: const EdgeInsets.only(
+                      bottom: DesignTokens.spacingSm,
+                    ),
+                  );
+                }
+                if (hasStatus && index == 1) {
                   return StateNote(
                     value(data, 'reason'),
                     icon: LucideIcons.circleAlert,
@@ -208,7 +216,7 @@ class NotificationsPage extends HookConsumerWidget {
                   padding: const EdgeInsets.only(
                     bottom: DesignTokens.spacingSm,
                   ),
-                  child: _NotificationCard(
+                  child: NotificationCard(
                     controller: controller,
                     device: device,
                     notification: notification,
@@ -247,223 +255,6 @@ class NotificationsPage extends HookConsumerWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-class _NotificationCard extends HookWidget {
-  const _NotificationCard({
-    required this.controller,
-    required this.device,
-    required this.notification,
-    required this.clearing,
-    required this.onClear,
-  });
-  final AppController controller;
-  final Json device;
-  final Json notification;
-  final bool clearing;
-  final VoidCallback onClear;
-
-  Future<void> _open(BuildContext context) async {
-    if (notification['canOpen'] == false) {
-      feedback(context, '这条通知没有可接续的原始动作，将打开手机界面。');
-      await openRemoteRoute(context, deviceId: value(device, 'id'));
-      return;
-    }
-    try {
-      final result = await controller.request('notifications.open', {
-        'deviceId': device['id'],
-        'notificationId': notification['id'],
-      });
-      if (!context.mounted) return;
-      if (result['located'] != true) {
-        feedback(context, value(result, 'message', '未能定位原内容，将打开手机界面'));
-      }
-    } catch (error) {
-      if (!context.mounted) return;
-      feedback(context, '$error');
-      if (error is! RequestFailure || error.code != 'authentication_required') {
-        return;
-      }
-    }
-    if (context.mounted) {
-      await openRemoteRoute(context, deviceId: value(device, 'id'));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final opening = useState(false);
-    final appName = value(notification, 'appName').trim();
-    final packageName = value(notification, 'packageName');
-    final timestamp = notification['postedAt'];
-    final posted =
-        timestamp is int && timestamp > 0 && timestamp <= 8640000000000000
-        ? DateTime.fromMillisecondsSinceEpoch(timestamp)
-        : null;
-    final localizations = MaterialLocalizations.of(context);
-    final now = DateTime.now();
-    final time = posted == null
-        ? null
-        : localizations.formatTimeOfDay(
-            TimeOfDay.fromDateTime(posted),
-            alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
-          );
-    final sameDay =
-        posted != null &&
-        posted.year == now.year &&
-        posted.month == now.month &&
-        posted.day == now.day;
-    final timeLabel = posted == null
-        ? null
-        : sameDay
-        ? time
-        : '${localizations.formatShortMonthDay(posted)} · $time';
-    return ContentPanel(
-      key: ValueKey('notification-${value(notification, 'id')}'),
-      padding: EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: opening.value
-              ? null
-              : () async {
-                  opening.value = true;
-                  try {
-                    await _open(context);
-                  } finally {
-                    if (context.mounted) opening.value = false;
-                  }
-                },
-          borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-          child: Padding(
-            padding: const EdgeInsets.all(DesignTokens.spacingMd),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    if (packageName.isNotEmpty)
-                      SizedBox.square(
-                        dimension: DesignTokens.componentSmallButtonSize,
-                        child: FittedBox(
-                          child: PhoneAppIcon(
-                            controller: controller,
-                            deviceId: value(device, 'id'),
-                            packageName: packageName,
-                            userId: notification['userId'] == null
-                                ? null
-                                : value(notification, 'userId'),
-                          ),
-                        ),
-                      )
-                    else
-                      const Icon(LucideIcons.imageOff, semanticLabel: '图标暂不可用'),
-                    const SizedBox(width: DesignTokens.spacingSm),
-                    Expanded(
-                      child: Wrap(
-                        alignment: WrapAlignment.spaceBetween,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: DesignTokens.spacingSm,
-                        runSpacing: DesignTokens.spacingXxs,
-                        children: [
-                          Text(
-                            appName.isEmpty || appName == packageName
-                                ? '手机通知'
-                                : appName,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          if (timeLabel != null)
-                            Text(
-                              timeLabel,
-                              semanticsLabel:
-                                  '收到于 ${localizations.formatFullDate(posted!)} $time',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (value(notification, 'title').isNotEmpty) ...[
-                  const SizedBox(height: DesignTokens.spacingSm),
-                  Text(
-                    value(notification, 'title'),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
-                if (value(notification, 'body').isNotEmpty) ...[
-                  const SizedBox(height: DesignTokens.spacingTight),
-                  Text(value(notification, 'body')),
-                ],
-                if (value(notification, 'title').isEmpty &&
-                    value(notification, 'body').isEmpty) ...[
-                  const SizedBox(height: DesignTokens.spacingTight),
-                  Text(
-                    '此通知未提供预览内容',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-                if (notification['canOpen'] == false)
-                  const StateNote('此通知没有可接续的原始动作；点击将仅打开手机界面。'),
-                if (notification['canDismiss'] is bool ||
-                    notification['canReply'] == true) ...[
-                  const SizedBox(height: DesignTokens.spacingSm),
-                  Align(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: Wrap(
-                      alignment: WrapAlignment.end,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: DesignTokens.spacingSm,
-                      runSpacing: DesignTokens.spacingXxs,
-                      children: [
-                        if (notification['canDismiss'] == true)
-                          GlassTooltip(
-                            message: '已读（清除）',
-                            child: TextButton.icon(
-                              style: TextButton.styleFrom(
-                                minimumSize: const Size(
-                                  DesignTokens.componentIconButtonSize,
-                                  DesignTokens.componentIconButtonSize,
-                                ),
-                              ),
-                              onPressed: clearing ? null : onClear,
-                              icon: const Icon(
-                                LucideIcons.checkCheck,
-                                size: DesignTokens.componentIconSmallSize,
-                              ),
-                              label: const Text('已读（清除）'),
-                            ),
-                          )
-                        else if (notification['canDismiss'] == false)
-                          Text(
-                            '手机系统将此项标为不可清除，请在原应用中处理。',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        if (notification['canReply'] == true)
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(
-                                DesignTokens.componentIconButtonSize,
-                                DesignTokens.componentIconButtonSize,
-                              ),
-                            ),
-                            onPressed: () => NotificationReplyRoute(
-                              deviceId: value(device, 'id'),
-                              notificationId: value(notification, 'id'),
-                            ).push<void>(context),
-                            child: const Text('快捷回复'),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

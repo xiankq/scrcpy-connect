@@ -11,7 +11,6 @@ import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_wor
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_workspace_gallery_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/notifications/reply/devices_workspace_notifications_reply_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
@@ -88,7 +87,6 @@ Json? _homeDevice(Widget page) => switch (page) {
   GalleryPage p => p.device,
   MediaPreviewPage p => p.device,
   NotificationsPage p => p.device,
-  NotificationReplyPage p => p.device,
   CallsPage p => p.device,
   QualityPage p => p.device,
   RemotePage p => p.device,

@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/notification_replies.dart';
 
 Object? _freeze(Object? value) => switch (value) {
   Map<Object?, Object?> map => Map<String, dynamic>.unmodifiable({
@@ -44,7 +43,6 @@ class AppState {
     required this.reconciliationPending,
     required this.reconciliationError,
     required this.reconciledSnapshot,
-    required this.notificationReplies,
   });
   factory AppState({
     List<Json> devices = const [],
@@ -65,8 +63,6 @@ class AppState {
     bool reconciliationPending = false,
     String? reconciliationError,
     Json? reconciledSnapshot,
-    Map<NotificationReplyKey, NotificationReplyState> notificationReplies =
-        const {},
   }) => AppState._(
     devices: _records(devices),
     settings: immutableJson(settings),
@@ -88,7 +84,6 @@ class AppState {
     reconciledSnapshot: reconciledSnapshot == null
         ? null
         : immutableJson(reconciledSnapshot),
-    notificationReplies: Map.unmodifiable(notificationReplies),
   );
   final List<Json> devices;
   final Json settings;
@@ -108,7 +103,6 @@ class AppState {
   final bool reconciliationPending;
   final String? reconciliationError;
   final Json? reconciledSnapshot;
-  final Map<NotificationReplyKey, NotificationReplyState> notificationReplies;
 
   AppState copyWith({
     List<Json>? devices,
@@ -129,7 +123,6 @@ class AppState {
     bool? reconciliationPending,
     String? Function()? reconciliationError,
     Json? Function()? reconciledSnapshot,
-    Map<NotificationReplyKey, NotificationReplyState>? notificationReplies,
   }) => AppState._(
     devices: devices == null ? this.devices : _records(devices),
     settings: settings == null ? this.settings : immutableJson(settings),
@@ -160,8 +153,5 @@ class AppState {
       reconciledSnapshot,
       this.reconciledSnapshot,
     ),
-    notificationReplies: notificationReplies == null
-        ? this.notificationReplies
-        : Map.unmodifiable(notificationReplies),
   );
 }

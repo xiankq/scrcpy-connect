@@ -2,7 +2,6 @@ import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/notifications/reply/devices_workspace_notifications_reply_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
@@ -250,51 +249,6 @@ void main() {
       );
     }
   }
-
-  testWidgets(
-    'system acceptance preserves the reply draft without claiming delivery or permitting resend',
-    (tester) async {
-      var submissions = 0;
-      const message = '原应用动作已交给系统；未确认应用或消息服务送达，不会自动重发。';
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        if (command == 'notifications.reply') submissions++;
-        return {
-          'status': 'acceptedBySystem',
-          'acceptedBySystem': true,
-          'delivered': null,
-          'message': message,
-        };
-      });
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: NotificationReplyPage(
-            controller: controller,
-            device: device,
-            notification: const {'id': 'notification', 'title': '消息'},
-          ),
-        ),
-      );
-      await tester.enterText(find.byType(TextField), '保留的真实草稿');
-      await tester.ensureVisible(find.text('发送回复'));
-      await tester.tap(find.text('发送回复'));
-      await tester.pumpAndSettle();
-      expect(find.text(message), findsOneWidget);
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        '保留的真实草稿',
-      );
-      expect(find.text('发送回复'), findsNothing);
-      expect(find.text('回复已由手机确认提交'), findsNothing);
-      expect(submissions, 1);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
 
   testWidgets(
     'aggregate call state remains limited and exposes no unsafe global actions',

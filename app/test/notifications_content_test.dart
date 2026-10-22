@@ -110,7 +110,7 @@ void main() {
       expect(find.text('空白汇总'), findsNothing);
       expect(find.text('当前消息'), findsOneWidget);
       expect(find.text('仍然显示原内容'), findsOneWidget);
-      expect(find.text('快捷回复'), findsOneWidget);
+      expect(find.text('快捷回复'), findsNothing);
       await tester.scrollUntilVisible(find.text('三条未读消息'), 200);
       expect(find.text('三条未读消息'), findsOneWidget);
       await tester.scrollUntilVisible(find.text('此通知未提供预览内容'), 200);
@@ -235,6 +235,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('notification-message')))
+            .height,
+        DesignTokens.componentNotificationCardHeight,
+      );
       await tester.tap(find.byTooltip('已读（清除）'));
       await tester.pumpAndSettle();
       expect(

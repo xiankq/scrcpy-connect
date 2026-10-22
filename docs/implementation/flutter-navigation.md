@@ -29,7 +29,7 @@
 | device-activities / device-convert-ip | `/devices/:deviceId/activities` / `/devices/:deviceId/convert-ip` | 核验同一 deviceId；活动按设备过滤，转IP只从当前连接的目标接口选择 |
 | device-adb-key（兼容） | `/devices/:deviceId/adb-key` | 仅重定向同设备连接配置；已有设备私钥只读 |
 | files / file-details / file-search / gallery / media-preview | `/devices/:deviceId/<功能>` | deviceId；文件 path 经当前目录清单重新核对 |
-| apps / notifications / calls / quality | `/devices/:deviceId/<功能>` | deviceId；通知回复额外按 notificationId 查当前通知 |
+| apps / notifications / calls / quality | `/devices/:deviceId/<功能>` | deviceId；通知仅提供打开原内容与清除，不建立回复路由 |
 | remote / remote-app | `/devices/:deviceId/remote` / `/devices/:deviceId/apps/:packageName/remote` | 显式打开意图；URL 恢复不会自动创建会话 |
 | session-tools / sessions（兼容） | `/devices/:deviceId/tools` / `/devices/:deviceId/sessions` | 仅重定向设备工作台，不恢复关闭的窗口 |
 | remote-session | `/devices/:deviceId/sessions/:sessionId` | 当前 `session.list` 中匹配的会话 |
@@ -66,7 +66,7 @@
 
 ## 当前设备归属
 
-设备专用页在`_deviceRecord`确认设备后共用`VisibleDeviceFocus`，以ModalRoute当前资格、生命周期及核验状态声明归属；失去资格只撤回自己的待处理声明，不能清空新页面的焦点。post-frame再次检查epoch、设备、mounted及实际route，返回/replace或同帧核验后正确跟随；Remote继续使用更严格的会话/画面核验，不由共享包装器抢先设焦点。独立回复route重新读取通知，失效且已有本机回复时仅呈现核对/复制，不把内存内容恢复成远端动作。对应实际回复流程与历史测试范围见[验收记录](validation.md#历史设备流程证据)。
+设备专用页在`_deviceRecord`确认设备后共用`VisibleDeviceFocus`，以ModalRoute当前资格、生命周期及核验状态声明归属；失去资格只撤回自己的待处理声明，不能清空新页面的焦点。post-frame再次检查epoch、设备、mounted及实际route，返回/replace或同帧核验后正确跟随；Remote继续使用更严格的会话/画面核验，不由共享包装器抢先设焦点。通知页只按当前deviceId核验并呈现打开与清除，不建立快捷回复路由。
 
 ## 生成与分析
 

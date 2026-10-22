@@ -1,0 +1,45 @@
+import 'package:design_system/design_system.dart';
+import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/services/app_controller.dart';
+
+class DeviceSourceRow extends StatelessWidget {
+  const DeviceSourceRow({
+    super.key,
+    required this.device,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final Json device;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: padding,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: DesignTokens.spacingLg),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              LucideIcons.smartphone,
+              size: DesignTokens.componentIconSmallSize - 2,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: DesignTokens.spacingTight),
+            Expanded(
+              child: Text(
+                deviceName(device),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

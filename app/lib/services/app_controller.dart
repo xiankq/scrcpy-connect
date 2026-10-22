@@ -10,7 +10,6 @@ import 'package:scrcpy_connect/services/device_screen_policy.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/services/app_dependencies.dart';
 import 'package:scrcpy_connect/services/app_state.dart';
-import 'package:scrcpy_connect/services/notification_replies.dart';
 
 part 'app_controller.g.dart';
 
@@ -241,18 +240,6 @@ class AppController extends _$AppController {
             reconciliationError: () => null,
             reconciledSnapshot: () => snapshot,
           );
-          var replies = repliesForDevices(
-            next.notificationReplies,
-            objects(snapshot['devices']).map((device) => value(device, 'id')),
-          );
-          for (final companion in objects(snapshot['companions'])) {
-            replies = expireNotificationReplies(
-              replies,
-              value(companion, 'deviceId'),
-              jsonObject(jsonObject(companion['state'])['notifications']),
-            );
-          }
-          next = next.copyWith(notificationReplies: replies);
         }
         if (event['type'] == 'settings.changed' &&
             event['data'] is Map<Object?, Object?>) {
@@ -263,24 +250,6 @@ class AppController extends _$AppController {
         if (event['type'] == 'share.received' &&
             event['data'] is Map<Object?, Object?>) {
           next = _withShare(next, jsonObject(event['data']));
-        }
-        if (event['type'] == 'notifications.changed') {
-          next = next.copyWith(
-            notificationReplies: expireNotificationReplies(
-              next.notificationReplies,
-              value(event, 'deviceId'),
-              data,
-            ),
-          );
-        }
-        if (event['type'] == 'devices.changed' &&
-            data['devices'] is List<Object?>) {
-          next = next.copyWith(
-            notificationReplies: repliesForDevices(
-              next.notificationReplies,
-              objects(data['devices']).map((device) => value(device, 'id')),
-            ),
-          );
         }
         state = next;
         if (event['type'] == 'device.screen.failed') {
@@ -380,133 +349,6 @@ class AppController extends _$AppController {
     return _dependencies.request(command, params);
   }
 
-  static NotificationReplyKey notificationReplyKey(
-    String deviceId,
-    Json notification,
-  ) => (
-    deviceId: deviceId,
-    notificationId: value(notification, 'id'),
-    revision: value(notification, 'revision', value(notification, 'id')),
-  );
-
-  bool updateNotificationReplyDraft(NotificationReplyKey key, String text) {
-    if (isDisposed() ||
-        key.deviceId.isEmpty ||
-        key.notificationId.isEmpty ||
-        text.length > 16384) {
-      return false;
-    }
-    final previous =
-        state.notificationReplies[key] ?? const NotificationReplyState();
-    if (!previous.canEdit) return false;
-    if (text.isEmpty) {
-      state = state.copyWith(
-        notificationReplies: {...state.notificationReplies}..remove(key),
-      );
-      return true;
-    }
-    if (!state.notificationReplies.containsKey(key) &&
-        state.notificationReplies.length >= 64) {
-      return false;
-    }
-    state = state.copyWith(
-      notificationReplies: {
-        ...state.notificationReplies,
-        key: previous.copyWith(text: text),
-      },
-    );
-    return true;
-  }
-
-  Future<void> submitNotificationReply(NotificationReplyKey key) async {
-    if (isDisposed()) return;
-    final previous = state.notificationReplies[key];
-    if (state.reconciliationPending ||
-        previous == null ||
-        !previous.canEdit ||
-        previous.text.trim().isEmpty) {
-      return;
-    }
-    final generation = _generation;
-    void update(NotificationReplyPhase phase, String message, {bool? expired}) {
-      if (!_current(generation)) return;
-      final current = state.notificationReplies[key];
-      if (current == null) return;
-      state = state.copyWith(
-        notificationReplies: {
-          ...state.notificationReplies,
-          key: current.copyWith(
-            phase: phase,
-            message: message,
-            expired: expired,
-          ),
-        },
-      );
-    }
-
-    update(NotificationReplyPhase.submitting, '正在提交…');
-    try {
-      final result = await execute(InteropCommand.notificationsReply, {
-        'deviceId': key.deviceId,
-        'notificationId': key.notificationId,
-        'text': previous.text,
-      });
-      if (result['status'] == 'acceptedBySystem' ||
-          result['acceptedBySystem'] == true) {
-        update(
-          NotificationReplyPhase.accepted,
-          value(result, 'message', '原应用动作已交给系统；未确认消息送达，不会自动重发。'),
-        );
-      } else if (result['status'] == 'completed' ||
-          result['status'] == 'sent') {
-        update(NotificationReplyPhase.submitted, '回复已由手机确认提交');
-      } else if (result['status'] == 'failed') {
-        update(
-          NotificationReplyPhase.editing,
-          value(result, 'reason', '手机明确返回提交失败，已保留回复草稿。'),
-        );
-      } else {
-        update(
-          NotificationReplyPhase.unknown,
-          value(result, 'reason', '回复结果尚未确认，已保留提交内容。请先在手机原应用核对，不会自动重发。'),
-        );
-      }
-    } catch (error) {
-      if (error is RequestFailure &&
-          [
-            'authentication_required',
-            'observation_required',
-          ].contains(error.code)) {
-        // These exact companion errors precede PendingIntent.send. Retrying is
-        // user initiated and the companion revalidates the original action.
-        update(NotificationReplyPhase.editing, '$error。草稿已保留；完成设置后可重新提交。');
-      } else if (error is RequestFailure &&
-          ['notification_expired', 'reply_unavailable'].contains(error.code)) {
-        update(
-          NotificationReplyPhase.editing,
-          '$error。已保留草稿，旧动作不能再使用。',
-          expired: true,
-        );
-      } else {
-        update(
-          NotificationReplyPhase.unknown,
-          '回复结果尚未确认：$error。请在手机原应用核对，不会自动重发。',
-        );
-      }
-    }
-  }
-
-  void reconcileNotificationReplies(String deviceId, Json snapshot) {
-    if (isDisposed()) return;
-    state = state.copyWith(
-      notificationReplies: expireNotificationReplies(
-        state.notificationReplies,
-        deviceId,
-        snapshot,
-      ),
-    );
-  }
-
   Future<void> initialize() =>
       Future.wait([refreshDevices(), loadSettings(), loadPendingShares()]);
 
@@ -602,22 +444,25 @@ class AppController extends _$AppController {
     }
   }
 
-  Future<void> updateSetting(String key, Object? next) {
+  Future<void> updateSettings(Json patch) {
     final generation = _generation;
     _settingsRequest++;
     final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
       if (!_current(generation)) return;
       final epoch = _settingsEpoch;
-      final result = await execute(InteropCommand.settingsUpdate, {key: next});
+      final result = await execute(InteropCommand.settingsUpdate, patch);
       if (_current(generation) && epoch == _settingsEpoch) {
         state = state.copyWith(
-          settings: {...state.settings, key: next, ...result},
+          settings: {...state.settings, ...patch, ...result},
         );
       }
     });
     _settingsQueue = operation;
     return operation;
   }
+
+  Future<void> updateSetting(String key, Object? next) =>
+      updateSettings({key: next});
 
   Future<void> updateDeviceSetting(String deviceId, String key, Object? next) =>
       updateDeviceSettings(deviceId, {key: next});

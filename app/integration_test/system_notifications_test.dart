@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -269,7 +268,6 @@ void main() {
         final sessionsBefore = jsonEncode(
           (await request('session.list'))['sessions'],
         );
-        final repliesBefore = controller.snapshot().notificationReplies;
         await checkpoint('awaiting-system-click', 'clicked');
         await waitFor(
           tester,
@@ -313,11 +311,7 @@ void main() {
           isTrue,
           reason: 'The OS click must not start a remote control session.',
         );
-        expect(
-          mapEquals(controller.snapshot().notificationReplies, repliesBefore),
-          isTrue,
-          reason: 'The OS click must not submit or mutate a remote reply.',
-        );
+        expect(find.text('快捷回复'), findsNothing);
         binding.reportData!.addAll({
           'notificationsPageOpened': true,
           'clickedSourceStillLive': true,

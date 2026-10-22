@@ -112,40 +112,6 @@ validated by a local APK build. The independently observed receipt and cleanup
 are required runtime evidence.
 
 
-## Flutter acceptance driver
-
-Use two isolated API36 AVDs and a prepared legacy TCP endpoint. The driver refuses
-any pre-existing installation, installs without replacement, grants only this
-new fixture's requested POST_NOTIFICATIONS permission, and uninstalls only its
-owned installation. It never modifies the product's permissions or AppOps.
-Before the copy check, put a known temporary plain-text clipboard baseline on
-the controller. The test requires a readable text baseline before writing and
-restores that text; it does not claim restoration of arbitrary ClipData/MIME or
-an originally empty clipboard.
-
-From `app/`, with Flutter on PATH:
-
-```sh
-env CONNECT_E2E_ADB=/absolute/android-sdk/platform-tools/adb \
-  CONNECT_E2E_TARGET=emulator-5556 \
-  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/notification-reply \
-  flutter drive -d emulator-5554 --no-pub \
-  --driver=../tool/driver/notification_reply.dart \
-  --target=integration_test/notification_reply_test.dart \
-  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
-  --dart-define=CONNECT_E2E_PORT=15556
-```
-
-A fresh run ID is delivered through a runtime handshake. The UI submits the
-original reply, returns to it, clears only notification 0, then copies the
-retained text from its expired route. The driver checks the receiver's private
-AtomicFile receipt and its final cleanup snapshot for exactly one matching
-Unicode reply. Missing UI/report/receipt, a duplicate, mismatched text, failure
-to restore the text baseline, or unconfirmed cleanup fails acceptance.
-`notificationReplyComplete` is scoped to this fixture; neither a product-wide
-completion nor delivery by a real chat application/message service is claimed.
-
-
 ## Notification requirements mode
 
 `CREATE_REQUIREMENTS` creates two clearable sources (IDs 0 and 1) and a source
