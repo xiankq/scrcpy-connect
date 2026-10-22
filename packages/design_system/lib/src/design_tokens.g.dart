@@ -184,6 +184,9 @@ abstract final class DesignTokens {
   static const componentFeatureIconRounded = 14.0;
   static const componentFeatureIconSize = 40.0;
   static const componentFieldBlockHeight = 104.0;
+  static const componentFileDocumentPreviewHeight = 54.0;
+  static const componentFileDocumentPreviewRounded = 5.0;
+  static const componentFileDocumentPreviewWidth = 42.0;
   static const componentFileIconSize = 44.0;
   static const componentFloatingActionWidth = 196.0;
   static const componentGlassActionBackgroundColor = Color(0xff1b1b1f);
@@ -258,6 +261,7 @@ abstract final class DesignTokens {
   static const componentNavigationLensSpecularIntensity = 2.0;
   static const componentNavigationPadding = 8.0;
   static const componentNavigationRounded = 999.0;
+  static const componentNotificationCardHeight = 190.0;
   static const componentPageBodyHeight = 632.0;
   static const componentPageContentMaxWidth = 720.0;
   static const componentPageHeaderHeight = 56.0;
@@ -328,6 +332,7 @@ abstract final class DesignTokens {
   static const componentThumbnailHeight = 112.0;
   static const componentThumbnailRounded = 10.0;
   static const componentThumbnailSize = 112.0;
+  static const componentTypeCellHeight = 60.0;
   static const roundedFull = 999.0;
   static const roundedLg = 20.0;
   static const roundedMd = 14.0;
