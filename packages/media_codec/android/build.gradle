@@ -1,0 +1,26 @@
+group 'dev.scrcpyconnect.media_codec'
+version '1.0'
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'dev.scrcpyconnect.media_codec'
+    compileSdk 36
+    ndkVersion '28.2.13676358'
+    defaultConfig {
+        minSdk 21
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_shared'
+                def root = System.getenv('MEDIA_CODEC_FFMPEG_ROOT')
+                if (root != null) arguments "-DMEDIA_CODEC_FFMPEG_ROOT=${root}"
+            }
+        }
+        ndk { abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64' }
+    }
+    externalNativeBuild { cmake { path 'CMakeLists.txt' } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

@@ -795,11 +795,7 @@ impl Command {
             }],
             Self::MediaOpen => &[
                 Field {
-                    name: "port",
-                    kind: FieldType::Integer,
-                },
-                Field {
-                    name: "token",
+                    name: "sourceId",
                     kind: FieldType::String,
                 },
                 Field {

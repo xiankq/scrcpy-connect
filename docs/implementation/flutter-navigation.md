@@ -36,7 +36,7 @@
 | transfer-details / document-export / receive-content | `/transfers/:taskId` 及其 `/export`、`/receive` 子路径 | `transfers.get`；导出能力与本机路径重新核对 |
 | document-import / share-directory | `/devices/:deviceId/documents/import` / `/devices/:deviceId/share-directory` | deviceId 与明确目标目录 |
 | incoming-share | `/sharing/:shareId` | 本机尚未消费的 pending share |
-| appearance / background / adb-key / data-preferences / media-cache | `/settings/<功能>` | 本机设置与实际服务状态；adb-key 管理全局私钥；声音和剪贴板没有专用设置路由 |
+| appearance / background / adb-key / data-preferences / media-cache / logs | `/settings/<功能>` | 本机设置与实际服务状态；adb-key 管理全局私钥；声音和剪贴板没有专用设置路由 |
 | activities（兼容） | `/settings/activities` | 仅重定向设备列表，由用户选择设备后查看其活动 |
 | transfer-center / settings-page | `/activity/transfers` / `/preferences` | 从业务页覆盖打开的独立页面 |
 

@@ -1,4 +1,6 @@
 //! Selectively lose a control receipt while real Android video and sync survive.
+#[path = "support/native_media.rs"]
+mod native_media;
 mod support;
 use interop_adb::{CancellationToken, protocol};
 use interop_core::Runtime;
@@ -8,7 +10,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
 };
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 
 struct ControlAckGate {
     port: u16,
@@ -203,16 +205,7 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
             "stopped"
         );
     }
-    let mut video = tokio::net::TcpStream::connect((
-        "127.0.0.1",
-        session["videoPort"].as_u64().unwrap() as u16,
-    ))
-    .await
-    .unwrap();
-    video
-        .write_all(format!("{}\n", session["videoToken"].as_str().unwrap()).as_bytes())
-        .await
-        .unwrap();
+    let mut video = native_media::Reader::video(&session);
     let video_bytes = Arc::new(AtomicUsize::new(0));
     let bytes = video_bytes.clone();
     let video_reader = tokio::spawn(async move {

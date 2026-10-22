@@ -1,27 +1,18 @@
 //! Opt-in tests use the Rust ADB host and the pinned official scrcpy JAR.
 //! Official adb is only used by the external harness to expose authorized adbd.
+#[path = "support/native_media.rs"]
+mod native_media;
 mod support;
 use interop_core::Runtime;
 use serde_json::{Value, json};
 use std::{process::Stdio, time::Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-async fn video_socket(session: &Value) -> tokio::net::TcpStream {
-    let mut socket = tokio::net::TcpStream::connect((
-        "127.0.0.1",
-        session["videoPort"].as_u64().unwrap() as u16,
-    ))
-    .await
-    .unwrap();
-    socket
-        .write_all(session["videoToken"].as_str().unwrap().as_bytes())
-        .await
-        .unwrap();
-    socket.write_all(b"\n").await.unwrap();
-    socket
+async fn video_socket(session: &Value) -> native_media::Reader {
+    native_media::Reader::video(session)
 }
 
-async fn keyframe(socket: &mut tokio::net::TcpStream) -> Vec<Vec<u8>> {
+async fn keyframe(socket: &mut native_media::Reader) -> Vec<Vec<u8>> {
     tokio::time::timeout(Duration::from_secs(12), async {
         let mut packets = Vec::new();
         let mut total = 0;

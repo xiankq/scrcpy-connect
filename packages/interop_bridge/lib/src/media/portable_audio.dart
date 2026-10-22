@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import '../interop_exception.dart';
+import '../diagnostics/diagnostic_log.dart';
+import '../diagnostics/diagnostic_reporter.dart';
 import 'audio_player_port.dart';
-import 'fvp_audio_player.dart';
+import 'codec_audio_player.dart';
 
 export 'audio_player_port.dart';
 
@@ -14,11 +16,13 @@ class PortableAudioOutputs {
     required this.platform,
     required this.emit,
     required this.isDisposed,
+    DiagnosticLog? diagnostics,
     AudioPlayerFactory? playerFactory,
     this.startTimeout = const Duration(seconds: 18),
     this.operationTimeout = const Duration(seconds: 5),
     this.pollInterval = const Duration(milliseconds: 50),
-  }) : _factory = playerFactory ?? FvpAudioPlayer.new;
+  }) : _diagnostics = DiagnosticReporter(diagnostics),
+       _factory = playerFactory ?? CodecAudioPlayer.new;
 
   final AudioRequest core, platform;
   static int _nextOwner = 0;
@@ -26,6 +30,7 @@ class PortableAudioOutputs {
       'audio-${DateTime.now().microsecondsSinceEpoch}-${_nextOwner++}';
   final void Function(AudioJson) emit;
   final bool Function() isDisposed;
+  final DiagnosticReporter _diagnostics;
   final AudioPlayerFactory _factory;
   final Duration startTimeout, operationTimeout, pollInterval;
   final _entries = <String, _AudioOutput>{};
@@ -79,8 +84,7 @@ class PortableAudioOutputs {
       await _await(entry, _ensureFocus());
       final opening = core('media.open', {
         'kind': 'audio',
-        'port': stream['audioPort'],
-        'token': stream['audioToken'],
+        'sourceId': stream['audioSourceId'],
         'generation': 1,
       });
       unawaited(
@@ -94,10 +98,11 @@ class PortableAudioOutputs {
       );
       final endpoint = await _await(entry, opening);
       entry.relay = _text(endpoint, 'relayId');
-      final url = _url(endpoint);
+      _validateSource(endpoint);
       entry.observer = entry.player.events.listen(
         (event) {
           if (!_owns(entry) || entry.closed) return;
+          _diagnostics.playerEvent(DiagnosticArea.audio, entry.id, event);
           if (event['kind'] == 'diagnostic' && entry.diagnostics.length < 24) {
             entry.diagnostics.add({...event});
           } else if (event['kind'] == 'failed') {
@@ -111,7 +116,7 @@ class PortableAudioOutputs {
           _fail(entry, const InteropException('audio_failed', '声音播放器事件连接已中断。'));
         },
       );
-      final format = await _await(entry, entry.player.open(url));
+      final format = await _await(entry, entry.player.open(endpoint));
       if (format.codec != 'pcm_s16le' ||
           format.sampleRate != 48000 ||
           format.channels != 2) {
@@ -162,6 +167,7 @@ class PortableAudioOutputs {
       entry.startTimer?.cancel();
       return _receipt(entry);
     } catch (error) {
+      _diagnostics.failure(DiagnosticArea.audio, entry.id, error);
       final failure = _failure(error, entry);
       if (_owns(entry)) _entries.remove(entry.id);
       _invalidateEmptyFocus();
@@ -578,7 +584,7 @@ class PortableAudioOutputs {
         'deviceId': entry.device,
         'code': failure.code,
         'reason': failure.message,
-        'backend': 'fvp',
+        'backend': 'media_codec',
       });
     }
     unawaited(_release(entry).then((_) => _retireUnused()));
@@ -668,6 +674,7 @@ class PortableAudioOutputs {
         'cleanupUnconfirmed': true,
       };
     }
+    _diagnostics.release(DiagnosticArea.audio, entry.id, receipt);
     await closing;
     return receipt;
   }
@@ -751,7 +758,7 @@ class PortableAudioOutputs {
     'sourceId': entry.id,
     'deviceId': entry.device,
     'relayId': entry.relay,
-    'backend': 'fvp',
+    'backend': 'media_codec',
     'revision': entry.appliedRevision,
     'applied': entry.appliedState != null,
     'playState': entry.appliedState ?? 'starting',
@@ -831,30 +838,20 @@ String _text(AudioJson data, String key) {
 }
 
 void _input(AudioJson stream) {
-  final port = stream['audioPort'], token = stream['audioToken'];
-  if (port is! int ||
-      port < 1 ||
-      port > 65535 ||
-      token is! String ||
-      !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(token)) {
-    throw const InteropException('invalid_endpoint', '声音输入缺少有效的一次性连接信息。');
+  final source = stream['audioSourceId'];
+  if (source is! String || !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(source)) {
+    throw const InteropException('invalid_endpoint', '缺少有效的原生声音源。');
   }
 }
 
-String _url(AudioJson endpoint) {
-  final value = endpoint['url'];
-  final uri = value is String ? Uri.tryParse(value) : null;
-  if (uri == null ||
-      uri.scheme != 'http' ||
-      uri.host != '127.0.0.1' ||
-      !uri.hasPort ||
-      uri.port < 1 ||
-      uri.userInfo.isNotEmpty ||
-      uri.hasQuery ||
-      uri.hasFragment ||
-      !RegExp(r'^/[a-fA-F0-9]{64}$').hasMatch(uri.path) ||
-      (endpoint['kind'] != null && endpoint['kind'] != 'audio')) {
-    throw const InteropException('invalid_endpoint', '声音输入不是授权的本机媒体流。');
+void _validateSource(AudioJson endpoint) {
+  if (endpoint['container'] != 'packet' ||
+      endpoint['kind'] != 'audio' ||
+      endpoint['sourceId'] is! String ||
+      endpoint['attachAddress'] is! int ||
+      endpoint['detachAddress'] is! int ||
+      (endpoint['attachAddress'] as int) <= 0 ||
+      (endpoint['detachAddress'] as int) <= 0) {
+    throw const InteropException('invalid_endpoint', '声音输入不是有效的原生数据源。');
   }
-  return value as String;
 }

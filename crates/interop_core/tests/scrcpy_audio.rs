@@ -1,11 +1,13 @@
 //! Real output-capture test. The optional fixture produces a known 880Hz tone,
 //! proving capture content independently of the controller's playback adapter.
+#[path = "support/native_media.rs"]
+mod native_media;
 mod support;
 use interop_adb::{Client, ConnectOptions, OperationOptions, sync::RemotePath};
 use interop_core::Runtime;
 use serde_json::json;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 
 #[tokio::test]
 #[ignore = "requires Android 11+ authorized adbd; optional INTEROP_AUDIO_FIXTURE plays test tone"]
@@ -46,15 +48,7 @@ async fn real_audio_only_capture_and_known_tone() {
     let sources = runtime.invoke("audio.sources", json!({})).await.unwrap();
     assert!(sources["sources"][0]["audioToken"].is_null());
     assert!(sources["sources"][0]["audioPort"].is_null());
-    let mut audio =
-        tokio::net::TcpStream::connect(("127.0.0.1", source["audioPort"].as_u64().unwrap() as u16))
-            .await
-            .unwrap();
-    audio
-        .write_all(source["audioToken"].as_str().unwrap().as_bytes())
-        .await
-        .unwrap();
-    audio.write_all(b"\n").await.unwrap();
+    let mut audio = native_media::Reader::audio(&source);
     let fixture = std::env::var("INTEROP_AUDIO_FIXTURE").ok();
     let fixture_client = Client::connect_tcp((address.as_str(), port), ConnectOptions::default())
         .await

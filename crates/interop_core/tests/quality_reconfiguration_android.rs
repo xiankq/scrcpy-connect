@@ -1,9 +1,11 @@
 //! Actual API-level evidence, using the product executor and pinned server.
+#[path = "support/native_media.rs"]
+mod native_media;
 mod support;
 use interop_core::Runtime;
 use serde_json::{Value, json};
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 
 async fn adb(arguments: &[&str]) -> String {
     let binary = std::env::var("INTEROP_ADB").expect("INTEROP_ADB");
@@ -313,47 +315,42 @@ async fn virtual_resize_and_rotation_keep_phone_logical_width() {
 }
 
 async fn drain_endpoint(endpoint: &Value) -> tokio::task::JoinHandle<()> {
-    let url = endpoint["url"]
-        .as_str()
-        .unwrap()
-        .strip_prefix("http://")
-        .unwrap();
-    let (address, path) = url.split_once('/').unwrap();
-    let mut socket = tokio::net::TcpStream::connect(address).await.unwrap();
-    socket
-        .write_all(format!("GET /{path} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes())
-        .await
-        .unwrap();
+    let mut reader = native_media::Reader::attach(
+        endpoint["sourceId"].as_str().unwrap(),
+        endpoint["generation"].as_u64().unwrap(),
+    );
     tokio::spawn(async move {
         let mut buffer = [0; 16384];
-        while matches!(socket.read(&mut buffer).await,Ok(count) if count>0) {}
+        while matches!(reader.read(&mut buffer).await,Ok(n) if n>0) {}
     })
 }
+
 async fn renderer_endpoint(
     runtime: &std::sync::Arc<Runtime>,
     stream: &Value,
     generation: u64,
 ) -> Value {
-    runtime.invoke("media.open",json!({"kind":"video","port":stream["videoPort"],"token":stream["videoToken"],"codec":stream["codec"],"generation":generation})).await.unwrap()
+    runtime.invoke("media.open",json!({"kind":"video","sourceId":stream["videoSourceId"],"codec":stream["codec"],"generation":generation})).await.unwrap()
 }
-async fn next_endpoint(runtime: &std::sync::Arc<Runtime>, relay: &Value, previous: u64) -> Value {
-    tokio::time::timeout(Duration::from_secs(5), async {
+async fn next_endpoint(runtime: &std::sync::Arc<Runtime>, relay: &Value, _previous: u64) -> Value {
+    tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let status = runtime
                 .invoke("media.status", json!({"relayId":relay["relayId"]}))
                 .await
                 .unwrap();
-            if status["endpoint"]["generation"].as_u64().unwrap_or(0) > previous {
-                break status["endpoint"].clone();
+            if status["width"] != relay["width"] || status["height"] != relay["height"] {
+                return status;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
     .await
-    .expect("actual relay must publish resized codec configuration")
+    .expect("native configure must publish resized dimensions")
 }
+
 #[tokio::test]
-#[ignore = "requires real target; exercises core/HTTP generations, renderer verified separately"]
+#[ignore = "requires real target; exercises core/native generations, renderer verified separately"]
 async fn resize_quality_resize_separates_capture_from_renderer_generation() {
     let (_directory, runtime, id) = runtime().await;
     let session = runtime.invoke("session.start",support::media_params(json!({"deviceId":id,"packageName":"com.android.settings","displayWidth":720,"displayHeight":1280,"maxSize":1920}))).await.unwrap();
@@ -375,7 +372,6 @@ async fn resize_quality_resize_separates_capture_from_renderer_generation() {
         .await
         .unwrap();
     let resized = next_endpoint(&runtime, &first, 1).await;
-    let resized_reader = drain_endpoint(&resized).await;
     let generation = resized["generation"].as_u64().unwrap();
     runtime
         .invoke(
@@ -419,10 +415,9 @@ async fn resize_quality_resize_separates_capture_from_renderer_generation() {
         .await
         .unwrap();
     let final_endpoint = next_endpoint(&runtime, &second, next).await;
-    let final_reader = drain_endpoint(&final_endpoint).await;
     let ready = runtime.invoke("session.ready",json!({"sessionId":sid,"textureId":4,"generation":final_endpoint["generation"],"captureGeneration":2})).await.unwrap();
     runtime.stop_all().await;
-    for reader in [first_reader, resized_reader, second_reader, final_reader] {
+    for reader in [first_reader, second_reader] {
         reader.abort();
     }
     assert_eq!(ready["captureGeneration"], 2);
@@ -452,9 +447,9 @@ async fn physical_resize_after_quality_uses_the_new_capture_owner() {
             ),
         )
         .await;
-    // This is an executor/HTTP ownership test, not a local-decoder acceptance.
+    // This is an executor/native ownership test, not a local-decoder acceptance.
     // Consume the replacement stream before acknowledging the renderer boundary;
-    // actual MDK verification remains in device_quality_test.dart.
+    // actual decoder verification remains in device_quality_test.dart.
     let mut reader = None;
     let ready = if let Ok(current) = &rebuilt {
         let endpoint =

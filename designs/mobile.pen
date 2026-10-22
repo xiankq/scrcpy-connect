@@ -32618,6 +32618,29 @@
                       }
                     },
                     {
+                      "id": "tJnh7",
+                      "type": "ref",
+                      "ref": "OuAnF",
+                      "name": "运行日志",
+                      "width": "fill_container",
+                      "height": 56,
+                      "descendants": {
+                        "i9kceM": {
+                          "fill": "$list-icon-amber"
+                        },
+                        "n4qgqg": {
+                          "icon": "file-text",
+                          "fill": "$white"
+                        },
+                        "nyAaN": {
+                          "content": "运行日志"
+                        },
+                        "LN3WS": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
                       "id": "WjHwn",
                       "type": "ref",
                       "ref": "OuAnF",
@@ -45022,6 +45045,745 @@
           "x": 129,
           "y": 858,
           "layoutPosition": "absolute"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "jMfoj",
+      "x": 3440,
+      "y": 11076,
+      "name": "偏好与恢复 / 运行日志",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "vertical",
+      "padding": [
+        0,
+        16
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "G8VlOd",
+          "name": "日志内容 · scroll-viewport",
+          "clip": true,
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "NNfPl",
+              "name": "完整滚动日志",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                126,
+                0,
+                32,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "J6EhAp",
+                  "name": "本机日志说明",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "日志仅保存在本机，自动清理较早记录。导出包含保留期内的全部日志，不受当前筛选影响。",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                },
+                {
+                  "type": "frame",
+                  "id": "A5eZgS",
+                  "name": "日志级别筛选",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "A1a94M",
+                      "name": "全部级别",
+                      "fill": "$text",
+                      "cornerRadius": "$radius-full",
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "j5LYpt",
+                          "name": "全部级别标签",
+                          "fill": "$canvas",
+                          "content": "全部级别",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "aBiMx",
+                      "name": "信息",
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-full",
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pXqls",
+                          "name": "信息标签",
+                          "fill": "$text",
+                          "content": "信息",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RltsX",
+                      "name": "警告",
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-full",
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "e2Oytd",
+                          "name": "警告标签",
+                          "fill": "$text",
+                          "content": "警告",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Q4PD4B",
+                      "name": "错误",
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-full",
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "k51rIf",
+                          "name": "错误标签",
+                          "fill": "$text",
+                          "content": "错误",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KbS4A",
+                  "name": "日志来源下拉框",
+                  "width": "fill_container",
+                  "height": 58,
+                  "cornerRadius": "$radius-sm",
+                  "stroke": "$secondary",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 4,
+                  "padding": [
+                    6,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Eh0D3",
+                      "fill": "$secondary",
+                      "content": "日志来源",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    },
+                    {
+                      "type": "text",
+                      "id": "YzFjY",
+                      "fill": "$text",
+                      "content": "全部来源",
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "gD3aV",
+                  "name": "保留与隐私说明",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "显示最近300条记录。授权密钥、配对码、剪贴板、通知正文与媒体访问凭据不写入日志。",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                },
+                {
+                  "type": "frame",
+                  "id": "DLJyi",
+                  "name": "已选用解码器：AMediaCodec",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "padding": [
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "aC9VK",
+                      "name": "事件",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "已选用解码器：AMediaCodec",
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
+                    },
+                    {
+                      "type": "text",
+                      "id": "izZ9u",
+                      "name": "时间来源与级别",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "14:32:08 · 画面 · 信息",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Xnjje",
+                      "name": "结构化诊断",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "硬件加速状态未知  ·  generation: 2",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "iWXTf",
+                  "name": "视频纹理已创建",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "padding": [
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "H82bsX",
+                      "name": "事件",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "视频纹理已创建",
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
+                    },
+                    {
+                      "type": "text",
+                      "id": "zGeKR",
+                      "name": "时间来源与级别",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "14:32:08 · 画面 · 信息",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Ds5Un",
+                      "name": "结构化诊断",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "elapsedMs: 24",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QWI60",
+                  "name": "操作未完成：devices.connect",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "padding": [
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "i1AAFq",
+                      "name": "事件",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "操作未完成：devices.connect",
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Orv3S",
+                      "name": "时间来源与级别",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "14:30:12 · 核心 · 错误",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    },
+                    {
+                      "type": "text",
+                      "id": "SGJcC",
+                      "name": "结构化诊断",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "code: connection_lost",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "q4lo3B",
+                  "name": "应用启动",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "padding": [
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "DwY5x",
+                      "name": "事件",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "应用启动",
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
+                    },
+                    {
+                      "type": "text",
+                      "id": "aibdN",
+                      "name": "时间来源与级别",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "14:29:50 · 应用 · 信息",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    },
+                    {
+                      "type": "text",
+                      "id": "zyc1L",
+                      "name": "结构化诊断",
+                      "fill": "$secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "platform: android  ·  buildMode: release",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "zuYLm",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 16,
+          "y": 0,
+          "width": 370,
+          "height": 54,
+          "layoutPosition": "absolute"
+        },
+        {
+          "id": "WNLih",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "页面导航 / 运行日志",
+          "x": 16,
+          "y": 54,
+          "width": 370,
+          "height": 56,
+          "layoutPosition": "absolute",
+          "descendants": {
+            "aFRxw": {
+              "content": "运行日志"
+            },
+            "BiHE4": {
+              "enabled": true
+            },
+            "eVp4v/alBho": {
+              "icon": "download"
+            },
+            "rBLka": {
+              "enabled": true
+            },
+            "rBLka/alBho": {
+              "icon": "trash-2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "svtD8",
+      "x": 3962,
+      "y": 11076,
+      "name": "偏好与恢复 / 运行日志空态",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "vertical",
+      "padding": [
+        0,
+        16
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "w4bbU",
+          "name": "日志内容 · scroll-viewport",
+          "clip": true,
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "raWj1",
+              "name": "完整滚动日志",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                126,
+                0,
+                32,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "XUBTu",
+                  "name": "本机日志说明",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "日志仅保存在本机，自动清理较早记录。导出包含保留期内的全部日志，不受当前筛选影响。",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                },
+                {
+                  "type": "frame",
+                  "id": "RiO6w",
+                  "name": "日志级别筛选",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "UO2rj",
+                      "name": "全部级别",
+                      "fill": "$text",
+                      "cornerRadius": "$radius-full",
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qqeQf",
+                          "name": "全部级别标签",
+                          "fill": "$canvas",
+                          "content": "全部级别",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Pc9qG",
+                      "name": "信息",
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-full",
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "h5SX1",
+                          "name": "信息标签",
+                          "fill": "$text",
+                          "content": "信息",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "OW8o8",
+                      "name": "警告",
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-full",
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "AF6WI",
+                          "name": "警告标签",
+                          "fill": "$text",
+                          "content": "警告",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LteEK",
+                      "name": "错误",
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-full",
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qnIDn",
+                          "name": "错误标签",
+                          "fill": "$text",
+                          "content": "错误",
+                          "lineHeight": "$line-body",
+                          "fontFamily": "$font-body",
+                          "fontSize": "$size-body",
+                          "fontWeight": "$weight-body"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "CGMlR",
+                  "name": "日志来源下拉框",
+                  "width": "fill_container",
+                  "height": 58,
+                  "cornerRadius": "$radius-sm",
+                  "stroke": "$secondary",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 4,
+                  "padding": [
+                    6,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "u0nleE",
+                      "fill": "$secondary",
+                      "content": "日志来源",
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    },
+                    {
+                      "type": "text",
+                      "id": "bRuxs",
+                      "fill": "$text",
+                      "content": "全部来源",
+                      "lineHeight": "$line-body",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-body"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "UUA8G",
+                  "name": "保留与隐私说明",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "显示最近300条记录。授权密钥、配对码、剪贴板、通知正文与媒体访问凭据不写入日志。",
+                  "lineHeight": "$line-caption",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                },
+                {
+                  "type": "text",
+                  "id": "Vphdw",
+                  "name": "日志空态",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "暂无符合条件的日志",
+                  "lineHeight": "$line-body",
+                  "fontFamily": "$font-body",
+                  "fontSize": "$size-body",
+                  "fontWeight": "$weight-body"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "HHheC",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 16,
+          "y": 0,
+          "width": 370,
+          "height": 54,
+          "layoutPosition": "absolute"
+        },
+        {
+          "id": "Q5DP0",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "页面导航 / 运行日志",
+          "x": 16,
+          "y": 54,
+          "width": 370,
+          "height": 56,
+          "layoutPosition": "absolute",
+          "descendants": {
+            "aFRxw": {
+              "content": "运行日志"
+            },
+            "BiHE4": {
+              "enabled": true
+            },
+            "eVp4v/alBho": {
+              "icon": "download"
+            },
+            "rBLka": {
+              "enabled": true
+            },
+            "rBLka/alBho": {
+              "icon": "trash-2"
+            }
+          }
         }
       ]
     }

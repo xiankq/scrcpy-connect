@@ -4,7 +4,6 @@ use crate::{
     CoreError, CoreResult, Runtime,
     model::{now, quote, required},
     remote_process::managed_shell_command,
-    scrcpy::accept_media,
 };
 use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, sync::RemotePath};
 use serde_json::{Value, json};
@@ -16,8 +15,6 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpListener,
     sync::{Mutex, RwLock},
     time::Instant,
 };
@@ -111,95 +108,43 @@ fn apply_presentation(data: &mut Value, params: &Value) -> CoreResult<()> {
 }
 
 fn apply_ready(data: &mut Value, params: &Value) -> CoreResult<()> {
-    let shared = params["backend"] == "fvp";
-    if shared {
-        let valid_clock = params["clockStartMs"]
-            .as_i64()
-            .zip(params["clockEndMs"].as_i64())
-            .is_some_and(|(start, end)| start >= 0 && end > start);
-        if params["applied"] != true
-            || params["revision"].as_u64().is_none()
-            || !matches!(params["playState"].as_str(), Some("playing" | "paused"))
-            || [
-                "mediaInfoReady",
-                "playingConfirmed",
-                "sourcePcmReceived",
-                "playbackClockAdvanced",
-            ]
-            .iter()
-            .any(|key| params[*key] != true)
-            || !params["sourcePcmPackets"]
-                .as_u64()
-                .is_some_and(|count| count > 0)
-            || !valid_clock
-            || params["sampleRate"] != 48000
-            || params["channels"] != 2
-        {
-            return Err(CoreError::new(
-                "audio_not_ready",
-                "共享播放器尚未返回完整的真实声音播放证据。",
-            ));
-        }
-    }
-    if data["nativeAttached"] == true {
-        if (data["backend"] == "fvp") != shared {
-            return Err(CoreError::new(
-                "audio_not_ready",
-                "声音输出后端与已连接的音源不一致。",
-            ));
-        }
-        return apply_presentation(data, params);
-    }
-    // Preserve the existing native AudioTrack acknowledgement requirements.
-    let paused_after_first_write = params["playState"] == "paused"
-        && params["nativeReady"] == true
-        && params["applied"] == true
-        && params["bytesWritten"]
+    if params["backend"] != "media_codec"
+        || params["nativeReady"] != true
+        || params["applied"] != true
+        || params["revision"].as_u64().is_none()
+        || !params["bytesWritten"]
             .as_u64()
-            .is_some_and(|count| count > 0)
-        && params["revision"].as_u64().is_some();
-    if params["playState"] != "playing" && !paused_after_first_write && !shared {
+            .is_some_and(|bytes| bytes > 0)
+        || !matches!(params["playState"].as_str(), Some("playing" | "paused"))
+    {
         return Err(CoreError::new(
             "audio_not_ready",
-            "音频播放器尚未开始工作。",
+            "原生音频输出尚未确认实际播放数据。",
         ));
     }
+    if data["nativeAttached"] == true {
+        return apply_presentation(data, params);
+    }
     data["status"] = params["playState"].clone();
+    data["backend"] = json!("media_codec");
     data["nativeAttached"] = json!(true);
+    data["nativeRevision"] = params["revision"].clone();
+    data["bytesWritten"] = params["bytesWritten"].clone();
     for key in ["manualPaused", "backgroundPaused", "focusPaused"] {
         if let Some(value) = params[key].as_bool() {
             data[key] = json!(value);
         }
     }
-    if let Some(revision) = params["revision"].as_u64() {
-        data["nativeRevision"] = json!(revision);
-    }
-    if shared {
-        data["backend"] = json!("fvp");
-        data["playbackVerified"] = json!(true);
-        data["speakerSamplesVerified"] = json!(false);
-        for key in [
-            "mediaInfoReady",
-            "playingConfirmed",
-            "sourcePcmReceived",
-            "playbackClockAdvanced",
-            "sourcePcmPackets",
-            "clockStartMs",
-            "clockEndMs",
-        ] {
-            data[key] = params[key].clone();
-        }
-    }
-    // Playback (including silence) cannot identify the target app producing it
-    // or prove that physical speaker samples have been observed.
+    // A host write proves playback submission, not physical speaker samples or
+    // the identity of the remote app responsible for those samples.
+    data["playbackVerified"] = json!(true);
+    data["speakerSamplesVerified"] = json!(false);
     data["audibleContentVerified"] = json!(false);
     Ok(())
 }
 
 fn should_forward_pcm(data: &Value) -> bool {
-    // The shared player owns presentation pause. It still needs fresh, bounded
-    // input to confirm a resume; stopping upstream here can deadlock that ack.
-    data["status"] != "paused" || data["backend"] == "fvp"
+    data["status"] != "paused"
 }
 
 impl Runtime {
@@ -520,16 +465,20 @@ impl Runtime {
                     "设备未返回所需的原始 PCM 音频流。",
                 ));
             }
-            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
-            let port = listener.local_addr()?.port();
+            let source = crate::media::native::MediaSource::register(
+                token.clone(),
+                crate::media::native::CODEC_PCM_S16LE,
+                0,
+                0,
+                cancellation.clone(),
+            )?;
             let stream_cancel = cancellation.clone();
             let stream_state = state.clone();
             let stream_events = self.events.clone();
             let stream_device = device_id.to_owned();
             tokio::spawn(async move {
                 forward_audio(
-                    listener,
-                    token,
+                    source,
                     audio,
                     stream_cancel,
                     stream_state,
@@ -538,17 +487,17 @@ impl Runtime {
                 )
                 .await;
             });
-            Ok::<_, CoreError>(port)
+            Ok::<_, CoreError>(())
         };
         let result = tokio::time::timeout(Duration::from_secs(20), startup)
             .await
             .unwrap_or_else(|_| Err(CoreError::new("timeout", "设备音源连接超时。")));
         match result {
-            Ok(port) => {
+            Ok(()) => {
                 guard.0 = None;
                 let mut data = state.read().await.clone();
-                data["audioPort"] = json!(port);
                 data["audioToken"] = json!(returned_token);
+                data["audioSourceId"] = data["audioToken"].clone();
                 Ok(data)
             }
             Err(error) => {
@@ -592,8 +541,7 @@ fn pcm_packet_size(header: &[u8; 12]) -> CoreResult<usize> {
 }
 
 async fn forward_audio(
-    listener: TcpListener,
-    token: String,
+    output: Arc<crate::media::native::MediaSource>,
     mut audio: AdbStream,
     cancellation: CancellationToken,
     state: Arc<RwLock<Value>>,
@@ -601,14 +549,8 @@ async fn forward_audio(
     device: String,
 ) {
     let operation = async {
-        let output = accept_media(&listener, &token).await?;
-        output.set_nodelay(true)?;
-        let (mut read, mut output) = output.into_split();
-        let read_cancel = cancellation.clone();
-        tokio::spawn(async move {
-            let mut byte = [0];
-            tokio::select! { _ = read_cancel.cancelled() => {}, _ = read.read(&mut byte) => { read_cancel.cancel(); } }
-        });
+        output.wait_attached().await?;
+        output.configure(0, 0, &[]).await?;
         let ready_state = state.clone();
         let ready_cancel = cancellation.clone();
         tokio::spawn(async move {
@@ -616,15 +558,30 @@ async fn forward_audio(
         });
         loop {
             let mut header = [0; 12];
-            audio.read_exact(&mut header).await?;
-            let length = pcm_packet_size(&header)?;
-            let mut bytes = vec![0; length];
-            audio.read_exact(&mut bytes).await?;
+            audio.read_exact(&mut header[..1]).await?;
+            let complete = async {
+                audio.read_exact(&mut header[1..]).await?;
+                let length = pcm_packet_size(&header)?;
+                let mut bytes = vec![0; length];
+                audio.read_exact(&mut bytes).await?;
+                Ok::<_, CoreError>(bytes)
+            };
+            let bytes = tokio::time::timeout(Duration::from_secs(10), complete)
+                .await
+                .map_err(|_| CoreError::new("audio_timeout", "音频数据包未及时发送完整。"))??;
+            if bytes.is_empty() {
+                continue;
+            }
             if !should_forward_pcm(&*state.read().await) {
                 continue;
             }
-            output.write_all(&header).await?;
-            output.write_all(&bytes).await?;
+            output
+                .packet(
+                    &bytes,
+                    u64::from_be_bytes(header[..8].try_into().expect("audio header")),
+                    true,
+                )
+                .await?;
         }
         #[allow(unreachable_code)]
         Ok::<(), CoreError>(())
@@ -643,6 +600,7 @@ async fn forward_audio(
         state.read().await.clone(),
     );
     cancellation.cancel();
+    output.finish();
 }
 
 #[cfg(test)]
@@ -663,27 +621,20 @@ mod tests {
         assert_eq!(error.code, "session_required");
         assert!(runtime.activities.audio_sources.lock().await.is_empty());
     }
-    fn shared_receipt() -> Value {
-        json!({"backend":"fvp","applied":true,"revision":7,"playState":"paused","focusPaused":true,
-            "mediaInfoReady":true,"playingConfirmed":true,"sourcePcmReceived":true,"playbackClockAdvanced":true,
-            "sourcePcmPackets":2,"clockStartMs":0,"clockEndMs":40,"sampleRate":48000,"channels":2})
+    fn native_receipt() -> Value {
+        json!({"backend":"media_codec","nativeReady":true,"bytesWritten":4096,"applied":true,"revision":7,"playState":"paused","focusPaused":true})
     }
     #[test]
-    fn shared_ready_requires_all_independent_evidence_and_a_valid_clock() {
+    fn native_ready_requires_written_pcm_and_actual_output_receipt() {
         for key in [
-            "mediaInfoReady",
-            "playingConfirmed",
-            "sourcePcmReceived",
-            "playbackClockAdvanced",
-            "sourcePcmPackets",
-            "clockStartMs",
-            "clockEndMs",
-            "revision",
-            "sampleRate",
-            "channels",
+            "backend",
+            "nativeReady",
+            "bytesWritten",
             "applied",
+            "revision",
+            "playState",
         ] {
-            let mut receipt = shared_receipt();
+            let mut receipt = native_receipt();
             receipt.as_object_mut().unwrap().remove(key);
             let mut state = json!({"status":"starting"});
             assert_eq!(
@@ -692,66 +643,36 @@ mod tests {
                 "{key}"
             );
             assert_eq!(state, json!({"status":"starting"}));
-            assert!(should_forward_pcm(&state));
         }
         for (key, value) in [
-            ("sourcePcmPackets", json!(0)),
-            ("clockEndMs", json!(0)),
-            ("clockStartMs", json!(-1)),
-            ("sampleRate", json!(44100)),
+            ("bytesWritten", json!(0)),
             ("playState", json!("starting")),
+            ("nativeReady", json!(false)),
         ] {
-            let mut receipt = shared_receipt();
+            let mut receipt = native_receipt();
             receipt[key] = value;
             assert!(apply_ready(&mut json!({"status":"starting"}), &receipt).is_err());
         }
     }
     #[test]
-    fn shared_first_playback_can_be_acknowledged_after_focus_paused_it() {
+    fn first_native_write_may_be_acknowledged_after_focus_paused_it() {
         let mut state = json!({"status":"starting"});
-        apply_ready(&mut state, &shared_receipt()).unwrap();
+        apply_ready(&mut state, &native_receipt()).unwrap();
         assert_eq!(state["status"], "paused");
         assert_eq!(state["nativeAttached"], true);
         assert_eq!(state["nativeRevision"], 7);
         assert_eq!(state["speakerSamplesVerified"], false);
-        assert!(state.get("bytesWritten").is_none());
-        assert!(
-            should_forward_pcm(&state),
-            "MDK must receive fresh packets to resume."
-        );
+        assert_eq!(state["audibleContentVerified"], false);
+        assert!(!should_forward_pcm(&state));
         apply_presentation(
             &mut state,
             &json!({"revision":9,"applied":true,"playState":"playing","focusPaused":false}),
         )
         .unwrap();
-        apply_ready(&mut state, &shared_receipt()).unwrap();
-        assert_eq!(
-            state["status"], "playing",
-            "A late ready cannot undo a newer presentation."
-        );
+        apply_ready(&mut state, &native_receipt()).unwrap();
+        assert_eq!(state["status"], "playing");
         assert_eq!(state["nativeRevision"], 9);
-    }
-    #[test]
-    fn native_ready_validation_and_pause_drop_are_preserved() {
-        let mut state = json!({"status":"starting"});
-        assert!(
-            apply_ready(
-                &mut state,
-                &json!({"playState":"paused","applied":true,"revision":1,"nativeReady":true})
-            )
-            .is_err()
-        );
-        apply_ready(&mut state, &json!({"playState":"paused","applied":true,"revision":1,"nativeReady":true,"bytesWritten":4})).unwrap();
-        assert!(!should_forward_pcm(&state));
-        assert!(
-            apply_ready(&mut state, &shared_receipt()).is_err(),
-            "A ready receipt cannot switch an already attached backend."
-        );
-        assert_eq!(state["status"], "paused");
-        let mut playing = json!({"status":"starting"});
-        apply_ready(&mut playing, &json!({"playState":"playing"})).unwrap();
-        assert_eq!(playing["status"], "playing");
-        assert!(should_forward_pcm(&playing));
+        assert!(should_forward_pcm(&state));
     }
     #[test]
     fn presentation_state_requires_actual_native_acknowledgement() {

@@ -7,9 +7,9 @@ workspace:
   - app
   - packages/design_system
   - packages/interop_bridge
+  - packages/media_codec
 dev_dependencies:
   ffi: 2.2.0
-  fvp: 0.39.1
   archive: 4.5.2
   args: 2.7.0
   crypto: 3.0.7

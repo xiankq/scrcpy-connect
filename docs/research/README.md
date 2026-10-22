@@ -22,6 +22,9 @@
 | --- | --- |
 | [scrcpy媒体与服务端](scrcpy-media-and-server.md) | 固定协议、通道顺序、JAR生命周期、应用窗口与音频边界 |
 | [共享媒体封装与播放器](cross-platform-media-pipeline.md) | Matroska映射、精确PTS、MDK C表ABI与输入候选 |
+| [scrcpy 到 fvp 的数据与复制路径](scrcpy-fvp-copy-path.md) | 按 Java/Rust/Dart/原生追踪、两段本机TCP、封装复制、USB差异与像素回读 |
+| [核心体积、延迟与跨平台重构评估](scrcpy-core-architecture-options.md) | 原版scrcpy与自写ADB差异、当前APK/ELF审计、原生packet解码、系统后端与全面重写取舍 |
+| [fvp 与 media_kit 替换评估](fvp-media-kit-comparison.md) | 开源核心、直播缓冲、截图与销毁语义、原生分发及现有迁移接缝 |
 | [移动端延迟一手来源](scrcpy-mobile-latency-primary-sources.md) | 官方35~70ms的桌面实验条件、第三方scrcpy-mobile固定源码与测量边界 |
 | [远控延迟对照与改造顺序](remote-control-latency-optimization.md) | scrcpy/scrcpy-mobile/EasyControlNext对照、输入ACK积压、视频反压与弱网实验 |
 | [客户端低延迟路径](scrcpy-client-latency-path.md) | 官方packet直送、FFmpeg parser/线程与容器反证 |

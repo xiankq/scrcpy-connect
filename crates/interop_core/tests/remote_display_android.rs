@@ -2,6 +2,8 @@
 //! own optional launchable INTEROP_DISPLAY_PACKAGE (MAIN/LAUNCHER intent) and
 //! removes only that fixture afterward. The app branch verifies flex-display
 //! resizing with actual decoded pixels, catching a missing flex_display option.
+#[path = "support/native_media.rs"]
+mod native_media;
 mod support;
 use interop_adb::{Client, ConnectOptions, OperationOptions};
 use interop_core::Runtime;
@@ -22,24 +24,13 @@ async fn shell(client: &Client, command: &str) -> String {
     String::from_utf8(result.stdout).unwrap()
 }
 
-async fn socket(session: &Value) -> tokio::net::TcpStream {
-    let mut stream = tokio::net::TcpStream::connect((
-        "127.0.0.1",
-        session["videoPort"].as_u64().unwrap() as u16,
-    ))
-    .await
-    .unwrap();
-    stream
-        .write_all(session["videoToken"].as_str().unwrap().as_bytes())
-        .await
-        .unwrap();
-    stream.write_all(b"\n").await.unwrap();
-    stream
+async fn socket(session: &Value) -> native_media::Reader {
+    native_media::Reader::video(session)
 }
 
 /// Read a genuine keyframe after the requested geometry, then independently
 /// decode it. Neither a control receipt nor fabricated session.ready is evidence.
-async fn decoded_frame(stream: &mut tokio::net::TcpStream, target: (u32, u32), label: &str) {
+async fn decoded_frame(stream: &mut native_media::Reader, target: (u32, u32), label: &str) {
     let (dimensions, bytes) = tokio::time::timeout(Duration::from_secs(20), async {
         let mut dimensions = (0, 0);
         let mut bytes = Vec::new();

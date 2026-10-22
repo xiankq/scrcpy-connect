@@ -17,8 +17,6 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::{AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::TcpListener,
     sync::{Mutex, RwLock, Semaphore, mpsc, oneshot},
     time::Instant,
 };
@@ -34,7 +32,6 @@ const VIDEO_DELAY_GROWTH_RESET_US: i128 = 800_000;
 const VIDEO_DELAY_GROWTH_FRAMES: u8 = 8;
 const VIDEO_AUTO_RESET_COOLDOWN: Duration = Duration::from_secs(4);
 const VIDEO_AUTO_RESET_CONFIRM_TIMEOUT: Duration = Duration::from_secs(8);
-const VIDEO_OUTPUT_STALL_TIMEOUT: Duration = Duration::from_secs(3);
 // Acquire before spawning: repeatedly cancelled catalog initializers cannot
 // leave an unbounded number of detached probe uploads/processes behind.
 static ENCODER_PROBE_JOBS: Semaphore = Semaphore::const_new(4);
@@ -1077,11 +1074,15 @@ impl Runtime {
             }
             startup_timing.insert("encodedKeyFrameMs".into(), json!(encoded_ms));
             startup_timing.insert("processVerifiedMs".into(), json!(verified_ms));
-            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
-            let port = listener.local_addr()?.port();
+            let source = crate::media::native::MediaSource::register(
+                video_token.clone(),
+                crate::media::native::video_codec_id(selected_codec.name)?,
+                width,
+                height,
+                cancellation.clone(),
+            )?;
             {
                 let mut data = state.write().await;
-                data["videoPort"] = json!(port);
                 data["width"] = json!(width);
                 data["height"] = json!(height);
                 data["encodedKeyFrameReady"] = json!(true);
@@ -1096,8 +1097,7 @@ impl Runtime {
             let video_control = control_tx.clone();
             tokio::spawn(async move {
                 run_video(
-                    listener,
-                    video_token,
+                    source,
                     video,
                     preface,
                     SessionContext {
@@ -1189,6 +1189,7 @@ impl Runtime {
             observed.clone()
         };
         result["videoToken"] = json!(return_token);
+        result["videoSourceId"] = result["videoToken"].clone();
         let mut sessions = self.activities.sessions.lock().await;
         if let Some(replacement) = &replacement {
             let current = sessions
@@ -2557,29 +2558,106 @@ impl VideoDelayGuard {
     }
 }
 
-async fn write_video_parts<W>(
-    output: &mut W,
-    parts: &[&[u8]],
-    timeout: Duration,
-    stalled: &str,
-) -> CoreResult<()>
-where
-    W: AsyncWrite + Unpin,
-{
-    tokio::time::timeout(timeout, async {
-        for part in parts {
-            output.write_all(part).await?;
+#[derive(Default)]
+struct VideoPackets {
+    dimensions: Option<(u32, u32)>,
+    configuration: Vec<u8>,
+    pending_configuration: Vec<u8>,
+    pending: bool,
+    pending_units: usize,
+}
+
+impl VideoPackets {
+    async fn unit(
+        &mut self,
+        output: &crate::media::native::MediaSource,
+        header: &[u8; 12],
+        bytes: &[u8],
+    ) -> CoreResult<()> {
+        if let Some(dimensions) = session_dimensions(header)? {
+            self.dimensions = Some(dimensions);
+            // A reset can emit another session before the old CSD gets a frame.
+            // Never concatenate parameter sets across those session boundaries.
+            self.pending_configuration.clear();
+            self.pending = true;
+            self.pending_units = 0;
+            return Ok(());
         }
-        Ok::<_, std::io::Error>(())
-    })
-    .await
-    .map_err(|_| CoreError::new("video_stall", stalled))??;
-    Ok(())
+        let flags = u64::from_be_bytes(header[..8].try_into().expect("fixed header"));
+        if flags & (1 << 62) != 0 {
+            if !self.pending {
+                self.pending = true;
+                self.pending_units = 0;
+                self.pending_configuration.clear();
+            }
+            if self.pending_configuration.len() + bytes.len()
+                > crate::media::MAX_CONFIGURATION_BYTES
+            {
+                return Err(CoreError::new("video_protocol", "视频配置超过限额。"));
+            }
+            self.pending_configuration.extend_from_slice(bytes);
+            self.pending_units += 1;
+            if self.pending_units > 64 {
+                return Err(CoreError::new(
+                    "video_protocol",
+                    "视频配置未在限额内跟随关键帧。",
+                ));
+            }
+            return Ok(());
+        }
+        let keyframe = flags & (1 << 61) != 0;
+        if self.pending {
+            self.pending_units += 1;
+            if self.pending_units > 64 {
+                return Err(CoreError::new(
+                    "video_protocol",
+                    "视频配置未在限额内跟随关键帧。",
+                ));
+            }
+            if !keyframe {
+                return Ok(());
+            }
+            let (width, height) = self
+                .dimensions
+                .ok_or_else(|| CoreError::new("video_protocol", "视频流缺少会话尺寸。"))?;
+            if !self.pending_configuration.is_empty() {
+                self.configuration = std::mem::take(&mut self.pending_configuration);
+            }
+            output.configure(width, height, &self.configuration).await?;
+            self.pending = false;
+        }
+        output
+            .packet(bytes, flags & ((1 << 61) - 1), keyframe)
+            .await
+    }
+    async fn preface(
+        &mut self,
+        output: &crate::media::native::MediaSource,
+        mut bytes: &[u8],
+    ) -> CoreResult<()> {
+        while !bytes.is_empty() {
+            if bytes.len() < 12 {
+                return Err(CoreError::new("video_protocol", "视频首帧前缀不完整。"));
+            }
+            let header: [u8; 12] = bytes[..12].try_into().expect("bounded header");
+            bytes = &bytes[12..];
+            let length = if session_dimensions(&header)?.is_some() {
+                0
+            } else {
+                u32::from_be_bytes(header[8..].try_into().expect("header")) as usize
+            };
+            if length > bytes.len() || length > MAX_PACKET {
+                return Err(CoreError::new("video_protocol", "视频首帧数据不完整。"));
+            }
+            self.unit(output, &header, &bytes[..length]).await?;
+            bytes = &bytes[length..];
+        }
+        Ok(())
+    }
 }
 
 async fn run_video(
-    listener: TcpListener,
-    token: String,
+    output: Arc<crate::media::native::MediaSource>,
     mut video: AdbStream,
     initial: Vec<u8>,
     context: SessionContext,
@@ -2597,18 +2675,13 @@ async fn run_video(
     let mut capture_segment = 1u64;
     let mut latency_guard = VideoDelayGuard::default();
     let mut last_auto_reset = None;
+    let mut packets = VideoPackets::default();
     let operation = async {
         if tracing {
             video.set_read_trace_clock(Some(crate::media::monotonic_micros))?;
         }
-        let output = accept_media(&listener, &token).await?;
-        output.set_nodelay(true)?;
-        let (mut native_reader, mut output) = output.into_split();
-        let native_cancel = cancellation.clone();
-        tokio::spawn(async move {
-            let mut unexpected = [0];
-            tokio::select! { _ = native_cancel.cancelled() => {}, _ = native_reader.read(&mut unexpected) => { native_cancel.cancel(); } }
-        });
+        output.wait_attached().await?;
+        packets.preface(&output, &initial).await?;
         let ready_state = state.clone();
         let ready_cancel = cancellation.clone();
         tokio::spawn(async move {
@@ -2617,13 +2690,6 @@ async fn run_video(
                 if data["textureId"].is_null() { data["status"] = json!("failed"); data["reason"] = json!("视频渲染器未返回可用画面。"); ready_cancel.cancel(); }
             } }
         });
-        write_video_parts(
-            &mut output,
-            &[&initial],
-            VIDEO_OUTPUT_STALL_TIMEOUT,
-            "视频呈现器未及时读取首帧前缀。",
-        )
-        .await?;
         loop {
             let mut header = [0; 12];
             // A static screen may remain silent between complete units. Once
@@ -2668,13 +2734,7 @@ async fn run_video(
                 // A slow presentation consumer must not hold the session state
                 // lock needed by control acknowledgements and cancellation.
                 if forward {
-                    write_video_parts(
-                        &mut output,
-                        &[&header],
-                        VIDEO_OUTPUT_STALL_TIMEOUT,
-                        "视频呈现器未及时读取会话尺寸。",
-                    )
-                    .await?;
+                    packets.unit(&output, &header, &[]).await?;
                 }
                 continue;
             }
@@ -2739,13 +2799,7 @@ async fn run_video(
                 }
             }
             let write_started_us = tracing.then(crate::media::monotonic_micros);
-            write_video_parts(
-                &mut output,
-                &[&header, &bytes],
-                VIDEO_OUTPUT_STALL_TIMEOUT,
-                "视频呈现器未及时读取画面。",
-            )
-            .await?;
+            packets.unit(&output, &header, &bytes).await?;
             let written_us = tracing.then(crate::media::monotonic_micros);
             if let Some(first_byte_us) = trace_first_byte_us.filter(|_| flags & (1 << 62) == 0) {
                 let mut data = state.write().await;
@@ -2778,33 +2832,7 @@ async fn run_video(
         data["reason"] = json!(error.message);
     }
     cancellation.cancel();
-}
-
-/// Fixed-length authenticated loopback media connection. No media bytes are
-/// sent to unauthenticated clients; repeated failures share the startup deadline.
-pub(crate) async fn accept_media(
-    listener: &TcpListener,
-    token: &str,
-) -> CoreResult<tokio::net::TcpStream> {
-    use subtle::ConstantTimeEq;
-    let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
-        let (mut candidate, _) = tokio::time::timeout_at(deadline, listener.accept())
-            .await
-            .map_err(|_| CoreError::new("renderer_timeout", "未能连接媒体呈现器。"))??;
-        let mut authentication = [0; 65];
-        if tokio::time::timeout_at(
-            deadline.min(Instant::now() + Duration::from_secs(3)),
-            candidate.read_exact(&mut authentication),
-        )
-        .await
-        .is_ok_and(|result| result.is_ok())
-            && authentication[64] == b'\n'
-            && bool::from(authentication[..64].ct_eq(token.as_bytes()))
-        {
-            return Ok(candidate);
-        }
-    }
+    output.finish();
 }
 
 async fn run_control(
@@ -3232,6 +3260,7 @@ fn parse_apps(text: &str) -> CoreResult<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::AsyncReadExt;
     fn media_params(patch: Value) -> Value {
         let mut params = crate::preferences::defaults();
         for (key, value) in patch.as_object().expect("fixture parameters") {
@@ -3263,17 +3292,63 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stalled_presentation_write_has_a_bounded_error() {
-        let (mut output, _peer) = tokio::io::duplex(1);
-        let error = write_video_parts(
-            &mut output,
-            &[&[7u8; 1024]],
-            Duration::from_millis(20),
-            "stalled fixture",
+    async fn direct_packets_discard_unframed_old_session_configuration() {
+        let token = format!(
+            "{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        );
+        let source = crate::media::native::MediaSource::register(
+            token.clone(),
+            1,
+            640,
+            480,
+            CancellationToken::new(),
         )
-        .await
-        .unwrap_err();
-        assert_eq!(error.code, "video_stall");
+        .unwrap();
+        let mut reader = crate::media::native::testing::Reader::attach(&token, 1);
+        let dimensions = |width: u32| {
+            [
+                0x8000_0000u32.to_be_bytes(),
+                width.to_be_bytes(),
+                480u32.to_be_bytes(),
+            ]
+            .concat()
+        };
+        let packet = |flags: u64, data: &[u8]| {
+            [
+                flags.to_be_bytes().as_slice(),
+                (data.len() as u32).to_be_bytes().as_slice(),
+                data,
+            ]
+            .concat()
+        };
+        let prefix = [
+            dimensions(320),
+            packet(1 << 62, b"old-csd"),
+            dimensions(640),
+            packet(1 << 62, b"new-"),
+            packet(1 << 62, b"csd"),
+            packet((1 << 61) | 123, b"keyframe"),
+        ]
+        .concat();
+        VideoPackets::default()
+            .preface(&source, &prefix)
+            .await
+            .unwrap();
+        let expected = [
+            dimensions(640),
+            packet(1 << 62, b"new-csd"),
+            packet((1 << 61) | 123, b"keyframe"),
+        ]
+        .concat();
+        let mut actual = vec![0; expected.len()];
+        tokio::time::timeout(Duration::from_secs(1), reader.read_exact(&mut actual))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(actual, expected);
+        source.finish();
     }
 
     #[tokio::test]
@@ -4607,7 +4682,7 @@ mod tests {
         peer: tokio::io::DuplexStream,
         client: interop_adb::Client,
         local: u32,
-        output: tokio::net::TcpStream,
+        output: crate::media::native::testing::Reader,
         state: Arc<RwLock<Value>>,
         requests: mpsc::Receiver<ControlRequest>,
         cancellation: CancellationToken,
@@ -4651,10 +4726,6 @@ mod tests {
                 .await
                 .unwrap();
             let video = opening.await.unwrap();
-            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-                .await
-                .unwrap();
-            let address = listener.local_addr().unwrap();
             let state = Arc::new(RwLock::new(json!({
                 "sessionId":"fixture", "status":"streaming", "textureId":1,
             })));
@@ -4662,12 +4733,33 @@ mod tests {
                 state.write().await["transportTrace"] = json!([]);
             }
             let (control, requests) = mpsc::channel(8);
-            let token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+            let token = format!(
+                "{}{}",
+                uuid::Uuid::new_v4().simple(),
+                uuid::Uuid::new_v4().simple()
+            );
+            let source = crate::media::native::MediaSource::register(
+                token.clone(),
+                1,
+                640,
+                480,
+                cancellation.clone(),
+            )
+            .unwrap();
+            let mut output = crate::media::native::testing::Reader::attach(&token, 1);
+            let mut initial = [
+                0x8000_0000u32.to_be_bytes(),
+                640u32.to_be_bytes(),
+                480u32.to_be_bytes(),
+            ]
+            .concat();
+            initial.extend_from_slice(&(1u64 << 61).to_be_bytes());
+            initial.extend_from_slice(&1u32.to_be_bytes());
+            initial.push(0x65);
             let running = tokio::spawn(run_video(
-                listener,
-                token.into(),
+                source,
                 video,
-                b"fixture-preface".to_vec(),
+                initial.clone(),
                 SessionContext {
                     cancellation: cancellation.clone(),
                     state: state.clone(),
@@ -4676,17 +4768,12 @@ mod tests {
                     control,
                 },
             ));
-            let mut output = tokio::net::TcpStream::connect(address).await.unwrap();
-            output
-                .write_all(format!("{token}\n").as_bytes())
-                .await
-                .unwrap();
-            let mut preface = [0; 15];
+            let mut preface = vec![0; initial.len()];
             tokio::time::timeout(Duration::from_secs(1), output.read_exact(&mut preface))
                 .await
                 .unwrap()
                 .unwrap();
-            assert_eq!(&preface, b"fixture-preface");
+            assert_eq!(preface, initial);
             Self {
                 peer,
                 client,
@@ -4839,7 +4926,7 @@ mod tests {
         };
         let packet = |pts: u64| {
             [
-                pts.to_be_bytes().as_slice(),
+                (pts | (1 << 61)).to_be_bytes().as_slice(),
                 1u32.to_be_bytes().as_slice(),
                 &[0x65],
             ]
@@ -4979,18 +5066,21 @@ mod tests {
             ]
             .concat();
             fixture.deliver(marker.clone()).await;
+            fixture.deliver(packet((1 << 61) | 5_001_000)).await;
             let mut metadata = [0; 12];
             fixture.output.read_exact(&mut metadata).await.unwrap();
             assert_eq!(metadata.as_slice(), marker);
-            for index in 1..=258 {
+            fixture.output.read_exact(&mut bytes).await.unwrap();
+            for index in 2..=258 {
                 fixture.deliver(packet(5_000_000 + index * 1000)).await;
                 fixture.output.read_exact(&mut bytes).await.unwrap();
             }
-            // Codec configuration is forwarded but must not masquerade as a
-            // source-PTS frame or consume a slot in the bounded frame trace.
+            // A config is held until a complete keyframe, then delivered as
+            // one configure callback; it never consumes a source-frame slot.
             fixture.deliver(packet(1 << 62)).await;
+            fixture.deliver(packet((1 << 61) | 5_259_000)).await;
+            fixture.output.read_exact(&mut metadata).await.unwrap();
             fixture.output.read_exact(&mut bytes).await.unwrap();
-            fixture.deliver(packet(5_259_000)).await;
             fixture.output.read_exact(&mut bytes).await.unwrap();
             if tracing {
                 let frames = tokio::time::timeout(Duration::from_secs(1), async {
@@ -5315,17 +5405,10 @@ mod tests {
             .unwrap();
         let old = runtime.start_session(&json!({"deviceId":device,"videoCodec":"h264","maxSize":720,"maxFps":30,"videoBitRate":1_000_000})).await.unwrap();
         let old_id = old["sessionId"].as_str().unwrap();
-        let mut socket = tokio::net::TcpStream::connect((
-            "127.0.0.1",
-            old["videoPort"].as_u64().unwrap() as u16,
-        ))
-        .await
-        .unwrap();
-        socket
-            .write_all(old["videoToken"].as_str().unwrap().as_bytes())
-            .await
-            .unwrap();
-        socket.write_all(b"\n").await.unwrap();
+        let mut socket = crate::media::native::testing::Reader::attach(
+            old["videoSourceId"].as_str().unwrap(),
+            1,
+        );
         let mut reservations = Vec::new();
         // These occupy application slots, not hardware resources. One real
         // encoded stream suffices; never exhaust the emulator's actual codecs.

@@ -60,9 +60,15 @@ Runtime 持有默认全局授权身份和设备专属身份。替换身份只失
 
 共享播放器使用 pub.dev 原版 `fvp: 0.39.1`，不维护本地 fork。MDK 的实际来源、版本和下载行为由该发布包的平台构建文件决定。Bridge 通过原生有界回读处理普通快照，逐帧诊断按需开启；不调用上游未判空的 `MdkSnapshot`。
 
+### 本机运行日志
+
+应用进程持有唯一 `DiagnosticLog`，bootstrap 将其注入 Bridge 与音视频输出；provider 重建和启动重试沿用同一写入队列。结构化 `DiagnosticReporter` 只转写命令标识、错误码、耗时、代际、释放回执与解码后端等白名单字段，设备和会话标识经每进程随机盐散列；不重定向原生自由文本日志，也不保存参数、异常正文或堆栈。设置页读取最近记录并手动导出 JSONL。
+
+日志位于应用支持目录 `diagnostics/`，四份文件各至多 512 KiB，内存最近 300 条、待写队列 256 条，溢出记录丢弃数量。文件 IO 串行，正常批次延迟至多约 250 ms 发起写入，错误与退出前台主动请求 flush；崩溃或系统强杀仍可能损失未落盘记录。重启跳过损坏行并截断当前文件的不完整尾行，存储失败保留有界内存记录且不阻断播放。产品行为见[设置与本地数据](../../designs/prod/information-architecture.md#设置与本地数据)。
+
 ## 材质启动与渲染
 
-`app/lib/main.dart` 先初始化 `GlassMaterial`，再启动 `bootstrapApplication`。支持 shader 时使用 premium 光学路径，不支持时使用明确的磨砂回退；降低透明度、高对比或实体偏好移除光学与模糊，减少动态效果关闭弹性位移。
+`app/lib/main.dart` 先创建进程级 `DiagnosticLog`，再初始化 `GlassMaterial` 并启动 `bootstrapApplication`。支持 shader 时使用 premium 光学路径，不支持时使用明确的磨砂回退；降低透明度、高对比或实体偏好移除光学与模糊，减少动态效果关闭弹性位移。
 
 页面直接使用库的 `GlassIconButton`、`GlassTabBar.bottom` 和 `GlassMenu`。浅色 premium 底栏由 `NavigationSelectionLens` 组合 regular 轨道、静止镜片和官方前景栏；暗色、辅助偏好与不支持 premium 的分支保留官方轨道和选中面。该组合依赖锁定版本的零光学快速路径，升级库时需重新核对。
 

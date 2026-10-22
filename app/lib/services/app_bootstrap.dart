@@ -10,9 +10,11 @@ import 'package:scrcpy_connect/services/media_cache_directory.dart';
 /// The returned dependencies transfer that ownership to the provider scope.
 Future<AppDependencies> bootstrapApplication({
   Future<AppDependencies> Function()? initializeTransport,
+  DiagnosticLog? diagnostics,
   Future<Directory> Function()? prepareOutgoingDirectory,
 }) async {
-  final dependencies = await (initializeTransport ?? _initializeTransport)();
+  final dependencies =
+      await (initializeTransport ?? () => _initializeTransport(diagnostics))();
   try {
     final outgoing =
         await (prepareOutgoingDirectory ?? outgoingMediaDirectory)();
@@ -30,13 +32,15 @@ Future<AppDependencies> bootstrapApplication({
   }
 }
 
-Future<AppDependencies> _initializeTransport() async {
+Future<AppDependencies> _initializeTransport(DiagnosticLog? diagnostics) async {
   final directory = await getApplicationSupportDirectory();
   await directory.create(recursive: true);
   final bridge = await InteropBridge.initialize(
     dataDirectory: await directory.resolveSymbolicLinks(),
+    diagnostics: diagnostics,
   );
   return AppDependencies(
+    diagnostics: diagnostics,
     request: (command, [params = const {}]) async {
       try {
         return await bridge.request(command, params);

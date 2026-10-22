@@ -4,7 +4,9 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import '../interop_exception.dart';
-import 'fvp_video_player.dart';
+import '../diagnostics/diagnostic_log.dart';
+import '../diagnostics/diagnostic_reporter.dart';
+import 'codec_video_player.dart';
 import 'video_player_port.dart';
 
 export 'video_player_port.dart';
@@ -16,14 +18,17 @@ class PortableVideoOutputs {
     required this.core,
     required this.emit,
     required this.isDisposed,
+    DiagnosticLog? diagnostics,
     VideoPlayerFactory? playerFactory,
     this.startTimeout = const Duration(seconds: 18),
     this.operationTimeout = const Duration(seconds: 6),
-  }) : _factory = playerFactory ?? FvpVideoPlayer.new;
+  }) : _diagnostics = DiagnosticReporter(diagnostics),
+       _factory = playerFactory ?? CodecVideoPlayer.new;
 
   final VideoCoreRequest core;
   final void Function(VideoJson) emit;
   final bool Function() isDisposed;
+  final DiagnosticReporter _diagnostics;
   final VideoPlayerFactory _factory;
   final Duration startTimeout, operationTimeout;
   final _entries = <String, _Output>{}, _pending = <String, _Output>{};
@@ -69,21 +74,12 @@ class PortableVideoOutputs {
 
   Future<VideoJson> _start(_Output entry, VideoJson stream) async {
     try {
-      final port = stream['videoPort'];
-      final token = stream['videoToken'];
-      if (port is! int ||
-          port < 1 ||
-          port > 65535 ||
-          token is! String ||
-          !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(token)) {
-        throw const InteropException('invalid_endpoint', '视频输入缺少有效的一次性连接信息。');
-      }
+      final source = _sourceId(stream);
       // A timeout cannot cancel a core Future. The late callback still closes
       // exactly the relay it created, never a replacement entry's relay.
       final opening = core('media.open', {
         'kind': 'video',
-        'port': port,
-        'token': token,
+        'sourceId': source,
         'codec': entry.codec,
         'generation': entry.generation,
       });
@@ -108,6 +104,7 @@ class PortableVideoOutputs {
       });
       return receipt;
     } catch (error) {
+      _diagnostics.failure(DiagnosticArea.video, entry.id, error);
       if (identical(_entries[entry.id], entry)) _entries.remove(entry.id);
       await _release(entry);
       throw _failure(error, entry);
@@ -122,9 +119,15 @@ class PortableVideoOutputs {
         (endpoint['codec'] != null && endpoint['codec'] != entry.codec)) {
       throw const InteropException('invalid_endpoint', '媒体输入类型或实际编码与视频输出不一致。');
     }
-    final url = _url(endpoint);
+    _validateSource(endpoint);
     entry.observer = entry.player.events.listen((event) {
       if (!_owns(entry) || entry.closed || _disposed || isDisposed()) return;
+      _diagnostics.playerEvent(
+        DiagnosticArea.video,
+        entry.id,
+        event,
+        generation: entry.generation,
+      );
       if (entry.diagnostics.length < 24 && event['kind'] == 'diagnostic') {
         entry.diagnostics.add({...event});
       }
@@ -145,12 +148,12 @@ class PortableVideoOutputs {
             'sessionId': entry.id,
             'generation': entry.generation,
             'reason': event['reason'] ?? '视频输入已结束。',
-            'backend': 'fvp',
+            'backend': 'media_codec',
           },
         });
       }
     });
-    final texture = await _await(entry, entry.player.open(url));
+    final texture = await _await(entry, entry.player.open(endpoint));
     entry.startupTimingMs['openedMs'] = entry.startupClock.elapsedMilliseconds;
     _check(entry);
     if (texture.id < 0 ||
@@ -187,19 +190,10 @@ class PortableVideoOutputs {
     if (captureGeneration <= old.captureGeneration) {
       throw const InteropException('generation_changed', '新视频输入归属已经过期。');
     }
-    final port = stream['videoPort'];
-    final token = stream['videoToken'];
-    if (port is! int ||
-        port < 1 ||
-        port > 65535 ||
-        token is! String ||
-        !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(token)) {
-      throw const InteropException('invalid_endpoint', '新视频输入缺少一次性连接信息。');
-    }
+    final source = _sourceId(stream);
     final opening = core('media.open', {
       'kind': 'video',
-      'port': port,
-      'token': token,
+      'sourceId': source,
       'codec': _codec(stream),
       'generation': generation,
     });
@@ -369,7 +363,7 @@ class PortableVideoOutputs {
     paused,
     onRequested: paused
         ? () async {
-            // A queued pause must reach MDK before RESET_VIDEO supplies the
+            // A queued pause must reach the native output before RESET_VIDEO supplies the
             // packet needed by a static reader. Never refresh a retired owner.
             _check(entry);
             await _await(
@@ -398,7 +392,7 @@ class PortableVideoOutputs {
     final pending = Future<VideoPixels?>.sync(
       () => entry.player.snapshot(width: width, height: height),
     );
-    // MDK has one outstanding snapshot slot. Timing out our receipt does not
+    // A timed-out readback still owns native resources. Timing out does not
     // cancel its native callback; never issue a second request into that slot.
     unawaited(
       pending.then<void>(
@@ -462,7 +456,7 @@ class PortableVideoOutputs {
         'width': width,
         'height': height,
         'scaled': factor < 1,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       };
     } catch (_) {
       if (owned != null) await owned.delete(recursive: true);
@@ -471,7 +465,7 @@ class PortableVideoOutputs {
   }
 
   VideoJson capabilities() => {
-    'backend': 'fvp',
+    'backend': 'media_codec',
     'probe': 'runtimeDecodeRequired',
     'codecs': [
       for (final codec in const ['h264', 'h265', 'av1', 'vp8', 'vp9'])
@@ -554,6 +548,7 @@ class PortableVideoOutputs {
         'cleanupUnconfirmed': true,
       };
     }
+    _diagnostics.release(DiagnosticArea.video, entry.id, released);
     await closing;
     return released;
   }
@@ -649,9 +644,9 @@ class PortableVideoOutputs {
     'codec': entry.codec,
     'generation': entry.generation,
     'captureGeneration': entry.captureGeneration,
-    'backend': 'fvp',
+    'backend': 'media_codec',
     'firstFrameDecoded': true,
-    'evidence': 'mdk.snapshot',
+    'evidence': 'media_codec.snapshot',
     'snapshotReceipts': entry.snapshotReceipts,
     'presentedToWidget': false,
     'continuousFrameTelemetry': false,
@@ -734,21 +729,23 @@ int _generation(VideoJson value) {
   return generation;
 }
 
-String _url(VideoJson endpoint) {
-  final value = endpoint['url'];
-  final url = value is String ? Uri.tryParse(value) : null;
-  if (url == null ||
-      url.scheme != 'http' ||
-      url.host != '127.0.0.1' ||
-      !url.hasPort ||
-      url.port < 1 ||
-      url.userInfo.isNotEmpty ||
-      url.hasQuery ||
-      url.hasFragment ||
-      !RegExp(r'^/[a-fA-F0-9]{64}$').hasMatch(url.path)) {
-    throw const InteropException('invalid_endpoint', '媒体输入不是授权的本机流。');
+String _sourceId(VideoJson stream) {
+  final id = stream['videoSourceId'];
+  if (id is! String || !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(id)) {
+    throw const InteropException('invalid_endpoint', '缺少有效的原生视频源。');
   }
-  return value as String;
+  return id;
+}
+
+void _validateSource(VideoJson endpoint) {
+  if (endpoint['container'] != 'packet' ||
+      endpoint['sourceId'] is! String ||
+      endpoint['attachAddress'] is! int ||
+      endpoint['detachAddress'] is! int ||
+      (endpoint['attachAddress'] as int) <= 0 ||
+      (endpoint['detachAddress'] as int) <= 0) {
+    throw const InteropException('invalid_endpoint', '媒体输入不是有效的原生数据源。');
+  }
 }
 
 Future<List<int>> _png(VideoPixels pixels) async {

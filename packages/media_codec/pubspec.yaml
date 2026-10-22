@@ -1,0 +1,29 @@
+name: media_codec
+description: Packet-driven low-latency video and PCM output for Flutter.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.13.5
+  flutter: '>=3.41.0'
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: dev.scrcpyconnect.media_codec
+        pluginClass: MediaCodecPlugin
+      ios:
+        pluginClass: MediaCodecPlugin
+      macos:
+        pluginClass: MediaCodecPlugin
+      linux:
+        pluginClass: MediaCodecPlugin
+      windows:
+        pluginClass: MediaCodecPluginCApi

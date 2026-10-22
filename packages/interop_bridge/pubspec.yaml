@@ -7,8 +7,10 @@ environment:
   sdk: ^3.13.5
 dependencies:
   crypto: 3.0.7
+  path: 1.9.1
   ffi: ^2.2.0
-  fvp: 0.39.1
+  media_codec:
+    path: ../media_codec
   code_assets: ^2.1.0
   flutter:
     sdk: flutter

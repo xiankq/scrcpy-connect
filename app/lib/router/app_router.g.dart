@@ -55,6 +55,7 @@ List<RouteBase> get $appRoutes => [
   $adbIdentityRoute,
   $deviceIdentityRoute,
   $deviceIpRoute,
+  $runtimeLogsRoute,
 ];
 
 RouteBase get $rootRoute => GoRouteData.$route(
@@ -1759,6 +1760,35 @@ mixin $DeviceIpRoute on GoRouteData {
   String get location => GoRouteData.$location(
     '/devices/${Uri.encodeComponent(_self.deviceId)}/convert-ip',
   );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $runtimeLogsRoute => GoRouteData.$route(
+  path: '/settings/logs',
+  name: 'runtime-logs',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: RuntimeLogsRoute.$parentNavigatorKey,
+  factory: $RuntimeLogsRoute._fromState,
+);
+
+mixin $RuntimeLogsRoute on GoRouteData {
+  static RuntimeLogsRoute _fromState(GoRouterState state) =>
+      const RuntimeLogsRoute();
+
+  @override
+  String get location => GoRouteData.$location('/settings/logs');
 
   @override
   void go(BuildContext context) => context.go(location);

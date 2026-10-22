@@ -697,8 +697,7 @@
       "name": "media.open",
       "owner": "core",
       "required": {
-        "port": "integer",
-        "token": "string",
+        "sourceId": "string",
         "kind": "string"
       }
     },

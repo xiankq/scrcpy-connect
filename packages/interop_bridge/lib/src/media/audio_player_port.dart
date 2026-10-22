@@ -8,7 +8,7 @@ typedef AudioPlayerFactory = AudioPlayerPort Function();
 /// Public-player seam; no PCM copies or OS focus policy live in this port.
 abstract interface class AudioPlayerPort {
   Stream<AudioJson> get events;
-  Future<AudioFormat> open(String url);
+  Future<AudioFormat> open(AudioJson source);
   Future<void> setPaused(bool paused);
   Future<void> volume(double value, bool muted);
   int get positionMs;

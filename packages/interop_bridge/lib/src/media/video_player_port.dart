@@ -8,10 +8,10 @@ typedef VideoCoreRequest = Future<VideoJson> Function(
 typedef VideoPlayerFactory = VideoPlayerPort Function();
 
 /// Only operations needed by the session owner. Tests exercise cancellation and
-/// late replies through this seam; production always constructs the MDK port.
+/// late replies through this seam; production uses the native packet decoder.
 abstract interface class VideoPlayerPort {
   Stream<VideoJson> get events;
-  Future<VideoTexture> open(String url);
+  Future<VideoTexture> open(VideoJson source);
 
   /// [onRequested] runs after native submission, before awaiting confirmation.
   /// A static source may need a fresh packet to acknowledge a pending pause.

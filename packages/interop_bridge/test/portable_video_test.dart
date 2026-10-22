@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:interop_bridge/src/diagnostics/diagnostic_log.dart';
 import 'package:interop_bridge/src/interop_exception.dart';
 import 'package:interop_bridge/src/media/portable_video.dart';
 import 'package:interop_bridge/src/media/video_player_operations.dart';
@@ -90,10 +91,12 @@ class _Player implements VideoPlayerPort {
 
 class _Harness {
   _Harness({
+    this.diagnostics,
     this.operationTimeout = const Duration(seconds: 6),
     this.serialized = false,
   });
   final Duration operationTimeout;
+  final DiagnosticLog? diagnostics;
   final bool serialized;
   final commands = <(String, VideoJson)>[];
   final events = <VideoJson>[];
@@ -102,6 +105,7 @@ class _Harness {
   bool disposed = false;
   int relays = 0;
   late final output = PortableVideoOutputs(
+    diagnostics: diagnostics,
     core: request,
     emit: events.add,
     isDisposed: () => disposed,
@@ -144,6 +148,48 @@ class _Harness {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'production observer records decoder changes and ignores disposed output',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'connect-player-log-',
+      );
+      final log = await DiagnosticLog.open(directory);
+      final h = _Harness(diagnostics: log);
+      try {
+        await h.output.start(_stream('A'));
+        h.players.first.changes.add({
+          'kind': 'diagnostic',
+          'category': 'decoder.video',
+          'detail': 'FFmpeg',
+          'error': 0,
+        });
+        expect(
+          log.recent
+              .where((r) => r.event == 'decoder.selected')
+              .single
+              .fields['decoder'],
+          'FFmpeg',
+        );
+        await h.output.dispose();
+        h.players.first.changes.add({
+          'kind': 'diagnostic',
+          'category': 'decoder.video',
+          'detail': 'AMediaCodec',
+          'error': 0,
+        });
+        expect(
+          log.recent.where((r) => r.event == 'decoder.selected'),
+          hasLength(1),
+        );
+        expect(log.recent.last.event, 'output.released');
+      } finally {
+        await h.output.dispose();
+        await log.close();
+        await directory.delete(recursive: true);
+      }
+    },
+  );
   test(
     'renderer resize generations stay independent of capture rebuilds',
     () async {

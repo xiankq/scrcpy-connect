@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/services/application_diagnostics.dart';
+import 'package:interop_bridge/interop_bridge.dart'
+    show DiagnosticLog, DiagnosticArea, LogLevel;
 import 'package:scrcpy_connect/services/app_dependencies.dart';
 import 'package:scrcpy_connect/services/app_bootstrap.dart';
 import 'package:scrcpy_connect/services/local_notification_sink.dart';
@@ -7,18 +10,16 @@ import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:design_system/design_system.dart';
-import 'package:fvp/fvp.dart' as fvp;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  fvp.registerWith(
-    options: {
-      'platforms': ['windows', 'linux'],
-    },
-  );
+  DiagnosticLog? diagnostics;
   try {
+    diagnostics = await applicationDiagnostics();
+    diagnostics.record(DiagnosticArea.app, 'bootstrap.started');
     await GlassMaterial.initialize();
-    final dependencies = await bootstrapApplication();
+    final dependencies = await bootstrapApplication(diagnostics: diagnostics);
+    diagnostics.record(DiagnosticArea.app, 'bootstrap.ready');
     runApp(
       ProviderScope(
         overrides: [
@@ -31,6 +32,13 @@ Future<void> main() async {
       ),
     );
   } catch (error) {
+    diagnostics?.record(
+      DiagnosticArea.app,
+      'bootstrap.failed',
+      level: LogLevel.error,
+      fields: {'errorType': error.runtimeType.toString()},
+    );
+    await diagnostics?.flush();
     runApp(
       ProviderScope(
         child: MaterialApp(

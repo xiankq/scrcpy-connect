@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:flutter/material.dart';
@@ -1268,6 +1269,18 @@ class DeviceIpRoute extends GoRouteData with $DeviceIpRoute {
     (_, _, device) =>
         DeviceConvertIpPage(controller: _controller(context), device: device),
   );
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
+@TypedGoRoute<RuntimeLogsRoute>(path: '/settings/logs', name: 'runtime-logs')
+class RuntimeLogsRoute extends GoRouteData with $RuntimeLogsRoute {
+  const RuntimeLogsRoute();
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      const RuntimeLogsPage();
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) =>
       _page(state, build(context, state));

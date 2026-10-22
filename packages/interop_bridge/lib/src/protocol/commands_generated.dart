@@ -420,8 +420,7 @@ enum InteropCommand {
   mediaOpen(
     "media.open",
     required: {
-      'port': ProtocolFieldType.integer,
-      'token': ProtocolFieldType.string,
+      'sourceId': ProtocolFieldType.string,
       'kind': ProtocolFieldType.string,
     },
   ),

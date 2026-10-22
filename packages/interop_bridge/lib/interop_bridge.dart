@@ -10,6 +10,8 @@ import 'package:flutter/widgets.dart'
     show AppLifecycleListener, AppLifecycleState, WidgetsBinding;
 import 'package:open_filex/open_filex.dart';
 
+import 'src/diagnostics/diagnostic_log.dart';
+import 'src/diagnostics/diagnostic_reporter.dart';
 import 'src/rust/api.dart' as core;
 import 'src/rust/frb_generated.dart';
 import 'src/media_intent.dart';
@@ -35,6 +37,7 @@ import 'src/connection_setup_coordinator.dart';
 import 'src/device_capability_policy.dart';
 import 'src/device_quality_coordinator.dart';
 
+export 'src/diagnostics/diagnostic_log.dart';
 export 'src/interop_exception.dart';
 export 'src/connection_policy.dart';
 export 'src/protocol/commands_generated.dart' show InteropCommand;
@@ -42,7 +45,14 @@ export 'src/protocol/commands_generated.dart' show InteropCommand;
 /// The application never invokes an external adb process. This is its only
 /// boundary to the persistent Rust runtime and ordinary platform permissions.
 class InteropBridge {
-  InteropBridge._(this._dataDirectory, this._connectionPolicy);
+  InteropBridge._(
+    this._dataDirectory,
+    this._connectionPolicy,
+    this.diagnostics,
+  );
+
+  final DiagnosticLog? diagnostics;
+  late final _diagnostics = DiagnosticReporter(diagnostics);
 
   final ConnectionPolicy _connectionPolicy;
   AppLifecycleListener? _connectionLifecycle;
@@ -127,6 +137,7 @@ class InteropBridge {
   Future<void>? _disposing;
   late final _audioOutputs = PortableAudioOutputs(
     core: _invoke,
+    diagnostics: diagnostics,
     platform: _audioPlatformRequest,
     emit: _handleAudioOutput,
     isDisposed: () => _disposed,
@@ -153,6 +164,7 @@ class InteropBridge {
   late final _videoOutputs = PortableVideoOutputs(
     core: _invoke,
     emit: _handleVideoOutput,
+    diagnostics: diagnostics,
     isDisposed: () => _disposed,
   );
   late final _videoPresentation = VideoPresentation(
@@ -232,6 +244,7 @@ class InteropBridge {
   static Future<InteropBridge> initialize({
     required String dataDirectory,
     ConnectionPolicy connectionPolicy = const ConnectionPolicy(),
+    DiagnosticLog? diagnostics,
   }) {
     if (_active case final existing? when !existing._disposed) {
       return Future.error(
@@ -260,17 +273,20 @@ class InteropBridge {
     }
     _initializingPolicyJson = policyJson;
     _initializingDirectory = dataDirectory;
-    return _initializing ??= _initialize(dataDirectory, connectionPolicy)
-        .whenComplete(() {
-          _initializing = null;
-          _initializingDirectory = null;
-          _initializingPolicyJson = null;
-        });
+    return _initializing ??=
+        _initialize(dataDirectory, connectionPolicy, diagnostics).whenComplete(
+          () {
+            _initializing = null;
+            _initializingDirectory = null;
+            _initializingPolicyJson = null;
+          },
+        );
   }
 
   static Future<InteropBridge> _initialize(
     String dataDirectory,
     ConnectionPolicy policy,
+    DiagnosticLog? diagnostics,
   ) async {
     final previous = _active;
     if (previous != null && previous._disposed) {
@@ -279,7 +295,7 @@ class InteropBridge {
       await previous._disposing;
     }
     await _runtime.attach(dataDirectory, connectionPolicy: policy);
-    final bridge = InteropBridge._(dataDirectory, policy);
+    final bridge = InteropBridge._(dataDirectory, policy, diagnostics);
     try {
       bridge._eventSubscriptionId = await core.openEvents();
       bridge._coreSubscription = core
@@ -382,6 +398,7 @@ class InteropBridge {
     // Transport heartbeats detect a dead Dart port; they are not product state.
     if (_disposed || event['type'] == 'runtime.heartbeat') return;
     if (!_stateRecovery.accept(event)) return;
+    _diagnostics.coreEvent(event);
     _screens.handleEvent(event);
     _setup.handleEvent(event);
     _reconnections.handleEvent(event);
@@ -739,14 +756,24 @@ class InteropBridge {
             audio: command == 'audio.start',
           )
         : null;
+    final watch = Stopwatch()..start();
     try {
-      if (command == 'session.start' || command == 'apps.launch') {
-        return await _deviceQuality.open(
-          '${params['deviceId']}',
-          () => _request(command, params, intent: intent),
-        );
-      }
-      return await _request(command, params, intent: intent);
+      final result = command == 'session.start' || command == 'apps.launch'
+          ? await _deviceQuality.open(
+              '${params['deviceId']}',
+              () => _request(command, params, intent: intent),
+            )
+          : await _request(command, params, intent: intent);
+      _diagnostics.command(command, params, watch.elapsedMilliseconds);
+      return result;
+    } catch (error) {
+      _diagnostics.command(
+        command,
+        params,
+        watch.elapsedMilliseconds,
+        error: error,
+      );
+      rethrow;
     } finally {
       if (intent != null) _mediaIntents.finish(intent);
       await finishReconnect();

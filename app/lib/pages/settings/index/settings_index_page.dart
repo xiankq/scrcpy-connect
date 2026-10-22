@@ -68,6 +68,11 @@ class SettingsPage extends HookConsumerWidget {
               onTap: () => const MediaCacheRoute().push<void>(context),
             ),
             ActionRow(
+              icon: LucideIcons.fileText,
+              title: '运行日志',
+              onTap: () => const RuntimeLogsRoute().push<void>(context),
+            ),
+            ActionRow(
               icon: LucideIcons.database,
               title: '设备记录与恢复',
 

@@ -3,7 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  fvp
+  media_codec
   url_launcher_linux
 )
 

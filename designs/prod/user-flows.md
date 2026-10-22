@@ -32,7 +32,7 @@
 | 文件与传输 | 文件管理 `MaHXL`、网格 `C2ZhGv`、列表 `Baclb`、视图菜单 `fOtkV`、搜索 `lm0us/jcZXq/zD1BI`、重命名 `x4cTCx`、删除 `VZ4BH`、发送 `Y0LpW`、传输中心 `W6enLf`、详情 `R759qi`、停止移除 `fKBPB`、冲突 `K950NO`、原文件准备 `ERONu/uhuiJ/Gfe22/mcRQa/vSjZS/pSoci/cdQol` |
 | 相册 | 相册 `RqDYL`、预览 `sepTa`、多选 `Wa6hu`、视频 `nSfCV/w4Qqmf`、检查中 `KFfP4`、部分可读 `x4oRdN`、有限空态 `s4p7JF`、范围 `UwGyp` |
 | 通知与通话 | 实时通知 `a7A57`、通知接续 `Q2B7mM`、失效通知 `Ib6xa`；来电 `a05tWj`、受限原因 `LVKgj`、通话中 `aLUZD`、另一设备来电 `oBEk5` |
-| 偏好与恢复 | 设置 `w6WUAT`、外观 `PLzIA`、画面设置 `XPceX/Wp1CG/EWW1a`、能力 `NVEMy`、后台 `DtBNP`、全局私钥 `LHXrH/Rz6jL`、断线重连 `zLQT5`、媒体暂存 `Q2ZaRT/dPgTI` |
+| 偏好与恢复 | 设置 `w6WUAT`、外观 `PLzIA`、画面设置 `XPceX/Wp1CG/EWW1a`、能力 `NVEMy`、后台 `DtBNP`、全局私钥 `LHXrH/Rz6jL`、断线重连 `zLQT5`、媒体暂存 `Q2ZaRT/dPgTI`、运行日志 `jMfoj/svtD8` |
 | 平板与桌面 | 设备列表 `H0TFx`、工作台 `zLBrM` |
 
 ## 关键转换

@@ -209,6 +209,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('外观'), findsOneWidget);
       expect(backend.starts, 0);
+      await tester.scrollUntilVisible(find.text('运行日志'), 160);
+      await tester.tap(find.text('运行日志'));
+      await tester.pumpAndSettle();
+      expect(find.text('本次运行未启用日志服务。'), findsOneWidget);
+      await tester.tap(pageBackButton(tester));
+      await tester.pumpAndSettle();
+      expect(find.text('外观'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       backend.controller.dispose();
       await backend.events.close();

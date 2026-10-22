@@ -1,5 +1,7 @@
 //! Real scrcpy JAR/device tests. No adb executable is used by this test or runtime.
 //! Run with INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 and a reachable authorized adbd.
+#[path = "support/native_media.rs"]
+mod native_media;
 mod support;
 use interop_core::Runtime;
 use serde_json::json;
@@ -8,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::test]
 #[ignore = "requires a real authorized adbd and optional ffmpeg decoder"]
-async fn jar_video_authentication_framing_and_h264_decode() {
+async fn jar_video_native_packet_framing_and_h264_decode() {
     let address = std::env::var("INTEROP_ADBD_ADDRESS").unwrap_or_else(|_| "127.0.0.1".into());
     let port: u16 = std::env::var("INTEROP_ADBD_PORT")
         .expect("set INTEROP_ADBD_PORT")
@@ -44,28 +46,8 @@ async fn jar_video_authentication_framing_and_h264_decode() {
     let session = started.unwrap();
     assert_eq!(session["status"], "starting");
     assert!(session["textureId"].is_null());
-    let video_port = session["videoPort"].as_u64().unwrap() as u16;
-    let mut unauthorized = tokio::net::TcpStream::connect(("127.0.0.1", video_port))
-        .await
-        .unwrap();
-    unauthorized.write_all(&[b'x'; 64]).await.unwrap();
-    unauthorized.write_all(b"\n").await.unwrap();
-    let mut byte = [0];
-    assert_eq!(
-        tokio::time::timeout(Duration::from_secs(2), unauthorized.read(&mut byte))
-            .await
-            .unwrap()
-            .unwrap(),
-        0
-    );
-    let mut video = tokio::net::TcpStream::connect(("127.0.0.1", video_port))
-        .await
-        .unwrap();
-    video
-        .write_all(session["videoToken"].as_str().unwrap().as_bytes())
-        .await
-        .unwrap();
-    video.write_all(b"\n").await.unwrap();
+    assert!(session["videoPort"].is_null());
+    let mut video = native_media::Reader::video(&session);
     let mut initial = [0; 12];
     video.read_exact(&mut initial).await.unwrap();
     assert_eq!(
@@ -188,17 +170,7 @@ async fn real_application_display_clipboard_and_task_survive_session_stop() {
         )
         .await
         .unwrap();
-    let mut video = tokio::net::TcpStream::connect((
-        "127.0.0.1",
-        session["videoPort"].as_u64().unwrap() as u16,
-    ))
-    .await
-    .unwrap();
-    video
-        .write_all(session["videoToken"].as_str().unwrap().as_bytes())
-        .await
-        .unwrap();
-    video.write_all(b"\n").await.unwrap();
+    let mut video = native_media::Reader::video(&session);
     let mut initial = [0; 12];
     video.read_exact(&mut initial).await.unwrap();
     let video_task = tokio::spawn(async move {
@@ -314,17 +286,7 @@ async fn real_scrcpy_touch_and_ascii_unicode_text_reach_android_edit_text() {
         )
         .await
         .unwrap();
-    let mut video = tokio::net::TcpStream::connect((
-        "127.0.0.1",
-        session["videoPort"].as_u64().unwrap() as u16,
-    ))
-    .await
-    .unwrap();
-    video
-        .write_all(session["videoToken"].as_str().unwrap().as_bytes())
-        .await
-        .unwrap();
-    video.write_all(b"\n").await.unwrap();
+    let mut video = native_media::Reader::video(&session);
     let video_task = tokio::spawn(async move {
         let mut buffer = vec![0; 64 * 1024];
         loop {
@@ -462,15 +424,7 @@ async fn main_and_application_start(paused: bool) {
         )
         .await
         .unwrap();
-    let mut socket =
-        tokio::net::TcpStream::connect(("127.0.0.1", main["videoPort"].as_u64().unwrap() as u16))
-            .await
-            .unwrap();
-    socket
-        .write_all(main["videoToken"].as_str().unwrap().as_bytes())
-        .await
-        .unwrap();
-    socket.write_all(b"\n").await.unwrap();
+    let mut socket = native_media::Reader::video(&main);
     let reader = tokio::spawn(async move {
         let mut buffer = [0; 65536];
         while socket.read(&mut buffer).await.unwrap_or(0) != 0 {}

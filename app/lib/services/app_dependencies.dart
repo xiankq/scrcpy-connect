@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:interop_bridge/interop_bridge.dart' show DiagnosticLog;
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/app_state.dart';
@@ -13,9 +15,11 @@ class AppDependencies {
     required this.request,
     this.events = const Stream<Json>.empty(),
     this.close,
+    this.diagnostics,
     AppState? initialState,
     this.initialize = true,
   }) : initialState = initialState ?? AppState();
+  final DiagnosticLog? diagnostics;
   final BridgeRequest request;
   final Stream<Json> events;
   final Future<void> Function()? close;
