@@ -5,10 +5,10 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 
 /// Owns one visible read-only search; replacing it retires only that identity.
 class FileSearchOperation extends ChangeNotifier {
-  FileSearchOperation(this.controller, this.deviceId, this.path);
+  FileSearchOperation(this.controller, this.deviceId);
   final AppController controller;
   final String deviceId;
-  final String path;
+  String? _activePath;
   Json? result;
   String? error;
   bool starting = false;
@@ -18,9 +18,14 @@ class FileSearchOperation extends ChangeNotifier {
   int _readGeneration = 0;
   Timer? _poll;
   String? get searchId => result?['searchId'] as String?;
+  String? get activePath => _activePath;
   bool get running => starting || result?['status'] == 'running';
 
-  Future<void> start(String query, String filter) async {
+  Future<void> start(
+    String query,
+    String filter, {
+    required String path,
+  }) async {
     final previous = result;
     final generation = ++_generation;
     _poll?.cancel();
@@ -29,6 +34,7 @@ class FileSearchOperation extends ChangeNotifier {
     }
     result = null;
     error = null;
+    _activePath = path;
     starting = true;
     stopping = false;
     notifyListeners();
@@ -40,7 +46,7 @@ class FileSearchOperation extends ChangeNotifier {
         'filter': filter,
       });
       final id = value(next, 'searchId');
-      if (next['deviceId'] != deviceId || id.isEmpty) {
+      if (next['deviceId'] != deviceId || next['path'] != path || id.isEmpty) {
         throw const RequestFailure('invalid_data', '搜索归属无法核验，请重新搜索。');
       }
       if (_disposed || generation != _generation) {
@@ -80,7 +86,7 @@ class FileSearchOperation extends ChangeNotifier {
       }
       if (next['searchId'] != id ||
           next['deviceId'] != deviceId ||
-          next['path'] != path) {
+          next['path'] != _activePath) {
         throw const RequestFailure('invalid_data', '搜索结果归属无法核验，未显示其他范围的内容。');
       }
       result = next;

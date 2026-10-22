@@ -58,12 +58,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(FileDetailsPage), findsNothing);
       expect(find.byTooltip('删除所选'), findsNothing);
-      expect(
-        tester
-            .widget<GlassMenuButton>(find.byType(GlassMenuButton).first)
-            .enabled,
-        isFalse,
-      );
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
       await mouse.moveTo(tester.getCenter(find.text('literal�.txt')));
@@ -72,12 +66,16 @@ void main() {
       expect(find.text('/sdcard/literal�.txt'), findsOneWidget);
       await mouse.removePointer();
       await tester.pumpAndSettle();
-      await tester.longPress(find.text('literal�.txt'));
-      await tester.pumpAndSettle();
-      expect(
-        tester.widget<Checkbox>(find.byType(Checkbox).first).onChanged,
-        isNull,
+      final literalName = find.text('literal�.txt');
+      await tester.longPressAt(
+        tester.getCenter(literalName) - const Offset(0, 80),
       );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('broken�.txt'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('broken�.txt'));
+      await tester.pumpAndSettle();
+      expect(find.text('已选择 1 项'), findsOneWidget);
       await tester.tap(find.byTooltip('删除所选'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('删除'));

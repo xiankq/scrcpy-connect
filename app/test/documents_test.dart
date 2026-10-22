@@ -371,10 +371,11 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.text('选择系统文件夹'));
+      await tester.tap(find.text('选择文件夹'));
       await tester.pumpAndSettle();
       expect(pushed, isNull);
       expect(find.text('部分内容已取回，请先核对'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('发送已核对的内容'), 240);
       final send = find.widgetWithText(FilledButton, '发送已核对的内容');
       expect(tester.widget<FilledButton>(send).onPressed, isNull);
       await tester.ensureVisible(find.byType(CheckboxListTile));

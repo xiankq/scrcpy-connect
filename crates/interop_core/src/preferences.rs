@@ -9,9 +9,10 @@ use std::sync::Arc;
 pub(crate) fn defaults() -> Value {
     json!({"appearance":"light",
         "backgroundConnection":true,"backgroundKeepAlive":true,
-        "notificationAlerts":true,"callAlerts":true,"adbBurstMode":false,
+        "notificationAlerts":true,"callAlerts":true,"adbBurstMode":true,
+        "fileViewMode":"grid","fileSortKey":"name","fileSortAscending":true,
         "deviceSettings":{},
-        "qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":8_000_000,"videoCodec":"h264","videoEncoder":null,"deviceQuality":{}})
+        "qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":4_000_000,"videoCodec":"h264","videoEncoder":null,"deviceQuality":{}})
 }
 
 const REMOVED_SETTINGS: [&str; 10] = [
@@ -32,6 +33,38 @@ pub(crate) fn remove_retired_settings(settings: &mut Value) {
     if let Some(settings) = settings.as_object_mut() {
         for key in REMOVED_SETTINGS {
             settings.remove(key);
+        }
+    }
+}
+
+fn is_former_balanced_default(quality: &Value) -> bool {
+    quality["qualityPreset"] == "balanced"
+        && quality["maxSize"].as_u64() == Some(1280)
+        && quality["maxFps"].as_u64() == Some(60)
+        && quality["videoBitRate"].as_u64() == Some(8_000_000)
+}
+
+/// Only records that still match every old default field migrate. A user who
+/// explicitly changed burst or bitrate must keep that choice.
+fn is_former_network_default(settings: &Value) -> bool {
+    settings["adbBurstMode"].as_bool() == Some(false) && is_former_balanced_default(settings)
+}
+
+pub(crate) fn migrate_network_first_defaults(settings: &mut Value) {
+    if is_former_network_default(settings) {
+        settings["adbBurstMode"] = json!(true);
+    }
+    if is_former_balanced_default(settings) {
+        settings["videoBitRate"] = json!(4_000_000);
+    }
+    if let Some(device_quality) = settings
+        .get_mut("deviceQuality")
+        .and_then(Value::as_object_mut)
+    {
+        for quality in device_quality.values_mut() {
+            if is_former_balanced_default(quality) {
+                quality["videoBitRate"] = json!(4_000_000);
+            }
         }
     }
 }
@@ -97,7 +130,13 @@ pub(crate) fn validated_settings(current: &Value, changes: &Value) -> CoreResult
             | "backgroundKeepAlive"
             | "notificationAlerts"
             | "callAlerts"
-            | "adbBurstMode" => value.is_boolean(),
+            | "adbBurstMode"
+            | "fileSortAscending" => value.is_boolean(),
+            "fileViewMode" => matches!(value.as_str(), Some("grid" | "list")),
+            "fileSortKey" => matches!(
+                value.as_str(),
+                Some("name" | "size" | "modified" | "type")
+            ),
             "deviceSettings" => value.as_object().is_some_and(|map| {
                 map.len() <= 256
                     && map.iter().all(|(id, settings)| {
@@ -327,6 +366,69 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn network_first_defaults_prefer_burst_and_four_megabits() {
+        let settings = defaults();
+        assert_eq!(settings["adbBurstMode"], true);
+        assert_eq!(settings["qualityPreset"], "balanced");
+        assert_eq!(settings["videoBitRate"], 4_000_000);
+        assert_eq!(settings["fileViewMode"], "grid");
+        assert_eq!(settings["fileSortKey"], "name");
+        assert_eq!(settings["fileSortAscending"], true);
+    }
+
+    #[test]
+    fn file_browser_preferences_validate_and_round_trip() {
+        let settings = defaults();
+        let next = validated_settings(
+            &settings,
+            &json!({
+                "fileViewMode":"list",
+                "fileSortKey":"modified",
+                "fileSortAscending":false
+            }),
+        )
+        .unwrap();
+        assert_eq!(next["fileViewMode"], "list");
+        assert_eq!(next["fileSortKey"], "modified");
+        assert_eq!(next["fileSortAscending"], false);
+        assert!(
+            validated_settings(&next, &json!({"fileViewMode":"columns"})).is_err()
+        );
+        assert!(
+            validated_settings(&next, &json!({"fileSortKey":"relevance"})).is_err()
+        );
+    }
+
+    #[test]
+    fn network_first_migration_changes_only_the_former_balanced_signature() {
+        let mut settings = json!({
+            "adbBurstMode":false,
+            "qualityPreset":"balanced",
+            "maxSize":1280,
+            "maxFps":60,
+            "videoBitRate":8_000_000,
+            "deviceQuality":{
+                "old":{"qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":8_000_000},
+                "custom":{"qualityPreset":"balanced","maxSize":1280,"maxFps":30,"videoBitRate":8_000_000},
+                "clear":{"qualityPreset":"clear","maxSize":1920,"maxFps":60,"videoBitRate":12_000_000}
+            }
+        });
+        migrate_network_first_defaults(&mut settings);
+        assert_eq!(settings["adbBurstMode"], true);
+        assert_eq!(settings["videoBitRate"], 4_000_000);
+        assert_eq!(settings["deviceQuality"]["old"]["videoBitRate"], 4_000_000);
+        assert_eq!(
+            settings["deviceQuality"]["custom"]["videoBitRate"],
+            8_000_000
+        );
+        assert_eq!(
+            settings["deviceQuality"]["clear"]["videoBitRate"],
+            12_000_000
+        );
+    }
+
     #[test]
     fn retiring_global_choices_preserves_explicit_device_settings() {
         let mut settings = json!({

@@ -1,12 +1,12 @@
 # 跨目录名称搜索
 
-文件页保留当前目录即时筛选，另由“搜索子文件夹”进入专用页。搜索固定设备与根目录；用户明确提交名称与类型，也可改为整个共享存储。修改条件不会将旧结果伪装成新查询；同名结果展示父目录，点击时由原文件/目录路由重新核验。
+文件页不承载名称筛选，由页头放大镜进入独立搜索页。搜索固定设备与进入时的当前目录，用户明确提交名称与类型，也可改为“手机内部存储”。修改条件不会将旧结果伪装成新查询；同名结果展示完整父目录与大小；点击时由原文件/目录路由重新核验，文件夹进入其原目录。
 
 ## 共享实现
 
 Rust `files.search.start/get/cancel` 持有独立只读任务，Flutter协调一次可见搜索及迟到回执；不增加原生业务或被控APK。start发布searchId后开始BFS，get不触发重搜，cancel只作用于匹配设备的该searchId。离页若start尚未返回，迟到ID也会被精确取消。查询读取世代独立于任务世代，旧running快照不能覆盖较新的cancelled快照。
 
-结果含固定根/query/filter、进度、匹配项、issues、complete及终态。过滤类型为全部、图片、视频、音频、文档、压缩包和文件夹；匹配文件名，不读取正文。Unicode匹配使用固定15.0异常casefold映射及Rust小写表，来源/生成方式记录于代码：官方[CaseFolding 15.0](https://www.unicode.org/Public/15.0.0/ucd/CaseFolding.txt)，SHA-256 `cdd49e55eae3bbf1f0a3f6580c974a0263cb86a6a08daa10fbf705b4808a56f7`；不是规范化/拼音/全文索引，也不宣称任意未来Unicode版本的完整映射。
+结果含固定根/query/filter、已检查目录与项数、当前正在检查的目录、匹配项、issues、complete及终态。界面进度文案只显示后端实际返回的计数和目录，不推测尚未检查的范围。过滤类型为全部、图片、视频、音频、文档、压缩包和文件夹；匹配文件名，不读取正文。Unicode匹配使用固定15.0异常casefold映射及Rust小写表，来源/生成方式记录于代码：官方[CaseFolding 15.0](https://www.unicode.org/Public/15.0.0/ucd/CaseFolding.txt)，SHA-256 `cdd49e55eae3bbf1f0a3f6580c974a0263cb86a6a08daa10fbf705b4808a56f7`；不是规范化/拼音/全文索引，也不宣称任意未来Unicode版本的完整映射。
 
 Unicode数据的[版权与许可通知](../../crates/interop_core/src/LICENSE-UNICODE)随源文件保留；这不是新增原生库或运行时下载要求。
 

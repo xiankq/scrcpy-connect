@@ -6,35 +6,32 @@ import 'package:scrcpy_connect/services/app_controller.dart';
 import 'support/router_test_app.dart';
 
 import 'package:design_system/design_system.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-class DirectoryPicker extends FilePickerPlatform {
-  @override
-  Future<String?> getDirectoryPath({
-    String? dialogTitle,
-    String? initialDirectory,
-    AndroidOptions androidOptions = const AndroidOptions(),
-    WindowsOptions windowsOptions = const WindowsOptions(),
-    LinuxOptions linuxOptions = const LinuxOptions(),
-    WebOptions webOptions = const WebOptions(),
-  }) async => '/tmp/Documents';
-}
-
 void main() {
   testWidgets(
-    'desktop folder selection sends its exact destination root as one batch',
+    'folder selection is previewed before its exact destination root is sent',
     (tester) async {
-      final picker = FilePickerPlatform.instance;
-      FilePickerPlatform.instance = DirectoryPicker();
-      addTearDown(() => FilePickerPlatform.instance = picker);
       Json? pushed;
+      Json? imported;
       final controller = createTestController((
         command, [
         params = const {},
       ]) async {
         if (command == 'files.list') return {'entries': <Json>[]};
+        if (command == 'documents.importDirectory') {
+          imported = params;
+          return {
+            'status': 'imported',
+            'name': 'Documents',
+            'localPath': '/tmp/imported/Documents',
+            'files': 2,
+            'directories': 1,
+            'bytes': 1280,
+            'errors': <Json>[],
+          };
+        }
         if (command == 'files.push') pushed = params;
         return {};
       });
@@ -49,15 +46,30 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('发送本机文件夹'));
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('发送整个文件夹？'), findsOneWidget);
-      await tester.tap(find.text('发送文件夹'));
+      await tester.tap(find.byTooltip('发送到手机'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('发送本机文件夹'));
+      await tester.pumpAndSettle();
+      expect(find.text('发送到手机'), findsOneWidget);
+      expect(find.text('准备发送一个文件夹'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, '选择文件夹'));
+      await tester.pumpAndSettle();
+      expect(imported, {'operationId': isA<String>()});
+      expect(find.text('Documents'), findsWidgets);
+      expect(find.text('2 个文件 · 1 个文件夹 · 1.3 KB'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('发送此文件夹'), 240);
+      await tester.tap(find.widgetWithText(FilledButton, '发送此文件夹'));
+      await tester.pumpAndSettle();
+      expect(find.text('发送此文件夹？'), findsOneWidget);
+      await tester.tap(find.text('确认发送'));
       await tester.pumpAndSettle();
       expect(pushed, {
         'deviceId': 'phone',
         'items': [
-          {'source': '/tmp/Documents', 'destination': '/sdcard/Documents'},
+          {
+            'source': '/tmp/imported/Documents',
+            'destination': '/sdcard/Documents',
+          },
         ],
         'conflict': 'ask',
       });

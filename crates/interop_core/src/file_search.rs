@@ -172,7 +172,7 @@ impl Runtime {
             snapshot: Mutex::new(
                 json!({"searchId":uuid::Uuid::new_v4().to_string(),"deviceId":device,
                 "path":path,"query":query,"filter":filter,"status":"running","entries":[],
-                "visitedDirectories":0,"visitedEntries":0,"complete":false,"issues":[],"limitation":LIMITATION,"canCancel":true}),
+                "visitedDirectories":0,"visitedEntries":0,"currentDirectory":"","complete":false,"issues":[],"limitation":LIMITATION,"canCancel":true}),
             ),
             cancellation: CancellationToken::new(),
         });
@@ -286,6 +286,12 @@ async fn walk(
     while let Some((path, depth)) = queue.pop_front() {
         if search.cancellation.is_cancelled() {
             return Ok(());
+        }
+        {
+            let mut snapshot = search.snapshot.lock().expect("search snapshot");
+            if snapshot["status"] == "running" {
+                snapshot["currentDirectory"] = json!(path);
+            }
         }
         let before = match stat(search, client, &path).await {
             Ok(stat) if stat.mode & 0o170000 == 0o040000 || (path == root && alias(root)) => stat,

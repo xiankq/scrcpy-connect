@@ -16,10 +16,12 @@ class MediaThumbnail extends HookConsumerWidget {
     required this.file,
     required this.controller,
     required this.device,
+    this.compact = false,
   });
   final Json file;
   final AppController controller;
   final Json device;
+  final bool compact;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final provided = value(file, 'thumbnail', value(file, 'localPath'));
@@ -45,13 +47,30 @@ class MediaThumbnail extends HookConsumerWidget {
       value(result.data ?? {}, 'url'),
     );
     Widget placeholder([String? imageFailure]) => Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: compact
+          ? Theme.of(context).colorScheme.surfaceContainerLow
+          : Theme.of(context).colorScheme.surface,
       child: Center(
         child: result.connectionState != ConnectionState.done
             ? const SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : compact
+            ? GlassActionIcon(
+                tooltip: '重试缩略图',
+                onPressed: () => retry.value++,
+                icon: const Icon(
+                  LucideIcons.refreshCw,
+                  size: DesignTokens.componentIconActionSize,
+                  color: ConnectTokens.coral,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: DesignTokens.componentIconButtonSize,
+                  minHeight: DesignTokens.componentIconButtonSize,
+                ),
               )
             : Padding(
                 padding: const EdgeInsets.all(DesignTokens.spacingXs),
@@ -86,8 +105,8 @@ class MediaThumbnail extends HookConsumerWidget {
                       ),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(
-                        minWidth: 44,
-                        minHeight: 44,
+                        minWidth: DesignTokens.componentIconButtonSize,
+                        minHeight: DesignTokens.componentIconButtonSize,
                       ),
                     ),
                   ],

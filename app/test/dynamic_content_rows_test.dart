@@ -58,10 +58,10 @@ void main() {
         );
         await tester.pumpAndSettle();
         await tester.scrollUntilVisible(
-          find.text(importing ? '选择系统文件夹' : '选择系统位置并保存'),
+          find.text(importing ? '选择文件夹' : '选择系统位置并保存'),
           200,
         );
-        await tester.tap(find.text(importing ? '选择系统文件夹' : '选择系统位置并保存'));
+        await tester.tap(find.text(importing ? '选择文件夹' : '选择系统位置并保存'));
         await tester.pumpAndSettle();
         expect(find.textContaining('failure-999'), findsNothing);
         expect(find.textContaining('failure-').evaluate().length, lessThan(30));
@@ -133,9 +133,7 @@ void main() {
     });
   }
 
-  testWidgets('search scope issues expand as lazy main-scroll rows', (
-    tester,
-  ) async {
+  testWidgets('search issues remain lazy main-scroll rows', (tester) async {
     final controller = createTestController((
       command, [
       params = const {},
@@ -174,21 +172,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('issue-127\n无权限'), findsNothing);
     expect(find.textContaining('issue-').evaluate().length, lessThan(30));
-    await tester.scrollUntilVisible(
-      find.text('搜索范围与跳过项'),
-      200,
-      scrollable: find
-          .descendant(
-            of: find.byType(CustomScrollView),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.tap(find.text('搜索范围与跳过项'));
-    await tester.pumpAndSettle();
-    expect(find.text('issue-0\n无权限'), findsNothing);
-    await tester.tap(find.text('搜索范围与跳过项'));
-    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('issue-127\n无权限'),
       1500,

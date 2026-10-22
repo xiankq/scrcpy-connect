@@ -166,6 +166,7 @@ async fn bounded_search_finds_distinct_paths_and_never_traverses_links() {
     assert_eq!(done["status"], "completed", "{done}");
     assert_eq!(done["entries"].as_array().unwrap().len(), 1, "{done}");
     assert_eq!(done["visitedDirectories"], 1, "links must not be traversed");
+    assert_eq!(done["currentDirectory"], format!("{root}/a"));
     let started = runtime
         .invoke(
             "files.search.start",

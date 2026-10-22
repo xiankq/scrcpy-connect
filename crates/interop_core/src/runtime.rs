@@ -95,7 +95,7 @@ impl Runtime {
         let mut store = match fs::read(root.join("devices.json")).await {
             Ok(bytes) => serde_json::from_slice::<Store>(&bytes)?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Store {
-                version: 1,
+                version: 2,
                 identity_fingerprint: fingerprint.clone(),
                 device_identity_fingerprints: HashMap::new(),
                 devices: Vec::new(),
@@ -103,11 +103,15 @@ impl Runtime {
             },
             Err(e) => return Err(e.into()),
         };
-        if store.version != 1 {
+        if !matches!(store.version, 1 | 2) {
             return Err(CoreError::new(
                 "storage_version",
                 "设备记录版本较新，请更新应用。",
             ));
+        }
+        if store.version == 1 {
+            crate::preferences::migrate_network_first_defaults(&mut store.settings);
+            store.version = 2;
         }
         crate::preferences::remove_retired_settings(&mut store.settings);
         let settings = store
@@ -236,7 +240,13 @@ impl Runtime {
             .ok_or_else(|| CoreError::new("disconnected", "设备尚未连接，请先恢复连接。"))
     }
 
+    /// Thin boundary: the dispatch state machine is large, so it is boxed once
+    /// here. Callers keep small frames on default test and FFI thread stacks.
     pub async fn invoke(self: &Arc<Self>, command: &str, params: Value) -> CoreResult<Value> {
+        Box::pin(self.invoke_inner(command, params)).await
+    }
+
+    async fn invoke_inner(self: &Arc<Self>, command: &str, params: Value) -> CoreResult<Value> {
         if command.starts_with("media.cache.") {
             return self.cache_command(command, &params).await;
         }

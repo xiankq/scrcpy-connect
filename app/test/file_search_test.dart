@@ -59,8 +59,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('搜索子文件夹'));
-      await tester.pumpAndSettle();
+      await _openDirectorySearch(tester);
+      expect(find.text('我的手机'), findsNothing);
+      expect(find.text('文件类型'), findsNothing);
       await tester.enterText(find.byType(TextField), '报告');
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, '搜索'));
@@ -69,11 +70,11 @@ void main() {
       await tester.tap(find.text('停止搜索'));
       await tester.pumpAndSettle();
       expect(reads, 2);
-      expect(find.textContaining('已停止搜索'), findsOneWidget);
+      expect(find.textContaining('已停止 · 保留 0 项'), findsOneWidget);
       oldRead.complete(snapshot('running'));
       await tester.pump();
       await tester.pump();
-      expect(find.textContaining('已停止搜索'), findsOneWidget);
+      expect(find.textContaining('已停止 · 保留 0 项'), findsOneWidget);
       expect(find.text('停止搜索'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
@@ -113,8 +114,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('搜索子文件夹'));
-    await tester.pumpAndSettle();
+    await _openDirectorySearch(tester);
     await tester.enterText(find.byType(TextField), '旧查询');
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, '搜索'));
@@ -130,6 +130,7 @@ void main() {
     lateStart.complete({
       'searchId': 'late-own-search',
       'deviceId': 'phone',
+      'path': '/sdcard',
       'status': 'running',
     });
     await tester.pump();
@@ -139,6 +140,102 @@ void main() {
     ]);
     expect(find.byType(FilesPage), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+  testWidgets('changing the draft scope keeps the submitted result', (
+    tester,
+  ) async {
+    final starts = <Json>[];
+    final cancellations = <Json>[];
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      switch (command) {
+        case 'files.list':
+          return {'entries': <Json>[]};
+        case 'device.info':
+          return {'id': 'phone', 'name': '我的手机'};
+        case 'files.search.start':
+          starts.add(params);
+          return {
+            'searchId': 'search-${starts.length}',
+            'deviceId': 'phone',
+            'path': params['path'],
+            'status': 'running',
+          };
+        case 'files.search.get':
+          return {
+            'searchId': 'search-${starts.length}',
+            'deviceId': 'phone',
+            'path': starts.last['path'],
+            'query': starts.last['query'],
+            'filter': starts.last['filter'],
+            'status': 'completed',
+            'complete': true,
+            'visitedDirectories': 2,
+            'visitedEntries': 4,
+            'issues': <Json>[],
+            'entries': [
+              {
+                'name': '报告.pdf',
+                'path': '${starts.last['path']}/报告.pdf',
+                'size': 1200,
+                'isDirectory': false,
+                'canOpen': true,
+                'canManage': true,
+              },
+            ],
+          };
+        case 'files.search.cancel':
+          cancellations.add(params);
+          return {'status': 'cancelled'};
+        default:
+          return {};
+      }
+    });
+    await tester.pumpWidget(
+      RouterTestApp(
+        controller: controller,
+        theme: ConnectTokens.theme(Brightness.light),
+        home: FilesPage(
+          controller: controller,
+          device: const {'id': 'phone', 'name': '我的手机'},
+          initialPath: '/sdcard/Download',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openDirectorySearch(tester);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('file-search-type-field'))),
+      const Size(126, 56),
+    );
+    await tester.enterText(find.byType(TextField), '报告');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '搜索'));
+    await tester.pumpAndSettle();
+    expect(starts.single['path'], '/sdcard/Download');
+    expect(find.text('报告.pdf'), findsOneWidget);
+
+    await tester.tap(find.text('手机内部存储'));
+    await tester.pumpAndSettle();
+    expect(cancellations, isEmpty);
+    expect(starts, hasLength(1));
+    expect(find.text('报告.pdf'), findsOneWidget);
+    expect(find.textContaining('当前目录及子目录 · 已检查 2 个文件夹 / 4 项'), findsOneWidget);
+    expect(find.textContaining('手机内部存储 · 已检查'), findsNothing);
+    expect(find.text('条件已修改。以下仍为“报告”的结果，点击搜索更新。'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '搜索'));
+    await tester.pumpAndSettle();
+    expect(starts.map((params) => params['path']), [
+      '/sdcard/Download',
+      '/sdcard',
+    ]);
+    expect(cancellations, isEmpty);
+    expect(find.textContaining('手机内部存储 · 已检查 2 个文件夹 / 4 项'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
@@ -172,6 +269,7 @@ void main() {
           return {
             'searchId': 'search-one',
             'deviceId': 'phone',
+            'path': params['path'],
             'status': 'running',
           };
         case 'files.search.get':
@@ -221,8 +319,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('搜索子文件夹'));
-    await tester.pumpAndSettle();
+    await _openDirectorySearch(tester);
     await tester.enterText(find.byType(TextField), '报告');
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, '搜索'));
@@ -249,9 +346,15 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
     }
-    expect(find.textContaining('已完成搜索'), findsOneWidget);
+    expect(find.textContaining('找到 2 项'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
+}
+
+Future<void> _openDirectorySearch(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('搜索文件'));
+  await tester.pumpAndSettle();
+  expect(find.text('文件搜索'), findsOneWidget);
 }

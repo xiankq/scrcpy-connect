@@ -40,6 +40,117 @@ async fn caller_defaults_fill_missing_keys_and_preserve_explicit_choices() {
 }
 
 #[tokio::test]
+async fn file_browser_preferences_survive_runtime_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = Runtime::initialize_with_settings(
+        directory.path(),
+        interop_core::ConnectionPolicy::standalone(),
+        json!({
+            "fileViewMode":"grid",
+            "fileSortKey":"name",
+            "fileSortAscending":true
+        }),
+    )
+    .await
+    .unwrap();
+    runtime
+        .invoke(
+            "settings.update",
+            json!({
+                "fileViewMode":"list",
+                "fileSortKey":"modified",
+                "fileSortAscending":false
+            }),
+        )
+        .await
+        .unwrap();
+    drop(runtime);
+
+    let reopened = Runtime::initialize_with_settings(
+        directory.path(),
+        interop_core::ConnectionPolicy::standalone(),
+        json!({
+            "fileViewMode":"grid",
+            "fileSortKey":"name",
+            "fileSortAscending":true
+        }),
+    )
+    .await
+    .unwrap();
+    let settings = reopened
+        .invoke("settings.get", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(settings["fileViewMode"], "list");
+    assert_eq!(settings["fileSortKey"], "modified");
+    assert_eq!(settings["fileSortAscending"], false);
+}
+
+#[tokio::test]
+async fn version_one_store_migrates_only_the_old_network_default_signature() {
+    let directory = tempfile::tempdir().unwrap();
+    tokio::fs::write(
+        directory.path().join("devices.json"),
+        serde_json::to_vec(&json!({
+            "version":1,
+            "identityFingerprint":"old",
+            "devices":[],
+            "settings":{
+                "appearance":"dark",
+                "adbBurstMode":false,
+                "qualityPreset":"balanced",
+                "maxSize":1280,
+                "maxFps":60,
+                "videoBitRate":8000000,
+                "videoCodec":"h264",
+                "videoEncoder":null,
+                "deviceQuality":{
+                    "old":{"qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":8000000},
+                    "custom":{"qualityPreset":"balanced","maxSize":1920,"maxFps":60,"videoBitRate":8000000}
+                }
+            }
+        }))
+        .unwrap(),
+    )
+    .await
+    .unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let settings = runtime.invoke("settings.get", json!({})).await.unwrap();
+    assert_eq!(settings["appearance"], "dark");
+    assert_eq!(settings["adbBurstMode"], true);
+    assert_eq!(settings["videoBitRate"], 4000000);
+    assert_eq!(settings["deviceQuality"]["old"]["videoBitRate"], 4000000);
+    assert_eq!(settings["deviceQuality"]["custom"]["videoBitRate"], 8000000);
+}
+
+#[tokio::test]
+async fn version_two_store_preserves_explicit_burst_and_bitrate_choices() {
+    let directory = tempfile::tempdir().unwrap();
+    tokio::fs::write(
+        directory.path().join("devices.json"),
+        serde_json::to_vec(&json!({
+            "version":2,
+            "identityFingerprint":"old",
+            "devices":[],
+            "settings":{
+                "adbBurstMode":false,
+                "qualityPreset":"balanced",
+                "maxSize":1280,
+                "maxFps":60,
+                "videoBitRate":8000000
+            }
+        }))
+        .unwrap(),
+    )
+    .await
+    .unwrap();
+    let runtime = Runtime::initialize(directory.path()).await.unwrap();
+    let settings = runtime.invoke("settings.get", json!({})).await.unwrap();
+    assert_eq!(settings["adbBurstMode"], false);
+    assert_eq!(settings["videoBitRate"], 8000000);
+}
+
+#[tokio::test]
 async fn own_tls_export_restores_transport_without_restoring_authorization() {
     let source = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(source.path()).await.unwrap();
