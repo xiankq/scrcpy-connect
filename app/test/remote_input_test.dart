@@ -1,3 +1,4 @@
+import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,9 +47,13 @@ void main() {
     },
   );
 
-  for (final showNavigationBar in [true, false]) {
+  for (final (showNavigationBar, brightness) in [
+    (true, Brightness.light),
+    (true, Brightness.dark),
+    (false, Brightness.light),
+  ]) {
     testWidgets(
-      'system back controls Android and only close exits with navigation $showNavigationBar',
+      'system back controls Android and only close exits with navigation $showNavigationBar in ${brightness.name} theme',
       (tester) async {
         final commands = <(String, Json)>[];
         final controller = _controller(commands);
@@ -62,6 +67,7 @@ void main() {
           await tester.pumpWidget(
             RouterTestApp(
               controller: controller,
+              theme: ConnectTokens.theme(brightness),
               devices: const [
                 {'id': 'phone'},
               ],
@@ -89,6 +95,18 @@ void main() {
             final finder = find.byTooltip(button.$1);
             expect(finder, showNavigationBar ? findsOneWidget : findsNothing);
             if (showNavigationBar) {
+              final context = tester.element(finder);
+              final colors = Theme.of(context).colorScheme;
+              final icon = tester.widget<Icon>(
+                find.descendant(of: finder, matching: find.byType(Icon)),
+              );
+              final bar = tester.widget<ColoredBox>(
+                find
+                    .ancestor(of: finder, matching: find.byType(ColoredBox))
+                    .first,
+              );
+              expect(icon.color, colors.onSurface);
+              expect(bar.color, colors.surface);
               await tester.tap(finder);
               await tester.pump();
               expect(commands.where((c) => c.$1 == 'session.key').last.$2, {

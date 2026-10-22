@@ -28,11 +28,17 @@ failed sync operations close their affected stream rather than reuse uncertain
 protocol state. Callers should drop a sync object when abandoning an in-progress
 operation.
 
-The data writer holds at most 64 queued frames. Reader-generated close/reject
-responses use a separate 128-entry control queue and never wait for data queue
-capacity; overflowing it closes the connection. Accepted same-stream frames
-retain their order before close. A closed route cannot enqueue a late OPEN or
-WRTE. Modern negotiated transports omit payload checksums; handshake and ADB
+The data writer holds at most 64 queued frames. A stream may opt into a separate
+16-entry priority writer with `AdbStream::set_write_priority`; the transport
+writer drains priority frames before ordinary frames, while per-stream ACKs or
+burst credit still enforce ordering and bounded in-flight data. Reader-generated
+close/reject responses use a separate 128-entry control queue and never wait for
+data queue capacity; overflowing it closes the connection. Ordered close drains
+both bounded writer queues before emitting its response. Accepted same-stream
+frames retain their order before close. A closed route cannot enqueue a late OPEN
+or WRTE. `AdbStream::max_payload` exposes the negotiated framing limit so a byte
+stream caller can batch complete fields into one WRTE; it does not permit bypassing
+per-stream ACKs/credit. Modern negotiated transports omit payload checksums; handshake and ADB
 1.0.0 frames retain them. USB preserves those wire bytes and transfer boundaries.
 
 Legacy adbd's ADB 1.0.0 transport retains checksum validation and 4 KiB payload

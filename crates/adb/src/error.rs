@@ -63,6 +63,10 @@ pub(crate) async fn bounded<T>(
     cancellation: &tokio_util::sync::CancellationToken,
     operation: impl std::future::Future<Output = Result<T>>,
 ) -> Result<T> {
+    // Callers embed this future in their own state machines, and operations
+    // such as shell carry large buffers. Box once here so a deep session-start
+    // call chain stays small on a default test thread stack.
+    let operation = Box::pin(operation);
     tokio::select! {
         biased;
         _ = cancellation.cancelled() => Err(Error::Cancelled),

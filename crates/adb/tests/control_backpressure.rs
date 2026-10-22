@@ -53,6 +53,72 @@ async fn saturated_writer() -> (
 }
 
 #[tokio::test]
+async fn priority_write_preempts_queued_normal_frames() {
+    let (client, mut peer, mut consumer, tasks) = saturated_writer().await;
+    consumer.set_write_priority(true).unwrap();
+    let writing = tokio::spawn(async move { consumer.write_all(b"urgent").await.unwrap() });
+    // The first large frame is already writing to the bounded transport. Once
+    // that transfer completes, the small control WRTE must precede the 64
+    // ordinary frames already waiting in the main FIFO.
+    let first = Frame::read(&mut peer, 65536, true).await.unwrap();
+    assert_eq!(
+        (first.command, first.payload.len()),
+        (protocol::WRTE, 65536)
+    );
+    let second = Frame::read(&mut peer, 65536, true).await.unwrap();
+    assert_eq!(second.command, protocol::WRTE);
+    assert_eq!(second.payload, b"urgent");
+    Frame::new(protocol::OKAY, second.arg0 + 1000, second.arg0, [])
+        .write(&mut peer)
+        .await
+        .unwrap();
+    writing.await.unwrap();
+    client.close();
+    for task in tasks {
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn ordered_close_follows_a_queued_priority_write_on_the_same_stream() {
+    let (client, mut peer, mut consumer, tasks) = saturated_writer().await;
+    consumer.set_write_priority(true).unwrap();
+    // Queue a priority WRTE that is still behind the blocked first frame, then
+    // close the same stream. The CLSE response must not overtake that WRTE.
+    let writing = tokio::spawn(async move {
+        let _ = consumer.write_all(b"priority-tail").await;
+        drop(consumer);
+    });
+    let result = tokio::time::timeout(Duration::from_secs(2), async {
+        let mut saw_priority = false;
+        loop {
+            let frame = Frame::read(&mut peer, 65536, true).await.unwrap();
+            if frame.command == protocol::CLSE {
+                assert!(
+                    saw_priority,
+                    "ordered close overtook its same-stream priority WRTE"
+                );
+                break;
+            }
+            if frame.command == protocol::WRTE && frame.payload == b"priority-tail" {
+                saw_priority = true;
+                Frame::new(protocol::OKAY, frame.arg0 + 1000, frame.arg0, [])
+                    .write(&mut peer)
+                    .await
+                    .unwrap();
+            }
+        }
+    })
+    .await;
+    client.close();
+    for task in tasks {
+        task.abort();
+    }
+    writing.abort();
+    result.unwrap();
+}
+
+#[tokio::test]
 async fn close_response_does_not_block_unrelated_inbound_data() {
     let (client, mut peer, mut consumer, tasks) = saturated_writer().await;
     Frame::new(protocol::CLSE, 1001, 1, [])

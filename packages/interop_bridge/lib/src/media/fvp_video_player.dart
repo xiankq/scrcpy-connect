@@ -34,6 +34,7 @@ class FvpVideoPlayer implements VideoPlayerPort {
   NativeFrameTrace? _frameTrace;
   NativeVideoReadback? _readback;
   int? _texture;
+  static bool _rendererQueueConfigured = false;
 
   /// Diagnostic snapshots and decoded observations share this native clock.
   VideoJson? get frameTrace {
@@ -46,10 +47,21 @@ class FvpVideoPlayer implements VideoPlayerPort {
   void _initialize() {
     if (_initialized) return;
     _initialized = true;
+    if (!_rendererQueueConfigured) {
+      // MDK's renderer queue is process-wide. A single pending frame is the
+      // low-latency presentation contract: if Flutter cannot consume every
+      // decoded frame, retain the newest rather than replaying stale frames.
+      mdk.setGlobalOption('videoout.buffer_frames', 1);
+      _rendererQueueConfigured = true;
+    }
     _player
       ..activeAudioTracks = const []
       ..mute = true
-      ..setBufferRange(min: 0, max: 150, drop: true)
+      // maxMs=0 means INT64_MAX in MDK. Below the keyframe interval a finite
+      // cap cannot drop an old decodable prefix, so 150ms had no effect for
+      // the usual multi-second GOP. MDK's live-stream mode keeps at most one
+      // keyframe packet and drops older prefixes only at decodable boundaries.
+      ..setBufferRange(min: 0, max: 0, drop: true)
       ..setProperty('avformat.input', 'matroska')
       ..setProperty('avformat.fpsprobesize', '0')
       // This player carries live video only. Present decoded frames immediately
@@ -94,6 +106,12 @@ class FvpVideoPlayer implements VideoPlayerPort {
       'category': 'decoder.priority',
       'candidates': decoders,
       'runtimeSelectionVerified': false,
+    });
+    _emit({
+      'kind': 'diagnostic',
+      'category': 'video.rendererQueue',
+      'maxFrames': 1,
+      'processWide': true,
     });
     _confirmation = PlaybackConfirmation(
       changes: _player.onStateChanged.map((event) => event.newValue),

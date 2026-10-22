@@ -490,11 +490,23 @@ void main() {
         );
         await tester.pumpAndSettle();
         final start = commands.singleWhere((c) => c.$1 == 'session.start').$2;
-        final expected = const RemoteDisplaySettings({
+        // The startup request is measured before the navigation band exists.
+        final startup = const RemoteDisplaySettings({
+          'remoteAspectRatio': 'auto',
+        }).dimensions(const Size(400, 800))!;
+        expect(start['displayWidth'], startup.width);
+        expect(start['displayHeight'], startup.height);
+        expect(find.bySemanticsLabel(RegExp('展开画面工具，')), findsOneWidget);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
+        final navigation = commands
+            .singleWhere((c) => c.$1 == 'session.display')
+            .$2;
+        final withNavigation = const RemoteDisplaySettings({
           'remoteAspectRatio': 'auto',
         }).dimensions(const Size(400, 724))!;
-        expect(start['displayWidth'], expected.width);
-        expect(start['displayHeight'], expected.height);
+        expect(navigation['displayWidth'], withNavigation.width);
+        expect(navigation['displayHeight'], withNavigation.height);
         controller.settings = const {
           'deviceSettings': {
             'phone': {'remoteAspectRatio': 'auto', 'showNavigationBar': false},
@@ -503,8 +515,10 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pumpAndSettle();
+        expect(commands.where((c) => c.$1 == 'session.display'), hasLength(2));
         final resized = commands
-            .singleWhere((c) => c.$1 == 'session.display')
+            .where((c) => c.$1 == 'session.display')
+            .last
             .$2;
         expect(
           resized['displayWidth'] / resized['displayHeight'],
@@ -515,7 +529,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         expect(
           commands.where((c) => c.$1 == 'session.display'),
-          hasLength(1),
+          hasLength(2),
           reason: 'IME visibility must not redefine the remote display',
         );
         tester.view.resetViewInsets();
@@ -533,7 +547,7 @@ void main() {
         }
         expect(
           commands.where((c) => c.$1 == 'session.display'),
-          hasLength(2),
+          hasLength(3),
           reason: 'Live updates cannot starve a stable landscape viewport.',
         );
         await tester.pumpAndSettle();
@@ -551,7 +565,7 @@ void main() {
         tester.view.physicalSize = const Size(400, 800);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
-        expect(commands.where((c) => c.$1 == 'session.display'), hasLength(2));
+        expect(commands.where((c) => c.$1 == 'session.display'), hasLength(3));
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.resumed,
         );
@@ -559,7 +573,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         expect(
           commands.where((c) => c.$1 == 'session.display'),
-          hasLength(3),
+          hasLength(4),
           reason: 'A short inactive transition cannot lose a pending viewport.',
         );
         await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
@@ -571,7 +585,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           commands.where((c) => c.$1 == 'session.display'),
-          hasLength(3),
+          hasLength(4),
           reason: 'Closing cancels the pending viewport adjustment.',
         );
         expect(commands.where((c) => c.$1 == 'session.stop'), hasLength(1));

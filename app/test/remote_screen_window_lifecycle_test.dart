@@ -163,10 +163,12 @@ void main() {
           calls.where((command) => command == 'devices.wake'),
           hasLength(1),
         );
-        await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
-        await tester.pump();
-        await tester.ensureVisible(find.text('关闭画面'));
-        await tester.tap(find.text('关闭画面'));
+        // Before the first frame the ambient field owns the page: the tools
+        // and navigation keys are intentionally absent, and closing is the
+        // explicit startup cancel action.
+        expect(find.bySemanticsLabel(RegExp('展开画面工具，')), findsNothing);
+        expect(find.text('取消打开'), findsOneWidget);
+        await tester.tap(find.text('取消打开'));
         await tester.pumpAndSettle();
         pending.complete({});
         await tester.pumpAndSettle();

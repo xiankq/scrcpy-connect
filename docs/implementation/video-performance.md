@@ -34,7 +34,7 @@
 | raw窗口 | 单独比较PNG/raw，增加显式迟到窗口诊断 | 可取得慢场景分布；扩展期限强制diagnosticOnly/exit1，未提高硬预算 |
 | ADB消费/转发 | 按同PTS记录首字节交出、整包、raw写和relay；动态组raw写约0.05ms，整包→relay约0.13ms | 没有证据把约1秒上游年龄归为该转发段；`AdbStream`首字节观测不含整个WRTE接收 |
 | 逐WRTE观测 | 分开完整wire帧接收、路由与消费，保留慢header/payload边界 | 仅说明Transport等待，不能自动归因物理网络或把不同PTS关联 |
-| 经典/Burst | 同配置各16输入，确认实际协商；P50/P95约1224/1493与1324/1670ms | 均严格失败，不能宣布普遍加速或普遍更慢；Burst保持显式可选、默认关闭 |
+| 经典/Burst | 同配置各16输入，确认实际协商；P50/P95约1224/1493与1324/1670ms | 历史样本均严格失败，不能宣布普遍加速或普遍更慢；当时Burst为显式可选。当前产品默认请求，只有双方协商支持时启用，现行受控样本见下文 |
 | 宿主快速排空 | 不解码，逐WRTE立即ACK；目标video TID strace，源PTS年龄仍约半秒 | 只排除该组长socket-write阻塞；无新像素核验，非端到端性能验收 |
 | 源CCodec边界 | Perfetto中303个workDone与收到的PTS精确匹配，检查data-loss和时钟快照 | 本组主要年龄在完成回调前；含采集/队列/编码/IPC/调度，不能叫纯编码CPU或证明唯一根因 |
 | 编码器/目标调度 | 固定格式与实际编码器对照，并看vCPU/runnable等待 | AVD软件编码器与调度影响不能外推实体硬编；无充分证据全局降低画质或改编码器 |
@@ -59,6 +59,37 @@ PTS用于帧身份，不直接当跨设备时钟。relay、onVideo与snapshot的
 ## 普通调度基准与解码路径对照
 
 先用独立目标准备 TCP 或实际已授权路径，并构建 `dart tool/e2e/video_fixture/build.dart`。fixture是隔离实验工具，不进入产品、不覆盖既有同名安装。当前主控/目标地址与产物路径由运行者提供；计时期间避免并行编译，使用新的系统临时输出目录。
+
+受控弱网对照可先启动本仓库的有界回环代理
+`tool/benchmark/weak_network_proxy.dart`。它按方向分别施加固定延迟和
+token-bucket 带宽，并在待发送队列达到高水位时暂停读取源 socket，保留真实
+TCP反压；代理本身不把队列扩成无界缓冲区。例如：
+
+```sh
+CONNECT_PROXY_LISTEN_PORT=15557 CONNECT_PROXY_UPSTREAM_PORT=15556 \
+CONNECT_PROXY_UP_DELAY_MS=80 CONNECT_PROXY_DOWN_DELAY_MS=80 \
+CONNECT_PROXY_UP_BPS=1000000 CONNECT_PROXY_DOWN_BPS=1000000 \
+dart run tool/benchmark/weak_network_proxy.dart
+```
+
+性能目标随后使用 `CONNECT_E2E_PORT=15557`，其余 fixture、画质和预算参数保持
+不变。该工具只提供链路条件，不能替代实体ARM/Wi-Fi、OEM编码器或最终面板
+扫描验收。
+
+2026-10-21 API36 x86_64 AVD的受控代理样本使用640宽、动态夹具和8次输入。
+每组只有一轮，且目标出现Choreographer跳帧，因此只用于排除明显方向和保留
+复现入口：
+
+| 变量 | 输入到新像素 P50/P95 |
+| --- | ---: |
+| burst，30fps，2Mbps | 345/624ms |
+| classic，30fps，2Mbps | 491/1308ms |
+| burst，15fps，2Mbps | 385/618ms |
+| burst，30fps，800kbps | 385/706ms |
+
+burst的改善方向与ADB逐流ACK/credit模型一致；降帧率或降码率没有稳定改善，
+不能据此写自动降档策略。要建立实体设备结论，仍需多个session、固定网络和
+P50/P95/P99统计。
 
 从仓库根进入 `app/`：
 

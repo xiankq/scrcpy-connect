@@ -31,7 +31,7 @@ class VideoQualityPolicy {
   ];
   static const presets = {
     'smooth': (720, 30, 2000000),
-    'balanced': (1280, 60, 8000000),
+    'balanced': (1280, 60, 4000000),
     'clear': (1920, 60, 12000000),
   };
 
@@ -122,6 +122,7 @@ class VideoQualityPolicy {
       'maxFps': choices([30, 60], (value) => '$value fps'),
       'bitRate': choices([
         2000000,
+        4000000,
         8000000,
         12000000,
       ], (value) => '${value ~/ 1000000} Mbps'),

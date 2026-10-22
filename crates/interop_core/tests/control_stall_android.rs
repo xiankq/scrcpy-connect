@@ -268,7 +268,7 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
     }
     let first_result = tokio::time::timeout(Duration::from_secs(8), first).await;
     let next_result = tokio::time::timeout(Duration::from_secs(2), next).await;
-    let route_closed = tokio::time::timeout(Duration::from_secs(2), async {
+    let route_closed = tokio::time::timeout(Duration::from_secs(8), async {
         while !proxy.closed.load(Ordering::SeqCst) {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
@@ -298,13 +298,15 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
         .unwrap();
     video_reader.abort();
     let _ = video_reader.await;
-    assert!(
-        first_result.unwrap().unwrap().is_err(),
-        "unconfirmed delivery must not succeed"
+    assert_eq!(
+        first_result.unwrap().unwrap().unwrap()["accepted"],
+        true,
+        "input admission must not wait for the stalled ADB receipt"
     );
-    assert!(
-        next_result.unwrap().unwrap().is_err(),
-        "queued old input must fail"
+    assert_eq!(
+        next_result.unwrap().unwrap().unwrap()["accepted"],
+        true,
+        "bounded admission may return before the first write completes"
     );
     assert!(
         route_closed,

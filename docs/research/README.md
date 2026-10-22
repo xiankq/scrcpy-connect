@@ -22,6 +22,8 @@
 | --- | --- |
 | [scrcpy媒体与服务端](scrcpy-media-and-server.md) | 固定协议、通道顺序、JAR生命周期、应用窗口与音频边界 |
 | [共享媒体封装与播放器](cross-platform-media-pipeline.md) | Matroska映射、精确PTS、MDK C表ABI与输入候选 |
+| [移动端延迟一手来源](scrcpy-mobile-latency-primary-sources.md) | 官方35~70ms的桌面实验条件、第三方scrcpy-mobile固定源码与测量边界 |
+| [远控延迟对照与改造顺序](remote-control-latency-optimization.md) | scrcpy/scrcpy-mobile/EasyControlNext对照、输入ACK积压、视频反压与弱网实验 |
 | [客户端低延迟路径](scrcpy-client-latency-path.md) | 官方packet直送、FFmpeg parser/线程与容器反证 |
 | [首帧与状态等待](scrcpy-first-frame-and-latency.md) | waitFor0负例、decoder选择、START_APP等待环与回调竞态 |
 | [首帧、源时间与解码路径](scrcpy-first-frame-performance.md) | AOSP时间轴、软件codec参数、snapshot故障与实际异步路径 |

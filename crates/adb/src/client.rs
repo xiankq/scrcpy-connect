@@ -119,6 +119,7 @@ struct Inner {
     burst_mode: bool,
     receive_budget: crate::burst::Budget,
     writer: mpsc::Sender<Frame>,
+    priority_writer: mpsc::Sender<Frame>,
     control_responses: mpsc::Sender<ControlResponse>,
     routes: Routes,
     next_id: AtomicU32,
@@ -351,9 +352,11 @@ impl Client {
             ));
         }
         let (mut reader, mut writer) = tokio::io::split(transport);
-        // Credit never bypasses this shared bounded writer. With one frame in
-        // flight, outgoing payload storage is at most 65 * max_payload bytes.
+        // Credit never bypasses these bounded writers. Small latency-sensitive
+        // control WRITEs may use the priority queue, while ordinary stream
+        // frames retain FIFO order in the main queue.
         let (tx, mut rx) = mpsc::channel::<Frame>(64);
+        let (priority_tx, mut priority_rx) = mpsc::channel::<Frame>(16);
         // Empty CLSEs have a separate bounded allowance, so a full data
         // writer cannot suspend inbound routing. Flooding this queue closes
         // the connection instead of allocating tasks or unbounded storage.
@@ -382,6 +385,7 @@ impl Client {
             burst_mode,
             receive_budget: Default::default(),
             writer: tx.clone(),
+            priority_writer: priority_tx,
             control_responses: control_tx,
             routes: routes.clone(),
             next_id: AtomicU32::new(1),
@@ -396,20 +400,27 @@ impl Client {
         let writer_cancel = cancellation.clone();
         tokio::spawn(async move {
             loop {
-                let (frame, preceding) = tokio::select! {
+                let (frame, preceding_priority, preceding) = tokio::select! {
                     biased;
                     _ = writer_cancel.cancelled() => break,
                     Some(response) = control_rx.recv() => match response {
-                        ControlResponse::OrderedClose(frame) => (frame, rx.len()),
-                        ControlResponse::RejectOpen(frame) => (frame, 0),
+                        ControlResponse::OrderedClose(frame) => (frame, priority_rx.len(), rx.len()),
+                        ControlResponse::RejectOpen(frame) => (frame, 0, 0),
                     },
-                    frame = rx.recv() => match frame { Some(frame) => (frame, 0), None => break },
+                    frame = priority_rx.recv() => match frame { Some(frame) => (frame, 0, 0), None => break },
+                    frame = rx.recv() => match frame { Some(frame) => (frame, 0, 0), None => break },
                 };
                 // A control response must follow WRTE/OPEN/OKAY frames already
                 // accepted for that stream. Route removal and data enqueue are
                 // serialized by the route mutex. Snapshotting the bounded queue
                 // preserves that order without starving control on later writes.
                 let result = async {
+                    for _ in 0..preceding_priority {
+                        let queued = priority_rx.recv().await.ok_or(Error::Closed)?;
+                        queued
+                            .write_with_checksum(&mut writer, skip_checksum)
+                            .await?;
+                    }
                     for _ in 0..preceding {
                         let queued = rx.recv().await.ok_or(Error::Closed)?;
                         queued
@@ -759,6 +770,7 @@ impl Client {
             options,
             eof: false,
             poisoned: false,
+            priority_write: false,
         };
         let mut payload = service.to_vec();
         payload.push(0);
@@ -880,6 +892,7 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
         },
         eof: false,
         poisoned: false,
+        priority_write: false,
     };
     tokio::spawn(async move {
         let result = bounded(destination.connect_timeout, &inner.cancellation, async {
@@ -941,6 +954,7 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
                     frame.arg0,
                     &mut acknowledgments,
                     &from_host[..count],
+                    false,
                 )
                 .await?;
             }
@@ -966,7 +980,13 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
     });
 }
 
-async fn write_burst_frame(inner: &Inner, local: u32, remote: u32, bytes: &[u8]) -> Result<()> {
+async fn write_burst_frame(
+    inner: &Inner,
+    local: u32,
+    remote: u32,
+    bytes: &[u8],
+    priority: bool,
+) -> Result<()> {
     let (changed, closed) = inner
         .routes
         .lock()
@@ -993,7 +1013,13 @@ async fn write_burst_frame(inner: &Inner, local: u32, remote: u32, bytes: &[u8])
             let permit = tokio::select! {
                 _ = inner.cancellation.cancelled() => return Err(Error::Closed),
                 _ = closed.cancelled() => return Err(Error::Closed),
-                permit = inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
+                permit = async {
+                    if priority {
+                        inner.priority_writer.reserve().await
+                    } else {
+                        inner.writer.reserve().await
+                    }
+                } => permit.map_err(|_| Error::Closed)?,
             };
             let mut routes = inner.routes.lock().expect("route mutex poisoned");
             let route = routes.get_mut(&local).ok_or(Error::Closed)?;
@@ -1018,10 +1044,11 @@ async fn write_stream_frames(
     remote: u32,
     acknowledgments: &mut mpsc::Receiver<u32>,
     bytes: &[u8],
+    priority: bool,
 ) -> Result<()> {
     for chunk in bytes.chunks(inner.info.max_payload) {
         if inner.burst_mode {
-            write_burst_frame(inner, local, remote, chunk).await?;
+            write_burst_frame(inner, local, remote, chunk, priority).await?;
             continue;
         }
         let closed = inner
@@ -1034,7 +1061,13 @@ async fn write_stream_frames(
         let permit = tokio::select! {
             _ = inner.cancellation.cancelled() => return Err(Error::Closed),
             _ = closed.cancelled() => return Err(Error::Closed),
-            permit = inner.writer.reserve() => permit.map_err(|_| Error::Closed)?,
+            permit = async {
+                if priority {
+                    inner.priority_writer.reserve().await
+                } else {
+                    inner.writer.reserve().await
+                }
+            } => permit.map_err(|_| Error::Closed)?,
         };
         {
             let mut routes = inner.routes.lock().expect("route mutex poisoned");
@@ -1077,11 +1110,32 @@ pub struct AdbStream {
     options: OperationOptions,
     eof: bool,
     poisoned: bool,
+    priority_write: bool,
 }
 
 impl AdbStream {
-    pub(crate) fn max_payload(&self) -> usize {
+    /// Maximum payload accepted by one WRTE for this negotiated transport.
+    /// Callers may use it to preserve complete control-message batches when
+    /// coalescing byte-stream writes; `write_all` still performs the framing.
+    pub fn max_payload(&self) -> usize {
         self.inner.info.max_payload
+    }
+
+    /// Place subsequent WRTE frames on the bounded priority writer queue.
+    /// This changes transport scheduling only; it does not bypass per-stream
+    /// ACKs/credit or permit concurrent writes on the same stream.
+    pub fn set_write_priority(&mut self, priority: bool) -> Result<()> {
+        if !self
+            .inner
+            .routes
+            .lock()
+            .expect("route mutex poisoned")
+            .contains_key(&self.local)
+        {
+            return Err(Error::Closed);
+        }
+        self.priority_write = priority;
+        Ok(())
     }
 
     async fn accept_reverse(&self) -> Result<()> {
@@ -1323,7 +1377,15 @@ impl AdbStream {
         self.poisoned = true;
         let options = self.options.clone();
         let result = bounded(options.timeout, &options.cancellation, async {
-            write_stream_frames(&self.inner, self.local, self.remote, &mut self.ack, bytes).await?;
+            write_stream_frames(
+                &self.inner,
+                self.local,
+                self.remote,
+                &mut self.ack,
+                bytes,
+                self.priority_write,
+            )
+            .await?;
             Ok(())
         })
         .await;

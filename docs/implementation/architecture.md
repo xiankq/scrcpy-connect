@@ -27,6 +27,8 @@ Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/`
 | KeepActiveOwner | 同设备仍开画面的保活意图、单个独立控制服务、连接与进程身份核验及取消释放 |
 | TransferStore | 传输检查点、按任务追加日志、持久化屏障与恢复校验 |
 | 领域实现 | 各类活动的协议流程、具体容器与资源释放 |
+| interop-adb writer | 每连接有界普通/优先帧调度、同流顺序与 ACK、有序 close 及独立控制响应额度 |
+| VideoTransport | 已认证本机中转、源PTS到达偏移检测、重置换段、有界呈现写入及播放器实时GOP上限 |
 | Dart InteropBridge | 核心观察者与本机输出协调；授权身份属于 Rust 持久存储 |
 | ConnectionSetupCoordinator | 配对、USB、转 IP 的产品步骤、重试和系统授权租约 |
 | DeviceCapabilityPolicy / VideoQualityPolicy / VirtualDisplayPolicy | 探测解释、设备共用质量偏好、预设与选项、虚拟窗口尺寸解析 |
@@ -36,6 +38,7 @@ Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/`
 | bootstrapApplication | 配置完成前持有 bridge；失败等待释放，成功交给 ProviderScope |
 | AppController | 应用级不可变状态投影、订阅和打开页面的设备音源租约 |
 | RemotePresentation | 单个远控路由的会话绑定、输入许可、可见性、恢复及启动结果 |
+| RemoteInputQueue / scrcpy ControlInput actor | Flutter 单页输入顺序与最新待发送 move；Rust 有界录取、按协商 payload 批写、边缘屏障、期限和失败撤销 |
 | SessionViews | 页面对尚未关闭控制窗口的呈现租约、精确关闭及终止屏障 |
 | PortableVideo/AudioOutputs | 本机播放器、呈现回执与释放 |
 | Android ProcessFlutterHost | 进程 FlutterEngine 与通道；Activity 提供当下 UI/授权 |

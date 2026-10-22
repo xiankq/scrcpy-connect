@@ -10,8 +10,10 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/remote_input.dart';
 import 'package:scrcpy_connect/services/remote_display_settings.dart';
+import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
 
 import 'remote_connection_recovery.dart';
+import 'remote_input_queue.dart';
 import 'remote_presentation.dart';
 
 import 'dart:async';
@@ -427,7 +429,11 @@ class _RemotePageState extends State<RemotePage>
   String previousText = inputSentinel;
   bool resettingText = false;
   StreamSubscription<Json>? eventSubscription;
-  Future<void> inputQueue = Future<void>.value();
+  late final RemoteInputQueue _inputQueue = RemoteInputQueue(
+    dispatch: _dispatchInput,
+    admits: _admitsInput,
+  );
+  Future<void> get inputQueue => _inputQueue.idle;
   AppController get controller => widget.controller;
   String get sessionId => presentation.sessionId;
   @override
@@ -1153,25 +1159,28 @@ class _RemotePageState extends State<RemotePage>
     InteropCommand command,
     Json params, {
     RemoteBinding? binding,
-  }) async {
+  }) {
     // Queue entries keep the binding that accepted them. A late request or
     // release must never inherit a replacement session's identity.
     final outgoing = binding ?? presentation.binding;
     final captured = {'sessionId': outgoing.$1, ...params};
-    inputQueue = inputQueue.then((_) async {
-      if (!presentation.admitsQueuedInput(
-        outgoing,
-        command.wire,
+    return _inputQueue.enqueue(command.wire, captured, outgoing);
+  }
+
+  bool _admitsInput(String command, Json params, RemoteBinding binding) =>
+      presentation.admitsQueuedInput(
+        binding,
+        command,
         params,
         foreground: acceptsInput,
         ownerCurrent: view?.isCurrent == true,
-      )) {
-        return;
-      }
-      await sendNow(command.wire, captured, outgoing);
-    });
-    return inputQueue;
-  }
+      );
+
+  Future<void> _dispatchInput(
+    String command,
+    Json params,
+    RemoteBinding binding,
+  ) => sendNow(command, params, binding);
 
   Future<void> sendNow(
     String command,
@@ -1519,6 +1528,12 @@ class _RemotePageState extends State<RemotePage>
     releaseDeviceView();
     presentation.invalidateStart();
     final release = releaseInputs();
+    unawaited(
+      release.then<void>(
+        (_) => _inputQueue.close(),
+        onError: (Object _, StackTrace _) => _inputQueue.close(),
+      ),
+    );
     final ownedView = view;
     if (!presentation.exiting && ownedView != null) {
       unawaited(
@@ -1671,7 +1686,12 @@ class _RemotePageState extends State<RemotePage>
           child: PopScope(
             canPop: presentation.exiting,
             onPopInvokedWithResult: (popped, _) {
-              if (!popped) pressNavigationKey(4);
+              if (popped) return;
+              if (presentation.connecting) {
+                unawaited(leave());
+              } else {
+                pressNavigationKey(4);
+              }
             },
             child: Focus(
               autofocus: true,
@@ -1683,47 +1703,13 @@ class _RemotePageState extends State<RemotePage>
               child: Scaffold(
                 backgroundColor: Colors.black,
                 resizeToAvoidBottomInset: true,
-                bottomNavigationBar: showNavigationBar
-                    ? SafeArea(
-                        top: false,
-                        child: SizedBox(
-                          height: DesignTokens.componentPageHeaderHeight,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              GlassActionIcon(
-                                tooltip: '返回',
-                                onPressed: canSendInput
-                                    ? () => pressNavigationKey(4)
-                                    : null,
-                                icon: const Icon(
-                                  Icons.arrow_back,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              GlassActionIcon(
-                                tooltip: '主屏幕',
-                                onPressed: canSendInput
-                                    ? () => pressNavigationKey(3)
-                                    : null,
-                                icon: const Icon(
-                                  Icons.circle_outlined,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              GlassActionIcon(
-                                tooltip: '最近任务',
-                                onPressed: canSendInput
-                                    ? () => pressNavigationKey(187)
-                                    : null,
-                                icon: const Icon(
-                                  Icons.crop_square,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                bottomNavigationBar:
+                    showNavigationBar && !presentation.connecting
+                    ? _RemoteNavigationBar(
+                        enabled: canSendInput,
+                        onBack: () => pressNavigationKey(4),
+                        onHome: () => pressNavigationKey(3),
+                        onRecent: () => pressNavigationKey(187),
                       )
                     : null,
                 // Video consumes the full drawable viewport. Overlay controls
@@ -1775,8 +1761,39 @@ class _RemotePageState extends State<RemotePage>
                       ),
                     ),
                     if (presentation.connecting)
-                      const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
+                      Positioned.fill(
+                        child: AmbientLoadingField(
+                          semanticsLabel: widget.packageName == null
+                              ? '正在打开手机屏幕'
+                              : '正在打开独立窗口',
+                          footer: GlassSurfaceGroup(
+                            child: Glass(
+                              radius: DesignTokens.roundedFull,
+                              child: TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(
+                                    DesignTokens.componentButtonSecondaryHeight,
+                                  ),
+                                  foregroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                ),
+                                onPressed: presentation.exiting
+                                    ? null
+                                    : () => unawaited(leave()),
+                                icon: Icon(
+                                  presentation.exiting
+                                      ? LucideIcons.loaderCircle
+                                      : LucideIcons.x,
+                                  size: DesignTokens.componentIconActionSize,
+                                ),
+                                label: Text(
+                                  presentation.exiting ? '正在关闭…' : '取消打开',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     if (presentation.qualityRebuilding)
                       const Align(
@@ -1791,7 +1808,8 @@ class _RemotePageState extends State<RemotePage>
                           ),
                         ),
                       ),
-                    if ((presentation.error != null || presentation.paused) &&
+                    if (!presentation.connecting &&
+                        (presentation.error != null || presentation.paused) &&
                         presentation.errorCode != 'device_asleep')
                       LayoutBuilder(
                         builder: (context, constraints) {
@@ -2000,31 +2018,34 @@ class _RemotePageState extends State<RemotePage>
                           ),
                         ),
                       ),
-                    ExitHandle(
-                      onExit: leave,
-                      independent: widget.packageName != null,
-                      onLock: canSendInput
-                          ? () => pressNavigationKey(223)
-                          : null,
-                      onConvert:
-                          canSendInput &&
-                              !converting &&
-                              (int.tryParse(value(widget.device, 'apiLevel')) ??
-                                      29) >=
-                                  29
-                          ? convertToIndependent
-                          : null,
-                      onScreenshot: valid && view?.isCurrent == true
-                          ? screenshot
-                          : null,
-                      onKeyboard: canSendInput ? showKeyboard : null,
-                      onRotate: canSendInput
-                          ? () => unawaited(
-                              send(InteropCommand.sessionRotate, {}),
-                            )
-                          : null,
-                      deviceLabel: deviceName(widget.device),
-                    ),
+                    if (!presentation.connecting)
+                      ExitHandle(
+                        onExit: leave,
+                        independent: widget.packageName != null,
+                        onLock: canSendInput
+                            ? () => pressNavigationKey(223)
+                            : null,
+                        onConvert:
+                            canSendInput &&
+                                !converting &&
+                                (int.tryParse(
+                                          value(widget.device, 'apiLevel'),
+                                        ) ??
+                                        29) >=
+                                    29
+                            ? convertToIndependent
+                            : null,
+                        onScreenshot: valid && view?.isCurrent == true
+                            ? screenshot
+                            : null,
+                        onKeyboard: canSendInput ? showKeyboard : null,
+                        onRotate: canSendInput
+                            ? () => unawaited(
+                                send(InteropCommand.sessionRotate, {}),
+                              )
+                            : null,
+                        deviceLabel: deviceName(widget.device),
+                      ),
                   ],
                 ),
               ),
@@ -2034,4 +2055,88 @@ class _RemotePageState extends State<RemotePage>
       },
     );
   }
+}
+
+class _RemoteNavigationBar extends StatelessWidget {
+  const _RemoteNavigationBar({
+    required this.enabled,
+    required this.onBack,
+    required this.onHome,
+    required this.onRecent,
+  });
+
+  final bool enabled;
+  final VoidCallback onBack;
+  final VoidCallback onHome;
+  final VoidCallback onRecent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final iconColor = enabled
+        ? colors.onSurface
+        : colors.onSurface.withValues(alpha: 0.38);
+    return ColoredBox(
+      color: colors.surface,
+      child: SafeArea(
+        top: false,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: colors.outlineVariant,
+                width: DesignTokens.spacingHairline,
+              ),
+            ),
+          ),
+          child: SizedBox(
+            height: DesignTokens.componentPageHeaderHeight,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _button(
+                  tooltip: '返回',
+                  enabled: enabled,
+                  onPressed: onBack,
+                  icon: Icons.arrow_back,
+                  color: iconColor,
+                ),
+                _button(
+                  tooltip: '主屏幕',
+                  enabled: enabled,
+                  onPressed: onHome,
+                  icon: Icons.circle_outlined,
+                  color: iconColor,
+                ),
+                _button(
+                  tooltip: '最近任务',
+                  enabled: enabled,
+                  onPressed: onRecent,
+                  icon: Icons.crop_square,
+                  color: iconColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _button({
+    required String tooltip,
+    required bool enabled,
+    required VoidCallback onPressed,
+    required IconData icon,
+    required Color color,
+  }) => SizedBox(
+    width: 72,
+    height: DesignTokens.componentPageHeaderHeight,
+    child: IconButton(
+      tooltip: tooltip,
+      onPressed: enabled ? onPressed : null,
+      iconSize: DesignTokens.componentIconSize,
+      icon: Icon(icon, color: color),
+    ),
+  );
 }

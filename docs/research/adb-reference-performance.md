@@ -2,7 +2,7 @@
 
 研究日期：2026-10-19。本项目基线 `6937bd91e1b26e30d166c88d5ab41f6982b3ef54`。本研究实际阅读参考项目源码，复核此前仅根据本地代码与夹具给出的性能判断。以下本项目描述及实验均对应上述修复前基线；随后实施的变更与回归结果见 [ADB 性能修复记录](../implementation/validation.md#协议与持久化回归)。按本轮范围排除本机 adb_dart 与播放器项目。
 
-**结论：不能认定本项目 ADB 整体慢于参考实现。可以确认的改进点是 SYNC 写入合并、部分控制响应与接收循环的耦合、现代协议仍计算发送校验和，以及 Core 的小文件部署和持久化成本。classic ACK、64 KiB SYNC DATA、默认关闭 burst、USB header/payload 分别发送和 TLS 握手生成证书，本身不构成实现落后的证据。**
+**结论：不能认定本项目 ADB 整体慢于参考实现。可以确认的改进点是 SYNC 写入合并、部分控制响应与接收循环的耦合、现代协议仍计算发送校验和，以及 Core 的小文件部署和持久化成本。classic ACK、64 KiB SYNC DATA、USB header/payload 分别发送和 TLS 握手生成证书，本身不构成实现落后的证据。ADB 库仍保持 burst 显式 opt-in；产品对现代连接默认请求 delayed_ack，并在对端不支持时回退经典模式。**
 
 证据分类：源码事实说明具体机制；本地夹具说明受控条件下的结果；工程推论说明可能影响。本轮没有编译运行参考项目、执行物理设备测速或长时间稳定性测试，也没有用参考项目的声明代替本项目验收。
 
@@ -23,7 +23,7 @@
 | --- | --- | --- |
 | 每个 WRTE 等 ACK | AOSP classic、Tango、libadb 都有同一约束 | 协议正常成本；应比较有效包大小、ACK 时点和协商模式 |
 | SYNC 只用 64 KiB，原始流可写 1 MiB | AOSP、Tango、libadb 的 SYNC DATA 同样最大 64 KiB | 不能把两种工作负载的包数差当作项目优劣；真正可比的是多条 SYNC 记录如何合并成 ADB WRTE |
-| burst 默认关闭 | 官方文档明确其为实验功能，默认关闭 | 当前默认不是偏离官方；Tango 的默认选择不同，也不能直接证明更适合移动主控 |
+| burst 在 ADB 库中默认关闭 | 官方文档明确其为实验功能，默认关闭 | 库继续要求显式 opt-in；移动主控产品可基于 RTT 场景选择请求，但不能把功能存在写成性能收益 |
 | 每包 flush、USB header/payload 分别完成 | libadb 每 ADB 包 flush；所查 AOSP libusb 后端也分别同步完成 header 和 payload | 这些行为不是本项目独有；flush 也不等于额外一个网络 RTT |
 | 每次 TLS 握手生成证书 | AOSP `FdConnection::DoTlsHandshake` 也这样做 | 不能把生成证书本身当作性能缺陷；本项目明文连接尝试也提前创建 TLS 配置，才是可单独测量的成本 |
 
@@ -71,7 +71,7 @@ ACK 时点也不同：本项目 classic 等整包被读取；AOSP 可在本机 s
 
 ## 5. burst、校验和与压缩：方向和默认值不可混淆
 
-- 本项目已实现 delayed ACK，默认关闭；AOSP 官方也默认关闭。Tango 默认 feature 包含 DelayedAck 并在双方支持时使用，默认接收信用 32 MiB。libadb 的桌面与 embedded 配置分别可取 32 MiB、32 KiB，握手仍由调用者提供 feature 集。不能仅按库名或配置方法断言任何调用都会开启。[Tango 协商](https://github.com/yume-chan/ya-webadb/blob/7bcec613f3441a7f20bdf3e5e8646bce63fe790d/libraries/adb/src/daemon/transport.ts#L102-L127)、[libadb 配置](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/base/connection/config.rs#L43-L63)。
+- `interop-adb` 已实现 delayed ACK，`ConnectOptions` 默认关闭并要求显式 opt-in；AOSP 官方也默认关闭。移动主控产品默认请求该能力，只有双方 feature 交集非空才启用。Tango 默认 feature 包含 DelayedAck 并在双方支持时使用，默认接收信用 32 MiB。libadb 的桌面与 embedded 配置分别可取 32 MiB、32 KiB，握手仍由调用者提供 feature 集。不能仅按库名或配置方法断言任何调用都会开启。[Tango 协商](https://github.com/yume-chan/ya-webadb/blob/7bcec613f3441a7f20bdf3e5e8646bce63fe790d/libraries/adb/src/daemon/transport.ts#L102-L127)、[libadb 配置](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/base/connection/config.rs#L43-L63)。
 - 本项目开启后给予设备 64 KiB 接收信用，限制的是**设备到主控**方向；push 的发送信用由设备返回的 OPEN OKAY 授予。前者不能直接用来解释上传吞吐。调整窗口需同时测方向、ACK 时点、内存与控制延迟。
 - [Frame::write](../../crates/adb/src/protocol.rs) 对现代连接仍计算 payload 字节和；AOSP、Tango、libadb 按协商版本省略。多一次 payload 遍历是确定的 CPU 工作差异，影响大小未经 release profile 量化。[AOSP](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/transport.cpp#565)、[Tango](https://github.com/yume-chan/ya-webadb/blob/7bcec613f3441a7f20bdf3e5e8646bce63fe790d/libraries/adb/src/daemon/dispatcher.ts#L458-L467)、[libadb](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/base/connection.rs#L269-L270)。
 - AOSP CLI 的 push 默认选择 Any 并按共同能力择 Zstd/LZ4/Brotli；pull 默认 None，不能概括为所有方向默认压缩。本项目 Core 调用普通 push/pull，没有使用库内压缩 API。可压缩内容上传值得测试；照片视频等已有压缩内容不保证受益。[CLI 默认值](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/client/commandline.cpp#2008)、[算法选择](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/client/file_sync_client.cpp#275)、[Core 调用](../../crates/interop_core/src/files.rs)。
