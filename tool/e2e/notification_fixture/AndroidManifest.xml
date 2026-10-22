@@ -3,6 +3,5 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application android:icon="@drawable/fixture_icon" android:label="Connect notification test fixture" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:debuggable="true">
         <activity android:name=".NotificationFixtureActivity" android:exported="true"/>
-        <receiver android:name=".ReplyReceiver" android:exported="false"/>
     </application>
 </manifest>

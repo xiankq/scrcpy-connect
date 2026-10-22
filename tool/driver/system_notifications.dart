@@ -12,7 +12,7 @@ const _genericBody = '请打开邻接查看';
 
 /// The host proves actual Android records, an actual SystemUI tap and cleanup.
 /// Attempted remote command absence is covered by coordinator unit tests; this
-/// real-app run checks source/session/reply and target-foreground outcomes.
+/// real-app run checks source/session and target-foreground outcomes.
 void validateSystemNotificationsReport(
   Map<String, dynamic> report, {
   required String runId,
@@ -35,7 +35,6 @@ void validateSystemNotificationsReport(
         'notificationsPageOpened',
         'clickedSourceStillLive',
         'remoteSessionUnchanged',
-        'remoteReplyStateUnchanged',
         'fixtureCleanupAcknowledged',
       ].any((key) => report[key] != true)) {
     throw StateError(

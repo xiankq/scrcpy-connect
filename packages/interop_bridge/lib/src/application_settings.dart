@@ -2,7 +2,6 @@
 /// choices and fills only missing keys from the supplied initialization seed.
 const applicationSettings = <String, Object?>{
   'appearance': 'light',
-  'backgroundConnection': true,
   'backgroundKeepAlive': true,
   'notificationAlerts': true,
   'callAlerts': true,

@@ -5,11 +5,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/services/remote_input.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
 
 void main() {
+  test('source input preserves aspect ratio and excludes letterbox space', () {
+    const viewport = Size(400, 800);
+    const landscape = Size(1920, 1080);
+    expect(
+      sourcePoint(const Offset(200, 400), viewport, landscape),
+      const Offset(960, 540),
+    );
+    expect(sourcePoint(const Offset(200, 20), viewport, landscape), isNull);
+    expect(sourcePoint(const Offset(200, 799), viewport, landscape), isNull);
+    expect(
+      sourcePoint(const Offset(200, 20), viewport, landscape, clamp: true),
+      const Offset(960, 0),
+    );
+    expect(
+      sourcePoint(const Offset(399, 400), viewport, landscape)!.dx,
+      closeTo(1915.2, .01),
+    );
+    expect(sourcePoint(Offset.zero, viewport, Size.zero), isNull);
+  });
+
   testWidgets(
     'remote image uses the complete viewport beneath host top safe area',
     (tester) async {
@@ -186,6 +207,99 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         controller.dispose();
       }
+    },
+  );
+
+  testWidgets('missing live texture reports failure and blocks remote input', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      calls.add(command);
+      return {'sessionId': 'actual-session', 'reason': '设备未提供解码画面'};
+    });
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      RouterTestApp(
+        controller: controller,
+        theme: ConnectTokens.theme(Brightness.light),
+        home: RemotePage(
+          controller: controller,
+          device: const {'id': 'phone', 'name': '测试手机'},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('暂时无法打开实时画面'), findsOneWidget);
+    expect(find.byType(Texture), findsNothing);
+    await tester.tapAt(const Offset(400, 500));
+    await tester.pump();
+    expect(calls.where((call) => call == 'session.touch'), isEmpty);
+  });
+
+  testWidgets(
+    'multitouch uses source pixels and preserves pointer identities',
+    (tester) async {
+      final touches = <Json>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'session.touch') {
+          touches.add(Map<String, dynamic>.from(params));
+        }
+        return command == 'session.start'
+            ? {
+                'sessionId': 'session',
+                'textureId': 1,
+                'width': 200,
+                'height': 400,
+              }
+            : {};
+      });
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          theme: ConnectTokens.theme(Brightness.light),
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final frame = tester.getRect(find.byType(Texture));
+      final one = await tester.startGesture(
+        const Offset(400, 300),
+        pointer: 101,
+      );
+      final two = await tester.startGesture(
+        const Offset(475, 450),
+        pointer: 102,
+      );
+      await one.moveBy(const Offset(15, 0));
+      await one.up();
+      await two.cancel();
+      await tester.pumpAndSettle();
+      expect(touches.first['x'], 100);
+      expect(
+        touches.first['y'],
+        ((300 - frame.top) / frame.height * 400).round(),
+      );
+      expect(touches.first['screenWidth'], 200);
+      expect(touches.first['screenHeight'], 400);
+      expect(
+        touches.where((p) => p['pointerId'] == 101).map((p) => p['action']),
+        ['down', 'move', 'up'],
+      );
+      expect(
+        touches.where((p) => p['pointerId'] == 102).map((p) => p['action']),
+        ['down', 'cancel'],
+      );
     },
   );
 }

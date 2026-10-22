@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../tool/driver/system_notifications.dart'
+import '../driver/system_notifications.dart'
     show validateSystemNotificationsReport;
 
 const _runId = '0123456789abcdef0123456789abcdef';
@@ -15,7 +15,6 @@ const _report = <String, dynamic>{
   'notificationsPageOpened': true,
   'clickedSourceStillLive': true,
   'remoteSessionUnchanged': true,
-  'remoteReplyStateUnchanged': true,
   'fixtureCleanupAcknowledged': true,
 };
 const _receipt = <String, dynamic>{

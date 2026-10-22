@@ -1,6 +1,7 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
@@ -468,6 +469,42 @@ void main() {
         ),
         isEmpty,
       );
+    },
+  );
+
+  testWidgets(
+    'metadata-only device stays unauthorized and has no live battery',
+    (tester) async {
+      final controller = createTestController(
+        (command, [params = const {}]) async => command == 'device.info'
+            ? {'id': 'restored', 'name': '恢复的手机', 'status': 'unauthorized'}
+            : command == 'devices.list'
+            ? {
+                'devices': [
+                  {
+                    'id': 'restored',
+                    'name': '恢复的手机',
+                    'status': 'unauthorized',
+                    'battery': 97,
+                  },
+                ],
+              }
+            : {},
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await tester.pumpWidget(
+        TestProviderScope(controller: controller, child: const ConnectApp()),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('需要重新授权'), findsOneWidget);
+      expect(find.textContaining('97%'), findsNothing);
+      await tester.tap(find.text('恢复的手机'));
+      await tester.pumpAndSettle();
+      expect(find.text('重新授权'), findsOneWidget);
+      expect(find.text('需要重新授权'), findsOneWidget);
+      expect(find.textContaining('97%'), findsNothing);
+      expect(find.text('连接后查看后台应用'), findsOneWidget);
     },
   );
 }

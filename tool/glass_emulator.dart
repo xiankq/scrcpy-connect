@@ -1,5 +1,5 @@
 /// Linux/X11 workaround for Emulator 37.2.12's software GLES translator crash.
-/// See docs/implementation/glass-components-2026-10-20.md for native evidence.
+/// See docs/implementation/repository-tooling.md#玻璃宿主 for host constraints.
 library;
 
 import 'dart:io';

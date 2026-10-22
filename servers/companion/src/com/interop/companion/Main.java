@@ -4,12 +4,10 @@ import android.app.Notification;
 import android.app.AppOpsManager;
 import android.app.KeyguardManager;
 import android.app.PendingIntent;
-import android.app.RemoteInput;
 import android.content.ComponentName;
 import android.content.ClipData;
 import android.content.pm.PackageManager;
 import android.content.Context;
-import android.content.Intent;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.os.Binder;
@@ -279,19 +277,6 @@ public final class Main {
             }
         });} catch(RejectedExecutionException ignored) {clipboardRefreshPending.set(false);}
     }
-    private static boolean mutable(PendingIntent intent) {
-        return intent!=null && (Build.VERSION.SDK_INT<31 || !intent.isImmutable());
-    }
-    private static int replyAction(Notification notification) {
-        if(notification.actions==null) return -1;
-        for(int i=0;i<notification.actions.length;i++) {
-            Notification.Action action=notification.actions[i];
-            RemoteInput[] inputs=action.getRemoteInputs();
-            if(!mutable(action.actionIntent) || inputs==null) continue;
-            for(RemoteInput input:inputs) if(input.getAllowFreeFormInput()) return i;
-        }
-        return -1;
-    }
     private String notificationAppName(StatusBarNotification notification) {
         try {
             // Resolve the original package in its actual profile. Notification
@@ -323,14 +308,9 @@ public final class Main {
                 .put("body",NotificationContent.body(extras))
                 .put("postedAt",sbn.getPostTime()).put("canOpen",n.contentIntent!=null)
                 .put("groupSummary",(n.flags & Notification.FLAG_GROUP_SUMMARY)!=0)
-                .put("canDismiss",sbn.isClearable()).put("canReply",replyAction(n)>=0);
+                .put("canDismiss",sbn.isClearable());
             StringBuilder fingerprint=new StringBuilder(data.toString());
             fingerprint.append(n.contentIntent==null?0:n.contentIntent.hashCode());
-            if(n.actions!=null) for(Notification.Action action:n.actions) {
-                fingerprint.append(text(action.title,512)).append(action.actionIntent==null?0:action.actionIntent.hashCode());
-                if(Build.VERSION.SDK_INT>=31) fingerprint.append(action.isAuthenticationRequired());
-                if(action.getRemoteInputs()!=null) for(RemoteInput input:action.getRemoteInputs()) fingerprint.append(input.getResultKey());
-            }
             Item old=byKey.get(sbn.getKey());Item item=new Item();item.sbn=sbn;item.fingerprint=fingerprint.toString();
             String id=old!=null && old.fingerprint.equals(item.fingerprint)?old.json.getString("id"):UUID.randomUUID().toString();
             item.json=data.put("id",id).put("revision",id);
@@ -370,17 +350,7 @@ public final class Main {
             notification.contentIntent.send(shellContext,0,null);
             return new JSONObject().put("acceptedBySystem",true).put("located",true).put("requiresRemoteView",true).put("applicationConfirmed",false);
         }
-        int index=replyAction(notification);
-        if(index<0) throw new Failure("reply_unavailable","The original notification has no mutable free-form RemoteInput action");
-        Notification.Action action=notification.actions[index];
-        if(Build.VERSION.SDK_INT>=31 && action.isAuthenticationRequired()) throw new Failure("authentication_required","This original action requires target-side application authentication");
-        String reply=request.getString("text");if(reply.isEmpty() || reply.length()>16384) throw new Failure("invalid_argument","Reply must contain 1 to 16384 characters");
-        Bundle results=new Bundle();List<RemoteInput> selected=new ArrayList<>();
-        for(RemoteInput input:action.getRemoteInputs()) if(input.getAllowFreeFormInput()) {results.putCharSequence(input.getResultKey(),reply);selected.add(input);}
-        Intent fillIn=new Intent();RemoteInput.addResultsToIntent(selected.toArray(new RemoteInput[0]),fillIn,results);
-        if(Build.VERSION.SDK_INT>=28) RemoteInput.setResultsSource(fillIn,RemoteInput.SOURCE_FREE_FORM_INPUT);
-        action.actionIntent.send(shellContext,0,fillIn);
-        return new JSONObject().put("status","acceptedBySystem").put("acceptedBySystem",true).put("delivered",JSONObject.NULL).put("message","原应用动作已交给系统；未确认应用或消息服务送达，不会自动重发。");
+        throw new Failure("invalid_command","Unknown notification action");
     }
     private void refreshCalls(boolean event) throws Exception {
         if(!observationEnabled || !callsListening || callError!=null) return;
@@ -444,7 +414,7 @@ public final class Main {
         String command=request.getString("command");
         if(command.equals("observation.set")) return setObservation(request);
         if(command.equals("notifications.list")) {refreshNotifications(false);return notificationSnapshot();}
-        if(command.equals("notifications.open") || command.equals("notifications.dismiss") || command.equals("notifications.reply")) return notificationAction(command,request);
+        if(command.equals("notifications.open") || command.equals("notifications.dismiss")) return notificationAction(command,request);
         if(command.equals("calls.list")) {refreshCalls(false);return callSnapshot();}
         if(command.equals("calls.open")) return openSystemCallUi(request);
         if(command.equals("calls.action")) return callAction(request);
@@ -466,7 +436,7 @@ public final class Main {
         LocalServerSocket server=new LocalServerSocket(socketName);
         ScheduledExecutorService watchdog=Executors.newSingleThreadScheduledExecutor();
         Future<?> startupDeadline=watchdog.schedule(()-> {try {server.close();}catch(Exception ignored){}},20,TimeUnit.SECONDS);
-        // This is the only stdout protocol. Notification text/reply drafts are
+        // This is the only stdout protocol. Notification text is
         // exchanged solely through the authenticated in-memory local socket.
         System.out.println("INTEROP_COMPANION_READY "+Process.myPid());System.out.flush();
         try(LocalSocket socket=server.accept()) {

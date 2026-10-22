@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../tool/benchmark/live_video/frame_trace_stages.dart';
+import '../benchmark/live_video/frame_trace_stages.dart';
 
 void main() {
   final native = <String, dynamic>{

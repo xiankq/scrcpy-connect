@@ -29,7 +29,6 @@ void main() {
       'apps.launch',
       'audio.start',
       'observation.start',
-      'notifications.reply',
       'clipboard.set',
     ]) {
       expect(needsVerifiedState(command, {}), isTrue, reason: command);

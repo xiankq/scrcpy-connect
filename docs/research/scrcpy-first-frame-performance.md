@@ -369,7 +369,7 @@ AImageReader异步获取已经启用，仍不能说明codec本身使用async cal
 为147.174ms。相同线程持续同步dequeue、没有异步输出事件，促成显式async=1实验；
 该参数有3条成功async日志及467条输出callback，后一段降至20.841ms，返回缺省又
 升至133.510ms。输入P50/P95相应277/392→153/204→273/389ms，首帧仍失败。
-[完整A/B/A与无诊断默认扩量](../implementation/android-decoder-async.md)。
+完整 A/B/A 与无诊断默认扩量的边界见[性能摘要](../implementation/video-performance.md#独立实验的结果)。
 
 [官方MDK文档](https://github.com/wang-bin/mdk-sdk/wiki/Decoders#amediacodec)当前写
 codec async默认1，但固定SDK公开头／Changelog无法解释此次实际缺省选择；项目

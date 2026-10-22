@@ -126,11 +126,15 @@ void main() {
     'closing while startup wake is pending cannot start a late window',
     (tester) async {
       final pending = Completer<Json>();
+      final wakeRequested = Completer<void>();
       final calls = <String>[];
       final controller = createTestController(
         (command, [params = const {}]) async {
           calls.add(command);
-          if (command == 'devices.wake') return pending.future;
+          if (command == 'devices.wake') {
+            if (!wakeRequested.isCompleted) wakeRequested.complete();
+            return pending.future;
+          }
           return {};
         },
         initialState: AppState(
@@ -152,13 +156,9 @@ void main() {
             ),
           ),
         );
-        for (
-          var tick = 0;
-          tick < 10 && !calls.contains('devices.wake');
-          tick++
-        ) {
-          await tester.pump(const Duration(milliseconds: 20));
-        }
+        await tester.pump();
+        await tester.pump();
+        expect(wakeRequested.isCompleted, isTrue);
         expect(
           calls.where((command) => command == 'devices.wake'),
           hasLength(1),

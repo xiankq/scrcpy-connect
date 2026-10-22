@@ -1,54 +1,37 @@
 # 设计稿与 Flutter 核对
 
-视觉数值归[视觉规范](../../designs/design.md)，页面入口与行为归[产品规格](../../designs/prod/README.md)。本文维护源稿/实现的查找方式、捕获契约和已执行证据的限制，不复制逐页规则或另一份画布清单。
+视觉数值归[视觉规范](../../designs/design.md)，页面入口与行为归[产品规格](../../designs/prod/README.md)。本文维护源稿定位、捕获契约和证据边界，不复制逐页规则。
 
 ## 源稿与实现定位
 
-`designs/mobile.pen` 是唯一源稿，须通过 Pencil MCP 或 `pen interactive` 对象 API 读取/修改，不按文本解析。代表状态从[用户流程](../../designs/prod/user-flows.md)定位，当前截图配对由[pages.json](../../tool/visual_parity/pages.json)维护；源码入口以[路由契约](flutter-navigation.md)为准。
+`designs/mobile.pen` 是唯一源稿，须通过 Pencil MCP 或 `pen interactive` 对象 API 读写。代表状态从[用户流程](../../designs/prod/user-flows.md)定位，截图配对由[pages.json](../../tool/visual_parity/pages.json)维护，源码入口以[导航契约](flutter-navigation.md)为准。
 
-添加页的配对码/扫码/USB/IP代表稿属于同一表单，帮助、字段错误及系统授权示意是局部状态。工作台承接设备信息与管理，旧独立设备详情/手动无线地址页面已被合并。画布数、Frame数、源码页数和路由数不能相互推导。旧审计的独立页面表及截图配对不再作为当前入口证据。
+一个 Frame 可表示页面的正常、失败、抽屉或系统授权状态，不要求独立路由。画布数、Frame 数、源码页数和路由数不能互相推导。
 
-母组件与受影响实例一并检查；完整手机、系统界面示意、局部状态及大屏分别定位。稿件分区/行列和标注颜色属于源稿组织，不能代替页面实际布局或新增产品路由。2026-10-20的代表稿核对包括统一表单、工作台四态、手机轮廓内状态图标、私钥导入/确认/不可用恢复、单设备活动及传输移除，当前逻辑验证见[验证记录](validation.md#2026-10-20-设备工作台与连接管理)。
-
-以下保留2026-10-20调整中容易混淆的定位关系；完整业务路径仍由用户流程/覆盖表负责，不据此新增规则。
-
-| 核对对象 | 源稿定位 | 实现/验证入口 |
+| 核对对象 | 源稿定位 | 实现入口 |
 | --- | --- | --- |
-| 设备四态、手机内状态图标、轮廓右侧设备信息 | `RTx0Z/uESR9/N5P7M`、`y5TL9/aozX4`；状态实例 `yseUT/Ok1ty/mNfsm` 与 `XYB3Y/i1Irz/darW7/mNfsm` | `devices/widgets/device_identity.dart`、`device_status.dart`、`workspace/index/widgets/device_facts.dart` |
-| 工作台整合、快捷移除与离线动作 | `nqQEb/m0AlTk`、`PxnBS/Txxv0/KcWEm` | `devices/workspace/index/`、`devices/widgets/device_access.dart`；保存设备均可进入同一工作台 |
-| 活跃应用与目标图标 | `U1FJF/VacW7/OApmp`，受限态`lYdIf` | `running_apps.dart`、Core `apps.list(filter:running)` / `apps.icon`；API29及任务读取权限条件见兼容文档，不用安装列表或主控图标填充 |
-| 四形式表单与发现二级页 | 外壳`JORmP`、Tab`igSfI`、`W3GRn/G4CpTk/OxUaB/OpFKk`、`yMlVd` | `connection/form/`与`connection/discovery/`；发现回填及配对后TLS补端口有独立回归 |
-| 密钥输入、三种替换确认与不可用恢复 | `nzitC/x7ZjT`、`s3Fdhr/bcFd3/B5nGcj/AXigJ`；全局重置`Rz6jL` | `settings_adb_identity_page.dart` / `adb_identity_validation.dart` / `host_identity.rs`；取消不更改身份，恢复继承需明确确认 |
-| 扫码设备归属与转IP失败保护 | `G4CpTk`、`XszXp/gHHmj/vPWPs` | `device.rs`扫码贯通原deviceId与所选身份；`tcpip.rs`目标核验后原子提交，失败/取消保留原method/address/port/GUID |
-| 传输历史与单设备活动 | `W6enLf/R759qi/fKBPB`、`mDL3I` | `transfer_history_row.dart`、`files.rs`及设备`activities/`；活动先停止，移除记录不删保存文件 |
-| 底栏原版镜片与无固定描边 | 母`Ffm0s`、材料/交互板`N70xWl`，明暗按压/拖动集中对照 | `home_page.dart` / `GlassMaterial.navigationLensSettings`；沿用上游合成能力，运行证据见玻璃记录 |
-| 画布组织与标注 | `KTHuP/B3uE9/w4TjN`；共享板`Rie7E/TfjoF` | 完整屏幕按类型排列，局部板按自然内容收紧；保留被完整页面引用的母组件，删除已由页面或材料板覆盖的重复小样；中灰标注使用canvas-label |
+| 设备状态、首卡与工作台 | `RTx0Z/uESR9/N5P7M`、`y5TL9/aozX4`；`nqQEb/m0AlTk/PxnBS/Txxv0/KcWEm` | `devices/widgets/`、`devices/workspace/index/` |
+| 活跃应用与目标图标 | `U1FJF/VacW7/OApmp`、受限态 `lYdIf` | `running_apps.dart`、`apps.list(filter:running)`、`apps.icon` |
+| 统一连接表单与发现 | 外壳 `JORmP`、Tab `igSfI`、`W3GRn/G4CpTk/OxUaB/OpFKk`、`yMlVd` | `connection/form/`、`connection/discovery/` |
+| 授权密钥与转 IP | `nzitC/x7ZjT/s3Fdhr/bcFd3/B5nGcj/AXigJ`、`XszXp/gHHmj/vPWPs` | 设置、连接表单、`host_identity.rs`、`device.rs`、`tcpip.rs` |
+| 传输与当前活动 | `W6enLf/R759qi/fKBPB/mDL3I` | `transfer_history_row.dart`、文件传输、设备 activities |
+| 底栏镜片 | 母组件 `Ffm0s`、材料板 `N70xWl` | `home_page.dart`、`GlassMaterial.navigationLensSettings`、`NavigationSelectionLens` |
+| 通知卡片 | `Cyzll`、`a7A57` | 通知页、系统提醒适配 |
+| 画布组织 | `KTHuP/B3uE9/w4TjN`、共享板 `Rie7E/TfjoF` | 完整屏幕与局部状态分开；保留被引用母组件，删除页面已覆盖的重复小样 |
 
-通知卡片母组件为 `Cyzll`，页面 `a7A57` 展开真实应用图标／名称、整卡接续与同步清除；右上全部已读使用图标。设备工作台 `uESR9` 的列表分组与活跃应用改成开放内容流，比例选项 `Wp1CG` 与自定义输入 `EWW1a` 复用现有选项行与字段。六组重复状态收敛到对应完整页面或材料板；视频播放控制仍保留独立状态 `nSfCV`。本次静态稿与源码验证的环境边界见[显示、通知与 ADB 分层记录](display-notifications-adb-2026-10-20.md)。
+## 静态核查
 
-## 静态布局核查
+每个受影响页面分别检查明暗、降低透明度、长标题、窄容器、文字放大、安全区和必要的横屏/键盘状态。普通内容按父约束流式布局；远控画面与浮层才使用绝对叠加。标记为滚动视口的裁剪必须确认完整末项可达。
 
-每个受影响页面分别检查明暗、降低透明度、长标题、窄容器、大字、安全区和必要的横屏/键盘状态。普通内容按父约束流式布局；远控画面和浮动控制才承担叠加关系。滚动视口内裁剪必须确认完整末项可达，其他活动分支不能用“设计裁剪”掩盖溢出。
+结构扫描证明引用和几何边界，目视说明文字、材料和层级。两者都不能替代 Flutter 运行、真实 GPU 或双设备授权。页头保护层在正文层最后绘制并止于实际标题栏底部；滚动内容消费避让，不能给 AppBar 另加不透明底色。
 
-结构扫描证明引用与几何边界，目视说明文字/材料/层级；二者各有作用。2026-10-20对象扫描核对了新增确认及恢复态、相关母组件和展开实例，未发现活动分支非预期裁切或悬空引用。该检查不是 Flutter GPU 或两设备授权验收。
+## 捕获契约
 
-页头保护层在正文内容层绘制，并止于实际标题栏底部。滚动内容消费相应避让，透明栏后方仍保留真实滚动背景；对齐、安全区与末项可达分别由布局测试核对。大屏使用侧栏和单一当前内容区，不把早期并行示意登记为已有原生多窗口能力。
+配对配置记录每个 case 的源 Frame、截图、裁剪、视口、内容差异和夹具身份。没有完整 Frame，与已有 Frame 但未配对是不同状态；未配对原因保留在 `unmatchedCaptures`，局部状态不拉伸成整页。
 
-## 配对与捕获契约
+手机参考为 402×874/DPR1，常态安全区 top 54/bottom 34；平板 1194×834、桌面 1440×960 使用各自完整视口。照片预览与远控保留全屏。历史 `capture-contract.json` 和 `layout-contract.json` 只有在 PNG 哈希匹配时才能附到报告；当前不维护遍历所有页面、主题和尺寸的截图矩阵。
 
-配对配置记录每个case的源Frame、截图名、裁剪、视口、内容差异及生产路由/隔离夹具身份，不在本文抄录易失效列表。没有完整Frame和已有Frame但未配对是不同状态；`unmatchedCaptures`保留原因，局部状态不拉伸成整页。
-
-手机参考402×874/DPR1，常态安全区top54/bottom34，普通主控内容按配置裁剪。照片预览与远控保留全屏，不能用常规裁剪漏掉边缘操作；远控黑底暂停夹具不冒充远端native纹理。平板1194×834、桌面1440×960使用各自完整视口和零安全区，不缩放手机稿。最终数值以每次捕获合同和配置为准。
-
-保留的历史捕获可能包含 `capture-contract.json`（视口、安全区、字体、设备及路由身份）和 `layout-contract.json`（与 PNG 哈希绑定的 RenderObject 几何及文字行框）。比较器继续读取这些可选附件；当前按实际变更范围捕获，不再维护遍历所有页面、主题和尺寸的截图测试。没有相同源视口的变体不混进正常视口像素比较。
-
-几何坐标不能单独证明未遮挡；`intersectsViewport`不证明主要动作可达。夹具的设备/通知/文件状态按实际合同核对，内容差异会改变行数和动作集合，不能因“仅文字不同”一概忽略，也不能伪造状态匹配图片。
-
-## 可重复操作与报告判读
-
-按本次变更在实际运行应用中捕获对应页面或交互状态，记录设备、视口、安全区、主题和数据来源；截图保存在新的系统临时目录。旧整页采集矩阵及其隔离 fixture 已移除，不能再按历史测试名生成当前画面。需要核对玻璃与弹层时使用下述保留的 GPU 入口。
-
-经对象API将配置中Frame按1×导出后，从仓库根运行：
+按实际变更在运行应用中截图后，从仓库根运行：
 
 ```sh
 dart tool/visual_parity/compare.dart \
@@ -57,26 +40,12 @@ dart tool/visual_parity/compare.dart \
   --output <新的比较目录>
 ```
 
-工具生成并排图、RGB差图和报告；缺图、解码失败、源尺寸/比较区域不匹配均失败，只有PNG哈希匹配才附几何，否则标记stale/unavailable。源图不得拉伸、补边或自动对齐。
+工具生成并排图、RGB 差图和报告；缺图、解码失败或尺寸不匹配失败。源图不得拉伸、补边或自动对齐。`completed=true` 只表示比较完成；RGB 指标没有自动阈值，`visualAcceptanceComplete` 与 `contentAcceptanceComplete` 仍需人工核对字形、内容、安全区、遮挡和滚动终点。
 
-`completed=true`只说明比较完成，RGB均值或差异像素比例没有自动合格阈值。`visualAcceptanceComplete`和`contentAcceptanceComplete`不自动变真；人工仍核对对齐、字级、真实内容、安全区、遮挡和滚动终点。
+## 当前运行证据
 
-## GPU与动态证据
+`glass_chrome_test.dart` 与对应 driver 覆盖透明页头、弹层、菜单、提示和辅助偏好；导航镜片入口为 `navigation_lens_test.dart` 与 `navigation_lens.dart`，覆盖静止、按住、拖动、归位、滚动背景、实体偏好和减少动态。当前宿主实际使用 Mesa llvmpipe 软件渲染，不能据此声称物理 GPU 或 Apple 原生等效。
 
-2026-10-19透明页头/覆盖层样本使用API36 x64、Impeller OpenGLES和当时Zink/Intel配置，实际JPEG滚入页头背后；明暗、减少动态、降低透明度下的弹窗/抽屉/菜单/提示/反馈分别捕获。输入哈希和像素标记证明产物身份，不能签发人工视觉通过。
+API36 双 AVD 已实际核对全屏顶部区域、远端通知栏与返回、横屏比例、输入法、独立窗口逻辑密度、通知内容和质量重建。以上证明对应镜像中的界面与系统交互，不覆盖物理刘海、其他 OEM、连续手感、多视频负载、读屏或性能预算。
 
-该轮OverlayPortal继承来源工具组44px采样范围，实际截图出现菜单失字；独立本地采样层修复后重捕并目视。有限按压/取消/恢复与弹层矩阵检查通过，降低透明度时无光学面/模糊。入口仍为 `app/integration_test/glass_chrome_test.dart` 与 `tool/driver/glass_chrome.dart`，照片夹具在设备上准备并核验后才捕获。
-
-2026-10-20采用上游原版控件的运行环境、模拟器崩溃规避及新GPU样本见[玻璃运行记录](glass-components-2026-10-20.md)。旧easy后端的散射/静态shader与GPU图片不覆盖现有widgets；Pencil投影和Flutter运行库并非相同后端，也不证明Apple原生等效。
-
-2026-10-21静止镜片与固定设置组选项的后续不覆盖上述历史事实。当前底栏实现定位为 `home_page.dart`、`GlassMaterial.navigationLensSettings` 和公开组件组合 `NavigationSelectionLens`；固定选项定位为设置首页、外观、记录恢复、媒体暂存及设备功能支持页中的 `SettingsGroup`/`ListIconBadge`。组卡、图标与材料规则仍只由[视觉规范](../../designs/design.md#layout)维护，本文不另列 token 或放宽验收条件。设置与外观有普通入口实际捕获，其余固定页本轮仅验证窄屏大字 Widget 夹具。最终三层公开组件组合在独立底栏真实渲染夹具中完成八张样本：静止轮廓可辨、glyph无旧方案的碎字、减少动态按住只保留一片镜片。该结论限于软件 Mesa 后端及本轮静态/离散交互状态；最终普通main冷构建后另行核对首页与设置稳定镜片、明暗实体组卡和白glyph，并完成热重载且运行错误为空；连续手感、性能和物理GPU仍未验收，详见[后续运行记录](glass-components-2026-10-20.md#2026-10-21-静止镜片与固定选项组后续)。
-
-## 2026-10-21 累计需求的额外复核
-
-同尺寸生产页面采集、源稿母组件同步、逐图并排查看、普通main实际成像及动态保活补漏，见[额外复核记录](design-refinement-reaudit-2026-10-21.md)。当前配对配置已收敛为本轮受影响页面，不再引用已删除的控制窗口管理页；局部状态板与整页的差别保留在未配对理由中。
-
-## 性能与未验范围
-
-widgets迁移阶段的诊断背景压力样本中，regular/clear/blend/reduced约33.582/16.999/29.739/3.842ms，前三项超过16.6667ms预算。后续成像捕获没有重测该性能场景，不能以“GPU截图通过”关闭缺口。
-
-历史优化探针只在临时依赖副本运行，未把实验修改带入发布包；它们缩小了材料层成本范围，没有证明所有GPU、连续手感、多路真实视频、读屏或四宿主性能通过。当前样本的`visualAcceptanceComplete=false`/`performanceMeasured=false`保留原义；有限人工目视和工具回执分别记录，不能互相替代。
+静态 Pencil 投影、Widget 软件捕获、真实 shader 成像和业务设备运行分别记录。现有样本未通过性能或完整可访问性验收，不能把“截图成功”写成视觉交付全部完成；最新证据与环境见[验收记录](validation.md)。

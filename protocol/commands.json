@@ -769,14 +769,6 @@
       "requiresVerifiedState": true
     },
     {
-      "name": "notifications.reply",
-      "owner": "core",
-      "required": {
-        "deviceId": "string"
-      },
-      "requiresVerifiedState": true
-    },
-    {
       "name": "observation.list",
       "owner": "core"
     },

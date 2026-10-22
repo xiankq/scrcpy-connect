@@ -8,14 +8,15 @@ use std::sync::Arc;
 #[cfg(test)]
 pub(crate) fn defaults() -> Value {
     json!({"appearance":"light",
-        "backgroundConnection":true,"backgroundKeepAlive":true,
+        "backgroundKeepAlive":true,
         "notificationAlerts":true,"callAlerts":true,"adbBurstMode":true,
         "fileViewMode":"grid","fileSortKey":"name","fileSortAscending":true,
         "deviceSettings":{},
         "qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":4_000_000,"videoCodec":"h264","videoEncoder":null,"deviceQuality":{}})
 }
 
-const REMOVED_SETTINGS: [&str; 10] = [
+const REMOVED_SETTINGS: [&str; 11] = [
+    "backgroundConnection",
     "backgroundAudio",
     "reduceTransparency",
     "reduceMotion",
@@ -126,17 +127,13 @@ pub(crate) fn validated_settings(current: &Value, changes: &Value) -> CoreResult
     for (key, value) in values {
         let valid = match key.as_str() {
             "appearance" => matches!(value.as_str(), Some("light" | "dark" | "system")),
-            "backgroundConnection"
-            | "backgroundKeepAlive"
+            "backgroundKeepAlive"
             | "notificationAlerts"
             | "callAlerts"
             | "adbBurstMode"
             | "fileSortAscending" => value.is_boolean(),
             "fileViewMode" => matches!(value.as_str(), Some("grid" | "list")),
-            "fileSortKey" => matches!(
-                value.as_str(),
-                Some("name" | "size" | "modified" | "type")
-            ),
+            "fileSortKey" => matches!(value.as_str(), Some("name" | "size" | "modified" | "type")),
             "deviceSettings" => value.as_object().is_some_and(|map| {
                 map.len() <= 256
                     && map.iter().all(|(id, settings)| {
@@ -393,12 +390,8 @@ mod tests {
         assert_eq!(next["fileViewMode"], "list");
         assert_eq!(next["fileSortKey"], "modified");
         assert_eq!(next["fileSortAscending"], false);
-        assert!(
-            validated_settings(&next, &json!({"fileViewMode":"columns"})).is_err()
-        );
-        assert!(
-            validated_settings(&next, &json!({"fileSortKey":"relevance"})).is_err()
-        );
+        assert!(validated_settings(&next, &json!({"fileViewMode":"columns"})).is_err());
+        assert!(validated_settings(&next, &json!({"fileSortKey":"relevance"})).is_err());
     }
 
     #[test]
@@ -433,6 +426,7 @@ mod tests {
     fn retiring_global_choices_preserves_explicit_device_settings() {
         let mut settings = json!({
             "audioMode":"fixed", "audioDevices":["a"], "backgroundAudio":true,
+            "backgroundConnection":false, "backgroundKeepAlive":true,
             "clipboardSync":true, "clipboardMode":"fixed", "clipboardDevice":"a",
             "reduceMotion":true, "reduceTransparency":true,
             "deviceSettings":{"a":{"clipboardSync":false,"showNavigationBar":true}},
@@ -442,6 +436,7 @@ mod tests {
         assert_eq!(
             settings,
             json!({
+                "backgroundKeepAlive":true,
                 "deviceSettings":{"a":{"clipboardSync":false,"showNavigationBar":true}},
                 "appearance":"dark"
             })

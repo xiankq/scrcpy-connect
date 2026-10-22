@@ -46,4 +46,4 @@ flutter test --no-pub tool/e2e/tests/usbip_server_test.dart
 
 完成后 Ctrl-C 停止准备工具，移除上述精确转发（`adb -s emulator-5556 forward --remove tcp:<宿主端口>`），并只关闭本轮启动的两台 AVD。手动拔插可通过停止、重启准备工具完成。普通应用调试入口与 integration-test APK 分开记录；测试结束若要交付安装包，重新构建普通 `app/lib/main.dart` release。
 
-这覆盖虚拟 USB 主机和真实 Android API／adbd，不证明物理线缆、电气、OTG 主从角色、厂商 USB HAL、量产设备 ADB RSA 授权或其他主控平台已通过。本轮实际结果见[验收记录](../../../docs/implementation/usb-qr-pairing-2026-10-21.md)。
+这覆盖虚拟 USB 主机和真实 Android API／adbd，不证明物理线缆、电气、OTG 主从角色、厂商 USB HAL、量产设备 ADB RSA 授权或其他主控平台已通过。实际结果与边界见[验收记录](../../../docs/implementation/validation.md)。

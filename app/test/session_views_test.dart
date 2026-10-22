@@ -152,7 +152,7 @@ void main() {
   });
 
   test(
-    'failed resume still pauses capture when the view is released',
+    'failed resume still pauses presentation when the view is released',
     () async {
       final commands = <String>[];
       final views = SessionViews((command, [params = const {}]) async {

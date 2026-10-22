@@ -38,10 +38,7 @@ class _Host {
   final timers = <_Timer>[];
   int sequence = 1;
   List<ReconnectJson> devices = [device()];
-  ReconnectJson settings = {
-    'backgroundConnection': true,
-    'backgroundKeepAlive': true,
-  };
+  ReconnectJson settings = {'backgroundKeepAlive': true};
   Future<ReconnectJson> Function(ReconnectJson)? connect;
 
   static ReconnectJson device({
@@ -95,6 +92,16 @@ class _Host {
       'type': 'devices.changed',
       'sequence': sequence,
       'data': {'devices': snapshot()['devices']},
+    });
+  }
+
+  void updateSettings(ReconnectionCoordinator owner, ReconnectJson value) {
+    settings = value;
+    sequence++;
+    owner.handleEvent({
+      'type': 'settings.changed',
+      'sequence': sequence,
+      'data': value,
     });
   }
 }
@@ -188,53 +195,58 @@ void main() {
     },
   );
 
-  test(
-    'background policy revokes pending work and foreground obtains a new lease',
-    () async {
-      final host = _Host()
-        ..settings = {
-          'backgroundConnection': false,
-          'backgroundKeepAlive': true,
-        };
-      final pending = Completer<ReconnectJson>();
-      host.connect = (_) => pending.future;
-      final owner = host.coordinator();
-      addTearDown(owner.dispose);
-      await owner.start();
-      await settle();
-      host.active.single.fire();
-      await settle();
-      final attempt = host.attempts.single['attemptId'];
-      owner.setVisible(false);
-      await settle();
-      expect(host.active, isEmpty);
-      expect(
-        host.calls.any(
-          (call) =>
-              call.$1 == 'devices.cancel' && call.$2['attemptId'] == attempt,
-        ),
-        true,
-      );
-      expect(
-        host.calls.any(
-          (call) =>
-              call.$1 == 'devices.reconnect.owner' &&
-              call.$2['ownerId'] == 'owner-1' &&
-              call.$2['active'] == false,
-        ),
-        true,
-      );
-      pending.complete({'connected': true});
-      await settle();
-      expect(host.active, isEmpty);
-      owner.setVisible(true);
-      await settle();
-      expect(host.active.length, 1);
-      host.active.single.fire();
-      await settle();
-      expect(host.attempts.last['ownerId'], 'owner-2');
-    },
-  );
+  test('background keep-alive revokes pending work and foreground obtains a new lease', () async {
+    final host = _Host();
+    final pending = Completer<ReconnectJson>();
+    host.connect = (_) => pending.future;
+    final owner = host.coordinator();
+    addTearDown(owner.dispose);
+    await owner.start();
+    await settle();
+    host.active.single.fire();
+    await settle();
+    final attempt = host.attempts.single['attemptId'];
+    host.updateSettings(owner, {
+      'backgroundConnection': false,
+      'backgroundKeepAlive': true,
+    });
+    owner.setVisible(false);
+    await settle();
+    expect(
+      host.calls.any((call) => call.$1 == 'devices.cancel'),
+      false,
+      reason: 'only keep-alive controls retry',
+    );
+    host.updateSettings(owner, {'backgroundKeepAlive': false});
+    await settle();
+    expect(host.active, isEmpty);
+    expect(
+      host.calls.any(
+        (call) =>
+            call.$1 == 'devices.cancel' && call.$2['attemptId'] == attempt,
+      ),
+      true,
+    );
+    expect(
+      host.calls.any(
+        (call) =>
+            call.$1 == 'devices.reconnect.owner' &&
+            call.$2['ownerId'] == 'owner-1' &&
+            call.$2['active'] == false,
+      ),
+      true,
+    );
+    pending.complete({'connected': true});
+    await settle();
+    expect(host.active, isEmpty);
+    owner.setVisible(true);
+    host.updateSettings(owner, {'backgroundKeepAlive': true});
+    await settle();
+    expect(host.active.length, 1);
+    host.active.single.fire();
+    await settle();
+    expect(host.attempts.last['ownerId'], 'owner-2');
+  });
 
   test('explicit stop survives stale offline events and native persisted state on reattachment', () async {
     final host = _Host();

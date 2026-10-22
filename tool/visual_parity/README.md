@@ -8,7 +8,7 @@ For a repeatable 402×874/DPR1 software layout capture, run from `app/`:
 
 ```sh
 DESIGN_REFINEMENT_CAPTURE_DIR=/tmp/connect-design/flutter \
-  flutter test --no-pub test/design_refinement_capture_test.dart
+  flutter test --no-pub test/design_refinement_capture.dart
 ```
 
 The opt-in test uses production pages and theme with an isolated controller,

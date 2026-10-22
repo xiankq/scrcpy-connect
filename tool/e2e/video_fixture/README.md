@@ -121,7 +121,7 @@ proxy-events.json、cleanup.json及截图仅存/tmp；EOF代理不代替物理�
 `measurementLoopComplete`只表示所有测量步骤完成，不能作为性能通过判据。
 默认不设置该变量仍用3000ms收集期限。输入计时和窗口抓取分开，输入由窗口检查
 间隔开，不是连续手势或物理面板延迟测量。
-[格式、分段和当前失败结果](../../../docs/implementation/video-dynamic-measurement.md)。
+格式、分段和当前失败结果的判读规则见[视频性能](../../../docs/implementation/video-performance.md#独立实验的结果)。
 
 
 `analyze_capture_slots.dart`离线重建单一捕获进程的GraphicBufferSource slot持有周期，

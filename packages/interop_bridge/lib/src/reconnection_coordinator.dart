@@ -225,9 +225,7 @@ class ReconnectionCoordinator {
       !_uncertain &&
       _pauses == 0 &&
       policy.reconnectEnabled &&
-      (_visible ||
-          (_settings['backgroundConnection'] == true &&
-              _settings['backgroundKeepAlive'] == true));
+      (_visible || _settings['backgroundKeepAlive'] == true);
 
   bool _eligible(String id, ReconnectJson device) =>
       !_stopped.contains(id) &&

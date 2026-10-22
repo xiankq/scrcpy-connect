@@ -422,7 +422,6 @@ impl Runtime {
             "activities.stop" => Box::pin(self.stop_activity(&params)).await,
             "notifications.list"
             | "notifications.open"
-            | "notifications.reply"
             | "notifications.dismiss"
             | "calls.list"
             | "calls.open"

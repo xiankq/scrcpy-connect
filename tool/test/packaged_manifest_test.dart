@@ -6,26 +6,25 @@ const manifest =
     '''<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 <application android:allowBackup="false" android:usesCleartextTraffic="false">
 <activity android:name="dev.scrcpyconnect.MainActivity" android:launchMode="singleTask"/>
-<service android:name="dev.scrcpyconnect.ConnectionService" android:exported="false" android:foregroundServiceType="connectedDevice|mediaPlayback"/>
+<service android:name="dev.scrcpyconnect.ConnectionService" android:exported="false" android:foregroundServiceType="connectedDevice"/>
+<service android:name="dev.scrcpyconnect.AudioPlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
 </application></manifest>''';
 
 void main() {
   test('accepts packaged enum names and compiled numeric values', () {
     for (final mode in ['singleTask', '2', '0x2']) {
-      for (final types in [
-        'connectedDevice|mediaPlayback',
-        'mediaPlayback|connectedDevice',
-        '18',
-        '0x12',
-      ]) {
-        expect(
-          () => verifyManifest(
-            manifest
-                .replaceFirst('singleTask', mode)
-                .replaceFirst('connectedDevice|mediaPlayback', types),
-          ),
-          returnsNormally,
-        );
+      for (final connectionType in ['connectedDevice', '16', '0x10']) {
+        for (final audioType in ['mediaPlayback', '2', '0x2']) {
+          expect(
+            () => verifyManifest(
+              manifest
+                  .replaceFirst('singleTask', mode)
+                  .replaceFirst('connectedDevice', connectionType)
+                  .replaceFirst('mediaPlayback', audioType),
+            ),
+            returnsNormally,
+          );
+        }
       }
     }
   });
@@ -41,13 +40,34 @@ void main() {
         manifest.replaceFirst('singleTask', 'singleTop'),
         manifest.replaceFirst('.MainActivity', '.OtherActivity'),
         manifest.replaceFirst(
-          'android:exported="false"',
-          'android:exported="true"',
+          'ConnectionService" android:exported="false"',
+          'ConnectionService" android:exported="true"',
         ),
-        manifest.replaceFirst('connectedDevice|mediaPlayback', 'mediaPlayback'),
         manifest.replaceFirst(
+          'AudioPlaybackService" android:exported="false"',
+          'AudioPlaybackService" android:exported="true"',
+        ),
+        manifest.replaceFirst('ConnectionService', 'OtherConnectionService'),
+        manifest.replaceFirst(
+          'AudioPlaybackService',
+          'OtherAudioPlaybackService',
+        ),
+        manifest.replaceFirst(
+          'android:foregroundServiceType="connectedDevice"',
+          'android:foregroundServiceType="mediaPlayback"',
+        ),
+        manifest.replaceFirst(
+          'android:foregroundServiceType="mediaPlayback"',
+          'android:foregroundServiceType="connectedDevice"',
+        ),
+        manifest.replaceFirst(
+          'connectedDevice',
           'connectedDevice|mediaPlayback',
-          'connectedDevice|mediaPlayback|location',
+        ),
+        manifest.replaceFirst('mediaPlayback', 'mediaPlayback|location'),
+        manifest.replaceFirst(
+          'android:name="dev.scrcpyconnect.MainActivity"',
+          'android:name="dev.scrcpyconnect.OtherActivity"',
         ),
         '<manifest/>',
       ]) {

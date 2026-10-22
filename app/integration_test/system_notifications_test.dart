@@ -311,12 +311,10 @@ void main() {
           isTrue,
           reason: 'The OS click must not start a remote control session.',
         );
-        expect(find.text('快捷回复'), findsNothing);
         binding.reportData!.addAll({
           'notificationsPageOpened': true,
           'clickedSourceStillLive': true,
           'remoteSessionUnchanged': true,
-          'remoteReplyStateUnchanged': true,
         });
         await checkpoint('awaiting-page-capture', 'page-captured');
         expect(tester.takeException(), isNull);

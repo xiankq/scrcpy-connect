@@ -138,7 +138,7 @@ class PlatformDocuments(private val activity: Activity) {
         }
         val writable = mode == "exportDirectory" || mode == "exportFile"
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or if (writable) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
-        val op = Operation(id).also {it.picker = DocumentPickerReply(result); it.pickerMode = mode!!}
+        val op = Operation(id).also {it.picker = DocumentPickerReply(result); it.pickerMode = mode}
         operations[id] = op
         val code = requestCode++
         pickers[code] = op

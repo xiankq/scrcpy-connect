@@ -79,13 +79,11 @@ class Probe {
     this.adbExecutable,
     this.serial, {
     required this.calls,
-    required this.skipReceiver,
     required this.fixtureFile,
   });
   final String adbExecutable;
   final String serial;
   final bool calls;
-  final bool skipReceiver;
   final File fixtureFile;
   final events = <Json>[];
   final random = Random.secure();
@@ -225,75 +223,10 @@ class Probe {
       require(clock.elapsed < deadline, 'all fixture notifications visible');
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
-    require(own[0]!['canReply'] == true && own[1]!['canReply'] == false, own);
     require(
       events.any((item) => item['event'] == 'notifications.changed'),
       'real Binder callback',
     );
-    const text = '真实 RemoteInput interoperability';
-    final reply = await success('notifications.reply', {
-      'notificationId': own[0]!['id'],
-      'text': text,
-    });
-    require(
-      reply['acceptedBySystem'] == true && reply['delivered'] == null,
-      reply,
-    );
-    if (!skipReceiver) {
-      late Json received;
-      try {
-        received = decode(await fixture!.line());
-      } catch (_) {
-        final dump = const LineSplitter().convert(
-          (await adb(['shell', 'dumpsys', 'activity', 'broadcasts'])).stdout
-              as String,
-        );
-        final selected = <int>{};
-        for (var index = 0; index < dump.length; index++) {
-          if (dump[index].contains(tag)) {
-            selected.addAll([
-              for (
-                var i = max(0, index - 4);
-                i < min(dump.length, index + 12);
-                i++
-              )
-                i,
-            ]);
-          }
-        }
-        stdout.writeln(
-          'Receiver timeout for $tag; fixture exit=${fixture!.status}',
-        );
-        stdout.writeln(
-          selected.isEmpty
-              ? 'No matching fixture receiver or queued broadcast was present.'
-              : (selected.toList()..sort())
-                    .map((index) => dump[index])
-                    .join('\n'),
-        );
-        final log = const LineSplitter().convert(
-          (await adb(['logcat', '-d', '-t', '500'])).stdout as String,
-        );
-        stdout.writeln(
-          log
-              .where((value) => value.contains('registerReceiverWithFeature'))
-              .join('\n'),
-        );
-        rethrow;
-      }
-      require(
-        sameJson(received, {'event': 'reply.received', 'text': text}),
-        received,
-      );
-    }
-    await rejected('notifications.reply', 'reply_unavailable', {
-      'notificationId': own[1]!['id'],
-      'text': 'must not send',
-    });
-    await rejected('notifications.reply', 'authentication_required', {
-      'notificationId': own[2]!['id'],
-      'text': 'must not bypass auth',
-    });
     await rejected('notifications.open', 'notification_expired', {
       'notificationId': own[3]!['id'],
     });
@@ -330,9 +263,8 @@ class Probe {
       'notificationId': own[0]!['id'],
     });
     stdout.writeln(
-      'PASS: UID2000 live Binder notifications, original PendingIntent, RemoteInput submitted'
-      '${skipReceiver ? ' (standalone receiver delivery NOT verified)' : ' and received'}, '
-      'immutable/auth/cancelled/stale rejection, actual remote dismissal',
+      'PASS: UID2000 live Binder notifications, original PendingIntent, '
+      'cancelled/stale rejection, actual remote dismissal',
     );
     if (calls) await checkCalls();
     final stopped = await success('observation.set', {
@@ -483,11 +415,6 @@ Future<void> main(List<String> arguments) => cli(() async {
     ..addOption('adb')
     ..addOption('serial')
     ..addFlag('calls', negatable: false)
-    ..addFlag(
-      'skip-receiver',
-      negatable: false,
-      help: 'Do not assert receiver delivery; PI submission is still tested',
-    )
     ..addOption(
       'fixture',
       defaultsTo: p.join(
@@ -517,7 +444,6 @@ Future<void> main(List<String> arguments) => cli(() async {
     options['adb'] as String,
     serial,
     calls: options['calls'] as bool,
-    skipReceiver: options['skip-receiver'] as bool,
     fixtureFile: File(options['fixture'] as String).absolute,
   );
   Object? failure;

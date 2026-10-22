@@ -32,18 +32,13 @@ Android 11 对照和更广泛权限研究见
 字段含义依据 [Notification 官方 API](https://developer.android.com/reference/android/app/Notification#EXTRA_TEXT_LINES)。
 服务重新启动、通知更新或移除后，原动作引用会失效。
 
-打开使用原通知的 `contentIntent`，回复使用原 action 的 `RemoteInput`
-result key 和原 `PendingIntent`。仅有 mutable/free-form 原动作时返回
-`canReply=true`。`PendingIntent.send` 使用真实已安装 `com.android.shell`
-PackageContext，且校验 context 的包名与 UID 2000 归因；没有冒充 `android`
-包。锁屏和 action 的认证要求会阻止后台发送，不绕过目标应用认证。
-[RemoteInput 官方 API](https://developer.android.com/reference/android/app/RemoteInput#addResultsToIntent(android.app.RemoteInput%5B%5D,android.content.Intent,android.os.Bundle))、
-[原 action 的认证标记](https://developer.android.com/reference/android/app/Notification.Action#isAuthenticationRequired())
-是填充内容和认证边界的依据。
+打开使用原通知的 `contentIntent`。`PendingIntent.send` 使用真实已安装
+`com.android.shell` PackageContext，并校验 context 的包名与 UID 2000
+归因；没有冒充 `android` 包。锁屏会阻止后台打开，不绕过目标应用认证。
+产品不提供通知内快捷回复，需要回复时进入手机原应用。
 
-回复回执是 `status=acceptedBySystem, acceptedBySystem=true, delivered=null`。
-这只表示系统接受原动作，无法确认应用处理或消息服务送达；超时返回
-`result_unknown`，不自动重发，草稿由主控界面保留。
+系统接受打开请求只返回 `acceptedBySystem=true, located=true,
+applicationConfirmed=false`，不能确认原应用已完成业务处理。
 清除单独返回 `dismissed` 和 `markedRead=false`，不把移除通知说成消息已读。
 
 通话状态通过真实 shell 包归因注册
@@ -247,19 +242,15 @@ API 36 / Android 16 AVD 的通知、观察启停、剪贴板及系统提醒结�
 [验收记录](../../docs/implementation/validation.md)。虚拟 modem 能调用全局
 Telecom API 不代表能安全定位具体通话，产品仍拒绝这些全局控制动作。
 
-旧 JAR probe 的 `--skip-receiver` 仅验证系统接受 RemoteInput，不验证原应用收到。
-没有对应 ApplicationThread 的 shell receiver 被 AMS 拒绝注册，不能以系统回执
-代替接收证据。需要实际接收验证时使用独立的
-[通知接收夹具](../../tool/e2e/notification_fixture/README.md)：仅在隔离目标安装测试 APK，
-不进入产品分发，也不是用户使用通知功能的前提。
-
-合成接收器通过不代表真实聊天应用、消息服务、认证／锁屏或 OEM 已通过。
+独立[通知夹具](../../tool/e2e/notification_fixture/README.md)只用于在隔离目标创建真实
+通知、打开与撤回样本；它不进入产品分发，也不证明第三方应用、认证、锁屏或
+OEM 已通过。
 系统服务重启、多用户／工作资料、通话音频及长期资源表现仍需分别验收。
 
 ## 通知快照一致性回归
 
 `dart servers/companion/tests/notification-snapshot.dart --adb <绝对adb路径> --serial emulator-5556`
-使用已构建的独立通知APK（先运行 `dart tool/e2e/notification_fixture/build.dart`），拒绝覆盖既有安装。
+使用已构建的独立通知 APK（先运行 `dart tool/e2e/notification_fixture/build.dart`），拒绝覆盖既有安装。
 在显式隔离AVD发送BigText、Inbox和MessagingStyle原生通知，对照Android服务快照，
 验证展开标题与正文、同键更新、旧动作失效、源应用撤回及观察重新附着。
 finally精确清理本run通知、动作、安装、临时JAR和forward；不改变产品通知权限或AppOps。

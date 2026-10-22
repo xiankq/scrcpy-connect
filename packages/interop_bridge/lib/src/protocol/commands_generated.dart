@@ -458,11 +458,6 @@ enum InteropCommand {
     requiresVerifiedState: true,
     required: {'deviceId': ProtocolFieldType.string},
   ),
-  notificationsReply(
-    "notifications.reply",
-    requiresVerifiedState: true,
-    required: {'deviceId': ProtocolFieldType.string},
-  ),
   observationList("observation.list"),
   observationStart(
     "observation.start",

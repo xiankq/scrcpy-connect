@@ -27,10 +27,10 @@
 | 软件回退线程 | 对照默认 FFmpeg 与 slice，80次新像素；slice P50/P95约149/242ms，对照243/302ms | 保留slice回退，不全局强制软件解码或单线程；非高分辨率功耗证明 |
 | 播放器参数 | 单变量测试立即渲染、同步codec、image-reader、direct AVIO等 | 均没有充分收益，撤回；不能重复拼装最快样本当优化 |
 | 同连接编码目录 | 按精确Client缓存成功目录，暖校验约46–52ms；新传输仍重新探测 | 采用连接身份缓存；不复用远端进程或会话JAR，不说明持续输入改善 |
-| 冷启动编排 | 身份校验并行、枚举与正常清理合并shell；默认主屏目录未知时直接捕获，严格格式/名称/应用仍预检 | 采用有界路径；失败/取消清理、未知能力与真实首帧核验保留。见[冷启动](video-cold-start.md) |
+| 冷启动编排 | 身份校验并行、枚举与正常清理合并shell；默认主屏目录未知时直接捕获，严格格式/名称/应用仍预检 | 采用有界路径；失败/取消清理、未知能力与真实首帧核验保留 |
 | 普通Driver后端 | 同配置原生60输入256/359ms，软件slice108/153ms；原生首帧仍超1000ms | 证明该AVD播放器路径有独立开销，不据此把生产默认换软件 |
-| 显式codec异步 | 同配置A/B/A，以实际MediaCodec callback和系统trace核验生效 | 输入改善、首帧仍失败；AImageReader异步acquire不是codec异步证明。见[异步解码](android-decoder-async.md) |
-| 高动态与目标资源 | 保持画面与画质，目标2→4→2vCPU；每组24输入 | P50/P95为1866/2202、1584/1865、1793/2145ms，全部失败；增加AVD资源不是产品修复。见[动态取样](video-dynamic-measurement.md) |
+| 显式codec异步 | 同配置A/B/A，以实际MediaCodec callback和系统trace核验生效 | 输入改善、首帧仍失败；AImageReader异步acquire不是codec异步证明，机制证据见[首帧研究](../research/scrcpy-first-frame-performance.md#codec异步默认值必须以运行路径验证2026-10-18) |
+| 高动态与目标资源 | 保持画面与画质，目标2→4→2vCPU；每组24输入 | P50/P95为1866/2202、1584/1865、1793/2145ms，全部失败；增加AVD资源不是产品修复 |
 | raw窗口 | 单独比较PNG/raw，增加显式迟到窗口诊断 | 可取得慢场景分布；扩展期限强制diagnosticOnly/exit1，未提高硬预算 |
 | ADB消费/转发 | 按同PTS记录首字节交出、整包、raw写和relay；动态组raw写约0.05ms，整包→relay约0.13ms | 没有证据把约1秒上游年龄归为该转发段；`AdbStream`首字节观测不含整个WRTE接收 |
 | 逐WRTE观测 | 分开完整wire帧接收、路由与消费，保留慢header/payload边界 | 仅说明Transport等待，不能自动归因物理网络或把不同PTS关联 |
@@ -44,7 +44,7 @@
 | snapshot实现/生命周期 | 核对提交、callback、暂停顺序和原生空回调崩溃 | 旧本地保护已随fvp副本移除；不能据历史补丁称当前崩溃已修复，见工具链契约 |
 | 黑洞/单流失活 | 分别注入TCP ACK丢失、应用层停转、控制WRTE不确认与HTTP消费者停读 | 各自测试精确故障边界，见[连接健康](connection-health.md)；不是低延迟优化或真实无线漫游 |
 
-静态默认路径曾在旧依赖下3轮60输入达到首帧903/877/875ms、P50/P95147/225ms；高动态图案没有因此通过。当前原版切换后的运行证据见[验证记录](validation.md#构建与渲染证据)，不能把这组旧值当当前性能承诺。
+静态默认路径曾在旧依赖下3轮60输入达到首帧903/877/875ms、P50/P95147/225ms；高动态图案没有因此通过。当前原版切换后的运行证据见[验证记录](validation.md#性能证据)，不能把这组旧值当当前性能承诺。
 
 ## 时钟与帧身份
 
@@ -54,7 +54,7 @@ PTS用于帧身份，不直接当跨设备时钟。relay、onVideo与snapshot的
 
 相同PTS必须唯一对应目标事件、transport包、relay和decoded callback；缺失、重复、错误token/PID、跨会话或时间倒序均标不完整，不挑最近帧。最早包含新计数的编码帧可能早于轮询选中的snapshot，后者的draw→raw不能冒称最早源端延迟。
 
-诊断`traceFrames/traceClock/tracePackets`会影响观测或snapshot实现，标记diagnosticOnly。编码前缀档案有32MiB/8192帧上限，封存完整chunk，不留半帧；离线分析在计时结束后运行，不增加第二消费者。原始帧档案工具见 `tool/e2e/video_fixture/{capture_first_counter,analyze_first_counter,analyze_player_archive}.dart`，系统trace分析见[异步解码](android-decoder-async.md#可复现的边界观测)。
+诊断`traceFrames/traceClock/tracePackets`会影响观测或snapshot实现，标记diagnosticOnly。编码前缀档案有32MiB/8192帧上限，封存完整chunk，不留半帧；离线分析在计时结束后运行，不增加第二消费者。原始帧档案与系统 trace 分析入口见[E2E 工具](../../tool/e2e/README.md)。
 
 ## 普通调度基准与解码路径对照
 
@@ -109,7 +109,7 @@ flutter drive -d <主控serial> \
   --dart-define=CONNECT_PERF_MAX_P50_MS=200 --dart-define=CONNECT_PERF_MAX_P95_MS=300
 ```
 
-用同场景只更改decoder和输出目录进行对照。支持的值/参数以 benchmark 的setup校验为准，旧集成入口的参数不能直接移植。高动态/raw诊断额外参数见[动态取样](video-dynamic-measurement.md)。历史固定SDK哈希不再作为当前社区包的构建命令输入。
+用同场景只更改 decoder 和输出目录进行对照。支持的值和参数以 benchmark 的 setup 校验为准；高动态、raw 窗口和迟到窗口参数见[视频夹具](../../tool/e2e/video_fixture/README.md)。历史固定 SDK 哈希不作为当前构建输入。
 
 ## 未完成边界
 

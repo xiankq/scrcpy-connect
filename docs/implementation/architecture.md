@@ -1,94 +1,73 @@
-# 当前目录与模块职责
+# 当前实现职责
 
-本文记录实现的依赖方向与资源所有权。领域用语见根目录 [GLOSSARY.md](../../GLOSSARY.md)，架构决定见 [ADR](../adr/)，产品行为以 [交互规则](../../designs/prod/interaction-rules.md) 为准。
-已执行验证及其环境边界见[验证记录](validation.md)。
+本文维护实现依赖、资源所有权与恢复边界。领域用语见[词表](../../GLOSSARY.md)，架构取舍见[ADR](../adr/)，产品行为见[产品规格](../../designs/prod/README.md)，验证结果见[验收记录](validation.md)。
 
-## 依赖方向与目录
+## 依赖方向
 
-Flutter 页面通过 `AppDependencies` 调用 Dart `InteropBridge`，经 FRB 进入 Rust `Runtime`，再调用独立 `interop-adb`。设计系统不依赖互联业务。主控系统能力由平台适配实现；被控设备临时 JAR/helper 集中在 `servers/`。媒体字节通过本机流交给播放器，不在 JSON 事件通道逐帧复制。
+Flutter 页面通过 `AppDependencies` 调用 Dart `InteropBridge`，经 FRB 进入 Rust `Runtime`，再由独立 `interop-adb` 连接 adbd。设计系统不依赖互联业务；Android/iOS/macOS/Windows 的系统能力由各自适配层实现。媒体字节走本机流，不复制到 JSON 事件通道。
 
-`interop-adb` 暴露 transport、认证、service、shell、sync、forward 与发现等协议能力；`tcpip`／`usb` 返回原始 adbd 响应，不定义产品重连事件或应用默认超时。Dart `ConnectionPolicy` 区分产品编排参数与原生执行参数，仅后者传入 Runtime；同一进程重新附着须使用相同配置。`ConnectionSetupCoordinator` 组织配对后发现、USB 记录选择、转 IP 后重试及取消；`ReconnectionCoordinator` 拥有网络连接的自动重连计时、退避及前后台决策；USB 离线后等待显式系统授权，不进入网络重试。Runtime 通过 `adb.*` 命令提供单次执行、显式操作租约、探测事实及资源准入，保留健康探测与可信发现缓存。独立 Rust 宿主的兼容初始化只提供执行参数，不启动产品调度。
+`interop-adb` 拥有 transport、认证、service、shell、sync、forward 与发现协议，不定义产品重连或默认超时。Dart `ConnectionPolicy` 区分产品编排与原生执行参数；同一进程重新附着必须使用相同配置。`ConnectionSetupCoordinator` 编排配对、USB、转 IP 与取消，`ReconnectionCoordinator` 拥有自动重连计时和前后台决策。USB 离线后等待新的系统授权。
 
-产品默认设置由 Dart `applicationSettings` 注入持久化层；独立 Runtime 默认空设置。`VideoQualityPolicy` 在 Dart 合并全局与设备偏好，展开预设并生成界面选项；新画面不接受独立的质量覆盖。`DeviceQualityCoordinator` 将同设备的启动、偏好保存和当前画面重建串行，保存后逐个应用并分别报告成功、失败及已关闭跳过，不把保存成功当作全部应用成功。`VirtualDisplayPolicy` 将窗口比例、虚拟像素与质量上限分别处理，实际尺寸等比解析；Rust 按目标实体显示的逻辑宽度计算虚拟密度，避免降采样把手机布局变成平板。Rust 核验具体媒体参数和目标编码器后执行。`DeviceCapabilityPolicy` 根据原始探测事实与本机解码能力形成产品状态和说明，Rust 不生成这些产品说明。
+产品默认值由 Dart `applicationSettings` 注入；独立 Runtime 使用空设置。`VideoQualityPolicy` 合并设备偏好，`DeviceQualityCoordinator` 串行保存、重建和逐窗结果，`VirtualDisplayPolicy` 计算等比虚拟尺寸。`DeviceCapabilityPolicy` 把原始探测事实转成产品状态；Rust 只验证可执行条件。
 
-被控兼容按 ADB feature、系统接口与实际权限分别判断，不能把音频或独立应用窗口的下限施加到基础连接与整机远控。无宽元数据／目录协议的设备使用同一个临时原生文件服务；旧 shell 的未知退出码不能作为文件变更成功证据。固定服务端、部署授权、资源回收及当前验证范围见[被控兼容边界](android-target-compatibility.md)。
+Flutter 位于 `app/`；`packages/` 提供设计系统和 Dart/Rust 桥接；`crates/` 提供 Rust 领域实现；`servers/` 保存被控执行产物；`protocol/` 是命令契约来源。Dart workspace 共用根锁文件和 `.dart_tool`，页面布局与路由规则见[导航契约](flutter-navigation.md)。
 
-被控执行产物在 Android 安装包中由三种主控架构共享，Flutter 宿主准备私有资源缓存，Rust 校验后持有不可变原始字节并负责远端部署；其他宿主和独立 Rust 保留压缩内置资源。生成链、摘要与缓存规则见[共享打包](repository-tooling.md#被控执行产物的共享打包)。被控 ABI 与主控 ABI 独立。
-
-Flutter 应用位于 `app/`：`app/lib/`、`app/test/`、`app/integration_test/` 与平台 runner 共用 `app/pubspec.yaml`。根 `pubspec.yaml` 声明 Dart workspace 与仓库工具依赖，统一解析使用根 `pubspec.lock` 和 `.dart_tool`。`packages/`、`crates/`、`servers/`、`tool/` 保留各自构建职责。页面按业务父子层级放在 `app/lib/pages/`，入口、叶页命名及业务组件归属统一见[页面文件布局](flutter-navigation.md#文件布局)；共享服务、通用组件和路由使用 `services/`、`widgets/`、`router/`。路由生命周期见 [Flutter 页面与路由](flutter-navigation.md)。
-
-## 状态和资源所有权
+## 状态与资源所有权
 
 | 模块 | 拥有的状态与责任 |
 | --- | --- |
-| Rust Runtime | 初始化、持久授权身份、跨模块协调与命令分发 |
+| Rust Runtime | 初始化、持久授权身份、模块协调、命令分发与快照栅栏 |
 | ConnectionOwner | 已准入连接、每设备转换栅栏、去重的在途清理 |
-| ActivityOwner / activities | 会话、音源、传输活动的准入、引用、统一投影与停止；持有设备级保活租约所有者 |
-| KeepActiveOwner | 同设备仍开画面的保活意图、单个独立控制服务、连接与进程身份核验及取消释放 |
-| TransferStore | 传输检查点、按任务追加日志、持久化屏障与恢复校验 |
-| 领域实现 | 各类活动的协议流程、具体容器与资源释放 |
-| interop-adb writer | 每连接有界普通/优先帧调度、同流顺序与 ACK、有序 close 及独立控制响应额度 |
-| VideoTransport | 已认证本机中转、源PTS到达偏移检测、重置换段、有界呈现写入及播放器实时GOP上限 |
-| Dart InteropBridge | 核心观察者与本机输出协调；授权身份属于 Rust 持久存储 |
-| ConnectionSetupCoordinator | 配对、USB、转 IP 的产品步骤、重试和系统授权租约 |
-| DeviceCapabilityPolicy / VideoQualityPolicy / VirtualDisplayPolicy | 探测解释、设备共用质量偏好、预设与选项、虚拟窗口尺寸解析 |
-| DeviceQualityCoordinator | 同设备新画面与质量变更排序、当前窗口流重建及逐窗应用结果 |
-| ReconnectionCoordinator | 自动重连计时、退避、快照补偿与调度租约；释放时取消旧尝试 |
-| RuntimeInitialization | 复用进程 FRB 绑定；界面重新附着保持原身份目录 |
-| bootstrapApplication | 配置完成前持有 bridge；失败等待释放，成功交给 ProviderScope |
-| AppController | 应用级不可变状态投影、订阅和打开页面的设备音源租约 |
-| RemotePresentation | 单个远控路由的会话绑定、输入许可、可见性、恢复及启动结果 |
-| RemoteInputQueue / scrcpy ControlInput actor | Flutter 单页输入顺序与最新待发送 move；Rust 有界录取、按协商 payload 批写、边缘屏障、期限和失败撤销 |
-| SessionViews | 页面对尚未关闭控制窗口的呈现租约、精确关闭及终止屏障 |
-| PortableVideo/AudioOutputs | 本机播放器、呈现回执与释放 |
-| Android ProcessFlutterHost | 进程 FlutterEngine 与通道；Activity 提供当下 UI/授权 |
+| ActivityOwner | 会话、音源、传输活动的准入、引用、投影与停止 |
+| KeepActiveOwner | 同设备仍开画面的保活意图、独立控制服务及按连接/PID 核验的释放 |
+| TransferStore | 传输检查点、任务日志、持久化屏障与恢复校验 |
+| interop-adb writer | 普通/优先队列、单流顺序、ACK、burst credit 与有序关闭 |
+| VideoTransport | 本机中转、源 PTS 偏移检测、换段、有界写入与实时 GOP 上限 |
+| Dart InteropBridge | 核心观察者、本机输出协调和启动重新附着 |
+| AppController | 应用级不可变状态、可见页面焦点、页面与设备音源租约 |
+| RemotePresentation | 单窗口的会话绑定、输入许可、可见性、恢复与启动结果 |
+| RemoteInputQueue | Dart 单页串行输入与每触点最新 move；Rust 负责有界录取、批写和失败撤销 |
+| SessionViews / Media outputs | 未关闭窗口租约、精确关闭、播放器回执与释放 |
+| Android ProcessFlutterHost | 进程 FlutterEngine、Activity 与当下系统授权 |
 
-慢设备清理在独立任务进行；同一设备仍受转换栅栏约束。旧清理不能释放新连接，重连不能覆盖尚未发布的离线结果。Activity 重建与进程死亡分别验收；后者终止内存活动。
+同一 Client 上的流与设备连接分别拥有生命周期；活动、页面租约和播放器也不能互相代替。旧清理、旧回执和旧连接结果不得作用于新连接。`connectionId` 只标识当前存活连接，不持久化。
 
-连接快照中的 `connectionId` 只标识当前存活连接，不持久化。`DeviceScreenCoordinator` 只维护连接核验基线，ADB连接、断开与重连不触发屏幕动作。远控页按每次明确新建画面意图执行一次设备唤醒，`DeviceScreenPolicy` 合并同设备整机与独立窗口归属；仅主动关闭最后窗口按偏好锁屏。重新附着、后台和遮挡不触发。点亮请求由 Runtime 核验连接标识，旧连接迟到请求不能作用于新连接。保持唤醒独立于点亮／锁屏；Rust 的设备级 `KeepActiveOwner` 合并仍开画面（含暂时暂停）的生命周期，偏好变更立即协调已有画面。保活使用固定 scrcpy 的独立 control-only 服务，不绑定 capture 或虚拟任务代次，不随质量重建释放；最后关闭、禁用和断线取消自身服务，按原连接及 PID/start/nice-name 核验回收，不改永久超时、不发送亮屏／锁屏动作。应用失败独立于已保存偏好和成功画面；成功明确清空旧错误。窗口关闭事实与保活释放核验分别返回，未确认时保留租约并发布设备事件，界面在关闭后提示而不复活窗口。Rust 另持有媒体 scrcpy 控制通道与临时显示覆盖租约。显示租约归属具体 capture 代次，关闭先禁止后续尺寸请求，再等待该代次已经准入的实际系统尺寸操作结束；只恢复自身已应用或尚在提交的尺寸，保留外部变更。请求取消、进程身份复用和质量重建均不能转移恢复责任给另一代次。
+## 连接与屏幕
 
-Runtime 在私有存储中维护默认全局授权身份及显式设置的设备独立身份，TLS 配置按实际身份缓存；替换身份只失效使用该身份的连接、活动及在途准入，旧身份的迟到连接不能附着。私钥通过专用导入或新建设备尝试的 identity 参数输入，不进入普通设置、快照和事件。设备已有绑定身份只读；配置候选在同一目标握手核验成功前不替换原端点。连接的加密策略仍单独判断。可选设备信息由 Runtime 拥有的有界队列处理，最多四个查询并行，电量／充电每30秒重新入队；结果仅能更新同一存活连接并携带采集时间。首卡不将过期或查询失败的电量显示为实时；电量必须处于有效level／scale范围，接入电源不替代正在充电的证据，未知状态不作推断，常量定义见[Android BatteryManager](https://developer.android.com/reference/android/os/BatteryManager)。设备数据页的只读命令使用有界查询并在返回前复核连接；动态值离线不复用，部分失败与未知独立呈现。Runtime 释放时取消在途任务并丢弃排队请求。连接准入仍完成必要身份检查。
+连接快照由 Runtime 栅栏发布。`DeviceScreenCoordinator` 只核对连接基线，连接、断开、重连和重新附着都不触发屏幕动作。每个明确新建的远控窗口至多尝试一次唤醒；`DeviceScreenPolicy` 按同设备整机与独立窗口计数，只有主动关闭最后窗口才按偏好锁屏。后台、遮挡、短断线和重新附着不触发唤醒或锁屏。
 
-传输持久状态由 `TransferStore` 统一写入：`transfers.json` 为版本化检查点，`transfers.journal` 为连续序号的任务变更；兼容读取原有数组格式。逐项完成与提交前 `finalizing` 保留持久化屏障，定期按存量阈值压缩日志，不以延迟保存换吞吐。检查点先同步文件、原子替换并同步目录，再截断旧日志；失败或取消中的追加禁止继续复用，损坏或截断日志拒绝猜测恢复。`finalizing` 恢复仍为 `result_unknown`，分享来源只在相关任务持久化后回收。主机回归范围见[验证记录](validation.md#协议与持久化回归)。检查点和 journal 共同构成最新记录；不能只复制检查点或删除 journal 进行版本回退。
+保持唤醒独立于点亮/锁屏，使用固定 scrcpy 的 control-only 服务。最后窗口关闭、偏好禁用或断线时取消该设备服务；回收必须核对原连接以及 PID、starttime 和 nice-name。没有打开窗口时，保持连接不产生页面或声音租约。
 
-画面质量重建保留逻辑sessionId和真实应用task，替换所属捕获进程及虚拟display，不重新启动应用。captureGeneration标识捕获所有者，renderer generation标识同捕获内CSD与本机解码输出；两者分别核验，旧捕获的迟到ready不能因renderer代次较大而更新新窗口。重建开始先发布qualityRebuilding并撤销旧输入绑定；新画面验证前禁止新的输入、尺寸与启动操作，释放按键／指针和明确关闭仍可用。恢复旧捕获、应用新捕获和不可恢复失败分别有明确终态，失败不重放打开请求。同一窗口保留的旧纹理不能被标记为新捕获首帧。资源达到窗口上限时，只为已拥有的同一逻辑窗口准入一次串行替换；普通新开窗口仍受原上限约束。
+Runtime 持有默认全局授权身份和设备专属身份。替换身份只失效使用该身份的连接、活动与在途准入；私钥不进入普通设置、快照或事件。设备已有绑定身份只读，候选配置在同一目标握手成功前不替换原端点。
 
-当前官方 scrcpy JAR 不提供协作捕获暂停：页面暂停保留会话并停止本地呈现，`capturePaused=false`，恢复用 `RESET_VIDEO` 取得新画面；旧扩展 JAR 的暂停回执不适用于这一路径。
+可选设备数据由 Runtime 有界查询并携带采集时间。结果只更新同一存活连接；离线或过期数据不冒充实时值。电量、充电和未知状态分别判断。
 
-远控页面租约、控制会话和设备连接具有不同生命周期。AppController 按设备合并页面租约；最后一个页面释放时立即撤销该设备声音启动意图，并精确停止对应音源。没有打开窗口时保持连接不产生页面或声音租约。剪贴板协调器拥有前台同步代次，设备偏好与可见页面焦点决定对象；切换后旧轮询、系统读回及远端事件失效。具体用户行为统一见交互规则。
+## 恢复、持久化与媒体
 
-应用级后台由 `ApplicationBackgroundPolicy` 在进入APP、恢复连接之前按保存偏好请求。Android `ConnectionService` 的 connectedDevice FGS 与 `AudioPlaybackService` 的 mediaPlayback FGS 分别拥有通知与资源，无画面不停止连接服务。显式关闭或系统 Task Manager stop 持久化停止状态，自动请求不清除它；重连协调器在首个恢复快照前建立停止屏障，只有用户明确操作才能重新准入对应设备。后台不自动创建画面或音源。
+`TransferStore` 以版本化 `transfers.json` 检查点加连续序号 journal 保存任务。检查点先同步文件、原子替换并同步目录，再截断日志；损坏或截断日志拒绝猜测恢复。`finalizing` 在重启后保持 `result_unknown`，未知写入不自动重放。
+
+画面质量重建保留逻辑 `sessionId` 和真实应用 task，只替换捕获进程与虚拟 display。`captureGeneration` 标识捕获所有者，renderer generation 标识同捕获内输出；旧 generation 的迟到 ready、输入和尺寸结果必须失效。重建期间撤销旧输入绑定，只允许释放按键、指针和明确关闭。
+
+当前官方 scrcpy JAR 不提供协作捕获暂停。页面暂停保留会话并停止本地呈现，`capturePaused=false`，恢复通过 `RESET_VIDEO` 取得新画面。旧扩展 JAR 的暂停回执不适用于此路径。
+
+后台由 `ApplicationBackgroundPolicy` 在应用进入时按偏好请求。Android 连接 FGS 与音频播放 FGS 分别拥有通知和资源；没有画面不停止连接服务。系统 Task Manager stop 持久化为停止状态，只有用户明确操作才能重新准入，后台恢复不自动创建画面或声音。
 
 ## 契约与生成
 
-`protocol/commands.json` 生成 Dart/Rust 命令枚举、字段形状和核验策略。统一 codec 负责版本、UTF-8 请求限额、命令和结果信封；执行层负责权限、范围和 generation；产品默认值与编排由 Dart 负责。保留 String/JSON 兼容入口与 typed execute 入口，动态业务 payload 尚未全部变为静态 DTO。
+`protocol/commands.json` 生成 Dart/Rust 命令枚举、字段形状和核验策略。统一 codec 负责版本、UTF-8 限额、信封和范围；执行层负责权限与 generation。新增活动通过 activities 投影和停止，新增远控转换通过 `RemotePresentation`，页面不另建平行状态。
 
-`TransportKind` 在保存、导出与恢复中区分 tcp、wireless、tls、usb。TLS 的明确授权拒绝映射为结构化错误，产品策略不解析展示文本。新增活动通过 activities 统一投影和停止；新增远控转换由 RemotePresentation 协调，页面不另建平行恢复状态。
+`TransportKind` 在保存、导出和恢复中区分 tcp、wireless、tls、usb。TLS 授权拒绝保留结构化错误，产品策略不解析展示文本。生成文件与来源一并维护，修改来源后重新生成。
 
-生成文件与来源一起维护，修改来源后重新生成。共享命令、FRB、Dart builder 和 companion 源码/产物检查由 `tool/check.sh` 汇总；视觉 token 的官方解析与自有 Dart emitter、社区原版 fvp 的依赖边界见 [工具链契约](repository-tooling.md)。
-
-共享播放器使用 pub.dev 精确版本 `fvp: 0.39.1`，不维护本地 fork 或原生补丁。MDK 的实际来源、版本与下载行为由该发布包的平台构建文件决定；锁定 Dart 包不等于所有平台 MDK 二进制也已锁定。普通视频像素回读由 Bridge 的原生适配核验空结果、大小与生命周期，复用诊断回读的请求所有权，逐帧诊断仍按需开启；不调用上游未判空的 MdkSnapshot。历史本地补丁的 snapshot 接缝与 MDK 固定回归不再是当前门禁，普通宿主产物检查继续保留；原版回调与适配边界见工具链契约。
+共享播放器使用 pub.dev 原版 `fvp: 0.39.1`，不维护本地 fork。MDK 的实际来源、版本和下载行为由该发布包的平台构建文件决定。Bridge 通过原生有界回读处理普通快照，逐帧诊断按需开启；不调用上游未判空的 `MdkSnapshot`。
 
 ## 材质启动与渲染
 
-`app/lib/main.dart` 在启动 `try` 内先等待 `GlassMaterial.initialize()`，再调用 `bootstrapApplication()`，生产应用通过 `GlassMaterial.wrap` 接入 `liquid_glass_widgets` 的主题亮度和系统辅助偏好。支持 shader 时初始化失败进入启动错误页；实际支持 `ImageFilter` shader 时使用 premium 光学路径，不支持时使用明确的磨砂回退。降低透明度、高对比或显式实体面使用不透明内容并移除光学与模糊；减少动态效果另行关闭弹性位移。
+`app/lib/main.dart` 先初始化 `GlassMaterial`，再启动 `bootstrapApplication`。支持 shader 时使用 premium 光学路径，不支持时使用明确的磨砂回退；降低透明度、高对比或实体偏好移除光学与模糊，减少动态效果关闭弹性位移。
 
-`Glass` 和工具组保留项目的材料接口。项目不再定义 `GlassIconButton`、`GlassTabBar` 或 `GlassDestination` 组件；页面直接构造库的 `GlassIconButton` 与 `GlassTabBar.bottom`。底部导航由官方组件持有目的地手势、焦点、语义与移动镜片。浅色premium由设计系统的 `NavigationSelectionLens` 按绘制顺序组合三个公开组件：`AdaptiveGlass` 绘制唯一的regular轨道，`AnimatedGlassIndicator` 绘制静止选中镜片，原版 `GlassTabBar.bottom` 绘制glyph并管理交互。`navigationBarSettings` 将该前景栏的厚度、模糊设为零，glass/backer透明、body为clear、shadow为空，进入锁定版本premium渲染器的无光学快速路径，避免重复绘制轨道；仅透明着色不足以关闭原轨道。静止镜片位于glyph之前、原选中ClipPath/saveLayer之外，关闭背景填充、扩张与pinch；原静止选中填充透明化。按下时无论是否减少动态均撤下静止镜片，让位给原版移动镜片；释放后等待锁定版本弹簧尾程，再挂回静止镜片。该等待不是上游动画完成回执，升级库时需复核。暗色、降低透明度及不支持premium的分支保留原版轨道、内容与选中面，不使用零光学配置。当前组合的实际成像范围见[后续运行记录](glass-components-2026-10-20.md#2026-10-21-静止镜片与固定选项组后续)。
+页面直接使用库的 `GlassIconButton`、`GlassTabBar.bottom` 和 `GlassMenu`。浅色 premium 底栏由 `NavigationSelectionLens` 组合 regular 轨道、静止镜片和官方前景栏；暗色、辅助偏好与不支持 premium 的分支保留官方轨道和选中面。该组合依赖锁定版本的零光学快速路径，升级库时需重新核对。
 
-普通材料与工具组仍在局部 `GlassSurfaceGroup` 中共享背景读取和融合形状，分组不跨 Navigator 或覆盖不同路由。实体内容卡片与列表使用原内容材料，固定设置选项通过应用层 `SettingsGroup` 组合实体 `ContentPanel`，行首功能图标复用 `ListIconBadge`；动态文件、通知与任务结果不因此统一包成设置组。整片材料的厚度、折射率、色散、着色、模糊和光照由生成 token 映射，角度按后端要求转换；`refractionWidth` 用于局部融合距离，不作为厚度的替代值。导航静止与交互镜片由 `GlassMaterial.navigationLensSettings` 共用库的 clear 基线，不套用整栏 regular 的着色与模糊。镜片采样包含整栏之后的合成背景及已绘制内容，公开接口不能单独挖去整栏底色/磨砂；不通过源码副本或自制 shader 补足这一能力。
-
-官方主题在应用 builder 中统一设置交互 stretch；减少动态效果时为零，按钮公开参数同步关闭缩放与 anchor stretch。底栏在减少动态时使用公开 `glowOnly`、无缩放、无镜片扩张、pinch与内容放大；按住时仍撤下静止镜片，避免与上游直接切换的镜片重叠。透明度/高对比度偏好映射到官方 accessibility scope；实体分支使用 minimal、blur0 与实体色。组件专属尺寸和导航选中色在实际调用点配置。真实渲染及辅助偏好的实际验收边界见[后续运行记录](glass-components-2026-10-20.md#2026-10-21-静止镜片与固定选项组后续)。
-
-光学层拥有轮廓与子内容裁剪，外层不叠加径向保护遮罩或固定白边。Pencil GLSL 是静态设计投影，与 Flutter 渲染分别核对。真实 shader、回退、辅助偏好与动态性能的验证结果见[设计与实现对照](design-fidelity.md)。
-
-`PageFrame` 将视口延伸至透明页头和底部导航背后，`PageChromePadding` 的避让由滚动内容消费；分组列表消费后清空下游作用域，自定义 sliver 使用对应首尾占位，非滚动状态使用 `PageChromeBody`。标题保护由正文 Stack 最后绘制，渐退限定在安全区与实际页头内，末端止于栏底，首屏内容通过内边距避让；不放入前景玻璃组或给 AppBar 添加底色。固定路径或搜索区域与列表通过同一嵌套滚动协调，不另占页头外的固定条带。页头拖动交给仍挂载的正文滚动对象，不能保留已释放的 `ScrollPosition`。
-
-对话框、底部抽屉、菜单和提示统一通过设计系统入口呈现。框架持有路由、焦点、返回结果、键盘和滚动控制器；库的组件持有材料。菜单使用 `GlassMenu`，对话框与 Tooltip 的生产表面使用 `GlassCard` 及独立采样层，保留现有框架布局；库的固定对话框或抽屉布局不能接管项目的键盘避让和业务滚动。抽屉以受约束的垂直圆角透镜承载，避免后端容器内部布局重新接管业务滚动。交互与材质化所需的纹理余量由生成 token 与实际尺寸推导，传给负责采样的局部光学层，不改变命中或内容尺寸。Tooltip 保留框架调度、语义与穿透行为，并以同一显示动画驱动玻璃可见性。工具组、视频控制和退出把手的按压观察器只负责可打断形变和光照，不抢占内部动作与业务拖拽。
-
-通过 OverlayPortal 呈现的菜单和 Tooltip 仍可能继承触发位置的上下文，不能据此复用触发工具组的玻璃平面。它们使用 `GlassSurfaceGroup.isolated` 建立本地光学层与独立背景采样键，采样范围归覆盖层自身；材质化作用域位于该本地层之外，使 shader 可见性随显示动画更新。
-
-现成组件接入、保留适配的原因及本次验证环境见[组件核查记录](glass-components-2026-10-20.md)。
+普通材料通过局部 `GlassSurfaceGroup` 共享背景采样，不跨 Navigator。固定设置行使用实体 `ContentPanel`/`SettingsGroup`，动态文件、通知和任务列表保持开放内容流。`PageFrame` 把页头和底栏延伸到透明背景之上，滚动内容通过 `PageChromePadding` 消费避让；对话框、抽屉、菜单和提示统一经设计系统入口创建。
 
 ## 平台交付边界
 
-仓库当前不配置自动 CI/CD。`tool/check.sh --android` 供手动执行工程检查与三 ABI Android APK 核验；`tool/build_host.dart` 由对应宿主手动执行 iOS、macOS、Windows 整包及库检查。平台功能支持、物理设备/OEM、媒体性能、后台回收和生产密码提供器分别留证。
+仓库不配置自动 CI/CD。`tool/check.sh` 执行主机检查，`tool/check.sh --android` 额外核验三 ABI APK；`tool/build_host.dart` 手动构建对应宿主。整包编译、协议夹具、模拟器和物理设备运行是不同证据，详见[验收记录](validation.md)。

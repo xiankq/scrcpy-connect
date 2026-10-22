@@ -96,42 +96,39 @@ void main() {
     },
   );
 
-  test(
-    'duplicate verified snapshots cannot forget that a view resumed capture',
-    () async {
-      final events = StreamController<Json>.broadcast(sync: true);
-      final commands = <String>[];
-      final container = scope((command, [params = const {}]) async {
-        commands.add(command);
-        return {};
-      }, events: events.stream);
-      final notifier = container.read(appControllerProvider.notifier);
-      final view = notifier.claimSessionView('live', visible: true);
-      final snapshot = <String, dynamic>{
-        'devices': <Json>[],
-        'settings': <String, dynamic>{},
-        'shares': <Json>[],
-        'sequence': 1,
-        'sessions': [
-          {'sessionId': 'live', 'status': 'paused', 'capturePaused': true},
-        ],
-      };
-      events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
-      expect(notifier.snapshot().reconciliationPending, isTrue);
-      events.add({'type': 'state.resynced', 'data': snapshot});
-      expect(notifier.snapshot().reconciliationPending, isFalse);
-      await view.resume();
-      events.add({'type': 'state.resynced', 'data': snapshot});
-      await view.release();
-      expect(commands, ['session.resume', 'session.pause']);
-      expect(
-        () => notifier.snapshot().reconciledSnapshot!['sequence'] = 2,
-        throwsUnsupportedError,
-      );
-      container.dispose();
-      await events.close();
-    },
-  );
+  test('duplicate verified snapshots cannot forget that a view resumed presentation', () async {
+    final events = StreamController<Json>.broadcast(sync: true);
+    final commands = <String>[];
+    final container = scope((command, [params = const {}]) async {
+      commands.add(command);
+      return {};
+    }, events: events.stream);
+    final notifier = container.read(appControllerProvider.notifier);
+    final view = notifier.claimSessionView('live', visible: true);
+    final snapshot = <String, dynamic>{
+      'devices': <Json>[],
+      'settings': <String, dynamic>{},
+      'shares': <Json>[],
+      'sequence': 1,
+      'sessions': [
+        {'sessionId': 'live', 'status': 'paused', 'capturePaused': true},
+      ],
+    };
+    events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
+    expect(notifier.snapshot().reconciliationPending, isTrue);
+    events.add({'type': 'state.resynced', 'data': snapshot});
+    expect(notifier.snapshot().reconciliationPending, isFalse);
+    await view.resume();
+    events.add({'type': 'state.resynced', 'data': snapshot});
+    await view.release();
+    expect(commands, ['session.resume', 'session.pause']);
+    expect(
+      () => notifier.snapshot().reconciledSnapshot!['sequence'] = 2,
+      throwsUnsupportedError,
+    );
+    container.dispose();
+    await events.close();
+  });
 
   test('dependency replacement invalidates old recovery owners and ignores late snapshots', () async {
     final oldEvents = StreamController<Json>.broadcast(sync: true);

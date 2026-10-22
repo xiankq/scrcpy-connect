@@ -786,7 +786,7 @@ void main() {
   );
 
   testWidgets(
-    'background resync keeps capture paused until visibility returns',
+    'background resync keeps local presentation paused until visibility returns',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final events = StreamController<Json>.broadcast(sync: true);
@@ -1248,7 +1248,7 @@ void main() {
     },
   );
   testWidgets(
-    'focus loss releases a held physical key once before capture pause and ignores its late key-up',
+    'focus loss releases a held physical key once before pausing presentation and ignores its late key-up',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final commands = <(String, Json)>[];

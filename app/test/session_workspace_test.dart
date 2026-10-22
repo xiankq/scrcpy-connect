@@ -234,13 +234,17 @@ void main() {
       final calls = <(String, Json)>[];
       final events = StreamController<Json>.broadcast();
       final resumed = Completer<Json>();
+      final resumeRequested = Completer<void>();
       final controller = createTestController((
         command, [
         params = const {},
       ]) async {
         calls.add((command, params));
         if (command == 'session.list') return {'sessions': sessions};
-        if (command == 'session.resume') return resumed.future;
+        if (command == 'session.resume') {
+          if (!resumeRequested.isCompleted) resumeRequested.complete();
+          return resumed.future;
+        }
         if (command == 'session.pause') {
           return {'sessionId': params['sessionId'], 'status': 'paused'};
         }
@@ -269,10 +273,8 @@ void main() {
           ),
         );
         await tester.pump();
-        for (var attempt = 0; attempt < 20; attempt++) {
-          await tester.pump(const Duration(milliseconds: 50));
-          if (calls.any((call) => call.$1 == 'session.resume')) break;
-        }
+        await tester.pump();
+        expect(resumeRequested.isCompleted, isTrue);
         expect(find.byType(RemotePage), findsOneWidget);
         expect(
           calls

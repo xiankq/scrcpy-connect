@@ -1,6 +1,6 @@
 /// Opt-in host captures for the pages touched by the October design refinement.
 /// Run from app/ with DESIGN_REFINEMENT_CAPTURE_DIR=/tmp/capture flutter test
-/// test/design_refinement_capture_test.dart. This is a capture tool, not a golden
+/// test/design_refinement_capture.dart. This is a capture tool, not a golden
 /// approval: production widgets use the host's software/frosted glass fallback.
 library;
 

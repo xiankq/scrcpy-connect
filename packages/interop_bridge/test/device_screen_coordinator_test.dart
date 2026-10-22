@@ -12,7 +12,6 @@ Map<String, dynamic> snapshot(int sequence, String? token) => {
   'sequence': sequence,
   'devices': [device(token)],
   'settings': {
-    'backgroundConnection': true,
     'deviceSettings': {
       'phone': {'wakeOnConnect': true},
     },

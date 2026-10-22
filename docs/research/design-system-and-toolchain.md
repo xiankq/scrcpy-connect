@@ -1,6 +1,6 @@
 # 设计系统与 Pencil 工具链依据
 
-本报告说明格式、工具和候选比较的边界。当前视觉角色以 [design.md](../../designs/design.md)为准，实际组件与后端契约见[架构](../implementation/architecture.md)，生成命令和受支持 token 由[工具 README](../../tool/design_tokens/README.md)维护。画布清点、截图版本和光学证据统一见[视觉审计](../implementation/design-fidelity.md#静态布局核查)，不在研究中缓存另一组页数或组件数。
+本报告说明格式、工具和候选比较的边界。当前视觉角色以 [design.md](../../designs/design.md)为准，实际组件与后端契约见[架构](../implementation/architecture.md)，生成命令和受支持 token 由[工具 README](../../tool/design_tokens/README.md)维护。画布清点、截图版本和光学证据统一见[视觉审计](../implementation/design-fidelity.md#静态核查)，不在研究中缓存另一组页数或组件数。
 
 ## DESIGN.md 格式与生成职责
 

@@ -1,7 +1,7 @@
 {
   "artifact": {
-    "sha256": "4e6edec6257094d2ab9992e62020ba15a72615ac63ad09e3d7d71af42b402c7d",
-    "size": 64639
+    "sha256": "4b3f470b9fdd364e9bf9ca1a534747b5824bc00ad1990f88d1e61c46197ea07b",
+    "size": 62819
   },
   "sources": {
     "../tooling.dart": "1f2d1917f8bd3bc4bf1fc9776ad45bd593ee99047f6f022008dd54518cce79a5",
@@ -10,7 +10,7 @@
     "src/com/interop/companion/Apps.java": "a0d3c96e1d95b366d4be1cd309c8f2e59c23ee67fbb5062168d6c3865fd62c38",
     "src/com/interop/companion/CallServices.java": "1acc01056621133acde69872286ff7831ffa8730f37bef700137d06751654df5",
     "src/com/interop/companion/ClipboardAppOps.java": "e5c9e491e025fd3db6c63d64948def123dbce84d0d2ec12e347fd9578ed263d9",
-    "src/com/interop/companion/Main.java": "9328ccb8592a2c12203e8c716f8ad51b2ec887d0144953f1bc1f8c6b62d56a83",
+    "src/com/interop/companion/Main.java": "ff994c19ea0c92656814bc4c690c7bbed7852cb7c7a9f30842802f5a00eea776",
     "src/com/interop/companion/MediaJobs.java": "79395e2629997411fd2ef5325366e40fe3112f4ef07148cc226948e90657d3f3",
     "src/com/interop/companion/NotificationContent.java": "1cf15a180c0a499245fbc817aa7ef4b0ec46a1f7cd293aa5ca24e9ca3a98cb84",
     "src/com/interop/companion/Processes.java": "bb0a018e3cf3a9a3de1f1f64a17e24597660d87078f446037d27aa145593c866",

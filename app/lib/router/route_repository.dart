@@ -77,18 +77,6 @@ class RouteRepository {
     return matches.first;
   }
 
-  Future<Json> notification(String deviceId, String id) async {
-    final matches = objects(
-      (await controller.execute(InteropCommand.notificationsList, {
-        'deviceId': deviceId,
-      }))['notifications'],
-    ).where((n) => n['id'] == id);
-    if (matches.isEmpty) {
-      throw const RequestFailure('missing_notification', '这条通知已失效，请返回通知列表核对。');
-    }
-    return matches.first;
-  }
-
   Future<Json> share(String id) async {
     await controller.loadPendingShares();
     final matches = controller.snapshot().pendingShares.where(

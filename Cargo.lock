@@ -1114,7 +1114,6 @@ dependencies = [
 name = "interop-bridge"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "flutter_rust_bridge",
  "interop-core",
  "log",
@@ -1129,7 +1128,6 @@ dependencies = [
 name = "interop-core"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "base64",
  "bytes",
  "flate2",

@@ -14,7 +14,6 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 uuid = { version = "1", features = ["v4"] }
 serde_json = "1"
-anyhow = "1"
 log = "0.4"
 
 [dev-dependencies]

@@ -1,6 +1,6 @@
 # Android MDK / FFmpeg 缩包可行性
 
-基线测量对应提交 `8853d975b00abb157b55d05bf3f4a794fef84416`。共享资源、字幕库链接与压缩候选的后续结果见[缩包验收](../implementation/android-packaging.md#三架构包体对照)。
+基线测量对应提交 `8853d975b00abb157b55d05bf3f4a794fef84416`。共享资源、字幕库链接与压缩候选的构建约束见[Android 打包](../implementation/android-packaging.md#构建与核验)。
 
 核查日期：2026-10-19。本文包含既有 debug 产物检查、上游资料研究、ARM64 release 辅助分析及三 ABI release 交付基线构建，没有构建裁剪版、安装应用或完成设备验收。用户要求通用 APK，单 ABI 数据仅用于拆解来源，不能替代交付包体积。当前依赖规则仍以[工具链契约](../implementation/repository-tooling.md#社区原版-fvp-0391)为准；以下候选不代表已采用的新规范。
 
@@ -96,7 +96,7 @@ Android 改用系统 MediaCodec / AudioTrack 是更大的架构候选，可减�
 
 嵌入产物合计 **6.789 MiB，约占 Rust ELF 的 49.97%**，位于约 7.123 MiB 的 `.rodata` 中；`.text` 为 5,278,580 字节。scrcpy 的两处偏移为 `0xbc395` / `0x3a6b84`，companion 为 `0x38dd9e` / `0x67858d`，每处均匹配完整文件，不只是命中相同字符串。
 
-基线中 scrcpy 与 companion 各通过 `const SERVER: &[u8] = include_bytes!(...)` 引入；额外完整副本共3,012,783字节（2.873MiB）。这是当时二进制的候选收益上界，后续共享资源实现与实测另见[缩包验收](../implementation/android-packaging.md#三架构包体对照)。
+基线中 scrcpy 与 companion 各通过 `const SERVER: &[u8] = include_bytes!(...)` 引入；额外完整副本共3,012,783字节（2.873MiB）。这是当时二进制的候选收益上界，后续资源打包规则见[Android 打包](../implementation/android-packaging.md#构建与核验)。
 
 另一个候选是无损压缩后内嵌、部署前恢复原始字节。只读内存 zlib level 9 测试中，单份 scrcpy 产物从 2,955,092 字节降到 968,185 字节，companion 从 57,691 降到 29,007，四 helper 合计从 1,093,196 降到 599,970；这尚未扣除解压代码和运行成本，也未实现产物摘要与部署校验，不能当作已实现节省。应保留原始供应链输入及精确还原字节。
 

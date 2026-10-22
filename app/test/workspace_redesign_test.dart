@@ -377,7 +377,6 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
-      final metrics = <String>[];
       for (final (width, scale) in [(402.0, 1.0), (280.0, 2.0)]) {
         await tester.pumpWidget(const SizedBox());
         tester.view.physicalSize = Size(width, 1800);
@@ -439,11 +438,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(reads, before + 1);
         expect(tester.takeException(), isNull);
-        metrics.add(
-          '$width/$scale shortcuts=$shortcutsRect caption=$captionRect icon=$iconRect refresh=$refreshRect allApps=$allAppsRect',
-        );
       }
-      debugPrint('Workspace section layout: ${metrics.join('; ')}');
       await tester.pumpWidget(const SizedBox());
     },
   );

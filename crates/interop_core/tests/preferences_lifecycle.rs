@@ -77,10 +77,7 @@ async fn file_browser_preferences_survive_runtime_restart() {
     )
     .await
     .unwrap();
-    let settings = reopened
-        .invoke("settings.get", json!({}))
-        .await
-        .unwrap();
+    let settings = reopened.invoke("settings.get", json!({})).await.unwrap();
     assert_eq!(settings["fileViewMode"], "list");
     assert_eq!(settings["fileSortKey"], "modified");
     assert_eq!(settings["fileSortAscending"], false);

@@ -85,7 +85,6 @@ void main() {
                 'appName': '消息应用',
                 'title': '当前消息',
                 'body': '仍然显示原内容',
-                'canReply': true,
               },
               {
                 'id': 'useful-summary',
@@ -110,7 +109,6 @@ void main() {
       expect(find.text('空白汇总'), findsNothing);
       expect(find.text('当前消息'), findsOneWidget);
       expect(find.text('仍然显示原内容'), findsOneWidget);
-      expect(find.text('快捷回复'), findsNothing);
       await tester.scrollUntilVisible(find.text('三条未读消息'), 200);
       expect(find.text('三条未读消息'), findsOneWidget);
       await tester.scrollUntilVisible(find.text('此通知未提供预览内容'), 200);

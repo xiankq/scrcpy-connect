@@ -30,26 +30,25 @@ void verifyManifest(String contents) {
       !['singleTask', '2', '0x2'].contains(attribute(activity, 'launchMode'))) {
     throw StateError('Packaged MainActivity must use singleTask.');
   }
-  final service = application
-      .findElements('service')
-      .where(
-        (item) =>
-            (attribute(item, 'name') ?? '').endsWith('.ConnectionService'),
-      )
-      .singleOrNull;
-  final types = service == null
-      ? ''
-      : attribute(service, 'foregroundServiceType') ?? '';
-  final namedTypes = types.split('|').toSet();
-  if (service == null ||
-      attribute(service, 'exported') != 'false' ||
-      (!['18', '0x12'].contains(types) &&
-          !(namedTypes.length == 2 &&
-              namedTypes.containsAll(['connectedDevice', 'mediaPlayback'])))) {
-    throw StateError(
-      'Packaged ConnectionService must retain its private foreground types.',
-    );
+  void requirePrivateService(String name, Set<String> expectedTypes) {
+    final service = application
+        .findElements('service')
+        .where((item) => (attribute(item, 'name') ?? '').endsWith('.$name'))
+        .singleOrNull;
+    final type = service == null
+        ? ''
+        : attribute(service, 'foregroundServiceType') ?? '';
+    if (service == null ||
+        attribute(service, 'exported') != 'false' ||
+        !expectedTypes.contains(type)) {
+      throw StateError(
+        'Packaged $name must retain its private foreground type.',
+      );
+    }
   }
+
+  requirePrivateService('ConnectionService', {'connectedDevice', '16', '0x10'});
+  requirePrivateService('AudioPlaybackService', {'mediaPlayback', '2', '0x2'});
 }
 
 void main(List<String> arguments) {

@@ -34,5 +34,5 @@ snapshot JPEG 失败和 Android native-window GL context 释放后使用修复�
 codec async buffer release／flush 修复均非当前新候选。
 
 公开资料尚不能解释本机基线为何表现为同步路径；保留本项目已实际 A/B/A 验证的
-`AMediaCodec:async=1`，实测范围见[异步解码记录](../implementation/android-decoder-async.md)。
+`AMediaCodec:async=1`，机制与限制见[首帧研究](scrcpy-first-frame-performance.md#codec异步默认值必须以运行路径验证2026-10-18)。
 不以文档默认值否定运行证据，也不据此声称所有真机路径均已验证。

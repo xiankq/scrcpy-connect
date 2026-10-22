@@ -9,7 +9,6 @@ import java.nio.charset.StandardCharsets;
 
 final class FixtureStore {
     static final String PREFIX = "dev.scrcpyconnect.notificationfixture.";
-    static final String RESULT_KEY = "original-result-key";
 
     static String runId(String value) {
         if (value == null || !value.matches("[A-Za-z0-9_-]{1,80}")) {

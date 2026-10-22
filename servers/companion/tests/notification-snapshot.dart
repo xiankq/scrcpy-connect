@@ -13,7 +13,7 @@ import 'android-probe.dart' as transport;
 /// actual Android notifications. No product notification permission is changed.
 class SnapshotProbe extends transport.Probe {
   SnapshotProbe(super.adbExecutable, super.serial)
-    : super(calls: false, skipReceiver: true, fixtureFile: File('/unused'));
+    : super(calls: false, fixtureFile: File('/unused'));
 
   static const package = 'dev.scrcpyconnect.notificationfixture';
   late final runId = randomHex(16);
