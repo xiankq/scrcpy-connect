@@ -8,13 +8,17 @@ final _token = List.filled(64, 'a').join();
 AudioJson _stream(String id, [String device = 'device-A']) => {
   'sourceId': id,
   'deviceId': device,
-  'audioPort': 2345,
-  'audioToken': _token,
+  'audioSourceId': _token,
 };
 AudioJson _endpoint(String id) => {
   'relayId': id,
   'kind': 'audio',
-  'url': 'http://127.0.0.1:1234/$_token',
+  'sourceId': _token,
+  'container': 'packet',
+  'codec': 'pcm_s16le',
+  'generation': 1,
+  'attachAddress': 4096,
+  'detachAddress': 8192,
 };
 Matcher _code(String code) =>
     isA<InteropException>().having((e) => e.code, 'code', code);
@@ -31,7 +35,7 @@ class _Player implements AudioPlayerPort {
   @override
   Stream<AudioJson> get events => changes.stream;
   @override
-  Future<AudioFormat> open(String url) async {
+  Future<AudioFormat> open(AudioJson source) async {
     calls.add('open');
     return opening == null ? format : opening!.future;
   }
@@ -73,7 +77,7 @@ class _Harness {
   int? nativeEpoch;
   int epochs = 0, relays = 0, packets = 3;
   Completer<AudioJson>? focusOpening, focusClosing, mediaOpening;
-  String? endpointUrl;
+  bool invalidEndpoint = false;
   late final outputs = PortableAudioOutputs(
     core: core,
     platform: platform,
@@ -96,7 +100,7 @@ class _Harness {
         if (mediaOpening != null) return mediaOpening!.future;
         return {
           ..._endpoint('relay-${++relays}'),
-          if (endpointUrl != null) 'url': endpointUrl,
+          if (invalidEndpoint) 'attachAddress': 0,
         };
       case 'media.status':
         return {'status': 'streaming', 'packets': packets};
@@ -492,7 +496,7 @@ void main() {
     await h.outputs.dispose();
   });
 
-  test('invalid format and non-loopback endpoint fail before ready', () async {
+  test('invalid format and native packet endpoint fail before ready', () async {
     final h = _Harness();
     await h.visible();
     final starting = h.outputs.start(_stream('A'));
@@ -500,7 +504,7 @@ void main() {
     await expectLater(starting, throwsA(_code('audio_format')));
     expect(h.closed, ['relay-1']);
     await h.outputs.dispose();
-    final other = _Harness()..endpointUrl = 'https://example.com/$_token';
+    final other = _Harness()..invalidEndpoint = true;
     await other.visible();
     await expectLater(
       other.outputs.start(_stream('B')),

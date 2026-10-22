@@ -12,8 +12,7 @@ final _token = List.filled(64, 'a').join();
 VideoJson _stream(String id, {String device = 'device-A'}) => {
   'sessionId': id,
   'deviceId': device,
-  'videoPort': 2345,
-  'videoToken': _token,
+  'videoSourceId': _token,
   'codec': 'h264',
   'width': 1080,
   'height': 2400,
@@ -21,7 +20,14 @@ VideoJson _stream(String id, {String device = 'device-A'}) => {
 VideoJson _endpoint(String id, {int generation = 1}) => {
   'relayId': id,
   'generation': generation,
-  'url': 'http://127.0.0.1:1234/$_token',
+  'sourceId': _token,
+  'container': 'packet',
+  'kind': 'video',
+  'codec': 'h264',
+  'width': 1080,
+  'height': 2400,
+  'attachAddress': 4096,
+  'detachAddress': 8192,
 };
 Matcher _code(String code) =>
     isA<InteropException>().having((e) => e.code, 'code', code);
@@ -41,7 +47,7 @@ class _Player implements VideoPlayerPort {
   @override
   Stream<VideoJson> get events => changes.stream;
   @override
-  Future<VideoTexture> open(String url) async {
+  Future<VideoTexture> open(VideoJson source) async {
     calls.add('open');
     return opening == null ? VideoTexture(texture, 720, 1280) : opening!.future;
   }
@@ -634,14 +640,11 @@ void main() {
     },
   );
 
-  test('only a loopback capability URL may reach the player', () async {
+  test('an invalid native packet endpoint never reaches the player', () async {
     final h = _Harness();
     h.opening = Completer();
     final starting = h.output.start(_stream('A'));
-    h.opening!.complete({
-      ..._endpoint('bad'),
-      'url': 'https://example.com/$_token',
-    });
+    h.opening!.complete({..._endpoint('bad'), 'attachAddress': 0});
     await expectLater(starting, throwsA(_code('invalid_endpoint')));
     expect(h.players.single.calls, ['release']);
     expect(h.closed, ['bad']);

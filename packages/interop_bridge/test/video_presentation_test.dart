@@ -21,7 +21,7 @@ void main() {
           'generation': 6,
           'textureId': 9,
           'firstFrameDecoded': true,
-          'evidence': 'mdk.snapshot',
+          'evidence': 'media_codec.snapshot',
         },
       );
       expect(combined['textureId'], 9);
@@ -65,7 +65,7 @@ void main() {
           'textureId': 8,
           'paused': false,
           'firstFrameDecoded': true,
-          'evidence': 'mdk.snapshot',
+          'evidence': 'media_codec.snapshot',
           'snapshotReceipts': 2,
         };
       },
@@ -87,7 +87,7 @@ void main() {
       'textureId': 8,
       'paused': true,
       'firstFrameDecoded': true,
-      'evidence': 'mdk.snapshot',
+      'evidence': 'media_codec.snapshot',
       'snapshotReceipts': 1,
     });
     oldResume.complete({
@@ -95,7 +95,7 @@ void main() {
       'textureId': 7,
       'paused': false,
       'firstFrameDecoded': true,
-      'evidence': 'mdk.snapshot',
+      'evidence': 'media_codec.snapshot',
       'snapshotReceipts': 9,
     });
     output = mergeVideoOutputReceipt(output, await restoring);
@@ -105,7 +105,7 @@ void main() {
       'textureId': 8,
       'paused': true,
       'firstFrameDecoded': true,
-      'evidence': 'mdk.snapshot',
+      'evidence': 'media_codec.snapshot',
       'snapshotReceipts': 1,
     });
 
@@ -117,7 +117,7 @@ void main() {
     expect(output['textureId'], 8);
     expect(output['paused'], isFalse);
     expect(output['firstFrameDecoded'], isTrue);
-    expect(output['evidence'], 'mdk.snapshot');
+    expect(output['evidence'], 'media_codec.snapshot');
     expect(output['snapshotReceipts'], 2);
   });
 

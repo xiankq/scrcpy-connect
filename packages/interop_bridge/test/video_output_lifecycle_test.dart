@@ -10,15 +10,19 @@ final _token = List.filled(64, 'a').join();
 VideoJson _stream(String id) => {
   'sessionId': id,
   'deviceId': 'device-A',
-  'videoPort': 2345,
-  'videoToken': _token,
+  'videoSourceId': _token,
   'codec': 'h264',
 };
 
 VideoJson _endpoint(String relay, int generation) => {
   'relayId': relay,
   'generation': generation,
-  'url': 'http://127.0.0.1:1234/$_token',
+  'sourceId': _token,
+  'container': 'packet',
+  'kind': 'video',
+  'codec': 'h264',
+  'attachAddress': 4096,
+  'detachAddress': 8192,
 };
 
 class _Player implements VideoPlayerPort {
@@ -31,7 +35,8 @@ class _Player implements VideoPlayerPort {
   Stream<VideoJson> get events => changes.stream;
 
   @override
-  Future<VideoTexture> open(String url) async => const VideoTexture(7, 16, 16);
+  Future<VideoTexture> open(VideoJson source) async =>
+      const VideoTexture(7, 16, 16);
 
   @override
   Future<void> setPaused(
