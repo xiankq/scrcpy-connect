@@ -16,6 +16,8 @@ class PageFrame extends StatefulWidget {
     this.actions,
     this.trailingAction,
     this.bottom,
+    this.onBack,
+    this.backgroundColor,
   });
   final String title;
   final Widget child;
@@ -24,6 +26,8 @@ class PageFrame extends StatefulWidget {
   final List<Widget>? actions;
   final Widget? trailingAction;
   final Widget? bottom;
+  final VoidCallback? onBack;
+  final Color? backgroundColor;
 
   @override
   State<PageFrame> createState() => _PageFrameState();
@@ -108,6 +112,7 @@ class _PageFrameState extends State<PageFrame> {
       final toolbarHeight = _toolbarHeight(context, constraints);
       final top = MediaQuery.paddingOf(context).top + toolbarHeight;
       final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
+      final onBack = widget.onBack ?? () => closePage<void>(context);
       final reduceMotion = GlassMaterial.reduceMotion(context);
       final appBar = AppBar(
         toolbarHeight: toolbarHeight,
@@ -136,7 +141,7 @@ class _PageFrameState extends State<PageFrame> {
                           ? 1
                           : DesignTokens.componentGlassInteractionScale,
                       anchorStretch: !reduceMotion,
-                      onPressed: () => closePage<void>(context),
+                      onPressed: onBack,
                       icon: const Icon(LucideIcons.chevronLeft),
                     ),
                   ),
@@ -173,6 +178,7 @@ class _PageFrameState extends State<PageFrame> {
               ],
       );
       return Scaffold(
+        backgroundColor: widget.backgroundColor,
         extendBodyBehindAppBar: true,
         extendBody: true,
         appBar: PreferredSize(
@@ -250,7 +256,12 @@ class _PageFrameState extends State<PageFrame> {
                         top: 0,
                         left: 0,
                         right: 0,
-                        child: PageChromeProtection(height: top),
+                        child: PageChromeProtection(
+                          height: top,
+                          backgroundColor:
+                              widget.backgroundColor ??
+                              Theme.of(context).scaffoldBackgroundColor,
+                        ),
                       ),
                     ],
                   ),

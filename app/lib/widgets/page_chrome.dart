@@ -100,14 +100,18 @@ class PageChromeBody extends StatelessWidget {
 
 /// Keeps the scroll-edge protection entirely inside the title area.
 class PageChromeProtection extends StatelessWidget {
-  const PageChromeProtection({super.key, required this.height});
+  const PageChromeProtection({
+    super.key,
+    required this.height,
+    required this.backgroundColor,
+  });
   final double height;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    final canvas = Theme.of(context).scaffoldBackgroundColor;
     final extent = height;
-    final protected = canvas.withValues(
+    final protected = backgroundColor.withValues(
       alpha: DesignTokens.componentScrollEdgeOpacity,
     );
     return IgnorePointer(
@@ -123,7 +127,11 @@ class PageChromeProtection extends StatelessWidget {
                 ((height - DesignTokens.spacingLg) / extent).clamp(0, 1),
                 1,
               ],
-              colors: [protected, protected, canvas.withValues(alpha: 0)],
+              colors: [
+                protected,
+                protected,
+                backgroundColor.withValues(alpha: 0),
+              ],
             ),
           ),
         ),
