@@ -49,7 +49,7 @@
 - 远控顶部额外安全区已由可失败Widget回归定位并去除：400×800视口/inset32原画面Rect(8,32,392,800)，修后Rect(0,0,400,800)。浮动工具自行避让安全区，纹理仍按源比例完整容纳。此证据不代替目标系统栏、横屏和输入的设备验收，不拉伸或裁切源画面补黑。入口为 `app/lib/pages/devices/workspace/remote/devices_workspace_remote_page.dart` 及主控平台系统栏配置。
 - 独立窗口内容过小已在API36 Settings样本定位为虚拟显示逻辑密度与实体显示不一致：实体宽约411dp，旧独立显示宽720dp，先取得失败证据；修复后720px／280dpi对应约411dp，不再以Flutter整幅缩放补偿远端布局。1280质量设置重建及不同分辨率复验保留真实task，实际resize→quality→resize与旧capture拒绝通过。入口为 `packages/interop_bridge/lib/src/virtual_display_policy.dart`、`video_quality_policy.dart`、`crates/interop_core/src/scrcpy.rs` 及命令契约；该结论与修复证据限于已测目标，其他应用／OEM仍需对照实际dp／density。
 - 大屏保留全局侧栏和单一当前内容区，正文、浮动标题使用同一阅读列；对照 `H0TFx`、`zLBrM`，入口为 `app/lib/widgets/page_frame.dart`。
-- 文件、目录选择、相册、通知回复、全部应用和诊断持续显示目标设备；回复和文件操作提交时仍核验原对象。对应入口位于 `app/lib/pages/devices/workspace/` 及 `devices/details/diagnostics/`。
+- 文件、目录选择、相册、通知接续、全部应用和诊断持续显示目标设备；文件和接续操作提交时仍核验原对象。对应入口位于 `app/lib/pages/devices/workspace/` 及 `devices/details/diagnostics/`。
 - 同名搜索结果显示目录；同名冲突显示文件名、来源、目标与替换影响。对照 `jcZXq`、`zD1BI`、`K950NO`，核对文件搜索页和 `app/lib/pages/transfers/`。
 - 发现失败、权限拒绝和配对码失效分别呈现原因及就近恢复动作；配对端口与日常连接端口不得混用。
 - 媒体暂存的预算、实际字节和清理后数值来自服务状态，沿用[媒体暂存规则](../../designs/prod/content-and-transfer.md#媒体暂存与空间准入)，不照抄设计示例数据；入口为 `settings/media_cache/`、`crates/interop_core/src/media_cache.rs`。
