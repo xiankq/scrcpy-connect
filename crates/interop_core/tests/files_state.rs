@@ -60,10 +60,10 @@ async fn interrupted_save_requires_target_verification_and_never_offers_byte_res
 async fn restored_directory_batches_keep_item_results_and_cancel_only_the_selected_batch() {
     let directory = tempfile::tempdir().unwrap();
     let tasks = vec![
-        json!({"id":"root","deviceId":"device","direction":"pull","source":"/source","destination":"/target","name":"source","status":"completed","transferred":0,"total":0,"error":null,"policy":"ask","createdAt":1,"batchId":"tree","kind":"directory","treeVerified":true}),
-        json!({"id":"file","deviceId":"device","direction":"pull","source":"/source/file","destination":"/target/file","name":"file","status":"conflict","transferred":0,"total":9,"error":null,"policy":"ask","createdAt":1,"batchId":"tree","kind":"file","parentId":"root"}),
-        json!({"id":"link","deviceId":"device","direction":"pull","source":"/source/link","destination":"/target/link","name":"link","status":"skipped","transferred":0,"total":null,"error":"link skipped","policy":"ask","createdAt":1,"batchId":"tree","kind":"symlink","parentId":"root"}),
-        json!({"id":"unrelated","deviceId":"device","direction":"push","source":"/a","destination":"/b","name":"a","status":"conflict","transferred":0,"total":1,"error":null,"policy":"ask","createdAt":1,"batchId":"other"}),
+        json!({"id":"root","deviceId":"device","direction":"pull","source":"/source","destination":"/target","name":"source","status":"completed","transferred":0,"total":0,"error":null,"policy":"ask","createdAt":1,"batchId":"tree","itemIndex":0,"kind":"directory","treeVerified":true}),
+        json!({"id":"file","deviceId":"device","direction":"pull","source":"/source/file","destination":"/target/file","name":"file","status":"conflict","transferred":0,"total":9,"error":null,"policy":"ask","createdAt":1,"batchId":"tree","itemIndex":1,"kind":"file","parentId":"root"}),
+        json!({"id":"link","deviceId":"device","direction":"pull","source":"/source/link","destination":"/target/link","name":"link","status":"skipped","transferred":0,"total":null,"error":"link skipped","policy":"ask","createdAt":1,"batchId":"tree","itemIndex":2,"kind":"symlink","parentId":"root"}),
+        json!({"id":"unrelated","deviceId":"device","direction":"push","source":"/a","destination":"/b","name":"a","status":"conflict","transferred":0,"total":1,"error":null,"policy":"ask","createdAt":1,"batchId":"other","itemIndex":0}),
     ];
     tokio::fs::write(
         directory.path().join("transfers.json"),
@@ -94,6 +94,21 @@ async fn restored_directory_batches_keep_item_results_and_cancel_only_the_select
         .unwrap();
     assert_eq!(file["status"], "cancelled");
     assert_eq!(file["canResume"], false);
+    assert_eq!(file["batch"]["batchId"], "tree");
+    assert_eq!(file["batch"]["itemCount"], 3);
+    assert_eq!(file["batch"]["cancelled"], 1);
+    assert_eq!(file["batch"]["skipped"], 1);
+    assert_eq!(file["batch"]["canCancel"], false);
+    assert_eq!(file["batch"]["status"], "cancelled");
+    assert_eq!(
+        file["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["root", "file", "link"]
+    );
     assert_eq!(
         runtime
             .invoke("transfers.get", json!({"transferId":"root"}))

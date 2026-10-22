@@ -2,7 +2,9 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/pages/transfers/widgets/transfer_direction_badge.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/services/transfer_state.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 
 bool transferHistoryActive(Json row) =>
@@ -14,26 +16,6 @@ bool transferHistoryActive(Json row) =>
       'cancelling',
       'conflict',
     ].contains(row['status']);
-
-String transferHistoryStatus(Json row) => switch (value(row, 'status')) {
-  'completed'
-      when row['direction'] == 'pull' &&
-          row['destinationScope'] == 'privateCache' =>
-    '已接收 · 待保存',
-  'completed' => '已完成',
-  'partialFailure' || 'partial' => '部分失败',
-  'completedWithSkips' => '已完成，部分跳过',
-  'running' => '传输中',
-  'queued' => '等待传输',
-  'cancelling' => '正在停止…',
-  'finalizing' => '正在确认结果',
-  'conflict' => '同名文件待处理',
-  'cancelled' => '已停止',
-  'interrupted' || 'paused' => '已中断',
-  'failed' => '传输失败',
-  'skipped' => '已跳过',
-  _ => '状态待确认',
-};
 
 class TransferHistoryRow extends HookWidget {
   const TransferHistoryRow({
@@ -63,8 +45,11 @@ class TransferHistoryRow extends HookWidget {
     final name = devices.isEmpty
         ? value(row, 'deviceName', '设备')
         : deviceName(devices.first);
-    final direction = row['direction'] == 'push' ? '发送到 $name' : '接收自 $name';
-    final status = busy.value ? '正在停止并移除…' : transferHistoryStatus(row);
+    final direction = transferListDirection(row, name);
+    final statusDescription = busy.value
+        ? '正在停止…'
+        : transferStatusDescription(row);
+    final issue = transferStatusHasIssue(value(row, 'status'));
 
     Future<void> remove() async {
       if (busy.value) return;
@@ -73,8 +58,12 @@ class TransferHistoryRow extends HookWidget {
           row['destinationScope'] == 'privateCache';
       if (!await confirm(
             context,
-            active ? '停止并移除这条传输？' : '移除传输记录？',
-            '${active ? '停止尚未完成的传输，并移除这条记录。' : '仅移除这条记录。'}已保存文件不受影响。${unsaved ? '未保存的暂存内容将无法从此处保存。' : ''}',
+            active ? '停止并移除这项传输？' : '移除传输记录？',
+            active
+                ? '先停止正在进行的传输，再移除记录。已完成部分和文件会保留。'
+                      '${unsaved ? '未保存的暂存内容将无法从此处保存。' : ''}'
+                : '仅移除这条记录，不会删除已保存文件。'
+                      '${unsaved ? '未保存的暂存内容将无法从此处保存。' : ''}',
             action: active ? '停止并移除' : '移除记录',
             danger: true,
           ) ||
@@ -121,17 +110,12 @@ class TransferHistoryRow extends HookWidget {
         padding: const EdgeInsets.only(
           left: DesignTokens.spacingMd,
           right: DesignTokens.spacingXs,
-          top: DesignTokens.spacingSm,
-          bottom: DesignTokens.spacingSm,
+          top: DesignTokens.spacingXs,
+          bottom: DesignTokens.spacingXs,
         ),
         child: Row(
           children: [
-            ListIconBadge(
-              icon: row['kind'] == 'directory'
-                  ? LucideIcons.folder
-                  : LucideIcons.file,
-              backgroundColor: DesignTokens.colorListIconAmber,
-            ),
+            TransferDirectionBadge(transfer: row),
             const SizedBox(width: DesignTokens.spacingSm),
             Expanded(
               child: Column(
@@ -142,30 +126,18 @@ class TransferHistoryRow extends HookWidget {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: DesignTokens.spacingXxs),
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(text: '$direction · '),
-                        TextSpan(
-                          text:
-                              '$status${active && progress != null ? ' ${(progress * 100).floor()}%' : ''}',
-                          style:
-                              [
-                                'failed',
-                                'partialFailure',
-                                'partial',
-                              ].contains(row['status'])
-                              ? TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                )
-                              : null,
-                        ),
-                      ],
+                  Text(direction, style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: DesignTokens.spacingXxs),
+                  Text(
+                    statusDescription,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: issue ? Theme.of(context).colorScheme.error : null,
                     ),
-                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   if (active) ...[
-                    const SizedBox(height: DesignTokens.spacingXs),
+                    const SizedBox(height: DesignTokens.spacingXxs),
                     LinearProgressIndicator(
                       value: progress,
                       minHeight: DesignTokens.spacingMicro,

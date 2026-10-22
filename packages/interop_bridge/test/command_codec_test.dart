@@ -27,6 +27,25 @@ void main() {
         () => CoreRequest(InteropCommand.documentsImportFiles),
         failure('unknown_command'),
       );
+      expect(
+        CoreRequest(InteropCommand.transfersCancel, {
+          'batchId': 'batch',
+        }).encode(),
+        contains('"batchId":"batch"'),
+      );
+      expect(
+        CoreRequest(InteropCommand.transfersCancel, {
+          'transferId': 'item',
+        }).encode(),
+        contains('"transferId":"item"'),
+      );
+      expect(
+        () => CoreRequest(InteropCommand.sessionStart, {
+          'deviceId': 'a',
+          'packageName': 7,
+        }),
+        failure('invalid_argument'),
+      );
       final request = CoreRequest(InteropCommand.devicesConnect, {
         'deviceId': 'a',
       });

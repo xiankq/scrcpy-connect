@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/services/document_operation.dart';
 import 'package:scrcpy_connect/services/media_cache_lease.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/original_file_header.dart';
+import 'package:scrcpy_connect/pages/transfers/details/widgets/file_delivery_path.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +22,7 @@ class DocumentExportForm extends HookWidget {
     required this.kind,
     this.transferId,
     this.partial = false,
+    this.sourceLabel = '被控设备',
   });
   final AppController controller;
   final String localPath;
@@ -28,6 +30,7 @@ class DocumentExportForm extends HookWidget {
   final String kind;
   final String? transferId;
   final bool partial;
+  final String sourceLabel;
   @override
   Widget build(BuildContext context) {
     final cacheLease = useTransferCacheLease(controller, transferId);
@@ -63,6 +66,11 @@ class DocumentExportForm extends HookWidget {
         status != 'pending' &&
         (result['partialDestinationPossible'] == true ||
             !['partial', 'cancelled', 'failed'].contains(status));
+    final deliveryState = status == 'saved'
+        ? FileDeliveryMilestone.complete
+        : unknown || status == 'failed' || operation.error != null
+        ? FileDeliveryMilestone.attention
+        : FileDeliveryMilestone.pending;
     if (transferId != null && (!cacheLease.hasData || cacheLease.hasError)) {
       return cacheLease.hasError
           ? StateNote('无法保留这份暂存：${cacheLease.error}。请返回原设备重新取回。')
@@ -71,6 +79,14 @@ class DocumentExportForm extends HookWidget {
     final errors = objects(result?['errors']);
     final leading = <Widget>[
       OriginalFileHeader(name: name, kind: kind),
+      const SizedBox(height: DesignTokens.spacingLg),
+      ContentPanel(
+        child: FileDeliveryPath(
+          sourceLabel: sourceLabel,
+          staged: true,
+          systemState: deliveryState,
+        ),
+      ),
       const SizedBox(height: DesignTokens.spacingLg),
       if (partial)
         const StateNote(

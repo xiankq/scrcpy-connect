@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_i
 import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
 import 'package:scrcpy_connect/pages/transfers/index/widgets/transfer_history_row.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/services/transfer_state.dart';
 
 import 'support/router_test_app.dart';
 
@@ -12,6 +13,82 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'batch details use real item results instead of a repeated summary',
+    (tester) async {
+      final task = <String, dynamic>{
+        'id': 'root',
+        'batchId': 'batch',
+        'name': '旅行照片',
+        'kind': 'directory',
+        'direction': 'pull',
+        'status': 'partial',
+        'itemCount': 3,
+        'sourceLabel': '我的手机',
+        'destinationLabel': '本机暂存',
+        'destinationScope': 'privateCache',
+        'batch': {
+          'batchId': 'batch',
+          'status': 'partialFailure',
+          'itemCount': 3,
+          'canCancel': false,
+          'canRestart': false,
+        },
+        'items': [
+          {
+            'id': 'root',
+            'name': '旅行照片',
+            'kind': 'directory',
+            'direction': 'pull',
+            'status': 'completed',
+            'totalBytes': 0,
+          },
+          {
+            'id': 'file',
+            'name': '旅行清单.pdf',
+            'kind': 'file',
+            'direction': 'pull',
+            'status': 'completed',
+            'totalBytes': 2300,
+            'completedBytes': 2300,
+          },
+          {
+            'id': 'video',
+            'name': '视频.mp4',
+            'kind': 'file',
+            'direction': 'pull',
+            'status': 'failed',
+            'error': '设备已断开',
+          },
+        ],
+      };
+      final controller = createTestController(
+        (command, [params = const {}]) async =>
+            command == 'transfers.get' ? task : {},
+      );
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          theme: ConnectTokens.theme(Brightness.light),
+          home: TransferDetailsPage(controller: controller, task: task),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('旅行照片 · 3 项'), findsOneWidget);
+      expect(find.text('旅行清单.pdf'), findsOneWidget);
+      expect(find.text('视频.mp4'), findsOneWidget);
+      expect(find.text('失败 · 设备已断开'), findsOneWidget);
+      expect(find.text('接收 · 我的手机 → 本机暂存'), findsNWidgets(4));
+      expect(find.text('已完成 · 2.2 KB'), findsOneWidget);
+      expect(find.text('部分传输失败'), findsOneWidget);
+      expect(find.textContaining('批次不会整体重放'), findsOneWidget);
+      expect(find.text('重新传输'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
   testWidgets(
     'backend export refusal prevents a partial directory from appearing saved as a complete tree',
     (tester) async {
@@ -120,6 +197,84 @@ void main() {
     },
   );
   testWidgets(
+    'conflict details show the actual source and destination paths with the three policies',
+    (tester) async {
+      final task = <String, dynamic>{
+        'id': 'conflict',
+        'deviceId': 'phone',
+        'batchId': 'batch',
+        'name': '旅行照片',
+        'kind': 'directory',
+        'direction': 'pull',
+        'status': 'conflict',
+        'itemCount': 2,
+        'sourceLabel': '我的手机',
+        'destinationLabel': '本机暂存',
+        'destinationScope': 'privateCache',
+        'source': '/sdcard/DCIM/旅行照片.jpg',
+        'destination': '/cache/旅行照片.jpg',
+        'batch': {
+          'batchId': 'batch',
+          'status': 'conflict',
+          'itemCount': 2,
+          'canCancel': true,
+        },
+        'items': [
+          {
+            'id': 'conflict',
+            'name': '旅行照片.jpg',
+            'kind': 'file',
+            'direction': 'pull',
+            'status': 'conflict',
+            'source': '/sdcard/DCIM/旅行照片.jpg',
+            'destination': '/cache/旅行照片.jpg',
+          },
+          {
+            'id': 'other',
+            'name': '清单.pdf',
+            'kind': 'file',
+            'direction': 'pull',
+            'status': 'completed',
+          },
+        ],
+      };
+      Json? resolved;
+      final controller =
+          createTestController((command, [params = const {}]) async {
+              if (command == 'transfers.get') return task;
+              if (command == 'transfers.resolve') resolved = params;
+              return {};
+            })
+            ..devices = [
+              {'id': 'phone', 'name': '我的手机', 'status': 'connected'},
+            ];
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          theme: ConnectTokens.theme(Brightness.light),
+          home: TransferDetailsPage(controller: controller, task: task),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('旅行照片.jpg'), findsNWidgets(2));
+      expect(find.text('来源 · 我的手机\n/sdcard/DCIM/旅行照片.jpg'), findsOneWidget);
+      expect(find.text('目标 · 本机暂存\n/cache/旅行照片.jpg'), findsOneWidget);
+      expect(find.text('替换将覆盖目标中的同名文件。'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '保留两份'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, '替换目标文件'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, '跳过此项'), findsOneWidget);
+      await tester.tap(find.text('保留两份'));
+      await tester.pumpAndSettle();
+      expect(resolved, {
+        'transferId': 'conflict',
+        'policy': 'keepBoth',
+        'applyToAll': false,
+      });
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
+  testWidgets(
     'a completed directory is not offered to file-only sharing or open APIs',
     (tester) async {
       final task = <String, dynamic>{
@@ -217,9 +372,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(TransferHistoryRow), findsNWidgets(2));
       expect(find.text('child.pdf'), findsNothing);
+      expect(find.text('进行中'), findsOneWidget);
+      expect(find.text('最近'), findsOneWidget);
+      expect(find.text('发送 · 本机 → 设备'), findsOneWidget);
+      expect(find.text('接收 · 设备'), findsOneWidget);
       expect(
         tester.getSize(find.byType(TransferHistoryRow).first).height,
-        lessThanOrEqualTo(90),
+        lessThanOrEqualTo(128),
       );
       await tester.tap(find.byTooltip('传输操作').first);
       await tester.pumpAndSettle();
@@ -298,7 +457,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('移除记录'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('已保存文件不受影响'), findsOneWidget);
+      expect(find.textContaining('不会删除已保存文件'), findsOneWidget);
       expect(requests.where((r) => r.$1 == 'transfers.remove'), isEmpty);
       await tester.tap(find.text('移除记录').last);
       await tester.pumpAndSettle();
@@ -358,6 +517,44 @@ void main() {
       expect(find.text('检查并继续'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
+    },
+  );
+  test(
+    'status copy keeps the actual byte result and does not repeat the status',
+    () {
+      expect(
+        transferStatusDescription({
+          'status': 'completed',
+          'totalBytes': 2.3 * 1024 * 1024,
+          'completedBytes': 2.3 * 1024 * 1024,
+          'direction': 'push',
+        }),
+        '已完成 · 2.3 MB',
+      );
+      expect(
+        transferStatusDescription({
+          'status': 'cancelled',
+          'completedBytes': 1200,
+          'totalBytes': 2400,
+        }),
+        '已停止，已完成部分保留',
+      );
+      expect(
+        transferStatusDescription({
+          'status': 'running',
+          'completedBytes': 1200,
+          'totalBytes': 2400,
+        }),
+        '传输中 · 1.2 KB / 2.3 KB · 50%',
+      );
+      expect(transferListDirection({'direction': 'pull'}, '我的手机'), '接收 · 我的手机');
+      expect(
+        transferDetailDirection({
+          'direction': 'pull',
+          'destinationScope': 'privateCache',
+        }, '我的手机'),
+        '接收 · 我的手机 → 本机暂存',
+      );
     },
   );
 }

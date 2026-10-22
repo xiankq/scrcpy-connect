@@ -2,10 +2,10 @@ import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
+import 'package:scrcpy_connect/pages/transfers/details/widgets/transfer_result_row.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/transfer_state.dart';
 import 'package:scrcpy_connect/services/media_cache_lease.dart';
-import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -43,7 +43,29 @@ class TransferDetailsPage extends HookConsumerWidget {
         emptyTitle: '暂时无法读取传输结果',
         builder: (context, data, refresh) {
           final current = transferView(controller, {...task, ...data});
-          final status = value(current, 'status');
+          final rawItems = objects(current['items']);
+          final items = rawItems.isEmpty ? [current] : rawItems;
+          final itemCount =
+              num.tryParse('${current['itemCount']}')?.toInt() ?? items.length;
+          // A child item keeps its own result and retry entry; only the batch
+          // representative shows the open list of every item.
+          final batch = itemCount > 1 && value(current, 'parentId').isEmpty;
+          final summary = jsonObject(current['batch']);
+          final status = batch
+              ? value(summary, 'status', value(current, 'status'))
+              : value(current, 'status');
+          final canCancel = batch
+              ? summary['canCancel'] == true
+              : current['canCancel'] == true;
+          final conflictItem = batch
+              ? items.where((item) => item['status'] == 'conflict').firstOrNull
+              : current['status'] == 'conflict'
+              ? current
+              : null;
+          final visibleItems = batch ? items : const <Json>[];
+          final remoteDevice = current['direction'] == 'push'
+              ? value(current, 'destinationLabel', '设备')
+              : value(current, 'sourceLabel', '设备');
           return HookBuilder(
             builder: (context) {
               final cacheLease = useTransferCacheLease(
@@ -62,18 +84,23 @@ class TransferDetailsPage extends HookConsumerWidget {
               );
               final leading = <Widget>[
                 Text(
-                  value(current, 'name', '文件传输'),
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  '${value(current, 'name', '文件传输')}'
+                  '${batch ? ' · $itemCount 项' : ''}',
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: DesignTokens.spacingSm),
-                Text(statusText(status)),
+                Text(
+                  statusText(status),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: DesignTokens.spacingXs),
                 Text(
-                  '${value(current, 'sourceLabel', value(current, 'source'))}\n→ ${value(current, 'destinationLabel', value(current, 'destination'))}',
+                  transferDetailDirection(current, remoteDevice),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: DesignTokens.spacingMd),
-                if (current['kind'] == 'directory' && status == 'finalizing')
+                if (current['kind'] == 'directory' &&
+                    value(current, 'status') == 'finalizing')
                   const StateNote('目录结构已建立，仍在核验所选内容。请等待批次实际结果。'),
                 if (value(current, 'exportReason').isNotEmpty)
                   StateNote(value(current, 'exportReason')),
@@ -81,37 +108,55 @@ class TransferDetailsPage extends HookConsumerWidget {
                   StateNote('暂存原件不可用：${cacheLease.error}。请重新取回原件后再保存或分享。'),
               ];
               final trailing = <Widget>[
-                if (status == 'conflict')
+                if (conflictItem != null)
                   ConflictPanel(
-                    key: ValueKey(('transfer-conflict', value(current, 'id'))),
+                    key: ValueKey((
+                      'transfer-conflict',
+                      value(conflictItem, 'id'),
+                    )),
+                    transfer: transferView(controller, {
+                      ...conflictItem,
+                      'deviceId':
+                          conflictItem['deviceId'] ?? current['deviceId'],
+                      'direction':
+                          conflictItem['direction'] ?? current['direction'],
+                      'destinationScope':
+                          conflictItem['destinationScope'] ??
+                          current['destinationScope'],
+                    }),
                     onResolve: (policy, all) async {
                       await perform(context, controller, 'transfers.resolve', {
-                        'transferId': current['id'],
+                        'transferId': conflictItem['id'],
                         'policy': policy,
                         'applyToAll': all,
                       });
                       refresh();
                     },
                   ),
-                if (current['canCancel'] == true)
+                if (canCancel)
                   OutlinedButton(
                     onPressed: () async {
                       if (await confirm(
                             context,
-                            '取消未完成的传输？',
+                            batch ? '取消剩余未完成项？' : '取消未完成的传输？',
                             '已完成内容会保留。未完成的临时项将按实际情况清理，不会作为完整文件保存。',
-                            action: '取消传输',
+                            action: batch ? '取消剩余项' : '取消传输',
                           ) &&
                           context.mounted) {
-                        await perform(context, controller, 'transfers.cancel', {
-                          'transferId': current['id'],
-                        });
+                        await perform(
+                          context,
+                          controller,
+                          'transfers.cancel',
+                          batch
+                              ? {'batchId': value(summary, 'batchId')}
+                              : {'transferId': current['id']},
+                        );
                         refresh();
                       }
                     },
-                    child: const Text('取消传输'),
+                    child: Text(batch ? '取消剩余未完成项' : '取消传输'),
                   ),
-                if (current['canRestart'] == true)
+                if (!batch && current['canRestart'] == true)
                   FilledButton(
                     onPressed: () async {
                       if (await confirm(
@@ -129,6 +174,21 @@ class TransferDetailsPage extends HookConsumerWidget {
                       }
                     },
                     child: const Text('重新传输'),
+                  )
+                else if (batch &&
+                    [
+                      'partialFailure',
+                      'interrupted',
+                      'cancelled',
+                    ].contains(status))
+                  const StateNote(
+                    '批次不会整体重放。请在逐项结果中打开要重试的项，确认来源和目标后单独重新传输。',
+                    icon: LucideIcons.info,
+                  ),
+                if (batch && status == 'completedWithSkips')
+                  const StateNote(
+                    '部分内容因符号链接或特殊文件被跳过，未作为完整原件传输。',
+                    icon: LucideIcons.info,
                   ),
                 if (current['canExport'] == true &&
                     (current['destinationScope'] != 'privateCache' ||
@@ -143,7 +203,7 @@ class TransferDetailsPage extends HookConsumerWidget {
                       current['destinationScope'] == 'privateCache')
                     FilledButton.icon(
                       onPressed: () => DocumentExportRoute(
-                        taskId: value(task, 'id', value(task, 'transferId')),
+                        taskId: value(current, 'id', value(task, 'transferId')),
                         partial: false,
                       ).push<void>(context),
                       icon: const Icon(LucideIcons.folderOutput),
@@ -198,7 +258,29 @@ class TransferDetailsPage extends HookConsumerWidget {
                     ),
                   ],
                 ],
-                if (['failed', 'partial', 'paused'].contains(status))
+                if (current['canExportPartial'] == true &&
+                    (current['destinationScope'] != 'privateCache' ||
+                        cacheLease.hasData && !cacheLease.hasError) &&
+                    Platform.isAndroid) ...[
+                  StateNote(
+                    '这是已核验但不完整的本机暂存。系统保存不会补齐失败、变化或跳过的项目。',
+                    icon: LucideIcons.circleAlert,
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => DocumentExportRoute(
+                      taskId: value(current, 'id', value(task, 'transferId')),
+                      partial: true,
+                    ).push<void>(context),
+                    icon: const Icon(LucideIcons.folderOutput),
+                    label: const Text('保存已取回的部分'),
+                  ),
+                ],
+                if ([
+                  'failed',
+                  'partial',
+                  'interrupted',
+                  'paused',
+                ].contains(status))
                   StateNote(
                     value(
                       current,
@@ -210,24 +292,34 @@ class TransferDetailsPage extends HookConsumerWidget {
                 const SizedBox(height: DesignTokens.spacingMd),
                 TextButton(onPressed: refresh, child: const Text('重新检查结果')),
               ];
-              final items = objects(current['items']);
               return GroupedListView.builder(
                 padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                itemCount: leading.length + items.length + trailing.length,
+                itemCount:
+                    leading.length + visibleItems.length + trailing.length,
                 findChildIndexCallback: (key) {
                   final index = trailing.indexWhere(
                     (widget) => widget.key == key,
                   );
                   return index < 0
                       ? null
-                      : leading.length + items.length + index;
+                      : leading.length + visibleItems.length + index;
                 },
                 itemBuilder: (context, index) {
                   if (index < leading.length) return leading[index];
                   final row = index - leading.length;
-                  if (row >= items.length) return trailing[row - items.length];
-                  final item = items[row];
-                  return ActionRow(
+                  if (row >= visibleItems.length) {
+                    return trailing[row - visibleItems.length];
+                  }
+                  final rawItem = visibleItems[row];
+                  final item = transferView(controller, {
+                    ...rawItem,
+                    'deviceId': rawItem['deviceId'] ?? current['deviceId'],
+                    'direction': rawItem['direction'] ?? current['direction'],
+                    'destinationScope':
+                        rawItem['destinationScope'] ??
+                        current['destinationScope'],
+                  });
+                  return TransferResultRow(
                     key: ValueKey((
                       'transfer-item',
                       value(current, 'id'),
@@ -235,18 +327,15 @@ class TransferDetailsPage extends HookConsumerWidget {
                       value(item, 'destination'),
                       row,
                     )),
-                    icon: item['status'] == 'completed'
-                        ? LucideIcons.circleCheck
-                        : LucideIcons.circleAlert,
-                    title: value(item, 'name'),
-                    trailing: Text(
-                      statusText(value(item, 'status')),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-
-                    color: item['status'] == 'completed'
-                        ? ConnectTokens.mint
-                        : ConnectTokens.amber,
+                    transfer: item,
+                    deviceName: remoteDevice,
+                    onOpen:
+                        rawItem['id'] == null ||
+                            value(rawItem, 'id') == value(current, 'id')
+                        ? null
+                        : () =>
+                              TransferDetailsRoute(taskId: value(rawItem, 'id'))
+                                  .push<void>(context),
                   );
                 },
               );

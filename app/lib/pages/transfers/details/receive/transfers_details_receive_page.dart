@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/document_export_form.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
+import 'package:scrcpy_connect/pages/transfers/details/widgets/file_delivery_path.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/transfer_state.dart';
@@ -87,6 +88,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                   transferId: taskId,
                   name: value(current, 'name', '原文件'),
                   kind: current['kind'] == 'directory' ? 'directory' : 'file',
+                  sourceLabel: value(current, 'sourceLabel', '被控设备'),
                 );
               }
               final status = value(current, 'status');
@@ -128,27 +130,18 @@ class ReceiveContentPage extends HookConsumerWidget {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: DesignTokens.spacingSm),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(value(current, 'sourceLabel')),
-                            ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: DesignTokens.spacingSm,
-                              ),
-                              child: Icon(
-                                LucideIcons.arrowRight,
-                                size: DesignTokens.componentIconSmallSize,
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                value(current, 'destinationLabel'),
-                                textAlign: TextAlign.end,
-                              ),
-                            ),
-                          ],
+                        FileDeliveryPath(
+                          sourceLabel: value(current, 'sourceLabel', '被控设备'),
+                          systemLabel: share ? '接收应用' : '系统副本',
+                          staged: ready,
+                          systemState: switch (status) {
+                            'failed' ||
+                            'interrupted' ||
+                            'cancelled' => FileDeliveryMilestone.attention,
+                            'completed' when ready =>
+                              FileDeliveryMilestone.pending,
+                            _ => FileDeliveryMilestone.pending,
+                          },
                         ),
                         if (pending) ...[
                           const SizedBox(height: DesignTokens.spacingSm),
@@ -172,6 +165,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                   ],
                   if (status == 'conflict')
                     ConflictPanel(
+                      transfer: transferView(controller, current),
                       onResolve: (policy, all) async {
                         await perform(
                           context,

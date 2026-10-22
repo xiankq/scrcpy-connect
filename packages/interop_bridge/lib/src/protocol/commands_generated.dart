@@ -617,6 +617,7 @@ enum InteropCommand {
       'displayHeight': ProtocolFieldType.integer,
       'displayAuto': ProtocolFieldType.boolean,
       'keepActive': ProtocolFieldType.boolean,
+      'packageName': ProtocolFieldType.string,
     },
   ),
   sessionStop(
@@ -713,7 +714,10 @@ enum InteropCommand {
   systemInfo("system.info"),
   transfersCancel(
     "transfers.cancel",
-    required: {'transferId': ProtocolFieldType.string},
+    optional: {
+      'transferId': ProtocolFieldType.string,
+      'batchId': ProtocolFieldType.string,
+    },
   ),
   transfersGet(
     "transfers.get",

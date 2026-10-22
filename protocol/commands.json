@@ -962,7 +962,8 @@
         "displayWidth": "integer",
         "displayHeight": "integer",
         "displayAuto": "boolean",
-        "keepActive": "boolean"
+        "keepActive": "boolean",
+        "packageName": "string"
       }
     },
     {
@@ -1111,8 +1112,9 @@
     {
       "name": "transfers.cancel",
       "owner": "core",
-      "required": {
-        "transferId": "string"
+      "optional": {
+        "transferId": "string",
+        "batchId": "string"
       }
     },
     {

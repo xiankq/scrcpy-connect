@@ -28,7 +28,7 @@ class TransfersPage extends HookConsumerWidget {
     final revision = useState(0);
     return PageFrame(
       root: embedded,
-      title: '传输',
+      title: '文件传输',
       actions: [
         GlassActionIcon(
           tooltip: '刷新任务',
@@ -52,6 +52,18 @@ class TransfersPage extends HookConsumerWidget {
               ),
             );
           }
+          final active = rows.where(transferHistoryActive).toList();
+          final recent = rows
+              .where((row) => !transferHistoryActive(row))
+              .toList();
+          final entries = <({String? group, int? count, Json? row})>[
+            if (active.isNotEmpty)
+              (group: '进行中', count: active.length, row: null),
+            for (final row in active) (group: null, count: null, row: row),
+            if (recent.isNotEmpty)
+              (group: '最近', count: recent.length, row: null),
+            for (final row in recent) (group: null, count: null, row: row),
+          ];
           return RefreshIndicator(
             onRefresh: () async => refresh(),
             child: ListView.builder(
@@ -63,12 +75,19 @@ class TransfersPage extends HookConsumerWidget {
                     DesignTokens.spacingLg,
                   ) +
                   PageChromePadding.of(context),
-              itemCount: rows.length + 1,
+              itemCount: entries.length + 1,
               itemBuilder: (context, index) {
                 if (index == 0) {
                   return const RecoveryStatus(padding: EdgeInsets.zero);
                 }
-                final row = rows[index - 1];
+                final entry = entries[index - 1];
+                if (entry.group != null) {
+                  return _TransferGroupHeader(
+                    title: entry.group!,
+                    count: entry.count!,
+                  );
+                }
+                final row = entry.row!;
                 return TransferHistoryRow(
                   key: ValueKey(row['historyId']),
                   controller: controller,
@@ -86,64 +105,39 @@ class TransfersPage extends HookConsumerWidget {
 
   void _open(BuildContext context, Json row) {
     final members = objects(row['members']);
-    if (members.length == 1) {
-      TransferDetailsRoute(taskId: value(members.single, 'id'))
-          .push<void>(context);
-      return;
-    }
-    showGlassModalSheet<void>(
-      context: context,
-      builder: (sheetContext) => SizedBox(
-        height: MediaQuery.sizeOf(sheetContext).height * .7,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(DesignTokens.spacingMd),
-              child: Text(
-                value(row, 'name'),
-                style: Theme.of(sheetContext).textTheme.bodyMedium,
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: members.length,
-                itemBuilder: (context, index) {
-                  final member = members[index];
-                  return ListTile(
-                    leading: Icon(
-                      member['kind'] == 'directory'
-                          ? LucideIcons.folder
-                          : LucideIcons.file,
-                      color: ConnectTokens.amber,
-                      size: DesignTokens.componentIconSize,
-                    ),
-                    title: Text(
-                      value(member, 'name', '文件'),
-                      style: Theme.of(sheetContext).textTheme.bodyMedium,
-                    ),
-                    subtitle: Text(
-                      transferHistoryStatus(member),
-                      style: Theme.of(sheetContext).textTheme.bodySmall,
-                    ),
-                    trailing: const Icon(
-                      LucideIcons.chevronRight,
-                      size: DesignTokens.componentIconSmallSize,
-                    ),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      TransferDetailsRoute(taskId: value(member, 'id'))
-                          .push<void>(context);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    if (members.isEmpty) return;
+    final roots = members
+        .where((member) => value(member, 'parentId').isEmpty)
+        .toList();
+    final representative = roots.isEmpty ? members.first : roots.first;
+    TransferDetailsRoute(taskId: value(representative, 'id'))
+        .push<void>(context);
   }
+}
+
+class _TransferGroupHeader extends StatelessWidget {
+  const _TransferGroupHeader({required this.title, required this.count});
+
+  final String title;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      0,
+      DesignTokens.spacingSm,
+      0,
+      DesignTokens.spacingXs,
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        ),
+        Text('$count 项', style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ),
+  );
 }
 
 /// Each selection appears once; batch children live in its details.
@@ -179,7 +173,12 @@ List<Json> transferHistoryRows(AppController controller, Json data) {
           'historyId': group.key,
           'members': members,
           'name':
-              '${value(first, 'name', '文件传输')}${roots.length > 1 ? ' 等 ${roots.length} 项' : ''}',
+              '${value(first, 'name', '文件传输')}'
+              '${roots.length > 1
+                  ? ' 等 ${members.length} 项'
+                  : multiple
+                  ? ' · ${members.length} 项'
+                  : ''}',
           if (multiple) 'completedBytes': summary?['transferred'] ?? 0,
           if (multiple) 'totalBytes': summary?['total'],
           'removeParams': batch.isEmpty

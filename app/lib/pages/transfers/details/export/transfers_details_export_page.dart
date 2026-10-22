@@ -12,6 +12,7 @@ class DocumentExportPage extends StatelessWidget {
     required this.kind,
     this.transferId,
     this.partial = false,
+    this.sourceLabel = '被控设备',
   });
   final AppController controller;
   final String localPath;
@@ -19,6 +20,7 @@ class DocumentExportPage extends StatelessWidget {
   final String kind;
   final String? transferId;
   final bool partial;
+  final String sourceLabel;
 
   @override
   Widget build(BuildContext context) => PageFrame(
@@ -30,6 +32,7 @@ class DocumentExportPage extends StatelessWidget {
       kind: kind,
       transferId: transferId,
       partial: partial,
+      sourceLabel: sourceLabel,
     ),
   );
 }

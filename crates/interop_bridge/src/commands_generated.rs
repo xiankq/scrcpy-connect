@@ -930,10 +930,6 @@ impl Command {
                 name: "shareId",
                 kind: FieldType::String,
             }],
-            Self::TransfersCancel => &[Field {
-                name: "transferId",
-                kind: FieldType::String,
-            }],
             Self::TransfersGet => &[Field {
                 name: "transferId",
                 kind: FieldType::String,
@@ -1262,6 +1258,10 @@ impl Command {
                     name: "keepActive",
                     kind: FieldType::Boolean,
                 },
+                Field {
+                    name: "packageName",
+                    kind: FieldType::String,
+                },
             ],
             Self::SessionStop => &[
                 Field {
@@ -1299,6 +1299,16 @@ impl Command {
                 Field {
                     name: "pressure",
                     kind: FieldType::Number,
+                },
+            ],
+            Self::TransfersCancel => &[
+                Field {
+                    name: "transferId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "batchId",
+                    kind: FieldType::String,
                 },
             ],
             Self::TransfersRemove => &[

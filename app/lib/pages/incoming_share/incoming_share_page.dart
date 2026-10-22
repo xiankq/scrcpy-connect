@@ -1,10 +1,11 @@
+import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
+import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
-import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -151,7 +152,7 @@ class IncomingSharePage extends HookConsumerWidget {
 
     final errors = strings(share['errors']);
     final leading = <Widget>[
-      const StateNote('明确选择本次接收设备。切换当前操作设备不会改变已提交任务的目标。'),
+      const StateNote('选择设备后确认保存目录；提交时固定来源和目标，切换页面不改目标。'),
       if (importing) ...[
         const LinearProgressIndicator(),
         const StateNote('正在读取分享内容，完成后即可发送。你也可以取消本次分享。'),
@@ -293,16 +294,98 @@ class IncomingSharePage extends HookConsumerWidget {
             if (index < devicesStart) return middle[index - middleStart];
             if (index >= trailingStart) return trailing[index - trailingStart];
             final device = devices[index - devicesStart];
-            return ChoiceRow<String>(
+            return _ShareDeviceCard(
               key: ValueKey(('incoming-device', value(device, 'id'))),
-              value: value(device, 'id'),
-              groupValue: deviceId.value,
-              onChanged: busy.value || locked
+              device: device,
+              selected: deviceId.value == value(device, 'id'),
+              onTap: busy.value || locked
                   ? null
-                  : (v) => deviceId.value = v,
-              title: Text(deviceName(device)),
+                  : () => deviceId.value = value(device, 'id'),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _ShareDeviceCard extends StatelessWidget {
+  const _ShareDeviceCard({
+    super.key,
+    required this.device,
+    required this.selected,
+    required this.onTap,
+  });
+  final Json device;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      checked: selected,
+      inMutuallyExclusiveGroup: true,
+      child: ContentPanel(
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: DesignTokens.componentDeviceListItemHeight,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.spacingMd,
+                vertical: DesignTokens.spacingMd,
+              ),
+              child: Row(
+                children: [
+                  DeviceIdentity(device: device),
+                  const SizedBox(width: DesignTokens.spacingMd),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          deviceName(device),
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: DesignTokens.spacingXxs),
+                        Row(
+                          children: [
+                            Icon(
+                              LucideIcons.circleCheck,
+                              size: DesignTokens.componentIconSmallSize,
+                              color: ConnectTokens.mint,
+                            ),
+                            const SizedBox(width: DesignTokens.spacingXxs),
+                            Expanded(
+                              child: Text(
+                                '已连接 · ${deviceTransportLabel(device)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: DesignTokens.spacingXs),
+                  if (selected)
+                    Icon(
+                      LucideIcons.circleCheck,
+                      color: theme.colorScheme.primary,
+                      size: DesignTokens.componentIconSize,
+                    ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

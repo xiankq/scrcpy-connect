@@ -1672,12 +1672,54 @@ impl Runtime {
         }
         let id = required(p, "transferId")?;
         let mut tasks = self.activities.transfers.lock().await;
+        if command == "transfers.get" {
+            let task = tasks
+                .get(id)
+                .ok_or_else(|| CoreError::new("not_found", "任务已不存在。"))?;
+            let batch_id = task.batch_id.clone();
+            let current_id = task.id.clone();
+            let mut result = transfer_value(task);
+            let mut items = tasks
+                .values()
+                .filter(|item| {
+                    item.id == current_id || (!batch_id.is_empty() && item.batch_id == batch_id)
+                })
+                .map(transfer_value)
+                .collect::<Vec<_>>();
+            items.sort_by(|left, right| {
+                let left_index = left["itemIndex"].as_u64().unwrap_or(u64::MAX);
+                let right_index = right["itemIndex"].as_u64().unwrap_or(u64::MAX);
+                left_index
+                    .cmp(&right_index)
+                    .then_with(|| {
+                        left["createdAt"]
+                            .as_u64()
+                            .unwrap_or_default()
+                            .cmp(&right["createdAt"].as_u64().unwrap_or_default())
+                    })
+                    .then_with(|| {
+                        left["id"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .cmp(right["id"].as_str().unwrap_or_default())
+                    })
+            });
+            result["items"] = serde_json::Value::Array(items);
+            if !batch_id.is_empty() {
+                let members = tasks
+                    .values()
+                    .filter(|item| item.batch_id == batch_id)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if let Some(summary) = batch_values(&members).into_iter().next() {
+                    result["batch"] = summary;
+                }
+            }
+            return Ok(result);
+        }
         let task = tasks
             .get_mut(id)
             .ok_or_else(|| CoreError::new("not_found", "任务已不存在。"))?;
-        if command == "transfers.get" {
-            return Ok(transfer_value(task));
-        }
         if command == "transfers.cancel" {
             task.cancellation.cancel();
             if matches!(task.status.as_str(), "running" | "finalizing") {
