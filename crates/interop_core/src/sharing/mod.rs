@@ -476,6 +476,40 @@ fn required<'a>(value: &'a Value, key: &str) -> CoreResult<&'a str> {
 }
 
 impl Runtime {
+    /// Imported descriptor leases stay native; Dart supplies durable task facts.
+    pub async fn execute_file_publication(
+        &self,
+        phase: &str,
+        share: &str,
+        params: Value,
+    ) -> CoreResult<Value> {
+        let manager = match self.sharing.lock().await.clone() {
+            Some(manager) => manager,
+            None if phase == "reconcile" => {
+                return Ok(json!({"reconciled":false,"reason":"not_configured"}));
+            }
+            None => return Err(CoreError::new("share_not_configured", "分享来源尚未配置。")),
+        };
+        if phase == "reconcile" {
+            return manager.command("sharing.reconcile", &params);
+        }
+        let mut state = lock(&manager.state);
+        match phase {
+            "begin" => Ok(json!({"receipt":state.begin_publication(share,&params)?})),
+            "finish" => {
+                state.publication_finished(
+                    share,
+                    params.get("receipt").filter(|value| !value.is_null()),
+                )?;
+                Ok(json!({"recorded":true}))
+            }
+            "abort" => {
+                state.publication_aborted(share)?;
+                Ok(json!({"aborted":true}))
+            }
+            _ => Err(CoreError::new("invalid_argument", "分享来源租约阶段无效。")),
+        }
+    }
     pub(crate) async fn sharing_manager(&self) -> CoreResult<Arc<ImportManager>> {
         self.sharing.lock().await.clone().ok_or_else(|| {
             CoreError::new("sharing_not_configured", "分享来源尚未连接本机授权缓存。")
@@ -559,94 +593,10 @@ impl Runtime {
         manager.command(command, params)
     }
     pub(crate) async fn reconcile_shares_from_transfers(&self) -> CoreResult<Value> {
-        let Some(manager) = self.sharing.lock().await.clone() else {
-            return Ok(json!({"reconciled":false,"reason":"not_configured"}));
-        };
-        let known: std::collections::HashSet<_> = manager
-            .command("sharing.sources", &Value::Null)?["sourcePaths"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-            .map(String::from)
-            .collect();
-        if known.is_empty() {
-            return manager.command(
-                "sharing.reconcile",
-                &json!({"transfers":[],"complete":true}),
-            );
-        }
-        // Match transfer persistence's lock order. Keep the snapshot stable until
-        // journal reconciliation finishes: a memory-only completed transition is
-        // never evidence that a resumable source may be deleted.
-        let _persistence = self.persistence.lock().await;
-        let tasks = self.activities.transfers.lock().await;
-        let persisted = async {
-            let batches: std::collections::HashSet<_> = tasks
-                .values()
-                .filter(|task| task.direction == "push" && known.contains(&task.source))
-                .map(|task| task.batch_id.as_str())
-                .collect();
-            self.transfer_store
-                .lock()
-                .await
-                .persist_selected(
-                    tasks
-                        .iter()
-                        .filter(|(_, task)| {
-                            task.direction == "push" && batches.contains(task.batch_id.as_str())
-                        })
-                        .map(|(id, task)| (id.as_str(), task)),
-                )
-                .await?;
-            #[cfg(unix)]
-            {
-                let root = self.root.clone();
-                tokio::task::spawn_blocking(move || File::open(root)?.sync_all())
-                    .await
-                    .map_err(|error| CoreError::new("persistence_failed", error.to_string()))??;
-            }
-            Ok::<_, CoreError>(())
-        }
-        .await;
-        if persisted.is_err() {
-            return Ok(
-                json!({"reconciled":false,"snapshotComplete":false,"reason":"transfer_snapshot_not_durable","sourcesRetained":true}),
-            );
-        }
-        let mut groups: std::collections::BTreeMap<
-            String,
-            (bool, std::collections::BTreeSet<String>),
-        > = std::collections::BTreeMap::new();
-        let mut relevant = std::collections::HashSet::new();
-        for task in tasks
-            .values()
-            .filter(|task| task.direction == "push" && known.contains(&task.source))
-        {
-            relevant.insert(task.batch_id.clone());
-            if relevant.len() > 1024 {
-                return manager.command(
-                    "sharing.reconcile",
-                    &json!({"transfers":vec![Value::Null;1025],"complete":true}),
-                );
-            }
-        }
-        for task in tasks
-            .values()
-            .filter(|t| t.direction == "push" && relevant.contains(&t.batch_id))
-        {
-            let entry = groups
-                .entry(task.batch_id.clone())
-                .or_insert((true, Default::default()));
-            entry.0 &= task.status == "completed";
-            if known.contains(&task.source) {
-                entry.1.insert(task.source.clone());
-            }
-        }
-        let refs:Vec<_>=groups.into_iter().map(|(id,(complete,sources))|json!({"id":id,"status":if complete{"completed"}else{"retained"},"sources":sources})).collect();
-        manager.command(
-            "sharing.reconcile",
-            &json!({"transfers":refs,"complete":true}),
+        // Only the Dart journal owner may attest a complete durable snapshot.
+        // Absence of that proof retains every imported source.
+        Ok(
+            json!({"reconciled":false,"snapshotComplete":false,"reason":"dart_transfer_snapshot_required","sourcesRetained":true}),
         )
     }
 }

@@ -60,10 +60,52 @@ pub(crate) struct Destination {
 struct RegistryState {
     destinations: HashMap<String, Destination>,
     bindings: HashMap<String, String>,
+    server_listeners: HashMap<String, tokio_util::sync::CancellationToken>,
 }
 #[derive(Default)]
 pub(crate) struct Registry(Mutex<RegistryState>, tokio::sync::Mutex<()>);
 impl Registry {
+    pub(crate) fn retire_server(&self, server: crate::server::Connection) {
+        let bindings = {
+            let mut state = self.0.lock().expect("reverse registry mutex");
+            for stop in state.server_listeners.values() {
+                stop.cancel();
+            }
+            state.server_listeners.clear();
+            std::mem::take(&mut state.bindings)
+        };
+        if bindings.is_empty() {
+            return;
+        }
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(async move {
+                // The official transport outlives a Rust Client. Remove only
+                // its exact owned mappings, and pin the original transport ID
+                // so a replacement device connection is never affected.
+                let cleanup = async {
+                    let bytes = server_reverse_request(&server, "list-forward").await?;
+                    let text = std::str::from_utf8(protocol_string(&bytes)?)
+                        .map_err(|_| Error::Protocol("invalid reverse list".into()))?;
+                    for line in text.lines() {
+                        let fields = line.split_ascii_whitespace().collect::<Vec<_>>();
+                        if fields.len() == 3
+                            && bindings
+                                .get(fields[1])
+                                .is_some_and(|host| host == fields[2])
+                        {
+                            let _ = server_reverse_request(
+                                &server,
+                                &format!("killforward:{}", fields[1]),
+                            )
+                            .await;
+                        }
+                    }
+                    Ok::<_, Error>(())
+                };
+                let _ = tokio::time::timeout(Duration::from_secs(3), cleanup).await;
+            });
+        }
+    }
     pub fn destination(&self, service: &[u8]) -> Option<Destination> {
         let service = std::str::from_utf8(service).ok()?;
         self.0
@@ -77,6 +119,57 @@ impl Registry {
         let mut state = self.0.lock().expect("reverse registry mutex");
         if let Some(service) = state.bindings.remove(device) {
             state.destinations.remove(&service);
+            if let Some(stop) = state.server_listeners.remove(&service) {
+                stop.cancel();
+            }
+        }
+    }
+}
+
+async fn server_reverse_request(
+    server: &crate::server::Connection,
+    command: &str,
+) -> Result<Vec<u8>> {
+    let options = OperationOptions {
+        timeout: Duration::from_secs(3),
+        ..Default::default()
+    };
+    bounded(options.timeout, &options.cancellation, async {
+        let mut stream = server
+            .open(
+                format!("reverse:{command}").as_bytes(),
+                &options,
+                tokio_util::sync::CancellationToken::new(),
+                std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            )
+            .await?;
+        let mut bytes = Vec::new();
+        let mut buffer = [0; 4096];
+        loop {
+            let n = stream.read(&mut buffer).await?;
+            if n == 0 {
+                break;
+            }
+            if bytes.len() + n > 65543 {
+                return Err(Error::OutputLimit);
+            }
+            bytes.extend_from_slice(&buffer[..n]);
+        }
+        Ok(bytes)
+    })
+    .await
+}
+
+impl Drop for Registry {
+    fn drop(&mut self) {
+        for stop in self
+            .0
+            .get_mut()
+            .expect("reverse registry mutex")
+            .server_listeners
+            .values()
+        {
+            stop.cancel();
         }
     }
 }
@@ -91,13 +184,18 @@ impl Drop for Registration {
         if self.committed {
             return;
         }
-        self.client
-            .reverse_registry()
-            .0
-            .lock()
-            .expect("reverse registry mutex")
-            .destinations
-            .remove(&self.token);
+        {
+            let mut state = self
+                .client
+                .reverse_registry()
+                .0
+                .lock()
+                .expect("reverse registry mutex");
+            state.destinations.remove(&self.token);
+            if let Some(stop) = state.server_listeners.remove(&self.token) {
+                stop.cancel();
+            }
+        }
         // OPEN may have installed an ephemeral listener before timeout/cancellation.
         // Remove only listeners carrying this exact, random operation token.
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
@@ -204,13 +302,57 @@ impl Client {
         .await?;
         let mut random = [0; 16];
         rsa::rand_core::OsRng.fill_bytes(&mut random);
-        let token = format!(
-            "localabstract:interop-reverse-{}",
-            random
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>()
-        );
+        let token = if self.uses_server() {
+            // The official server accepts tcp:port destinations only on its own
+            // loopback interface. An owned listener preserves arbitrary explicit
+            // host destinations without delegating a Rust ADB transport.
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+            let token = format!("tcp:{}", listener.local_addr()?.port());
+            let stop = self.cancellation().child_token();
+            self.reverse_registry()
+                .0
+                .lock()
+                .expect("reverse registry mutex")
+                .server_listeners
+                .insert(token.clone(), stop.clone());
+            let timeout = options.timeout;
+            tokio::spawn(async move {
+                let limit = std::sync::Arc::new(tokio::sync::Semaphore::new(32));
+                loop {
+                    let accepted = tokio::select! {
+                        _ = stop.cancelled() => break,
+                        accepted = listener.accept() => accepted,
+                    };
+                    let Ok((mut incoming, _)) = accepted else {
+                        break;
+                    };
+                    let Ok(permit) = limit.clone().try_acquire_owned() else {
+                        continue;
+                    };
+                    let stopping = stop.clone();
+                    tokio::spawn(async move {
+                        let _permit = permit;
+                        tokio::select! {
+                            _=stopping.cancelled()=>{},
+                            _=async {
+                                if let Ok(Ok(mut host)) = tokio::time::timeout(timeout, tokio::net::TcpStream::connect(destination)).await {
+                                    let _=tokio::io::copy_bidirectional(&mut incoming,&mut host).await;
+                                }
+                            }=>{},
+                        }
+                    });
+                }
+            });
+            token
+        } else {
+            format!(
+                "localabstract:interop-reverse-{}",
+                random
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>()
+            )
+        };
         let mut guard = Registration {
             client: self.clone(),
             token: token.clone(),
@@ -270,6 +412,9 @@ impl Client {
             .expect("reverse registry mutex");
         if let Some(previous) = state.bindings.insert(actual.service()?, token) {
             state.destinations.remove(&previous);
+            if let Some(stop) = state.server_listeners.remove(&previous) {
+                stop.cancel();
+            }
         }
         guard.committed = true;
         Ok(ReverseBinding {
@@ -338,11 +483,15 @@ impl Client {
                 "unexpected reverse removal response".into(),
             ));
         }
-        *self
+        let mut state = self
             .reverse_registry()
             .0
             .lock()
-            .expect("reverse registry mutex") = RegistryState::default();
+            .expect("reverse registry mutex");
+        for stop in state.server_listeners.values() {
+            stop.cancel();
+        }
+        *state = RegistryState::default();
         Ok(())
     }
 }

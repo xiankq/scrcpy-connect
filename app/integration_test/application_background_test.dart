@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:interop_bridge/interop_bridge.dart';
+import 'package:device_runtime/device_runtime.dart';
 
 // Runs the production bridge and actual Android services with an isolated
 // private directory. No device, remote page, capture or audio output is opened.
@@ -22,7 +22,7 @@ void main() {
       final directory = await Directory.systemTemp.createTemp(
         'background-acceptance-',
       );
-      InteropBridge? bridge;
+      DeviceRuntime? bridge;
       Future<Map<String, dynamic>> nativeStatus() async =>
           Map<String, dynamic>.from(
             await platform.invokeMethod<Map<Object?, Object?>>(
@@ -43,7 +43,7 @@ void main() {
       }
 
       try {
-        bridge = await InteropBridge.initialize(dataDirectory: directory.path);
+        bridge = await DeviceRuntime.initialize(dataDirectory: directory.path);
         expect(
           (await bridge.request('settings.get'))['backgroundKeepAlive'],
           true,
@@ -67,7 +67,7 @@ void main() {
         bridge = null;
         // Disposing outputs/observers must not retire application background.
         await waitRunning(true);
-        bridge = await InteropBridge.initialize(dataDirectory: directory.path);
+        bridge = await DeviceRuntime.initialize(dataDirectory: directory.path);
         status = await waitRunning(true);
         expect(status['audioRequested'], false);
         expect(status['mediaPlaybackReady'], false);

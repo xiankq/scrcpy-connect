@@ -113,7 +113,7 @@ void main() {
         );
         expect(started['nativeAttached'], isTrue);
         final output = await request('audio.status', {'sourceId': sourceId});
-        expect(output['backend'], 'fvp');
+        expect(output['backend'], 'media_codec');
         expect(output['sourcePcmReceived'], true);
         expect(output['playbackClockAdvanced'], true);
         expect(output.containsKey('bytesWritten'), false);

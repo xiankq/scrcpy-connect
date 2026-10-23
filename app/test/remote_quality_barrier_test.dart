@@ -20,7 +20,7 @@ const pixels = <String, dynamic>{
   'captureGeneration': 1,
   'generation': 10,
   'firstFrameDecoded': true,
-  'evidence': 'mdk.snapshot',
+  'evidence': 'media_codec.snapshot',
 };
 
 void main() {

@@ -399,14 +399,14 @@ async fn runtime_definite_validation_failure_can_retry_without_abandoning_lease(
     .unwrap();
     let params = json!({"shareId":share,"deviceId":"offline","items":[{"source":path,"destination":"/sdcard/retry"}]});
     for _ in 0..2 {
-        assert_eq!(
-            runtime
-                .invoke("files.push", params.clone())
-                .await
-                .unwrap_err()
-                .code,
-            "disconnected"
-        );
+        runtime
+            .execute_file_publication("begin", &share, params.clone())
+            .await
+            .unwrap();
+        runtime
+            .execute_file_publication("abort", &share, json!({}))
+            .await
+            .unwrap();
     }
     let inventory = runtime.invoke("sharing.sources", json!({})).await.unwrap();
     assert_eq!(inventory["leases"].as_array().unwrap().len(), 1);
@@ -601,17 +601,9 @@ async fn completed_memory_snapshot_cannot_reclaim_until_the_same_snapshot_is_dur
     );
     command(&manager, "sharing.consume", json!({"shareId":share}));
     drop(manager);
-    let record = json!({"id":id(),"deviceId":"offline","direction":"push","source":path,"destination":"/sdcard/sentinel","name":"sentinel","status":"completed","transferred":37,"total":37,"error":null,"policy":"ask","createdAt":1,"batchId":transfer});
-    fs::write(
-        root.path().join("transfers.json"),
-        serde_json::to_vec(&json!([record])).unwrap(),
-    )
-    .unwrap();
     let runtime = interop_core::Runtime::initialize(root.path())
         .await
         .unwrap();
-    fs::remove_file(root.path().join("transfers.json")).unwrap();
-    fs::create_dir(root.path().join("transfers.json")).unwrap();
     runtime
         .invoke(
             "sharing.configure",
@@ -623,7 +615,7 @@ async fn completed_memory_snapshot_cannot_reclaim_until_the_same_snapshot_is_dur
         .invoke("sharing.reconcile", json!({}))
         .await
         .unwrap();
-    assert_eq!(blocked["reason"], "transfer_snapshot_not_durable");
+    assert_eq!(blocked["reason"], "dart_transfer_snapshot_required");
     assert_eq!(
         fs::read(&path).unwrap(),
         b"must survive persistence failure"
@@ -635,18 +627,9 @@ async fn completed_memory_snapshot_cannot_reclaim_until_the_same_snapshot_is_dur
             .len(),
         1
     );
-    fs::remove_dir(root.path().join("transfers.json")).unwrap();
-    assert_eq!(
-        runtime
-            .invoke("sharing.reconcile", json!({}))
-            .await
-            .unwrap()["reconciled"],
-        true
-    );
+    // Only a complete snapshot supplied after the Dart journal flush permits release.
+    runtime.execute_file_publication("reconcile","",json!({"transfers":[{"id":transfer,"status":"completed","sources":[path]}],"complete":true})).await.unwrap();
     assert!(!Path::new(&path).exists());
-    let durable: Value =
-        serde_json::from_slice(&fs::read(root.path().join("transfers.json")).unwrap()).unwrap();
-    assert_eq!(durable["transfers"][0]["status"], "completed");
 }
 
 #[tokio::test]

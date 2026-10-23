@@ -7,6 +7,8 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConnectionPolicy {
+    #[serde(default)]
+    pub adb_server: Option<AdbServerPolicy>,
     pub request_authorization: bool,
     pub public_key_comment: String,
     pub connect_timeout_ms: u64,
@@ -22,6 +24,15 @@ pub struct ConnectionPolicy {
     pub health_probe_timeout_ms: u64,
     pub health_failure_limit: u32,
     pub monitor_interval_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AdbServerPolicy {
+    pub host: String,
+    pub port: u16,
+    pub executable_path: String,
+    pub key_directory: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -59,6 +70,7 @@ impl ConnectionPolicy {
     /// its complete configuration explicitly through initialize_with_connection_policy.
     pub fn standalone() -> Self {
         Self {
+            adb_server: None,
             request_authorization: true,
             public_key_comment: "interop-controller".into(),
             connect_timeout_ms: 60_000,
@@ -86,6 +98,17 @@ impl ConnectionPolicy {
     }
 
     pub fn validate(&self) -> CoreResult<()> {
+        if self.adb_server.as_ref().is_some_and(|server| {
+            server.host != "127.0.0.1"
+                || server.port == 0
+                || !std::path::Path::new(&server.executable_path).is_absolute()
+                || !std::path::Path::new(&server.key_directory).is_absolute()
+        }) {
+            return Err(CoreError::new(
+                "invalid_connection_policy",
+                "官方ADB端点必须属于本机隔离服务。",
+            ));
+        }
         let durations = [
             self.connect_timeout_ms,
             self.discovery_timeout_ms,

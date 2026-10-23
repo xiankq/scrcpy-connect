@@ -51,7 +51,7 @@ async fn unprobed_quality_is_unknown_and_invalid_settings_are_atomic() {
 }
 
 #[tokio::test]
-async fn per_device_quality_is_isolated_and_not_restored_to_new_identities() {
+async fn per_device_execution_quality_is_isolated_and_invalid_updates_are_atomic() {
     let directory = tempfile::tempdir().unwrap();
     let runtime = configured_runtime(directory.path()).await;
     let a = runtime
@@ -87,9 +87,9 @@ async fn per_device_quality_is_isolated_and_not_restored_to_new_identities() {
             .await
             .is_err()
     );
-    let metadata = runtime.invoke("settings.export", json!({})).await.unwrap();
-    runtime.invoke("settings.import", metadata).await.unwrap();
-    let exported = runtime.invoke("settings.export", json!({})).await.unwrap();
-    assert_eq!(exported["metadata"]["settings"]["deviceQuality"], json!({}));
-    assert_eq!(exported["metadata"]["settings"]["videoCodec"], "h264");
+    assert_eq!(
+        runtime.invoke("settings.get", json!({})).await.unwrap(),
+        stored
+    );
+    // Metadata preference remapping is tested by the Dart preference owner.
 }

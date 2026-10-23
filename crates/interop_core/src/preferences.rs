@@ -5,71 +5,6 @@ use crate::{
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-#[cfg(test)]
-pub(crate) fn defaults() -> Value {
-    json!({"appearance":"light",
-        "backgroundKeepAlive":true,
-        "notificationAlerts":true,"callAlerts":true,"adbBurstMode":true,
-        "fileViewMode":"grid","fileSortKey":"name","fileSortAscending":true,
-        "deviceSettings":{},
-        "qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":4_000_000,"videoCodec":"h264","videoEncoder":null,"deviceQuality":{}})
-}
-
-const REMOVED_SETTINGS: [&str; 11] = [
-    "backgroundConnection",
-    "backgroundAudio",
-    "reduceTransparency",
-    "reduceMotion",
-    "audioMode",
-    "audioDevices",
-    "clipboardEnabled",
-    "clipboardTarget",
-    "clipboardSync",
-    "clipboardMode",
-    "clipboardDevice",
-];
-
-/// Retired global source choices must not survive restart or metadata restore.
-pub(crate) fn remove_retired_settings(settings: &mut Value) {
-    if let Some(settings) = settings.as_object_mut() {
-        for key in REMOVED_SETTINGS {
-            settings.remove(key);
-        }
-    }
-}
-
-fn is_former_balanced_default(quality: &Value) -> bool {
-    quality["qualityPreset"] == "balanced"
-        && quality["maxSize"].as_u64() == Some(1280)
-        && quality["maxFps"].as_u64() == Some(60)
-        && quality["videoBitRate"].as_u64() == Some(8_000_000)
-}
-
-/// Only records that still match every old default field migrate. A user who
-/// explicitly changed burst or bitrate must keep that choice.
-fn is_former_network_default(settings: &Value) -> bool {
-    settings["adbBurstMode"].as_bool() == Some(false) && is_former_balanced_default(settings)
-}
-
-pub(crate) fn migrate_network_first_defaults(settings: &mut Value) {
-    if is_former_network_default(settings) {
-        settings["adbBurstMode"] = json!(true);
-    }
-    if is_former_balanced_default(settings) {
-        settings["videoBitRate"] = json!(4_000_000);
-    }
-    if let Some(device_quality) = settings
-        .get_mut("deviceQuality")
-        .and_then(Value::as_object_mut)
-    {
-        for quality in device_quality.values_mut() {
-            if is_former_balanced_default(quality) {
-                quality["videoBitRate"] = json!(4_000_000);
-            }
-        }
-    }
-}
-
 pub(crate) const QUALITY_KEYS: [&str; 6] = [
     "qualityPreset",
     "maxSize",
@@ -119,80 +54,44 @@ pub(crate) fn validate_quality(values: &Value) -> CoreResult<()> {
     Ok(())
 }
 
-pub(crate) fn validated_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
+/// Defensive validation at the native execution boundary. Product preference
+/// defaults, retired fields, migration and persistence belong to Dart.
+pub(crate) fn validated_execution_settings(current: &Value, changes: &Value) -> CoreResult<Value> {
     let values = changes
         .as_object()
-        .ok_or_else(|| CoreError::new("invalid_argument", "设置必须是对象。"))?;
-    let mut next = current.clone();
+        .ok_or_else(|| CoreError::new("invalid_argument", "执行配置必须是对象。"))?;
+    let mut next = current.as_object().cloned().unwrap_or_default();
     for (key, value) in values {
         let valid = match key.as_str() {
-            "appearance" => matches!(value.as_str(), Some("light" | "dark" | "system")),
-            "backgroundKeepAlive"
-            | "notificationAlerts"
-            | "callAlerts"
-            | "adbBurstMode"
-            | "fileSortAscending" => value.is_boolean(),
-            "fileViewMode" => matches!(value.as_str(), Some("grid" | "list")),
-            "fileSortKey" => matches!(value.as_str(), Some("name" | "size" | "modified" | "type")),
-            "deviceSettings" => value.as_object().is_some_and(|map| {
-                map.len() <= 256
-                    && map.iter().all(|(id, settings)| {
-                        uuid::Uuid::parse_str(id).is_ok()
-                            && settings.as_object().is_some_and(|settings| {
-                                settings.iter().all(|(key, value)| match key.as_str() {
-                                    "clipboardSync" | "showNavigationBar" | "wakeOnConnect"
-                                    | "lockOnClose" | "stayAwake" => value.is_boolean(),
-                                    "remoteAspectRatio" => matches!(
-                                        value.as_str(),
-                                        Some(
-                                            "original"
-                                                | "auto"
-                                                | "9:16"
-                                                | "3:4"
-                                                | "1:1"
-                                                | "16:9"
-                                                | "custom"
-                                        )
-                                    ),
-                                    "remoteCustomRatio" => value.as_str().is_some_and(|text| {
-                                        let Some((width, height)) = text.split_once(':') else {
-                                            return false;
-                                        };
-                                        let (Ok(width), Ok(height)) =
-                                            (width.parse::<f64>(), height.parse::<f64>())
-                                        else {
-                                            return false;
-                                        };
-                                        width.is_finite()
-                                            && height.is_finite()
-                                            && width > 0.0
-                                            && height > 0.0
-                                            && (0.2..=5.0).contains(&(width / height))
-                                    }),
-                                    _ => false,
-                                })
-                            })
-                    })
-            }),
-            "qualityPreset" | "videoCodec" | "videoEncoder" | "maxSize" | "maxFps"
-            | "videoBitRate" => quality_value(key, value),
+            "adbBurstMode" => value.is_boolean(),
             "deviceQuality" => value.as_object().is_some_and(|map| {
                 map.len() <= 256
                     && map.iter().all(|(id, quality)| {
                         uuid::Uuid::parse_str(id).is_ok() && validate_quality(quality).is_ok()
                     })
             }),
-            _ => false,
+            "deviceSettings" => value.as_object().is_some_and(|map| {
+                map.len() <= 256
+                    && map.iter().all(|(id, settings)| {
+                        uuid::Uuid::parse_str(id).is_ok()
+                            && settings.as_object().is_some_and(|settings| {
+                                settings
+                                    .iter()
+                                    .all(|(key, value)| key == "stayAwake" && value.is_boolean())
+                            })
+                    })
+            }),
+            _ => quality_value(key, value),
         };
         if !valid {
             return Err(CoreError::new(
                 "invalid_argument",
-                format!("设置值无效：{key}"),
+                format!("执行配置无效：{key}"),
             ));
         }
-        next[key] = value.clone();
+        next.insert(key.clone(), value.clone());
     }
-    Ok(next)
+    Ok(Value::Object(next))
 }
 
 fn changed_keep_active_devices(previous: &Value, next: &Value) -> Vec<String> {
@@ -225,13 +124,12 @@ impl Runtime {
             "settings.update" => {
                 let mut store = self.store.write().await;
                 let previous = store.settings.clone();
-                store.settings = validated_settings(&store.settings, params)?;
+                store.settings = validated_execution_settings(&store.settings, params)?;
                 let affected = changed_keep_active_devices(&previous, &store.settings);
                 drop(store);
-                self.persist().await?;
-                // Persistence may wait behind another writer. Publish while
-                // holding a fresh read guard so a late receipt cannot regress
-                // a newer in-memory state already observed by a snapshot.
+                // This is an execution mirror, not the product preference store.
+                // Dart commits preferences before projecting them here.
+                // Read the current mirror again before emitting a receipt.
                 let store = self.store.read().await;
                 let result = store.settings.clone();
                 self.emit("settings.changed", None, result.clone());
@@ -261,13 +159,6 @@ impl Runtime {
                     .as_array()
                     .filter(|a| a.len() <= 256)
                     .ok_or_else(|| CoreError::new("invalid_data", "设备列表无效或过长。"))?;
-                let mut imported_settings = metadata["settings"].clone();
-                remove_retired_settings(&mut imported_settings);
-                let mut settings = validated_settings(&self.settings_defaults, &imported_settings)?;
-                // Restored devices receive new identities; old per-device quality keys
-                // must not silently attach to a different authorization record.
-                settings["deviceQuality"] = json!({});
-                settings["deviceSettings"] = json!({});
                 let mut restored = Vec::new();
                 for entry in entries {
                     let transport = TransportKind::parse(required(entry, "transport")?)
@@ -316,17 +207,14 @@ impl Runtime {
                 let mut store = self.store.write().await;
                 // A restored endpoint never merges into or overwrites an authenticated live identity.
                 store.devices.extend(restored);
-                let affected = changed_keep_active_devices(&store.settings, &settings);
-                store.settings = settings;
                 drop(store);
                 self.persist().await?;
                 self.emit("devices.changed", None, json!({"restored":count}));
-                Box::pin(self.sync_changed_keep_active(affected)).await?;
                 Ok(json!({"restored":count,"authorizationRestored":false}))
             }
             "system.info" => Ok(
                 json!({"version":env!("CARGO_PKG_VERSION"),"platform":std::env::consts::OS,
-                "architecture":std::env::consts::ARCH,"adbImplementation":"Rust independent host",
+                "architecture":std::env::consts::ARCH,"adbImplementation":if self.connection_policy.adb_server.is_some(){"official platform-tools"}else{"Rust mobile host"},
                 "scrcpyVersion":"5.0.1","identityMigration":false,"wirelessCryptoStatus":"experimental-rustcrypto"}),
             ),
             _ => Err(CoreError::new("unknown_command", "未知设置操作。")),
@@ -361,151 +249,54 @@ impl Runtime {
 }
 
 #[cfg(test)]
+pub(crate) fn defaults() -> Value {
+    json!({"adbBurstMode":true,"deviceSettings":{},"qualityPreset":"balanced",
+        "maxSize":1280,"maxFps":60,"videoBitRate":4_000_000,"videoCodec":"h264",
+        "videoEncoder":null,"deviceQuality":{}})
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
-    fn network_first_defaults_prefer_burst_and_four_megabits() {
-        let settings = defaults();
-        assert_eq!(settings["adbBurstMode"], true);
-        assert_eq!(settings["qualityPreset"], "balanced");
-        assert_eq!(settings["videoBitRate"], 4_000_000);
-        assert_eq!(settings["fileViewMode"], "grid");
-        assert_eq!(settings["fileSortKey"], "name");
-        assert_eq!(settings["fileSortAscending"], true);
-    }
-
-    #[test]
-    fn file_browser_preferences_validate_and_round_trip() {
-        let settings = defaults();
-        let next = validated_settings(
-            &settings,
-            &json!({
-                "fileViewMode":"list",
-                "fileSortKey":"modified",
-                "fileSortAscending":false
-            }),
-        )
-        .unwrap();
-        assert_eq!(next["fileViewMode"], "list");
-        assert_eq!(next["fileSortKey"], "modified");
-        assert_eq!(next["fileSortAscending"], false);
-        assert!(validated_settings(&next, &json!({"fileViewMode":"columns"})).is_err());
-        assert!(validated_settings(&next, &json!({"fileSortKey":"relevance"})).is_err());
-    }
-
-    #[test]
-    fn network_first_migration_changes_only_the_former_balanced_signature() {
-        let mut settings = json!({
-            "adbBurstMode":false,
-            "qualityPreset":"balanced",
-            "maxSize":1280,
-            "maxFps":60,
-            "videoBitRate":8_000_000,
-            "deviceQuality":{
-                "old":{"qualityPreset":"balanced","maxSize":1280,"maxFps":60,"videoBitRate":8_000_000},
-                "custom":{"qualityPreset":"balanced","maxSize":1280,"maxFps":30,"videoBitRate":8_000_000},
-                "clear":{"qualityPreset":"clear","maxSize":1920,"maxFps":60,"videoBitRate":12_000_000}
-            }
-        });
-        migrate_network_first_defaults(&mut settings);
-        assert_eq!(settings["adbBurstMode"], true);
-        assert_eq!(settings["videoBitRate"], 4_000_000);
-        assert_eq!(settings["deviceQuality"]["old"]["videoBitRate"], 4_000_000);
-        assert_eq!(
-            settings["deviceQuality"]["custom"]["videoBitRate"],
-            8_000_000
-        );
-        assert_eq!(
-            settings["deviceQuality"]["clear"]["videoBitRate"],
-            12_000_000
-        );
-    }
-
-    #[test]
-    fn retiring_global_choices_preserves_explicit_device_settings() {
-        let mut settings = json!({
-            "audioMode":"fixed", "audioDevices":["a"], "backgroundAudio":true,
-            "backgroundConnection":false, "backgroundKeepAlive":true,
-            "clipboardSync":true, "clipboardMode":"fixed", "clipboardDevice":"a",
-            "reduceMotion":true, "reduceTransparency":true,
-            "deviceSettings":{"a":{"clipboardSync":false,"showNavigationBar":true}},
-            "appearance":"dark"
-        });
-        remove_retired_settings(&mut settings);
-        assert_eq!(
-            settings,
-            json!({
-                "backgroundKeepAlive":true,
-                "deviceSettings":{"a":{"clipboardSync":false,"showNavigationBar":true}},
-                "appearance":"dark"
-            })
-        );
-    }
-
-    #[tokio::test]
-    async fn restored_device_identities_do_not_inherit_clipboard_or_navigation_preferences() {
-        let directory = tempfile::tempdir().unwrap();
-        let runtime = Runtime::initialize(directory.path()).await.unwrap();
-        let id = uuid::Uuid::new_v4().to_string();
-        let result = runtime.invoke("settings.import", json!({"metadata":{
-            "format":"scrcpy-connect-metadata","version":1,
-            "devices":[{"name":"Phone","address":"phone.local","port":5555,"transport":"tcp"}],
-            "settings":{"deviceSettings":{id:{"clipboardSync":true,"showNavigationBar":false}},
-                "audioMode":"fixed","audioDevices":[],"clipboardMode":"fixed","clipboardSync":true}
-        }})).await.unwrap();
-        assert_eq!(result["restored"], 1);
-        let settings = runtime.invoke("settings.get", Value::Null).await.unwrap();
-        assert_eq!(settings["deviceSettings"], json!({}));
-        assert!(settings.get("clipboardSync").is_none());
-        assert!(settings.get("audioDevices").is_none());
-    }
-    #[tokio::test]
-    async fn a_delayed_persistence_receipt_cannot_publish_old_settings_after_a_snapshot() {
-        let directory = tempfile::tempdir().unwrap();
-        let runtime = Runtime::initialize(directory.path()).await.unwrap();
-        let mut events = runtime.subscribe();
-        let barrier = runtime.persistence.lock().await;
-        let update = |appearance: &'static str| {
-            let runtime = runtime.clone();
-            tokio::spawn(async move {
-                runtime
-                    .invoke("settings.update", json!({"appearance":appearance}))
-                    .await
-                    .unwrap()
-            })
-        };
-        let first = update("dark");
-        tokio::time::timeout(std::time::Duration::from_secs(2), async {
-            while runtime.invoke("settings.get", Value::Null).await.unwrap()["appearance"] != "dark"
-            {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .unwrap();
-        let second = update("system");
-        tokio::time::timeout(std::time::Duration::from_secs(2), async {
-            while runtime.invoke("settings.get", Value::Null).await.unwrap()["appearance"]
-                != "system"
-            {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .unwrap();
-        let snapshot = runtime.invoke("state.snapshot", Value::Null).await.unwrap();
-        assert_eq!(snapshot["settings"]["appearance"], "system");
-        drop(barrier);
-        first.await.unwrap();
-        second.await.unwrap();
-        for _ in 0..2 {
-            let event = events.recv().await.unwrap();
-            assert!(event["sequence"].as_u64().unwrap() > snapshot["sequence"].as_u64().unwrap());
-            assert_eq!(
-                event["data"]["appearance"], "system",
-                "A late event must project the current committed in-memory state"
-            );
+    fn product_values_and_secrets_cannot_enter_execution_mirror() {
+        for value in [
+            json!({"appearance":"dark"}),
+            json!({"privateKeyPem":"secret"}),
+            json!({"deviceSettings":{"f6c1fc23-3943-49ce-b5ca-b774be89b61a":{"clipboardSync":true}}}),
+        ] {
+            assert!(validated_execution_settings(&json!({}), &value).is_err());
         }
+        assert!(validated_execution_settings(&json!({}), &json!({"maxFps":0})).is_err());
+        assert_eq!(
+            validated_execution_settings(&json!({}), &json!({"adbBurstMode":true})).unwrap(),
+            json!({"adbBurstMode":true})
+        );
+    }
+    #[tokio::test]
+    async fn mirror_update_does_not_write_product_preferences_or_device_records() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let path = directory.path().join("devices.json");
+        let before = tokio::fs::read(&path).await.unwrap();
+        runtime
+            .invoke("settings.update", json!({"adbBurstMode":true}))
+            .await
+            .unwrap();
+        assert_eq!(tokio::fs::read(&path).await.unwrap(), before);
+        assert_eq!(
+            runtime.invoke("settings.get", Value::Null).await.unwrap()["adbBurstMode"],
+            true
+        );
+        runtime
+            .invoke("devices.add", json!({"address":"127.0.0.1","port":9}))
+            .await
+            .unwrap();
+        let persisted: Value =
+            serde_json::from_slice(&tokio::fs::read(&path).await.unwrap()).unwrap();
+        assert!(
+            persisted.get("settings").is_none(),
+            "unrelated device saves must not persist an execution mirror"
+        );
     }
 }

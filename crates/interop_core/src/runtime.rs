@@ -17,7 +17,6 @@ use tokio::{
 
 pub struct Runtime {
     pub connection_policy: crate::ConnectionPolicy,
-    pub settings_defaults: Value,
     pub(crate) root: PathBuf,
     pub(crate) identities: crate::host_identity::IdentityOwner,
     pub(crate) metadata_updates: tokio::sync::mpsc::Sender<crate::device_metadata::Request>,
@@ -27,19 +26,18 @@ pub struct Runtime {
     pub(crate) encoder_catalog: crate::encoder_catalog::EncoderCatalog,
     pub(crate) events: crate::events::EventBus,
     pub(crate) persistence: Mutex<()>,
-    pub(crate) transfer_store: Mutex<crate::transfer_store::TransferStore>,
+    pub(crate) file_parts: std::sync::Mutex<HashMap<String, (String, Arc<std::fs::File>)>>,
     pub(crate) activities: Arc<crate::activities::ActivityOwner>,
     pub(crate) companions: Mutex<HashMap<String, Arc<crate::companion::Companion>>>,
     pub(crate) observations: Mutex<HashMap<String, crate::observation::Observation>>,
     pub(crate) observation_wakeup: Arc<tokio::sync::Notify>,
-    pub(crate) searches: crate::file_search::Searches,
-    pub(crate) gallery_scans: crate::gallery_index::GalleryScans,
     pub(crate) sharing: Mutex<Option<Arc<crate::sharing::ImportManager>>>,
     pub(crate) documents: crate::documents::CopyManager,
     pub(crate) deliveries: crate::delivery::DeliveryJournal,
     pub(crate) app_opens: crate::app_open::AppOpens,
     pub(crate) quality_changes: Mutex<()>,
     pub(crate) media: crate::media::native::MediaStreams,
+    pub(crate) official_adb: crate::official_adb::ServerPool,
     pub(crate) media_cache: crate::media_cache::MediaCache,
     pub(crate) setup_operations: crate::connection_setup::SetupOperations,
     pub(crate) discovered_services: crate::device::DiscoveredServices,
@@ -66,7 +64,7 @@ impl Runtime {
     ) -> CoreResult<Arc<Self>> {
         connection_policy.validate()?;
         let settings_defaults =
-            crate::preferences::validated_settings(&json!({}), &settings_defaults)?;
+            crate::preferences::validated_execution_settings(&json!({}), &settings_defaults)?;
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(&root).await?;
         let root = fs::canonicalize(&root).await?;
@@ -109,18 +107,11 @@ impl Runtime {
                 "设备记录版本较新，请更新应用。",
             ));
         }
-        if store.version == 1 {
-            crate::preferences::migrate_network_first_defaults(&mut store.settings);
-            store.version = 2;
-        }
-        crate::preferences::remove_retired_settings(&mut store.settings);
-        let settings = store
-            .settings
-            .as_object_mut()
-            .ok_or_else(|| CoreError::new("invalid_data", "本机设置记录损坏。"))?;
-        for (key, value) in settings_defaults.as_object().unwrap() {
-            settings.entry(key.clone()).or_insert_with(|| value.clone());
-        }
+        // The Dart preference owner has already read/migrated the legacy
+        // settings before native startup. Never reinterpret product choices or
+        // overwrite its committed preferences with this execution projection.
+        store.version = 2;
+        store.settings = settings_defaults.clone();
         let identity_changed = store.identity_fingerprint != fingerprint;
         store.identity_fingerprint = fingerprint;
         let (identities, changed_custom) =
@@ -144,17 +135,10 @@ impl Runtime {
         let deliveries = crate::delivery::DeliveryJournal::open(&root).await?;
         let app_opens = crate::app_open::AppOpens::open(&root).await?;
         let media_cache = crate::media_cache::MediaCache::open(&root).await?;
-        let transfer_root = root.clone();
-        let transfer_store = tokio::task::spawn_blocking(move || {
-            crate::transfer_store::TransferStore::open(&transfer_root)
-        })
-        .await
-        .map_err(|error| CoreError::new("storage_error", error.to_string()))??;
         let (metadata_updates, metadata_requests) = tokio::sync::mpsc::channel(64);
         let metadata_lifetime = tokio_util::sync::CancellationToken::new();
         let runtime = Arc::new(Self {
             connection_policy,
-            settings_defaults,
             root,
             identities,
             metadata_updates,
@@ -164,26 +148,24 @@ impl Runtime {
             encoder_catalog: crate::encoder_catalog::EncoderCatalog::default(),
             events,
             persistence: Mutex::new(()),
-            transfer_store: Mutex::new(transfer_store),
+            file_parts: std::sync::Mutex::new(HashMap::new()),
             activities: Arc::new(crate::activities::ActivityOwner::default()),
             companions: Mutex::new(HashMap::new()),
             observations: Mutex::new(HashMap::new()),
             observation_wakeup: Arc::new(tokio::sync::Notify::new()),
-            searches: crate::file_search::Searches::default(),
-            gallery_scans: crate::gallery_index::GalleryScans::default(),
             sharing: Mutex::new(None),
             documents: crate::documents::CopyManager::default(),
             deliveries,
             app_opens,
             quality_changes: Mutex::new(()),
             media: crate::media::native::MediaStreams,
+            official_adb: Default::default(),
             media_cache,
             setup_operations: Default::default(),
             discovered_services: Default::default(),
             reconnect_owner: Mutex::new(None),
             device_operations: Mutex::new(HashMap::new()),
         });
-        runtime.restore_transfers().await?;
         runtime.persist().await?;
         crate::device_metadata::spawn(&runtime, metadata_requests, metadata_lifetime);
         runtime.spawn_connection_monitor();
@@ -247,6 +229,15 @@ impl Runtime {
     }
 
     async fn invoke_inner(self: &Arc<Self>, command: &str, params: Value) -> CoreResult<Value> {
+        if command.starts_with("files.")
+            || command.starts_with("transfers.")
+            || matches!(command, "media.list" | "media.scan.cancel")
+        {
+            return Err(CoreError::new(
+                "owner_moved",
+                "文件、搜索、相册及传输状态由 Dart device_files 运行时处理。",
+            ));
+        }
         if command.starts_with("media.cache.") {
             return self.cache_command(command, &params).await;
         }
@@ -283,30 +274,6 @@ impl Runtime {
         }
         if command.starts_with("sharing.") {
             return self.sharing_command(command, &params).await;
-        }
-        if command == "files.push"
-            && let Some(share) = params["shareId"].as_str()
-        {
-            let manager = self.sharing_manager().await?;
-            return Box::pin(manager.submit_checked(share, &params, || async {
-                match Box::pin(self.start_transfer(command, params.clone())).await {
-                    Ok(receipt) => Ok(receipt),
-                    Err(error) => {
-                        let sources: Vec<_> = params["items"]
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|item| item["source"].as_str())
-                            .collect();
-                        let published =
-                            self.activities.transfers.lock().await.values().any(|task| {
-                                task.direction == "push" && sources.contains(&task.source.as_str())
-                            });
-                        Err((error, !published))
-                    }
-                }
-            }))
-            .await;
         }
         if command.starts_with("identity.") {
             return self.identity_command(command, &params).await;
@@ -358,21 +325,6 @@ impl Runtime {
             "device.info" => Ok(serde_json::to_value(
                 self.device(required(&params, "deviceId")?).await?,
             )?),
-            "files.list" => Box::pin(self.list_files(&params)).await,
-            "files.search.start" | "files.search.get" | "files.search.cancel" => {
-                self.file_search_command(command, &params).await
-            }
-            "files.mkdir" | "files.rename" | "files.delete" => {
-                Box::pin(self.mutate_files(command, &params)).await
-            }
-            "files.pull" | "files.push" => Box::pin(self.start_transfer(command, params)).await,
-            "transfers.remove" => Box::pin(self.remove_transfer_record(&params)).await,
-            "transfers.list" => Box::pin(self.list_transfers()).await,
-            "transfers.get" | "transfers.cancel" | "transfers.resume" | "transfers.resolve" => {
-                Box::pin(self.transfer_command(command, &params)).await
-            }
-            "media.list" => Box::pin(self.list_media(&params)).await,
-            "media.scan.cancel" => self.gallery_command(command, &params).await,
             "media.preview" => Box::pin(self.preview_media(&params)).await,
             "media.thumbnail" => Box::pin(self.thumbnail_media(&params)).await,
             "media.thumbnail.cancel" => Box::pin(self.cancel_thumbnail_media(&params)).await,
@@ -391,6 +343,7 @@ impl Runtime {
             "apps.launch" => Box::pin(self.launch_app(&params)).await,
             "session.start" => Box::pin(self.start_session(&params)).await,
             "session.stop"
+            | "session.scroll"
             | "session.touch"
             | "session.key"
             | "session.text"

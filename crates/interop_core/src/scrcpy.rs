@@ -6,13 +6,16 @@ use crate::{
     remote_process::managed_shell_command,
     resource::ResourceStatus,
 };
-use interop_adb::{AdbStream, CancellationToken, OperationOptions, RemoteSocket, sync::RemotePath};
+use interop_adb::{
+    AdbStream, CancellationToken, OperationOptions, RemoteSocket,
+    sync::{Compression, RemotePath},
+};
 use serde_json::{Value, json};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -35,6 +38,23 @@ const VIDEO_AUTO_RESET_CONFIRM_TIMEOUT: Duration = Duration::from_secs(8);
 // Acquire before spawning: repeatedly cancelled catalog initializers cannot
 // leave an unbounded number of detached probe uploads/processes behind.
 static ENCODER_PROBE_JOBS: Semaphore = Semaphore::const_new(4);
+
+pub(crate) fn server_upload_compression(features: &HashSet<String>) -> Compression {
+    if !features.contains("sendrecv_v2") {
+        return Compression::None;
+    }
+    // Use the existing bounded workers and their low-cost encoding levels.
+    // Select from negotiated capabilities; a failed compressed upload must not
+    // silently retry a partially written remote file through another protocol.
+    [
+        ("sendrecv_v2_zstd", Compression::Zstd),
+        ("sendrecv_v2_lz4", Compression::Lz4),
+        ("sendrecv_v2_brotli", Compression::Brotli),
+    ]
+    .into_iter()
+    .find_map(|(feature, codec)| features.contains(feature).then_some(codec))
+    .unwrap_or(Compression::None)
+}
 
 #[path = "scrcpy_display.rs"]
 mod display;
@@ -308,6 +328,51 @@ impl OwnedProcess {
         Ok(process)
     }
 
+    /// A closed local exec route only requests supervisor cleanup. Confirm the
+    /// exact kernel identity has exited before releasing its process receipt.
+    fn exit_wait_command(&self) -> String {
+        format!(
+            r#"p={pid}
+expected={started}
+while :; do
+  if [ ! -e /proc/$p ]; then print -r -- released:absent; exit 0; fi
+  IFS= read -r stat < /proc/$p/stat || exit 42
+  rest=${{stat##*) }}
+  set -- $rest
+  state=$1
+  shift 19 || exit 42
+  case "$1" in ''|*[!0-9]*) exit 42 ;; esac
+  if [ "$1" != "$expected" ]; then print -r -- released:replaced; exit 0; fi
+  case "$state" in Z|X|x) print -r -- released:exited; exit 0 ;; esac
+  sleep 0.02 || exit 42
+done"#,
+            pid = self.pid,
+            started = self.started
+        )
+    }
+
+    async fn wait_exited(&self, client: &interop_adb::Client) -> CoreResult<()> {
+        let result = client
+            .shell(
+                &self.exit_wait_command(),
+                4096,
+                OperationOptions {
+                    timeout: Duration::from_secs(3),
+                    ..Default::default()
+                },
+            )
+            .await?;
+        if result.exit_code.is_some_and(|code| code != 0)
+            || !result.stdout.starts_with(b"released:")
+        {
+            return Err(CoreError::new(
+                "process_cleanup_unverified",
+                "无法确认原窗口服务进程已经退出。",
+            ));
+        }
+        Ok(())
+    }
+
     async fn verify(&self, client: &interop_adb::Client) -> CoreResult<()> {
         // Revalidate in the shell, including the kernel start time,
         // rather than retaining a numeric PID across independent shell calls.
@@ -362,6 +427,7 @@ impl Drop for Session {
 enum ControlRequest {
     Launch(Vec<u8>, crate::app_open::LaunchPermit, ControlReply),
     Input(Vec<u8>, Instant),
+    Barrier(ControlReply),
     Send(Vec<u8>, ControlReply),
     ClipboardSet(String, bool, ControlReply),
 }
@@ -369,9 +435,10 @@ impl ControlRequest {
     fn expired(&self) -> bool {
         match self {
             Self::Input(_, deadline) => Instant::now() >= *deadline,
-            Self::Launch(_, _, reply) | Self::Send(_, reply) | Self::ClipboardSet(_, _, reply) => {
-                reply.is_closed()
-            }
+            Self::Barrier(reply)
+            | Self::Launch(_, _, reply)
+            | Self::Send(_, reply)
+            | Self::ClipboardSet(_, _, reply) => reply.is_closed(),
         }
     }
 }
@@ -432,6 +499,17 @@ pub(crate) fn package_name(value: &str) -> CoreResult<&str> {
         return Err(invalid("应用包名无效。"));
     }
     Ok(value)
+}
+
+fn mark_app_launch_unknown(state: &mut Value, code: Option<&str>) {
+    state["launchOutcome"] = json!("unknown");
+    if state["status"] != "failed" {
+        state["status"] = json!("failed");
+        if let Some(code) = code {
+            state["failureCode"] = json!(code);
+        }
+        state["reason"] = json!(unknown_app_launch(state).message);
+    }
 }
 
 fn unknown_app_launch(state: &Value) -> CoreError {
@@ -679,11 +757,6 @@ impl Runtime {
                 ((f64::from(height) * scale) as u16 / 2 * 2).max(2),
             ));
         }
-        let previous_displays = if package.is_some() {
-            display::virtual_ids(&client).await?
-        } else {
-            Vec::new()
-        };
         startup_timing.insert(
             "validatedMs".into(),
             json!(startup_clock.elapsed().as_millis() as u64),
@@ -752,22 +825,7 @@ impl Runtime {
             reservation.stopping();
             {
                 let mut data = cleanup_state.write().await;
-                if data["status"] != "failed"
-                    && data["replaced"] != true
-                    && data["qualityRetryable"] != true
-                {
-                    data["status"] = json!("stopped");
-                }
-                data.as_object_mut()
-                    .expect("session state")
-                    .remove("textureId");
-                data.as_object_mut()
-                    .expect("session state")
-                    .remove("videoPort");
-                if data["replaced"] != true
-                    && data["internalReconfigure"] != true
-                    && data["qualityRebuilding"] != true
-                {
+                if prepare_disconnected_state(&mut data) {
                     event(
                         &cleanup_events,
                         "session.disconnected",
@@ -821,12 +879,13 @@ impl Runtime {
         let startup_logs = Arc::new(Mutex::new(Vec::new()));
         let startup = async {
             let mut sync = client.sync(OperationOptions::default()).await?;
-            sync.push(
+            sync.push_compressed(
                 &RemotePath::new(&remote_jar)?,
                 &mut &server[..],
                 0o644,
                 now().min(u32::MAX as u64) as u32,
                 server.len() as u64,
+                server_upload_compression(&client.info().features),
             )
             .await?;
             drop(sync);
@@ -848,6 +907,9 @@ impl Runtime {
                 command.push_str(&quote(&format!("video_encoder={encoder}"))?);
             }
             if package.is_some() {
+                // The fixed upstream INFO line carries this process's virtual
+                // display ID. It replaces public-name dumpsys inference.
+                command = command.replace(" log_level=warn ", " log_level=info ");
                 command.push_str(" new_display=");
                 if let Some((width, height)) = display_size {
                     command.push_str(&format!(
@@ -887,39 +949,39 @@ impl Runtime {
             let process_closed = Arc::new(AtomicBool::new(false));
             let logs = startup_logs.clone();
             let process_cancel = cancellation.clone();
+            let process_client = client.clone();
+            let process_identity = OwnedProcess {
+                pid,
+                started,
+                jar: remote_jar.clone(),
+                scid: format!("{scid:08x}"),
+            };
             let process_closed_task = process_closed.clone();
             let process_logs = logs.clone();
             let process_state = state.clone();
             let process_failure = startup_failure.clone();
             tokio::spawn(async move {
-                let mut buffer = [0; 4096];
-                loop {
-                    let result = tokio::select! { _ = process_cancel.cancelled() => break, result = process.read(&mut buffer) => result };
-                    match result {
-                        Ok(0) | Err(_) => break,
-                        Ok(count) => {
-                            let mut logs = process_logs.lock().await;
-                            let room = 16_384usize.saturating_sub(logs.len());
-                            logs.extend_from_slice(&buffer[..count.min(room)]);
-                        }
-                    }
-                }
-                if !process_cancel.is_cancelled() {
-                    let detail = String::from_utf8_lossy(&process_logs.lock().await)
-                        .trim()
-                        .to_owned();
-                    let reason = if detail.is_empty() {
-                        "被控端的窗口服务已结束，请检查连接后重新打开。".to_owned()
-                    } else {
-                        detail
-                    };
-                    *process_failure.lock().expect("startup failure") = Some(reason.clone());
-                    let mut state = process_state.write().await;
-                    state["status"] = json!("failed");
-                    state["reason"] = json!(reason);
-                }
-                process_closed_task.store(true, Ordering::Release);
+                observe_capture_process(
+                    &mut process,
+                    &process_cancel,
+                    &process_logs,
+                    &process_state,
+                    &process_failure,
+                )
+                .await;
+                // Dropping exec sends CLSE/EOF to the owned supervisor. Its
+                // child may still be restoring a display lease or terminating.
+                drop(process);
                 process_cancel.cancel();
+                let proof = process_identity.wait_exited(&process_client).await;
+                let mut observed = process_state.write().await;
+                observed["processCleanupVerified"] = json!(proof.is_ok());
+                if let Err(error) = proof {
+                    observed["processCleanupError"] =
+                        json!({"code":error.code,"reason":error.message});
+                } else {
+                    process_closed_task.store(true, Ordering::Release);
+                }
             });
             let socket = RemoteSocket::LocalAbstract(format!("scrcpy_{scid:08x}"));
             let deadline = Instant::now() + Duration::from_secs(12);
@@ -994,7 +1056,8 @@ impl Runtime {
                 .await;
             });
             if package.is_some() {
-                let target_display = display::new_virtual_id(&client, &previous_displays).await?;
+                let target_display =
+                    display::owned_virtual_id(&startup_logs, &cancellation).await?;
                 state.write().await["displayId"] = json!(target_display);
                 if let Some(task) = replacement.as_ref().and_then(|value| value.task) {
                     display::move_task(&client, task, target_display).await?;
@@ -1158,11 +1221,7 @@ impl Runtime {
                 // write leaves pending evidence, which also blocks replay.
                 let _ = self.app_opens.finish(&id, Some(&error.code)).await;
                 let mut observed = state.write().await;
-                observed["status"] = json!("failed");
-                observed["launchOutcome"] = json!("unknown");
-                observed["failureCode"] = json!(error.code);
-                let unknown = unknown_app_launch(&observed);
-                observed["reason"] = json!(unknown.message);
+                mark_app_launch_unknown(&mut observed, Some(&error.code));
                 return Err(unknown_app_launch(&observed));
             }
             Err(error) => return Err(error),
@@ -1170,10 +1229,7 @@ impl Runtime {
         if app_launch_submitted && let Err(error) = self.app_opens.finish(&id, None).await {
             cancellation.cancel();
             let mut observed = state.write().await;
-            observed["status"] = json!("failed");
-            observed["launchOutcome"] = json!("unknown");
-            observed["failureCode"] = json!(error.code);
-            observed["reason"] = json!(unknown_app_launch(&observed).message);
+            mark_app_launch_unknown(&mut observed, Some(&error.code));
             return Err(unknown_app_launch(&observed));
         }
         let mut result = {
@@ -1188,8 +1244,7 @@ impl Runtime {
             }
             observed.clone()
         };
-        result["videoToken"] = json!(return_token);
-        result["videoSourceId"] = result["videoToken"].clone();
+        result["videoSourceId"] = json!(return_token);
         let mut sessions = self.activities.sessions.lock().await;
         if let Some(replacement) = &replacement {
             let current = sessions
@@ -1268,6 +1323,13 @@ impl Runtime {
             if let Some(session) = sessions.remove(id) {
                 let device = session.device_id.clone();
                 let closed = session.process_closed.clone();
+                let state = session.state.clone();
+                {
+                    let mut observed = state.write().await;
+                    if observed["status"] != "failed" {
+                        observed["status"] = json!("stopped");
+                    }
+                }
                 session.lifetime.cancel();
                 drop(session);
                 if !sessions
@@ -1276,12 +1338,12 @@ impl Runtime {
                 {
                     self.stop_device_audio(&device).await;
                 }
-                Some((device, closed))
+                Some((device, closed, state))
             } else {
                 None
             }
         };
-        if let Some((device, closed)) = process_closed {
+        if let Some((device, closed, state)) = process_closed {
             let cleanup =
                 match keep_active::stop_unowned(&self.activities, &self.events, &device).await {
                     Ok(receipt) => (receipt["required"] == true).then_some(receipt),
@@ -1293,7 +1355,20 @@ impl Runtime {
                 }
             })
             .await;
-            return cleanup;
+            let verified = closed.load(Ordering::Acquire);
+            let mut receipt = json!({"processCleanupVerified": verified});
+            if let Some(cleanup) = cleanup {
+                receipt["keepActiveCleanup"] = cleanup;
+            }
+            if !verified {
+                let observed = state.read().await;
+                receipt["processCleanupError"] = if observed["processCleanupError"].is_object() {
+                    observed["processCleanupError"].clone()
+                } else {
+                    json!({"code":"process_cleanup_unverified","reason":"本地会话已停止，尚未确认远端服务进程退出。"})
+                };
+            }
+            return Some(receipt);
         }
         None
     }
@@ -1405,11 +1480,9 @@ impl Runtime {
                     .app_opens
                     .finish(&id, Some("renderer_start_failed"))
                     .await;
-                cancellation.cancel();
                 let mut observed = state.write().await;
-                observed["status"] = json!("failed");
-                observed["launchOutcome"] = json!("unknown");
-                observed["reason"] = json!(unknown_app_launch(&observed).message);
+                mark_app_launch_unknown(&mut observed, None);
+                cancellation.cancel();
                 if persisted.is_err() {
                     return Err(unknown_app_launch(&observed));
                 }
@@ -1419,9 +1492,17 @@ impl Runtime {
             let cleanup = self.stop_session(&id).await;
             let mut receipt = json!({"sessionId":id,"status":"stopped","applicationStopped":false});
             if let Some(cleanup) = cleanup {
-                receipt["keepActiveCleanup"] = cleanup;
+                for (key, value) in cleanup.as_object().expect("stop receipt") {
+                    receipt[key] = value.clone();
+                }
             }
             return Ok(receipt);
+        }
+        if matches!(
+            command,
+            "session.touch" | "session.key" | "session.text" | "session.scroll"
+        ) {
+            validate_input_capture(params, &*state.read().await)?;
         }
         let _process = process.ok_or_else(|| {
             CoreError::new(
@@ -1539,6 +1620,19 @@ impl Runtime {
         }
         if command == "session.frame" {
             let mut data = state.write().await;
+            if data["qualityRebuilding"] == true
+                || params["captureGeneration"].as_u64() != data["captureGeneration"].as_u64()
+                || params["generation"].as_u64()
+                    != data["rendererGeneration"]
+                        .as_u64()
+                        .or(data["generation"].as_u64())
+                || params["textureId"].as_i64() != data["textureId"].as_i64()
+            {
+                return Err(CoreError::new(
+                    "stale_generation",
+                    "画面归属或渲染版本已变化，忽略旧帧。",
+                ));
+            }
             if data["textureId"].is_null() {
                 return Err(CoreError::new("renderer_not_ready", "实时渲染尚未就绪。"));
             }
@@ -1595,6 +1689,9 @@ impl Runtime {
         }
         let mut bytes = Vec::new();
         match command {
+            "session.scroll" => {
+                bytes = scroll_message(params, &*state.read().await)?;
+            }
             "session.touch" => {
                 let observed = state.read().await;
                 let mut adjusted = params.clone();
@@ -1623,7 +1720,10 @@ impl Runtime {
                 for action in actions {
                     bytes.extend_from_slice(&[0, *action]);
                     bytes.extend_from_slice(&key.to_be_bytes());
-                    bytes.extend_from_slice(&0u32.to_be_bytes());
+                    bytes.extend_from_slice(
+                        &(params["repeat"].as_u64().unwrap_or(0).min(u32::MAX as u64) as u32)
+                            .to_be_bytes(),
+                    );
                     bytes.extend_from_slice(
                         &(params["metaState"]
                             .as_u64()
@@ -1769,7 +1869,10 @@ impl Runtime {
             }
             _ => return Err(CoreError::new("unknown_command", "控制操作无效。")),
         }
-        if matches!(command, "session.touch" | "session.key" | "session.text") {
+        if matches!(
+            command,
+            "session.touch" | "session.key" | "session.text" | "session.scroll"
+        ) {
             request_input(&control, bytes).await
         } else {
             request_control(&control, ControlRequest::Send, bytes).await
@@ -1820,12 +1923,13 @@ impl Runtime {
         let client = self.client(required(params, "deviceId")?).await?;
         let path = format!("/data/local/tmp/interop-apps-{}.jar", uuid::Uuid::new_v4());
         let mut sync = client.sync(OperationOptions::default()).await?;
-        sync.push(
+        sync.push_compressed(
             &RemotePath::new(&path)?,
             &mut &server[..],
             0o600,
             now() as u32,
             server.len() as u64,
+            server_upload_compression(&client.info().features),
         )
         .await?;
         drop(sync);
@@ -1899,12 +2003,13 @@ impl Runtime {
                 ..Default::default()
             };
             let mut sync = client.sync(operation.clone()).await?;
-            sync.push(
+            sync.push_compressed(
                 &RemotePath::new(&path)?,
                 &mut &server[..],
                 0o644,
                 now().min(u32::MAX as u64) as u32,
                 server.len() as u64,
+                server_upload_compression(&client.info().features),
             )
             .await?;
             drop(sync);
@@ -1993,50 +2098,50 @@ impl Runtime {
             "codecs":codecs,"encoders":entries}))
     }
 
-    async fn save_device_quality(&self, device: &str, settings: &Value) -> CoreResult<()> {
-        let quality: serde_json::Map<String, Value> = crate::preferences::QUALITY_KEYS
-            .iter()
-            .map(|key| ((*key).to_owned(), settings[*key].clone()))
-            .collect();
-        crate::preferences::validate_quality(&Value::Object(quality.clone()))?;
-        let previous = {
-            let mut store = self.store.write().await;
-            if !store.settings["deviceQuality"].is_object() {
-                store.settings["deviceQuality"] = json!({});
-            }
-            let map = store.settings["deviceQuality"]
-                .as_object_mut()
-                .expect("quality map");
-            if !map.contains_key(device) && map.len() >= 256 {
-                return Err(CoreError::new(
-                    "quality_limit",
-                    "设备画质覆盖数量已达到上限。",
-                ));
-            }
-            map.insert(device.to_owned(), Value::Object(quality.clone()))
-        };
-        if let Err(error) = self.persist().await {
-            let mut store = self.store.write().await;
-            let map = store.settings["deviceQuality"]
-                .as_object_mut()
-                .expect("quality map");
-            // Do not overwrite a newer successful concurrent settings operation.
-            if map.get(device) == Some(&Value::Object(quality)) {
-                if let Some(previous) = previous {
-                    map.insert(device.to_owned(), previous);
-                } else {
-                    map.remove(device);
-                }
-            }
-            return Err(error);
-        }
-        Ok(())
-    }
-
     async fn reconfigure_session(&self, params: &Value) -> CoreResult<Value> {
-        let _serial = self.quality_changes.lock().await;
         let id = required(params, "sessionId")?.to_owned();
         let device = required(params, "deviceId")?.to_owned();
+        let (queued_state, queued_lifetime) = {
+            let sessions = self.activities.sessions.lock().await;
+            let session = sessions
+                .get(&id)
+                .ok_or_else(|| CoreError::new("session_required", "本窗口已关闭。"))?;
+            if session.device_id != device {
+                return Err(invalid("会话不属于所选设备。"));
+            }
+            (session.state.clone(), session.lifetime.clone())
+        };
+        {
+            let mut state = queued_state.write().await;
+            let depth = state["qualityRebuildQueueDepth"].as_u64().unwrap_or(0) + 1;
+            state["qualityRebuildQueueDepth"] = json!(depth);
+            state["qualityRebuildQueued"] = json!(true);
+            state["qualityRebuildQueueReason"] = json!("正在等待其他窗口释放画质调整资源。");
+            self.emit("session.updated", Some(&device), state.clone());
+        }
+        let admission = tokio::select! {
+            biased;
+            _ = queued_lifetime.cancelled() => Err(CoreError::new("cancelled", "本窗口已关闭，已取消排队的画质调整。")),
+            result = tokio::time::timeout(Duration::from_secs(30), self.quality_changes.lock()) =>
+                result.map_err(|_| CoreError::new("quality_busy", "其他窗口的画质调整尚未结束，请稍后重试。")),
+        };
+        {
+            let mut state = queued_state.write().await;
+            let depth = state["qualityRebuildQueueDepth"]
+                .as_u64()
+                .unwrap_or(1)
+                .saturating_sub(1);
+            state["qualityRebuildQueueDepth"] = json!(depth);
+            state["qualityRebuildQueued"] = json!(depth != 0);
+            if let Err(error) = &admission {
+                state["qualityRebuildQueueError"] =
+                    json!({"code":error.code,"reason":error.message});
+            } else {
+                state["qualityRebuildQueueError"] = Value::Null;
+            }
+            self.emit("session.updated", Some(&device), state.clone());
+        }
+        let _serial = admission?;
         let (previous, lifetime, package, capture_cancel, closed, old_control) = {
             let sessions = self.activities.sessions.lock().await;
             let session = sessions
@@ -2119,7 +2224,12 @@ impl Runtime {
         // This safe control barrier follows any already-writing old input.
         // Queued unsafe input is rejected by the actor once the flag is set.
         if !capture_cancel.is_cancelled()
-            && let Err(error) = request_control(&old_control, ControlRequest::Send, vec![17]).await
+            && let Err(error) = request_control(
+                &old_control,
+                |_, reply| ControlRequest::Barrier(reply),
+                Vec::new(),
+            )
+            .await
         {
             previous.write().await["qualityRebuilding"] = json!(false);
             previous.write().await["qualityRebuildOutcome"] = json!("restored");
@@ -2275,11 +2385,9 @@ impl Runtime {
                 }
             }
         };
-        // This command persists concrete device preferences. The Dart quality
-        // coordinator applies each live capture via session.reconfigure and
-        // verifies its local renderer, reporting individual failures honestly.
+        // Validate the remote encoder before Dart durably saves the preference.
+        // Dart owns persistence and then applies each live capture separately.
         validate_encoder_selection(&next, &self.probe_video_encoders(&device).await?)?;
-        self.save_device_quality(&device, &next).await?;
         let active = self
             .activities
             .sessions
@@ -2572,7 +2680,7 @@ impl VideoPackets {
         &mut self,
         output: &crate::media::native::MediaSource,
         header: &[u8; 12],
-        bytes: &[u8],
+        bytes: Vec<u8>,
     ) -> CoreResult<()> {
         if let Some(dimensions) = session_dimensions(header)? {
             self.dimensions = Some(dimensions);
@@ -2595,7 +2703,7 @@ impl VideoPackets {
             {
                 return Err(CoreError::new("video_protocol", "视频配置超过限额。"));
             }
-            self.pending_configuration.extend_from_slice(bytes);
+            self.pending_configuration.extend_from_slice(&bytes);
             self.pending_units += 1;
             if self.pending_units > 64 {
                 return Err(CoreError::new(
@@ -2627,7 +2735,7 @@ impl VideoPackets {
             self.pending = false;
         }
         output
-            .packet(bytes, flags & ((1 << 61) - 1), keyframe)
+            .packet_owned(bytes, flags & ((1 << 61) - 1), keyframe)
             .await
     }
     async fn preface(
@@ -2649,10 +2757,59 @@ impl VideoPackets {
             if length > bytes.len() || length > MAX_PACKET {
                 return Err(CoreError::new("video_protocol", "视频首帧数据不完整。"));
             }
-            self.unit(output, &header, &bytes[..length]).await?;
+            self.unit(output, &header, bytes[..length].to_vec()).await?;
             bytes = &bytes[length..];
         }
         Ok(())
+    }
+}
+
+async fn observe_capture_process(
+    process: &mut AdbStream,
+    cancellation: &CancellationToken,
+    logs: &Arc<Mutex<Vec<u8>>>,
+    state: &Arc<RwLock<Value>>,
+    startup_failure: &Arc<std::sync::Mutex<Option<String>>>,
+) {
+    let mut buffer = [0; 4096];
+    let failure = loop {
+        let result = tokio::select! { _ = cancellation.cancelled() => break None, result = process.read(&mut buffer) => result };
+        match result {
+            Ok(0) => {
+                break Some((
+                    "server_process_closed",
+                    "被控端的窗口服务连接已结束，请检查连接后重新打开。",
+                ));
+            }
+            Err(_) => {
+                break Some((
+                    "server_process_read_failed",
+                    "被控端的窗口服务连接读取失败。",
+                ));
+            }
+            Ok(count) => {
+                let mut logs = logs.lock().await;
+                let room = 16_384usize.saturating_sub(logs.len());
+                logs.extend_from_slice(&buffer[..count.min(room)]);
+            }
+        }
+    };
+    if let Some((code, reason)) = failure
+        && record_capture_failure(state, cancellation, code, "server_process", reason).await
+    {
+        let detail = String::from_utf8_lossy(&logs.lock().await)
+            .trim()
+            .to_owned();
+        startup_failure
+            .lock()
+            .expect("startup failure")
+            .get_or_insert_with(|| {
+                if detail.is_empty() {
+                    reason.to_owned()
+                } else {
+                    detail
+                }
+            });
     }
 }
 
@@ -2673,6 +2830,8 @@ async fn run_video(
     // The startup preface is already buffered. Number only subsequent capture
     // segments here; this counter is not the renderer generation identifier.
     let mut capture_segment = 1u64;
+    let segment_epoch = Arc::new(AtomicU64::new(capture_segment));
+    let reset_inflight = Arc::new(AtomicBool::new(false));
     let mut latency_guard = VideoDelayGuard::default();
     let mut last_auto_reset = None;
     let mut packets = VideoPackets::default();
@@ -2687,7 +2846,10 @@ async fn run_video(
         tokio::spawn(async move {
             tokio::select! { _ = ready_cancel.cancelled() => {}, _ = tokio::time::sleep(Duration::from_secs(20)) => {
                 let mut data = ready_state.write().await;
-                if data["textureId"].is_null() { data["status"] = json!("failed"); data["reason"] = json!("视频渲染器未返回可用画面。"); ready_cancel.cancel(); }
+                if data["textureId"].is_null() {
+                    set_capture_failure(&mut data, &ready_cancel, "video_renderer_timeout", "video_output", "视频渲染器未返回可用画面。");
+                    ready_cancel.cancel();
+                }
             } }
         });
         loop {
@@ -2711,7 +2873,8 @@ async fn run_video(
                 if length == 0 || length > MAX_PACKET {
                     return Err(CoreError::new("video_protocol", "视频数据包大小无效。"));
                 }
-                let mut bytes = vec![0; length];
+                let mut bytes = Vec::with_capacity(length + 64);
+                bytes.resize(length, 0);
                 video.read_exact(&mut bytes).await?;
                 Ok((None, bytes))
             };
@@ -2720,6 +2883,7 @@ async fn run_video(
                 .map_err(|_| CoreError::new("video_timeout", "视频数据包未及时发送完整。"))??;
             if let Some((width, height)) = dimensions {
                 capture_segment = capture_segment.saturating_add(1);
+                segment_epoch.store(capture_segment, Ordering::Release);
                 latency_guard.reset_segment();
                 let forward = {
                     let mut data = state.write().await;
@@ -2734,7 +2898,7 @@ async fn run_video(
                 // A slow presentation consumer must not hold the session state
                 // lock needed by control acknowledgements and cancellation.
                 if forward {
-                    packets.unit(&output, &header, &[]).await?;
+                    packets.unit(&output, &header, Vec::new()).await?;
                 }
                 continue;
             }
@@ -2748,47 +2912,55 @@ async fn run_video(
                     && data["qualityRebuilding"] != true
             };
             if can_monitor
+                && !reset_inflight.load(Ordering::Acquire)
                 && last_auto_reset
                     .is_none_or(|last: Instant| last.elapsed() >= VIDEO_AUTO_RESET_COOLDOWN)
                 && latency_guard.observe(flags, first_byte_us)
             {
-                // RESET_VIDEO is a completed control write: only mark the
-                // segment as awaiting after the actor actually wrote it. A
-                // bounded admission receipt alone cannot prove delivery.
-                if request_control(&control, ControlRequest::Send, vec![17])
-                    .await
-                    .is_ok()
-                {
-                    last_auto_reset = Some(Instant::now());
-                    latency_guard.reset_segment();
+                // Retain the completed-write receipt without holding the video
+                // reader behind ADB control backpressure. At most one reset is
+                // in flight, and a newer SESSION always wins over a late receipt.
+                last_auto_reset = Some(Instant::now());
+                latency_guard.reset_segment();
+                reset_inflight.store(true, Ordering::Release);
+                let control = control.clone();
+                let state = state.clone();
+                let cancellation = cancellation.clone();
+                let segment = segment_epoch.clone();
+                let expected_segment = capture_segment;
+                let inflight = reset_inflight.clone();
+                tokio::spawn(async move {
+                    let receipt = tokio::select! {
+                        _ = cancellation.cancelled() => { inflight.store(false, Ordering::Release); return; }
+                        receipt = request_control(&control, ControlRequest::Send, vec![17]) => receipt,
+                    };
+                    inflight.store(false, Ordering::Release);
+                    if receipt.is_err() {
+                        return;
+                    }
                     let mut data = state.write().await;
-                    data["awaitingSession"] = json!(true);
                     let reset_count = data["autoVideoResetCount"].as_u64().unwrap_or(0) + 1;
                     data["autoVideoResetCount"] = json!(reset_count);
                     data["autoVideoResetReason"] = json!("video_transport_backlog");
+                    if segment.load(Ordering::Acquire) != expected_segment {
+                        return;
+                    }
+                    data["awaitingSession"] = json!(true);
                     drop(data);
-                    let timeout_state = state.clone();
-                    let timeout_cancel = cancellation.clone();
-                    tokio::spawn(async move {
-                        tokio::select! {
-                            _ = timeout_cancel.cancelled() => {}
-                            _ = tokio::time::sleep(VIDEO_AUTO_RESET_CONFIRM_TIMEOUT) => {
-                                let mut data = timeout_state.write().await;
-                                if data["awaitingSession"] == true
-                                    && data["autoVideoResetCount"].as_u64() == Some(reset_count)
-                                {
-                                    data["status"] = json!("failed");
-                                    data["reason"] = json!("视频编码恢复未返回新会话，正在重新连接。");
-                                    drop(data);
-                                    timeout_cancel.cancel();
-                                }
+                    tokio::select! {
+                        _ = cancellation.cancelled() => {}
+                        _ = tokio::time::sleep(VIDEO_AUTO_RESET_CONFIRM_TIMEOUT) => {
+                            let mut data = state.write().await;
+                            if data["awaitingSession"] == true
+                                && data["autoVideoResetCount"].as_u64() == Some(reset_count)
+                                && segment.load(Ordering::Acquire) == expected_segment
+                            {
+                                set_capture_failure(&mut data, &cancellation, "video_timeout", "video_read", "视频编码恢复未返回新会话，正在重新连接。");
+                                cancellation.cancel();
                             }
                         }
-                    });
-                } else {
-                    last_auto_reset = Some(Instant::now());
-                }
-                continue;
+                    }
+                });
             }
             {
                 let data = state.read().await;
@@ -2799,7 +2971,8 @@ async fn run_video(
                 }
             }
             let write_started_us = tracing.then(crate::media::monotonic_micros);
-            packets.unit(&output, &header, &bytes).await?;
+            let packet_length = bytes.len();
+            packets.unit(&output, &header, bytes).await?;
             let written_us = tracing.then(crate::media::monotonic_micros);
             if let Some(first_byte_us) = trace_first_byte_us.filter(|_| flags & (1 << 62) == 0) {
                 let mut data = state.write().await;
@@ -2810,7 +2983,7 @@ async fn run_video(
                     frames.push(json!({
                         "captureSegment": capture_segment,
                         "sourcePtsUs": flags & ((1 << 61) - 1),
-                        "bytes": bytes.len(),
+                        "bytes": packet_length,
                         "firstByteUs": first_byte_us,
                         "readCompletedUs": read_completed_us,
                         "writeStartedUs": write_started_us,
@@ -2827,12 +3000,104 @@ async fn run_video(
     let result =
         tokio::select! { _ = cancellation.cancelled() => Ok(()), result = operation => result };
     if let Err(error) = result {
-        let mut data = state.write().await;
-        data["status"] = json!("failed");
-        data["reason"] = json!(error.message);
+        let (code, stage) = video_failure(&error);
+        record_capture_failure(&state, &cancellation, code, stage, &error.message).await;
     }
     cancellation.cancel();
     output.finish();
+}
+
+// A sibling may report EOF while another task is already cancelling the
+// capture. Publish the first cause before cancelling; teardown never replaces it.
+async fn record_capture_failure(
+    state: &Arc<RwLock<Value>>,
+    cancellation: &CancellationToken,
+    code: &str,
+    stage: &str,
+    reason: &str,
+) -> bool {
+    let mut data = state.write().await;
+    set_capture_failure(&mut data, cancellation, code, stage, reason)
+}
+
+fn set_capture_failure(
+    data: &mut Value,
+    cancellation: &CancellationToken,
+    code: &str,
+    stage: &str,
+    reason: &str,
+) -> bool {
+    if cancellation.is_cancelled() || data["status"] == "failed" || data["replaced"] == true {
+        return false;
+    }
+    data["status"] = json!("failed");
+    data["failureCode"] = json!(code);
+    data["failureStage"] = json!(stage);
+    data["reason"] = json!(reason);
+    true
+}
+
+async fn record_control_failure(
+    state: &Arc<RwLock<Value>>,
+    cancellation: &CancellationToken,
+    startup_failure: &Arc<std::sync::Mutex<Option<String>>>,
+    code: &str,
+    stage: &str,
+    reason: &str,
+) {
+    if record_capture_failure(state, cancellation, code, stage, reason).await {
+        startup_failure
+            .lock()
+            .expect("startup failure")
+            .get_or_insert(reason.to_owned());
+    }
+}
+
+async fn record_control_write_failure(
+    state: &Arc<RwLock<Value>>,
+    cancellation: &CancellationToken,
+    startup_failure: &Arc<std::sync::Mutex<Option<String>>>,
+    error: &CoreError,
+) {
+    let (code, reason) = if error.code == "timeout" {
+        (
+            "control_write_timeout",
+            "设备未及时确认控制输入，控制连接已结束。",
+        )
+    } else {
+        ("control_write_failed", "控制输入发送失败，控制连接已结束。")
+    };
+    record_control_failure(
+        state,
+        cancellation,
+        startup_failure,
+        code,
+        "control_write",
+        reason,
+    )
+    .await;
+}
+
+fn video_failure(error: &CoreError) -> (&str, &str) {
+    match error.code.as_str() {
+        "renderer_timeout" => ("video_renderer_timeout", "video_output"),
+        "media_ended" | "media_detached" => ("media_source_closed", "video_output"),
+        "media_decoder" | "media_stall" | "media_protocol" => (&error.code, "video_output"),
+        "video_timeout" | "video_protocol" => (&error.code, "video_read"),
+        _ => ("video_read_failed", "video_read"),
+    }
+}
+
+fn prepare_disconnected_state(data: &mut Value) -> bool {
+    if data["status"] != "failed" && data["replaced"] != true && data["qualityRetryable"] != true {
+        data["status"] = json!("stopped");
+    }
+    data.as_object_mut()
+        .expect("session state")
+        .remove("textureId");
+    data["replaced"] != true
+        && data["internalReconfigure"] != true
+        && data["qualityRebuilding"] != true
 }
 
 async fn run_control(
@@ -2844,69 +3109,167 @@ async fn run_control(
     state: Arc<RwLock<Value>>,
     startup_failure: Arc<std::sync::Mutex<Option<String>>>,
 ) {
-    if let Err(error) = stream.set_write_priority(true) {
-        if !cancellation.is_cancelled() {
-            startup_failure
-                .lock()
-                .expect("startup failure")
-                .get_or_insert(format!("控制流写入优先级设置失败：{error}"));
-        }
+    if stream.set_write_priority(true).is_err() {
+        record_control_failure(
+            &state,
+            &cancellation,
+            &startup_failure,
+            "control_write_failed",
+            "control_write",
+            "控制流写入优先级设置失败。",
+        )
+        .await;
         cancellation.cancel();
         return;
     }
-    let mut incoming = Vec::new();
-    let mut buffer = [0; 4096];
-    let mut sets: HashMap<u64, ControlReply> = HashMap::new();
+    let max_payload = stream.max_payload().max(1);
+    let (mut reader, mut stream) = stream.into_split();
+    let sets = Arc::new(Mutex::new(HashMap::<u64, ControlReply>::new()));
+    // Receiving must progress while classic ADB waits for a WRTE receipt, or
+    // while the bounded writer is saturated. Clipboard ACKs and EOF otherwise
+    // depend on unrelated outgoing traffic finishing first.
+    let receiving = tokio::spawn({
+        let sets = sets.clone();
+        let cancellation = cancellation.clone();
+        let startup_failure = startup_failure.clone();
+        let state = state.clone();
+        async move {
+            let mut incoming = Vec::new();
+            let mut buffer = [0; 4096];
+            loop {
+                let result = tokio::select! {
+                    _ = cancellation.cancelled() => break,
+                    result = reader.read(&mut buffer) => result,
+                };
+                let count = match result {
+                    Ok(count) if count != 0 => count,
+                    closed => {
+                        let (code, reason) = match closed {
+                            Err(_) => ("control_read_failed", "控制连接读取失败。"),
+                            _ if !incoming.is_empty() => {
+                                ("control_protocol_error", "被控端控制消息未发送完整。")
+                            }
+                            _ => ("control_closed", "被控端的控制连接已结束。"),
+                        };
+                        let stage = if code == "control_protocol_error" {
+                            "control_protocol"
+                        } else {
+                            "control_read"
+                        };
+                        record_control_failure(
+                            &state,
+                            &cancellation,
+                            &startup_failure,
+                            code,
+                            stage,
+                            reason,
+                        )
+                        .await;
+                        break;
+                    }
+                };
+                incoming.extend_from_slice(&buffer[..count]);
+                while let Some(&kind) = incoming.first() {
+                    let needed = match kind {
+                        0 => {
+                            if incoming.len() < 5 {
+                                break;
+                            }
+                            let length = u32::from_be_bytes(
+                                incoming[1..5].try_into().expect("clipboard length"),
+                            ) as usize;
+                            if length > (1 << 18) - 5 {
+                                record_control_failure(
+                                    &state,
+                                    &cancellation,
+                                    &startup_failure,
+                                    "control_protocol_error",
+                                    "control_protocol",
+                                    "被控端剪贴板消息超出大小限制。",
+                                )
+                                .await;
+                                cancellation.cancel();
+                                break;
+                            }
+                            5 + length
+                        }
+                        1 => 9,
+                        2 => {
+                            if incoming.len() < 5 {
+                                break;
+                            }
+                            5 + u16::from_be_bytes(incoming[3..5].try_into().expect("UHID length"))
+                                as usize
+                        }
+                        _ => {
+                            record_control_failure(
+                                &state,
+                                &cancellation,
+                                &startup_failure,
+                                "control_protocol_error",
+                                "control_protocol",
+                                "被控端返回了未知控制消息。",
+                            )
+                            .await;
+                            cancellation.cancel();
+                            break;
+                        }
+                    };
+                    if incoming.len() < needed {
+                        break;
+                    }
+                    if kind == 0 {
+                        let Ok(text) = std::str::from_utf8(&incoming[5..needed]) else {
+                            record_control_failure(
+                                &state,
+                                &cancellation,
+                                &startup_failure,
+                                "control_protocol_error",
+                                "control_protocol",
+                                "被控端剪贴板消息编码无效。",
+                            )
+                            .await;
+                            cancellation.cancel();
+                            break;
+                        };
+                        event(
+                            &events,
+                            "clipboard.changed",
+                            &device,
+                            json!({"text":text,"sessionId":state.read().await["sessionId"]}),
+                        );
+                    } else if kind == 1 {
+                        let sequence = u64::from_be_bytes(
+                            incoming[1..9].try_into().expect("control sequence"),
+                        );
+                        if let Some(reply) = sets.lock().await.remove(&sequence) {
+                            let _ = reply.send(Ok(json!({"applied":true})));
+                        }
+                    }
+                    incoming.drain(..needed);
+                }
+                if cancellation.is_cancelled() {
+                    break;
+                }
+            }
+            cancellation.cancel();
+        }
+    });
     let mut sequence = 1u64;
     let mut deferred = None;
     'control: loop {
-        let request = loop {
-            if let Some(request) = deferred.take() {
-                break request;
-            }
+        let request = if let Some(request) = deferred.take() {
+            request
+        } else {
             tokio::select! {
-                biased;
                 _ = cancellation.cancelled() => break 'control,
                 request = requests.recv() => {
-                    let Some(request) = request else { break 'control; };
-                    break request;
-                },
-                result = stream.read(&mut buffer) => {
-                    let count = match result {
-                        Ok(count) if count != 0 => count,
-                        closed => {
-                            // Record an observed remote close before waking startup.
-                            // A user cancellation may also end read(); it is not a
-                            // server failure, even when ordinary WARN logs exist.
-                            if !cancellation.is_cancelled() {
-                                let reason = match closed {
-                                    Err(error) => format!("控制连接读取失败：{error}"),
-                                    _ => "被控端的控制连接已结束。".to_owned(),
-                                };
-                                startup_failure.lock().expect("startup failure").get_or_insert(reason);
-                            }
-                            break 'control;
-                        }
+                    let Some(request) = request else {
+                        record_control_failure(&state, &cancellation, &startup_failure,
+                            "control_write_failed", "control_write", "控制请求通道意外结束。").await;
+                        break 'control;
                     };
-                    incoming.extend_from_slice(&buffer[..count]);
-                    loop {
-                        if incoming.is_empty() { break; }
-                        let needed = match incoming[0] {
-                            0 => { if incoming.len() < 5 { break; } let length = u32::from_be_bytes(incoming[1..5].try_into().expect("clipboard length")) as usize; if length > (1 << 18)-5 { cancellation.cancel(); break; } 5 + length },
-                            1 => 9,
-                            2 => { if incoming.len() < 5 { break; } 5 + u16::from_be_bytes(incoming[3..5].try_into().expect("UHID length")) as usize },
-                            _ => { cancellation.cancel(); break; }
-                        };
-                        if incoming.len() < needed { break; }
-                        if incoming[0] == 0 {
-                            let Ok(text) = std::str::from_utf8(&incoming[5..needed]) else { cancellation.cancel(); break; };
-                            event(&events,"clipboard.changed",&device,json!({"text":text,"sessionId":state.read().await["sessionId"]}));
-                        } else if incoming[0] == 1 {
-                            let sequence = u64::from_be_bytes(incoming[1..9].try_into().expect("control sequence"));
-                            if let Some(reply) = sets.remove(&sequence) { let _ = reply.send(Ok(json!({"applied":true}))); }
-                        }
-                        incoming.drain(..needed);
-                    }
+                    request
                 }
             }
         };
@@ -2918,12 +3281,14 @@ async fn run_control(
                 ControlRequest::Input(bytes, _) | ControlRequest::Send(bytes, _) => {
                     quality_safe_bytes(bytes)
                 }
+                ControlRequest::Barrier(_) => true,
                 _ => false,
             };
             if !safe {
                 match request {
                     ControlRequest::Input(_, _) => {}
-                    ControlRequest::Send(_, reply)
+                    ControlRequest::Barrier(reply)
+                    | ControlRequest::Send(_, reply)
                     | ControlRequest::ClipboardSet(_, _, reply)
                     | ControlRequest::Launch(_, _, reply) => {
                         let _ = reply.send(Err(CoreError::new(
@@ -2936,6 +3301,9 @@ async fn run_control(
             }
         }
         match request {
+            ControlRequest::Barrier(reply) => {
+                let _ = reply.send(Ok(json!({"drained":true})));
+            }
             ControlRequest::Launch(bytes, permit, reply) => {
                 if !permit.claim() {
                     let _ = reply.send(Err(CoreError::new("cancelled", "本次应用打开已关闭。")));
@@ -2950,6 +3318,13 @@ async fn run_control(
                     result = stream.write_all(&bytes) => result.map_err(CoreError::from),
                 };
                 let abort = result.is_err() || permit.is_cancelled();
+                if let Err(error) = &result
+                    && !permit.is_cancelled()
+                    && error.code != "cancelled"
+                {
+                    record_control_write_failure(&state, &cancellation, &startup_failure, error)
+                        .await;
+                }
                 permit.complete();
                 let _ = reply.send(result.map(|()| json!({"sent":true})));
                 if abort {
@@ -2963,7 +3338,7 @@ async fn run_control(
                 if state.read().await["qualityRebuilding"] == true {
                     inputs.retain(|(bytes, _)| quality_safe_bytes(bytes));
                 }
-                for (bytes, deadline) in batch_control_inputs(inputs, stream.max_payload().max(1)) {
+                for (bytes, deadline) in batch_control_inputs(inputs, max_payload) {
                     if Instant::now() >= deadline {
                         continue;
                     }
@@ -2973,13 +3348,14 @@ async fn run_control(
                         _ = tokio::time::sleep_until(deadline) => Err(control_timeout()),
                         result = stream.write_all(&bytes) => result.map_err(CoreError::from),
                     };
-                    if let Err(error) = &result
-                        && !cancellation.is_cancelled()
-                    {
-                        startup_failure
-                            .lock()
-                            .expect("startup failure")
-                            .get_or_insert(format!("控制输入发送失败：{error}"));
+                    if let Err(error) = &result {
+                        record_control_write_failure(
+                            &state,
+                            &cancellation,
+                            &startup_failure,
+                            error,
+                        )
+                        .await;
                     }
                     if result.is_err() {
                         break 'control;
@@ -2996,13 +3372,9 @@ async fn run_control(
                     result = stream.write_all(&bytes) => result.map_err(CoreError::from),
                 };
                 let abort = result.is_err();
-                if let Err(error) = &result
-                    && !cancellation.is_cancelled()
-                {
-                    startup_failure
-                        .lock()
-                        .expect("startup failure")
-                        .get_or_insert(format!("控制输入发送失败：{error}"));
+                if let Err(error) = &result {
+                    record_control_write_failure(&state, &cancellation, &startup_failure, error)
+                        .await;
                 }
                 let _ = reply.send(result.map(|()| json!({"sent":true})));
                 // A partial or unacknowledged write cannot safely be retried.
@@ -3013,8 +3385,9 @@ async fn run_control(
                 }
             }
             ControlRequest::ClipboardSet(text, paste, reply) => {
-                sets.retain(|_, reply| !reply.is_closed());
-                if sets.len() >= 16 {
+                let mut pending = sets.lock().await;
+                pending.retain(|_, reply| !reply.is_closed());
+                if pending.len() >= 16 {
                     let _ = reply.send(Err(CoreError::new("busy", "剪贴板请求较多，请稍后重试。")));
                     continue;
                 }
@@ -3025,20 +3398,17 @@ async fn run_control(
                 bytes.extend_from_slice(&(text.len() as u32).to_be_bytes());
                 bytes.extend_from_slice(text.as_bytes());
                 let deadline = reply.deadline;
-                sets.insert(sequence, reply);
+                pending.insert(sequence, reply);
+                drop(pending);
                 let result = tokio::select! {
                     biased;
                     _ = cancellation.cancelled() => Err(CoreError::new("disconnected", "控制连接已结束。")),
                     _ = tokio::time::sleep_until(deadline) => Err(control_timeout()),
                     result = stream.write_all(&bytes) => result.map_err(CoreError::from),
                 };
-                if let Err(error) = &result
-                    && !cancellation.is_cancelled()
-                {
-                    startup_failure
-                        .lock()
-                        .expect("startup failure")
-                        .get_or_insert(format!("控制输入发送失败：{error}"));
+                if let Err(error) = &result {
+                    record_control_write_failure(&state, &cancellation, &startup_failure, error)
+                        .await;
                 }
                 if result.is_err() {
                     break 'control;
@@ -3046,7 +3416,9 @@ async fn run_control(
             }
         }
     }
-    for reply in sets.into_values() {
+    cancellation.cancel();
+    let _ = receiving.await;
+    for reply in std::mem::take(&mut *sets.lock().await).into_values() {
         let error = if Instant::now() >= reply.deadline {
             control_timeout()
         } else {
@@ -3102,7 +3474,7 @@ fn coalesce_control_inputs(
             inputs.push((bytes, deadline));
             return;
         };
-        if action == 2 {
+        if action == 2 || action == 7 {
             if let Some(removed) = moves.remove(&pointer) {
                 inputs.remove(removed);
                 for pending in moves.values_mut() {
@@ -3177,6 +3549,7 @@ fn touch_message(params: &Value, state: &Value) -> CoreResult<Vec<u8>> {
         Some("up") => 1,
         Some("move") => 2,
         Some("cancel") => 3,
+        Some("hover") if params["mouse"] == true => 7,
         _ => return Err(invalid("触控动作无效。")),
     };
     let width = params["screenWidth"]
@@ -3201,9 +3574,13 @@ fn touch_message(params: &Value, state: &Value) -> CoreResult<Vec<u8>> {
         .as_i64()
         .filter(|y| *y >= 0 && *y < height as i64)
         .ok_or_else(|| invalid("触控位置超出画面。"))? as u32;
-    let pointer = params["pointerId"]
-        .as_u64()
-        .ok_or_else(|| invalid("触点标识无效。"))?;
+    let pointer = if params["mouse"] == true {
+        u64::MAX // Fixed scrcpy POINTER_ID_MOUSE, encoded as signed -1.
+    } else {
+        params["pointerId"]
+            .as_u64()
+            .ok_or_else(|| invalid("触点标识无效。"))?
+    };
     let pressure = params["pressure"]
         .as_f64()
         .unwrap_or(if action == 1 || action == 3 { 0.0 } else { 1.0 });
@@ -3218,8 +3595,53 @@ fn touch_message(params: &Value, state: &Value) -> CoreResult<Vec<u8>> {
     bytes.extend_from_slice(&(width as u16).to_be_bytes());
     bytes.extend_from_slice(&(height as u16).to_be_bytes());
     bytes.extend_from_slice(&pressure.to_be_bytes());
-    bytes.extend_from_slice(&0u32.to_be_bytes());
-    bytes.extend_from_slice(&0u32.to_be_bytes());
+    bytes.extend_from_slice(&input_buttons(params, "actionButton")?.to_be_bytes());
+    bytes.extend_from_slice(&input_buttons(params, "buttons")?.to_be_bytes());
+    Ok(bytes)
+}
+
+fn input_buttons(params: &Value, key: &str) -> CoreResult<u32> {
+    match params.get(key) {
+        None => Ok(0),
+        Some(value) => value
+            .as_u64()
+            .filter(|value| *value <= 31)
+            .map(|value| value as u32)
+            .ok_or_else(|| invalid("鼠标按键无效。")),
+    }
+}
+
+fn validate_input_capture(params: &Value, state: &Value) -> CoreResult<()> {
+    let capture = params["captureGeneration"]
+        .as_u64()
+        .filter(|generation| *generation > 0);
+    if capture.is_none() || capture != state["captureGeneration"].as_u64() {
+        return Err(CoreError::new(
+            "stale_capture",
+            "画面已重建，已取消旧画面的输入。",
+        ));
+    }
+    Ok(())
+}
+
+fn scroll_message(params: &Value, state: &Value) -> CoreResult<Vec<u8>> {
+    // Reuse the position/size validation, then use scrcpy's signed Q4.11
+    // scroll representation ([-16,16], with +16 saturated to 32767).
+    let mut position = params.clone();
+    position["action"] = json!("hover");
+    position["mouse"] = json!(true);
+    let touch = touch_message(&position, state)?;
+    let mut bytes = vec![3];
+    bytes.extend_from_slice(&touch[10..22]);
+    for field in ["hscroll", "vscroll"] {
+        let value = params[field]
+            .as_f64()
+            .filter(|value| value.is_finite())
+            .ok_or_else(|| invalid("滚动距离无效。"))?;
+        let fixed = (value.clamp(-16.0, 16.0) * 2048.0).clamp(-32768.0, 32767.0) as i16;
+        bytes.extend_from_slice(&fixed.to_be_bytes());
+    }
+    bytes.extend_from_slice(&input_buttons(params, "buttons")?.to_be_bytes());
     Ok(bytes)
 }
 
@@ -3414,6 +3836,117 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn queued_quality_change_is_visible_and_cancels_before_global_admission() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let lifetime = CancellationToken::new();
+        let state = Arc::new(RwLock::new(
+            json!({"sessionId":"queued","deviceId":"phone"}),
+        ));
+        let (control, _requests) = mpsc::channel(1);
+        runtime.activities.sessions.lock().await.insert(
+            "queued".into(),
+            Session {
+                device_id: "phone".into(),
+                package: None,
+                cancellation: CancellationToken::new(),
+                lifetime: lifetime.clone(),
+                control,
+                state: state.clone(),
+                process_closed: Arc::new(AtomicBool::new(true)),
+                process: None,
+            },
+        );
+        let serial = runtime.quality_changes.lock().await;
+        let changing = tokio::spawn({
+            let runtime = runtime.clone();
+            async move {
+                runtime
+                    .reconfigure_session(&json!({"sessionId":"queued","deviceId":"phone"}))
+                    .await
+            }
+        });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while state.read().await["qualityRebuildQueued"] != true {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        lifetime.cancel();
+        let error = tokio::time::timeout(Duration::from_millis(500), changing)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.code, "cancelled");
+        assert_eq!(state.read().await["qualityRebuildQueued"], false);
+        assert_eq!(state.read().await["qualityRebuildQueueDepth"], 0);
+        drop(serial);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires actual mksh; set INTEROP_TEST_MKSH or include mksh in PATH"]
+    fn process_cleanup_proof_waits_for_exit_and_handles_reused_pid_without_signalling() {
+        let mksh = std::env::var_os("INTEROP_TEST_MKSH").unwrap_or_else(|| "mksh".into());
+        let mut child = std::process::Command::new("sleep")
+            .arg("0.2")
+            .spawn()
+            .unwrap();
+        let stat = std::fs::read_to_string(format!("/proc/{}/stat", child.id())).unwrap();
+        let started = stat
+            .rsplit_once(") ")
+            .unwrap()
+            .1
+            .split_whitespace()
+            .nth(19)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let process = OwnedProcess {
+            pid: child.id(),
+            started,
+            jar: "fixture".into(),
+            scid: "fixture".into(),
+        };
+        let clock = std::time::Instant::now();
+        let output = std::process::Command::new(&mksh)
+            .args(["-c", &process.exit_wait_command()])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert!(output.stdout.starts_with(b"released:"));
+        assert!(
+            clock.elapsed() >= Duration::from_millis(100),
+            "local teardown cannot immediately claim the still-live child exited"
+        );
+        child.wait().unwrap();
+        let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+        let started: u64 = stat
+            .rsplit_once(") ")
+            .unwrap()
+            .1
+            .split_whitespace()
+            .nth(19)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let reused = OwnedProcess {
+            pid: std::process::id(),
+            started: started + 1,
+            jar: "fixture".into(),
+            scid: "fixture".into(),
+        };
+        let output = std::process::Command::new(mksh)
+            .args(["-c", &reused.exit_wait_command()])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert!(output.stdout.starts_with(b"released:replaced"));
+    }
+
+    #[tokio::test]
     async fn monitor_retires_another_device_while_a_session_waits_for_process_shutdown() {
         use interop_adb::{Client, DeviceInfo, protocol};
         let directory = tempfile::tempdir().unwrap();
@@ -3518,7 +4051,12 @@ mod tests {
         }
 
         async fn with_shell_v2(shell_v2: bool) -> Self {
+            Self::with_features(if shell_v2 { &["shell_v2"] } else { &[] }).await
+        }
+
+        async fn with_features(features: &[&str]) -> Self {
             use interop_adb::{DeviceInfo, protocol};
+            let shell_v2 = features.contains(&"shell_v2");
             let root = tempfile::tempdir().unwrap();
             let runtime = Runtime::initialize(root.path()).await.unwrap();
             runtime.store.write().await.devices.push(
@@ -3534,11 +4072,7 @@ mod tests {
                     version: protocol::VERSION,
                     max_payload: 64 * 1024,
                     banner: "device::cold-start".into(),
-                    features: if shell_v2 {
-                        HashSet::from(["shell_v2".into()])
-                    } else {
-                        HashSet::new()
-                    },
+                    features: features.iter().map(|feature| (*feature).into()).collect(),
                 },
             )
             .unwrap();
@@ -3592,6 +4126,14 @@ mod tests {
             &mut self,
             startup: tokio::task::JoinHandle<CoreResult<Value>>,
         ) -> (String, CoreError) {
+            self.first_upload_with_compression(startup, None).await
+        }
+
+        async fn first_upload_with_compression(
+            &mut self,
+            startup: tokio::task::JoinHandle<CoreResult<Value>>,
+            compression_flag: Option<u32>,
+        ) -> (String, CoreError) {
             use interop_adb::protocol;
             let mut bytes = Vec::new();
             let path = loop {
@@ -3609,9 +4151,24 @@ mod tests {
                         self.send(protocol::OKAY, frame.arg0, Vec::new()).await;
                         bytes.extend_from_slice(&frame.payload);
                         if bytes.len() >= 8 {
-                            assert_eq!(&bytes[..4], b"SEND");
+                            let id = if compression_flag.is_some() {
+                                b"SND2"
+                            } else {
+                                b"SEND"
+                            };
+                            assert_eq!(&bytes[..4], id);
                             let len = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
-                            if bytes.len() >= 8 + len {
+                            let setup_len = usize::from(compression_flag.is_some()) * 12;
+                            if bytes.len() >= 8 + len + setup_len {
+                                if let Some(flag) = compression_flag {
+                                    assert_eq!(&bytes[8 + len..12 + len], b"SND2");
+                                    assert_eq!(
+                                        u32::from_le_bytes(
+                                            bytes[16 + len..20 + len].try_into().unwrap()
+                                        ),
+                                        flag
+                                    );
+                                }
                                 break String::from_utf8(bytes[8..8 + len].to_vec()).unwrap();
                             }
                         }
@@ -3765,6 +4322,33 @@ mod tests {
             "unexpected SEND: {path}"
         );
         assert_eq!(error.details["launchOutcome"], "not_submitted");
+    }
+
+    #[tokio::test]
+    async fn cold_capture_upload_selects_only_negotiated_sync_compression() {
+        for (features, flag) in [
+            (vec![], None),
+            (vec!["sendrecv_v2"], None),
+            (vec!["sendrecv_v2_zstd"], None),
+            (vec!["sendrecv_v2", "sendrecv_v2_zstd"], Some(4)),
+            (vec!["sendrecv_v2", "sendrecv_v2_lz4"], Some(2)),
+            (vec!["sendrecv_v2", "sendrecv_v2_brotli"], Some(1)),
+            (
+                vec![
+                    "sendrecv_v2",
+                    "sendrecv_v2_zstd",
+                    "sendrecv_v2_lz4",
+                    "sendrecv_v2_brotli",
+                ],
+                Some(4),
+            ),
+        ] {
+            let mut fixture = ColdStartFixture::with_features(&features).await;
+            let startup = fixture.start_with(json!({}));
+            let (path, error) = fixture.first_upload_with_compression(startup, flag).await;
+            assert!(path.starts_with("/data/local/tmp/interop-scrcpy-"));
+            assert_eq!(error.details["launchOutcome"], "not_submitted");
+        }
     }
 
     #[tokio::test]
@@ -4102,6 +4686,21 @@ mod tests {
             .unwrap()
         }
 
+        async fn open_process(&mut self) -> (AdbStream, u32) {
+            use interop_adb::protocol::{self, Frame};
+            let client = self.client.clone();
+            let options = options(&self.cancellation);
+            let opening =
+                tokio::spawn(async move { client.open("exec:fixture", options).await.unwrap() });
+            let frame = self.read().await;
+            assert_eq!(frame.command, protocol::OPEN);
+            Frame::new(protocol::OKAY, 88, frame.arg0, Vec::new())
+                .write(&mut self.peer)
+                .await
+                .unwrap();
+            (opening.await.unwrap(), frame.arg0)
+        }
+
         async fn assert_healthy_service(&mut self) {
             use interop_adb::protocol::{self, Frame};
             assert!(!self.client.is_closed(), "only the control session may end");
@@ -4149,7 +4748,74 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn control_unacknowledged_write_expires_without_replaying_queued_input() {
+    async fn clipboard_ack_progresses_while_outbound_classic_write_waits_for_receipt() {
+        use interop_adb::protocol::{self, Frame};
+        let mut fixture = ControlTransportFixture::start().await;
+        let sender = fixture.control.clone();
+        let clipboard =
+            tokio::spawn(async move { clipboard_set(&sender, "文字".into(), true).await });
+        let outgoing = fixture.read().await;
+        assert_eq!(outgoing.command, protocol::WRTE);
+        assert_eq!(outgoing.payload[0], 9);
+        let mut ack = vec![1];
+        ack.extend_from_slice(&outgoing.payload[1..9]);
+        // Do not acknowledge the outgoing WRTE. This used to prevent the
+        // control actor from reading an already-delivered protocol ACK.
+        Frame::new(protocol::WRTE, 77, fixture.local, ack)
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        let result = tokio::time::timeout(Duration::from_millis(500), clipboard)
+            .await
+            .expect("receiver must progress independently of the writer")
+            .unwrap()
+            .unwrap();
+        assert_eq!(result["applied"], true);
+        assert_eq!(fixture.read().await.command, protocol::OKAY);
+        fixture.cancellation.cancel();
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .unwrap()
+            .unwrap();
+        fixture.client.close();
+    }
+
+    #[test]
+    fn native_input_rejects_missing_or_replaced_capture_even_at_same_dimensions() {
+        let current = json!({"captureGeneration":2,"width":1080,"height":1920});
+        for request in [
+            json!({}),
+            json!({"captureGeneration":1}),
+            json!({"captureGeneration":0}),
+        ] {
+            assert_eq!(
+                validate_input_capture(&request, &current).unwrap_err().code,
+                "stale_capture"
+            );
+        }
+        validate_input_capture(&json!({"captureGeneration":2}), &current).unwrap();
+    }
+
+    #[test]
+    fn mouse_touch_and_scroll_preserve_fixed_scrcpy_wire_fields() {
+        let state = json!({"width":800,"height":600});
+        let params = json!({"action":"down","mouse":true,"pointerId":44,
+            "x":123,"y":234,"screenWidth":800,"screenHeight":600,
+            "pressure":1,"actionButton":2,"buttons":3,"hscroll":1.5,"vscroll":-2});
+        let touch = touch_message(&params, &state).unwrap();
+        assert_eq!(&touch[2..10], &u64::MAX.to_be_bytes());
+        assert_eq!(&touch[24..28], &2u32.to_be_bytes());
+        assert_eq!(&touch[28..32], &3u32.to_be_bytes());
+        let scroll = scroll_message(&params, &state).unwrap();
+        assert_eq!(scroll.len(), 21);
+        assert_eq!(&scroll[1..13], &touch[10..22]);
+        assert_eq!(&scroll[13..15], &3072i16.to_be_bytes());
+        assert_eq!(&scroll[15..17], &(-4096i16).to_be_bytes());
+        assert_eq!(&scroll[17..21], &3u32.to_be_bytes());
+    }
+
+    #[tokio::test]
+    async fn control_failure_cause_unacknowledged_write_expires_without_replay() {
         use interop_adb::protocol::{self, Frame};
         let mut fixture = ControlTransportFixture::start().await;
         let sender = fixture.control.clone();
@@ -4174,6 +4840,16 @@ mod tests {
             .expect("a timed-out control write must end its actor and discard queued input")
             .unwrap();
         assert!(queued.await.unwrap().is_err());
+        {
+            let mut state = fixture.state.write().await;
+            assert!(prepare_disconnected_state(&mut state));
+            assert_eq!(
+                state["status"], "failed",
+                "write timeout must not become normal stopped: {state}"
+            );
+            assert_eq!(state["failureCode"], "control_write_timeout");
+            assert_eq!(state["failureStage"], "control_write");
+        }
         // The only later control-route frame is CLSE, never the queued input.
         let closed = fixture.read().await;
         assert_eq!(
@@ -4211,13 +4887,20 @@ mod tests {
             .unwrap();
         assert!(writing.await.unwrap().is_err());
         assert!(fixture.startup_failure.lock().unwrap().is_none());
+        {
+            let mut state = fixture.state.write().await;
+            assert!(prepare_disconnected_state(&mut state));
+            assert_eq!(state["status"], "stopped");
+            assert!(state["failureCode"].is_null());
+            assert!(state["failureStage"].is_null());
+        }
         assert_eq!(fixture.read().await.command, protocol::CLSE);
         fixture.assert_healthy_service().await;
         fixture.client.close();
     }
 
     #[tokio::test]
-    async fn control_remote_eof_records_failure_before_cancelling_startup() {
+    async fn control_failure_cause_remote_eof_survives_disconnected_cleanup() {
         use interop_adb::protocol::{self, Frame};
         let mut fixture = ControlTransportFixture::start().await;
         Frame::new(protocol::CLSE, 77, fixture.local, Vec::new())
@@ -4230,7 +4913,294 @@ mod tests {
             .unwrap();
         assert!(fixture.cancellation.is_cancelled());
         assert!(fixture.startup_failure.lock().unwrap().is_some());
+        let mut state = fixture.state.write().await;
+        assert!(prepare_disconnected_state(&mut state));
+        assert_eq!(
+            state["status"], "failed",
+            "unexpected EOF must not become normal stopped: {state}"
+        );
+        assert_eq!(state["failureCode"], "control_closed");
+        assert_eq!(state["failureStage"], "control_read");
+        assert!(
+            state["reason"]
+                .as_str()
+                .is_some_and(|reason| !reason.is_empty())
+        );
         fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn control_failure_cause_unknown_message_survives_disconnected_cleanup() {
+        use interop_adb::protocol::{self, Frame};
+        let mut fixture = ControlTransportFixture::start().await;
+        Frame::new(protocol::WRTE, 77, fixture.local, vec![0xff])
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(fixture.cancellation.is_cancelled());
+        let mut state = fixture.state.write().await;
+        assert!(prepare_disconnected_state(&mut state));
+        assert_eq!(
+            state["status"], "failed",
+            "malformed control must not become normal stopped: {state}"
+        );
+        assert_eq!(state["failureCode"], "control_protocol_error");
+        assert_eq!(state["failureStage"], "control_protocol");
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn control_failure_cause_rejects_malformed_clipboard_and_truncated_message() {
+        use interop_adb::protocol::{self, Frame};
+        for payload in [vec![0, 0, 4, 0, 0], vec![0, 0, 0, 0, 1, 0xff], vec![1, 0]] {
+            let mut fixture = ControlTransportFixture::start().await;
+            Frame::new(protocol::WRTE, 77, fixture.local, payload)
+                .write(&mut fixture.peer)
+                .await
+                .unwrap();
+            if fixture.read().await.command == protocol::OKAY
+                && !fixture.cancellation.is_cancelled()
+            {
+                Frame::new(protocol::CLSE, 77, fixture.local, Vec::new())
+                    .write(&mut fixture.peer)
+                    .await
+                    .unwrap();
+            }
+            tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+                .await
+                .unwrap()
+                .unwrap();
+            let mut state = fixture.state.write().await;
+            prepare_disconnected_state(&mut state);
+            assert_eq!(state["status"], "failed");
+            assert_eq!(state["failureCode"], "control_protocol_error");
+            assert_eq!(state["failureStage"], "control_protocol");
+            fixture.client.close();
+        }
+    }
+
+    #[tokio::test]
+    async fn control_failure_cause_preserves_first_producer_and_replacement_semantics() {
+        let token = CancellationToken::new();
+        let state = Arc::new(RwLock::new(json!({"status":"streaming"})));
+        assert!(
+            record_capture_failure(
+                &state,
+                &token,
+                "media_decoder",
+                "video_output",
+                "first cause"
+            )
+            .await
+        );
+        assert!(
+            !record_capture_failure(
+                &state,
+                &token,
+                "control_closed",
+                "control_read",
+                "later EOF"
+            )
+            .await
+        );
+        token.cancel();
+        assert!(
+            !record_capture_failure(
+                &state,
+                &token,
+                "server_process_closed",
+                "server_process",
+                "later cleanup"
+            )
+            .await
+        );
+        let mut state = state.write().await;
+        assert!(prepare_disconnected_state(&mut state));
+        assert_eq!(state["failureCode"], "media_decoder");
+        assert_eq!(state["failureStage"], "video_output");
+        assert_eq!(state["reason"], "first cause");
+        mark_app_launch_unknown(&mut state, Some("server_start_failed"));
+        assert_eq!(state["launchOutcome"], "unknown");
+        assert_eq!(state["failureCode"], "media_decoder");
+        assert_eq!(state["failureStage"], "video_output");
+        assert_eq!(state["reason"], "first cause");
+        let token = CancellationToken::new();
+        for mut replaced in [
+            json!({"status":"streaming","replaced":true}),
+            json!({"status":"streaming","internalReconfigure":true}),
+            json!({"status":"streaming","qualityRebuilding":true}),
+        ] {
+            assert!(!prepare_disconnected_state(&mut replaced));
+            assert!(replaced["failureCode"].is_null());
+        }
+        let mut replaced = json!({"status":"streaming","replaced":true});
+        assert!(!set_capture_failure(
+            &mut replaced,
+            &token,
+            "control_closed",
+            "control_read",
+            "old capture EOF"
+        ));
+        let mut cancelled = json!({"status":"starting"});
+        token.cancel();
+        assert!(!set_capture_failure(
+            &mut cancelled,
+            &token,
+            "control_closed",
+            "control_read",
+            "explicit stop"
+        ));
+        assert!(prepare_disconnected_state(&mut cancelled));
+        assert_eq!(cancelled["status"], "stopped");
+        assert!(cancelled["failureCode"].is_null());
+    }
+
+    #[tokio::test]
+    async fn control_failure_cause_explicit_stop_reclaims_resources_without_erasing_first_failure()
+    {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = Runtime::initialize(directory.path()).await.unwrap();
+        let lifetime = CancellationToken::new();
+        let state = Arc::new(RwLock::new(
+            json!({"sessionId":"failed-fixture","status":"failed",
+            "failureCode":"control_closed","failureStage":"control_read","reason":"first cause"}),
+        ));
+        let (control, _requests) = mpsc::channel(1);
+        runtime.activities.sessions.lock().await.insert(
+            "failed-fixture".into(),
+            Session {
+                device_id: "fixture-device".into(),
+                package: None,
+                cancellation: lifetime.child_token(),
+                lifetime: lifetime.clone(),
+                control,
+                state: state.clone(),
+                process_closed: Arc::new(AtomicBool::new(true)),
+                process: None,
+            },
+        );
+        let receipt = runtime.stop_session("failed-fixture").await.unwrap();
+        assert_eq!(receipt["processCleanupVerified"], true);
+        assert!(lifetime.is_cancelled());
+        assert!(
+            !runtime
+                .activities
+                .sessions
+                .lock()
+                .await
+                .contains_key("failed-fixture")
+        );
+        let state = state.read().await;
+        assert_eq!(state["status"], "failed");
+        assert_eq!(state["failureCode"], "control_closed");
+        assert_eq!(state["failureStage"], "control_read");
+        assert_eq!(state["reason"], "first cause");
+    }
+
+    #[tokio::test]
+    async fn control_failure_cause_process_eof_uses_machine_code_without_exposing_java_output() {
+        use interop_adb::protocol::{self, Frame};
+        let mut fixture = ControlTransportFixture::start().await;
+        let (mut process, local) = fixture.open_process().await;
+        let state = fixture.state.clone();
+        let cancellation = fixture.cancellation.clone();
+        let startup_failure = fixture.startup_failure.clone();
+        let logs = Arc::new(Mutex::new(Vec::new()));
+        let observing = tokio::spawn(async move {
+            observe_capture_process(&mut process, &cancellation, &logs, &state, &startup_failure)
+                .await;
+            cancellation.cancel();
+        });
+        let detail = b"java.lang.SecurityException: fixture sensitive application details";
+        Frame::new(protocol::WRTE, 88, local, detail.to_vec())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        assert_eq!(fixture.read().await.command, protocol::OKAY);
+        Frame::new(protocol::CLSE, 88, local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        observing.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut state = fixture.state.write().await;
+        assert!(prepare_disconnected_state(&mut state));
+        assert_eq!(state["status"], "failed");
+        assert_eq!(state["failureCode"], "server_process_closed");
+        assert_eq!(state["failureStage"], "server_process");
+        assert!(!state.to_string().contains("fixture sensitive"));
+        assert_eq!(
+            fixture.startup_failure.lock().unwrap().as_deref(),
+            Some(std::str::from_utf8(detail).unwrap())
+        );
+        fixture.client.close();
+    }
+
+    #[tokio::test]
+    async fn control_failure_cause_control_eof_wins_over_later_process_teardown() {
+        use interop_adb::protocol::{self, Frame};
+        let mut fixture = ControlTransportFixture::start().await;
+        let (mut process, local) = fixture.open_process().await;
+        let state = fixture.state.clone();
+        let cancellation = fixture.cancellation.clone();
+        let startup_failure = fixture.startup_failure.clone();
+        let logs = Arc::new(Mutex::new(Vec::new()));
+        let observing = tokio::spawn(async move {
+            observe_capture_process(&mut process, &cancellation, &logs, &state, &startup_failure)
+                .await;
+        });
+        Frame::new(
+            protocol::WRTE,
+            88,
+            local,
+            b"java.lang.SecurityException: private detail".to_vec(),
+        )
+        .write(&mut fixture.peer)
+        .await
+        .unwrap();
+        assert_eq!(fixture.read().await.command, protocol::OKAY);
+        Frame::new(protocol::CLSE, 77, fixture.local, Vec::new())
+            .write(&mut fixture.peer)
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), observing)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut state = fixture.state.write().await;
+        assert!(prepare_disconnected_state(&mut state));
+        assert_eq!(state["failureCode"], "control_closed");
+        assert_eq!(state["failureStage"], "control_read");
+        assert!(!state.to_string().contains("private detail"));
+        fixture.client.close();
+    }
+
+    #[test]
+    fn control_failure_cause_classifies_video_input_and_output_errors() {
+        for (error, code, stage) in [
+            ("io_error", "video_read_failed", "video_read"),
+            ("video_timeout", "video_timeout", "video_read"),
+            ("video_protocol", "video_protocol", "video_read"),
+            ("renderer_timeout", "video_renderer_timeout", "video_output"),
+            ("media_ended", "media_source_closed", "video_output"),
+            ("media_detached", "media_source_closed", "video_output"),
+            ("media_decoder", "media_decoder", "video_output"),
+            ("media_stall", "media_stall", "video_output"),
+        ] {
+            let error = CoreError::new(error, "fixture");
+            assert_eq!(video_failure(&error), (code, stage));
+        }
     }
 
     #[tokio::test]
@@ -4847,13 +5817,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn automatic_reset_keeps_reading_video_and_new_session_wins_over_late_receipt() {
+        let mut fixture = VideoTransportFixture::start().await;
+        let packet = |pts: u64| {
+            [
+                pts.to_be_bytes().as_slice(),
+                1u32.to_be_bytes().as_slice(),
+                &[0x65],
+            ]
+            .concat()
+        };
+        fixture.deliver(packet(1_000_000)).await;
+        for index in 0..16u64 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            fixture.deliver(packet(1_001_000 + index * 1_000)).await;
+        }
+        let request = tokio::time::timeout(Duration::from_secs(1), fixture.requests.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let ControlRequest::Send(bytes, reply) = request else {
+            panic!("expected reset")
+        };
+        assert_eq!(bytes, vec![17]);
+        // Withhold the completed control write. Media ACKs must still progress.
+        fixture.deliver(packet(1_100_000)).await;
+        assert_ne!(fixture.state.read().await["awaitingSession"], true);
+        fixture
+            .deliver(
+                [
+                    0x8000_0000u32.to_be_bytes(),
+                    720u32.to_be_bytes(),
+                    1280u32.to_be_bytes(),
+                ]
+                .concat(),
+            )
+            .await;
+        reply.send(Ok(json!({"sent":true}))).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while fixture.state.read().await["autoVideoResetCount"]
+                .as_u64()
+                .unwrap_or(0)
+                == 0
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            fixture.state.read().await["awaitingSession"],
+            false,
+            "a late write receipt cannot hide an already consumed replacement SESSION"
+        );
+        fixture.stop().await;
+    }
+
+    #[tokio::test]
     async fn sustained_video_delay_growth_requests_a_priority_video_reset() {
         let mut fixture = VideoTransportFixture::start().await;
         let requests = std::mem::replace(&mut fixture.requests, mpsc::channel(1).1);
         let (resets, mut reset_rx) = mpsc::unbounded_channel();
-        // The video loop blocks on the completed control write while awaiting
-        // its reset receipt, so the fixture must service requests concurrently
-        // with delivering frames.
+        // Service reset receipts independently of video consumption.
         let control = tokio::spawn(async move {
             let mut requests = requests;
             while let Some(request) = requests.recv().await {
@@ -5106,6 +6131,32 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn control_failure_cause_video_eof_and_invalid_unit_are_not_normal_stop() {
+        use interop_adb::protocol::{self, Frame};
+        for (invalid, code) in [(false, "video_read_failed"), (true, "video_protocol")] {
+            let mut fixture = VideoTransportFixture::start().await;
+            if invalid {
+                fixture.deliver(vec![0; 12]).await;
+            } else {
+                Frame::new(protocol::CLSE, 77, fixture.local, Vec::new())
+                    .write(&mut fixture.peer)
+                    .await
+                    .unwrap();
+            }
+            tokio::time::timeout(Duration::from_secs(1), &mut fixture.running)
+                .await
+                .unwrap()
+                .unwrap();
+            let mut state = fixture.state.write().await;
+            assert!(prepare_disconnected_state(&mut state));
+            assert_eq!(state["status"], "failed");
+            assert_eq!(state["failureCode"], code);
+            assert_eq!(state["failureStage"], "video_read");
+            fixture.client.close();
+        }
+    }
+
     async fn partial_video_unit_must_expire(bytes: Vec<u8>) {
         let mut fixture = VideoTransportFixture::start().await;
         fixture.deliver(bytes).await;
@@ -5123,6 +6174,8 @@ mod tests {
             "an already-started scrcpy unit must expire after 10 seconds; status={status}"
         );
         assert_eq!(status["status"], "failed");
+        assert_eq!(status["failureCode"], "video_timeout");
+        assert_eq!(status["failureStage"], "video_read");
     }
 
     #[tokio::test]
@@ -5206,7 +6259,7 @@ mod tests {
             .unwrap();
         let state = Arc::new(RwLock::new(json!({
             "sessionId":"fixture", "deviceId":"device", "status":"streaming",
-            "width":1080, "height":1920,
+            "width":1080, "height":1920, "captureGeneration":1,
         })));
         let (control, mut requests) = mpsc::channel(1);
         runtime.activities.sessions.lock().await.insert(
@@ -5231,7 +6284,7 @@ mod tests {
         let key = runtime
             .session_command(
                 "session.key",
-                &json!({"sessionId":"fixture", "keyCode":4, "action":"up"}),
+                &json!({"sessionId":"fixture", "captureGeneration":1, "keyCode":4, "action":"up"}),
             )
             .await
             .unwrap();
@@ -5239,7 +6292,7 @@ mod tests {
         let busy = runtime
             .session_command(
                 "session.key",
-                &json!({"sessionId":"fixture", "keyCode":3, "action":"up"}),
+                &json!({"sessionId":"fixture", "captureGeneration":1, "keyCode":3, "action":"up"}),
             )
             .await
             .unwrap_err();
@@ -5283,7 +6336,7 @@ mod tests {
             .unwrap();
         let state = Arc::new(RwLock::new(json!({
             "sessionId":"fixture", "deviceId":"device", "status":"starting",
-            "width":1080, "height":1920,
+            "width":1080, "height":1920, "generation":1, "captureGeneration":1,
         })));
         let (control, mut requests) = mpsc::channel(1);
         // The ready boundary only consumes renderer evidence: no device or
@@ -5309,7 +6362,7 @@ mod tests {
         let initial = runtime
             .session_command(
                 "session.ready",
-                &json!({"sessionId":"fixture", "textureId":1}),
+                &json!({"sessionId":"fixture", "textureId":1,"generation":1,"captureGeneration":1}),
             )
             .await
             .unwrap();
@@ -5334,7 +6387,7 @@ mod tests {
         let delayed = runtime
             .session_command(
                 "session.ready",
-                &json!({"sessionId":"fixture", "textureId":2,
+                &json!({"sessionId":"fixture", "textureId":2,"generation":2,"captureGeneration":1,
                     "decodedWidth":640, "decodedHeight":360, "decoderName":"replacement",
                     "status":"streaming", "capturePaused":false}),
             )
@@ -5351,6 +6404,44 @@ mod tests {
         assert_eq!(activity.status, ResourceStatus::Paused);
         assert!(activity.can_resume);
         assert!(!activity.can_pause);
+
+        // Only the current renderer may publish changed decoded dimensions.
+        // These receipts neither resume presentation nor rewrite capture size.
+        let frame = json!({"sessionId":"fixture","textureId":2,"generation":2,
+            "captureGeneration":1,"decodedWidth":360,"decodedHeight":640});
+        runtime
+            .session_command("session.frame", &frame)
+            .await
+            .unwrap();
+        let accepted = state.read().await.clone();
+        assert_eq!(accepted["status"], "paused");
+        assert_eq!(accepted["decodedWidth"], 360);
+        assert_eq!(accepted["decodedHeight"], 640);
+        assert_eq!(accepted["width"], 1080);
+        assert_eq!(accepted["height"], 1920);
+        for (key, stale) in [
+            ("textureId", 1),
+            ("generation", 1),
+            ("captureGeneration", 0),
+        ] {
+            let mut late = frame.clone();
+            late[key] = json!(stale);
+            late["decodedWidth"] = json!(999);
+            let error = runtime
+                .session_command("session.frame", &late)
+                .await
+                .unwrap_err();
+            assert_eq!(error.code, "stale_generation");
+            assert_eq!(*state.read().await, accepted);
+        }
+        state.write().await["qualityRebuilding"] = json!(true);
+        let error = runtime
+            .session_command("session.frame", &frame)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "stale_generation");
+        assert_eq!(state.read().await["decodedWidth"], 360);
+        state.write().await["qualityRebuilding"] = json!(false);
 
         // A subsequent local resume still accepts renderer updates.
         let reset = async {
@@ -5370,7 +6461,7 @@ mod tests {
         let resumed = runtime
             .session_command(
                 "session.ready",
-                &json!({"sessionId":"fixture", "textureId":3}),
+                &json!({"sessionId":"fixture", "textureId":3,"generation":3,"captureGeneration":1}),
             )
             .await
             .unwrap();

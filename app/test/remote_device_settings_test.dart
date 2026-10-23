@@ -121,7 +121,7 @@ void main() {
             return {
               ...app,
               'firstFrameDecoded': true,
-              'evidence': 'mdk.snapshot',
+              'evidence': 'media_codec.snapshot',
             };
           }
           return {};
@@ -362,7 +362,7 @@ void main() {
                 ...retained,
                 'status': 'streaming',
                 'firstFrameDecoded': true,
-                'evidence': 'mdk.snapshot',
+                'evidence': 'media_codec.snapshot',
               };
             }
             return {};

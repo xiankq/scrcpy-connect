@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::{path::Path, sync::OnceLock};
 
 const MANIFEST: &str =
-    include_str!("../../../packages/interop_bridge/assets/servers/manifest.json");
+    include_str!("../../../packages/device_runtime/assets/servers/manifest.json");
 const IDS: [&str; 6] = [
     "scrcpy",
     "companion",
@@ -96,18 +96,18 @@ fn decode(entry: &Artifact, compressed: &[u8]) -> CoreResult<Box<[u8]>> {
 #[cfg(not(target_os = "android"))]
 fn embedded(id: &str) -> &'static [u8] {
     match id {
-        "scrcpy" => include_bytes!("../../../packages/interop_bridge/assets/servers/scrcpy.zlib"),
+        "scrcpy" => include_bytes!("../../../packages/device_runtime/assets/servers/scrcpy.zlib"),
         "companion" => {
-            include_bytes!("../../../packages/interop_bridge/assets/servers/companion.zlib")
+            include_bytes!("../../../packages/device_runtime/assets/servers/companion.zlib")
         }
         "arm64-v8a" => {
-            include_bytes!("../../../packages/interop_bridge/assets/servers/arm64-v8a.zlib")
+            include_bytes!("../../../packages/device_runtime/assets/servers/arm64-v8a.zlib")
         }
         "armeabi-v7a" => {
-            include_bytes!("../../../packages/interop_bridge/assets/servers/armeabi-v7a.zlib")
+            include_bytes!("../../../packages/device_runtime/assets/servers/armeabi-v7a.zlib")
         }
-        "x86_64" => include_bytes!("../../../packages/interop_bridge/assets/servers/x86_64.zlib"),
-        "x86" => include_bytes!("../../../packages/interop_bridge/assets/servers/x86.zlib"),
+        "x86_64" => include_bytes!("../../../packages/device_runtime/assets/servers/x86_64.zlib"),
+        "x86" => include_bytes!("../../../packages/device_runtime/assets/servers/x86.zlib"),
         _ => unreachable!("only manifest-validated IDs reach the embedded source"),
     }
 }

@@ -248,12 +248,9 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
     // All listings use the same Runtime/Client through the gated proxy.
     let mut healthy_lists = 0;
     for _ in 0..3 {
-        let listed = invoke(
-            &runtime,
-            "files.list",
-            json!({"deviceId":device,"path":"/sdcard"}),
-        )
-        .await;
+        let listed = runtime
+            .execute_file_list(device, "/sdcard", false, 10000, Default::default())
+            .await;
         if listed.is_ok() && !proxy.closed.load(Ordering::SeqCst) {
             healthy_lists += 1;
         }
@@ -269,12 +266,9 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
     .await
     .is_ok();
     let bytes_after = video_bytes.load(Ordering::SeqCst);
-    let listed_after = invoke(
-        &runtime,
-        "files.list",
-        json!({"deviceId":device,"path":"/sdcard"}),
-    )
-    .await;
+    let listed_after = runtime
+        .execute_file_list(device, "/sdcard", false, 10000, Default::default())
+        .await;
     let keys = proxy.keys.load(Ordering::SeqCst);
     let _ = invoke(&runtime, "session.stop", json!({"sessionId":sid})).await;
     if original_clipboard["hasText"] == true {

@@ -178,12 +178,13 @@ impl Companion {
         let startup = Box::pin(async {
             let mut sync = client.sync(operations(&cancellation)).await?;
             let count = sync
-                .push(
+                .push_compressed(
                     &RemotePath::new(&remote_jar)?,
                     &mut &server[..],
                     0o644,
                     now().min(u32::MAX as u64) as u32,
                     server.len() as u64,
+                    crate::scrcpy::server_upload_compression(&client.info().features),
                 )
                 .await?;
             if count != server.len() as u64 {

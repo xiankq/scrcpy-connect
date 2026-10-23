@@ -87,43 +87,61 @@ pub(super) fn scaled_density(metrics: (u32, u32, u32), width: u16, height: u16) 
     .clamp(72, 65535) as u32
 }
 
-pub(super) async fn virtual_ids(client: &interop_adb::Client) -> CoreResult<Vec<u32>> {
-    let receipt = client
-        .shell(
-            "dumpsys display",
-            1_048_576,
-            interop_adb::OperationOptions::default(),
-        )
-        .await?;
-    let text = String::from_utf8_lossy(&receipt.stdout);
-    let mut ids = Vec::new();
-    for line in text.lines() {
-        if let Some((_, tail)) = line.split_once("DisplayInfo{\"scrcpy\", displayId ")
-            && let Some(id) = tail.split(',').next().and_then(|id| id.parse::<u32>().ok())
-            && !ids.contains(&id)
-        {
-            ids.push(id);
+/// The fixed upstream server reports its own virtual display identity on the
+/// owned exec stream. A public dumpsys-name difference is not an ownership
+/// proof: another scrcpy process may create a display at the same time.
+pub(super) async fn owned_virtual_id(
+    logs: &std::sync::Arc<tokio::sync::Mutex<Vec<u8>>>,
+    cancellation: &interop_adb::CancellationToken,
+) -> CoreResult<u32> {
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            if let Some(id) = parse_owned_virtual_id(&logs.lock().await)? {
+                return Ok(id);
+            }
+            tokio::select! {
+                _ = cancellation.cancelled() => return Err(CoreError::new("cancelled", "虚拟屏幕启动已取消。")),
+                _ = tokio::time::sleep(std::time::Duration::from_millis(5)) => {},
+            }
         }
-    }
-    Ok(ids)
+    }).await.map_err(|_| CoreError::new("display_identity_unverified", "服务未确认所属虚拟屏幕，已有应用任务保持不变。"))?
 }
 
-pub(super) async fn new_virtual_id(
-    client: &interop_adb::Client,
-    previous: &[u32],
-) -> CoreResult<u32> {
-    let ids = virtual_ids(client)
-        .await?
-        .into_iter()
-        .filter(|id| !previous.contains(id))
-        .collect::<Vec<_>>();
-    if ids.len() != 1 {
-        return Err(CoreError::new(
-            "display_identity_unverified",
-            "无法唯一核实新虚拟屏幕；已有应用任务保持不变。",
-        ));
+fn parse_owned_virtual_id(logs: &[u8]) -> CoreResult<Option<u32>> {
+    let mut found = None;
+    // Only complete lines may authorize task migration. A chunk can end in
+    // the middle of a decimal ID; accepting that prefix would retarget input.
+    for line in logs
+        .split_inclusive(|byte| *byte == b'\n')
+        .filter(|line| line.ends_with(b"\n"))
+    {
+        let Ok(line) = std::str::from_utf8(line) else {
+            continue;
+        };
+        let Some((_, display)) = line.split_once("New display: ") else {
+            continue;
+        };
+        let Some((_, suffix)) = display.rsplit_once(" (id=") else {
+            continue;
+        };
+        let Some((id, _)) = suffix.split_once(')') else {
+            continue;
+        };
+        let id = id.parse::<u32>().ok().filter(|id| *id > 0).ok_or_else(|| {
+            CoreError::new(
+                "display_identity_unverified",
+                "服务返回的虚拟屏幕标识无效。",
+            )
+        })?;
+        if found.is_some_and(|previous| previous != id) {
+            return Err(CoreError::new(
+                "display_identity_unverified",
+                "服务返回了冲突的虚拟屏幕标识。",
+            ));
+        }
+        found = Some(id);
     }
-    Ok(ids[0])
+    Ok(found)
 }
 
 pub(super) async fn task(
@@ -496,6 +514,27 @@ echo __INTEROP_DISPLAY_READY__"#
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn virtual_identity_comes_from_complete_owned_server_log_lines() {
+        assert_eq!(
+            super::parse_owned_virtual_id(b"[server] INFO: New display: 480x800/200 (id=12")
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            super::parse_owned_virtual_id(b"[server] INFO: New display: 480x800/200 (id=12)\n")
+                .unwrap(),
+            Some(12)
+        );
+        assert!(
+            super::parse_owned_virtual_id(
+                b"New display: 480x800/200 (id=12)\nNew display: 480x800/200 (id=13)\n"
+            )
+            .is_err()
+        );
+        assert!(super::parse_owned_virtual_id(b"New display: 480x800/200 (id=0)\n").is_err());
+    }
+
     use super::*;
     use serde_json::json;
     #[test]

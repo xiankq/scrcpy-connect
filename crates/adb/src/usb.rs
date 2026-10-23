@@ -46,7 +46,7 @@ pub const fn supported() -> bool {
 mod backend {
     use super::*;
     use crate::{Error, Result};
-    use crate::{OperationOptions, error::bounded, protocol::read_wire_packet};
+    use crate::{OperationOptions, error::bounded};
     use nusb::{
         Device, DeviceInfo,
         descriptors::TransferType,
@@ -57,8 +57,7 @@ mod backend {
         pin::Pin,
         task::{Context, Poll},
     };
-    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadBuf};
-    use tokio_util::sync::CancellationToken;
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
     #[derive(Clone, Debug)]
     pub struct UsbDevice {
@@ -119,16 +118,56 @@ mod backend {
         Err(UsbError::PlatformAuthorizationRequired.into())
     }
 
-    /// Owns a USB claim and its transfer tasks until dropped. Each ADB header and
-    /// payload is a separate USB transfer, terminated with a ZLP when needed.
+    /// Owns native endpoint buffers directly. Header and payload end in
+    /// separate USB transfers, including the required short packet or ZLP.
+    /// There is no byte-stream relay, temporary payload Vec or adapter task.
     pub struct UsbTransport {
-        io: DuplexStream,
-        cancellation: CancellationToken,
+        reader: nusb::io::EndpointRead<Bulk>,
+        writer: nusb::io::EndpointWrite<Bulk>,
+        boundary: WriteBoundary,
+        flushing: bool,
+        failed: bool,
+    }
+
+    #[derive(Default)]
+    struct WriteBoundary {
+        header: [u8; 24],
+        header_len: usize,
+        payload_remaining: usize,
+    }
+    impl WriteBoundary {
+        fn limit(&self) -> usize {
+            if self.payload_remaining != 0 {
+                self.payload_remaining
+            } else {
+                24 - self.header_len
+            }
+        }
+        fn accept(&mut self, bytes: &[u8]) -> io::Result<bool> {
+            if self.payload_remaining != 0 {
+                self.payload_remaining -= bytes.len();
+                return Ok(self.payload_remaining == 0);
+            }
+            self.header[self.header_len..self.header_len + bytes.len()].copy_from_slice(bytes);
+            self.header_len += bytes.len();
+            if self.header_len != 24 {
+                return Ok(false);
+            }
+            let words =
+                crate::protocol::validate_header(&self.header, crate::protocol::MAX_PAYLOAD)
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            self.payload_remaining = words[3] as usize;
+            self.header_len = 0;
+            Ok(true)
+        }
+        fn complete(&self) -> bool {
+            self.header_len == 0 && self.payload_remaining == 0
+        }
     }
     impl std::fmt::Debug for UsbTransport {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.debug_struct("UsbTransport")
-                .field("closed", &self.cancellation.is_cancelled())
+                .field("closed", &self.failed)
                 .finish()
         }
     }
@@ -138,7 +177,14 @@ mod backend {
             cx: &mut Context<'_>,
             output: &mut ReadBuf<'_>,
         ) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.io).poll_read(cx, output)
+            if self.failed {
+                return Poll::Ready(Err(io::ErrorKind::BrokenPipe.into()));
+            }
+            let result = Pin::new(&mut self.reader).poll_read(cx, output);
+            if matches!(result, Poll::Ready(Err(_))) {
+                self.failed = true;
+            }
+            result
         }
     }
     impl AsyncWrite for UsbTransport {
@@ -147,18 +193,66 @@ mod backend {
             cx: &mut Context<'_>,
             bytes: &[u8],
         ) -> Poll<io::Result<usize>> {
-            Pin::new(&mut self.io).poll_write(cx, bytes)
+            if self.failed {
+                return Poll::Ready(Err(io::ErrorKind::BrokenPipe.into()));
+            }
+            if bytes.is_empty() {
+                return Poll::Ready(Ok(0));
+            }
+            if self.flushing {
+                match Pin::new(&mut self.writer).poll_flush(cx) {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(Err(error)) => {
+                        self.failed = true;
+                        return Poll::Ready(Err(error));
+                    }
+                    Poll::Ready(Ok(())) => self.flushing = false,
+                }
+            }
+            let length = bytes.len().min(self.boundary.limit());
+            let count = match Pin::new(&mut self.writer).poll_write(cx, &bytes[..length]) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Err(error)) => {
+                    self.failed = true;
+                    return Poll::Ready(Err(error));
+                }
+                Poll::Ready(Ok(count)) => count,
+            };
+            match self.boundary.accept(&bytes[..count]) {
+                Err(error) => {
+                    self.failed = true;
+                    return Poll::Ready(Err(error));
+                }
+                Ok(true) => {
+                    self.writer.submit_end();
+                    self.flushing = true;
+                }
+                Ok(false) => {}
+            }
+            Poll::Ready(Ok(count))
         }
         fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.io).poll_flush(cx)
+            if self.failed {
+                return Poll::Ready(Err(io::ErrorKind::BrokenPipe.into()));
+            }
+            if !self.boundary.complete() {
+                self.failed = true;
+                return Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "partial USB ADB frame",
+                )));
+            }
+            let result = Pin::new(&mut self.writer).poll_flush(cx);
+            if matches!(result, Poll::Ready(Err(_))) {
+                self.failed = true;
+            }
+            if matches!(result, Poll::Ready(Ok(()))) {
+                self.flushing = false;
+            }
+            result
         }
-        fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.io).poll_shutdown(cx)
-        }
-    }
-    impl Drop for UsbTransport {
-        fn drop(&mut self) {
-            self.cancellation.cancel();
+        fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            self.poll_flush(cx)
         }
     }
 
@@ -234,55 +328,22 @@ mod backend {
                 .await
                 .map_err(map_error)?;
         }
-        let mut reader = interface
+        let reader = interface
             .endpoint::<Bulk, In>(input)
             .map_err(map_error)?
             .reader(64 * 1024)
             .with_num_transfers(2);
-        let mut writer = interface
+        let writer = interface
             .endpoint::<Bulk, Out>(output)
             .map_err(map_error)?
             .writer(64 * 1024)
             .with_num_transfers(2);
-        let (application, bridge) = tokio::io::duplex(128 * 1024);
-        let (mut bridge_read, mut bridge_write) = tokio::io::split(bridge);
-        let cancellation = CancellationToken::new();
-        let read_cancel = cancellation.clone();
-        tokio::spawn(async move {
-            let operation = async {
-                let mut buffer = vec![0; 64 * 1024];
-                loop {
-                    let count = reader.read(&mut buffer).await?;
-                    if count == 0 {
-                        return Ok::<(), io::Error>(());
-                    }
-                    bridge_write.write_all(&buffer[..count]).await?;
-                }
-            };
-            tokio::select! { _ = read_cancel.cancelled() => {}, _ = operation => {} }
-            read_cancel.cancel();
-        });
-        let write_cancel = cancellation.clone();
-        tokio::spawn(async move {
-            let operation = async {
-                loop {
-                    let (header, payload) = read_wire_packet(&mut bridge_read).await?;
-                    writer.write_all(&header).await?;
-                    writer.flush_end_async().await.map_err(Error::Io)?;
-                    if !payload.is_empty() {
-                        writer.write_all(&payload).await?;
-                        writer.flush_end_async().await.map_err(Error::Io)?;
-                    }
-                }
-                #[allow(unreachable_code)]
-                Ok::<(), Error>(())
-            };
-            tokio::select! { _ = write_cancel.cancelled() => {}, _ = operation => {} }
-            write_cancel.cancel();
-        });
         Ok(UsbTransport {
-            io: application,
-            cancellation,
+            reader,
+            writer,
+            boundary: WriteBoundary::default(),
+            flushing: false,
+            failed: false,
         })
     }
 
@@ -296,6 +357,48 @@ mod backend {
             _ => UsbError::Backend(message),
         };
         error.into()
+    }
+
+    #[cfg(test)]
+    mod boundary_tests {
+        use super::*;
+        use crate::protocol::{Frame, WRTE};
+        #[tokio::test]
+        async fn fragmented_header_and_payload_keep_usb_ends_without_relay_copy() {
+            for length in [0, 1, 512, 65536, 65537, crate::protocol::MAX_PAYLOAD] {
+                let mut wire = Vec::new();
+                Frame::new(WRTE, 1, 2, vec![42; length])
+                    .write(&mut wire)
+                    .await
+                    .unwrap();
+                let mut boundary = WriteBoundary::default();
+                let mut offset = 0;
+                let mut ends = Vec::new();
+                // Exercise partial headers and payload chunks across the USB
+                // transfer size, including exact packet multiples needing ZLP.
+                while offset < wire.len() {
+                    let count = boundary.limit().min(7).min(wire.len() - offset);
+                    if boundary.accept(&wire[offset..offset + count]).unwrap() {
+                        ends.push(offset + count);
+                    }
+                    offset += count;
+                }
+                assert!(boundary.complete());
+                assert_eq!(
+                    ends,
+                    if length == 0 {
+                        vec![24]
+                    } else {
+                        vec![24, 24 + length]
+                    }
+                );
+            }
+        }
+        #[test]
+        fn malformed_header_is_rejected_before_submission() {
+            let mut boundary = WriteBoundary::default();
+            assert!(boundary.accept(&[0; 24]).is_err());
+        }
     }
 }
 #[cfg(all(

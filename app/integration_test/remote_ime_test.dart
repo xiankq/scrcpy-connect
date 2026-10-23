@@ -75,6 +75,7 @@ void main() {
       final initialFocus = controller.snapshot().focusedDeviceId;
       String? deviceId;
       String? sessionId;
+      int? captureGeneration;
       var createdDevice = false;
       var initiallyConnected = false;
       var targetFocused = false;
@@ -119,8 +120,9 @@ void main() {
               !initialSessionIds.contains(id(item)),
         );
         sessionId = id(current);
+        captureGeneration = current['captureGeneration'] as int;
         expect(current['firstFrameDecoded'], isTrue);
-        expect(current['evidence'], 'mdk.snapshot');
+        expect(current['evidence'], 'media_codec.snapshot');
         expectHealthyRemote();
         return current;
       }
@@ -288,12 +290,14 @@ void main() {
               if (targetFocused) {
                 await request('session.key', {
                   'sessionId': sessionId,
+                  'captureGeneration': captureGeneration,
                   'keyCode': 29,
                   'metaState': 4096,
                   'action': 'press',
                 });
                 await request('session.key', {
                   'sessionId': sessionId,
+                  'captureGeneration': captureGeneration,
                   'keyCode': 67,
                   'action': 'press',
                 });

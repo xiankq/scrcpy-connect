@@ -36,17 +36,35 @@ Iterable<File> bundleFiles(Directory directory) =>
 
 void verifyWindows(Directory bundle) {
   final files = bundleFiles(bundle).toList();
+  const adbFiles = {'adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'};
+  int? adbMachine;
   for (final name in [
     'scrcpy_connect.exe',
     'flutter_windows.dll',
     'interop_bridge.dll',
-    'mdk.dll',
-    'ffmpeg-9.dll',
+    'media_codec_plugin.dll',
+    'adb.exe',
+    'AdbWinApi.dll',
+    'AdbWinUsbApi.dll',
   ]) {
     final matches = files
         .where((file) => p.basename(file.path) == name)
         .toList();
-    if (matches.length != 1 || peMachine(matches.single) != 0x8664) {
+    if (matches.length != 1) {
+      throw StateError('Final Windows bundle lacks one x64 $name');
+    }
+    final machine = peMachine(matches.single);
+    if (adbFiles.contains(name)) {
+      // Official platform-tools may ship a 32-bit subprocess and its matching
+      // DLLs; they are not loaded into the x64 Flutter process.
+      if (!{0x14c, 0x8664}.contains(machine) ||
+          (adbMachine != null && machine != adbMachine)) {
+        throw StateError(
+          'Official ADB executable and DLL architectures differ',
+        );
+      }
+      adbMachine = machine;
+    } else if (machine != 0x8664) {
       throw StateError('Final Windows bundle lacks one x64 $name');
     }
   }
@@ -54,6 +72,127 @@ void verifyWindows(Directory bundle) {
       .existsSync()) {
     throw StateError('Windows bundle lacks Flutter assets');
   }
+  verifyMedia(bundle);
+}
+
+void verifyMedia(Directory bundle) {
+  final files = bundleFiles(bundle).toList();
+  if (files.any(
+    (file) => RegExp(
+      r'(^|lib)(mdk|fvp)|avformat|ffmpeg-\d',
+      caseSensitive: false,
+    ).hasMatch(p.basename(file.path)),
+  )) {
+    throw StateError('Bundle contains an obsolete full media runtime');
+  }
+  final receipts = files.where(
+    (file) =>
+        p.basename(file.path) == 'media-codec-build.json' &&
+        p.split(file.path).contains('licenses'),
+  );
+  if (receipts.isEmpty) throw StateError('Missing trimmed FFmpeg receipt');
+  for (final receipt in receipts) {
+    final config =
+        jsonDecode(receipt.readAsStringSync()) as Map<String, dynamic>;
+    final options = (config['options'] as List).cast<String>();
+    for (final required in [
+      '--disable-everything',
+      '--disable-avformat',
+      '--disable-network',
+      '--disable-programs',
+    ]) {
+      if (!options.contains(required)) {
+        throw StateError('FFmpeg is missing $required');
+      }
+    }
+  }
+}
+
+void verifyLinux(Directory bundle) {
+  final files = bundleFiles(bundle).toList();
+  for (final name in [
+    'scrcpy_connect',
+    'libflutter_linux_gtk.so',
+    'libinterop_bridge.so',
+    'libmedia_codec_plugin.so',
+    'adb',
+  ]) {
+    final matches = files
+        .where((file) => p.basename(file.path) == name)
+        .toList();
+    if (matches.length != 1) throw StateError('Linux bundle lacks one $name');
+    final bytes = matches.single.openSync();
+    try {
+      final header = bytes.readSync(20);
+      if (header.length != 20 ||
+          header[0] != 0x7f ||
+          header[1] != 0x45 ||
+          header[2] != 0x4c ||
+          header[3] != 0x46 ||
+          header[4] != 2 ||
+          ByteData.sublistView(header).getUint16(18, Endian.little) != 62) {
+        throw StateError('Linux bundle has a non-x64 ELF: $name');
+      }
+    } finally {
+      bytes.closeSync();
+    }
+  }
+  final entries = [
+    ...files.where(
+      (file) => const ['scrcpy_connect', 'adb'].contains(p.basename(file.path)),
+    ),
+    ...files.where((file) => p.basename(file.path).contains('.so')),
+  ];
+  final resolved = <String>{};
+  for (final file in entries) {
+    final canonical = file.resolveSymbolicLinksSync();
+    if (resolved.contains(canonical)) continue;
+    final linkage = runTool(
+      ['ldd', file.path],
+      quiet: true,
+      environment: const {'LD_LIBRARY_PATH': ''},
+    );
+    if ('${linkage.stdout}'.contains('not found')) {
+      throw StateError('Unresolved Linux dependency: ${file.path}');
+    }
+    // ldd validates the complete closure under this real entry's RUNPATH.
+    // A dependency already resolved there need not be executable on its own:
+    // for example libva-drm resolves libva when both are loaded by the plugin.
+    resolved.add(canonical);
+    for (final line in const LineSplitter().convert('${linkage.stdout}')) {
+      final arrow = line.indexOf('=> ');
+      final address = line.lastIndexOf(' (');
+      if (arrow < 0 || address <= arrow + 3) continue;
+      final dependency = File(line.substring(arrow + 3, address).trim());
+      if (dependency.existsSync()) {
+        resolved.add(dependency.resolveSymbolicLinksSync());
+      }
+    }
+  }
+  verifyMedia(bundle);
+}
+
+void installMediaNotices(Directory bundle, String platform) {
+  if (platform == 'macos' || platform == 'ios') {
+    // Runner's final resource phase uses the actual CocoaPods SDK/architecture
+    // prefixes and signs the nested official adb on macOS.
+    verifyMedia(bundle);
+    return;
+  }
+  final prefix = Directory(
+    p.join(
+      root.path,
+      '.dart_tool/media_codec/ffmpeg/$platform-${platform == 'macos' || platform == 'ios' ? 'arm64' : 'x64'}',
+    ),
+  );
+  final source = Directory(p.join(prefix.path, 'share/media_codec'));
+  if (!source.existsSync()) {
+    throw StateError('Missing FFmpeg provenance: ${source.path}');
+  }
+  copyDirectory(source, Directory(p.join(bundle.path, 'licenses/media_codec')));
+  File(p.join(prefix.path, 'media-codec-build.json')).copySync(
+    p.join(bundle.path, 'licenses/media_codec/media-codec-build.json'),
+  );
 }
 
 String bundleExecutable(File plist) {
@@ -114,9 +253,7 @@ void verifyApple(Directory bundle, String platform) {
   for (final library in rust) {
     runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', library.path]);
   }
-  if (!files.any((file) => p.basename(file.path) == 'mdk')) {
-    throw StateError('Apple bundle lacks its MDK framework');
-  }
+  verifyMedia(bundle);
 }
 
 void archiveBundle(Directory bundle, String platform, Directory artifacts) {
@@ -159,14 +296,14 @@ void main(List<String> arguments) {
     final args = parser.parse(arguments);
     if (args['help'] as bool) {
       stdout.writeln(
-        'Usage: dart tool/build_host.dart <windows|ios|macos>\n${parser.usage}',
+        'Usage: dart tool/build_host.dart <windows|linux|ios|macos>\n${parser.usage}',
       );
       return;
     }
     if (args.rest.length != 1 ||
-        !['windows', 'ios', 'macos'].contains(args.rest.single)) {
+        !['windows', 'linux', 'ios', 'macos'].contains(args.rest.single)) {
       throw ArgumentError(
-        'Usage: dart tool/build_host.dart <windows|ios|macos> [--verify-only]',
+        'Usage: dart tool/build_host.dart <windows|linux|ios|macos> [--verify-only]',
       );
     }
     final platform = args.rest.single;
@@ -186,7 +323,14 @@ void main(List<String> arguments) {
       bundle = Directory(
         p.join(application.path, 'build/windows/x64/runner/Release'),
       );
+      if (!(args['verify-only'] as bool)) installMediaNotices(bundle, platform);
       verifyWindows(bundle);
+    } else if (platform == 'linux') {
+      bundle = Directory(
+        p.join(application.path, 'build/linux/x64/release/bundle'),
+      );
+      if (!(args['verify-only'] as bool)) installMediaNotices(bundle, platform);
+      verifyLinux(bundle);
     } else {
       final directory = Directory(
         p.join(
@@ -205,6 +349,7 @@ void main(List<String> arguments) {
         throw StateError('Expected one final application in ${directory.path}');
       }
       bundle = bundles.single;
+      if (!(args['verify-only'] as bool)) installMediaNotices(bundle, platform);
       verifyApple(bundle, platform);
     }
     archiveBundle(
@@ -213,7 +358,7 @@ void main(List<String> arguments) {
       Directory(p.join(root.path, 'build/verified')),
     );
     stdout.writeln(
-      'PASS: final $platform application, Flutter engine, Rust library and MDK',
+      'PASS: final $platform application, Flutter engine, Rust and trimmed media codec',
     );
   } on Object catch (error) {
     stderr.writeln(error);

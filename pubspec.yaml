@@ -6,9 +6,26 @@ environment:
 workspace:
   - app
   - packages/design_system
-  - packages/interop_bridge
+  - packages/device_runtime
   - packages/media_codec
+  - packages/flutter_adb
+  - packages/device_protocol
+  - packages/runtime_diagnostics
+  - packages/device_connections
+  - packages/device_files
+  - packages/scrcpy_client
+  - packages/device_preferences
 dev_dependencies:
+  device_protocol:
+    path: packages/device_protocol
+  runtime_diagnostics:
+    path: packages/runtime_diagnostics
+  device_connections:
+    path: packages/device_connections
+  device_files:
+    path: packages/device_files
+  scrcpy_client:
+    path: packages/scrcpy_client
   ffi: 2.2.0
   archive: 4.5.2
   args: 2.7.0
@@ -27,5 +44,5 @@ dev_dependencies:
   riverpod_lint: 3.1.9
   hooks_riverpod: ^3.4.3
   path_provider: ^2.1.6
-  interop_bridge:
-    path: packages/interop_bridge
+  device_runtime:
+    path: packages/device_runtime

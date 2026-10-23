@@ -38,7 +38,6 @@ struct Reservation {
 #[derive(Default)]
 struct Ownership {
     leases: HashMap<String, Vec<PathBuf>>,
-    transfer_leases: HashMap<String, String>,
     writers: HashMap<String, Reservation>,
 }
 pub(crate) struct MediaCache {
@@ -200,18 +199,73 @@ impl MediaCache {
     }
 }
 impl Runtime {
+    /// Admit and protect paths selected by the Dart task owner. No transfer
+    /// status or conflict policy is retained in this execution layer.
+    pub async fn execute_file_cache_reserve(
+        &self,
+        paths: Vec<String>,
+        bytes: Vec<u64>,
+    ) -> CoreResult<String> {
+        if paths.is_empty() || paths.len() > 2000 || paths.len() != bytes.len() {
+            return Err(invalid("缓存保留路径必须为1至2000项。"));
+        }
+        let _gate = self.media_cache.gate.lock().await;
+        let roots = self.media_cache.roots(&self.root).await?;
+        let mut records = Vec::new();
+        let fresh_reservation = bytes.iter().any(|bytes| *bytes > 0);
+        let mut total = 0u64;
+        for (path, bytes) in paths.into_iter().zip(bytes) {
+            let path = PathBuf::from(path);
+            plain_path(&path).await?;
+            if fresh_reservation {
+                self.cache_validate_destination_locked(path.to_string_lossy().as_ref())
+                    .await?;
+            }
+            if !roots.iter().any(|root| path.starts_with(root)) {
+                return Err(invalid("目标不属于已登记缓存目录。"));
+            }
+            let baseline = scan(std::slice::from_ref(&path))
+                .await?
+                .iter()
+                .map(|f| f.bytes)
+                .sum();
+            total = total
+                .checked_add(bytes)
+                .ok_or_else(|| invalid("缓存大小溢出。"))?;
+            records.push(Reservation {
+                path,
+                bytes,
+                baseline,
+            });
+        }
+        if total > 0 {
+            self.cache_admit_locked(total).await?;
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        let mut owner = self.media_cache.ownership.lock().unwrap();
+        if owner.leases.len() >= 1024 {
+            return Err(CoreError::new("busy", "缓存租约达到上限。"));
+        }
+        owner
+            .leases
+            .insert(id.clone(), records.iter().map(|r| r.path.clone()).collect());
+        for (index, record) in records.into_iter().enumerate() {
+            owner.writers.insert(format!("{id}:{index}"), record);
+        }
+        Ok(id)
+    }
+    pub async fn execute_file_cache_release(&self, id: &str) -> CoreResult<()> {
+        self.cache_command("media.cache.release", &serde_json::json!({"leaseId":id}))
+            .await?;
+        Ok(())
+    }
     async fn cache_snapshot(&self) -> CoreResult<Snapshot> {
         let files = scan(&self.media_cache.roots(&self.root).await?).await?;
-        let (mut protected, writers, leased_transfers) = {
+        let (mut protected, writers) = {
             let owner = self.media_cache.ownership.lock().unwrap();
             (
                 owner.leases.values().flatten().cloned().collect::<Vec<_>>(),
                 owner.writers.values().cloned().collect::<Vec<_>>(),
-                owner
-                    .transfer_leases
-                    .values()
-                    .cloned()
-                    .collect::<BTreeSet<_>>(),
             )
         };
         protected.extend(
@@ -237,70 +291,6 @@ impl Runtime {
                     .saturating_sub(actual.saturating_sub(writer.baseline)),
             );
             protected.push(writer.path);
-        }
-        let transfers = self.activities.transfers.lock().await;
-        // Protect the selected directory as a tree while any descendant is
-        // active, even if the root's mkdir task has already completed.
-        for task in transfers
-            .values()
-            .filter(|t| t.direction == "pull" && t.destination_scope == "privateCache")
-        {
-            let active = matches!(
-                task.status.as_str(),
-                "queued" | "running" | "finalizing" | "cancelling" | "conflict"
-            );
-            let uncertain = task.partial_destination_possible
-                || task.error_code.as_deref() == Some("result_unknown");
-            let child_active = task.kind == "directory"
-                && transfers.values().any(|child| {
-                    child.batch_id == task.batch_id
-                        && (matches!(
-                            child.status.as_str(),
-                            "queued" | "running" | "finalizing" | "cancelling" | "conflict"
-                        ) || child.partial_destination_possible)
-                });
-            if active
-                || uncertain
-                || child_active
-                || leased_transfers.contains(&task.id)
-                || (task.kind == "directory" && task.status == "completed" && !task.tree_verified)
-            {
-                protected.push(PathBuf::from(&task.destination));
-                let temporary = task
-                    .temporary_path
-                    .as_ref()
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|| {
-                        Path::new(&task.destination).with_file_name(format!(
-                            ".interop-{}-{}.part",
-                            task.id, task.generation
-                        ))
-                    });
-                protected.push(temporary.clone());
-                if active && task.kind == "file" {
-                    let actual = files
-                        .iter()
-                        .filter(|f| f.path == temporary)
-                        .map(|f| f.bytes)
-                        .sum::<u64>();
-                    // A finalized file replaces the part; don't count both
-                    // completed bytes and their original reservation.
-                    let committed = if task.status == "finalizing" {
-                        files
-                            .iter()
-                            .filter(|f| f.path == Path::new(&task.destination))
-                            .map(|f| f.bytes)
-                            .sum::<u64>()
-                    } else {
-                        0
-                    };
-                    reserved = reserved.saturating_add(
-                        task.total
-                            .unwrap_or(0)
-                            .saturating_sub(actual.max(committed)),
-                    );
-                }
-            }
         }
         let used = files.iter().map(|f| f.bytes).sum();
         let protected_bytes = files
@@ -394,26 +384,6 @@ impl Runtime {
                 }
             }
         }
-        if !deleted_paths.is_empty() {
-            let mut tasks = self.activities.transfers.lock().await;
-            let mut changed = false;
-            for task in tasks
-                .values_mut()
-                .filter(|task| task.direction == "pull" && task.destination_scope == "privateCache")
-            {
-                if deleted_paths
-                    .iter()
-                    .any(|path| path.starts_with(&task.destination))
-                {
-                    task.cache_evicted = true;
-                    changed = true;
-                }
-            }
-            drop(tasks);
-            if changed {
-                self.persist_transfers().await?;
-            }
-        }
         if let Some(error) = failure {
             return Err(error.into());
         }
@@ -495,59 +465,14 @@ impl Runtime {
                     .to_string();
                 let mut ownership = self.media_cache.ownership.lock().unwrap();
                 let released = ownership.leases.remove(&id).is_some();
-                ownership.transfer_leases.remove(&id);
+                let prefix = format!("{id}:");
+                ownership.writers.retain(|key, _| !key.starts_with(&prefix));
                 Ok(json!({"leaseId":id,"released":released}))
             }
-            "media.cache.acquire" => {
-                let transfers = self.activities.transfers.lock().await;
-                let task = transfers
-                    .get(required(params, "transferId")?)
-                    .ok_or_else(|| CoreError::new("not_found", "传输任务已不存在。"))?;
-                if task.direction != "pull" || task.destination_scope != "privateCache" {
-                    return Err(invalid("仅可持有取回到私有缓存的传输。"));
-                }
-                let path = PathBuf::from(&task.destination);
-                if task.cache_evicted {
-                    return Err(CoreError::new("cache_evicted", "此传输的原件缓存已清理。"));
-                }
-                if !self
-                    .media_cache
-                    .roots(&self.root)
-                    .await?
-                    .iter()
-                    .any(|root| path.starts_with(root))
-                {
-                    return Err(invalid("传输不属于已登记的媒体缓存目录。"));
-                }
-                plain_path(&path).await?;
-                if matches!(
-                    task.status.as_str(),
-                    "completed" | "failed" | "cancelled" | "interrupted" | "skipped"
-                ) && fs::symlink_metadata(&path).await.is_err()
-                {
-                    return Err(CoreError::new("cache_evicted", "此传输的原件缓存已清理。"));
-                }
-                let mut paths = vec![path.clone()];
-                paths.push(
-                    task.temporary_path
-                        .as_ref()
-                        .map(PathBuf::from)
-                        .unwrap_or_else(|| {
-                            path.with_file_name(format!(
-                                ".interop-{}-{}.part",
-                                task.id, task.generation
-                            ))
-                        }),
-                );
-                let lease = self.media_cache.lease(paths);
-                self.media_cache
-                    .ownership
-                    .lock()
-                    .unwrap()
-                    .transfer_leases
-                    .insert(lease.clone(), task.id.clone());
-                Ok(json!({"leaseId":lease}))
-            }
+            "media.cache.acquire" => Err(CoreError::new(
+                "owner_moved",
+                "缓存任务路径由 Dart device_files 核验后保留。",
+            )),
             "media.cache.retain" => {
                 let path = PathBuf::from(required(params, "localPath")?);
                 plain_path(&path).await?;

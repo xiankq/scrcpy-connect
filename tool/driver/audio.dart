@@ -131,7 +131,7 @@ Future<void> driveAudioLifecycle(
         final shouldPause = stage == 'background-paused';
         if (native['playState'] != (shouldPause ? 'paused' : 'playing') ||
             native['backgroundPaused'] != shouldPause ||
-            native['backend'] != 'fvp') {
+            native['backend'] != 'media_codec') {
           throw StateError(
             'Shared playback did not apply actual background policy: $native',
           );

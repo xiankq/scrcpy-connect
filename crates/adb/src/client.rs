@@ -39,6 +39,9 @@ impl Default for OperationOptions {
 
 #[derive(Debug, Clone)]
 pub struct ConnectOptions {
+    /// Desktop host service endpoint. Device transports/authorization belong to
+    /// the official server; no direct protocol handshake is performed here.
+    pub adb_server: Option<std::net::SocketAddr>,
     pub tcp: crate::TcpOptions,
     pub identity: Option<Identity>,
     /// Advertise experimental AOSP delayed_ack. Active only when the peer also supports it.
@@ -68,6 +71,7 @@ pub enum TlsPolicy {
 impl Default for ConnectOptions {
     fn default() -> Self {
         Self {
+            adb_server: None,
             tcp: crate::TcpOptions::default(),
             identity: None,
             burst_mode: false,
@@ -114,6 +118,7 @@ enum ControlResponse {
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 
 struct Inner {
+    server: Option<crate::server::Connection>,
     connection_id: u64,
     info: DeviceInfo,
     burst_mode: bool,
@@ -158,6 +163,9 @@ impl Inner {
 }
 impl Drop for Inner {
     fn drop(&mut self) {
+        if let Some(server) = &self.server {
+            self.reverses.retire_server(server.clone());
+        }
         self.cancellation.cancel();
     }
 }
@@ -168,7 +176,81 @@ pub struct Client {
 }
 
 impl Client {
+    /// Attach to one exact official-server transport. Subsequent services use
+    /// its transport ID, so reconnecting the same serial cannot retarget a live
+    /// logical connection to a replacement device transport.
+    pub async fn connect_server(
+        address: std::net::SocketAddr,
+        serial: &str,
+        options: OperationOptions,
+    ) -> Result<Self> {
+        let (server, info) = crate::server::Connection::connect(address, serial, &options).await?;
+        let (writer, _) = mpsc::channel(1);
+        let (priority_writer, _) = mpsc::channel(1);
+        let (control_responses, _) = mpsc::channel(1);
+        Ok(Self {
+            inner: Arc::new(Inner {
+                server: Some(server),
+                connection_id: NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed),
+                info,
+                burst_mode: false,
+                receive_budget: Default::default(),
+                writer,
+                priority_writer,
+                control_responses,
+                routes: Arc::new(Mutex::new(HashMap::new())),
+                next_id: AtomicU32::new(1),
+                cancellation: CancellationToken::new(),
+                failure: Arc::new(Mutex::new(None)),
+                traced_routes: Arc::new(AtomicUsize::new(0)),
+                inbound_activity: Arc::new(AtomicUsize::new(0)),
+                reverses: Arc::new(Default::default()),
+            }),
+        })
+    }
+    pub fn uses_server(&self) -> bool {
+        self.inner.server.is_some()
+    }
+    pub fn server_transport_id(&self) -> Option<u64> {
+        self.inner.server.as_ref().map(|server| server.transport_id)
+    }
     pub async fn connect_tcp(address: impl ToSocketAddrs, options: ConnectOptions) -> Result<Self> {
+        if let Some(server) = options.adb_server {
+            let target = tokio::net::lookup_host(address)
+                .await?
+                .next()
+                .ok_or(Error::InvalidArgument("device endpoint has no address"))?;
+            let serial = if matches!(options.tls_policy, TlsPolicy::Required) {
+                crate::server::tls_service(server, target, &options.operations).await?
+            } else {
+                target.to_string()
+            };
+            if !options.request_authorization {
+                // The official daemon has no 'never offer a public key' flag.
+                // Background reconnect may reuse its authorized transport but
+                // cannot create an unknown transport and provoke a dialog.
+                if crate::server::devices(server, &options.operations)
+                    .await?
+                    .iter()
+                    .any(|device| device.serial == serial && device.state == "device")
+                {
+                    return Self::connect_server(server, &serial, options.operations).await;
+                }
+                return Err(Error::AuthorizationRequired);
+            }
+            let answer = crate::server::query(
+                server,
+                &format!("host:connect:{serial}"),
+                &options.operations,
+            )
+            .await?;
+            let answer = String::from_utf8_lossy(&answer);
+            if !answer.starts_with("connected to ") && !answer.starts_with("already connected to ")
+            {
+                return Err(Error::Remote(answer.into_owned()));
+            }
+            return Self::connect_server(server, &serial, options.operations).await;
+        }
         bounded(
             options.operations.timeout,
             &options.operations.cancellation,
@@ -186,6 +268,11 @@ impl Client {
         transport: T,
         options: ConnectOptions,
     ) -> Result<Self> {
+        if options.adb_server.is_some() {
+            return Err(Error::InvalidArgument(
+                "desktop server backend cannot open a direct transport",
+            ));
+        }
         if options.tls_policy == TlsPolicy::Required && options.tls.is_none() {
             return Err(Error::InvalidArgument(
                 "required TLS policy needs a TLS configuration",
@@ -380,6 +467,7 @@ impl Client {
             }
         }
         let inner = Arc::new(Inner {
+            server: None,
             connection_id,
             info,
             burst_mode,
@@ -688,7 +776,15 @@ impl Client {
         self.inner.failure.lock().expect("failure mutex").clone()
     }
     pub fn close(&self) {
+        if !self.inner.cancellation.is_cancelled()
+            && let Some(server) = &self.inner.server
+        {
+            self.inner.reverses.retire_server(server.clone());
+        }
         self.inner.cancellation.cancel();
+    }
+    pub(crate) fn cancellation(&self) -> CancellationToken {
+        self.inner.cancellation.clone()
     }
     pub(crate) fn reverse_registry(&self) -> &Arc<crate::reverse::Registry> {
         &self.inner.reverses
@@ -713,6 +809,34 @@ impl Client {
         }
         if self.is_closed() {
             return Err(Error::Closed);
+        }
+        if let Some(server) = &self.inner.server {
+            let socket = tokio::select! {
+                _=self.inner.cancellation.cancelled()=>return Err(Error::Closed),
+                result=server.open(service,&options,self.inner.cancellation.clone(),self.inner.inbound_activity.clone())=>result?,
+            };
+            let (_, data) = mpsc::channel(1);
+            let (_, ack) = mpsc::channel(1);
+            return Ok(AdbStream {
+                server: Some(socket),
+                closed: self.inner.cancellation.child_token(),
+                inner: self.inner.clone(),
+                local: 0,
+                remote: 0,
+                data,
+                ack,
+                buffer: Vec::new(),
+                read_trace: None,
+                trace_token: None,
+                offset: 0,
+                pending_ack: false,
+                pending_credit: 0,
+                _receive_reservation: None,
+                options,
+                eof: false,
+                poisoned: false,
+                priority_write: false,
+            });
         }
         let reservation = if self.inner.burst_mode {
             Some(
@@ -754,6 +878,7 @@ impl Client {
             );
         }
         let mut stream = AdbStream {
+            server: None,
             inner: self.inner.clone(),
             closed,
             local,
@@ -873,6 +998,7 @@ async fn accept_reverse(inner: Arc<Inner>, frame: Frame) {
         return;
     }
     let mut stream = AdbStream {
+        server: None,
         inner: inner.clone(),
         closed,
         local,
@@ -1094,6 +1220,7 @@ async fn write_stream_frames(
 /// packets in classic mode), providing per-stream backpressure.
 /// An interrupted write closes this stream because the peer's ACK state is then uncertain.
 pub struct AdbStream {
+    server: Option<crate::server::Stream>,
     closed: CancellationToken,
     inner: Arc<Inner>,
     local: u32,
@@ -1125,6 +1252,14 @@ impl AdbStream {
     /// This changes transport scheduling only; it does not bypass per-stream
     /// ACKs/credit or permit concurrent writes on the same stream.
     pub fn set_write_priority(&mut self, priority: bool) -> Result<()> {
+        if self.server.is_some() {
+            return if self.closed.is_cancelled() {
+                Err(Error::Closed)
+            } else {
+                self.priority_write = priority;
+                Ok(())
+            };
+        }
         if !self
             .inner
             .routes
@@ -1244,6 +1379,12 @@ impl AdbStream {
     /// It must be quick and must not call back into this client. Changing the
     /// clock discards pending diagnostics, never pending stream bytes.
     pub fn set_read_trace_clock(&mut self, clock: Option<fn() -> u64>) -> Result<()> {
+        // Smart sockets expose service bytes, not the server's WRTE receive
+        // boundaries. Do not fabricate transport timing from socket reads.
+        if self.server.is_some() {
+            self.read_trace = None;
+            return Ok(());
+        }
         let mut routes = self.inner.routes.lock().expect("route mutex poisoned");
         let route = routes.get_mut(&self.local).ok_or(Error::Closed)?;
         route.trace = clock.map(|clock| Subscription::new(clock, self.inner.traced_routes.clone()));
@@ -1286,6 +1427,15 @@ impl AdbStream {
             return Err(Error::Closed);
         }
         let options = self.options.clone();
+        if let Some(server) = self.server.as_mut() {
+            return bounded(options.timeout, &options.cancellation, async {
+                tokio::select! {
+                    _=self.inner.cancellation.cancelled()=>Err(Error::Closed),
+                    result=server.read(output)=>result,
+                }
+            })
+            .await;
+        }
         bounded(options.timeout, &options.cancellation, async {
             loop {
                 if self.offset < self.buffer.len() {
@@ -1376,6 +1526,21 @@ impl AdbStream {
         // Set before awaiting, so dropping this future cannot permit an ambiguous second write.
         self.poisoned = true;
         let options = self.options.clone();
+        if let Some(server) = self.server.as_mut() {
+            let result = bounded(options.timeout, &options.cancellation, async {
+                tokio::select! {
+                    _=self.inner.cancellation.cancelled()=>Err(Error::Closed),
+                    result=server.write_all(bytes)=>result,
+                }
+            })
+            .await;
+            if result.is_err() {
+                self.close_now();
+            } else {
+                self.poisoned = false;
+            }
+            return result;
+        }
         let result = bounded(options.timeout, &options.cancellation, async {
             write_stream_frames(
                 &self.inner,
@@ -1398,6 +1563,10 @@ impl AdbStream {
     }
 
     pub async fn close(mut self) -> Result<()> {
+        if let Some(mut server) = self.server.take() {
+            self.eof = true;
+            return server.close().await;
+        }
         let options = self.options.clone();
         let result = bounded(
             options.timeout,
@@ -1424,6 +1593,11 @@ impl AdbStream {
     }
 
     pub(crate) fn close_now(&mut self) {
+        if self.server.take().is_some() {
+            self.closed.cancel();
+            self.eof = true;
+            return;
+        }
         let route = self
             .inner
             .routes
@@ -1451,3 +1625,7 @@ impl Drop for AdbStream {
         self.close_now();
     }
 }
+
+#[path = "duplex.rs"]
+mod duplex;
+pub use duplex::{AdbReader, AdbWriter};

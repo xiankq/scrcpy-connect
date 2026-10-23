@@ -251,7 +251,7 @@ Future<void> driveFocus(
             await Future<void>.delayed(const Duration(milliseconds: 700));
             final after = await state({'action': 'status'});
             for (final k in ['1', '2']) {
-              if (native(after, k)['backend'] != 'fvp' ||
+              if (native(after, k)['backend'] != 'media_codec' ||
                   ((native(after, k)['positionMs'] as int) -
                               (native(stable, k)['positionMs'] as int))
                           .abs() >

@@ -587,7 +587,7 @@ async fn unknown_independent_app_open_is_not_replayed_before_or_after_encoded_fr
     assert_eq!(after_restart["sessions"][0]["sessionId"], unknown_id);
     assert_eq!(after_restart["sessions"][0]["launchOutcome"], "unknown");
     assert!(after_restart["sessions"][0]["textureId"].is_null());
-    assert!(after_restart["sessions"][0]["videoToken"].is_null());
+    assert!(after_restart["sessions"][0]["videoSourceId"].is_null());
     invoke_runtime(&runtime, "devices.connect", json!({"deviceId":device}))
         .await
         .unwrap();

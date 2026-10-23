@@ -28,7 +28,7 @@ void main() {
       'width': 200,
       'height': 400,
       'firstFrameDecoded': true,
-      'evidence': 'mdk.snapshot',
+      'evidence': 'media_codec.snapshot',
     };
     final controller = createTestController((
       command, [
@@ -91,7 +91,7 @@ void main() {
           'width': 200,
           'height': 400,
           'firstFrameDecoded': true,
-          'evidence': 'mdk.snapshot',
+          'evidence': 'media_codec.snapshot',
         };
         final controller = createTestController((
           command, [
@@ -200,7 +200,7 @@ void main() {
         'height': 400,
         'status': 'ready',
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       };
       const unknown = {
         'sessionId': 'unknown-phone-open',
@@ -296,7 +296,7 @@ void main() {
           'height': 400,
           'status': 'ready',
           'firstFrameDecoded': true,
-          'evidence': 'mdk.snapshot',
+          'evidence': 'media_codec.snapshot',
         };
         const unknown = {
           'sessionId': 'held-open-record',
@@ -413,7 +413,7 @@ void main() {
         'height': 400,
         'status': 'ready',
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       };
       const unknown = {
         'sessionId': 'late-open-record',
@@ -498,7 +498,7 @@ void main() {
         'height': 400,
         'status': 'ready',
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       };
       final controller = createTestController((
         command, [
@@ -792,7 +792,7 @@ void main() {
         'height': 400,
         'status': 'ready',
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       };
       final controller = createTestController((
         command, [

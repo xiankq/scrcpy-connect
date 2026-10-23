@@ -147,7 +147,7 @@ void main() {
                               >?)?['firstFrameDecoded'] ==
                           true &&
                       (event['data'] as Map<Object?, Object?>?)?['evidence'] ==
-                          'mdk.snapshot',
+                          'media_codec.snapshot',
                 ),
             timeout: const Duration(seconds: 45),
             reason:
@@ -164,9 +164,9 @@ void main() {
             codec,
             reason: 'The new session must use the persisted selected format.',
           );
-          expect(session['backend'], 'fvp');
+          expect(session['backend'], 'media_codec');
           expect(session['firstFrameDecoded'], true);
-          expect(session['evidence'], 'mdk.snapshot');
+          expect(session['evidence'], 'media_codec.snapshot');
           final id = value(session, 'sessionId', value(session, 'id'));
           expect(
             outputs.any(

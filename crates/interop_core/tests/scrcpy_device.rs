@@ -46,7 +46,7 @@ async fn jar_video_native_packet_framing_and_h264_decode() {
     let session = started.unwrap();
     assert_eq!(session["status"], "starting");
     assert!(session["textureId"].is_null());
-    assert!(session["videoPort"].is_null());
+    assert!(session["videoSourceId"].is_null());
     let mut video = native_media::Reader::video(&session);
     let mut initial = [0; 12];
     video.read_exact(&mut initial).await.unwrap();

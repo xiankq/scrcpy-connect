@@ -9,7 +9,7 @@ const _pixels = <String, dynamic>{
   'width': 200,
   'height': 400,
   'firstFrameDecoded': true,
-  'evidence': 'mdk.snapshot',
+  'evidence': 'media_codec.snapshot',
 };
 
 RemotePresentation _viewed() => RemotePresentation()
@@ -39,6 +39,23 @@ bool _queued(
 );
 
 void main() {
+  test('queued hover and scroll lose permission when the window loses input ownership', () {
+    final state = _viewed();
+    for (final command in ['session.touch', 'session.scroll']) {
+      for (final ownership in [(false, true), (true, false)]) {
+        expect(
+          state.admitsQueuedInput(
+            state.binding,
+            command,
+            {'action': 'hover'},
+            foreground: ownership.$1,
+            ownerCurrent: ownership.$2,
+          ),
+          isFalse,
+        );
+      }
+    }
+  });
   test('capture resize preserves decoded image proportions and fences input until output catches up', () {
     final state = _viewed();
     state.output({

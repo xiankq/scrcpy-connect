@@ -9,6 +9,7 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 interop-core = { path = "../interop_core" }
+interop-adb = { path = "../adb" }
 flutter_rust_bridge = "=2.13.0"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }

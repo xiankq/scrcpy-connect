@@ -10,9 +10,18 @@ async fn actual_reverse_accepts_device_opens_bridges_bytes_rebinds_and_removes()
         .expect("set INTEROP_ADBD_PORT")
         .parse()
         .unwrap();
-    let client = Client::connect_tcp((address.as_str(), port), ConnectOptions::default())
-        .await
-        .unwrap();
+    let client = Client::connect_tcp(
+        (address.as_str(), port),
+        ConnectOptions {
+            adb_server: std::env::var("INTEROP_ADB_SERVER")
+                .ok()
+                .map(|s| s.parse().unwrap()),
+            request_authorization: true,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
         .unwrap();
@@ -193,6 +202,49 @@ async fn actual_reverse_accepts_device_opens_bridges_bytes_rebinds_and_removes()
     assert!(snapshot.iter().all(|pid| pid.get() > 0));
     assert!(initial.iter().all(|pid| pid.get() > 0));
     tracker.close().await.unwrap();
+    if client.uses_server() {
+        let binding = client
+            .reverse_forward(
+                &ReverseSocket::Tcp(0),
+                destination,
+                true,
+                OperationOptions::default(),
+            )
+            .await
+            .unwrap();
+        let ReverseSocket::Tcp(port) = binding.device else {
+            panic!("TCP binding expected")
+        };
+        let server = std::env::var("INTEROP_ADB_SERVER")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let observer = Client::connect_server(
+            server,
+            &format!("{address}:{}", std::env::var("INTEROP_ADBD_PORT").unwrap()),
+            OperationOptions::default(),
+        )
+        .await
+        .unwrap();
+        client.close();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if !observer
+                    .reverse_list(OperationOptions::default())
+                    .await
+                    .unwrap()
+                    .iter()
+                    .any(|e| e.device_service == format!("tcp:{port}"))
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        observer.close();
+    }
     echo.abort();
     client.close();
 }

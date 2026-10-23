@@ -158,7 +158,7 @@ void main() {
         ]) {
           expect(output[flag], isTrue, reason: flag);
         }
-        expect(output['backend'], 'fvp');
+        expect(output['backend'], 'media_codec');
         report['actualPlaybackReady'] = true;
         report['deviceId'] = deviceId;
         report['sourceId'] = sourceId;

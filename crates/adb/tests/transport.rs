@@ -864,3 +864,207 @@ async fn daemon_restart_services_preserve_responses_and_do_not_reconnect() {
     assert!(!client.is_closed());
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn split_duplex_reads_while_classic_write_waits_for_peer_ack() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (closed_send, closed_receive) = tokio::sync::oneshot::channel();
+    let fixture = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        handshake(&mut socket, "").await;
+        let open = read(&mut socket).await;
+        send(&mut socket, protocol::OKAY, 91, open.arg0, &[]).await;
+        let written = read(&mut socket).await;
+        assert_eq!(written.command, protocol::WRTE);
+        assert_eq!(written.payload, b"request");
+        // This peer only acknowledges stdin after the host has consumed stdout.
+        send(&mut socket, protocol::WRTE, 91, open.arg0, b"response").await;
+        let received = read(&mut socket).await;
+        assert_eq!(received.command, protocol::OKAY);
+        send(&mut socket, protocol::OKAY, 91, open.arg0, &[]).await;
+        while read(&mut socket).await.command != protocol::CLSE {}
+        closed_send.send(()).unwrap();
+        let sibling = read(&mut socket).await;
+        assert_eq!(sibling.command, protocol::OPEN);
+        send(&mut socket, protocol::OKAY, 92, sibling.arg0, &[]).await;
+        send(&mut socket, protocol::WRTE, 92, sibling.arg0, b"alive").await;
+        while Frame::read(&mut socket, protocol::MAX_PAYLOAD, true)
+            .await
+            .is_ok()
+        {}
+    });
+    let client = Client::connect_tcp(address, ConnectOptions::default())
+        .await
+        .unwrap();
+    let (mut reader, mut writer) = client
+        .open("exec:duplex", options())
+        .await
+        .unwrap()
+        .into_split();
+    let output = async {
+        let mut bytes = [0; 8];
+        assert_eq!(reader.read(&mut bytes).await.unwrap(), 8);
+        assert_eq!(&bytes, b"response");
+    };
+    tokio::time::timeout(Duration::from_secs(1), async {
+        tokio::join!(output, async {
+            writer.write_all(b"request").await.unwrap();
+        });
+    })
+    .await
+    .unwrap();
+    drop(writer);
+    assert_eq!(reader.read(&mut [0; 1]).await.unwrap(), 0);
+    assert!(!client.is_closed());
+    closed_receive.await.unwrap();
+    let mut sibling = client.open("exec:alive", options()).await.unwrap();
+    let mut bytes = [0; 5];
+    sibling.read_exact(&mut bytes).await.unwrap();
+    assert_eq!(&bytes, b"alive");
+    client.close();
+    fixture.await.unwrap();
+}
+
+#[tokio::test]
+async fn split_shell_input_progresses_while_stdout_header_is_incomplete() {
+    use interop_adb::{ShellEvent, ShellMode};
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let fixture = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        handshake(&mut socket, "shell_v2").await;
+        let open = read(&mut socket).await;
+        assert_eq!(open.payload, b"shell,v2,pty:cat\0");
+        send(&mut socket, protocol::OKAY, 93, open.arg0, &[]).await;
+        send(&mut socket, protocol::WRTE, 93, open.arg0, &[1, 2]).await;
+        let mut controls = Vec::new();
+        while controls.len() < 3 {
+            let frame = read(&mut socket).await;
+            if frame.command == protocol::WRTE {
+                controls.push(frame.payload);
+                send(&mut socket, protocol::OKAY, 93, open.arg0, &[]).await;
+            }
+        }
+        assert_eq!(controls[0], b"\0\x02\0\0\0hi");
+        assert_eq!(&controls[1][..5], &[5, 10, 0, 0, 0]);
+        assert_eq!(&controls[1][5..], b"24x80,0x0\0");
+        assert_eq!(controls[2], [4, 0, 0, 0, 0]);
+        send(
+            &mut socket,
+            protocol::WRTE,
+            93,
+            open.arg0,
+            &[0, 0, 0, b'h', b'i', 3, 1, 0, 0, 0, 7],
+        )
+        .await;
+        while read(&mut socket).await.command != protocol::CLSE {}
+    });
+    let client = Client::connect_tcp(address, ConnectOptions::default())
+        .await
+        .unwrap();
+    let (mut reader, mut writer) = client
+        .shell_session("cat", ShellMode::Pty, 4096, options())
+        .await
+        .unwrap()
+        .into_split();
+    let reading = async {
+        assert_eq!(
+            reader.next_event().await.unwrap(),
+            Some(ShellEvent::Stdout(b"hi".to_vec()))
+        );
+        assert_eq!(
+            reader.next_event().await.unwrap(),
+            Some(ShellEvent::Exit(7))
+        );
+    };
+    let writing = async {
+        writer.write_stdin(b"hi").await.unwrap();
+        writer.resize(24, 80).await.unwrap();
+        writer.close_stdin().await.unwrap();
+    };
+    tokio::time::timeout(Duration::from_secs(1), async {
+        tokio::join!(reading, writing);
+    })
+    .await
+    .unwrap();
+    drop(writer);
+    drop(reader);
+    fixture.await.unwrap();
+    assert!(!client.is_closed());
+    client.close();
+}
+
+#[tokio::test]
+async fn binder_argv_command_quoting_and_reboot_ack_keep_protocol_boundaries() {
+    use interop_adb::{RebootTarget, ShellEvent};
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let fixture = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        handshake(&mut socket, "cmd,shell_v2,abb,abb_exec").await;
+        for (expected, framed) in [
+            (b"reboot:recovery\0".as_slice(), false),
+            (
+                b"shell,v2,raw:cmd 'package' 'a b' 'q'\\''r'\0".as_slice(),
+                true,
+            ),
+            (b"abb:package\0a b\0q'r\0".as_slice(), true),
+            (b"abb_exec:package\0a b\0q'r\0".as_slice(), false),
+        ] {
+            let open = loop {
+                let frame = read(&mut socket).await;
+                if frame.command == protocol::OPEN {
+                    break frame;
+                }
+            };
+            assert_eq!(open.payload, expected);
+            send(&mut socket, protocol::OKAY, 95, open.arg0, &[]).await;
+            if expected.starts_with(b"reboot:") {
+                continue;
+            }
+            let bytes = if framed {
+                b"\x01\x02\0\0\0\0\xff\x03\x01\0\0\0\x07".as_slice()
+            } else {
+                b"\0\xff".as_slice()
+            };
+            send(&mut socket, protocol::WRTE, 95, open.arg0, bytes).await;
+            if !framed {
+                send(&mut socket, protocol::CLSE, 95, open.arg0, &[]).await;
+            }
+        }
+        while Frame::read(&mut socket, protocol::MAX_PAYLOAD, true)
+            .await
+            .is_ok()
+        {}
+    });
+    let client = Client::connect_tcp(address, ConnectOptions::default())
+        .await
+        .unwrap();
+    client
+        .reboot(RebootTarget::Recovery, options())
+        .await
+        .unwrap();
+    let args = ["package", "a b", "q'r"];
+    let command = client.cmd(&args, 4096, options()).await.unwrap();
+    assert_eq!(command.stdout, [0, 255]);
+    assert_eq!(command.exit_code, Some(7));
+    let mut binder = client.abb(&args, 4096, options()).await.unwrap();
+    assert_eq!(
+        binder.next_event().await.unwrap(),
+        Some(ShellEvent::Stdout(vec![0, 255]))
+    );
+    assert_eq!(
+        binder.next_event().await.unwrap(),
+        Some(ShellEvent::Exit(7))
+    );
+    drop(binder);
+    let mut raw = client.abb_exec(&args, options()).await.unwrap();
+    let mut bytes = [0; 2];
+    raw.read_exact(&mut bytes).await.unwrap();
+    assert_eq!(bytes, [0, 255]);
+    assert!(client.cmd(&["bad\0arg"], 4096, options()).await.is_err());
+    assert!(client.abb(&[], 4096, options()).await.is_err());
+    client.close();
+    fixture.await.unwrap();
+}

@@ -22,7 +22,7 @@ pub(crate) struct Material {
     tls: OnceCell<TlsConfig>,
 }
 impl Material {
-    fn new(identity: Identity) -> CoreResult<Arc<Self>> {
+    pub(crate) fn new(identity: Identity) -> CoreResult<Arc<Self>> {
         Ok(Arc::new(Self {
             fingerprint: fingerprint(&identity)?,
             identity,

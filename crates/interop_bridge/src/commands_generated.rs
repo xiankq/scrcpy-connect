@@ -111,6 +111,7 @@ pub(crate) enum Command {
     SessionRotate,
     SessionScreen,
     SessionScreenshot,
+    SessionScroll,
     SessionStart,
     SessionStop,
     SessionText,
@@ -250,6 +251,7 @@ impl Command {
             "session.rotate" => Self::SessionRotate,
             "session.screen" => Self::SessionScreen,
             "session.screenshot" => Self::SessionScreenshot,
+            "session.scroll" => Self::SessionScroll,
             "session.start" => Self::SessionStart,
             "session.stop" => Self::SessionStop,
             "session.text" => Self::SessionText,
@@ -390,6 +392,7 @@ impl Command {
             Self::SessionRotate => "session.rotate",
             Self::SessionScreen => "session.screen",
             Self::SessionScreenshot => "session.screenshot",
+            Self::SessionScroll => "session.scroll",
             Self::SessionStart => "session.start",
             Self::SessionStop => "session.stop",
             Self::SessionText => "session.text",
@@ -861,6 +864,36 @@ impl Command {
                     kind: FieldType::Integer,
                 },
             ],
+            Self::SessionFrame => &[
+                Field {
+                    name: "sessionId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "generation",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "captureGeneration",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "textureId",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "decodedWidth",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "decodedHeight",
+                    kind: FieldType::Integer,
+                },
+            ],
+            Self::SessionKey => &[Field {
+                name: "captureGeneration",
+                kind: FieldType::Integer,
+            }],
             Self::SessionReconfigure => &[
                 Field {
                     name: "deviceId",
@@ -871,9 +904,47 @@ impl Command {
                     kind: FieldType::String,
                 },
             ],
+            Self::SessionScroll => &[
+                Field {
+                    name: "captureGeneration",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "x",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "y",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "screenWidth",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "screenHeight",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "hscroll",
+                    kind: FieldType::Number,
+                },
+                Field {
+                    name: "vscroll",
+                    kind: FieldType::Number,
+                },
+            ],
             Self::SessionStart => &[Field {
                 name: "deviceId",
                 kind: FieldType::String,
+            }],
+            Self::SessionText => &[Field {
+                name: "captureGeneration",
+                kind: FieldType::Integer,
+            }],
+            Self::SessionTouch => &[Field {
+                name: "captureGeneration",
+                kind: FieldType::Integer,
             }],
             Self::SettingsImport => &[Field {
                 name: "metadata",
@@ -1062,16 +1133,10 @@ impl Command {
                     kind: FieldType::String,
                 },
             ],
-            Self::SessionFrame => &[
-                Field {
-                    name: "sessionId",
-                    kind: FieldType::String,
-                },
-                Field {
-                    name: "deviceId",
-                    kind: FieldType::String,
-                },
-            ],
+            Self::SessionFrame => &[Field {
+                name: "deviceId",
+                kind: FieldType::String,
+            }],
             Self::SessionKey => &[
                 Field {
                     name: "sessionId",
@@ -1087,6 +1152,14 @@ impl Command {
                 },
                 Field {
                     name: "keyCode",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "metaState",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "repeat",
                     kind: FieldType::Integer,
                 },
             ],
@@ -1230,6 +1303,20 @@ impl Command {
                     kind: FieldType::String,
                 },
             ],
+            Self::SessionScroll => &[
+                Field {
+                    name: "sessionId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "deviceId",
+                    kind: FieldType::String,
+                },
+                Field {
+                    name: "buttons",
+                    kind: FieldType::Integer,
+                },
+            ],
             Self::SessionStart => &[
                 Field {
                     name: "displayWidth",
@@ -1288,6 +1375,18 @@ impl Command {
                 Field {
                     name: "pressure",
                     kind: FieldType::Number,
+                },
+                Field {
+                    name: "mouse",
+                    kind: FieldType::Boolean,
+                },
+                Field {
+                    name: "buttons",
+                    kind: FieldType::Integer,
+                },
+                Field {
+                    name: "actionButton",
+                    kind: FieldType::Integer,
                 },
             ],
             Self::TransfersCancel => &[
@@ -1444,10 +1543,6 @@ impl Command {
                 },
                 Field {
                     name: "sources",
-                    kind: FieldType::Array,
-                },
-                Field {
-                    name: "transfers",
                     kind: FieldType::Array,
                 },
                 Field {

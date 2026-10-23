@@ -150,6 +150,9 @@ pub struct Store {
     #[serde(default)]
     pub device_identity_fingerprints: std::collections::HashMap<String, String>,
     pub devices: Vec<Device>,
+    // Read legacy preferences for migration compatibility, but never persist
+    // the execution mirror as a second preferences owner.
+    #[serde(default, skip_serializing)]
     pub settings: Value,
 }
 

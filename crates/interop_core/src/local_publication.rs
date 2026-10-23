@@ -82,6 +82,14 @@ fn open_at(parent: &File, name: &CStr) -> io::Result<File> {
 
 /// The caller retains the completed, synced temporary file until publication.
 pub(crate) fn publish_file(source: &File, from: &Path, to: &Path) -> CoreResult<()> {
+    publish_file_mode(source, from, to, false)
+}
+
+pub(crate) fn publish_file_replace(source: &File, from: &Path, to: &Path) -> CoreResult<()> {
+    publish_file_mode(source, from, to, true)
+}
+
+fn publish_file_mode(source: &File, from: &Path, to: &Path, replace: bool) -> CoreResult<()> {
     let (source_parent, source_name) = location(from)?;
     let (target_parent, target_name) = location(to)?;
     let before = source.metadata()?;
@@ -92,13 +100,29 @@ pub(crate) fn publish_file(source: &File, from: &Path, to: &Path) -> CoreResult<
             "暂存文件在提交前变化，未发布替换内容。",
         ));
     }
-    rename_noreplace(
-        source_parent.as_raw_fd(),
-        &source_name,
-        target_parent.as_raw_fd(),
-        &target_name,
-    )
-    .map_err(|error| {
+    let renamed = if replace {
+        let result = unsafe {
+            libc::renameat(
+                source_parent.as_raw_fd(),
+                source_name.as_ptr(),
+                target_parent.as_raw_fd(),
+                target_name.as_ptr(),
+            )
+        };
+        if result < 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    } else {
+        rename_noreplace(
+            source_parent.as_raw_fd(),
+            &source_name,
+            target_parent.as_raw_fd(),
+            &target_name,
+        )
+    };
+    renamed.map_err(|error| {
         if error.kind() == io::ErrorKind::AlreadyExists {
             CoreError::new(
                 "conflict",
@@ -128,5 +152,34 @@ pub(crate) fn publish_file(source: &File, from: &Path, to: &Path) -> CoreResult<
             "result_unknown",
             "提交后暂存身份或目录同步无法确认，请核对目标；不会自动重试。",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replace_checks_retained_inode_and_preserves_existing_target_on_replacement() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("part");
+        let target = root.path().join("target");
+        std::fs::write(&source, b"verified").unwrap();
+        std::fs::write(&target, b"existing").unwrap();
+        let held = File::open(&source).unwrap();
+        std::fs::rename(&source, root.path().join("retained")).unwrap();
+        std::fs::write(&source, b"replaced").unwrap();
+        assert_eq!(
+            publish_file_replace(&held, &source, &target)
+                .unwrap_err()
+                .code,
+            "source_changed"
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), b"existing");
+        assert_eq!(std::fs::read(&source).unwrap(), b"replaced");
+        let current = File::open(&source).unwrap();
+        publish_file_replace(&current, &source, &target).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"replaced");
+        assert!(!source.exists());
     }
 }

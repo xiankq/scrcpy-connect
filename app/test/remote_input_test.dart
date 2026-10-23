@@ -1,5 +1,6 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
@@ -30,6 +31,83 @@ void main() {
     );
     expect(sourcePoint(Offset.zero, viewport, Size.zero), isNull);
   });
+
+  testWidgets(
+    'physical modifiers, repeat and mouse input retain capture identity',
+    (tester) async {
+      final commands = <(String, Json)>[];
+      final controller = _controller(commands, captureGeneration: 7);
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: RemotePage(
+              controller: controller,
+              device: const {'id': 'phone'},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.keyA);
+        await tester.sendKeyRepeatEvent(LogicalKeyboardKey.keyA);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.keyA);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        final center = tester.getCenter(find.byType(Texture));
+        await tester.sendEventToBinding(
+          PointerHoverEvent(position: center, kind: PointerDeviceKind.mouse),
+        );
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            position: center,
+            scrollDelta: const Offset(0, 20),
+            kind: PointerDeviceKind.mouse,
+          ),
+        );
+        final mouse = await tester.startGesture(
+          center,
+          kind: PointerDeviceKind.mouse,
+          buttons: kSecondaryMouseButton,
+        );
+        await mouse.up();
+        await tester.pumpAndSettle();
+        final keys = commands
+            .where((c) => c.$1 == 'session.key' && c.$2['keyCode'] == 29)
+            .map((c) => c.$2)
+            .toList();
+        expect(keys.map((p) => p['action']), ['down', 'down', 'up']);
+        expect(keys.map((p) => p['metaState']), everyElement(0x1000));
+        expect(keys[1]['repeat'], 1);
+        final touches = commands
+            .where((c) => c.$1 == 'session.touch')
+            .map((c) => c.$2)
+            .toList();
+        expect(touches.map((p) => p['action']), ['hover', 'down', 'up']);
+        expect(touches.map((p) => p['mouse']), everyElement(isTrue));
+        expect(touches[1]['actionButton'], kSecondaryMouseButton);
+        expect(touches.last['pressure'], 0);
+        expect(
+          commands.where((c) => c.$1 == 'session.scroll').single.$2['vscroll'],
+          -1,
+        );
+        expect(
+          commands
+              .where(
+                (c) => [
+                  'session.touch',
+                  'session.scroll',
+                  'session.key',
+                ].contains(c.$1),
+              )
+              .map((c) => c.$2['captureGeneration']),
+          everyElement(7),
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
 
   testWidgets(
     'remote image uses the complete viewport beneath host top safe area',
@@ -304,21 +382,24 @@ void main() {
   );
 }
 
-AppController _controller(List<(String, Json)> commands) =>
-    createTestController((command, [params = const {}]) async {
-      commands.add((command, params));
-      if (command == 'session.start') {
-        return {
-          'sessionId': 'original',
-          'deviceId': 'phone',
-          'textureId': 1,
-          'width': 200,
-          'height': 400,
-        };
-      }
-      if (command == 'session.touch' &&
-          ((params['x'] as int) >= 200 || (params['y'] as int) >= 400)) {
-        throw const RequestFailure('invalid_argument', '触控位置超出画面。');
-      }
-      return {};
-    });
+AppController _controller(
+  List<(String, Json)> commands, {
+  int? captureGeneration,
+}) => createTestController((command, [params = const {}]) async {
+  commands.add((command, params));
+  if (command == 'session.start') {
+    return {
+      'sessionId': 'original',
+      'captureGeneration': ?captureGeneration,
+      'deviceId': 'phone',
+      'textureId': 1,
+      'width': 200,
+      'height': 400,
+    };
+  }
+  if (command == 'session.touch' &&
+      ((params['x'] as int) >= 200 || (params['y'] as int) >= 400)) {
+    throw const RequestFailure('invalid_argument', '触控位置超出画面。');
+  }
+  return {};
+});

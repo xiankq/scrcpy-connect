@@ -7,9 +7,9 @@ import 'package:crypto/crypto.dart';
 /// Checks the deliverable rather than trusting the source asset declarations.
 void verifyPackagedServers(Archive apk, Directory repository) {
   const prefix =
-      'assets/flutter_assets/packages/interop_bridge/assets/servers/';
+      'assets/flutter_assets/packages/device_runtime/assets/servers/';
   final source = Directory(
-    '${repository.path}/packages/interop_bridge/assets/servers',
+    '${repository.path}/packages/device_runtime/assets/servers',
   );
   final manifestBytes = File('${source.path}/manifest.json').readAsBytesSync();
   final manifest =

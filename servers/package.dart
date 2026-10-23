@@ -5,7 +5,7 @@ import 'package:path/path.dart' as p;
 
 import 'tooling.dart';
 
-const packagedServerDirectory = 'packages/interop_bridge/assets/servers';
+const packagedServerDirectory = 'packages/device_runtime/assets/servers';
 const _helpers = ['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'];
 
 /// Derives the shared compressed payloads only from verified, controlled inputs.

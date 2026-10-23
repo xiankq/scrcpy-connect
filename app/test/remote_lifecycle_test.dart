@@ -73,6 +73,33 @@ void main() {
           {'sessionId': 'original', 'text': '你好🙂'},
         ]);
         expect(commands.where((c) => c.$1 == 'session.key'), isEmpty);
+        // A long committed history retains only an editable suffix. Emoji
+        // remain whole graphemes, and the next insertion must not replay it.
+        final longText = '\u200B你好🙂${List.filled(100, '文🙂').join()}';
+        tester.testTextInput.updateEditingValue(
+          TextEditingValue(
+            text: longText,
+            selection: TextSelection.collapsed(offset: longText.length),
+          ),
+        );
+        await tester.pump();
+        final editor = tester
+            .widget<TextField>(find.byType(TextField))
+            .controller!;
+        expect(editor.text.characters.length, 65);
+        final retained = editor.text;
+        tester.testTextInput.updateEditingValue(
+          TextEditingValue(
+            text: '$retained新',
+            selection: TextSelection.collapsed(offset: retained.length + 1),
+          ),
+        );
+        await tester.pump();
+        expect(
+          commands.where((c) => c.$1 == 'session.text').last.$2['text'],
+          '新',
+        );
+        expect(commands.where((c) => c.$1 == 'session.key'), isEmpty);
       } finally {
         await tester.pumpWidget(const SizedBox());
         controller.dispose();
@@ -100,7 +127,7 @@ void main() {
             'width': 200,
             'height': 400,
             'firstFrameDecoded': true,
-            'evidence': 'mdk.snapshot',
+            'evidence': 'media_codec.snapshot',
           };
         }
         return {};
@@ -288,7 +315,7 @@ void main() {
               'width': 200,
               'height': 400,
               'firstFrameDecoded': true,
-              'evidence': 'mdk.snapshot',
+              'evidence': 'media_codec.snapshot',
             };
           }
           if (command == 'session.resume') {
@@ -421,7 +448,7 @@ void main() {
         'sessionId': 'original',
         'textureId': 2,
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       };
       resumed.complete(oldReceipt);
       await tester.pumpAndSettle();
@@ -471,7 +498,7 @@ void main() {
                 'width': 200,
                 'height': 400,
                 'firstFrameDecoded': true,
-                'evidence': 'mdk.snapshot',
+                'evidence': 'media_codec.snapshot',
               }
             : {};
       }, events: events.stream);
@@ -566,7 +593,7 @@ void main() {
               'width': 200,
               'height': 400,
               'firstFrameDecoded': true,
-              'evidence': 'mdk.snapshot',
+              'evidence': 'media_codec.snapshot',
             }
           : {};
     }, events: events.stream);
@@ -746,7 +773,7 @@ void main() {
         'sessionId': 'original',
         'textureId': 2,
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       });
       await tester.pumpAndSettle();
       expect(resumes, 2);
@@ -758,7 +785,7 @@ void main() {
         'sessionId': 'original',
         'textureId': 3,
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       });
       await tester.pumpAndSettle();
       events.add({
@@ -803,7 +830,7 @@ void main() {
                 'width': 200,
                 'height': 400,
                 'firstFrameDecoded': true,
-                'evidence': 'mdk.snapshot',
+                'evidence': 'media_codec.snapshot',
               }
             : {};
       }, events: events.stream);
@@ -1629,7 +1656,7 @@ void main() {
         'data': {
           'sessionId': 'session',
           'firstFrameDecoded': true,
-          'evidence': 'mdk.snapshot',
+          'evidence': 'media_codec.snapshot',
           'textureId': 1,
           'width': 200,
           'height': 400,
@@ -1642,7 +1669,7 @@ void main() {
       resume.complete({
         'sessionId': 'session',
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
         'textureId': 1,
       });
       await tester.pumpAndSettle();

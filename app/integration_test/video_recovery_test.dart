@@ -226,6 +226,7 @@ void main() {
         expect(secondId, isNot(firstId));
         for (final action in ['down', 'up']) {
           await request('session.key', {
+            'captureGeneration': second['captureGeneration'],
             'sessionId': secondId,
             'keyCode': 20,
             'action': action,

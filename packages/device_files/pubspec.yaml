@@ -1,0 +1,15 @@
+name: device_files
+description: Remote document and system delivery coordination.
+publish_to: none
+version: 0.1.0
+resolution: workspace
+environment:
+  sdk: ^3.13.5
+dependencies:
+  path: 1.9.1
+  device_protocol:
+    path: ../device_protocol
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

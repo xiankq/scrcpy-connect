@@ -18,7 +18,6 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/media_thumbnail.dart';
-import 'package:video_player/video_player.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
@@ -200,53 +199,9 @@ void main() {
             reason: 'The real full image must decode visible pixels.',
           );
         } else {
-          await waitFor(
-            tester,
-            () =>
-                find.byType(VideoPlayer).evaluate().isNotEmpty &&
-                find.byTooltip('播放').evaluate().isNotEmpty,
-            reason: 'Actual MP4 preview must initialize and offer play.',
-          );
-          final player = tester
-              .widget<VideoPlayer>(find.byType(VideoPlayer))
-              .controller;
-          expect(
-            player.value.duration,
-            greaterThanOrEqualTo(const Duration(seconds: 5)),
-          );
-          await tester.tap(find.byTooltip('播放'));
-          await waitFor(
-            tester,
-            () =>
-                player.value.position > const Duration(milliseconds: 300) &&
-                find.byTooltip('暂停').evaluate().isNotEmpty,
-            reason: 'The real preview clock must advance after Play.',
-          );
-          await tester.tap(find.byTooltip('暂停'));
-          await waitFor(
-            tester,
-            () => !player.value.isPlaying,
-            reason: 'Pause must stop actual playback.',
-          );
-          final progress = find.byType(VideoProgressIndicator);
-          final rect = tester.getRect(progress);
-          await tester.tapAt(
-            Offset(rect.left + rect.width * .6, rect.center.dy),
-          );
-          await waitFor(
-            tester,
-            () => player.value.position > const Duration(seconds: 2),
-            reason: 'User scrubbing must seek the real video.',
-          );
-          await tester.tap(find.byTooltip('静音'));
-          await waitFor(
-            tester,
-            () =>
-                player.value.volume == 0 &&
-                find.byTooltip('打开声音').evaluate().isNotEmpty,
-            reason: 'Mute must change the actual preview player.',
-          );
-          binding.reportData!['videoPlaybackControls'] = true;
+          expect(find.text('保存视频后打开'), findsOneWidget);
+          expect(find.text('保存原文件'), findsWidgets);
+          binding.reportData!['videoSaveFallbackAvailable'] = true;
         }
         binding.reportData!['actualMediaPreview'] = true;
         await tester.pump(const Duration(milliseconds: 300));

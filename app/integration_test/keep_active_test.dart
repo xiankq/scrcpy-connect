@@ -135,10 +135,10 @@ void main() {
         final found = (await sessions()).where((item) => idOf(item) == id);
         if (found.length == 1) {
           final item = found.single;
-          if (item['backend'] == 'fvp' &&
+          if (item['backend'] == 'media_codec' &&
               item['status'] == 'streaming' &&
               item['firstFrameDecoded'] == true &&
-              item['evidence'] == 'mdk.snapshot' &&
+              item['evidence'] == 'media_codec.snapshot' &&
               item['textureId'] is int &&
               (item['textureId'] as int) >= 0 &&
               (item['decodedWidth'] as num? ?? 0) > 0 &&
@@ -157,7 +157,7 @@ void main() {
                     data['generation'] == item['rendererGeneration'] &&
                     data['textureId'] == item['textureId'] &&
                     data['firstFrameDecoded'] == true &&
-                    data['evidence'] == 'mdk.snapshot';
+                    data['evidence'] == 'media_codec.snapshot';
               })) {
             return item;
           }

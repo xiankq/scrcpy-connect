@@ -69,9 +69,9 @@ void main() {
       );
       bool verified(Json record) =>
           ['streaming', 'paused'].contains(record['status']) &&
-          record['backend'] == 'fvp' &&
+          record['backend'] == 'media_codec' &&
           record['firstFrameDecoded'] == true &&
-          record['evidence'] == 'mdk.snapshot' &&
+          record['evidence'] == 'media_codec.snapshot' &&
           record['qualityRebuilding'] != true &&
           record['outputRetained'] != true &&
           record['textureId'] is int &&
@@ -94,7 +94,7 @@ void main() {
                 output['generation'] == record['rendererGeneration'] &&
                 output['textureId'] == record['textureId'] &&
                 output['firstFrameDecoded'] == true &&
-                output['evidence'] == 'mdk.snapshot';
+                output['evidence'] == 'media_codec.snapshot';
           });
       Future<List<Json>> ready(Set<String> ids, {int after = 0}) async {
         final deadline = DateTime.now().add(const Duration(seconds: 45));
@@ -202,7 +202,7 @@ void main() {
           final snapshot = await request('session.screenshot', {
             'sessionId': idOf(record),
           });
-          expect(snapshot['evidence'], 'mdk.snapshot');
+          expect(snapshot['evidence'], 'media_codec.snapshot');
           expect(snapshot['generation'], record['rendererGeneration']);
           final file = File(value(snapshot, 'localPath'));
           try {
@@ -423,8 +423,8 @@ void main() {
           'screenAfter': screenAfter,
           'lifecycleEvidence': 'Stable session/task IDs, no terminal session events, unchanged observed screen state; no wake-command counter is exposed.',
           'regressionReferences': [
-            'packages/interop_bridge/test/device_quality_coordinator_test.dart: reports actual partial failures and continues remaining windows',
-            'packages/interop_bridge/test/portable_video_test.dart: close beats a late one-use replacement relay',
+            'packages/device_runtime/test/device_quality_coordinator_test.dart: reports actual partial failures and continues remaining windows',
+            'packages/device_runtime/test/portable_video_test.dart: close beats a late one-use replacement relay',
             'crates/interop_core/tests/quality_reconfiguration_android.rs: explicit_close_during_rebuild_does_not_resurrect_window',
           ],
         });

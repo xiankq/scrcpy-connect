@@ -12,29 +12,11 @@ use tokio::sync::Mutex;
 pub(crate) struct ActivityOwner {
     pub(crate) sessions: Mutex<HashMap<String, crate::scrcpy::Session>>,
     pub(crate) audio_sources: Mutex<HashMap<String, crate::audio::AudioSource>>,
-    pub(crate) transfers: Mutex<HashMap<String, crate::files::Transfer>>,
     pub(crate) admission: crate::resource::ResourceAdmission,
     pub(crate) keep_active: crate::scrcpy::KeepActiveOwner,
 }
 
 impl ActivityOwner {
-    pub(crate) async fn cancel_device_transfers(&self, device: &str) {
-        for transfer in self
-            .transfers
-            .lock()
-            .await
-            .values_mut()
-            .filter(|task| task.device_id == device)
-        {
-            if matches!(
-                transfer.status.as_str(),
-                "queued" | "running" | "finalizing"
-            ) {
-                transfer.cancellation.cancel();
-            }
-        }
-    }
-
     pub(crate) async fn session_snapshots(&self) -> Vec<Value> {
         let mut sessions = Vec::new();
         for session in self.sessions.lock().await.values() {
@@ -97,10 +79,8 @@ impl std::fmt::Display for ActivityRef<'_> {
 
 impl Runtime {
     pub(crate) async fn stop_device_activities(&self, id: &str) -> CoreResult<()> {
-        self.searches.cancel_device(id);
-        self.gallery_scans.cancel_device(id);
+        self.cancel_file_executions(id).await;
         self.observation_connection_changed(id).await;
-        self.activities.cancel_device_transfers(id).await;
         self.stop_device_sessions(id).await;
         self.stop_device_audio(id).await;
         self.stop_device_companion(id).await;
@@ -130,6 +110,7 @@ impl Runtime {
         for id in ids {
             let _ = self.disconnect_device(&id, false).await;
         }
+        self.official_adb.stop_all().await;
     }
 }
 
@@ -144,7 +125,6 @@ impl Runtime {
                 sessions.push(record);
             }
         }
-        let transfers = self.list_transfers().await?;
         let devices = self.store.read().await.devices.clone();
         let device_name = |id: &str| {
             devices
@@ -177,16 +157,6 @@ impl Runtime {
                 "name":reserved.name,"status":reserved.status,"canStop":true,"canPause":reserved.can_pause,
                 "reserved":true,"stopImpact":"仅取消这个正在启动或清理的控制会话；已有其他活动保持不变。"}));
         }
-        if let Some(transfers) = transfers["transfers"].as_array() {
-            for transfer in transfers.iter().filter(|transfer| {
-                matches!(
-                    transfer["status"].as_str(),
-                    Some("queued" | "running" | "finalizing" | "conflict")
-                )
-            }) {
-                activities.push(json!({"id":ActivityRef::Transfer(transfer["id"].as_str().unwrap_or_default()).to_string(),"deviceId":transfer["deviceId"],"deviceName":device_name(transfer["deviceId"].as_str().unwrap_or_default()),"name":transfer["name"],"status":transfer["status"],"canStop":true,"stopImpact":"仅取消这一项传输；已完成的文件不回滚，未完成内容保留为实际中断状态。"}));
-            }
-        }
         for observation in self.observation_list().await? {
             if observation["wanted"] == true {
                 let id = observation["deviceId"].as_str().unwrap_or_default();
@@ -200,7 +170,7 @@ impl Runtime {
                 "deviceName":device_name(device),"name":"设备声音","status":source["status"],"canStop":true,
                 "stopImpact":"仅停止这台设备的这一代音源；设备连接、控制会话、通知与来电观察及其他设备音源保持运行。"}));
         }
-        Ok(json!({"activities":activities,"sessions":sessions,"transfers":transfers["transfers"]}))
+        Ok(json!({"activities":activities,"sessions":sessions}))
     }
 
     pub(crate) async fn stop_activity(self: &Arc<Self>, params: &Value) -> CoreResult<Value> {
@@ -233,10 +203,10 @@ impl Runtime {
                 self.session_command("session.stop", &json!({"sessionId":id}))
                     .await
             }
-            Some(ActivityRef::Transfer(id)) => {
-                self.transfer_command("transfers.cancel", &json!({"transferId":id}))
-                    .await
-            }
+            Some(ActivityRef::Transfer(id)) => Err(CoreError::new(
+                "owner_moved",
+                format!("传输 {id} 由 Dart device_files 运行时取消。"),
+            )),
             None => Err(CoreError::new("not_found", "此活动已结束或标识无效。")),
         }
     }

@@ -20,6 +20,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:media_codec/media_codec.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:design_system/design_system.dart';
@@ -56,6 +58,8 @@ class _RemotePageState extends State<RemotePage>
   final activePointers = <int>{};
   final pointerPositions = <int, Json>{};
   final heldKeys = <int, RemoteBinding>{};
+  final keyRepeats = <int, int>{};
+  final bindingCaptures = <RemoteBinding, int>{};
   bool adjustmentShown = false;
   SessionView? view;
   ModalRoute<dynamic>? observedRoute;
@@ -392,6 +396,7 @@ class _RemotePageState extends State<RemotePage>
     var completion = releasePointers(binding: binding);
     final keys = Map<int, RemoteBinding>.from(heldKeys);
     heldKeys.clear();
+    keyRepeats.clear();
     if (!presentation.controlAvailable && binding == null) return completion;
     for (final entry in keys.entries) {
       if (entry.value != outgoing) {
@@ -889,7 +894,7 @@ class _RemotePageState extends State<RemotePage>
       case 'session.output.resumed':
         if (event['type'] != 'session.frame' &&
             (data['firstFrameDecoded'] != true ||
-                data['evidence'] != 'mdk.snapshot')) {
+                data['evidence'] != 'media_codec.snapshot')) {
           return;
         }
         showResourceAdjustment();
@@ -1163,8 +1168,33 @@ class _RemotePageState extends State<RemotePage>
     // Queue entries keep the binding that accepted them. A late request or
     // release must never inherit a replacement session's identity.
     final outgoing = binding ?? presentation.binding;
-    final captured = {'sessionId': outgoing.$1, ...params};
-    return _inputQueue.enqueue(command.wire, captured, outgoing);
+    final input = const {
+      'session.touch',
+      'session.key',
+      'session.text',
+      'session.scroll',
+    }.contains(command.wire);
+    final currentCapture = presentation.session?['captureGeneration'];
+    if (outgoing == presentation.binding && currentCapture is int) {
+      bindingCaptures[outgoing] = currentCapture;
+      while (bindingCaptures.length > 32) {
+        bindingCaptures.remove(bindingCaptures.keys.first);
+      }
+    }
+    final captured = {
+      'sessionId': outgoing.$1,
+      if (input && bindingCaptures[outgoing] != null)
+        'captureGeneration': bindingCaptures[outgoing],
+      ...params,
+    };
+    return _inputQueue.enqueue(command.wire, captured, outgoing).catchError((
+      Object error,
+    ) {
+      if (mounted && outgoing == presentation.binding) {
+        presentation.revokeControl();
+        setState(() => presentation.failInput('$error', 'control_busy'));
+      }
+    });
   }
 
   bool _admitsInput(String command, Json params, RemoteBinding binding) =>
@@ -1255,12 +1285,30 @@ class _RemotePageState extends State<RemotePage>
       }
       return;
     }
+    final previousButtons =
+        pointerPositions[event.pointer]?['buttons'] as int? ?? 0;
+    final changedButtons = (previousButtons ^ event.buttons) & 31;
+    final wireAction =
+        event.kind == PointerDeviceKind.mouse &&
+            action == 'move' &&
+            changedButtons != 0
+        ? (event.buttons & changedButtons != 0 ? 'down' : 'up')
+        : action;
     final params = <String, dynamic>{
-      'action': action,
+      'action': wireAction,
       'pointerId': event.pointer,
       'x': point.dx.round().clamp(0, source.width.round() - 1),
       'y': point.dy.round().clamp(0, source.height.round() - 1),
-      'pressure': action == 'up' || action == 'cancel' ? 0 : event.pressure,
+      'pressure': wireAction == 'up' || wireAction == 'cancel'
+          ? 0
+          : normalizedPressure(event),
+      if (event.kind == PointerDeviceKind.mouse) ...{
+        'mouse': true,
+        'buttons': event.buttons & 31,
+        'actionButton': (wireAction == 'down' || wireAction == 'up')
+            ? changedButtons
+            : 0,
+      },
       'screenWidth': source.width.round(),
       'screenHeight': source.height.round(),
     };
@@ -1272,6 +1320,51 @@ class _RemotePageState extends State<RemotePage>
       activePointers.remove(event.pointer);
       pointerPositions.remove(event.pointer);
     }
+  }
+
+  double normalizedPressure(PointerEvent event) {
+    final span = event.pressureMax - event.pressureMin;
+    if (!event.pressure.isFinite || !span.isFinite || span <= 0) return 1;
+    return ((event.pressure - event.pressureMin) / span).clamp(0.0, 1.0);
+  }
+
+  void hover(PointerHoverEvent event, Size viewport, Size source) {
+    if (!canSendInput || event.kind != PointerDeviceKind.mouse) return;
+    final point = sourcePoint(event.localPosition, viewport, source);
+    if (point == null) return;
+    unawaited(
+      send(InteropCommand.sessionTouch, {
+        'action': 'hover',
+        'mouse': true,
+        'pointerId': 0,
+        'x': point.dx.round().clamp(0, source.width.round() - 1),
+        'y': point.dy.round().clamp(0, source.height.round() - 1),
+        'screenWidth': source.width.round(),
+        'screenHeight': source.height.round(),
+        'pressure': 0,
+        'buttons': event.buttons & 31,
+      }),
+    );
+  }
+
+  void scroll(PointerSignalEvent event, Size viewport, Size source) {
+    if (!canSendInput || event is! PointerScrollEvent) return;
+    final point = sourcePoint(event.localPosition, viewport, source);
+    if (point == null) return;
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      unawaited(
+        send(InteropCommand.sessionScroll, {
+          'x': point.dx.round().clamp(0, source.width.round() - 1),
+          'y': point.dy.round().clamp(0, source.height.round() - 1),
+          'screenWidth': source.width.round(),
+          'screenHeight': source.height.round(),
+          // Flutter reports logical pixels; one ordinary wheel tick is 20 px.
+          'hscroll': -event.scrollDelta.dx / 20,
+          'vscroll': -event.scrollDelta.dy / 20,
+          'buttons': event.buttons & 31,
+        }),
+      );
+    });
   }
 
   void requestImeFocus() {
@@ -1337,6 +1430,17 @@ class _RemotePageState extends State<RemotePage>
       unawaited(send(InteropCommand.sessionText, {'text': added}));
     }
     previousText = next;
+    if (after.length > 128) {
+      final retained =
+          '$inputSentinel${after.skip(after.length - 64).join().replaceAll(inputSentinel, '')}';
+      previousText = retained;
+      resettingText = true;
+      text.value = TextEditingValue(
+        text: retained,
+        selection: TextSelection.collapsed(offset: retained.length),
+      );
+      resettingText = false;
+    }
     // Keep one invisible local character so IME backspace can still delete
     // pre-existing remote text after the local insertion buffer is empty.
     if (next.isEmpty) {
@@ -1355,18 +1459,65 @@ class _RemotePageState extends State<RemotePage>
       LogicalKeyboardKey.arrowDown: 20,
       LogicalKeyboardKey.arrowLeft: 21,
       LogicalKeyboardKey.arrowRight: 22,
-      LogicalKeyboardKey.home: 3,
+      LogicalKeyboardKey.home: 122,
+      LogicalKeyboardKey.end: 123,
+      LogicalKeyboardKey.pageUp: 92,
+      LogicalKeyboardKey.pageDown: 93,
+      LogicalKeyboardKey.insert: 124,
+      LogicalKeyboardKey.controlLeft: 113,
+      LogicalKeyboardKey.controlRight: 114,
+      LogicalKeyboardKey.shiftLeft: 59,
+      LogicalKeyboardKey.shiftRight: 60,
+      LogicalKeyboardKey.altLeft: 57,
+      LogicalKeyboardKey.altRight: 58,
+      LogicalKeyboardKey.metaLeft: 117,
+      LogicalKeyboardKey.metaRight: 118,
+      LogicalKeyboardKey.space: 62,
+      LogicalKeyboardKey.minus: 69,
+      LogicalKeyboardKey.equal: 70,
+      LogicalKeyboardKey.bracketLeft: 71,
+      LogicalKeyboardKey.bracketRight: 72,
+      LogicalKeyboardKey.backslash: 73,
+      LogicalKeyboardKey.semicolon: 74,
+      LogicalKeyboardKey.quote: 75,
+      LogicalKeyboardKey.slash: 76,
+      LogicalKeyboardKey.backquote: 68,
+      LogicalKeyboardKey.comma: 55,
+      LogicalKeyboardKey.period: 56,
       LogicalKeyboardKey.delete: 112,
     };
-    final code = codes[event.logicalKey];
+    final logical = event.logicalKey.keyId;
+    final code =
+        codes[event.logicalKey] ??
+        (logical >= 0x61 && logical <= 0x7a ? logical - 0x61 + 29 : null) ??
+        (logical >= 0x30 && logical <= 0x39 ? logical - 0x30 + 7 : null) ??
+        (event.logicalKey.keyId >= LogicalKeyboardKey.f1.keyId &&
+                event.logicalKey.keyId <= LogicalKeyboardKey.f12.keyId
+            ? event.logicalKey.keyId - LogicalKeyboardKey.f1.keyId + 131
+            : null);
+    final keyboard = HardwareKeyboard.instance;
+    final metaState =
+        (keyboard.isShiftPressed ? 0x1 : 0) |
+        (keyboard.isAltPressed ? 0x2 : 0) |
+        (keyboard.isControlPressed ? 0x1000 : 0) |
+        (keyboard.isMetaPressed ? 0x10000 : 0) |
+        (keyboard.lockModesEnabled.contains(KeyboardLockMode.capsLock)
+            ? 0x100000
+            : 0) |
+        (keyboard.lockModesEnabled.contains(KeyboardLockMode.numLock)
+            ? 0x200000
+            : 0);
+
     if (event is KeyUpEvent && code != null) {
       final held = heldKeys.remove(code);
+      keyRepeats.remove(code);
       if (held == null) return KeyEventResult.ignored;
       if (held == presentation.binding && presentation.controlAvailable) {
         unawaited(
           send(InteropCommand.sessionKey, {
             'sessionId': held.$1,
             'keyCode': code,
+            if (metaState != 0) 'metaState': metaState,
             'action': 'up',
           }),
         );
@@ -1374,14 +1525,27 @@ class _RemotePageState extends State<RemotePage>
       return KeyEventResult.handled;
     }
     if (!canSendInput || (ime && code != 4)) return KeyEventResult.ignored;
+    if (event is KeyDownEvent &&
+        event.character?.isNotEmpty == true &&
+        event.character!.runes.any((rune) => rune > 127) &&
+        !keyboard.isControlPressed &&
+        !keyboard.isAltPressed &&
+        !keyboard.isMetaPressed) {
+      unawaited(send(InteropCommand.sessionText, {'text': event.character}));
+      return KeyEventResult.handled;
+    }
     if (code != null) {
       if (event is KeyRepeatEvent && !heldKeys.containsKey(code)) {
         return KeyEventResult.ignored;
       }
       heldKeys[code] = presentation.binding;
+      final repeat = event is KeyRepeatEvent ? (keyRepeats[code] ?? 0) + 1 : 0;
+      keyRepeats[code] = repeat;
       unawaited(
         send(InteropCommand.sessionKey, {
           'keyCode': code,
+          if (metaState != 0) 'metaState': metaState,
+          if (repeat != 0) 'repeat': repeat,
           'action': event is KeyUpEvent ? 'up' : 'down',
         }),
       );
@@ -1724,6 +1888,16 @@ class _RemotePageState extends State<RemotePage>
                           }
                           return Listener(
                             behavior: HitTestBehavior.opaque,
+                            onPointerHover: (event) => hover(
+                              event,
+                              constraints.biggest,
+                              Size(width, height),
+                            ),
+                            onPointerSignal: (event) => scroll(
+                              event,
+                              constraints.biggest,
+                              Size(width, height),
+                            ),
                             onPointerDown: (event) => pointer(
                               event,
                               'down',
@@ -1749,11 +1923,10 @@ class _RemotePageState extends State<RemotePage>
                               Size(width, height),
                             ),
                             child: valid
-                                ? Center(
-                                    child: AspectRatio(
-                                      aspectRatio: width / height,
-                                      child: Texture(textureId: texture),
-                                    ),
+                                ? MediaCodecView(
+                                    textureId: texture,
+                                    width: width.round(),
+                                    height: height.round(),
                                   )
                                 : const SizedBox.expand(),
                           );

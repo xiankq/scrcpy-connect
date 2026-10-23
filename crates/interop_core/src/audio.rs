@@ -496,8 +496,7 @@ impl Runtime {
             Ok(()) => {
                 guard.0 = None;
                 let mut data = state.read().await.clone();
-                data["audioToken"] = json!(returned_token);
-                data["audioSourceId"] = data["audioToken"].clone();
+                data["audioSourceId"] = json!(returned_token);
                 Ok(data)
             }
             Err(error) => {
@@ -562,7 +561,8 @@ async fn forward_audio(
             let complete = async {
                 audio.read_exact(&mut header[1..]).await?;
                 let length = pcm_packet_size(&header)?;
-                let mut bytes = vec![0; length];
+                let mut bytes = Vec::with_capacity(length + 64);
+                bytes.resize(length, 0);
                 audio.read_exact(&mut bytes).await?;
                 Ok::<_, CoreError>(bytes)
             };
@@ -576,8 +576,8 @@ async fn forward_audio(
                 continue;
             }
             output
-                .packet(
-                    &bytes,
+                .packet_owned(
+                    bytes,
                     u64::from_be_bytes(header[..8].try_into().expect("audio header")),
                     true,
                 )

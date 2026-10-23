@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:interop_bridge/interop_bridge.dart';
+import 'package:device_runtime/device_runtime.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/app_dependencies.dart';
@@ -35,7 +35,7 @@ Future<AppDependencies> bootstrapApplication({
 Future<AppDependencies> _initializeTransport(DiagnosticLog? diagnostics) async {
   final directory = await getApplicationSupportDirectory();
   await directory.create(recursive: true);
-  final bridge = await InteropBridge.initialize(
+  final bridge = await DeviceRuntime.initialize(
     dataDirectory: await directory.resolveSymbolicLinks(),
     diagnostics: diagnostics,
   );

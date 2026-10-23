@@ -16,9 +16,9 @@ dart tool/generate.dart --check
 
 ## workspace 与生成
 
-`app/pubspec.yaml` 是唯一 Flutter 应用入口；根 `pubspec.yaml` 只声明 workspace 和工具依赖。`app`、`packages/design_system`、`packages/interop_bridge` 共用根 `pubspec.lock` 与 `.dart_tool`，Cargo 使用根 workspace。
+`app/pubspec.yaml` 是唯一 Flutter 应用入口；根 `pubspec.yaml` 声明 workspace 和工具依赖。`app` 与全部 Dart 能力包共用根 `pubspec.lock` 与 `.dart_tool`。领域 Rust crate 使用根 Cargo workspace；独立媒体核心使用 `packages/media_codec/rust/` 的 workspace 与锁文件。
 
-Flutter 运行、构建和测试在 `app/` 执行；仓库工具、生成和主机检查从根目录执行。主机驱动在 `tool/driver/`，性能目标在 `tool/benchmark/`，从 `app/` 显式使用 `--driver=../tool/driver/<入口>.dart` 与 `--target=../tool/benchmark/<入口>.dart`。
+Flutter 应用运行、构建和集成测试在 `app/` 执行；能力包测试在各包执行，仓库工具与生成从根目录执行。主机驱动在 `tool/driver/`，集成测试目标在 `app/integration_test/`；独立诊断入口仍可位于 `tool/benchmark/`。
 
 `protocol/commands.json` 生成 Dart/Rust 命令契约；`dart tool/protocol_codegen.dart` 只处理该来源。其余生成物由 `dart tool/generate.dart` 汇总，`--check` 同时检查生成漂移。依赖已缓存但网络不可用时，可使用 `flutter pub get --offline --enforce-lockfile`；不得借此更新锁文件或跳过一致性检查。
 
@@ -39,19 +39,21 @@ Flutter 运行、构建和测试在 `app/` 执行；仓库工具、生成和主�
 
 ## 被控执行产物的共享打包
 
-`servers/vendor`、`servers/companion`、`servers/helpers` 的源码、固定输入、manifest 和产物构成同一条链。`dart servers/package.dart` 核对摘要并生成 `packages/interop_bridge/assets/servers/`；`--check` 只读拒绝缺失、漂移和多余文件。
+`servers/vendor`、`servers/companion`、`servers/helpers` 的源码、固定输入、manifest 和产物构成同一条链。`dart servers/package.dart` 核对摘要并生成 `packages/device_runtime/assets/servers/`；`--check` 只读拒绝缺失、漂移和多余文件。
 
 Android 三种主控 ABI 共享一套 Flutter package assets。`initializeNativeRuntime` 在 FRB 初始化前把六份资源还原到私有 `bundled_servers/`，逐一校验并在损坏时原子替换；解压长度有界。Rust 对照编译清单再次校验并将原始字节保存在进程内，部署不信任随后被修改的磁盘缓存。
 
 被控助手按被控设备 ABI 选择，不能按主控架构裁剪。APK 检查核对共享资源只有一套、长度与摘要正确，并拒绝 Android Rust 库再次嵌入原始或压缩产物。修改 JAR、helper 或来源后需重建、更新 manifest，再同步共享资源；不得只替换二进制或降低编译目标。
 
-## 社区原版 fvp 0.39.1
+## 原生媒体与官方 ADB
 
-播放器使用 pub.dev 社区原版 `fvp: 0.39.1`，不保留本地 fork、path override 或 pub 缓存补丁。发布归档 SHA-256 为 `2f4607e07748856dbe268a3b968efe973c27f85ea4e7621c4209783a6dad26a0`。
+`packages/media_codec/third_party/` 固定 FFmpeg、dav1d 与 nv-codec-headers 的来源和 SHA-256。`tool/build_ffmpeg.py` 只构建所需静态库，并生成配置回执与依赖许可证；构建缓存位于 `.dart_tool/media_codec/`。构建需要目标平台工具链、Python、Meson、Ninja 与适用的汇编器，不从播放器 SDK 下载通用媒体运行时。
 
-Android、Windows、Linux 的 CMake 默认从 SourceForge 下载 MDK SDK；Apple CocoaPods 使用 `mdk ~> 0.39.0`，SwiftPM 使用上游固定归档。Dart 锁文件不固定这些平台 SDK 字节，构建回执按实际平台记录版本。原版 `MdkSnapshot` 对失败回调的空结果未判空，Bridge 因此使用有界原生回读并晚于排空再销毁 Player；逐帧诊断仍为可选。
+共享解码核心位于 `packages/media_codec/rust/`，使用独立 Cargo workspace 与锁文件；bindgen 从固定 FFmpeg 头文件生成 ABI。Flutter 插件只实现纹理、音频输出及生命周期需要的平台胶水。Apple 源码适配与实际 SDK/机器验收分开记录。
 
-Android 的 fvp 链接启用 `--as-needed`，应用打包排除未使用的 `libass.so`；FFmpeg 仍随包分发。该配置不修改社区包源码或 SDK 缓存，最终 ELF 必须没有缺失的 `libass.so` 必需依赖。
+Windows 宿主需要 Visual Studio C++ 桌面工作负载、Windows SDK 和 `Microsoft.VisualStudio.Component.VC.ATL`；现有通知插件编译依赖 `atlbase.h`，仅安装桌面工作负载不足。工具查找遵守 Windows PATHEXT，不能执行 Flutter SDK 中供 POSIX 使用的同名无扩展脚本。
+
+`packages/flutter_adb/third_party/platform-tools.lock.json` 固定桌面官方 platform-tools 归档及选取文件摘要。`tool/prepare_adb.dart` 校验后只提取 adb、Windows 所需 DLL、NOTICE 与版本信息，桌面包放置于可执行文件旁的 `adb/`。Android/iOS 不附带桌面 adb。`tool/build_host.dart` 核验目标架构、裁剪配置、必需原生库与官方 adb，再生成交付归档。
 
 ## 玻璃宿主
 

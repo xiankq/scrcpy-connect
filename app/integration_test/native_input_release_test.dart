@@ -148,7 +148,7 @@ void main() {
           (await request('session.list', {'deviceId': deviceId}))['sessions'],
         ).singleWhere((session) => session['status'] == 'streaming');
         expect(rendered['firstFrameDecoded'], isTrue);
-        expect(rendered['evidence'], 'mdk.snapshot');
+        expect(rendered['evidence'], 'media_codec.snapshot');
         expect(
           rendered['textureId'],
           tester.widget<Texture>(find.byType(Texture)).textureId,
@@ -199,7 +199,8 @@ void main() {
                           owns(e) &&
                           e['type'] == 'session.output.resumed' &&
                           jsonObject(e['data'])['firstFrameDecoded'] == true &&
-                          jsonObject(e['data'])['evidence'] == 'mdk.snapshot',
+                          jsonObject(e['data'])['evidence'] ==
+                              'media_codec.snapshot',
                     );
           },
           reason: 'The same real session must pause, resume and render a new actual native frame.',

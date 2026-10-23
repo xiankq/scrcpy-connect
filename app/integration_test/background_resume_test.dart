@@ -107,7 +107,7 @@ void main() {
                                   >?)?['firstFrameDecoded'] ==
                               true &&
                           (e['data'] as Map<Object?, Object?>?)?['evidence'] ==
-                              'mdk.snapshot',
+                              'media_codec.snapshot',
                     );
           },
           reason: 'A real paused update, resumed stream and later verified shared-player snapshot are required.',

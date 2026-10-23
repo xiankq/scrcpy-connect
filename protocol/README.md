@@ -5,6 +5,11 @@ declared request/result fields, and state-verification policy. `owner: core`
 crosses FRB; `owner: bridge` is resolved by the main device's local coordinator.
 Platform MethodChannel methods and companion RPC methods are separate protocols.
 
+For a composed response, `nativeResult` declares the native facts validated by
+Rust; `result` declares the complete public result validated after Dart owners
+contribute their state. For example, `state.snapshot` gets durable transfer tasks
+from `device_files`. Native responses must not invent placeholder task state.
+
 Run `dart tool/protocol_codegen.dart` from the repository root after changing the contract.
 `--check` formats expected outputs in memory and compares them without writing.
 The main check script checks this contract and independently checks FRB output.

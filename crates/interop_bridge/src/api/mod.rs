@@ -6,6 +6,15 @@ pub(crate) mod event_observers;
 use event_observers::{EventObservers, pump_events};
 
 static RUNTIME: tokio::sync::OnceCell<Arc<Runtime>> = tokio::sync::OnceCell::const_new();
+/// Share the initialized connection owner with typed execution APIs.
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) fn runtime() -> interop_core::CoreResult<Arc<Runtime>> {
+    RUNTIME
+        .get()
+        .cloned()
+        .ok_or_else(|| interop_core::CoreError::new("not_initialized", "互联核心尚未初始化。"))
+}
+
 static EXECUTOR: OnceLock<tokio::runtime::Handle> = OnceLock::new();
 static EVENT_OBSERVERS: OnceLock<EventObservers> = OnceLock::new();
 
@@ -41,11 +50,12 @@ pub async fn initialize(
                 .into(),
         );
     }
-    if runtime.settings_defaults != defaults {
-        return Err(
-            "runtime_settings_defaults_mismatch: restart the host to change defaults".into(),
-        );
-    }
+    // Dart owns durable preferences. Reattaching applies its current execution
+    // mirror; these values may change without changing process identity.
+    runtime
+        .invoke("settings.update", defaults)
+        .await
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
@@ -81,6 +91,13 @@ pub async fn invoke(request_json: String) -> String {
     }
     .await;
     crate::protocol::response(command, result)
+}
+
+/// Terminal host exit: drain native activities before the owned ADB server exits.
+pub async fn shutdown() {
+    if let Some(runtime) = RUNTIME.get() {
+        runtime.stop_all().await;
+    }
 }
 
 /// Reserve one event observer before constructing Dart's async* listener.

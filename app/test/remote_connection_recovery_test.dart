@@ -35,7 +35,7 @@ void main() {
         'width': 200,
         'height': 400,
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       };
       final controller = createTestController((
         command, [
@@ -183,7 +183,7 @@ void main() {
         'height': 400,
         'status': 'streaming',
         'firstFrameDecoded': true,
-        'evidence': 'mdk.snapshot',
+        'evidence': 'media_codec.snapshot',
       };
       final controller = createTestController((
         command, [

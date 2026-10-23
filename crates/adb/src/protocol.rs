@@ -64,10 +64,22 @@ impl Frame {
         let words = validate_header(&header, limit)?;
         let [command, arg0, arg1, length, wire_checksum, _] = words;
         let length = length as usize;
-        let mut payload = vec![0; length];
+        let mut payload = Vec::with_capacity(length);
         let clock = observe(command, arg0, arg1);
         let started_us = clock.as_ref().map(|clock| (clock.read)());
-        read_exact_progress(reader, &mut payload, &mut progress).await?;
+        while payload.len() < length {
+            // read_buf initializes only the bytes received. A fresh payload
+            // need not first be zeroed in full and then overwritten by I/O.
+            let remaining = length - payload.len();
+            let count = (&mut *reader)
+                .take(remaining as u64)
+                .read_buf(&mut payload)
+                .await?;
+            if count == 0 {
+                return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
+            }
+            progress();
+        }
         let timing =
             clock
                 .zip(started_us)
@@ -138,6 +150,7 @@ impl Frame {
         target_os = "macos"
     )
 ))]
+#[cfg(test)]
 pub(crate) async fn read_wire_packet<R: AsyncRead + Unpin>(
     reader: &mut R,
 ) -> Result<([u8; 24], Vec<u8>)> {
@@ -149,7 +162,7 @@ pub(crate) async fn read_wire_packet<R: AsyncRead + Unpin>(
     Ok((header, payload))
 }
 
-fn validate_header(header: &[u8; 24], limit: usize) -> Result<[u32; 6]> {
+pub(crate) fn validate_header(header: &[u8; 24], limit: usize) -> Result<[u32; 6]> {
     let words = std::array::from_fn(|index| {
         u32::from_le_bytes(
             header[index * 4..index * 4 + 4]

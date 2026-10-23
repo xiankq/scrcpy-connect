@@ -80,7 +80,7 @@ class _Backend {
           'height': 400,
           'status': 'streaming',
           'firstFrameDecoded': true,
-          'evidence': 'mdk.snapshot',
+          'evidence': 'media_codec.snapshot',
         };
       case 'session.list':
         return {'sessions': sessions.values.toList()};

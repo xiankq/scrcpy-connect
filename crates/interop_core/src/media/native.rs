@@ -37,8 +37,51 @@ pub struct MediaSinkV1 {
 // promises that its context may be called on any runtime worker thread.
 unsafe impl Send for MediaSinkV1 {}
 
+pub type Release = unsafe extern "C" fn(*mut c_void);
+pub type Wake = unsafe extern "C" fn(*mut c_void);
+pub type OwnedEvent = unsafe extern "C" fn(
+    *mut c_void,
+    u32,
+    u64,
+    u32,
+    u32,
+    u32,
+    *mut u8,
+    usize,
+    usize,
+    *mut c_void,
+    Option<Release>,
+    i64,
+    u32,
+) -> i32;
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MediaSinkV2 {
+    pub base: MediaSinkV1,
+    pub event_owned: Option<OwnedEvent>,
+    pub set_waker:
+        Option<unsafe extern "C" fn(*mut c_void, *mut c_void, Option<Wake>, Option<Release>)>,
+}
+#[derive(Clone, Copy)]
+struct Sink {
+    base: MediaSinkV1,
+    owned: Option<OwnedEvent>,
+}
+unsafe impl Send for Sink {}
+unsafe extern "C" fn wake_source(context: *mut c_void) {
+    unsafe {
+        (&*(context as *const Notify)).notify_one();
+    }
+}
+unsafe extern "C" fn release_waker(context: *mut c_void) {
+    drop(unsafe { Arc::from_raw(context as *const Notify) });
+}
+unsafe extern "C" fn release_bytes(context: *mut c_void) {
+    drop(unsafe { Box::from_raw(context as *mut Vec<u8>) });
+}
+
 struct SourceState {
-    sink: Option<MediaSinkV1>,
+    sink: Option<Sink>,
     generation: u64,
     dimensions: (u32, u32),
     closed: bool,
@@ -51,6 +94,7 @@ pub struct MediaSource {
     codec: u32,
     state: Mutex<SourceState>,
     attached: Notify,
+    ready: Arc<Notify>,
     cancellation: CancellationToken,
 }
 
@@ -115,6 +159,7 @@ impl MediaSource {
                 bytes: 0,
             }),
             attached: Notify::new(),
+            ready: Arc::new(Notify::new()),
             cancellation,
         });
         registry.insert(id, Arc::downgrade(&source));
@@ -159,8 +204,8 @@ impl MediaSource {
         // Detach must acquire this lock before returning permission to free the
         // foreign context. No callback may reenter this source's registry API.
         let result = unsafe {
-            sink.event.expect("validated sink")(
-                sink.context,
+            sink.base.event.expect("validated sink")(
+                sink.base.context,
                 kind,
                 state.generation,
                 self.codec,
@@ -196,10 +241,23 @@ impl MediaSource {
     ) -> CoreResult<()> {
         let send = async {
             loop {
+                let ready = self.ready.notified();
+                tokio::pin!(ready);
+                ready.as_mut().enable();
                 if self.invoke(kind, dimensions, data, pts, flags)? {
                     return Ok(());
                 }
-                tokio::time::sleep(Duration::from_millis(2)).await;
+                let signalled = self
+                    .state
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .sink
+                    .is_some_and(|sink| sink.owned.is_some());
+                tokio::select! {
+                    _ = self.cancellation.cancelled() => return Err(CoreError::new("media_ended", "媒体输入已结束。")),
+                    _ = ready, if signalled => {},
+                    _ = tokio::time::sleep(Duration::from_millis(2)), if !signalled => {},
+                }
             }
         };
         tokio::time::timeout(Duration::from_secs(3), send)
@@ -231,6 +289,107 @@ impl MediaSource {
         )
         .await
     }
+    /// Transfer a packet allocation to a v2 decoder; v1 consumers retain the
+    /// borrowed compatibility path. Padding is initialized without clearing the
+    /// payload a second time. Readers can reserve the 64-byte tail up front.
+    pub async fn packet_owned(
+        &self,
+        mut data: Vec<u8>,
+        pts_us: u64,
+        keyframe: bool,
+    ) -> CoreResult<()> {
+        let length = data.len();
+        if length == 0 || length > super::MAX_PACKET_BYTES {
+            return Err(CoreError::new("media_protocol", "媒体数据包大小无效。"));
+        }
+        data.resize(length + 64, 0);
+        let owner = Box::into_raw(Box::new(data)) as usize;
+        struct Owned(usize);
+        unsafe impl Send for Owned {}
+        impl Drop for Owned {
+            fn drop(&mut self) {
+                if self.0 != 0 {
+                    unsafe {
+                        release_bytes(self.0 as *mut c_void);
+                    }
+                }
+            }
+        }
+        let mut allocation = Owned(owner);
+        let send = async {
+            loop {
+                let ready = self.ready.notified();
+                tokio::pin!(ready);
+                ready.as_mut().enable();
+                let (result, owned) = {
+                    let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                    if state.closed || self.cancellation.is_cancelled() {
+                        return Err(CoreError::new("media_ended", "媒体输入已结束。"));
+                    }
+                    let sink = state
+                        .sink
+                        .ok_or_else(|| CoreError::new("media_detached", "媒体呈现器已释放。"))?;
+                    let bytes = unsafe { &mut *(allocation.0 as *mut Vec<u8>) };
+                    let (width, height) = state.dimensions;
+                    let flags = if keyframe { FLAG_KEYFRAME } else { 0 };
+                    let result = unsafe {
+                        if let Some(callback) = sink.owned {
+                            callback(
+                                sink.base.context,
+                                EVENT_PACKET,
+                                state.generation,
+                                self.codec,
+                                width,
+                                height,
+                                bytes.as_mut_ptr(),
+                                length,
+                                bytes.len(),
+                                allocation.0 as *mut c_void,
+                                Some(release_bytes),
+                                pts_us as i64,
+                                flags,
+                            )
+                        } else {
+                            sink.base.event.unwrap()(
+                                sink.base.context,
+                                EVENT_PACKET,
+                                state.generation,
+                                self.codec,
+                                width,
+                                height,
+                                bytes.as_ptr(),
+                                length,
+                                pts_us as i64,
+                                flags,
+                            )
+                        }
+                    };
+                    if result == 0 {
+                        state.packets += 1;
+                        state.bytes += length as u64;
+                    }
+                    (result, sink.owned.is_some())
+                };
+                if result == 0 {
+                    if owned {
+                        allocation.0 = 0;
+                    }
+                    return Ok(());
+                }
+                if result < 0 {
+                    return Err(CoreError::new("media_decoder", "原生解码器拒绝媒体输入。"));
+                }
+                tokio::select! {
+                    _ = self.cancellation.cancelled() => return Err(CoreError::new("media_ended", "媒体输入已结束。")),
+                    _ = ready, if owned => {},
+                    _ = tokio::time::sleep(Duration::from_millis(2)), if !owned => {},
+                }
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(3), send)
+            .await
+            .map_err(|_| CoreError::new("media_stall", "原生解码器未及时读取媒体输入。"))?
+    }
     pub fn finish(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.closed {
@@ -239,8 +398,8 @@ impl MediaSource {
         state.closed = true;
         if let Some(sink) = state.sink.take() {
             unsafe {
-                sink.event.expect("validated sink")(
-                    sink.context,
+                sink.base.event.expect("validated sink")(
+                    sink.base.context,
                     EVENT_END,
                     state.generation,
                     self.codec,
@@ -254,6 +413,7 @@ impl MediaSource {
             }
         }
         self.attached.notify_waiters();
+        self.ready.notify_waiters();
     }
     fn view(&self, generation: u64) -> Value {
         let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -291,7 +451,10 @@ pub fn attach(id: &str, generation: u64, sink: MediaSinkV1) -> i32 {
         return -3;
     }
     state.generation = generation;
-    state.sink = Some(sink);
+    state.sink = Some(Sink {
+        base: sink,
+        owned: None,
+    });
     drop(state);
     source.attached.notify_one();
     0
@@ -333,7 +496,47 @@ pub unsafe extern "C" fn interop_media_attach(
     if !id.bytes().all(|b| b.is_ascii_hexdigit()) {
         return -2;
     }
-    attach(id, generation, unsafe { *sink })
+    let base = unsafe { *sink };
+    if base.abi_version == 1 {
+        return attach(id, generation, base);
+    }
+    if base.abi_version != 2 || base.struct_size as usize != std::mem::size_of::<MediaSinkV2>() {
+        return -2;
+    }
+    let table = unsafe { *(sink as *const MediaSinkV2) };
+    if table.event_owned.is_none() || table.set_waker.is_none() {
+        return -2;
+    }
+    let Some(source) = lookup(id) else {
+        return -1;
+    };
+    let mut state = source.state.lock().unwrap_or_else(|e| e.into_inner());
+    if generation == 0
+        || state.closed
+        || source.cancellation.is_cancelled()
+        || state.sink.is_some()
+        || generation <= state.generation
+        || base.event.is_none()
+    {
+        return -3;
+    }
+    let context = Arc::into_raw(source.ready.clone()) as *mut c_void;
+    unsafe {
+        table.set_waker.unwrap()(
+            base.context,
+            context,
+            Some(wake_source),
+            Some(release_waker),
+        );
+    }
+    state.generation = generation;
+    state.sink = Some(Sink {
+        base,
+        owned: table.event_owned,
+    });
+    drop(state);
+    source.attached.notify_one();
+    0
 }
 
 /// # Safety

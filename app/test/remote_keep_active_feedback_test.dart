@@ -153,7 +153,7 @@ void main() {
           return {
             ..._session,
             'firstFrameDecoded': true,
-            'evidence': 'mdk.snapshot',
+            'evidence': 'media_codec.snapshot',
           };
         }
         return {};
@@ -228,7 +228,7 @@ void main() {
           return {
             ..._session,
             'firstFrameDecoded': true,
-            'evidence': 'mdk.snapshot',
+            'evidence': 'media_codec.snapshot',
           };
         }
         return {};

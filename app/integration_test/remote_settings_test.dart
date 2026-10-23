@@ -267,7 +267,7 @@ void main() {
               !['stopped', 'failed', 'error'].contains(entry['status']),
         );
         expect(session['firstFrameDecoded'], isTrue);
-        expect(session['evidence'], 'mdk.snapshot');
+        expect(session['evidence'], 'media_codec.snapshot');
         sessionId = value(session, 'sessionId');
         owned.add(sessionId!);
         await waitFor(
@@ -692,7 +692,7 @@ void main() {
               (session) => session['packageName'] == 'com.android.settings',
             );
         expect(application['firstFrameDecoded'], isTrue);
-        expect(application['evidence'], 'mdk.snapshot');
+        expect(application['evidence'], 'media_codec.snapshot');
         sessionId = value(application, 'sessionId');
         owned.add(sessionId!);
         await geometry('application-custom', ratio: 2 / 3, virtual: true);

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
+import 'package:path/path.dart' as p;
 
 import 'video_clock_bounds.dart';
 
@@ -29,10 +30,15 @@ Future<void> main() async {
   }
   final output = Directory(
     environment['CONNECT_E2E_CAPTURE_DIR'] ??
-        '/tmp/connect-e2e/video-performance',
+        p.join(Directory.systemTemp.path, 'connect-e2e', 'video-performance'),
   );
-  if (!output.absolute.path.startsWith('/tmp/')) {
-    throw StateError('Keep evidence under /tmp.');
+  final temporaryRoots = [
+    Directory.systemTemp.absolute.path,
+    if (!Platform.isWindows) '/tmp',
+    if (Platform.isMacOS) '/private/tmp',
+  ];
+  if (!temporaryRoots.any((root) => p.isWithin(root, output.absolute.path))) {
+    throw StateError('Keep evidence in the system temporary directory.');
   }
   await output.create(recursive: true);
   Future<String> command(List<String> args) async {

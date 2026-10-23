@@ -74,11 +74,11 @@ void main() {
     }
     if (includeServers) {
       final servers = Directory(
-        p.join(android.root.path, 'packages/interop_bridge/assets/servers'),
+        p.join(android.root.path, 'packages/device_runtime/assets/servers'),
       );
       for (final file in servers.listSync().whereType<File>()) {
         final name =
-            'assets/flutter_assets/packages/interop_bridge/assets/servers/${p.basename(file.path)}';
+            'assets/flutter_assets/packages/device_runtime/assets/servers/${p.basename(file.path)}';
         final bytes = file.readAsBytesSync();
         if (corruptServer && file.path.endsWith('scrcpy.zlib')) bytes[0] ^= 1;
         entry(name, bytes);

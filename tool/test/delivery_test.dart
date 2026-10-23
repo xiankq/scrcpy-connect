@@ -104,17 +104,39 @@ void main() {
       'scrcpy_connect.exe',
       'flutter_windows.dll',
       'interop_bridge.dll',
-      'mdk.dll',
-      'ffmpeg-9.dll',
+      'media_codec_plugin.dll',
+      'adb/adb.exe',
+      'adb/AdbWinApi.dll',
+      'adb/AdbWinUsbApi.dll',
     ]) {
-      File(p.join(bundle.path, name)).writeAsBytesSync(header);
+      final binary = File(p.join(bundle.path, name));
+      binary.parent.createSync(recursive: true);
+      binary.writeAsBytesSync(header);
     }
+    final receipt = File(
+      p.join(bundle.path, 'licenses/media_codec/media-codec-build.json'),
+    );
+    receipt.parent.createSync(recursive: true);
+    receipt.writeAsStringSync(
+      jsonEncode({
+        'options': [
+          '--disable-everything',
+          '--disable-avformat',
+          '--disable-network',
+          '--disable-programs',
+        ],
+      }),
+    );
     final assets = File(
       p.join(bundle.path, 'data/flutter_assets/AssetManifest.bin'),
     );
     assets.parent.createSync(recursive: true);
     assets.writeAsStringSync('assets');
     host.verifyWindows(bundle);
+    final obsolete = File(p.join(bundle.path, 'mdk.dll'))
+      ..writeAsBytesSync(header);
+    expect(() => host.verifyWindows(bundle), throwsStateError);
+    obsolete.deleteSync();
     final library = File(p.join(bundle.path, 'interop_bridge.dll'))
       ..deleteSync();
     expect(

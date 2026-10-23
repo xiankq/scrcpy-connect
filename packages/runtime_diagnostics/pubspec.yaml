@@ -1,0 +1,16 @@
+name: runtime_diagnostics
+description: Bounded structured runtime diagnostics.
+publish_to: none
+version: 0.1.0
+resolution: workspace
+environment:
+  sdk: ^3.13.5
+dependencies:
+  device_protocol:
+    path: ../device_protocol
+  crypto: 3.0.7
+  path: 1.9.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

@@ -30,7 +30,7 @@ void main() {
           'width': 200,
           'height': 400,
           'firstFrameDecoded': true,
-          'evidence': 'mdk.snapshot',
+          'evidence': 'media_codec.snapshot',
         };
         final controller = createTestController((
           command, [

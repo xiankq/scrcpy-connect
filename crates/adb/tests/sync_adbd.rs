@@ -15,9 +15,18 @@ async fn official_adbd_round_trips_all_compression_formats_and_bounds() {
         .expect("set INTEROP_ADBD_PORT")
         .parse()
         .unwrap();
-    let client = Client::connect_tcp((address.as_str(), port), ConnectOptions::default())
-        .await
-        .unwrap();
+    let client = Client::connect_tcp(
+        (address.as_str(), port),
+        ConnectOptions {
+            adb_server: std::env::var("INTEROP_ADB_SERVER")
+                .ok()
+                .map(|s| s.parse().unwrap()),
+            request_authorization: true,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     for feature in [
         "sendrecv_v2",
         "sendrecv_v2_brotli",

@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/services/application_diagnostics.dart';
-import 'package:interop_bridge/interop_bridge.dart'
+import 'package:device_runtime/device_runtime.dart'
     show DiagnosticLog, DiagnosticArea, LogLevel;
 import 'package:scrcpy_connect/services/app_dependencies.dart';
 import 'package:scrcpy_connect/services/app_bootstrap.dart';

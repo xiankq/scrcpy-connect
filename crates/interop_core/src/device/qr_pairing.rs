@@ -28,7 +28,7 @@ impl Runtime {
                 _ = op.token.cancelled() => Err(CoreError::new("cancelled","配对执行已取消。")),
                 result = tokio::time::timeout(options.timeout, async {
                     let discovery = Discovery::new()?;
-                    let tls = material.tls().await?;
+                    let tls = if runtime.connection_policy.adb_server.is_some(){None}else{Some(material.tls().await?)};
                     loop {
                         if let DiscoveryEvent::Resolved(service) = discovery.next(&options).await?
                             && service.kind == ServiceKind::Pairing && service.instance == qr.service_name() {
@@ -41,8 +41,11 @@ impl Runtime {
                                 // Bound TCP and the entire PAKE exchange together. A
                                 // silent interface must leave time for other addresses.
                                 let paired = tokio::time::timeout(endpoint_options.timeout, async {
+                                    if runtime.connection_policy.adb_server.is_some(){
+                                        return runtime.official_pair(&address.to_string(),qr.password(),&material,&endpoint_options).await;
+                                    }
                                     let socket = tokio::net::TcpStream::connect(address).await?;
-                                    Ok::<_, CoreError>(wireless::pair(socket,qr.password(),&material.identity,&tls,&runtime.connection_policy.public_key_comment,&endpoint_options).await?)
+                                    Ok::<_, CoreError>(wireless::pair(socket,qr.password(),&material.identity,tls.as_ref().expect("mobile TLS"),&runtime.connection_policy.public_key_comment,&endpoint_options).await?)
                                 }).await.unwrap_or_else(|_|Err(CoreError::new("timeout","配对地址响应超时。")));
                                 match paired {
                                     Ok(paired) => return runtime.finish_pairing_record(paired.guid,address_of(address),device.as_deref(),&op).await,

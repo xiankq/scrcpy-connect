@@ -1,7 +1,7 @@
 //! Filesystem compatibility shared by tree transfers, search and gallery.
 //! SYNC remains the fast path; its denied metadata is resolved by the same
 //! descriptor-verified native helper, without depending on Android shell tools.
-use crate::{CoreError, CoreResult, model::quote, remote_helper::remote_metadata};
+use crate::{CoreError, CoreResult, remote_helper::remote_metadata};
 use interop_adb::{
     Client, OperationOptions, ShellOutput,
     sync::{FileStat, RemotePath},
@@ -123,14 +123,19 @@ pub(crate) async fn stat(
     }
 }
 
+pub(crate) struct Listing {
+    pub(crate) entries: Vec<(Vec<u8>, CoreResult<FileStat>)>,
+    pub(crate) truncated: bool,
+}
+
+/// Some adbd versions encode a denied LIST as an empty DONE. Verify access
+/// before reporting an empty directory as complete.
 pub(crate) async fn accessible(
     client: &Client,
     path: &str,
     options: OperationOptions,
 ) -> CoreResult<bool> {
-    let path = quote(path)?;
-    // Legacy shell has neither a separate stderr nor an exit code. An exact
-    // positive receipt avoids mistaking an empty/error response for permission.
+    let path = crate::model::quote(path)?;
     let mut stream = client
         .exec(
             &format!("if [ -r {path} ] && [ -x {path} ]; then print -nr -- INTEROP_ACCESSIBLE; fi"),
@@ -150,11 +155,6 @@ pub(crate) async fn accessible(
         output.extend_from_slice(&buffer[..count]);
     }
     Ok(output == b"INTEROP_ACCESSIBLE")
-}
-
-pub(crate) struct Listing {
-    pub(crate) entries: Vec<(Vec<u8>, CoreResult<FileStat>)>,
-    pub(crate) truncated: bool,
 }
 
 pub(crate) async fn fallback_children(

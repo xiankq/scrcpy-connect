@@ -8,9 +8,17 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `app` | Flutter 主控源码、测试及平台 runner；正式交付平台为 Android、iOS、macOS、Windows，Linux runner 仅用于本地开发与成像验证 |
+| `app` | Flutter 主控源码、测试与 Android、iOS、macOS、Windows、Linux runner；实际验证层级见验收记录 |
 | `packages/design_system` | 主题、材料和共享界面组件 |
-| `packages/interop_bridge` | Dart 产品编排、Rust 边界、媒体与系统适配 |
+| `packages/device_runtime` | 应用运行时组装、原生执行入口和跨能力生命周期 |
+| `packages/flutter_adb` | 统一 ADB 接口；移动端 Rust 传输、桌面官方 adb-server |
+| `packages/media_codec` | 裁剪 FFmpeg 的 Rust 解码核心、系统输出和 Flutter 组件 |
+| `packages/scrcpy_client` | 远控画面、设备音源与质量编排 |
+| `packages/device_connections` | 配对、连接、恢复及设备能力策略 |
+| `packages/device_preferences` | 产品默认值、偏好校验、迁移和原子持久化 |
+| `packages/device_files` | 文件浏览、内容交付与本机保存编排 |
+| `packages/runtime_diagnostics` | 有界结构化运行日志 |
+| `packages/device_protocol` | 运行时命令契约与错误 |
 | `crates/adb` | 独立 Rust ADB 主机协议与服务 |
 | `crates/interop_core` | 设备、会话、传输与被控协同活动 |
 | `crates/interop_bridge` | FRB 入口、命令校验与事件观察 |

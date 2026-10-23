@@ -24,7 +24,6 @@ impl Runtime {
             // Box it so snapshot polls stay small on a default test thread stack.
             let sessions = Box::pin(self.session_command("session.list", &Value::Null)).await?;
             let sources = self.audio_command("audio.sources", &Value::Null).await?;
-            let transfers = self.list_transfers().await?;
             let activities = self.activities().await?;
             let observations = self.observation_list().await?;
             let adb_operations = self.setup_operations.snapshot().await;
@@ -59,7 +58,7 @@ impl Runtime {
                     "consistency":"event-fenced",
                     "devices":projected_devices,"settings":settings,
                     "sessions":sessions["sessions"],"sources":sources["sources"],
-                    "transfers":transfers["transfers"],"activities":activities["activities"],
+                    "activities":activities["activities"],
                     "shares":shares,"companions":companions,"observations":observations,
                     "adbOperations":adb_operations
                 }));

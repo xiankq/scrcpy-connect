@@ -1,7 +1,7 @@
-rust_input: crate::api
+rust_input: crate::api,crate::adb_api,crate::file_api
 rust_root: crates/interop_bridge
-dart_root: packages/interop_bridge
-dart_output: packages/interop_bridge/lib/src/rust
+dart_root: packages/device_runtime
+dart_output: packages/device_runtime/lib/src/rust
 rust_output: crates/interop_bridge/src/frb_generated.rs
 web: false
 auto_upgrade_dependency: false

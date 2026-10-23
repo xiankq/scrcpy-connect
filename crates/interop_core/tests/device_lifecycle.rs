@@ -41,7 +41,8 @@ async fn device_ids_survive_storage_and_equal_addresses_never_merge_records() {
     assert_eq!(device["address"], "192.0.2.7");
     assert_eq!(device["port"], 37001);
     assert_eq!(device["status"], "offline");
-    restored.invoke("settings.update",json!({"deviceQuality":{&id:{"videoCodec":"h265"}},"deviceSettings":{&id:{"clipboardSync":true,"showNavigationBar":false}}})).await.unwrap();
+    // The native mirror contains execution inputs; UI preferences live in Dart.
+    restored.invoke("settings.update",json!({"deviceQuality":{&id:{"videoCodec":"h265"}},"deviceSettings":{&id:{"stayAwake":false}}})).await.unwrap();
     restored
         .invoke("devices.forget", json!({"deviceId":&id}))
         .await

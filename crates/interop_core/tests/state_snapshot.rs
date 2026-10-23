@@ -7,12 +7,12 @@ async fn snapshot_recovers_current_state_with_an_event_fence_and_no_new_activiti
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
     let mut events = runtime.subscribe();
     runtime
-        .invoke("settings.update", json!({"appearance":"dark"}))
+        .invoke("settings.update", json!({"maxFps":30}))
         .await
         .unwrap();
     let before = events.recv().await.unwrap();
     let snapshot = runtime.invoke("state.snapshot", json!({})).await.unwrap();
-    assert_eq!(snapshot["settings"]["appearance"], "dark");
+    assert_eq!(snapshot["settings"]["maxFps"], 30);
     let watermark = snapshot["sequence"].as_u64().unwrap();
     assert!(watermark > 0);
     assert!(before["sequence"].as_u64().unwrap() <= watermark);
@@ -20,7 +20,6 @@ async fn snapshot_recovers_current_state_with_an_event_fence_and_no_new_activiti
         "devices",
         "sessions",
         "sources",
-        "transfers",
         "activities",
         "shares",
         "companions",
@@ -28,19 +27,23 @@ async fn snapshot_recovers_current_state_with_an_event_fence_and_no_new_activiti
         assert_eq!(snapshot[collection], json!([]), "{collection}");
     }
     assert!(
+        snapshot.get("transfers").is_none(),
+        "Dart owns transfer snapshots"
+    );
+    assert!(
         events.try_recv().is_err(),
         "Reading state must not start or publish an activity"
     );
     assert!(!snapshot.to_string().contains("PRIVATE KEY"));
     runtime
-        .invoke("settings.update", json!({"appearance":"light"}))
+        .invoke("settings.update", json!({"maxFps":60}))
         .await
         .unwrap();
     let after = events.recv().await.unwrap();
     assert!(after["sequence"].as_u64().unwrap() > watermark);
     assert_eq!(
-        runtime.invoke("state.snapshot", json!({})).await.unwrap()["settings"]["appearance"],
-        "light"
+        runtime.invoke("state.snapshot", json!({})).await.unwrap()["settings"]["maxFps"],
+        60
     );
 }
 

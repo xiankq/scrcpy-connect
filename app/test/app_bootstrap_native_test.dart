@@ -6,8 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show ExternalLibrary;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:interop_bridge/interop_bridge.dart';
-import 'package:interop_bridge/src/rust/frb_generated.dart' show RustLib;
+import 'package:device_runtime/device_runtime.dart';
+import 'package:device_runtime/src/native_runtime.dart';
+import 'package:device_runtime/src/rust/frb_generated.dart' show RustLib;
 import 'package:scrcpy_connect/services/app_bootstrap.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/services/app_dependencies.dart';
@@ -24,7 +25,7 @@ void main() {
     final nativeAssets = manifest['native-assets'] as Map<String, dynamic>;
     final assets = nativeAssets.values.single as Map<String, dynamic>;
     final location =
-        assets['package:interop_bridge/src/rust/frb_generated.io.dart']
+        assets['package:device_runtime/src/rust/frb_generated.io.dart']
             as List<Object?>;
     expect(location.first, 'absolute');
     await RustLib.init(
@@ -34,13 +35,28 @@ void main() {
     final cache = await Directory.systemTemp.createTemp(
       'connect-bootstrap-cache-',
     );
+    var repository = Directory.current;
+    while (!File('${repository.path}/Cargo.toml').existsSync()) {
+      final parent = repository.parent;
+      if (parent.path == repository.path) {
+        throw StateError('Repository not found');
+      }
+      repository = parent;
+    }
+    await initializeNativeRuntime(
+      dataDirectory: root.path,
+      adbBinaryDirectory: Directory(
+        '${repository.path}/.dart_tool/flutter_adb/'
+        '${Platform.isMacOS ? 'macos' : Platform.operatingSystem}',
+      ),
+    );
     AppDependencies? owner;
-    final bridges = <InteropBridge>[];
+    final bridges = <DeviceRuntime>[];
     Future<AppDependencies> open() async {
-      final pending = InteropBridge.initialize(dataDirectory: root.path);
+      final pending = DeviceRuntime.initialize(dataDirectory: root.path);
       if (bridges.isEmpty) {
         await expectLater(
-          InteropBridge.initialize(dataDirectory: '${root.path}/different'),
+          DeviceRuntime.initialize(dataDirectory: '${root.path}/different'),
           throwsA(
             isA<InteropException>().having(
               (error) => error.code,
@@ -94,6 +110,11 @@ void main() {
       // Every bridge dispose is idempotent, including the failed owner.
       for (final bridge in bridges) {
         await bridge.dispose();
+      }
+      if (bridges.isNotEmpty) {
+        await bridges.last.shutdown();
+      } else {
+        await shutdownNativeAdb();
       }
       await root.delete(recursive: true);
       await cache.delete(recursive: true);

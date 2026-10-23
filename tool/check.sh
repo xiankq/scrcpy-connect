@@ -2,6 +2,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 flutter pub get --enforce-lockfile
+case "$(uname -s)" in
+  Linux*) dart packages/flutter_adb/tool/prepare_adb.dart --platform linux ;;
+  Darwin*) dart packages/flutter_adb/tool/prepare_adb.dart --platform macos ;;
+esac
 npm ci --ignore-scripts --prefix tool/design_tokens
 dart tool/protocol_codegen.dart --check
 dart tool/generate.dart --check
@@ -22,7 +26,10 @@ flutter analyze --no-pub --fatal-infos
 dart tool/check_analyzer_plugin.dart
 (cd app && flutter test --no-pub)
 (cd packages/design_system && flutter test --no-pub)
-(cd packages/interop_bridge && flutter test --no-pub)
+(cd packages/device_runtime && flutter test --no-pub)
+for capability in device_protocol runtime_diagnostics device_connections device_files device_preferences scrcpy_client flutter_adb media_codec; do
+  (cd "packages/$capability" && flutter test --no-pub)
+done
 npm run lint --prefix tool/design_tokens
 if [[ "${1:-}" == "--android" ]]; then
   (cd app && flutter build apk --debug --no-pub --target-platform android-arm,android-arm64,android-x64)

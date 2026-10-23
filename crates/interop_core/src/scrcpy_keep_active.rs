@@ -120,12 +120,13 @@ async fn start(
     let launched = std::sync::Mutex::new(None::<OwnedProcess>);
     let operation = async {
         let mut sync = client.sync(options(&cancellation)).await?;
-        sync.push(
+        sync.push_compressed(
             &RemotePath::new(&path)?,
             &mut &server[..],
             0o644,
             now().min(u32::MAX as u64) as u32,
             server.len() as u64,
+            super::server_upload_compression(&client.info().features),
         )
         .await?;
         drop(sync);

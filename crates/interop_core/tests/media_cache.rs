@@ -83,16 +83,9 @@ async fn android_thumbnail_preview_and_original_have_real_file_leases_through_cl
         .invoke("media.preview", json!({"deviceId":id,"path":path}))
         .await
         .unwrap();
-    let started = runtime.invoke("files.pull",json!({"deviceId":id,"path":path,"destination":outgoing.join("original.png"),"destinationScope":"privateCache"})).await.unwrap();
-    let original_lease = runtime
-        .invoke(
-            "media.cache.acquire",
-            json!({"transferId":started["transferId"]}),
-        )
-        .await
-        .unwrap();
-    let original = settled(&runtime, started["transferId"].as_str().unwrap()).await;
-    assert_eq!(original["status"], "completed", "{original}");
+    let original_path = outgoing.join("original.png");
+    let original_lease = pull_leased(&runtime, &id, &path, &original_path).await;
+    let original = json!({"localPath":original_path});
     assert_eq!(
         tokio::fs::read(preview["localPath"].as_str().unwrap())
             .await
@@ -122,7 +115,7 @@ async fn android_thumbnail_preview_and_original_have_real_file_leases_through_cl
     for lease in [
         &thumbnail["cacheLeaseId"],
         &preview["cacheLeaseId"],
-        &original_lease["leaseId"],
+        &json!(original_lease),
     ] {
         runtime
             .invoke("media.cache.release", json!({"leaseId":lease}))
@@ -137,15 +130,8 @@ async fn android_thumbnail_preview_and_original_have_real_file_leases_through_cl
     for content in [&thumbnail, &preview, &original] {
         assert!(!std::path::Path::new(content["localPath"].as_str().unwrap()).exists());
     }
-    assert_eq!(
-        runtime
-            .invoke("transfers.get", json!({"transferId":started["transferId"]}))
-            .await
-            .unwrap()["cacheEvicted"],
-        true
-    );
     runtime
-        .invoke("files.delete", json!({"deviceId":id,"paths":[path]}))
+        .execute_file_mutation(&id, "delete", &path, "", false, false, Default::default())
         .await
         .unwrap();
     runtime
@@ -513,24 +499,50 @@ async fn changed_preview_source_never_replaces_a_file_still_owned_by_a_consumer(
     assert!(std::path::Path::new(next["localPath"].as_str().unwrap()).exists());
 }
 
-async fn settled(runtime: &Arc<Runtime>, id: &str) -> serde_json::Value {
-    tokio::time::timeout(std::time::Duration::from_secs(10), async {
-        loop {
-            let task = runtime
-                .invoke("transfers.get", json!({"transferId":id}))
-                .await
-                .unwrap();
-            if !matches!(
-                task["status"].as_str().unwrap(),
-                "queued" | "running" | "finalizing" | "cancelling"
-            ) {
-                return task;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
-    .await
-    .unwrap()
+async fn pull_leased(
+    runtime: &Arc<Runtime>,
+    device: &str,
+    source: &str,
+    destination: &std::path::Path,
+) -> String {
+    let stamp = runtime
+        .execute_file_stat(device, source, false, false, Default::default())
+        .await
+        .unwrap();
+    let part = destination.with_extension("part");
+    let paths = vec![
+        destination.to_string_lossy().into_owned(),
+        part.to_string_lossy().into_owned(),
+    ];
+    let lease = runtime
+        .execute_file_cache_reserve(paths, vec![0, stamp.size])
+        .await
+        .unwrap();
+    runtime
+        .execute_file_copy(
+            device,
+            source,
+            part.to_str().unwrap(),
+            false,
+            stamp,
+            Default::default(),
+            Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        )
+        .await
+        .unwrap();
+    runtime
+        .execute_file_mutation(
+            device,
+            "commit",
+            part.to_str().unwrap(),
+            destination.to_str().unwrap(),
+            true,
+            false,
+            Default::default(),
+        )
+        .await
+        .unwrap();
+    lease
 }
 
 #[tokio::test]
@@ -548,16 +560,7 @@ async fn real_private_pull_lease_spans_publish_and_eviction_removes_export_capab
         .unwrap();
     let id = peer.connect(&runtime).await;
     let destination = outgoing.join("first.bin");
-    let started = runtime.invoke("files.pull",json!({"deviceId":id,"path":"/sdcard/a.jpg","destination":destination,"destinationScope":"privateCache"})).await.unwrap();
-    let lease = runtime
-        .invoke(
-            "media.cache.acquire",
-            json!({"transferId":started["transferId"]}),
-        )
-        .await
-        .unwrap();
-    let done = settled(&runtime, started["transferId"].as_str().unwrap()).await;
-    assert_eq!(done["status"], "completed", "{done}");
+    let lease = pull_leased(&runtime, &id, "/sdcard/a.jpg", &destination).await;
     assert_eq!(
         tokio::fs::read(&destination).await.unwrap(),
         b"real device bytes"
@@ -573,9 +576,19 @@ async fn real_private_pull_lease_spans_publish_and_eviction_removes_export_capab
         .invoke("media.cache.configure", json!({"budgetBytes":17}))
         .await
         .unwrap();
-    assert_eq!(runtime.invoke("files.pull",json!({"deviceId":id,"path":"/sdcard/a.jpg","destination":outgoing.join("other.bin"),"destinationScope":"privateCache"})).await.unwrap_err().code,"cache_budget_exceeded");
+    assert_eq!(
+        runtime
+            .execute_file_cache_reserve(
+                vec![outgoing.join("other.bin").to_string_lossy().into_owned()],
+                vec![17]
+            )
+            .await
+            .unwrap_err()
+            .code,
+        "cache_budget_exceeded"
+    );
     runtime
-        .invoke("media.cache.release", json!({"leaseId":lease["leaseId"]}))
+        .invoke("media.cache.release", json!({"leaseId":lease}))
         .await
         .unwrap();
     assert_eq!(
@@ -585,13 +598,8 @@ async fn real_private_pull_lease_spans_publish_and_eviction_removes_export_capab
             .unwrap()["deletedBytes"],
         17
     );
-    let evicted = runtime
-        .invoke("transfers.get", json!({"transferId":started["transferId"]}))
-        .await
-        .unwrap();
-    assert_eq!(evicted["canExport"], false);
-    assert_eq!(evicted["cacheEvicted"], true);
-    assert!(evicted["localPath"].is_null());
+    // Export capability is derived by Dart from the native filesystem fact.
+    assert!(!destination.exists());
 }
 
 #[tokio::test]

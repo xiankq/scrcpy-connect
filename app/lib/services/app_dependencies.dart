@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:interop_bridge/interop_bridge.dart' show DiagnosticLog;
+import 'package:device_runtime/device_runtime.dart' show DiagnosticLog;
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';

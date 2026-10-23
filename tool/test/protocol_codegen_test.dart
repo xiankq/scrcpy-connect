@@ -26,6 +26,7 @@ void main() {
       'duplicate',
       'owner',
       'field',
+      'nativeField',
       'version',
       'overlap',
       'order',
@@ -40,6 +41,8 @@ void main() {
           commands.first['owner'] = 'platform';
         case 'field':
           commands.first['required'] = {'id': 'anything'};
+        case 'nativeField':
+          commands.first['nativeResult'] = {'id': 'anything'};
         case 'version':
           schema['version'] = true;
         case 'overlap':
@@ -74,5 +77,24 @@ void main() {
       dart,
       contains('documentsImportFiles("documents.importFiles", core: false)'),
     );
+  });
+
+  test('native facts and composed public state retain separate schemas', () {
+    final schema = {
+      'version': 1,
+      'commands': [
+        {
+          'name': 'state.snapshot',
+          'owner': 'core',
+          'nativeResult': {'sequence': 'integer'},
+          'result': {'sequence': 'integer', 'transfers': 'array'},
+        },
+      ],
+    };
+    final rust = generator.rustSource(schema);
+    final dart = generator.dartSource(schema);
+    expect(rust, contains('name: "sequence"'));
+    expect(rust, isNot(contains('name: "transfers"')));
+    expect(dart, contains("'transfers': ProtocolFieldType.array"));
   });
 }

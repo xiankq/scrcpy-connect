@@ -383,7 +383,7 @@ class RemotePresentation {
           existing,
           verified:
               existing['firstFrameDecoded'] == true &&
-              existing['evidence'] == 'mdk.snapshot',
+              existing['evidence'] == 'media_codec.snapshot',
         );
       } else {
         if (!_qualityRebuilding) _session = _retainedImage(existing);
@@ -540,7 +540,7 @@ class RemotePresentation {
       final incoming = _outputGeneration(data);
       if (!verified ||
           data['firstFrameDecoded'] != true ||
-          data['evidence'] != 'mdk.snapshot' ||
+          data['evidence'] != 'media_codec.snapshot' ||
           data['textureId'] == null ||
           data['outputRetained'] == true ||
           incoming == null ||
@@ -688,7 +688,7 @@ class RemotePresentation {
       return RemoteResumeResult.stale;
     }
     if (receipt['firstFrameDecoded'] != true ||
-        receipt['evidence'] != 'mdk.snapshot') {
+        receipt['evidence'] != 'media_codec.snapshot') {
       return RemoteResumeResult.rendererNotReady;
     }
     _session = {...?_session, ...receipt};
@@ -730,9 +730,10 @@ class RemotePresentation {
     }
     final newInput =
         command == 'session.text' ||
+        command == 'session.scroll' ||
         (command == 'session.key' && params['action'] == 'down') ||
         (command == 'session.touch' &&
-            const ['down', 'move'].contains(params['action']));
+            const ['down', 'move', 'hover'].contains(params['action']));
     return !newInput ||
         canSendInput(foreground: foreground, ownerCurrent: ownerCurrent);
   }

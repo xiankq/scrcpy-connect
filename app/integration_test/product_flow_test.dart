@@ -478,7 +478,7 @@ void main() {
       );
       expect(session['codec'], 'h265');
       expect(session['firstFrameDecoded'], isTrue);
-      expect(session['evidence'], 'mdk.snapshot');
+      expect(session['evidence'], 'media_codec.snapshot');
       expect(session['capturePaused'], isNot(true));
       binding.reportData!['systemBackRetainsStreamingRemote'] = true;
       binding.reportData!['letterboxTapRetainsStreamingRemote'] = true;

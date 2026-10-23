@@ -147,7 +147,7 @@ void main() {
               item['status'] == 'streaming' && item['packageName'] == package,
         );
         expect(active['firstFrameDecoded'], isTrue);
-        expect(active['evidence'], 'mdk.snapshot');
+        expect(active['evidence'], 'media_codec.snapshot');
         expectHealthyRemote();
         if (!ownedIds.contains(idOf(active))) ownedIds.add(idOf(active));
         if (!allIds.contains(idOf(active))) allIds.add(idOf(active));
@@ -329,6 +329,7 @@ void main() {
         final main = await current(null);
         for (final action in ['down', 'up']) {
           await request('session.key', {
+            'captureGeneration': main['captureGeneration'],
             'sessionId': idOf(main),
             'keyCode': 3,
             'action': action,

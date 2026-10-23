@@ -6,13 +6,23 @@ resolution: workspace
 environment:
   sdk: ^3.13.5
 dependencies:
+  device_protocol:
+    path: ../packages/device_protocol
+  runtime_diagnostics:
+    path: ../packages/runtime_diagnostics
+  device_connections:
+    path: ../packages/device_connections
+  device_files:
+    path: ../packages/device_files
+  scrcpy_client:
+    path: ../packages/scrcpy_client
   flutter:
     sdk: flutter
   design_system:
     path: ../packages/design_system
   liquid_glass_widgets: 1.13.0
-  interop_bridge:
-    path: ../packages/interop_bridge
+  device_runtime:
+    path: ../packages/device_runtime
   hooks_riverpod: ^3.4.3
   flutter_hooks: ^0.21.3+1
   lucide_icons_flutter: ^4.0.0
@@ -44,4 +54,6 @@ dev_dependencies:
   riverpod_lint: 3.1.9
   build_runner: 2.16.2
 flutter:
+  config:
+    enable-swift-package-manager: false
   uses-material-design: true

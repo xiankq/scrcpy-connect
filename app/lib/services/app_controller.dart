@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:interop_bridge/interop_bridge.dart' show InteropCommand;
+import 'package:device_runtime/device_runtime.dart' show InteropCommand;
 
-export 'package:interop_bridge/interop_bridge.dart' show InteropCommand;
+export 'package:device_runtime/device_runtime.dart' show InteropCommand;
 
 import 'package:scrcpy_connect/services/session_views.dart';
 import 'package:scrcpy_connect/services/device_screen_policy.dart';

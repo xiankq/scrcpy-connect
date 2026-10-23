@@ -1,0 +1,42 @@
+name: device_runtime
+description: Typed entrypoint to the Rust interop runtime.
+publish_to: none
+version: 0.1.0
+resolution: workspace
+environment:
+  sdk: ^3.13.5
+dependencies:
+  device_preferences:
+    path: ../device_preferences
+  device_protocol:
+    path: ../device_protocol
+  runtime_diagnostics:
+    path: ../runtime_diagnostics
+  device_connections:
+    path: ../device_connections
+  device_files:
+    path: ../device_files
+  scrcpy_client:
+    path: ../scrcpy_client
+  crypto: 3.0.7
+  path: 1.9.1
+  ffi: ^2.2.0
+  media_codec:
+    path: ../media_codec
+  flutter_adb:
+    path: ../flutter_adb
+  code_assets: ^2.1.0
+  flutter:
+    sdk: flutter
+  flutter_rust_bridge: 2.13.0
+  flutter_rust_bridge_hooks: 2.13.0
+  open_filex: ^5.0.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  integration_test:
+    sdk: flutter
+flutter:
+  assets:
+    - assets/servers/

@@ -1,0 +1,16 @@
+name: flutter_adb
+description: Platform ADB ownership for Flutter remote-control hosts.
+publish_to: none
+version: 0.1.0
+resolution: workspace
+environment:
+  sdk: ^3.13.5
+dependencies:
+  path: 1.9.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  archive: 4.5.2
+  args: 2.7.0
+  crypto: 3.0.7
+  lints: ^6.0.0

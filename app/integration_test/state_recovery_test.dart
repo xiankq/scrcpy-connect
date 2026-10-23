@@ -106,7 +106,7 @@ void main() {
             .where((session) => session['deviceId'] == deviceId)
             .single;
         ownedId = value(initial, 'sessionId');
-        expect(initial['evidence'], 'mdk.snapshot');
+        expect(initial['evidence'], 'media_codec.snapshot');
         final watermarks = <int>[];
         for (final concurrent in [false, true]) {
           observed.clear();
@@ -130,7 +130,8 @@ void main() {
               (event) =>
                   event['type'] == 'session.output.resumed' &&
                   jsonObject(event['data'])['sessionId'] == ownedId &&
-                  jsonObject(event['data'])['evidence'] == 'mdk.snapshot',
+                  jsonObject(event['data'])['evidence'] ==
+                      'media_codec.snapshot',
             ),
             reason: 'The same actual player must verify resumed pixels after the state barrier.',
           );

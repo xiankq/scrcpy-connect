@@ -13,9 +13,11 @@ final root = repositoryRoot();
 const frbVersion = '2.13.0';
 const outputs = [
   'crates/interop_bridge/src/frb_generated.rs',
-  'packages/interop_bridge/lib/src/rust/api.dart',
-  'packages/interop_bridge/lib/src/rust/frb_generated.dart',
-  'packages/interop_bridge/lib/src/rust/frb_generated.io.dart',
+  'packages/device_runtime/lib/src/rust/api.dart',
+  'packages/device_runtime/lib/src/rust/adb_api.dart',
+  'packages/device_runtime/lib/src/rust/file_api.dart',
+  'packages/device_runtime/lib/src/rust/frb_generated.dart',
+  'packages/device_runtime/lib/src/rust/frb_generated.io.dart',
 ];
 
 void compareOutputs(Directory original, Directory generated) {

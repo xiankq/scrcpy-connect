@@ -1,7 +1,13 @@
 # interop-adb
 
-An independent asynchronous ADB host. It connects directly to adbd over TCP or
-USB; it never invokes an adb executable or relies on a local adb server.
+An asynchronous ADB service library with two transport boundaries. Mobile hosts
+connect directly to adbd over TCP or authorized USB. Desktop hosts use the
+bundled official adb server through its smart socket, selected with
+`ConnectOptions::adb_server` or `Client::connect_server`. The desktop branch does
+not emit CNXN/AUTH/STLS/WRTE; official adb owns device authentication and USB.
+Process startup, pinned binaries and persistent identity selection belong to the
+host, not this protocol crate. Desktop transport failures never fall back to the
+direct mobile implementation.
 
 ```rust,no_run
 use interop_adb::{Client, ConnectOptions, Identity, OperationOptions};
@@ -147,8 +153,14 @@ client.reverse_remove(&binding.device, OperationOptions::default()).await?;
 # }
 ```
 
-This is distinct from `host:forward`, which belongs to the adb server's 5037
-smart-socket protocol. This crate does not connect to that server. Use
+The official-server branch installs a bounded loopback listener and uses its
+`tcp:port` reverse destination. Cancelling the Rust client closes those listeners
+and removes only matching owned device mappings on the original transport ID.
+Existing mappings installed by other clients are retained. Direct mobile hosts
+continue to use the opaque OPEN allowlist described above.
+
+This is distinct from `host:forward`, which belongs to the adb server's
+smart-socket protocol. Use
 `connect_socket` to open a device socket directly; an application can expose its
 own host listener if it needs forward-like behavior.
 
@@ -225,3 +237,12 @@ and [sync](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2
 
 Typed host forwarding, package management, incremental install and
 a 5037 smart-socket compatibility server remain outside this crate's current API.
+
+The official-server client pins a transport ID before opening services, so a
+replacement transport with the same serial cannot silently retarget old work.
+Service bytes still reuse this crate's shell/sync codecs and cancellation bounds.
+WRTE-level diagnostics are unavailable on a smart socket; they are never
+synthesized from unrelated host TCP reads. Forced TLS resolves a matching
+official `_adb-tls-connect._tcp` service before connecting and fails if none is
+available. A background connection with authorization disabled reuses only an
+already authorized official transport; it does not create an unknown transport.

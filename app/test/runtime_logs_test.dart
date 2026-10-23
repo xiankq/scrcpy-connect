@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:interop_bridge/interop_bridge.dart';
+import 'package:device_runtime/device_runtime.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
 
 import 'support/test_controller.dart';
@@ -67,6 +67,44 @@ void main() {
     expect(find.text('运行日志已导出'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'verified hardware and platform preparation have accurate labels',
+    (tester) async {
+      log.record(
+        DiagnosticArea.video,
+        'decoder.selected',
+        fields: {
+          'decoder': 'h264',
+          'decoderBackend': 'vaapi',
+          'acceleration': 'hardware',
+        },
+      );
+      log.record(
+        DiagnosticArea.video,
+        'video.presentation',
+        fields: {
+          'presentationPath': 'vaapi.egl',
+          'platformTexturePrepared': true,
+          'presentedToWidget': false,
+        },
+      );
+      await tester.pumpWidget(
+        TestProviderScope(
+          controller: controller,
+          child: MaterialApp(
+            theme: ConnectTokens.theme(Brightness.light),
+            home: RuntimeLogsPage(log: log),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('已选用解码器：h264（硬件解码）'), findsOneWidget);
+      expect(find.text('平台视频纹理已准备'), findsOneWidget);
+      expect(find.textContaining('硬件加速状态未知'), findsNothing);
+      await tester.runAsync(log.close);
+    },
+  );
 
   testWidgets('clear requires confirmation and new events still appear', (
     tester,

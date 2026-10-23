@@ -249,7 +249,7 @@ void main() {
         );
         sessionId = id(current);
         expect(current['firstFrameDecoded'], isTrue);
-        expect(current['evidence'], 'mdk.snapshot');
+        expect(current['evidence'], 'media_codec.snapshot');
         expect(
           current['packageName'],
           isNull,

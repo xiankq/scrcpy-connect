@@ -468,7 +468,7 @@ async fn unrelated_settings_and_capture_replacement_preserve_the_lease_and_other
     b.setting(true).await.unwrap();
     let lease_a = a.state("A").await["keepActiveLeaseId"].clone();
     let lease_b = b.state("B").await["keepActiveLeaseId"].clone();
-    request(&a.runtime, "settings.update", json!({"appearance":"dark"}))
+    request(&a.runtime, "settings.update", json!({"maxFps":30}))
         .await
         .unwrap();
     {

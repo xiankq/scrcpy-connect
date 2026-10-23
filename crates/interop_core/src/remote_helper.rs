@@ -92,15 +92,6 @@ fn path_assignment(name: &str, path: &[u8]) -> CoreResult<String> {
     ))
 }
 
-pub(crate) async fn remote_rename(
-    client: &Client,
-    source: &str,
-    target: &str,
-    replace: bool,
-) -> CoreResult<Value> {
-    remote_rename_with_options(client, source, target, replace, OperationOptions::default()).await
-}
-
 pub(crate) async fn remote_rename_with_options(
     client: &Client,
     source: &str,

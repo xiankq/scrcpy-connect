@@ -46,8 +46,7 @@ async fn real_audio_only_capture_and_known_tone() {
     assert_eq!(source["channels"], 2);
     assert_eq!(source["audibleContentVerified"], false);
     let sources = runtime.invoke("audio.sources", json!({})).await.unwrap();
-    assert!(sources["sources"][0]["audioToken"].is_null());
-    assert!(sources["sources"][0]["audioPort"].is_null());
+    assert!(sources["sources"][0]["audioSourceId"].is_null());
     let mut audio = native_media::Reader::audio(&source);
     let fixture = std::env::var("INTEROP_AUDIO_FIXTURE").ok();
     let fixture_client = Client::connect_tcp((address.as_str(), port), ConnectOptions::default())

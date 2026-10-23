@@ -23,10 +23,7 @@ Directory applicationRoot([Directory? repository]) =>
 
 String? executable(String name) {
   final extensions = Platform.isWindows
-      ? [
-          '',
-          ...((Platform.environment['PATHEXT'] ?? '.EXE;.BAT;.CMD').split(';')),
-        ]
+      ? [...((Platform.environment['PATHEXT'] ?? '.EXE;.BAT;.CMD').split(';'))]
       : [''];
   for (final directory in (Platform.environment['PATH'] ?? '').split(
     p.separator == r'\' ? ';' : ':',
@@ -64,7 +61,11 @@ ProcessResult runTool(
     workingDirectory: cwd?.path,
     environment: environment,
     runInShell:
-        Platform.isWindows && command.first.toLowerCase().endsWith('.bat'),
+        Platform.isWindows &&
+        const [
+          '.bat',
+          '.cmd',
+        ].contains(p.extension(command.first).toLowerCase()),
   );
   if (!quiet && !secret) {
     stdout.write(result.stdout);

@@ -6,7 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:interop_bridge/interop_bridge.dart';
+import 'package:device_runtime/device_runtime.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/services/app_dependencies.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -190,7 +190,11 @@ String _areaName(DiagnosticArea area) => switch (area) {
 
 String _title(DiagnosticRecord record) => switch (record.event) {
   'decoder.selected' =>
-    '已选用解码器：${record.fields['decoder']}（${record.fields['acceleration'] == 'software' ? '软件解码' : '硬件加速状态未知'}）',
+    '已选用解码器：${record.fields['decoder']}（${switch (record.fields['acceleration']) {
+      'hardware' => '硬件解码',
+      'software' => '软件解码',
+      _ => '硬件加速状态未知',
+    }}）',
   'decoder.failed' => '解码器尝试失败：${record.fields['decoder']}',
   'request.completed' => '操作已完成：${record.fields['command']}',
   'request.failed' => '操作未完成：${record.fields['command']}',
@@ -209,5 +213,6 @@ String _title(DiagnosticRecord record) => switch (record.event) {
   'log.dropped' => '日志写入繁忙，部分记录已丢弃',
   'video.prepare' => '视频准备完成',
   'video.texture' => '视频纹理已创建',
+  'video.presentation' => '平台视频纹理已准备',
   _ => record.event,
 };

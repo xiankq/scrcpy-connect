@@ -190,27 +190,45 @@ async fn actual_android_shared_storage_rename_and_publish_are_kernel_atomic() {
     let target = format!("{root}/target");
     put(&client, source.as_bytes(), b"source").await;
     put(&client, target.as_bytes(), b"existing").await;
-    let conflict = remote_helper::remote_rename(&client, &source, &target, false)
-        .await
-        .unwrap_err();
+    let conflict = remote_helper::remote_rename_with_options(
+        &client,
+        &source,
+        &target,
+        false,
+        OperationOptions::default(),
+    )
+    .await
+    .unwrap_err();
     assert_eq!(conflict.code, "conflict", "{conflict:?}");
     assert_eq!(conflict.details["errno"], 17);
     assert_eq!(get(&client, source.as_bytes()).await.unwrap(), b"source");
     assert_eq!(get(&client, target.as_bytes()).await.unwrap(), b"existing");
     shell(&client, &format!("rm -- {target}")).await;
     assert_eq!(
-        remote_helper::remote_rename(&client, &source, &target, false)
-            .await
-            .unwrap()["atomic"],
+        remote_helper::remote_rename_with_options(
+            &client,
+            &source,
+            &target,
+            false,
+            OperationOptions::default()
+        )
+        .await
+        .unwrap()["atomic"],
         true
     );
     assert!(get(&client, source.as_bytes()).await.is_none());
     assert_eq!(get(&client, target.as_bytes()).await.unwrap(), b"source");
     put(&client, source.as_bytes(), b"new publication").await;
     assert_eq!(
-        remote_helper::remote_rename(&client, &source, &target, true)
-            .await
-            .unwrap()["atomic"],
+        remote_helper::remote_rename_with_options(
+            &client,
+            &source,
+            &target,
+            true,
+            OperationOptions::default()
+        )
+        .await
+        .unwrap()["atomic"],
         true
     );
     assert!(get(&client, source.as_bytes()).await.is_none());
@@ -242,18 +260,30 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
     let target = format!("{root}/target");
     put(&client, source.as_bytes(), b"source").await;
     put(&client, target.as_bytes(), b"existing").await;
-    let conflict = remote_helper::remote_rename(&client, &source, &target, false)
-        .await
-        .unwrap_err();
+    let conflict = remote_helper::remote_rename_with_options(
+        &client,
+        &source,
+        &target,
+        false,
+        OperationOptions::default(),
+    )
+    .await
+    .unwrap_err();
     assert_eq!(conflict.code, "conflict", "{conflict:?}");
     assert_eq!(conflict.details["errno"], 17);
     assert_eq!(get(&client, source.as_bytes()).await.unwrap(), b"source");
     assert_eq!(get(&client, target.as_bytes()).await.unwrap(), b"existing");
     shell(&client, &format!("rm -- {target}")).await;
     assert_eq!(
-        remote_helper::remote_rename(&client, &source, &target, false)
-            .await
-            .unwrap()["atomic"],
+        remote_helper::remote_rename_with_options(
+            &client,
+            &source,
+            &target,
+            false,
+            OperationOptions::default()
+        )
+        .await
+        .unwrap()["atomic"],
         true
     );
     assert!(get(&client, source.as_bytes()).await.is_none());
@@ -265,11 +295,12 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
         ),
     )
     .await;
-    let directory_conflict = remote_helper::remote_rename(
+    let directory_conflict = remote_helper::remote_rename_with_options(
         &client,
         &format!("{root}/another-dir"),
         &format!("{root}/kept-dir"),
         false,
+        OperationOptions::default(),
     )
     .await
     .unwrap_err();
@@ -282,10 +313,16 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
     let candidate = format!("{root}/candidate");
     put(&client, candidate.as_bytes(), b"candidate").await;
     assert_eq!(
-        remote_helper::remote_rename(&client, &candidate, &format!("{root}/existing-link"), false)
-            .await
-            .unwrap_err()
-            .code,
+        remote_helper::remote_rename_with_options(
+            &client,
+            &candidate,
+            &format!("{root}/existing-link"),
+            false,
+            OperationOptions::default()
+        )
+        .await
+        .unwrap_err()
+        .code,
         "conflict"
     );
     assert_eq!(
@@ -297,11 +334,12 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
         b"candidate"
     );
     shell(&client,&format!("mkdir -p -- {root}/dir/sub; print -nr -- payload > {root}/dir/sub/file; ln -s target {root}/link")).await;
-    remote_helper::remote_rename(
+    remote_helper::remote_rename_with_options(
         &client,
         &format!("{root}/dir"),
         &format!("{root}/moved-dir"),
         false,
+        OperationOptions::default(),
     )
     .await
     .unwrap();
@@ -311,11 +349,12 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
             .unwrap(),
         b"payload"
     );
-    remote_helper::remote_rename(
+    remote_helper::remote_rename_with_options(
         &client,
         &format!("{root}/link"),
         &format!("{root}/moved-link"),
         false,
+        OperationOptions::default(),
     )
     .await
     .unwrap();
@@ -351,8 +390,20 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
         put(&client, first.as_bytes(), b"first").await;
         put(&client, second.as_bytes(), b"second").await;
         let (a, b) = tokio::join!(
-            remote_helper::remote_rename(&client, &first, &destination, false),
-            remote_helper::remote_rename(&client, &second, &destination, false)
+            remote_helper::remote_rename_with_options(
+                &client,
+                &first,
+                &destination,
+                false,
+                OperationOptions::default()
+            ),
+            remote_helper::remote_rename_with_options(
+                &client,
+                &second,
+                &destination,
+                false,
+                OperationOptions::default()
+            )
         );
         assert_eq!(usize::from(a.is_ok()) + usize::from(b.is_ok()), 1);
         let loser = if a.is_ok() {
@@ -374,8 +425,20 @@ async fn actual_atomic_conflicts_directories_symlinks_bytes_and_source_replaceme
         put(&client, source.as_bytes(), b"old").await;
         put(&client, incoming.as_bytes(), b"new").await;
         let (moved, published) = tokio::join!(
-            remote_helper::remote_rename(&client, &source, &destination, false),
-            remote_helper::remote_rename(&client, &incoming, &source, true)
+            remote_helper::remote_rename_with_options(
+                &client,
+                &source,
+                &destination,
+                false,
+                OperationOptions::default()
+            ),
+            remote_helper::remote_rename_with_options(
+                &client,
+                &incoming,
+                &source,
+                true,
+                OperationOptions::default()
+            )
         );
         moved.unwrap();
         published.unwrap();

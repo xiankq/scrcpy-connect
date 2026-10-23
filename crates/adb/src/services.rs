@@ -92,7 +92,102 @@ pub struct ShellSession {
     stdin_closed: bool,
 }
 
+pub struct ShellReader {
+    session: ShellSession,
+    exited: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+pub struct ShellWriter {
+    stream: crate::AdbWriter,
+    mode: ShellMode,
+    stdin_closed: bool,
+    exited: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+impl ShellReader {
+    pub async fn next_event(&mut self) -> Result<Option<ShellEvent>> {
+        let event = self.session.next_event().await?;
+        if event.is_none() || matches!(event, Some(ShellEvent::Exit(_))) {
+            self.exited
+                .store(true, std::sync::atomic::Ordering::Release);
+        }
+        Ok(event)
+    }
+}
+impl ShellWriter {
+    async fn packet(&mut self, channel: u8, payload: &[u8]) -> Result<()> {
+        if self.exited.load(std::sync::atomic::Ordering::Acquire) {
+            return Err(Error::Closed);
+        }
+        let mut bytes = Vec::with_capacity(5 + payload.len());
+        bytes.push(channel);
+        bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(payload);
+        self.stream.write_all(&bytes).await
+    }
+    pub async fn write_stdin(&mut self, bytes: &[u8]) -> Result<()> {
+        if self.stdin_closed {
+            return Err(Error::Closed);
+        }
+        for chunk in bytes.chunks(64 * 1024) {
+            self.packet(0, chunk).await?;
+        }
+        Ok(())
+    }
+    pub async fn close_stdin(&mut self) -> Result<()> {
+        if !self.stdin_closed {
+            self.packet(4, &[]).await?;
+            self.stdin_closed = true;
+        }
+        Ok(())
+    }
+    pub async fn resize(&mut self, rows: u16, columns: u16) -> Result<()> {
+        if self.mode != ShellMode::Pty || rows == 0 || columns == 0 {
+            return Err(Error::InvalidArgument(
+                "terminal resize requires a PTY and nonzero dimensions",
+            ));
+        }
+        self.packet(5, format!("{rows}x{columns},0x0\0").as_bytes())
+            .await
+    }
+}
+
 impl ShellSession {
+    pub fn into_split(self) -> (ShellReader, ShellWriter) {
+        let ShellSession {
+            stream,
+            mode,
+            max_packet,
+            header,
+            header_read,
+            payload,
+            payload_read,
+            exited,
+            stdin_closed,
+        } = self;
+        let (reader, writer) = stream.into_split();
+        let exit = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(exited));
+        (
+            ShellReader {
+                session: ShellSession {
+                    stream: reader.0,
+                    mode,
+                    max_packet,
+                    header,
+                    header_read,
+                    payload,
+                    payload_read,
+                    exited,
+                    stdin_closed,
+                },
+                exited: exit.clone(),
+            },
+            ShellWriter {
+                stream: writer,
+                mode,
+                stdin_closed,
+                exited: exit,
+            },
+        )
+    }
     pub async fn next_event(&mut self) -> Result<Option<ShellEvent>> {
         if self.exited {
             return Ok(None);

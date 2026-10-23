@@ -43,7 +43,7 @@ Map<String, dynamic> loadSchema([File? path]) {
     if (!{'core', 'bridge'}.contains(command['owner'])) {
       throw FormatException('invalid command owner: $name');
     }
-    for (final group in ['required', 'optional', 'result']) {
+    for (final group in ['required', 'optional', 'result', 'nativeResult']) {
       final fields = command[group] ?? <String, dynamic>{};
       if (fields is! Map<String, dynamic> ||
           !fields.values.every(fieldTypes.contains)) {
@@ -95,8 +95,11 @@ String rustSource(Map<String, dynamic> schema) {
   for (final group in ['required', 'optional', 'result']) {
     lines.add("pub(crate) fn $group(self) -> &'static [Field] { match self {");
     for (final command in commands) {
-      if (fields(command, group).isNotEmpty) {
-        final values = fields(command, group).entries
+      final selected = group == 'result' && command.containsKey('nativeResult')
+          ? 'nativeResult'
+          : group;
+      if (fields(command, selected).isNotEmpty) {
+        final values = fields(command, selected).entries
             .map((entry) {
               final kind = entry.value as String;
               return 'Field { name: "${entry.key}", kind: FieldType::${kind[0].toUpperCase()}${kind.substring(1)} }';
@@ -201,8 +204,10 @@ void main(List<String> arguments) {
         rustSource(schema),
         'rust',
       ),
-      'packages/interop_bridge/lib/src/protocol/commands_generated.dart':
-          formatted(dartSource(schema), 'dart'),
+      'packages/device_protocol/lib/src/commands_generated.dart': formatted(
+        dartSource(schema),
+        'dart',
+      ),
     };
     final stale = <String>[];
     for (final entry in outputs.entries) {

@@ -814,8 +814,15 @@
     {
       "name": "session.frame",
       "owner": "core",
-      "optional": {
+      "required": {
         "sessionId": "string",
+        "generation": "integer",
+        "captureGeneration": "integer",
+        "textureId": "integer",
+        "decodedWidth": "integer",
+        "decodedHeight": "integer"
+      },
+      "optional": {
         "deviceId": "string"
       }
     },
@@ -826,7 +833,12 @@
         "sessionId": "string",
         "deviceId": "string",
         "action": "string",
-        "keyCode": "integer"
+        "keyCode": "integer",
+        "metaState": "integer",
+        "repeat": "integer"
+      },
+      "required": {
+        "captureGeneration": "integer"
       }
     },
     {
@@ -943,6 +955,24 @@
       }
     },
     {
+      "name": "session.scroll",
+      "owner": "core",
+      "required": {
+        "captureGeneration": "integer",
+        "x": "integer",
+        "y": "integer",
+        "screenWidth": "integer",
+        "screenHeight": "integer",
+        "hscroll": "number",
+        "vscroll": "number"
+      },
+      "optional": {
+        "sessionId": "string",
+        "deviceId": "string",
+        "buttons": "integer"
+      }
+    },
+    {
       "name": "session.start",
       "owner": "core",
       "required": {
@@ -972,6 +1002,9 @@
       "optional": {
         "sessionId": "string",
         "deviceId": "string"
+      },
+      "required": {
+        "captureGeneration": "integer"
       }
     },
     {
@@ -981,7 +1014,13 @@
         "sessionId": "string",
         "deviceId": "string",
         "action": "string",
-        "pressure": "number"
+        "pressure": "number",
+        "mouse": "boolean",
+        "buttons": "integer",
+        "actionButton": "integer"
+      },
+      "required": {
+        "captureGeneration": "integer"
       }
     },
     {
@@ -1083,6 +1122,17 @@
     {
       "name": "state.snapshot",
       "owner": "core",
+      "nativeResult": {
+        "sequence": "integer",
+        "settings": "object",
+        "devices": "array",
+        "sessions": "array",
+        "sources": "array",
+        "activities": "array",
+        "shares": "array",
+        "companions": "array",
+        "observations": "array"
+      },
       "result": {
         "sequence": "integer",
         "settings": "object",
