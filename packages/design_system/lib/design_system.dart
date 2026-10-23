@@ -143,10 +143,6 @@ abstract final class ConnectTokens {
       surfaceTint: DesignTokens.colorTransparent,
     );
     final text = dark ? DesignTokens.colorTextDark : ink;
-    final platformLabelFamily = ThemeData(brightness: brightness)
-        .textTheme
-        .labelLarge
-        ?.fontFamily;
     return ThemeData(
       useMaterial3: true,
       pageTransitionsTheme: const PageTransitionsTheme(
@@ -312,16 +308,7 @@ abstract final class ConnectTokens {
           backgroundColor: dark
               ? DesignTokens.colorPrimaryActionDark
               : DesignTokens.colorPrimaryAction,
-          textStyle: TextStyle(
-            // Match the platform family used by the rest of ThemeData.
-            fontFamily: platformLabelFamily,
-            fontSize: DesignTokens.componentButtonPrimaryTypography.fontSize,
-            fontWeight:
-                DesignTokens.componentButtonPrimaryTypography.fontWeight,
-            height: DesignTokens.componentButtonPrimaryTypography.height,
-            letterSpacing:
-                DesignTokens.componentButtonPrimaryTypography.letterSpacing,
-          ),
+          textStyle: DesignTokens.componentButtonPrimaryTypography,
           shape: const StadiumBorder(),
         ),
       ),
@@ -339,9 +326,7 @@ abstract final class ConnectTokens {
           backgroundColor: dark
               ? DesignTokens.componentButtonSecondaryDarkBackgroundColor
               : DesignTokens.componentButtonSecondaryBackgroundColor,
-          textStyle: DesignTokens.componentButtonSecondaryTypography.copyWith(
-            fontFamily: platformLabelFamily,
-          ),
+          textStyle: DesignTokens.componentButtonSecondaryTypography,
           shape: const StadiumBorder(),
         ),
       ),
@@ -357,9 +342,7 @@ abstract final class ConnectTokens {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: DesignTokens.componentButtonPrimaryTypography.copyWith(
-            fontFamily: platformLabelFamily,
-          ),
+          textStyle: DesignTokens.componentButtonPrimaryTypography,
           minimumSize: const Size(
             DesignTokens.componentIconButtonSize,
             DesignTokens.componentIconButtonSize,

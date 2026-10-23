@@ -75,6 +75,9 @@ function literal(value, path) {
   if (value?.type === 'dimension') return dimension(value, path);
   if (value?.type === 'typography') {
     const fields = typography(value, path);
+    // Font families describe the design draft only; runtime styles inherit
+    // Flutter's defaults on each platform.
+    delete fields.fontFamily;
     return `TextStyle(${Object.entries(fields).map(([key, field]) => `${key === 'lineHeight' ? 'height' : key}: ${field}`).join(', ')})`;
   }
   throw new Error(`Unsupported or unresolved token at ${path}`);

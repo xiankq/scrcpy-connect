@@ -37,6 +37,13 @@ test('generation fails on lint errors, missing tokens, unsupported units and sil
   assert.throws(() => generate(design.replace('colors:\n', 'colors:\n  foo-bar: "#000000"\n  fooBar: "#000000"\n')), /Dart identifier collision/);
 });
 
+test('design font changes remain metadata without entering runtime text styles', () => {
+  const { source } = generate(design.replaceAll('fontFamily: MiSans', 'fontFamily: Draft Font'));
+  assert.match(source, /typographyBodyFontFamily = "Draft Font"/);
+  assert.match(source, /componentButtonPrimaryTypography = TextStyle\(/);
+  assert.doesNotMatch(source, /fontFamily:/);
+});
+
 test('--check detects source and output drift without writing, generation restores freshness', () => {
   const directory = mkdtempSync(join(tmpdir(), 'design-token-test-'));
   const source = join(directory, 'DESIGN.md');

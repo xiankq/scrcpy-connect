@@ -118,7 +118,6 @@ abstract final class DesignTokens {
   static const componentButtonPrimaryRounded = 999.0;
   static const componentButtonPrimaryTextColor = Color(0xffffffff);
   static const componentButtonPrimaryTypography = TextStyle(
-    fontFamily: "Noto Sans SC",
     fontSize: 13.0,
     fontWeight: FontWeight.w500,
     height: 1.4,
@@ -131,7 +130,6 @@ abstract final class DesignTokens {
   static const componentButtonSecondaryRounded = 999.0;
   static const componentButtonSecondaryTextColor = Color(0xff000000);
   static const componentButtonSecondaryTypography = TextStyle(
-    fontFamily: "Noto Sans SC",
     fontSize: 13.0,
     fontWeight: FontWeight.w500,
     height: 1.4,
@@ -354,57 +352,57 @@ abstract final class DesignTokens {
   static const spacingXxl = 40.0;
   static const spacingXxs = 4.0;
   static const spacingZero = 0.0;
-  static const typographyBodyCompactFontFamily = "Noto Sans SC";
+  static const typographyBodyCompactFontFamily = "MiSans";
   static const typographyBodyCompactFontSize = 14.0;
   static const typographyBodyCompactFontWeight = FontWeight.w400;
   static const typographyBodyCompactLetterSpacing = 0.0;
   static const typographyBodyCompactLineHeight = 1.4;
-  static const typographyBodyEmphasisFontFamily = "Noto Sans SC";
+  static const typographyBodyEmphasisFontFamily = "MiSans";
   static const typographyBodyEmphasisFontSize = 14.0;
   static const typographyBodyEmphasisFontWeight = FontWeight.w600;
   static const typographyBodyEmphasisLetterSpacing = 0.0;
   static const typographyBodyEmphasisLineHeight = 1.45;
-  static const typographyBodyFontFamily = "Noto Sans SC";
+  static const typographyBodyFontFamily = "MiSans";
   static const typographyBodyFontSize = 14.0;
   static const typographyBodyFontWeight = FontWeight.w400;
   static const typographyBodyLetterSpacing = 0.0;
   static const typographyBodyLineHeight = 1.45;
-  static const typographyCaptionFontFamily = "Noto Sans SC";
+  static const typographyCaptionFontFamily = "MiSans";
   static const typographyCaptionFontSize = 12.0;
   static const typographyCaptionFontWeight = FontWeight.w400;
   static const typographyCaptionLetterSpacing = 0.0;
   static const typographyCaptionLineHeight = 1.4;
-  static const typographyClockFontFamily = "Inter";
+  static const typographyClockFontFamily = "MiSans";
   static const typographyClockFontSize = 48.0;
   static const typographyClockFontWeight = FontWeight.w600;
   static const typographyClockLetterSpacing = -1.0;
   static const typographyClockLineHeight = 1.1;
-  static const typographyDisplayFontFamily = "Noto Sans SC";
+  static const typographyDisplayFontFamily = "MiSans";
   static const typographyDisplayFontSize = 28.0;
   static const typographyDisplayFontWeight = FontWeight.w700;
   static const typographyDisplayLetterSpacing = -0.6;
   static const typographyDisplayLineHeight = 1.15;
-  static const typographyHeadingFontFamily = "Noto Sans SC";
+  static const typographyHeadingFontFamily = "MiSans";
   static const typographyHeadingFontSize = 17.0;
   static const typographyHeadingFontWeight = FontWeight.w600;
   static const typographyHeadingLetterSpacing = 0.0;
   static const typographyHeadingLineHeight = 1.35;
-  static const typographyLabelFontFamily = "Noto Sans SC";
+  static const typographyLabelFontFamily = "MiSans";
   static const typographyLabelFontSize = 13.0;
   static const typographyLabelFontWeight = FontWeight.w500;
   static const typographyLabelLetterSpacing = 0.0;
   static const typographyLabelLineHeight = 1.4;
-  static const typographyMicroFontFamily = "Noto Sans SC";
+  static const typographyMicroFontFamily = "MiSans";
   static const typographyMicroFontSize = 11.0;
   static const typographyMicroFontWeight = FontWeight.w500;
   static const typographyMicroLetterSpacing = 0.0;
   static const typographyMicroLineHeight = 1.3;
-  static const typographyNumericFontFamily = "Inter";
+  static const typographyNumericFontFamily = "MiSans";
   static const typographyNumericFontSize = 14.0;
   static const typographyNumericFontWeight = FontWeight.w600;
   static const typographyNumericLetterSpacing = 0.0;
   static const typographyNumericLineHeight = 1.3;
-  static const typographyTitleFontFamily = "Noto Sans SC";
+  static const typographyTitleFontFamily = "MiSans";
   static const typographyTitleFontSize = 22.0;
   static const typographyTitleFontWeight = FontWeight.w600;
   static const typographyTitleLetterSpacing = 0.0;

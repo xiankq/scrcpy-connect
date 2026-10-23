@@ -88,67 +88,67 @@ colors:
   outline-dark: '#76767E'
 typography:
   display:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 28px
     fontWeight: 700
     lineHeight: '1.15'
     letterSpacing: -0.6px
   title:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 22px
     fontWeight: 600
     lineHeight: '1.25'
     letterSpacing: 0px
   heading:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 17px
     fontWeight: 600
     lineHeight: '1.35'
     letterSpacing: 0px
   body:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 14px
     fontWeight: 400
     lineHeight: '1.45'
     letterSpacing: 0px
   body-emphasis:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 14px
     fontWeight: 600
     lineHeight: '1.45'
     letterSpacing: 0px
   body-compact:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 14px
     fontWeight: 400
     lineHeight: '1.4'
     letterSpacing: 0px
   label:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 13px
     fontWeight: 500
     lineHeight: '1.4'
     letterSpacing: 0px
   caption:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 12px
     fontWeight: 400
     lineHeight: '1.4'
     letterSpacing: 0px
   micro:
-    fontFamily: Noto Sans SC
+    fontFamily: MiSans
     fontSize: 11px
     fontWeight: 500
     lineHeight: '1.3'
     letterSpacing: 0px
   numeric:
-    fontFamily: Inter
+    fontFamily: MiSans
     fontSize: 14px
     fontWeight: 600
     lineHeight: '1.3'
     letterSpacing: 0px
   clock:
-    fontFamily: Inter
+    fontFamily: MiSans
     fontSize: 48px
     fontWeight: 600
     lineHeight: '1.1'
@@ -549,7 +549,7 @@ Pencil `mode=light/dark` 将同名语义变量映射到对应 token；媒体遮�
 
 ## Typography
 
-Pencil 的中文使用 Noto Sans SC，时间和数值可使用 Inter；Flutter 使用平台中文系统字体。两者共享语义字号、字重、行高和字距，不以字体文件不同为由重新选择视觉尺度。
+设计稿中的中文、拉丁文字、时间和数值统一使用 MiSans。各端代码完全遵循框架与平台的默认字体及回退机制，不指定字体家族、不捆绑设计稿字体，也不按平台维护字体替换表。设计稿与实现共享语义字号、字重、行高和字距，不以字体文件不同为由重新选择视觉尺度；生成的字体家族元数据仅描述设计稿，不写入运行时 TextStyle。
 
 页面标题只保留标题，普通列表项不附解释性二级描述。必要信息按职责呈现：
 

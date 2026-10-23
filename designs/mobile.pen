@@ -19146,7 +19146,7 @@
                   "width": "fill_container",
                   "height": 44,
                   "x": 16,
-                  "y": 89,
+                  "y": 86,
                   "descendants": {
                     "mpPvv": {
                       "content": "打开手机屏幕"
@@ -22888,7 +22888,7 @@
                   "stroke": "$muted",
                   "height": 108,
                   "x": 16,
-                  "y": 89,
+                  "y": 86,
                   "descendants": {
                     "akAwb": {
                       "width": 52,
@@ -22924,7 +22924,7 @@
                   "ref": "Ffm0s",
                   "name": "全局导航",
                   "x": 16,
-                  "y": 213,
+                  "y": 210,
                   "fill": "$surface",
                   "effect": {
                     "type": "shadow",
@@ -38298,8 +38298,7 @@
                                   "type": "frame",
                                   "id": "dTMBk",
                                   "name": "单行文字约束",
-                                  "width": 136,
-                                  "height": 17,
+                                  "width": "fill_container",
                                   "layout": "vertical",
                                   "children": [
                                     {
@@ -38307,6 +38306,8 @@
                                       "id": "m2z0U",
                                       "name": "端口应为 1–65535 的整数",
                                       "fill": "$danger",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
                                       "content": "端口应为 1–65535 的整数",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-body",
@@ -38858,8 +38859,7 @@
                                   "type": "frame",
                                   "id": "Qcsz3",
                                   "name": "单行文字约束",
-                                  "width": 86,
-                                  "height": 12,
+                                  "width": "fill_container",
                                   "layout": "vertical",
                                   "children": [
                                     {
@@ -38867,6 +38867,8 @@
                                       "id": "Q4KAa6",
                                       "name": "IP 地址或主机名",
                                       "fill": "$secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
                                       "content": "IP 地址或主机名",
                                       "lineHeight": 1,
                                       "fontFamily": "$font-caption",
@@ -46115,7 +46117,7 @@
     },
     "font-display": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-display": {
       "type": "number",
@@ -46131,7 +46133,7 @@
     },
     "font-title": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-title": {
       "type": "number",
@@ -46147,7 +46149,7 @@
     },
     "font-heading": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-heading": {
       "type": "number",
@@ -46163,7 +46165,7 @@
     },
     "font-body": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-body": {
       "type": "number",
@@ -46179,7 +46181,7 @@
     },
     "font-label": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-label": {
       "type": "number",
@@ -46195,7 +46197,7 @@
     },
     "font-caption": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-caption": {
       "type": "number",
@@ -46211,7 +46213,7 @@
     },
     "font-micro": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-micro": {
       "type": "number",
@@ -46227,7 +46229,7 @@
     },
     "font-numeric": {
       "type": "string",
-      "value": "Inter"
+      "value": "MiSans"
     },
     "size-numeric": {
       "type": "number",
@@ -46415,7 +46417,7 @@
     },
     "font-clock": {
       "type": "string",
-      "value": "Inter"
+      "value": "MiSans"
     },
     "size-clock": {
       "type": "number",
@@ -46878,7 +46880,7 @@
     },
     "font-body-emphasis": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-body-emphasis": {
       "type": "number",
@@ -46894,7 +46896,7 @@
     },
     "font-body-compact": {
       "type": "string",
-      "value": "Noto Sans SC"
+      "value": "MiSans"
     },
     "size-body-compact": {
       "type": "number",
@@ -47099,5 +47101,26 @@
       "value": "#AF52DE"
     }
   },
-  "fileToken": "a093725f-869e-4791-abe1-22c1bab505db"
+  "fileToken": "a093725f-869e-4791-abe1-22c1bab505db",
+  "fonts": [
+    {
+      "name": "MiSans",
+      "url": "assets/fonts/misans/MiSans-Regular.woff2"
+    },
+    {
+      "name": "MiSans",
+      "url": "assets/fonts/misans/MiSans-Medium.woff2",
+      "weight": 500
+    },
+    {
+      "name": "MiSans",
+      "url": "assets/fonts/misans/MiSans-Semibold.woff2",
+      "weight": 600
+    },
+    {
+      "name": "MiSans",
+      "url": "assets/fonts/misans/MiSans-Bold.woff2",
+      "weight": 700
+    }
+  ]
 }

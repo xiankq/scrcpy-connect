@@ -29,8 +29,9 @@ future mapping. Unitless line heights must be quoted strings because the
 official 0.4.0 parser silently ignores YAML numeric line heights. Numeric
 spacing is rejected for the same reason.
 
-The generated font-family metadata remains available, while Flutter's theme
-uses the platform Chinese system font as required by the specification's
+The generated font-family metadata describes the MiSans design draft only.
+Generated `TextStyle` values omit font families, so all runtime code inherits
+the framework and platform defaults as required by the specification's
 Typography section. All rendered font sizes, weights, line heights, and
 tracking come from generated constants.
 
