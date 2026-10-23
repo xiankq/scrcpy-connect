@@ -88,6 +88,12 @@ async fn plain_path(path: &Path) -> CoreResult<()> {
     let mut current = PathBuf::new();
     for component in path.components() {
         current.push(component);
+        // A Windows prefix (for example \\?\C:) is not a filesystem object
+        // until RootDir is appended. Querying it returns ERROR_INVALID_FUNCTION.
+        // Keep checking the complete root and every following directory.
+        if matches!(component, Component::Prefix(_)) {
+            continue;
+        }
         match fs::symlink_metadata(&current).await {
             Ok(meta) if meta.is_symlink() => return Err(invalid("缓存路径不能经过符号链接。")),
             Ok(_) => {}
