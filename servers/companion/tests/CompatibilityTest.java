@@ -5,6 +5,76 @@ import java.util.concurrent.TimeUnit;
 
 /** Host contract test: the API21 Process boundary has only exitValue/destroy. */
 public final class CompatibilityTest {
+    public static final class Users {
+        static Object current = 10;
+        static boolean denied;
+        static int queries;
+        public static Object getCurrentUser() {
+            queries++;
+            if (denied) throw new SecurityException("current user denied");
+            return current;
+        }
+    }
+    private static void userFailure(CurrentUser user, String code) throws Exception {
+        try { user.require(); throw new AssertionError("Unverified user accepted"); }
+        catch (Main.Failure expected) {
+            if (!expected.code.equals(code)) throw new AssertionError("Unexpected user failure: " + expected.code);
+        }
+    }
+    private static void userBoundary(Main companion, String method, String code) throws Exception {
+        java.lang.reflect.Method boundary;
+        Object[] arguments;
+        if (method.equals("checkClipboardAccess")) {
+            boundary = Main.class.getDeclaredMethod(method, boolean.class);
+            arguments = new Object[]{false};
+        } else {
+            boundary = Main.class.getDeclaredMethod(method);
+            arguments = new Object[0];
+        }
+        boundary.setAccessible(true);
+        try { boundary.invoke(companion, arguments); throw new AssertionError("Old-user content accepted by " + method); }
+        catch (java.lang.reflect.InvocationTargetException failure) {
+            if (!(failure.getCause() instanceof Main.Failure) || !((Main.Failure) failure.getCause()).code.equals(code)) throw failure;
+        }
+    }
+    private static void currentUser() throws Exception {
+        CurrentUser session = new CurrentUser(Users.class);
+        Main companion = new Main(session);
+        if (Users.queries != 0) throw new AssertionError("User-independent startup resolved a user");
+        Users.denied = true;
+        userFailure(session, "user_unavailable");
+        try { session.owner(); throw new AssertionError("Failed lookup guessed an owner"); }
+        catch (Main.Failure expected) { }
+        Users.denied = false;
+        for (Object invalid : new Object[]{null, -1, -2, "10"}) {
+            Users.current = invalid;
+            userFailure(session, "user_unavailable");
+        }
+        userFailure(new CurrentUser(Object.class), "user_unavailable");
+        Users.current = 10;
+        if (session.require() != 10 || session.owner() != 10 || session.require() != 10)
+            throw new AssertionError("Verified current user did not bind");
+        Users.current = 11;
+        userFailure(session, "user_changed");
+        java.lang.reflect.Field enabled = Main.class.getDeclaredField("observationEnabled");
+        enabled.setAccessible(true);
+        enabled.setBoolean(companion, true);
+        for (String boundary : new String[]{"notificationSnapshot", "callSnapshot", "checkClipboardAccess"})
+            userBoundary(companion, boundary, "user_changed");
+        int queries = Users.queries;
+        if (session.owner() != 10 || Users.queries != queries)
+            throw new AssertionError("Cleanup lost the original listener owner");
+        Users.denied = true;
+        userFailure(session, "user_unavailable");
+        for (String boundary : new String[]{"notificationSnapshot", "callSnapshot", "checkClipboardAccess"})
+            userBoundary(companion, boundary, "user_unavailable");
+        if (session.owner() != 10) throw new AssertionError("Lookup failure replaced the bound user");
+        Users.denied = false;
+        Users.current = 0;
+        if (new CurrentUser(Users.class).require() != 0)
+            throw new AssertionError("An actually verified user zero was rejected");
+        System.out.println("PASS: lazy user binding, lookup failures, user switch and original-owner cleanup");
+    }
     public static final class LegacyCalls {
         boolean listening, opened;
         public void listenForSubscriber(long subscription, String pkg, Object token, int events, boolean notify) {
@@ -83,6 +153,7 @@ public final class CompatibilityTest {
         public void destroy() { exited = true; }
     }
     public static void main(String[] args) throws Exception {
+        currentUser();
         if (!Apps.applicationTask(true, 1, 1, 10, 10)) throw new AssertionError("Running standard task missing");
         if (Apps.applicationTask(false, 1, 1, 10, 10)
             || Apps.applicationTask(true, 0, 1, 10, 10)

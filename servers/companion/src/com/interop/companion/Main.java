@@ -41,7 +41,8 @@ public final class Main {
     private final Map<String, Item> notifications = new LinkedHashMap<>();
     private final Map<String, Item> byKey = new HashMap<>();
     private Object notificationManager, telecom, registry, notificationToken, phoneToken;
-    private int userId, callState;
+    private final CurrentUser user;
+    private int callState;
     private String notificationError, callError, callId, callUiError;
     private volatile int rawPhoneState=-1;
     private final AtomicLong phoneGeneration=new AtomicLong();
@@ -56,6 +57,9 @@ public final class Main {
     private volatile boolean observationEnabled;
     private volatile long observationEpoch;
     private boolean notificationsListening, callsListening;
+
+    Main() { this(new CurrentUser()); }
+    Main(CurrentUser user) { this.user=user; }
 
     private static final class Item {
         StatusBarNotification sbn;
@@ -156,7 +160,6 @@ public final class Main {
     }
     private void initialize() throws Exception {
         if(Process.myUid()!=2000) throw new Failure("wrong_identity","Companion requires the authorized ADB shell identity");
-        try {userId=(Integer)Class.forName("android.app.ActivityManager").getMethod("getCurrentUser").invoke(null);} catch(Exception e) {userId=0;}
         // Shared media/clipboard use never acquires notification or phone listeners.
     }
     private JSONObject observationSnapshot(boolean cleanupConfirmed) throws Exception {
@@ -166,6 +169,7 @@ public final class Main {
     private JSONObject setObservation(JSONObject request) throws Exception {
         long epoch=request.getLong("epoch");boolean enabled=request.getBoolean("enabled");
         if(epoch<1 || epoch<observationEpoch) throw new Failure("stale_observation","The observation intent was replaced");
+        if(enabled) user.require();
         if(epoch==observationEpoch && enabled==observationEnabled && (!notificationsListening && !callsListening || enabled)) return observationSnapshot(true);
         observationEnabled=false;observationEpoch=epoch;
         notifications.clear();byKey.clear();callId=null;callState=0;rawPhoneState=-1;
@@ -173,7 +177,7 @@ public final class Main {
         notificationsTruncated=false;notificationError=null;callError=null;callUiError=null;
         boolean clean=true;
         if(notificationsListening) {
-            try {invoke(notificationManager,"unregisterListener",notificationToken,userId);notificationsListening=false;notificationToken=null;}
+            try {invoke(notificationManager,"unregisterListener",notificationToken,user.owner());notificationsListening=false;notificationToken=null;}
             catch(Exception e) {notificationError=error(e);clean=false;}
         }
         if(callsListening) {
@@ -183,15 +187,17 @@ public final class Main {
             } catch(Exception e) {callError=error(e);clean=false;}
         }
         if(!enabled || !clean) return observationSnapshot(clean);
+        user.require();
         observationEnabled=true;
         final long currentEpoch=epoch;
         try {
             notificationManager=service("notification","android.app.INotificationManager");
             notificationToken=callback("android.service.notification.INotificationListener",()->scheduleRefresh(currentEpoch));
-            invoke(notificationManager,"registerListener",notificationToken,new ComponentName(PACKAGE,"com.interop.companion.Listener"),userId);
+            invoke(notificationManager,"registerListener",notificationToken,new ComponentName(PACKAGE,"com.interop.companion.Listener"),user.require());
             notificationsListening=true;refreshNotifications(false);
         } catch(Exception e) {notificationError=error(e);}
         try {
+            user.require();
             telecom=service("telecom","com.android.internal.telecom.ITelecomService");
             registry=service("telephony.registry","com.android.internal.telephony.ITelephonyRegistry");
             phoneToken=callback("com.android.internal.telephony.IPhoneStateListener",()->scheduleRefresh(currentEpoch));
@@ -219,13 +225,14 @@ public final class Main {
             if(first!=null) args.add(first);
             if(count>=1) args.add(PACKAGE);
             if(count>=3) args.add(null); // Actual shell attribution tag is absent.
-            if(count>=2) args.add(userId);
+            if(count>=2) args.add(user.owner());
             if(count==4) args.add(0); // Context.DEVICE_ID_DEFAULT, not a virtual-device identity.
             return invoke(clipboard,name,args.toArray());
         }
         throw new Failure("clipboard_api_unavailable","Unsupported IClipboard attribution signature: "+name);
     }
     private void checkClipboardAccess(boolean writing) throws Exception {
+        user.require();
         KeyguardManager keyguard=(KeyguardManager)shellContext.getSystemService(Context.KEYGUARD_SERVICE);
         if(keyguard==null) throw new Failure("clipboard_api_unavailable","Target keyguard state is unavailable");
         boolean locked=Build.VERSION.SDK_INT>=23?keyguard.isDeviceLocked():keyguard.isKeyguardLocked();
@@ -295,6 +302,7 @@ public final class Main {
     }
     private void refreshNotifications(boolean event) throws Exception {
         if(!observationEnabled || !notificationsListening || notificationError!=null) return;
+        user.require();
         Object slice=invoke(notificationManager,"getActiveNotificationsFromListener",notificationToken,null,0);
         @SuppressWarnings("unchecked") List<StatusBarNotification> current=(List<StatusBarNotification>)invoke(slice,"getList");
         Map<String,Item> next=new LinkedHashMap<>();Map<String,Item> keys=new HashMap<>();
@@ -318,20 +326,23 @@ public final class Main {
             if(snapshotBytes>768*1024) {notificationsTruncated=true;break;}
             next.put(id,item);keys.put(sbn.getKey(),item);
         }
+        user.require();
         String before=notificationList().toString();notifications.clear();notifications.putAll(next);byKey.clear();byKey.putAll(keys);
         if(event && !before.equals(notificationList().toString())) send(new JSONObject().put("event","notifications.changed").put("data",notificationSnapshot()));
     }
     private JSONArray notificationList() {JSONArray result=new JSONArray();for(Item item:notifications.values()) result.put(item.json);return result;}
     private JSONObject notificationSnapshot() throws Exception {
         if(!observationEnabled) return new JSONObject().put("notifications",new JSONArray()).put("status",notificationError==null?"stopped":"unknown").put("live",false).put("reason",notificationError==null?"通知与来电观察已停止。":notificationError).put("observationEpoch",observationEpoch).put("observationEnabled",false);
+        user.require();
         return new JSONObject().put("observationEpoch",observationEpoch).put("observationEnabled",true).put("notifications",notificationList()).put("status",notificationError==null && !notificationsTruncated?"available":"limited")
             .put("reason",notificationError!=null?notificationError:notificationsTruncated?"部分通知未同步，请进入手机查看。":JSONObject.NULL)
-            .put("truncated",notificationsTruncated).put("live",notificationError==null).put("userId",userId);
+            .put("truncated",notificationsTruncated).put("live",notificationError==null).put("userId",user.owner());
     }
     private boolean keyguardLocked() throws Exception {
         return (Boolean)invoke(service("window","android.view.IWindowManager"),"isKeyguardLocked");
     }
     private JSONObject notificationAction(String command,JSONObject request) throws Exception {
+        user.require();
         if(!observationEnabled || !notificationsListening) throw new Failure("observation_required","Start notification observation before using its actions");
         if(notificationError!=null) throw new Failure("permission_or_api_unavailable",notificationError);
         refreshNotifications(false);
@@ -340,6 +351,7 @@ public final class Main {
         Notification notification=item.sbn.getNotification();
         if(command.equals("notifications.dismiss")) {
             if(!item.sbn.isClearable()) throw new Failure("not_dismissible","Android marks this notification as ongoing");
+            user.require();
             invoke(notificationManager,"cancelNotificationsFromListener",notificationToken,new String[]{item.sbn.getKey()});
             refreshNotifications(true);
             return new JSONObject().put("acceptedBySystem",true).put("dismissed",!byKey.containsKey(item.sbn.getKey())).put("markedRead",false);
@@ -347,6 +359,7 @@ public final class Main {
         if(keyguardLocked()) throw new Failure("authentication_required","Unlock the target device before continuing this notification action");
         if(command.equals("notifications.open")) {
             if(notification.contentIntent==null) throw new Failure("no_original_action","The original notification has no content PendingIntent");
+            user.require();
             notification.contentIntent.send(shellContext,0,null);
             return new JSONObject().put("acceptedBySystem",true).put("located",true).put("requiresRemoteView",true).put("applicationConfirmed",false);
         }
@@ -354,7 +367,9 @@ public final class Main {
     }
     private void refreshCalls(boolean event) throws Exception {
         if(!observationEnabled || !callsListening || callError!=null) return;
+        user.require();
         int previous=callState;int actual=CallServices.state(telecom);
+        user.require();
         long generation=phoneGeneration.get();
         if(actual!=0 && (callId==null || generation!=observedPhoneGeneration)) callId=UUID.randomUUID().toString();
         observedPhoneGeneration=generation;
@@ -367,6 +382,7 @@ public final class Main {
     }
     private JSONObject callSnapshot() throws Exception {
         if(!observationEnabled) return new JSONObject().put("calls",new JSONArray()).put("status",callError==null?"stopped":"unknown").put("live",false).put("reason",callError==null?"通知与来电观察已停止。":callError).put("audioStatus","unknown").put("observationEpoch",observationEpoch).put("observationEnabled",false);
+        user.require();
         JSONArray calls=new JSONArray();
         if(callState!=0 && callError==null) calls.put(new JSONObject().put("id",callId).put("state",callState==1?"ringing":"active")
             .put("name","当前系统通话").put("canAnswer",false).put("canReject",false)
@@ -388,8 +404,7 @@ public final class Main {
         if(!observationEnabled || !callsListening || callError!=null) throw new Failure("observation_required","请先核验此设备的实时通话状态。");
         refreshCalls(false);
         if(callState==0) throw new Failure("no_current_call","手机当前已没有系统通话，请重新核验通话状态。");
-        int currentUser=(Integer)Class.forName("android.app.ActivityManager").getMethod("getCurrentUser").invoke(null);
-        if(currentUser!=userId) throw new Failure("user_changed","被控设备的当前用户已变化，请重新核验通话。");
+        user.require();
         Method method=systemCallUiMethod();
         if(method==null) throw new Failure("call_ui_unsupported","此系统未提供已适配的通话界面打开接口，请在手机上继续处理。");
         try {
@@ -421,10 +436,10 @@ public final class Main {
         if(command.equals("clipboard.get")) return clipboardGet();
         if(command.equals("clipboard.set")) return clipboardSet(request);
         if(command.equals("apps.list")) {
-            try {return Apps.running(shellContext);}
+            try {JSONObject result=Apps.running(shellContext,user.require());user.require();return result;}
             catch(NoSuchMethodException | NoSuchFieldException unavailable) {throw new Failure("apps_running_unavailable","Verified application task metadata is unavailable on this device");}
         }
-        if(command.equals("apps.icon")) return Apps.icon(shellContext,request);
+        if(command.equals("apps.icon")) {JSONObject result=Apps.icon(shellContext,request,user.require());user.require();return result;}
         throw new Failure("invalid_command","Unknown companion command");
     }
     private static String readLine(InputStream input) throws Exception {

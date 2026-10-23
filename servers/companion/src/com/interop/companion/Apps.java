@@ -29,14 +29,15 @@ final class Apps {
         return running && activities > 0 && activityType == 1 && taskUser == currentUser;
     }
 
-    private static Context currentUserContext(Context context) throws Exception {
+    private static Context currentUserContext(Context context, int user) throws Exception {
         try {
-            // Do not guess user zero if the current user cannot be established.
-            int user = (Integer) ActivityManager.class.getMethod("getCurrentUser").invoke(null);
             Class<?> handle = Class.forName("android.os.UserHandle");
             Object identity = handle.getConstructor(int.class).newInstance(user);
-            return (Context) Context.class.getMethod("createPackageContextAsUser", String.class, int.class, handle)
+            Context current = (Context) Context.class.getMethod("createPackageContextAsUser", String.class, int.class, handle)
                 .invoke(context, "com.android.shell", 0, identity);
+            if ((Integer) Main.invoke(current, "getUserId") != user)
+                throw new Main.Failure("user_unavailable", "The package context does not belong to the verified current user");
+            return current;
         } catch (java.lang.reflect.InvocationTargetException failure) {
             if (failure.getCause() instanceof Exception) throw (Exception) failure.getCause();
             throw failure;
@@ -53,11 +54,10 @@ final class Apps {
     }
 
     @SuppressWarnings("deprecation")
-    static JSONObject running(Context context) throws Exception {
+    static JSONObject running(Context context, int user) throws Exception {
         if (Build.VERSION.SDK_INT < 29) throw new Main.Failure("apps_running_unavailable", "Verified task/user metadata requires Android 10 or later");
         requireTaskAccess(context);
-        Context current = currentUserContext(context);
-        int user = (Integer) Main.invoke(current, "getUserId");
+        Context current = currentUserContext(context, user);
         PackageManager packages = current.getPackageManager();
         ActivityManager manager = (ActivityManager) current.getSystemService(Context.ACTIVITY_SERVICE);
         if (manager == null) throw new Main.Failure("apps_running_unavailable", "Activity service is absent");
@@ -87,11 +87,11 @@ final class Apps {
         return new JSONObject().put("apps", apps).put("source", "runningTasks").put("live", true).put("userId", user);
     }
 
-    static JSONObject icon(Context context, JSONObject request) throws Exception {
+    static JSONObject icon(Context context, JSONObject request, int user) throws Exception {
         String name = request.optString("packageName");
         if (name.isEmpty() || name.length() > 255 || !name.matches("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*"))
             throw new Main.Failure("invalid_argument", "A valid target package name is required");
-        Context current = currentUserContext(context);
+        Context current = currentUserContext(context, user);
         PackageManager packages = current.getPackageManager();
         final Drawable icon;
         try {
