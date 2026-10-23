@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'dart:math';
 
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
+
+import '../src/process.dart';
 
 const _receiverPackage = 'dev.scrcpyconnect.deliveryfixture';
 const _receiverApk =
@@ -96,28 +99,13 @@ class _AndroidDelivery {
     List<String> args, {
     bool binary = false,
   }) async {
-    final process = await Process.start(adb, ['-s', serial, ...args]);
-    final stdout = process.stdout.fold<List<int>>(
-      [],
-      (all, bytes) => all..addAll(bytes),
+    return runProcess(
+      adb,
+      ['-s', serial, ...args],
+      timeout: const Duration(seconds: 30),
+      stdoutEncoding: binary ? null : utf8,
+      stderrEncoding: utf8,
     );
-    final stderr = process.stderr.transform(utf8.decoder).join();
-    try {
-      final code = await process.exitCode.timeout(const Duration(seconds: 30));
-      final bytes = await stdout;
-      return ProcessResult(
-        process.pid,
-        code,
-        binary ? bytes : utf8.decode(bytes),
-        await stderr,
-      );
-    } on TimeoutException {
-      process.kill(ProcessSignal.sigkill);
-      await process.exitCode;
-      await stdout;
-      await stderr;
-      rethrow;
-    }
   }
 
   Future<ProcessResult> _shellResult(String serial, List<String> tokens) =>
@@ -199,54 +187,45 @@ class _AndroidDelivery {
           'Media delivery requires an explicit host FFmpeg tool.',
         );
       }
-      final process = await Process.start(ffmpeg, [
-        '-v',
-        'error',
-        '-nostdin',
-        '-n',
-        '-f',
-        'lavfi',
-        '-i',
-        'testsrc2=size=320x180:rate=15',
-        if (kind == 'image') ...[
-          '-frames:v',
-          '1',
-          '-c:v',
-          'mjpeg',
-          '-q:v',
-          '3',
-        ] else ...[
-          '-t',
-          '6',
-          '-an',
-          '-c:v',
-          'libx264',
-          '-preset',
-          'ultrafast',
-          '-pix_fmt',
-          'yuv420p',
-          '-movflags',
-          '+faststart',
+      final result = await runProcess(
+        ffmpeg,
+        [
+          '-v',
+          'error',
+          '-nostdin',
+          '-n',
+          '-f',
+          'lavfi',
+          '-i',
+          'testsrc2=size=320x180:rate=15',
+          if (kind == 'image') ...[
+            '-frames:v',
+            '1',
+            '-c:v',
+            'mjpeg',
+            '-q:v',
+            '3',
+          ] else ...[
+            '-t',
+            '6',
+            '-an',
+            '-c:v',
+            'libx264',
+            '-preset',
+            'ultrafast',
+            '-pix_fmt',
+            'yuv420p',
+            '-movflags',
+            '+faststart',
+          ],
+          knownFile.path,
         ],
-        knownFile.path,
-      ]);
-      final stdout = process.stdout.drain<void>();
-      final stderr = process.stderr.transform(utf8.decoder).join();
-      try {
-        final exit = await process.exitCode.timeout(
-          const Duration(seconds: 30),
-        );
-        await stdout;
-        if (exit != 0) {
-          throw StateError('Host media fixture failed: ${await stderr}');
-        }
-        await stderr;
-      } on TimeoutException {
-        process.kill(ProcessSignal.sigkill);
-        await process.exitCode;
-        await stdout;
-        await stderr;
-        rethrow;
+        timeout: const Duration(seconds: 30),
+        stdoutEncoding: null,
+        stderrEncoding: utf8,
+      );
+      if (result.exitCode != 0) {
+        throw StateError('Host media fixture failed: ${result.stderr}');
       }
     }
     expected = await knownFile.readAsBytes();
@@ -255,9 +234,9 @@ class _AndroidDelivery {
         'Delivery fixture exceeds the independent receiver bound.',
       );
     }
-    final hash = await Process.run('sha256sum', [
+    final hash = await runProcess('sha256sum', [
       knownFile.path,
-    ]).timeout(const Duration(seconds: 10));
+    ], timeout: const Duration(seconds: 10));
     final value = RegExp(r'^([a-f0-9]{64})\s').firstMatch('${hash.stdout}');
     if (hash.exitCode != 0 || value == null) {
       throw StateError('Independent host SHA256 calculation failed.');

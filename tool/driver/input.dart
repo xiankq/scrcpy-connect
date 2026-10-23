@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 const fixturePackage = 'dev.scrcpyconnect.inputfixture';
 
 Future<void> main() async {
@@ -89,11 +91,11 @@ Future<void> driveInputRelease(
       'Installed Android build-tools are required to verify the test APK identity.',
     );
   }
-  final badging = await Process.run('${buildTools.last.path}/aapt2', [
+  final badging = await runProcess('${buildTools.last.path}/aapt2', [
     'dump',
     'badging',
     apk,
-  ]).timeout(const Duration(seconds: 15));
+  ], timeout: const Duration(seconds: 15));
   final packageName = RegExp(
     r"^package: name='([^']+)'",
     multiLine: true,
@@ -108,11 +110,12 @@ Future<void> driveInputRelease(
     List<String> args, {
     bool binary = false,
   }) async {
-    final result = await Process.run(
+    final result = await runProcess(
       adb,
       ['-s', device, ...args],
       stdoutEncoding: binary ? null : utf8,
-    ).timeout(const Duration(seconds: 20));
+      timeout: const Duration(seconds: 20),
+    );
     if (result.exitCode != 0) {
       throw StateError('Official adb ${args.first} failed: ${result.stderr}');
     }

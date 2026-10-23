@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 // This executable is a host-only experiment. ADB never enters product code.
 Future<void> main() async {
   String requiredEnvironment(String name) {
@@ -94,12 +96,13 @@ Future<Map<String, Object?>> driveShareTarget(
   String quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
   Future<ProcessResult> command(String serial, List<String> args) async {
-    final result = await Process.run(
+    final result = await runProcess(
       adb,
       ['-s', serial, ...args],
       stdoutEncoding: null,
       stderrEncoding: utf8,
-    ).timeout(const Duration(seconds: 25));
+      timeout: const Duration(seconds: 25),
+    );
     if (result.exitCode != 0) {
       throw StateError(
         'Independent ADB operation failed for $serial: ${result.stderr}',

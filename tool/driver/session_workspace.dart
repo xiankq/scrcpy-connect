@@ -5,6 +5,8 @@ import 'package:flutter_driver/flutter_driver.dart';
 
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 Future<void> main() async {
   final directory = Directory(
     Platform.environment['CONNECT_E2E_CAPTURE_DIR'] ??
@@ -24,12 +26,12 @@ Future<void> main() async {
     final active = args['activeSessionId'] as String?;
     final closed = (args['closedSessionIds'] as List).cast<String>();
     Future<String> shell(List<String> command) async {
-      final result = await Process.run(adb, [
+      final result = await runProcess(adb, [
         '-s',
         target,
         'shell',
         ...command,
-      ]).timeout(const Duration(seconds: 10));
+      ], timeout: const Duration(seconds: 10));
       if (result.exitCode != 0) {
         throw StateError(
           'Independent target inspection failed: ${result.stderr}',

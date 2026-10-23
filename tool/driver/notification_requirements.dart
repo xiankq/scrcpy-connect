@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 const fixturePackage = 'dev.scrcpyconnect.notificationfixture';
 const controllerPackage = 'dev.scrcpyconnect.scrcpy_connect';
 String quote(String text) => "'${text.replaceAll("'", "'\\''")}'";
@@ -47,7 +49,7 @@ Future<void> main() async {
   var reportWritten = false;
   Future<void>? coordination;
   Future<String> shell(String serial, List<String> args) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       serial,
       'shell',
@@ -67,7 +69,7 @@ Future<void> main() async {
   }
 
   Future<void> capture(String serial, String name) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       serial,
       'exec-out',
@@ -179,7 +181,7 @@ Future<void> main() async {
     // Uninstall is attempted even if an earlier cleanup step failed. Its owner
     // was established before installation, so existing packages are untouched.
     try {
-      final result = await Process.run(adb, [
+      final result = await runProcess(adb, [
         '-s',
         target,
         'uninstall',
@@ -217,7 +219,7 @@ Future<void> main() async {
     ])).trim().isNotEmpty) {
       throw StateError('Refuse replacing pre-existing fixture.');
     }
-    final install = await Process.run(adb, [
+    final install = await runProcess(adb, [
       '-s',
       target,
       'install',
@@ -331,7 +333,7 @@ Future<void> main() async {
                     ack = 'baseline';
                   case 'opened':
                     await wait(() async {
-                      final result = await Process.run(adb, [
+                      final result = await runProcess(adb, [
                         '-s',
                         target,
                         'shell',

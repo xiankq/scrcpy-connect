@@ -6,23 +6,12 @@ import 'dart:io';
 import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
 
+import '../src/process.dart';
+
+export '../src/core_tooling.dart' show repositoryRoot;
+
 typedef Json = Map<String, dynamic>;
 typedef Query = Future<List<Json>> Function(String sql);
-
-Directory repositoryRoot() {
-  var directory = File.fromUri(Platform.script).absolute.parent;
-  while (true) {
-    if (File(p.join(directory.path, 'pubspec.yaml')).existsSync() &&
-        File(p.join(directory.path, 'Cargo.toml')).existsSync()) {
-      return directory;
-    }
-    final parent = directory.parent;
-    if (parent.path == directory.path) {
-      throw StateError('Cannot find repository root from ${Platform.script}');
-    }
-    directory = parent;
-  }
-}
 
 ArgParser options(List<String> required, {List<String> flags = const []}) {
   final parser = ArgParser()..addFlag('help', abbr: 'h', negatable: false);
@@ -58,39 +47,26 @@ Future<ProcessResult> checked(
   Duration timeout = const Duration(seconds: 120),
   bool binary = false,
 }) async {
-  final process = await Process.start(
+  final result = await runProcess(
     executable,
     arguments,
-    runInShell:
-        Platform.isWindows &&
-        (executable.toLowerCase().endsWith('.bat') ||
-            executable.toLowerCase().endsWith('.cmd')),
+    timeout: timeout,
+    stdoutEncoding: binary ? null : utf8,
+    stderrEncoding: null,
   );
-  final out = process.stdout.fold<List<int>>([], (a, b) => a..addAll(b));
-  final err = process.stderr.fold<List<int>>([], (a, b) => a..addAll(b));
-  int status;
-  try {
-    status = await process.exitCode.timeout(timeout);
-  } on TimeoutException {
-    process.kill(ProcessSignal.sigkill);
-    await process.exitCode;
-    await Future.wait([out, err]);
-    rethrow;
-  }
-  final output = await out;
-  final errors = await err;
-  if (status != 0) {
+  final errors = result.stderr as List<int>;
+  if (result.exitCode != 0) {
     throw ProcessException(
       executable,
       arguments,
       utf8.decode(errors, allowMalformed: true),
-      status,
+      result.exitCode,
     );
   }
   return ProcessResult(
-    process.pid,
-    status,
-    binary ? output : utf8.decode(output),
+    result.pid,
+    result.exitCode,
+    result.stdout,
     binary ? errors : utf8.decode(errors),
   );
 }

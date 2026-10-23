@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 Future<void> main() async {
   final adb = Platform.environment['CONNECT_E2E_ADB'];
   final target = Platform.environment['CONNECT_E2E_TARGET'];
@@ -30,13 +32,12 @@ Future<void> main() async {
   final captures = <Map<String, Object?>>[];
   Future<void> capture(String device, String label) async {
     final started = DateTime.now().toUtc();
-    final captured = await Process.run(adb, [
-      '-s',
-      device,
-      'exec-out',
-      'screencap',
-      '-p',
-    ], stdoutEncoding: null).timeout(const Duration(seconds: 15));
+    final captured = await runProcess(
+      adb,
+      ['-s', device, 'exec-out', 'screencap', '-p'],
+      stdoutEncoding: null,
+      timeout: const Duration(seconds: 15),
+    );
     final bytes = captured.stdout as List<int>;
     if (captured.exitCode != 0 ||
         bytes.length < 8 ||
@@ -52,12 +53,12 @@ Future<void> main() async {
   }
 
   Future<String> shell(List<String> command) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       target,
       'shell',
       ...command,
-    ]).timeout(const Duration(seconds: 15));
+    ], timeout: const Duration(seconds: 15));
     if (result.exitCode != 0) {
       throw StateError(
         'Independent Android inspection failed for ${command.first}: ${result.stderr}',
@@ -90,13 +91,13 @@ Future<void> main() async {
       String? xml;
       for (var attempt = 1; attempt <= 3; attempt++) {
         final dump = await shell(['uiautomator', 'dump', remoteDump]);
-        final read = await Process.run(adb, [
+        final read = await runProcess(adb, [
           '-s',
           target,
           'shell',
           'cat',
           remoteDump,
-        ]).timeout(const Duration(seconds: 15));
+        ], timeout: const Duration(seconds: 15));
         await File('${directory.path}/$stage-dump-$attempt.txt').writeAsString(
           'uiautomator:\n$dump\nread exit=${read.exitCode}\n${read.stderr}',
         );

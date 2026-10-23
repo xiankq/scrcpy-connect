@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_driver/flutter_driver.dart';
 
+import '../src/process.dart';
+
 Future<void> driveAudioLifecycle(
   FlutterDriver driver, {
   bool Function()? shouldStop,
@@ -16,11 +18,11 @@ Future<void> driveAudioLifecycle(
     );
   }
   Future<String> run(List<String> args) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       serial,
       ...args,
-    ]).timeout(const Duration(seconds: 20));
+    ], timeout: const Duration(seconds: 20));
     if (result.exitCode != 0) {
       throw StateError('Actual Android command failed: ${result.stderr}');
     }

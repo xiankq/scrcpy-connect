@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'dart:math';
 
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
+
+import '../src/process.dart';
 
 String _quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
@@ -33,24 +36,17 @@ class _PairingFixture {
   String get xmlPath => '/data/local/tmp/connect-pair-$runId.xml';
 
   Future<String> _run(List<String> args) async {
-    final process = await Process.start(adb, ['-s', target, ...args]);
-    final stdout = process.stdout.transform(utf8.decoder).join();
-    final stderr = process.stderr.drain<void>();
-    try {
-      final exit = await process.exitCode.timeout(const Duration(seconds: 25));
-      await stderr;
-      final text = await stdout;
-      if (exit != 0) {
-        throw StateError('Android fixture command failed ($exit).');
-      }
-      return text;
-    } catch (_) {
-      process.kill(ProcessSignal.sigkill);
-      await process.exitCode;
-      await stderr;
-      await stdout;
-      rethrow;
+    final result = await runProcess(
+      adb,
+      ['-s', target, ...args],
+      timeout: const Duration(seconds: 25),
+      stdoutEncoding: utf8,
+      stderrEncoding: null,
+    );
+    if (result.exitCode != 0) {
+      throw StateError('Android fixture command failed (${result.exitCode}).');
     }
+    return result.stdout as String;
   }
 
   Future<String> shell(List<String> args) =>
@@ -334,32 +330,16 @@ class _PairingFixture {
   }
 
   Future<void> capture(String label) async {
-    final process = await Process.start(adb, [
-      '-s',
-      controller,
-      'exec-out',
-      'screencap',
-      '-p',
-    ]);
-    final bytes = process.stdout.fold<List<int>>(
-      [],
-      (all, chunk) => all..addAll(chunk),
+    final result = await runProcess(
+      adb,
+      ['-s', controller, 'exec-out', 'screencap', '-p'],
+      timeout: const Duration(seconds: 25),
+      stdoutEncoding: null,
+      stderrEncoding: null,
     );
-    final errors = process.stderr.drain<void>();
-    try {
-      if (await process.exitCode.timeout(const Duration(seconds: 25)) != 0) {
-        throw StateError('Controller screenshot failed.');
-      }
-      await errors;
-      await File('${output.path}/$label.png')
-          .writeAsBytes(await bytes, flush: true);
-    } catch (_) {
-      process.kill(ProcessSignal.sigkill);
-      await process.exitCode;
-      await errors;
-      await bytes;
-      rethrow;
-    }
+    if (result.exitCode != 0) throw StateError('Controller screenshot failed.');
+    await File('${output.path}/$label.png')
+        .writeAsBytes(result.stdout as List<int>, flush: true);
   }
 }
 

@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_driver/flutter_driver.dart';
 
+import '../src/process.dart';
+
 /// Uses the actual system picker. The operator selects the paths printed here;
 /// the driver independently reads the resulting public files through official adb.
 Future<void> driveDocuments(FlutterDriver driver, Directory captures) async {
@@ -20,11 +22,12 @@ Future<void> driveDocuments(FlutterDriver driver, Directory captures) async {
       Platform.environment['CONNECT_E2E_ADB'] ??
       (sdk == null ? 'adb' : '$sdk/platform-tools/adb');
   Future<ProcessResult> run(List<String> args, {bool binary = false}) async {
-    final result = await Process.run(
+    final result = await runProcess(
       adb,
       ['-s', serial, ...args],
       stdoutEncoding: binary ? null : systemEncoding,
-    ).timeout(const Duration(seconds: 20));
+      timeout: const Duration(seconds: 20),
+    );
     if (result.exitCode != 0) {
       throw StateError('Official adb ${args.first} failed: ${result.stderr}');
     }

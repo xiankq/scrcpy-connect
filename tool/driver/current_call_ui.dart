@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 // Host-only fixture: the Android virtual modem supplies one isolated incoming
 // call. Only the production CallsPage may request opening the actual call UI.
 Future<void> main() async {
@@ -36,11 +38,11 @@ Future<void> main() async {
   final screenshots = <String>[];
   Object? inspectionError;
   Future<String> adbTarget(List<String> command) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       target,
       ...command,
-    ]).timeout(const Duration(seconds: 15));
+    ], timeout: const Duration(seconds: 15));
     final output = result.stdout as String;
     if (result.exitCode != 0 || output.contains('KO:')) {
       throw StateError(
@@ -165,13 +167,12 @@ Future<void> main() async {
 
   Future<void> capture(String stage) async {
     for (final device in {'controller': controller, 'target': target}.entries) {
-      final result = await Process.run(adb, [
-        '-s',
-        device.value,
-        'exec-out',
-        'screencap',
-        '-p',
-      ], stdoutEncoding: null).timeout(const Duration(seconds: 15));
+      final result = await runProcess(
+        adb,
+        ['-s', device.value, 'exec-out', 'screencap', '-p'],
+        stdoutEncoding: null,
+        timeout: const Duration(seconds: 15),
+      );
       final bytes = result.stdout as List<int>;
       if (result.exitCode != 0 ||
           bytes.length < 8 ||

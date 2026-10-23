@@ -6,6 +6,7 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 import 'package:path/path.dart' as p;
 
 import 'video_clock_bounds.dart';
+import '../src/process.dart';
 
 Future<void> main() async {
   const package = 'dev.scrcpyconnect.videofixture';
@@ -42,11 +43,11 @@ Future<void> main() async {
   }
   await output.create(recursive: true);
   Future<String> command(List<String> args) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       target,
       ...args,
-    ]).timeout(const Duration(seconds: 30));
+    ], timeout: const Duration(seconds: 30));
     if (result.exitCode != 0) {
       throw StateError('Target ${args.first} failed: ${result.stderr}');
     }
@@ -54,14 +55,14 @@ Future<void> main() async {
   }
 
   Future<bool> fixtureExists() async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       target,
       'shell',
       'pm',
       'path',
       package,
-    ]).timeout(const Duration(seconds: 10));
+    ], timeout: const Duration(seconds: 10));
     if (result.exitCode != 0 &&
         (result.exitCode != 1 || '${result.stderr}'.trim().isNotEmpty)) {
       throw StateError('Cannot inspect fixture ownership: ${result.stderr}');
@@ -76,13 +77,12 @@ Future<void> main() async {
   }
   var installed = false;
   Future<void> capture(String serial, String name) async {
-    final result = await Process.run(adb, [
-      '-s',
-      serial,
-      'exec-out',
-      'screencap',
-      '-p',
-    ], stdoutEncoding: null).timeout(const Duration(seconds: 15));
+    final result = await runProcess(
+      adb,
+      ['-s', serial, 'exec-out', 'screencap', '-p'],
+      stdoutEncoding: null,
+      timeout: const Duration(seconds: 15),
+    );
     if (result.exitCode != 0) throw StateError('Cannot capture $name.');
     await File('${output.path}/$name.png')
         .writeAsBytes(result.stdout as List<int>);

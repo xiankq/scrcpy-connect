@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 Future<void> main() async {
   final outputPath = Platform.environment['CONNECT_E2E_CAPTURE_DIR']!;
   final adb = Platform.environment['CONNECT_E2E_ADB']!;
@@ -40,7 +42,7 @@ Future<void> main() async {
       RegExp(r'^[a-zA-Z0-9_./-]+$').hasMatch(path) &&
       (path.contains('/media/') || path.contains('/cache/outgoing/'));
   Future<void> bytesEqual(List<String> args, List<int> expected) async {
-    final result = await Process.run(adb, args, stdoutEncoding: null);
+    final result = await runProcess(adb, args, stdoutEncoding: null);
     final actual = result.stdout as List<int>;
     if (result.exitCode != 0 ||
         actual.length != expected.length ||
@@ -126,7 +128,7 @@ Future<void> main() async {
                 ], expected);
               }
               for (final path in absent) {
-                final result = await Process.run(adb, [
+                final result = await runProcess(adb, [
                   '-s',
                   controller,
                   'shell',
@@ -168,7 +170,7 @@ Future<void> main() async {
       var removed = false;
       if (remote != null) {
         removed =
-            (await Process.run(adb, [
+            (await runProcess(adb, [
               '-s',
               target,
               'shell',

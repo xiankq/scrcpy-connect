@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 Future<void> main() async {
   final serial = Platform.environment['CONNECT_E2E_DEVICE'];
   if (serial == null) {
@@ -52,11 +54,11 @@ Future<void> driveShares(
   final sent = <String>{};
   var launcherReturned = false;
   Future<ProcessResult> runAdb(List<String> args) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       serial,
       ...args,
-    ]).timeout(const Duration(seconds: 20));
+    ], timeout: const Duration(seconds: 20));
     if (result.exitCode != 0) {
       throw StateError('External sharing host failed: ${result.stderr}');
     }
@@ -112,7 +114,7 @@ Future<void> driveShares(
       }
       final mode = state['mode'];
       if (state['stage'] == 'send' && mode is String && sent.add(mode)) {
-        final result = await Process.run(adb, [
+        final result = await runProcess(adb, [
           '-s',
           serial,
           'shell',
@@ -127,7 +129,7 @@ Future<void> driveShares(
           '--es',
           'mode',
           mode,
-        ]).timeout(const Duration(seconds: 20));
+        ], timeout: const Duration(seconds: 20));
         if (result.exitCode != 0) {
           throw StateError('External fixture failed: ${result.stderr}');
         }

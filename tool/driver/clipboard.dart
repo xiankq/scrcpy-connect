@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_driver/flutter_driver.dart';
 
+import '../src/process.dart';
+
 Future<void> driveClipboard(FlutterDriver driver) async {
   final client = Platform.environment['CONNECT_E2E_CLIPBOARD_CLIENT'];
   final serial =
@@ -26,11 +28,11 @@ Future<void> driveClipboard(FlutterDriver driver) async {
       Platform.environment['CONNECT_E2E_ADB'] ??
       (sdk == null ? 'adb' : '$sdk/platform-tools/adb');
   Future<void> adbCommand(String device, List<String> args) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       device,
       ...args,
-    ]).timeout(const Duration(seconds: 20));
+    ], timeout: const Duration(seconds: 20));
     if (result.exitCode != 0) {
       throw StateError('Official adb ${args.first} failed: ${result.stderr}');
     }
@@ -41,11 +43,12 @@ Future<void> driveClipboard(FlutterDriver driver) async {
     String command, [
     String? text,
   ]) async {
-    final result = await Process.run(
+    final result = await runProcess(
       client,
       [endpoint, command, ?text],
       environment: {'INTEROP_CLIPBOARD_FIXTURE': '1'},
-    ).timeout(const Duration(seconds: 35));
+      timeout: const Duration(seconds: 35),
+    );
     if (result.exitCode != 0) {
       throw StateError(
         'Independent actual clipboard client failed: ${result.stderr}',

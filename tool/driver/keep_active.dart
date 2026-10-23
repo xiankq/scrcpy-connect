@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 /// Independent Android process/power evidence for keep_active_test.dart.
 /// No product ready receipt, session or setting is injected by this driver.
 Future<void> main() async {
@@ -27,12 +29,12 @@ Future<void> main() async {
   }
   final directory = await Directory(path).create(recursive: true);
   Future<String> shell(String command) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       target,
       'shell',
       command,
-    ]).timeout(const Duration(seconds: 20));
+    ], timeout: const Duration(seconds: 20));
     if (result.exitCode != 0) throw StateError('$command: ${result.stderr}');
     return result.stdout as String;
   }
@@ -81,13 +83,12 @@ Future<void> main() async {
   final ownedSettingsTasks = <int>{};
   var sleepingFixture = false;
   Future<void> capture(String name) async {
-    final result = await Process.run(adb, [
-      '-s',
-      controller,
-      'exec-out',
-      'screencap',
-      '-p',
-    ], stdoutEncoding: null).timeout(const Duration(seconds: 20));
+    final result = await runProcess(
+      adb,
+      ['-s', controller, 'exec-out', 'screencap', '-p'],
+      stdoutEncoding: null,
+      timeout: const Duration(seconds: 20),
+    );
     final bytes = result.stdout as List<int>;
     if (result.exitCode != 0 ||
         bytes.take(8).join(',') != '137,80,78,71,13,10,26,10') {

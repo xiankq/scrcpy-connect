@@ -6,6 +6,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import 'support/adb_fault_proxy.dart';
+import '../src/process.dart';
 
 Future<void> main() async {
   const package = 'dev.scrcpyconnect.videofixture';
@@ -60,11 +61,11 @@ Future<void> main() async {
     await File('${output.path}/$name.json').writeAsString(jsonEncode(value));
   }
 
-  Future<ProcessResult> runAdb(List<String> args) => Process.run(adb, [
+  Future<ProcessResult> runAdb(List<String> args) => runProcess(adb, [
     '-s',
     target,
     ...args,
-  ]).timeout(const Duration(seconds: 30));
+  ], timeout: const Duration(seconds: 30));
 
   Future<String> command(List<String> args) async {
     final result = await runAdb(args);

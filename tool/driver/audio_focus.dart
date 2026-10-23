@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 const fixturePackage = 'dev.scrcpyconnect.focusfixture';
 
 Future<void> main() async {
@@ -71,7 +73,7 @@ Future<void> driveFocus(
       .where((p) => p is Directory)
       .toList();
   buildTools.sort((a, b) => a.path.compareTo(b.path));
-  final badging = await Process.run('${buildTools.last.path}/aapt2', [
+  final badging = await runProcess('${buildTools.last.path}/aapt2', [
     'dump',
     'badging',
     apk,
@@ -86,11 +88,11 @@ Future<void> driveFocus(
     );
   }
   Future<String> run(List<String> args) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       serial!,
       ...args,
-    ]).timeout(const Duration(seconds: 25));
+    ], timeout: const Duration(seconds: 25));
     if (result.exitCode != 0) {
       throw StateError('Official Android tool failed: ${result.stderr}');
     }

@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'dart:math';
 
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
+
+import '../src/process.dart';
 
 String _quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
@@ -28,22 +31,17 @@ class _UsbPermissionUi {
   String get xmlPath => '/data/local/tmp/connect-usb-$runId.xml';
 
   Future<String> _run(List<String> args) async {
-    final process = await Process.start(adb, ['-s', controller, ...args]);
-    final output = process.stdout.transform(utf8.decoder).join();
-    final errors = process.stderr.drain<void>();
-    try {
-      final exit = await process.exitCode.timeout(const Duration(seconds: 15));
-      await errors;
-      final text = await output;
-      if (exit != 0) throw StateError('USB UI command failed ($exit).');
-      return text;
-    } catch (_) {
-      process.kill(ProcessSignal.sigkill);
-      await process.exitCode;
-      await errors;
-      await output;
-      rethrow;
+    final result = await runProcess(
+      adb,
+      ['-s', controller, ...args],
+      timeout: const Duration(seconds: 15),
+      stdoutEncoding: utf8,
+      stderrEncoding: null,
+    );
+    if (result.exitCode != 0) {
+      throw StateError('USB UI command failed (${result.exitCode}).');
     }
+    return result.stdout as String;
   }
 
   Future<String> shell(List<String> args) =>

@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 Future<void> main() async {
   final path =
       Platform.environment['CONNECT_E2E_CAPTURE_DIR'] ??
@@ -79,7 +81,7 @@ Future<void> main() async {
                   'Independent gallery original verification failed.',
                 );
               }
-              final sizes = await Process.run(adb, [
+              final sizes = await runProcess(adb, [
                 '-s',
                 target,
                 'shell',
@@ -94,7 +96,7 @@ Future<void> main() async {
                   values.every(
                     (value) => int.tryParse(value) == expected.length,
                   );
-              final source = await Process.run(adb, [
+              final source = await runProcess(adb, [
                 '-s',
                 target,
                 'exec-out',
@@ -157,7 +159,7 @@ Future<void> main() async {
           );
       var absent = false;
       if (safe) {
-        final result = await Process.run(adb, [
+        final result = await runProcess(adb, [
           '-s',
           target,
           'shell',

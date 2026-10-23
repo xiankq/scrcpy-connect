@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -9,6 +10,7 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import '../support.dart';
+import '../../src/process.dart';
 
 class ExactReader {
   ExactReader(Socket socket) : _iterator = StreamIterator(socket);
@@ -89,30 +91,13 @@ Future<int> capture(List<String> arguments) async {
     'complete': false,
     'cleanupErrors': <String, dynamic>{},
   };
-  Future<ProcessResult> adbResult(List<String> command) async {
-    final child = await Process.start(args['adb'] as String, [
-      '-s',
-      args['target'] as String,
-      ...command,
-    ]);
-    final out = child.stdout.fold<List<int>>([], (a, b) => a..addAll(b));
-    final err = child.stderr.fold<List<int>>([], (a, b) => a..addAll(b));
-    int status;
-    try {
-      status = await child.exitCode.timeout(const Duration(seconds: 20));
-    } on TimeoutException {
-      child.kill(ProcessSignal.sigkill);
-      await child.exitCode;
-      await Future.wait([out, err]);
-      rethrow;
-    }
-    return ProcessResult(
-      child.pid,
-      status,
-      utf8.decode(await out),
-      utf8.decode(await err),
-    );
-  }
+  Future<ProcessResult> adbResult(List<String> command) => runProcess(
+    args['adb'] as String,
+    ['-s', args['target'] as String, ...command],
+    timeout: const Duration(seconds: 20),
+    stdoutEncoding: utf8,
+    stderrEncoding: utf8,
+  );
 
   Future<String> adb(List<String> command, {bool check = true}) async {
     final completed = await adbResult(command);

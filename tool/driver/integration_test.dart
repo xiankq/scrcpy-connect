@@ -7,6 +7,7 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 import 'documents.dart';
 import 'clipboard.dart';
 import 'audio.dart';
+import '../src/process.dart';
 
 Future<void> main() async {
   final directory = Directory(
@@ -125,11 +126,11 @@ Future<void> triggerBackground(FlutterDriver driver) async {
       Platform.environment['CONNECT_E2E_ADB'] ??
       (sdk == null ? 'adb' : '$sdk/platform-tools/adb');
   Future<void> runAdb(List<String> args) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       serial,
       ...args,
-    ]).timeout(const Duration(seconds: 20));
+    ], timeout: const Duration(seconds: 20));
     if (result.exitCode != 0) {
       throw StateError('adb ${args.first} failed: ${result.stderr}');
     }

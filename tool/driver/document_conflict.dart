@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'dart:math';
 
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
+
+import '../src/process.dart';
 
 String _quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 String _decodeXml(String value) => value
@@ -65,31 +68,19 @@ class _Fixture {
     bool binary = false,
     bool check = true,
   }) async {
-    final process = await Process.start(adb, ['-s', serial, ...args]);
-    final bytes = process.stdout.fold<List<int>>(
-      [],
-      (all, part) => all..addAll(part),
+    final result = await runProcess(
+      adb,
+      ['-s', serial, ...args],
+      timeout: const Duration(seconds: 25),
+      stdoutEncoding: binary ? null : utf8,
+      stderrEncoding: utf8,
     );
-    final errors = process.stderr.transform(utf8.decoder).join();
-    try {
-      final code = await process.exitCode.timeout(const Duration(seconds: 25));
-      final result = ProcessResult(
-        process.pid,
-        code,
-        binary ? await bytes : utf8.decode(await bytes),
-        await errors,
+    if (check && result.exitCode != 0) {
+      throw StateError(
+        'Android fixture ${args.first} failed (${result.exitCode}).',
       );
-      if (check && code != 0) {
-        throw StateError('Android fixture ${args.first} failed ($code).');
-      }
-      return result;
-    } catch (_) {
-      process.kill(ProcessSignal.sigkill);
-      await process.exitCode;
-      await bytes;
-      await errors;
-      rethrow;
     }
+    return result;
   }
 
   Future<String> shell(String serial, List<String> args) async =>

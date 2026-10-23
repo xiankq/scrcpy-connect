@@ -17,6 +17,8 @@ dart servers/companion/tests/compatibility.dart
 dart servers/tests/tooling_test.dart
 dart servers/tests/package_test.dart
 flutter test --no-pub tool/test tool/e2e/tests
+dart tool/driver/support/android_screencap_test.dart
+dart tool/driver/support/adb_fault_proxy_tcp_test.dart
 npm test --prefix tool/design_tokens
 dart format --output=none --set-exit-if-changed app/lib app/test app/integration_test tool servers packages
 cargo fmt --all --check

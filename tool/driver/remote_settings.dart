@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
+import '../src/process.dart';
+
 /// Independent Android observations for remote_settings_test.dart. The driver
 /// never injects a product session.start, session.display or devices.wake call.
 Future<void> main() async {
@@ -27,12 +29,12 @@ Future<void> main() async {
   }
   final directory = await Directory(path).create(recursive: true);
   Future<String> shell(String serial, String command) async {
-    final result = await Process.run(adb, [
+    final result = await runProcess(adb, [
       '-s',
       serial,
       'shell',
       command,
-    ]).timeout(const Duration(seconds: 20));
+    ], timeout: const Duration(seconds: 20));
     if (result.exitCode != 0) {
       throw StateError('$serial $command: ${result.stderr}');
     }
@@ -46,13 +48,12 @@ Future<void> main() async {
     }
     final started = DateTime.now().toUtc();
     final source = serial ?? controller;
-    final screenshot = await Process.run(adb, [
-      '-s',
-      source,
-      'exec-out',
-      'screencap',
-      '-p',
-    ], stdoutEncoding: null).timeout(const Duration(seconds: 20));
+    final screenshot = await runProcess(
+      adb,
+      ['-s', source, 'exec-out', 'screencap', '-p'],
+      stdoutEncoding: null,
+      timeout: const Duration(seconds: 20),
+    );
     final bytes = screenshot.stdout as List<int>;
     if (screenshot.exitCode != 0 ||
         bytes.length < 8 ||

@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'dart:math';
 
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
+
+import '../src/process.dart';
 
 const _controllerPackage = 'dev.scrcpyconnect.scrcpy_connect';
 const _channel = 'remote_notifications';
@@ -100,11 +103,12 @@ class _AndroidNotifications {
     String serial,
     List<String> args, {
     bool binary = false,
-  }) => Process.run(adb, [
-    '-s',
-    serial,
-    ...args,
-  ], stdoutEncoding: binary ? null : utf8).timeout(const Duration(seconds: 30));
+  }) => runProcess(
+    adb,
+    ['-s', serial, ...args],
+    stdoutEncoding: binary ? null : utf8,
+    timeout: const Duration(seconds: 30),
+  );
 
   Future<String> _shell(String serial, List<String> tokens) async {
     // adb joins shell arguments. Quote every token for the *remote* shell,
