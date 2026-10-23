@@ -1,34 +1,9 @@
 # 共享存储相册检查与快照分页
 
-`media.list`检查当前用户的主共享存储，包含根部媒体、Download、自定义目录和Android/media。它按扩展名识别照片与视频，不冒充Android系统媒体库、其他用户或其他存储卷；Android/data、Android/obb、子符号链接和特殊文件在公开scope中列明排除。modified是文件修改秒数，不是拍摄时间。
+产品范围归[内容规格](../../designs/prod/content-and-transfer.md)。Dart RemoteFiles经typed执行器扫描/sdcard，以扩展名识别图片/视频，modified为文件修改时间；不是MediaStore或其他用户/卷。共享预算归[能力包](../../packages/device_files/README.md)，图库另限4096目录、25000媒体项、8MiB结果。
 
-## 公开契约与生命周期
+DeviceRuntime分派media.list/media.scan.cancel。首次建立scanId，扫描时返回进度，完成后按modified降序/path升序冻结分页；刷新生成新快照，错设备/过期ID拒绝。离页/断开/关闭只取消所属扫描。排除Android/data、Android/obb及子符号链接；权限、非法名称、截断或预算耗尽保留部分结果，原件取用仍重验。目录兼容见[旧协议](android-target-compatibility.md#旧协议与文件服务)。
 
-- `media.list({deviceId,limit?})`创建一次异步只读检查；立即返回scanId、scanning状态、进度和空items。终态前不呈现尚未冻结的媒体集合。
-- `media.list({deviceId,scanId,offset?,limit?})`只读同一快照；deviceId必须一致，过期身份明确拒绝。limit为1–200，默认100。终态按modified降序、path升序冻结，返回total、nextOffset及所请求页；刷新创建独立快照，旧页不随手机变化而偷偷重排。
-- `media.scan.cancel({deviceId,scanId})`只取消该检查，保留已读内容并冻结为cancelled；不停止连接、传输、远控或其他检查。断开和Runtime销毁也取消所属worker，worker不持Runtime。
-- completed只表示公开范围内没有发现扫描问题。partial保留可访问内容及issues／issueCount／truncated，不等同整台手机或所有格式完整。目录前后元数据和实际遍历权限按尽力原则核对；这不是文件系统事务隔离，打开与保存原件继续重验。
+缩略图共享队列每controller/device最多128等待、同设备一次实际请求；离屏取消精确operationId，旧请求结束才释放队列，仅busy有限重试。
 
-逐目录优先SYNC，并先核验read/execute以区分拒权与空DONE；需要回退时使用 `remote_fs` 的同一临时原生元数据服务，保留限额内媒体，失败项也计入检查预算。无效UTF8不生成替换字符的可操作路径，子链接不跟随；旧shell目录回退不再是当前实现。
-
-检查有30秒deadline、50000项、4096目录、32层、25000媒体、每目录4096项、128条问题展示及每快照8MiB保留容量预算；问题另计总数。typed记录计入容器容量和全部拥有的字符串，保留固定预算用于明确返回snapshot_byte_limit。最多2个活动检查、8个终态快照，终态淘汰后旧ID明确过期。该预算只属于相册索引内存，不能作为A51媒体原件／缩略图磁盘预算已实现的证据。
-
-Flutter每页拥有一个固定设备的检查，展示检查／停止、已显示与总数、范围／未读目录、有限空态和加载更多。离页和刷新取消精确旧检查；即使首次回执迟到也退回其scanId。请求代际与读序号排除迟到页，换设备重置所选项；读取或归属错误不混入其他设备内容。下拉或刷新按钮开始新检查，加载更多只读旧快照。
-
-## 缩略图调度
-
-每个controller/device共享provider持有的队列，最多128项等待，同设备仅一条实际请求。尝试各有新UUID；离屏移除排队项或取消精确operationId，lane要等原请求实际结束才释放，快速重进不与旧请求重叠。仅busy有最多3次退避，其他错误保留原因与主动重试；换设备/来源不保留旧图，本地图片不走远端队列。
-
-## 已执行证据
-
-主机Runtime/公开页面回归覆盖稳定分页、刷新隔离、目录及字节预算、取消/错设备、非法名称、链接、权限错误与partial空态。旧实现曾在4097项目录丢掉应保留的4096前缀、漏算失败项或耗尽问题预算panic；修复后保留有界前缀和真实未完成原因。这些夹具不冒充实际Android。
-
-2026-10-18 API36双AVD实际上传105个PNG，覆盖共享根/Download/自定义目录/Android/media；真实相册加载更多、范围面板、旧快照105与刷新后106隔离均通过。host独立核对样本原文、全部文件大小与精确清理；未用root扩大范围。
-
-早期只要求一张缩略图的通过样本暴露多图busy/取消问题，不能算网格可用。共享调度修复后的加强样本要求首屏15张、滚动后21张可见缩略图实际解码，并保留原件/分页/清理断言；真实流程通过、截图已目视。
-
-## 复现入口与限制
-
-主机运行 `cargo test -p interop-core --test gallery_index`。在 `app/` 用 `../tool/driver/gallery_index.dart` 与 `integration_test/gallery_index_test.dart` 执行drive，提供实际主控/目标、连接地址端口和新临时输出目录，通用准备见[验证入口](validation.md#复现入口)。
-
-该样本是API36旧TCP，非首次授权/OEM证据。真实目录拒权、切网/重连/进程回收、大原件/损坏格式/低内存、长时滚动及其他存储卷仍分别验收。刷新快照不是持续增量索引，单个网格也不证明全部格式或设计状态。
+当前取消/分页/部分结果及组装证据见[能力验收](../../packages/device_files/VALIDATION.md)。app/integration_test/gallery_index_test.dart配tool/driver/gallery_index.dart为页面入口。2026-10-18双API36 AVD曾核对105张PNG、冻结/刷新及实际滚动解码，早于所有者迁移；拒权、切网、进程回收、坏格式、大原件及长滚动未由该样本关闭。

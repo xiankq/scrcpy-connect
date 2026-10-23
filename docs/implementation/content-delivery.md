@@ -1,103 +1,38 @@
 # 原文件取回、系统保存与分享
 
-单项文件／相册取用由固定的传输任务持有来源，不依赖当前焦点设备。`ReceiveContentRoute` 从权威任务记录核验 ID；页面继续核验设备、方向和私有暂存范围。准备时展示进度、冲突、失败和精确取消；只有后端确认完整原件可导出后，才出现系统保存或分享操作。
+产品入口与失败恢复见[文件与内容规格](../../designs/prod/content-and-transfer.md)。本页维护交付账本、系统提供方和原子发布约束。来源固定于传输任务；ReceiveContentRoute从权威记录核对任务、设备、方向和私有路径，全局焦点不改变来源。
 
-## 三个不同的完成点
+## 完成点与持久账本
 
-| 阶段 | 完成依据 | 不代表 |
-| --- | --- | --- |
-| 取回本机暂存 | ADB 取回完整、源未变化、原子发布成功，任务 `canExport` | 已保存到用户选择的系统位置 |
-| 系统保存 | 共享复制／同步、提供方错误检查与关闭、目标元数据核验 | 云端远程副本已经提交或同步 |
-| 系统分享 | 交给系统选择的接收应用；关闭和未知结果单独呈现 | 接收应用已发送给他人或保存完成 |
+| 阶段 | 确认依据 |
+| --- | --- |
+| 取回暂存 | 原件完整、源未变化、原子发布后任务canExport |
+| 系统保存 | 复制/同步、提供方检查与关闭、目标元数据核验；不承诺云端已同步 |
+| 系统分享 | 交给所选应用；关闭/未知单独呈现，不承诺接收方已发送或保存 |
 
-`DocumentExportForm` 为准备页与传输详情复用同一保存交互；`FileDeliveryPath` 同时在准备页、保存页和分享页显示同一组“手机原件→本机暂存→系统副本／接收应用”里程碑，来源标签传给保存页。Pencil 母组件 `huhmB` 由 `ERONu` 与全部保存／分享状态帧共用，异常态第三阶段使用危险色。取消系统选择器保留原件暂存；取消写入可能留下部分目标，不能显示成保存成功。请求异常导致回执缺失时，页面保留结果未知状态，要求用户核对系统文件后再重试。离页只取消本次系统文档操作，不自动重放，也不删除被控原件。
+Rust按 `(sourceId, localPath, kind)` 记录；选择器和写入前先可靠保存pending，完整回执落盘后才成功。重启将pending转unknown，不重放；不持久化URI/FD/授权。上限1024份原件、16384次操作、4MiB，满额拒绝，不淘汰旧结果。
 
-Rust以来源任务、私有原件路径和类型的精确三元组持有记录，系统选择器出现前先可靠记录pending，再允许共享协调器实际写入；完整回执落盘后才返回完成。进程重建将pending转为结果未知，不重放写入。记录上限1024份原件／16384次操作／4MiB；容量不足安全拒绝，不挤掉旧的已保存或未知记录。只保留有界结果，不持久化provider URI、FD或授权句柄。
-
-页面重进先只读核验，失败时禁止保存；未知结果必须核对当前操作，已保存结果通过另一个明确确认入口保存额外副本。admission被拒绝后重新读取真实旧记录，不把新但未获准的操作当成核对对象。完整回执过大时只尝试写最小unknown元数据，不再次写provider；存储仍失败则保持pending，不能伪报成功。迟到回执不能覆盖另一操作或更改既有终态。离页只取消本次仍在执行的精确操作；另一页面仅查阅pending，不因自身销毁而取消它。
-
-公开Runtime账本、Bridge和页面回归覆盖重开、容量、并发、持久化失败、旧操作与回执。真实Android系统写入中杀进程／unknown重进、云provider和授权故障矩阵仍未验，不能以Runtime重开测试替代。本节只记录该阶段账本与交付链的验证，整体产品仍按各领域验收边界判断。
+重进只读核验；已保存的额外副本需明确确认，unknown先核对当前操作。迟到回执不能覆盖别的操作或既有终态；离页只取消自己仍在执行的操作，查阅pending的页面不取得取消权。拒绝admission后重读真实记录。完整回执过大只尝试最小unknown，不重写provider；仍持久化失败则保留pending。取消选择器保留来源，取消写入可能留下部分系统目标。
 
 ## 共享与系统适配边界
 
-Flutter 承担主要页面与任务归属；共享 Dart 协调树规划、数量／容量限制和操作生命周期；Rust 持有借用 FD 的副本并复制、核验和同步。Android 管理系统选择器、URI／授权和原始 PFD；系统保存同名冲突决策与界面已迁到共享协调器／Flutter，保留提供方不可原子替换时的安全限制。原生USB多设备选择仍待迁移，没有重新引入原生视频循环。
+Dart DocumentsCoordinator负责树规划、容量、冲突和生命周期；Rust复制借用FD副本、核验与同步；Android只管选择器、URI/授权及原始PFD。成功完成lease必须 `checkError→close→checkError`，任一步失败仍释放并保留首错；失败/取消使用closeWithError，无实际lease不得确认成功。依据见[提供方研究](../research/provider-output-streams.md)。
 
-完成提供方描述符时，共享层显式传递 `success`／`abort`。成功路径执行 `checkError → close → checkError`，各步失败也继续释放并保留首错；失败／取消发送 `closeWithError`。没有实际 lease 的回执不能确认成功。复制本身失败时，关闭失败不能覆盖原错误。上述 API 不提供远端持久提交 ACK；契约与固定 AOSP 来源见[提供方研究](../research/provider-output-streams.md)。
+仅接受rw、可核验空普通文件、可定位和同步的provider。URI不代表排他新建，不能回退到可能截断旧内容的w。管道、非空目标、权限失效或异常明确失败并保留来源。
 
-兼容范围仍为支持 `rw` 且提供可核验空普通文件、定位和同步能力的提供方。不能把系统选择器返回的 URI 当作排他新建凭证，也不能自动切换到可能截断已有内容的 `w`。非空目标、只支持管道写入、授权失效和提供方异常均须保留来源并明确结果。管道／云提供方的完整矩阵尚未验收。
+冲突绑定operationId/conflictId，支持保留两份、跳过、取消与本次后续策略；过期决定拒绝，等待受操作期限/取消约束。不具安全替换能力时禁替换；全跳过显示本次未保存内容。私有来源保护归[媒体缓存](media-cache.md)。
 
 ## Android 私有文件的发布
 
-真实普通应用受到 SELinux 限制，私有缓存的硬链接同样可能返回 `EACCES`。Linux／Android 的文件取回与文档暂存发布共用 `renameat2(RENAME_NOREPLACE)`：已有目标原子拒绝，保持原目标及未提交 part；成功后核对身份并同步目录。发布后的身份或同步无法确认时返回 `result_unknown`，不能自动再次提交或删除结果。
+Linux/Android使用 `renameat2(RENAME_NOREPLACE)` 原子发布：目标存在则保全旧目标和part，成功后核对身份并同步目录；无法确认则result_unknown，不重试提交、不删除结果。使用libc架构SYS_renameat2，不依赖API30动态符号。SELinux下硬链接可能EACCES；不支持的内核/文件系统安全拒绝，不回退覆盖rename或复制删除，也不提供同权限恶意写者的事务隔离。来源：[Bionic声明](https://android.googlesource.com/platform/bionic/+/06356e41c5ed7b12220b24c05ba4fdb873b126a7/libc/include/stdio.h#260)、[旧系统syscall策略](https://android.googlesource.com/platform/bionic/+/f711b078b9656f7dbb52a046a7f992a450e8fa13/libc/seccomp/arm64_policy.cpp#36)、[rename契约](https://man7.org/linux/man-pages/man2/rename.2.html)。
 
-调用使用 libc 对应架构的 `SYS_renameat2`，不依赖 Bionic API 30 才提供的动态符号。旧内核／文件系统／厂商策略不支持时安全失败，不降级为会覆盖已有目标的普通 rename。实际来源：固定 [Bionic 声明](https://android.googlesource.com/platform/bionic/+/06356e41c5ed7b12220b24c05ba4fdb873b126a7/libc/include/stdio.h#260)、[旧系统应用 syscall 策略](https://android.googlesource.com/platform/bionic/+/f711b078b9656f7dbb52a046a7f992a450e8fa13/libc/seccomp/arm64_policy.cpp#36)及 [Linux rename 契约](https://man7.org/linux/man-pages/man2/rename.2.html)。这不提供对同权限恶意并发写者的事务隔离。
+## 已执行证据与复现
 
-## 可复现验收
+| 入口 | 证据 |
+| --- | --- |
+| CopyManager及Bridge/JVM回归 | 独立Linux子进程禁linkat后成功发布、目标冲突保全；完成/中止、迟到/丢失lease、关闭错误及顺序 |
+| `app/integration_test/content_delivery_test.dart` / `tool/driver/content_delivery.dart` | 2026-10-17双API36 AVD，系统取消→保存→离页重进saved→Sharesheet独立接收器；host核字节/hash/grant。文本、JPEG、MP4单项系统交付样本均不足2MiB |
+| `document_conflict_flow_test.dart` / `document_conflict.dart` | 同日本地树提供方真实同名目录/文件、旧字节/inode保全、新副本、跳过/取消/离页无写入和过期决定；未制造第二个自然冲突验证后续策略 |
+| `incoming_share_target_test.dart` / `incoming_share_target.dart` | 2026-10-18三AVD，用户固定目标A与目录，焦点改B仍只写A，host核hash、B无文件及consume不重提 |
 
-公开 CopyManager 回归在独立 Linux 子进程禁止 `linkat`，验证成功发布、part 消失、已有目标和未提交 part 保全；该回归不冒充 Android SELinux 验收。Bridge 测试覆盖成功／中止完成信号、迟到回执／取消、lease 丢失及关闭错误；原生 JVM 端口实际检查关闭顺序与异常收束。
-
-双 AVD 自动流程使用真实 `app.main`、Rust ADB、文件详情和任务准备页。host 生成唯一 UTF-8 原件，通过实际系统文件选择器取消／保存，再通过实际 Sharesheet 选择独立测试接收器。保存位置由 host 独立读字节，接收器凭实际 content URI 授权读内容并计算 SHA-256。缺失任一回执均失败。接收器仅安装在主控 AVD；不进入产品、被控设备或发布依赖。
-
-```sh
-dart tool/e2e/content_delivery_fixture/build.dart
-# 从仓库根目录开始；PATH 包含 Rust 和 Flutter。
-cd app
-env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
-  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
-  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/content-delivery \
-  flutter drive -d emulator-5554 --no-pub \
-  --driver=../tool/driver/content_delivery.dart \
-  --target=integration_test/content_delivery_test.dart \
-  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
-  --dart-define=CONNECT_E2E_PORT=15556
-```
-
-运行结果、失败与复验记录见[实施验收](validation.md)。单项文本、JPEG及MP4的实际系统交付已有证据；当前整体验收仍需批量取用、目录／提供方矩阵、长原件预览活动、媒体异常组合和进程重建后的任务意图恢复。系统目标／测试 APK 的精确清理由 host 确认；用户语义要求保留的私有暂存没有通过清空应用数据去掩盖。
-
-2026-10-17双AVD实际验证系统取消→保存→完整离页→重进同一传输恢复saved回执→系统分享；host独立接收原文并核对hash。测试等待真实路由完成、保存回执可见和分享命中，未把过渡中的旧页面算重进。这覆盖saved恢复，不冒充写入中杀进程后的unknown验收。
-
-## 相册入口的验收变体
-
-同一真实流程支持`text`、`image`、`video`三种明确样本。媒体测试须同时设置host环境`CONNECT_E2E_CONTENT_KIND=image`（或`video`）和Flutter参数`--dart-define=CONNECT_E2E_CONTENT_KIND=image`，并将`CONNECT_E2E_FFMPEG`指定为host FFmpeg绝对路径。工具只生成320×180 JPEG或6秒H264 MP4临时样本，不是产品运行依赖。host独立读取样本、计算hash并核验导出；严格检查接收MIME，不只比长度。
-
-媒体变体从真实相册网格进入：目标缩略图必须解码出像素，原件预览也必须加载；视频检查真实时钟前进、暂停、拖动定位和静音。之后仍经过实际系统选择器取消/保存、Sharesheet接收及字节/hash/grant核验。被控唯一源分别位于Pictures/Movies，主控导出位于Downloads，两处路径单独拥有和精确清理。此变体不证明超2MiB原件、所有媒体格式、媒体索引分页或云提供方能力。
-
-## 共享系统目录冲突与零成果结果
-
-系统目录同名决定现在由共享DocumentsCoordinator和Flutter保存页承担，Android只提供系统选择、授权、元数据和句柄。冲突绑定operationId／conflictId，支持保留两份、跳过、取消及本次后续策略；过期决定不能作用新任务。等待纳入本次操作期限，取消／离页清理对应等待者。无法安全替换时继续禁用替换，不把远端文件的三选一直接套到系统提供方。
-
-2026-10-17双AVD正式DocumentExportRoute与真实DocumentsUI核对旧目录/同名文件字节及inode/时间戳、新文本/二进制副本、空目录、跳过/取消/离页无写入和旧决定隔离。全跳过误报“部分已保存”由公开页面回归复现后修复，实际复验确认“本次未保存内容”；宿主以真实文件核验成果，未扩回执字段掩盖夹具错误。
-
-```sh
-cd app
-env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
-  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
-  CONNECT_E2E_TARGET_ADB_PORT=5555 \
-  CONNECT_E2E_CAPTURE_DIR=/tmp/connect-e2e/document-conflict \
-  flutter drive --no-pub -d emulator-5554 \
-  --driver=../tool/driver/document_conflict.dart \
-  --target=integration_test/document_conflict_flow_test.dart
-```
-
-该历史样本实际勾选后续策略，但没有制造第二个自然同名冲突；多冲突策略由协调器测试覆盖，回执明确`realSubsequentApplyConflictVerified:false`。仅证明已测本地树提供方，不证明云提供方／写入杀进程／外部分享打断选择器；多USB选择产品UI仍未迁到共享层。
-
-## 外部入站内容的固定目标
-
-IncomingSharePage以设备卡呈现接收设备的身份与真实连接方式，让用户明确选接收设备，提交前捕获该设备和目录；全局焦点变化不会改收件设备。2026-10-18三AVD14秒通过一条PNG链路；独立host确认A字节／hash、B同路径不存在和consume后不重提，未改生产实现。
-
-先构建并仅在主控安装tool/e2e/share_fixture的APK。以下命令从仓库根目录开始，PATH包含Flutter／Rust，ANDROID_HOME指向SDK；目标端5556／5558分别开放已授权测试TCP及hostforward15556／15558。运行：
-
-```sh
-cd app
-env CONNECT_E2E_ADB=/home/xiankq/Android/Sdk/platform-tools/adb \
-  CONNECT_E2E_DEVICE=emulator-5554 CONNECT_E2E_TARGET=emulator-5556 \
-  CONNECT_E2E_SECOND_TARGET=emulator-5558 \
-  flutter drive -d emulator-5554 --no-pub \
-  --driver=../tool/driver/incoming_share_target.dart \
-  --target=integration_test/incoming_share_target_test.dart \
-  --dart-define=CONNECT_E2E_ADDRESS=10.0.2.2 \
-  --dart-define=CONNECT_E2E_PORT=15556 \
-  --dart-define=CONNECT_E2E_SECOND_PORT=15558
-```
-
-显式三端不得相同，ro.boot.qemu.avd_name须非空且互异；允许目标ro.serialno相同，实际映射由各端独占目录marker和公开files.list共同确认。严格结果与截图只写/tmp/connect-e2e/incoming-share-target。软件ADB仅作为独立实验读数工具，不进入产品依赖。其余批量／大原件／权限撤销／提交断线和进程恢复继续开放。
+从app运行对应driver/target；隔离参数见[E2E说明](../../tool/e2e/README.md)及driver声明，接收器仅装主控。媒体样本由host FFmpeg生成，不是产品依赖；当前不内置本地视频播放器。上述样本先于文件任务所有权迁移，现行所有者证据见[device_files验收](../../packages/device_files/VALIDATION.md)。云/管道provider、写入中进程终止后的unknown、批量大原件、权限撤销及提交断线仍待验证。

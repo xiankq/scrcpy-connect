@@ -25,7 +25,8 @@ PATH 中的 adb，也不调用 scrcpy 主机。
 目录权限为 0700，私钥为 0600。导出设备元数据不包含身份。应用不得把该目录
 作为系统文件导出来源。事件中的媒体 token、通知正文和剪贴板不得写入日志。
 
-媒体通过进程内 SinkV1 C ABI 将完整 scrcpy 视频包与 PCM 送往本机解码器；
+媒体通过进程内 source ABI v2 将完整 scrcpy 视频包与 PCM 送往本机解码器；
+v2 移交独占包存储，v1 借用回调保留兼容复制。
 无 HTTP、MKV 或 Dart 字节中转。配置和数据带输出代际，detach 同步等待回调排空。
 传输入口不等于已渲染或已播放；平台必须报告真实首帧／首次播放结果。
 
@@ -38,6 +39,9 @@ PATH 中的 adb，也不调用 scrcpy 主机。
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+真实 mksh 监督器夹具默认忽略；显式运行时设置 `INTEROP_TEST_MKSH`，执行
+`cargo test -p interop-core --lib remote_process::tests -- --ignored --skip actual_scrcpy`。
 
 真实设备测试默认忽略，必须显式提供隔离目标；运行方法、实际通过范围和
 未验证项见[验收记录](../../docs/implementation/validation.md)。单元测试通过

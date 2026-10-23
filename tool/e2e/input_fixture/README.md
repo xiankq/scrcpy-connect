@@ -1,20 +1,8 @@
-# Independent Android input and lifecycle fixture
+# Android input and lifecycle fixture
 
-Build with `dart tool/e2e/input_fixture/build.dart`. The APK, classes,
-and test signing key stay in `/tmp/connect-input-fixture`. They are not product
-dependencies. `InputReceiverActivity` records actual Android input delivery for
-the opt-in input-release test.
+`dart tool/e2e/input_fixture/build.dart` writes the independent APK/classes/key to `/tmp/connect-input-fixture`. `InputReceiverActivity` records real input delivery. The same archive's `ActivityLifecycle` shell entrypoint calls ActivityManager `setAlwaysFinish`; changing only the settings database cannot force recreation.
 
-`ActivityLifecycle` is a separate host shell entrypoint in the same test archive.
-The audio driver pushes that archive to a unique `/data/local/tmp` path and runs
-it through `app_process`, without installing it. It calls ActivityManager's
-`setAlwaysFinish` using the authorized test shell, so leaving the foreground
-actually destroys the Activity. Changing the settings database alone does not
-change the runtime flag; see [AOSP implementation](https://android.googlesource.com/platform/frameworks/base/+/2f5bb9c5ff88/services/core/java/com/android/server/am/ActivityManagerService.java).
-This is a testing mechanism, not a permission or debugging requirement for users.
-
-For an isolated controller, run from 仓库根目录 after ensuring the target is
-authorized and reachable:
+For a dedicated authorized controller/target, run:
 
 ```sh
 cd app
@@ -31,9 +19,4 @@ env CONNECT_E2E_DEVICE=emulator-5554 \
   --dart-define=CONNECT_E2E_AUDIO_LIFECYCLE=true
 ```
 
-The host verifies a different actual Activity identity in the same PID, while
-the existing Dart isolate/source continues. It checks paused or progressing
-playback clocks according to policy and the actual mediaPlayback foreground
-service type. Cleanup restores the previous runtime/database setting and removes
-the pushed archive before the host driver exits. Process death, Doze and physical
-speaker output are separate tests; this fixture does not prove them.
+The driver pushes the archive to a unique target path without installation, checks a new Activity in the same PID/isolate with policy-correct audio clocks/FGS, then restores the prior runtime/database setting and removes the archive. This does not cover process death, Doze or physical speakers.

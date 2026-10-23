@@ -92,7 +92,7 @@ JNI 0.22.4 默认不启用 JVM invocation；Rust 通过已有 JNIEnv 函数表�
 
 mdns-sd **0.21.5**，固定源码 `a25148c4d7adea836316dac2eca6c5bbdd79aa15`，通过 Rust UDP socket 实现 DNS-SD，不要求外置 Bonjour daemon。清单使用 socket2、mio、if-addrs、socket-pktinfo 等平台接口；所检正常依赖没有 C 实现构建项，仍须对最终目标闭包复核。[源码与清单](https://github.com/keepsimple1/mdns-sd/tree/a25148c4d7adea836316dac2eca6c5bbdd79aa15)
 
-0.21.5 是本研究候选；工程曾使用的 0.17.2 包含 HINFO 解析器 panic，修复版本及契约差异见[mDNS 解析器研究](locked-mdns-contract.md)。实际锁定版本以 Cargo 清单与 lockfile 为准。
+实际锁定版本以 Cargo 清单与 lockfile 为准；已解决的旧解析器问题由 Git 历史追溯。
 
 Android Wi-Fi 默认组播过滤可能影响原始 UDP 接收，须管理 MulticastLock 与 CHANGE_WIFI_MULTICAST_STATE；Android 17 target 37 的本地网络权限也覆盖本地 socket 活动。NsdManager 的系统服务行为不能直接当作 mdns-sd 原始 socket 已获相同待遇的证据。发现失败需要区分权限、网络接口和无设备。[MulticastLock](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock)、[本地网络权限](https://developer.android.com/privacy-and-security/local-network-permission)、[NsdManager](https://developer.android.com/reference/android/net/nsd/NsdManager)
 

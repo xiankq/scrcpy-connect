@@ -6,7 +6,7 @@
 
 Rust runtime 每次发布事件，在同一短锁内分配递增 `sequence` 并写入 broadcast。通道容量仍为 256。FRB 观察者遇到 `Lagged` 时先从当前尾部重新订阅，再发 `state.resync`，不继续交付滞留旧队列；其他观察者不受影响。
 
-`state.snapshot` 只读取本地存储、现有会话/音源/传输/活动、分享管理器及已经存在的 companion 缓存，不连接设备、不新建播放器、不启动观察进程。返回 `sequence`、`consistency: event-fenced`、`settings` 与 `devices/sessions/sources/transfers/activities/shares/companions`。前后状态 revision 不同则最多重读四次，仍不稳定返回 `state_busy`。视频帧遥测不推进状态 revision，避免持续视频使核验饥饿。
+Rust `state.snapshot` 只读取本地存储、现有会话/音源/活动、分享管理器及已经存在的 companion 缓存，不连接设备、不新建播放器、不启动观察进程。返回 `sequence`、`consistency: event-fenced` 及原生状态；Dart `DeviceRuntime` 再组合偏好、文件任务与对应活动。原生状态前后 revision 不同则最多重读四次，仍不稳定返回 `state_busy`。视频帧遥测不推进状态 revision，避免持续视频使核验饥饿。
 
 此屏障是 runtime 已观察状态的事件一致性检查，不是跨 Android 系统服务的远端事务。RPC list 缓存提交在 socket actor 中先于 oneshot 返回，并推进 revision；不会因查询再发 changed 事件造成查询循环。取消的 companion 不暴露旧可操作缓存。设置在持当前读锁时发布；分享转发从当前状态重新取值，已消费来源只触发重新核验。
 
@@ -22,7 +22,7 @@ AppController 在同步通知页面监听器之前落地不可变快照，校准
 
 ## 编码会话边界
 
-核验的真实复验发现连续 reset 会在首个关键帧前发出多组 session/CSD。HTTP relay 在新的 Dimensions 标记处废弃前一 session 尚未成帧的配置，只合并同一 session 内的配置分包。相同 CSD 保留现有 HTTP 流，变化 CSD 创建下一代；不靠放宽 AVC 单活动 SPS 约束吞掉混合配置。真实 TCP 回归同时检查两条路径，原配置容量、64 单位和半包超时限制保留。
+连续 reset 可在首个关键帧前产生多组 session/CSD。Rust `VideoPackets` 遇到新尺寸标记即清除上一段尚未成帧的配置，只合并当前段；等到关键帧后配置原生 packet source，再交付压缩包。配置容量、64 单元与完整包期限仍有界；当前路径不经过 HTTP relay 或容器封装。
 
 ## 通知与系统提醒
 

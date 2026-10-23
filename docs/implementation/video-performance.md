@@ -1,6 +1,6 @@
 # 视频性能测量
 
-当前路径为 Rust scrcpy packet source → Rust 媒体核心 → 裁剪 FFmpeg → 平台纹理。构建来源见[工具链契约](repository-tooling.md#原生媒体与官方-adb)，所有权见[架构](architecture.md)。历史 fvp/MDK、Matroska/HTTP 与隔离捕获实验的数字不能作为当前路径的验收；当时的方法与结论见[首帧研究](../research/scrcpy-first-frame-performance.md)。
+当前路径为 Rust scrcpy packet source → Rust 媒体核心 → 裁剪 FFmpeg → 平台纹理。构建来源见[工具链契约](repository-tooling.md#原生媒体与官方-adb)，所有权见[架构](architecture.md)。性能结果按实际版本、后端、构建模式与运行环境记录于[验收索引](validation.md)。
 
 ## 指标与证据
 

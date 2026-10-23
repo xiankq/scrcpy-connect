@@ -167,6 +167,6 @@
 
 ### iOS／iPadOS：实际编译与运行能力分别验收
 
-**事实。**Apple 本地网络权限、具体 Bonjour service 声明、自行 multicast entitlement 和后台任务各有条件；普通 TCP／Rust 实现不能绕过系统许可。USB 候选后端是否支持也不等于整个核心是否可编译。[Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)、[后台策略](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app)。补充复核见[关键事实](requirements-gap-verification.md)。
+**事实。**Apple 本地网络权限、具体 Bonjour service 声明、自行 multicast entitlement 和后台任务各有条件；普通 TCP／Rust 实现不能绕过系统许可。USB 候选后端是否支持也不等于整个核心是否可编译。[Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)、[后台策略](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app)。
 
 **现行交付约束。**保留 BackgroundExecutionCapability、UsbHostCapability、LocalNetworkAuthorization、FileEndpoint、KeySigner、VideoSurface 等适配，同时按[四端编译契约](cross-platform-build-contract.md)实际构建核心、FRB链接和Flutter整包；平台构建、运行权限和后台能力仍是不同验证层级。

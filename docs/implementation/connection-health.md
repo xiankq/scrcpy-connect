@@ -24,7 +24,7 @@ ConnectionOwner按每设备串行化旧连接清理、连接准入和显式断�
 
 - 视频完整单元的首字节之后，header/session/payload有总期限；完整包间允许长期静止，不设置固定出帧频率。
 - `run_video`用源PTS与到达时刻的偏移增长识别单向排队，不要求两端时钟同源。连续8帧增长达到约800ms时，经控制优先通道请求`RESET_VIDEO`，进入`awaitingSession`并丢弃旧编码段直到新session；4秒冷却避免重置风暴。
-- 认证本机媒体输出的首帧前缀、session尺寸和完整视频单元写入有3秒停滞期限；HTTP响应头及实际待交付chunk另有写入期限。消费者停读不会无限占住上游，失败只结束所属输出，不随意丢弃有参考关系的压缩帧。
+- 本机 packet source 的视频和 PCM 交付在等待消费者容量时有3秒期限，并响应取消；没有附着消费者时另有连接期限。消费者停读不会无限占住上游，失败只结束所属输出，不随意丢弃有参考关系的压缩帧。媒体输入与所有权见[原生媒体组件](../../packages/media_codec/README.md)。
 - 普通触摸、按键和文本在进入控制actor的有界队列后即向Dart返回接纳回执；时间戳仍带绝对6秒期限，出队时拒绝过期请求。队列满返回`control_busy`，不建立无界积压。actor在等ADB回执期间只保留每触点最新move，down/up/cancel保序；随后把同一阶段连续的完整控制消息拼成不超过协商max payload的一个WRTE，使用最早消息的期限。classic模式因此不再为每个短触摸消息各等一次ACK。画质重建检查先过滤非安全消息再拼接，不能由批写绕过输入栅栏。
 - 启动、刷新及需要结果的发送仍等待实际WRTE；剪贴板另等应用层sequence。任何实际写入失败只取消所属控制会话，保留共享Client及其他活动；晚到OKAY不能复活已撤销route或重放输入。
 - Set/Capture的应用层sequence回复超时是独立错误，不把任何无回复都当设备断连。剪贴板读取使用companion带编号RPC及hasText/权限结果，避免无requestId旧回复误配新读取；allowStart门禁继续生效。无helper的自动同步失败进入limited后，手动读取即使启动helper，也不保证协调器立即恢复：相同配置会直接返回，失败路径已取消timer；仍需内容事件、前后台变化或开关重新核对，`clipboard.changed`可重新激活。
@@ -56,6 +56,6 @@ env INTEROP_ADBD_ADDRESS=<地址> INTEROP_ADBD_PORT=<连接端口> \
   -- --ignored --nocapture --test-threads=1
 ```
 
-可见视频恢复从 `app/` 用 `tool/driver/video_recovery.dart` / `integration_test/video_recovery_test.dart`，准备方式同[性能夹具](video-performance.md#普通调度基准与解码路径对照)，host设置 `CONNECT_E2E_RECOVERY_FAULT=blackhole`；省略该变量是EOF对照。故障回执在cleanup前收集，cleanup产生的EOF不能满足验收。
+可见视频恢复从 `app/` 用 `../tool/driver/video_recovery.dart` / `integration_test/video_recovery_test.dart`，准备方式同[性能夹具](video-performance.md#重复测量入口)，host设置 `CONNECT_E2E_RECOVERY_FAULT=blackhole`；省略该变量是EOF对照。故障回执在cleanup前收集，cleanup产生的EOF不能满足验收。
 
-物理ARM、Wi-Fi/OEM、小时长稳、捕获/应用任务恢复和原生snapshot崩溃未由这些测试关闭；连接恢复通过也不证明[性能预算](video-performance.md#未完成边界)达标。
+物理ARM、Wi-Fi/OEM、小时长稳、捕获/应用任务恢复和原生snapshot崩溃未由这些测试关闭；连接恢复通过也不证明[性能预算](video-performance.md#指标与证据)达标。

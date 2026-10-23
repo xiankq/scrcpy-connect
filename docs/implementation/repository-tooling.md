@@ -32,7 +32,7 @@ Flutter 应用运行、构建和集成测试在 `app/` 执行；能力包测试�
 | `cross_file 0.3.5+5` | 当前 `file_picker`、`share_plus` 仍依赖 0.3，不能单独升到 0.4 |
 | `qr 3.0.2` | `qr_flutter 4.1.0` 仍依赖该主版本 |
 | `sha1 0.10.7` | `rsa 0.9.10` 的 ADB AUTH 签名使用 digest 0.10；升级前需先迁移签名器 |
-| `rustls-rustcrypto 0.0.2-alpha` | 当前指定 provider 无更新发布，不替换 TLS provider |
+| `rustls-rustcrypto 0.0.2-alpha` | 固定使用此 TLS provider，常规依赖升级不替换 provider |
 | Flutter SDK 锁定包 | `material_color_utilities`、`test_api` 随 SDK；升级 Flutter 后重新解析并跑生成与测试 |
 
 新增或升级依赖时同步检查 `pubspec.lock`、`Cargo.lock`、许可证、对应源码归档和生成物，不以版本号变化代替构建或运行证据。
@@ -47,13 +47,13 @@ Android 三种主控 ABI 共享一套 Flutter package assets。`initializeNative
 
 ## 原生媒体与官方 ADB
 
-`packages/media_codec/third_party/` 固定 FFmpeg、dav1d 与 nv-codec-headers 的来源和 SHA-256。`tool/build_ffmpeg.py` 只构建所需静态库，并生成配置回执与依赖许可证；构建缓存位于 `.dart_tool/media_codec/`。构建需要目标平台工具链、Python、Meson、Ninja 与适用的汇编器，不从播放器 SDK 下载通用媒体运行时。
+`packages/media_codec/third_party/` 固定 FFmpeg、dav1d 与 nv-codec-headers 的来源和 SHA-256。`packages/media_codec/tool/build_ffmpeg.py` 只构建所需静态库，并生成配置回执与依赖许可证；构建缓存位于 `.dart_tool/media_codec/`。构建需要目标平台工具链、Python、Meson、Ninja 与适用的汇编器，不从播放器 SDK 下载通用媒体运行时。
 
 共享解码核心位于 `packages/media_codec/rust/`，使用独立 Cargo workspace 与锁文件；bindgen 从固定 FFmpeg 头文件生成 ABI。Flutter 插件只实现纹理、音频输出及生命周期需要的平台胶水。Apple 源码适配与实际 SDK/机器验收分开记录。
 
 Windows 宿主需要 Visual Studio C++ 桌面工作负载、Windows SDK 和 `Microsoft.VisualStudio.Component.VC.ATL`；现有通知插件编译依赖 `atlbase.h`，仅安装桌面工作负载不足。工具查找遵守 Windows PATHEXT，不能执行 Flutter SDK 中供 POSIX 使用的同名无扩展脚本。
 
-`packages/flutter_adb/third_party/platform-tools.lock.json` 固定桌面官方 platform-tools 归档及选取文件摘要。`tool/prepare_adb.dart` 校验后只提取 adb、Windows 所需 DLL、NOTICE 与版本信息，桌面包放置于可执行文件旁的 `adb/`。Android/iOS 不附带桌面 adb。`tool/build_host.dart` 核验目标架构、裁剪配置、必需原生库与官方 adb，再生成交付归档。
+`packages/flutter_adb/third_party/platform-tools.lock.json` 固定桌面官方 platform-tools 归档及选取文件摘要。`packages/flutter_adb/tool/prepare_adb.dart` 校验后只提取 adb、Windows 所需 DLL、NOTICE 与版本信息，桌面包放置于可执行文件旁的 `adb/`。Android/iOS 不附带桌面 adb。`tool/build_host.dart` 核验目标架构、裁剪配置、必需原生库与官方 adb，再生成交付归档。
 
 ## 玻璃宿主
 

@@ -1,29 +1,17 @@
 # Visual comparison captures
 
-`pages.json` contains the current scoped Pencil/Flutter pairs for the affected pages. It records the
-source viewport, crops and known content differences; local state boards are not
-stretched into page references. Export Pencil PNGs through the object API at 1×.
+`pages.json` defines Pencil/Flutter pairs, viewports, crops and content differences. Export Pencil PNGs at 1× through the object API; unmatched component/state boards remain unmatched.
 
-For a repeatable 402×874/DPR1 software layout capture, run from `app/`:
+For production-page software layout capture at 402×874/DPR1 with 54/34px safe areas, run from `app/`:
 
 ```sh
 DESIGN_REFINEMENT_CAPTURE_DIR=/tmp/connect-design/flutter \
   flutter test --no-pub test/design_refinement_capture.dart
 ```
 
-The opt-in test uses production pages and theme with an isolated controller,
-loads a declared Noto CJK font and the real app icon, and writes `layout.json`.
-It reserves the 54/34px safe areas without painting fake system bars. It does
-not prove native behavior or GPU optics; capture those from the running app in
-a separate directory. Local component boards and alternate scroll/mode states
-are listed as unmatched with explicit reasons, never stretched into full pages.
+The isolated controller uses the production theme, declared CJK font and app icon, and writes `layout.json`. Native/GPU captures require the running app and a separate temporary directory with device, viewport, safe areas, theme and fixture identity recorded.
 
-Capture the changed production pages from the running app into a new system
-temporary directory. Record device, viewport, safe areas, theme and fixture
-identity. The old all-page screenshot tests and their shared fixtures have been
-removed; existing capture archives remain readable.
-
-From the repository root:
+From the root:
 
 ```sh
 dart tool/visual_parity/compare.dart \
@@ -32,13 +20,4 @@ dart tool/visual_parity/compare.dart \
   --output /tmp/connect-design/comparison
 ```
 
-Inputs must match their configured dimensions and crops. The tool does not
-resize, align or pad images. It produces side-by-side images, RGB differences
-and input hashes. Optional historical `layout-contract.json` geometry is attached
-only when its screenshot hash matches; otherwise it is marked stale/unavailable.
-
-`completed` means comparison finished. It does not establish content or visual
-acceptance. Review typography, safe areas, occlusion and scroll reachability on
-the actual changed screen. For native materials and overlays, use the retained
-`app/integration_test/glass_chrome_test.dart` device capture. See the
-[design fidelity record](../../docs/implementation/design-fidelity.md).
+Inputs must match configured dimensions/crops; the tool never resizes, aligns or pads. It emits paired images, RGB differences and hashes; optional historical geometry applies only to matching screenshot hashes. `completed` means comparison finished, not acceptance. Review actual typography, occlusion and scroll reachability; native material evidence uses `glass_chrome_test.dart` and the [fidelity record](../../docs/implementation/design-fidelity.md).
