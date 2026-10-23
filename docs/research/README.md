@@ -20,6 +20,8 @@
 
 | 研究 | 独有内容 |
 | --- | --- |
+| [当前实现与 scrcpy 源码逐链路对照](scrcpy-source-audit.md) | 新原生媒体实现的五平台缺陷、额外复制/GPU pass、音频时钟与控制链路；含三份专项详报与 Android Release 故障核查 |
+| [Android Release 投屏崩溃](android-release-media-crash.md) | 普通Release在Android16 AVD复现SIGABRT，R8裁掉JNI回调；栈、最终包身份、验收遗漏与精确修复范围 |
 | [scrcpy媒体与服务端](scrcpy-media-and-server.md) | 固定协议、通道顺序、JAR生命周期、应用窗口与音频边界 |
 | [共享媒体封装与播放器](cross-platform-media-pipeline.md) | Matroska映射、精确PTS、MDK C表ABI与输入候选 |
 | [scrcpy 到 fvp 的数据与复制路径](scrcpy-fvp-copy-path.md) | 按 Java/Rust/Dart/原生追踪、两段本机TCP、封装复制、USB差异与像素回读 |
