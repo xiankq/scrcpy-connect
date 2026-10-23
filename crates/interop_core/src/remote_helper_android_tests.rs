@@ -101,7 +101,7 @@ async fn actual_metadata_preserves_raw_names_links_and_bounded_listing_without_s
             .unwrap();
     assert_eq!(limited["truncated"], true);
     assert_eq!(limited["entries"].as_array().unwrap().len(), 1);
-    // Public file operations must work without shell_v2, printf or mkdir --.
+    // Native file execution must work without shell_v2, printf or mkdir --.
     let state = tempfile::tempdir().unwrap();
     let runtime = crate::Runtime::initialize(state.path()).await.unwrap();
     let endpoint: std::net::SocketAddr = endpoint.parse().unwrap();
@@ -125,40 +125,60 @@ async fn actual_metadata_preserves_raw_names_links_and_bounded_listing_without_s
         .unwrap();
     let directory = format!("{root}/created");
     runtime
-        .invoke(
-            "files.mkdir",
-            serde_json::json!({"deviceId":id,"path":directory}),
+        .execute_file_mutation(
+            &id,
+            "mkdir",
+            &directory,
+            "",
+            false,
+            false,
+            interop_adb::CancellationToken::new(),
         )
         .await
         .unwrap();
     assert_eq!(
         runtime
-            .invoke(
-                "files.mkdir",
-                serde_json::json!({"deviceId":id,"path":directory})
+            .execute_file_mutation(
+                &id,
+                "mkdir",
+                &directory,
+                "",
+                false,
+                false,
+                interop_adb::CancellationToken::new(),
             )
             .await
             .unwrap_err()
             .code,
-        "remote_error",
+        "remote_failed",
         "legacy exit receipt must preserve mkdir failure"
     );
     let files = runtime
-        .invoke("files.list", serde_json::json!({"deviceId":id,"path":root}))
+        .execute_file_list(
+            &id,
+            &root,
+            false,
+            10_000,
+            interop_adb::CancellationToken::new(),
+        )
         .await
         .unwrap();
-    assert_eq!(files["entries"].as_array().unwrap().len(), 4);
+    assert_eq!(files.entries.len(), 4);
     assert!(
-        files["entries"]
-            .as_array()
-            .unwrap()
+        files
+            .entries
             .iter()
-            .any(|entry| entry["nameIsUtf8"] == false && entry["canOpen"] == false)
+            .any(|entry| entry.name == b"quote'\n\xff" && entry.stamp.is_some())
     );
     runtime
-        .invoke(
-            "files.delete",
-            serde_json::json!({"deviceId":id,"paths":[directory]}),
+        .execute_file_mutation(
+            &id,
+            "delete",
+            &directory,
+            "",
+            false,
+            false,
+            interop_adb::CancellationToken::new(),
         )
         .await
         .unwrap();

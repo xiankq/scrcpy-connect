@@ -1,88 +1,21 @@
 //! Real TCP/TLS peer: the kernel still ACKs and the socket remains readable,
 //! while the first peer stops processing ADB services. No packet filters/root.
+#[path = "support/tls.rs"]
+mod tls;
 use interop_adb::{
-    CancellationToken, Identity,
+    CancellationToken,
     protocol::{self, Frame},
-    wireless::TlsConfig,
 };
 use interop_core::Runtime;
-use rsa::{
-    RsaPrivateKey,
-    pkcs8::{DecodePrivateKey, EncodePrivateKey},
-};
-use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use serde_json::{Value, json};
-use std::{
-    sync::{Arc, OnceLock},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use tokio::{
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     sync::{broadcast, mpsc, oneshot},
     task::{JoinHandle, JoinSet},
 };
 
 const RECOVERY_DEADLINE: Duration = Duration::from_secs(40);
-
-fn tls_server() -> Arc<rustls::ServerConfig> {
-    static CONFIG: OnceLock<Arc<rustls::ServerConfig>> = OnceLock::new();
-    CONFIG
-        .get_or_init(|| {
-            let identity = Identity::generate().unwrap();
-            let tls = TlsConfig::experimental_rustcrypto(&identity).unwrap();
-            let key = RsaPrivateKey::from_pkcs8_pem(&identity.to_pkcs8_pem().unwrap())
-                .unwrap()
-                .to_pkcs8_der()
-                .unwrap();
-            Arc::new(
-                rustls::ServerConfig::builder_with_provider(
-                    Arc::new(rustls_rustcrypto::provider()),
-                )
-                .with_protocol_versions(&[&rustls::version::TLS13])
-                .unwrap()
-                .with_no_client_auth()
-                .with_single_cert(
-                    vec![CertificateDer::from(tls.certificate_der().to_vec())],
-                    PrivatePkcs8KeyDer::from(key.as_bytes().to_vec()).into(),
-                )
-                .unwrap(),
-            )
-        })
-        .clone()
-}
-
-async fn handshake(
-    mut socket: TcpStream,
-    config: Arc<rustls::ServerConfig>,
-) -> tokio_rustls::server::TlsStream<TcpStream> {
-    socket.set_nodelay(true).unwrap();
-    assert_eq!(
-        Frame::read(&mut socket, 4096, false).await.unwrap().command,
-        protocol::CNXN
-    );
-    Frame::new(protocol::STLS, 0x0100_0000, 0, vec![])
-        .write(&mut socket)
-        .await
-        .unwrap();
-    assert_eq!(
-        Frame::read(&mut socket, 4096, false).await.unwrap().command,
-        protocol::STLS
-    );
-    let mut encrypted = tokio_rustls::TlsAcceptor::from(config)
-        .accept(socket)
-        .await
-        .unwrap();
-    Frame::new(
-        protocol::CNXN,
-        protocol::VERSION,
-        4096,
-        b"device::features=shell_v2;\0".to_vec(),
-    )
-    .write(&mut encrypted)
-    .await
-    .unwrap();
-    encrypted
-}
 
 struct Peer {
     port: u16,
@@ -107,7 +40,7 @@ impl Peer {
     async fn start() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        let config = tls_server();
+        let config = tls::server_config();
         let (arm, arm_rx) = oneshot::channel();
         let (armed_tx, armed) = oneshot::channel();
         let (accepted_tx, accepted) = mpsc::unbounded_channel();
@@ -138,7 +71,7 @@ impl Peer {
                         let ignored_tx = ignored_tx.clone();
                         let replied_tx = replied_tx.clone();
                         connections.spawn(async move {
-                            let mut encrypted = handshake(socket, config).await;
+                            let mut encrypted = tls::handshake(socket, config, None).await;
                             let (mut arm, mut armed) = match fault {
                                 Some((arm, armed)) => (Some(arm), Some(armed)),
                                 None => (None, None),
@@ -204,7 +137,7 @@ impl Peer {
 }
 
 async fn invoke(runtime: &Arc<Runtime>, command: &str, params: Value) -> Value {
-    Box::pin(runtime.invoke(command, params)).await.unwrap()
+    runtime.invoke(command, params).await.unwrap()
 }
 
 async fn state_event(events: &mut broadcast::Receiver<Value>, id: &str, status: &str) -> Value {

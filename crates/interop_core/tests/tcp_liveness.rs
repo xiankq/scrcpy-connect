@@ -2,20 +2,16 @@
 //! socket stays open while its incoming packets (including keepalives) drop.
 #![cfg(any(target_os = "linux", target_os = "android"))]
 
+#[path = "support/tls.rs"]
+mod tls;
 use interop_adb::{
-    CancellationToken, Identity,
+    CancellationToken,
     protocol::{self, Frame},
-    wireless::TlsConfig,
 };
 use interop_core::Runtime;
-use rsa::{
-    RsaPrivateKey,
-    pkcs8::{DecodePrivateKey, EncodePrivateKey},
-};
-use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use serde_json::{Value, json};
 use socket2::{SockFilter, SockRef};
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{broadcast, mpsc, oneshot},
@@ -24,74 +20,10 @@ use tokio::{
 
 const RECOVERY_DEADLINE: Duration = Duration::from_secs(25);
 
-async fn invoke(
-    runtime: &Arc<Runtime>,
-    command: &str,
-    params: Value,
-) -> Result<Value, interop_core::CoreError> {
-    // Keep Runtime's large command future off the Android test-thread stack.
-    Box::pin(runtime.invoke(command, params)).await
-}
-
-fn tls_server() -> Arc<rustls::ServerConfig> {
-    // Generate a fixture identity in memory; never use an installed host key.
-    let identity = Identity::generate().unwrap();
-    let tls = TlsConfig::experimental_rustcrypto(&identity).unwrap();
-    let key = RsaPrivateKey::from_pkcs8_pem(&identity.to_pkcs8_pem().unwrap())
-        .unwrap()
-        .to_pkcs8_der()
-        .unwrap();
-    Arc::new(
-        rustls::ServerConfig::builder_with_provider(Arc::new(rustls_rustcrypto::provider()))
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .unwrap()
-            .with_no_client_auth()
-            .with_single_cert(
-                vec![CertificateDer::from(tls.certificate_der().to_vec())],
-                PrivatePkcs8KeyDer::from(key.as_bytes().to_vec()).into(),
-            )
-            .unwrap(),
-    )
-}
-
-async fn handshake(
-    mut socket: TcpStream,
-    config: Arc<rustls::ServerConfig>,
-) -> tokio_rustls::server::TlsStream<TcpStream> {
-    socket.set_nodelay(true).unwrap();
-    assert_eq!(
-        Frame::read(&mut socket, 4096, false).await.unwrap().command,
-        protocol::CNXN
-    );
-    Frame::new(protocol::STLS, 0x0100_0000, 0, vec![])
-        .write(&mut socket)
-        .await
-        .unwrap();
-    assert_eq!(
-        Frame::read(&mut socket, 4096, false).await.unwrap().command,
-        protocol::STLS
-    );
-    let mut encrypted = tokio_rustls::TlsAcceptor::from(config)
-        .accept(socket)
-        .await
-        .unwrap();
-    Frame::new(
-        protocol::CNXN,
-        protocol::VERSION,
-        4096,
-        b"device::features=shell_v2;\0".to_vec(),
-    )
-    .write(&mut encrypted)
-    .await
-    .unwrap();
-    encrypted
-}
-
 async fn metadata_peer(socket: &mut tokio_rustls::server::TlsStream<TcpStream>) {
     while let Ok(frame) = Frame::read(socket, 4096, true).await {
         if frame.command == protocol::OPEN {
-            // Unsupported metadata is a valid ADB service response and does
-            // not close the authenticated transport or prevent attachment.
+            // A service rejection keeps the authenticated transport alive.
             if Frame::new(protocol::CLSE, 0, frame.arg0, vec![])
                 .write(socket)
                 .await
@@ -126,7 +58,7 @@ impl Peer {
     async fn start() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        let config = tls_server();
+        let config = tls::server_config();
         let (arm, arm_rx) = oneshot::channel();
         let (armed_tx, armed) = oneshot::channel();
         let (accepted_tx, accepted) = mpsc::unbounded_channel();
@@ -155,7 +87,7 @@ impl Peer {
                         connections.spawn(async move {
                             let mut encrypted = tokio::select! {
                                 _ = token.cancelled() => return,
-                                socket = handshake(socket, config) => socket,
+                                socket = tls::handshake(socket, config, None) => socket,
                             };
                             if let Some((arm, armed)) = fault {
                                 tokio::select! {
@@ -226,22 +158,23 @@ async fn caller_recovers_after_tls_tcp_blackhole_and_disconnect_prevents_revival
     let directory = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(directory.path()).await.unwrap();
     let mut events = runtime.subscribe();
-    let added = invoke(
-        &runtime,
-        "devices.add",
-        json!({"address":"127.0.0.1","port":peer.port,"transport":"tls"}),
-    )
-    .await
-    .unwrap();
+    let added = runtime
+        .invoke(
+            "devices.add",
+            json!({"address":"127.0.0.1","port":peer.port,"transport":"tls"}),
+        )
+        .await
+        .unwrap();
     let id = added["deviceId"].as_str().unwrap().to_owned();
     // Keep this transport otherwise idle: no companion polling should hide a
     // missing keepalive implementation by generating unrelated service I/O.
-    invoke(&runtime, "observation.stop", json!({"deviceId":id}))
+    runtime
+        .invoke("observation.stop", json!({"deviceId":id}))
         .await
         .unwrap();
     let connected = tokio::time::timeout(
         RECOVERY_DEADLINE,
-        invoke(&runtime, "devices.connect", json!({"deviceId":id})),
+        runtime.invoke("devices.connect", json!({"deviceId":id})),
     )
     .await
     .expect("initial manual TLS connection must complete")
@@ -276,14 +209,14 @@ async fn caller_recovers_after_tls_tcp_blackhole_and_disconnect_prevents_revival
         peer.accepted.try_recv().is_err(),
         "native has no automatic retry scheduler"
     );
-    invoke(
-        &runtime,
-        "devices.reconnect.owner",
-        json!({"ownerId":"dart-tcp-fixture","active":true}),
-    )
-    .await
-    .unwrap();
-    assert_eq!(invoke(&runtime, "devices.connect", json!({
+    runtime
+        .invoke(
+            "devices.reconnect.owner",
+            json!({"ownerId":"dart-tcp-fixture","active":true}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(runtime.invoke("devices.connect", json!({
         "deviceId":id,"automatic":true,"ownerId":"dart-tcp-fixture","attemptId":"tcp-recovery"
     })).await.unwrap()["connected"], true);
     let reconnected = tokio::time::timeout(
@@ -300,7 +233,7 @@ async fn caller_recovers_after_tls_tcp_blackhole_and_disconnect_prevents_revival
         Some(2),
         "recovery must use a new TCP/TLS connection",
     );
-    let devices = invoke(&runtime, "devices.list", json!({})).await.unwrap();
+    let devices = runtime.invoke("devices.list", json!({})).await.unwrap();
     let devices = devices["devices"].as_array().unwrap();
     assert_eq!(
         devices.len(),
@@ -311,10 +244,12 @@ async fn caller_recovers_after_tls_tcp_blackhole_and_disconnect_prevents_revival
     assert_eq!(devices[0]["status"], "connected");
     assert_eq!(devices[0]["autoReconnect"], true);
 
-    invoke(&runtime, "devices.disconnect", json!({"deviceId":id}))
+    runtime
+        .invoke("devices.disconnect", json!({"deviceId":id}))
         .await
         .unwrap();
-    let disconnected = invoke(&runtime, "device.info", json!({"deviceId":id}))
+    let disconnected = runtime
+        .invoke("device.info", json!({"deviceId":id}))
         .await
         .unwrap();
     assert_eq!(disconnected["status"], "offline");
@@ -326,7 +261,7 @@ async fn caller_recovers_after_tls_tcp_blackhole_and_disconnect_prevents_revival
         Some(2),
         "explicit disconnect must close the replacement transport",
     );
-    let late = invoke(&runtime, "devices.connect", json!({
+    let late = runtime.invoke("devices.connect", json!({
         "deviceId":id,"automatic":true,"ownerId":"dart-tcp-fixture","attemptId":"late-tcp-recovery"
     })).await.unwrap_err();
     assert_eq!(late.code, "cancelled");

@@ -4,7 +4,7 @@ mod native_media;
 mod support;
 use interop_adb::{CancellationToken, protocol};
 use interop_core::Runtime;
-use serde_json::{Value, json};
+use serde_json::json;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
@@ -121,14 +121,6 @@ impl ControlAckGate {
     }
 }
 
-async fn invoke(
-    runtime: &Arc<Runtime>,
-    command: &str,
-    params: Value,
-) -> Result<Value, interop_core::CoreError> {
-    Box::pin(runtime.invoke(command, params)).await
-}
-
 #[tokio::test]
 #[ignore = "requires an awake authorized legacy TCP Android target at INTEROP_ADBD_PORT"]
 async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
@@ -137,67 +129,66 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
     let proxy = ControlAckGate::start(&address, port).await;
     let root = tempfile::tempdir().unwrap();
     let runtime = Runtime::initialize(root.path()).await.unwrap();
-    let added = invoke(
-        &runtime,
-        "devices.add",
-        json!({"address":"127.0.0.1", "port":proxy.port}),
-    )
-    .await
-    .unwrap();
-    let device = added["deviceId"].as_str().unwrap();
-    invoke(&runtime, "observation.stop", json!({"deviceId":device}))
-        .await
-        .unwrap();
-    invoke(&runtime, "devices.connect", json!({"deviceId":device}))
-        .await
-        .unwrap();
-    let session = invoke(
-        &runtime,
-        "session.start",
-        support::media_params(json!({"deviceId":device,"maxSize":640,"maxFps":15})),
-    )
-    .await
-    .unwrap();
-    let sid = session["sessionId"].as_str().unwrap();
-    // A screen session must not bypass the helper startup policy. Reads use
-    // request IDs: scrcpy GET has no correlation ID and may legally be silent.
-    let guarded = invoke(
-        &runtime,
-        "clipboard.get",
-        json!({"deviceId":device,"allowStart":false}),
-    )
-    .await
-    .unwrap_err();
-    assert_eq!(guarded.code, "observation_required");
-    let original_clipboard = invoke(
-        &runtime,
-        "clipboard.get",
-        json!({"deviceId":device,"allowStart":true}),
-    )
-    .await
-    .unwrap();
-    assert_eq!(original_clipboard["source"], "companion");
-    for _ in 0..2 {
-        let marker = format!("control-stall-{}", uuid::Uuid::new_v4());
-        let applied = invoke(
-            &runtime,
-            "clipboard.set",
-            json!({"deviceId":device,"text":marker}),
+    let added = runtime
+        .invoke(
+            "devices.add",
+            json!({"address":"127.0.0.1", "port":proxy.port}),
         )
         .await
         .unwrap();
-        assert_eq!(applied["applied"], true);
-        let read = invoke(
-            &runtime,
+    let device = added["deviceId"].as_str().unwrap();
+    runtime
+        .invoke("observation.stop", json!({"deviceId":device}))
+        .await
+        .unwrap();
+    runtime
+        .invoke("devices.connect", json!({"deviceId":device}))
+        .await
+        .unwrap();
+    let session = runtime
+        .invoke(
+            "session.start",
+            support::media_params(json!({"deviceId":device,"maxSize":640,"maxFps":15})),
+        )
+        .await
+        .unwrap();
+    let sid = session["sessionId"].as_str().unwrap();
+    // A screen session must not bypass the helper startup policy. Reads use
+    // request IDs: scrcpy GET has no correlation ID and may legally be silent.
+    let guarded = runtime
+        .invoke(
             "clipboard.get",
             json!({"deviceId":device,"allowStart":false}),
         )
         .await
+        .unwrap_err();
+    assert_eq!(guarded.code, "observation_required");
+    let original_clipboard = runtime
+        .invoke(
+            "clipboard.get",
+            json!({"deviceId":device,"allowStart":true}),
+        )
+        .await
         .unwrap();
+    assert_eq!(original_clipboard["source"], "companion");
+    for _ in 0..2 {
+        let marker = format!("control-stall-{}", uuid::Uuid::new_v4());
+        let applied = runtime
+            .invoke("clipboard.set", json!({"deviceId":device,"text":marker}))
+            .await
+            .unwrap();
+        assert_eq!(applied["applied"], true);
+        let read = runtime
+            .invoke(
+                "clipboard.get",
+                json!({"deviceId":device,"allowStart":false}),
+            )
+            .await
+            .unwrap();
         assert_eq!(read["source"], "companion");
         assert_eq!(read["text"], marker);
     }
-    let snapshot = invoke(&runtime, "state.snapshot", json!({})).await.unwrap();
+    let snapshot = runtime.invoke("state.snapshot", json!({})).await.unwrap();
     assert_eq!(snapshot["observations"][0]["wanted"], false);
     for section in ["notifications", "calls"] {
         assert_eq!(
@@ -220,12 +211,12 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
     let key_runtime = runtime.clone();
     let key_sid = sid.to_owned();
     let first = tokio::spawn(async move {
-        invoke(
-            &key_runtime,
-            "session.key",
-            json!({"sessionId":key_sid,"keyCode":82,"action":"up"}),
-        )
-        .await
+        key_runtime
+            .invoke(
+                "session.key",
+                json!({"sessionId":key_sid,"keyCode":82,"action":"up"}),
+            )
+            .await
     });
     tokio::time::timeout(Duration::from_secs(5), async {
         while !proxy.held.load(Ordering::SeqCst) {
@@ -238,12 +229,12 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
     let next_runtime = runtime.clone();
     let next_sid = sid.to_owned();
     let next = tokio::spawn(async move {
-        invoke(
-            &next_runtime,
-            "session.key",
-            json!({"sessionId":next_sid,"keyCode":3,"action":"up"}),
-        )
-        .await
+        next_runtime
+            .invoke(
+                "session.key",
+                json!({"sessionId":next_sid,"keyCode":3,"action":"up"}),
+            )
+            .await
     });
     // All listings use the same Runtime/Client through the gated proxy.
     let mut healthy_lists = 0;
@@ -270,17 +261,20 @@ async fn stalled_control_expires_without_late_keys_or_device_disconnect() {
         .execute_file_list(device, "/sdcard", false, 10000, Default::default())
         .await;
     let keys = proxy.keys.load(Ordering::SeqCst);
-    let _ = invoke(&runtime, "session.stop", json!({"sessionId":sid})).await;
+    let _ = runtime
+        .invoke("session.stop", json!({"sessionId":sid}))
+        .await;
     if original_clipboard["hasText"] == true {
-        invoke(
-            &runtime,
-            "clipboard.set",
-            json!({"deviceId":device,"text":original_clipboard["text"]}),
-        )
-        .await
-        .unwrap();
+        runtime
+            .invoke(
+                "clipboard.set",
+                json!({"deviceId":device,"text":original_clipboard["text"]}),
+            )
+            .await
+            .unwrap();
     }
-    invoke(&runtime, "devices.forget", json!({"deviceId":device}))
+    runtime
+        .invoke("devices.forget", json!({"deviceId":device}))
         .await
         .unwrap();
     video_reader.abort();

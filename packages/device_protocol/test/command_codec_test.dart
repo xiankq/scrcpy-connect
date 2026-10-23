@@ -144,6 +144,7 @@ void main() {
   test('request cap counts UTF-8 bytes on both sides of the wire', () {
     final request = CoreRequest(InteropCommand.sessionText, {
       'sessionId': 'a',
+      'captureGeneration': 1,
       'text': List.filled(400000, '字').join(),
     });
     expect(request.encode, failure('request_limit'));

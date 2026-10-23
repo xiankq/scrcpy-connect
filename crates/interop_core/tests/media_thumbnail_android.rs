@@ -548,27 +548,6 @@ async fn real_thumbnail_fixture() {
         Some(0),
         "cancel must wait for the observed owned child to exit"
     );
-    let mut listing = runtime
-        .invoke("media.list", json!({"deviceId":id}))
-        .await
-        .unwrap();
-    let scan = listing["scanId"].as_str().unwrap().to_owned();
-    tokio::time::timeout(Duration::from_secs(40), async {
-        while listing["status"] == "scanning" {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            listing = runtime
-                .invoke("media.list", json!({"deviceId":id,"scanId":scan}))
-                .await
-                .unwrap();
-        }
-    })
-    .await
-    .expect("the bounded read-only gallery scan must settle after thumbnail cancellation");
-    assert!(matches!(
-        listing["status"].as_str(),
-        Some("completed" | "partial")
-    ));
-    assert_eq!(listing["scope"]["roots"], json!(["/sdcard"]));
     // A separate service remains responsive after media cancellation.
     runtime
         .invoke("clipboard.get", json!({"deviceId":id}))

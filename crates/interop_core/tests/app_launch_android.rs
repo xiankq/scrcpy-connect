@@ -5,8 +5,6 @@ use interop_core::Runtime;
 use serde_json::json;
 use std::time::Duration;
 
-// Large real-device scenarios keep each public command future on the heap;
-// they run with the ordinary test-thread stack, without RUST_MIN_STACK changes.
 async fn invoke_runtime(
     runtime: &std::sync::Arc<Runtime>,
     command: &str,
@@ -17,7 +15,7 @@ async fn invoke_runtime(
     } else {
         params
     };
-    Box::pin(runtime.invoke(command, params)).await
+    runtime.invoke(command, params).await
 }
 
 struct LostStartReceipt {

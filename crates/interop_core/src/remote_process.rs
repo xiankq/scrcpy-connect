@@ -98,7 +98,7 @@ mod tests {
         completed: bool,
     }
     impl Supervisor {
-        fn launch(identity: bool, body: &str) -> Option<Self> {
+        fn launch(identity: bool, body: &str) -> Self {
             let mksh = std::env::var_os("INTEROP_TEST_MKSH")
                 .map(PathBuf::from)
                 .or_else(|| {
@@ -107,10 +107,7 @@ mod tests {
                         .into_iter()
                         .find(|p| p.is_file())
                 });
-            let Some(mksh) = mksh else {
-                eprintln!("requires real mksh: set INTEROP_TEST_MKSH");
-                return None;
-            };
+            let mksh = mksh.expect("requires real mksh: set INTEROP_TEST_MKSH");
             let root = std::env::temp_dir().join(format!(
                 "remote-process-{}-{}",
                 std::process::id(),
@@ -155,12 +152,12 @@ mod tests {
                     }
                 }
             });
-            Some(Self {
+            Self {
                 process,
                 lines,
                 root,
                 completed: false,
-            })
+            }
         }
         fn line(&self) -> String {
             self.lines
@@ -232,13 +229,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires real mksh; set INTEROP_TEST_MKSH"]
     fn natural_exit_preserves_status_and_removes_only_its_deployment() {
         for identity in [false, true] {
             for code in [0, 7] {
-                let Some(mut supervisor) = Supervisor::launch(identity, &format!("exit {code}"))
-                else {
-                    return;
-                };
+                let mut supervisor = Supervisor::launch(identity, &format!("exit {code}"));
                 std::fs::write(supervisor.root.join("unrelated.jar"), b"unrelated").unwrap();
                 supervisor.child(identity);
                 assert_eq!(supervisor.exited(), code);
@@ -252,6 +247,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires real mksh; set INTEROP_TEST_MKSH"]
     fn raw_stdin_eof_reaps_blocked_and_stopped_initializers_before_unlink() {
         for identity in [false, true] {
             for stopped in [false, true] {
@@ -263,9 +259,7 @@ mod tests {
                         ":"
                     }
                 );
-                let Some(mut supervisor) = Supervisor::launch(identity, &body) else {
-                    return;
-                };
+                let mut supervisor = Supervisor::launch(identity, &body);
                 let child = supervisor.child(identity);
                 assert_eq!(supervisor.line(), "READY");
                 drop(supervisor.process.stdin.take());
@@ -284,6 +278,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires real mksh; set INTEROP_TEST_MKSH"]
     fn private_host_stdin_is_not_inherited_and_term_keeps_the_exit_contract() {
         for identity in [false, true] {
             let body = r#"if IFS= read -r leaked; then exit 61; fi
@@ -291,9 +286,7 @@ if [ -e /proc/self/fd/3 ]; then exit 62; fi
 trap 'if [ -f "$1" ]; then print -nr -- retained > "$1.exit"; fi; exit 0' TERM
 print -r -- ISOLATED
 while :; do sleep 0.02; done"#;
-            let Some(mut supervisor) = Supervisor::launch(identity, body) else {
-                return;
-            };
+            let mut supervisor = Supervisor::launch(identity, body);
             let child = supervisor.child(identity);
             assert_eq!(supervisor.line(), "ISOLATED");
             supervisor

@@ -1,59 +1,23 @@
 //! Public Runtime tests with real DNS-SD and TLS sockets. Run explicitly on a
 //! multicast-capable network; these do not require Android or an external adb.
+#[path = "support/tls.rs"]
+mod tls;
 use interop_adb::{
-    Identity, OperationOptions,
+    OperationOptions,
     protocol::{self, Frame},
-    wireless::{
-        TlsConfig,
-        discovery::{CONNECT_SERVICE, Discovery, DiscoveryEvent},
-    },
+    wireless::discovery::{CONNECT_SERVICE, Discovery, DiscoveryEvent},
 };
 use interop_core::Runtime;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
-use rsa::{
-    RsaPrivateKey,
-    pkcs8::{DecodePrivateKey, EncodePrivateKey},
-};
-use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use serde_json::{Value, json};
 use std::{
     net::{IpAddr, Ipv4Addr, UdpSocket},
-    sync::{Arc, OnceLock},
+    sync::Arc,
     time::Duration,
 };
 use tokio::net::TcpListener;
 
-type Gate = (
-    tokio::sync::oneshot::Sender<()>,
-    tokio::sync::oneshot::Receiver<()>,
-);
-
-fn tls_server() -> Arc<rustls::ServerConfig> {
-    static CONFIG: OnceLock<Arc<rustls::ServerConfig>> = OnceLock::new();
-    CONFIG
-        .get_or_init(|| {
-            let identity = Identity::generate().unwrap();
-            let tls = TlsConfig::experimental_rustcrypto(&identity).unwrap();
-            let key = RsaPrivateKey::from_pkcs8_pem(&identity.to_pkcs8_pem().unwrap())
-                .unwrap()
-                .to_pkcs8_der()
-                .unwrap();
-            Arc::new(
-                rustls::ServerConfig::builder_with_provider(
-                    Arc::new(rustls_rustcrypto::provider()),
-                )
-                .with_protocol_versions(&[&rustls::version::TLS13])
-                .unwrap()
-                .with_no_client_auth()
-                .with_single_cert(
-                    vec![CertificateDer::from(tls.certificate_der().to_vec())],
-                    PrivatePkcs8KeyDer::from(key.as_bytes().to_vec()).into(),
-                )
-                .unwrap(),
-            )
-        })
-        .clone()
-}
+use tls::Gate;
 
 fn network_address() -> Ipv4Addr {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -83,38 +47,10 @@ async fn peer_with_gates(
 ) -> (u16, tokio::task::JoinHandle<()>) {
     let listener = TcpListener::bind((address, 0)).await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let config = tls_server();
+    let config = tls::server_config();
     let task = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        assert_eq!(
-            Frame::read(&mut socket, 4096, false).await.unwrap().command,
-            protocol::CNXN
-        );
-        Frame::new(protocol::STLS, 0x0100_0000, 0, vec![])
-            .write(&mut socket)
-            .await
-            .unwrap();
-        assert_eq!(
-            Frame::read(&mut socket, 4096, false).await.unwrap().command,
-            protocol::STLS
-        );
-        let mut encrypted = tokio_rustls::TlsAcceptor::from(config)
-            .accept(socket)
-            .await
-            .unwrap();
-        if let Some((ready, release)) = tls_gate {
-            ready.send(()).unwrap();
-            release.await.unwrap();
-        }
-        Frame::new(
-            protocol::CNXN,
-            protocol::VERSION,
-            4096,
-            b"device::features=shell_v2;\0".to_vec(),
-        )
-        .write(&mut encrypted)
-        .await
-        .unwrap();
+        let (socket, _) = listener.accept().await.unwrap();
+        let mut encrypted = tls::handshake(socket, config, tls_gate).await;
         while let Ok(frame) = Frame::read(&mut encrypted, 4096, true).await {
             if frame.command == protocol::OPEN {
                 if let Some((ready, release)) = metadata_gate.take() {

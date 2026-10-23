@@ -96,7 +96,7 @@ pub(super) async fn serve(
                         stream
                     } else {
                         let mut stream = Stream::new(Service::Plain);
-                        let data = files.lock().unwrap();
+                        let mut data = files.lock().unwrap();
                         if command.contains("INTEROP_ACCESSIBLE") {
                             if !data.blocked {
                                 let path = command
@@ -110,6 +110,43 @@ pub(super) async fn serve(
                                 stream
                                     .queue(if allowed { b"INTEROP_ACCESSIBLE" } else { b"" }, true);
                             }
+                        } else if command.starts_with("(\nmkdir ")
+                            || command.starts_with("(\nrm -rf ")
+                        {
+                            let operation = command.lines().nth(1).unwrap();
+                            let (arguments, create) = match operation.strip_prefix("mkdir ") {
+                                Some(arguments) => (arguments, true),
+                                None => (operation.strip_prefix("rm -rf ").unwrap(), false),
+                            };
+                            // Android's old toolbox does not accept the GNU
+                            // option terminator. Model its nonzero usage exit,
+                            // rather than acknowledging every shell as success.
+                            let status = if arguments.starts_with("-- ") {
+                                2
+                            } else {
+                                let path = arguments
+                                    .strip_prefix('\'')
+                                    .and_then(|path| path.strip_suffix('\''))
+                                    .expect("quoted fixture path");
+                                if create && data.nodes.contains_key(path) {
+                                    1
+                                } else {
+                                    if create {
+                                        data.directory(path);
+                                    } else {
+                                        data.nodes.remove(path);
+                                    }
+                                    0
+                                }
+                            };
+                            let marker = command
+                                .split("print -nr -- '")
+                                .nth(1)
+                                .unwrap()
+                                .split('\'')
+                                .next()
+                                .unwrap();
+                            stream.queue(format!("{marker}{status}").as_bytes(), true);
                         } else {
                             panic!("unexpected raw gallery service: {command}");
                         }

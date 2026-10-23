@@ -71,12 +71,27 @@ void main() {
         if (calls.length == 1) await gate.future;
       },
     );
-    final down = queue.enqueue('session.touch', {'action': 'down', 'pointerId': 1}, binding);
-    final first = queue.enqueue('session.touch', {'action': 'move', 'pointerId': 1, 'x': 0}, binding);
+    final down = queue.enqueue('session.touch', {
+      'action': 'down',
+      'pointerId': 1,
+    }, binding);
+    final first = queue.enqueue('session.touch', {
+      'action': 'move',
+      'pointerId': 1,
+      'x': 0,
+    }, binding);
     for (var index = 1; index <= 10000; index++) {
-      expect(identical(first, queue.enqueue('session.touch', {
-        'action': 'move', 'pointerId': 1, 'x': index,
-      }, binding)), isTrue);
+      expect(
+        identical(
+          first,
+          queue.enqueue('session.touch', {
+            'action': 'move',
+            'pointerId': 1,
+            'x': index,
+          }, binding),
+        ),
+        isTrue,
+      );
     }
     gate.complete();
     await Future.wait([down, first, queue.idle]);
@@ -86,14 +101,18 @@ void main() {
 
   test('edge admission is bounded while an earlier dispatch stalls', () async {
     final gate = Completer<void>();
-    final queue = RemoteInputQueue(capacity: 2,
+    final queue = RemoteInputQueue(
+      capacity: 2,
       admits: (_, _, _) => true,
       dispatch: (_, _, _) => gate.future,
     );
     final first = queue.enqueue('session.text', {'text': 'first'}, binding);
     final second = queue.enqueue('session.text', {'text': 'second'}, binding);
     final third = queue.enqueue('session.text', {'text': 'third'}, binding);
-    await expectLater(queue.enqueue('session.text', {'text': 'overflow'}, binding), throwsStateError);
+    await expectLater(
+      queue.enqueue('session.text', {'text': 'overflow'}, binding),
+      throwsStateError,
+    );
     gate.complete();
     await Future.wait([first, second, third, queue.idle]);
   });

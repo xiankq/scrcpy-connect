@@ -4,9 +4,6 @@ use interop_adb::{
     protocol::{self, Frame},
 };
 
-async fn request(runtime: &Arc<Runtime>, command: &str, params: Value) -> CoreResult<Value> {
-    Box::pin(runtime.invoke(command, params)).await
-}
 async fn session(runtime: &Runtime, command: &str, params: &Value) -> CoreResult<Value> {
     Box::pin(runtime.session_command(command, params)).await
 }
@@ -181,12 +178,9 @@ impl Fixture {
             settings = json!({});
         }
         settings[&self.device] = json!({"stayAwake":enabled});
-        request(
-            &self.runtime,
-            "settings.update",
-            json!({"deviceSettings":settings}),
-        )
-        .await
+        self.runtime
+            .invoke("settings.update", json!({"deviceSettings":settings}))
+            .await
     }
     async fn state(&self, id: &str) -> Value {
         self.runtime.activities.sessions.lock().await[id]
@@ -424,12 +418,12 @@ async fn closing_the_last_window_cancels_a_pending_control_handshake() {
     let runtime = fixture.runtime.clone();
     let device = fixture.device.clone();
     let changing = tokio::spawn(async move {
-        request(
-            &runtime,
-            "settings.update",
-            json!({"deviceSettings":{device:{"stayAwake":true}}}),
-        )
-        .await
+        runtime
+            .invoke(
+                "settings.update",
+                json!({"deviceSettings":{device:{"stayAwake":true}}}),
+            )
+            .await
     });
     tokio::time::timeout(Duration::from_secs(3), async {
         while fixture.evidence.lock().unwrap().controls.is_empty() {
@@ -468,7 +462,8 @@ async fn unrelated_settings_and_capture_replacement_preserve_the_lease_and_other
     b.setting(true).await.unwrap();
     let lease_a = a.state("A").await["keepActiveLeaseId"].clone();
     let lease_b = b.state("B").await["keepActiveLeaseId"].clone();
-    request(&a.runtime, "settings.update", json!({"maxFps":30}))
+    a.runtime
+        .invoke("settings.update", json!({"maxFps":30}))
         .await
         .unwrap();
     {
@@ -541,12 +536,12 @@ async fn disabling_the_setting_cancels_a_pending_control_handshake() {
     let runtime = fixture.runtime.clone();
     let device = fixture.device.clone();
     let enabling = tokio::spawn(async move {
-        request(
-            &runtime,
-            "settings.update",
-            json!({"deviceSettings":{device:{"stayAwake":true}}}),
-        )
-        .await
+        runtime
+            .invoke(
+                "settings.update",
+                json!({"deviceSettings":{device:{"stayAwake":true}}}),
+            )
+            .await
     });
     tokio::time::timeout(Duration::from_secs(3), async {
         while fixture.evidence.lock().unwrap().controls.is_empty() {
