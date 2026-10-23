@@ -36,7 +36,7 @@ class FlutterAdb {
   /// Connections and services are available after bindNative.
   AdbClient get client =>
       _client ??
-      (throw StateError('Mobile Rust ADB bindings have not been attached'));
+      (throw StateError('Native ADB bindings have not been attached'));
 
   void bindNative(NativeAdbApi bindings) {
     if (_closed) throw StateError('ADB backend is closed');
@@ -48,13 +48,6 @@ class FlutterAdb {
       throw StateError('ADB backend already attached');
     }
   }
-
-  void bindMobile(NativeAdbApi bindings) {
-    if (usesOfficialAdb) throw StateError('Use bindNative for desktop');
-    bindNative(bindings);
-  }
-
-  bool get usesOfficialAdb => _process != null;
 
   /// [binaryDirectory] is an explicit package/test override; PATH is never used
   /// to silently select another ADB version or fall back to direct desktop ADB.

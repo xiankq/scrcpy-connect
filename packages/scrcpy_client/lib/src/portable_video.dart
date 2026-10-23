@@ -8,8 +8,6 @@ import 'package:device_protocol/device_protocol.dart';
 import 'package:runtime_diagnostics/runtime_diagnostics.dart';
 import 'package:scrcpy_client/scrcpy_client.dart';
 
-export 'package:scrcpy_client/scrcpy_client.dart';
-
 /// Owns local video output only. Core remains the owner of the control session,
 /// encoder process, input coordinates and session.ready/session.stop decisions.
 class PortableVideoOutputs {

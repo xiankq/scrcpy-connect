@@ -203,7 +203,6 @@ struct Output {
   McTexture *texture = nullptr;
   mc_decoder *decoder = nullptr;
   std::unique_ptr<Audio> audio;
-  bool paused = false;
   ~Output() {
     if (texture) {
       std::lock_guard<std::mutex> lock(*texture->mutex);
@@ -414,55 +413,6 @@ void method(FlMethodChannel *, FlMethodCall *call, gpointer user) {
   if (strcmp(name, "dispose") == 0) {
     plugin->outputs.erase(found);
     respond(call, nullptr);
-    return;
-  }
-  if (strcmp(name, "setPaused") == 0) {
-    auto *value = get(args, "paused");
-    output->paused = value && fl_value_get_bool(value);
-    mc_set_paused(output->decoder, output->paused);
-    respond(call, nullptr);
-    return;
-  }
-  if (strcmp(name, "setVolume") == 0) {
-    auto *value = get(args, "volume");
-    double volume = value ? (fl_value_get_type(value) == FL_VALUE_TYPE_FLOAT
-                                 ? fl_value_get_float(value)
-                                 : fl_value_get_int(value))
-                          : 1;
-    mc_set_volume(output->decoder, volume);
-    respond(call, nullptr);
-    return;
-  }
-  if (strcmp(name, "status") == 0) {
-    mc_status status{};
-    mc_get_status(output->decoder, &status);
-    g_autoptr(FlValue) result = fl_value_new_map();
-    put(result, "width", fl_value_new_int(status.width));
-    put(result, "height", fl_value_new_int(status.height));
-    put(result, "frameCount", fl_value_new_int(status.frame_count));
-    put(result, "presentedFrameCount",
-        fl_value_new_int(status.presented_frame_count));
-    put(result, "presentedSequence",
-        fl_value_new_int(status.presented_sequence));
-    put(result, "presentationPath",
-        fl_value_new_string(status.presentation_path));
-    put(result, "presentationError",
-        fl_value_new_string(status.presentation_error));
-    put(result, "audioPlayedFrames",
-        fl_value_new_int(status.audio_played_frames));
-    put(result, "audioQueuedFrames",
-        fl_value_new_int(status.audio_queued_frames));
-    put(result, "bytesWritten", fl_value_new_int(status.bytes_written));
-    put(result, "positionMs", fl_value_new_int(status.position_us / 1000));
-    put(result, "decoderName", fl_value_new_string(status.decoder_name));
-    put(result, "hardwareAccelerated",
-        fl_value_new_bool(status.hardware_accelerated));
-    put(result, "nativeReady", fl_value_new_bool(status.native_ready));
-    put(result, "ended", fl_value_new_bool(status.ended));
-    put(result, "paused", fl_value_new_bool(status.paused));
-    put(result, "errorCode", fl_value_new_int(status.error_code));
-    put(result, "error", fl_value_new_string(status.error));
-    respond(call, result);
     return;
   }
   if (strcmp(name, "snapshot") == 0) {

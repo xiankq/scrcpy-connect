@@ -4,8 +4,6 @@ import 'package:device_protocol/device_protocol.dart';
 import 'package:runtime_diagnostics/runtime_diagnostics.dart';
 import 'package:scrcpy_client/scrcpy_client.dart';
 
-export 'package:scrcpy_client/scrcpy_client.dart';
-
 /// Process/engine-scoped output owner. Core owns remote capture; the platform
 /// owns OS focus and foreground-service eligibility. No per-packet Dart PCM.
 class PortableAudioOutputs {

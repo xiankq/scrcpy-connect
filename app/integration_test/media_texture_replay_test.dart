@@ -4,9 +4,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:media_codec/media_codec.dart';
 
 /// Replays the pinned AV1 fixture through the real decoder and Windows texture.
 /// It needs no device, ADB server, application runtime, or platform window pixels.
@@ -25,26 +25,24 @@ void main() {
     // Only forward symbol addresses; Dart never calls the native SinkV1 ABI.
     final attach = library.lookup<Void>('replay_attach').address;
     final detach = library.lookup<Void>('replay_detach').address;
-    const channel = MethodChannel('media_codec');
     final rounds = <Map<String, Object?>>[];
     binding.reportData = {'textureReplay': rounds};
     for (var round = 0; round < 3; round++) {
-      late Map<Object?, Object?> output;
-      await tester.runAsync(() async {
-        output = (await channel.invokeMapMethod<Object?, Object?>(
-          'createVideo',
-          {
-            'codec': 'av1',
-            'sourceId': 'offline-texture-replay',
-            'generation': round + 1,
-            'width': 320,
-            'height': 240,
-            'attachAddress': attach,
-            'detachAddress': detach,
-          },
-        ))!;
-      });
+      final controller = MediaCodecController.video();
       try {
+        await tester.runAsync(
+          () => controller.open(
+            MediaCodecSource(
+              codec: 'av1',
+              sourceId: 'offline-texture-replay',
+              generation: round + 1,
+              width: 320,
+              height: 240,
+              attachAddress: attach,
+              detachAddress: detach,
+            ),
+          ),
+        );
         final key = GlobalKey();
         await tester.pumpWidget(
           Directionality(
@@ -55,7 +53,7 @@ void main() {
                 child: SizedBox(
                   width: 320,
                   height: 240,
-                  child: Texture(textureId: output['textureId'] as int),
+                  child: Texture(textureId: controller.textureId!),
                 ),
               ),
             ),
@@ -64,10 +62,7 @@ void main() {
         await tester.runAsync(() async {
           final deadline = Stopwatch()..start();
           while (true) {
-            final status = (await channel.invokeMapMethod<Object?, Object?>(
-              'status',
-              {'handle': output['handle']},
-            ))!;
+            final status = await controller.refresh();
             if ((status['frameCount'] as int) >= 24) break;
             if (deadline.elapsed > const Duration(seconds: 5)) {
               throw StateError(
@@ -100,11 +95,7 @@ void main() {
         }
       } finally {
         await tester.pumpWidget(const SizedBox());
-        await tester.runAsync(() async {
-          await channel.invokeMethod<void>('dispose', {
-            'handle': output['handle'],
-          });
-        });
+        await tester.runAsync(controller.dispose);
       }
     }
     debugPrint('[media-texture-replay] $rounds');

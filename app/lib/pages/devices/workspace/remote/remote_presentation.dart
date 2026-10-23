@@ -51,7 +51,6 @@ class RemotePresentation {
   bool get connecting => _connecting;
   bool get paused => _paused;
   bool get exiting => _exiting;
-  bool get initialActionApplied => _initialActionApplied;
   bool get lifecyclePaused => _lifecyclePaused;
   bool get covered => _covered;
   RemoteData? get session =>

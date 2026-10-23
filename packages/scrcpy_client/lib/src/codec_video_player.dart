@@ -22,12 +22,8 @@ class CodecVideoPlayer implements VideoPlayerPort {
   }
 
   @override
-  Future<void> setPaused(
-    bool paused, {
-    Future<void> Function()? onRequested,
-  }) async {
+  Future<void> setPaused(bool paused) async {
     await _controller.setPaused(paused);
-    await onRequested?.call();
     if (!paused) await _controller.waitForFrame();
   }
 

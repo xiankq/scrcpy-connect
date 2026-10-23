@@ -435,14 +435,6 @@ enum InteropCommand {
     required: {'deviceId': ProtocolFieldType.string},
   ),
   mediaThumbnailCancel("media.thumbnail.cancel"),
-  mediaTraceRead(
-    "media.trace.read",
-    required: {'relayId': ProtocolFieldType.string},
-  ),
-  mediaTraceSeal(
-    "media.trace.seal",
-    required: {'relayId': ProtocolFieldType.string},
-  ),
   notificationsDismiss(
     "notifications.dismiss",
     requiresVerifiedState: true,

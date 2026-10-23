@@ -10,8 +10,6 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -30,7 +28,6 @@ class MainActivity : FlutterActivity() {
         fun cancelPendingConnections() { current?.get()?.cancelPendingConnectionsAndMedia() }
         fun releaseUsbLease(id: String?) { UsbLeases.connections.release(id) }
     }
-    private val main = Handler(Looper.getMainLooper())
     private val documents by lazy { PlatformDocuments(this) }
     private val audio by lazy { NativeAudioRuntime.get(applicationContext) }
     private var pendingUsb: MethodChannel.Result? = null
@@ -121,10 +118,6 @@ class MainActivity : FlutterActivity() {
             if (IncomingShares.handle(applicationContext, this, call, result)) return
             when (call.method) {
                 "usb.authorize" -> authorizeUsb(call, result)
-                "usb.release" -> {
-                    releaseUsbLease(call.argument<String>("usbLeaseId"))
-                    result.success(null)
-                }
                 "usb.cancel" -> {
                     val attempt = call.argument<String>("attemptId")
                     if (attempt != null && attempt == pendingUsbAttempt) {

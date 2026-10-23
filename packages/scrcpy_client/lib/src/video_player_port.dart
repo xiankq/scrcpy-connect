@@ -16,9 +16,8 @@ abstract interface class VideoPlayerPort {
   /// observed separately after Flutter mounts the returned texture.
   Future<VideoTexture> open(VideoJson source);
 
-  /// Synchronously applies output pause. [onRequested] is a compatibility hook
-  /// after submission; pausing a decoder does not require restarting capture.
-  Future<void> setPaused(bool paused, {Future<void> Function()? onRequested});
+  /// Applies output pause without restarting capture.
+  Future<void> setPaused(bool paused);
   Future<VideoPixels?> snapshot({required int width, required int height});
   Future<VideoJson> release();
 }

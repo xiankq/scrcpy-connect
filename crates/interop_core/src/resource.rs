@@ -280,58 +280,6 @@ impl Drop for ResourceReservation {
     }
 }
 
-/// Native evidence is distinct from scrcpy's untyped exception messages.
-/// Android CodecException.ERROR_INSUFFICIENT_RESOURCE = 1100; ERROR_RECLAIMED
-/// = 1101 means the codec must be released. Neither is a hardware capacity.
-/// https://developer.android.com/reference/android/media/MediaCodec.CodecException
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CodecFailure {
-    InsufficientResource,
-    Reclaimed,
-    Unclassified,
-}
-
-impl CodecFailure {
-    pub fn from_android_error_code(code: i32) -> Self {
-        match code {
-            1100 => Self::InsufficientResource,
-            1101 => Self::Reclaimed,
-            _ => Self::Unclassified,
-        }
-    }
-
-    /// Fixed scrcpy 5.0.1 SurfaceEncoder logs exception class + message, not
-    /// CodecException.getErrorCode(); generic failures must not authorize retry.
-    /// https://github.com/Genymobile/scrcpy/blob/v5.0.1/server/src/main/java/com/genymobile/scrcpy/video/SurfaceEncoder.java#L138
-    pub fn from_scrcpy_log(_log: &str) -> Self {
-        Self::Unclassified
-    }
-}
-
-/// Permission for one lower-load attempt of a new, side-effect-free request.
-/// Does not restart a process, change codec/encoder, or stop an old activity.
-#[derive(Default)]
-pub struct NewSessionRetry {
-    used: bool,
-}
-
-impl NewSessionRetry {
-    pub fn claim(
-        &mut self,
-        failure: CodecFailure,
-        application_side_effects_possible: bool,
-    ) -> bool {
-        if self.used
-            || application_side_effects_possible
-            || failure != CodecFailure::InsufficientResource
-        {
-            return false;
-        }
-        self.used = true;
-        true
-    }
-}
-
 #[cfg(test)]
 mod replacement_tests {
     use super::*;

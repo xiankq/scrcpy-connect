@@ -731,20 +731,6 @@
       "owner": "core"
     },
     {
-      "name": "media.trace.read",
-      "owner": "core",
-      "required": {
-        "relayId": "string"
-      }
-    },
-    {
-      "name": "media.trace.seal",
-      "owner": "core",
-      "required": {
-        "relayId": "string"
-      }
-    },
-    {
       "name": "notifications.dismiss",
       "owner": "core",
       "required": {

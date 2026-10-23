@@ -604,10 +604,6 @@ impl MediaStreams {
                 source.cancellation.cancel();
                 Ok(json!({"closed":true}))
             }
-            "media.trace.seal" | "media.trace.read" => Err(CoreError::new(
-                "trace_unavailable",
-                "原始包直连路径不生成容器诊断档案。",
-            )),
             _ => Err(CoreError::new("unknown_command", "未知媒体传输操作。")),
         }
     }

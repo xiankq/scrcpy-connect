@@ -515,7 +515,6 @@ struct Output {
   GpuTexture gpu;
   std::unique_ptr<Audio> audio;
   std::mutex mutex;
-  bool paused = false;
   void stop() {
     std::lock_guard<std::mutex> lock(mutex);
     mc_destroy(decoder);
@@ -657,49 +656,6 @@ private:
       outputs_.erase(found);
       retire(output);
       result->Success();
-      return;
-    }
-    if (name == "setPaused") {
-      auto *v = get(args, "paused");
-      output->paused = v && std::get_if<bool>(v) ? std::get<bool>(*v) : false;
-      mc_set_paused(output->decoder, output->paused);
-      result->Success();
-      return;
-    }
-    if (name == "setVolume") {
-      auto *v = get(args, "volume");
-      double volume = v && std::get_if<double>(v) ? std::get<double>(*v) : 1;
-      mc_set_volume(output->decoder, volume);
-      result->Success();
-      return;
-    }
-    if (name == "status") {
-      mc_status s{};
-      mc_get_status(output->decoder, &s);
-      Map reply{
-          {Value("width"), Value(static_cast<int64_t>(s.width))},
-          {Value("height"), Value(static_cast<int64_t>(s.height))},
-          {Value("frameCount"), Value(static_cast<int64_t>(s.frame_count))},
-          {Value("presentedFrameCount"),
-           Value(static_cast<int64_t>(s.presented_frame_count))},
-          {Value("presentedSequence"),
-           Value(static_cast<int64_t>(s.presented_sequence))},
-          {Value("presentationPath"), Value(s.presentation_path)},
-          {Value("presentationError"), Value(s.presentation_error)},
-          {Value("audioPlayedFrames"),
-           Value(static_cast<int64_t>(s.audio_played_frames))},
-          {Value("audioQueuedFrames"),
-           Value(static_cast<int64_t>(s.audio_queued_frames))},
-          {Value("bytesWritten"), Value(static_cast<int64_t>(s.bytes_written))},
-          {Value("positionMs"), Value(s.position_us / 1000)},
-          {Value("decoderName"), Value(s.decoder_name)},
-          {Value("hardwareAccelerated"), Value(s.hardware_accelerated != 0)},
-          {Value("nativeReady"), Value(s.native_ready != 0)},
-          {Value("ended"), Value(s.ended != 0)},
-          {Value("paused"), Value(s.paused != 0)},
-          {Value("errorCode"), Value(s.error_code)},
-          {Value("error"), Value(s.error)}};
-      result->Success(Value(reply));
       return;
     }
     if (name == "snapshot") {

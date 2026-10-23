@@ -423,7 +423,6 @@ void main() {
     state.replaceBinding();
     expect(state.acceptsStart(attempt), isFalse);
     expect(state.requiresVerification(attempt), isTrue);
-    expect(state.initialActionApplied, isTrue);
     expect(_input(state), isFalse);
     final snapshot = <String, dynamic>{
       'sequence': 4,
@@ -441,6 +440,12 @@ void main() {
       RemoteResumeResult.ready,
     );
     expect(_input(state), isTrue);
+    expect(
+      state.takeInitialAction(foreground: true, ownerCurrent: true),
+      isFalse,
+      reason:
+          'Recovery must not replay the initial action after input resumes.',
+    );
     expect(
       state.reconcile(snapshot, packageName: null, deviceId: 'phone'),
       isFalse,

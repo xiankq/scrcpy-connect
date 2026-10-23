@@ -86,8 +86,6 @@ pub(crate) enum Command {
     MediaStatus,
     MediaThumbnail,
     MediaThumbnailCancel,
-    MediaTraceRead,
-    MediaTraceSeal,
     NotificationsDismiss,
     NotificationsList,
     NotificationsOpen,
@@ -226,8 +224,6 @@ impl Command {
             "media.status" => Self::MediaStatus,
             "media.thumbnail" => Self::MediaThumbnail,
             "media.thumbnail.cancel" => Self::MediaThumbnailCancel,
-            "media.trace.read" => Self::MediaTraceRead,
-            "media.trace.seal" => Self::MediaTraceSeal,
             "notifications.dismiss" => Self::NotificationsDismiss,
             "notifications.list" => Self::NotificationsList,
             "notifications.open" => Self::NotificationsOpen,
@@ -367,8 +363,6 @@ impl Command {
             Self::MediaStatus => "media.status",
             Self::MediaThumbnail => "media.thumbnail",
             Self::MediaThumbnailCancel => "media.thumbnail.cancel",
-            Self::MediaTraceRead => "media.trace.read",
-            Self::MediaTraceSeal => "media.trace.seal",
             Self::NotificationsDismiss => "notifications.dismiss",
             Self::NotificationsList => "notifications.list",
             Self::NotificationsOpen => "notifications.open",
@@ -816,14 +810,6 @@ impl Command {
             }],
             Self::MediaThumbnail => &[Field {
                 name: "deviceId",
-                kind: FieldType::String,
-            }],
-            Self::MediaTraceRead => &[Field {
-                name: "relayId",
-                kind: FieldType::String,
-            }],
-            Self::MediaTraceSeal => &[Field {
-                name: "relayId",
                 kind: FieldType::String,
             }],
             Self::NotificationsDismiss => &[Field {

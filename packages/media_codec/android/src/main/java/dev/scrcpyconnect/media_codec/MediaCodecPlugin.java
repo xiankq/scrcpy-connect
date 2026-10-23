@@ -120,26 +120,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
     }
     if (call.method.equals("dispose")) { dispose(session, result); return; }
     if (call.method.equals("snapshot")) { snapshot(session, args, result); return; }
-    worker.execute(() -> {
-      try {
-        Object value = null;
-        switch (call.method) {
-          case "status": value = nativeStatus(session.decoder); break;
-          case "setPaused":
-            nativeSetPaused(session.decoder, Boolean.TRUE.equals(args.get("paused")));
-            break;
-          case "setVolume":
-            Object volume = args.get("volume");
-            nativeSetVolume(session.decoder, volume instanceof Number ? ((Number) volume).doubleValue() : 1.0);
-            break;
-          default: main.post(result::notImplemented); return;
-        }
-        Object response = value;
-        main.post(() -> result.success(response));
-      } catch (RuntimeException error) {
-        main.post(() -> result.error("media_codec_operation", error.getMessage(), null));
-      }
-    });
+    result.notImplemented();
   }
 
   private void dispose(Session session, MethodChannel.Result result) {
@@ -388,9 +369,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
       int height, long generation, String sourceId, long attachAddress, long detachAddress);
   private static native Map<String, Object> nativeBindings(long decoder);
   private static native void nativeSetSurface(long decoder, Surface surface);
-  private static native Map<String, Object> nativeStatus(long decoder);
   private static native Map<String, Object> nativeSnapshot(long decoder, int maxWidth, int maxHeight);
   private static native void nativeSetPaused(long decoder, boolean paused);
-  private static native void nativeSetVolume(long decoder, double volume);
   private static native void nativeDispose(long decoder);
 }

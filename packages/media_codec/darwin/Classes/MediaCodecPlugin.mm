@@ -52,7 +52,6 @@ extern "C" {
 - (void)publishFrame;
 - (int64_t)writePCM:(const uint8_t *)bytes length:(size_t)length;
 - (void)recycleAudioBuffer:(AudioQueueBufferRef)buffer;
-- (void)setPaused:(BOOL)paused;
 - (void)pauseAudio:(BOOL)paused;
 - (void)closeAudio;
 - (int32_t)audioState:(mc_audio_state *)state;
@@ -307,7 +306,6 @@ static uint32_t MCCodec(id value) {
   if (std::find(_audioBuffers.begin(), _audioBuffers.end(), buffer) == _audioBuffers.end())
     _audioBuffers.push_back(buffer);
 }
-- (void)setPaused:(BOOL)paused { mc_set_paused(_decoder, paused); }
 - (void)pauseAudio:(BOOL)paused {
   std::lock_guard<std::mutex> control(_audioControlMutex);
   _audioPaused = paused;
@@ -455,20 +453,7 @@ static uint32_t MCCodec(id value) {
   if ([call.method isEqualToString:@"dispose"]) [self.outputs removeObjectForKey:args[@"handle"]];
   dispatch_async(self.worker, ^{
     id response = nil;
-    if ([call.method isEqualToString:@"status"]) {
-      mc_status status = {}; mc_get_status(output->_decoder, &status);
-      response = @{@"width": @(status.width), @"height": @(status.height),
-                   @"frameCount": @(status.frame_count), @"bytesWritten": @(status.bytes_written),
-                   @"positionMs": @(status.position_us / 1000), @"nativeReady": @(status.native_ready != 0),
-                   @"firstFrame": @(status.frame_count > 0), @"ended": @(status.ended != 0),
-                   @"paused": @(status.paused != 0),
-                   @"hardwareAccelerated": @(status.hardware_accelerated != 0),
-                   @"decoderName": @(status.decoder_name), @"errorCode": @(status.error_code), @"error": @(status.error)};
-    } else if ([call.method isEqualToString:@"setPaused"]) {
-      [output setPaused:[args[@"paused"] boolValue]];
-    } else if ([call.method isEqualToString:@"setVolume"]) {
-      mc_set_volume(output->_decoder, [args[@"volume"] doubleValue]);
-    } else if ([call.method isEqualToString:@"snapshot"]) {
+    if ([call.method isEqualToString:@"snapshot"]) {
       mc_image image = {};
       if (mc_copy_rgba_scaled(output->_decoder, [args[@"width"] unsignedIntValue], [args[@"height"] unsignedIntValue], &image) == 0) {
         NSMutableData *bytes = [NSMutableData dataWithLength:image.width * image.height * 4];

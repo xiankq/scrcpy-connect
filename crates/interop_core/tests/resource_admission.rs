@@ -1,6 +1,4 @@
-use interop_core::resource::{
-    APP_SESSION_LIMIT, BusyReason, CodecFailure, NewSessionRetry, ResourceAdmission, ResourceStatus,
-};
+use interop_core::resource::{APP_SESSION_LIMIT, BusyReason, ResourceAdmission, ResourceStatus};
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -241,21 +239,4 @@ fn duplicate_identity_and_device_cancellation_cannot_replace_or_stop_other_activ
     assert_eq!(admission.activities().len(), 1);
     assert!(admission.activities()[0].can_pause);
     assert!(!admission.cancel("session:unknown"));
-}
-
-#[test]
-fn only_explicit_native_resource_evidence_authorizes_one_side_effect_free_retry() {
-    let mut retry = NewSessionRetry::default();
-    for log in [
-        "Capture/encoding error: java.lang.IllegalArgumentException:",
-        "Capture/encoding error: java.lang.IllegalStateException: insufficient resources",
-        "Capture/encoding error: android.media.MediaCodec$CodecException: Error 0xfffffff4",
-    ] {
-        assert!(!retry.claim(CodecFailure::from_scrcpy_log(log), false));
-    }
-    assert!(!retry.claim(CodecFailure::from_android_error_code(1101), false));
-    assert!(!retry.claim(CodecFailure::from_android_error_code(-12), false));
-    assert!(!retry.claim(CodecFailure::from_android_error_code(1100), true));
-    assert!(retry.claim(CodecFailure::from_android_error_code(1100), false));
-    assert!(!retry.claim(CodecFailure::from_android_error_code(1100), false));
 }

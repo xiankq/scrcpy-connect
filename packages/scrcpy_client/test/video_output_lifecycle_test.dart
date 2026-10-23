@@ -38,12 +38,8 @@ class _Player implements VideoPlayerPort {
       const VideoTexture(7, 16, 16);
 
   @override
-  Future<void> setPaused(
-    bool paused, {
-    Future<void> Function()? onRequested,
-  }) async {
+  Future<void> setPaused(bool paused) async {
     if (!playing.isCompleted) playing.complete();
-    await onRequested?.call();
     await presentation?.future;
   }
 

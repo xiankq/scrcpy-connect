@@ -99,11 +99,6 @@ void integer(JNIEnv* env, jobject target, const char* key, int64_t value) {
   jobject number = env->CallStaticObjectMethod(cls, env->GetStaticMethodID(cls, "valueOf", "(J)Ljava/lang/Long;"), static_cast<jlong>(value));
   env->DeleteLocalRef(cls); put(env, target, key, number);
 }
-void boolean(JNIEnv* env, jobject target, const char* key, bool value) {
-  jclass cls = env->FindClass("java/lang/Boolean");
-  jobject number = env->CallStaticObjectMethod(cls, env->GetStaticMethodID(cls, "valueOf", "(Z)Ljava/lang/Boolean;"), static_cast<jboolean>(value));
-  env->DeleteLocalRef(cls); put(env, target, key, number);
-}
 void render_software(Output* output) {
   uint64_t sequence = 0;
   AVFrame* frame = mc_acquire_frame_snapshot(output->decoder, &sequence);
@@ -320,21 +315,6 @@ extern "C" JNIEXPORT void JNICALL JNI_METHOD(nativeSetSurface)(JNIEnv* env, jcla
   mc_set_native_window(value->decoder, next);
   if (previous) ANativeWindow_release(previous);
 }
-extern "C" JNIEXPORT jobject JNICALL JNI_METHOD(nativeStatus)(JNIEnv* env, jclass, jlong handle) {
-  mc_status status{}; if (handle) mc_get_status(output(handle)->decoder, &status);
-  jobject value = map(env);
-  integer(env, value, "width", status.width); integer(env, value, "height", status.height);
-  integer(env, value, "frameCount", status.frame_count); integer(env, value, "bytesWritten", status.bytes_written);
-  integer(env, value, "positionMs", status.position_us / 1000);
-  integer(env, value, "errorCode", status.error_code);
-  boolean(env, value, "hardwareAccelerated", status.hardware_accelerated);
-  boolean(env, value, "nativeReady", status.native_ready);
-  boolean(env, value, "firstFrame", status.frame_count > 0);
-  boolean(env, value, "ended", status.ended);
-  boolean(env, value, "paused", status.paused);
-  put(env, value, "decoderName", env->NewStringUTF(status.decoder_name));
-  put(env, value, "error", env->NewStringUTF(status.error)); return value;
-}
 extern "C" JNIEXPORT jobject JNICALL JNI_METHOD(nativeSnapshot)(JNIEnv* env, jclass, jlong handle, jint max_width, jint max_height) {
   mc_image image{};
   if (!handle || mc_copy_rgba_scaled(output(handle)->decoder, max_width, max_height, &image) != 0) return nullptr;
@@ -350,9 +330,6 @@ extern "C" JNIEXPORT jobject JNICALL JNI_METHOD(nativeSnapshot)(JNIEnv* env, jcl
 }
 extern "C" JNIEXPORT void JNICALL JNI_METHOD(nativeSetPaused)(JNIEnv*, jclass, jlong handle, jboolean paused) {
   if (handle) mc_set_paused(output(handle)->decoder, paused);
-}
-extern "C" JNIEXPORT void JNICALL JNI_METHOD(nativeSetVolume)(JNIEnv*, jclass, jlong handle, jdouble volume) {
-  if (handle) mc_set_volume(output(handle)->decoder, volume);
 }
 extern "C" JNIEXPORT void JNICALL JNI_METHOD(nativeDispose)(JNIEnv* env, jclass, jlong handle) {
   if (!handle) return;

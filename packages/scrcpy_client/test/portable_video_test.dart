@@ -38,10 +38,6 @@ class _Player implements VideoPlayerPort {
   Completer<VideoTexture>? opening;
   Completer<void>? presentation;
   Completer<VideoPixels?>? pixels;
-  Completer<void>? snapshotRequested;
-  final operations = VideoPlayerOperations();
-  bool serialized = false;
-  void Function(bool)? onPlaybackRequested;
   bool nullFrame = false;
   int texture = 7, released = 0;
   @override
@@ -55,30 +51,17 @@ class _Player implements VideoPlayerPort {
   }
 
   @override
-  Future<void> setPaused(bool paused, {Future<void> Function()? onRequested}) {
-    Future<void> change() async {
-      calls.add(paused ? 'pause' : 'play');
-      onPlaybackRequested?.call(paused);
-      await Future.wait<void>([
-        if (presentation != null) presentation!.future,
-        if (onRequested != null) Future<void>.sync(onRequested),
-      ]);
-    }
-
-    return serialized ? operations.run(change) : change();
+  Future<void> setPaused(bool paused) async {
+    calls.add(paused ? 'pause' : 'play');
+    await presentation?.future;
   }
 
   @override
-  Future<VideoPixels?> snapshot({required int width, required int height}) =>
-      serialized
-      ? operations.run(() => readPixels(width, height))
-      : readPixels(width, height);
-
-  Future<VideoPixels?> readPixels(int width, int height) async {
+  Future<VideoPixels?> snapshot({
+    required int width,
+    required int height,
+  }) async {
     calls.add('snapshot:$width:$height');
-    if (snapshotRequested case final requested? when !requested.isCompleted) {
-      requested.complete();
-    }
     if (pixels != null) return pixels!.future;
     return nullFrame
         ? null
@@ -101,11 +84,9 @@ class _Harness {
   _Harness({
     this.diagnostics,
     this.operationTimeout = const Duration(seconds: 6),
-    this.serialized = false,
   });
   final Duration operationTimeout;
   final DiagnosticLog? diagnostics;
-  final bool serialized;
   final commands = <(String, VideoJson)>[];
   final events = <VideoJson>[];
   final players = <_Player>[];
@@ -119,14 +100,7 @@ class _Harness {
     isDisposed: () => disposed,
     operationTimeout: operationTimeout,
     playerFactory: () {
-      final p = _Player()
-        ..texture = 7 + players.length
-        ..serialized = serialized
-        ..onPlaybackRequested = (paused) {
-          if (serialized) {
-            commands.add(('native.${paused ? 'pause' : 'play'}', {}));
-          }
-        };
+      final p = _Player()..texture = 7 + players.length;
       players.add(p);
       return p;
     },
@@ -142,7 +116,6 @@ class _Harness {
           : opening!.future;
     }
     if (command == 'media.close') return {'closed': true};
-    if (command == 'session.refresh') return {'refreshRequested': true};
     throw StateError(
       'adapter must not create or stop a remote session: $command',
     );
@@ -526,47 +499,6 @@ void main() {
     expect(h.events.any((event) => event['type'] == 'session.frame'), false);
     await h.output.dispose();
   });
-
-  test(
-    'queued pause waits for readback and never requests an encoder reset',
-    () async {
-      final h = _Harness(serialized: true);
-      await h.output.start(_stream('A'));
-      final root = await Directory.systemTemp.createTemp(
-        'portable-video-pause-',
-      );
-      final player = h.players.single;
-      final pixels = Completer<VideoPixels?>();
-      player.pixels = pixels;
-      player.snapshotRequested = Completer<void>();
-      final screenshot = h.output.screenshot('A', directory: root.path);
-      final captured = expectLater(
-        screenshot,
-        throwsA(_code('capture_failed')),
-      );
-      Future<VideoJson>? pausing;
-      try {
-        await player.snapshotRequested!.future.timeout(
-          const Duration(seconds: 5),
-        );
-        expect(player.calls.last, 'snapshot:720:1280');
-        h.commands.clear();
-        pausing = h.output.pause('A');
-        await Future<void>.delayed(Duration.zero);
-        expect(h.commands, isEmpty, reason: 'Pause may not overtake readback.');
-        pixels.complete(null);
-        await captured;
-        await pausing;
-        expect(h.commands.map((e) => e.$1), ['native.pause']);
-      } finally {
-        if (!pixels.isCompleted) pixels.complete(null);
-        await captured;
-        await pausing;
-        await h.output.dispose();
-        await root.delete(recursive: true);
-      }
-    },
-  );
 
   test('same relay survives failed generation and closes exactly once after commit', () async {
     final h = _Harness();
