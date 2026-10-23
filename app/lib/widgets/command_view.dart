@@ -26,13 +26,12 @@ class CommandView extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final retry = useState(0);
+    final identity = (controller, command, params.toString());
     final future = useMemoized(() => controller.request(command, params), [
-      command,
-      params.toString(),
+      identity,
       retry.value,
       refreshKey,
     ]);
-    final identity = '$command:${params.toString()}';
     final previousIdentity = useRef(identity);
     final changedObject = previousIdentity.value != identity;
     previousIdentity.value = identity;

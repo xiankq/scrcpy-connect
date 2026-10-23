@@ -81,11 +81,6 @@ String statusText(String status) => switch (status) {
   'completedWithSkips' => '部分内容已跳过',
   _ => '状态待核验',
 };
-String sessionStatusText(String status) => switch (status) {
-  'running' => '运行中',
-  'active' => '使用中',
-  _ => statusText(status),
-};
 String bytes(dynamic input) {
   final n = num.tryParse('$input') ?? 0;
   if (n < 1024) return '${n.toInt()} B';
@@ -154,8 +149,8 @@ class AppController extends _$AppController {
   final _audioStops = <String, Future<void>>{};
   final _audioDeviceEpochs = <String, int>{};
   final _audioFailures = <String, String>{};
-  Future<void> _deviceAudioQueue = Future<void>.value();
   bool _deviceAudioScheduled = false;
+  bool _deviceAudioDirty = false;
   Future<void> _settingsQueue = Future<void>.value();
   bool _disposed = true;
   int _generation = 0;
@@ -175,8 +170,8 @@ class AppController extends _$AppController {
     final ownedViews = _sessionViews;
     final generation = ++_generation;
     _disposed = false;
-    _deviceAudioQueue = Future<void>.value();
     _deviceAudioScheduled = false;
+    _deviceAudioDirty = false;
     _audioDeviceWork.clear();
     _audioStops.clear();
     _audioDeviceEpochs.clear();
@@ -499,15 +494,25 @@ class AppController extends _$AppController {
   }
 
   void _scheduleDeviceAudio() {
-    if (isDisposed() || _deviceAudioScheduled || !_hasDeviceAudioWork) return;
+    if (isDisposed() || !_hasDeviceAudioWork) return;
+    _deviceAudioDirty = true;
+    if (_deviceAudioScheduled) return;
     _deviceAudioScheduled = true;
     final generation = _generation;
-    Future<void>.microtask(() {
-      _deviceAudioScheduled = false;
-      if (!_current(generation)) return;
-      _deviceAudioQueue = _deviceAudioQueue
-          .catchError((Object _) {})
-          .then((_) => _syncDeviceAudio(generation));
+    Future<void>.microtask(() async {
+      try {
+        // Intermediate events only require one further pass over current state.
+        // Never accumulate an async reconciliation for every event in a burst.
+        if (_current(generation)) {
+          _deviceAudioDirty = false;
+          await _syncDeviceAudio(generation);
+        }
+      } finally {
+        if (_current(generation)) {
+          _deviceAudioScheduled = false;
+          if (_deviceAudioDirty) _scheduleDeviceAudio();
+        }
+      }
     });
   }
 
@@ -576,6 +581,9 @@ class AppController extends _$AppController {
         !_hasDeviceAudioWork) {
       return;
     }
+    // A start can finish while these snapshots are in flight. Its absence from
+    // an older source snapshot must not trigger another start in this pass.
+    final starting = _audioDeviceWork.keys.toSet();
     try {
       final sources = objects(
         (await execute(InteropCommand.audioSources))['sources'],
@@ -617,7 +625,9 @@ class AppController extends _$AppController {
         }
       }
       for (final device in wanted.difference(active)) {
-        if (_audioDeviceWork.containsKey(device)) continue;
+        if (starting.contains(device) || _audioDeviceWork.containsKey(device)) {
+          continue;
+        }
         final epoch = _audioDeviceEpochs[device] ?? 0;
         late final Future<void> work;
         work = _startDeviceAudio(device, generation, epoch).whenComplete(() {

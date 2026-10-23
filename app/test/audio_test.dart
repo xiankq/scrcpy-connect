@@ -15,15 +15,20 @@ class _AudioFixture {
   ];
   final events = StreamController<Json>.broadcast(sync: true);
   final pendingStarts = <String, Completer<Json>>{};
+  Completer<Json>? pendingSources;
+  Completer<Json>? pendingSessions;
   final failingDevices = <String>{};
   late final controller =
       createTestController((command, [params = const {}]) async {
           calls.add((command, Map.of(params)));
           final device = value(params, 'deviceId');
           if (command == 'audio.sources') {
-            return {'sources': sources.values.toList()};
+            return pendingSources?.future ??
+                {'sources': sources.values.toList()};
           }
-          if (command == 'session.list') return {'sessions': sessions};
+          if (command == 'session.list') {
+            return pendingSessions?.future ?? {'sessions': sessions};
+          }
           if (command == 'audio.start') {
             if (failingDevices.contains(device)) {
               throw StateError('unsupported $device');
@@ -61,6 +66,80 @@ Future<void> _flush(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('event bursts coalesce while an audio state read is pending', (
+    tester,
+  ) async {
+    final fixture = _AudioFixture();
+    final pending = fixture.pendingSources = Completer<Json>();
+    final close = fixture.controller.claimRemoteDeviceView('a');
+    await _flush(tester);
+    for (var i = 0; i < 50; i++) {
+      fixture.events.add({
+        'type': 'session.updated',
+        'deviceId': 'a',
+        'data': fixture.sessions.first,
+      });
+      await tester.pump();
+    }
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.sources'),
+      hasLength(1),
+    );
+    fixture.pendingSources = null;
+    pending.complete({'sources': <Json>[]});
+    await _flush(tester);
+    expect(fixture.sources.keys, ['a']);
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.sources'),
+      hasLength(2),
+    );
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.start'),
+      hasLength(1),
+    );
+    close();
+    await _flush(tester);
+    expect(fixture.sources, isEmpty);
+    await fixture.dispose();
+  });
+
+  testWidgets('an old source snapshot cannot restart a just completed start', (
+    tester,
+  ) async {
+    final fixture = _AudioFixture();
+    final starting = fixture.pendingStarts['a'] = Completer<Json>();
+    final close = fixture.controller.claimRemoteDeviceView('a');
+    await _flush(tester);
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.start'),
+      hasLength(1),
+    );
+
+    final sources = fixture.pendingSources = Completer<Json>();
+    final sessions = fixture.pendingSessions = Completer<Json>();
+    fixture.events.add({
+      'type': 'session.updated',
+      'deviceId': 'a',
+      'data': fixture.sessions.first,
+    });
+    await _flush(tester);
+    fixture.pendingSources = null;
+    sources.complete({'sources': <Json>[]});
+    await _flush(tester);
+    starting.complete(fixture.sources['a']);
+    await _flush(tester);
+    fixture.pendingSessions = null;
+    sessions.complete({'sessions': fixture.sessions});
+    await _flush(tester);
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.start'),
+      hasLength(1),
+    );
+    close();
+    await _flush(tester);
+    await fixture.dispose();
+  });
+
   testWidgets(
     'connected devices and ordinary device focus never enable sound',
     (tester) async {
