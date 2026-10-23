@@ -390,8 +390,8 @@ impl Runtime {
                 .into());
             }
             let script = match action {
-                "mkdir" => format!("mkdir -- {}", quote(&path)?),
-                "delete" => format!("rm -rf -- {}", quote(&path)?),
+                "mkdir" => format!("mkdir {}", quote(&path)?),
+                "delete" => format!("rm -rf {}", quote(&path)?),
                 _ => return Err(CoreError::new("unsupported", "不支持的设备文件原语。")),
             };
             let result = crate::remote_fs::command(&client, &script, 64 * 1024, options(token))

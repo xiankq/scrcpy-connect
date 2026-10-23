@@ -225,6 +225,36 @@ async fn legacy_storage_alias_uses_verified_wide_metadata_and_bounded_listing() 
         .unwrap();
     assert_eq!(facts.entries.len(), 5);
     assert!(facts.truncated);
+
+    let mutate = |action| {
+        runtime.execute_file_mutation(
+            &id,
+            action,
+            "/sdcard/created",
+            "",
+            false,
+            false,
+            Default::default(),
+        )
+    };
+    mutate("mkdir").await.unwrap();
+    assert!(
+        peer.files
+            .lock()
+            .unwrap()
+            .nodes
+            .contains_key("/sdcard/created")
+    );
+    assert_eq!(mutate("mkdir").await.unwrap_err().code, "remote_failed");
+    mutate("delete").await.unwrap();
+    assert!(
+        !peer
+            .files
+            .lock()
+            .unwrap()
+            .nodes
+            .contains_key("/sdcard/created")
+    );
 }
 
 #[tokio::test]
