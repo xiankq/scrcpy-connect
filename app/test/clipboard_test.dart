@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -78,6 +79,25 @@ class _ClipboardFixture {
 }
 
 void main() {
+  testWidgets(
+    'desktop focus return detects an external copy without waiting for the poll tick',
+    (tester) async {
+      final fixture = _ClipboardFixture();
+      await fixture.start(tester);
+      fixture.local = 'copied in another window';
+      tester.binding.handleViewFocusChanged(
+        ViewFocusEvent(
+          viewId: tester.view.viewId,
+          state: ViewFocusState.focused,
+          direction: ViewFocusDirection.undefined,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(fixture.sent.single['text'], 'copied in another window');
+      await fixture.dispose();
+    },
+  );
   testWidgets(
     'disconnect intent discards a pending device clipboard read immediately',
     (tester) async {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:scrcpy_connect/services/app_controller.dart';
 
@@ -18,11 +19,16 @@ typedef RemoteInputAdmission = bool Function(
 /// Serializes remote input while retaining only the newest pending move for
 /// each pointer. Edge events remain ordered and are never coalesced.
 final class RemoteInputQueue {
-  RemoteInputQueue({required this.dispatch, required this.admits});
+  RemoteInputQueue({
+    required this.dispatch,
+    required this.admits,
+    this.capacity = 256,
+  });
 
   final RemoteInputDispatch dispatch;
   final RemoteInputAdmission admits;
-  final _pending = <_PendingInput>[];
+  final int capacity;
+  final _pending = LinkedList<_PendingInput>();
   final _moves = <String, _PendingInput>{};
   Completer<void>? _idle;
   bool _pumping = false;
@@ -38,16 +44,18 @@ final class RemoteInputQueue {
   Future<void> enqueue(String command, Json params, RemoteBinding binding) {
     if (_closed) return Future<void>.value();
     final pointerKey = _pointerKey(command, params, binding);
-    final moveKey = params['action'] == 'move' ? pointerKey : null;
+    final moveKey = const ['move', 'hover'].contains(params['action'])
+        ? pointerKey
+        : null;
     if (moveKey != null) {
       final pending = _moves[moveKey];
       if (pending != null && pending.pending) {
-        final waiter = Completer<void>();
-        _pending.remove(pending);
+        pending.unlink();
         pending.params = params;
-        pending.waiters.add(waiter);
         _pending.add(pending);
-        return waiter.future;
+        // Every superseded move shares this one completion. Slow writes must
+        // not allocate one retained waiter for each physical pointer event.
+        return pending.waiter.future;
       }
     } else if (pointerKey != null) {
       // A later down/up/cancel belongs after every move for this pointer.
@@ -55,6 +63,18 @@ final class RemoteInputQueue {
       _moves.remove(pointerKey);
     }
 
+    final cleanup =
+        (command == InteropCommand.sessionKey.wire &&
+            params['action'] == 'up') ||
+        (command == InteropCommand.sessionTouch.wire &&
+            const ['up', 'cancel'].contains(params['action']));
+    // Reserve half of the bounded queue for releases. A saturated stream of
+    // text/down events must not prevent releasing already-held physical keys
+    // and pointers when the page revokes further admission.
+    final limit = cleanup || capacity < 16 ? capacity : capacity ~/ 2;
+    if (_pending.length >= limit) {
+      return Future<void>.error(StateError('控制输入队列繁忙，请等待网络恢复。'));
+    }
     final waiter = Completer<void>();
     final entry = _PendingInput(command, params, binding, moveKey, waiter);
     _pending.add(entry);
@@ -86,7 +106,8 @@ final class RemoteInputQueue {
   Future<void> _drain() async {
     try {
       while (_pending.isNotEmpty && !_closed) {
-        final entry = _pending.removeAt(0);
+        final entry = _pending.first;
+        entry.unlink();
         entry.pending = false;
         final moveKey = entry.moveKey;
         if (moveKey != null && identical(_moves[moveKey], entry)) {
@@ -135,30 +156,28 @@ final class RemoteInputQueue {
   }
 }
 
-final class _PendingInput {
+final class _PendingInput extends LinkedListEntry<_PendingInput> {
   _PendingInput(
     this.command,
     this.params,
     this.binding,
     this.moveKey,
-    Completer<void> waiter,
-  ) : waiters = [waiter];
+    this.waiter,
+  );
 
   final String command;
   Json params;
   final RemoteBinding binding;
   final String? moveKey;
-  final List<Completer<void>> waiters;
+  final Completer<void> waiter;
   bool pending = true;
 
   void complete([Object? error, StackTrace? stack]) {
-    for (final waiter in waiters) {
-      if (waiter.isCompleted) continue;
-      if (error == null) {
-        waiter.complete();
-      } else {
-        waiter.completeError(error, stack);
-      }
+    if (waiter.isCompleted) return;
+    if (error == null) {
+      waiter.complete();
+    } else {
+      waiter.completeError(error, stack);
     }
   }
 }

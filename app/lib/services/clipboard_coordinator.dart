@@ -2,6 +2,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'dart:async';
+import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -345,6 +346,15 @@ class ClipboardCoordinator with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) => configure();
+
+  @override
+  void didChangeViewFocus(ViewFocusEvent event) {
+    // Desktop applications remain lifecycle-resumed while another window
+    // owns focus. Check immediately when returning after an external copy;
+    // this does not replace activation's remote-first ownership rule.
+    if (event.state == ViewFocusState.focused) _schedulePoll();
+  }
+
   void dispose() {
     _disposed = true;
     _generation++;
