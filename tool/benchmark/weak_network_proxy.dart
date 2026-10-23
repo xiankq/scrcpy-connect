@@ -3,94 +3,170 @@ import 'dart:collection';
 import 'dart:io';
 import 'dart:math' as math;
 
-/// Deterministic loopback proxy for ADB/media weak-network experiments.
-///
-/// It accepts ordinary TCP, applies an independent one-way delay and token
-/// bucket to each direction, and stops reading a source while its pending
-/// queue is high. The latter preserves real TCP backpressure instead of
-/// silently accumulating an unbounded proxy queue.
-Future<void> main(List<String> arguments) async {
-  final listenPort = _positiveEnv('CONNECT_PROXY_LISTEN_PORT', 15557);
-  final upstreamHost =
-      Platform.environment['CONNECT_PROXY_UPSTREAM_HOST'] ?? '127.0.0.1';
-  final upstreamPort = _positiveEnv('CONNECT_PROXY_UPSTREAM_PORT', 15556);
-  final upload = _Direction(
-    label: 'upload',
-    delay: Duration(
-      milliseconds: _nonNegativeEnv('CONNECT_PROXY_UP_DELAY_MS', 0),
-    ),
-    rate: _nonNegativeEnv('CONNECT_PROXY_UP_BPS', 0),
+/// Loopback proxy with independent delay, bandwidth and bounded backpressure in
+/// each direction. Closing it cancels even a stalled write or long rate wait.
+class WeakNetworkProxy {
+  WeakNetworkProxy._(
+    this._server,
+    this._host,
+    this._port,
+    this._upload,
+    this._download,
+    this._log,
   );
-  final download = _Direction(
-    label: 'download',
-    delay: Duration(
-      milliseconds: _nonNegativeEnv('CONNECT_PROXY_DOWN_DELAY_MS', 0),
-    ),
-    rate: _nonNegativeEnv('CONNECT_PROXY_DOWN_BPS', 0),
-  );
-  final server = await ServerSocket.bind(
-    InternetAddress.loopbackIPv4,
-    listenPort,
-  );
-  stdout.writeln(
-    'weak-network proxy listening=$listenPort upstream=$upstreamHost:$upstreamPort '
-    'upload=${upload.describe()} download=${download.describe()}',
-  );
-  var connection = 0;
-  await for (final client in server) {
-    connection++;
-    unawaited(
-      _serve(client, upstreamHost, upstreamPort, upload, download, connection),
+
+  static Future<WeakNetworkProxy> start({
+    required String upstreamHost,
+    required int upstreamPort,
+    int listenPort = 0,
+    Duration uploadDelay = Duration.zero,
+    Duration downloadDelay = Duration.zero,
+    int uploadBytesPerSecond = 0,
+    int downloadBytesPerSecond = 0,
+    void Function(String)? log,
+  }) async {
+    if (uploadDelay.isNegative ||
+        downloadDelay.isNegative ||
+        uploadBytesPerSecond < 0 ||
+        downloadBytesPerSecond < 0) {
+      throw ArgumentError('Delay and bandwidth must be non-negative');
+    }
+    final proxy = WeakNetworkProxy._(
+      await ServerSocket.bind(InternetAddress.loopbackIPv4, listenPort),
+      upstreamHost,
+      upstreamPort,
+      _Direction(
+        label: 'upload',
+        delay: uploadDelay,
+        rate: uploadBytesPerSecond,
+      ),
+      _Direction(
+        label: 'download',
+        delay: downloadDelay,
+        rate: downloadBytesPerSecond,
+      ),
+      log,
     );
+    proxy._subscription = proxy._server.listen(
+      proxy._accept,
+      onError: (Object error) {
+        log?.call('weak-network proxy listener failed: $error');
+        unawaited(proxy.close());
+      },
+    );
+    log?.call(
+      'weak-network proxy listening=${proxy.port} upstream=$upstreamHost:$upstreamPort upload=${proxy._upload.describe()} download=${proxy._download.describe()}',
+    );
+    return proxy;
+  }
+
+  final ServerSocket _server;
+  final String _host;
+  final int _port;
+  final _Direction _upload, _download;
+  final void Function(String)? _log;
+  final _connections = <_Cancellation, Future<void>>{};
+  final _done = Completer<void>();
+  late final StreamSubscription<Socket> _subscription;
+  Future<void>? _closing;
+  int _nextConnection = 0;
+
+  int get port => _server.port;
+  Future<void> get done => _done.future;
+
+  void _accept(Socket client) {
+    if (_closing != null) {
+      client.destroy();
+      return;
+    }
+    final cancellation = _Cancellation();
+    final task = _serve(client, cancellation, ++_nextConnection);
+    _connections[cancellation] = task;
+    unawaited(task.then((_) => _connections.remove(cancellation)));
+  }
+
+  Future<void> _serve(
+    Socket client,
+    _Cancellation cancellation,
+    int connection,
+  ) async {
+    Socket? upstream;
+    final pumps = <Future<void>>[];
+    try {
+      client.setOption(SocketOption.tcpNoDelay, true);
+      final connecting =
+          Socket.connect(
+            _host,
+            _port,
+            timeout: const Duration(seconds: 10),
+          ).then((socket) {
+            // A connect already in progress can complete after local shutdown.
+            if (cancellation.stopped) socket.destroy();
+            return socket;
+          });
+      upstream = await Future.any<Socket?>([
+        connecting,
+        cancellation.done.future.then((_) => null),
+      ]);
+      if (cancellation.stopped || upstream == null) return;
+      upstream.setOption(SocketOption.tcpNoDelay, true);
+      pumps.addAll([
+        _pump(client, upstream, _upload, cancellation),
+        _pump(upstream, client, _download, cancellation),
+      ]);
+      // Normal EOF only closes one TCP direction. The peer can still send a
+      // response after consuming that EOF; errors abort the pair immediately.
+      await Future.wait(pumps, eagerError: true);
+    } catch (error) {
+      if (!cancellation.stopped) {
+        _log?.call('weak-network proxy connection=$connection failed: $error');
+      }
+    } finally {
+      cancellation.cancel();
+      client.destroy();
+      upstream?.destroy();
+      // A failed direction does not stop its peer. Wait until both reads,
+      // output flushes and rate/delay waits have all observed cancellation.
+      await Future.wait(pumps.map((pump) => pump.catchError((Object _) {})));
+      _log?.call('weak-network proxy connection=$connection closed');
+    }
+  }
+
+  Future<void> close() => _closing ??= _close();
+
+  Future<void> _close() async {
+    for (final cancellation in _connections.keys.toList()) {
+      cancellation.cancel();
+    }
+    await _server.close();
+    await _subscription.cancel();
+    await Future.wait(_connections.values.toList());
+    if (!_done.isCompleted) _done.complete();
   }
 }
 
-Future<void> _serve(
-  Socket client,
-  String upstreamHost,
-  int upstreamPort,
-  _Direction upload,
-  _Direction download,
-  int connection,
+Future<void> _pump(
+  Socket source,
+  Socket sink,
+  _Direction direction,
+  _Cancellation cancellation,
 ) async {
-  Socket? upstream;
-  final started = Stopwatch()..start();
-  try {
-    client.setOption(SocketOption.tcpNoDelay, true);
-    upstream = await Socket.connect(upstreamHost, upstreamPort);
-    upstream.setOption(SocketOption.tcpNoDelay, true);
-    await Future.any([
-      _pump(client, upstream, upload),
-      _pump(upstream, client, download),
-    ]);
-  } catch (error) {
-    stderr.writeln('weak-network proxy connection=$connection failed: $error');
-  } finally {
-    client.destroy();
-    upstream?.destroy();
-    stdout.writeln(
-      'weak-network proxy connection=$connection closed '
-      'afterMs=${started.elapsedMilliseconds}',
-    );
-  }
-}
-
-Future<void> _pump(Socket source, Socket sink, _Direction direction) async {
   final queue = Queue<_Chunk>();
   final available = _Signal();
   final rate = _TokenBucket(direction.rate);
+  final clock = Stopwatch()..start();
   late final StreamSubscription<List<int>> subscription;
   var pending = 0;
   var paused = false;
   var done = false;
-
+  Object? readError;
   subscription = source.listen(
     (bytes) {
-      if (bytes.isEmpty) return;
+      if (bytes.isEmpty || cancellation.stopped) return;
       queue.add(
         _Chunk(
           bytes,
-          DateTime.now().add(direction.delay).microsecondsSinceEpoch,
+          clock.elapsedMicroseconds + direction.delay.inMicroseconds,
         ),
       );
       pending += bytes.length;
@@ -100,10 +176,10 @@ Future<void> _pump(Socket source, Socket sink, _Direction direction) async {
       }
       available.signal();
     },
-    onError: (Object error, StackTrace stack) {
+    onError: (Object error) {
+      readError = error;
       done = true;
       available.signal();
-      stderr.writeln('weak-network proxy ${direction.label} read: $error');
     },
     onDone: () {
       done = true;
@@ -111,33 +187,109 @@ Future<void> _pump(Socket source, Socket sink, _Direction direction) async {
     },
     cancelOnError: true,
   );
-
   try {
-    while (!done || queue.isNotEmpty) {
+    while (!cancellation.stopped && (!done || queue.isNotEmpty)) {
       if (queue.isEmpty) {
-        await available.next;
+        await cancellation.wait(available.next);
         continue;
       }
       final chunk = queue.first;
-      final now = DateTime.now().microsecondsSinceEpoch;
-      if (chunk.dueUs > now) {
-        await Future<void>.delayed(
-          Duration(microseconds: math.min(chunk.dueUs - now, 20000)),
-        );
-        continue;
+      final remaining = chunk.dueUs - clock.elapsedMicroseconds;
+      if (remaining > 0) {
+        await cancellation.delay(Duration(microseconds: remaining));
       }
-      await rate.take(chunk.bytes.length);
+      if (cancellation.stopped) break;
+      await rate.take(chunk.bytes.length, cancellation);
+      if (cancellation.stopped) break;
       sink.add(chunk.bytes);
+      await cancellation.wait(sink.flush());
+      if (cancellation.stopped) break;
+      // Count the in-flight chunk until the socket actually accepts it. Reading
+      // must not resume just because bytes moved to an unbounded IOSink buffer.
       queue.removeFirst();
       pending -= chunk.bytes.length;
       if (paused && pending <= _Direction.lowWaterBytes) {
         paused = false;
         subscription.resume();
       }
-      available.signal();
     }
+    if (readError != null && !cancellation.stopped) throw readError!;
+    if (!cancellation.stopped) await cancellation.wait(sink.close());
   } finally {
     await subscription.cancel();
+    queue.clear();
+  }
+}
+
+class _Cancellation {
+  final done = Completer<void>();
+  final _waiters = <Completer<void>>{};
+  bool get stopped => done.isCompleted;
+  void cancel() {
+    if (stopped) return;
+    done.complete();
+    for (final waiter in _waiters.toList()) {
+      if (!waiter.isCompleted) waiter.complete();
+    }
+  }
+
+  Future<void> wait(Future<void> operation) async {
+    if (stopped) return;
+    final ready = Completer<void>();
+    _waiters.add(ready);
+    operation.then(
+      (_) {
+        if (!ready.isCompleted) ready.complete();
+      },
+      onError: (Object error, StackTrace stack) {
+        if (!ready.isCompleted) ready.completeError(error, stack);
+      },
+    );
+    try {
+      await ready.future;
+    } finally {
+      _waiters.remove(ready);
+    }
+  }
+
+  Future<void> delay(Duration duration) async {
+    if (stopped) return;
+    final elapsed = Completer<void>();
+    final timer = Timer(duration, elapsed.complete);
+    try {
+      await wait(elapsed.future);
+    } finally {
+      timer.cancel();
+    }
+  }
+}
+
+Future<void> main(List<String> arguments) async {
+  final proxy = await WeakNetworkProxy.start(
+    listenPort: _positiveEnv('CONNECT_PROXY_LISTEN_PORT', 15557),
+    upstreamHost:
+        Platform.environment['CONNECT_PROXY_UPSTREAM_HOST'] ?? '127.0.0.1',
+    upstreamPort: _positiveEnv('CONNECT_PROXY_UPSTREAM_PORT', 15556),
+    uploadDelay: Duration(
+      milliseconds: _nonNegativeEnv('CONNECT_PROXY_UP_DELAY_MS', 0),
+    ),
+    downloadDelay: Duration(
+      milliseconds: _nonNegativeEnv('CONNECT_PROXY_DOWN_DELAY_MS', 0),
+    ),
+    uploadBytesPerSecond: _nonNegativeEnv('CONNECT_PROXY_UP_BPS', 0),
+    downloadBytesPerSecond: _nonNegativeEnv('CONNECT_PROXY_DOWN_BPS', 0),
+    log: stdout.writeln,
+  );
+  final signals = [
+    ProcessSignal.sigint.watch().listen((_) => unawaited(proxy.close())),
+    if (!Platform.isWindows)
+      ProcessSignal.sigterm.watch().listen((_) => unawaited(proxy.close())),
+  ];
+  try {
+    await proxy.done;
+  } finally {
+    await proxy.close();
+    await Future.wait(signals.map((subscription) => subscription.cancel()));
   }
 }
 
@@ -173,13 +325,13 @@ final class _TokenBucket {
   double _tokens = 0;
   int _lastUs = 0;
 
-  Future<void> take(int bytes) async {
+  Future<void> take(int bytes, _Cancellation cancellation) async {
     if (bytesPerSecond == 0) return;
     final capacity = math.max(
       bytes.toDouble(),
       math.max(4096.0, bytesPerSecond * .05),
     );
-    while (true) {
+    while (!cancellation.stopped) {
       final now = _clock.elapsedMicroseconds;
       final elapsed = now - _lastUs;
       _lastUs = now;
@@ -194,7 +346,7 @@ final class _TokenBucket {
       final micros =
           ((bytes - _tokens) * Duration.microsecondsPerSecond / bytesPerSecond)
               .ceil();
-      await Future<void>.delayed(Duration(microseconds: math.max(100, micros)));
+      await cancellation.delay(Duration(microseconds: math.max(100, micros)));
     }
   }
 }
