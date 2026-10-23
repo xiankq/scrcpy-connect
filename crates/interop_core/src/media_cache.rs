@@ -64,14 +64,50 @@ struct File {
 }
 struct Snapshot {
     files: Vec<File>,
-    protected: Vec<PathBuf>,
+    protected: BTreeSet<PathBuf>,
     used: u64,
     reserved: u64,
     protected_bytes: u64,
 }
-fn covered(path: &Path, protections: &[PathBuf]) -> bool {
-    protections.iter().any(|root| path.starts_with(root))
+fn covered(path: &Path, protections: &BTreeSet<PathBuf>) -> bool {
+    path.ancestors()
+        .any(|ancestor| protections.contains(ancestor))
 }
+
+// Count each requested subtree in one pass, without rescanning all files for
+// every writer. Components keep sibling prefixes such as a and a-copy distinct.
+fn bytes_under_paths<'a>(
+    files: &[File],
+    paths: impl IntoIterator<Item = &'a Path>,
+) -> HashMap<PathBuf, u64> {
+    let mut bytes = paths
+        .into_iter()
+        .map(|path| (path.to_owned(), 0))
+        .collect::<HashMap<_, _>>();
+    for file in files {
+        for ancestor in file.path.ancestors() {
+            if let Some(total) = bytes.get_mut(ancestor) {
+                *total += file.bytes;
+            }
+        }
+    }
+    bytes
+}
+fn validate_unprotected(path: &Path, protected: &BTreeSet<PathBuf>) -> CoreResult<()> {
+    if covered(path, protected)
+        || protected
+            .range(path.to_owned()..)
+            .next()
+            .is_some_and(|protected| protected.starts_with(path))
+    {
+        return Err(CoreError::new(
+            "cache_in_use",
+            "目标缓存正被其他操作使用，请使用新的取回位置。",
+        ));
+    }
+    Ok(())
+}
+
 fn invalid(message: &str) -> CoreError {
     CoreError::new("invalid_argument", message)
 }
@@ -104,7 +140,17 @@ async fn plain_path(path: &Path) -> CoreResult<()> {
     Ok(())
 }
 async fn scan(roots: &[PathBuf]) -> CoreResult<Vec<File>> {
-    let mut pending = roots.to_vec();
+    let roots = roots.iter().cloned().collect::<BTreeSet<_>>();
+    let mut pending = roots
+        .iter()
+        .filter(|path| {
+            !path
+                .ancestors()
+                .skip(1)
+                .any(|parent| roots.contains(parent))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
     let mut files = Vec::new();
     while let Some(path) = pending.pop() {
         let meta = match fs::symlink_metadata(&path).await {
@@ -128,7 +174,6 @@ async fn scan(roots: &[PathBuf]) -> CoreResult<Vec<File>> {
             });
         }
     }
-    files.sort_by(|a, b| a.modified.cmp(&b.modified).then(a.path.cmp(&b.path)));
     Ok(files)
 }
 impl MediaCache {
@@ -216,42 +261,62 @@ impl Runtime {
             return Err(invalid("缓存保留路径必须为1至2000项。"));
         }
         let _gate = self.media_cache.gate.lock().await;
+        if self.media_cache.ownership.lock().unwrap().leases.len() >= 1024 {
+            return Err(CoreError::new("busy", "缓存租约达到上限。"));
+        }
         let roots = self.media_cache.roots(&self.root).await?;
-        let mut records = Vec::new();
         let fresh_reservation = bytes.iter().any(|bytes| *bytes > 0);
+        let protected = self.cache_protected_paths().await;
+        let mut records = Vec::with_capacity(paths.len());
         let mut total = 0u64;
         for (path, bytes) in paths.into_iter().zip(bytes) {
             let path = PathBuf::from(path);
             plain_path(&path).await?;
-            if fresh_reservation {
-                self.cache_validate_destination_locked(path.to_string_lossy().as_ref())
-                    .await?;
-            }
             if !roots.iter().any(|root| path.starts_with(root)) {
                 return Err(invalid("目标不属于已登记缓存目录。"));
             }
-            let baseline = scan(std::slice::from_ref(&path))
-                .await?
-                .iter()
-                .map(|f| f.bytes)
-                .sum();
+            if fresh_reservation {
+                validate_unprotected(&path, &protected)?;
+            }
             total = total
                 .checked_add(bytes)
                 .ok_or_else(|| invalid("缓存大小溢出。"))?;
             records.push(Reservation {
                 path,
                 bytes,
-                baseline,
+                baseline: 0,
             });
         }
-        if total > 0 {
-            self.cache_admit_locked(total).await?;
+        // Fresh admission already needs a complete disk snapshot. Reuse it for
+        // all baselines; read-only leases inspect only their selected subtrees.
+        let snapshot = if total > 0 {
+            Some(self.cache_snapshot().await?)
+        } else {
+            None
+        };
+        let selected_files;
+        let files = if let Some(snapshot) = &snapshot {
+            &snapshot.files
+        } else {
+            selected_files = scan(
+                &records
+                    .iter()
+                    .map(|record| record.path.clone())
+                    .collect::<Vec<_>>(),
+            )
+            .await?;
+            &selected_files
+        };
+        let baselines =
+            bytes_under_paths(files, records.iter().map(|record| record.path.as_path()));
+        for record in &mut records {
+            record.baseline = baselines[&record.path];
+        }
+        if let Some(snapshot) = snapshot {
+            self.cache_admit_snapshot_locked(total, snapshot).await?;
         }
         let id = uuid::Uuid::new_v4().to_string();
         let mut owner = self.media_cache.ownership.lock().unwrap();
-        if owner.leases.len() >= 1024 {
-            return Err(CoreError::new("busy", "缓存租约达到上限。"));
-        }
         owner
             .leases
             .insert(id.clone(), records.iter().map(|r| r.path.clone()).collect());
@@ -265,14 +330,16 @@ impl Runtime {
             .await?;
         Ok(())
     }
-    async fn cache_snapshot(&self) -> CoreResult<Snapshot> {
-        let files = scan(&self.media_cache.roots(&self.root).await?).await?;
-        let (mut protected, writers) = {
+    async fn cache_protected_paths(&self) -> BTreeSet<PathBuf> {
+        let mut protected = {
             let owner = self.media_cache.ownership.lock().unwrap();
-            (
-                owner.leases.values().flatten().cloned().collect::<Vec<_>>(),
-                owner.writers.values().cloned().collect::<Vec<_>>(),
-            )
+            owner
+                .leases
+                .values()
+                .flatten()
+                .cloned()
+                .chain(owner.writers.values().map(|writer| writer.path.clone()))
+                .collect::<BTreeSet<_>>()
         };
         protected.extend(
             self.media_cache
@@ -284,19 +351,28 @@ impl Runtime {
                 .cloned(),
         );
         protected.extend(self.deliveries.protected_paths().await);
+        protected
+    }
+    async fn cache_snapshot(&self) -> CoreResult<Snapshot> {
+        let files = scan(&self.media_cache.roots(&self.root).await?).await?;
+        let protected = self.cache_protected_paths().await;
+        let writers = self
+            .media_cache
+            .ownership
+            .lock()
+            .unwrap()
+            .writers
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        let actual = bytes_under_paths(&files, writers.iter().map(|writer| writer.path.as_path()));
         let mut reserved = 0_u64;
         for writer in writers {
-            let actual = files
-                .iter()
-                .filter(|file| file.path.starts_with(&writer.path))
-                .map(|f| f.bytes)
-                .sum::<u64>();
             reserved = reserved.saturating_add(
                 writer
                     .bytes
-                    .saturating_sub(actual.saturating_sub(writer.baseline)),
+                    .saturating_sub(actual[&writer.path].saturating_sub(writer.baseline)),
             );
-            protected.push(writer.path);
         }
         let used = files.iter().map(|f| f.bytes).sum();
         let protected_bytes = files
@@ -324,8 +400,11 @@ impl Runtime {
     // Caller owns the cache gate. Eviction uses the same ownership snapshot as
     // admission; delivery.begin cannot publish between snapshot and deletion.
     pub(crate) async fn cache_admit_locked(&self, bytes: u64) -> CoreResult<()> {
-        let budget = self.media_cache.configuration.lock().await.budget_bytes;
         let snapshot = self.cache_snapshot().await?;
+        self.cache_admit_snapshot_locked(bytes, snapshot).await
+    }
+    async fn cache_admit_snapshot_locked(&self, bytes: u64, snapshot: Snapshot) -> CoreResult<()> {
+        let budget = self.media_cache.configuration.lock().await.budget_bytes;
         let required = snapshot
             .used
             .saturating_add(snapshot.reserved)
@@ -356,9 +435,11 @@ impl Runtime {
         }
         Ok(())
     }
-    async fn cache_delete_locked(&self, snapshot: Snapshot, wanted: u64) -> CoreResult<u64> {
+    async fn cache_delete_locked(&self, mut snapshot: Snapshot, wanted: u64) -> CoreResult<u64> {
+        snapshot
+            .files
+            .sort_by(|a, b| a.modified.cmp(&b.modified).then(a.path.cmp(&b.path)));
         let mut deleted = 0_u64;
-        let mut deleted_paths = Vec::new();
         let mut failure = None;
         for file in snapshot.files {
             if deleted >= wanted {
@@ -374,7 +455,6 @@ impl Runtime {
                 Ok(meta) if meta.is_file() => match fs::remove_file(&file.path).await {
                     Ok(()) => {
                         deleted = deleted.saturating_add(meta.len());
-                        deleted_paths.push(file.path);
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                     Err(error) => {
@@ -513,29 +593,6 @@ impl Runtime {
             }
             _ => Err(CoreError::new("unknown_command", "未知媒体缓存操作。")),
         }
-    }
-    pub(crate) async fn cache_validate_destination_locked(&self, path: &str) -> CoreResult<()> {
-        let path = Path::new(path);
-        plain_path(path).await?;
-        if !self
-            .media_cache
-            .roots(&self.root)
-            .await?
-            .iter()
-            .any(|root| path.starts_with(root))
-        {
-            return Err(invalid("私有原件必须存入已登记的缓存目录。"));
-        }
-        let snapshot = self.cache_snapshot().await?;
-        if covered(path, &snapshot.protected)
-            || snapshot.protected.iter().any(|p| p.starts_with(path))
-        {
-            return Err(CoreError::new(
-                "cache_in_use",
-                "目标缓存正被其他操作使用，请使用新的取回位置。",
-            ));
-        }
-        Ok(())
     }
     pub(crate) async fn cache_validate_delivery_locked(&self, params: &Value) -> CoreResult<()> {
         let Some(path) = params["localPath"].as_str().map(Path::new) else {

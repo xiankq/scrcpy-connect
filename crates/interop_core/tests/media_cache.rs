@@ -655,3 +655,136 @@ async fn cache_budget_counts_only_managed_roots_and_clear_preserves_delivery_and
     assert_eq!(status["retainedShareCount"], 1);
     assert!(root.path().join("not-cache.bin").exists());
 }
+
+#[tokio::test]
+async fn batch_reservations_count_subtree_growth_and_reject_overlaps_atomically() {
+    let root = tempfile::tempdir().unwrap();
+    let media = root.path().join("media");
+    let tree = media.join("tree");
+    let nested = tree.join("nested");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(tree.join("existing"), b"1234").unwrap();
+    let sibling = media.join("tree-copy");
+    std::fs::write(&sibling, b"12").unwrap();
+    std::fs::write(media.join("reclaimable"), b"12345").unwrap();
+    let runtime = Runtime::initialize(root.path()).await.unwrap();
+    let part = media.join("new.part");
+    let lease = runtime
+        .execute_file_cache_reserve(
+            [&tree, &nested, &part, &sibling]
+                .map(|p| p.to_string_lossy().into_owned())
+                .to_vec(),
+            vec![10, 0, 8, 0],
+        )
+        .await
+        .unwrap();
+    let status = runtime
+        .invoke("media.cache.status", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(status["usedBytes"], 11);
+    assert_eq!(status["reservedBytes"], 18);
+    assert_eq!(status["protectedBytes"], 6);
+    std::fs::write(nested.join("growth"), b"123456").unwrap();
+    std::fs::write(&part, b"123").unwrap();
+    let status = runtime
+        .invoke("media.cache.status", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(status["usedBytes"], 20);
+    assert_eq!(status["reservedBytes"], 9);
+    assert_eq!(status["protectedBytes"], 15);
+
+    let free = media.join("free");
+    assert_eq!(
+        runtime
+            .execute_file_cache_reserve(
+                vec![
+                    free.to_string_lossy().into_owned(),
+                    nested.join("conflict").to_string_lossy().into_owned()
+                ],
+                vec![2, 0],
+            )
+            .await
+            .unwrap_err()
+            .code,
+        "cache_in_use"
+    );
+    // The rejected batch must not leave its earlier, non-conflicting path owned.
+    let free_lease = runtime
+        .execute_file_cache_reserve(vec![free.to_string_lossy().into_owned()], vec![2])
+        .await
+        .unwrap();
+    runtime
+        .execute_file_cache_release(&free_lease)
+        .await
+        .unwrap();
+    let cleared = runtime
+        .invoke("media.cache.clear", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(cleared["deletedBytes"], 5);
+    assert_eq!(cleared["usedBytes"], 15);
+    assert_eq!(cleared["reservedBytes"], 9);
+    runtime.execute_file_cache_release(&lease).await.unwrap();
+    assert_eq!(
+        runtime
+            .invoke("media.cache.clear", json!({}))
+            .await
+            .unwrap()["deletedBytes"],
+        15
+    );
+}
+
+#[tokio::test]
+async fn admission_evicts_oldest_files_and_never_treats_sibling_prefixes_as_protected() {
+    let root = tempfile::tempdir().unwrap();
+    let media = root.path().join("media");
+    std::fs::create_dir(&media).unwrap();
+    // Create in reverse age order so directory traversal cannot choose victims.
+    let mut paths = Vec::new();
+    for (name, age) in [("tree-copy", 30), ("middle", 20), ("oldest", 10)] {
+        let path = media.join(name);
+        std::fs::write(&path, b"12345").unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_times(
+                std::fs::FileTimes::new()
+                    .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(age)),
+            )
+            .unwrap();
+        paths.push(path);
+    }
+    let runtime = Runtime::initialize(root.path()).await.unwrap();
+    runtime
+        .invoke("media.cache.configure", json!({"budgetBytes":15}))
+        .await
+        .unwrap();
+    let lease = runtime
+        .execute_file_cache_reserve(
+            vec![media.join("tree").to_string_lossy().into_owned()],
+            vec![6],
+        )
+        .await
+        .unwrap();
+    assert!(paths[0].exists());
+    assert!(!paths[1].exists());
+    assert!(!paths[2].exists());
+    let status = runtime
+        .invoke("media.cache.status", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(status["usedBytes"], 5);
+    assert_eq!(status["reservedBytes"], 6);
+    assert_eq!(status["protectedBytes"], 0);
+    assert_eq!(
+        runtime
+            .invoke("media.cache.clear", json!({}))
+            .await
+            .unwrap()["deletedBytes"],
+        5
+    );
+    runtime.execute_file_cache_release(&lease).await.unwrap();
+}
