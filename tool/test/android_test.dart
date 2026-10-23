@@ -106,6 +106,27 @@ void main() {
     );
   });
 
+  test(
+    'independent APK verification rejects an archive with no native ABI',
+    () {
+      final archive = ZipDecoder().decodeBytes(apk());
+      final withoutNative = Archive();
+      for (final file in archive.files) {
+        if (!file.name.startsWith('lib/')) withoutNative.addFile(file);
+      }
+      expect(
+        () => android.verifyApkArchive(ZipEncoder().encode(withoutNative)),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('lacks native libraries'),
+          ),
+        ),
+      );
+    },
+  );
+
   test('APK CRC verification rejects corrupt stored data', () {
     final bytes = apk();
     // The first local header is followed by the required manifest's stored

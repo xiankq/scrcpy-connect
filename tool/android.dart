@@ -212,6 +212,9 @@ List<String> verifyApkArchive(List<int> bytes, [List<String>? expectedAbis]) {
           .toSet()
           .toList()
         ..sort();
+  if (abis.isEmpty) {
+    throw StateError('APK lacks native libraries for any supported ABI.');
+  }
   if (expectedAbis != null &&
       (abis.length != expectedAbis.toSet().length ||
           !abis.toSet().containsAll(expectedAbis))) {
