@@ -12,10 +12,29 @@ class FileFailure implements Exception {
 
 class FileCancellation {
   final _cancelled = Completer<void>();
+  final _listeners = <void Function()>{};
   bool get isCancelled => _cancelled.isCompleted;
   Future<void> get whenCancelled => _cancelled.future;
+
+  /// Registers until cancellation or the returned removal function is called.
+  void Function() onCancel(void Function() listener) {
+    if (isCancelled) {
+      listener();
+      return () {};
+    }
+    void registered() => listener();
+    _listeners.add(registered);
+    return () => _listeners.remove(registered);
+  }
+
   void cancel() {
-    if (!isCancelled) _cancelled.complete();
+    if (isCancelled) return;
+    _cancelled.complete();
+    final listeners = _listeners.toList();
+    _listeners.clear();
+    for (final listener in listeners) {
+      listener();
+    }
   }
 
   void check() {

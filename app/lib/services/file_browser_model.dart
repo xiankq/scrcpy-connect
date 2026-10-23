@@ -1,12 +1,13 @@
+import 'package:device_files/device_files.dart' show FileKind, FileTypePolicy;
 import 'package:scrcpy_connect/services/app_controller.dart';
+
+export 'package:device_files/device_files.dart' show FileKind;
 
 enum FileViewMode { grid, list }
 
 enum FileSortKey { name, size, modified, type }
 
 enum FileTypeFilter { all, documents, images, videos, audio }
-
-enum FileKind { documents, images, videos, audio, archives, other }
 
 class FileBreadcrumb {
   const FileBreadcrumb({required this.label, required this.path});
@@ -28,21 +29,15 @@ class DirectoryListing {
 
 DirectoryListing buildDirectoryListing({
   required List<Json> entries,
-  required String query,
   required FileTypeFilter typeFilter,
   required FileSortKey sortKey,
   required bool ascending,
 }) {
-  final needle = query.trim().toLowerCase();
-  bool nameMatches(Json entry) =>
-      needle.isEmpty || value(entry, 'name').toLowerCase().contains(needle);
   final folders = entries
       .where((entry) => entry['isDirectory'] == true)
-      .where(nameMatches)
       .toList();
   final files = entries
       .where((entry) => entry['isDirectory'] != true)
-      .where(nameMatches)
       .where((entry) => fileMatchesType(entry, typeFilter))
       .toList();
   final folderSortKey = sortKey == FileSortKey.type
@@ -61,74 +56,8 @@ bool fileMatchesType(Json entry, FileTypeFilter filter) => switch (filter) {
   FileTypeFilter.audio => fileKindOf(entry) == FileKind.audio,
 };
 
-FileKind fileKindOf(Json entry) {
-  final mime = value(entry, 'mime').toLowerCase();
-  final name = value(entry, 'name').toLowerCase();
-  if (mime.startsWith('image/')) return FileKind.images;
-  if (mime.startsWith('video/')) return FileKind.videos;
-  if (mime.startsWith('audio/')) return FileKind.audio;
-  if (mime.startsWith('text/') ||
-      mime == 'application/pdf' ||
-      mime == 'application/rtf' ||
-      mime.contains('word') ||
-      mime.contains('excel') ||
-      mime.contains('spreadsheet') ||
-      mime.contains('powerpoint') ||
-      mime.contains('presentation') ||
-      mime == 'application/json' ||
-      mime == 'application/xml') {
-    return FileKind.documents;
-  }
-  if (mime.contains('zip') ||
-      mime.contains('compressed') ||
-      mime.contains('archive') ||
-      mime.contains('tar') ||
-      mime.contains('gzip')) {
-    return FileKind.archives;
-  }
-  final extension = name.contains('.') ? name.split('.').last : '';
-  if (const {
-    'pdf',
-    'doc',
-    'docx',
-    'xls',
-    'xlsx',
-    'ppt',
-    'pptx',
-    'odt',
-    'ods',
-    'odp',
-    'rtf',
-    'txt',
-    'md',
-    'csv',
-    'json',
-    'xml',
-  }.contains(extension)) {
-    return FileKind.documents;
-  }
-  if (const {
-    'zip',
-    '7z',
-    'rar',
-    'tar',
-    'gz',
-    'bz2',
-    'xz',
-  }.contains(extension)) {
-    return FileKind.archives;
-  }
-  return FileKind.other;
-}
-
-String fileKindLabel(FileKind kind) => switch (kind) {
-  FileKind.documents => '文档',
-  FileKind.images => '图片',
-  FileKind.videos => '视频',
-  FileKind.audio => '音频',
-  FileKind.archives => '压缩包',
-  FileKind.other => '文件',
-};
+FileKind fileKindOf(Json entry) =>
+    FileTypePolicy.kind(name: value(entry, 'name'), mime: value(entry, 'mime'));
 
 int compareFileEntries(Json a, Json b, FileSortKey sortKey, bool ascending) {
   final aValue = _sortValue(a, sortKey);

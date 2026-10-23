@@ -249,282 +249,291 @@ class FilesPage extends HookConsumerWidget {
                 openRemoteRoute(context, deviceId: value(device, 'id')),
             child: const Text('在手机上继续处理'),
           ),
-          builder: (context, data, refresh) {
-            final all = objects(data['entries']);
-            final listing = buildDirectoryListing(
-              entries: all,
-              query: '',
-              typeFilter: typeFilter.value,
-              sortKey: sortKey,
-              ascending: ascending,
-            );
-            final chosen = all
-                .where(
-                  (entry) =>
-                      fileCanManage(entry) &&
-                      selected.value.contains(value(entry, 'path')),
-                )
-                .toList();
-            final retrievable = chosen.isNotEmpty && chosen.every(fileCanOpen);
-            final atStorageRoot = path.value == '/sdcard';
-            final hasFilter =
-                atStorageRoot && typeFilter.value != FileTypeFilter.all;
-            final unavailableFiles =
-                listing.files.isEmpty && typeFilter.value != FileTypeFilter.all;
+          builder: (context, data, refresh) => HookBuilder(
+            builder: (context) {
+              final all = useMemoized(() => objects(data['entries']), [data]);
+              final listing = useMemoized(
+                () => buildDirectoryListing(
+                  entries: all,
+                  typeFilter: typeFilter.value,
+                  sortKey: sortKey,
+                  ascending: ascending,
+                ),
+                [all, typeFilter.value, sortKey, ascending],
+              );
+              final chosen = all
+                  .where(
+                    (entry) =>
+                        fileCanManage(entry) &&
+                        selected.value.contains(value(entry, 'path')),
+                  )
+                  .toList();
+              final retrievable =
+                  chosen.isNotEmpty && chosen.every(fileCanOpen);
+              final atStorageRoot = path.value == '/sdcard';
+              final hasFilter =
+                  atStorageRoot && typeFilter.value != FileTypeFilter.all;
+              final unavailableFiles =
+                  listing.files.isEmpty &&
+                  typeFilter.value != FileTypeFilter.all;
 
-            Widget folderTile(Json folder, {required bool grid}) {
-              final folderPath = value(folder, 'path');
-              final manageable = fileCanManage(folder);
-              final openable = fileCanOpen(folder);
-              void onTap() {
-                if (selected.value.isNotEmpty) {
-                  if (manageable) {
-                    handleEntryAction('select', folder);
+              Widget folderTile(Json folder, {required bool grid}) {
+                final folderPath = value(folder, 'path');
+                final manageable = fileCanManage(folder);
+                final openable = fileCanOpen(folder);
+                void onTap() {
+                  if (selected.value.isNotEmpty) {
+                    if (manageable) {
+                      handleEntryAction('select', folder);
+                    }
+                  } else if (openable) {
+                    openDirectory(folderPath);
                   }
-                } else if (openable) {
-                  openDirectory(folderPath);
                 }
+
+                final onLongPress = manageable
+                    ? () => handleEntryAction('select', folder)
+                    : null;
+                final selectedFolder = selected.value.contains(folderPath);
+                return grid
+                    ? FolderGridTile(
+                        key: ValueKey(folderPath),
+                        folder: folder,
+                        selected: selectedFolder,
+                        selectionActive: selected.value.isNotEmpty,
+                        onTap: onTap,
+                        onLongPress: onLongPress,
+                      )
+                    : FolderListTile(
+                        key: ValueKey(folderPath),
+                        folder: folder,
+                        selected: selectedFolder,
+                        selectionActive: selected.value.isNotEmpty,
+                        onTap: onTap,
+                        onLongPress: onLongPress,
+                      );
               }
 
-              final onLongPress = manageable
-                  ? () => handleEntryAction('select', folder)
-                  : null;
-              final selectedFolder = selected.value.contains(folderPath);
-              return grid
-                  ? FolderGridTile(
-                      key: ValueKey(folderPath),
-                      folder: folder,
-                      selected: selectedFolder,
-                      selectionActive: selected.value.isNotEmpty,
-                      onTap: onTap,
-                      onLongPress: onLongPress,
-                    )
-                  : FolderListTile(
-                      key: ValueKey(folderPath),
-                      folder: folder,
-                      selected: selectedFolder,
-                      selectionActive: selected.value.isNotEmpty,
-                      onTap: onTap,
-                      onLongPress: onLongPress,
-                    );
-            }
-
-            Widget fileTile(Json file, {required bool grid}) {
-              final filePath = value(file, 'path');
-              final manageable = fileCanManage(file);
-              final openable = fileCanOpen(file);
-              void onTap() {
-                if (selected.value.isNotEmpty) {
-                  if (manageable) {
-                    handleEntryAction('select', file);
+              Widget fileTile(Json file, {required bool grid}) {
+                final filePath = value(file, 'path');
+                final manageable = fileCanManage(file);
+                final openable = fileCanOpen(file);
+                void onTap() {
+                  if (selected.value.isNotEmpty) {
+                    if (manageable) {
+                      handleEntryAction('select', file);
+                    }
+                  } else if (openable) {
+                    FileDetailsRoute(
+                      deviceId: value(device, 'id'),
+                      path: filePath,
+                    ).push<void>(context);
                   }
-                } else if (openable) {
-                  FileDetailsRoute(
-                    deviceId: value(device, 'id'),
-                    path: filePath,
-                  ).push<void>(context);
                 }
+
+                final onLongPress = manageable
+                    ? () => handleEntryAction('select', file)
+                    : null;
+                return grid
+                    ? FileGridTile(
+                        key: ValueKey(filePath),
+                        controller: controller,
+                        device: device,
+                        file: file,
+                        selected: selected.value.contains(filePath),
+                        selectionActive: selected.value.isNotEmpty,
+                        onTap: onTap,
+                        onLongPress: onLongPress,
+                      )
+                    : FileListTile(
+                        key: ValueKey(filePath),
+                        file: file,
+                        selected: selected.value.contains(filePath),
+                        selectionActive: selected.value.isNotEmpty,
+                        onTap: onTap,
+                        onLongPress: onLongPress,
+                      );
               }
 
-              final onLongPress = manageable
-                  ? () => handleEntryAction('select', file)
-                  : null;
-              return grid
-                  ? FileGridTile(
-                      key: ValueKey(filePath),
-                      controller: controller,
-                      device: device,
-                      file: file,
-                      selected: selected.value.contains(filePath),
-                      selectionActive: selected.value.isNotEmpty,
-                      onTap: onTap,
-                      onLongPress: onLongPress,
-                    )
-                  : FileListTile(
-                      key: ValueKey(filePath),
-                      file: file,
-                      selected: selected.value.contains(filePath),
-                      selectionActive: selected.value.isNotEmpty,
-                      onTap: onTap,
-                      onLongPress: onLongPress,
-                    );
-            }
+              Widget entryTile(Json entry, {required bool grid}) =>
+                  entry['isDirectory'] == true
+                  ? folderTile(entry, grid: grid)
+                  : fileTile(entry, grid: grid);
 
-            Widget entryTile(Json entry, {required bool grid}) =>
-                entry['isDirectory'] == true
-                ? folderTile(entry, grid: grid)
-                : fileTile(entry, grid: grid);
-
-            return RefreshIndicator(
-              onRefresh: () async {
-                selected.value = {};
-                refresh();
-              },
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  const PageChromeSliver(),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DesignTokens.spacingMd,
-                        DesignTokens.spacingXs,
-                        DesignTokens.spacingMd,
-                        DesignTokens.spacingSm,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (!atStorageRoot) ...[
-                            DeviceSourceRow(
-                              device: device,
-                              padding: const EdgeInsets.only(
-                                bottom: DesignTokens.spacingSm,
-                              ),
-                            ),
-                          ],
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FileBreadcrumbs(
-                                  path: path.value,
-                                  onSelected: openDirectory,
-                                ),
-                              ),
-                              const SizedBox(width: DesignTokens.spacingXs),
-                              GlassActionIcon(
-                                tooltip: '刷新目录',
-                                onPressed: busy.value
-                                    ? null
-                                    : () {
-                                        selected.value = {};
-                                        refresh();
-                                      },
-                                icon: const Icon(LucideIcons.refreshCw),
-                                iconSize:
-                                    DesignTokens.componentIconSmallSize +
-                                    DesignTokens.spacingMicro,
-                                padding: EdgeInsets.zero,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: DesignTokens.componentSmallButtonSize,
-                                  height: DesignTokens.componentSmallButtonSize,
+              return RefreshIndicator(
+                onRefresh: () async {
+                  selected.value = {};
+                  refresh();
+                },
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    const PageChromeSliver(),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          DesignTokens.spacingMd,
+                          DesignTokens.spacingXs,
+                          DesignTokens.spacingMd,
+                          DesignTokens.spacingSm,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (!atStorageRoot) ...[
+                              DeviceSourceRow(
+                                device: device,
+                                padding: const EdgeInsets.only(
+                                  bottom: DesignTokens.spacingSm,
                                 ),
                               ),
                             ],
-                          ),
-                          if (atStorageRoot) ...[
-                            const SizedBox(height: DesignTokens.spacingMd),
-                            FileTypeFilterGrid(
-                              selected: typeFilter.value,
-                              onSelected: (next) => typeFilter.value = next,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FileBreadcrumbs(
+                                    path: path.value,
+                                    onSelected: openDirectory,
+                                  ),
+                                ),
+                                const SizedBox(width: DesignTokens.spacingXs),
+                                GlassActionIcon(
+                                  tooltip: '刷新目录',
+                                  onPressed: busy.value
+                                      ? null
+                                      : () {
+                                          selected.value = {};
+                                          refresh();
+                                        },
+                                  icon: const Icon(LucideIcons.refreshCw),
+                                  iconSize:
+                                      DesignTokens.componentIconSmallSize +
+                                      DesignTokens.spacingMicro,
+                                  padding: EdgeInsets.zero,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width:
+                                        DesignTokens.componentSmallButtonSize,
+                                    height:
+                                        DesignTokens.componentSmallButtonSize,
+                                  ),
+                                ),
+                              ],
                             ),
+                            if (atStorageRoot) ...[
+                              const SizedBox(height: DesignTokens.spacingMd),
+                              FileTypeFilterGrid(
+                                selected: typeFilter.value,
+                                onSelected: (next) => typeFilter.value = next,
+                              ),
+                            ],
+                            if (busy.value) ...[
+                              const SizedBox(height: DesignTokens.spacingSm),
+                              const LinearProgressIndicator(minHeight: 2),
+                            ],
                           ],
-                          if (busy.value) ...[
-                            const SizedBox(height: DesignTokens.spacingSm),
-                            const LinearProgressIndicator(minHeight: 2),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (selected.value.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: FileSelectionBar(
-                        count: chosen.length,
-                        onRename: chosen.length == 1
-                            ? () => handleEntryAction('rename', chosen.single)
-                            : null,
-                        onRetrieve: retrievable
-                            ? () => retrieveSelection(
-                                context,
-                                controller,
-                                device,
-                                chosen,
-                              )
-                            : null,
-                        onDelete: chosen.isEmpty
-                            ? null
-                            : () async {
-                                if (await confirm(
-                                      context,
-                                      '删除 ${chosen.length} 项？',
-                                      '将从 ${deviceName(device)} 删除所选内容。此操作无法在本应用撤销，若结果未知请重新检查目录。',
-                                      action: '删除',
-                                      danger: true,
-                                    ) &&
-                                    context.mounted) {
-                                  await mutate('files.delete', {
-                                    'paths': chosen
-                                        .map((entry) => entry['path'])
-                                        .toList(),
-                                  });
-                                }
-                              },
-                        onClear: () => selected.value = {},
-                      ),
-                    ),
-                  if (listing.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: EmptyContent(
-                        icon: hasFilter
-                            ? LucideIcons.searchX
-                            : LucideIcons.folderOpen,
-                        title: hasFilter
-                            ? '当前目录没有匹配内容'
-                            : all.isEmpty
-                            ? '这个目录是空的'
-                            : '目录中没有可显示内容',
-                        message: hasFilter
-                            ? '文件类型只筛选当前目录中的文件；文件夹仍按原顺序显示。'
-                            : '发送本机文件到 ${path.value}，或新建文件夹。',
-                        action: TextButton(
-                          onPressed: hasFilter
-                              ? () => typeFilter.value = FileTypeFilter.all
-                              : upload,
-                          child: Text(hasFilter ? '清除筛选' : '发送文件'),
                         ),
                       ),
-                    )
-                  else ...[
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: DesignTokens.spacingMd,
-                      ),
-                      sliver: FileEntrySliver(
-                        entries: listing.entries,
-                        viewMode: viewMode,
-                        builder: (entry, grid) => entryTile(entry, grid: grid),
-                      ),
                     ),
-                    if (unavailableFiles)
+                    if (selected.value.isNotEmpty)
                       SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            DesignTokens.spacingMd,
-                            DesignTokens.spacingSm,
-                            DesignTokens.spacingMd,
-                            DesignTokens.spacingMd,
-                          ),
-                          child: StateNote(
-                            '当前目录没有${_typeFilterLabel(typeFilter.value)}文件。'
-                            '文件夹不受文件类型筛选影响。',
-                            icon: LucideIcons.info,
-                          ),
+                        child: FileSelectionBar(
+                          count: chosen.length,
+                          onRename: chosen.length == 1
+                              ? () => handleEntryAction('rename', chosen.single)
+                              : null,
+                          onRetrieve: retrievable
+                              ? () => retrieveSelection(
+                                  context,
+                                  controller,
+                                  device,
+                                  chosen,
+                                )
+                              : null,
+                          onDelete: chosen.isEmpty
+                              ? null
+                              : () async {
+                                  if (await confirm(
+                                        context,
+                                        '删除 ${chosen.length} 项？',
+                                        '将从 ${deviceName(device)} 删除所选内容。此操作无法在本应用撤销，若结果未知请重新检查目录。',
+                                        action: '删除',
+                                        danger: true,
+                                      ) &&
+                                      context.mounted) {
+                                    await mutate('files.delete', {
+                                      'paths': chosen
+                                          .map((entry) => entry['path'])
+                                          .toList(),
+                                    });
+                                  }
+                                },
+                          onClear: () => selected.value = {},
                         ),
                       ),
+                    if (listing.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: EmptyContent(
+                          icon: hasFilter
+                              ? LucideIcons.searchX
+                              : LucideIcons.folderOpen,
+                          title: hasFilter
+                              ? '当前目录没有匹配内容'
+                              : all.isEmpty
+                              ? '这个目录是空的'
+                              : '目录中没有可显示内容',
+                          message: hasFilter
+                              ? '文件类型只筛选当前目录中的文件；文件夹仍按原顺序显示。'
+                              : '发送本机文件到 ${path.value}，或新建文件夹。',
+                          action: TextButton(
+                            onPressed: hasFilter
+                                ? () => typeFilter.value = FileTypeFilter.all
+                                : upload,
+                            child: Text(hasFilter ? '清除筛选' : '发送文件'),
+                          ),
+                        ),
+                      )
+                    else ...[
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DesignTokens.spacingMd,
+                        ),
+                        sliver: FileEntrySliver(
+                          entries: listing.entries,
+                          viewMode: viewMode,
+                          builder: (entry, grid) =>
+                              entryTile(entry, grid: grid),
+                        ),
+                      ),
+                      if (unavailableFiles)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              DesignTokens.spacingMd,
+                              DesignTokens.spacingSm,
+                              DesignTokens.spacingMd,
+                              DesignTokens.spacingMd,
+                            ),
+                            child: StateNote(
+                              '当前目录没有${_typeFilterLabel(typeFilter.value)}文件。'
+                              '文件夹不受文件类型筛选影响。',
+                              icon: LucideIcons.info,
+                            ),
+                          ),
+                        ),
+                    ],
+                    const SliverToBoxAdapter(
+                      child: SizedBox(height: DesignTokens.spacingLg),
+                    ),
+                    const PageChromeBottomSliver(),
                   ],
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: DesignTokens.spacingLg),
-                  ),
-                  const PageChromeBottomSliver(),
-                ],
-              ),
-            );
-          },
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

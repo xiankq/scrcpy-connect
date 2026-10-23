@@ -38,7 +38,6 @@ void main() {
   test('type filters files while folders and unknown entries stay visible', () {
     final listing = buildDirectoryListing(
       entries: [folderB, folderA, document, image, unknown],
-      query: '',
       typeFilter: FileTypeFilter.documents,
       sortKey: FileSortKey.name,
       ascending: true,
@@ -55,23 +54,9 @@ void main() {
     );
   });
 
-  test('name queries apply independently from the selected file type', () {
-    final listing = buildDirectoryListing(
-      entries: [folderB, folderA, document, image, unknown],
-      query: '报',
-      typeFilter: FileTypeFilter.images,
-      sortKey: FileSortKey.name,
-      ascending: true,
-    );
-
-    expect(listing.folders, isEmpty);
-    expect(listing.files, isEmpty);
-  });
-
   test('file sorting keeps folders first and missing metadata last', () {
     final listing = buildDirectoryListing(
       entries: [folderB, folderA, document, image, unknown],
-      query: '',
       typeFilter: FileTypeFilter.all,
       sortKey: FileSortKey.size,
       ascending: false,
@@ -91,7 +76,6 @@ void main() {
   test('folder order follows comparable sort metadata and direction', () {
     final listing = buildDirectoryListing(
       entries: [folderA, folderB],
-      query: '',
       typeFilter: FileTypeFilter.all,
       sortKey: FileSortKey.modified,
       ascending: false,
@@ -128,7 +112,6 @@ void main() {
   test('a directory listing exposes one folder-first content stream', () {
     final listing = buildDirectoryListing(
       entries: [image, folderA, document, folderB],
-      query: '',
       typeFilter: FileTypeFilter.all,
       sortKey: FileSortKey.name,
       ascending: true,

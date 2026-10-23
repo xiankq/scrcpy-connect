@@ -18,7 +18,6 @@ class FileSearchOperation extends ChangeNotifier {
   int _readGeneration = 0;
   Timer? _poll;
   String? get searchId => result?['searchId'] as String?;
-  String? get activePath => _activePath;
   bool get running => starting || result?['status'] == 'running';
 
   Future<void> start(

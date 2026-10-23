@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:path/path.dart' as p;
 
 import 'file_executor.dart';
+import 'file_type.dart';
 
 part 'task_journal.dart';
 
@@ -194,59 +195,19 @@ class RemoteFiles {
     });
   }
 
-  static String mime(String path) =>
-      switch (p.posix.extension(path).toLowerCase()) {
-        '.jpg' || '.jpeg' => 'image/jpeg',
-        '.png' => 'image/png',
-        '.webp' => 'image/webp',
-        '.gif' => 'image/gif',
-        '.heic' || '.heif' => 'image/heic',
-        '.bmp' => 'image/bmp',
-        '.mp4' || '.m4v' => 'video/mp4',
-        '.mkv' => 'video/x-matroska',
-        '.webm' => 'video/webm',
-        '.mov' => 'video/quicktime',
-        '.3gp' => 'video/3gpp',
-        '.mp3' => 'audio/mpeg',
-        '.m4a' || '.aac' => 'audio/aac',
-        '.wav' => 'audio/wav',
-        '.ogg' => 'audio/ogg',
-        '.flac' => 'audio/flac',
-        '.pdf' => 'application/pdf',
-        '.txt' || '.md' || '.csv' || '.log' => 'text/plain',
-        '.zip' => 'application/zip',
-        '.rar' => 'application/x-rar-compressed',
-        '.7z' => 'application/x-7z-compressed',
-        '.tar' || '.gz' => 'application/x-tar',
-        '.doc' ||
-        '.docx' ||
-        '.xls' ||
-        '.xlsx' ||
-        '.ppt' ||
-        '.pptx' => 'application/document',
-        _ => 'application/octet-stream',
-      };
-  static bool _matches(FileSnapshot entry, String filter) {
-    final type = entry['mime']! as String;
-    return switch (filter) {
-      'all' => true,
-      'folders' => entry['kind'] == 'directory',
-      'images' => type.startsWith('image/'),
-      'videos' => type.startsWith('video/'),
-      'audio' => type.startsWith('audio/'),
-      'documents' =>
-        type.startsWith('text/') ||
-            type == 'application/pdf' ||
-            type == 'application/document',
-      'archives' => const [
-        'application/zip',
-        'application/x-rar-compressed',
-        'application/x-7z-compressed',
-        'application/x-tar',
-      ].contains(type),
-      _ => throw const FileFailure('invalid_argument', '文件类型无效。'),
-    };
-  }
+  static String mime(String path) => FileTypePolicy.mime(path);
+
+  static bool _matches(FileSnapshot entry, String filter) => switch (filter) {
+    'all' => true,
+    'folders' => entry['kind'] == 'directory',
+    'images' || 'videos' || 'audio' || 'documents' || 'archives' =>
+      FileTypePolicy.kind(
+            name: entry['name'] as String? ?? '',
+            mime: entry['mime'] as String?,
+          ).name ==
+          filter,
+    _ => throw const FileFailure('invalid_argument', '文件类型无效。'),
+  };
 
   static FileSnapshot _entry(String root, FileEntryFact fact) {
     final name = fact.pathName;
@@ -879,15 +840,16 @@ class RemoteFiles {
       }
       if (!push && destinationScope == 'privateCache') {
         final reservations = <FileCacheReservation>[];
+        final totals = <String, int>{};
+        for (final task in selected.reversed) {
+          final id = task['id']! as String;
+          final size = (totals[id] ?? 0) + (task['total'] as int? ?? 0);
+          totals[id] = size;
+          final parent = task['parentId'];
+          if (parent is String) totals[parent] = (totals[parent] ?? 0) + size;
+        }
         for (final root in selected.where((t) => t['parentId'] == null)) {
-          final source = root['source']! as String;
-          final size = selected
-              .where(
-                (t) =>
-                    t['source'] == source ||
-                    (t['source']! as String).startsWith('$source/'),
-              )
-              .fold<int>(0, (n, t) => n + (t['total'] as int? ?? 0));
+          final size = totals[root['id']]!;
           reservations.add(
             FileCacheReservation(
               root['destination']! as String,
@@ -1008,17 +970,17 @@ class RemoteFiles {
         }
         if (task['status'] == 'conflict') break;
       }
+      final children = _children(tasks);
       for (final task in tasks.reversed.where(
         (t) => t['kind'] == 'directory' && t['status'] == 'completed',
       )) {
-        final descendants = tasks.where(
-          (t) =>
-              t['source'] != task['source'] &&
-              (t['source']! as String).startsWith('${task['source']}/'),
-        );
         task['treeVerified'] = true;
-        task['treeComplete'] = descendants.every(
-          (t) => t['status'] == 'completed',
+        task['treeComplete'] = (children[task['id']] ?? const []).every(
+          (child) =>
+              child['status'] == 'completed' &&
+              (child['kind'] != 'directory' ||
+                  child['treeVerified'] == true &&
+                      child['treeComplete'] == true),
         );
         await _save(task);
       }
@@ -1128,11 +1090,7 @@ class RemoteFiles {
           if (expected.isDirectory) {
             final replacement = task['destination']! as String;
             final context = push ? p.posix : p.context;
-            for (final child in _tasks.values.where(
-              (t) =>
-                  t['batchId'] == task['batchId'] &&
-                  context.isWithin(original, t['destination']! as String),
-            )) {
+            for (final child in _subtree([task]).skip(1)) {
               child['destination'] = context.join(
                 replacement,
                 context.relative(
@@ -1227,22 +1185,35 @@ class RemoteFiles {
     }
   }
 
+  static Map<String, List<FileSnapshot>> _children(
+    Iterable<FileSnapshot> tasks,
+  ) {
+    final children = <String, List<FileSnapshot>>{};
+    for (final task in tasks) {
+      final parent = task['parentId'];
+      if (parent is String) children.putIfAbsent(parent, () => []).add(task);
+    }
+    return children;
+  }
+
+  List<FileSnapshot> _subtree(Iterable<FileSnapshot> roots) {
+    final children = _children(_tasks.values);
+    final pending = Queue<FileSnapshot>()..addAll(roots);
+    final selected = <FileSnapshot>[];
+    final seen = <String>{};
+    while (pending.isNotEmpty) {
+      final task = pending.removeFirst();
+      if (!seen.add(task['id']! as String)) continue;
+      selected.add(task);
+      pending.addAll(children[task['id']] ?? const []);
+    }
+    return selected;
+  }
+
   Future<FileSnapshot> cancelTransfer(String id) async {
     final task = _tasks[id];
     if (task == null) throw const FileFailure('not_found', '传输任务不存在。');
-    final selected = [task], ids = {id};
-    var added = true;
-    while (added) {
-      added = false;
-      for (final candidate in _tasks.values) {
-        if (ids.contains(candidate['parentId']) &&
-            ids.add(candidate['id']! as String)) {
-          selected.add(candidate);
-          added = true;
-        }
-      }
-    }
-    await _cancelTasks(selected);
+    await _cancelTasks(_subtree([task]));
     return _project(task);
   }
 
@@ -1303,22 +1274,14 @@ class RemoteFiles {
   Future<FileSnapshot> removeTransfer(String id, {bool batch = false}) async {
     _check();
     final root = _tasks[id];
-    final selected = batch
-        ? _tasks.values.where((t) => t['batchId'] == id).toList()
-        : root == null
-        ? <FileSnapshot>[]
-        : [root];
+    final selected = _subtree(
+      batch
+          ? _tasks.values.where((t) => t['batchId'] == id)
+          : root == null
+          ? const <FileSnapshot>[]
+          : [root],
+    );
     final ids = selected.map((t) => t['id']! as String).toSet();
-    var added = true;
-    while (added) {
-      added = false;
-      for (final task in _tasks.values) {
-        if (ids.contains(task['parentId']) && ids.add(task['id']! as String)) {
-          selected.add(task);
-          added = true;
-        }
-      }
-    }
     final batches = selected.map((t) => t['batchId']).toSet();
     if (_tasks.values.any(
       (t) => batches.contains(t['batchId']) && !_terminal(t['status']),

@@ -51,18 +51,11 @@ final class NativeFileExecutor implements RemoteFileExecutor {
   ) async* {
     cancellation.check();
     final id = await native.fileExecute(request: request);
-    var done = false;
     Future<void>? cancelling;
-    unawaited(
-      cancellation.whenCancelled
-          .then((_) async {
-            if (!done) {
-              cancelling = native.fileCancel(operationId: id);
-              await cancelling;
-            }
-          })
-          .catchError((Object _) {}),
-    );
+    final stopListening = cancellation.onCancel(() {
+      cancelling = Future<void>.sync(() => native.fileCancel(operationId: id));
+      unawaited(cancelling!.catchError((Object _) {}));
+    });
     try {
       cancellation.check();
       while (true) {
@@ -81,7 +74,7 @@ final class NativeFileExecutor implements RemoteFileExecutor {
         if (event.kind == 'done') break;
       }
     } finally {
-      done = true;
+      stopListening();
       if (cancelling != null) {
         await cancelling;
       } else {

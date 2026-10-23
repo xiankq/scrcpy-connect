@@ -7,3 +7,5 @@ export 'src/system_delivery.dart';
 
 export 'src/file_executor.dart';
 export 'src/remote_files.dart';
+
+export 'src/file_type.dart';
