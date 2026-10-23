@@ -1,0 +1,7 @@
+{
+  global:
+    JNI_OnLoad;
+    Java_dev_scrcpyconnect_media_1codec_MediaCodecPlugin_*;
+    mc_*;
+  local: *;
+};

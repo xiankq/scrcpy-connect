@@ -10,4 +10,35 @@ target_compile_features(${PLUGIN_NAME} PUBLIC cxx_std_17)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL NOMINMAX)
 target_include_directories(${PLUGIN_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin media_codec_core d3d11 dxgi ole32 uuid)
-set(media_codec_bundled_libraries "" PARENT_SCOPE)
+# Rust and the pinned C archives request the release DLL CRT. In a Flutter
+# Debug DLL, resolve those C allocation APIs from the debug CRT selected by the
+# wrapper as well, rather than importing both CRT heaps into the same module.
+target_link_options(${PLUGIN_NAME} PRIVATE
+  "$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/NODEFAULTLIB:MSVCRT>")
+get_target_property(MC_FFMPEG_INCLUDE mc_ffmpeg INTERFACE_INCLUDE_DIRECTORIES)
+get_filename_component(MC_FFMPEG_PREFIX "${MC_FFMPEG_INCLUDE}" DIRECTORY)
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/licenses")
+file(GLOB_RECURSE MC_DEPENDENCY_NOTICES LIST_DIRECTORIES false
+  "${MC_FFMPEG_PREFIX}/share/media_codec/*")
+set(MC_BUNDLED_NOTICES "")
+foreach(notice IN LISTS MC_DEPENDENCY_NOTICES)
+  get_filename_component(notice_name "${notice}" NAME)
+  set(notice_copy "${CMAKE_CURRENT_BINARY_DIR}/licenses/media_codec-${notice_name}")
+  configure_file("${notice}" "${notice_copy}" COPYONLY)
+  list(APPEND MC_BUNDLED_NOTICES "${notice_copy}")
+endforeach()
+set(media_codec_bundled_libraries "${MC_BUNDLED_NOTICES}" PARENT_SCOPE)
+
+target_compile_options(${PLUGIN_NAME} PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+
+if(MEDIA_CODEC_BUILD_TESTS)
+  enable_testing()
+  add_executable(media_codec_wasapi_test tests/audio_test.cpp)
+  apply_standard_settings(media_codec_wasapi_test)
+  target_compile_features(media_codec_wasapi_test PRIVATE cxx_std_17)
+  target_compile_definitions(media_codec_wasapi_test PRIVATE FLUTTER_PLUGIN_IMPL NOMINMAX)
+  target_compile_options(media_codec_wasapi_test PRIVATE /utf-8 /UNDEBUG)
+  target_link_libraries(media_codec_wasapi_test PRIVATE flutter flutter_wrapper_plugin
+    media_codec_core d3d11 dxgi ole32 uuid)
+  add_test(NAME media_codec_wasapi_test COMMAND media_codec_wasapi_test)
+endif()

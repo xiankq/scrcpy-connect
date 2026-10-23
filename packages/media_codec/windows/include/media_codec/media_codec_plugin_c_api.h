@@ -9,7 +9,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-MEDIA_CODEC_PLUGIN_EXPORT void MediaCodecPluginCApiRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar);
+MEDIA_CODEC_PLUGIN_EXPORT void MediaCodecPluginCApiRegisterWithRegistrar(
+    FlutterDesktopPluginRegistrarRef registrar);
 #ifdef __cplusplus
 }
 #endif

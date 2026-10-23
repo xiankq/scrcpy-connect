@@ -33,8 +33,9 @@ class MediaCodecView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (textureId == null || width < 1 || height < 1)
+    if (textureId == null || width < 1 || height < 1) {
       return const SizedBox.expand();
+    }
     return ClipRect(
       child: SizedBox.expand(
         child: FittedBox(

@@ -11,6 +11,7 @@
 **/android/local.properties
 **/android/.gradle/
 **/android/.kotlin/
+**/android/.cxx/
 **/android/app/src/main/jniLibs/
 **/.flutter-plugins-dependencies
 **/__pycache__/

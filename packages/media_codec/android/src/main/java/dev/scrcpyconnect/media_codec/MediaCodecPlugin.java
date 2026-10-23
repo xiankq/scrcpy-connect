@@ -3,12 +3,12 @@ package dev.scrcpyconnect.media_codec;
 import android.graphics.Bitmap;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
-import android.media.AudioManager;
 import android.media.AudioTrack;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.view.PixelCopy;
 import android.view.Surface;
 import androidx.annotation.NonNull;
@@ -16,9 +16,15 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.view.TextureRegistry;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,9 +47,23 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
 
   @Override public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
     channel.setMethodCallHandler(null);
-    for (Session session : sessions.values()) dispose(session, null);
-    sessions.clear();
-    worker.shutdown();
+    List<Session> outputs = new ArrayList<>(sessions.values());
+    for (Session session : outputs) { session.disposed = true; session.releaseTexture(); }
+    // Flutter destroys texture consumers after detach returns. Also drain any
+    // earlier dispose already removed from sessions. Consumers were abandoned
+    // first so a blocked software dequeue cannot hold this drain indefinitely.
+    Future<?> drain = worker.submit(() -> {
+      for (Session session : outputs) session.closeNative();
+    });
+    boolean interrupted = false;
+    for (;;) {
+      try { drain.get(); break; }
+      catch (InterruptedException error) { interrupted = true; }
+      catch (ExecutionException error) { throw new IllegalStateException("Unable to drain native media", error.getCause()); }
+    }
+    for (Session session : outputs) session.releasePlatform();
+    sessions.clear(); worker.shutdown();
+    if (interrupted) Thread.currentThread().interrupt();
   }
 
   private static long number(Map<?, ?> args, String name, long fallback) {
@@ -76,9 +96,10 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
           session.open();
           Map<String, Object> value = new HashMap<>();
           value.put("handle", session.id);
-          value.put("textureId", session.producer == null ? -1L : session.producer.id());
+          value.put("textureId", session.textureId());
           value.put("width", session.width);
           value.put("height", session.height);
+          value.putAll(nativeBindings(session.decoder));
           main.post(() -> result.success(value));
         } catch (RuntimeException error) {
           session.closeNative();
@@ -105,12 +126,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
         switch (call.method) {
           case "status": value = nativeStatus(session.decoder); break;
           case "setPaused":
-            session.paused = Boolean.TRUE.equals(args.get("paused"));
-            nativeSetPaused(session.decoder, session.paused);
-            if (session.audio != null) {
-              if (session.paused) { session.audio.pause(); session.audio.flush(); }
-              else session.audio.play();
-            }
+            nativeSetPaused(session.decoder, Boolean.TRUE.equals(args.get("paused")));
             break;
           case "setVolume":
             Object volume = args.get("volume");
@@ -129,8 +145,9 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
   private void dispose(Session session, MethodChannel.Result result) {
     sessions.remove(session.id);
     session.disposed = true;
+    session.releaseTexture();
     worker.execute(() -> {
-      session.closeNative(); // Detach drains Rust callbacks before releasing Surface/AudioTrack.
+      session.closeNative(); // Consumers are abandoned before a possibly blocked software dequeue is joined.
       main.post(() -> {
         session.releasePlatform();
         if (result != null) result.success(null);
@@ -145,7 +162,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
       Map<String, Object> image = nativeSnapshot(session.decoder, maxWidth, maxHeight);
       main.post(() -> {
         if (image != null) { result.success(image); return; }
-        if (session.producer == null || session.disposed || Build.VERSION.SDK_INT < 24) {
+        if (session.textureId() < 0 || session.disposed || Build.VERSION.SDK_INT < 24) {
           result.success(null); return;
         }
         // MediaCodec Surface buffers intentionally never travel through CPU memory during playback.
@@ -154,7 +171,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
         Bitmap bitmap = Bitmap.createBitmap(Math.max(1, (int) (session.width * scale)),
             Math.max(1, (int) (session.height * scale)), Bitmap.Config.ARGB_8888);
         try {
-          PixelCopy.request(session.producer.getSurface(), bitmap, status -> {
+          PixelCopy.request(session.surface, bitmap, status -> {
             if (status != PixelCopy.SUCCESS || session.disposed) {
               bitmap.recycle(); result.success(null); return;
             }
@@ -183,22 +200,31 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
     final long id;
     final Map<?, ?> config;
     final TextureRegistry.SurfaceProducer producer;
-    final AudioTrack audio;
+    final TextureRegistry.SurfaceTextureEntry surfaceTexture;
+    final Object decoderLock = new Object();
+    final Object audioLock = new Object();
+    AudioTrack audio;
     volatile boolean disposed;
+    boolean platformReleased;
+    boolean textureReleased;
     volatile boolean paused;
     volatile int width;
     volatile int height;
     volatile Surface surface;
     long decoder;
+    long audioFramesWritten;
+    long audioGeneration;
+    long lastPlaybackHead;
+    long playbackWrap;
 
     Session(long id, Map<?, ?> config, boolean isAudio) {
       this.id = id; this.config = config;
       width = Math.max(1, (int) number(config, "width", 1));
       height = Math.max(1, (int) number(config, "height", 1));
       if (isAudio) {
-        producer = null;
+        producer = null; surfaceTexture = null;
         int minimum = AudioTrack.getMinBufferSize(48000, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT);
-        if (Build.VERSION.SDK_INT >= 23) {
+        {
           AudioTrack.Builder builder = new AudioTrack.Builder()
             .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
@@ -207,9 +233,6 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
             .setTransferMode(AudioTrack.MODE_STREAM).setBufferSizeInBytes(Math.max(minimum, 7680));
           if (Build.VERSION.SDK_INT >= 26) builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY);
           audio = builder.build();
-        } else {
-          audio = new AudioTrack(AudioManager.STREAM_MUSIC, 48000, AudioFormat.CHANNEL_OUT_STEREO,
-              AudioFormat.ENCODING_PCM_16BIT, Math.max(minimum, 7680), AudioTrack.MODE_STREAM);
         }
         if (audio.getState() != AudioTrack.STATE_INITIALIZED) {
           audio.release(); throw new IllegalStateException("PCM audio output is unavailable");
@@ -217,37 +240,71 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
         audio.play();
       } else {
         audio = null;
-        producer = textures.createSurfaceProducer();
-        producer.setSize(width, height);
-        surface = producer.getSurface();
-        producer.setCallback(new TextureRegistry.SurfaceProducer.Callback() {
-          @Override public void onSurfaceCleanup() {
-            worker.execute(Session.this::closeNative);
-          }
-          @Override public void onSurfaceAvailable() {
-            surface = producer.getSurface();
-            Surface available = surface;
-            worker.execute(() -> { if (!disposed && decoder == 0) open(available); });
-          }
-        });
+        TextureRegistry.SurfaceProducer candidate = textures.createSurfaceProducer();
+        // ImageReader producers cannot apply codec crop/rotation on all engines.
+        // Flutter's SurfaceTexture consumer applies the producer transform matrix.
+        if (candidate.handlesCropAndRotation()) {
+          producer = candidate; surfaceTexture = null;
+          producer.setSize(width, height);
+          surface = producer.getSurface();
+          producer.setCallback(new TextureRegistry.SurfaceProducer.Callback() {
+            @Override public void onSurfaceCleanup() {
+              // The callback is a barrier: Flutter destroys its consumer as soon
+              // as this returns. Merely posting to the worker races that release.
+              synchronized (decoderLock) {
+                if (decoder != 0) nativeSetSurface(decoder, null);
+                surface = null;
+              }
+            }
+            @Override public void onSurfaceAvailable() {
+              synchronized (decoderLock) {
+                surface = producer.getSurface();
+                if (!disposed && decoder != 0) nativeSetSurface(decoder, surface);
+              }
+            }
+          });
+        } else {
+          candidate.release(); producer = null;
+          surfaceTexture = textures.createSurfaceTexture();
+          surfaceTexture.surfaceTexture().setDefaultBufferSize(width, height);
+          surface = new Surface(surfaceTexture.surfaceTexture());
+        }
       }
     }
 
-    void open() { open(surface); }
-    void open(Surface surface) {
-      if (disposed || decoder != 0) return;
-      decoder = nativeCreate(this, surface, audio != null ? 100 : codec(config.get("codec")),
-          width, height, number(config, "generation", 0), (String) config.get("sourceId"),
-          number(config, "attachAddress", 0), number(config, "detachAddress", 0));
-      if (decoder == 0) throw new IllegalStateException("Unable to attach native media output");
-      if (paused) nativeSetPaused(decoder, true);
+    long textureId() {
+      return producer != null ? producer.id() : surfaceTexture != null ? surfaceTexture.id() : -1L;
+    }
+    void open() {
+      synchronized (decoderLock) {
+        if (disposed || decoder != 0) return;
+        decoder = nativeCreate(this, surface, audio != null ? 100 : codec(config.get("codec")),
+            width, height, number(config, "generation", 0), (String) config.get("sourceId"),
+            number(config, "attachAddress", 0), number(config, "detachAddress", 0));
+        if (decoder == 0) throw new IllegalStateException("Unable to attach native media output");
+        if (paused) nativeSetPaused(decoder, true);
+      }
     }
     void closeNative() {
-      if (decoder != 0) { nativeDispose(decoder); decoder = 0; }
+      synchronized (decoderLock) {
+        if (decoder != 0) { nativeDispose(decoder); decoder = 0; }
+      }
+    }
+    // Called on the main thread. Native workers retain their ANativeWindow, so
+    // abandoning the consumer is safe and unblocks an in-flight software lock.
+    void releaseTexture() {
+      if (textureReleased) return;
+      textureReleased = true;
+      if (producer != null) { producer.setCallback(null); producer.release(); }
+      if (surfaceTexture != null) {
+        if (surface != null) surface.release();
+        surfaceTexture.release();
+      }
     }
     void releasePlatform() {
-      if (producer != null) { producer.setCallback(null); producer.release(); }
-      if (audio != null) { audio.pause(); audio.flush(); audio.release(); }
+      if (platformReleased) return;
+      platformReleased = true;
+      releaseTexture(); onAudioClosed();
     }
 
     // Called by the shared core's decode thread, never by the Dart isolate.
@@ -256,37 +313,81 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
       main.post(() -> {
         if (disposed || (width == nextWidth && height == nextHeight)) return;
         width = nextWidth; height = nextHeight;
-        worker.execute(() -> {
-          closeNative();
-          main.post(() -> {
-            if (disposed) return;
+        synchronized (decoderLock) {
+          if (disposed) return;
+          if (producer != null) {
             producer.setSize(width, height);
             surface = producer.getSurface();
-            Surface available = surface;
-            worker.execute(() -> { if (!disposed) open(available); });
-          });
-        });
+          } else if (surfaceTexture != null) {
+            surfaceTexture.surfaceTexture().setDefaultBufferSize(width, height);
+          }
+          if (decoder != 0) nativeSetSurface(decoder, surface);
+        }
       });
     }
-    @SuppressWarnings("unused") public long onPcm(byte[] bytes) {
-      if (disposed || paused || audio == null) return 0;
-      int offset = 0;
-      long deadline = SystemClock.elapsedRealtime() + 80;
-      while (offset < bytes.length && !disposed && !paused) {
-        int written = audio.write(bytes, offset, bytes.length - offset, AudioTrack.WRITE_NON_BLOCKING);
-        if (written < 0) return written;
-        offset += written;
-        if (offset < bytes.length) {
-          if (SystemClock.elapsedRealtime() >= deadline) break;
-          SystemClock.sleep(1);
+    @SuppressWarnings("unused") public void onAudioClosed() {
+      synchronized (audioLock) {
+        if (audio != null) {
+          try { audio.pause(); audio.flush(); } finally { audio.release(); audio = null; }
+          audioFramesWritten = 0; lastPlaybackHead = 0; playbackWrap = 0; audioGeneration++;
         }
       }
-      return offset;
+    }
+    @SuppressWarnings("unused") public void onPaused(boolean value) {
+      paused = value;
+      synchronized (audioLock) {
+        if (disposed || audio == null) return;
+        if (value) {
+          audio.pause(); audio.flush(); audioFramesWritten = 0;
+          lastPlaybackHead = 0; playbackWrap = 0; audioGeneration++;
+        }
+        else audio.play();
+      }
+    }
+    @SuppressWarnings("unused") public int onHardwareDecoder(String name) {
+      if (name == null || name.isEmpty()) return -1;
+      if (Build.VERSION.SDK_INT >= 29) {
+        for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.ALL_CODECS).getCodecInfos()) {
+          if (!info.isEncoder() && (name.equals(info.getName()) || name.equals(info.getCanonicalName()))) {
+            if (info.isSoftwareOnly()) return 0;
+            return info.isHardwareAccelerated() ? 1 : -1;
+          }
+        }
+      }
+      String lower = name.toLowerCase(java.util.Locale.ROOT);
+      return lower.startsWith("c2.android.") || lower.startsWith("omx.google.") ? 0 : -1;
+    }
+    @SuppressWarnings("unused") public void onAudioState(ByteBuffer state) {
+      synchronized (audioLock) {
+        long played = 0;
+        if (audio != null && !disposed) {
+          long head = Integer.toUnsignedLong(audio.getPlaybackHeadPosition());
+          if (head < lastPlaybackHead) playbackWrap += 1L << 32;
+          lastPlaybackHead = head;
+          played = Math.min(audioFramesWritten, playbackWrap + head);
+        }
+        state.order(ByteOrder.nativeOrder());
+        state.putLong(played).putLong(Math.max(0, audioFramesWritten - played))
+            .putLong(audioGeneration).putInt(!paused && !disposed && audio != null ? 1 : 0);
+      }
+    }
+    @SuppressWarnings("unused") public long onPcm(ByteBuffer bytes) {
+      if (disposed || paused || audio == null) return 0;
+      synchronized (audioLock) {
+        if (disposed || paused || audio == null) return 0;
+        // The core retries unaccepted bytes. Never wait/sleep on its decode
+        // thread, and never copy borrowed PCM into a Java heap array.
+        int written = audio.write(bytes, bytes.remaining(), AudioTrack.WRITE_NON_BLOCKING);
+        if (written > 0) audioFramesWritten += written / 4;
+        return written < 0 ? written : written - written % 4;
+      }
     }
   }
 
   private static native long nativeCreate(Object listener, Surface surface, int codec, int width,
       int height, long generation, String sourceId, long attachAddress, long detachAddress);
+  private static native Map<String, Object> nativeBindings(long decoder);
+  private static native void nativeSetSurface(long decoder, Surface surface);
   private static native Map<String, Object> nativeStatus(long decoder);
   private static native Map<String, Object> nativeSnapshot(long decoder, int maxWidth, int maxHeight);
   private static native void nativeSetPaused(long decoder, boolean paused);

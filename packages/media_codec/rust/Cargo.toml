@@ -1,0 +1,23 @@
+[package]
+name = "media-codec-native"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "media_codec_native"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[workspace]
+
+[build-dependencies]
+bindgen = { version = "0.72.1", default-features = false, features = ["runtime"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+debug = 0
+strip = "debuginfo"
+panic = "abort"
+incremental = false
+

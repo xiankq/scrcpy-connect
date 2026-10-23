@@ -1,7 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
+
+import 'native_controls.dart';
 
 /// A process-local native producer. Payload bytes never enter the Dart isolate.
 /// Function addresses and source capabilities must not be persisted or logged.
@@ -86,6 +87,11 @@ class MediaCodecController {
   int get height => _status['height'] as int? ?? 0;
   int get positionMs => _status['positionMs'] as int? ?? 0;
   int? _handle;
+  NativeControls? _native;
+  (String, bool, String?)? _publishedSelection;
+  (int, int)? _decodedDimensions;
+  int _observedFrameCount = 0, _generation = 0, _presentedSequence = 0;
+  Future<void> _operations = Future<void>.value();
   bool _disposed = false, _polling = false;
   Timer? _timer;
   Future<void>? _opening;
@@ -99,23 +105,42 @@ class MediaCodecController {
   }
 
   Future<void> _open(MediaCodecSource source) async {
+    _generation = source.generation;
     final created = await _channel.invokeMapMethod<String, dynamic>(
       _audio ? 'createAudio' : 'createVideo',
       source.toMap(),
     );
     final handle = created?['handle'];
-    if (handle is! int || handle <= 0)
+    if (handle is! int || handle <= 0) {
       throw StateError('Invalid native output');
+    }
     _handle = handle;
-    _status = {...?created};
-    if (_disposed)
+    _status = {...?created}
+      ..removeWhere((key, _) => key == 'decoderAddress' || key == 'nativeApi');
+    if (_disposed) {
       return; // dispose waits for this creation and then drains it.
+    }
+    try {
+      _native = NativeControls(created!);
+    } catch (_) {
+      _handle = null;
+      await _channel.invokeMethod<void>('dispose', {'handle': handle});
+      rethrow;
+    }
     await refresh();
+    if (_disposed) return;
     _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
       if (!_disposed && !_polling) {
         unawaited(
           refresh().catchError((Object error) {
-            if (!_disposed) _events.add({'kind': 'failed', 'reason': '$error'});
+            if (!_disposed) {
+              _events.add({
+                'kind': 'failed',
+                'code': 'native_status_error',
+                'stage': 'status_poll',
+                'reason': '$error',
+              });
+            }
             return <String, dynamic>{};
           }),
         );
@@ -127,31 +152,97 @@ class MediaCodecController {
     if (_disposed || _handle == null || _polling) return currentStatus;
     _polling = true;
     try {
-      final value = await _channel.invokeMapMethod<String, dynamic>('status', {
-        'handle': _handle,
-      });
+      final value = await _run(() => _native!.readStatus());
       if (_disposed) return currentStatus;
       final previous = _status;
-      _status = {..._status, ...?value};
-      if ((_status['errorCode'] as int? ?? 0) != 0) {
+      _status = {..._status, ...value};
+      final nativeError = _status['errorCode'] as int? ?? 0;
+      final presentationError = _status['presentationError'] as String? ?? '';
+      if (nativeError != 0 || presentationError.isNotEmpty) {
+        final presentation = presentationError.isNotEmpty;
         _events.add({
           'kind': 'failed',
-          'reason': _status['error'] ?? 'Native decoder failed',
+          'code': presentation ? 'presentation_error' : 'decoder_error',
+          'stage': _audio
+              ? 'audio_output'
+              : presentation
+              ? 'video_presentation'
+              : 'video_decode',
+          if (nativeError != 0) 'nativeError': nativeError,
+          'reason': presentation
+              ? presentationError
+              : _status['error'] ?? 'Native decoder failed',
         });
       } else if (_status['ended'] == true && previous['ended'] != true) {
-        _events.add({'kind': 'failed', 'reason': 'Native packet source ended'});
+        _events.add({
+          'kind': 'failed',
+          'code': 'media_source_ended',
+          'stage': _audio ? 'audio_output' : 'video_decode',
+          'reason': 'Native packet source ended',
+        });
       }
-      if (previous['decoderName'] != _status['decoderName'] ||
-          previous['hardwareAccelerated'] != _status['hardwareAccelerated']) {
+      final presented = _status['presentedSequence'] as int? ?? 0;
+      if (!_audio && presented > _presentedSequence) {
+        _presentedSequence = presented;
         _events.add({
           'kind': 'diagnostic',
-          'category': 'decoder.video',
+          'category': 'video.presentation',
+          'generation': _generation,
+          'textureId': textureId,
+          'presentedSequence': presented,
+          'presentedFrameCount': _status['presentedFrameCount'],
+          'presentationPath': _status['presentationPath'],
+          'platformTexturePrepared': true,
+          'presentedToWidget': false,
+        });
+      }
+      final decoder = _status['decoderName'];
+      final hasOutput = _audio
+          ? _status['nativeReady'] == true
+          : (_status['frameCount'] as int? ?? 0) > 0;
+      final hardware = _status['hardwareAccelerated'] == true;
+      final verification = _status['hardwareVerification'] as String?;
+      if (hasOutput &&
+          decoder is String &&
+          decoder.isNotEmpty &&
+          _publishedSelection != (decoder, hardware, verification)) {
+        _publishedSelection = (decoder, hardware, verification);
+        _events.add({
+          'kind': 'diagnostic',
+          'category': _audio ? 'decoder.audio' : 'decoder.video',
           'decoderName': _status['decoderName'],
           'hardwareAccelerated': _status['hardwareAccelerated'],
+          'hardwareVerification': verification,
+          'backendHardwareFrames': _status['backendHardwareFrames'],
           'runtimeSelectionVerified': true,
         });
       }
+      if (!_audio && hasOutput) {
+        final count = _status['frameCount'] as int;
+        final w = width, h = height;
+        if (count > _observedFrameCount && w > 0 && h > 0) {
+          final dimensions = (w, h);
+          final changed =
+              _decodedDimensions != null && _decodedDimensions != dimensions;
+          _observedFrameCount = count;
+          _decodedDimensions = dimensions;
+          if (changed) {
+            _events.add({
+              'kind': 'metadata',
+              'category': 'video.dimensions',
+              'generation': _generation,
+              'textureId': textureId,
+              'width': w,
+              'height': h,
+              'frameCount': count,
+            });
+          }
+        }
+      }
       return currentStatus;
+    } catch (_) {
+      if (_disposed) return currentStatus;
+      rethrow;
     } finally {
       _polling = false;
     }
@@ -163,42 +254,73 @@ class MediaCodecController {
     final watch = Stopwatch()..start();
     while (!_disposed) {
       final value = await refresh();
-      if ((value['errorCode'] as int? ?? 0) != 0 || value['ended'] == true) {
+      if ((value['errorCode'] as int? ?? 0) != 0 ||
+          (value['presentationError'] as String? ?? '').isNotEmpty ||
+          value['ended'] == true) {
         throw StateError('Native source failed before the first frame');
       }
-      if ((value['frameCount'] as int? ?? 0) > 0 && width > 0 && height > 0)
+      if ((value['frameCount'] as int? ?? 0) > 0 && width > 0 && height > 0) {
         return value;
-      if (watch.elapsed >= timeout)
+      }
+      if (watch.elapsed >= timeout) {
         throw TimeoutException('No decoded frame', timeout);
+      }
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
     throw StateError('Media output disposed');
   }
 
-  Future<void> setPaused(bool paused) =>
-      _control('setPaused', {'paused': paused});
-  Future<void> setVolume(double volume, {bool muted = false}) {
-    if (!volume.isFinite || volume < 0 || volume > 1)
-      throw ArgumentError.value(volume, 'volume');
-    return _control('setVolume', {'volume': volume, 'muted': muted});
+  /// Call after mounting the Texture. Some platforms import lazily on raster.
+  Future<Map<String, dynamic>> waitForPresentation({
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final watch = Stopwatch()..start();
+    while (!_disposed) {
+      final value = await refresh();
+      if ((value['presentationError'] as String? ?? '').isNotEmpty ||
+          (value['errorCode'] as int? ?? 0) != 0 ||
+          value['ended'] == true) {
+        throw StateError('Native presentation failed');
+      }
+      if ((value['presentedFrameCount'] as int? ?? 0) > 0) return value;
+      if (watch.elapsed >= timeout) {
+        throw TimeoutException('No prepared platform texture', timeout);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    throw StateError('Media output disposed');
   }
 
-  Future<void> _control(String method, Map<String, Object> parameters) async {
-    if (_disposed || _handle == null)
-      throw StateError('Media output is not open');
-    await _channel.invokeMethod<void>(method, {
-      'handle': _handle,
-      ...parameters,
+  Future<void> setPaused(bool paused) => _run(() {
+    _native!.setPaused(paused);
+    _status = {..._status, ..._native!.readStatus()};
+  });
+
+  Future<void> setVolume(double volume, {bool muted = false}) {
+    if (!volume.isFinite || volume < 0 || volume > 1) {
+      throw ArgumentError.value(volume, 'volume');
+    }
+    return _run(() => _native!.setVolume(muted ? 0 : volume));
+  }
+
+  Future<T> _run<T>(FutureOr<T> Function() operation) {
+    final result = _operations.then((_) {
+      if (_disposed || _handle == null || _native == null) {
+        throw StateError('Media output is not open');
+      }
+      return operation();
     });
-    await refresh();
+    _operations = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
   }
 
   Future<MediaCodecImage?> snapshot({
     required int width,
     required int height,
-  }) async {
-    if (_disposed || _handle == null)
-      throw StateError('Media output is not open');
+  }) => _run(() async {
     if (width < 1 ||
         height < 1 ||
         width > 4096 ||
@@ -224,7 +346,7 @@ class MediaCodecController {
       throw StateError('Invalid native snapshot');
     }
     return MediaCodecImage(w, h, rgba);
-  }
+  });
 
   /// A late create is drained too. Return only after native source detachment.
   Future<Map<String, dynamic>> dispose() => _disposing ??= _dispose();
@@ -236,11 +358,15 @@ class MediaCodecController {
     } catch (_) {
       /* A failed create owns no output. */
     }
+    await _operations;
+    _native?.release();
+    _native = null;
     final handle = _handle;
     _handle = null;
     try {
-      if (handle == null)
+      if (handle == null) {
         return {'resourceAllocated': false, 'nativeDeleteConfirmed': true};
+      }
       return await _channel.invokeMapMethod<String, dynamic>('dispose', {
             'handle': handle,
           }) ??

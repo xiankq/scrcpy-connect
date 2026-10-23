@@ -4,42 +4,30 @@ Pod::Spec.new do |s|
   s.summary = 'Packet-driven remote video decoding and PCM output.'
   s.description = 'Trimmed FFmpeg decoding with native Flutter textures; no media player, demuxer or network stack.'
   s.homepage = 'https://github.com/scrcpy-connect/scrcpy-connect'
-  s.license = { :type => 'MIT', :file => '../LICENSE' }
+  s.license = { :type => 'Unspecified', :text => 'Project license not specified. Bundled FFmpeg and dav1d retain their upstream licenses; see the application media_codec notices.' }
   s.author = { 'scrcpy-connect' => 'maintainers@scrcpy-connect.local' }
   s.source = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.public_header_files = 'Classes/MediaCodecPlugin.h'
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
-  s.frameworks = 'VideoToolbox', 'CoreMedia', 'CoreVideo', 'AudioToolbox', 'AVFoundation'
+  s.frameworks = 'VideoToolbox', 'CoreMedia', 'CoreVideo', 'CoreImage', 'Metal', 'CoreGraphics', 'AudioToolbox', 'AVFoundation', 'CoreFoundation', 'Security'
+  s.libraries = 'media_codec_native', 'c++', 'z', 'bz2', 'iconv'
   root = ENV['MEDIA_CODEC_FFMPEG_ROOT']
-  if root.nil? || root.empty?
-    root = '$(DERIVED_FILE_DIR)/media_codec_ffmpeg/$(PLATFORM_NAME)/$(CURRENT_ARCH)'
-    s.script_phase = {
-      :name => 'Build pinned decode-only FFmpeg',
-      :execution_position => :before_compile,
-      :shell_path => '/bin/sh',
-      :script => <<-SCRIPT
-set -eu
-mc_package_root="$(cd "$PODS_TARGET_SRCROOT/.." && pwd)"
-for mc_apple_arch in $ARCHS; do
-  case "$mc_apple_arch" in
-    arm64) mc_ffmpeg_arch=arm64 ;;
-    x86_64) mc_ffmpeg_arch=x64 ;;
-    *) echo "Unsupported media_codec Apple architecture: $mc_apple_arch" >&2; exit 1 ;;
-  esac
-  python3 "$mc_package_root/tool/build_ffmpeg.py" --platform ios --arch "$mc_ffmpeg_arch" \
-    --sdk "$PLATFORM_NAME" --prefix "$DERIVED_FILE_DIR/media_codec_ffmpeg/$PLATFORM_NAME/$mc_apple_arch"
-done
-      SCRIPT
-    }
-  end
+  root = '$(PODS_CONFIGURATION_BUILD_DIR)/media_codec_ffmpeg/$(PLATFORM_NAME)/$(CURRENT_ARCH)' if root.nil? || root.empty?
+  s.script_phase = {
+    :name => 'Build Rust packet decoder and pinned FFmpeg',
+    :execution_position => :before_compile,
+    :shell_path => '/bin/sh',
+    :script => '/bin/sh "$PODS_TARGET_SRCROOT/../darwin/build_native.sh" ios'
+  }
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'CLANG_ENABLE_OBJC_ARC' => 'YES',
     'HEADER_SEARCH_PATHS' => "$(inherited) \"#{root}/include\" \"$(PODS_TARGET_SRCROOT)/../native\"",
     'LIBRARY_SEARCH_PATHS' => "$(inherited) \"#{root}/lib\"",
-    'OTHER_LDFLAGS' => '$(inherited) -lavcodec -lavutil -lswscale -lc++ -lz -lbz2 -liconv',
   }
+  # Static CocoaPods also resolve the FFmpeg archives at the final app link.
+  s.user_target_xcconfig = { 'LIBRARY_SEARCH_PATHS' => "$(inherited) \"#{root}/lib\"" }
 end
