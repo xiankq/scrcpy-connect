@@ -28,6 +28,7 @@ mod model;
 mod observation;
 mod official_adb;
 mod preferences;
+mod private_file;
 mod remote_fs;
 mod remote_helper;
 mod remote_process;

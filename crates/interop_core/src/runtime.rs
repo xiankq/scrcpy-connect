@@ -182,24 +182,9 @@ impl Runtime {
             .send(json!({"type":kind,"deviceId":device,"data":data,"timestamp":now()}));
     }
     pub(crate) async fn private_write(path: &Path, bytes: &[u8]) -> CoreResult<()> {
-        use tokio::io::AsyncWriteExt;
-        let mut options = fs::OpenOptions::new();
-        options.create_new(true).write(true);
-        #[cfg(unix)]
-        {
-            options.mode(0o600);
-        }
-        let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-        let mut output = options.open(&temporary).await?;
-        output.write_all(bytes).await?;
-        output.sync_all().await?;
-        drop(output);
-        if let Err(e) = fs::rename(&temporary, path).await {
-            let _ = fs::remove_file(&temporary).await;
-            return Err(e.into());
-        }
-        Ok(())
+        crate::private_file::write(path, bytes).await
     }
+
     pub(crate) async fn persist(&self) -> CoreResult<()> {
         let _guard = self.persistence.lock().await;
         let bytes = serde_json::to_vec_pretty(&*self.store.read().await)?;
