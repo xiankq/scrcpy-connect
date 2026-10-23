@@ -28,6 +28,7 @@ class FakeNative {
           Pointer<mc_status> status,
         ) {
           expect(destroyed, isFalse, reason: 'read after native destroy');
+          observedDecoder = decoder.address;
           reads++;
           status.ref
             ..width = width
@@ -62,12 +63,14 @@ class FakeNative {
           int value,
         ) {
           expect(destroyed, isFalse, reason: 'control after native destroy');
+          observedDecoder = decoder.address;
           paused = value != 0;
         });
     volume =
         NativeCallable<Void Function(Pointer<mc_decoder>, Double)>.isolateLocal(
           (Pointer<mc_decoder> decoder, double value) {
             expect(destroyed, isFalse, reason: 'volume after native destroy');
+            observedDecoder = decoder.address;
             lastVolume = value;
           },
         );
@@ -81,6 +84,7 @@ class FakeNative {
   final memory = calloc<Uint8>();
   bool destroyed = false, paused = false;
   int reads = 0, frameCount = 4, width = 320, height = 720;
+  int? decoderAddressOverride, observedDecoder;
   int preparedSequence = 0;
   String presentationError = '', error = '';
   int errorCode = 0;
@@ -93,7 +97,7 @@ class FakeNative {
     'textureId': 7,
     'width': 320,
     'height': 720,
-    'decoderAddress': memory.address,
+    'decoderAddress': decoderAddressOverride ?? memory.address,
     'nativeApi': {
       'getStatusAddress': read.nativeFunction.address,
       'setPausedAddress': pause.nativeFunction.address,
@@ -138,6 +142,53 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
     native.close();
   });
+
+  test(
+    'Android arm64 tagged decoder reaches the first frame without detaching',
+    () async {
+      // JNI jlong and StandardMethodCodec preserve this non-null pointer's bits
+      // as a negative Dart int. The native callbacks treat the decoder as opaque,
+      // so this exercises the real FFI handoff without dereferencing ARM TBI
+      // addresses on a host which does not implement TBI.
+      final tagged = native.memory.address | 0xb400000000000000;
+      expect(tagged, isNegative);
+      native.decoderAddressOverride = tagged;
+      await controller.open(source);
+      final frame = await controller.waitForFrame();
+      expect(frame['firstFrame'], true);
+      expect(native.observedDecoder, tagged);
+      expect(calls, ['createVideo']);
+      expect(native.destroyed, false);
+      await controller.setPaused(true);
+      expect(native.observedDecoder, tagged);
+      expect(native.paused, true);
+      await controller.setPaused(false);
+      expect(native.observedDecoder, tagged);
+      expect(native.paused, false);
+      await controller.setVolume(.4);
+      expect(native.observedDecoder, tagged);
+      expect(native.lastVolume, .4);
+      await controller.dispose();
+      await controller.dispose();
+      expect(calls, ['createVideo', 'dispose']);
+      expect(native.destroyed, true);
+    },
+    skip: sizeOf<IntPtr>() != 8
+        ? 'Android arm64 pointer-width regression'
+        : false,
+  );
+
+  test(
+    'null decoder is rejected and the platform output is released once',
+    () async {
+      native.decoderAddressOverride = 0;
+      await expectLater(controller.open(source), throwsStateError);
+      await controller.dispose();
+      expect(native.reads, 0);
+      expect(native.destroyed, true);
+      expect(calls, ['createVideo', 'dispose']);
+    },
+  );
 
   test('reads status and applies controls through generated FFI', () async {
     await controller.open(source);

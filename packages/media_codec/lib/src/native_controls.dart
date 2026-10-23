@@ -11,7 +11,10 @@ final class NativeControls {
   NativeControls(Map<String, dynamic> created) {
     final decoder = created['decoderAddress'];
     final api = created['nativeApi'];
-    if (decoder is! int || decoder <= 0 || api is! Map) {
+    // Android arm64 heap tags can set bit 63. JNI Long/Dart int then carry a
+    // valid pointer as a negative value. Preserve every bit, including the tag
+    // required when the platform later destroys the decoder; only zero is null.
+    if (decoder is! int || decoder == 0 || api is! Map) {
       throw StateError('Native decoder controls are unavailable');
     }
     final addresses = <String, int>{};
