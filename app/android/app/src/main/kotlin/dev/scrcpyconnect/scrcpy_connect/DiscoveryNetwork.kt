@@ -3,8 +3,7 @@ package dev.scrcpyconnect.scrcpy_connect
 import android.content.Context
 import android.net.wifi.WifiManager
 
-/** Android filters inbound Wi-Fi multicast unless a live user of discovery
- * holds a lock. Activity and foreground service own independent leases. */
+/** Android 会过滤入站 Wi-Fi 多播，发现活动必须持有锁；Activity 和前台服务独立拥有租约。 */
 object DiscoveryNetwork {
     private val owners = DiscoveryLeaseOwners()
     private var lock: WifiManager.MulticastLock? = null

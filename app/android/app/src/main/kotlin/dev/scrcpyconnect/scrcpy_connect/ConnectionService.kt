@@ -13,7 +13,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 
-/** Application-owned connected-device foreground service, independent of media. */
+/** 应用拥有的设备连接前台服务，与媒体独立。 */
 class ConnectionService : Service() {
     companion object {
         private const val STOP = "dev.scrcpyconnect.STOP_CONNECTIONS"
@@ -27,8 +27,7 @@ class ConnectionService : Service() {
             lifetime?.let { return it }
             val preferences = context.getSharedPreferences("connection-background", Context.MODE_PRIVATE)
             var stopped = preferences.getString("stopped", null)
-            // Android Task Manager terminates the entire process without a
-            // callback. Consume the exit once so automatic entry respects it.
+            // Android 任务管理器结束整个进程时没有回调；退出记录仅消费一次，使自动进入遵循此决定。
             if (Build.VERSION.SDK_INT >= 30) {
                 val exit = runCatching {
                     (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
@@ -62,15 +61,15 @@ class ConnectionService : Service() {
             changed(context)
         }
 
-        /** A retained engine can re-enter through a new Activity. Never override Stop. */
+        /** 保留的引擎可能经由新 Activity 再次进入，不能覆盖明确停止。 */
         fun appEntered(context: Context) {
-            val owner = lifetime ?: return // Await the authoritative Dart preference on cold start.
+            val owner = lifetime ?: return // 冷启动时等待 Dart 权威偏好。
             if (owner.enabled && !owner.running) {
                 runCatching { keepConnections(context, true, automatic = true) }
             } else refreshNotification(context)
         }
 
-        /** Repost after a permission/settings change without acquiring a new lifetime. */
+        /** 权限或设置变化后重新发布提醒，不另取生命周期。 */
         fun refreshNotification(context: Context) {
             if (running && connectionRequested) {
                 runCatching { context.startService(Intent(context, ConnectionService::class.java)) }
@@ -118,8 +117,7 @@ class ConnectionService : Service() {
     }
 
     private fun updateForeground() {
-        // This real discovery multicast lease uses CHANGE_WIFI_MULTICAST_STATE,
-        // which is also a connectedDevice foreground-type prerequisite.
+        // 实际发现多播租约使用 CHANGE_WIFI_MULTICAST_STATE，它也是 connectedDevice 前台服务类型的前置条件。
         DiscoveryNetwork.acquire(this, "background")
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1, Intent(this, ConnectionService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
@@ -137,7 +135,6 @@ class ConnectionService : Service() {
         if (intent?.action == STOP) {
             state(this).stop("user")
             ProcessFlutterHost.stopRequested(applicationContext)
-            NativeCore.stopAll()
             stopSelf()
         } else if (connectionRequested && !state(this).stopping) {
             try { updateForeground() } catch (error: Exception) {
@@ -146,7 +143,7 @@ class ConnectionService : Service() {
                 stopSelf()
             }
         } else stopSelf()
-        // User/system Stop must not cause an immediate sticky restart.
+        // 用户或系统停止后不能立即触发粘性重启。
         return START_NOT_STICKY
     }
 
@@ -158,9 +155,4 @@ class ConnectionService : Service() {
         if (replacement) runCatching { keepConnections(applicationContext, true, automatic = true) }
     }
     override fun onBind(intent: Intent?): IBinder? = null
-}
-
-object NativeCore {
-    init { System.loadLibrary("interop_bridge") }
-    external fun stopAll(): Boolean
 }

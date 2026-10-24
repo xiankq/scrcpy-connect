@@ -2,7 +2,7 @@ package dev.scrcpyconnect.scrcpy_connect
 
 import java.util.WeakHashMap
 
-/** Main-thread system lease ownership. Contains no player or playback policy. */
+/** 主线程系统租约所有权，不包含播放器或播放策略。 */
 internal class AudioPlatformOwnership {
     private val visibleOwners = WeakHashMap<Any, Boolean>()
     var owner: String? = null

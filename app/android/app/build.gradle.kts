@@ -2,7 +2,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // Flutter Gradle 插件必须在 Android 与 Kotlin Gradle 插件之后应用。
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -11,8 +11,7 @@ val releaseKey = Properties().apply {
     if (releaseKeyFile.exists()) releaseKeyFile.inputStream().use { load(it) }
 }
 
-// Fail before Flutter AOT/Rust compilation instead of successfully publishing
-// an unsigned app-release.apk which Android's installer cannot parse.
+// 在 Flutter AOT 和 Rust 编译前就检查签名，避免成功发布 Android 安装器无法解析的未签名 app-release.apk。
 gradle.taskGraph.whenReady {
     if (allTasks.any { it.project == project && it.name.endsWith("Release") }) {
         check(releaseKeyFile.isFile) {
@@ -36,19 +35,13 @@ android {
 
     defaultConfig {
         applicationId = "dev.scrcpyconnect.scrcpy_connect"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // 按应用需求调整以下配置；说明见 https://flutter.dev/to/review-gradle-config。
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
+        // 版本号读取 pubspec.yaml。拆分 APK 时 Flutter 自动增加 1000 * ABI_VERSION；构建传入 -P force-version-code-ignoring-abi=true 可强制使用原版本号。参考 https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions。
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Flutter's default filters include all three supported ABIs even when
-        // --target-platform selects one. Exclude plugin-only ABIs: an installer
-        // must never select an architecture lacking Flutter and the Rust core.
+        // Flutter 默认筛选包含全部三个 ABI，即使 --target-platform 只指定一个。排除仅插件提供的 ABI，避免安装器选中缺少 Flutter 或 Rust 核心的架构。
         if (providers.gradleProperty("split-per-abi").orNull != "true") {
             val requestedPlatforms = providers.gradleProperty("target-platform")
                 .orElse("android-arm,android-arm64,android-x64").get().split(",")
@@ -88,8 +81,7 @@ android {
 
     packaging {
         jniLibs {
-            // Optional sideload APK compression. Android extracts these libraries
-            // at install time, trading installed space for a smaller download.
+            // 可选的侧载 APK 压缩；Android 安装时解压这些库，以安装空间换取更小的下载体积。
             useLegacyPackaging = providers.gradleProperty("compress-native-libs")
                 .orNull?.toBooleanStrict() ?: true
         }

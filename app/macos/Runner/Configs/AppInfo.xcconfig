@@ -1,14 +1,9 @@
-// Application-level settings for the Runner target.
-//
-// This may be replaced with something auto-generated from metadata (e.g., pubspec.yaml) in the
-// future. If not, the values below would default to using the project name when this becomes a
-// 'flutter create' template.
-
-// The application's name. By default this is also the title of the Flutter window.
+// Runner 目标的应用级设置，未来可从 pubspec.yaml 自动生成。
+// 应用名称默认也作为 Flutter 窗口标题。
 PRODUCT_NAME = scrcpy_connect
 
-// The application's bundle identifier
+// 应用包标识
 PRODUCT_BUNDLE_IDENTIFIER = dev.scrcpyconnect.scrcpyConnect
 
-// The copyright displayed in application information
+// 应用信息中显示的版权文字
 PRODUCT_COPYRIGHT = Copyright © 2026 dev.scrcpyconnect. All rights reserved.

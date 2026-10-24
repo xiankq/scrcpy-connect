@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Overrides open_filex's root/files grants. Identity and journals are never exportable. -->
+    <!-- 覆盖 open_filex 的根目录和文件授权，身份与日志永不允许导出。 -->
     <files-path name="screenshots" path="screenshots/" />
     <files-path name="media" path="media/" />
     <cache-path name="documents" path="documents/" />

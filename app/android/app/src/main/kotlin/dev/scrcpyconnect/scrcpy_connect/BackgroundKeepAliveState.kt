@@ -1,6 +1,6 @@
 package dev.scrcpyconnect.scrcpy_connect
 
-/** Application connection lifetime. Media/page ownership never enters this state. */
+/** 应用连接生命周期；媒体和页面所有权不进入此状态。 */
 internal class BackgroundKeepAliveState(
     stopped: String? = null,
     private val persistStop: (String?) -> Unit = {},
@@ -18,11 +18,11 @@ internal class BackgroundKeepAliveState(
     var failure: String? = null
         private set
 
-    /** False means an automatic request was suppressed after an explicit stop. */
+    /** 返回 false 表示明确停止后抑制了自动请求。 */
     fun request(value: Boolean, automatic: Boolean): Boolean {
         enabled = value
         if (value && automatic && stoppedReason != null) return false
-        if (!automatic || !value) {
+        if (!automatic) {
             stoppedReason = null
             persistStop(null)
         }
@@ -48,8 +48,7 @@ internal class BackgroundKeepAliveState(
     }
 
     fun destroyed(): Boolean {
-        // A rapid off/on can arrive before Android dispatches the old destroy.
-        // Only this acknowledged, explicitly requested replacement may restart.
+        // 快速关闭再开启可能先于 Android 分发旧服务销毁；仅已确认且明确请求的替换可以重启。
         val replacement = stopping && requested && stoppedReason == null
         running = false
         stopping = false

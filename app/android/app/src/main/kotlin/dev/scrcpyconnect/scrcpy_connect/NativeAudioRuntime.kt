@@ -12,7 +12,7 @@ import android.os.SystemClock
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
-/** Thin OS adapter only. PCM, player state and compound pause reasons belong to Dart. */
+/** 仅提供操作系统适配；PCM、播放器状态和组合暂停原因归 Dart 所有。 */
 class NativeAudioRuntime private constructor(private val app: Context) {
     companion object {
         @Volatile private var instance: NativeAudioRuntime? = null
@@ -151,7 +151,7 @@ class NativeAudioRuntime private constructor(private val app: Context) {
         emit("audio.platform.background", mapOf("ready" to ConnectionService.mediaPlaybackReady,
             "enabled" to owners.background, "ownerId" to owners.owner))
     }
-    /** Explicit Stop or a Dart engine restart; never called for Activity detach. */
+    /** 仅用于明确停止或 Dart 引擎重启，Activity 分离时不得调用。 */
     fun stopAll() {
         backgroundGeneration++
         pendingBackground?.error("cancelled", "声音活动已停止。", null)

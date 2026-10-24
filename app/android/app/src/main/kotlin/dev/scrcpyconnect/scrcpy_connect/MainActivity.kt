@@ -16,9 +16,8 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.UUID
 
-private object UsbLeases {
-    // A missing ACK cannot create unbounded OS descriptor retention. Do not
-    // expire an offered fd: Rust may not yet have executed F_DUPFD_CLOEXEC.
+internal object UsbLeases {
+    // 缺少确认不能导致系统描述符无限保留；已提供的描述符不能超时释放，Rust 可能尚未执行 F_DUPFD_CLOEXEC。
     val connections = UsbHandoffLeases<UsbDeviceConnection>(16) { it.close() }
 }
 
@@ -26,13 +25,30 @@ class MainActivity : FlutterActivity() {
     companion object {
         private var current: java.lang.ref.WeakReference<MainActivity>? = null
         fun cancelPendingConnections() { current?.get()?.cancelPendingConnectionsAndMedia() }
-        fun releaseUsbLease(id: String?) { UsbLeases.connections.release(id) }
+        fun sealUsbForRestart() {
+            // 封存必须先于旧回调通知；即使旧 Dart 的回复端已消失，原始 FD 仍归进程登记。
+            UsbLeases.connections.seal()
+            runCatching { current?.get()?.cancelPendingConnectionsAndMedia() }
+        }
+        fun cancelUsbPermission(attempt: String?, candidate: String?): Map<String, Any?> {
+            val lease = UsbLeases.connections.validateToken(candidate)
+            // 没有 Activity 或匹配 UI 时也可确认撤销；这不确认任何 SDK 或 FD 的关闭。
+            current?.get()?.usbRequests?.cancel(lease, attempt)
+            return mapOf("cancelled" to true, "ownerLeaseId" to lease)
+        }
+        fun beginUsbRecovery(expected: String?, candidate: String?): Map<String, Any?> {
+            val response = UsbLeases.connections.beginRecovery(expected, candidate)
+            // 已完成候选的重复 begin 不得撤销其后新建的授权请求。
+            if (response["ownerReady"] != true) runCatching { current?.get()?.cancelPendingConnectionsAndMedia() }
+            return response
+        }
     }
-    private val documents by lazy { PlatformDocuments(this) }
+    private val documentsDelegate = lazy { PlatformDocuments.attach(this) }
+    private val documents by documentsDelegate
     private val audio by lazy { NativeAudioRuntime.get(applicationContext) }
     private var pendingUsb: MethodChannel.Result? = null
     private var pendingDevice: UsbDevice? = null
-    private var pendingUsbAttempt: String? = null
+    private val usbRequests = UsbPermissionRequests()
     private var usbChooser: AlertDialog? = null
     private var usbGeneration = 0L
     private val activityLease = Any()
@@ -42,23 +58,30 @@ class MainActivity : FlutterActivity() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != usbAction || intent.getStringExtra("owner") != usbPermissionOwner ||
                 intent.getLongExtra("generation", -1) != usbGeneration) return
+            val lease = usbRequests.owner() ?: return
+            val generation = usbGeneration
+            if (intent.getStringExtra("ownerLeaseId") != lease || !usbRequestCurrent(generation, lease)) return
             val result = pendingUsb ?: return
             val device = pendingDevice
-            pendingUsb = null
-            pendingDevice = null
-            pendingUsbAttempt = null
+            clearPendingUsb()
             if (device == null || !(getSystemService(USB_SERVICE) as UsbManager).hasPermission(device)) {
                 result.error("permission_denied", "尚未允许主控应用访问 USB 设备。", null)
-            } else openUsb(device, result)
+            } else openUsb(device, result, generation, lease)
         }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        val previous = current?.get()
         current = java.lang.ref.WeakReference(this)
+        if (previous !== this) {
+            // 新页面只撤旧页面的授权 UI，不封存或关闭已交付的进程资源。
+            runCatching { previous?.cancelPendingConnectionsAndMedia() }
+            if (previous != null) runCatching { UsbLeases.connections.abandon(previous.activityLease) }
+        }
         ProcessFlutterHost.attach(this)
-        // Permission PendingIntents carry a URI to isolate attempts. An action-only
-        // filter rejects every such result, leaving both grant and denial pending.
+        IncomingShares.attach(this)
+        // 权限 PendingIntent 携带 URI 来区分尝试；只按 action 筛选会拒绝全部结果，使授权与拒绝都悬而未决。
         val usbFilter = IntentFilter(usbAction).apply { addDataScheme("scrcpyconnect") }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, usbFilter, RECEIVER_NOT_EXPORTED)
         else @Suppress("DEPRECATION") registerReceiver(usbReceiver, usbFilter)
@@ -99,14 +122,29 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun cancelPendingConnectionsAndMedia() {
-        usbGeneration++
-        usbChooser?.dismiss()
-        usbChooser = null
-        pendingUsb?.error("cancelled", "已停止连接。", null)
+    private fun clearPendingUsb() {
         pendingUsb = null
         pendingDevice = null
-        pendingUsbAttempt = null
+        usbRequests.clear()
+    }
+
+    private fun cancelPendingConnectionsAndMedia() {
+        usbGeneration++
+        val chooser = usbChooser
+        val result = pendingUsb
+        usbChooser = null
+        clearPendingUsb()
+        // 先撤销全部本地状态，再调用外部回调；失败不能恢复旧请求准入。
+        runCatching { chooser?.dismiss() }
+        runCatching { result?.error("cancelled", "USB 授权请求已撤销。", null) }
+    }
+
+    private fun usbRequestCurrent(generation: Long, lease: String): Boolean =
+        current?.get() === this && generation == usbGeneration && UsbLeases.connections.accepts(lease)
+
+    private fun usbFailure(result: MethodChannel.Result, error: Exception) {
+        val failure = error as? UsbLeaseFailure
+        result.error(failure?.code ?: "platform_error", error.message ?: "USB 系统操作未完成。", null)
     }
 
     internal fun handlePlatform(call: MethodCall, result: MethodChannel.Result) {
@@ -114,23 +152,19 @@ class MainActivity : FlutterActivity() {
             val documentArguments = (call.arguments as? Map<*, *>)?.entries?.mapNotNull { entry ->
                 (entry.key as? String)?.let { it to entry.value }
             }?.toMap().orEmpty()
-            if (documents.handle(call.method, documentArguments, result)) return
-            if (IncomingShares.handle(applicationContext, this, call, result)) return
+            if (call.method.startsWith("documents.platform.")) {
+                if (current?.get() !== this) {result.error("cancelled", "文档页面已替换。", null); return}
+                if (documents.handle(this, call.method, documentArguments, result)) return
+            }
+            if (call.method.startsWith("sharing.platform.")) {
+                if (current?.get() !== this) {result.error("cancelled", "分享页面已替换。", null); return}
+                if (IncomingShares.handle(applicationContext, this, call, result)) return
+            }
+            if (call.method.startsWith("usb.") && current?.get() !== this) {
+                throw UsbLeaseFailure("usb_owner_stale", "USB 授权页面已被替换。")
+            }
             when (call.method) {
                 "usb.authorize" -> authorizeUsb(call, result)
-                "usb.cancel" -> {
-                    val attempt = call.argument<String>("attemptId")
-                    if (attempt != null && attempt == pendingUsbAttempt) {
-                        usbGeneration++
-                        usbChooser?.dismiss()
-                        usbChooser = null
-                        pendingUsb?.error("cancelled", "已取消 USB 连接。", null)
-                        pendingUsb = null
-                        pendingDevice = null
-                        pendingUsbAttempt = null
-                    }
-                    result.success(null)
-                }
                 "background.status" -> result.success(backgroundStatus())
                 "background.request" -> {
                     val enabled = call.argument<Boolean>("enabled") ?: true
@@ -145,7 +179,17 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
-        } catch (error: Exception) { result.error("platform_error", error.message ?: "系统操作未完成。", null) }
+        } catch (error: Exception) {
+            if (call.method == "usb.authorize" && pendingUsb === result) {
+                usbGeneration++
+                val chooser = usbChooser
+                usbChooser = null
+                clearPendingUsb()
+                runCatching { chooser?.dismiss() }
+            }
+            if (call.method.startsWith("usb.")) usbFailure(result, error)
+            else result.error("platform_error", error.message ?: "系统操作未完成。", null)
+        }
     }
 
     private fun backgroundStatus(): Map<String, Any> {
@@ -162,6 +206,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun authorizeUsb(call: MethodCall, result: MethodChannel.Result) {
+        val lease = UsbLeases.connections.checkAdmission(call.argument<String>("ownerLeaseId"))
+        UsbLeases.connections.checkCapacity(lease)
         if (pendingUsb != null) { result.error("permission_pending", "已有一个 USB 授权请求正在等待。", null); return }
         val manager = getSystemService(USB_SERVICE) as UsbManager
         val devices = manager.deviceList.values.filter { device ->
@@ -176,87 +222,88 @@ class MainActivity : FlutterActivity() {
         if (explicit != null && selected == null) { result.error("usb_removed", "所选 USB 设备已断开。", null); return }
         val generation = ++usbGeneration
         pendingUsb = result
-        pendingUsbAttempt = call.argument<String>("attemptId")
-        if (selected != null || devices.size == 1) requestUsbPermission(selected ?: devices.first(), generation)
+        usbRequests.begin(lease, call.argument<String>("attemptId"), ::cancelPendingConnectionsAndMedia)
+        if (selected != null || devices.size == 1) requestUsbPermission(selected ?: devices.first(), generation, lease)
         else {
             usbChooser = AlertDialog.Builder(this).setTitle("选择被控手机")
                 .setItems(devices.map { it.productName ?: it.deviceName }.toTypedArray()) { _, index ->
+                    if (!usbRequestCurrent(generation, lease)) return@setItems
                     usbChooser = null
-                    requestUsbPermission(devices[index], generation)
+                    requestUsbPermission(devices[index], generation, lease)
                 }
                 .setOnCancelListener {
-                    if (generation == usbGeneration) {
-                        pendingUsb?.error("cancelled", "已取消选择 USB 设备。", null)
-                        pendingUsb = null
-                        pendingDevice = null
-                        pendingUsbAttempt = null
-                    }
-                    usbChooser = null
+                    if (usbRequestCurrent(generation, lease)) cancelPendingConnectionsAndMedia()
                 }.create()
             usbChooser?.show()
         }
     }
 
-    private fun requestUsbPermission(device: UsbDevice, generation: Long) {
-        if (generation != usbGeneration) return
+    private fun requestUsbPermission(device: UsbDevice, generation: Long, lease: String) {
+        if (!usbRequestCurrent(generation, lease)) return
         val result = pendingUsb ?: return
         val manager = getSystemService(USB_SERVICE) as UsbManager
         if (manager.hasPermission(device)) {
-            pendingUsb = null
-            pendingDevice = null
-            pendingUsbAttempt = null
-            openUsb(device, result)
+            clearPendingUsb()
+            openUsb(device, result, generation, lease)
             return
         }
         pendingDevice = device
         val permission = PendingIntent.getBroadcast(this, generation.toInt(), Intent(usbAction).setPackage(packageName)
             .setData(android.net.Uri.parse("scrcpyconnect://usb-permission/$usbPermissionOwner/$generation"))
-            .putExtra("generation", generation).putExtra("owner", usbPermissionOwner),
+            .putExtra("generation", generation).putExtra("owner", usbPermissionOwner).putExtra("ownerLeaseId", lease),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         manager.requestPermission(device, permission)
     }
 
-    private fun openUsb(device: UsbDevice, result: MethodChannel.Result) {
-        val manager = getSystemService(USB_SERVICE) as UsbManager
-        val connection = manager.openDevice(device)
-        if (connection == null) { result.error("usb_open_failed", "系统未能打开 USB 设备。", null); return }
-        val leaseId = UUID.randomUUID().toString()
-        if (!UsbLeases.connections.register(leaseId, activityLease, connection)) {
-            connection.close()
-            result.error("usb_lease_limit", "USB 授权交接仍未完成，请先结束已有请求。", null)
-            return
-        }
+    private fun openUsb(device: UsbDevice, result: MethodChannel.Result, generation: Long, lease: String) {
+        var delivered = false
+        var registered = false
         try {
-            val descriptor = connection.fileDescriptor
-            check(descriptor >= 0 && UsbLeases.connections.handoff(leaseId, activityLease))
-            result.success(mapOf("fd" to descriptor, "usbLeaseId" to leaseId, "usbDeviceId" to device.deviceName,
-                "deviceName" to (device.productName ?: "Android 手机")))
+            if (!usbRequestCurrent(generation, lease)) throw UsbLeaseFailure("usb_owner_stale", "USB 授权请求已被替换。")
+            UsbLeases.connections.checkCapacity(lease)
+            val manager = getSystemService(USB_SERVICE) as UsbManager
+            val leaseId = UUID.randomUUID().toString()
+            val opened = UsbLeases.connections.open(leaseId, activityLease, lease) { manager.openDevice(device) }
+            if (opened == null) { result.error("usb_open_failed", "系统未能打开 USB 设备。", null); return }
+            registered = true
+            val descriptor = opened.fileDescriptor
+            if (descriptor < 0 || !usbRequestCurrent(generation, lease) ||
+                !UsbLeases.connections.handoff(leaseId, activityLease, lease)) {
+                throw UsbLeaseFailure("usb_owner_stale", "USB 描述符交付已失效。")
+            }
+            delivered = true
+            // 回复可能已交付但确认丢失；交接后失败不能自行关闭 SDK 可能正在借用的原始 FD。
+            val serial = try { device.serialNumber?.takeIf { it.isNotBlank() } } catch (_: SecurityException) { null }
+            result.success(mapOf("fd" to descriptor, "usbLeaseId" to leaseId, "ownerLeaseId" to lease,
+                "usbDeviceId" to device.deviceName, "serial" to serial, "deviceName" to (device.productName ?: "Android 手机")))
         } catch (error: Exception) {
-            releaseUsbLease(leaseId)
-            throw error
+            if (!delivered) {
+                try {
+                    if (registered) UsbLeases.connections.abandon(activityLease)
+                } catch (cleanup: Exception) {
+                    usbFailure(result, UsbLeaseFailure("usb_cleanup_unconfirmed", "USB 未交付资源尚未确认关闭。", cleanup))
+                    return
+                }
+            }
+            // 原回复端消失不影响进程登记；由下一次 SDK 排空后的接管精确回收。
+            runCatching { usbFailure(result, error) }
         }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (!documents.onActivityResult(requestCode, resultCode, data)) {
+        if (!documentsDelegate.isInitialized() || !documents.onActivityResult(this, requestCode, resultCode, data)) {
             super.onActivityResult(requestCode, resultCode, data)
         }
     }
 
     override fun onDestroy() {
         if (current?.get() === this) current = null
-        documents.onDestroy()
-        usbGeneration++
-        usbChooser?.dismiss()
-        usbChooser = null
-        pendingUsb?.error("cancelled", "授权页面已关闭。", null)
-        pendingUsb = null
-        pendingDevice = null
-        pendingUsbAttempt = null
-        UsbLeases.connections.abandon(activityLease)
+        if (documentsDelegate.isInitialized()) documents.onDestroy(this)
+        cancelPendingConnectionsAndMedia()
+        runCatching { UsbLeases.connections.abandon(activityLease) }
         runCatching { unregisterReceiver(usbReceiver) }
         audio.detach(this)
-        IncomingShares.releaseOwner(this)
+        IncomingShares.detach(this)
         ProcessFlutterHost.detach(this)
         DiscoveryNetwork.release(activityLease)
         super.onDestroy()

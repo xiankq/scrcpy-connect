@@ -12,13 +12,13 @@ internal enum class FocusSignal(val wire: String) {
     GRANTED("granted"), TRANSIENT_LOSS("transientLoss"), PERMANENT_LOSS("permanentLoss")
 }
 
-/** A request owns its callback until abandon. Callbacks are dispatched after request returns. */
+/** 请求在放弃前拥有回调；回调在请求返回后分发。 */
 internal interface FocusDriver {
     fun request(changed: (FocusSignal) -> Unit): Boolean
     fun abandon()
 }
 
-/** One system lease for every explicitly mixed source; callbacks never run under the lease lock. */
+/** 全部明确混音的音源共用一份系统租约；不在租约锁内执行回调。 */
 internal class FocusLeases(private val driver: FocusDriver) {
     private val lock = Any()
     private val owners = LinkedHashMap<Any, (FocusSignal) -> Unit>()
@@ -33,7 +33,7 @@ internal class FocusLeases(private val driver: FocusDriver) {
             synchronized(lock) {
                 if (owners.remove(owner) == null) return
                 if (owners.isEmpty()) {
-                    generation++ // Invalidate callbacks already queued by the abandoned request.
+                    generation++ // 使已放弃请求排入的回调失效。
                     signal = FocusSignal.PERMANENT_LOSS
                     driver.abandon()
                 }
@@ -75,11 +75,7 @@ internal class FocusLeases(private val driver: FocusDriver) {
     }
 }
 
-/**
- * Shared by the app, not one request per player. This never starts a foreground service.
- * Android 15+ rejects the real request unless the app is topmost or has an eligible FGS:
- * https://developer.android.com/media/optimize/audio-focus
- */
+/** 应用共享此所有者，各播放器不单独申请；它不会启动前台服务。Android 15 及以上仅允许前台应用或符合条件的前台服务申请音频焦点，见 https://developer.android.com/media/optimize/audio-focus。 */
 class AudioFocusController(context: Context) {
     private val leases = FocusLeases(AndroidFocusDriver(context.applicationContext))
     internal fun acquire(changed: (FocusSignal) -> Unit): FocusLeases.Lease? = leases.acquire(changed)
@@ -100,8 +96,7 @@ private class AndroidFocusDriver(context: Context) : FocusDriver {
                 AudioManager.AUDIOFOCUS_LOSS -> FocusSignal.PERMANENT_LOSS
                 else -> null
             }
-            // Always queue, including legacy callbacks; no player callback can
-            // run inside requestAudioFocus or while the lease lock is held.
+            // 包括旧接口在内的所有回调都排队，不能在 requestAudioFocus 内部或持有租约锁时调用播放器。
             if (signal != null) main.post { changed(signal) }
         }
         val result = if (Build.VERSION.SDK_INT >= 26) {

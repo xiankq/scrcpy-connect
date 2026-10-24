@@ -1,6 +1,6 @@
 package dev.scrcpyconnect.scrcpy_connect
 
-/** JVM tests of production orchestration against hardware ports, not Android framework mocks. */
+/** 在硬件端口上测试生产编排，不模拟 Android 框架。 */
 object AudioPlaybackTest {
     private class Driver : FocusDriver {
         var requests = 0
@@ -57,7 +57,7 @@ object AudioPlaybackTest {
         val first = checkNotNull(leases.acquire { throw IllegalStateException("one owner failed") })
         val second = checkNotNull(leases.acquire { events++ })
         driver.callbacks[1](FocusSignal.PERMANENT_LOSS)
-        check(events == 1) // One listener failure must not leave another source playing.
+        check(events == 1) // 一个监听器失败不能使其他音源继续播放。
         check(first.state() == FocusSignal.PERMANENT_LOSS && second.state() == FocusSignal.PERMANENT_LOSS)
         driver.callbacks[1](FocusSignal.GRANTED)
         check(events == 1 && driver.requests == 2 && driver.abandons == 2)

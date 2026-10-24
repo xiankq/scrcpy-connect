@@ -11,7 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 
-/** Exists only while a Dart audio-output owner requests media playback. */
+/** 仅在 Dart 音频输出所有者请求媒体播放期间存在。 */
 class AudioPlaybackService : Service() {
     companion object {
         @Volatile var requested = false

@@ -8,9 +8,7 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.lang.ref.WeakReference
 
-/** One process engine owns Dart players/channels. Activities own only UI grants.
- * Process death still ends everything; this does not provide process survival.
- */
+/** 单个进程引擎拥有 Dart 播放器和通道，Activity 仅拥有界面授权；进程死亡仍结束一切，此处不保证进程存活。 */
 internal object ProcessFlutterHost {
     private var engine: FlutterEngine? = null
     private var activity: WeakReference<MainActivity>? = null
@@ -20,8 +18,7 @@ internal object ProcessFlutterHost {
     fun engine(context: Context): FlutterEngine {
         check(Looper.myLooper() == Looper.getMainLooper())
         return engine ?: FlutterEngine(context.applicationContext).also { created ->
-            // The constructor registers generated plugins once. FlutterActivity
-            // starts its Dart entrypoint only on the first attach.
+            // 构造器仅注册一次生成插件；FlutterActivity 仅首次附着时启动 Dart 入口。
             engine = created
             val audio = NativeAudioRuntime.get(context)
             audio.bind(::emit)
@@ -33,23 +30,38 @@ internal object ProcessFlutterHost {
                 })
             MethodChannel(created.dartExecutor.binaryMessenger, "dev.scrcpyconnect/platform")
                 .setMethodCallHandler { call, result ->
-                    if (call.method == "usb.release") {
-                        // This is the Rust handoff acknowledgement, not a UI
-                        // operation. It must work after the host was destroyed.
-                        MainActivity.releaseUsbLease(call.argument<String>("usbLeaseId"))
-                        result.success(null)
-                    } else if (!audio.handle(call, result)) {
-                        val host = activity?.get()
-                        if (host != null) host.handlePlatform(call, result)
-                        else result.error("activity_unavailable", "请返回应用后执行此系统界面操作。", null)
+                    try {
+                        when (call.method) {
+                            "usb.environment" -> result.success(UsbLeases.connections.environment())
+                            "usb.beginRecovery" -> result.success(MainActivity.beginUsbRecovery(
+                                call.argument<String>("expectedOwnerLeaseId"), call.argument<String>("ownerLeaseId")))
+                            "usb.completeRecovery" -> result.success(UsbLeases.connections.completeRecovery(
+                                call.argument<String>("ownerLeaseId")))
+                            "usb.cancel" -> result.success(MainActivity.cancelUsbPermission(
+                                call.argument<String>("attemptId"), call.argument<String>("ownerLeaseId")))
+                            "usb.release" -> {
+                                val lease = call.argument<String>("ownerLeaseId")
+                                UsbLeases.connections.release(call.argument<String>("usbLeaseId"), lease)
+                                result.success(mapOf("released" to true, "ownerLeaseId" to lease))
+                            }
+                            else -> if (!audio.handle(call, result)) {
+                                val host = activity?.get()
+                                if (host != null) host.handlePlatform(call, result)
+                                else result.error("activity_unavailable", "请返回应用后执行此系统界面操作。", null)
+                            }
+                        }
+                    } catch (error: UsbLeaseFailure) {
+                        result.error(error.code, error.message, null)
                     }
                 }
             created.addEngineLifecycleListener(object : FlutterEngine.EngineLifecycleListener {
                 override fun onPreEngineRestart() {
+                    MainActivity.sealUsbForRestart()
                     audio.stopAll()
                     sink = null
                 }
                 override fun onEngineWillDestroy() {
+                    MainActivity.sealUsbForRestart()
                     audio.stopAll()
                     IncomingShares.unbind(this@ProcessFlutterHost)
                     sink = null

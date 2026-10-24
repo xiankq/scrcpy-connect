@@ -1,5 +1,5 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Lucide link-2 (ISC). Keep the complete mark inside the adaptive safe zone. -->
+    <!-- Lucide link-2（ISC），完整标记保持在自适应安全区域内。 -->
     <group android:translateX="30" android:translateY="30" android:scaleX="2" android:scaleY="2">
         <path android:pathData="M9,17H7A5,5 0,0 1,7 7H9M15,7H17A5,5 0,0 1,17 17H15M8,12H16" android:strokeWidth="2" android:strokeColor="#FFFFFF" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent" />
     </group>
