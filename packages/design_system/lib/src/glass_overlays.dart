@@ -1,7 +1,17 @@
-part of '../design_system.dart';
+import 'dart:ui';
+import 'dart:math' as math;
 
-/// An ordinary icon action with a glass tooltip. Its surface, hit geometry,
-/// focus and gesture recognizer remain those of the Material icon button.
+import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
+
+import 'design_tokens.g.dart';
+import 'glass_preferences.dart';
+import 'glass_geometry.dart';
+import 'glass_material.dart';
+import 'connect_theme.dart';
+import 'glass_press_feedback.dart';
+
+/// 带玻璃提示的普通图标动作；表面、命中几何、焦点和手势识别器仍由 Material 图标按钮负责。
 class GlassActionIcon extends StatelessWidget {
   const GlassActionIcon({
     super.key,
@@ -70,7 +80,7 @@ class GlassActionIcon extends StatelessWidget {
   }
 }
 
-/// A tooltip whose content uses the same floating material as other controls.
+/// 内容与其他控件采用同一浮动材质的提示。
 class GlassTooltip extends StatelessWidget {
   const GlassTooltip({
     super.key,
@@ -95,8 +105,7 @@ class GlassTooltip extends StatelessWidget {
         textScaler: MediaQuery.textScalerOf(context),
       ),
     ),
-    // Tooltip's semantics must expose the string even though the visible
-    // content is an embedded material widget.
+    // 即使可见内容是嵌入的材质 widget，Tooltip 语义仍须公开提示字符串。
     excludeFromSemantics: false,
     ignorePointer: true,
     triggerMode: triggerMode,
@@ -121,9 +130,8 @@ class _GlassTooltipMaterial extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      // Tooltip owns scheduling and focus semantics. Its ambient fade is the
-      // actual show/hide animation; drive the shader visibility from that same
-      // animation instead of maintaining a second timer or visibility flag.
+      // Tooltip 持有调度和焦点语义，外层淡入淡出就是真实显示动画。
+      // shader 可见性跟随同一动画，不另建计时器或可见性标志。
       final animation =
           context.findAncestorWidgetOfExactType<FadeTransition>()?.opacity ??
           const AlwaysStoppedAnimation<double>(1);
@@ -144,7 +152,7 @@ class _GlassTooltipMaterial extends StatelessWidget {
         painter.height + 2 * DesignTokens.spacingXs,
       );
       painter.dispose();
-      final expansion = _glassMotionExpansion(
+      final expansion = glassMotionExpansion(
         size,
         DesignTokens.componentGlassMaterializeScale,
         centered: true,
@@ -169,9 +177,8 @@ class _GlassTooltipMaterial extends StatelessWidget {
   );
 }
 
-/// The library card owns the glass surface; Flutter retains overlay layout,
-/// focus and scrolling. Its local layer supplies the animation's texture
-/// headroom because GlassCard does not expose clipExpansion itself.
+/// 库卡片持有玻璃表面；Flutter 保留覆盖层布局、焦点和滚动。
+/// GlassCard 不公开 clipExpansion，因此局部图层提供动画纹理余量。
 class _GlassOverlayCard extends StatelessWidget {
   const _GlassOverlayCard({
     required this.child,
@@ -190,7 +197,7 @@ class _GlassOverlayCard extends StatelessWidget {
     clipExpansion: clipExpansion,
     child: Builder(
       builder: (context) {
-        if (_opaqueGlass(context) || !ImageFilter.isShaderFilterSupported) {
+        if (opaqueGlass(context) || !ImageFilter.isShaderFilterSupported) {
           return Glass(
             solid: !ImageFilter.isShaderFilterSupported,
             radius: radius,
@@ -229,8 +236,7 @@ class _GlassOverlayCard extends StatelessWidget {
   );
 }
 
-// Preserve Tooltip's textual semantics and Flutter's byTooltip lookup while
-// displaying a material widget in place of the usual painted decoration.
+// 以材质 widget 替换常规绘制装饰时，保留 Tooltip 文本语义和 Flutter 的 byTooltip 查找。
 class _GlassTooltipSpan extends WidgetSpan {
   const _GlassTooltipSpan({required this.message, required super.child});
   final String message;
@@ -243,7 +249,7 @@ class _GlassTooltipSpan extends WidgetSpan {
   }) => buffer.write(message);
 }
 
-/// Scrollable alert layout with a transparent production glass material.
+/// 采用透明生产玻璃材质的可滚动提示布局。
 class GlassAlertDialog extends StatelessWidget {
   const GlassAlertDialog({
     super.key,
@@ -264,7 +270,7 @@ class GlassAlertDialog extends StatelessWidget {
     clipBehavior: Clip.none,
     child: LayoutBuilder(
       builder: (context, constraints) => _GlassOverlayCard(
-        clipExpansion: _glassMotionExpansion(
+        clipExpansion: glassMotionExpansion(
           Size(constraints.maxWidth, constraints.maxHeight),
           DesignTokens.componentGlassMaterializeScale,
           centered: true,
@@ -304,9 +310,7 @@ class GlassAlertDialog extends StatelessWidget {
   );
 }
 
-/// A modal alert with native materialization and the normal dialog focus trap.
-/// [builder] can retain route-local action closures; otherwise the semantic
-/// title, content and actions build a [GlassAlertDialog].
+/// 具有原生材质化和普通对话框焦点约束的模态提示。
 Future<T?> showGlassDialog<T>({
   required BuildContext context,
   WidgetBuilder? builder,
@@ -371,9 +375,8 @@ class _GlassDialogRoute<T> extends RawDialogRoute<T> {
       liquid.GlassDefaults.dematerializeDuration;
 }
 
-/// Retains Flutter's modal route, result and drag ownership. The native sheet
-/// supplies the dynamic material without adding a second dismissal recognizer
-/// or taking ownership of any content scroll controller.
+/// 保留 Flutter 的模态路由、结果和拖动所有权。
+/// 原生 sheet 提供动态材质，不另建关闭识别器，也不接管内容滚动控制器。
 Future<T?> showGlassModalSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -404,7 +407,7 @@ Future<T?> showGlassModalSheet<T>({
       child: Builder(
         builder: (context) {
           final opaque =
-              _opaqueGlass(context) || !ImageFilter.isShaderFilterSupported;
+              opaqueGlass(context) || !ImageFilter.isShaderFilterSupported;
           final content = Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -474,14 +477,13 @@ Future<T?> showGlassModalSheet<T>({
             child: Stack(
               fit: StackFit.passthrough,
               children: [
-                // The native lens gets finite bounds and texture headroom.
-                // Application content retains its viewport and controller.
+                // 原生镜片获得有限范围和纹理余量；应用内容保留自身视口与控制器。
                 Positioned.fill(
                   child: IgnorePointer(
                     child: ExcludeSemantics(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final expansion = _glassMotionExpansion(
+                          final expansion = glassMotionExpansion(
                             Size(constraints.maxWidth, constraints.maxHeight),
                             1 +
                                 (DesignTokens.componentGlassInteractionScale -
@@ -490,7 +492,7 @@ Future<T?> showGlassModalSheet<T>({
                                         DesignTokens
                                             .componentGlassInteractionStretch),
                           );
-                          return _boundGlassSampling(
+                          return boundGlassSampling(
                             liquid.AdaptiveGlass(
                               shape:
                                   const liquid.LiquidVerticalRoundedSuperellipse(

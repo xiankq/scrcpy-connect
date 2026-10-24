@@ -216,7 +216,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(result, 7);
     expect(controller.hasClients, isFalse);
-    // A route never owns this controller; it remains usable after dismissal.
+    // 路由不拥有该控制器；关闭路由后控制器仍可使用。
     controller.addListener(() {});
     expect(tester.takeException(), isNull);
   });

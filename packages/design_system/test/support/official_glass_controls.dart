@@ -2,7 +2,7 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
-/// The application's configuration applied to the official test subject.
+/// 将应用配置用于官方测试对象。
 Widget officialGlassNavigation(
   BuildContext context, {
   required int selectedIndex,

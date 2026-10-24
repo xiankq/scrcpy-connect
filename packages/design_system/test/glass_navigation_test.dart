@@ -113,8 +113,7 @@ void main() {
       update(() => selected = 0);
       await tester.pumpAndSettle();
       final bar = tester.getRect(find.byType(GlassTabBar));
-      // Re-selecting the current tab must retain a usable tap target after an
-      // external route restoration, then another destination remains reachable.
+      // 外部路由恢复后，重新选择当前标签仍须保留可点击区域，且其他目标仍可访问。
       await tester.tapAt(Offset(bar.left + bar.width / 6, bar.center.dy));
       await tester.pumpAndSettle();
       expect(selected, 0);

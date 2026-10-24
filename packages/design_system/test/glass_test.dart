@@ -350,8 +350,7 @@ void main() {
   testWidgets('unsupported renderer retains the frosted material', (
     tester,
   ) async {
-    // The widget-test renderer has no Impeller shader image filters. The
-    // production shader branch is covered by device rendering checks.
+    // 组件测试渲染器不支持 Impeller 着色器图像过滤；生产着色器分支由设备渲染检查覆盖。
     expect(ImageFilter.isShaderFilterSupported, isFalse);
     await tester.pumpWidget(
       MaterialApp(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'design_tokens.g.dart';
 
-/// A compact functional leading icon for a content list row.
+/// 内容列表行的紧凑功能前导图标。
 class ListIconBadge extends StatelessWidget {
   const ListIconBadge({
     super.key,
