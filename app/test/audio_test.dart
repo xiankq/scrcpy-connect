@@ -1,7 +1,9 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/test_controller.dart';
 
@@ -18,6 +20,8 @@ class _AudioFixture {
   Completer<Json>? pendingSources;
   Completer<Json>? pendingSessions;
   final failingDevices = <String>{};
+  int stopsToFail = 0;
+  Completer<Json>? pendingStop;
   late final controller =
       createTestController((command, [params = const {}]) async {
           calls.add((command, Map.of(params)));
@@ -41,6 +45,15 @@ class _AudioFixture {
             return pendingStarts[device]?.future ?? source;
           }
           if (command == 'audio.stop') {
+            final waiting = pendingStop;
+            if (waiting != null) {
+              pendingStop = null;
+              await waiting.future;
+            }
+            if (stopsToFail > 0) {
+              stopsToFail--;
+              throw StateError('音源停止回执失败');
+            }
             if (params['sourceId'] == null ||
                 sources[device]?['sourceId'] == params['sourceId']) {
               sources.remove(device);
@@ -66,6 +79,166 @@ Future<void> _flush(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('最后窗口停止失败后无需外部事件即可有界重试清理精确音源', (tester) async {
+    final fixture = _AudioFixture();
+    final close = fixture.controller.claimRemoteDeviceView('a');
+    await _flush(tester);
+    final failedStop = fixture.pendingStop = Completer<Json>();
+    close();
+    await _flush(tester);
+    failedStop.completeError(StateError('音源停止回执失败'));
+    await _flush(tester);
+    expect(fixture.sources, isEmpty);
+    expect(
+      fixture.calls
+          .where((call) => call.$1 == 'audio.stop')
+          .map((call) => call.$2),
+      [
+        {'deviceId': 'a'},
+        {'deviceId': 'a', 'sourceId': 'source-a'},
+      ],
+    );
+    expect(fixture.controller.audioError, isNull);
+    await fixture.dispose();
+  });
+
+  testWidgets('已释放窗口的迟到音源清理失败后仍重试且只停止原身份', (tester) async {
+    final fixture = _AudioFixture();
+    final pending = fixture.pendingStarts['a'] = Completer<Json>();
+    final close = fixture.controller.claimRemoteDeviceView('a');
+    await _flush(tester);
+    close();
+    await _flush(tester);
+    fixture.stopsToFail = 1;
+    final late = <String, dynamic>{
+      'deviceId': 'a',
+      'sourceId': 'late-a',
+      'status': 'playing',
+    };
+    fixture.sources['a'] = late;
+    pending.complete(late);
+    await _flush(tester);
+    expect(fixture.sources, isEmpty);
+    final precise = fixture.calls.where(
+      (call) => call.$1 == 'audio.stop' && call.$2['sourceId'] != null,
+    );
+    expect(precise.map((call) => call.$2), [
+      {'deviceId': 'a', 'sourceId': 'late-a'},
+      {'deviceId': 'a', 'sourceId': 'late-a'},
+    ]);
+    await fixture.dispose();
+  });
+
+  testWidgets('持续停止失败保留待清理错误但不形成无限重试', (tester) async {
+    final fixture = _AudioFixture();
+    final close = fixture.controller.claimRemoteDeviceView('a');
+    await _flush(tester);
+    fixture.stopsToFail = 100;
+    close();
+    await _flush(tester);
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.stop'),
+      hasLength(3),
+    );
+    expect(fixture.controller.audioError, contains('音源停止回执失败'));
+    for (var i = 0; i < 20; i++) {
+      fixture.events.add({
+        'type': 'session.updated',
+        'deviceId': 'a',
+        'data': fixture.sessions.first,
+      });
+      await _flush(tester);
+    }
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.stop'),
+      hasLength(3),
+    );
+    fixture.sources.clear();
+    fixture.events.add({
+      'type': 'session.updated',
+      'deviceId': 'a',
+      'data': fixture.sessions.first,
+    });
+    await _flush(tester);
+    expect(fixture.controller.audioError, isNull);
+    await fixture.dispose();
+  });
+
+  testWidgets('旧音源快照不能抹掉读取期间新产生的迟到清理失败', (tester) async {
+    final fixture = _AudioFixture();
+    final starting = fixture.pendingStarts['a'] = Completer<Json>();
+    final close = fixture.controller.claimRemoteDeviceView('a');
+    await _flush(tester);
+    final reading = fixture.pendingSources = Completer<Json>();
+    fixture.events.add({
+      'type': 'session.updated',
+      'deviceId': 'a',
+      'data': fixture.sessions.first,
+    });
+    await _flush(tester);
+    close();
+    await _flush(tester);
+    fixture.stopsToFail = 100;
+    final late = <String, dynamic>{
+      'deviceId': 'a',
+      'sourceId': 'late-a',
+      'status': 'playing',
+    };
+    fixture.sources['a'] = late;
+    starting.complete(late);
+    await _flush(tester);
+    expect(fixture.controller.audioError, contains('音源停止回执失败'));
+    fixture.pendingSources = null;
+    reading.complete({'sources': <Json>[]});
+    await _flush(tester);
+    expect(fixture.sources['a'], late);
+    expect(fixture.controller.audioError, contains('音源停止回执失败'));
+    expect(
+      fixture.calls.where(
+        (call) => call.$1 == 'audio.stop' && call.$2['sourceId'] == 'late-a',
+      ),
+      hasLength(3),
+    );
+    fixture.sources.clear();
+    fixture.events.add({
+      'type': 'session.updated',
+      'deviceId': 'a',
+      'data': fixture.sessions.first,
+    });
+    await _flush(tester);
+    expect(fixture.controller.audioError, isNull);
+    await fixture.dispose();
+  });
+
+  testWidgets('协调器释放时重试仅由失败清理记录持有的迟到音源', (tester) async {
+    final fixture = _AudioFixture();
+    final starting = fixture.pendingStarts['a'] = Completer<Json>();
+    final close = fixture.controller.claimRemoteDeviceView('a');
+    await _flush(tester);
+    close();
+    await _flush(tester);
+    fixture.stopsToFail = 3;
+    final late = <String, dynamic>{
+      'deviceId': 'a',
+      'sourceId': 'late-a',
+      'status': 'playing',
+    };
+    fixture.sources['a'] = late;
+    starting.complete(late);
+    await _flush(tester);
+    expect(fixture.controller.audioError, contains('音源停止回执失败'));
+    fixture.controller.dispose();
+    await _flush(tester);
+    expect(fixture.sources, isEmpty);
+    expect(
+      fixture.calls.where(
+        (call) => call.$1 == 'audio.stop' && call.$2['sourceId'] == 'late-a',
+      ),
+      hasLength(4),
+    );
+    await fixture.events.close();
+  });
+
   testWidgets('event bursts coalesce while an audio state read is pending', (
     tester,
   ) async {

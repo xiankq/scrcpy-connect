@@ -1,20 +1,24 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
-import 'package:scrcpy_connect/services/session_views.dart';
+import 'package:scrcpy_connect/media/session_view_registry.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart'
     show confirm, glassSnackBar;
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/remote_input.dart';
-import 'package:scrcpy_connect/services/remote_display_settings.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/remote_failure.dart';
+import 'package:scrcpy_connect/media/remote_display_settings.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
 
 import 'remote_connection_recovery.dart';
-import 'remote_input_queue.dart';
+import 'remote_input_owner.dart';
 import 'remote_presentation.dart';
+import 'remote_window.dart';
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -53,17 +57,11 @@ class _RemotePageState extends State<RemotePage>
   bool sensitive = false;
   final inputFocus = FocusNode();
   final keyboardFocus = FocusNode();
-  static const inputSentinel = '\u200B';
-  final text = TextEditingController(text: inputSentinel);
-  final activePointers = <int>{};
-  final pointerPositions = <int, Json>{};
-  final heldKeys = <int, RemoteBinding>{};
-  final keyRepeats = <int, int>{};
-  final bindingCaptures = <RemoteBinding, int>{};
   bool adjustmentShown = false;
-  SessionView? view;
+  SessionViewLease? get view => window.view;
   ModalRoute<dynamic>? observedRoute;
-  final presentation = RemotePresentation();
+  late final RemoteWindow window;
+  RemotePresentation get presentation => window.presentation;
   final connectionRecovery = RemoteConnectionRecovery();
   bool restoringConnection = false;
   final remoteMessenger = GlobalKey<ScaffoldMessengerState>();
@@ -72,8 +70,6 @@ class _RemotePageState extends State<RemotePage>
   String? pendingKeepActiveNotice;
   bool keepActiveNoticeScheduled = false;
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? remoteNoticeTail;
-  late final void Function() releaseDeviceView;
-  bool Function()? releasePhonePage;
   late final RemoteDisplaySettings displaySettings;
   final initialViewport = Completer<Size>();
   Size? displayViewport;
@@ -161,7 +157,7 @@ class _RemotePageState extends State<RemotePage>
             .firstOrNull?['connectionId'] ??
         widget.device['connectionId'];
     final connection = currentConnection();
-    await controller.execute(InteropCommand.devicesWake, {
+    await controller.execute(ApplicationCommand.devicesWake, {
       'deviceId': widget.device['id'],
       'connectionId': ?connection,
     });
@@ -177,8 +173,7 @@ class _RemotePageState extends State<RemotePage>
     try {
       await requestWake();
       if (!mounted || presentation.exiting) return;
-      // An explicit wake can resolve a failed startup wake without replaying
-      // the failed request automatically on a later start retry.
+      // 明确唤醒可以解除启动唤醒失败，但后续通用重试不能自动重放失败请求。
       newWindowWake = Future<void>.value();
       await refreshScreenState();
       if (mounted && presentation.errorCode == 'device_asleep') await start();
@@ -197,7 +192,7 @@ class _RemotePageState extends State<RemotePage>
     if (owned?.isCurrent != true || id.isEmpty) return;
     try {
       final result = await controller.execute(
-        InteropCommand.sessionScreenshot,
+        ApplicationCommand.sessionScreenshot,
         {'sessionId': id},
       );
       if (!mounted || view != owned || sessionId != id) return;
@@ -379,8 +374,7 @@ class _RemotePageState extends State<RemotePage>
       }
       final messenger = remoteMessenger.currentState;
       final message = pendingKeepActiveNotice;
-      // A queued SnackBar cannot be individually cancelled. Keep this fact in
-      // page state until prior notices close, then recheck route and binding.
+      // 排队的 SnackBar 无法单独撤销；先保留提示，前一条结束后重新核对路由与绑定。
       if (messenger == null || message == null || remoteNoticeTail != null) {
         return;
       }
@@ -390,62 +384,27 @@ class _RemotePageState extends State<RemotePage>
     WidgetsBinding.instance.scheduleFrame();
   }
 
-  Future<void> releaseInputs({RemoteBinding? binding}) {
-    final outgoing = binding ?? presentation.binding;
-    resetTextInput();
-    var completion = releasePointers(binding: binding);
-    final keys = Map<int, RemoteBinding>.from(heldKeys);
-    heldKeys.clear();
-    keyRepeats.clear();
-    if (!presentation.controlAvailable && binding == null) return completion;
-    for (final entry in keys.entries) {
-      if (entry.value != outgoing) {
-        continue;
-      }
-      completion = send(InteropCommand.sessionKey, {
-        'sessionId': entry.value.$1,
-        'keyCode': entry.key,
-        'action': 'up',
-      }, binding: outgoing);
-    }
-    return completion;
-  }
-
-  Future<void> releasePointers({RemoteBinding? binding}) {
-    final releases = pointerPositions.values.toList();
-    activePointers.clear();
-    pointerPositions.clear();
-    if (!presentation.controlAvailable && binding == null) {
-      return presentation.reconcileOnly ? inputQueue : Future<void>.value();
-    }
-    // A physical key-up can already be queued after its held entry was
-    // removed. Flush live input before stopping or replacing this session.
-    Future<void> completion = inputQueue;
-    for (final params in releases) {
-      completion = send(InteropCommand.sessionTouch, {
-        ...params,
-        'action': 'cancel',
-        'pressure': 0,
-      }, binding: binding);
-    }
-    return completion;
-  }
-
-  String previousText = inputSentinel;
-  bool resettingText = false;
+  late final RemoteInputOwner inputs;
+  TextEditingController get text => inputs.text;
+  Future<void> get inputQueue => inputs.idle;
   StreamSubscription<Json>? eventSubscription;
-  late final RemoteInputQueue _inputQueue = RemoteInputQueue(
-    dispatch: _dispatchInput,
-    admits: _admitsInput,
-  );
-  Future<void> get inputQueue => _inputQueue.idle;
   AppController get controller => widget.controller;
   String get sessionId => presentation.sessionId;
   @override
   void initState() {
     super.initState();
-    releaseDeviceView = controller.claimRemoteDeviceView(
-      value(widget.device, 'id'),
+    window = RemoteWindow(
+      controller: controller,
+      deviceId: value(widget.device, 'id'),
+    );
+    inputs = RemoteInputOwner(
+      window: window,
+      foreground: () => acceptsInput,
+      enabled: () => canSendInput,
+      onChanged: () {
+        if (mounted) setState(() {});
+      },
+      onUnknownLaunch: detachForUnknownAppLaunch,
     );
     screenStateTimer = Timer.periodic(
       const Duration(seconds: 3),
@@ -460,8 +419,6 @@ class _RemotePageState extends State<RemotePage>
         )],
       ),
     );
-    // IMEs can finish composition without changing text; onChanged misses it.
-    text.addListener(textChanged);
     inputFocus.addListener(inputFocusChanged);
     WidgetsBinding.instance.addObserver(this);
     eventSubscription = controller.eventStream().listen(onEvent);
@@ -500,7 +457,7 @@ class _RemotePageState extends State<RemotePage>
       Json? retained = recoveringConnection ? null : widget.existingSession;
       if (retained == null) {
         final listed = objects(
-          (await controller.execute(InteropCommand.sessionList, {
+          (await controller.execute(ApplicationCommand.sessionList, {
             'deviceId': widget.device['id'],
           }))['sessions'],
         );
@@ -529,15 +486,14 @@ class _RemotePageState extends State<RemotePage>
       if (retained == null &&
           !recoveringConnection &&
           displaySettings.values['wakeOnConnect'] == true) {
-        // Consume this new-window intent before requesting input. A failed or
-        // missing receipt cannot be replayed by a rebuild or generic retry.
+        // 请求前先消耗新窗口唤醒意图，失败或缺少回执时不能随重建和通用重试重放。
         await (newWindowWake ??= requestWake());
         if (!mounted || !presentation.acceptsStart(attempt)) return;
       }
       submittedAppStart = retained == null && widget.packageName != null;
       final result =
           retained ??
-          await controller.execute(InteropCommand.sessionStart, {
+          await controller.execute(ApplicationCommand.sessionStart, {
             'deviceId': widget.device['id'],
             if (widget.packageName != null) 'packageName': widget.packageName,
             'keepActive': displaySettings.values['stayAwake'] == true,
@@ -549,8 +505,7 @@ class _RemotePageState extends State<RemotePage>
           });
       if (!mounted || !presentation.acceptsStart(attempt)) {
         if (mounted && presentation.requiresVerification(attempt)) {
-          // The launch was already submitted. Its late result is an identity
-          // to verify, never a reason to launch or stop the task again.
+          // 打开请求已提交；迟到结果仅用于核验身份，不能触发再次打开或停止真实任务。
           if (sessionId.isEmpty) {
             setState(() => presentation.retainUnverifiedStart(result));
           }
@@ -560,13 +515,13 @@ class _RemotePageState extends State<RemotePage>
           final staleId = value(result, 'sessionId', value(result, 'id'));
           if (staleId.isNotEmpty && staleId != sessionId) {
             try {
-              await controller.execute(InteropCommand.sessionStop, {
+              await controller.execute(ApplicationCommand.sessionStop, {
                 'sessionId': staleId,
                 'keepTask': true,
                 if (widget.packageName != null) 'keepLaunchRecord': true,
               });
             } catch (_) {
-              /* A late response cannot recreate a disposed view. */
+              // 迟到回执不能重新创建已释放视图。
             }
           }
         }
@@ -595,15 +550,7 @@ class _RemotePageState extends State<RemotePage>
       });
       if (ime && widget.requestKeyboard) requestImeFocus();
       if (sessionId.isEmpty || result['textureId'] == null) return;
-      releasePhonePage?.call();
-      releasePhonePage = controller.claimPhoneControlPage(
-        value(widget.device, 'id'),
-        sessionId: sessionId,
-      );
-      view = controller.claimSessionView(
-        sessionId,
-        visible: result['status'] != 'paused',
-      );
+      window.bind(visible: result['status'] != 'paused');
       consumeKeepActiveNotice(result);
       unawaited(refreshScreenState());
       if (retained == null) {
@@ -623,8 +570,7 @@ class _RemotePageState extends State<RemotePage>
       }
 
       trace('start.bound paused=${presentation.paused}');
-      // The bridge returns this texture only after actual decoded pixels have
-      // been read. Earlier output events can precede this page binding.
+      // 桥接只在实际解码像素后返回纹理；早期输出事件可能先于页面绑定。
       if (result['textureId'] != null) showResourceAdjustment();
       final lifecycle = WidgetsBinding.instance.lifecycleState;
       if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
@@ -671,35 +617,22 @@ class _RemotePageState extends State<RemotePage>
         )) {
       return;
     }
-    // Consume the intent before submitting any side effect. A missing receipt
-    // leaves an unknown outcome and must never turn a resume into a replay.
+    // 副作用提交前先消耗意图，缺少回执意味着结果未知，恢复画面不能自动重放。
     switch (action.tool) {
       case RemoteTool.rotate:
-        await send(InteropCommand.sessionRotate, {});
+        await send(ApplicationCommand.sessionRotate, {});
       case RemoteTool.screen:
-        await send(InteropCommand.sessionScreen, {'mode': action.value});
+        await send(ApplicationCommand.sessionScreen, {'mode': action.value});
       case RemoteTool.text:
-        await send(InteropCommand.sessionText, {'text': action.value});
+        await send(ApplicationCommand.sessionText, {'text': action.value});
       case RemoteTool.launchApp:
-        await send(InteropCommand.sessionLaunch, {
+        await send(ApplicationCommand.sessionLaunch, {
           'deviceId': widget.device['id'],
           'packageName': action.value,
         });
       case RemoteTool.key:
         final code = action.value! as int;
-        heldKeys[code] = presentation.binding;
-        try {
-          await send(InteropCommand.sessionKey, {
-            'keyCode': code,
-            'action': 'down',
-          });
-        } finally {
-          heldKeys.remove(code);
-          await send(InteropCommand.sessionKey, {
-            'keyCode': code,
-            'action': 'up',
-          });
-        }
+        await inputs.tapKey(code);
     }
   }
 
@@ -708,33 +641,14 @@ class _RemotePageState extends State<RemotePage>
   }
 
   void detachForUnknownAppLaunch(Json record) {
-    // Only this exact outgoing binding may drain cleanup after the page adopts
-    // the operation record. New input still needs the current live binding.
-    final outgoing = presentation.permitDetachedCleanup();
-    final releases = releaseInputs().whenComplete(() {
-      presentation.finishDetachedCleanup(outgoing);
-    });
-    final owned = view;
-    view = null;
-    presentation.detachBinding();
-    if (owned != null) {
-      // Pause belongs to the captured view, even after adopting the record.
-      // A lost control stream may reject pause; it cannot erase launch evidence.
-      unawaited(
-        owned
-            .release(afterInput: releases)
-            .catchError((Object _) => <String, dynamic>{}),
-      );
-    }
-    // Neither input receipts nor capture pause gate reviewing this fixed record.
-    showUnknownAppLaunch(record);
+    setState(() => window.detachUnknownLaunch(record, releaseInputs));
   }
 
   Future<void> checkAppLaunch() async {
     setState(() => presentation.checking());
     try {
       final listed = objects(
-        (await controller.execute(InteropCommand.sessionList, {
+        (await controller.execute(ApplicationCommand.sessionList, {
           'deviceId': widget.device['id'],
         }))['sessions'],
       );
@@ -770,7 +684,7 @@ class _RemotePageState extends State<RemotePage>
     setState(() => presentation.checking());
     try {
       if (sessionId.isNotEmpty) {
-        await controller.execute(InteropCommand.sessionStop, {
+        await controller.execute(ApplicationCommand.sessionStop, {
           'sessionId': sessionId,
           'keepTask': true,
         });
@@ -842,8 +756,7 @@ class _RemotePageState extends State<RemotePage>
             event['deviceId'] == widget.device['id'])) {
       connectionRecovery.stop();
       if (restoringConnection) {
-        // A late list/start receipt must not undo a stop accepted while the
-        // replacement has not yet acquired its new session identity.
+        // 替换会话取得新身份前接受的停止，不能被迟到列表或启动回执撤销。
         presentation.invalidateStart();
         restoringConnection = false;
         setState(() => presentation.deferStart());
@@ -990,9 +903,8 @@ class _RemotePageState extends State<RemotePage>
   Future<void> reconcileState() async {
     final epoch = markStateUnknown();
     try {
-      // The Bridge publishes state.resynced only after its full read barrier.
-      // A command receipt alone must never unlock this surface.
-      await controller.execute(InteropCommand.stateReconcile);
+      // 桥接只在完整读取栅栏通过后发布 state.resynced，命令回执本身不能解除画面门禁。
+      await controller.execute(ApplicationCommand.stateReconcile);
     } catch (failure) {
       if (mounted && presentation.acceptsReconciliation(epoch)) {
         setState(() => presentation.reportError(remoteFailure(failure)));
@@ -1048,33 +960,21 @@ class _RemotePageState extends State<RemotePage>
         !connectionRecovery.take()) {
       return;
     }
-    // Consume the recovery intent synchronously before an asynchronous startup,
-    // and never replay a tool action from the original route launch.
+    // 异步恢复启动前同步消耗恢复意图，不重放路由最初携带的工具动作。
     presentation.suppressInitialAction();
-    view?.abandonEndedSession();
-    view = null;
+    window.abandonEndedSession();
     unawaited(start(recoveringConnection: true));
   }
 
   Future<void> pauseView() async {
-    if (presentation.exiting || presentation.appLaunchUnknown) return;
-    final owned = view;
-    if (owned == null || !owned.isCurrent) return;
-    final epoch = presentation.beginPause();
-    final releases = releaseInputs();
+    final operation = window.pause(releaseInputs);
     if (mounted) setState(() {});
-    try {
-      await owned.pause(afterInput: releases);
-    } catch (failure) {
-      if (mounted && presentation.acceptsVisibilityFailure(epoch)) {
-        setState(() => presentation.reportError(remoteFailure(failure)));
-      }
-    }
+    await operation;
+    if (mounted) setState(() {});
   }
 
   void focusVisibleDevice() {
-    // A retained page can finish starting or resuming after another device
-    // becomes visible. Only the current route and session owner may set focus.
+    // 保留页面可能在其他设备可见后才完成启动或恢复，只有当前路由和会话所有者可设置焦点。
     if (!mounted ||
         presentation.exiting ||
         presentation.covered ||
@@ -1093,50 +993,18 @@ class _RemotePageState extends State<RemotePage>
   }
 
   Future<void> resumeView() async {
-    if (!presentation.canResume(foreground: acceptsInput)) return;
-    var owned = view;
-    if (owned == null || !owned.isCurrent) {
-      owned = controller.claimSessionView(sessionId, visible: false);
-      view = owned;
-      releasePhonePage?.call();
-      releasePhonePage = null;
-    }
-    releasePhonePage ??= controller.claimPhoneControlPage(
-      value(widget.device, 'id'),
-      sessionId: sessionId,
+    final operation = window.resume(
+      foreground: acceptsInput,
+      afterInput: inputQueue,
     );
     focusVisibleDevice();
-    final epoch = presentation.beginResume();
-    trace('resume.begin epoch=$epoch session=$sessionId');
     setState(() {});
-    try {
-      final receipt = await owned.resume(afterInput: inputQueue);
-      trace(
-        'resume.receipt epoch=$epoch current=${presentation.visibilityEpoch} owned=${owned.isCurrent} covered=${presentation.covered} evidence=${receipt['evidence']}',
-      );
-      if (!mounted) return;
-      final outcome = presentation.completeResume(
-        epoch,
-        receipt,
-        ownerCurrent: owned.isCurrent,
-      );
-      if (outcome == RemoteResumeResult.stale) return;
-      if (outcome == RemoteResumeResult.rendererNotReady) {
-        throw const RequestFailure('renderer_not_ready', '尚未确认恢复后的画面，请重新检查。');
-      }
-      setState(() {});
-      showPendingKeepActiveNotice();
-      await applyPendingInitialAction();
-    } catch (failure) {
-      trace(
-        'resume.failed epoch=$epoch current=${presentation.visibilityEpoch} reason=$failure',
-      );
-      if (mounted && presentation.acceptsVisibilityFailure(epoch)) {
-        setState(() {
-          presentation.failOperation(remoteFailure(failure));
-        });
-      }
-    }
+    final outcome = await operation;
+    if (!mounted) return;
+    setState(() {});
+    if (outcome != RemoteResumeResult.ready) return;
+    showPendingKeepActiveNotice();
+    await applyPendingInitialAction();
   }
 
   @override
@@ -1145,8 +1013,7 @@ class _RemotePageState extends State<RemotePage>
     if (state == AppLifecycleState.inactive || sessionId.isEmpty) return;
     if (state == AppLifecycleState.resumed) {
       showPendingKeepActiveNotice();
-      // A brief inactive transition keeps the stream live but can defer a
-      // viewport adjustment. Resume it even when no visibility change is due.
+      // 短暂 inactive 保留画面流但可能推迟视口调整，恢复时即使无需切换可见性也要继续调整。
       if (displayViewport != null) observeViewport(displayViewport!);
       if (!presentation.lifecycleVisibility(true)) return;
       if (connectionRecovery.pending) {
@@ -1160,216 +1027,8 @@ class _RemotePageState extends State<RemotePage>
     }
   }
 
-  Future<void> send(
-    InteropCommand command,
-    Json params, {
-    RemoteBinding? binding,
-  }) {
-    // Queue entries keep the binding that accepted them. A late request or
-    // release must never inherit a replacement session's identity.
-    final outgoing = binding ?? presentation.binding;
-    final input = const {
-      'session.touch',
-      'session.key',
-      'session.text',
-      'session.scroll',
-    }.contains(command.wire);
-    final currentCapture = presentation.session?['captureGeneration'];
-    if (outgoing == presentation.binding && currentCapture is int) {
-      bindingCaptures[outgoing] = currentCapture;
-      while (bindingCaptures.length > 32) {
-        bindingCaptures.remove(bindingCaptures.keys.first);
-      }
-    }
-    final captured = {
-      'sessionId': outgoing.$1,
-      if (input && bindingCaptures[outgoing] != null)
-        'captureGeneration': bindingCaptures[outgoing],
-      ...params,
-    };
-    return _inputQueue.enqueue(command.wire, captured, outgoing).catchError((
-      Object error,
-    ) {
-      if (mounted && outgoing == presentation.binding) {
-        presentation.revokeControl();
-        setState(() => presentation.failInput('$error', 'control_busy'));
-      }
-    });
-  }
-
-  bool _admitsInput(String command, Json params, RemoteBinding binding) =>
-      presentation.admitsQueuedInput(
-        binding,
-        command,
-        params,
-        foreground: acceptsInput,
-        ownerCurrent: view?.isCurrent == true,
-      );
-
-  Future<void> _dispatchInput(
-    String command,
-    Json params,
-    RemoteBinding binding,
-  ) => sendNow(command, params, binding);
-
-  Future<void> sendNow(
-    String command,
-    Json params,
-    RemoteBinding binding,
-  ) async {
-    trace('request.begin command=$command');
-    try {
-      await controller.request(command, params);
-      trace('request.complete command=$command');
-    } catch (e) {
-      trace('request.failed command=$command kind=${e.runtimeType}');
-      if (mounted &&
-          !presentation.exiting &&
-          params['sessionId'] == sessionId) {
-        final details = e is RequestFailure
-            ? jsonObject(e.details)
-            : <String, dynamic>{};
-        if (command == 'session.launch' &&
-            remoteFailureCode(e) == 'app_launch_unknown' &&
-            details['launchOutcome'] == 'unknown' &&
-            details['recordOnly'] == true &&
-            value(details, 'sessionId').isNotEmpty &&
-            details['sessionId'] == details['launchOperationId'] &&
-            details['sessionId'] != params['sessionId'] &&
-            details['deviceId'] == widget.device['id'] &&
-            details['packageName'] == params['packageName'] &&
-            details['linkedSessionId'] == params['sessionId']) {
-          detachForUnknownAppLaunch(details);
-          return;
-        }
-        if (binding != presentation.binding) return;
-        if ([
-          'not_found',
-          'disconnected',
-          'not_connected',
-          'session_required',
-        ].contains(remoteFailureCode(e))) {
-          presentation.revokeControl();
-        }
-        unawaited(releaseInputs());
-        setState(() {
-          presentation.failInput(remoteFailure(e), remoteFailureCode(e));
-        });
-      }
-    }
-  }
-
-  void pointer(PointerEvent event, String action, Size viewport, Size source) {
-    if (!canSendInput) {
-      return;
-    }
-    final point = sourcePoint(event.localPosition, viewport, source);
-    if (action == 'down') {
-      if (point == null) return;
-      activePointers.add(event.pointer);
-    }
-    if (!activePointers.contains(event.pointer)) return;
-    if (point == null) {
-      // End the remote gesture at its last valid position, then ignore this
-      // physical pointer until it lifts. Re-entry must not create a new drag.
-      final previous = pointerPositions.remove(event.pointer);
-      activePointers.remove(event.pointer);
-      if (previous != null) {
-        unawaited(
-          send(InteropCommand.sessionTouch, {
-            ...previous,
-            'action': 'cancel',
-            'pressure': 0,
-          }),
-        );
-      }
-      return;
-    }
-    final previousButtons =
-        pointerPositions[event.pointer]?['buttons'] as int? ?? 0;
-    final changedButtons = (previousButtons ^ event.buttons) & 31;
-    final wireAction =
-        event.kind == PointerDeviceKind.mouse &&
-            action == 'move' &&
-            changedButtons != 0
-        ? (event.buttons & changedButtons != 0 ? 'down' : 'up')
-        : action;
-    final params = <String, dynamic>{
-      'action': wireAction,
-      'pointerId': event.pointer,
-      'x': point.dx.round().clamp(0, source.width.round() - 1),
-      'y': point.dy.round().clamp(0, source.height.round() - 1),
-      'pressure': wireAction == 'up' || wireAction == 'cancel'
-          ? 0
-          : normalizedPressure(event),
-      if (event.kind == PointerDeviceKind.mouse) ...{
-        'mouse': true,
-        'buttons': event.buttons & 31,
-        'actionButton': (wireAction == 'down' || wireAction == 'up')
-            ? changedButtons
-            : 0,
-      },
-      'screenWidth': source.width.round(),
-      'screenHeight': source.height.round(),
-    };
-    if (action == 'down' || action == 'move') {
-      pointerPositions[event.pointer] = params;
-    }
-    unawaited(send(InteropCommand.sessionTouch, params));
-    if (action == 'up' || action == 'cancel') {
-      activePointers.remove(event.pointer);
-      pointerPositions.remove(event.pointer);
-    }
-  }
-
-  double normalizedPressure(PointerEvent event) {
-    final span = event.pressureMax - event.pressureMin;
-    if (!event.pressure.isFinite || !span.isFinite || span <= 0) return 1;
-    return ((event.pressure - event.pressureMin) / span).clamp(0.0, 1.0);
-  }
-
-  void hover(PointerHoverEvent event, Size viewport, Size source) {
-    if (!canSendInput || event.kind != PointerDeviceKind.mouse) return;
-    final point = sourcePoint(event.localPosition, viewport, source);
-    if (point == null) return;
-    unawaited(
-      send(InteropCommand.sessionTouch, {
-        'action': 'hover',
-        'mouse': true,
-        'pointerId': 0,
-        'x': point.dx.round().clamp(0, source.width.round() - 1),
-        'y': point.dy.round().clamp(0, source.height.round() - 1),
-        'screenWidth': source.width.round(),
-        'screenHeight': source.height.round(),
-        'pressure': 0,
-        'buttons': event.buttons & 31,
-      }),
-    );
-  }
-
-  void scroll(PointerSignalEvent event, Size viewport, Size source) {
-    if (!canSendInput || event is! PointerScrollEvent) return;
-    final point = sourcePoint(event.localPosition, viewport, source);
-    if (point == null) return;
-    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
-      unawaited(
-        send(InteropCommand.sessionScroll, {
-          'x': point.dx.round().clamp(0, source.width.round() - 1),
-          'y': point.dy.round().clamp(0, source.height.round() - 1),
-          'screenWidth': source.width.round(),
-          'screenHeight': source.height.round(),
-          // Flutter reports logical pixels; one ordinary wheel tick is 20 px.
-          'hscroll': -event.scrollDelta.dx / 20,
-          'vscroll': -event.scrollDelta.dy / 20,
-          'buttons': event.buttons & 31,
-        }),
-      );
-    });
-  }
-
   void requestImeFocus() {
-    // Android reveals system bars before reporting the keyboard inset. Keep
-    // the confirmed display through both parts of that transition.
+    // Android 会先显示系统栏再报告键盘边距；过渡两阶段均保留已确认的显示尺寸。
     waitingForIme = true;
     imeRequestedWindowSize = MediaQuery.sizeOf(context);
     resizeTimer?.cancel();
@@ -1381,190 +1040,38 @@ class _RemotePageState extends State<RemotePage>
 
   void inputFocusChanged() {
     if (!inputFocus.hasFocus) {
-      resetTextInput();
+      inputs.resetTextInput();
       if (mounted && waitingForIme) {
         setState(() => waitingForIme = false);
       }
     }
   }
 
-  void resetTextInput() {
-    previousText = inputSentinel;
-    resettingText = true;
-    text.value = const TextEditingValue(
-      text: inputSentinel,
-      selection: TextSelection.collapsed(offset: 1),
-    );
-    resettingText = false;
-  }
-
-  void textChanged() {
-    if (resettingText) return;
-    if (!canSendInput) {
-      resetTextInput();
-      return;
-    }
-    // Only send committed IME text; pinyin/candidate composition remains local.
-    if (text.value.composing.isValid && !text.value.composing.isCollapsed) {
-      return;
-    }
-    final next = text.text;
-    final before = previousText.characters.toList();
-    final after = next.characters.toList();
-    var common = 0;
-    while (common < before.length &&
-        common < after.length &&
-        before[common] == after[common]) {
-      common++;
-    }
-    for (var i = common; i < before.length; i++) {
-      unawaited(
-        send(InteropCommand.sessionKey, {'keyCode': 67, 'action': 'down'}),
-      );
-      unawaited(
-        send(InteropCommand.sessionKey, {'keyCode': 67, 'action': 'up'}),
-      );
-    }
-    final added = after.skip(common).join().replaceAll(inputSentinel, '');
-    if (added.isNotEmpty) {
-      unawaited(send(InteropCommand.sessionText, {'text': added}));
-    }
-    previousText = next;
-    if (after.length > 128) {
-      final retained =
-          '$inputSentinel${after.skip(after.length - 64).join().replaceAll(inputSentinel, '')}';
-      previousText = retained;
-      resettingText = true;
-      text.value = TextEditingValue(
-        text: retained,
-        selection: TextSelection.collapsed(offset: retained.length),
-      );
-      resettingText = false;
-    }
-    // Keep one invisible local character so IME backspace can still delete
-    // pre-existing remote text after the local insertion buffer is empty.
-    if (next.isEmpty) {
-      resetTextInput();
-    }
-  }
-
-  KeyEventResult key(FocusNode node, KeyEvent event) {
-    final codes = {
-      LogicalKeyboardKey.escape: 4,
-      LogicalKeyboardKey.goBack: 4,
-      LogicalKeyboardKey.enter: 66,
-      LogicalKeyboardKey.backspace: 67,
-      LogicalKeyboardKey.tab: 61,
-      LogicalKeyboardKey.arrowUp: 19,
-      LogicalKeyboardKey.arrowDown: 20,
-      LogicalKeyboardKey.arrowLeft: 21,
-      LogicalKeyboardKey.arrowRight: 22,
-      LogicalKeyboardKey.home: 122,
-      LogicalKeyboardKey.end: 123,
-      LogicalKeyboardKey.pageUp: 92,
-      LogicalKeyboardKey.pageDown: 93,
-      LogicalKeyboardKey.insert: 124,
-      LogicalKeyboardKey.controlLeft: 113,
-      LogicalKeyboardKey.controlRight: 114,
-      LogicalKeyboardKey.shiftLeft: 59,
-      LogicalKeyboardKey.shiftRight: 60,
-      LogicalKeyboardKey.altLeft: 57,
-      LogicalKeyboardKey.altRight: 58,
-      LogicalKeyboardKey.metaLeft: 117,
-      LogicalKeyboardKey.metaRight: 118,
-      LogicalKeyboardKey.space: 62,
-      LogicalKeyboardKey.minus: 69,
-      LogicalKeyboardKey.equal: 70,
-      LogicalKeyboardKey.bracketLeft: 71,
-      LogicalKeyboardKey.bracketRight: 72,
-      LogicalKeyboardKey.backslash: 73,
-      LogicalKeyboardKey.semicolon: 74,
-      LogicalKeyboardKey.quote: 75,
-      LogicalKeyboardKey.slash: 76,
-      LogicalKeyboardKey.backquote: 68,
-      LogicalKeyboardKey.comma: 55,
-      LogicalKeyboardKey.period: 56,
-      LogicalKeyboardKey.delete: 112,
-    };
-    final logical = event.logicalKey.keyId;
-    final code =
-        codes[event.logicalKey] ??
-        (logical >= 0x61 && logical <= 0x7a ? logical - 0x61 + 29 : null) ??
-        (logical >= 0x30 && logical <= 0x39 ? logical - 0x30 + 7 : null) ??
-        (event.logicalKey.keyId >= LogicalKeyboardKey.f1.keyId &&
-                event.logicalKey.keyId <= LogicalKeyboardKey.f12.keyId
-            ? event.logicalKey.keyId - LogicalKeyboardKey.f1.keyId + 131
-            : null);
-    final keyboard = HardwareKeyboard.instance;
-    final metaState =
-        (keyboard.isShiftPressed ? 0x1 : 0) |
-        (keyboard.isAltPressed ? 0x2 : 0) |
-        (keyboard.isControlPressed ? 0x1000 : 0) |
-        (keyboard.isMetaPressed ? 0x10000 : 0) |
-        (keyboard.lockModesEnabled.contains(KeyboardLockMode.capsLock)
-            ? 0x100000
-            : 0) |
-        (keyboard.lockModesEnabled.contains(KeyboardLockMode.numLock)
-            ? 0x200000
-            : 0);
-
-    if (event is KeyUpEvent && code != null) {
-      final held = heldKeys.remove(code);
-      keyRepeats.remove(code);
-      if (held == null) return KeyEventResult.ignored;
-      if (held == presentation.binding && presentation.controlAvailable) {
-        unawaited(
-          send(InteropCommand.sessionKey, {
-            'sessionId': held.$1,
-            'keyCode': code,
-            if (metaState != 0) 'metaState': metaState,
-            'action': 'up',
-          }),
-        );
-      }
-      return KeyEventResult.handled;
-    }
-    if (!canSendInput || (ime && code != 4)) return KeyEventResult.ignored;
-    if (event is KeyDownEvent &&
-        event.character?.isNotEmpty == true &&
-        event.character!.runes.any((rune) => rune > 127) &&
-        !keyboard.isControlPressed &&
-        !keyboard.isAltPressed &&
-        !keyboard.isMetaPressed) {
-      unawaited(send(InteropCommand.sessionText, {'text': event.character}));
-      return KeyEventResult.handled;
-    }
-    if (code != null) {
-      if (event is KeyRepeatEvent && !heldKeys.containsKey(code)) {
-        return KeyEventResult.ignored;
-      }
-      heldKeys[code] = presentation.binding;
-      final repeat = event is KeyRepeatEvent ? (keyRepeats[code] ?? 0) + 1 : 0;
-      keyRepeats[code] = repeat;
-      unawaited(
-        send(InteropCommand.sessionKey, {
-          'keyCode': code,
-          if (metaState != 0) 'metaState': metaState,
-          if (repeat != 0) 'repeat': repeat,
-          'action': event is KeyUpEvent ? 'up' : 'down',
-        }),
-      );
-      return KeyEventResult.handled;
-    }
-    if (event is KeyDownEvent && event.character?.isNotEmpty == true) {
-      unawaited(send(InteropCommand.sessionText, {'text': event.character}));
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
+  Future<void> releaseInputs({RemoteBinding? binding}) =>
+      inputs.releaseInputs(binding: binding);
+  Future<void> releasePointers({RemoteBinding? binding}) =>
+      inputs.releasePointers(binding: binding);
+  Future<void> send(
+    ApplicationCommand command,
+    Json params, {
+    RemoteBinding? binding,
+  }) => inputs.send(command, params, binding: binding);
+  KeyEventResult key(FocusNode node, KeyEvent event) =>
+      inputs.key(event, ime: ime);
+  void pointer(PointerEvent event, String action, Size viewport, Size source) =>
+      inputs.pointer(event, action, viewport, source);
+  void hover(PointerHoverEvent event, Size viewport, Size source) =>
+      inputs.hover(event, viewport, source);
+  void scroll(PointerSignalEvent event, Size viewport, Size source) =>
+      inputs.scroll(event, viewport, source);
 
   void pressNavigationKey(int code) {
     if (!canSendInput) return;
     unawaited(
-      send(InteropCommand.sessionKey, {'keyCode': code, 'action': 'down'}),
+      send(ApplicationCommand.sessionKey, {'keyCode': code, 'action': 'down'}),
     );
     unawaited(
-      send(InteropCommand.sessionKey, {'keyCode': code, 'action': 'up'}),
+      send(ApplicationCommand.sessionKey, {'keyCode': code, 'action': 'up'}),
     );
   }
 
@@ -1573,110 +1080,40 @@ class _RemotePageState extends State<RemotePage>
     resizeTimer?.cancel();
     scheduledDisplaySize = null;
     scheduledDisplayBinding = null;
-    releaseDeviceView();
-    setState(() => presentation.leave());
     final feedback = ScaffoldMessenger.maybeOf(context);
     final left = Completer<void>();
-    final owned = view;
     final id = sessionId;
-    Future<void> reportKeepActiveCleanup(Json receipt) async {
-      final cleanup = jsonObject(receipt['keepActiveCleanup']);
-      if (receipt['sessionId'] != id ||
-          receipt['status'] != 'stopped' ||
-          (cleanup['cleanupConfirmed'] != false &&
-              cleanup['status'] != 'cleanup_unconfirmed')) {
-        return;
-      }
-      final reason = value(jsonObject(cleanup['error']), 'reason', '请稍后重新检查。');
-      await left.future;
-      if (feedback?.mounted == true) {
-        feedback!.showSnackBar(glassSnackBar('窗口已关闭，保持唤醒服务释放尚未确认：$reason'));
-      }
-    }
-
-    final lock =
-        owned?.isCurrent == true &&
-        presentation.controlAvailable &&
-        !presentation.stateUnverified &&
-        jsonObject(
-              jsonObject(
-                controller.snapshot().settings['deviceSettings'],
-              )[value(widget.device, 'id')],
-            )['lockOnClose'] ==
-            true;
-    final lastPage = releasePhonePage?.call() == true;
-    releasePhonePage = null;
-    if (id.isNotEmpty && owned?.ownsBinding == true) {
-      // Capture exact ownership before leaving. Closing destroys this window;
-      // temporary occlusion alone continues to use pause/resume.
-      final cleanup = releaseInputs().then((_) async {
-        if (lock &&
-            lastPage &&
-            !controller.hasPhoneControlPages(value(widget.device, 'id')) &&
-            owned!.ownsBinding) {
-          try {
-            await controller.execute(InteropCommand.sessionKey, {
-              'sessionId': id,
-              'keyCode': 223,
-              'action': 'down',
-            });
-            await controller.execute(InteropCommand.sessionKey, {
-              'sessionId': id,
-              'keyCode': 223,
-              'action': 'up',
-            });
-          } catch (failure) {
-            unawaited(
-              left.future.then((_) {
-                if (feedback?.mounted == true) {
-                  feedback!.showSnackBar(
-                    glassSnackBar('锁屏尚未确认：${remoteFailure(failure)}'),
-                  );
-                }
-              }),
-            );
-          }
+    final cleanup = window.close(releaseInputs);
+    setState(() {});
+    unawaited(
+      cleanup.then((result) async {
+        await left.future;
+        if (feedback?.mounted != true) return;
+        if (result.lockFailure case final failure?) {
+          feedback!.showSnackBar(
+            glassSnackBar('锁屏尚未确认：${remoteFailure(failure)}'),
+          );
         }
-        if (owned!.ownsBinding) {
-          final receipt = await owned.close();
-          await reportKeepActiveCleanup(receipt);
+        if (result.closeFailure case final failure?) {
+          feedback!.showSnackBar(
+            glassSnackBar('关闭窗口尚未确认：${remoteFailure(failure)}'),
+          );
         }
-      });
-      presentation.revokeControl();
-      unawaited(
-        cleanup.catchError((Object failure) async {
-          await left.future;
-          if (feedback?.mounted == true) {
-            feedback!.showSnackBar(
-              glassSnackBar('关闭窗口尚未确认：${remoteFailure(failure)}'),
-            );
-          }
-        }),
-      );
-    } else if (id.isNotEmpty && owned == null && !presentation.sessionEnded) {
-      // A startup without pixels can still own an operation record or remote
-      // window. Explicit close releases that exact identity as well.
-      unawaited(
-        controller
-            .execute(InteropCommand.sessionStop, {
-              'sessionId': id,
-              'keepTask': true,
-            })
-            .then((receipt) async {
-              await reportKeepActiveCleanup(receipt);
-              return receipt;
-            })
-            .catchError((Object failure) async {
-              await left.future;
-              if (feedback?.mounted == true) {
-                feedback!.showSnackBar(
-                  glassSnackBar('关闭窗口尚未确认：${remoteFailure(failure)}'),
-                );
-              }
-              return <String, dynamic>{};
-            }),
-      );
-    }
+        final receipt = result.receipt;
+        final keepActive = jsonObject(receipt['keepActiveCleanup']);
+        if (receipt['sessionId'] == id &&
+            receipt['status'] == 'stopped' &&
+            (keepActive['cleanupConfirmed'] == false ||
+                keepActive['status'] == 'cleanup_unconfirmed')) {
+          final reason = value(
+            jsonObject(keepActive['error']),
+            'reason',
+            '请稍后重新检查。',
+          );
+          feedback!.showSnackBar(glassSnackBar('窗口已关闭，保持唤醒服务释放尚未确认：$reason'));
+        }
+      }),
+    );
     await WidgetsBinding.instance.endOfFrame;
     if (mounted) closePage<void>(context);
     await WidgetsBinding.instance.endOfFrame;
@@ -1687,33 +1124,15 @@ class _RemotePageState extends State<RemotePage>
   void dispose() {
     resizeTimer?.cancel();
     screenStateTimer?.cancel();
-    releasePhonePage?.call();
     if (!initialViewport.isCompleted) initialViewport.complete(Size.zero);
-    releaseDeviceView();
-    presentation.invalidateStart();
-    final release = releaseInputs();
-    unawaited(
-      release.then<void>(
-        (_) => _inputQueue.close(),
-        onError: (Object _, StackTrace _) => _inputQueue.close(),
-      ),
-    );
-    final ownedView = view;
-    if (!presentation.exiting && ownedView != null) {
-      unawaited(
-        ownedView
-            .close(afterInput: release)
-            .catchError((Object _) => <String, dynamic>{}),
-      );
-    }
+    final release = window.dispose(releaseInputs);
+    inputs.dispose(afterInput: release);
     sessionRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     eventSubscription?.cancel();
-    text.removeListener(textChanged);
     inputFocus.removeListener(inputFocusChanged);
     inputFocus.dispose();
     keyboardFocus.dispose();
-    text.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -1736,8 +1155,7 @@ class _RemotePageState extends State<RemotePage>
       return;
     }
     final binding = presentation.binding;
-    // Frames can rebuild this layout faster than the debounce interval. Only
-    // a changed target or binding restarts the pending adjustment.
+    // 帧可能比防抖间隔更快重建布局，仅目标尺寸或绑定变化时重置待调整任务。
     if (resizeTimer?.isActive == true &&
         scheduledDisplaySize == target &&
         scheduledDisplayBinding == binding) {
@@ -1765,7 +1183,7 @@ class _RemotePageState extends State<RemotePage>
         }
         requestedDisplaySize = target;
         trace('display.request target=$target binding=$binding');
-        await controller.execute(InteropCommand.sessionDisplay, {
+        await controller.execute(ApplicationCommand.sessionDisplay, {
           'sessionId': binding.$1,
           'displayWidth': target.width,
           'displayHeight': target.height,
@@ -1804,8 +1222,7 @@ class _RemotePageState extends State<RemotePage>
         .dimensions(displayViewport!);
     if (target != null &&
         (width / height - target.width / target.height).abs() > .005) {
-      // Physical device rotation changes natural-coordinate mapping even when
-      // this host's viewport did not change. Reapply once for that geometry.
+      // 手机旋转会改变自然坐标映射，即使主控视口未变化，也要按新几何形状重设一次。
       requestedDisplaySize = null;
       observeViewport(displayViewport!);
     }
@@ -1813,15 +1230,12 @@ class _RemotePageState extends State<RemotePage>
 
   @override
   Widget build(BuildContext context) {
-    // Scaffold removes the inherited bottom viewInset after resizing its body.
-    // Read the route's original inset so an IME cannot redefine display size.
+    // Scaffold 调整内容区后会移除底部 viewInset；读取路由原始边距，避免输入法重新定义显示尺寸。
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     if (keyboardVisible ||
         (waitingForIme &&
             imeRequestedWindowSize != MediaQuery.sizeOf(context))) {
-      // A hardware keyboard need not produce an IME inset. A real host resize
-      // still adapts; transient system bars in the same window never end this
-      // wait merely because the IME took longer to appear.
+      // 硬件键盘未必产生输入法边距；实际宿主尺寸变化仍需适应，同窗口的临时系统栏不能提前结束等待。
       waitingForIme = false;
     }
     if (keyboardVisible || waitingForIme) resizeTimer?.cancel();
@@ -1829,8 +1243,7 @@ class _RemotePageState extends State<RemotePage>
     final height = presentation.imageHeight;
     final texture = int.tryParse('${presentation.session?['textureId']}');
     final valid = texture != null && width > 0 && height > 0;
-    // The app messenger carries feedback between routes. A remote session has
-    // its own scope so results from local pages cannot cover the phone screen.
+    // 应用消息可跨路由显示；远控使用独立消息区域，防止本机页面的结果遮住手机画面。
     return Consumer(
       builder: (context, ref, _) {
         final showNavigationBar = ref.watch(
@@ -1876,8 +1289,7 @@ class _RemotePageState extends State<RemotePage>
                         onRecent: () => pressNavigationKey(187),
                       )
                     : null,
-                // Video consumes the full drawable viewport. Overlay controls
-                // apply their own safe and system gesture insets.
+                // 视频占满可绘制视口，叠加控件自行扣除安全区与系统手势边距。
                 body: Stack(
                   children: [
                     Positioned.fill(
@@ -1999,8 +1411,7 @@ class _RemotePageState extends State<RemotePage>
                           );
                           final roomBelow =
                               constraints.maxHeight - belowExit - bottom;
-                          // A short landscape viewport can use the space beside
-                          // the exit control; taller layouts reserve its top band.
+                          // 较矮的横屏使用退出控件旁边的空间，较高布局则预留顶部区域。
                           final below =
                               roomBelow >= DesignTokens.componentRowHeight * 2;
                           return Padding(
@@ -2155,13 +1566,13 @@ class _RemotePageState extends State<RemotePage>
                           onSubmitted: (_) {
                             if (!canSendInput) return;
                             unawaited(
-                              send(InteropCommand.sessionKey, {
+                              send(ApplicationCommand.sessionKey, {
                                 'keyCode': 66,
                                 'action': 'down',
                               }),
                             );
                             unawaited(
-                              send(InteropCommand.sessionKey, {
+                              send(ApplicationCommand.sessionKey, {
                                 'keyCode': 66,
                                 'action': 'up',
                               }),
@@ -2214,7 +1625,7 @@ class _RemotePageState extends State<RemotePage>
                         onKeyboard: canSendInput ? showKeyboard : null,
                         onRotate: canSendInput
                             ? () => unawaited(
-                                send(InteropCommand.sessionRotate, {}),
+                                send(ApplicationCommand.sessionRotate, {}),
                               )
                             : null,
                         deviceLabel: deviceName(widget.device),

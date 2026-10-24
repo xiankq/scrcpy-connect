@@ -1,7 +1,7 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 import 'dart:collection';
-
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'remote_presentation.dart';
 
@@ -16,8 +16,7 @@ typedef RemoteInputAdmission = bool Function(
   RemoteBinding binding,
 );
 
-/// Serializes remote input while retaining only the newest pending move for
-/// each pointer. Edge events remain ordered and are never coalesced.
+/// 串行发送输入，每个触点只保留最新待发移动；按下、抬起等边缘事件保持顺序且不合并。
 final class RemoteInputQueue {
   RemoteInputQueue({
     required this.dispatch,
@@ -34,8 +33,7 @@ final class RemoteInputQueue {
   bool _pumping = false;
   bool _closed = false;
 
-  /// Completes after every input accepted before the getter call has either
-  /// been dispatched or rejected by the current presentation binding.
+  /// 调用时已准入的全部输入完成分发或被当前绑定拒绝后，此 Future 才结束。
   Future<void> get idle {
     if (!_pumping && _pending.isEmpty) return Future<void>.value();
     return (_idle ??= Completer<void>()).future;
@@ -53,24 +51,20 @@ final class RemoteInputQueue {
         pending.unlink();
         pending.params = params;
         _pending.add(pending);
-        // Every superseded move shares this one completion. Slow writes must
-        // not allocate one retained waiter for each physical pointer event.
+        // 被覆盖的移动共享同一完成信号，慢写入不能为每个物理事件保留独立等待者。
         return pending.waiter.future;
       }
     } else if (pointerKey != null) {
-      // A later down/up/cancel belongs after every move for this pointer.
-      // Prevent a following move from being merged across that edge.
+      // 后续按下、抬起或取消必须排在该触点已有移动之后，不能跨此边缘合并移动。
       _moves.remove(pointerKey);
     }
 
     final cleanup =
-        (command == InteropCommand.sessionKey.wire &&
+        (command == ApplicationCommand.sessionKey.wire &&
             params['action'] == 'up') ||
-        (command == InteropCommand.sessionTouch.wire &&
+        (command == ApplicationCommand.sessionTouch.wire &&
             const ['up', 'cancel'].contains(params['action']));
-    // Reserve half of the bounded queue for releases. A saturated stream of
-    // text/down events must not prevent releasing already-held physical keys
-    // and pointers when the page revokes further admission.
+    // 有界队列预留一半容量给释放事件，文字和按下拥塞不能阻止页面撤销准入后释放已持有输入。
     final limit = cleanup || capacity < 16 ? capacity : capacity ~/ 2;
     if (_pending.length >= limit) {
       return Future<void>.error(StateError('控制输入队列繁忙，请等待网络恢复。'));
@@ -83,8 +77,7 @@ final class RemoteInputQueue {
     return waiter.future;
   }
 
-  /// Stops accepting new commands. Pending inputs are settled locally without
-  /// replay; an in-flight dispatch is allowed to finish.
+  /// 停止接收新命令；本机结算待发输入且不重放，允许已分发请求结束。
   void close() {
     if (_closed) return;
     _closed = true;
@@ -149,7 +142,7 @@ final class RemoteInputQueue {
   }
 
   String? _pointerKey(String command, Json params, RemoteBinding binding) {
-    if (command != InteropCommand.sessionTouch.wire) return null;
+    if (command != ApplicationCommand.sessionTouch.wire) return null;
     final pointer = params['pointerId'];
     if (pointer is! int) return null;
     return '${binding.$1}\u0000${binding.$2}\u0000$pointer';

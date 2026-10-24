@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:typed_data';
@@ -12,14 +15,13 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 import 'video_performance_test.dart' show pattern;
 
-// A real adbd sits behind the host driver's per-connection TCP proxy. No device
-// state or video endpoint is simulated; only this test's transport is cut.
+// 真实 adbd 位于宿主驱动的逐连接 TCP 代理之后；不模拟设备状态或视频端点，仅切断本测试传输。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   var hostReady = false;
@@ -233,7 +235,7 @@ void main() {
           });
         }
         await presented(1, 'after-recovery');
-        // A user stop must remain stopped, despite a later device state refresh.
+        // 用户停止后，即使设备状态再次刷新也必须保持停止。
         await request('session.stop', {'sessionId': secondId});
         await tester.pump(const Duration(seconds: 2));
         final remaining = objects(
@@ -255,8 +257,7 @@ void main() {
           'deviceSettings',
           jsonObject(initialSettings['deviceSettings']),
         );
-        // Removing the production app closes its bridge/provider container.
-        // Restore owned runtime state before that teardown, not afterwards.
+        // 移除生产应用会关闭桥接和 provider 容器，必须先恢复拥有的运行时状态，再执行卸载。
         await tester.pumpWidget(const SizedBox.shrink());
       }
       binding.reportData!['videoRecoveryComplete'] = true;

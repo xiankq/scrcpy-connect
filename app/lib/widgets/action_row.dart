@@ -50,7 +50,7 @@ class ActionRow extends StatelessWidget {
   );
 }
 
-/// Functional color belongs to the action, while the glyph stays white.
+/// 功能色属于操作背景，图形符号保持白色。
 Color functionalIconColor(IconData icon, {Color? color}) {
   if (color == ConnectTokens.danger || color == ConnectTokens.coral) {
     return DesignTokens.colorListIconCoral;

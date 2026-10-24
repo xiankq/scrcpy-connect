@@ -1,11 +1,12 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-/// A recovery status inside the page flow, leaving content and cleanup usable.
+/// 恢复状态位于正常页面内容流中，保留内容访问和清理操作。
 class RecoveryStatus extends ConsumerStatefulWidget {
   const RecoveryStatus({
     super.key,
@@ -31,9 +32,9 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
     try {
       await ref
           .read(appControllerProvider.notifier)
-          .execute(InteropCommand.stateReconcile);
+          .execute(ApplicationCommand.stateReconcile);
     } catch (_) {
-      // The Bridge publishes the authoritative failure while keeping the gate.
+      // 桥接保持核验门禁，并发布权威失败状态。
     } finally {
       if (mounted) setState(() => _retrying = false);
     }

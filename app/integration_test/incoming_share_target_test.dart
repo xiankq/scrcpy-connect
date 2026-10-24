@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -9,8 +13,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
 
 import 'product_flow_test.dart' show waitFor;
@@ -136,7 +140,7 @@ void main() {
       }
 
       try {
-        // Focus has real clipboard/audio effects; restore these preferences below.
+        // 焦点具有真实剪贴板和音频副作用，下方恢复这些偏好。
         await tester.runAsync(
           () => controller.updateSetting('deviceSettings', <String, dynamic>{}),
         );
@@ -162,8 +166,7 @@ void main() {
         serialB = value(deviceB, 'serial');
         expect(serialA, isNotEmpty);
         expect(serialB, isNotEmpty);
-        // Emulator clones may share ro.serialno. Unique host-created directory
-        // entries below bind each public connection to the independent ADB target.
+        // 模拟器克隆可能共用 ro.serialno；宿主创建的唯一目录项将各公共连接绑定到独立 ADB 目标。
         await host('prepare', 'prepared');
         final entriesA = objects(
           (await request('files.list', {
@@ -349,7 +352,7 @@ void main() {
         expect(tester.takeException(), isNull);
       } finally {
         try {
-          // Never remove the host fixture while its exact upload is still active.
+          // 精确上传仍在活动时，不能删除宿主夹具。
           for (final task in await ownTransfers()) {
             if ([
               'queued',

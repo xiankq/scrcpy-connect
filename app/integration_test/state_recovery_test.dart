@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -6,8 +8,8 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'product_flow_test.dart' show expectHealthyRemote, waitFor;
 

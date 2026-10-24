@@ -1,7 +1,9 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -11,22 +13,18 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class CallsPage extends HookConsumerWidget {
+class CallsPage extends HookWidget {
   const CallsPage({super.key, required this.controller, required this.device});
   final AppController controller;
   final Json device;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final appEventRevision = ref.watch(
-      appControllerProvider.select((state) => state.eventRevision),
-    );
+  Widget build(BuildContext context) {
     final starting = useState(false);
     final openingCallUi = useState(false);
     final callUiFailure = useState<String?>(null);
     return PageFrame(
       title: '来电与通话',
       child: CommandView(
-        refreshKey: appEventRevision,
         controller: controller,
         command: 'calls.list',
         params: {'deviceId': device['id']},

@@ -1,8 +1,9 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/remote_display_settings.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/media/remote_display_settings.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 
@@ -68,8 +69,7 @@ Future<void> chooseScreenRatio(
         .join(':');
   }
   try {
-    // Save both fields in one settings transaction, so a failed write cannot
-    // leave a new custom ratio paired with the previous mode.
+    // 同一事务保存两个字段，避免失败后把新自定义比例与旧模式混用。
     await controller.updateDeviceSettings(deviceId, {
       'remoteAspectRatio': choice,
       'remoteCustomRatio': ?custom,

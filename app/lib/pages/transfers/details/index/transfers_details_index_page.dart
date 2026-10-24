@@ -1,11 +1,13 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/transfer_result_row.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/transfer_state.dart';
-import 'package:scrcpy_connect/services/media_cache_lease.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/transfer_presentation.dart';
+import 'package:scrcpy_connect/media/media_cache_lease.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -19,7 +21,7 @@ import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
 
-class TransferDetailsPage extends HookConsumerWidget {
+class TransferDetailsPage extends HookWidget {
   const TransferDetailsPage({
     super.key,
     required this.controller,
@@ -28,27 +30,26 @@ class TransferDetailsPage extends HookConsumerWidget {
   final AppController controller;
   final Json task;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final appEventRevision = ref.watch(
-      appControllerProvider.select((state) => state.eventRevision),
-    );
+  Widget build(BuildContext context) {
     final revision = useState(0);
     return PageFrame(
       title: '传输详情',
       child: CommandView(
-        refreshKey: '$appEventRevision:${revision.value}',
+        refreshKey: revision.value,
         controller: controller,
         command: 'transfers.get',
         params: {'transferId': task['id']},
         emptyTitle: '暂时无法读取传输结果',
         builder: (context, data, refresh) {
-          final current = transferView(controller, {...task, ...data});
+          final current = transferView(controller.snapshot().devices, {
+            ...task,
+            ...data,
+          });
           final rawItems = objects(current['items']);
           final items = rawItems.isEmpty ? [current] : rawItems;
           final itemCount =
               num.tryParse('${current['itemCount']}')?.toInt() ?? items.length;
-          // A child item keeps its own result and retry entry; only the batch
-          // representative shows the open list of every item.
+          // 子项保留自己的结果与重试入口，只有批次代表项展示完整子项列表。
           final batch = itemCount > 1 && value(current, 'parentId').isEmpty;
           final summary = jsonObject(current['batch']);
           final status = batch
@@ -114,7 +115,7 @@ class TransferDetailsPage extends HookConsumerWidget {
                       'transfer-conflict',
                       value(conflictItem, 'id'),
                     )),
-                    transfer: transferView(controller, {
+                    transfer: transferView(controller.snapshot().devices, {
                       ...conflictItem,
                       'deviceId':
                           conflictItem['deviceId'] ?? current['deviceId'],
@@ -235,7 +236,7 @@ class TransferDetailsPage extends HookConsumerWidget {
                         try {
                           if (current['destinationScope'] == 'privateCache') {
                             await controller.execute(
-                              InteropCommand.mediaCacheRetain,
+                              ApplicationCommand.mediaCacheRetain,
                               {'localPath': value(current, 'localPath')},
                             );
                           }
@@ -311,7 +312,7 @@ class TransferDetailsPage extends HookConsumerWidget {
                     return trailing[row - visibleItems.length];
                   }
                   final rawItem = visibleItems[row];
-                  final item = transferView(controller, {
+                  final item = transferView(controller.snapshot().devices, {
                     ...rawItem,
                     'deviceId': rawItem['deviceId'] ?? current['deviceId'],
                     'direction': rawItem['direction'] ?? current['direction'],

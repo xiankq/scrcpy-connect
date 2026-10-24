@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'dart:convert';
 
@@ -73,7 +75,7 @@ void main() {
           isEmpty,
           reason: 'Use an isolated target; existing device sessions must be retained.',
         );
-        // This is an explicit test action, never automatic product wake-up.
+        // 这是明确测试动作，不是产品自动唤醒。
         await request('devices.wake', {'deviceId': deviceId});
         final local = await request('video.capabilities');
         final localCodecs = objects(local['codecs']);

@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -7,16 +10,12 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-// Run with tool/driver/integration_test.dart and CONNECT_E2E_ACCEPTANCE=media.
-// Failure/close races remain covered by device_quality_coordinator_test.dart,
-// portable_video_test.dart and quality_reconfiguration_android.rs. This test
-// supplies the missing actual Flutter/MDK two-output evidence, without mocks,
-// renderer factories, fabricated ready receipts, or per-window quality patches.
+// 配合 tool/driver/integration_test.dart 和 CONNECT_E2E_ACCEPTANCE=media 运行。失败及关闭竞争由 device_quality_coordinator_test.dart、video_output_coordinator_test.dart 和 quality_reconfiguration_android.rs 覆盖；本测试提供真实 Flutter/MDK 双输出证据，不模拟渲染器、伪造就绪回执或逐窗口修改画质。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
@@ -238,7 +237,7 @@ void main() {
               codec.dispose();
             }
           } finally {
-            // Only this screenshot's newly created capture directory is owned.
+            // 仅拥有本次截图新建的捕获目录。
             await file.delete();
             await file.parent.delete();
           }
@@ -299,8 +298,7 @@ void main() {
         for (final record in before) {
           assertQuality(record, 720, 30, 2000000);
         }
-        // The overlay only displays real production-owned MDK texture IDs. The
-        // original ConnectApp and its providers remain mounted throughout.
+        // 覆盖层仅显示真实生产所有者创建的 MDK 纹理 ID；原 ConnectApp 与 provider 全程保持挂载。
         overlay = OverlayEntry(
           builder: (context) => Positioned.fill(
             child: Material(
@@ -334,8 +332,7 @@ void main() {
         Overlay.of(tester.element(find.byType(Scaffold).first)).insert(overlay);
         evidence['before'] = before.map(receipt).toList();
         await capture('device-quality-two-outputs-before', before);
-        // A covered, still-open window must receive device-wide settings too.
-        // Verify a real paused MDK output alongside the playing app output.
+        // 被遮挡但仍打开的窗口也应收到设备级设置，验证真实暂停的 MDK 输出与播放中的应用输出。
         await request('session.pause', {'sessionId': idOf(phone)});
         final paused = (await sessions()).singleWhere(
           (record) => idOf(record) == idOf(phone),
@@ -423,9 +420,9 @@ void main() {
           'screenAfter': screenAfter,
           'lifecycleEvidence': 'Stable session/task IDs, no terminal session events, unchanged observed screen state; no wake-command counter is exposed.',
           'regressionReferences': [
-            'packages/device_runtime/test/device_quality_coordinator_test.dart: reports actual partial failures and continues remaining windows',
-            'packages/device_runtime/test/portable_video_test.dart: close beats a late one-use replacement relay',
-            'crates/interop_core/tests/quality_reconfiguration_android.rs: explicit_close_during_rebuild_does_not_resurrect_window',
+            'app/test/media/device_quality_coordinator_test.dart: reports actual partial failures and continues remaining windows',
+            'app/test/media/video_output_coordinator_test.dart: close beats a late one-use replacement relay',
+            'app/rust/core/tests/quality_reconfiguration_android.rs: explicit_close_during_rebuild_does_not_resurrect_window',
           ],
         });
         await capture('device-quality-two-outputs-after', after);
@@ -442,8 +439,7 @@ void main() {
           )[deviceId],
         );
         expect(saved['qualityPreset'], 'balanced');
-        // Close only our original phone window, then open a genuinely new window.
-        // Neither opening supplies raw per-window video parameters.
+        // 仅关闭本测试原手机窗口，再打开全新窗口；两次打开都不直接传入逐窗口视频参数。
         await request('session.stop', {
           'sessionId': idOf(phone),
           'keepTask': true,

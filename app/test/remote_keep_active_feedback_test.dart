@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:design_system/design_system.dart';
@@ -6,7 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -179,7 +182,7 @@ void main() {
         expect(find.text('保持唤醒尚未确认：后台保活结束'), findsOneWidget);
         events.add(_update(null));
         await tester.pumpAndSettle();
-        // An already visible transient notice may finish naturally.
+        // 已可见的短暂提醒可自然结束。
         await tester.pump(const Duration(seconds: 5));
         await tester.pumpAndSettle();
         expect(find.textContaining('后台保活结束'), findsNothing);

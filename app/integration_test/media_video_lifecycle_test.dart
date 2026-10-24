@@ -6,16 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_client/scrcpy_client.dart';
-import 'package:device_runtime/device_runtime.dart' show InteropException;
-import 'package:device_runtime/src/native_runtime.dart';
-import 'package:device_runtime/src/rust/api.dart' as core;
-import 'package:device_runtime/src/rust/frb_generated.dart';
+import 'package:scrcpy_connect/media/output/video_output_coordinator.dart';
+import 'package:scrcpy_connect/media/output/video_player_port.dart';
+import 'package:scrcpy_connect/media/output/video_presentation.dart';
+import 'package:scrcpy_connect/media/quality/video_quality_policy.dart';
+import 'package:scrcpy_connect/application/transport/application_command_exception.dart'
+    show ApplicationCommandException;
+
 import 'package:path_provider/path_provider.dart';
 
-/// Real-device opt-in target. The adapter must obtain its first decoded pixels
-/// BEFORE a Texture widget is mounted; this is deliberately stronger than the
-/// earlier direct-Player probe. No application native video methods are called.
+import 'support/media_owner_fixture.dart';
+
+/// 真实设备可选目标；Texture 控件挂载前适配器必须已取得首批解码像素，这比早期直接 Player 探测更严格，不调用应用原生视频方法。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('portable video actual first frame and exact-session lifecycle', (
@@ -28,56 +30,58 @@ void main() {
     await temporary.create(recursive: true);
     final events = <VideoJson>[];
     var disposed = false;
+    MediaOwnerFixture? fixture;
     Future<VideoJson> request(String command, VideoJson params) async {
-      final result = jsonDecode(
-        await core.invoke(
-          requestJson: jsonEncode({'command': command, 'params': params}),
-        ),
-      ) as Map<String, dynamic>;
-      if (result['ok'] != true) {
-        throw StateError('$command: ${result['error']}');
+      final owner = fixture;
+      if (owner == null) throw StateError('媒体测试所有者尚未打开。');
+      if (command.startsWith('session.')) {
+        return owner.sessions.command(command, params);
       }
-      return result['data'] as VideoJson;
+      if (command == 'media.status') {
+        final source = params['relayId'];
+        if (source is! String || source.isEmpty) {
+          throw ArgumentError.value(source, 'relayId', '缺少精确原生来源身份。');
+        }
+        return owner.sourceStatus(source);
+      }
+      throw UnsupportedError('媒体测试不处理 $command');
     }
 
-    final outputs = PortableVideoOutputs(
-      core: request,
+    final outputs = VideoOutputCoordinator(
+      request: request,
+      openSource: (stream, generation) =>
+          fixture!.videoSource.openSource(stream, generation),
       emit: events.add,
       isDisposed: () => disposed,
     );
     final presentation = VideoPresentation(
-      core: request,
+      request: request,
       pauseOutput: outputs.pause,
       resumeOutput: outputs.resume,
     );
     var capturedSurface = false;
     String? device;
     String? activeSession;
-    await tester.runAsync(() async {
-      await RustLib.init();
-      await initializeNativeRuntime(
-        dataDirectory:
-            const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY').isEmpty
-            ? '${support.path}/portable-video-lifecycle'
-            : const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY'),
-      );
-    });
     try {
       await tester.runAsync(() async {
-        final added = await request('devices.add', {
-          'address': const String.fromEnvironment(
-            'CONNECT_E2E_ADDRESS',
-            defaultValue: '10.0.2.2',
+        const address = String.fromEnvironment(
+          'CONNECT_E2E_ADDRESS',
+          defaultValue: '10.0.2.2',
+        );
+        final port = int.parse(
+          const String.fromEnvironment(
+            'CONNECT_E2E_PORT',
+            defaultValue: '15556',
           ),
-          'port': int.parse(
-            const String.fromEnvironment(
-              'CONNECT_E2E_PORT',
-              defaultValue: '15556',
-            ),
-          ),
-        });
-        device = (added['device'] as VideoJson)['id'] as String;
-        await request('devices.connect', {'deviceId': device});
+        );
+        fixture = await MediaOwnerFixture.open(
+          dataDirectory:
+              const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY').isEmpty
+              ? '${support.path}/portable-video-lifecycle'
+              : const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY'),
+          address: Uri(host: address, port: port).authority,
+        );
+        device = fixture!.deviceId;
       });
       for (final codec in const String.fromEnvironment(
         'CONNECT_MEDIA_CODECS',
@@ -101,11 +105,10 @@ void main() {
             evidence['coreStartMs'] = watch.elapsedMilliseconds;
             evidence['coreStartupTimingMs'] = stream['captureStartupTimingMs'];
             watch.reset();
-            // No Texture widget exists at this point. A timeout is a failed
-            // premount readiness contract, never a fabricated ready receipt.
+            // 此时没有 Texture 控件；超时表示挂载前就绪契约失败，不能伪造就绪回执。
             try {
               ready = await outputs.start(stream);
-            } on InteropException catch (error) {
+            } on ApplicationCommandException catch (error) {
               evidence['startupFailure'] = error.details;
               rethrow;
             }
@@ -215,7 +218,7 @@ void main() {
                   paused = await presentation.request('session.pause', {
                     'sessionId': activeSession,
                   });
-                } on InteropException catch (error) {
+                } on ApplicationCommandException catch (error) {
                   evidence['pauseFailure'] = error.details;
                   rethrow;
                 }
@@ -293,15 +296,8 @@ void main() {
         try {
           await outputs.dispose();
           disposed = true;
-          if (device != null) {
-            await request('devices.disconnect', {'deviceId': device});
-          }
         } finally {
-          try {
-            await core.shutdown();
-          } finally {
-            await shutdownNativeAdb();
-          }
+          await fixture?.close();
         }
       });
     }

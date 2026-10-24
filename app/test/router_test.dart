@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'support/page_back.dart';
 import 'support/test_controller.dart';
 
@@ -12,7 +14,6 @@ import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'dart:async';
 
@@ -226,7 +227,7 @@ void main() {
     (tester) async {
       final backend = _Backend();
       final router = await _mountRouter(tester, backend);
-      // Use a context inside the router rather than the outer MaterialApp.
+      // 使用路由内部的上下文，不使用外层 MaterialApp 的上下文。
       unawaited(
         openRemoteRoute(
           tester.element(find.byType(DevicesPage)),

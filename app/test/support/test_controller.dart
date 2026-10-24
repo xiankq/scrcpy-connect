@@ -1,12 +1,13 @@
-import 'package:scrcpy_connect/router/route_repository.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/router/route_resource_resolver.dart';
 
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/app_dependencies.dart';
-import 'package:scrcpy_connect/services/app_state.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/application/app_dependencies.dart';
+import 'package:scrcpy_connect/application/app_state.dart';
 
 final _containers = Expando<ProviderContainer>();
 
@@ -17,7 +18,7 @@ class _TestController extends AppController {
 }
 
 AppController createTestController(
-  BridgeRequest request, {
+  ApplicationRequest request, {
   Stream<Json>? events,
   AppState? initialState,
   Future<void> Function()? close,
@@ -34,8 +35,9 @@ AppController createTestController(
         ),
       ),
       appControllerProvider.overrideWith(_TestController.new),
-      routeRepositoryProvider.overrideWith(
-        (ref) => _FixtureRecords(ref.watch(appControllerProvider.notifier)),
+      routeResourceResolverProvider.overrideWith(
+        (ref) =>
+            _FixtureRouteResources(ref.watch(appControllerProvider.notifier)),
       ),
     ],
   );
@@ -63,8 +65,7 @@ class TestProviderScope extends StatelessWidget {
   );
 }
 
-/// Fixture seeding is test-only. Production widgets consume generated state and
-/// actions; they cannot mutate the immutable snapshots through these helpers.
+/// 夹具注入仅供测试；生产控件消费生成状态和动作，不能经这些辅助方法修改不可变快照。
 extension ControllerFixture on AppController {
   void dispose() => testContainer(this).dispose();
   void queueTestShare(Json share) {
@@ -132,8 +133,8 @@ void seedRouteDevices(AppController controller, List<Json> devices) {
   _recordDevices[controller] = devices;
 }
 
-class _FixtureRecords extends RouteRepository {
-  _FixtureRecords(super.controller);
+class _FixtureRouteResources extends RouteResourceResolver {
+  _FixtureRouteResources(super.controller);
   @override
   Future<Json> device(String id) async {
     if (_recordDevices[controller] == null) return super.device(id);

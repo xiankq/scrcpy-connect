@@ -1,12 +1,12 @@
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:design_system/design_system.dart';
 
 void feedback(BuildContext context, String message) =>
     ScaffoldMessenger.of(context).showSnackBar(glassSnackBar(message));
 
-/// A neutral foreground follows the glass appearance, rather than SnackBar's
-/// inverse default text colors. Build it in the receiving messenger's context.
+/// 提示前景跟随玻璃外观，在接收消息的上下文中构建，避免使用默认反色文字。
 SnackBar glassSnackBar(String message) => SnackBar(
   behavior: SnackBarBehavior.floating,
   backgroundColor: Colors.transparent,

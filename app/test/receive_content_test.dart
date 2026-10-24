@@ -1,10 +1,11 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/test_controller.dart';
 
@@ -66,7 +67,11 @@ void main() {
         'canExport': true,
         'localPath': '/private/outgoing/receive-a/原图.png',
       };
-      events.add({'type': 'transfer.changed', 'deviceId': 'phone-a'});
+      events.add({
+        'type': 'transfers.changed',
+        'deviceId': 'phone-a',
+        'transferId': transfer['id'],
+      });
       await tester.pumpAndSettle();
       final save = find.text('选择系统位置并保存');
       expect(save, findsOneWidget);

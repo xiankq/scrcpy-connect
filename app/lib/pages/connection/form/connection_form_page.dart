@@ -1,4 +1,6 @@
-import 'package:scrcpy_connect/services/adb_identity_validation.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/connection/adb_identity_validation.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_identity_fields.dart';
 import 'package:scrcpy_connect/pages/connection/form/widgets/connection_ambient_loading.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -7,8 +9,8 @@ import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
 import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -100,7 +102,7 @@ class ConnectionFormPage extends HookWidget {
       () => () {
         final attempt = activeAttempt.value;
         if (attempt != null) {
-          controller.execute(InteropCommand.devicesCancel, {
+          controller.execute(ApplicationCommand.devicesCancel, {
             'attemptId': attempt,
           }).ignore();
         }
@@ -215,7 +217,7 @@ class ConnectionFormPage extends HookWidget {
               : response;
           final id = device['id'] ?? response['deviceId'];
           if (id != null && device['status'] != 'connected') {
-            await controller.execute(InteropCommand.devicesConnect, {
+            await controller.execute(ApplicationCommand.devicesConnect, {
               'deviceId': id,
               'attemptId': attempt,
             });
@@ -256,7 +258,7 @@ class ConnectionFormPage extends HookWidget {
       final attempt = activeAttempt.value;
       activeAttempt.value = null;
       if (attempt != null) {
-        controller.execute(InteropCommand.devicesCancel, {
+        controller.execute(ApplicationCommand.devicesCancel, {
           'attemptId': attempt,
         }).ignore();
       }
@@ -822,7 +824,7 @@ class ConnectionFormPage extends HookWidget {
   }
 }
 
-/// Keeps the request failure intact while presenting actionable form feedback.
+/// 保留原始请求失败，同时提供可操作的表单反馈。
 class ConnectionFailureNote extends StatelessWidget {
   const ConnectionFailureNote({
     super.key,

@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/widgets/video_preview.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/file_actions.dart';
-import 'package:scrcpy_connect/services/media_cache_lease.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/file_actions.dart';
+import 'package:scrcpy_connect/media/media_cache_lease.dart';
 import 'package:scrcpy_connect/widgets/cached_file_image.dart';
 import 'package:scrcpy_connect/widgets/media_controls_protection.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -140,7 +142,7 @@ class MediaPreviewPage extends HookWidget {
             .clamp(DesignTokens.componentIconButtonSize, double.infinity);
     final inheritedTheme = Theme.of(context);
     final darkTheme = ConnectTokens.theme(Brightness.dark);
-    // Media changes material/contrast while retaining the app's typeface.
+    // 媒体只调整材质和对比度，保留应用字体。
     final mediaTheme = darkTheme.copyWith(
       textTheme: darkTheme.textTheme.apply(
         fontFamily: inheritedTheme.textTheme.bodyMedium?.fontFamily,

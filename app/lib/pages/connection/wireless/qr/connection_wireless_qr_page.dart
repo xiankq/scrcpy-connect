@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -69,7 +71,10 @@ class QrPairPage extends HookWidget {
           }
           onPaired?.call(outcome.value!);
           final failure = outcome.value!['connectionFailure'];
-          message.value = outcome.value!['connected'] == true
+          final cleanup = outcome.value!['cleanupFailure'];
+          message.value = cleanup is Map<Object?, Object?>
+              ? '配对已完成，资源释放尚未确认。${value(jsonObject(cleanup), 'message')}'
+              : outcome.value!['connected'] == true
               ? '配对与连接已完成。'
               : failure is Map<Object?, Object?>
               ? '已配对，尚未连接。${value(jsonObject(failure), 'message')}'
@@ -97,7 +102,7 @@ class QrPairPage extends HookWidget {
       earlyEvents.value.clear();
       try {
         if (old != null) {
-          await controller.execute(InteropCommand.devicesCancel, {
+          await controller.execute(ApplicationCommand.devicesCancel, {
             'attemptId': old,
           });
         }
@@ -107,14 +112,14 @@ class QrPairPage extends HookWidget {
         if (params == null || !context.mounted || generation.value != current) {
           return;
         }
-        final result = await controller.execute(InteropCommand.devicesPairQr, {
-          ...params,
-          'deviceId': ?deviceId,
-        });
+        final result = await controller.execute(
+          ApplicationCommand.devicesPairQr,
+          {...params, 'deviceId': ?deviceId},
+        );
         final id = value(result, 'attemptId');
         if (!context.mounted || generation.value != current) {
           if (id.isNotEmpty) {
-            controller.execute(InteropCommand.devicesCancel, {
+            controller.execute(ApplicationCommand.devicesCancel, {
               'attemptId': id,
             }).ignore();
           }
@@ -146,7 +151,7 @@ class QrPairPage extends HookWidget {
           final id = attempt.value!;
           attempt.value = null;
           message.value = '二维码已过期，请重新生成。';
-          controller.execute(InteropCommand.devicesCancel, {
+          controller.execute(ApplicationCommand.devicesCancel, {
             'attemptId': id,
           }).ignore();
         }
@@ -158,7 +163,7 @@ class QrPairPage extends HookWidget {
         generation.value++;
         final id = attempt.value;
         if (id != null) {
-          controller.execute(InteropCommand.devicesCancel, {
+          controller.execute(ApplicationCommand.devicesCancel, {
             'attemptId': id,
           }).ignore();
         }
@@ -254,9 +259,10 @@ class QrPairPage extends HookWidget {
                   final id = attempt.value;
                   try {
                     if (id != null) {
-                      await controller.execute(InteropCommand.devicesCancel, {
-                        'attemptId': id,
-                      });
+                      await controller.execute(
+                        ApplicationCommand.devicesCancel,
+                        {'attemptId': id},
+                      );
                     }
                     if (!context.mounted) return;
                     attempt.value = null;

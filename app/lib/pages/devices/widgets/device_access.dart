@@ -1,10 +1,13 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 
-/// An unavailable remote action offers connection without replaying the action.
+/// 远端操作不可用时提供连接入口，连接后不自动重放该动作。
 Future<void> offerDeviceConnection(
   BuildContext context,
   AppController controller,

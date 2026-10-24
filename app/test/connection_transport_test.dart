@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'support/test_controller.dart';
 
 import 'package:design_system/design_system.dart';
@@ -6,7 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 class _Backend {
   _Backend({this.service, this.record, this.connectFailure, this.pairFailure});
@@ -589,7 +590,7 @@ void main() {
       );
       await tester.tap(find.text('IP连接'));
       await tester.pumpAndSettle();
-      // A known encrypted address remains encrypted when entering the IP tab.
+      // 进入 IP 页签时，已知加密地址仍保持加密。
       expect(find.text('使用手机无线调试主页面的连接端口。'), findsOneWidget);
       expect(find.byType(TextFormField), findsNWidgets(2));
       final added = await _submit(tester, backend);

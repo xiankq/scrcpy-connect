@@ -1,6 +1,9 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_access.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
 import 'package:flutter/material.dart';

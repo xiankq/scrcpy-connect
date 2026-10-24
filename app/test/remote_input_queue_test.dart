@@ -1,8 +1,9 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_input_queue.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 void main() {
   const binding = ('session', 1);

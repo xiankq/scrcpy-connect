@@ -6,23 +6,18 @@ resolution: workspace
 environment:
   sdk: ^3.13.5
 dependencies:
-  device_protocol:
-    path: ../packages/device_protocol
-  runtime_diagnostics:
-    path: ../packages/runtime_diagnostics
-  device_connections:
-    path: ../packages/device_connections
-  device_files:
-    path: ../packages/device_files
-  scrcpy_client:
-    path: ../packages/scrcpy_client
+  adb:
+    path: ../packages/adb
+  scrcpy:
+    path: ../packages/scrcpy
+  crypto: 3.0.7
+  multicast_dns: ^0.3.3+1
+  open_filex: ^5.0.0
   flutter:
     sdk: flutter
   design_system:
     path: ../packages/design_system
   liquid_glass_widgets: 1.13.0
-  device_runtime:
-    path: ../packages/device_runtime
   hooks_riverpod: ^3.4.3
   flutter_hooks: ^0.21.3+1
   lucide_icons_flutter: ^4.0.0
@@ -36,13 +31,12 @@ dependencies:
   go_router: 18.1.0
   riverpod_annotation: 4.0.7
   flutter_local_notifications: 22.3.2
+  package_info_plus: 10.2.2
 dev_dependencies:
   path_provider_platform_interface: 2.1.3
   archive: 4.5.2
   args: 2.7.0
-  crypto: 3.0.7
   xml: 7.1.0
-  flutter_rust_bridge: 2.13.0
   flutter_driver:
     sdk: flutter
   flutter_test:
@@ -57,4 +51,6 @@ dev_dependencies:
 flutter:
   config:
     enable-swift-package-manager: false
+  assets:
+    - assets/servers/
   uses-material-design: true

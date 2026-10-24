@@ -1,9 +1,11 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -144,7 +146,7 @@ void main() {
         if (shouldRecover) {
           expect(starts.last.containsKey('packageName'), false);
           expect(find.text('画面已暂停'), findsNothing);
-          // An old stopped session must not regain control over its successor.
+          // 已停止的旧会话不得重新取得后继会话的控制权。
           events.add({
             'type': 'session.disconnected',
             'deviceId': 'phone',

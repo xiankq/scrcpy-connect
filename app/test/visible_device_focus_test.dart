@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'support/page_back.dart';
 
 import 'dart:async';
@@ -13,8 +16,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_wor
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/clipboard_coordinator.dart';
+import 'package:scrcpy_connect/platform/clipboard_coordinator.dart';
 
 import 'support/test_controller.dart';
 

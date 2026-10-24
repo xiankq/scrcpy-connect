@@ -3,10 +3,9 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:device_runtime/device_runtime.dart';
+import 'package:scrcpy_connect/application/application_session.dart';
 
-// Runs the production bridge and actual Android services with an isolated
-// private directory. No device, remote page, capture or audio output is opened.
+// 在隔离私有目录中运行生产桥接和真实 Android 服务；不打开设备、远控页面、捕获或音频输出。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const platform = MethodChannel('dev.scrcpyconnect/platform');
@@ -22,7 +21,7 @@ void main() {
       final directory = await Directory.systemTemp.createTemp(
         'background-acceptance-',
       );
-      DeviceRuntime? bridge;
+      ApplicationSession? bridge;
       Future<Map<String, dynamic>> nativeStatus() async =>
           Map<String, dynamic>.from(
             await platform.invokeMethod<Map<Object?, Object?>>(
@@ -43,7 +42,9 @@ void main() {
       }
 
       try {
-        bridge = await DeviceRuntime.initialize(dataDirectory: directory.path);
+        bridge = await ApplicationSession.initialize(
+          dataDirectory: directory.path,
+        );
         expect(
           (await bridge.request('settings.get'))['backgroundKeepAlive'],
           true,
@@ -65,9 +66,11 @@ void main() {
         await waitRunning(true);
         await bridge.dispose();
         bridge = null;
-        // Disposing outputs/observers must not retire application background.
+        // 释放输出和观察者不能终止应用后台连接。
         await waitRunning(true);
-        bridge = await DeviceRuntime.initialize(dataDirectory: directory.path);
+        bridge = await ApplicationSession.initialize(
+          dataDirectory: directory.path,
+        );
         status = await waitRunning(true);
         expect(status['audioRequested'], false);
         expect(status['mediaPlaybackReady'], false);

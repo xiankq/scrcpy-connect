@@ -1,13 +1,16 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/app_dependencies.dart';
-import 'package:scrcpy_connect/services/app_state.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/application/app_dependencies.dart';
+import 'package:scrcpy_connect/application/app_state.dart';
 
 ProviderContainer scope(
-  BridgeRequest request, {
+  ApplicationRequest request, {
   Stream<Json> events = const Stream<Json>.empty(),
   AppState? initialState,
   Future<void> Function()? close,
@@ -104,7 +107,7 @@ void main() {
       return {};
     }, events: events.stream);
     final notifier = container.read(appControllerProvider.notifier);
-    final view = notifier.claimSessionView('live', visible: true);
+    final view = notifier.claimSessionViewLease('live', visible: true);
     final snapshot = <String, dynamic>{
       'devices': <Json>[],
       'settings': <String, dynamic>{},
@@ -141,7 +144,7 @@ void main() {
 
     final container = scope(request, events: oldEvents.stream);
     final oldController = container.read(appControllerProvider.notifier);
-    final oldView = oldController.claimSessionView('old', visible: true);
+    final oldView = oldController.claimSessionViewLease('old', visible: true);
     oldEvents.add({'type': 'state.resync', 'data': <String, dynamic>{}});
     container.updateOverrides([
       appDependenciesProvider.overrideWithValue(

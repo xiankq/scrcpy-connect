@@ -49,8 +49,7 @@ Future<void> _scrollToEnd(
   WidgetTester tester,
   ScrollController controller,
 ) async {
-  // A lazy list can refine maxScrollExtent after reaching its estimated end.
-  // Keep advancing to the measured end before asserting the last row's inset.
+  // 懒加载列表到达估算末尾后仍可能修正 maxScrollExtent；继续滚动到实测末尾再断言末行边距。
   for (var attempt = 0; attempt < 5; attempt++) {
     controller.jumpTo(controller.position.maxScrollExtent);
     await tester.pumpAndSettle();

@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -10,13 +13,12 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-// Requires an externally prepared USBIP ADB fixture on an Android controller.
-// Android UsbManager and its permission UI are real; the cable is virtual.
+// 需要在 Android 主控上预先准备外部 USBIP ADB 夹具；Android UsbManager 和权限界面真实，仅线缆虚拟。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   var stage = 'waiting-fixture';
@@ -107,8 +109,7 @@ void main() {
 
     Future<void> collectOwned() async {
       if (controller == null || baselineIds == null) return;
-      // The isolated fixture is the only USB addition during this run. Retain
-      // exact new IDs; never forget a baseline record or remove by display name.
+      // 隔离夹具是本轮唯一新增 USB 设备；记录精确新 ID，不遗忘基线记录，也不按显示名称删除。
       for (final device in await devices()) {
         final id = value(device, 'id');
         if (id.isNotEmpty &&
@@ -218,8 +219,7 @@ void main() {
       final connected = await request('device.info', {'deviceId': id});
       expect(connected['transport'], 'usb');
       expect(connected['status'], 'connected');
-      // device.info is the stored record; devices.list adds the current live
-      // connection projection. Bind all subsequent probes to this exact ID.
+      // device.info 是存储记录，devices.list 增加当前活动连接投影；后续探测全部绑定此精确 ID。
       final live = (await devices()).singleWhere(
         (device) => device['id'] == id,
       );
@@ -241,9 +241,7 @@ void main() {
       );
       binding.reportData!['usbWorkspaceOpened'] = true;
 
-      // devices.usb only returns after its finally block releases the Java
-      // UsbDeviceConnection lease. This fresh query performs real shell, sync
-      // and package probes over the admitted Rust-owned connection.
+      // devices.usb 的 finally 释放 Java UsbDeviceConnection 租约后才返回；此后新查询经已准入且归 Rust 所有的连接执行真实 shell、同步和包探测。
       final result = await request('device.capabilities', {'deviceId': id});
       expect(result['deviceId'], id);
       expect(result['connectionId'], connectionId);

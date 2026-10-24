@@ -1,7 +1,7 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/file_browser_model.dart';
+import 'package:scrcpy_connect/presentation/file_browser_presentation.dart';
 
 class FileEntrySliver extends StatelessWidget {
   const FileEntrySliver({
@@ -56,9 +56,7 @@ class FileEntrySliver extends StatelessWidget {
   }
 }
 
-/// Phone reference width uses four columns: 370px of content minus three
-/// 12px gaps leaves 83.5px per tile. Wider host windows may add columns, but a
-/// narrow phone never drops below three readable columns.
+/// 手机参考布局为四列：370 像素减去三个 12 像素间隔，每项 83.5 像素；宽窗口增加列数，窄手机不少于三列。
 int fileGridColumnCount(BuildContext context) {
   final pageWidth = MediaQuery.sizeOf(context).width
       .clamp(0.0, DesignTokens.componentPageContentMaxWidth);

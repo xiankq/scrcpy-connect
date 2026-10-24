@@ -1,10 +1,13 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/system_notifications.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/platform/system_notification_coordinator.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -85,7 +88,7 @@ class BackgroundPage extends HookConsumerWidget {
                               v,
                             );
                             await controller.execute(
-                              InteropCommand.backgroundRequest,
+                              ApplicationCommand.backgroundRequest,
                               {'enabled': v, 'askNotificationPermission': v},
                             );
                           } catch (e) {

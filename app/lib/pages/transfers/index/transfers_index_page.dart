@@ -1,18 +1,19 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/transfers/index/widgets/transfer_history_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/transfer_state.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/transfer_presentation.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
-class TransfersPage extends HookConsumerWidget {
+class TransfersPage extends HookWidget {
   const TransfersPage({
     super.key,
     required this.controller,
@@ -21,10 +22,7 @@ class TransfersPage extends HookConsumerWidget {
   final AppController controller;
   final bool embedded;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final events = ref.watch(
-      appControllerProvider.select((s) => s.eventRevision),
-    );
+  Widget build(BuildContext context) {
     final revision = useState(0);
     return PageFrame(
       root: embedded,
@@ -37,7 +35,7 @@ class TransfersPage extends HookConsumerWidget {
         ),
       ],
       child: CommandView(
-        refreshKey: '$events:${revision.value}',
+        refreshKey: revision.value,
         controller: controller,
         command: 'transfers.list',
         emptyTitle: '暂时无法读取传输任务',
@@ -140,11 +138,11 @@ class _TransferGroupHeader extends StatelessWidget {
   );
 }
 
-/// Each selection appears once; batch children live in its details.
+/// 每次选择在列表出现一次，批次子项放在详情中。
 List<Json> transferHistoryRows(AppController controller, Json data) {
   final groups = <String, List<Json>>{};
   for (final raw in objects(data['transfers'])) {
-    final task = transferView(controller, raw);
+    final task = transferView(controller.snapshot().devices, raw);
     final batch = value(task, 'batchId');
     groups
         .putIfAbsent(

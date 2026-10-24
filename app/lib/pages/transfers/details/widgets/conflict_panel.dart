@@ -1,7 +1,8 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 class ConflictPanel extends HookWidget {
   const ConflictPanel({

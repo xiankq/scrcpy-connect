@@ -1,13 +1,15 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/app_dependencies.dart';
-import 'package:scrcpy_connect/services/app_state.dart';
-import 'package:scrcpy_connect/services/system_notifications.dart';
+import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
+import 'package:scrcpy_connect/application/app_dependencies.dart';
+import 'package:scrcpy_connect/application/app_state.dart';
+import 'package:scrcpy_connect/platform/system_notification_coordinator.dart';
 
 class _Sink implements SystemNotificationSink {
   final shown = <SystemNotice>[];
@@ -32,6 +34,58 @@ class _Sink implements SystemNotificationSink {
 }
 
 void main() {
+  testWidgets('分享排入下一帧后进入后台时等待恢复前台再呈现', (tester) async {
+    final dependencies = AppDependencies(
+      initialize: false,
+      request: (_, [params = const {}]) async => {},
+      events: const Stream.empty(),
+      initialState: AppState(
+        loading: false,
+        pendingShares: [
+          {'shareId': 'pending-share', 'text': '保留分享'},
+        ],
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    var scheduled = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDependenciesProvider.overrideWithValue(dependencies),
+          systemNotificationSinkProvider.overrideWithValue(_Sink()),
+        ],
+        child: Builder(
+          builder: (context) {
+            if (!scheduled) {
+              scheduled = true;
+              // 在根呈现回调执行前失去前台资格，不额外等待一次重建。
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                tester.binding.handleAppLifecycleStateChanged(
+                  AppLifecycleState.inactive,
+                );
+                tester.binding.handleAppLifecycleStateChanged(
+                  AppLifecycleState.hidden,
+                );
+                tester.binding.handleAppLifecycleStateChanged(
+                  AppLifecycleState.paused,
+                );
+              });
+            }
+            return const ConnectApp();
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(IncomingSharePage), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.byType(IncomingSharePage), findsOneWidget);
+    expect(find.text('保留分享'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets(
     'paused before a new frame still delivers the next background event',
     (tester) async {
@@ -87,7 +141,7 @@ void main() {
         },
       });
       await tester.pumpAndSettle();
-      // The OS need not grant another UI frame before suspending the view.
+      // 系统暂停视图前不一定再允许界面绘制一帧。
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);

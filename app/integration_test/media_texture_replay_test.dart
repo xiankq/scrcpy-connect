@@ -8,8 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:media_codec/media_codec.dart';
 
-/// Replays the pinned AV1 fixture through the real decoder and Windows texture.
-/// It needs no device, ADB server, application runtime, or platform window pixels.
+/// 经真实解码器与 Windows 纹理重放固定 AV1 夹具；无需设备、ADB 服务、应用运行时或平台窗口像素。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('isolated decoded textures survive repeated creation', (
@@ -22,7 +21,7 @@ void main() {
       reason: 'Build the test-only replay library',
     );
     final library = DynamicLibrary.open(libraryPath);
-    // Only forward symbol addresses; Dart never calls the native SinkV1 ABI.
+    // 仅转发符号地址，Dart 不调用原生 SinkV1 ABI。
     final attach = library.lookup<Void>('replay_attach').address;
     final detach = library.lookup<Void>('replay_detach').address;
     final rounds = <Map<String, Object?>>[];

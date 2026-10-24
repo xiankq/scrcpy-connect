@@ -4,7 +4,7 @@ import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
-/// An open content list. Each child is laid out independently by the viewport.
+/// 开放内容列表由视口分别布局每个子项。
 class GroupedListView extends StatelessWidget {
   const GroupedListView({
     super.key,
@@ -71,7 +71,7 @@ class GroupedListView extends StatelessWidget {
   }
 }
 
-/// The compact control and the row's text keep independent minimum sizes.
+/// 紧凑控件与行内文字分别保持自己的最小尺寸。
 class ConnectSwitchRow extends StatelessWidget {
   const ConnectSwitchRow({
     super.key,
@@ -128,7 +128,7 @@ class ConnectSwitchRow extends StatelessWidget {
   );
 }
 
-/// A bounded group of related settings, not a wrapper for dynamic results.
+/// 有界的关联设置分组，不用于包裹动态结果列表。
 class SettingsGroup extends StatelessWidget {
   const SettingsGroup({super.key, required this.children});
   final List<Widget> children;

@@ -1,7 +1,9 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
@@ -39,7 +41,7 @@ class UsbGuidePage extends HookWidget {
       () => () {
         final id = attempt.value;
         if (id != null) {
-          controller.execute(InteropCommand.devicesCancel, {
+          controller.execute(ApplicationCommand.devicesCancel, {
             'attemptId': id,
           }).ignore();
         }
@@ -51,7 +53,7 @@ class UsbGuidePage extends HookWidget {
       if (id == null || cancelling.value) return;
       cancelling.value = true;
       try {
-        await controller.execute(InteropCommand.devicesCancel, {
+        await controller.execute(ApplicationCommand.devicesCancel, {
           'attemptId': id,
         });
         if (!context.mounted || attempt.value != id) return;
@@ -78,7 +80,7 @@ class UsbGuidePage extends HookWidget {
       state.value = null;
       message.value = null;
       try {
-        final result = await controller.execute(InteropCommand.devicesUsb, {
+        final result = await controller.execute(ApplicationCommand.devicesUsb, {
           ...params,
           'attemptId': id,
           'deviceId': ?deviceId,

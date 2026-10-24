@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -8,9 +11,9 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
-import 'package:scrcpy_connect/services/system_notifications.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/platform/system_notification_coordinator.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
@@ -82,8 +85,7 @@ void main() {
         stage = next;
         binding.reportData!['stage'] = stage;
         final deadline = DateTime.now().add(const Duration(seconds: 60));
-        // HOME can suspend frame scheduling. Host acknowledgements and Rust
-        // events must continue without waiting for a rendered Flutter frame.
+        // HOME 可能暂停帧调度；宿主确认和 Rust 事件仍须继续，不能等待 Flutter 绘制帧。
         while (!acknowledgements.contains(acknowledgement) &&
             (cleanup || hostError == null) &&
             DateTime.now().isBefore(deadline)) {
@@ -217,8 +219,7 @@ void main() {
         binding.reportData!['automaticObservationLive'] = true;
         await checkpoint('ready-background', 'posted');
 
-        // The host posts A and B separately after actual HOME, recording each
-        // newly created OS key before it posts the next source.
+        // 实际 HOME 之后宿主分别发布 A 和 B，发布下一来源前记录新建的系统键。
         final sourceDeadline = DateTime.now().add(const Duration(seconds: 20));
         List<Json> sources = [];
         while (DateTime.now().isBefore(sourceDeadline)) {

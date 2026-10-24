@@ -1,0 +1,50 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+
+String deviceName(Json device) =>
+    value(device, 'name', value(device, 'model', 'Android 设备'));
+String statusText(String status) => switch (status) {
+  'connected' => '已连接',
+  'checking' => '正在检查',
+  'connecting' => '正在连接',
+  'reconnecting' => '正在恢复连接',
+  'paired' => '已配对，尚未连接',
+  'unauthorized' => '需要重新授权',
+  'available' => '可用',
+  'limited' => '受限',
+  'unavailable' => '不可用',
+  'needsSetup' => '需要设置',
+  'unknown' => '尚未检查',
+  'completed' => '已完成',
+  'failed' => '失败',
+  'cancelled' => '已取消',
+  'running' => '传输中',
+  'pending' => '等待中',
+  'queued' => '等待传输',
+  'finalizing' => '正在校验并保存',
+  'interrupted' => '已中断，等待核对',
+  'skipped' => '已跳过',
+  'ready' => '画面可用',
+  'active' => '进行中',
+  'ringing' => '来电响铃',
+  'dialing' => '正在拨号',
+  'holding' => '已保持通话',
+  'ended' => '已结束',
+  'starting' => '正在启动',
+  'playing' => '正在播放',
+  'stopped' => '已停止',
+  'offline' => '离线',
+  'paused' => '已暂停',
+  'conflict' => '等待处理同名文件',
+  'partial' => '部分完成',
+  'partialFailure' => '部分传输失败',
+  'completedWithSkips' => '部分内容已跳过',
+  _ => '状态待核验',
+};
+String bytes(dynamic input) {
+  final n = num.tryParse('$input') ?? 0;
+  if (n < 1024) return '${n.toInt()} B';
+  if (n < 1048576) return '${(n / 1024).toStringAsFixed(1)} KB';
+  if (n < 1073741824) return '${(n / 1048576).toStringAsFixed(1)} MB';
+  return '${(n / 1073741824).toStringAsFixed(1)} GB';
+}

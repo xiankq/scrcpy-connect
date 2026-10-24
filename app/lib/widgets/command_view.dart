@@ -1,5 +1,9 @@
+import 'dart:async';
+
+import 'package:scrcpy_connect/application/command_query.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
@@ -25,33 +29,42 @@ class CommandView extends HookWidget {
   final Object? refreshKey;
   @override
   Widget build(BuildContext context) {
-    final retry = useState(0);
-    final identity = (controller, command, params.toString());
-    final future = useMemoized(() => controller.request(command, params), [
-      identity,
-      retry.value,
-      refreshKey,
-    ]);
-    final previousIdentity = useRef(identity);
-    final changedObject = previousIdentity.value != identity;
-    previousIdentity.value = identity;
-    final result = useFuture(future, preserveState: !changedObject);
-    if (result.connectionState != ConnectionState.done && !result.hasData) {
+    final query = useMemoized(
+      () => CommandQuery(
+        request: controller.request,
+        events: controller.eventStream(),
+        command: command,
+        params: params,
+      ),
+      [controller, command, params.toString()],
+    );
+    useListenable(query);
+    useEffect(() => query.dispose, [query]);
+    final previousRefresh = useRef(refreshKey);
+    useEffect(() {
+      if (previousRefresh.value != refreshKey) {
+        previousRefresh.value = refreshKey;
+        unawaited(query.refresh());
+      }
+      return null;
+    }, [query, refreshKey]);
+    void refresh() => unawaited(query.refresh());
+    if (query.loading && query.data == null) {
       return const PageChromeBody(
         child: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
-    if (result.hasError) {
+    if (query.error != null) {
       return PageChromeBody(
         child: EmptyContent(
           icon: LucideIcons.circleAlert,
           title: emptyTitle,
-          message: '${result.error}',
+          message: '${query.error}',
           action: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               OutlinedButton.icon(
-                onPressed: () => retry.value++,
+                onPressed: refresh,
                 icon: const Icon(
                   LucideIcons.refreshCw,
                   size: DesignTokens.componentIconActionSize,
@@ -64,6 +77,6 @@ class CommandView extends HookWidget {
         ),
       );
     }
-    return builder(context, result.data ?? {}, () => retry.value++);
+    return builder(context, query.data ?? {}, refresh);
   }
 }

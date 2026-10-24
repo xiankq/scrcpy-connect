@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 
 import 'dart:async';
@@ -8,7 +9,6 @@ import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/settings/index/settings_index_page.dart';
 import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 import 'support/test_controller.dart';

@@ -3,7 +3,7 @@ targets:
     builders:
       source_gen:combining_builder:
         options:
-          # go_router_builder 4.5.0 emits redundant casts for nullable Object?
-          # extras. Handwritten boundaries retain all strict analyzer checks.
+          # go_router_builder 4.5.0 为可空 Object? extra 生成冗余转换；
+          # 手写边界仍保留全部严格分析检查。
           ignore_for_file:
             - unnecessary_cast

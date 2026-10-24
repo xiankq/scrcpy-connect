@@ -1,9 +1,11 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
-/// An identity symbol, never a preview of the remote phone's current screen.
+/// 只表示设备身份，不作为远端手机当前画面的预览。
 class DeviceIdentity extends StatelessWidget {
   const DeviceIdentity({
     super.key,

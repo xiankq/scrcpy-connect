@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/remote_display_settings.dart';
+import 'package:scrcpy_connect/media/remote_display_settings.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/screen_ratio_picker.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
@@ -72,8 +74,7 @@ class QualityPage extends HookConsumerWidget {
               return false;
             }
             if (item['decoderStatus'] == 'available') return true;
-            // The bridge folds local canAttempt into available, retaining the
-            // runtime probe kind instead of forwarding the per-codec flag.
+            // 桥接将本机 canAttempt 合入 available，保留运行时探测类型，不直接透传逐编解码器标志。
             return item['canAttempt'] == true ||
                 (item['canAttempt'] != false &&
                     data['decoderProbe'] == 'runtimeDecodeRequired');

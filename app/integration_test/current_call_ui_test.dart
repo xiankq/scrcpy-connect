@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -10,15 +13,13 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'product_flow_test.dart'
     show expectHealthyRemote, tapPageAction, waitFor;
 
-// Run only with tool/driver/current_call_ui.dart and its isolated virtual modem.
-// The real CallsPage owns observation and calls.open; no runtime call substitutes
-// for tapping either production action in this acceptance path.
+// 仅配合 tool/driver/current_call_ui.dart 的隔离虚拟调制解调器运行；生产 CallsPage 拥有观察和 calls.open，本验收流程必须实际点击产品动作，不能以运行时调用替代。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
@@ -177,8 +178,7 @@ void main() {
         );
         hostFixtureRequested = true;
         await host('prepare-ringing-settings');
-        // The production app presents an incoming-call sheet over this page.
-        // Follow its actual action rather than tapping through a modal barrier.
+        // 生产应用会在当前页面上呈现来电面板，沿用其实际动作，不穿透模态遮罩点击。
         await waitFor(
           tester,
           () => find.text('查看来电与声音').hitTestable().evaluate().isNotEmpty,
@@ -256,8 +256,7 @@ void main() {
           reason: 'The CallsPage action must enter full screen remote control.',
         );
         expectHealthyRemote();
-        // Let the first actual InCallActivity frame reach the physical display
-        // before the host captures the controller, including its video texture.
+        // 宿主截取主控及视频纹理前，先等待真实 InCallActivity 首帧到达物理显示器。
         await tester.pump(const Duration(seconds: 1));
         await host('decoded-incall');
         calls = await request('calls.list', {'deviceId': deviceId});

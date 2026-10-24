@@ -1,10 +1,11 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/app_state.dart';
+import 'package:scrcpy_connect/application/app_state.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -163,9 +164,7 @@ void main() {
           calls.where((command) => command == 'devices.wake'),
           hasLength(1),
         );
-        // Before the first frame the ambient field owns the page: the tools
-        // and navigation keys are intentionally absent, and closing is the
-        // explicit startup cancel action.
+        // 首帧前由环境加载场占据页面，工具和导航键尚未出现；关闭使用明确的启动取消动作。
         expect(find.bySemanticsLabel(RegExp('展开画面工具，')), findsNothing);
         expect(find.text('取消打开'), findsOneWidget);
         await tester.tap(find.text('取消打开'));

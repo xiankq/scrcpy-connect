@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:device_runtime/device_runtime.dart';
+import 'package:scrcpy_connect/platform/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
 
 import 'support/test_controller.dart';
 
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 
 void main() {
   late AppController controller;
@@ -142,7 +142,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('初始化完成'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    // Drain IO outside the widget binding's fake async zone.
+    // 在控件绑定的虚拟异步区域之外排空实际文件读写。
     await tester.runAsync(log.close);
   });
 

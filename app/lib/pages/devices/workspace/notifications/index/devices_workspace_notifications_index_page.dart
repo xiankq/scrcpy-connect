@@ -1,10 +1,11 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/widgets/notification_card.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -14,7 +15,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class NotificationsPage extends HookConsumerWidget {
+class NotificationsPage extends HookWidget {
   const NotificationsPage({
     super.key,
     required this.controller,
@@ -23,10 +24,7 @@ class NotificationsPage extends HookConsumerWidget {
   final AppController controller;
   final Json device;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final appEventRevision = ref.watch(
-      appControllerProvider.select((state) => state.eventRevision),
-    );
+  Widget build(BuildContext context) {
     final clearing = useState(false);
     final refreshing = useRef<VoidCallback?>(null);
 
@@ -52,8 +50,7 @@ class NotificationsPage extends HookConsumerWidget {
             .where((item) => item['canDismiss'] == true)
             .toList();
         for (final item in candidates) {
-          // Each opaque reference is checked on the phone again. Never hide
-          // an item locally or retry a command with an unknown result.
+          // 每个不透明引用都在手机再次核验，不本机隐藏项目，也不重试结果未知的命令。
           try {
             final result = await controller.request('notifications.dismiss', {
               'deviceId': device['id'],
@@ -99,7 +96,6 @@ class NotificationsPage extends HookConsumerWidget {
         ),
       ],
       child: CommandView(
-        refreshKey: appEventRevision,
         controller: controller,
         command: 'notifications.list',
         params: {'deviceId': device['id']},

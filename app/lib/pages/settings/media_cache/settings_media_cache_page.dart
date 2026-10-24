@@ -1,9 +1,10 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -124,7 +125,7 @@ class MediaCachePage extends HookWidget {
                         busy.value = true;
                         try {
                           final result = await controller.execute(
-                            InteropCommand.mediaCacheClear,
+                            ApplicationCommand.mediaCacheClear,
                           );
                           if (!context.mounted) return;
                           final deleted =

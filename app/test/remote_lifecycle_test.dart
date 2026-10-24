@@ -1,9 +1,11 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
 
@@ -73,8 +75,7 @@ void main() {
           {'sessionId': 'original', 'text': '你好🙂'},
         ]);
         expect(commands.where((c) => c.$1 == 'session.key'), isEmpty);
-        // A long committed history retains only an editable suffix. Emoji
-        // remain whole graphemes, and the next insertion must not replay it.
+        // 长提交历史仅保留可编辑后缀，表情仍是完整字素，后续插入不能重放历史。
         final longText = '\u200B你好🙂${List.filled(100, '文🙂').join()}';
         tester.testTextInput.updateEditingValue(
           TextEditingValue(
@@ -452,7 +453,7 @@ void main() {
       };
       resumed.complete(oldReceipt);
       await tester.pumpAndSettle();
-      // The Bridge also publishes output evidence for that same late request.
+      // 桥接还会发布同一个迟到请求的输出证据。
       events.add({
         'type': 'session.output.resumed',
         'deviceId': 'phone',
@@ -611,7 +612,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final successor = controller.claimSessionView('original', visible: false);
+    final successor = controller.claimSessionViewLease(
+      'original',
+      visible: false,
+    );
     events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
     events.add({
       'type': 'state.resynced',
@@ -1649,7 +1653,7 @@ void main() {
       await tester.tapAt(const Offset(400, 300));
       await tester.pumpAndSettle();
       expect(commands.where((c) => c.$1 == 'session.touch'), hasLength(2));
-      // A stale frame cannot unlock input while the current resume is pending.
+      // 当前恢复尚未完成时，旧帧不能解除输入门禁。
       events.add({
         'type': 'session.output.resumed',
         'deviceId': 'phone',

@@ -1,9 +1,10 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
 
@@ -179,6 +180,43 @@ void main() {
     events.add({'type': 'share.received', 'data': share});
     await Future<void>.delayed(Duration.zero);
     expect(controller.pendingShares, isEmpty);
+    controller.dispose();
+    await events.close();
+  });
+
+  test('后台消费只结束对应分享，旧查询和迟到事件不能复活或阻塞全局状态', () async {
+    final events = StreamController<Json>();
+    final stale = Completer<Json>();
+    var reads = 0;
+    const first = {'shareId': 'share-1', 'status': 'ready'};
+    const second = {'shareId': 'share-2', 'status': 'ready'};
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      if (command == 'sharing.pending') {
+        if (++reads == 2) return stale.future;
+        return {
+          'shares': [first, second],
+        };
+      }
+      throw StateError('消费事实不能触发全局状态恢复或设备操作');
+    }, events: events.stream);
+    await controller.loadPendingShares();
+    final oldQuery = controller.loadPendingShares();
+    events.add({
+      'type': 'share.consumed',
+      'data': {'shareId': 'share-1'},
+    });
+    await Future<void>.delayed(Duration.zero);
+    stale.complete({
+      'shares': [first, second],
+    });
+    await oldQuery;
+    events.add({'type': 'share.received', 'data': first});
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.pendingShares, [second]);
+    expect(controller.snapshot().reconciliationPending, isFalse);
     controller.dispose();
     await events.close();
   });

@@ -20,8 +20,7 @@ Future<void> returnFromFiles(WidgetTester tester) async {
   );
   expect(back, findsOneWidget);
   await tester.tap(back);
-  // The old workspace can coexist with the entering file route during its
-  // transition. Scope the action and wait for the popped route to disappear.
+  // 旧工作区可能与进入中的文件路由并存；限定动作所在范围并等待弹出路由消失。
   final deadline = DateTime.now().add(const Duration(seconds: 5));
   while (files.evaluate().isNotEmpty && DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 100));

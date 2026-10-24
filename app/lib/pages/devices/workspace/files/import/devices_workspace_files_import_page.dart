@@ -1,7 +1,10 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/document_operation.dart';
-import 'package:scrcpy_connect/services/file_browser_model.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/document_operation_controller.dart';
+import 'package:scrcpy_connect/presentation/file_browser_presentation.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -24,7 +27,7 @@ class DocumentImportPage extends HookWidget {
   final VoidCallback onSubmitted;
   @override
   Widget build(BuildContext context) {
-    final operation = useDocumentOperation(controller);
+    final operation = useDocumentOperationController(controller);
     final reviewed = useState(false);
     final sending = useState(false);
     final result = operation.result;

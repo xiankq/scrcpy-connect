@@ -6,15 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:device_protocol/device_protocol.dart';
-import 'package:scrcpy_client/scrcpy_client.dart';
-import 'package:device_runtime/src/native_runtime.dart';
-import 'package:device_runtime/src/rust/api.dart' as core;
-import 'package:device_runtime/src/rust/frb_generated.dart';
+import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/media/output/audio_player_port.dart';
+import 'package:scrcpy_connect/platform/audio/mixer_audio_focus_registry.dart';
+import 'package:scrcpy_connect/media/output/audio_output_coordinator.dart';
+import 'package:scrcpy_connect/media/output/video_output_coordinator.dart';
+import 'package:scrcpy_connect/media/quality/video_quality_policy.dart';
+import 'package:scrcpy_connect/application/lifecycle/ordered_disposal.dart';
+
+import 'support/media_owner_fixture.dart';
+
 import 'package:path_provider/path_provider.dart';
 
-/// Real host/target test using the direct PCM output and OS focus/FGS adapter.
-/// Native accepted-byte evidence does not prove audible speaker output.
+/// 使用直接 PCM 输出和系统焦点、前台服务适配器的真实宿主与目标测试；原生接受字节证据不代表扬声器实际可听。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('remote PCM audio-only lifecycle has honest playback evidence', (
@@ -27,25 +31,41 @@ void main() {
     binding.reportData = {'mediaAudioLifecycle': report};
     final emitted = <AudioJson>[];
     var disposed = false;
-    String? device, source, session;
+    String? device, source;
     AudioJson? stream;
+    MediaOwnerFixture? owner;
     Future<AudioJson> request(String method, AudioJson params) async {
-      final envelope = jsonDecode(
-        await core.invoke(
-          requestJson: jsonEncode({'command': method, 'params': params}),
-        ),
-      ) as AudioJson;
-      if (envelope['ok'] != true) {
-        throw StateError('$method: ${envelope['error']}');
+      final fixture = owner!;
+      if (fixture.sessions.handles(method)) {
+        return fixture.sessions.command(method, params);
       }
-      return envelope['data'] as AudioJson;
+      if (method.startsWith('audio.')) {
+        return Map<String, dynamic>.from(
+          await fixture.audio.command(method, params),
+        );
+      }
+      if (method == 'media.open' && params['kind'] == 'audio') {
+        return Map<String, dynamic>.from(
+          await fixture.audio.openSource(
+            params['sourceId'] as String,
+            generation: params['generation'] as int? ?? 1,
+          ),
+        );
+      }
+      if (method == 'media.status') {
+        return fixture.sourceStatus(params['relayId'] as String);
+      }
+      throw ApplicationCommandException(
+        'unknown_command',
+        '测试没有提供此媒体操作：$method',
+      );
     }
 
-    final mixerAudio = MixerAudioPolicy(
+    final mixerAudio = MixerAudioFocusRegistry(
       backgroundPlaybackSupported: !Platform.isIOS,
     );
-    final outputs = PortableAudioOutputs(
-      core: request,
+    final outputs = AudioOutputCoordinator(
+      request: request,
       platform: (method, params) async {
         if (!Platform.isAndroid) return mixerAudio.request(method, params);
         final raw = await channel.invokeMethod<Object?>(method, params);
@@ -56,8 +76,10 @@ void main() {
       emit: emitted.add,
       isDisposed: () => disposed,
     );
-    final video = PortableVideoOutputs(
-      core: request,
+    final video = VideoOutputCoordinator(
+      request: request,
+      openSource: (stream, generation) =>
+          owner!.videoSource.openSource(stream, generation),
       emit: emitted.add,
       isDisposed: () => disposed,
     );
@@ -73,44 +95,30 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: Text('共享声音实际生命周期验证'))),
     );
-    await tester.runAsync(() async {
-      await RustLib.init();
-      await initializeNativeRuntime(
-        dataDirectory:
-            const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY').isEmpty
-            ? '${support.path}/media-audio-lifecycle'
-            : const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY'),
-      );
-    });
     try {
       await tester.runAsync(() async {
+        owner = await MediaOwnerFixture.open(
+          dataDirectory:
+              const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY').isEmpty
+              ? '${support.path}/media-audio-lifecycle'
+              : const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY'),
+          address:
+              '${const String.fromEnvironment('CONNECT_E2E_ADDRESS', defaultValue: '10.0.2.2')}:'
+              '${const String.fromEnvironment('CONNECT_E2E_PORT', defaultValue: '15556')}',
+        );
+        device = owner!.deviceId;
         await outputs.setVisible(
           binding.lifecycleState == AppLifecycleState.resumed,
         );
         await outputs.policy(
           const bool.fromEnvironment('CONNECT_MEDIA_BACKGROUND_AUDIO'),
         );
-        final added = await request('devices.add', {
-          'address': const String.fromEnvironment(
-            'CONNECT_E2E_ADDRESS',
-            defaultValue: '10.0.2.2',
-          ),
-          'port': int.parse(
-            const String.fromEnvironment(
-              'CONNECT_E2E_PORT',
-              defaultValue: '15556',
-            ),
-          ),
-        });
-        device = (added['device'] as AudioJson)['id'] as String;
-        await request('devices.connect', {'deviceId': device});
         final capture = await request('session.start', {
           ...defaultVideoQuality,
           'deviceId': device,
           'maxSize': 640,
           'maxFps': 30,
         });
-        session = capture['sessionId'] as String;
         final rendered = await video.start(capture);
         await request('session.ready', {...capture, ...rendered});
         stream = await request('audio.start', {'deviceId': device});
@@ -121,9 +129,11 @@ void main() {
         } catch (error) {
           report.add({
             'stage': 'native-start-failure',
-            'code': error is InteropException ? error.code : 'test_failure',
+            'code': error is ApplicationCommandException
+                ? error.code
+                : 'test_failure',
             'status': outputs.status(),
-            if (error is InteropException) 'details': error.details,
+            if (error is ApplicationCommandException) 'details': error.details,
           });
           rethrow;
         }
@@ -187,37 +197,28 @@ void main() {
     } catch (error) {
       report.add({
         'stage': 'failure',
-        'code': error is InteropException ? error.code : 'test_failure',
+        'code': error is ApplicationCommandException
+            ? error.code
+            : 'test_failure',
         'reason': '$error',
-        if (error is InteropException) 'details': error.details,
+        if (error is ApplicationCommandException) 'details': error.details,
       });
       rethrow;
     } finally {
       await tester.runAsync(() async {
-        try {
-          await outputs.dispose();
-          await video.dispose();
-          if (session != null) {
-            await request('session.stop', {'sessionId': session});
-          }
-          disposed = true;
-          await subscription?.cancel();
-          if (source != null) {
-            await request('audio.stop', {
-              'sourceId': source,
-              'deviceId': device,
-            });
-          }
-          if (device != null) {
-            await request('devices.disconnect', {'deviceId': device});
-          }
-        } finally {
-          try {
-            await core.shutdown();
-          } finally {
-            await shutdownNativeAdb();
-          }
-        }
+        disposed = true;
+        await OrderedDisposal([
+          outputs.dispose,
+          () async {
+            await video.dispose();
+          },
+          () async {
+            await subscription?.cancel();
+          },
+          () async {
+            await owner?.close();
+          },
+        ]).run();
       });
       debugPrint('[media-audio-lifecycle] ${jsonEncode(report)}');
     }

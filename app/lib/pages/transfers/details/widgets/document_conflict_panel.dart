@@ -1,11 +1,14 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-/// Follows the exact save operation, including one restored from its ledger.
+/// 跟踪精确的系统保存操作，包含从持久账本恢复的操作。
 class DocumentConflictPanel extends StatefulWidget {
   const DocumentConflictPanel({
     super.key,
@@ -48,8 +51,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
   }
 
   void _follow() {
-    // Subscribe before reading so a conflict created during initialization is
-    // observed, and a stale read cannot resurrect an already resolved prompt.
+    // 先订阅再读取，避免漏掉初始化期间的冲突，也防止旧读取重新显示已解决的提示。
     _events = widget.controller.eventStream().listen((event) {
       if (event['type'] != 'documents.conflict.changed') return;
       final data = jsonObject(event['data']);
@@ -65,7 +67,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     final owner = widget.operationId;
     try {
       final response = await widget.controller.execute(
-        InteropCommand.documentsConflictGet,
+        ApplicationCommand.documentsConflictGet,
         {'operationId': owner},
       );
       if (!mounted || revision != _revision || owner != widget.operationId) {
@@ -104,7 +106,7 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     setState(() => _resolving = conflictId);
     try {
       final response = await widget.controller.execute(
-        InteropCommand.documentsConflictResolve,
+        ApplicationCommand.documentsConflictResolve,
         {
           'operationId': owner,
           'conflictId': conflictId,
@@ -140,9 +142,8 @@ class _DocumentConflictPanelState extends State<DocumentConflictPanel> {
     _revision++;
     unawaited(_events?.cancel());
     _events = null;
-    // Restored pending saves also need a page-exit cancellation owner. The
-    // shared command is idempotent and cannot cancel a replacement operation.
-    owner.controller.execute(InteropCommand.documentsCancel, {
+    // 恢复的待保存操作也需要离页取消所有者；幂等命令不会取消替换后的新操作。
+    owner.controller.execute(ApplicationCommand.documentsCancel, {
       'operationId': owner.operationId,
     }).ignore();
   }

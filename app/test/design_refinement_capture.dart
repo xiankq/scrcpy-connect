@@ -1,8 +1,8 @@
-/// Opt-in host captures for the pages touched by the October design refinement.
-/// Run from app/ with DESIGN_REFINEMENT_CAPTURE_DIR=/tmp/capture flutter test
-/// test/design_refinement_capture.dart. This is a capture tool, not a golden
-/// approval: production widgets use the host's software/frosted glass fallback.
 library;
+
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
+/// 十月设计调整页面的可选宿主截图工具。在 app/ 中执行 DESIGN_REFINEMENT_CAPTURE_DIR=/tmp/capture flutter test test/design_refinement_capture.dart；它不作黄金图批准，生产控件使用宿主的软件或磨砂材质回退。
 
 import 'dart:async';
 import 'dart:convert';
@@ -19,8 +19,8 @@ import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart
 import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_hero.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_launcher.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 
 import 'support/router_test_app.dart';
@@ -48,7 +48,7 @@ void main() {
 
   setUpAll(() async {
     if (outputPath == null || outputPath.isEmpty) return;
-    // Load declared icon fonts so Lucide glyphs retain their actual shapes.
+    // 加载声明的图标字体，保留 Lucide 字形。
     final manifest =
         jsonDecode(await rootBundle.loadString('FontManifest.json')) as List;
     for (final entry in manifest.cast<Map<String, dynamic>>()) {
@@ -59,8 +59,7 @@ void main() {
       }
       await loader.load();
     }
-    // Widget tests otherwise use Ahem. Register the host CJK font under the
-    // framework's test/default families without changing production ThemeData.
+    // 控件测试默认使用 Ahem；将宿主中文字体注册到测试默认字体族，不改变生产 ThemeData。
     final font = await File(fontPath).readAsBytes();
     for (final family in ['Ahem', 'Roboto']) {
       await (FontLoader(
@@ -184,8 +183,7 @@ void main() {
         required String scope,
       }) async {
         await tester.pumpAndSettle();
-        // Decode the actual returned PNG before taking a software frame. The
-        // widget-test clock alone does not wait for asynchronous image codecs.
+        // 先解码实际返回的 PNG 再截软件帧；控件测试时钟本身不会等待异步图片编解码器。
         await tester.runAsync(() async {
           for (final element in find.byType(Image).evaluate()) {
             final image = element.widget as Image;

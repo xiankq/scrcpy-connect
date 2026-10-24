@@ -4,7 +4,7 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/services/file_browser_model.dart';
+import 'package:scrcpy_connect/presentation/file_browser_presentation.dart';
 
 class FileViewMenuButton extends StatelessWidget {
   const FileViewMenuButton({

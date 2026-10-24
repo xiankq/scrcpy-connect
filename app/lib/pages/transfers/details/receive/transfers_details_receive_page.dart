@@ -1,16 +1,18 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/document_export_form.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/file_delivery_path.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/transfer_state.dart';
-import 'package:scrcpy_connect/services/media_cache_lease.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/transfer_presentation.dart';
+import 'package:scrcpy_connect/media/media_cache_lease.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -18,9 +20,8 @@ import 'package:scrcpy_connect/widgets/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// The task identity stays fixed while the selected original is prepared.
-/// A completed cache download is the source of an explicit system handoff.
-class ReceiveContentPage extends HookConsumerWidget {
+/// 准备原件时任务身份保持不变，缓存下载完成后才作为明确系统交付的来源。
+class ReceiveContentPage extends HookWidget {
   const ReceiveContentPage({
     super.key,
     required this.controller,
@@ -32,10 +33,7 @@ class ReceiveContentPage extends HookConsumerWidget {
   final bool share;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final revision = ref.watch(
-      appControllerProvider.select((state) => state.eventRevision),
-    );
+  Widget build(BuildContext context) {
     final busy = useState(false);
     final shareResult = useState<String?>(null);
     final taskId = value(task, 'id', value(task, 'transferId'));
@@ -45,10 +43,9 @@ class ReceiveContentPage extends HookConsumerWidget {
         controller: controller,
         command: 'transfers.get',
         params: {'transferId': taskId},
-        refreshKey: revision,
         emptyTitle: '暂时无法核验原文件',
         builder: (context, data, refresh) {
-          final current = transferView(controller, data);
+          final current = transferView(controller.snapshot().devices, data);
           return HookBuilder(
             builder: (context) {
               final cacheLease = useTransferCacheLease(
@@ -165,7 +162,10 @@ class ReceiveContentPage extends HookConsumerWidget {
                   ],
                   if (status == 'conflict')
                     ConflictPanel(
-                      transfer: transferView(controller, current),
+                      transfer: transferView(
+                        controller.snapshot().devices,
+                        current,
+                      ),
                       onResolve: (policy, all) async {
                         await perform(
                           context,
@@ -233,7 +233,7 @@ class ReceiveContentPage extends HookConsumerWidget {
                               busy.value = true;
                               try {
                                 await controller.execute(
-                                  InteropCommand.mediaCacheRetain,
+                                  ApplicationCommand.mediaCacheRetain,
                                   {'localPath': localPath},
                                 );
                                 final result = await SharePlus.instance.share(

@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -16,9 +20,9 @@ import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/file_actions.dart';
-import 'package:scrcpy_connect/services/file_browser_model.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/file_actions.dart';
+import 'package:scrcpy_connect/presentation/file_browser_presentation.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';

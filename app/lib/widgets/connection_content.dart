@@ -1,8 +1,7 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 
-/// Connection and authorization forms share body text and field feedback.
-/// Applies to device settings as well as embedded USB and QR content.
+/// 连接与授权表单共用正文和字段反馈，适用于设备设置以及内嵌 USB、二维码内容。
 class ConnectionContent extends StatelessWidget {
   const ConnectionContent({super.key, required this.child});
   final Widget child;
@@ -36,7 +35,7 @@ class ConnectionContent extends StatelessWidget {
           labelStyle: WidgetStateTextStyle.resolveWith(
             (states) => labelStyle(body, states),
           ),
-          // InputDecorator scales a floating label by 0.75.
+          // InputDecorator 会将浮动标签缩放为 0.75 倍。
           floatingLabelStyle: WidgetStateTextStyle.resolveWith(
             (states) => labelStyle(
               caption.copyWith(
@@ -58,7 +57,7 @@ class ConnectionContent extends StatelessWidget {
   }
 }
 
-/// Authorization and connection changes retain the form's readable type scale.
+/// 授权与连接切换保持表单文字的可读字号。
 Future<bool> confirmConnectionChange(
   BuildContext context,
   String title,

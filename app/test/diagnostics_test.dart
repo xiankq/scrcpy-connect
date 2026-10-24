@@ -33,7 +33,7 @@ void main() {
         expect(command, 'device.diagnose');
         expect(params, {'deviceId': 'phone'});
         checks++;
-        // Matches Runtime::diagnose, which has no checks/message fields.
+        // 与没有 checks 和 message 字段的 Runtime::diagnose 保持一致。
         return {
           'deviceId': 'phone',
           'device': current,

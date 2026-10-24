@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'test_controller.dart';
 
 import 'package:scrcpy_connect/router/route_observers.dart';
@@ -16,12 +18,11 @@ import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/devices_workspace_files_directory_picker_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// A test entry route for focused page tests. Production routes still rebuild
-/// their own pages; only explicit test device fixtures bypass native lookups.
+/// 聚焦页面测试的入口路由；生产路由仍重建自己的页面，仅明确测试设备夹具跳过原生查询。
 class RouterTestApp extends StatefulWidget {
   const RouterTestApp({
     super.key,

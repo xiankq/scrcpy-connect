@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 
 import 'package:design_system/design_system.dart';
@@ -7,10 +10,10 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/widgets/file_search_controls.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/widgets/file_search_result_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/file_actions.dart';
-import 'package:scrcpy_connect/services/file_browser_model.dart';
-import 'package:scrcpy_connect/services/file_search_operation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/file_actions.dart';
+import 'package:scrcpy_connect/presentation/file_browser_presentation.dart';
+import 'package:scrcpy_connect/presentation/file_search_controller.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -36,7 +39,7 @@ class FileSearchPage extends HookWidget {
     final entireStorage = useState(false);
     final scopePath = entireStorage.value ? '/sdcard' : initialPath;
     final operation = useMemoized(
-      () => FileSearchOperation(controller, value(device, 'id')),
+      () => FileSearchController(controller, value(device, 'id')),
       [controller, device['id']],
     );
     useEffect(() => operation.dispose, [operation]);

@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:design_system/design_system.dart';
@@ -8,7 +10,6 @@ import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -285,8 +286,7 @@ void main() {
           ],
         );
 
-        // A late notification from earlier playback must not substitute for the
-        // current resume operation's receipt.
+        // 早期播放的迟到通知不能代替当前恢复操作的回执。
         events.add({
           'type': 'session.output.resumed',
           'deviceId': 'phone',

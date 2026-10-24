@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -10,14 +13,13 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'product_flow_test.dart'
     show expectHealthyRemote, tapPageAction, waitFor;
 
-// Run with tool/driver/remote_ime.dart. This injects Flutter IME editing values;
-// it does not claim to exercise Gboard's Chinese candidate UI.
+// 配合 tool/driver/remote_ime.dart 运行，仅注入 Flutter 输入法编辑值，不声称覆盖 Gboard 中文候选界面。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
@@ -43,8 +45,7 @@ void main() {
     'committed Chinese and emoji reach the real Android EditText once',
     (tester) async {
       final semantics = tester.ensureSemantics();
-      // IntegrationTest normally leaves the platform IME installed. Register
-      // the Flutter input protocol mock explicitly for this editing sequence.
+      // IntegrationTest 通常保留平台输入法；为此编辑序列明确注册 Flutter 输入协议替身。
       tester.testTextInput.register();
       expect(address, isNotEmpty);
       expect(port, inInclusiveRange(1, 65535));
@@ -211,8 +212,7 @@ void main() {
           texture.left + x * texture.width / width,
           texture.top + y * texture.height / height,
         );
-        // Traverse the production video Listener and sourcePoint conversion;
-        // the independent host proves this tap focused the real target field.
+        // 经过生产视频 Listener 和 sourcePoint 转换，独立宿主证明此次点击聚焦真实目标字段。
         await tester.tapAt(touch);
         await host('focused-empty');
         targetFocused = true;
@@ -240,8 +240,7 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 600));
         await host('composing-no-leak');
-        // Critical regression: only composing changes; text and selection stay
-        // identical, so TextField.onChanged alone would miss this commitment.
+        // 关键回归：仅组合范围改变，文字与选区完全一致，单独使用 TextField.onChanged 会漏掉此次提交。
         tester.testTextInput.updateEditingValue(
           TextEditingValue(
             text: composed,
@@ -282,8 +281,7 @@ void main() {
         });
         expect(tester.takeException(), isNull);
       } finally {
-        // Settings started with an empty query. Restore only this fixture’s input
-        // through its own control channel, then stop only the owned session.
+        // 设置初始查询为空；仅经本夹具自己的控制通道恢复输入，再只停止拥有的会话。
         try {
           if (sessionId != null && !initialSessionIds.contains(sessionId)) {
             try {

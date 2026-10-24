@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -13,16 +16,14 @@ import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/remote_display_settings.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/media/remote_display_settings.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
 
 import 'product_flow_test.dart' show waitFor, tapPageAction;
 
-/// Opt-in: tool/driver/remote_settings.dart owns an isolated, distinct target.
-/// Product actions below use real widgets and the production transport. Direct
-/// requests are confined to fixture setup, observation and finally cleanup.
+/// 可选运行：tool/driver/remote_settings.dart 拥有隔离独立目标。产品动作使用真实控件与生产传输；直接请求仅用于夹具准备、观察与最终清理。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
@@ -92,9 +93,7 @@ void main() {
           'sessionId': sessionId,
           ...details,
         };
-        // Host acknowledgements must also advance while Android has stopped
-        // producing frames for this Activity. tester.pump waits for a frame
-        // that cannot arrive until the later resume-controller checkpoint.
+        // Android 停止为本 Activity 产帧时宿主确认仍须推进；tester.pump 会等待后续 resume-controller 检查点才可能到达的帧。
         final deadline = DateTime.now().add(const Duration(seconds: 50));
         while (acknowledged != id && DateTime.now().isBefore(deadline)) {
           await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -430,8 +429,7 @@ void main() {
             'decodedHeight': current['height'],
           });
         } finally {
-          // The actual system Back follows the product PopScope and remote
-          // key channel; it must collapse the target shade, not leave the page.
+          // 实际系统返回经过产品 PopScope 与远端键通道，必须收起目标通知栏，不能离开页面。
           await tester.binding.handlePopRoute();
           await tester.pump(const Duration(milliseconds: 600));
         }

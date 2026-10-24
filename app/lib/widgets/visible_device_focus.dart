@@ -2,10 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 
-/// Gives a verified device page focus only while its route is interactive.
-/// Remote surfaces retain their stricter session ownership checks instead.
+/// 只有已核验且可交互的设备页面能取得焦点；远控画面另行核对会话所有权。
 class VisibleDeviceFocus extends ConsumerStatefulWidget {
   const VisibleDeviceFocus({
     super.key,
@@ -62,8 +61,7 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
     final recovery = appControllerProvider.select(
       (state) => state.reconciliationPending,
     );
-    // Preserve a resync marker even when its successful receipt arrives before
-    // the next frame: the same visible device must then regain clipboard focus.
+    // 即使重同步在下一帧前完成，也要保留核验标记，使同一可见设备重新激活剪贴板。
     ref.listen(recovery, (_, pending) {
       if (pending) _invalidate();
     });
@@ -86,8 +84,7 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
             ModalRoute.of(context)?.isCurrent != true) {
           return;
         }
-        // Reassert the visible device after verification, even when the
-        // retained public focus still names the same device.
+        // 核验后重新声明可见设备，即使公开焦点仍指向同一设备。
         unawaited(controller.focusDevice(deviceId));
       });
     }

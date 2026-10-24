@@ -1,10 +1,13 @@
+import 'package:scrcpy_connect/presentation/formatters.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -94,18 +97,18 @@ class IncomingSharePage extends HookConsumerWidget {
 
     Future<void> submit() async {
       if (!canSubmit) return;
-      // Capture the confirmed target before any asynchronous request.
+      // 任何异步请求前先固定用户确认的目标。
       final target = deviceId.value;
       final directory = path.text.trim().replaceFirst(RegExp(r'/+$'), '');
       busy.value = true;
       error.value = null;
       try {
         if (needsPush) {
-          await controller.execute(InteropCommand.filesList, {
+          await controller.execute(ApplicationCommand.filesList, {
             'deviceId': target,
             'path': directory.isEmpty ? '/' : directory,
           });
-          await controller.execute(InteropCommand.filesPush, {
+          await controller.execute(ApplicationCommand.filesPush, {
             'shareId': share['shareId'],
             'deviceId': target,
             'items': [
@@ -121,10 +124,10 @@ class IncomingSharePage extends HookConsumerWidget {
           pushed.value = true;
         }
         if (needsCopy) {
-          final result = await controller.execute(InteropCommand.clipboardSet, {
-            'deviceId': target,
-            'text': text,
-          });
+          final result = await controller.execute(
+            ApplicationCommand.clipboardSet,
+            {'deviceId': target, 'text': text},
+          );
           if (!context.mounted) return;
           if (result['applied'] != true) {
             throw RequestFailure(

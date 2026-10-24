@@ -2,7 +2,7 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/widgets/recovery_status.dart';
 
-/// Insets belong to scroll content so its viewport can extend behind chrome.
+/// 边距归滚动内容所有，使视口可以延伸到界面装饰下方。
 class PageChromePadding extends InheritedWidget {
   const PageChromePadding({
     super.key,
@@ -39,7 +39,7 @@ class PageChromePadding extends InheritedWidget {
       padding != oldWidget.padding || showRecovery != oldWidget.showRecovery;
 }
 
-/// The leading sliver used by custom page scroll views, never modal routes.
+/// 用于自定义页面滚动视图的首个 sliver，不用于模态路由。
 class PageChromeSliver extends StatelessWidget {
   const PageChromeSliver({super.key});
 
@@ -70,7 +70,7 @@ class PageChromeBottomSliver extends StatelessWidget {
   );
 }
 
-/// Non-scrolling loading and error states stay inside the usable page area.
+/// 不滚动的加载和错误状态留在页面可用区域内。
 class PageChromeBody extends StatelessWidget {
   const PageChromeBody({super.key, required this.child});
   final Widget child;
@@ -98,7 +98,7 @@ class PageChromeBody extends StatelessWidget {
   );
 }
 
-/// Keeps the scroll-edge protection entirely inside the title area.
+/// 滚动边缘保护完全位于标题区域内。
 class PageChromeProtection extends StatelessWidget {
   const PageChromeProtection({
     super.key,

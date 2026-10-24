@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -7,12 +10,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_facts.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_summary.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_hero.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/content_shortcuts.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/running_apps.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_launcher.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 
@@ -253,7 +256,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: ConnectTokens.theme(Brightness.light),
-          home: Scaffold(body: DeviceFacts(device: {..._device, ...update})),
+          home: Scaffold(body: DeviceSummary(device: {..._device, ...update})),
         ),
       );
     }
@@ -433,7 +436,7 @@ void main() {
         expect(refresh.hitTestable(), findsOneWidget);
         expect(allApps.hitTestable(), findsOneWidget);
         final before = reads;
-        // Exercise the edge of the actual button area, outside its 16px glyph.
+        // 点击实际按钮区域边缘，避开仅 16 像素宽的字形。
         await tester.tapAt(refreshRect.topCenter + const Offset(0, 1));
         await tester.pumpAndSettle();
         expect(reads, before + 1);

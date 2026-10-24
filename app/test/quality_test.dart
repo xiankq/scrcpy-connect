@@ -1,7 +1,8 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
 
@@ -290,7 +291,7 @@ void main() {
   );
 
   testWidgets(
-    'real bridge runtime-decode contract permits a first codec choice without claiming it verified',
+    'runtime-decode capability contract permits a first codec choice without claiming it verified',
     (tester) async {
       final requests = <(String, Json)>[];
       var selected = 'h264';
@@ -311,8 +312,7 @@ void main() {
               {
                 'id': codec,
                 'name': codec == 'h264' ? 'H.264' : 'H.265',
-                // The bridge merges local canAttempt into available instead
-                // of forwarding canAttempt to each codec.
+                // 桥接把本机 canAttempt 合入 available，不逐编解码器透传。
                 'available': true,
                 'status': 'available',
                 'targetStatus': 'available',

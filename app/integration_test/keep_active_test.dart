@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -7,13 +10,12 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-// Real AppController/MDK acceptance. The companion host driver independently
-// observes target processes, task IDs, power state and userActivity timestamps.
+// 真实 AppController/MDK 验收；配套宿主驱动独立观察目标进程、任务 ID、电源状态与 userActivity 时间戳。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
@@ -171,7 +173,7 @@ void main() {
       try {
         final result = await request('session.start', {
           'deviceId': deviceId, 'packageName': ?package,
-          // Deliberately no raw keepActive override: saved product setting owns it.
+          // 有意不直接覆盖 keepActive，由保存的产品设置决定。
         });
         final id = idOf(result);
         expect(id, isNotEmpty);

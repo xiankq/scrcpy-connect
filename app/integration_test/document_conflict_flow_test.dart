@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -12,14 +15,13 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/transfers/details/export/transfers_details_export_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/document_conflict_panel.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
-import 'package:scrcpy_connect/services/file_actions.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/presentation/file_actions.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-/// Run with tool/driver/document_conflict.dart. The host controls only the real
-/// Android picker and isolated public files; every product action uses app.main.
+/// 配合 tool/driver/document_conflict.dart 运行；宿主仅控制真实 Android 选择器和隔离公共文件，产品动作全部经过 app.main。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   var stage = 'waiting-fixture';
@@ -89,8 +91,7 @@ void main() {
     }) async {
       stage = next;
       final deadline = DateTime.now().add(const Duration(seconds: 85));
-      // DocumentsUI may suspend Flutter frame scheduling. VM-service handshakes
-      // therefore wait on wall time while the host operates the OS picker.
+      // DocumentsUI 可能暂停 Flutter 帧调度；宿主操作系统选择器期间，VM 服务握手按实际时间等待。
       while (!acknowledgements.contains(acknowledgement) &&
           (cleanup || hostError == null) &&
           DateTime.now().isBefore(deadline)) {
@@ -265,8 +266,7 @@ void main() {
     }
 
     try {
-      // The host's forward terminates at the existing target AVD adbd. This
-      // fixture tests filesystem UI, not pairing or USB authorization.
+      // 宿主转发终止于现有目标 AVD 的 adbd；此夹具验证文件系统界面，不验证配对或 USB 授权。
       deviceId = responseDeviceId(
         await request('devices.add', {
           'address': '10.0.2.2',
@@ -346,8 +346,7 @@ void main() {
       expect(saved['directories'], 3);
       savedName = value(saved, 'name');
       expect(savedName, matches(r'^bundle \([a-f0-9]{32}\)$'));
-      // The durable delivery receipt intentionally projects only its public
-      // fields. The host checks the exact new name and both directory trees.
+      // 持久交付回执有意只投影公共字段；宿主核对精确新名称与两棵目录树。
       await waitFor(
         tester,
         () => find.text('已保存到系统位置').evaluate().isNotEmpty,
@@ -435,8 +434,7 @@ void main() {
       var writesStopped = false;
       try {
         if (transferId != null && localPath != null) {
-          // A failure may happen while a new picker is still waiting, before
-          // waitConflict learns its operation ID. Read this source's real owner.
+          // 新选择器等待时就可能失败，而 waitConflict 尚不知道操作 ID；读取此来源的真实所有者。
           final current = await record();
           final currentId = value(current, 'operationId');
           if (currentId.isNotEmpty) {
@@ -491,9 +489,7 @@ void main() {
           if (writesStopped &&
               cacheOwner != null &&
               await cacheOwner.exists()) {
-            // Only the dedicated receivedDirectory created above is owned here.
-            // Production transfer/save history is retained; no state files or
-            // unrelated cache entries are removed by this fixture.
+            // 这里只拥有上方创建的专用 receivedDirectory；保留生产传输和保存历史，不删除状态文件或无关缓存。
             await cacheOwner.delete(recursive: true);
             report['scopedCacheRemoved'] = true;
           } else if (cacheOwner != null) {

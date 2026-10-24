@@ -1,5 +1,7 @@
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/thumbnail_queue.dart';
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/media/thumbnail_queue.dart';
 import 'package:scrcpy_connect/widgets/cached_file_image.dart';
 
 import 'dart:io';

@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -163,12 +165,10 @@ void main() {
           AppLifecycleState.resumed,
         );
         observed.clear();
-        // Public Flutter hardware-key input traverses the real product handler,
-        // FRB, scrcpy control transport and Android InputManager injection.
+        // 公共 Flutter 硬件键输入经过真实产品处理器、FRB、scrcpy 控制传输及 Android InputManager 注入。
         await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
         await tester.pump(const Duration(milliseconds: 200));
-        // Host first proves native DOWN=1/UP=0, then actually sends HOME to the
-        // controller and independently proves native UP=1 on the target.
+        // 宿主先证明原生 DOWN=1、UP=0，再实际向主控发送 HOME，并独立证明目标 UP=1。
         await host('hold', 'returned');
         await waitFor(
           tester,

@@ -1,6 +1,6 @@
 include: package:flutter_lints/flutter.yaml
 
-# Analyzer plugins are workspace-wide and must be enabled at its root.
+# analyzer 插件作用于整个工作区，必须在根目录启用。
 plugins:
   riverpod_lint: 3.1.9
 

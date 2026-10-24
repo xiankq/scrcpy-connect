@@ -1,7 +1,10 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_launcher.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:flutter/material.dart';

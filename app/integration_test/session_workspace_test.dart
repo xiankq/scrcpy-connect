@@ -1,9 +1,12 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -14,8 +17,8 @@ import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_ap
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'product_flow_test.dart'
     show waitFor, expectHealthyRemote, tapPageAction;
@@ -192,10 +195,7 @@ void main() {
                     }
                   }
                 }
-                // The isolated stock target's Settings is light; its HOME
-                // fixture is dark. Pair this pixel check with host observation
-                // of the actual Settings task, not merely a sent receipt.
-                // A white launch surface is not rendered Settings content.
+                // 隔离的原生目标设置为浅色，HOME 夹具为深色；像素检查还必须配合宿主观察真实设置任务，不能仅凭发送回执；白色启动面不是已渲染设置内容。
                 lightContent = bright > 24 * 36 * .7 && ink > 12;
               } finally {
                 frame.image.dispose();
@@ -304,7 +304,7 @@ void main() {
           ...jsonObject(originalSettings['deviceSettings']),
           deviceId!: {'wakeOnConnect': true, 'lockOnClose': false},
         });
-        // Fixture configuration, not evidence for the quality or connection UI.
+        // 夹具配置不作为画质或连接界面的证据。
         await request('session.quality', {
           'deviceId': deviceId,
           'videoCodec': 'h264',
@@ -431,7 +431,7 @@ void main() {
         });
       } finally {
         semantics.dispose();
-        // Only this fixture’s exact identities; never stop by device or package.
+        // 仅操作本夹具精确身份，绝不按设备或包名停止。
         for (final id in ownedIds) {
           if (!initialSessions.contains(id)) {
             try {

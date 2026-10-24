@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 import 'package:scrcpy_connect/widgets/media_thumbnail.dart';
 
 import 'support/router_test_app.dart';
@@ -26,6 +27,7 @@ void main() {
           'name': '原件',
           'status': 'running',
         };
+        final events = StreamController<Json>.broadcast(sync: true);
         final controller = createTestController((
           command, [
           params = const {},
@@ -38,7 +40,7 @@ void main() {
             released.add(params['leaseId'] as String);
           }
           return {};
-        });
+        }, events: events.stream);
         await tester.pumpWidget(
           RouterTestApp(
             controller: controller,
@@ -51,7 +53,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         expect(released, isEmpty);
         status = 'interrupted';
-        controller.eventRevision++;
+        events.add({'type': 'transfers.changed', 'transferId': task['id']});
         await tester.pumpAndSettle();
         expect(
           released,
@@ -60,6 +62,7 @@ void main() {
         );
         await tester.pumpWidget(const SizedBox());
         controller.dispose();
+        await events.close();
       },
     );
   }

@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'support/page_back.dart';
 
 import 'package:scrcpy_connect/router/app_router.dart';
@@ -6,7 +9,6 @@ import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
 
@@ -67,8 +69,7 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 100));
         await tester.tap(find.text('文件管理'));
-        // Deliberately leave both routes in transition, as a fast real listing
-        // can complete before its entering route has finished animating.
+        // 有意让两条路由都处在转场中，真实列表可能先于进入动画完成。
         await tester.pump(const Duration(milliseconds: 40));
         await tester.pump(const Duration(milliseconds: 40));
         await tester.pump();

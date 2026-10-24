@@ -8,10 +8,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-// Public diagnostics only: the rendered controls all come from design_system.
+// 仅使用公共诊断接口，渲染控件全部来自 design_system。
 // ignore: depend_on_referenced_packages
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-import 'package:scrcpy_connect/services/app_state.dart';
+import 'package:scrcpy_connect/application/app_state.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show glassSnackBar;
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -31,7 +31,7 @@ const _dialog = ValueKey('chrome-dialog');
 const _sheet = ValueKey('chrome-sheet');
 const _menu = ValueKey('chrome-menu');
 
-/// Finite functional/optical capture, deliberately without a performance loop.
+/// 有界的功能与光学截图，不执行性能循环。
 void main() {
   final binding = _ChromeBinding()
     ..framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
@@ -103,7 +103,7 @@ void main() {
         ),
       );
       await _settle(tester);
-      // Require a real production shader before Android screenshot conversion.
+      // Android 截图转换前必须确认真实生产着色器。
       report['nativeWarmup'] = _rendererReceipt();
       expect(find.byType(liquid.AdaptiveGlass), findsWidgets);
       expect(find.byType(liquid.LightweightLiquidGlass), findsNothing);
@@ -137,7 +137,7 @@ void main() {
         final code = 0xc300 | (scenes.length + 1);
         harness.mark(code);
         await _raster(tester);
-        // Drain ImageReader's previous image before publishing this identity.
+        // 发布此截图身份前排空 ImageReader 的上一张图片。
         await binding.callbackManager.takeScreenshot('$name-drain');
         await _raster(tester);
         final renderer = _rendererReceipt();
@@ -175,8 +175,7 @@ void main() {
       Future<void> overlays(String suffix) async {
         Future<void> sampleOverlay(Finder target, String kind) async {
           await tester.pump();
-          // A native menu first morphs its source; its item subtree mounts
-          // after that phase. Sample content once it actually exists.
+          // 原生菜单先变形其来源，之后才挂载条目子树；内容实际出现后再采样。
           var appearanceFrames = 0;
           while (target.evaluate().isEmpty && appearanceFrames < 75) {
             await tester.pump(const Duration(milliseconds: 16));
@@ -244,7 +243,7 @@ void main() {
         await _settle(tester);
         expect(find.text('查看原文件'), findsOneWidget);
         await capture('menu-$suffix');
-        // Cancel the real route/anchor, then reopen and activate an action.
+        // 取消真实路由或锚点后，重新打开并触发动作。
         await tester.tapAt(
           Offset(
             4,

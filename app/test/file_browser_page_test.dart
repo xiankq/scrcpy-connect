@@ -1,10 +1,10 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/router_test_app.dart';
 import 'support/page_back.dart';
@@ -252,8 +252,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(GlassMenu), findsOneWidget);
     expect(find.byType(GlassMenuItem), findsWidgets);
-    // The production backend may use Material anchors internally for focus
-    // and dismissal; the contract is that the visible menu is the glass one.
+    // 生产后端可在内部使用 Material 锚点处理焦点和关闭；契约要求可见菜单使用玻璃材质。
     expect(find.byType(GlassMenuDivider), findsWidgets);
     await tester.tap(find.text('列表'));
     await tester.pumpAndSettle();

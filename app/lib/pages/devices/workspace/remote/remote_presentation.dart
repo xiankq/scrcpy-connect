@@ -15,9 +15,7 @@ enum _Launch { normal, unknown, closed }
 
 enum _Visibility { visible, hidden, resuming }
 
-/// Presentation authority for one remote route. IO and widget lifetimes stay
-/// with the page; binding changes, receipt fencing and input permission live
-/// here so every caller uses the same transitions.
+/// 统一维护单路由的绑定、回执栅栏与输入许可；异步资源由窗口编排，控件生命周期由页面协调。
 class RemotePresentation {
   RemoteData? _session;
   String? _error;
@@ -244,7 +242,7 @@ class RemotePresentation {
     _connecting = false;
     _error = reason;
     _errorCode = code;
-    // Only explicit pre-submission rejections establish that retry is safe.
+    // 只有提交前的明确拒绝才能证明重试安全。
     if (submittedAppStart &&
         details['launchOutcome'] != 'not_submitted' &&
         !const {
@@ -306,7 +304,7 @@ class RemotePresentation {
     _stateEpoch++;
     _visibilityEpoch++;
     invalidateStart();
-    // Freeze before the page captures releases for the outgoing binding.
+    // 页面捕获原绑定的释放输入前先冻结准入。
     _verification = _Verification.pending;
     _reconcileOnly = true;
     _initialActionApplied = true;
@@ -323,7 +321,7 @@ class RemotePresentation {
   bool acceptsVisibilityFailure(int epoch) =>
       !exiting && epoch == _visibilityEpoch;
 
-  /// False means a duplicate snapshot; no capture or focus effect is needed.
+  /// 返回 false 表示重复快照，不应再触发捕获或焦点副作用。
   bool reconcile(
     RemoteData snapshot, {
     required String? packageName,
@@ -421,8 +419,7 @@ class RemotePresentation {
 
   static RemoteData _retainedImage(RemoteData data) {
     if (data['outputRetained'] != true) return data;
-    // Input remains blocked. Size this placeholder by the retained texture,
-    // rather than stretching its old pixels to the new capture's dimensions.
+    // 输入保持禁用；占位按保留纹理尺寸显示，避免把旧像素拉伸到新捕获尺寸。
     return {
       ...data,
       if (data['decodedWidth'] is num && (data['decodedWidth'] as num) > 0)
@@ -452,7 +449,7 @@ class RemotePresentation {
             (incoming.$1 == current.$1 && incoming.$2 < current.$2));
   }
 
-  /// Errors from a retired capture cannot end this logical window.
+  /// 已退役捕获的错误不能终止当前逻辑窗口。
   bool acceptsFailure(RemoteData data) {
     if (_older(data)) return false;
     if (!_qualityRebuilding) return true;
@@ -570,14 +567,13 @@ class RemotePresentation {
     return true;
   }
 
-  /// Returns whether the page must release its held physical input.
+  /// 返回页面是否需要释放已持有的物理输入。
   bool updateSession(RemoteData data) {
     if (data['qualityRebuilding'] == true) {
       if (_older(data)) return false;
       final outgoing = binding;
       _beginQuality(data);
-      // Keep the last verified image and its dimensions until the new local
-      // renderer and core ready receipt agree on both generations.
+      // 本机新 renderer 与核心 ready 回执的两层代际一致前，保留最后核验的图像和尺寸。
       _session = {...?_session, 'qualityRebuilding': true};
       return outgoing != binding;
     }
@@ -706,8 +702,7 @@ class RemotePresentation {
     invalidateStart();
   }
 
-  /// Queue admission uses the captured binding, including cleanup that may
-  /// drain after an unknown app launch replaced the live session with a record.
+  /// 队列用捕获的绑定判断准入，包含未知应用打开将存活会话替换成记录后仍需排空的清理。
   bool admitsQueuedInput(
     RemoteBinding captured,
     String command,

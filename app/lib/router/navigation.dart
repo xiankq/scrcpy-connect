@@ -6,8 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 
-/// Explicit user intent is deliberately transient; restored URLs cannot create
-/// another stream. Existing sessions are always resolved by their identity.
+/// 明确打开意图仅保存在内存中，恢复 URL 不能创建新流；已有会话按身份重新查找。
 Future<void> openRemoteRoute(
   BuildContext context, {
   required String deviceId,

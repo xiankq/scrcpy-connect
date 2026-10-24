@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 
 import 'dart:async';
@@ -9,9 +11,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/widgets/gallery_scope_sheet.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/file_actions.dart';
-import 'package:scrcpy_connect/services/gallery_scan.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/presentation/file_actions.dart';
+import 'package:scrcpy_connect/presentation/gallery_scan_controller.dart';
 import 'package:scrcpy_connect/widgets/media_thumbnail.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -34,7 +36,7 @@ class GalleryPage extends HookWidget {
     useEffect(() => selected.dispose, [selected]);
     useListenable(selected);
     final scan = useMemoized(
-      () => GalleryScan(controller, value(device, 'id')),
+      () => GalleryScanController(controller, value(device, 'id')),
       [controller, device['id']],
     );
     useListenable(scan);

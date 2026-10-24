@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/router/remote_control_intent.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -24,6 +26,92 @@ const pixels = <String, dynamic>{
 };
 
 void main() {
+  testWidgets('旧工具按键回执不能释放重建捕获上新按住的同名按键', (tester) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final events = StreamController<Json>.broadcast(sync: true);
+    final calls = <(String, Json)>[];
+    final oldDown = Completer<Json>();
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      calls.add((command, params));
+      if (command == 'session.start') return pixels;
+      if (command == 'session.key' &&
+          params['captureGeneration'] == 1 &&
+          params['action'] == 'down') {
+        return oldDown.future;
+      }
+      return {};
+    }, events: events.stream);
+    try {
+      await tester.pumpWidget(
+        RouterTestApp(
+          controller: controller,
+          home: RemotePage(
+            controller: controller,
+            device: const {'id': 'phone'},
+            initialAction: const RemoteControlIntent.key(20),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(calls.where((call) => call.$1 == 'session.key'), hasLength(1));
+      events.add({
+        'type': 'session.updated',
+        'data': {
+          ...pixels,
+          'qualityRebuilding': true,
+          'qualityRebuildTarget': 2,
+        },
+      });
+      final fresh = {
+        ...pixels,
+        'captureGeneration': 2,
+        'generation': 20,
+        'textureId': 2,
+      };
+      events.add({'type': 'session.output.changed', 'data': fresh});
+      events.add({
+        'type': 'session.updated',
+        'data': {
+          ...fresh,
+          'qualityRebuilding': false,
+          'qualityRebuildOutcome': 'applied',
+        },
+      });
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      oldDown.complete({});
+      await tester.pumpAndSettle();
+      Iterable<Json> newKeys() => calls
+          .where(
+            (call) =>
+                call.$1 == 'session.key' && call.$2['captureGeneration'] == 2,
+          )
+          .map((call) => call.$2);
+      expect(newKeys().map((params) => params['action']), ['down']);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(newKeys().map((params) => params['action']), ['down', 'up']);
+      expect(
+        calls
+            .where(
+              (call) =>
+                  call.$1 == 'session.key' && call.$2['captureGeneration'] == 1,
+            )
+            .map((call) => call.$2['action']),
+        ['down', 'up'],
+      );
+    } finally {
+      if (!oldDown.isCompleted) oldDown.complete({});
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      await events.close();
+    }
+  });
+
   testWidgets(
     'capture geometry cannot stretch the retained decoded texture or admit input',
     (tester) async {

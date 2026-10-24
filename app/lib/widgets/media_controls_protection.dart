@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 enum MediaControlsEdge { top, bottom }
 
-/// Protect the actual media controls before fading toward their content.
+/// 先保护实际媒体控件，再向内容区淡出。
 class MediaControlsProtection extends StatelessWidget {
   const MediaControlsProtection({
     super.key,

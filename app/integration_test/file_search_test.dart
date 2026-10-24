@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,8 +15,8 @@ import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_wor
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/devices_workspace_files_search_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
@@ -165,8 +168,7 @@ void main() {
         await tester.pump();
         expect(find.textContaining('已完成搜索'), findsOneWidget);
         await binding.takeScreenshot('file-search-documents');
-        // Match the authoritative path shown to the user, independently of byte
-        // formatting, then let the real route look the file up again.
+        // 匹配向用户显示的权威路径，不依赖字节格式，再由真实路由重新查询文件。
         final row = find.ancestor(
           of: find.byWidgetPredicate(
             (widget) =>

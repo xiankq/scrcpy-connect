@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -9,7 +12,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
@@ -172,8 +175,7 @@ void main() {
         timeout: const Duration(seconds: 45),
         reason: 'The host must actually reopen the app from its launcher task.',
       );
-      // am start -W confirms Activity launch/display, not the later Flutter
-      // window-focus lifecycle message. Require that actual message as well.
+      // am start -W 仅确认 Activity 启动和显示，不能证明后续 Flutter 窗口焦点消息；同时等待该真实消息。
       final resumeWait = Stopwatch()..start();
       await waitFor(
         tester,

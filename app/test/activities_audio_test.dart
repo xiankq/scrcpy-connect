@@ -1,7 +1,7 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
 
 import 'support/test_controller.dart';
 

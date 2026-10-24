@@ -1,10 +1,13 @@
+import 'dart:async';
+
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
 import 'package:scrcpy_connect/pages/transfers/index/transfers_index_page.dart';
 import 'package:scrcpy_connect/pages/transfers/index/widgets/transfer_history_row.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/transfer_state.dart';
+import 'package:scrcpy_connect/presentation/transfer_presentation.dart';
 
 import 'support/router_test_app.dart';
 
@@ -166,6 +169,7 @@ void main() {
         'canCancel': true,
       };
       Json? cancelled;
+      final events = StreamController<Json>.broadcast(sync: true);
       final controller = createTestController((
         command, [
         params = const {},
@@ -173,7 +177,7 @@ void main() {
         if (command == 'transfers.get') return task;
         if (command == 'transfers.cancel') cancelled = params;
         return {};
-      });
+      }, events: events.stream);
       await tester.pumpWidget(
         RouterTestApp(
           controller: controller,
@@ -188,12 +192,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(cancelled, {'transferId': 'queued'});
       task = {...task, 'status': 'finalizing', 'canCancel': false};
-      controller.eventRevision++;
-      await controller.loadSettings();
+      events.add({'type': 'transfers.changed', 'transferId': task['id']});
       await tester.pumpAndSettle();
       expect(find.text('取消传输'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
+      await events.close();
     },
   );
   testWidgets(
@@ -486,6 +490,7 @@ void main() {
         'canRestart': true,
         'name': 'document.pdf',
       };
+      final events = StreamController<Json>.broadcast(sync: true);
       final controller = createTestController((
         command, [
         params = const {},
@@ -493,7 +498,7 @@ void main() {
         if (command == 'transfers.get') return task;
         if (command == 'transfers.resume') restart = params;
         return {};
-      });
+      }, events: events.stream);
       await tester.pumpWidget(
         RouterTestApp(
           controller: controller,
@@ -510,13 +515,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(restart, {'transferId': 'transfer', 'restart': true});
       task = {...task, 'canRestart': false, 'errorCode': 'result_unknown'};
-      controller.eventRevision++;
-      await controller.loadSettings();
+      events.add({'type': 'transfers.changed', 'transferId': task['id']});
       await tester.pumpAndSettle();
       expect(find.text('重新传输'), findsNothing);
       expect(find.text('检查并继续'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
+      await events.close();
     },
   );
   test(

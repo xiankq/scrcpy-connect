@@ -161,7 +161,7 @@ void main() {
   });
   for (final readyFirst in [false, true]) {
     test(
-      'quality barrier requires matching core ready and verified output, readyFirst=$readyFirst',
+      'quality barrier requires matching capture ready and verified output, readyFirst=$readyFirst',
       () {
         final state = _viewed();
         state.updateSession({'captureGeneration': 1, 'generation': 10});

@@ -1,10 +1,10 @@
-import 'package:scrcpy_connect/services/application_diagnostics.dart';
-import 'package:device_runtime/device_runtime.dart'
+import 'package:scrcpy_connect/platform/application_diagnostics.dart';
+import 'package:scrcpy_connect/platform/diagnostics/diagnostic_log.dart'
     show DiagnosticLog, DiagnosticArea, LogLevel;
-import 'package:scrcpy_connect/services/app_dependencies.dart';
-import 'package:scrcpy_connect/services/app_bootstrap.dart';
-import 'package:scrcpy_connect/services/local_notification_sink.dart';
-import 'package:scrcpy_connect/services/system_notifications.dart';
+import 'package:scrcpy_connect/application/app_dependencies.dart';
+import 'package:scrcpy_connect/application/app_bootstrap.dart';
+import 'package:scrcpy_connect/platform/local_notification_sink.dart';
+import 'package:scrcpy_connect/platform/system_notification_coordinator.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
 import 'package:flutter/material.dart';

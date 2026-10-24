@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -15,8 +18,8 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_wor
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/media_thumbnail.dart';
 
 import 'product_flow_test.dart' show waitFor;
@@ -95,7 +98,7 @@ void main() {
     }) async {
       stage = next;
       final deadline = DateTime.now().add(const Duration(seconds: 75));
-      // A system picker can suspend Flutter frame scheduling.
+      // 系统选择器可能暂停 Flutter 帧调度。
       while (!acknowledgements.contains(action) &&
           (cleanup || hostError == null) &&
           DateTime.now().isBefore(deadline)) {
@@ -363,7 +366,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await checkpoint('shared-product-page', 'shared-product-captured');
       binding.reportData!['sharedProductPageCaptured'] = true;
-      // Host reads the actual receiving app's bytes before returning us.
+      // 宿主先读取实际接收应用的字节，再返回本应用。
       expect(tester.takeException(), isNull);
     } finally {
       try {

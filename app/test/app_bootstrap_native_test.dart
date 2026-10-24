@@ -1,36 +1,19 @@
-import 'dart:convert';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:io';
 
-import 'package:flutter/services.dart';
-
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
-    show ExternalLibrary;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:device_runtime/device_runtime.dart';
-import 'package:device_runtime/src/native_runtime.dart';
-import 'package:device_runtime/src/rust/frb_generated.dart' show RustLib;
-import 'package:scrcpy_connect/services/app_bootstrap.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/app_dependencies.dart';
+import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/application/application_session.dart';
+import 'package:scrcpy_connect/application/lifecycle/application_host.dart';
+
+import 'package:scrcpy_connect/application/app_bootstrap.dart';
+import 'package:scrcpy_connect/application/app_dependencies.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('real bridge can retry bootstrap after outgoing preparation fails', () async {
-    // Flutter tests bundle hook assets outside FRB's application loader paths.
-    // Preload that real adapter; product bootstrap still owns its attachment.
-    final manifest = jsonDecode(
-      await rootBundle.loadString('NativeAssetsManifest.json'),
-    ) as Map<String, dynamic>;
-    final nativeAssets = manifest['native-assets'] as Map<String, dynamic>;
-    final assets = nativeAssets.values.single as Map<String, dynamic>;
-    final location =
-        assets['package:device_runtime/src/rust/frb_generated.io.dart']
-            as List<Object?>;
-    expect(location.first, 'absolute');
-    await RustLib.init(
-      externalLibrary: ExternalLibrary.open(location[1] as String),
-    );
+  test('真实 Dart 应用在待分享目录准备失败后可以重试', () async {
     final root = await Directory.systemTemp.createTemp('connect-bootstrap-');
     final cache = await Directory.systemTemp.createTemp(
       'connect-bootstrap-cache-',
@@ -43,22 +26,23 @@ void main() {
       }
       repository = parent;
     }
-    await initializeNativeRuntime(
-      dataDirectory: root.path,
-      adbBinaryDirectory: Directory(
-        '${repository.path}/.dart_tool/flutter_adb/'
-        '${Platform.isMacOS ? 'macos' : Platform.operatingSystem}',
-      ),
+    final binaryDirectory = Directory(
+      '${repository.path}/.dart_tool/adb/${Platform.isMacOS ? 'macos' : Platform.operatingSystem}',
     );
     AppDependencies? owner;
-    final bridges = <DeviceRuntime>[];
+    final sessions = <ApplicationSession>[];
     Future<AppDependencies> open() async {
-      final pending = DeviceRuntime.initialize(dataDirectory: root.path);
-      if (bridges.isEmpty) {
+      final pending = ApplicationSession.initialize(
+        dataDirectory: root.path,
+        adbBinaryDirectory: binaryDirectory,
+      );
+      if (sessions.isEmpty) {
         await expectLater(
-          DeviceRuntime.initialize(dataDirectory: '${root.path}/different'),
+          ApplicationSession.initialize(
+            dataDirectory: '${root.path}/different',
+          ),
           throwsA(
-            isA<InteropException>().having(
+            isA<ApplicationCommandException>().having(
               (error) => error.code,
               'code',
               'runtime_directory_mismatch',
@@ -66,12 +50,12 @@ void main() {
           ),
         );
       }
-      final bridge = await pending;
-      bridges.add(bridge);
+      final session = await pending;
+      sessions.add(session);
       return AppDependencies(
-        request: bridge.request,
-        events: bridge.events,
-        close: bridge.dispose,
+        request: session.request,
+        events: session.events,
+        close: session.dispose,
         initialize: false,
       );
     }
@@ -80,15 +64,15 @@ void main() {
       final failure = FileSystemException('temporary storage unavailable');
       await expectLater(
         bootstrapApplication(
-          initializeTransport: open,
+          createDependencies: open,
           prepareOutgoingDirectory: () async => throw failure,
         ),
         throwsA(same(failure)),
       );
       await expectLater(
-        bridges.single.request('settings.get'),
+        sessions.single.request('settings.get'),
         throwsA(
-          isA<InteropException>().having(
+          isA<ApplicationCommandException>().having(
             (error) => error.code,
             'code',
             'disposed',
@@ -98,23 +82,23 @@ void main() {
 
       final outgoing = await Directory('${cache.path}/outgoing').create();
       owner = await bootstrapApplication(
-        initializeTransport: open,
+        createDependencies: open,
         prepareOutgoingDirectory: () async => outgoing,
       );
-      expect(bridges, hasLength(2));
+      expect(sessions, hasLength(2));
       expect(await owner.request('settings.get'), isA<Json>());
       final status = await owner.request('media.cache.status');
       expect(status, isNotEmpty);
     } finally {
       await owner?.close?.call();
-      // Every bridge dispose is idempotent, including the failed owner.
-      for (final bridge in bridges) {
-        await bridge.dispose();
+      // 所有应用所有者释放都幂等，包括启动失败的实例。
+      for (final session in sessions) {
+        await session.dispose();
       }
-      if (bridges.isNotEmpty) {
-        await bridges.last.shutdown();
+      if (sessions.isNotEmpty) {
+        await sessions.last.shutdown();
       } else {
-        await shutdownNativeAdb();
+        await ApplicationHost.closeRetiredHosts();
       }
       await root.delete(recursive: true);
       await cache.delete(recursive: true);

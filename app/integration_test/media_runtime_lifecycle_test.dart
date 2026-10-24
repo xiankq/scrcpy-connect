@@ -2,16 +2,16 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:device_runtime/device_runtime.dart';
+import 'package:scrcpy_connect/connection/connection_policy.dart';
+import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/application/application_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Uses the application's assembled runtime, including capability admission,
-/// packet-source recognition, output creation, audio policy and snapshot merge.
-/// Raw-core decoder tests cannot catch missing orchestration at this boundary.
+/// 使用应用装配的运行时，覆盖能力准入、包源识别、输出创建、音频策略和快照合并；原始核心解码器测试无法发现此边界缺失的编排。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('assembled runtime presents video and plays native PCM', (
@@ -19,7 +19,7 @@ void main() {
   ) async {
     final evidence = <String, dynamic>{};
     binding.reportData = {'assembledMedia': evidence};
-    DeviceRuntime? runtime;
+    ApplicationSession? runtime;
     StreamSubscription<Map<String, dynamic>>? subscription;
     final events = <Map<String, dynamic>>[];
     String? device, session, audio;
@@ -41,7 +41,7 @@ void main() {
     try {
       runtime = await real(() async {
         final support = await getApplicationSupportDirectory();
-        return DeviceRuntime.initialize(
+        return ApplicationSession.initialize(
           dataDirectory:
               const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY').isEmpty
               ? '${support.path}/assembled-media-lifecycle'
@@ -147,13 +147,13 @@ void main() {
               'status': status,
             });
           } catch (_) {
-            // The final shutdown can race a diagnostic-only sample.
+            // 最终关闭可能与仅诊断用途的采样竞争。
           }
         });
         late final Map<String, dynamic> ready;
         try {
           ready = await runtime!.request('audio.start', {'deviceId': device});
-        } on InteropException catch (error) {
+        } on ApplicationCommandException catch (error) {
           evidence['audioFailure'] = {
             'code': error.code,
             'message': error.message,

@@ -23,7 +23,7 @@ class ExitHandle extends StatefulWidget {
   final bool independent;
   static const initialOffset = Offset(12, 80);
 
-  /// The initial overlay footprint also reserves space in recovery content.
+  /// 初始叠加区域也在恢复内容中预留位置。
   static Rect initialBoundsFor(Size viewport, MediaQueryData media) {
     final bounds = _dragBoundsFor(viewport, media);
     return Rect.fromLTWH(

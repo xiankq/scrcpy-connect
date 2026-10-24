@@ -6,14 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:device_runtime/src/native_runtime.dart';
-import 'package:device_runtime/src/rust/api.dart' as core;
-import 'package:device_runtime/src/rust/frb_generated.dart';
-import 'package:scrcpy_client/scrcpy_client.dart';
+
+import 'package:scrcpy_connect/media/output/codec_video_player.dart';
+import 'package:scrcpy_connect/media/output/video_output_coordinator.dart';
+import 'package:scrcpy_connect/media/output/video_player_port.dart';
+import 'package:scrcpy_connect/media/quality/video_quality_policy.dart';
 import 'package:path_provider/path_provider.dart';
 
-// The independent fixture changes four colored bars on each DPAD_DOWN.
-// Recognizing their sequence detects stale frames rather than trusting receipts.
+import 'support/media_owner_fixture.dart';
+
+// 独立夹具在每次 DPAD_DOWN 改变四条色带；识别其序列以检测旧帧，不单凭回执。
 int? pattern(List<int> rgba, int width, int height, {ui.Rect? region}) {
   final bounds =
       region ?? ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
@@ -51,19 +53,24 @@ void main() {
           'input request to recognized readback; includes readback overhead',
       'rounds': rounds,
     };
+    MediaOwnerFixture? fixture;
     Future<VideoJson> request(
       String command, [
       VideoJson params = const {},
     ]) async {
-      final result = jsonDecode(
-        await core.invoke(
-          requestJson: jsonEncode({'command': command, 'params': params}),
-        ),
-      ) as VideoJson;
-      if (result['ok'] != true) {
-        throw StateError('$command: ${result['error']}');
+      final owner = fixture;
+      if (owner == null) throw StateError('媒体测试所有者尚未打开。');
+      if (command.startsWith('session.')) {
+        return owner.sessions.command(command, params);
       }
-      return result['data'] as VideoJson;
+      if (command == 'media.status') {
+        final source = params['relayId'];
+        if (source is! String || source.isEmpty) {
+          throw ArgumentError.value(source, 'relayId', '缺少精确原生来源身份。');
+        }
+        return owner.sourceStatus(source);
+      }
+      throw UnsupportedError('媒体测试不处理 $command');
     }
 
     Future<T> real<T>(Future<T> Function() action) async =>
@@ -71,8 +78,10 @@ void main() {
     var disposed = false;
     late CodecVideoPlayer player;
     final decoderEvents = <VideoJson>[];
-    final outputs = PortableVideoOutputs(
-      core: request,
+    final outputs = VideoOutputCoordinator(
+      request: request,
+      openSource: (stream, generation) =>
+          fixture!.videoSource.openSource(stream, generation),
       emit: (_) {},
       isDisposed: () => disposed,
       playerFactory: () {
@@ -97,26 +106,23 @@ void main() {
           }
           await Future<void>.delayed(const Duration(milliseconds: 20));
         }
-        await RustLib.init();
         final support = await getApplicationSupportDirectory();
-        await initializeNativeRuntime(
+        const address = String.fromEnvironment(
+          'CONNECT_E2E_ADDRESS',
+          defaultValue: '10.0.2.2',
+        );
+        const port = int.fromEnvironment(
+          'CONNECT_E2E_PORT',
+          defaultValue: 15556,
+        );
+        fixture = await MediaOwnerFixture.open(
           dataDirectory:
               const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY').isEmpty
               ? '${support.path}/packet-video-performance'
               : const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY'),
+          address: Uri(host: address, port: port).authority,
         );
-        final added = await request('devices.add', {
-          'address': const String.fromEnvironment(
-            'CONNECT_E2E_ADDRESS',
-            defaultValue: '10.0.2.2',
-          ),
-          'port': const int.fromEnvironment(
-            'CONNECT_E2E_PORT',
-            defaultValue: 15556,
-          ),
-        });
-        device = (added['device'] as VideoJson)['id'] as String;
-        await request('devices.connect', {'deviceId': device});
+        device = fixture!.deviceId;
       });
       const count = int.fromEnvironment('CONNECT_PERF_ROUNDS', defaultValue: 3);
       const transitions = int.fromEnvironment(
@@ -285,15 +291,8 @@ void main() {
           if (session != null) {
             await request('session.stop', {'sessionId': session});
           }
-          if (device != null) {
-            await request('devices.disconnect', {'deviceId': device});
-          }
         } finally {
-          try {
-            await core.shutdown();
-          } finally {
-            await shutdownNativeAdb();
-          }
+          await fixture?.close();
         }
       });
     }

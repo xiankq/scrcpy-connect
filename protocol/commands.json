@@ -3,116 +3,18 @@
   "commands": [
     {
       "name": "activities.list",
-      "owner": "core",
       "result": {
         "activities": "array"
       }
     },
     {
       "name": "activities.stop",
-      "owner": "core",
       "required": {
         "activityId": "string"
       }
     },
     {
-      "name": "adb.device.probe",
-      "owner": "core",
-      "required": {
-        "deviceId": "string",
-        "probes": "array",
-        "timeoutMs": "integer"
-      },
-      "optional": {
-        "connectionId": "string"
-      }
-    },
-    {
-      "name": "adb.operation.get",
-      "owner": "core",
-      "required": {
-        "operationId": "string"
-      }
-    },
-    {
-      "name": "adb.operation.release",
-      "owner": "core",
-      "required": {
-        "operationId": "string"
-      }
-    },
-    {
-      "name": "adb.pair",
-      "owner": "core",
-      "required": {
-        "address": "string",
-        "port": "integer",
-        "code": "string",
-        "attemptId": "string",
-        "leaseMs": "integer"
-      },
-      "optional": {
-        "deviceId": "string",
-        "identity": "object"
-      }
-    },
-    {
-      "name": "adb.pair.qr",
-      "owner": "core",
-      "required": {
-        "attemptId": "string",
-        "leaseMs": "integer"
-      },
-      "optional": {
-        "deviceId": "string",
-        "identity": "object"
-      }
-    },
-    {
-      "name": "adb.tcpip.begin",
-      "owner": "core",
-      "required": {
-        "deviceId": "string",
-        "connectionId": "string",
-        "port": "integer",
-        "attemptId": "string",
-        "leaseMs": "integer"
-      }
-    },
-    {
-      "name": "adb.tcpip.connect",
-      "owner": "core",
-      "required": {
-        "operationId": "string",
-        "address": "string"
-      }
-    },
-    {
-      "name": "adb.usb.attach",
-      "owner": "core",
-      "required": {
-        "operationId": "string"
-      },
-      "optional": {
-        "deviceId": "string"
-      }
-    },
-    {
-      "name": "adb.usb.open",
-      "owner": "core",
-      "required": {
-        "attemptId": "string",
-        "leaseMs": "integer"
-      },
-      "optional": {
-        "fd": "integer",
-        "usbDeviceId": "string",
-        "deviceId": "string"
-      }
-    },
-    {
       "name": "apps.foreground",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -122,7 +24,6 @@
     },
     {
       "name": "apps.icon",
-      "owner": "core",
       "required": {
         "deviceId": "string",
         "packageName": "string"
@@ -138,7 +39,6 @@
     },
     {
       "name": "apps.launch",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -146,7 +46,6 @@
     },
     {
       "name": "apps.list",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -155,64 +54,52 @@
       }
     },
     {
-      "name": "audio.pause",
-      "owner": "core"
+      "name": "audio.pause"
     },
     {
-      "name": "audio.presentation",
-      "owner": "core"
+      "name": "audio.presentation"
     },
     {
-      "name": "audio.ready",
-      "owner": "core"
+      "name": "audio.ready"
     },
     {
       "name": "audio.resume",
-      "owner": "core",
       "requiresVerifiedState": true
     },
     {
       "name": "audio.sources",
-      "owner": "core",
       "result": {
         "sources": "array"
       }
     },
     {
       "name": "audio.start",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
       "requiresVerifiedState": true
     },
     {
-      "name": "audio.status",
-      "owner": "bridge"
+      "name": "audio.status"
     },
     {
-      "name": "audio.stop",
-      "owner": "core"
+      "name": "audio.stop"
     },
     {
       "name": "audio.volume",
-      "owner": "core",
       "optional": {
         "volume": "number",
         "muted": "boolean"
       }
     },
     {
-      "name": "background.request",
-      "owner": "bridge"
+      "name": "background.request"
     },
     {
-      "name": "background.status",
-      "owner": "bridge"
+      "name": "background.status"
     },
     {
       "name": "calls.action",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -220,21 +107,19 @@
     },
     {
       "name": "calls.list",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "calls.open",
-      "owner": "core",
       "required": {
         "deviceId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "clipboard.get",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -242,34 +127,28 @@
     },
     {
       "name": "clipboard.set",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
       "requiresVerifiedState": true
     },
     {
-      "name": "delivery.begin",
-      "owner": "core"
+      "name": "delivery.begin"
     },
     {
-      "name": "delivery.finish",
-      "owner": "core"
+      "name": "delivery.finish"
     },
     {
-      "name": "delivery.get",
-      "owner": "core"
+      "name": "delivery.get"
     },
     {
       "name": "device.capabilities",
-      "owner": "bridge",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "device.data.get",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -279,21 +158,18 @@
     },
     {
       "name": "device.diagnose",
-      "owner": "bridge",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "device.info",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "device.network.get",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -303,7 +179,6 @@
     },
     {
       "name": "device.screen.state",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -313,18 +188,15 @@
     },
     {
       "name": "devices.add",
-      "owner": "core",
       "optional": {
         "identity": "object"
       }
     },
     {
-      "name": "devices.cancel",
-      "owner": "core"
+      "name": "devices.cancel"
     },
     {
       "name": "devices.configure",
-      "owner": "core",
       "required": {
         "deviceId": "string",
         "address": "string",
@@ -333,11 +205,11 @@
       },
       "optional": {
         "attemptId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "devices.connect",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -347,51 +219,47 @@
         "attemptId": "string",
         "candidateSource": "string",
         "parentOperationId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "devices.disconnect",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
-      "name": "devices.discover",
-      "owner": "core"
+      "name": "devices.discover"
     },
     {
       "name": "devices.forget",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "devices.list",
-      "owner": "core",
       "result": {
         "devices": "array"
       }
     },
     {
       "name": "devices.pair",
-      "owner": "bridge",
       "optional": {
         "identity": "object"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "devices.pair.qr",
-      "owner": "bridge",
       "optional": {
         "deviceId": "string",
         "identity": "object"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "devices.reconnect.owner",
-      "owner": "core",
       "required": {
         "ownerId": "string",
         "active": "boolean"
@@ -399,31 +267,29 @@
     },
     {
       "name": "devices.rename",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "devices.usb",
-      "owner": "bridge",
       "optional": {
         "identity": "object"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "devices.wake",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
       "optional": {
         "connectionId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "devices.wireless",
-      "owner": "bridge",
       "required": {
         "deviceId": "string",
         "address": "string"
@@ -431,133 +297,70 @@
       "optional": {
         "port": "integer",
         "attemptId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
-      "name": "document.cancel",
-      "owner": "core"
+      "name": "documents.cancel"
     },
     {
-      "name": "document.commit",
-      "owner": "core",
-      "required": {
-        "path": "string",
-        "allowedRoots": "array",
-        "partPath": "string",
-        "identity": "object"
-      }
+      "name": "documents.conflict.get"
     },
     {
-      "name": "document.copy",
-      "owner": "core"
+      "name": "documents.conflict.resolve"
     },
     {
-      "name": "document.limits",
-      "owner": "core"
+      "name": "documents.export"
     },
     {
-      "name": "document.localChildren",
-      "owner": "core",
-      "required": {
-        "path": "string",
-        "allowedRoots": "array"
-      }
+      "name": "documents.importDirectory"
     },
     {
-      "name": "document.localStat",
-      "owner": "core",
-      "required": {
-        "path": "string",
-        "allowedRoots": "array"
-      }
-    },
-    {
-      "name": "document.mkdir",
-      "owner": "core",
-      "required": {
-        "path": "string",
-        "allowedRoots": "array"
-      }
-    },
-    {
-      "name": "document.remove",
-      "owner": "core",
-      "required": {
-        "path": "string",
-        "allowedRoots": "array",
-        "identity": "object"
-      }
-    },
-    {
-      "name": "documents.cancel",
-      "owner": "bridge"
-    },
-    {
-      "name": "documents.conflict.get",
-      "owner": "bridge"
-    },
-    {
-      "name": "documents.conflict.resolve",
-      "owner": "bridge"
-    },
-    {
-      "name": "documents.export",
-      "owner": "bridge"
-    },
-    {
-      "name": "documents.importDirectory",
-      "owner": "bridge"
-    },
-    {
-      "name": "documents.importFiles",
-      "owner": "bridge"
+      "name": "documents.importFiles"
     },
     {
       "name": "files.delete",
-      "owner": "core",
       "required": {
         "deviceId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "files.list",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "files.mkdir",
-      "owner": "core",
       "required": {
         "deviceId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "files.open",
-      "owner": "bridge",
       "required": {
         "localPath": "string"
       }
     },
     {
       "name": "files.pull",
-      "owner": "core"
+      "requiresVerifiedState": true
     },
     {
       "name": "files.push",
-      "owner": "core"
+      "requiresVerifiedState": true
     },
     {
       "name": "files.rename",
-      "owner": "core",
       "required": {
         "deviceId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "files.search.cancel",
-      "owner": "core",
       "required": {
         "searchId": "string",
         "deviceId": "string"
@@ -565,7 +368,6 @@
     },
     {
       "name": "files.search.get",
-      "owner": "core",
       "required": {
         "searchId": "string",
         "deviceId": "string"
@@ -573,7 +375,6 @@
     },
     {
       "name": "files.search.start",
-      "owner": "core",
       "required": {
         "deviceId": "string",
         "path": "string",
@@ -583,7 +384,6 @@
     },
     {
       "name": "identity.device.get",
-      "owner": "core",
       "result": {
         "scope": "string",
         "fingerprint": "string"
@@ -594,7 +394,6 @@
     },
     {
       "name": "identity.device.import",
-      "owner": "core",
       "result": {
         "scope": "string",
         "fingerprint": "string"
@@ -606,7 +405,6 @@
     },
     {
       "name": "identity.device.useGlobal",
-      "owner": "core",
       "result": {
         "scope": "string",
         "fingerprint": "string"
@@ -617,7 +415,6 @@
     },
     {
       "name": "identity.global.get",
-      "owner": "core",
       "result": {
         "scope": "string",
         "fingerprint": "string"
@@ -625,7 +422,6 @@
     },
     {
       "name": "identity.global.import",
-      "owner": "core",
       "result": {
         "scope": "string",
         "fingerprint": "string"
@@ -636,7 +432,6 @@
     },
     {
       "name": "identity.global.reset",
-      "owner": "core",
       "result": {
         "scope": "string",
         "fingerprint": "string"
@@ -644,18 +439,15 @@
     },
     {
       "name": "media.cache.acquire",
-      "owner": "core",
       "required": {
         "transferId": "string"
       }
     },
     {
-      "name": "media.cache.clear",
-      "owner": "core"
+      "name": "media.cache.clear"
     },
     {
       "name": "media.cache.configure",
-      "owner": "core",
       "optional": {
         "outgoingDirectory": "string",
         "budgetBytes": "integer"
@@ -663,39 +455,27 @@
     },
     {
       "name": "media.cache.release",
-      "owner": "core",
       "required": {
         "leaseId": "string"
       }
     },
     {
       "name": "media.cache.retain",
-      "owner": "core",
       "required": {
         "localPath": "string"
       }
     },
     {
-      "name": "media.cache.status",
-      "owner": "core"
-    },
-    {
-      "name": "media.close",
-      "owner": "core",
-      "required": {
-        "relayId": "string"
-      }
+      "name": "media.cache.status"
     },
     {
       "name": "media.list",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "media.open",
-      "owner": "core",
       "required": {
         "sourceId": "string",
         "kind": "string"
@@ -703,36 +483,30 @@
     },
     {
       "name": "media.preview",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
-      "name": "media.scan.cancel",
-      "owner": "core"
+      "name": "media.scan.cancel"
     },
     {
       "name": "media.status",
-      "owner": "core",
       "required": {
         "relayId": "string"
       }
     },
     {
       "name": "media.thumbnail",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
-      "name": "media.thumbnail.cancel",
-      "owner": "core"
+      "name": "media.thumbnail.cancel"
     },
     {
       "name": "notifications.dismiss",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -740,26 +514,22 @@
     },
     {
       "name": "notifications.list",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "notifications.open",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
       "requiresVerifiedState": true
     },
     {
-      "name": "observation.list",
-      "owner": "core"
+      "name": "observation.list"
     },
     {
       "name": "observation.start",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -767,29 +537,18 @@
     },
     {
       "name": "observation.status",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
       "name": "observation.stop",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       }
     },
     {
-      "name": "session.clock.probe",
-      "owner": "core",
-      "optional": {
-        "sessionId": "string",
-        "deviceId": "string"
-      }
-    },
-    {
       "name": "session.display",
-      "owner": "core",
       "required": {
         "sessionId": "string",
         "displayWidth": "integer",
@@ -799,7 +558,6 @@
     },
     {
       "name": "session.frame",
-      "owner": "core",
       "required": {
         "sessionId": "string",
         "generation": "integer",
@@ -814,7 +572,6 @@
     },
     {
       "name": "session.key",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string",
@@ -829,7 +586,6 @@
     },
     {
       "name": "session.launch",
-      "owner": "core",
       "requiresVerifiedState": true,
       "optional": {
         "sessionId": "string",
@@ -838,7 +594,6 @@
     },
     {
       "name": "session.list",
-      "owner": "core",
       "result": {
         "sessions": "array"
       },
@@ -849,7 +604,6 @@
     },
     {
       "name": "session.pause",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string"
@@ -857,15 +611,14 @@
     },
     {
       "name": "session.quality",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "session.quality.options",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string"
@@ -873,7 +626,6 @@
     },
     {
       "name": "session.ready",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string",
@@ -882,7 +634,6 @@
     },
     {
       "name": "session.reconfigure",
-      "owner": "core",
       "required": {
         "deviceId": "string",
         "sessionId": "string"
@@ -899,15 +650,14 @@
     },
     {
       "name": "session.refresh",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "session.resume",
-      "owner": "core",
       "requiresVerifiedState": true,
       "optional": {
         "sessionId": "string",
@@ -916,7 +666,6 @@
     },
     {
       "name": "session.rotate",
-      "owner": "core",
       "requiresVerifiedState": true,
       "optional": {
         "sessionId": "string",
@@ -925,7 +674,6 @@
     },
     {
       "name": "session.screen",
-      "owner": "core",
       "requiresVerifiedState": true,
       "optional": {
         "sessionId": "string",
@@ -934,7 +682,6 @@
     },
     {
       "name": "session.screenshot",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string"
@@ -942,7 +689,6 @@
     },
     {
       "name": "session.scroll",
-      "owner": "core",
       "required": {
         "captureGeneration": "integer",
         "x": "integer",
@@ -956,11 +702,11 @@
         "sessionId": "string",
         "deviceId": "string",
         "buttons": "integer"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "session.start",
-      "owner": "core",
       "required": {
         "deviceId": "string"
       },
@@ -975,7 +721,6 @@
     },
     {
       "name": "session.stop",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string"
@@ -983,7 +728,6 @@
     },
     {
       "name": "session.text",
-      "owner": "core",
       "requiresVerifiedState": true,
       "optional": {
         "sessionId": "string",
@@ -995,7 +739,6 @@
     },
     {
       "name": "session.touch",
-      "owner": "core",
       "optional": {
         "sessionId": "string",
         "deviceId": "string",
@@ -1011,29 +754,24 @@
     },
     {
       "name": "settings.export",
-      "owner": "core",
       "result": {
         "metadata": "object"
       }
     },
     {
-      "name": "settings.get",
-      "owner": "core"
+      "name": "settings.get"
     },
     {
       "name": "settings.import",
-      "owner": "core",
       "required": {
         "metadata": "object"
       }
     },
     {
-      "name": "settings.update",
-      "owner": "core"
+      "name": "settings.update"
     },
     {
       "name": "sharing.bind",
-      "owner": "core",
       "required": {
         "leaseId": "string",
         "transferId": "string"
@@ -1041,14 +779,12 @@
     },
     {
       "name": "sharing.cancel",
-      "owner": "core",
       "required": {
         "shareId": "string"
       }
     },
     {
       "name": "sharing.configure",
-      "owner": "core",
       "required": {
         "absoluteRoot": "string",
         "allowedCacheRoot": "string"
@@ -1056,69 +792,48 @@
     },
     {
       "name": "sharing.consume",
-      "owner": "core",
       "required": {
         "shareId": "string"
       }
     },
     {
       "name": "sharing.import",
-      "owner": "core",
       "required": {
         "shareId": "string"
       }
     },
     {
       "name": "sharing.pending",
-      "owner": "core",
       "result": {
         "shares": "array"
       }
     },
     {
-      "name": "sharing.reconcile",
-      "owner": "core"
+      "name": "sharing.reconcile"
     },
     {
-      "name": "sharing.reject",
-      "owner": "core"
+      "name": "sharing.reject"
     },
     {
       "name": "sharing.release",
-      "owner": "core",
       "required": {
         "leaseId": "string"
       }
     },
     {
       "name": "sharing.retain",
-      "owner": "core",
       "required": {
         "shareId": "string"
       }
     },
     {
-      "name": "sharing.sources",
-      "owner": "core"
+      "name": "sharing.sources"
     },
     {
-      "name": "state.reconcile",
-      "owner": "bridge"
+      "name": "state.reconcile"
     },
     {
       "name": "state.snapshot",
-      "owner": "core",
-      "nativeResult": {
-        "sequence": "integer",
-        "settings": "object",
-        "devices": "array",
-        "sessions": "array",
-        "sources": "array",
-        "activities": "array",
-        "shares": "array",
-        "companions": "array",
-        "observations": "array"
-      },
       "result": {
         "sequence": "integer",
         "settings": "object",
@@ -1134,11 +849,15 @@
     },
     {
       "name": "system.info",
-      "owner": "core"
+      "result": {
+        "appName": "text",
+        "packageName": "text",
+        "version": "string",
+        "buildNumber": "text"
+      }
     },
     {
       "name": "transfers.cancel",
-      "owner": "core",
       "optional": {
         "transferId": "string",
         "batchId": "string"
@@ -1146,21 +865,18 @@
     },
     {
       "name": "transfers.get",
-      "owner": "core",
       "required": {
         "transferId": "string"
       }
     },
     {
       "name": "transfers.list",
-      "owner": "core",
       "result": {
         "transfers": "array"
       }
     },
     {
       "name": "transfers.remove",
-      "owner": "core",
       "optional": {
         "transferId": "string",
         "batchId": "string"
@@ -1168,21 +884,20 @@
     },
     {
       "name": "transfers.resolve",
-      "owner": "core",
       "required": {
         "transferId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
       "name": "transfers.resume",
-      "owner": "core",
       "required": {
         "transferId": "string"
-      }
+      },
+      "requiresVerifiedState": true
     },
     {
-      "name": "video.capabilities",
-      "owner": "bridge"
+      "name": "video.capabilities"
     }
   ]
 }

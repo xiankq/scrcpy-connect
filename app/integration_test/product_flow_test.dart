@@ -1,7 +1,9 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_facts.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_summary.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'dart:ui' as ui;
 
@@ -12,7 +14,7 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
@@ -150,8 +152,7 @@ void main() {
         reason: 'The actual connection form must finish its route loading.',
       );
       if (transport == 'tls') {
-        // The harness supplies an already authorized encrypted endpoint; the new
-        // IP tab itself never guesses encryption from a port number.
+        // 测试提供已授权的加密端点；新 IP 页签本身不能根据端口猜测加密。
         const ConnectionFormRoute(transport: ConnectionTransport.tls)
             .pushReplacement(tester.element(find.byType(ConnectionFormPage)));
         await tester.pumpAndSettle();
@@ -231,8 +232,7 @@ void main() {
       );
       expect(find.text('无法读取这个目录'), findsNothing);
       await returnFromFiles(tester);
-      // Follow the real navigation and JSON projection, rather than invoking
-      // diagnose or quality mutations directly through the bridge.
+      // 沿真实导航与 JSON 投影操作，不直接经桥接调用诊断或画质修改。
       await waitFor(
         tester,
         () => find
@@ -250,7 +250,7 @@ void main() {
         find.byType(DeviceWorkspacePage),
         find
             .ancestor(
-              of: find.byType(DeviceFacts),
+              of: find.byType(DeviceSummary),
               matching: find.byType(InkWell),
             )
             .first,
@@ -270,8 +270,7 @@ void main() {
           .map((text) => text.data ?? '')
           .firstWhere((text) => text.startsWith('更新于'));
       await capture('real-device-data');
-      // Target observations use whole seconds. Cross that boundary before a
-      // single refresh so an equally fresh same-second reply is not rejected.
+      // 目标观察按整秒记录；跨过此边界后只刷新一次，避免同一秒内同样新鲜的响应被拒绝。
       await tester.pump(const Duration(seconds: 1));
       await tester.tap(find.byTooltip('刷新'));
       await waitFor(

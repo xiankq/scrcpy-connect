@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
-import 'package:device_runtime/device_runtime.dart';
+import 'package:scrcpy_connect/connection/connection_policy.dart';
+import 'package:scrcpy_connect/application/application_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Exercises decoded geometry through the production assembly, rather than
-/// replacing the player or calling the raw Rust core around that assembly.
+/// 经生产装配验证解码后几何，不替换播放器，也不绕开装配直接调用 Rust 核心。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
@@ -17,7 +17,7 @@ void main() {
     (tester) async {
       final evidence = <String, dynamic>{};
       binding.reportData = {'assembledRotation': evidence};
-      DeviceRuntime? runtime;
+      ApplicationSession? runtime;
       StreamSubscription<Map<String, dynamic>>? subscription;
       final events = <Map<String, dynamic>>[];
       String? device, session;
@@ -114,7 +114,7 @@ void main() {
       try {
         runtime = await real(() async {
           final support = await getApplicationSupportDirectory();
-          return DeviceRuntime.initialize(
+          return ApplicationSession.initialize(
             dataDirectory:
                 const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY')
                     .isEmpty
@@ -151,8 +151,7 @@ void main() {
           session = result['sessionId'] as String;
           expect(result['firstFrameDecoded'], true);
           expect(result['backend'], 'media_codec');
-          // Keep a primary-screen session. packageName on session.start would
-          // create an independent app display rather than rotate this screen.
+          // 保留主屏幕会话；session.start 携带 packageName 会新建独立应用显示，无法旋转此屏幕。
           await runtime!.request('session.launch', {
             'sessionId': session,
             'packageName': 'com.android.settings',

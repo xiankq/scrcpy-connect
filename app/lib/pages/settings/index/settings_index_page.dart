@@ -1,7 +1,9 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -84,7 +86,9 @@ class SettingsPage extends HookConsumerWidget {
         TextButton(
           onPressed: () async {
             try {
-              final info = await controller.execute(InteropCommand.systemInfo);
+              final info = await controller.execute(
+                ApplicationCommand.systemInfo,
+              );
               if (context.mounted) {
                 showGlassDialog<void>(
                   context: context,

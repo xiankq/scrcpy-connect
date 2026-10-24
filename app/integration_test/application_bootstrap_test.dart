@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:device_runtime/src/native_runtime.dart';
-import 'package:device_runtime/src/rust/api.dart' as core;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,8 +10,8 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as application;
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
-import 'package:scrcpy_connect/services/app_dependencies.dart';
-import 'package:scrcpy_connect/services/application_diagnostics.dart';
+import 'package:scrcpy_connect/application/app_dependencies.dart';
+import 'package:scrcpy_connect/platform/application_diagnostics.dart';
 
 class _IsolatedPaths extends PathProviderPlatform {
   _IsolatedPaths(this.root);
@@ -26,19 +24,9 @@ class _IsolatedPaths extends PathProviderPlatform {
   Future<String> getTemporaryPath() async => '${root.path}/temporary';
 }
 
-class _BootstrapBinding extends IntegrationTestWidgetsFlutterBinding {
-  final captureKey = GlobalKey();
-
-  @override
-  Widget wrapWithDefaultView(Widget rootWidget) => super.wrapWithDefaultView(
-    RepaintBoundary(key: captureKey, child: rootWidget),
-  );
-}
-
-/// Runs the normal main/bootstrap with real packaged ADB and Rust. Only the
-/// support/temp directory provider is replaced, preserving user data.
+/// 运行正常 main 与启动流程，使用真实打包的 ADB 和 Rust；仅替换支持目录和临时目录提供方以保留用户数据。
 void main() {
-  final binding = _BootstrapBinding();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('normal application main opens its interface and media cache', (
     tester,
   ) async {
@@ -61,11 +49,11 @@ void main() {
         expect(status, isA<Map<String, dynamic>>());
       });
       await tester.pump(const Duration(seconds: 1));
-      final boundary =
-          binding.captureKey.currentContext!.findRenderObject()!
-              as RenderRepaintBoundary;
+      // 测试启动器可能已创建绑定，复用它并截取实际根图层，避免二次初始化绑定。
+      final view = binding.renderViews.single;
+      final layer = view.debugLayer! as OffsetLayer;
       await tester.runAsync(() async {
-        final image = await boundary.toImage();
+        final image = await layer.toImage(view.paintBounds);
         try {
           final png = await image.toByteData(format: ui.ImageByteFormat.png);
           final capture = Directory(
@@ -98,15 +86,10 @@ void main() {
           await dependencies?.close?.call();
         } finally {
           try {
-            await core.shutdown();
+            await (await applicationDiagnostics()).close();
           } finally {
-            try {
-              await shutdownNativeAdb();
-              await (await applicationDiagnostics()).close();
-            } finally {
-              PathProviderPlatform.instance = originalPaths;
-              await root.delete(recursive: true);
-            }
+            PathProviderPlatform.instance = originalPaths;
+            await root.delete(recursive: true);
           }
         }
       });

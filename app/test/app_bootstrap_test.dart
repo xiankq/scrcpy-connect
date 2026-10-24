@@ -1,11 +1,13 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/app_bootstrap.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/app_dependencies.dart';
+import 'package:scrcpy_connect/application/app_bootstrap.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/application/app_dependencies.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +20,7 @@ void main() {
         final failure = FileSystemException(failureAt);
         var fail = true;
         Future<AppDependencies> attempt() => bootstrapApplication(
-          initializeTransport: () => transport.open(
+          createDependencies: () => transport.open(
             configurationFailure: fail && failureAt == 'cache configuration'
                 ? failure
                 : null,
@@ -60,7 +62,7 @@ void main() {
       final failure = StateError('directory unavailable');
       var completed = false;
       final pending = bootstrapApplication(
-        initializeTransport: () async => AppDependencies(
+        createDependencies: () async => AppDependencies(
           request: (command, [params = const {}]) async => {},
           close: () => detach.future,
         ),
@@ -83,7 +85,7 @@ void main() {
       final stack = StackTrace.fromString('configuration origin');
       try {
         await bootstrapApplication(
-          initializeTransport: () async => AppDependencies(
+          createDependencies: () async => AppDependencies(
             request: (command, [params = const {}]) async => {},
             close: () async => throw StateError('detach failed'),
           ),
@@ -99,8 +101,7 @@ void main() {
   );
 }
 
-/// Models the bridge's one-owner rule: the next open is rejected until close
-/// completes. A permissive request fake cannot catch the broken retry path.
+/// 模拟应用依赖的单所有者规则：关闭完成前拒绝再次打开；允许任意请求的替身无法发现损坏的重试路径。
 class _ExclusiveTransport {
   bool active = false;
   int closes = 0;
@@ -108,7 +109,10 @@ class _ExclusiveTransport {
 
   Future<AppDependencies> open({Object? configurationFailure}) async {
     if (active) {
-      throw const RequestFailure('bridge_already_initialized', 'Already owned');
+      throw const RequestFailure(
+        'application_already_initialized',
+        'Already owned',
+      );
     }
     active = true;
     return AppDependencies(

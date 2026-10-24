@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
@@ -5,10 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
-import 'package:scrcpy_connect/router/route_repository.dart';
-import 'package:scrcpy_connect/router/record_route.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/router/route_resource_resolver.dart';
+import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/widgets/visible_device_focus.dart';
 
@@ -56,10 +58,11 @@ AppController _controller(BuildContext context) => ProviderScope.containerOf(
   context,
   listen: false,
 ).read(appControllerProvider.notifier);
-RouteRepository _records(BuildContext context) => ProviderScope.containerOf(
-  context,
-  listen: false,
-).read(routeRepositoryProvider);
+RouteResourceResolver _resources(BuildContext context) =>
+    ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(routeResourceResolverProvider);
 
 List<RouteBase> typedRoutes(GlobalKey<NavigatorState> root) {
   _root = root;
@@ -100,11 +103,11 @@ Widget _deviceRecord(
 ) {
   final identity =
       '$name:$deviceId:${state.pathParameters['sessionId'] ?? ''}:${state.pathParameters['packageName'] ?? ''}';
-  return RecordRoute(
+  return RouteResourceView(
     key: ValueKey('${state.pageKey.value}:$identity'),
     identity: identity,
     preserveContent: ['remote', 'remote-app', 'remote-session'].contains(name),
-    load: () => _records(context).device(deviceId),
+    load: () => _resources(context).device(deviceId),
     builder: (context, device) =>
         ['remote', 'remote-app', 'remote-session'].contains(name)
         ? build(context, state, device)
@@ -293,14 +296,14 @@ class AddDeviceRoute extends GoRouteData with $AddDeviceRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext _, GoRouterState state) {
       final id = deviceId;
       return id == null
           ? AddDevicePage(controller: controller)
-          : RecordRoute(
+          : RouteResourceView(
               identity: 'reauthorize:$id',
-              load: () => records.device(id),
+              load: () => resources.device(id),
               builder: (_, device) =>
                   AddDevicePage(controller: controller, initialDevice: device),
             );
@@ -326,7 +329,7 @@ class WirelessGuideRoute extends GoRouteData with $WirelessGuideRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext _, GoRouterState state) {
       final id = deviceId;
       Widget guide([Json? record]) => AddDevicePage(
@@ -337,9 +340,9 @@ class WirelessGuideRoute extends GoRouteData with $WirelessGuideRoute {
       );
       return id == null
           ? guide()
-          : RecordRoute(
+          : RouteResourceView(
               identity: 'wireless:$id',
-              load: () => records.device(id),
+              load: () => resources.device(id),
               builder: (_, device) => guide(device),
             );
     }
@@ -373,7 +376,7 @@ class ConnectionFormRoute extends GoRouteData with $ConnectionFormRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext _, GoRouterState state) {
       Widget form([Json? record]) => AddDevicePage(
         key: state.pageKey,
@@ -391,9 +394,9 @@ class ConnectionFormRoute extends GoRouteData with $ConnectionFormRoute {
       final id = deviceId;
       return id == null
           ? form()
-          : RecordRoute(
+          : RouteResourceView(
               identity: 'connection:$id',
-              load: () => records.device(id),
+              load: () => resources.device(id),
               builder: (_, record) => form(record),
             );
     }
@@ -600,11 +603,11 @@ class FileDetailsRoute extends GoRouteData with $FileDetailsRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext context, GoRouterState state, Json device) {
-      return RecordRoute(
+      return RouteResourceView(
         identity: 'file:${device['id']}:$path',
-        load: () => records.file(value(device, 'id'), path),
+        load: () => resources.file(value(device, 'id'), path),
         builder: (_, file) =>
             FileDetailsPage(controller: controller, device: device, file: file),
       );
@@ -698,11 +701,11 @@ class MediaPreviewRoute extends GoRouteData with $MediaPreviewRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext _, GoRouterState state, Json device) {
-      return RecordRoute(
+      return RouteResourceView(
         identity: 'media:${device['id']}:$path',
-        load: () => records.file(value(device, 'id'), path),
+        load: () => resources.file(value(device, 'id'), path),
         builder: (_, file) => MediaPreviewPage(
           controller: controller,
           device: device,
@@ -901,12 +904,12 @@ class RemoteSessionRoute extends GoRouteData with $RemoteSessionRoute {
   static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext context, GoRouterState state, Json device) {
       final id = sessionId;
-      return RecordRoute(
+      return RouteResourceView(
         identity: 'session:${device['id']}:$id',
-        load: () => records.session(value(device, 'id'), id),
+        load: () => resources.session(value(device, 'id'), id),
         builder: (context, session) => _remoteView(
           context,
           state,
@@ -937,12 +940,12 @@ class TransferDetailsRoute extends GoRouteData with $TransferDetailsRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext _, GoRouterState state) {
       final id = taskId;
-      return RecordRoute(
+      return RouteResourceView(
         identity: 'transfer:$id',
-        load: () => records.transfer(id),
+        load: () => resources.transfer(id),
         builder: (_, task) =>
             TransferDetailsPage(controller: controller, task: task),
       );
@@ -968,12 +971,12 @@ class DocumentExportRoute extends GoRouteData with $DocumentExportRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext _, GoRouterState state) {
       final id = taskId;
-      return RecordRoute(
+      return RouteResourceView(
         identity: 'export:$id',
-        load: () => records.transfer(id),
+        load: () => resources.transfer(id),
         builder: (_, task) {
           final localPath = value(
             task,
@@ -1023,10 +1026,10 @@ class ReceiveContentRoute extends GoRouteData with $ReceiveContentRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
-    return RecordRoute(
+    final resources = _resources(context);
+    return RouteResourceView(
       identity: 'receive:$taskId:$share',
-      load: () => records.transfer(taskId),
+      load: () => resources.transfer(taskId),
       builder: (_, task) =>
           ReceiveContentPage(controller: controller, task: task, share: share),
     );
@@ -1082,12 +1085,12 @@ class IncomingShareRoute extends GoRouteData with $IncomingShareRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
-    final records = _records(context);
+    final resources = _resources(context);
     Widget page(BuildContext _, GoRouterState state) {
       final id = shareId;
-      return RecordRoute(
+      return RouteResourceView(
         identity: 'share:$id',
-        load: () => records.share(id),
+        load: () => resources.share(id),
         builder: (_, share) =>
             IncomingSharePage(controller: controller, share: share),
       );

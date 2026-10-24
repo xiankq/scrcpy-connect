@@ -1,11 +1,13 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/clipboard_coordinator.dart';
+import 'package:scrcpy_connect/platform/clipboard_coordinator.dart';
 
 import 'support/test_controller.dart';
 
@@ -79,6 +81,31 @@ class _ClipboardFixture {
 }
 
 void main() {
+  testWidgets('同设备替换连接后拒绝旧读取并重新取得新连接剪贴板', (tester) async {
+    final fixture = _ClipboardFixture();
+    final oldRead = Completer<Json>();
+    fixture.controller.devices = [
+      {'id': 'a', 'status': 'connected', 'connectionId': 'connection-1'},
+    ];
+    fixture.pending['a'] = oldRead.future;
+    await fixture.start(tester);
+    fixture.pending.remove('a');
+    fixture.remote['a'] = 'new connection clipboard';
+    fixture.controller.devices = [
+      {'id': 'a', 'status': 'connected', 'connectionId': 'connection-2'},
+    ];
+    await tester.pump();
+    await tester.pump();
+    oldRead.complete({'text': 'stale connection clipboard'});
+    await tester.pump();
+    await tester.pump();
+    expect(fixture.remoteReads, ['a', 'a']);
+    expect(fixture.local, 'new connection clipboard');
+    expect(fixture.writes, ['new connection clipboard']);
+    expect(fixture.sent, isEmpty);
+    await fixture.dispose();
+  });
+
   testWidgets(
     'desktop focus return detects an external copy without waiting for the poll tick',
     (tester) async {

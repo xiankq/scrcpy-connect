@@ -1,4 +1,4 @@
-/// A deliberate tool action, held only in memory and never replayed from a URL.
+/// 明确的工具动作仅保存在内存中，不能从 URL 自动重放。
 enum RemoteTool { rotate, screen, key, text, launchApp }
 
 class RemoteControlIntent {

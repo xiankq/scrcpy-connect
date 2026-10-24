@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -12,9 +15,9 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
-import 'package:scrcpy_connect/services/system_notifications.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/platform/system_notification_coordinator.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 
 import 'product_flow_test.dart' show waitFor;
@@ -362,8 +365,7 @@ void main() {
                       value(notice, 'key').contains(snapshotTag),
                 )
                 .toList();
-        // The list owns keys for every record, including unbuilt lazy children.
-        // Inspect that owner rather than treating offscreen text as removed.
+        // 列表拥有每条记录的键，包括未构建的懒加载子项；检查该所有者，不把屏外文字视为已删除。
         bool pageContainsIds(Iterable<dynamic> ids, {bool present = true}) {
           final lists = tester
               .widgetList<GroupedListView>(
@@ -415,8 +417,7 @@ void main() {
           return result!;
         }
 
-        // Subscribe before asking the driver to post. Do not query the list or
-        // manually refresh the page until its event-driven UI has been checked.
+        // 要求驱动发布前先订阅；检查事件驱动界面前不主动查询列表或手动刷新。
         await checkpoint('snapshot-create', 'snapshot-created');
         final snapshots = await waitSnapshotEvent(
           0,
@@ -494,8 +495,7 @@ void main() {
         );
         binding.reportData!['snapshotUpdateEventUiVerified'] = true;
         final beforeWithdraw = snapshotEvents.length;
-        // The updated card is visible immediately before source withdrawal, so
-        // disappearance cannot pass merely because a lazy child was offscreen.
+        // 来源撤回前更新后的卡片立即可见，消失断言不能因懒加载子项原本就在屏外而误通过。
         expect(
           find.text('Updated real expanded body').hitTestable(),
           findsOneWidget,

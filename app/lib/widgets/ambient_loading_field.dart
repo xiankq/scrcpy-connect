@@ -3,8 +3,7 @@ import 'dart:math' as math;
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 
-/// Full-surface ambient waiting field for an operation that has been submitted
-/// but has not produced its first verified result yet.
+/// 已提交但尚无首个已核验结果时，显示覆盖整个内容面的等待效果。
 class AmbientLoadingField extends StatefulWidget {
   const AmbientLoadingField({
     super.key,

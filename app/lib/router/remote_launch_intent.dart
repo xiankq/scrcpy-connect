@@ -1,7 +1,6 @@
 import 'remote_control_intent.dart';
 
-/// A transient, explicit request to create a stream. It contains no widget,
-/// authorization, or persistent trust. Restoring a URL cannot recreate it.
+/// 创建画面的明确请求只短暂保留，不携带控件、授权或长期信任，恢复 URL 不能重建请求。
 class RemoteLaunchIntent {
   const RemoteLaunchIntent({this.action});
   final RemoteControlIntent? action;

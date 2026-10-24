@@ -19,8 +19,7 @@ class SectionTitle extends StatelessWidget {
       ),
       if (action != null)
         Padding(
-          // Match the caption's asymmetric whitespace while letting the full
-          // action hit area share that space and grow with larger content.
+          // 保留标题的不对称留白，同时让完整动作热区随较大内容增长。
           padding: const EdgeInsets.only(
             top: DesignTokens.spacingSectionTitle - DesignTokens.spacingSm,
           ),

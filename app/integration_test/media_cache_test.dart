@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -15,9 +18,9 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/settings/media_cache/settings_media_cache_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
-import 'package:scrcpy_connect/services/file_actions.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/presentation/file_actions.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -220,10 +223,10 @@ void main() {
         await binding.convertFlutterSurfaceToImage();
         await tester.pump(const Duration(milliseconds: 300));
         await binding.takeScreenshot('cache-real-preview');
-        // The page now owns the preview; release only our diagnostic request.
+        // 页面已拥有预览，仅释放诊断请求的租约。
         await request('media.cache.release', {'leaseId': previewLease});
         previewLease = null;
-        // A second public thumbnail is made reclaimable to exercise UI deletion.
+        // 令第二张公共缩略图可回收，以验证界面删除。
         final thumbnail = await request('media.thumbnail', {
           'deviceId': deviceId,
           'path': remote,

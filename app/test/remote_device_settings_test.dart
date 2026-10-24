@@ -1,14 +1,14 @@
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/app_state.dart';
-import 'package:scrcpy_connect/services/remote_display_settings.dart';
+import 'package:scrcpy_connect/application/app_state.dart';
+import 'package:scrcpy_connect/media/remote_display_settings.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -185,59 +185,6 @@ void main() {
       }
     },
   );
-  testWidgets(
-    'bridge wake failure stays visible through initial device refresh',
-    (tester) async {
-      final events = StreamController<Json>.broadcast(sync: true);
-      final calls = <String>[];
-      const devices = [
-        {
-          'id': 'phone',
-          'name': '测试手机',
-          'status': 'connected',
-          'connectionId': 'one',
-        },
-      ];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add(command);
-        if (command == 'devices.list') return {'devices': devices};
-        return {};
-      }, events: events.stream);
-      try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            devices: devices,
-            home: DevicesPage(controller: controller),
-          ),
-        );
-        events.add({
-          'type': 'device.screen.failed',
-          'deviceId': 'phone',
-          'data': {'connectionId': 'one', 'reason': 'wake result unknown'},
-        });
-        await controller.refreshDevices();
-        await tester.pumpAndSettle();
-        expect(
-          find.textContaining('未能自动点亮设备：wake result unknown'),
-          findsOneWidget,
-        );
-        expect(
-          calls.where((command) => command == 'devices.wake'),
-          isEmpty,
-          reason: 'Only the bridge owns connection wake policy',
-        );
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        controller.dispose();
-        await events.close();
-      }
-    },
-  );
-
   for (final scenario in [(false, false), (true, false), (false, true)]) {
     final fails = scenario.$1;
     final anotherPhonePage = scenario.$2;
@@ -255,6 +202,7 @@ void main() {
             if (command == 'session.start') {
               return {
                 'sessionId': 'screen',
+                'captureGeneration': 7,
                 'textureId': 1,
                 'width': 400,
                 'height': 800,
@@ -274,7 +222,7 @@ void main() {
           ),
         );
         final releaseOtherPage = anotherPhonePage
-            ? controller.claimPhoneControlPage('phone')
+            ? controller.claimControlPage('phone')
             : null;
         try {
           await tester.pumpWidget(
@@ -312,6 +260,7 @@ void main() {
             expect(pause, greaterThanOrEqualTo(0));
           } else {
             expect(sleep, greaterThanOrEqualTo(0));
+            expect(commands[sleep].$2['captureGeneration'], 7);
             expect(pause, greaterThan(sleep));
           }
           if (fails) expect(find.textContaining('锁屏尚未确认'), findsOneWidget);
@@ -334,8 +283,7 @@ void main() {
         );
         tester.view.physicalSize = const Size(400, 800);
         tester.view.devicePixelRatio = 1;
-        // A newly entered route sees the old status bar until Android finishes
-        // switching to immersive mode; the retained window was already sized.
+        // 新路由进入时 Android 可能尚未完成沉浸切换，仍能看到旧状态栏；保留窗口已完成尺寸调整。
         tester.view.padding = const FakeViewPadding(top: 24);
         tester.view.viewPadding = const FakeViewPadding(top: 24);
         addTearDown(tester.view.resetPhysicalSize);
@@ -490,7 +438,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         final start = commands.singleWhere((c) => c.$1 == 'session.start').$2;
-        // The startup request is measured before the navigation band exists.
+        // 启动请求在导航栏建立前测量。
         final startup = const RemoteDisplaySettings({
           'remoteAspectRatio': 'auto',
         }).dimensions(const Size(400, 800))!;
@@ -535,8 +483,7 @@ void main() {
         tester.view.resetViewInsets();
         tester.view.physicalSize = const Size(800, 400);
         await tester.pump();
-        // A live stream continues producing state updates during rotation.
-        // Rebuilding with the same viewport must not postpone its resize.
+        // 旋转时活动流持续产生状态更新；相同视口的重建不能推迟调整。
         for (var frame = 0; frame < 6; frame++) {
           events.add({
             'type': 'session.updated',

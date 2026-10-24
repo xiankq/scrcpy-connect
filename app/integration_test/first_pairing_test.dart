@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/application/transport/application_request.dart';
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -10,15 +13,13 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/app_controller.dart';
-import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/connection/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-// This target checks first pairing and revocation through the production app.
-// The host supplies an isolated secure Android wireless-debugging fixture; it
-// never pairs this installation's Rust identity on the app's behalf.
+// 经生产应用检查首次配对与撤销；宿主提供隔离的安全 Android 无线调试夹具，不代替应用为此安装的 Rust 身份配对。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   var stage = 'waiting-fixture';
@@ -45,8 +46,7 @@ void main() {
   };
 
   developer.registerExtension('ext.connect.firstPairing', (_, args) async {
-    // No payload, error message, code, or widget screenshot is echoed here.
-    // A host failure still permits an authenticated cleanup acknowledgement.
+    // 不回传载荷、错误文本、配对码或控件截图；宿主失败后仍允许经过认证的清理确认。
     if (args['error'] == 'true') {
       hostFailed = true;
       final failedRun = args['runId'];
@@ -54,8 +54,7 @@ void main() {
           stage == 'waiting-fixture' &&
           failedRun != null &&
           RegExp(r'^[0-9a-f]{32}$').hasMatch(failedRun)) {
-        // Bind only cleanup ownership after fixture preparation failed. No
-        // connection data or credentials are accepted on this error path.
+        // 夹具准备失败后仅绑定清理所有权，此错误路径不接收连接数据或凭据。
         runId = failedRun;
       }
     }
@@ -293,8 +292,7 @@ void main() {
       final devices = objects((await request('devices.list'))['devices']);
       for (final device in devices) {
         final id = value(device, 'id');
-        // The sole record created by the initial form is retained explicitly
-        // throughout pairing. Never remove a record present before this test.
+        // 配对期间明确保留初始表单创建的唯一记录，绝不删除测试前已存在的记录。
         if (!baseline.contains(id) &&
             device['address'] == address &&
             device['port'] == connectPort &&
@@ -358,8 +356,7 @@ void main() {
         true,
       );
       await fill('配对端口', '$pairPort');
-      // Change exactly one digit of the current valid code. Neither value is
-      // placed in the report, diagnostics, extension response, or screenshots.
+      // 仅修改当前有效配对码的一位；两份值都不进入报告、诊断、扩展响应或截图。
       final code = pairingCode!;
       final wrongCode = '${(int.parse(code[0]) + 1) % 10}${code.substring(1)}';
       await fill('配对码', wrongCode);
@@ -379,8 +376,7 @@ void main() {
         isTrue,
         reason: 'The real pairing request must return a structured failure.',
       );
-      // Keep the actual peer failure separate from its localized presentation.
-      // The raw failure and current codes remain in memory, never in the report.
+      // 实际对端故障与本地化呈现分开；原始故障和当前配对码仅留内存，不进入报告。
       final requestFailure = failure as RequestFailure;
       final wrongError = requestFailure.message.toLowerCase();
       final authenticationFailed = wrongError.contains(
@@ -456,8 +452,7 @@ void main() {
       publish('paired');
       await tester.pump(const Duration(seconds: 1));
 
-      // Discovery may already have connected. Explicitly disconnect, then
-      // enter the independent host-forwarded connection port in the real form.
+      // 发现可能已连接；先明确断开，再在真实表单输入独立宿主转发的连接端口。
       await request('devices.disconnect', {'deviceId': deviceId});
       await openForm(deviceId: deviceId);
       await fill('连接端口', '$connectPort');
@@ -507,8 +502,7 @@ void main() {
     } catch (error, stack) {
       binding.reportData!['failedStage'] = stage;
       binding.reportData!['failureType'] = '${error.runtimeType}';
-      // Stack locations help preserve the primary failure when independent
-      // cleanup also fails; exception text can contain input and is omitted.
+      // 独立清理也失败时，堆栈位置帮助保留首要故障；异常文本可能包含输入，因此省略。
       binding.reportData!['failureLocations'] = stack
           .toString()
           .split('\n')
@@ -519,7 +513,7 @@ void main() {
     } finally {
       pairingCode = null;
       try {
-        // Host cleanup failure must not bypass removal of this test's record.
+        // 宿主清理失败不能跳过删除本测试记录。
         publish('cleanup');
         await waitFor(
           tester,
