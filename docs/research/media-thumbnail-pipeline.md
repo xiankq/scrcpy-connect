@@ -51,6 +51,6 @@ env INTEROP_CORE_TEST_ENDPOINT=127.0.0.1:15556 \
 - 图片 EXIF 的 InputStream 路径依赖 API24+；有界视频取帧依赖 API27+。低版本返回明确的能力限制；不能把某版实现未提供解释为 Android 系统永远不支持。
 - ROM媒体解码器、HEIF/AVIF等格式、超大图和非seekable/特殊文件没有保证；拒绝后用户可以明确打开原件。
 - 目标端硬件解码器进程属于系统服务，独立Java子进程隔离不能绝对保证厂商原生服务无缺陷；超时不会把结果伪装成功。
-- 来源验证不是文件快照，存在上述时间粒度边界。当前持久缓存租约与容量淘汰由[媒体缓存实现](../../crates/interop_core/src/media_cache.rs)负责。
+- 来源验证不是文件快照，存在上述时间粒度边界。当前持久缓存租约与容量淘汰由应用 Dart 持有，职责见[媒体缓存](../implementation/media-cache.md)。
 
 断线竞争的重复测试曾发现：Rust shell drain结束不能证明Java finally已回收子进程。最终实现先取消设备拥有的thumbnail tokens，向仍存活的认证helper发media.shutdown，并等待真正Process退出回执后才关闭socket；启动阶段仍直接取消，不创建新helper。待完成的媒体取消请求若不能确认回执，返回media_cleanup_unknown，不把未知说成已回收。设备断线返回只表示本机连接已关闭；网络中断时不能把该结果当作目标进程已回收证明，目标自身的stdin-EOF/有界watchdog继续限制解码。

@@ -1,6 +1,6 @@
 # 生成链、依赖与产物边界
 
-本文维护仓库工具职责、受控输入和构建产物规则；实际执行结果见[验收记录](validation.md)。
+本文维护仓库工具职责、受控输入和构建产物规则；实际执行结果见[验收记录](validation.md)，当前架构迁移偏差见[本轮重构记录](architecture-refactor-validation.md)。
 
 ## 视觉 token
 
@@ -16,11 +16,13 @@ dart tool/generate.dart --check
 
 ## workspace 与生成
 
-`app/pubspec.yaml` 是唯一 Flutter 应用入口；根 `pubspec.yaml` 声明 workspace 和工具依赖。`app` 与全部 Dart 能力包共用根 `pubspec.lock` 与 `.dart_tool`。领域 Rust crate 使用根 Cargo workspace；独立媒体核心使用 `packages/media_codec/rust/` 的 workspace 与锁文件。
+`app/pubspec.yaml` 是唯一 Flutter 应用入口；根 `pubspec.yaml` 声明 workspace 和工具依赖。`app` 与四个 Dart 能力包共用根 `pubspec.lock` 与 `.dart_tool`。ADB、scrcpy 的协议库、普通 API 库和各自 FRB 入口使用根 Cargo workspace；媒体核心使用 `rust/media_codec/` 的独立 workspace 与锁文件。应用不设置 Rust 工作区成员或原生业务组装层。
 
 Flutter 应用运行、构建和集成测试在 `app/` 执行；能力包测试在各包执行，仓库工具与生成从根目录执行。主机驱动在 `tool/driver/`，集成测试目标在 `app/integration_test/`；独立诊断入口仍可位于 `tool/benchmark/`。
 
-`protocol/commands.json` 生成 Dart/Rust 命令契约；`dart tool/protocol_codegen.dart` 只处理该来源。其余生成物由 `dart tool/generate.dart` 汇总，`--check` 同时检查生成漂移。依赖已缓存但网络不可用时，可使用 `flutter pub get --offline --enforce-lockfile`；不得借此更新锁文件或跳过一致性检查。
+`protocol/commands.json` 定义应用 Dart 命令契约，`dart tool/protocol_codegen.dart` 只生成应用内字段与核验策略，不生成 Rust 业务分派。旧 owner／nativeResult 分层字段被拒绝，能力层独立维护类型化 FRB 契约。仓库定位、工具查找和隔离复制等公共工具位于 `tool/src/repository_tooling.dart`。其余生成物由 `dart tool/generate.dart` 汇总，`--check` 同时检查生成漂移。依赖已缓存但网络不可用时，可使用 `flutter pub get --offline --enforce-lockfile`；不得借此更新锁文件或跳过一致性检查。
+
+FRB 配置统一放在仓库顶层，路径相对仓库根目录。`flutter_rust_bridge.yaml` 与 `flutter_rust_bridge.scrcpy.yaml` 分别指定 ADB、scrcpy 包内部的 Dart 生成目录及 `rust/` 中对应的 Rust 绑定。生成工具始终从根目录读取配置，隔离检查使用同一份配置与路径规则。
 
 ## 当前依赖边界
 
@@ -39,9 +41,9 @@ Flutter 应用运行、构建和集成测试在 `app/` 执行；能力包测试�
 
 ## 被控执行产物的共享打包
 
-`servers/vendor`、`servers/companion`、`servers/helpers` 的源码、固定输入、manifest 和产物构成同一条链。`dart servers/package.dart` 核对摘要并生成 `packages/device_runtime/assets/servers/`；`--check` 只读拒绝缺失、漂移和多余文件。
+`servers/vendor`、`servers/companion` 的源码与受控产物，以及 `rust/adb/device_fs_helper` 的通用设备端 Rust 源码与 `servers/helpers` 的构建器、固定输入、manifest 和四 ABI 产物构成同一条链。文件助手保留独立 workspace、锁文件与构建 profile，不加入根 Rust workspace。`dart servers/package.dart` 核对摘要并生成 `app/assets/servers/`；`--check` 只读拒绝缺失、漂移和多余文件。
 
-Android 三种主控 ABI 共享一套 Flutter package assets。`initializeNativeRuntime` 在 FRB 初始化前把六份资源还原到私有 `bundled_servers/`，逐一校验并在损坏时原子替换；解压长度有界。Rust 对照编译清单再次校验并将原始字节保存在进程内，部署不信任随后被修改的磁盘缓存。
+Android 三种主控 ABI 共享一套应用 assets。应用资源适配器负责按共享 manifest 校验、限制解压长度和原子还原私有 `bundled_servers/`；应用再把所需 JAR 或助手字节传给通用能力。能力包只校验并持有本次明确提供的执行输入，不读取应用 assets、私有目录、整份业务清单或产品设置；后续部署使用已接收的字节，不重新信任可变磁盘缓存。
 
 被控助手按被控设备 ABI 选择，不能按主控架构裁剪。APK 检查核对共享资源只有一套、长度与摘要正确，并拒绝 Android Rust 库再次嵌入原始或压缩产物。修改 JAR、helper 或来源后需重建、更新 manifest，再同步共享资源；不得只替换二进制或降低编译目标。
 
@@ -49,11 +51,13 @@ Android 三种主控 ABI 共享一套 Flutter package assets。`initializeNative
 
 `packages/media_codec/third_party/` 固定 FFmpeg、dav1d 与 nv-codec-headers 的来源和 SHA-256。`packages/media_codec/tool/build_ffmpeg.py` 只构建所需静态库，并生成配置回执与依赖许可证；构建缓存位于 `.dart_tool/media_codec/`。构建需要目标平台工具链、Python、Meson、Ninja 与适用的汇编器，不从播放器 SDK 下载通用媒体运行时。
 
-共享解码核心位于 `packages/media_codec/rust/`，使用独立 Cargo workspace 与锁文件；bindgen 从固定 FFmpeg 头文件生成 ABI。Flutter 插件只实现纹理、音频输出及生命周期需要的平台胶水。Apple 源码适配与实际 SDK/机器验收分开记录。
+共享解码核心位于 `rust/media_codec/`，使用独立 Cargo workspace 与锁文件；bindgen 从固定 FFmpeg 头文件生成 ABI。Flutter 插件只实现纹理、音频输出及生命周期需要的平台胶水。Apple 源码适配与实际 SDK/机器验收分开记录。
 
 Windows 宿主需要 Visual Studio C++ 桌面工作负载、Windows SDK 和 `Microsoft.VisualStudio.Component.VC.ATL`；现有通知插件编译依赖 `atlbase.h`，仅安装桌面工作负载不足。工具查找遵守 Windows PATHEXT，不能执行 Flutter SDK 中供 POSIX 使用的同名无扩展脚本。
 
-`packages/flutter_adb/third_party/platform-tools.lock.json` 固定桌面官方 platform-tools 归档及选取文件摘要。`packages/flutter_adb/tool/prepare_adb.dart` 校验后只提取 adb、Windows 所需 DLL、NOTICE 与版本信息，桌面包放置于可执行文件旁的 `adb/`。Android/iOS 不附带桌面 adb。`tool/build_host.dart` 核验目标架构、裁剪配置、必需原生库与官方 adb，再生成交付归档。
+`packages/adb/third_party/platform-tools.lock.json` 固定桌面官方 platform-tools 归档及选取文件摘要。`packages/adb/tool/prepare_adb.dart` 校验后只提取 adb、Windows 所需 DLL、NOTICE 与版本信息，桌面包放置于可执行文件旁的 `adb/`。Android/iOS 不附带桌面 adb。`tool/build_host.dart` 核验目标架构、裁剪配置、必需原生库与官方 adb，再生成交付归档。
+
+Linux/Android 的通用进程监督器源码归 `rust/adb/api/supervisor/`，由该库 `build.rs` 调用目标 `rustc` 构建后嵌入能力库；不增加应用 asset、共享包或 Cargo 工作区成员。交叉构建必须提供目标 linker，ABI 与页大小等目标 flags 传递给监督器，不能嵌入宿主产物代替目标产物。ADB 与 scrcpy 的 Native Assets hooks 显式登记 build script 和监督器源码，隔离生成复制整个 Rust 输入树。Linux 运行使用封存的可执行 memfd；Android 只有目标编译证据，移动 ADB 不使用桌面进程路径。Darwin 尚未完成相同监督机制，不能把 Linux 回归外推为 macOS 验收。
 
 ## 玻璃宿主
 
@@ -67,6 +71,10 @@ dart tool/glass_emulator.dart --avd <既有AVD名称> \
 入口清除 Mesa/Gallium/EGL 覆盖，使用 `-gpu host -feature -Vulkan`，禁用快照并保留 AVD。实际 renderer 通常仍是 Mesa llvmpipe 软件实现；“host”不代表硬件 GPU。该规避针对已知 Emulator 37.2.12/gfxstream 零附件崩溃，不保证其他 Linux 驱动。实际成像边界见[设计还原](design-fidelity.md)。
 
 ## 测试取舍
+
+`dart tool/check_architecture.dart` 随主机门禁执行，依赖层次在 `tool/src/architecture.dart` 明确维护；通用包按已接受的架构决定声明其允许依赖。Rust 同时使用 Cargo metadata 核验带平台条件的路径依赖。Dart 检查读取真实语法树，不以目录名称或文本搜索推断依赖。生成库及 typed router 的组装例外见[模块接口](architecture.md#模块位置与接口)。
+
+主门禁分别检查根 Rust workspace 和独立 `rust/media_codec/` 的格式，不能以根目录的 `cargo fmt --all` 代替后者。媒体核心的主机测试和 Clippy 另需固定 FFmpeg 构建、匹配的 Clang 资源目录及目标平台链接环境；Flutter 包测试不能替代这组 Rust 核验。
 
 测试围绕失败风险和可观察结果保留，优先通过责任接口覆盖。常量、简单透传、框架默认、源码字符串和已由生成检查覆盖的稳定逻辑不单独建用例；同一场景不重复到多个层级。取消与迟到回执、资源所有权、协议互操作、持久化未知结果和真实故障回归保留独立断言。
 

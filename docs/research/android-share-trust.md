@@ -12,11 +12,11 @@ API35+的 `ComponentCaller.checkContentUriPermission` 提供启动时调用者�
 
 ## 打开、准入与复制
 
-`openAssetFileDescriptor` 交付FD、startOffset及declaredLength，provider的SIZE字段不是可信复制边界。当前Android适配只查询DISPLAY_NAME，并在Rust缓存准入前打开provider；因此不能声称超大内容在provider open之前已被拒绝。[ContentResolver](https://developer.android.com/reference/android/content/ContentResolver#openAssetFileDescriptor(android.net.Uri,%20java.lang.String,%20android.os.CancellationSignal))
+`openAssetFileDescriptor` 交付FD、startOffset及declaredLength，provider的SIZE字段不是可信复制边界。Android适配只查询DISPLAY_NAME；应用需要先打开provider取得声明区间，再执行Dart预算准入，因此不能声称超大内容在provider open之前已被拒绝。[ContentResolver](https://developer.android.com/reference/android/content/ContentResolver#openAssetFileDescriptor(android.net.Uri,%20java.lang.String,%20android.os.CancellationSignal))
 
 regular file需按声明区间读取，非seekable源不支持非零offset。复制时继续核验实际字节限额；声明长度检查不能覆盖实际超限路径。取消signal也不能强制终止不配合的provider或已经阻塞的OS read，必须限制worker、队列与保留FD。原FD与native重复FD分别释放。
 
-来源lease与Dart任务日志分别拥有生命周期。已交给任务或发布结果未知的来源不能因取消分享UI就回收；完整、已持久化的任务证据才允许reconcile。具体限额与日志格式以[导入执行](../../crates/interop_core/src/sharing/mod.rs)、[文件所有者](../../packages/device_files/README.md)为准，研究不复制第二份常量表。
+来源lease与Dart任务日志分别拥有生命周期。已交给任务或发布结果未知的来源不能因取消分享UI就回收；完整、已持久化的任务证据才允许reconcile。具体限额与日志格式以[内容交付](../implementation/content-delivery.md#外部分享接收与传输来源)、[文件所有者](../implementation/file-ownership.md)为准，研究不复制第二份常量表。
 
 ## 已发现的系统与夹具反例
 
@@ -29,4 +29,4 @@ regular file需按声明区间读取，非seekable源不支持非零offset。复
 
 历史九模式样本通过text/image/multi/alias、拒绝与slow显式取消，但不覆盖120秒deadline、恶意provider饱和、所有任务/多显示布局或系统picker与新分享并发。
 
-当前入口：[Rust来源测试](../../crates/interop_core/tests/share_import.rs)、[Dart intake测试](../../packages/device_files/test/share_intake_test.dart)、[真实页面流程](../../app/integration_test/incoming_share_test.dart)及[driver](../../tool/driver/incoming_share.dart)。测试声明负责环境与清理，不在研究中保留临时PID、日志路径和重复命令。
+当前入口：[Dart来源存储测试](../../app/test/files/share_store_test.dart)、[分享协调测试](../../app/test/files/share_coordinator_test.dart)、[真实文件能力测试](../../app/test/files/share_coordinator_native_test.dart)、[真实页面流程](../../app/integration_test/incoming_share_test.dart)及[driver](../../tool/driver/incoming_share.dart)。测试声明负责环境与清理，不在研究中保留临时PID、日志路径和重复命令。

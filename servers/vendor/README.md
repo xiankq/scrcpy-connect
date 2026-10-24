@@ -14,7 +14,7 @@ dart servers/vendor/build.dart --rebuild
 dart servers/vendor/build.dart --update
 ```
 
-`JAVA_HOME`/`ANDROID_HOME` 选择工具链；`--gradle` 可指定同版本安装，`--offline` 使用Gradle依赖缓存（固定源码归档仍需下载）。不同JDK补丁或SDK内容可能产生差异，比较会失败。生成与共享打包见[工具链契约](../../docs/implementation/repository-tooling.md)。
+`JAVA_HOME`/`ANDROID_HOME` 选择工具链；`--gradle` 可指定同版本安装，`--source` 可指定固定提交的本地源码归档，读取时仍验证固定 SHA-256。`--offline` 使用 Gradle 依赖缓存；配合这两个本地输入可避免下载。不同 JDK 补丁或 SDK 内容可能产生差异，比较会失败。生成与共享打包见[工具链契约](../../docs/implementation/repository-tooling.md)。
 
 ## API 21回归
 

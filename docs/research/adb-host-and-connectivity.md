@@ -1,6 +1,6 @@
 # ADB 连接、身份与平台依据
 
-2026-10-16至18核查 AOSP `android17-release` 提交 `9084198a2d4b0f6a0f174260fb42da33485b684d`。它不是 Platform Tools 37.0.1 二进制的已证构建提交。当前库契约见[ADB 库](../../crates/adb/README.md)，产品取舍见[ADR](../adr/)。
+2026-10-16至18核查 AOSP `android17-release` 提交 `9084198a2d4b0f6a0f174260fb42da33485b684d`。它不是 Platform Tools 37.0.1 二进制的已证构建提交。当前库契约见[ADB 库](../../rust/adb/README.md)，产品取舍见[ADR](../adr/)。
 
 ## 协议与流控
 
@@ -43,4 +43,4 @@ Android UsbManager授权后的FD可交native；授权、插拔、FD关闭与ZLP 
 
 底层Rust socket同样受Android本地网络授权限制；iOS Bonjour、本地网络隐私和multicast entitlement也分别判断，普通iPhone没有通用USBDriverKit host保证。[Android网络权限](https://developer.android.com/privacy-and-security/local-network-permission)、[Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)、[DriverKit](https://developer.apple.com/documentation/driverkit/creating-drivers-for-ipados)
 
-CLSE取消通信不回滚已执行的远端动作；重建transport不迁移旧stream ID。shell v1退出码、SYNC元数据/压缩与非幂等提交的具体处理见[兼容研究](adb-android-compatibility.md)和[ADB接口](../../packages/flutter_adb/README.md)。
+CLSE取消通信不回滚已执行的远端动作；重建transport不迁移旧stream ID。shell v1退出码、SYNC元数据/压缩与非幂等提交的具体处理见[兼容研究](adb-android-compatibility.md)和[ADB接口](../../packages/adb/README.md)。

@@ -18,3 +18,5 @@ Builder choices are `video`, `audio-focus`, `input`, `share`, `notification` and
 Use `--help` for flags. Perfetto analysis requires official `trace_processor query`; counter decoding requires explicit host FFmpeg, microsecond showinfo PTS and exact 64×64 RGBA frames. Missing evidence fails rather than estimating.
 
 `capture_first_counter.dart` is a separate lab H264 drain: explicit `--adb`, `--target`, `--jar`, `--fixture` and new `--out` are required. It installs only an absent fixture on a dedicated authorized target and records cleanup. These raw-drain measurements do not qualify Flutter latency; use the [current benchmark](../../docs/implementation/video-performance.md).
+
+The standalone [Android tone source](audio_fixture/README.md) supplies explicit PCM input through `app_process`; it is separate from the APK builders and does not validate host playback.

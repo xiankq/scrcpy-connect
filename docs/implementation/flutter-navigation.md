@@ -4,7 +4,7 @@
 
 ## 文件布局
 
-pages按业务父子目录组织：有子页的入口放index，叶页直接放业务目录。文件名为pages以下完整目录链下划线连接加_page.dart（包含index）。专属组件放当前widgets，跨子页放最近共同业务widgets，不引用其他页面私有组件。通用控件归app/lib/widgets，控制/转换归services，typed路由及加载归router；只为生成文件使用.g.dart part。
+pages按业务父子目录组织：有子页的入口放index，叶页直接放业务目录。文件名为pages以下完整目录链下划线连接加_page.dart（包含index）。专属组件放当前widgets，跨子页放最近共同业务widgets，不引用其他页面私有组件。通用控件归 `packages/design_system`，应用呈现与页面状态归 `app/lib/presentation`，业务执行按连接、文件、媒体等职责组织；typed路由及资源解析归router。只为生成文件使用.g.dart part。
 
 设置归settings、连接建立归connection、工作台/远控归devices/workspace、连接配置/数据/能力/诊断归devices/details（无独立详情页）、接收导出归transfers/details。目录表达业务归属，多入口复用同一实现，迁移不改变typed route身份。
 
@@ -12,7 +12,7 @@ pages按业务父子目录组织：有子页的入口放index，叶页直接放�
 
 完整图及地址由 `app/lib/router/app_router.dart` 的TypedGoRoute/TypedStatefulShellRoute声明，生成文件与源码同步；不在文档再列一份路由表。生产直接使用typed route，navigation.dart只保留显式远控启动、typed返回和回设备页。
 
-RouteRepository只接受记录ID，从当前权威设备/任务/会话重新核验；文件路径按当前清单核对。地址/ID不授予授权，缺失记录呈现可重试错误及返回入口，不强转extra。新远控只接受短暂RemoteLaunchIntent；意图丢失提供重新打开入口，URL/进程恢复不自动创建会话。已有远控必须同时匹配deviceId/sessionId。
+`RouteResourceResolver` 按路由参数从当前权威设备/任务/会话重新核验目标；文件路径按当前清单核对。地址/ID不授予授权，缺失记录呈现可重试错误及返回入口，不强转extra。新远控只接受短暂RemoteLaunchIntent；意图丢失提供重新打开入口，URL/进程恢复不自动创建会话。已有远控必须同时匹配deviceId/sessionId。
 
 兼容地址保留：details、tools、sessions回同设备工作台；设备adb-key回连接配置；settings/activities回设备列表；wireless/form/usb/qr呈现统一添加表单的预选形式。连接草稿与尝试身份由统一表单持有，切换后旧扫码/USB/发现回执不得导航或改新形式；重新授权与补连接端口保留原deviceId及授权身份。
 
@@ -26,7 +26,7 @@ RouteRepository只接受记录ID，从当前权威设备/任务/会话重新核�
 
 AppController为生成Notifier，AppState深冻结；页面select所需字段，服务snapshot读取。appDependenciesProvider在根ProviderScope注入真实request/events/close，controller以ref.watch持有，onDispose取消唯一订阅并关闭transport。异步回执受请求序号/生命周期约束；session.frame只发给所属页面流，不更新全应用快照。
 
-clipboardCoordinatorProvider拥有timer、事件和生命周期观察并在销毁时清理。文本控制器归页面；SessionViews按真实session/代际管理播放器，页面取得/释放自身呈现资格。当前runtime恢复边界归[状态恢复](state-recovery.md)。
+`clipboardCoordinatorProvider` 拥有 timer、事件和生命周期观察，并在销毁时清理。文本控制器归页面；`SessionViewRegistry` 登记窗口租约，串行处理可见性与关闭操作，页面通过 `SessionViewLease` 取得和释放自身呈现资格。恢复边界归[状态恢复](state-recovery.md)。
 
 ## 当前设备归属
 

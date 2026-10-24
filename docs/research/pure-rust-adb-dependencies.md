@@ -113,4 +113,4 @@ Android Wi-Fi 默认组播过滤可能影响原始 UDP 接收，须管理 Multic
 
 ## 8. 组合判断
 
-候选代码表明协议核心、SPAKE2 变体、nusb、mDNS 和压缩均有 Rust 实现路径；TLS provider、软件私钥运算、Zstd 的错误接口与各目标依赖闭包仍需分别评估。Keystore 外部 signer 可以隔离私钥，却会增加系统签名、证书与调用生命周期责任。源码语言、互操作成功、生产安全和四端构建不是同一证据。当前选择与实际依赖见[ADR 0002](../adr/0002-rust-adb-and-flutter-monorepo.md)、[ADB 库](../../crates/adb/README.md)和[工具链](../implementation/repository-tooling.md)。
+候选代码表明协议核心、SPAKE2 变体、nusb、mDNS 和压缩均有 Rust 实现路径；TLS provider、软件私钥运算、Zstd 的错误接口与各目标依赖闭包仍需分别评估。Keystore 外部 signer 可以隔离私钥，却会增加系统签名、证书与调用生命周期责任。源码语言、互操作成功、生产安全和四端构建不是同一证据。当前选择与实际依赖见[ADR 0002](../adr/0002-rust-adb-and-flutter-monorepo.md)、[ADB 库](../../rust/adb/README.md)和[工具链](../implementation/repository-tooling.md)。

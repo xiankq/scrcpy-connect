@@ -9,10 +9,10 @@ Asynchronous ADB services with two transport backends:
 use interop_adb::{Client, ConnectOptions, Identity, OperationOptions};
 
 # async fn example() -> interop_adb::Result<()> {
-let identity = Identity::generate()?; // Persist and reuse across connections.
+let identity = Identity::generate()?; // 持久化身份并在多次连接间复用。
 let client = Client::connect_tcp("192.0.2.10:5555", ConnectOptions {
     identity: Some(identity),
-    request_authorization: true, // Allow the target's authorization dialog.
+    request_authorization: true, // 允许被控设备显示授权对话框。
     ..Default::default()
 }).await?;
 let output = client.shell("printf hello", 4096, OperationOptions::default()).await?;
@@ -98,7 +98,7 @@ INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
   cargo test -p interop-adb --test reverse_adbd --test sync_adbd -- --ignored
 ```
 
-Ignored BoringSSL tests require the independently built helper documented in their source. Device tests require an authorized endpoint and use a unique temporary directory without invoking an adb executable. Wire fixtures cover legacy/authenticated transports, credit/backpressure, close, TLS and reverse allowlists; device tests cover reverse/JDWP and sync codec interoperability. These are separate from platform/product validation in [the validation record](../../docs/implementation/validation.md).
+Ignored BoringSSL tests require the independently built helper documented in their source. Device tests require an authorized endpoint and use a unique temporary directory without invoking an adb executable. Wire fixtures cover legacy/authenticated transports, credit/backpressure, close, TLS and reverse allowlists; device tests cover reverse/JDWP and sync codec interoperability. These are separate from platform/product validation in [the validation record](../../../docs/implementation/validation.md).
 
 Protocol sources at fixed AOSP revision `1cf2f017d312f73b3dc53bda85ef2610e35a80e9`:
 [handshake/reverse requests](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/adb.cpp),

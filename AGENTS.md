@@ -1,6 +1,6 @@
 # 项目约束
 
-Flutter 主控应用位于 `app/`，该目录直接包含 Flutter 应用结构；`packages`、`crates`、`servers` 分别承载共享界面与桥接、Rust 领域实现、被控设备临时执行产物。目录职责见 [README](README.md#工作区)。
+Flutter 主控应用与业务代码位于 `app/`；`packages` 仅承载通用设计系统、ADB、scrcpy 与媒体解码能力，Rust 实现统一位于同名的 `rust/<package>/`。FRB 及生成代码由能力包维护，应用只使用公开 Dart 接口。被控临时执行产物位于 `servers`。目录职责见 [README](README.md#工作区)。
 
 ## 按任务读取
 
@@ -11,7 +11,7 @@ Flutter 主控应用位于 `app/`，该目录直接包含 Flutter 应用结构�
 | 界面、布局、颜色、材质或 Pencil 组件 | [视觉工作约束](designs/AGENTS.md)、[视觉规范](designs/design.md) |
 | Flutter 页面、导航、当前设备归属 | [主控应用约束](app/lib/AGENTS.md) |
 | 共享主题、材质、控件或 token 接口 | [设计系统约束](packages/design_system/AGENTS.md) |
-| ADB 协议、被控版本、文件服务或 Rust 活动生命周期 | [Rust 核心约束](crates/AGENTS.md) |
+| ADB 协议、被控版本、文件服务或 Rust 活动生命周期 | [Rust 核心约束](docs/agents/native.md) |
 | 被控 JAR、原生助手、上游产物或嵌入摘要 | [服务端产物约束](servers/AGENTS.md) |
 | 资源所有权、路由、生成物或原生依赖 | [架构](docs/implementation/architecture.md)、[工具链契约](docs/implementation/repository-tooling.md) |
 

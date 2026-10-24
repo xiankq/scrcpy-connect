@@ -4,17 +4,21 @@
 
 ## 工作区
 
+以下职责是重构约束；当前生产接线、构建状态和未完成项见[本轮重构记录](docs/implementation/architecture-refactor-validation.md)。历史运行结果不代表本轮已交付。
+
 | 目录 | 职责 |
 | --- | --- |
-| `app/` | Flutter 主控、测试与各平台 runner |
-| `packages/` | 运行时组装、ADB、连接、偏好、文件、媒体、协议、诊断与设计系统；各包 README 说明接口 |
-| `crates/` | Rust ADB、设备执行核心、FRB 桥接和 Android 文件助手 |
-| `protocol/` | Dart/Rust 命令与字段形状的单一来源 |
-| `servers/` | 固定 scrcpy、协同 JAR、文件助手及其构建输入 |
+| `app/` | Flutter 主控、应用业务、测试和各平台 runner；只调用能力包的公开 Dart 接口 |
+| `packages/` | 通用 `design_system`、`adb`、`scrcpy`、`media_codec`；隐藏原生绑定与生成物 |
+| `rust/` | 与能力包同名的 Rust 实现；只提供需要原生执行的通用机制 |
+| `protocol/` | 应用命令与字段形状的单一来源；不作为通用包的聚合命令接口 |
+| `servers/` | scrcpy 与协同 JAR 的源码、构建输入和产物；文件助手的构建器、manifest 与 ABI 产物，助手 Rust 源码归 `rust/adb/device_fs_helper/` |
 | `designs/` | 产品规格、视觉规范和 Pencil 源稿 |
 | `tool/` | 生成、构建、检查、宿主驱动与测试夹具 |
 
 根 `pubspec.yaml` 声明 Dart workspace 和工具依赖；应用依赖在 `app/pubspec.yaml`，共用根 lockfile。
+
+应用内按 `application`、`connection`、`preferences`、`files`、`media`、`platform` 与 `presentation` 表达职责；页面与 typed route 的位置保持业务归属。通用包、原生捕获及媒体的模块位置和依赖规则见[架构](docs/implementation/architecture.md#模块位置与接口)。
 
 ## 开发与构建
 

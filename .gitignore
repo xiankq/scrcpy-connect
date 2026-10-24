@@ -1,7 +1,7 @@
-# Design preview exports belong in the system temporary directory.
+# 设计预览导出放在系统临时目录。
 /designs/previews/
 
-# Workspace outputs and machine-local configuration.
+# 工作区生成物和本机配置。
 /target/
 **/target/
 /.dart_tool/
@@ -21,7 +21,7 @@
 *.keystore
 *.jks
 
-# Flutter application and editor outputs.
+# Flutter 应用与编辑器输出。
 *.iml
 *.ipr
 *.iws
@@ -34,5 +34,5 @@
 /app/android/app/profile/
 /app/android/app/release/
 
-# Pinned build-time design tooling.
+# 固定版本的构建设计工具。
 **/node_modules/

@@ -32,7 +32,7 @@
 
 Linux `media_runtime_rotation_test.dart` 真实完成576×1280→1280×576→576×1280，同一texture/renderer/capture代际，两个尺寸元数据、普通帧无逐帧Dart事件，暂停恢复和释放通过。目标必须先锁定rotation0，结束恢复原user_rotation及FREE；scrcpy在FREE时freeze后thaw，AVD传感器可维持竖屏，因此未观察到方向改变的运行不能作为尺寸链路失败。迟到texture/renderer/capture回执及画质重建屏障由Rust/Dart回归覆盖。
 
-完整ADB typed adapter范围见[flutter_adb验收](../../packages/flutter_adb/test/README.md)。偏好持久化/迁移由Dart device_preferences覆盖，Rust只保留执行镜像、身份、事件与原生资源规则。
+完整ADB typed adapter范围见[adb验收](../../packages/adb/test/README.md)。偏好持久化/迁移由应用 Dart 偏好模块覆盖，Rust只保留执行镜像、身份、事件与原生资源规则。
 
 ## 复现入口
 

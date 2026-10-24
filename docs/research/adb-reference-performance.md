@@ -43,7 +43,7 @@ Tango 的 SYNC socket 使用以 `adb.maxPayloadSize` 为大小的 `BufferCombine
 
 libadb 则合并单条 SYNC 请求的头和内容，随后立即 `channel.write`；大文件同样按 64 KiB 分 DATA，所查路径没有 Tango 式跨记录合并。[write_req](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/sync.rs#L137-L166)、[DATA 循环](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/sync.rs#L454-L458)。
 
-本项目 [Sync::request](../../crates/adb/src/sync.rs) 合并单条头和内容后立即调用 `AdbStream::write_all`；[push](../../crates/adb/src/sync.rs) 对 SEND、各 DATA、DONE 分别调用，并在每次返回前等到对应 classic ACK。因此，**相对 Tango 的跨记录合并，存在可确认的优化缺口；不能说所有参考库都已经解决。**
+本项目 [Sync::request](../../rust/adb/src/sync.rs) 合并单条头和内容后立即调用 `AdbStream::write_all`；[push](../../rust/adb/src/sync.rs) 对 SEND、各 DATA、DONE 分别调用，并在每次返回前等到对应 classic ACK。因此，**相对 Tango 的跨记录合并，存在可确认的优化缺口；不能说所有参考库都已经解决。**
 
 ### 同一 SYNC 工作负载的受控实验
 
@@ -61,7 +61,7 @@ libadb 则合并单条 SYNC 请求的头和内容，随后立即 `channel.write`
 
 ## 4. 稳定性：共享发送与接收耦合需按具体实现比较
 
-本项目正常 WRTE 路由使用 `try_send`，不等待应用消费者；ACK/信用由逐流读取端返还。问题路径是 [reader 的 response 入队](../../crates/adb/src/client.rs)：普通 CLSE、未知流等响应需要等待共享 64 帧 writer 队列的容量。已用 67 条 classic 流、256 字节内存 transport 复现：66 条流写满出站，收到一条 CLSE 后，无关流的 hello 不能在 100 ms 内交付；排空出站后恢复。该夹具是条件性阻塞证据，不代表普通单文件会填满队列。
+本项目正常 WRTE 路由使用 `try_send`，不等待应用消费者；ACK/信用由逐流读取端返还。问题路径是 [reader 的 response 入队](../../rust/adb/src/client.rs)：普通 CLSE、未知流等响应需要等待共享 64 帧 writer 队列的容量。已用 67 条 classic 流、256 字节内存 transport 复现：66 条流写满出站，收到一条 CLSE 后，无关流的 hello 不能在 100 ms 内交付；排空出站后恢复。该夹具是条件性阻塞证据，不代表普通单文件会填满队列。
 
 AOSP 的所查 `BlockingConnectionAdapter` 使用独立读写线程，写入仅把 packet 放入 deque 后通知 writer；没有本项目这个有界 channel 的容量等待。因此它避免同一条饱和路径，但其排队内存策略也不同，不能通过改成无界队列来简单模仿。[独立读写](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/transport.cpp#307)、[入队](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/transport.cpp#439)。
 
@@ -73,17 +73,17 @@ ACK 时点也不同：本项目 classic 等整包被读取；AOSP 可在本机 s
 
 - `interop-adb` 已实现 delayed ACK，`ConnectOptions` 默认关闭并要求显式 opt-in；AOSP 官方也默认关闭。移动主控产品默认请求该能力，只有双方 feature 交集非空才启用。Tango 默认 feature 包含 DelayedAck 并在双方支持时使用，默认接收信用 32 MiB。libadb 的桌面与 embedded 配置分别可取 32 MiB、32 KiB，握手仍由调用者提供 feature 集。不能仅按库名或配置方法断言任何调用都会开启。[Tango 协商](https://github.com/yume-chan/ya-webadb/blob/7bcec613f3441a7f20bdf3e5e8646bce63fe790d/libraries/adb/src/daemon/transport.ts#L102-L127)、[libadb 配置](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/base/connection/config.rs#L43-L63)。
 - 本项目开启后给予设备 64 KiB 接收信用，限制的是**设备到主控**方向；push 的发送信用由设备返回的 OPEN OKAY 授予。前者不能直接用来解释上传吞吐。调整窗口需同时测方向、ACK 时点、内存与控制延迟。
-- [Frame::write](../../crates/adb/src/protocol.rs) 对现代连接仍计算 payload 字节和；AOSP、Tango、libadb 按协商版本省略。多一次 payload 遍历是确定的 CPU 工作差异，影响大小未经 release profile 量化。[AOSP](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/transport.cpp#565)、[Tango](https://github.com/yume-chan/ya-webadb/blob/7bcec613f3441a7f20bdf3e5e8646bce63fe790d/libraries/adb/src/daemon/dispatcher.ts#L458-L467)、[libadb](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/base/connection.rs#L269-L270)。
-- AOSP CLI 的 push 默认选择 Any 并按共同能力择 Zstd/LZ4/Brotli；pull 默认 None，不能概括为所有方向默认压缩。本项目 Core 调用普通 push/pull，没有使用库内压缩 API。可压缩内容上传值得测试；照片视频等已有压缩内容不保证受益。[CLI 默认值](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/client/commandline.cpp#2008)、[算法选择](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/client/file_sync_client.cpp#275)、[Core 调用](../../crates/interop_core/src/files.rs)。
+- [Frame::write](../../rust/adb/src/protocol.rs) 对现代连接仍计算 payload 字节和；AOSP、Tango、libadb 按协商版本省略。多一次 payload 遍历是确定的 CPU 工作差异，影响大小未经 release profile 量化。[AOSP](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/transport.cpp#565)、[Tango](https://github.com/yume-chan/ya-webadb/blob/7bcec613f3441a7f20bdf3e5e8646bce63fe790d/libraries/adb/src/daemon/dispatcher.ts#L458-L467)、[libadb](https://github.com/tarigo/libadb/blob/bc681df985967e083cdd7c02df45f942495393a5/libadb/src/base/connection.rs#L269-L270)。
+- AOSP CLI 的 push 默认选择 Any 并按共同能力择 Zstd/LZ4/Brotli；pull 默认 None，不能概括为所有方向默认压缩。本项目 Core 调用普通 push/pull，没有使用库内压缩 API。可压缩内容上传值得测试；照片视频等已有压缩内容不保证受益。[CLI 默认值](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/client/commandline.cpp#2008)、[算法选择](https://android.googlesource.com/platform/packages/modules/adb/+/9084198a2d4b0f6a0f174260fb42da33485b684d/client/file_sync_client.cpp#275)、研究版本的旧 Core 调用（文件传输实现已移除）。
 
-## 6. Core 层额外成本仍然成立，但不是 ADB 协议缺陷
+## 6. 研究版本的 Core 额外成本
 
-这些结论来自本项目代码，不声称参考项目提供相同的产品语义：
+以下是研究版本的代码观察，不声称参考项目提供相同的产品语义。旧文件执行和传输持久化链已移除，现行文件实现见[文件所有权](../implementation/file-ownership.md)；这里保留原版本事实，不作为当前源码入口或性能结论：
 
-- [device::metadata](../../crates/interop_core/src/device.rs) 在发布连接前等待 getprop 与 dumpsys battery，超时 8 秒。参考传输库通常只提供握手和服务访问，比较连接速度时必须将“ADB CNXN 完成”和“产品设备信息就绪”分别计时。电量等可选字段可评估后置；必要身份核验仍需保留。
-- [remote_fs::stat](../../crates/interop_core/src/remote_fs.rs) 对现代 lstat 错误统一使用 helper，包括正常 ENOENT；[原子提交](../../crates/interop_core/src/files.rs) 再调用 helper。每次 [部署](../../crates/interop_core/src/remote_helper.rs) 都上传并回读完整二进制，导致新目标小文件的固定流量明显大于文件内容。此机制是确定的，用户时间影响未做实机测量；优化不能删除精确字节授权和打开 inode 的保证。
-- [persist_transfers](../../crates/interop_core/src/files.rs) 每次编码全部任务，调用 [private_write](../../crates/interop_core/src/runtime.rs) 全量写入并 sync_all。批量逐项保存有累计 O(N²) 级记录处理量；应针对千级小文件测持久化占比，保留恢复语义后再合并或增量保存。
-- push/pull 的 3600 秒为整个复制的绝对时限，持续进度也会到期，且没有字节续传。dadb 所查写超时采用每次写入进展的停滞期限；这提供了策略对照，不表示它完整操作都没有其他时限，也不意味着应照抄其 10 秒值。[本项目选项](../../crates/interop_core/src/files.rs)、[dadb](https://github.com/mobile-dev-inc/dadb/blob/55cb08849b9b17c1e627156a0de11d91d36034de/dadb/src/main/kotlin/dadb/AdbConnection.kt#L98)。
+- [device::metadata](../../rust/app/core/src/device.rs) 在发布连接前等待 getprop 与 dumpsys battery，超时 8 秒。参考传输库通常只提供握手和服务访问，比较连接速度时必须将“ADB CNXN 完成”和“产品设备信息就绪”分别计时。电量等可选字段可评估后置；必要身份核验仍需保留。
+- `remote_fs::stat`（已移除） 对现代 lstat 错误统一使用 helper，包括正常 ENOENT；旧原子提交 再调用 helper。每次 旧部署 都上传并回读完整二进制，导致新目标小文件的固定流量明显大于文件内容。此机制是确定的，用户时间影响未做实机测量；优化不能删除精确字节授权和打开 inode 的保证。
+- `persist_transfers`（已移除） 每次编码全部任务，调用 [private_write](../../rust/app/core/src/runtime.rs) 全量写入并 sync_all。批量逐项保存有累计 O(N²) 级记录处理量；应针对千级小文件测持久化占比，保留恢复语义后再合并或增量保存。
+- push/pull 的 3600 秒为整个复制的绝对时限，持续进度也会到期，且没有字节续传。dadb 所查写超时采用每次写入进展的停滞期限；这提供了策略对照，不表示它完整操作都没有其他时限，也不意味着应照抄其 10 秒值。研究版本的旧复制选项（已移除）、[dadb](https://github.com/mobile-dev-inc/dadb/blob/55cb08849b9b17c1e627156a0de11d91d36034de/dadb/src/main/kotlin/dadb/AdbConnection.kt#L98)。
 
 ## 7. 后续决策所需测量
 

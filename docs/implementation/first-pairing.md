@@ -1,10 +1,10 @@
 # 首次配对、加密连接与撤权验证
 
-产品用自己的Rust身份，经被控系统配对码窗口完成PAKE，再用独立连接端口建立Required TLS。宿主只协调系统界面/当次码/转发，不执行adb pair、不导入产品私钥或在目标安装APK。配对、连接、授权拒绝分别核验；当前用户规则见[设备连接](../../designs/prod/device-connection.md)。
+应用选择持久主控授权身份，通过 `adb` 的公开 Dart 能力完成配对，再用独立连接端口建立 Required TLS。密钥机制归能力包，身份选择、设备绑定及重试归应用；不把私钥作为产品快照或命令参数导出。配对、连接、授权拒绝分别核验；用户规则见[设备连接](../../designs/prod/device-connection.md)，当前生产切换见[本轮重构记录](architecture-refactor-validation.md)。
 
-## 可重复的产品链路
+## 历史设备链路与复验入口
 
-`app/integration_test/first_pairing_test.dart`与 `tool/driver/first_pairing.dart`经过app.main/FRB/Runtime及真实表单：
+下列 API36 样本通过当时的正式应用表单和移动端原生实现；验收驱动只协调系统界面、当次码及转发，不在应用外执行 adb pair、不导入产品私钥或在目标安装 APK。生产切换完成后，仍从 `app/integration_test/first_pairing_test.dart` 与 `tool/driver/first_pairing.dart` 复验以下链路：
 
 1. 新身份访问真实TLS listener，要求明确证书授权拒绝，不以超时代替。
 2. 错码失败且无GUID；重新打开系统窗口，用新码完成PAKE。

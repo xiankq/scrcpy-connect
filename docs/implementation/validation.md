@@ -6,13 +6,14 @@
 
 | 记录 | 责任 |
 | --- | --- |
+| [架构重构](architecture-refactor-validation.md) | 2026-10-23 多轮架构审计、生命周期整改与本次回归边界 |
 | [原生媒体](native-media-validation.md) | 2026-10-23跨平台运行、历史严格性能及组装入口 |
 | [公共整改](scrcpy-audit-fixes.md) | 公共C/S项、启动故障、固定依赖及当轮最终交付摘要 |
 | [桌面整改](scrcpy-audit-desktop-fixes.md) / [Windows运行](windows-native-media-validation.md) | D项、GPU/PCM、ADB关闭与普通bootstrap |
 | [移动/Apple整改](scrcpy-audit-mobile-apple-fixes.md) / [Apple运行](apple-native-media-validation.md) | A项、JNI、Metal/AudioQueue、SDK与模拟器/实体边界 |
 | [传输整改](scrcpy-audit-transport-fixes.md) | T项、输入代际、USB与控制回归 |
-| [ADB服务](../../packages/flutter_adb/test/README.md) | 私有官方server和typed适配器 |
-| [文件能力](../../packages/device_files/VALIDATION.md) | 当前Dart任务所有者、持久恢复及原生执行组装 |
+| [ADB服务](../../packages/adb/test/README.md) | 私有官方server和typed适配器 |
+| [文件能力](file-ownership-validation.md) | 当前Dart任务所有者、持久恢复及原生执行组装 |
 
 ## 控制、连接与恢复
 

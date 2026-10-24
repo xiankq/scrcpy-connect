@@ -37,7 +37,7 @@ Flutter成像必须在已登录用户交互会话运行；SSH Session0可解码�
 
 真正main的outgoingMediaDirectory→media.cache.configure曾在canonical Windows路径返回错误1。根因是逐组件查询把 `Prefix(VerbatimDisk)`（如 `\\?\C:`）当作完整目录；追加RootDir后才可查询。现仅跳过Prefix自身，仍检查根及后续组件、拒绝相对路径/junction并保留真实I/O错误。旧DeviceRuntime组装绕过普通bootstrap，未覆盖此缺口。
 
-`crates/interop_core/tests/runtime_startup.rs` 在真实Windows无ADB/GUI下复现修前错误，修后canonical登记/重开和junction拒绝均通过。Windows MSVC工具终端入口：
+`rust/app/core/tests/runtime_startup.rs` 在真实Windows无ADB/GUI下复现修前错误，修后canonical登记/重开和junction拒绝均通过。Windows MSVC工具终端入口：
 
 ```sh
 cargo test --release -p interop-core --test runtime_startup -- --nocapture

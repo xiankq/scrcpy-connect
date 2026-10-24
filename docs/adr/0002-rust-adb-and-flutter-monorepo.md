@@ -4,7 +4,7 @@ status: accepted
 
 # 独立 Rust ADB 主机库与 Flutter 主控应用
 
-移动端 ADB 主机协议由独立 Rust 库提供；桌面使用随应用固定打包的官方 ADB。`flutter_adb` 在 Dart 层提供统一接口。Flutter 承担主控界面与性能不敏感的业务编排，使用 Hooks 和 Riverpod；协议、绑定与应用在同一仓库协同演进。能力拆分与媒体路径见 [0007](0007-capability-packages-and-native-media.md)。
+移动端 ADB 主机协议由独立 Rust 库提供；桌面使用随应用固定打包的官方 ADB。`adb` 在 Dart 层提供统一接口。Flutter 承担主控界面与性能不敏感的业务编排，使用 Hooks 和 Riverpod；协议、绑定与应用在同一仓库协同演进。通用包与业务归属见 [0008](0008-reusable-packages-and-application-composition.md)，媒体路径见 [0007](0007-capability-packages-and-native-media.md)。
 
 “完整 ADB 主机”指连接、认证、无线配对、设备发现、传输复用及被控服务访问；不等同于重写被控设备的 adbd。桌面官方 ADB 属于产品依赖，应用拥有独立 server 的端口、身份目录与生命周期，不接管用户已有的 5037 服务。
 

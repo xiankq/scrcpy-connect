@@ -1,40 +1,9 @@
-# Shared command contract
+# 应用命令契约
 
-`commands.json` is the source for the Dart and Rust command discriminators,
-declared request/result fields, and state-verification policy. `owner: core`
-crosses FRB; `owner: bridge` is resolved by the main device's local coordinator.
-Platform MethodChannel methods and companion RPC methods are separate protocols.
+`commands.json` 定义应用内 Dart 命令、请求与结果的字段形状，以及状态核验要求。生成输出仅为 `app/lib/application/transport/commands_generated.dart`；业务分派与资源所有权由应用模块负责。FRB 类型契约、平台 MethodChannel 和伴生服务 RPC 分别维护，不使用这份应用命令表。
 
-For a composed response, `nativeResult` declares the native facts validated by
-Rust; `result` declares the complete public result validated after Dart owners
-contribute their state. For example, `state.snapshot` gets durable transfer tasks
-from `device_files`. Native responses must not invent placeholder task state.
+修改后从仓库根目录运行 `dart tool/protocol_codegen.dart`。`--check` 在临时目录格式化预期输出，再与当前文件比较，不重写产物。主检查脚本分别核验应用命令和 FRB 生成物。
 
-Run `dart tool/protocol_codegen.dart` from the repository root after changing the contract.
-`--check` formats expected outputs in memory and compares them without writing.
-The main check script checks this contract and independently checks FRB output.
+请求和结果直接使用 Dart Map，由 `command_contract.dart` 核验必需字段及已提供的可选字段。没有应用 JSON 编解码桥，也不生成 Rust 命令分派器。可选字段为 null 时视为缺省，未知字段允许扩展；范围、默认值、权限、设备归属、资源代次和副作用仍由对应所有者核验。
 
-The wire envelope is version 1:
-
-```json
-{"protocolVersion":1,"command":"devices.list","params":{}}
-{"protocolVersion":1,"ok":true,"data":{"devices":[]}}
-{"protocolVersion":1,"ok":false,"error":{"code":"disconnected","message":"...","details":null}}
-```
-
-Rust accepts an omitted request version as legacy v1. New Dart requests include
-the version and reject a missing or different response version. Bridge and native
-library must ship together. The native request limit counts UTF-8 bytes, as does
-the Dart encoder.
-
-Declared fields reject missing required fields or incorrect primitive shapes.
-Unknown fields remain available for additive extensions. Optional null fields
-remain absent for compatibility. Domain modules still decide ranges, defaults,
-alternative session selectors, permissions, generation validity and side effects.
-This is a typed command/validated wire contract, not a claim that every dynamic
-domain payload has been converted into a Dart or Rust struct.
-
-To add a command, declare its owner and stable field shapes, regenerate outputs,
-implement the dispatcher, and test its behavior through the owning module.
-Declare `requiresVerifiedState` for operations that must wait for reconciliation;
-the exact key/touch UP/CANCEL cleanup exception remains in state recovery.
+添加命令时声明稳定字段，重新生成，在责任模块中实现分派并验证行为。需要等待状态对账的操作声明 `requiresVerifiedState`；按键和触摸 UP/CANCEL 的清理例外由状态恢复模块维护。
