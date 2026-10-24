@@ -18,14 +18,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Target-owned application tasks and rasterized package icons; never an installed-app fallback. */
+/** 被控设备拥有的真实应用任务及栅格化包图标，不回退为已安装应用列表。 */
 final class Apps {
     private static final int MAX_TASKS = 512;
     private static final int ICON_SIZE = 96;
     private static final int MAX_ICON_BYTES = 128 * 1024;
 
     static boolean applicationTask(boolean running, int activities, int activityType, int taskUser, int currentUser) {
-        // TaskInfo activity type 1 is STANDARD; HOME, RECENTS, ASSISTANT and DREAM are not apps.
+        // TaskInfo 的 activity type 1 表示 STANDARD；HOME、RECENTS、ASSISTANT 和 DREAM 不属于应用。
         return running && activities > 0 && activityType == 1 && taskUser == currentUser;
     }
 
@@ -46,8 +46,8 @@ final class Apps {
 
     private static void requireTaskAccess(Context context) throws Exception {
         if (context.checkPermission("android.permission.REAL_GET_TASKS", Process.myPid(), Process.myUid()) == PackageManager.PERMISSION_GRANTED) return;
-        // AOSP permits legacy GET_TASKS only for a privileged UID. Without this check,
-        // getRunningTasks silently returns just shell/home and an empty grid would lie.
+        // AOSP 仅允许特权 UID 使用旧 GET_TASKS；缺少此检查时，getRunningTasks 会静默只返回 shell/home，不能据此展示空列表。
+        //
         if (context.checkPermission("android.permission.GET_TASKS", Process.myPid(), Process.myUid()) == PackageManager.PERMISSION_GRANTED
             && Boolean.TRUE.equals(Main.invoke(Main.service("package", "android.content.pm.IPackageManager"), "isUidPrivileged", Process.myUid()))) return;
         throw new Main.Failure("permission_denied", "The shell identity cannot enumerate application tasks");
@@ -67,7 +67,7 @@ final class Apps {
         JSONArray apps = new JSONArray();
         Set<String> seen = new HashSet<>();
         for (ActivityManager.RunningTaskInfo task : tasks) {
-            // Resolve newer metadata reflectively so API21 icon requests do not link TaskInfo.
+            // 通过反射读取新版本元数据，避免 API21 图标请求链接到 TaskInfo。
             Field userField = task.getClass().getField("userId");
             int taskUser = userField.getInt(task);
             int type = (Integer) Main.invoke(task, "getActivityType");
@@ -81,7 +81,7 @@ final class Apps {
                     .put("packageName", name).put("system", (info.flags & ApplicationInfo.FLAG_SYSTEM) != 0)
                     .put("taskId", task.id).put("userId", taskUser));
             } catch (PackageManager.NameNotFoundException disappeared) {
-                // A package may be removed between the Binder snapshot and metadata read.
+                // 包可能在 Binder 快照与元数据读取之间被移除。
             }
         }
         return new JSONObject().put("apps", apps).put("source", "runningTasks").put("live", true).put("userId", user);
@@ -95,7 +95,7 @@ final class Apps {
         PackageManager packages = current.getPackageManager();
         final Drawable icon;
         try {
-            // getApplicationInfo first prevents PackageManager's missing-package default icon.
+            // 先用 getApplicationInfo 确认包存在，避免 PackageManager 返回缺失包的默认图标。
             ApplicationInfo info = packages.getApplicationInfo(name, 0);
             if (info.icon == 0) throw new Main.Failure("app_icon_unavailable", "The package does not declare an application icon");
             icon = packages.getResourcesForApplication(info).getDrawable(info.icon);

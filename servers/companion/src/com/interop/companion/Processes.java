@@ -2,7 +2,7 @@ package com.interop.companion;
 
 import java.util.concurrent.TimeUnit;
 
-/** Bounded waiting for processes owned by this companion. */
+/** 对本协同助手拥有的进程进行有界等待。 */
 final class Processes {
     static boolean alive(Process process) {
         try { process.exitValue(); return false; }

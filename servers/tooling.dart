@@ -154,8 +154,8 @@ Future<Uint8List> download(String url, String expected) async {
   }
 }
 
-/// ZIP_STORED headers match the historical producer, including its platform
-/// attributes. This keeps pinned JAR bytes independent of archive library defaults.
+/// ZIP_STORED 头及平台属性遵循历史生成器，避免固定 JAR 字节受归档库默认值影响。
+///
 Uint8List storedZip(
   Map<String, List<int>> entries, {
   required DateTime date,

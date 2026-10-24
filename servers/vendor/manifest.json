@@ -40,13 +40,13 @@
     }
   },
   "inputs": {
-    "../tooling.dart": "1f2d1917f8bd3bc4bf1fc9776ad45bd593ee99047f6f022008dd54518cce79a5",
+    "../tooling.dart": "de4f8837de9e57a9d9d9a81c7169dd653a6c69d2c6c0bb58558928ddf0e1425a",
     "ADDITIONAL_LICENSE_INFO-desugar_jdk_libs": "a69bce275ba7a3570af6579cb0f55682cd75fedfcd49e0e8e9022270c447c916",
     "ASSEMBLY_EXCEPTION-desugar_jdk_libs": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb",
     "LICENSE-desugar_jdk_libs": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726",
     "LICENSE-desugar_jdk_libs_configuration": "68834f116f8ff545f05d14753357b620748156d60ee36b26beab4cb3f317efe4",
     "LICENSE-scrcpy": "01c12035bf35af37241298dc7ad538eb2a07e5c940437bc6876feeaa9d1951d0",
-    "build.dart": "24bf644035498fd6d52674cc1cb11d4558fc3e693fbab7f92f8d961b55742544",
+    "build.dart": "b471441e4e9861184443a8eedad40f22f0cc25223c2bc66b18c564beb7afe003",
     "test/ScrcpyApi21Probe.java": "6ad3c7e1e5563d92a38558987c4e034c1e693f014ca36c5d6e59dc67674ebe88",
     "test/build_probe.dart": "786750cf64aa1c43480d19beb2c7deece6c741fd1c512e6fc63768e29e4d9e8b"
   },

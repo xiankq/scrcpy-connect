@@ -2,7 +2,7 @@ package com.interop.companion;
 
 import java.lang.reflect.InvocationTargetException;
 
-/** Lazily binds user-dependent work; cleanup retains the original listener owner. */
+/** 按需绑定当前用户的工作，清理仍使用最初的监听所有者。 */
 final class CurrentUser {
     private final Class<?> manager;
     private Integer owner;

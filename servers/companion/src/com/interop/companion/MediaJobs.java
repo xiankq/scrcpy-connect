@@ -7,7 +7,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONObject;
 
-/** One decoder process plus one waiting job; independent of Binder callbacks. */
+/** 一个解码进程和一个等待任务，与 Binder 回调独立。 */
 final class MediaJobs implements AutoCloseable {
     interface Reply { void send(JSONObject value) throws Exception; }
     private final Reply reply;
@@ -87,15 +87,15 @@ final class MediaJobs implements AutoCloseable {
                 }
                 java.lang.Process child = process;
                 Thread stderr = new Thread(() -> {
-                    // Drain diagnostics without storing or logging source paths/content.
+                    // 持续排空诊断输出，不存储或记录源路径与内容。
                     try { byte[] buffer = new byte[2048]; while (child.getErrorStream().read(buffer) != -1) {} } catch (IOException ignored) {}
                 }, "interop-media-stderr"); stderr.setDaemon(true); stderr.start();
                 deadline = timer.schedule(() -> cancel("media_timeout"), 10, TimeUnit.SECONDS);
                 byte[] input = (request.toString() + "\n").getBytes(StandardCharsets.UTF_8);
                 if (input.length > 16384) throw new Thumbnail.Failure("invalid_argument", "Media request exceeds the input bound");
                 child.getOutputStream().write(input); child.getOutputStream().flush();
-                // Keep stdin open: EOF asks the child's independent monitor to
-                // SIGKILL itself. Native decode does not block that monitor.
+                // 保持 stdin 打开；EOF 会让子进程的独立监控器自行 SIGKILL，原生解码不会阻塞监控器。
+                //
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
                 for (int value; (value = child.getInputStream().read()) != -1 && value != '\n';) {
                     if (output.size() >= 384 * 1024) throw new Thumbnail.Failure("thumbnail_output_limit", "Decoder response exceeds the output bound");
@@ -126,8 +126,8 @@ final class MediaJobs implements AutoCloseable {
             try { child.exitValue(); return true; } catch (IllegalThreadStateException alive) {}
             try { child.getOutputStream().close(); } catch (IOException ignored) {}
             if (Processes.await(child, 2000)) return true;
-            // Owned Process fallback, never an arbitrary numeric PID. On AOSP
-            // this is SIGTERM; the child's own deadline provides SIGKILL.
+            // 回退仅使用拥有的 Process，不使用任意数字 PID；AOSP 对应 SIGTERM，子进程自身的期限负责 SIGKILL。
+            //
             child.destroy();
             return Processes.await(child, 2000);
         } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return false; }

@@ -4,18 +4,18 @@
     "size": 64079
   },
   "sources": {
-    "../tooling.dart": "1f2d1917f8bd3bc4bf1fc9776ad45bd593ee99047f6f022008dd54518cce79a5",
-    "build.dart": "86850a0cdc18955d16d34d7b7680b89bb81e6d7bb614c04c7671bf9ceb6ffa52",
+    "../tooling.dart": "de4f8837de9e57a9d9d9a81c7169dd653a6c69d2c6c0bb58558928ddf0e1425a",
+    "build.dart": "f89815d014c52789f6108ae0e82b2e9f79ec3854e6c7f9fa089d376a366d4316",
     "build.sh": "620b1c0fb01bd36ae5b714be11b36f0d1fb4e04aa6937d517fa33cb13096cfeb",
-    "src/com/interop/companion/Apps.java": "8b2051119eea2beac1c16b1659aebb4f3e63ade904ba598cf7ed23159d988085",
-    "src/com/interop/companion/CallServices.java": "1acc01056621133acde69872286ff7831ffa8730f37bef700137d06751654df5",
-    "src/com/interop/companion/ClipboardAppOps.java": "e5c9e491e025fd3db6c63d64948def123dbce84d0d2ec12e347fd9578ed263d9",
-    "src/com/interop/companion/CurrentUser.java": "c5ee401b9ba95f19c4f9425f901bba8bc29d28922e9ab6748243c3dce2781659",
-    "src/com/interop/companion/Main.java": "8088d7f2265cf3f66974a1e9177eb45ad563190278be398824a3fe0fcea420b4",
-    "src/com/interop/companion/MediaJobs.java": "79395e2629997411fd2ef5325366e40fe3112f4ef07148cc226948e90657d3f3",
-    "src/com/interop/companion/NotificationContent.java": "1cf15a180c0a499245fbc817aa7ef4b0ec46a1f7cd293aa5ca24e9ca3a98cb84",
-    "src/com/interop/companion/Processes.java": "bb0a018e3cf3a9a3de1f1f64a17e24597660d87078f446037d27aa145593c866",
-    "src/com/interop/companion/Thumbnail.java": "277549b8baa8e9197a9333f460e6d705b347d3d04ffd88b57d6baf5b2bd2aafc"
+    "src/com/interop/companion/Apps.java": "f238c2eb58ffce8b76ef49b97df4282f31c73bc0120126b6e20461952d03bd8d",
+    "src/com/interop/companion/CallServices.java": "a243408560aa4740c6a4d1c393dc5812ec778d80a7c974e14cbfc8f25091e0f7",
+    "src/com/interop/companion/ClipboardAppOps.java": "fa5dadfe94d51db41930ca2903c844bf394fc4e06b335707f056db584b8383a7",
+    "src/com/interop/companion/CurrentUser.java": "a90a88f800c2eb9f4041bb1171317dcf009a99b9179d01d59ad8e04bcdeeecbe",
+    "src/com/interop/companion/Main.java": "16e641cb9733386f3f4d73cf64615a9b9c999a7020a3d90397744d2ee1dd8592",
+    "src/com/interop/companion/MediaJobs.java": "b610c957043206d4aed6755b0a57e57bdf98092c7d5472ead31df6cf6227fc98",
+    "src/com/interop/companion/NotificationContent.java": "8a231f271b4c16442ecddd00643d1ac716b3aeb6a698553c5230e547b4754813",
+    "src/com/interop/companion/Processes.java": "14443e9ff6b2a14c4161858b89b0146c5b8e559977b524ea80b54e71b663448a",
+    "src/com/interop/companion/Thumbnail.java": "ef65e1e342b1b69e430e7f33fadf7541ce76dbebd9bde265980150a4ee9f82af"
   },
   "tools": {
     "androidPlatform": "36",

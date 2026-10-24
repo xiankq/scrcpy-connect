@@ -31,7 +31,7 @@ const dependencies = {
 const androidJarSha =
     'd9eb9da824d9e247a352f570f01e1169e725b2954bca9e283a71786c59b59f9a';
 const buildAddition = '''
-// Build-only core library API desugaring. Upstream Java sources are unchanged.
+// 仅在构建时对核心库接口执行脱糖，保留上游 Java 源码原文。
 android {
     buildToolsVersion '37.0.0'
     compileOptions {
@@ -120,7 +120,7 @@ Archive _verifiedZip(List<int> bytes) {
   final decoder = ZipDecoder();
   final archive = decoder.decodeBytes(bytes, verify: true);
   final names = <String>{};
-  // archive 4 deduplicates names and no longer verifies CRCs during decode.
+  // archive 4 会按名称去重，解码时也不再验证 CRC。
   for (final header in decoder.directory.fileHeaders) {
     require(names.add(header.filename), 'Duplicate ZIP entries');
     final file = header.file;
@@ -300,6 +300,13 @@ Future<File> getGradle(ArgResults options, Directory temporary) async {
   return executable;
 }
 
+Future<Uint8List> sourceArchive(String? localPath) async {
+  if (localPath == null) return download(sourceUrl(commit), sourceSha);
+  final bytes = await File(localPath).readAsBytes();
+  require(sha256(bytes) == sourceSha, 'Source archive SHA-256 mismatch');
+  return bytes;
+}
+
 Future<void> build(ArgResults options) async {
   final sdk = androidSdk(options['sdk'] as String?);
   require(
@@ -330,7 +337,7 @@ Future<void> build(ArgResults options) async {
   );
   await withTemporary('scrcpy-vendor-build-', (temporary) async {
     final gradle = await getGradle(options, temporary);
-    final source = await download(sourceUrl(commit), sourceSha);
+    final source = await sourceArchive(options['source'] as String?);
     await extractArchive(
       TarDecoder().decodeBytes(GZipDecoder().decodeBytes(source, verify: true)),
       temporary,
@@ -421,7 +428,7 @@ Future<void> build(ArgResults options) async {
       stdout.writeln('OK clean source rebuild is byte-for-byte identical');
       return;
     }
-    // Preserve the source-set hash encoding used by the existing provenance.
+    // 保留现有来源记录所使用的源码集合摘要编码。
     final names = originalSources.keys.toList()..sort();
     final sourceJson =
         '{${names.map((name) => '${jsonEncode(name)}: ${jsonEncode(originalSources[name])}').join(', ')}}';
@@ -498,6 +505,7 @@ Future<void> main(List<String> arguments) => cli(() async {
     ..addFlag('update', negatable: false)
     ..addOption('sdk')
     ..addOption('gradle')
+    ..addOption('source', help: 'Local pinned scrcpy source archive')
     ..addFlag('offline', negatable: false)
     ..addMultiOption('gradle-arg', splitCommas: false)
     ..addFlag('help', abbr: 'h', negatable: false);

@@ -1,4 +1,4 @@
-// Keep the migrated command's existing spelling for external callers.
+// 保留迁移前的命令拼写，兼容外部调用方。
 // ignore_for_file: file_names
 
 import 'dart:async';
@@ -151,7 +151,7 @@ class Probe {
     final secret = randomHex(32);
     final companionPath = '/data/local/tmp/interop-companion-probe-$id.jar';
     final fixturePath = '/data/local/tmp/interop-companion-fixture-$id.jar';
-    // Register each path before push, so partial failed transfers are cleaned too.
+    // push 前先登记每个路径，确保部分传输失败也能清理。
     pushed.add(companionPath);
     await adb(['push', p.join(root.path, 'companion.jar'), companionPath]);
     pushed.add(fixturePath);

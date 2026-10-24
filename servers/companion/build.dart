@@ -25,7 +25,7 @@ Map<String, String> inputs(Directory root) {
   };
 }
 
-/// [root] is the companion directory, including its manifest, sources and JAR.
+/// [root] 是协同助手目录，包含清单、源码与 JAR。
 Future<void> verifyManifest(Directory root) async {
   final manifest = readJson(File(p.join(root.path, 'manifest.json')));
   require(

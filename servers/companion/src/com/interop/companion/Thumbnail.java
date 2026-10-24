@@ -21,13 +21,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import org.json.JSONObject;
 
-/** Isolated, single-request shell process. Never sends original media bytes. */
+/** 隔离的单请求 shell 进程，不发送原始媒体字节。 */
 public final class Thumbnail {
     static final int MAX_JPEG = 256 * 1024;
     static final long MAX_SOURCE = 64L * 1024 * 1024 * 1024;
-    // Linux UAPI O_CLOEXEC = 02000000 for Android ARM/ARM64/x86/x86_64.
-    // The kernel flag predates API21, whose OsConstants Java field is absent.
-    // Preserve atomic close-on-exec at open without resolving that newer field.
+    // Android ARM/ARM64/x86/x86_64 的 Linux UAPI O_CLOEXEC 为 02000000；内核标志早于 API21，但其 OsConstants 字段尚不存在，直接在 open 时保留原子的 close-on-exec。
+    //
+    //
     private static final int OPEN_CLOSE_ON_EXEC = 0x80000;
     static final class Failure extends Exception {
         final String code;
@@ -69,9 +69,9 @@ public final class Thumbnail {
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw new Failure("media_decode_failed", "Image header is corrupt or this decoder cannot read it");
         if ((long) bounds.outWidth * bounds.outHeight > 100_000_000L) throw new Failure("media_pixel_limit", "Image dimensions exceed the bounded pixel count");
         Os.lseek(fd, 0, OsConstants.SEEK_SET);
-        // The FD constructor asks FileUtils for ActivityThread.currentApplication
-        // on Android 12+, which is absent in a shell process. The read-only
-        // InputStream API avoids MediaProvider transcoding and keeps this exact FD.
+        // Android 12+ 的 FD 构造器通过 FileUtils 查询 shell 进程中不存在的 ActivityThread.currentApplication；只读 InputStream 避免 MediaProvider 转码并保持同一 FD。
+        //
+        //
         int orientation;
         if (Build.VERSION.SDK_INT >= 24) {
             try (InputStream input = new BufferedInputStream(new FileInputStream(Os.dup(fd)), 8192)) {
@@ -79,9 +79,9 @@ public final class Thumbnail {
                 orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
             }
         } else {
-            // API21-23 only expose the filename constructor. A held duplicate
-            // names the exact opened inode, even if the source path is replaced;
-            // never reopen the user path or discard its EXIF orientation.
+            // API21–23 仅提供文件名构造器；持有的重复描述符指向原 inode，即使路径已被替换也不重开用户路径，并保留 EXIF 方向。
+            //
+            //
             try (ParcelFileDescriptor duplicate = ParcelFileDescriptor.dup(fd)) {
                 ExifInterface exif = new ExifInterface("/proc/self/fd/" + duplicate.getFd());
                 orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
@@ -115,16 +115,16 @@ public final class Thumbnail {
             return transformed;
         } catch (Exception | Error e) { decoded.recycle(); throw e; }
     }
-    // ART21 verifies a method's referenced classes before its SDK guard runs.
-    // Keep MediaDataSource (API23) and bounded video retrieval (API27) outside
-    // the image/stat class, including their anonymous subclass and signatures.
+    // ART21 在 SDK 条件执行前验证方法引用的类；MediaDataSource（API23）及有界视频读取（API27）必须隔离在图像/stat 类外，匿名子类和签名也一样。
+    //
+    //
     private static final class VideoApi27 {
       static Bitmap frame(FileDescriptor fd, long size, int maxSize, JSONObject result) throws Exception {
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
-            // Read the exact opened descriptor through the public API. The FD
-            // overload invokes ActivityThread-dependent MediaProvider conversion
-            // on Android 12+, unavailable in an app_process shell child.
+            // 通过公共接口读取已打开的同一描述符；Android 12+ 的 FD 重载会调用依赖 ActivityThread 的 MediaProvider 转换，app_process shell 子进程无法使用。
+            //
+            //
             retriever.setDataSource(new MediaDataSource() {
                 @Override public long getSize() { return size; }
                 @Override public int readAt(long position, byte[] buffer, int offset, int count) throws IOException {
@@ -140,8 +140,8 @@ public final class Thumbnail {
             String text = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION);
             int rotation = text == null ? 0 : Integer.parseInt(text);
             if (rotation != 0 && rotation != 90 && rotation != 180 && rotation != 270) throw new Failure("media_orientation_invalid", "Video rotation is invalid");
-            // AOSP's retriever already rotates the returned bitmap. Applying
-            // the metadata rotation a second time would corrupt orientation.
+            // AOSP retriever 已旋转返回位图，再应用元数据旋转会破坏方向。
+            //
             Bitmap frame = retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, maxSize, maxSize);
             if (frame == null) throw new Failure("media_no_frame", "Video contains no retrievable frame, or the device decoder cannot provide one");
             if ((long) frame.getWidth() * frame.getHeight() > 1_048_576L) { frame.recycle(); throw new Failure("media_pixel_limit", "Video decoder did not honor bounded scaling"); }
@@ -199,8 +199,8 @@ public final class Thumbnail {
         } finally { Os.close(fd); }
     }
     public static void main(String[] ignored) {
-        // Kill only this process, not a retained numeric child PID. Both the
-        // deadline and the stdin-EOF monitor remain runnable during native decode.
+        // 只终止当前进程，不保留数字子 PID；期限与 stdin EOF 监控器在原生解码期间仍可运行。
+        //
         Thread deadline = new Thread(() -> { try { Thread.sleep(8000); } catch (InterruptedException ignoredSleep) {} android.os.Process.killProcess(android.os.Process.myPid()); }, "interop-media-deadline");
         deadline.setDaemon(true); deadline.start();
         JSONObject response = new JSONObject();

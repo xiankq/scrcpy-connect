@@ -3,7 +3,7 @@ package com.interop.companion;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-/** AppOps permission preflight with the actual shell attribution. */
+/** 使用真实 shell 归因预检 AppOps 权限。 */
 final class ClipboardAppOps {
     private static Object invoke(Object manager, Method method, Object operation, int uid) throws Exception {
         method.setAccessible(true);
@@ -21,9 +21,9 @@ final class ClipboardAppOps {
         if (modern != null) {
             try { return (Integer) invoke(manager, modern, operation, uid); }
             catch (IllegalArgumentException unsupported) {
-                // AOSP21 defines integer clipboard ops but has no string-map
-                // entry. Only that exact mapping failure allows a legacy call;
-                // denied modes, SecurityException and all other errors remain.
+                // AOSP21 有整数剪贴板操作码但没有字符串映射；仅此精确映射失败允许旧调用，权限拒绝、SecurityException 及其他错误均保留。
+                //
+                //
                 if (!("Unknown operation string: " + operation).equals(unsupported.getMessage())) throw unsupported;
             }
         }

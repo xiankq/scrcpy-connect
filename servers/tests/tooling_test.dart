@@ -78,7 +78,7 @@ Future<void> main(List<String> arguments) => cli(() async {
     }
   }
   require(marker >= 0, 'Missing known min-api marker');
-  dex[marker + needle.length - 1] = 50; // API 22, retaining DEX string offsets.
+  dex[marker + needle.length - 1] = 50; // 改为 API 22，保持 DEX 字符串偏移不变。
   dex.setRange(12, 32, crypto.sha1.convert(dex.sublist(32)).bytes);
   entries['classes.dex'] = dex;
   await rejects(() async {
@@ -107,6 +107,11 @@ Future<void> main(List<String> arguments) => cli(() async {
   );
 
   await withTemporary('server-tooling-test-', (work) async {
+    final corruptSource = File(p.join(work.path, 'source.tar.gz'));
+    await corruptSource.writeAsBytes([1, 2, 3]);
+    await rejects(() async {
+      await vendor.sourceArchive(corruptSource.path);
+    }, 'Source archive SHA-256 mismatch');
     final copy = Directory(p.join(work.path, 'companion'))..createSync();
     final original = Directory(p.join(root.path, 'servers', 'companion'));
     final common = File(p.join(work.path, 'tooling.dart'));

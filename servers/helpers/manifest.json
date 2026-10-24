@@ -3,28 +3,28 @@
     {
       "abi": "arm64-v8a",
       "file": "bin/arm64-v8a/interop-rename",
-      "sha256": "2fad306ad2222fd5a0456b2af5aecd1ca7b9795ff7b64bd9600d7dcf3a59ec8b",
+      "sha256": "3924825f2cc577e05b6e8c7c56eff335e6b30c6a9c30f8f65236a65cd258ea9d",
       "size": 274776,
       "target": "aarch64-linux-android"
     },
     {
       "abi": "armeabi-v7a",
       "file": "bin/armeabi-v7a/interop-rename",
-      "sha256": "d1e716714d54be17d09653325bd13f2cedbcc34dca9c3d6ddfdd4c66135eb673",
+      "sha256": "1273a2e856f6dd1ca9a366bc8e068bb091568b5a2fd8cd11df7e02f0483aa16f",
       "size": 207836,
       "target": "armv7-linux-androideabi"
     },
     {
       "abi": "x86_64",
       "file": "bin/x86_64/interop-rename",
-      "sha256": "ccfe7dc18bd690d9b1cb12718d7187b51b87aed396951a1217c61baebf6ca0c9",
+      "sha256": "36904671ff8afacd93f97c6fabb385c655dfe2e2788c9d6201d2045d091904f2",
       "size": 303480,
       "target": "x86_64-linux-android"
     },
     {
       "abi": "x86",
       "file": "bin/x86/interop-rename",
-      "sha256": "58426b80c3dc5348dc982eabce23a128f2f7eefbfeed1fd98c92a59d22e65adb",
+      "sha256": "0f4d32205871496fae0a3dec7f4e9cacb06b7a0e53c57d225dbc519890c4949a",
       "size": 306888,
       "target": "i686-linux-android"
     }
@@ -34,10 +34,10 @@
   "protocol": 1,
   "rust": "1.99.1",
   "sources": {
-    "crates/android_helper/Cargo.lock": "aa326d3139dd21535ccd3c663496390c6a83abd29d444f94b1cfbd6a6f0d1470",
-    "crates/android_helper/Cargo.toml": "726ac26cce9aeef6e21854ee10bb363c8362d6bf8ee96bbdabe465be977a42d5",
-    "crates/android_helper/src/main.rs": "c10da67e534b37a6b6574b50ea2557604e5ee7c106a4c732b2dbe39e8bea4b0c",
-    "servers/helpers/build.dart": "5d7b86ff17738edc1c0863f3f12d0303da6773eda9ad4e7998bcc8138a0c0037",
-    "servers/tooling.dart": "1f2d1917f8bd3bc4bf1fc9776ad45bd593ee99047f6f022008dd54518cce79a5"
+    "rust/adb/device_fs_helper/Cargo.lock": "aa326d3139dd21535ccd3c663496390c6a83abd29d444f94b1cfbd6a6f0d1470",
+    "rust/adb/device_fs_helper/Cargo.toml": "726ac26cce9aeef6e21854ee10bb363c8362d6bf8ee96bbdabe465be977a42d5",
+    "rust/adb/device_fs_helper/src/main.rs": "a1132eebf315573e841e0489a3ab10ee98b372a5ced28f88e7359fa9f0de4e0e",
+    "servers/helpers/build.dart": "6b2cdc474d6b67e308dc1a3128a25e02766c3862bfdf309a6c83b6350c92c378",
+    "servers/tooling.dart": "de4f8837de9e57a9d9d9a81c7169dd653a6c69d2c6c0bb58558928ddf0e1425a"
   }
 }

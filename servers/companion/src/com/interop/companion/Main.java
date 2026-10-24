@@ -29,7 +29,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Temporary shell-UID Binder bridge. No APK, service grant, AppOp, or database access. */
+/** 临时 shell UID Binder 桥接；不安装 APK、不授予服务或 AppOp 权限、不访问数据库。 */
 public final class Main {
     private static final String PACKAGE = "com.android.shell";
     private static final int MAX_LINE = 1024 * 1024;
@@ -110,14 +110,14 @@ public final class Main {
                     if(reply!=null) reply.writeNoException();return true;
                 }
                 if(phoneStateTransactions.contains(code)) {
-                    // Preserve every delivered state transition before the
-                    // worker coalesces invalidations. In particular 1,0,1 must
-                    // never be mistaken for the same observed ringing episode.
+                    // 工作线程合并失效通知前，保留每次状态转换；尤其不能把 1,0,1 当成同一次已观察的响铃。
+                    //
+                    //
                     int state=data.readInt();
                     if(state!=rawPhoneState) {rawPhoneState=state;phoneGeneration.incrementAndGet();}
                 }
-                // Callbacks are invalidations, not a polling timer. A fresh token-
-                // scoped snapshot reconciles updates/removals and preserves PIs.
+                // 回调仅声明状态失效，不充当轮询计时器；新 token 对应的快照核对更新和移除，并保留 PendingIntent。
+                //
                 changed.run();
                 if(reply!=null) reply.writeNoException();
                 return true;
@@ -160,7 +160,7 @@ public final class Main {
     }
     private void initialize() throws Exception {
         if(Process.myUid()!=2000) throw new Failure("wrong_identity","Companion requires the authorized ADB shell identity");
-        // Shared media/clipboard use never acquires notification or phone listeners.
+        // 共享媒体和剪贴板能力不会申请通知或电话监听。
     }
     private JSONObject observationSnapshot(boolean cleanupConfirmed) throws Exception {
         return new JSONObject().put("observationEpoch",observationEpoch).put("observationEnabled",observationEnabled)
@@ -206,8 +206,8 @@ public final class Main {
         } catch(Exception e) {callError=error(e);}
         return observationSnapshot(true);
     }
-    // Only known AOSP IClipboard attribution layouts are accepted. Every call
-    // uses the actual installed shell package; no synthetic android identity.
+    // 仅接受已知的 AOSP IClipboard 归因参数布局；每次调用使用实际安装的 shell 包，不伪造 android 身份。
+    //
     private Object clipboardInvoke(String name,Object first) throws Exception {
         for(Method method:clipboard.getClass().getMethods()) {
             if(!method.getName().equals(name)) continue;
@@ -224,9 +224,9 @@ public final class Main {
             List<Object> args=new ArrayList<>();
             if(first!=null) args.add(first);
             if(count>=1) args.add(PACKAGE);
-            if(count>=3) args.add(null); // Actual shell attribution tag is absent.
+            if(count>=3) args.add(null); // 实际 shell 没有归因标签。
             if(count>=2) args.add(user.owner());
-            if(count==4) args.add(0); // Context.DEVICE_ID_DEFAULT, not a virtual-device identity.
+            if(count==4) args.add(0); // 使用 Context.DEVICE_ID_DEFAULT，表示默认设备身份。
             return invoke(clipboard,name,args.toArray());
         }
         throw new Failure("clipboard_api_unavailable","Unsupported IClipboard attribution signature: "+name);
@@ -286,8 +286,8 @@ public final class Main {
     }
     private String notificationAppName(StatusBarNotification notification) {
         try {
-            // Resolve the original package in its actual profile. Notification
-            // extras may contain a substitute label and are not app identity.
+            // 在实际用户配置中解析原始包；通知 extras 中的替代标签不代表应用身份。
+            //
             Class<?> handle=Class.forName("android.os.UserHandle");
             Object user=handle.getConstructor(int.class).newInstance(notification.getUserId());
             Context application=(Context)Context.class.getMethod("createPackageContextAsUser",String.class,int.class,handle)
@@ -296,7 +296,7 @@ public final class Main {
             String name=text(label,512).trim();
             if(!name.isEmpty() && !name.equals(notification.getPackageName())) return name;
         } catch(Exception unavailable) {
-            // Metadata failure must not invalidate otherwise actionable content.
+            // 元数据读取失败不应让原本可操作的内容失效。
         }
         return "手机通知";
     }
@@ -420,9 +420,9 @@ public final class Main {
             .put("message","系统已接受打开当前通话界面的请求；请在远控画面确认，不代表接听或挂断了通话。");
     }
     private JSONObject callAction(JSONObject request) throws Exception {
-        // Telecom's aggregate endCall/acceptRingingCall take no call object.
-        // Even a fresh state check races a replacement call between Binder
-        // transactions. An observation UUID cannot make those operations safe.
+        // Telecom 的聚合 endCall/acceptRingingCall 没有通话对象；即使刚检查过状态，两次 Binder 事务之间仍可能更换通话，观察 UUID 无法保障此类操作安全。
+        //
+        //
         throw new Failure("call_targeting_unavailable","具体通话的安全定位尚未完成，未执行任何接听或挂断；请在手机原电话应用处理。");
     }
     private JSONObject execute(JSONObject request) throws Exception {
@@ -451,8 +451,8 @@ public final class Main {
         LocalServerSocket server=new LocalServerSocket(socketName);
         ScheduledExecutorService watchdog=Executors.newSingleThreadScheduledExecutor();
         Future<?> startupDeadline=watchdog.schedule(()-> {try {server.close();}catch(Exception ignored){}},20,TimeUnit.SECONDS);
-        // This is the only stdout protocol. Notification text is
-        // exchanged solely through the authenticated in-memory local socket.
+        // 这是唯一的 stdout 协议；通知正文仅通过已认证的内存本地 socket 传送。
+        //
         System.out.println("INTEROP_COMPANION_READY "+Process.myPid());System.out.flush();
         try(LocalSocket socket=server.accept()) {
             socket.setSoTimeout(15000);InputStream input=new BufferedInputStream(socket.getInputStream());
@@ -484,10 +484,10 @@ public final class Main {
     }
     public static void main(String[] args) {
         try {
-            // Match the fixed upstream scrcpy server: debug/eng adbd may start
-            // app_process as root, but every companion operation uses shell.
-            // Drop before context creation, Binder access or worker creation;
-            // a failed transition is terminal and never runs privileged work.
+            // 遵循固定上游 scrcpy 服务端：debug/eng adbd 可能以 root 启动 app_process，但协同操作始终使用 shell；创建上下文、访问 Binder 或创建线程前先降权，失败立即终止，不执行特权工作。
+            //
+            //
+            //
             if(Process.myUid()==0) android.system.Os.setuid(2000);
             if(Process.myUid()!=2000) throw new Failure("wrong_identity","Companion requires the authorized ADB shell identity");
             if(args.length!=2 || !args[0].matches("interop-companion-[0-9a-f]{32}") || !args[1].matches("[0-9a-f]{64}")) throw new Failure("invalid_argument","Expected a random abstract socket name and authentication token");

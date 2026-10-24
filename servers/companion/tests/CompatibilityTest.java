@@ -3,7 +3,7 @@ package com.interop.companion;
 import java.io.*;
 import java.util.concurrent.TimeUnit;
 
-/** Host contract test: the API21 Process boundary has only exitValue/destroy. */
+/** 主机契约测试：API21 Process 接口仅有 exitValue/destroy。 */
 public final class CompatibilityTest {
     public static final class Users {
         static Object current = 10;

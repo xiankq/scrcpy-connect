@@ -14,7 +14,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-/** Test-only real notifications and PendingIntents; never included in companion.jar. */
+/** 仅用于测试的真实通知及 PendingIntent，不进入 companion.jar。 */
 public final class Fixture {
     public static void main(String[] args) throws Exception {
         String tag = "interop-fixture-" + UUID.randomUUID();

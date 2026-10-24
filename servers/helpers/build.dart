@@ -17,9 +17,9 @@ const targets = <String, (String, String)>{
 
 Map<String, String> inputs(Directory root) => {
   for (final name in [
-    'crates/android_helper/Cargo.toml',
-    'crates/android_helper/Cargo.lock',
-    'crates/android_helper/src/main.rs',
+    'rust/adb/device_fs_helper/Cargo.toml',
+    'rust/adb/device_fs_helper/Cargo.lock',
+    'rust/adb/device_fs_helper/src/main.rs',
     'servers/helpers/build.dart',
     'servers/tooling.dart',
   ])
@@ -94,7 +94,7 @@ Future<void> main(List<String> arguments) => cli(() async {
     return;
   }
   final here = Directory(p.join(root.path, 'servers', 'helpers'));
-  final crate = Directory(p.join(root.path, 'crates', 'android_helper'));
+  final crate = Directory(p.join(root.path, 'rust', 'adb', 'device_fs_helper'));
   final ndk = Directory(
     Platform.environment['ANDROID_NDK_HOME'] ??
         p.join(userHome, 'Android', 'Sdk', 'ndk', '30.0.16248370'),

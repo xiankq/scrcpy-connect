@@ -3,7 +3,7 @@ package com.interop.companion;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-/** The read-only call-state Binder boundary; no accept/end-call methods. */
+/** 只读的通话状态 Binder 接口，不提供接听或挂断方法。 */
 final class CallServices {
     private static final String PACKAGE = "com.android.shell";
     private static Method method(Object service, String name, Object token, Class<?>... signature) {

@@ -9,8 +9,8 @@ import 'package:path/path.dart' as p;
 import '../../tooling.dart';
 import 'android-probe.dart' as transport;
 
-/// An installed source app and a UID2000 product companion observe the same
-/// actual Android notifications. No product notification permission is changed.
+/// 已安装来源应用与 UID2000 产品协同助手观察同一批真实 Android 通知，不改变产品通知权限。
+///
 class SnapshotProbe extends transport.Probe {
   SnapshotProbe(super.adbExecutable, super.serial)
     : super(calls: false, fixtureFile: File('/unused'));
@@ -48,8 +48,8 @@ class SnapshotProbe extends transport.Probe {
 
   final binderEvents = <String, transport.Json>{};
 
-  /// Consume only unsolicited transport events. A notifications.list request
-  /// actively refreshes the companion and would hide a missing Binder callback.
+  /// 仅消费主动传入的传输事件；notifications.list 会主动刷新协同助手，可能掩盖 Binder 回调缺失。
+  ///
   Future<List<transport.Json>> waitOwnEvent(
     String phase,
     bool Function(List<transport.Json>) ready,
@@ -128,8 +128,8 @@ class SnapshotProbe extends transport.Probe {
     await success('observation.set', {'enabled': true, 'epoch': 1});
     await action('CREATE_SNAPSHOT');
     final initial = await waitOwnEvent('create', (items) => items.length == 3);
-    // Independent Android service dump proves these are actually posted,
-    // rather than only values supplied to the companion assertion.
+    // 独立 Android 服务转储证明通知确实已发布，不仅依赖传给协同断言的数据。
+    //
     final dump =
         (await adb(['shell', 'dumpsys', 'notification', '--noredact'])).stdout
             as String;
@@ -198,7 +198,7 @@ class SnapshotProbe extends transport.Probe {
     await waitOwnEvent('withdraw', (items) => items.isEmpty);
     File(p.join(evidence.path, 'binder-events.json'))
         .writeAsStringSync(jsonEncode(binderEvents));
-    // Reattach observation after cleanup must not resurrect the removed set.
+    // 清理后重新附着观察，不得恢复已移除的集合。
     await success('observation.set', {'enabled': false, 'epoch': 2});
     await success('observation.set', {'enabled': true, 'epoch': 3});
     final reattached = await success('notifications.list');
@@ -222,7 +222,7 @@ class SnapshotProbe extends transport.Probe {
             (await adb(['shell', 'dumpsys', 'notification', '--noredact']))
                     .stdout
                 as String;
-        // Active entries have a NotificationRecord; deleted channels may retain the tag.
+        // 活跃条目具有 NotificationRecord；删除的 channel 仍可能保留标签。
         require(
           !RegExp(
             'NotificationRecord[^\\n]*${RegExp.escape('notification-fixture-$runId')}',

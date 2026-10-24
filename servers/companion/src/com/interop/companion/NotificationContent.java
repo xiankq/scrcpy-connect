@@ -3,7 +3,7 @@ package com.interop.companion;
 import android.app.Notification;
 import android.os.Bundle;
 
-/** Plain text supplied by the original notification, including expanded styles. */
+/** 原通知提供的纯文本，包含展开样式。 */
 final class NotificationContent {
     private NotificationContent() {}
 
@@ -35,8 +35,8 @@ final class NotificationContent {
             }
             if (text.length() > 0) return text.toString();
         }
-        // MessagingStyle publishes the current conversation preview through
-        // EXTRA_TITLE/EXTRA_TEXT; preserve that system-provided attribution.
+        // MessagingStyle 通过 EXTRA_TITLE/EXTRA_TEXT 提供当前会话预览，保留系统提供的归因。
+        //
         return bounded(extras.getCharSequence(Notification.EXTRA_TEXT), 16384);
     }
 }

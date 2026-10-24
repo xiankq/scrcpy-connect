@@ -5,10 +5,10 @@ import 'package:path/path.dart' as p;
 
 import 'tooling.dart';
 
-const packagedServerDirectory = 'packages/device_runtime/assets/servers';
+const packagedServerDirectory = 'app/assets/servers';
 const _helpers = ['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'];
 
-/// Derives the shared compressed payloads only from verified, controlled inputs.
+/// 仅从已验证的受控输入生成共享压缩载荷。
 void packageServers(Directory root, {bool check = false}) {
   final vendor = readJson(
     File(p.join(root.path, 'servers/vendor/manifest.json')),
