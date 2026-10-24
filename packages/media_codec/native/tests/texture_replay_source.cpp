@@ -1,4 +1,4 @@
-// Test-only SinkV1 producer. Never linked into the shipping plugin.
+// 仅用于测试的 SinkV1 生产者，不链接到交付插件。
 #include "../media_codec.h"
 #include <atomic>
 #include <chrono>

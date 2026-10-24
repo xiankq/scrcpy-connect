@@ -1,4 +1,4 @@
-// Run against the Rust core and the pinned FFmpeg headers on an Apple host.
+// 在 Apple 宿主上，使用 Rust 核心及锁定版本的 FFmpeg 头文件运行。
 #include "media_codec.h"
 extern "C" {
 #include <libavutil/frame.h>

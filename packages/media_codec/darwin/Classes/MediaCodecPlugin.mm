@@ -142,8 +142,7 @@ static uint32_t MCCodec(id value) {
   return mc_attach(_decoder, source.UTF8String, [arguments[@"attachAddress"] unsignedLongLongValue],
                    [arguments[@"detachAddress"] unsignedLongLongValue]) == 0;
 }
-// Conversion happens when Flutter consumes the latest slot, so superseded
-// decoded frames never pay swscale/CoreImage work on the decoder thread.
+// Flutter 消费最新槽位时才转换，已被替换的解码帧不在解码线程执行 swscale/CoreImage 工作。
 - (CVPixelBufferRef)copyPixelBuffer {
   std::lock_guard<std::mutex> guard(_pixelMutex);
   if (_disposed) return NULL;
@@ -162,8 +161,7 @@ static uint32_t MCCodec(id value) {
 }
 - (CVPixelBufferRef)convertFrame:(AVFrame *)frame {
   CVPixelBufferRef source = frame->format == AV_PIX_FMT_VIDEOTOOLBOX ? (CVPixelBufferRef)frame->data[3] : NULL;
-  // Flutter's current NV12 shader always chooses BT.601. Only pass through
-  // frames whose matrix agrees; other matrices are converted on the GPU.
+  // Flutter 当前 NV12 shader 固定使用 BT.601；仅直接传递矩阵一致的帧，其他矩阵在 GPU 上转换。
   AVColorSpace matrix = frame->colorspace;
   if (matrix == AVCOL_SPC_UNSPECIFIED) matrix = AVCOL_SPC_BT709;
   if (source) {
@@ -257,9 +255,7 @@ static uint32_t MCCodec(id value) {
 - (int64_t)writePCM:(const uint8_t *)bytes length:(size_t)length {
   std::lock_guard<std::mutex> control(_audioControlMutex);
   if (_disposed || _audioPaused || _audioInterrupted || !_audioQueue) return 0;
-  // A system clock also advances through underruns. Start a fresh timeline
-  // when every buffer has returned and the previous submitted tail has played;
-  // otherwise a late packet would be counted as played immediately on enqueue.
+  // 系统时钟在欠载时也前进；全部缓冲归还且上次提交尾部已播放后，开启新时间线，避免迟到包入队即被计为已播放。
   bool allReturned;
   { std::lock_guard<std::mutex> guard(_audioMutex); allReturned = _audioBuffers.size() == 3; }
   if (_audioStarted && _audioFramesSubmitted && allReturned) {
@@ -289,9 +285,8 @@ static uint32_t MCCodec(id value) {
     accepted += count; _audioFramesSubmitted += count / 4;
     if (!_audioStarted) {
       if (AudioQueueStart(_audioQueue, NULL) != noErr) return -1;
-      // AudioQueueReset clears buffers, but its sample clock can keep running.
-      // Map queue age to submitted frames; preserve the logical frame count
-      // across underruns, while explicit pause/flush starts a new generation.
+      // AudioQueueReset 清空缓冲后采样时钟仍可能前进。
+      // 将队列时间映射到已提交帧，欠载期间保留逻辑帧数；显式暂停或刷新开启新代际。
       AudioTimeStamp origin = {};
       _audioClockOrigin = AudioQueueGetCurrentTime(_audioQueue, NULL, &origin, NULL) == noErr &&
           (origin.mFlags & kAudioTimeStampSampleTimeValid) ? origin.mSampleTime - (double)startFrames : -(double)startFrames;
@@ -302,7 +297,7 @@ static uint32_t MCCodec(id value) {
 }
 - (void)recycleAudioBuffer:(AudioQueueBufferRef)buffer {
   std::lock_guard<std::mutex> guard(_audioMutex);
-  // Reset/stop may return all queued buffers. Keep each free buffer once.
+  // 重置或停止可能归还全部排队缓冲，每个空闲缓冲只保留一次。
   if (std::find(_audioBuffers.begin(), _audioBuffers.end(), buffer) == _audioBuffers.end())
     _audioBuffers.push_back(buffer);
 }
@@ -320,7 +315,7 @@ static uint32_t MCCodec(id value) {
     _audioInterrupted = ![AVAudioSession.sharedInstance setActive:YES error:&error];
   }
 #endif
-  // Start only after the first buffer is queued, avoiding an empty restart.
+  // 首个缓冲入队后才启动，避免空队列重启。
 }
 - (int32_t)audioState:(mc_audio_state *)state {
   std::lock_guard<std::mutex> control(_audioControlMutex);
@@ -379,8 +374,7 @@ static uint32_t MCCodec(id value) {
 - (void)close {
   if (_disposed.exchange(true)) return;
   [NSNotificationCenter.defaultCenter removeObserver:self];
-  // Drain a raster-thread copy before freeing its decoder. New copies see
-  // disposed; decoded callbacks also stop publishing before this barrier.
+  // 释放解码器前排空光栅线程复制；新复制会观察到 disposed，解码回调也在该栅栏前停止发布。
   { std::lock_guard<std::mutex> guard(_pixelMutex); }
   if (_decoder) { mc_destroy(_decoder); _decoder = NULL; }
   [self closeAudio];
@@ -476,7 +470,7 @@ static uint32_t MCCodec(id value) {
 - (void)detachFromEngineForRegistrar:(NSObject<FlutterPluginRegistrar> *)registrar {
   NSArray<MCMediaOutput *> *outputs = self.outputs.allValues;
   [self.outputs removeAllObjects];
-  // Drain native/Rust producers before textures can be unregistered by engine teardown.
+  // 引擎销毁注销纹理前，先排空原生和 Rust 生产者。
   dispatch_sync(self.worker, ^{ for (MCMediaOutput *output in outputs) [output close]; });
   for (MCMediaOutput *output in outputs) {
     if (output.textureId >= 0) {

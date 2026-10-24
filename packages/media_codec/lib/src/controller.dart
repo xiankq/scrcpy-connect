@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 
 import 'native_controls.dart';
 
-/// A process-local native producer. Payload bytes never enter the Dart isolate.
-/// Function addresses and source capabilities must not be persisted or logged.
+/// 进程内的原生媒体生产者；负载字节不进入 Dart isolate。
+/// 函数地址和源能力不能持久化或写入日志。
 class MediaCodecSource {
   MediaCodecSource({
     required this.sourceId,
@@ -67,7 +67,7 @@ class MediaCodecImage {
   final Uint8List rgba;
 }
 
-/// Owns one decoder and texture, or one PCM output. The producer owns capture.
+/// 持有一个解码器及纹理，或一个 PCM 输出；捕获由生产者持有。
 class MediaCodecController {
   MediaCodecController.video({MethodChannel? channel})
     : _audio = false,
@@ -118,13 +118,13 @@ class MediaCodecController {
     _status = {...?created}
       ..removeWhere((key, _) => key == 'decoderAddress' || key == 'nativeApi');
     if (_disposed) {
-      return; // dispose waits for this creation and then drains it.
+      return; // dispose 会等待本次创建，然后排空输出。
     }
     try {
       _native = NativeControls(created!);
     } catch (_) {
-      _handle = null;
-      await _channel.invokeMethod<void>('dispose', {'handle': handle});
+      _disposed = true;
+      await _releaseOutput();
       rethrow;
     }
     await refresh();
@@ -270,7 +270,7 @@ class MediaCodecController {
     throw StateError('Media output disposed');
   }
 
-  /// Call after mounting the Texture. Some platforms import lazily on raster.
+  /// 挂载 Texture 后调用；部分平台直到光栅化时才导入纹理。
   Future<Map<String, dynamic>> waitForPresentation({
     Duration timeout = const Duration(seconds: 15),
   }) async {
@@ -348,31 +348,45 @@ class MediaCodecController {
     return MediaCodecImage(w, h, rgba);
   });
 
-  /// A late create is drained too. Return only after native source detachment.
+  /// 迟到的创建也必须回收；原生媒体源分离后才能返回，失败保留同一输出供重试。
   Future<Map<String, dynamic>> dispose() => _disposing ??= _dispose();
   Future<Map<String, dynamic>> _dispose() async {
     _disposed = true;
     _timer?.cancel();
     try {
-      await _opening;
+      try {
+        await _opening;
+      } catch (_) {
+        // 创建失败仍可能留有未确认释放的输出，继续按原句柄回收。
+      }
+      await _operations;
+      final receipt = await _releaseOutput();
+      await _events.close();
+      return receipt;
     } catch (_) {
-      /* A failed create owns no output. */
+      _disposing = null;
+      rethrow;
     }
-    await _operations;
+  }
+
+  Future<Map<String, dynamic>> _releaseOutput() async {
+    // 停止借用 FFI 后仍保留平台句柄，只有平台销毁确认才能撤销清理责任。
     _native?.release();
     _native = null;
     final handle = _handle;
-    _handle = null;
-    try {
-      if (handle == null) {
-        return {'resourceAllocated': false, 'nativeDeleteConfirmed': true};
-      }
-      return await _channel.invokeMapMethod<String, dynamic>('dispose', {
-            'handle': handle,
-          }) ??
-          {'resourceAllocated': true, 'nativeDeleteConfirmed': true};
-    } finally {
-      await _events.close();
+    if (handle == null) {
+      return {'resourceAllocated': false, 'nativeDeleteConfirmed': true};
     }
+    final receipt =
+        await _channel.invokeMapMethod<String, dynamic>('dispose', {
+          'handle': handle,
+        }) ??
+        {'resourceAllocated': true, 'nativeDeleteConfirmed': true};
+    if (receipt['nativeDeleteConfirmed'] == false ||
+        receipt['cleanupUnconfirmed'] == true) {
+      throw StateError('Native media output disposal is unconfirmed');
+    }
+    _handle = null;
+    return receipt;
   }
 }

@@ -1,7 +1,7 @@
-rust_input: crate::api,crate::adb_api,crate::file_api
-rust_root: crates/interop_bridge
-dart_root: packages/device_runtime
-dart_output: packages/device_runtime/lib/src/rust
-rust_output: crates/interop_bridge/src/frb_generated.rs
+rust_input: crate,interop-adb-api::api
+rust_root: rust/adb/bridge
+dart_root: packages/adb
+dart_output: packages/adb/lib/src/native/generated
+dart_entrypoint_class_name: AdbRustLib
 web: false
 auto_upgrade_dependency: false

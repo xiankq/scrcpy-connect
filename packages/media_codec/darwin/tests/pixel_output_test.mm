@@ -1,6 +1,5 @@
-// Compile on macOS with the plugin implementation, FlutterMacOS framework,
-// pinned FFmpeg/core and CoreImage/Metal frameworks. This fixture checks actual
-// converted pixels rather than comparing implementation decisions.
+// 在 macOS 上使用插件实现、FlutterMacOS 框架、锁定版本的 FFmpeg/核心及
+// CoreImage/Metal 框架编译；该夹具校验实际转换像素。
 #include "../Classes/MediaCodecPlugin.mm"
 #include <cstdlib>
 #include <iostream>
@@ -40,8 +39,8 @@ int main() {
       }
       av_frame_free(&frame);
     }
-    // The NV12 709 path must convert on Metal, since Flutter interprets native
-    // NV12 as 601. A 601 conversion of this fixture has visibly nonzero green.
+    // NV12 709 路径必须通过 Metal 转换，因为 Flutter 将原生 NV12 解释为 601。
+    // 该夹具按 601 转换时会出现明显的非零绿色分量。
     CVPixelBufferRef nv12 = NULL;
     NSDictionary* attrs = @{(id)kCVPixelBufferIOSurfacePropertiesKey: @{}, (id)kCVPixelBufferMetalCompatibilityKey: @YES};
     Check(CVPixelBufferCreate(kCFAllocatorDefault, 16, 16, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
@@ -62,8 +61,8 @@ int main() {
     Check(converted != nv12, "709 NV12 bypassed matrix correction");
     CVPixelBufferRelease(converted); frame->data[3] = NULL; av_frame_free(&frame); CVPixelBufferRelease(nv12);
     [output close];
-    // Exercise the system AudioQueue without a transport source. A failed
-    // attachment still owns platform audio until explicit/terminal cleanup.
+    // 在没有传输源的情况下验证系统 AudioQueue。
+    // 附着失败后，平台音频仍由当前实例拥有，直到显式或终止清理。
     MCMediaOutput* audio = [[MCMediaOutput alloc] init];
     Check(![audio open:@{@"sourceId": @"fixture", @"attachAddress": @0,
                         @"detachAddress": @0} audio:YES], "invalid attach unexpectedly succeeded");

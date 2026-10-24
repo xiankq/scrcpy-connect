@@ -29,10 +29,8 @@ if(MEDIA_CODEC_BUILD_TESTS)
   set_tests_properties(media_codec_audio_test PROPERTIES
     ENVIRONMENT "ALSA_CONFIG_PATH=${CMAKE_CURRENT_SOURCE_DIR}/tests/alsa-null.conf")
 endif()
-# FFmpeg's VA-API objects have ELF dependencies even when runtime selection
-# falls back to CUDA/software. Ship the small VA dispatch libraries so loading
-# this plugin does not require the receiving machine to install libva first.
-# GPU-specific VA drivers, libcuda and libnvcuvid remain driver-provided.
+# FFmpeg 的 VA-API 对象具有 ELF 依赖，即使运行时回退为 CUDA 或软件解码也不例外。
+# 随插件分发小型 VA 调度库，使目标机器无需预装 libva；GPU 专属 VA 驱动、libcuda 和 libnvcuvid 仍由驱动提供。
 pkg_check_modules(MC_VA_RUNTIME REQUIRED libva libva-drm)
 find_program(MC_READELF NAMES readelf llvm-readelf REQUIRED)
 set(MC_RUNTIME_DIR "${CMAKE_CURRENT_BINARY_DIR}/runtime")
@@ -78,6 +76,5 @@ foreach(notice IN LISTS MC_DEPENDENCY_NOTICES)
   configure_file("${notice}" "${MC_RUNTIME_DIR}/media_codec-${notice_name}" COPYONLY)
   list(APPEND MC_BUNDLED_RUNTIME "${MC_RUNTIME_DIR}/media_codec-${notice_name}")
 endforeach()
-# Use Flutter's bundled-file installation, which runs after the app clears its
-# old bundle; plugin-local install() rules run before that cleanup.
+# 使用 Flutter 的随包文件安装，它在应用清理旧 bundle 后执行；插件局部 install() 规则会在清理前执行。
 set(media_codec_bundled_libraries "${MC_BUNDLED_RUNTIME}" PARENT_SCOPE)

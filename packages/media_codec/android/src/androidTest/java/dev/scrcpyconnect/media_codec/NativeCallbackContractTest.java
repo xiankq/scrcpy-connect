@@ -7,7 +7,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 
-/** Runs inside Android ART: a missing callback must throw, never abort JNI. */
+/** 在 Android ART 内运行：缺失回调必须抛出异常，不能导致 JNI 中止。 */
 public final class NativeCallbackContractTest {
   public static final class MissingPCM {
     public void onFrame(int width, int height) {}

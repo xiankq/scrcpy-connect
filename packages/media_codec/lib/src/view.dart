@@ -2,8 +2,8 @@ import 'package:flutter/widgets.dart';
 
 import 'controller.dart';
 
-/// Presents a native decoded texture inside the Flutter scene.
-/// Ownership remains with the caller, so route changes cannot stop capture.
+/// 在 Flutter 场景中呈现原生解码纹理。
+/// 调用方持有所有权，路由变化不能停止捕获。
 class MediaCodecView extends StatelessWidget {
   const MediaCodecView({
     super.key,

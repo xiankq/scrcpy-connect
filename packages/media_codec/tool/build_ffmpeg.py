@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Build the pinned, decode-only FFmpeg profile; never use a system FFmpeg.
+"""构建固定版本且仅用于解码的 FFmpeg，不使用系统 FFmpeg。
 
-The cache retains upstream archives and license text for source correspondence.
-Only avcodec/avutil/swscale are linked; there is no avformat, protocol or player.
+缓存保留上游归档和许可证，以供对应源码核验。
+仅链接 avcodec、avutil、swscale，不包含 avformat、网络协议或播放器。
 """
 import argparse
 from contextlib import contextmanager
@@ -39,7 +39,7 @@ def run(command, cwd, environment, log):
 
 
 def windows_environment(environment, arch, cache):
-    """Load MSVC and the Windows SDK without requiring a developer shell."""
+    """加载 MSVC 与 Windows SDK，无需从开发者终端启动。"""
     if os.name != "nt":
         raise RuntimeError("Windows FFmpeg must be built on Windows with MSVC")
     if shutil.which("cl.exe", path=environment.get("PATH")) and environment.get("WindowsSdkDir"):
@@ -78,7 +78,7 @@ def windows_environment(environment, arch, cache):
 
 @contextmanager
 def prefix_lock(prefix):
-    """Serialize manual/CMake builds of one prefix, including cache replacement."""
+    """串行执行同一安装目录的手动或 CMake 构建，包括缓存替换。"""
     path = prefix.parent / (prefix.name + ".lock")
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as handle:
@@ -163,7 +163,7 @@ def verify_ffmpeg_patches():
 
 
 def patched_ffmpeg_source(cache, upstream):
-    """Keep the hash-pinned upstream intact; patch a separate immutable tree."""
+    """保持摘要锁定的上游源码完整，在独立且不可变的源码树上应用补丁。"""
     patches = verify_ffmpeg_patches()
     if not patches:
         return upstream
@@ -181,8 +181,8 @@ def patched_ffmpeg_source(cache, upstream):
             shutil.copytree(upstream, temporary)
             for patch in patches:
                 path = (PACKAGE / "third_party" / patch["file"]).resolve()
-                # git apply works without a .git directory on both Unix and
-                # Windows and refuses mismatched hunks instead of fuzzy edits.
+                # git apply 在 Unix 和 Windows 上均不依赖 .git 目录，
+                # 且会拒绝不匹配的块，避免模糊套用补丁。
                 subprocess.run(["git", "apply", "--check", str(path)], cwd=temporary, check=True)
                 subprocess.run(["git", "apply", str(path)], cwd=temporary, check=True)
             (temporary / "media-codec-source.json").write_text(json.dumps(identity, indent=2) + "\n")
@@ -220,7 +220,7 @@ def cross_file(work, args, binaries, flags):
 
 
 def build(args, cache, prefix):
-    # Check source inputs even when a matching compiled prefix can be reused.
+    # 即使可以复用匹配的编译产物，也核验源码输入。
     verify_ffmpeg_patches()
     environment = os.environ.copy()
     options = ["--disable-everything", "--disable-autodetect", "--disable-programs", "--disable-doc",
@@ -232,7 +232,7 @@ def build(args, cache, prefix):
                "--enable-bsf=h264_mp4toannexb,hevc_mp4toannexb,extract_extradata",
                "--disable-gpl", "--disable-nonfree", "--disable-version3", "--enable-optimizations"]
     binaries, flags = {}, []
-    # Keep SIMD and runtime CPU dispatch, including dav1d's 8/10/12-bit fallback.
+    # 保留 SIMD 和运行时 CPU 分派，包括 dav1d 的 8/10/12 位回退。
     if args.platform == "linux":
         actual_arch = "arm64" if platform.machine().lower() in ["aarch64", "arm64"] else "x64"
         if args.arch != actual_arch:
@@ -252,9 +252,9 @@ def build(args, cache, prefix):
         options += ["--toolchain=msvc", "--target-os=win32", "--extra-cflags=-MD",
                     "--arch=" + {"x64": "x86_64", "arm64": "aarch64", "arm": "arm"}[args.arch],
                     "--enable-d3d11va",
-                    # *va2 exposes HW_DEVICE_CTX + AV_PIX_FMT_D3D11. This pinned
-                    # upstream Makefile gates their shared dxva2_*.o on *va, so
-                    # retain both variants. Upstream has no VP8 D3D11VA path.
+                    # *va2 提供 HW_DEVICE_CTX 与 AV_PIX_FMT_D3D11；固定版本的上游
+                    # Makefile 通过 *va 启用共享 dxva2_*.o，因此保留两种变体。
+                    # 上游没有 VP8 D3D11VA 路径。
                     "--enable-hwaccel=h264_d3d11va,h264_d3d11va2,hevc_d3d11va,hevc_d3d11va2,av1_d3d11va,av1_d3d11va2,vp9_d3d11va,vp9_d3d11va2"]
     elif args.platform == "android":
         ndk = Path(args.ndk)
@@ -288,8 +288,8 @@ def build(args, cache, prefix):
         binaries = {"c": cc, "ar": subprocess.check_output(["xcrun", "--sdk", sdk, "--find", "ar"], text=True).strip(),
                     "strip": subprocess.check_output(["xcrun", "--sdk", sdk, "--find", "strip"], text=True).strip()}
         flags = ["-target", target, "-isysroot", sysroot]
-        # CocoaPods inherits the target SDKROOT. FFmpeg's executable code
-        # generators must still run on macOS, including iOS simulator builds.
+        # CocoaPods 会继承目标 SDKROOT；即使构建 iOS 模拟器，
+        # FFmpeg 的代码生成器也必须作为 macOS 可执行文件运行。
         host_sysroot = subprocess.check_output(["xcrun", "--sdk", "macosx", "--show-sdk-path"], text=True).strip()
         host_cc = subprocess.check_output(["xcrun", "--sdk", "macosx", "--find", "clang"], text=True).strip()
         host_arch = "arm64" if platform.machine() in {"arm64", "aarch64"} else "x86_64"
@@ -298,7 +298,7 @@ def build(args, cache, prefix):
         options += ["--target-os=darwin", "--enable-cross-compile", f"--arch={arch}", f"--cc={cc}",
                     f"--sysroot={sysroot}", f"--extra-cflags=-target {target}", f"--extra-ldflags=-target {target}",
                     "--enable-videotoolbox", "--enable-hwaccel=h264_videotoolbox,hevc_videotoolbox,av1_videotoolbox,vp9_videotoolbox"]
-    # FFmpeg's native av1 decoder is hardware-only; libdav1d is mandatory fallback.
+    # FFmpeg 原生 AV1 解码器仅提供硬件路径，必须保留 libdav1d 回退。
     dependency_locks = {"dav1d": DEPENDENCIES["dav1d"]}
     if args.platform == "linux":
         dependency_locks["nv-codec-headers"] = DEPENDENCIES["nv-codec-headers"]
@@ -312,8 +312,8 @@ def build(args, cache, prefix):
                  for name in ["avcodec", "avutil", "swscale", "dav1d"]]
     previous = json.loads(receipt.read_text()) if receipt.exists() else None
     if previous:
-        # Profile 2 initially recorded the local pkg-config proxy command. Its
-        # path is an invocation detail, not a codec capability/cache identity.
+        # 旧配置版本 2 曾记录本机 pkg-config 代理命令；
+        # 其路径属于调用细节，不参与解码能力或缓存身份。
         previous["options"] = [option for option in previous.get("options", [])
                                if not option.startswith("--pkg-config")]
     if (previous == identity and
@@ -329,8 +329,8 @@ def build(args, cache, prefix):
     dav1d = source_archive("dav1d", DEPENDENCIES["dav1d"], cache)
     nvcodec = source_archive("nv-codec-headers", DEPENDENCIES["nv-codec-headers"], cache) if args.platform == "linux" else None
     work = cache / "work" / f"{args.platform}-{args.arch}"
-    # Reconfigure alone leaves obsolete members in static archives. Rebuild the
-    # derived output directories whenever the complete locked profile changes.
+    # 仅重新配置会在静态归档中留下旧成员；
+    # 完整锁定配置变化时重新构建派生输出目录。
     shutil.rmtree(work, ignore_errors=True)
     shutil.rmtree(prefix, ignore_errors=True)
     work.mkdir(parents=True)
@@ -350,8 +350,8 @@ def build(args, cache, prefix):
     run([*meson, "compile", "-C", work / "dav1d", "-j", str(args.jobs)], work, environment, log)
     run([*meson, "install", "-C", work / "dav1d", "--no-rebuild"], work, environment, log)
     if args.platform == "windows":
-        # dav1d deliberately names its static MSVC archive libdav1d.a. Rust and
-        # FFmpeg's MSVC linker adapter resolve -ldav1d as dav1d.lib instead.
+        # dav1d 将 MSVC 静态归档命名为 libdav1d.a，
+        # 而 Rust 与 FFmpeg 的 MSVC 链接适配器将 -ldav1d 解析为 dav1d.lib。
         shutil.copy2(prefix / "lib/libdav1d.a", prefix / "lib/dav1d.lib")
     if nvcodec:
         shutil.copytree(nvcodec / "include/ffnvcodec", prefix / "include/ffnvcodec", dirs_exist_ok=True)
@@ -372,7 +372,7 @@ def build(args, cache, prefix):
         shutil.copy2(source / name, licenses / name)
     shutil.copy2(dav1d / "COPYING", licenses / "dav1d-COPYING")
     if nvcodec:
-        # This upstream revision carries its notices in individual headers.
+        # 此上游版本将版权声明分别保存在各头文件中。
         notices = []
         for header in sorted((nvcodec / "include/ffnvcodec").glob("*.h")):
             text = header.read_text()

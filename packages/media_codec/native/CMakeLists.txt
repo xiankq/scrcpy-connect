@@ -3,7 +3,7 @@ project(media_codec_core LANGUAGES C CXX)
 include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ffmpeg.cmake")
 
 find_program(MEDIA_CODEC_CARGO cargo HINTS "$ENV{CARGO_HOME}/bin" "$ENV{HOME}/.cargo/bin" "$ENV{USERPROFILE}/.cargo/bin" REQUIRED)
-set(MEDIA_CODEC_RUST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../rust")
+set(MEDIA_CODEC_RUST_ROOT "${MEDIA_CODEC_WORKSPACE_ROOT}/rust/media_codec")
 set(MEDIA_CODEC_RUST_TARGET_DIR "${MEDIA_CODEC_WORKSPACE_ROOT}/.dart_tool/media_codec/rust-target" CACHE PATH "Shared media decoder Cargo cache")
 set(MEDIA_CODEC_RUST_ENV "MEDIA_CODEC_FFMPEG_ROOT=${MEDIA_CODEC_FFMPEG_ROOT}" "CARGO_INCREMENTAL=0" "MAKEFLAGS=")
 

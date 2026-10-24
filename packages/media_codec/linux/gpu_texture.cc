@@ -12,8 +12,8 @@ extern "C" {
 #include <libavutil/hwcontext_drm.h>
 }
 namespace {
-// Runtime-loaded CUDA/GL interop keeps systems without NVIDIA usable. Copies
-// NV12 planes device-to-device; no host pixels or CUDA SDK dependency.
+// 运行时加载 CUDA/GL 互操作，使无 NVIDIA 的系统仍可使用。
+// NV12 平面直接在设备间复制，不经过主机像素，也不依赖 CUDA SDK。
 class CudaInterop {
 public:
   CudaInterop() {
@@ -79,8 +79,7 @@ public:
       for (int i = 0; i < 2; ++i)
         resources[i] = handles[i];
     } else {
-      // Only the error path blocks; successful GL draws wait on CUDA unmap
-      // implicitly, and their GL fence retains both registration and source.
+      // 只有错误路径阻塞；成功 GL 绘制隐式等待 CUDA unmap，GL fence 同时保留注册和源。
       sync(device->stream);
       for (auto handle : handles)
         if (handle)
@@ -203,7 +202,7 @@ void McLinuxGpuTexture::reap(bool wait) {
   }
 }
 void McLinuxGpuTexture::release_shared_resources() {
-  // Sync objects and texture/program names are shared by GDK contexts.
+  // GDK context 共享同步对象、纹理名称和程序名称。
   reap(true);
   glDeleteTextures(3, software_textures_);
   std::fill_n(software_textures_, 3, 0);
@@ -242,7 +241,7 @@ bool McLinuxGpuTexture::render(AVFrame *source, GLuint output) {
        !epoxy_has_gl_extension("GL_OES_EGL_image")))
     return false;
   reap(false);
-  // Only apply backpressure when four decoder surfaces are still read by GL.
+  // 只有四个解码 surface 仍被 GL 读取时才施加背压。
   if (pending_.size() >= 4)
     reap(true);
   AVFrame *mapped = hardware ? av_frame_alloc() : nullptr;
@@ -278,7 +277,7 @@ bool McLinuxGpuTexture::render(AVFrame *source, GLuint output) {
       auto plane = drm->layers[layer].planes[p];
       planes.push_back({plane.object_index, plane.offset, plane.pitch});
     }
-  // NV12 only. 10-bit/P010 and unsupported layouts use the general fallback.
+  // 仅处理 NV12；10 位/P010 和不支持的布局使用通用回退。
   bool nv12 = !hardware ||
               (drm->nb_layers == 1 &&
                drm->layers[0].format == fourcc('N', 'V', '1', '2')) ||
@@ -529,7 +528,7 @@ bool McLinuxGpuTexture::render(AVFrame *source, GLuint output) {
             pending_.push_back(pending);
             glFlush();
           } else {
-            // Fence allocation failure must not release an in-use surface.
+            // fence 分配失败不能释放仍在使用的 surface。
             glFinish();
             okay = false;
           }

@@ -5,12 +5,12 @@
 #include <epoxy/gl.h>
 #include <vector>
 struct AVFrame;
-/* VA-API surfaces are exported by FFmpeg as DRM PRIME and imported as Y/UV
- * EGL images. Unsupported drivers/formats return false for the CPU fallback. */
+/* FFmpeg 将 VA-API surface 导出为 DRM PRIME，再以 Y/UV EGL 图像导入。
+ * 驱动或格式不支持时返回 false，交由 CPU 回退。 */
 class McLinuxGpuTexture {
 public:
   bool render(AVFrame *frame, GLuint output);
-  // Invalidate the storage cache after a CPU fallback redefines output.
+  // CPU 回退重建输出后，使存储缓存失效。
   void storage_changed() { width_ = height_ = 0; }
   void release_shared_resources();
 

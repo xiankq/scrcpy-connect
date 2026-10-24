@@ -29,7 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Platform texture and PCM output; packet ownership and decoding live in the shared core. */
+/** 平台纹理与 PCM 输出；数据包所有权和解码由共享核心负责。 */
 public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.MethodCallHandler {
   static { System.loadLibrary("media_codec_plugin"); }
   private final Handler main = new Handler(Looper.getMainLooper());
@@ -49,9 +49,8 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
     channel.setMethodCallHandler(null);
     List<Session> outputs = new ArrayList<>(sessions.values());
     for (Session session : outputs) { session.disposed = true; session.releaseTexture(); }
-    // Flutter destroys texture consumers after detach returns. Also drain any
-    // earlier dispose already removed from sessions. Consumers were abandoned
-    // first so a blocked software dequeue cannot hold this drain indefinitely.
+    // Flutter 在 detach 返回后销毁纹理消费者；此前 dispose 从 sessions 移除的输出也必须排空。
+    // 先放弃消费者，防止阻塞的软件 dequeue 使排空无限等待。
     Future<?> drain = worker.submit(() -> {
       for (Session session : outputs) session.closeNative();
     });
@@ -146,8 +145,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
         if (session.textureId() < 0 || session.disposed || Build.VERSION.SDK_INT < 24) {
           result.success(null); return;
         }
-        // MediaCodec Surface buffers intentionally never travel through CPU memory during playback.
-        // An explicit snapshot is the only path that reads the Android Surface back.
+        // 播放时 MediaCodec Surface 缓冲不经过 CPU 内存；只有明确截图才回读 Android Surface。
         double scale = Math.min(1.0, Math.min((double) maxWidth / session.width, (double) maxHeight / session.height));
         Bitmap bitmap = Bitmap.createBitmap(Math.max(1, (int) (session.width * scale)),
             Math.max(1, (int) (session.height * scale)), Bitmap.Config.ARGB_8888);
@@ -222,16 +220,14 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
       } else {
         audio = null;
         TextureRegistry.SurfaceProducer candidate = textures.createSurfaceProducer();
-        // ImageReader producers cannot apply codec crop/rotation on all engines.
-        // Flutter's SurfaceTexture consumer applies the producer transform matrix.
+        // 部分引擎上的 ImageReader 生产者不能应用编解码器裁剪和旋转；Flutter SurfaceTexture 消费者会应用生产者变换矩阵。
         if (candidate.handlesCropAndRotation()) {
           producer = candidate; surfaceTexture = null;
           producer.setSize(width, height);
           surface = producer.getSurface();
           producer.setCallback(new TextureRegistry.SurfaceProducer.Callback() {
             @Override public void onSurfaceCleanup() {
-              // The callback is a barrier: Flutter destroys its consumer as soon
-              // as this returns. Merely posting to the worker races that release.
+              // 此回调是释放栅栏，返回后 Flutter 立即销毁消费者；只向 worker 投递任务会与销毁发生竞态。
               synchronized (decoderLock) {
                 if (decoder != 0) nativeSetSurface(decoder, null);
                 surface = null;
@@ -271,8 +267,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
         if (decoder != 0) { nativeDispose(decoder); decoder = 0; }
       }
     }
-    // Called on the main thread. Native workers retain their ANativeWindow, so
-    // abandoning the consumer is safe and unblocks an in-flight software lock.
+    // 在主线程调用；原生 worker 保留 ANativeWindow，因此可安全放弃消费者并解除在途软件锁等待。
     void releaseTexture() {
       if (textureReleased) return;
       textureReleased = true;
@@ -288,7 +283,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
       releaseTexture(); onAudioClosed();
     }
 
-    // Called by the shared core's decode thread, never by the Dart isolate.
+    // 由共享核心解码线程调用，不由 Dart isolate 调用。
     @SuppressWarnings("unused") public void onFrame(int nextWidth, int nextHeight) {
       if (disposed || nextWidth <= 0 || nextHeight <= 0 || (width == nextWidth && height == nextHeight)) return;
       main.post(() -> {
@@ -356,8 +351,7 @@ public final class MediaCodecPlugin implements FlutterPlugin, MethodChannel.Meth
       if (disposed || paused || audio == null) return 0;
       synchronized (audioLock) {
         if (disposed || paused || audio == null) return 0;
-        // The core retries unaccepted bytes. Never wait/sleep on its decode
-        // thread, and never copy borrowed PCM into a Java heap array.
+        // 核心重试未接受字节；不能在解码线程等待或休眠，也不能将借用 PCM 复制到 Java 堆数组。
         int written = audio.write(bytes, bytes.remaining(), AudioTrack.WRITE_NON_BLOCKING);
         if (written > 0) audioFramesWritten += written / 4;
         return written < 0 ? written : written - written % 4;

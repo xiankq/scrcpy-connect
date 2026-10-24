@@ -1,0 +1,20 @@
+[package]
+name = "interop-scrcpy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0"
+description = "Typed scrcpy protocol, process and capture over an existing ADB client"
+
+[features]
+test-support = []
+
+[dependencies]
+interop-adb = { path = "../adb" }
+tokio = { version = "1", features = ["io-util", "sync", "time", "rt", "macros"] }
+thiserror = "2"
+tokio-util = { version = "0.7", features = ["rt"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Resolve only our pinned static dependencies, delegate system packages.
+"""解析固定的静态依赖，系统包交给系统工具处理。
 
-The rootless Linux sysroot must apply to libva but must not rewrite the absolute
-workspace prefix of dav1d. This also avoids requiring pkg-config on Windows.
-This is intentionally not a general .pc parser: versions come from our locks.
+无需 root 的 Linux sysroot 适用于 libva，但不能重写 dav1d 的工作区绝对路径。
+这也避免 Windows 强制依赖 pkg-config。版本来自锁文件，不实现通用 .pc 解析器。
 """
 import json
 import os
@@ -52,7 +51,7 @@ def main():
     if "--cflags" in arguments or "--cflags-only-I" in arguments:
         print("-I" + (prefix / "include").as_posix())
     if "--libs" in arguments and name == "dav1d":
-        # Threads are provided by the host runtime / FFmpeg's pthread detection.
+        # 线程支持由宿主运行时或 FFmpeg 的 pthread 检测提供。
         print("-L" + (prefix / "lib").as_posix() + " -ldav1d")
     return 0
 

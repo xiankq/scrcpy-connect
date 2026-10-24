@@ -28,6 +28,6 @@ Pod::Spec.new do |s|
     'HEADER_SEARCH_PATHS' => "$(inherited) \"#{root}/include\" \"$(PODS_TARGET_SRCROOT)/../native\"",
     'LIBRARY_SEARCH_PATHS' => "$(inherited) \"#{root}/lib\"",
   }
-  # Static CocoaPods also resolve the FFmpeg archives at the final app link.
+  # 静态 CocoaPods 也会在最终应用链接阶段解析 FFmpeg 静态库。
   s.user_target_xcconfig = { 'LIBRARY_SEARCH_PATHS' => "$(inherited) \"#{root}/lib\"" }
 end

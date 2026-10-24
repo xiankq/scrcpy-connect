@@ -60,7 +60,7 @@ struct Output {
   }
   ~Output() { stop_render(); sws_freeContext(scaler); }
 };
-// Attach each native worker once, and detach only when that thread exits.
+// 每个原生 worker 只附着一次，线程退出时才分离。
 struct ThreadEnvironment {
   JNIEnv* env = nullptr;
   bool attached = false;
@@ -111,9 +111,8 @@ void render_software(Output* output) {
     window = output->window;
     if (window) ANativeWindow_acquire(window);
   }
-  // A dequeue may block until the consumer releases a buffer. Never hold the
-  // swap mutex while waiting: cleanup must be able to withdraw the target and
-  // abandon its consumer, waking the platform dequeue.
+  // dequeue 可能等待消费者释放缓冲；等待时不能持有替换互斥锁。
+  // 清理必须能撤回目标并放弃消费者，从而唤醒平台 dequeue。
   const char* error = nullptr;
   if (window) {
     output->scaler = sws_getCachedContext(output->scaler, frame->width, frame->height,
@@ -136,8 +135,7 @@ void render_software(Output* output) {
         else {
           uint8_t* planes[4] = {static_cast<uint8_t*>(buffer.bits), nullptr, nullptr, nullptr};
           int strides[4] = {buffer.stride * 4, 0, 0, 0};
-          // Convert straight into the dequeued buffer: no per-frame RGBA
-          // allocation or second full-frame CPU memcpy.
+          // 直接转换到已出队缓冲，避免逐帧分配 RGBA 或第二次整帧 CPU memcpy。
           if (sws_scale(output->scaler, frame->data, frame->linesize, 0, frame->height, planes, strides) != frame->height)
             error = "Software frame conversion failed";
         }
@@ -158,8 +156,7 @@ void frame_ready(void* context) {
   auto* output = static_cast<Output*>(context);
   if (output->closing) return;
   mc_status status{}; mc_get_status(output->decoder, &status);
-  // A software component (e.g. c2.android.avc.decoder) still renders through
-  // MediaCodec's opaque Surface API; physical acceleration is diagnostic only.
+  // 软件组件（如 c2.android.avc.decoder）也通过 MediaCodec 的不透明 Surface 渲染；物理加速仅作为诊断事实。
   if (strstr(status.decoder_name, "_mediacodec")) {
     std::lock_guard<std::mutex> guard(output->window_mutex);
     mc_report_present(output->decoder, 0, "android-mediacodec-surface",
@@ -223,8 +220,7 @@ Output* output(jlong handle) { return reinterpret_cast<Output*>(static_cast<uint
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* value, void*) {
   vm = value;
-  // NDK decode still uses FFmpeg's Java codec-list/profile discovery when a
-  // JVM is available. Register it before any decoder can be constructed.
+  // 存在 JVM 时，NDK 解码仍使用 FFmpeg 的 Java 编解码器列表和 profile 探测；创建任何解码器前先注册 JVM。
   return av_jni_set_java_vm(value, nullptr) < 0 ? JNI_ERR : JNI_VERSION_1_6;
 }
 #define JNI_METHOD(name) Java_dev_scrcpyconnect_media_1codec_MediaCodecPlugin_##name
@@ -239,7 +235,7 @@ extern "C" JNIEXPORT jlong JNICALL JNI_METHOD(nativeCreate)(JNIEnv* env, jclass,
   auto fail = [&]() -> jlong {
     if (cls) env->DeleteLocalRef(cls);
     env->DeleteGlobalRef(value->listener);
-    // Do not execute another lookup with NoSuchMethodError pending: ART aborts.
+    // 存在未处理的 NoSuchMethodError 时不能继续查找，否则 ART 会终止。
     if (env->ExceptionCheck()) env->ExceptionClear();
     jclass exception = env->FindClass("java/lang/IllegalStateException");
     if (exception) {
@@ -307,8 +303,7 @@ extern "C" JNIEXPORT void JNICALL JNI_METHOD(nativeSetSurface)(JNIEnv* env, jcla
       if (next) ANativeWindow_release(next);
       return;
     }
-    // A renderer holds its own native reference. Publish the new target before
-    // the synchronous core swap, which may immediately publish a replay.
+    // renderer 持有独立原生引用；同步核心替换可能立即发布重放，因此先发布新目标。
     previous = value->window;
     value->window = next;
   }

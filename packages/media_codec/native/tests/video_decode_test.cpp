@@ -48,8 +48,8 @@ void submit(uint32_t event, uint32_t width, uint32_t height,
 }
 } // namespace
 
-// IVF is only a test-fixture envelope. The production library receives the
-// original AV1 packet payloads directly and contains no demuxer/AVFormat.
+// IVF 仅作为测试夹具封装；生产库直接接收原始 AV1 包负载，
+// 不包含解复用器或 AVFormat。
 int main(int argc, char **argv) {
   check(argc == 2 || argc == 3,
         "usage: video_decode_test AV1.ivf [required-hardware-device]");

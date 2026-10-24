@@ -46,8 +46,7 @@ public:
       return;
     paused_ = value;
     if (pcm_) {
-      // Drop the device queue too: stopping Rust writes alone leaves audio
-      // audible after the playback clock has been marked paused.
+      // 同时清空设备队列；只停止 Rust 写入会使播放时钟标为暂停后仍可听到排队声音。
       drop_(pcm_);
       if (!value && prepare_(pcm_) < 0)
         reopen();
@@ -89,8 +88,7 @@ public:
       } else {
         int recovered = recover_(pcm_, static_cast<int>(count), 1);
         if (recovered < 0) {
-          // Default-route/device removal may invalidate a PCM permanently.
-          // Reopen once here; Rust retains the unwritten tail for retry.
+          // 默认路由或设备移除可能使 PCM 永久失效；此处仅重开一次，Rust 保留未写入尾部以供重试。
           reopen();
           return original == frames ? -1 : int64_t((original - frames) * 4);
         }

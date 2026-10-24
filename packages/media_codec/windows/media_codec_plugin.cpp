@@ -62,8 +62,7 @@ public:
   ~Audio() { shutdown(); }
   void shutdown() {
     std::lock_guard<std::mutex> lock(mutex_);
-    // Called by the PCM worker before it exits its COM apartment. WASAPI
-    // service interfaces must be released on their GetService thread.
+    // PCM worker 退出其 COM apartment 前调用；WASAPI 接口必须在取得 GetService 的线程释放。
     invalidate();
     enumerator_.Reset();
     if (event_) {
@@ -141,7 +140,7 @@ public:
       remaining -= count;
       submitted_ += count;
     }
-    // Preserve a successful prefix; Rust retries precisely the unwritten tail.
+    // 保留已成功写入的前缀，Rust 只重试未写入的尾部。
     return original == remaining && !client_
                ? -1
                : static_cast<int64_t>((original - remaining) * 4);
@@ -310,8 +309,7 @@ public:
     descriptor_.visible_width = width_;
     descriptor_.visible_height = height_;
     descriptor_.format = kFlutterDesktopPixelFormatBGRA8888;
-    // Flutter's ANGLE device differs from the decoder/upload device. Import
-    // the DXGI shared handle, retaining its owner until Flutter has opened it.
+    // Flutter 的 ANGLE 设备与解码、上传设备不同；导入 DXGI 共享句柄，并保留所有者直到 Flutter 完成打开。
     output_->AddRef();
     descriptor_.release_context = output_.Get();
     descriptor_.release_callback = [](void *p) {
@@ -386,9 +384,8 @@ private:
       return false;
     ComPtr<ID3D11Device> device;
     input->GetDevice(&device);
-    // Legacy DXGI sharing crosses devices on one adapter, not distinct GPUs.
-    // Preserve decoding on the selected device and upload a CPU fallback on
-    // Flutter's adapter when Windows chose different GPUs for the two APIs.
+    // 旧 DXGI 共享仅支持同一 adapter 上的不同设备。
+    // 若 Windows 为两个接口选择了不同 GPU，则保留所选设备解码，在 Flutter 的 adapter 上上传 CPU 回退。
     if (!can_share(device.Get()))
       return false;
     auto *frames = reinterpret_cast<AVHWFramesContext *>(
@@ -485,7 +482,7 @@ private:
     }
     if (!target(upload_device_.Get(), image.width, image.height))
       return false;
-    // swscale converts directly to BGRA; no second full-frame CPU traversal.
+    // swscale 直接转换为 BGRA，避免第二次整帧 CPU 遍历。
     context_->UpdateSubresource(output_.Get(), 0, nullptr, image.rgba,
                                 static_cast<UINT>(image.stride), 0);
     context_->Flush();
@@ -583,7 +580,7 @@ private:
       config.width = static_cast<uint32_t>(integer(args, "width"));
       config.height = static_cast<uint32_t>(integer(args, "height"));
       config.generation = integer(args, "generation");
-      // FFmpeg's D3D11VA numeric device selects the DXGI adapter ordinal.
+      // FFmpeg 的 D3D11VA 数值设备选择 DXGI adapter 序号。
       std::string hardware_device = audio ? "" : output->gpu.hardware_device();
       config.hardware_device =
           hardware_device.empty() ? nullptr : hardware_device.c_str();

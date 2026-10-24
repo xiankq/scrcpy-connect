@@ -148,10 +148,9 @@ static gboolean populate(FlTextureGL *texture, uint32_t *target, uint32_t *name,
 }
 static void texture_finalize(GObject *object) {
   auto *self = reinterpret_cast<McTexture *>(object);
-  // GDK contexts on the same display share textures and programs. Use a
-  // separate context on the platform thread after unregistering, rather than
-  // moving Flutter raster context across threads or leaking one GL texture per
-  // remote session. Context-local FBO/VAO objects are deleted during populate.
+  // 同一显示设备上的 GDK context 共享纹理与程序。
+  // 注销后在平台线程使用独立 context，避免跨线程移动 Flutter 光栅 context 或逐会话泄漏 GL 纹理。
+  // context 私有的 FBO/VAO 在 populate 期间删除。
   if (self->window && !gdk_window_is_destroyed(self->window)) {
     GdkGLContext *previous = gdk_gl_context_get_current();
     if (previous)
@@ -195,8 +194,7 @@ static void mc_texture_init(McTexture *self) {
   self->height = 0;
 }
 namespace {
-// ALSA is loaded at runtime, keeping the plugin usable on systems where audio
-// is unavailable. Nonblocking writes and bounded waits keep disposal bounded.
+// 运行时加载 ALSA，使无音频设备的系统仍可使用插件；非阻塞写入和有界等待保证释放有界。
 using Audio = mc_linux::Audio;
 struct Output {
   FlTextureRegistrar *registrar = nullptr;
@@ -343,8 +341,7 @@ void method(FlMethodChannel *, FlMethodCall *call, gpointer user) {
     config.width = integer(args, "width");
     config.height = integer(args, "height");
     config.generation = integer(args, "generation");
-    // VAAPI must decode on Flutter's render GPU when EGL exposes its node.
-    // GLX/older EGL keeps the normal default and the bounded CPU fallback.
+    // EGL 公开渲染节点时，VAAPI 必须在 Flutter 渲染 GPU 上解码；旧 EGL/GLX 保留默认设备及有界 CPU 回退。
     std::string hardware_device = audio ? "" : render_node(plugin->view);
     if (!hardware_device.empty())
       hardware_device = "vaapi:" + hardware_device;

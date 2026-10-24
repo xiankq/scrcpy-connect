@@ -12,7 +12,7 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 import static org.junit.Assume.*;
 
-/** Exercise consumer abandonment concurrently with a live CPU producer. */
+/** 在 CPU 生产者运行期间并发验证消费者放弃。 */
 public final class SurfaceConsumerLifecycleTest {
   @Test public void abandoningConsumerStopsSoftwareProducer() throws Exception {
     assumeTrue(Build.VERSION.SDK_INT >= 26);
@@ -28,7 +28,7 @@ public final class SurfaceConsumerLifecycleTest {
           producer.unlockCanvasAndPost(canvas); posted.incrementAndGet();
         }
       } catch (RuntimeException abandoned) {
-        // A removed consumer rejects a pending/future dequeue.
+        // 已移除的消费者拒绝挂起及后续的出队请求。
       } finally { done.countDown(); }
     });
     writer.start();

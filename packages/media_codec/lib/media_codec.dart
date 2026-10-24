@@ -1,4 +1,4 @@
-/// Native packet decoding and Flutter presentation without a file player.
+/// 直接解码原生媒体包并在 Flutter 呈现。
 library;
 
 export 'src/controller.dart';

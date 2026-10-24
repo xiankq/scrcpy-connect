@@ -1,0 +1,16 @@
+[package]
+name = "interop-scrcpy-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+interop-scrcpy = { path = ".." }
+interop-adb = { path = "../../adb" }
+interop-adb-api = { path = "../../adb/api" }
+flutter_rust_bridge = "=2.13.0"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

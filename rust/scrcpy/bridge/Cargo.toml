@@ -1,0 +1,16 @@
+[package]
+name = "interop-scrcpy-bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+interop-adb-api = { path = "../../adb/api" }
+interop-scrcpy-api = { path = "../api" }
+flutter_rust_bridge = "=2.13.0"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

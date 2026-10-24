@@ -1,4 +1,4 @@
-// Standalone EGL regression: links the production importer, no Flutter mocks.
+// 独立 EGL 回归测试：链接生产导入器，不使用 Flutter 模拟实现。
 #include "../gpu_texture.h"
 #include <array>
 #include <cassert>
@@ -83,15 +83,14 @@ int main(int argc, char **) {
   assert(renderer.render(f, texture));
   assert(pixel(texture, 4) == reference);
 
-  // A CPU fallback may redefine this very same GL name to a different size.
+  // CPU 回退可能将同一 GL 名称重新定义为不同尺寸。
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                nullptr);
   renderer.storage_changed();
   assert(renderer.render(f, texture));
   assert(pixel(texture, 4) == reference);
 
-  // Simulate host state that previously interpreted CPU addresses as offsets,
-  // disabled drawing, and overwrote the host's distinct READ binding.
+  // 模拟曾将 CPU 地址解释为偏移、禁用绘制并覆盖宿主独立 READ 绑定的宿主状态。
   GLuint fbos[2], pbo;
   glGenFramebuffers(2, fbos);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbos[0]);
@@ -142,7 +141,7 @@ int main(int argc, char **) {
       assert(av_hwframe_transfer_data(gpu, cpu, 0) == 0);
       assert(av_frame_copy_props(gpu, cpu) == 0);
       assert(renderer.render(gpu, texture));
-      // Let the importer retain all borrowed surfaces safely across iterations.
+      // 允许导入器跨迭代安全保留全部借用表面。
       av_frame_free(&gpu);
     }
     assert(pixel(texture, 64) == reference);

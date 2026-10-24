@@ -168,7 +168,7 @@ dependencies = [
  "addr2line",
  "cfg-if",
  "libc",
- "miniz_oxide 0.8.9",
+ "miniz_oxide",
  "object",
  "rustc-demangle",
  "windows-link",
@@ -406,15 +406,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "crc32fast"
-version = "1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78"
-dependencies = [
- "cfg-if",
 ]
 
 [[package]]
@@ -726,16 +717,6 @@ name = "flagset"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
-
-[[package]]
-name = "flate2"
-version = "1.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb"
-dependencies = [
- "crc32fast",
- "miniz_oxide 0.9.1",
-]
 
 [[package]]
 name = "flume"
@@ -1072,45 +1053,60 @@ dependencies = [
 ]
 
 [[package]]
-name = "interop-bridge"
+name = "interop-adb-api"
 version = "0.1.0"
 dependencies = [
  "flutter_rust_bridge",
  "interop-adb",
- "interop-core",
- "log",
+ "libc",
  "serde_json",
+ "sha2 0.11.1",
  "tempfile",
+ "tokio",
+ "tokio-util",
+ "uuid",
+ "windows-sys 0.61.2",
+ "zeroize",
+]
+
+[[package]]
+name = "interop-adb-bridge"
+version = "0.1.0"
+dependencies = [
+ "flutter_rust_bridge",
+ "interop-adb-api",
+]
+
+[[package]]
+name = "interop-scrcpy"
+version = "0.1.0"
+dependencies = [
+ "interop-adb",
+ "thiserror",
  "tokio",
  "tokio-util",
  "uuid",
 ]
 
 [[package]]
-name = "interop-core"
+name = "interop-scrcpy-api"
 version = "0.1.0"
 dependencies = [
- "base64",
- "bytes",
- "flate2",
- "hex",
+ "flutter_rust_bridge",
  "interop-adb",
- "libc",
- "mdns-sd",
- "rsa",
- "rustls",
- "rustls-rustcrypto",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "socket2",
- "subtle",
- "tempfile",
- "thiserror",
+ "interop-adb-api",
+ "interop-scrcpy",
  "tokio",
- "tokio-rustls",
- "tokio-util",
  "uuid",
+]
+
+[[package]]
+name = "interop-scrcpy-bridge"
+version = "0.1.0"
+dependencies = [
+ "flutter_rust_bridge",
+ "interop-adb-api",
+ "interop-scrcpy-api",
 ]
 
 [[package]]
@@ -1238,16 +1234,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
 dependencies = [
  "adler2",
-]
-
-[[package]]
-name = "miniz_oxide"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
-dependencies = [
- "adler2",
- "simd-adler32",
 ]
 
 [[package]]
@@ -1835,7 +1821,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
- "serde_derive",
 ]
 
 [[package]]
@@ -1949,12 +1934,6 @@ checksum = "28d567dcbaf0049cb8ac2608a76cd95ff9e4412e1899d389ee400918ca7537f5"
 dependencies = [
  "rand_core 0.10.1",
 ]
-
-[[package]]
-name = "simd-adler32"
-version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
 name = "slab"
@@ -2213,7 +2192,6 @@ checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
- "serde_core",
  "wasm-bindgen",
 ]
 

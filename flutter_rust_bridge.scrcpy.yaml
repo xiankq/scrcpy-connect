@@ -1,0 +1,7 @@
+rust_input: crate,interop-adb-api::api,interop-scrcpy-api::api
+rust_root: rust/scrcpy/bridge
+dart_root: packages/scrcpy
+dart_output: packages/scrcpy/lib/src/native/generated
+dart_entrypoint_class_name: ScrcpyRustLib
+web: false
+auto_upgrade_dependency: false

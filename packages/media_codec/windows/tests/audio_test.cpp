@@ -1,5 +1,5 @@
-// Exercise the production WASAPI sink on its owning thread. Silence verifies
-// device acceptance and clock state without claiming acoustic output.
+// 在所有者线程验证生产 WASAPI 输出；静音数据验证设备接受及采样时钟状态，
+// 不作为实际声学输出的证据。
 #include "../media_codec_plugin.cpp"
 #include <array>
 #include <cassert>

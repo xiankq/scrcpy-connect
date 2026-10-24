@@ -1,9 +1,7 @@
-# Only the pinned decode-only build is supported. No fallback to a system or
-# full-player FFmpeg, since that silently changes the shipped capabilities.
+# 只支持固定的纯解码构建，不回退到系统或完整播放器 FFmpeg，避免静默改变交付能力。
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-# CMake REALPATH does not consistently resolve Flutter's Windows directory
-# links. Resolve with the same Python implementation as the dependency builder
-# before deriving the workspace, so all hosts reuse its actual package cache.
+# CMake REALPATH 不能稳定解析 Flutter 的 Windows 目录链接。
+# 派生 workspace 前，使用与依赖构建器一致的 Python 实现解析，使各宿主复用实际包缓存。
 execute_process(COMMAND "${Python3_EXECUTABLE}" -c
   "from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().as_posix())"
   "${CMAKE_CURRENT_LIST_DIR}/.."
@@ -79,7 +77,7 @@ endif()
 add_library(mc_ffmpeg INTERFACE)
 target_include_directories(mc_ffmpeg SYSTEM INTERFACE "${MEDIA_CODEC_FFMPEG_ROOT}/include")
 foreach(component swscale avcodec dav1d avutil)
-  # A reconfigure may replace a previously selected SDK/architecture/prefix.
+  # 重新配置可能替换此前选择的 SDK、架构或前缀。
   unset(MEDIA_CODEC_${component}_LIBRARY CACHE)
   find_library(MEDIA_CODEC_${component}_LIBRARY NAMES ${component} lib${component}
     PATHS "${MEDIA_CODEC_FFMPEG_ROOT}/lib" NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH REQUIRED)

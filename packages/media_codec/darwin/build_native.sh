@@ -1,5 +1,5 @@
 #!/bin/sh
-# CocoaPods runs this before compilation for both static and framework linkage.
+# CocoaPods 在静态库和 framework 的编译前均执行此脚本。
 set -eu
 mc_platform="$1"
 mc_package_root="$(cd "$PODS_TARGET_SRCROOT/.." && pwd)"
@@ -27,7 +27,7 @@ for mc_apple_arch in $ARCHS; do
       --sdk "$PLATFORM_NAME" --prefix "$mc_ffmpeg_prefix"
   fi
   (
-    cd "$mc_package_root/rust"
+    cd "$mc_package_root/../../rust/media_codec"
     export MEDIA_CODEC_FFMPEG_ROOT="$mc_ffmpeg_prefix"
     export MEDIA_CODEC_SYSROOT="$mc_sdk_root"
     export LIBCLANG_PATH="${LIBCLANG_PATH:-$(dirname "$mc_clang")/../lib}"
@@ -37,7 +37,7 @@ for mc_apple_arch in $ARCHS; do
     export CARGO_INCREMENTAL=0
     "$mc_cargo" build --release --lib --locked --target "$mc_rust_target" --target-dir "$mc_cargo_target_dir"
   )
-  # Rust's staticlib already includes the three trimmed FFmpeg libraries.
+  # Rust staticlib 已包含三个裁剪后的 FFmpeg 库。
   ln -sf "$mc_cargo_target_dir/$mc_rust_target/release/libmedia_codec_native.a" \
     "$mc_ffmpeg_prefix/lib/libmedia_codec_native.a"
 done

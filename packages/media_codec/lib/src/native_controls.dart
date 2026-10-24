@@ -5,15 +5,14 @@ import 'package:ffi/ffi.dart';
 
 import 'native_bindings.g.dart';
 
-/// Borrows a platform-owned Rust decoder. Only the platform may destroy it.
-/// Addresses are capabilities for this process and never enter public status.
+/// 借用平台持有的 Rust 解码器，仅平台可销毁。
+/// 地址只在当前进程有效，不进入公开状态。
 final class NativeControls {
   NativeControls(Map<String, dynamic> created) {
     final decoder = created['decoderAddress'];
     final api = created['nativeApi'];
-    // Android arm64 heap tags can set bit 63. JNI Long/Dart int then carry a
-    // valid pointer as a negative value. Preserve every bit, including the tag
-    // required when the platform later destroys the decoder; only zero is null.
+    // Android arm64 堆标签可能设置第 63 位，使有效指针以负的 JNI Long/Dart int 表示。
+    // 保留全部位和平台销毁所需标签，只有零表示空指针。
     if (decoder is! int || decoder == 0 || api is! Map) {
       throw StateError('Native decoder controls are unavailable');
     }

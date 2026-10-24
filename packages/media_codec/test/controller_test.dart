@@ -146,10 +146,9 @@ void main() {
   test(
     'Android arm64 tagged decoder reaches the first frame without detaching',
     () async {
-      // JNI jlong and StandardMethodCodec preserve this non-null pointer's bits
-      // as a negative Dart int. The native callbacks treat the decoder as opaque,
-      // so this exercises the real FFI handoff without dereferencing ARM TBI
-      // addresses on a host which does not implement TBI.
+      // JNI jlong 与 StandardMethodCodec 以负 Dart int 保留该非空指针的位模式。
+      // 原生回调将解码器视为不透明句柄，因此可验证真实 FFI 交接，
+      // 无需在不支持 ARM TBI 的宿主上解引用 TBI 地址。
       final tagged = native.memory.address | 0xb400000000000000;
       expect(tagged, isNegative);
       native.decoderAddressOverride = tagged;
@@ -220,7 +219,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(events.where((event) => event['kind'] == 'diagnostic'), isEmpty);
 
-    // The selected name can stay identical when the first frame arrives.
+    // 首帧到达时，所选名称可能保持不变。
     native.frameCount = 1;
     await controller.refresh();
     await Future<void>.delayed(Duration.zero);
@@ -228,7 +227,7 @@ void main() {
     expect(events.single['runtimeSelectionVerified'], true);
     expect(events.single['hardwareAccelerated'], true);
 
-    // FFmpeg may then fall back internally; report the actual output change.
+    // FFmpeg 随后可能内部回退；应报告实际输出变化。
     native.decoderName = 'software_h264';
     native.hardware = false;
     native.frameCount = 2;
@@ -378,7 +377,7 @@ void main() {
       await controller.refresh();
       native.width = 720;
       native.height = 320;
-      // Dimensions without a newer decoded frame are not sufficient evidence.
+      // 没有更新的解码帧时，仅尺寸不足以构成证据。
       await controller.refresh();
       await Future<void>.delayed(Duration.zero);
       expect(events.where((event) => event['kind'] == 'metadata'), isEmpty);
@@ -418,6 +417,69 @@ void main() {
       await expectLater(controller.setVolume(.5), throwsStateError);
     },
   );
+
+  for (final unconfirmed in [false, true]) {
+    test(unconfirmed ? '销毁未确认时保留原句柄供重试' : '销毁失败后重试原输出且合并并发关闭', () async {
+      var attempts = 0;
+      final retry = Completer<void>();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        if (call.method == 'createVideo') return native.created;
+        if (call.method == 'dispose') {
+          expect(call.arguments, {'handle': 42});
+          if (++attempts == 1) {
+            if (unconfirmed) return {'nativeDeleteConfirmed': false};
+            throw PlatformException(code: 'dispose_failed');
+          }
+          await retry.future;
+          native.destroyed = true;
+          return null;
+        }
+        fail('Unexpected platform round trip: ${call.method}');
+      });
+      await controller.open(source);
+      await expectLater(controller.dispose(), throwsA(anything));
+      expect(native.destroyed, isFalse);
+      final reads = native.reads;
+      await controller.refresh();
+      await expectLater(controller.setPaused(true), throwsStateError);
+      expect(native.reads, reads);
+      final first = controller.dispose();
+      final second = controller.dispose();
+      expect(identical(first, second), isTrue);
+      retry.complete();
+      final receipt = await first;
+      expect(receipt['nativeDeleteConfirmed'], isTrue);
+      await second;
+      await controller.dispose();
+      expect(attempts, 2);
+      expect(native.destroyed, isTrue);
+    });
+  }
+
+  test('创建后控制地址无效且清理失败仍保留输出供关闭重试', () async {
+    var attempts = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'createVideo') return {'handle': 42};
+      if (call.method == 'dispose') {
+        expect(call.arguments, {'handle': 42});
+        if (++attempts == 1) throw PlatformException(code: 'dispose_failed');
+        native.destroyed = true;
+        return null;
+      }
+      fail('Unexpected platform round trip: ${call.method}');
+    });
+    await expectLater(
+      controller.open(source),
+      throwsA(isA<PlatformException>()),
+    );
+    expect(native.destroyed, isFalse);
+    await controller.dispose();
+    expect(native.destroyed, isTrue);
+    expect(native.reads, 0);
+    expect(attempts, 2);
+  });
 
   test(
     'dispose waits for snapshot already using the native resource',
