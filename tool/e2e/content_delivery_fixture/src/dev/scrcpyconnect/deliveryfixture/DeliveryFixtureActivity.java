@@ -16,7 +16,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-/** A separate, test-only recipient for a real system Sharesheet delivery. */
+/** 独立的测试接收应用，用于真实系统 Sharesheet 交付。 */
 public final class DeliveryFixtureActivity extends Activity {
     private static final int MAX_BYTES = 2 * 1024 * 1024;
 
@@ -99,8 +99,8 @@ public final class DeliveryFixtureActivity extends Activity {
                     digest.update(buffer, 0, count);
                     bytesRead += count;
                 }
-                // Do not consume byte MAX_BYTES + 1 just to test for EOF. A stream
-                // that reaches the cap is conservatively rejected, even at exactly 2 MiB.
+                // 不为判断 EOF 而额外读取 MAX_BYTES + 1；达到上限即保守拒绝，包括恰好 2 MiB 的流。
+                //
                 if (!receipt.getBoolean("success")) {
                     throw new VerificationFailure("read_limit_reached_2_mib");
                 }
@@ -115,7 +115,7 @@ public final class DeliveryFixtureActivity extends Activity {
                 receipt.put("sha256", JSONObject.NULL);
                 receipt.put("error", error.getClass().getSimpleName() + ": " + error.getMessage());
             } catch (Exception ignored) {
-                // JSONObject values above are all supported types.
+                // 上方 JSONObject 值均为受支持类型。
             }
         }
         try {

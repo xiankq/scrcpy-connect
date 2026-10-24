@@ -6,7 +6,7 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
 
-// This executable is a host-only experiment. ADB never enters product code.
+// 此可执行程序仅用于宿主实验；产品代码不引入 ADB 实验入口。
 Future<void> main() async {
   String requiredEnvironment(String name) {
     final value = Platform.environment[name];
@@ -201,7 +201,7 @@ Future<Map<String, Object?>> driveShareTarget(
             }
             for (final target in {targetA: 'a', targetB: 'b'}.entries) {
               final serial = target.key;
-              // mkdir, without -p, fails on a pre-existing path; never overwrite it.
+              // 不带 -p 的 mkdir 在路径已存在时失败，禁止覆盖。
               await shell(serial, 'mkdir ${quote(directory)}');
               created[serial] = directory;
               await shell(

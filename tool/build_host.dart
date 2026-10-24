@@ -1,4 +1,4 @@
-/// Build and verify the native libraries in a final host application bundle.
+/// 构建并核验最终宿主应用包中的原生库。
 library;
 
 import 'dart:convert';
@@ -10,7 +10,7 @@ import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
 
-import 'src/core_tooling.dart';
+import 'src/repository_tooling.dart';
 
 final root = repositoryRoot();
 
@@ -34,14 +34,26 @@ int peMachine(File path) {
 Iterable<File> bundleFiles(Directory directory) =>
     directory.listSync(recursive: true, followLinks: true).whereType<File>();
 
+void _rejectApplicationBridge(Iterable<File> files) {
+  if (files.any(
+    (file) =>
+        RegExp(r'^(?:lib)?interop_bridge(?:\.|$)')
+            .hasMatch(p.basename(file.path)),
+  )) {
+    throw StateError('Bundle contains the removed application bridge');
+  }
+}
+
 void verifyWindows(Directory bundle) {
   final files = bundleFiles(bundle).toList();
+  _rejectApplicationBridge(files);
   const adbFiles = {'adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'};
   int? adbMachine;
   for (final name in [
     'scrcpy_connect.exe',
     'flutter_windows.dll',
-    'interop_bridge.dll',
+    'interop_adb_bridge.dll',
+    'interop_scrcpy_bridge.dll',
     'media_codec_plugin.dll',
     'adb.exe',
     'AdbWinApi.dll',
@@ -55,8 +67,8 @@ void verifyWindows(Directory bundle) {
     }
     final machine = peMachine(matches.single);
     if (adbFiles.contains(name)) {
-      // Official platform-tools may ship a 32-bit subprocess and its matching
-      // DLLs; they are not loaded into the x64 Flutter process.
+      // 官方 platform-tools 可能包含 32 位子进程及配套 DLL；它们不会载入 x64 Flutter 进程。
+      //
       if (!{0x14c, 0x8664}.contains(machine) ||
           (adbMachine != null && machine != adbMachine)) {
         throw StateError(
@@ -110,10 +122,12 @@ void verifyMedia(Directory bundle) {
 
 void verifyLinux(Directory bundle) {
   final files = bundleFiles(bundle).toList();
+  _rejectApplicationBridge(files);
   for (final name in [
     'scrcpy_connect',
     'libflutter_linux_gtk.so',
-    'libinterop_bridge.so',
+    'libinterop_adb_bridge.so',
+    'libinterop_scrcpy_bridge.so',
     'libmedia_codec_plugin.so',
     'adb',
   ]) {
@@ -155,9 +169,9 @@ void verifyLinux(Directory bundle) {
     if ('${linkage.stdout}'.contains('not found')) {
       throw StateError('Unresolved Linux dependency: ${file.path}');
     }
-    // ldd validates the complete closure under this real entry's RUNPATH.
-    // A dependency already resolved there need not be executable on its own:
-    // for example libva-drm resolves libva when both are loaded by the plugin.
+    // ldd 在真实入口的 RUNPATH 下核验完整依赖闭包；已在此解析的库不必能单独执行，例如插件同时加载 libva-drm 和 libva。
+    //
+    //
     resolved.add(canonical);
     for (final line in const LineSplitter().convert('${linkage.stdout}')) {
       final arrow = line.indexOf('=> ');
@@ -174,8 +188,8 @@ void verifyLinux(Directory bundle) {
 
 void installMediaNotices(Directory bundle, String platform) {
   if (platform == 'macos' || platform == 'ios') {
-    // Runner's final resource phase uses the actual CocoaPods SDK/architecture
-    // prefixes and signs the nested official adb on macOS.
+    // runner 最终资源阶段采用实际 CocoaPods SDK 与架构前缀，并在 macOS 为嵌套的官方 adb 签名。
+    //
     verifyMedia(bundle);
     return;
   }
@@ -199,7 +213,7 @@ String bundleExecutable(File plist) {
   final bytes = plist.readAsBytesSync();
   if (bytes.length >= 6 &&
       ascii.decode(bytes.take(6).toList(), allowInvalid: true) == 'bplist') {
-    // Binary plists are native Apple build outputs; plutil handles both encodings.
+    // 二进制 plist 属于 Apple 原生构建输出，plutil 同时支持两种编码。
     final result = runTool([
       'plutil',
       '-convert',
@@ -233,6 +247,7 @@ void verifyApple(Directory bundle, String platform) {
       : p.join(contents.path, name);
   runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', binary]);
   final files = bundleFiles(contents).toList();
+  _rejectApplicationBridge(files);
   if (!files.any(
     (file) =>
         p.basename(file.path) ==
@@ -240,18 +255,20 @@ void verifyApple(Directory bundle, String platform) {
   )) {
     throw StateError('Apple bundle lacks its Flutter engine');
   }
-  final rust = files
-      .where(
-        (file) =>
-            p.basename(file.path).contains('interop_bridge') &&
-            !{'.plist', '.json', '.h'}.contains(p.extension(file.path)),
-      )
-      .toList();
-  if (rust.isEmpty) {
-    throw StateError('Apple bundle lacks its Rust interop library');
-  }
-  for (final library in rust) {
-    runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', library.path]);
+  for (final name in ['interop_adb_bridge', 'interop_scrcpy_bridge']) {
+    final rust = files
+        .where(
+          (file) =>
+              p.basename(file.path).contains(name) &&
+              !{'.plist', '.json', '.h'}.contains(p.extension(file.path)),
+        )
+        .toList();
+    if (rust.isEmpty) {
+      throw StateError('Apple bundle lacks its Rust capability library: $name');
+    }
+    for (final library in rust) {
+      runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', library.path]);
+    }
   }
   verifyMedia(bundle);
 }
@@ -275,8 +292,8 @@ void archiveBundle(Directory bundle, String platform, Directory artifacts) {
     File(p.join(artifacts.path, 'windows-release.zip'))
         .writeAsBytesSync(ZipEncoder().encode(archive));
   } else {
-    // Native tar preserves executable modes and framework symlinks. Never
-    // traverse framework links or rebuild the archive from plain file bytes.
+    // 原生 tar 保留执行权限与 framework 符号链接；不遍历 framework 链接，也不用普通文件字节重建归档。
+    //
     runTool([
       'tar',
       '-czf',

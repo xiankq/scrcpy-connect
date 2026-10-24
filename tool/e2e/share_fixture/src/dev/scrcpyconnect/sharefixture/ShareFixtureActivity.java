@@ -11,7 +11,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.ArrayList;
 
-/** A real external sharing app. No product backdoor, package privileges or ADB dependency. */
+/** 真实外部分享应用，不提供产品后门、包特权或 ADB 依赖。 */
 public final class ShareFixtureActivity extends Activity {
     private static final String AUTHORITY = "dev.scrcpyconnect.sharefixture.content";
     private TextView status;
@@ -47,9 +47,9 @@ public final class ShareFixtureActivity extends Activity {
             }
             if (share.getAction().equals(Intent.ACTION_SEND_MULTIPLE)) share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
             else share.putExtra(Intent.EXTRA_STREAM, uris.get(0));
-            // ACTION_SEND auto-migrates EXTRA_STREAM and adds a read grant if
-            // ClipData is absent. Supply it explicitly to preserve negative
-            // no-grant/own-provider cases through Intent preparation.
+            // ACTION_SEND 在没有 ClipData 时会自动迁移 EXTRA_STREAM 并添加读取授权；显式提供 ClipData，保留 Intent 准备过程中的无授权/自有 provider 反例。
+            //
+            //
             ClipData clip = ClipData.newRawUri("fixture", uris.get(0));
             for (int i = 1; i < uris.size(); ++i) clip.addItem(new ClipData.Item(uris.get(i)));
             share.setClipData(clip);

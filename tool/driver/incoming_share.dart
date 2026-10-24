@@ -120,8 +120,8 @@ Future<void> driveShares(
           'shell',
           'am',
           'start',
-          // Bring the sender itself to the top and deliver this mode even when
-          // its task still has the previously opened receiver above it.
+          // 即使任务上方仍有先前打开的接收页，也把发送方本身置顶并交付此模式。
+          //
           '-f',
           '0x24000000',
           '-n',

@@ -6,8 +6,8 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
 
-/// Independent Android observations for remote_settings_test.dart. The driver
-/// never injects a product session.start, session.display or devices.wake call.
+/// 为 remote_settings_test.dart 提供独立 Android 观察，不注入产品 session.start、session.display 或 devices.wake 调用。
+///
 Future<void> main() async {
   final environment = Platform.environment;
   final adb = environment['CONNECT_E2E_ADB'];
@@ -359,7 +359,7 @@ Future<void> main() async {
     } else if (name == 'restore-controller') {
       await restoreController();
     } else if (name == 'failure') {
-      // Record actual target state before finally restores this failed run.
+      // finally 恢复失败运行前，先记录实际被控状态。
       await capture('remote-settings-failed');
       await File('${directory.path}/target-display-failed.txt')
           .writeAsString(await shell(target, 'dumpsys display'));

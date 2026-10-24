@@ -16,8 +16,8 @@ class _Node {
   final List<int> bounds;
 }
 
-/// Host-only Android Settings coordination. Never calls adb pair or imports an
-/// identity. The controller app performs PAKE/TLS with its own Rust key.
+/// 仅宿主使用的 Android 设置协调，不调用 adb pair 或导入身份；主控应用用自身 Rust 密钥执行 PAKE/TLS。
+///
 class _PairingFixture {
   _PairingFixture(this.adb, this.target, this.controller, this.output);
   final String adb;
@@ -117,8 +117,8 @@ class _PairingFixture {
     }
     for (var i = 0; i < 20; i++) {
       current = await nodes();
-      // Settings can finish dismissing its dialog after am start returns.
-      // Recognize the destination on every read, including that late frame.
+      // am start 返回后设置对话框可能仍在关闭，每次读取都要识别目标，包括迟到画面。
+      //
       if (current.any((node) => node.text == 'Use wireless debugging')) {
         return current;
       }
@@ -152,7 +152,7 @@ class _PairingFixture {
         'The Android fixture authorization snapshot is missing.',
       );
     }
-    // Public keys stay in host memory. Never write this snapshot to the report.
+    // 公钥仅留在宿主内存，不把此快照写入报告。
     return dump
         .substring(start + 'user_keys='.length, end)
         .split('\n')
@@ -258,9 +258,9 @@ class _PairingFixture {
     if (fingerprints.length != 1) {
       throw StateError('The owned product fingerprint is not unique.');
     }
-    // API36 Settings can reopen AtomicFile while its handler persists unpairing,
-    // deleting the pending .new file. Use the same system unpair method with
-    // Settings stopped reading; do not replace this with a key-file edit.
+    // API36 设置在 handler 持久化取消配对时可能重开 AtomicFile 并删除待提交 .new；停止设置读取后仍调用同一系统取消配对方法，不改写密钥文件。
+    //
+    //
     await shell(['am', 'force-stop', 'com.android.settings']);
     final result = await shell([
       'service',
@@ -436,8 +436,8 @@ Future<void> main() async {
                     });
                 }
               } catch (error, stack) {
-                // Commands may carry a current pairing code. Do not serialize the
-                // exception or VM-service arguments into logs or the result.
+                // 命令可能携带当前配对码，不将异常或 VM service 参数序列化到日志与结果。
+                //
                 errors.add('Android fixture failed at stage $stage.');
                 fixture.receipt.putIfAbsent('failureStage', () => stage);
                 fixture.receipt.putIfAbsent(

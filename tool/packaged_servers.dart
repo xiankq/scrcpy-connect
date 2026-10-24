@@ -4,13 +4,10 @@ import 'dart:io';
 import 'package:archive/archive.dart' hide ZLibDecoder;
 import 'package:crypto/crypto.dart';
 
-/// Checks the deliverable rather than trusting the source asset declarations.
+/// 直接核验交付包，不仅信任源码中的资源声明。
 void verifyPackagedServers(Archive apk, Directory repository) {
-  const prefix =
-      'assets/flutter_assets/packages/device_runtime/assets/servers/';
-  final source = Directory(
-    '${repository.path}/packages/device_runtime/assets/servers',
-  );
+  const prefix = 'assets/flutter_assets/assets/servers/';
+  final source = Directory('${repository.path}/app/assets/servers');
   final manifestBytes = File('${source.path}/manifest.json').readAsBytesSync();
   final manifest =
       jsonDecode(utf8.decode(manifestBytes)) as Map<String, dynamic>;
@@ -49,7 +46,8 @@ void verifyPackagedServers(Archive apk, Directory repository) {
     embeddedPatterns.addAll([latin1.decode(bytes), latin1.decode(compressed)]);
   }
   for (final library in apk.files.where(
-    (entry) => entry.name.endsWith('/libinterop_bridge.so'),
+    (entry) =>
+        RegExp(r'/libinterop_(?:adb|scrcpy)_bridge\.so$').hasMatch(entry.name),
   )) {
     final bytes = latin1.decode(library.content);
     if (embeddedPatterns.any(bytes.contains)) {

@@ -65,7 +65,7 @@ Future<void> main() async {
         throw StateError('No actual owned scrcpy process for session $id');
       }
       final stopped = found[id]!.contains('T');
-      // Capture suspension must leave the controller and Binder threads alive.
+      // 捕获暂停必须保留主控和 Binder 线程存活。
       if (stopped) {
         throw StateError(
           'Capture pause froze the whole target service: ${found[id]} for $id',

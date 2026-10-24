@@ -109,13 +109,13 @@ Future<void> main() async {
             final record = jsonDecode(line) as Map<String, dynamic>;
             if (record['run'] == timelineRun) records.add(record);
           }
-          // Preserve even a partial/empty timeline after an early native crash.
-          // Successful samples are checked below, after uninstall completes.
+          // 原生提前崩溃也保留部分或空时间线；成功样本在卸载完成后再检查。
+          //
           targetTimeline = records;
           await File('${output.path}/target-timeline.json')
               .writeAsString(jsonEncode(records));
         } catch (error) {
-          // A missing observation must still uninstall this invocation's APK.
+          // 观察缺失仍须卸载本次安装的 APK。
           cleanup['timelineError'] = '$error';
           targetTimelineError = '$error';
         }
@@ -181,7 +181,7 @@ Future<void> main() async {
         return true;
       },
       responseDataCallback: (data) async {
-        // integrationDriver exits the VM, so finally alone cannot clean up.
+        // integrationDriver 会退出 VM，不能只依靠 finally 清理。
         await cleanupFixture();
         final report = {...?data}..remove('screenshots');
         report['fixtureCleanupConfirmed'] = true;
@@ -199,8 +199,8 @@ Future<void> main() async {
               ...round['pauseSamples'] as List? ?? const [],
             ]) {
               final sequence = sample['fixtureSequence'];
-              // A failed pause may never have sent its next input. Preserve
-              // that original failure rather than failing this postprocessor.
+              // 暂停失败时可能尚未发送下一输入；保留原始错误，不改报后处理失败。
+              //
               if (sequence is! int) continue;
               final counter = sample['counter'] ?? sample['expectedCounter'];
               final inputs = (targetTimeline ?? const <Map<String, dynamic>>[])

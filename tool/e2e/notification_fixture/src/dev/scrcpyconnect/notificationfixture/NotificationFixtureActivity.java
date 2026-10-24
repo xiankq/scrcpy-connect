@@ -17,7 +17,7 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** A separate test APK; never packaged into Connect or its companion JAR. */
+/** 独立测试 APK，不进入 Connect 或协同 JAR。 */
 public final class NotificationFixtureActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -115,7 +115,7 @@ public final class NotificationFixtureActivity extends Activity {
         }
         for (int id = 0; id < 6; id++) {
             manager.cancel(tag, id);
-            // These identities include runId; no other run's actions are touched.
+            // 这些身份包含 runId，不触碰其他运行的动作。
             open(runId, id).cancel();
         }
         manager.deleteNotificationChannel(tag);

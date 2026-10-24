@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-import '../src/core_tooling.dart' show dartExecutable;
+import '../src/repository_tooling.dart' show dartExecutable;
 import '../src/process.dart';
 
 void main() {

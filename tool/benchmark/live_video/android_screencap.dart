@@ -1,12 +1,12 @@
 import 'dart:typed_data';
 
-/// Packed output of modern Android `screencap` without `-p`.
+/// 现代 Android 不带 -p 的 screencap 紧凑输出。
 ///
-/// AOSP writes four native uint32 words (width, height, pixel format, color-space
-/// code), then width * bytes-per-pixel per row, omitting GraphicBuffer padding:
+/// AOSP 先写四个本机 uint32（宽、高、像素格式、色彩空间），
+/// 随后每行写 width × bytes-per-pixel，省略 GraphicBuffer 填充：
 /// https://android.googlesource.com/platform/frameworks/base/+/master/cmds/screencap/screencap.cpp
-/// This benchmark supports the known little-endian Android RGBA_8888 layout
-/// only; it never guesses older 12-byte headers or converts other pixel formats.
+/// 本基准只支持已知的小端 Android RGBA_8888 布局，
+/// 不猜测旧的 12 字节头，也不转换其他像素格式。
 class AndroidRgbaScreenshot {
   AndroidRgbaScreenshot._(
     this.width,
@@ -19,7 +19,7 @@ class AndroidRgbaScreenshot {
   factory AndroidRgbaScreenshot.parse(Uint8List bytes) {
     const headerBytes = 16;
     const maxDimension = 8192;
-    // The surface command permits at most 16 Mi characters of base64.
+    // surface 命令最多允许 16 Mi 个 base64 字符。
     const maxBytes = 12 * 1024 * 1024;
     if (bytes.length < headerBytes) {
       throw const FormatException('Expected modern 16-byte screencap header.');
@@ -40,7 +40,7 @@ class AndroidRgbaScreenshot {
         'Only screencap RGBA_8888 (1) is supported: $format.',
       );
     }
-    // Bound both dimensions before multiplication, including on the Dart VM.
+    // 相乘前先限制两个维度，Dart VM 路径也遵循此规则。
     final expectedBytes = headerBytes + width * height * 4;
     if (expectedBytes > maxBytes || bytes.length > maxBytes) {
       throw const FormatException('Screencap exceeds the byte limit.');

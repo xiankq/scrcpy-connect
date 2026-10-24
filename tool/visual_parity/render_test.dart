@@ -157,8 +157,8 @@ void main() {
             for (var offset = 0; offset < difference.length; offset += 4) {
               var changed = false;
               for (var channel = 0; channel < 3; channel++) {
-                // Compare what each input displays on a white canvas, including
-                // transparent PNG pixels. The alpha channel is not RGB error.
+                // 比较各输入在白色画布上的显示，包括透明 PNG 像素；alpha 通道不计作 RGB 误差。
+                //
                 final first = _onWhite(a, offset, channel);
                 final second = _onWhite(b, offset, channel);
                 final delta = (first - second).abs();
@@ -246,7 +246,7 @@ Future<ui.Image> _decode(Uint8List bytes) async {
   }
 }
 
-/// Explicit [x, y, width, height] crop; never scales or pads either input.
+/// 显式 [x, y, width, height] 裁剪，不缩放或填补任一输入。
 Future<ui.Image> _crop(ui.Image source, Object? crop, double radius) async {
   if (crop == null && radius == 0) return source;
   final values = crop == null
@@ -263,8 +263,8 @@ Future<ui.Image> _crop(ui.Image source, Object? crop, double radius) async {
   }
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
-  // Identical white masks remove the physical phone silhouette, not content
-  // differences. A mask is declared in source coordinates before cropping.
+  // 相同白色遮罩仅移除实体手机轮廓，保留内容差异；遮罩先在源坐标声明，再执行裁剪。
+  //
   canvas.drawColor(const ui.Color(0xffffffff), ui.BlendMode.src);
   if (radius > 0) {
     canvas.clipRRect(

@@ -17,7 +17,7 @@ Directory repositoryRoot([Uri? script]) {
   }
 }
 
-/// The single Flutter application is a member of the repository workspace.
+/// 唯一 Flutter 应用属于仓库工作区。
 Directory applicationRoot([Directory? repository]) =>
     Directory(p.join((repository ?? repositoryRoot()).path, 'app'));
 
@@ -98,7 +98,7 @@ void copyDirectory(
     } else if (entity is File) {
       entity.copySync(target);
     } else if (entity is Link) {
-      // The check tree owns its inputs even when a workspace input is a link.
+      // 即使工作区输入是符号链接，检查树仍拥有独立输入。
       final resolved = entity.resolveSymbolicLinksSync();
       if (Directory(resolved).existsSync()) {
         copyDirectory(Directory(resolved), Directory(target), exclude: exclude);

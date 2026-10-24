@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 
-/// Runs PNG comparison with the workspace's existing Flutter image codec.
+/// 使用工作区既有 Flutter 图像 codec 比较 PNG。
 Future<void> main(List<String> arguments) async {
   final root = File.fromUri(Platform.script).parent.parent.parent;
   final parser = ArgParser()

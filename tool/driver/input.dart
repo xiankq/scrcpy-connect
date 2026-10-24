@@ -30,8 +30,8 @@ Future<void> main() async {
     writeResponseOnFailure: true,
     responseDataCallback: (data) async {
       appFinished = true;
-      // integrationDriver exits after this callback. Drain actual Android
-      // fixture cleanup here, before it can terminate a pending finally block.
+      // integrationDriver 在回调后退出；在此排空真实 Android 夹具清理，避免终止仍在等待的 finally。
+      //
       await fixture;
       final metadata = {...?data}..remove('screenshots');
       metadata['fixtureCleanupComplete'] = fixtureError == null;
@@ -245,7 +245,7 @@ Future<void> driveInputRelease(
               'keyevent',
               'KEYCODE_WAKEUP',
             ]);
-            // Remove only this test receiver, including an older test signing key.
+            // 仅移除此测试接收器，包括旧测试签名的安装。
             final packages =
                 '${(await adbRun(target, ['shell', 'pm', 'list', 'packages', fixturePackage])).stdout}';
             if (packages

@@ -39,47 +39,50 @@ void main() {
     client = upstream = null;
   });
 
-  test('a stalled receiver backpressures the sender while reverse bytes progress', () async {
-    await start();
-    final reverse = Completer<void>();
-    final clientReads = client!.listen((bytes) {
-      expect(bytes, everyElement(23));
-      if (!reverse.isCompleted) reverse.complete();
-    });
-    addTearDown(clientReads.cancel);
+  test(
+    'a stalled receiver backpressures the sender while reverse bytes progress',
+    () async {
+      await start();
+      final reverse = Completer<void>();
+      final clientReads = client!.listen((bytes) {
+        expect(bytes, everyElement(23));
+        if (!reverse.isCompleted) reverse.complete();
+      });
+      addTearDown(clientReads.cancel);
 
-    // The target intentionally has no read subscription yet. This payload is
-    // larger than the loopback socket buffers, so a bounded proxy cannot accept
-    // the whole transfer until the receiver resumes.
-    final chunk = Uint8List(64 * 1024)..fillRange(0, 64 * 1024, 17);
-    const total = 32 * 1024 * 1024;
-    for (var sent = 0; sent < total; sent += chunk.length) {
-      client!.add(chunk);
-    }
-    var senderFinished = false;
-    final sent = client!.flush().then((_) => senderFinished = true);
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    expect(
-      senderFinished,
-      isFalse,
-      reason: 'Output buffering must not hide a stalled receiver',
-    );
-    upstream!.add([23]);
-    await upstream!.flush();
-    await reverse.future.timeout(const Duration(seconds: 3));
+      // 目标暂不订阅读取；载荷大于本机 socket 缓冲，因此接收恢复前，有界代理不能接受整个传输。
+      //
+      //
+      final chunk = Uint8List(64 * 1024)..fillRange(0, 64 * 1024, 17);
+      const total = 32 * 1024 * 1024;
+      for (var sent = 0; sent < total; sent += chunk.length) {
+        client!.add(chunk);
+      }
+      var senderFinished = false;
+      final sent = client!.flush().then((_) => senderFinished = true);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(
+        senderFinished,
+        isFalse,
+        reason: 'Output buffering must not hide a stalled receiver',
+      );
+      upstream!.add([23]);
+      await upstream!.flush();
+      await reverse.future.timeout(const Duration(seconds: 3));
 
-    var received = 0;
-    final complete = Completer<void>();
-    final targetReads = upstream!.listen((bytes) {
-      expect(bytes, everyElement(17));
-      received += bytes.length;
-      if (received == total) complete.complete();
-    });
-    addTearDown(targetReads.cancel);
-    await sent.timeout(const Duration(seconds: 10));
-    await complete.future.timeout(const Duration(seconds: 10));
-    expect(received, total);
-  });
+      var received = 0;
+      final complete = Completer<void>();
+      final targetReads = upstream!.listen((bytes) {
+        expect(bytes, everyElement(17));
+        received += bytes.length;
+        if (received == total) complete.complete();
+      });
+      addTearDown(targetReads.cancel);
+      await sent.timeout(const Duration(seconds: 10));
+      await complete.future.timeout(const Duration(seconds: 10));
+      expect(received, total);
+    },
+  );
 
   test(
     'request half-close preserves the later response in the other direction',
@@ -96,7 +99,7 @@ void main() {
       client!.add([1, 2, 3]);
       await client!.close();
       expect(await request.timeout(const Duration(seconds: 3)), [1, 2, 3]);
-      // A server may wait for request EOF before it generates any response.
+      // 服务端可能等请求 EOF 后才生成响应。
       upstream!.add([4, 5, 6]);
       await upstream!.close();
       expect(await response.timeout(const Duration(seconds: 3)), [4, 5, 6]);

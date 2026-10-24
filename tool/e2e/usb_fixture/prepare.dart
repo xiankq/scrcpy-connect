@@ -1,4 +1,4 @@
-// Root is confined to disposable AVD setup. The application uses UsbManager.
+// root 仅限一次性 AVD 的准备阶段，应用仍使用 UsbManager。
 import 'dart:async';
 import 'dart:io';
 
@@ -37,7 +37,7 @@ Future<void> main(List<String> arguments) => cli(() async {
       (await shell('getenforce')).trim() != 'Enforcing') {
     throw StateError('A rootable, initially enforcing AVD is required.');
   }
-  // Do not take over a controller port already owned by another test.
+  // 不接管其他测试已拥有的控制器端口。
   final status = await shell('cat /sys/devices/platform/vhci_hcd.0/status');
   if (!RegExp(r'^hs\s+0000\s+004\s', multiLine: true).hasMatch(status)) {
     throw StateError(
@@ -104,7 +104,7 @@ Future<void> main(List<String> arguments) => cli(() async {
             break;
           }
         } on ProcessException {
-          // Package service is unavailable during the framework restart.
+          // framework 重启期间 package service 不可用。
         }
         await Future<void>.delayed(const Duration(milliseconds: 500));
       }
@@ -121,7 +121,7 @@ Future<void> main(List<String> arguments) => cli(() async {
     if (!hostReady) {
       throw StateError('Android USB Host service did not start.');
     }
-    // Framework restart also recreates the emulator's Wi-Fi default network.
+    // framework 重启也会重建模拟器默认 Wi-Fi 网络。
     final networkDeadline = DateTime.now().add(const Duration(seconds: 60));
     var networkReady = false;
     while (DateTime.now().isBefore(networkDeadline)) {

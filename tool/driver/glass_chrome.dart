@@ -71,8 +71,8 @@ Future<void> main() async {
   final expectedPhoto = sha256.convert(await photo.readAsBytes()).toString();
   final captures = <String, Map<String, dynamic>>{};
   final pixels = <String, List<int>>{};
-  // Remove only this harness's named outputs so an interrupted rerun cannot
-  // leave previous frames masquerading as the current result.
+  // 只移除本夹具命名的输出，避免中断后重跑将旧画面误当成当前结果。
+  //
   for (final name in [..._scenes.map((s) => '$s.png'), 'result.json']) {
     final file = File('$resolved/$name');
     if (await file.exists()) await file.delete();
@@ -115,7 +115,7 @@ Future<void> main() async {
           if (marker != scene['markerCode']) {
             throw StateError('Stale scene PNG $name: pixel marker $marker.');
           }
-          // Verify bytes after writing, independently of the device receipt.
+          // 写入后独立核验字节，不依赖设备回执。
           final stored = await File(captures[name]!['path'] as String)
               .readAsBytes();
           if (sha256.convert(stored).toString() != scene['sha256']) {
@@ -137,7 +137,7 @@ Future<void> main() async {
   );
 }
 
-/// Checks finite runtime evidence. This never issues a perceptual verdict.
+/// 检查有限的运行证据，不作感知视觉判定。
 void validateGlassChromeReport(Map<String, dynamic> report) {
   void require(bool condition, String message) {
     if (!condition) throw StateError(message);

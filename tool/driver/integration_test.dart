@@ -52,8 +52,8 @@ Future<void> main() async {
     driver: driver,
     writeResponseOnFailure: true,
     responseDataCallback: (data) async {
-      // extended integrationDriver exits the process after this callback.
-      // Drain host fixture cleanup before it can terminate pending finallys.
+      // 扩展 integrationDriver 在回调后退出进程；先排空宿主夹具清理，避免中止尚未完成的 finally。
+      //
       hostFinished = true;
       await audioOperation;
       final metadata = {...?data}..remove('screenshots');
@@ -70,8 +70,8 @@ Future<void> main() async {
   );
 }
 
-/// Fail closed when a test exits without its expected acceptance receipt.
-/// Kept independent of a connected driver so host contracts can exercise it.
+/// 缺少预期验收回执时判定失败；保持与已连接 driver 独立，便于主机契约测试直接验证。
+///
 void validateAcceptanceReport(
   Map<String, dynamic> metadata, {
   required Map<String, String> environment,
@@ -83,8 +83,8 @@ void validateAcceptanceReport(
   if (acceptance == 'media' && metadata['mediaAcceptanceComplete'] != true) {
     throw StateError('The app did not complete scoped media acceptance.');
   }
-  // This driver's default target is the full product flow. Dedicated host
-  // fixture modes retain their own completion checks below.
+  // 默认目标是完整产品流程，专用宿主夹具模式仍使用下方各自的完成检查。
+  //
   final fixtureMode = [
     'CONNECT_E2E_BACKGROUND',
     'CONNECT_E2E_AUDIO_LIFECYCLE',
@@ -169,7 +169,7 @@ Future<void> triggerBackground(FlutterDriver driver) async {
         return;
       }
     } catch (error) {
-      // The test registers its extension after the driver attaches.
+      // 测试在 driver 附着后才注册扩展。
       if (!error.toString().contains('ext.connect.background') &&
           !error.toString().contains('Method not found')) {
         rethrow;

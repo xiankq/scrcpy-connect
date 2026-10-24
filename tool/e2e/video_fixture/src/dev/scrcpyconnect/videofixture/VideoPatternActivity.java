@@ -12,7 +12,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 
-/** Independent lab target, never installed by or bundled with the product. */
+/** 独立实验被控夹具，不由产品安装或打包。 */
 public final class VideoPatternActivity extends Activity {
     private Pattern pattern;
     private int counter;
@@ -84,9 +84,9 @@ public final class VideoPatternActivity extends Activity {
                     getWidth() * (bit + 1) / 4f, getHeight(), paint);
             }
             if (motion) {
-                // Changing tiles create sustained encode/transport/decode load.
-                // Keep the middle band unchanged for the counter oracle used
-                // by both decoded snapshots and Android composition captures.
+                // 变化的色块产生持续编码、传输与解码负载；中间条保持不变，供解码快照与 Android 合成捕获共同读取计数判定。
+                //
+                //
                 for (int y = 0; y < getHeight(); y += 64) {
                     for (int x = 0; x < getWidth(); x += 64) {
                         int seed = frame * 1664525 + x * 1013904223 + y * 69069;

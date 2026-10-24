@@ -18,7 +18,7 @@ void main() {
   Directory? temporary;
   try {
     final application = applicationRoot();
-    // The fixture must inherit the workspace's analyzer plugin and imports.
+    // 夹具必须继承工作区的 analyzer 插件和导入配置。
     temporary = Directory(path.join(application.path, 'test'))
         .createTempSync('lint_smoke_');
     final fixture = File(path.join(temporary.path, 'lint_smoke.dart'))

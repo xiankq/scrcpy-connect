@@ -1,4 +1,4 @@
-// Shared host-only support for the offline analyzers and Android fixtures.
+// 离线分析器及 Android 夹具共用的宿主支持。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -8,7 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../src/process.dart';
 
-export '../src/core_tooling.dart' show repositoryRoot;
+export '../src/repository_tooling.dart' show repositoryRoot;
 
 typedef Json = Map<String, dynamic>;
 typedef Query = Future<List<Json>> Function(String sql);
@@ -71,7 +71,7 @@ Future<ProcessResult> checked(
   );
 }
 
-// Perfetto emits RFC-style CSV, including quoted names and doubled quotes.
+// Perfetto 输出 RFC 风格 CSV，包括带引号名称与双写引号。
 List<Json> csvRows(String source) {
   final rows = <List<String>>[];
   var row = <String>[];

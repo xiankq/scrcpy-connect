@@ -6,8 +6,8 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
 
-/// Independent Android process/power evidence for keep_active_test.dart.
-/// No product ready receipt, session or setting is injected by this driver.
+/// 为 keep_active_test.dart 提供独立 Android 进程与电源证据，不注入产品 ready 回执、会话或设置。
+///
 Future<void> main() async {
   final env = Platform.environment;
   final adb = env['CONNECT_E2E_ADB'];
@@ -139,8 +139,8 @@ Future<void> main() async {
       }
     }
     if (name == 'cleanup') {
-      // Product close preserves the application task. Remove only the fixture's
-      // independently verified new root task, leaving system services intact.
+      // 产品关闭保留应用任务；仅移除经独立核实由夹具新建的根任务，保留系统服务。
+      //
       for (final task in ownedSettingsTasks) {
         final tasks = await shell('dumpsys activity activities');
         final header = RegExp(
@@ -212,8 +212,8 @@ Future<void> main() async {
           .trim()
           .split(RegExp(r'\s+'));
       identity = '$pid:${fields[19]}:${process[3]}';
-      // The exact target supervisor retains the launch command even after ART
-      // replaces argv[0] with its unique process identity.
+      // 即使 ART 已将 argv[0] 替换为唯一进程身份，精确目标监督器仍保留启动命令。
+      //
       command = await shell(
         "tr '\\000' '\\n' < /proc/$pid/cmdline; tr '\\000' '\\n' < /proc/$parent/cmdline",
       );
@@ -280,8 +280,8 @@ Future<void> main() async {
     if (sleepingFixture && awake(current['power']!)) {
       throw StateError('Sleeping target unexpectedly woke.');
     }
-    // The independent task list must contain the actual app task returned by
-    // production; keep-active itself must never invent a replacement task.
+    // 独立任务列表须包含产品实际返回的应用任务，保持唤醒不能自行创建替代任务。
+    //
     for (final session
         in (checkpoint['sessions'] as List).cast<Map<String, dynamic>>()) {
       final task = session['taskId'];
@@ -389,7 +389,7 @@ Future<void> main() async {
   } finally {
     finished = true;
     await inspection;
-    // Fixture sleep is ours; never leave the target asleep after a failed test.
+    // 休眠由夹具触发，失败结束也不能让被控设备持续休眠。
     if (sleepingFixture) await shell('input keyevent 224');
   }
 }

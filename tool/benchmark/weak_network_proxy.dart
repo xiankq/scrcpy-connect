@@ -3,8 +3,8 @@ import 'dart:collection';
 import 'dart:io';
 import 'dart:math' as math;
 
-/// Loopback proxy with independent delay, bandwidth and bounded backpressure in
-/// each direction. Closing it cancels even a stalled write or long rate wait.
+/// 双向独立延迟、带宽与有界背压的本机代理；关闭会取消卡住的写入及长时间速率等待。
+///
 class WeakNetworkProxy {
   WeakNetworkProxy._(
     this._server,
@@ -100,7 +100,7 @@ class WeakNetworkProxy {
             _port,
             timeout: const Duration(seconds: 10),
           ).then((socket) {
-            // A connect already in progress can complete after local shutdown.
+            // 已在进行的连接可能在本地关闭后才完成。
             if (cancellation.stopped) socket.destroy();
             return socket;
           });
@@ -114,8 +114,8 @@ class WeakNetworkProxy {
         _pump(client, upstream, _upload, cancellation),
         _pump(upstream, client, _download, cancellation),
       ]);
-      // Normal EOF only closes one TCP direction. The peer can still send a
-      // response after consuming that EOF; errors abort the pair immediately.
+      // 普通 EOF 仅关闭一个 TCP 方向，对端消费 EOF 后仍可回复；错误立即中止连接对。
+      //
       await Future.wait(pumps, eagerError: true);
     } catch (error) {
       if (!cancellation.stopped) {
@@ -125,8 +125,8 @@ class WeakNetworkProxy {
       cancellation.cancel();
       client.destroy();
       upstream?.destroy();
-      // A failed direction does not stop its peer. Wait until both reads,
-      // output flushes and rate/delay waits have all observed cancellation.
+      // 一个方向失败不会停止另一个方向；等待双向读取、输出 flush、速率和延迟等待全部响应取消。
+      //
       await Future.wait(pumps.map((pump) => pump.catchError((Object _) {})));
       _log?.call('weak-network proxy connection=$connection closed');
     }
@@ -204,8 +204,8 @@ Future<void> _pump(
       sink.add(chunk.bytes);
       await cancellation.wait(sink.flush());
       if (cancellation.stopped) break;
-      // Count the in-flight chunk until the socket actually accepts it. Reading
-      // must not resume just because bytes moved to an unbounded IOSink buffer.
+      // socket 真正接受前仍计入在途块；不能因字节进入无界 IOSink 缓冲就恢复读取。
+      //
       queue.removeFirst();
       pending -= chunk.bytes.length;
       if (paused && pending <= _Direction.lowWaterBytes) {

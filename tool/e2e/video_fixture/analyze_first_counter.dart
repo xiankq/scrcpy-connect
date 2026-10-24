@@ -1,4 +1,4 @@
-// Exact-PTS join of every decoded frame to its original raw receipt.
+// 按精确 PTS 将每个解码帧关联到原始接收回执。
 import 'dart:convert';
 import 'dart:io';
 

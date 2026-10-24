@@ -1,6 +1,6 @@
-// A hardware-free USB/IP ADB peer for isolated integration environments.
-// USB/IP framing: https://www.kernel.org/doc/html/latest/usb/usbip_protocol.html
-// The default ADB peer is simulated; targetHost/targetPort uses a real adbd.
+// 用于隔离集成环境、无需硬件的 USB/IP ADB 对端。
+// USB/IP 帧格式：https://www.kernel.org/doc/html/latest/usb/usbip_protocol.html
+// 默认模拟 ADB 对端；targetHost/targetPort 模式连接真实 adbd。
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -253,7 +253,7 @@ class _Connection {
         }
       }
     } on Object {
-      // Never print ADB data, services, AUTH material or exception payloads.
+      // 不打印 ADB 数据、服务名、AUTH 材料或异常载荷。
       server.log?.call('usbip protocol failure');
       close();
     } finally {
@@ -319,7 +319,7 @@ class _Connection {
       return;
     }
     _transfers.add(_Transfer(bytes));
-    // A full final USB packet is followed by a ZLP to end the transfer.
+    // 完整的末尾 USB 包后附加 ZLP，标记传输结束。
     if (bytes.isNotEmpty && bytes.length % 512 == 0) {
       _transfers.add(_Transfer(Uint8List(0)));
     }
@@ -439,7 +439,7 @@ class _Connection {
     view.setUint32(4, arg0, Endian.little);
     view.setUint32(8, arg1, Endian.little);
     view.setUint32(12, payload.length, Endian.little);
-    // CNXN uses legacy checksum; retaining it is accepted by modern peers too.
+    // CNXN 使用旧校验和，现代对端也接受保留它。
     view.setUint32(
       16,
       payload.fold<int>(0, (a, b) => (a + b) & 0xffffffff),
@@ -460,8 +460,8 @@ String _shellOutput(String service) {
   final colon = service.indexOf(':');
   if (colon < 0) return '';
   final command = service.substring(colon + 1).trim();
-  // The application uses a fixed list of getprop commands. Avoid treating
-  // semicolons inside quoted echo/printf strings as shell syntax.
+  // 应用使用固定 getprop 命令列表；引号内 echo/printf 的分号不能当成 shell 语法。
+  //
   if (command.contains(';') &&
       command.split(';').every((part) => part.trim().startsWith('getprop '))) {
     return command
@@ -533,7 +533,7 @@ Uint8List _device() {
   final view = ByteData.sublistView(bytes);
   view.setUint32(288, 1);
   view.setUint32(292, 1);
-  view.setUint32(296, 3); // USB_SPEED_HIGH
+  view.setUint32(296, 3); // USB 高速设备（USB_SPEED_HIGH）。
   view.setUint16(300, 0x18d1);
   view.setUint16(302, 0x4ee7);
   view.setUint16(304, 0x0100);
@@ -615,7 +615,7 @@ Uint8List? _descriptor(int type, int index) {
       for (final unit in value.codeUnits) ...[unit & 255, unit >> 8],
     ]);
   }
-  return null; // Device qualifier / BOS: STALL, supported by USB enumeration.
+  return null; // 设备限定符与 BOS 返回 STALL，符合 USB 枚举行为。
 }
 
 Future<void> main(List<String> args) async {

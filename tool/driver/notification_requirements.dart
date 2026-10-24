@@ -178,8 +178,8 @@ Future<void> main() async {
     } catch (_) {
       failures.add('Fixture cleanup action failed.');
     }
-    // Uninstall is attempted even if an earlier cleanup step failed. Its owner
-    // was established before installation, so existing packages are untouched.
+    // 前序清理失败仍尝试卸载；安装前已确立所有权，不触碰已有包。
+    //
     try {
       final result = await runProcess(adb, [
         '-s',
@@ -287,7 +287,7 @@ Future<void> main() async {
               }
             }
             if (stage == 'connecting' && !manualSystemUi) {
-              // Confirm only the normal target-side ADB authorization dialog.
+              // 仅确认被控设备正常的 ADB 授权对话框。
               final xml = await hierarchy(target);
               if (xml.contains('Allow USB debugging?') ||
                   xml.contains('Allow debugging?')) {

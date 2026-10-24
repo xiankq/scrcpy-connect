@@ -8,7 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../build_host.dart' as host;
 import '../generate.dart' as generate;
-import '../src/core_tooling.dart';
+import '../src/repository_tooling.dart';
 
 void main() {
   late Directory temporary;
@@ -26,14 +26,14 @@ void main() {
     final sibling = File(p.join(output.parent.path, 'lib.rs'))
       ..writeAsStringSync('pub fn unrelated( ) { }\n');
     final original = sibling.readAsBytesSync();
-    generate.formatFrbRust(temporary);
+    generate.formatFrbRust(temporary, [generate.outputs.first]);
     expect(
       output.readAsStringSync(),
       'use example::{Lifetimeable, Lockable, transform_result_dco};\n',
     );
     expect(sibling.readAsBytesSync(), original);
     final first = output.readAsBytesSync();
-    generate.formatFrbRust(temporary);
+    generate.formatFrbRust(temporary, [generate.outputs.first]);
     expect(output.readAsBytesSync(), first);
   });
 
@@ -45,18 +45,20 @@ void main() {
       'Cargo.toml',
       'Cargo.lock',
       'rust-toolchain.toml',
-      'flutter_rust_bridge.yaml',
       'pubspec.yaml',
       'pubspec.lock',
+      for (final module in generate.frbModules) module.config,
       'app/pubspec.yaml',
       'app/lib/main.dart',
       'app/lib/generated.g.dart',
+      'app/assets/servers/manifest.json',
+      'rust/scrcpy/src/lib.rs',
       'app/.dart_tool/flutter_build/cache',
       'app/build/app.apk',
       'app/android/local.properties',
       'app/android/key.properties',
-      'crates/bridge/src/lib.rs',
-      'crates/bridge/target/cache',
+      'rust/adb/src/lib.rs',
+      'rust/adb/target/cache',
       '.dart_tool/package_config.json',
     ]) {
       final file = File(p.join(source.path, name));
@@ -65,24 +67,27 @@ void main() {
     }
     generate.copyFrbInputs(source, isolated);
     for (final name in [
+      for (final module in generate.frbModules) module.config,
       'app/pubspec.yaml',
       'app/lib/main.dart',
       'app/lib/generated.g.dart',
+      'app/assets/servers/manifest.json',
+      'rust/scrcpy/src/lib.rs',
     ]) {
       expect(File(p.join(isolated.path, name)).readAsStringSync(), name);
     }
     for (final name in ['app/.dart_tool', 'app/build', 'app/android']) {
       expect(Directory(p.join(isolated.path, name)).existsSync(), isFalse);
     }
-    final copied = File(p.join(isolated.path, 'crates/bridge/src/lib.rs'))
+    final copied = File(p.join(isolated.path, 'rust/adb/src/lib.rs'))
       ..writeAsStringSync('generator edit');
     expect(copied.readAsStringSync(), 'generator edit');
     expect(
-      File(p.join(source.path, 'crates/bridge/src/lib.rs')).readAsStringSync(),
-      'crates/bridge/src/lib.rs',
+      File(p.join(source.path, 'rust/adb/src/lib.rs')).readAsStringSync(),
+      'rust/adb/src/lib.rs',
     );
     expect(
-      File(p.join(isolated.path, 'crates/bridge/target/cache')).existsSync(),
+      File(p.join(isolated.path, 'rust/adb/target/cache')).existsSync(),
       isFalse,
     );
     expect(
@@ -103,7 +108,8 @@ void main() {
     for (final name in [
       'scrcpy_connect.exe',
       'flutter_windows.dll',
-      'interop_bridge.dll',
+      'interop_adb_bridge.dll',
+      'interop_scrcpy_bridge.dll',
       'media_codec_plugin.dll',
       'adb/adb.exe',
       'adb/AdbWinApi.dll',
@@ -133,11 +139,24 @@ void main() {
     assets.parent.createSync(recursive: true);
     assets.writeAsStringSync('assets');
     host.verifyWindows(bundle);
+    final removedBridge = File(p.join(bundle.path, 'interop_bridge.dll'))
+      ..writeAsBytesSync(header);
+    expect(
+      () => host.verifyWindows(bundle),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('removed application bridge'),
+        ),
+      ),
+    );
+    removedBridge.deleteSync();
     final obsolete = File(p.join(bundle.path, 'mdk.dll'))
       ..writeAsBytesSync(header);
     expect(() => host.verifyWindows(bundle), throwsStateError);
     obsolete.deleteSync();
-    final library = File(p.join(bundle.path, 'interop_bridge.dll'))
+    final library = File(p.join(bundle.path, 'interop_scrcpy_bridge.dll'))
       ..deleteSync();
     expect(
       () => host.verifyWindows(bundle),
@@ -145,7 +164,7 @@ void main() {
         isA<StateError>().having(
           (e) => e.message,
           'message',
-          contains('interop_bridge'),
+          contains('interop_scrcpy_bridge'),
         ),
       ),
     );
@@ -154,7 +173,9 @@ void main() {
     expect(() => host.verifyWindows(bundle), throwsStateError);
     data.setUint16(68, 0x8664, Endian.little);
     library.writeAsBytesSync(header);
-    final duplicate = File(p.join(bundle.path, 'nested/interop_bridge.dll'));
+    final duplicate = File(
+      p.join(bundle.path, 'nested/interop_scrcpy_bridge.dll'),
+    );
     duplicate.parent.createSync();
     duplicate.writeAsBytesSync(header);
     expect(() => host.verifyWindows(bundle), throwsStateError);
@@ -165,7 +186,8 @@ void main() {
       File(p.join(artifacts.path, 'windows-release.zip')).readAsBytesSync(),
       verify: true,
     );
-    expect(archive.findFile('interop_bridge.dll')!.content, header);
+    expect(archive.findFile('interop_adb_bridge.dll')!.content, header);
+    expect(archive.findFile('interop_scrcpy_bridge.dll')!.content, header);
     expect(
       archive.findFile('data/flutter_assets/AssetManifest.bin')!.content,
       utf8.encode('assets'),

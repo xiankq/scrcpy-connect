@@ -1,6 +1,6 @@
 typedef ClockJson = Map<String, dynamic>;
 
-/// Conditional clock bounds; this does not prove equal clock rates or no VM pause.
+/// 条件成立时的时钟区间，不证明时钟速率相等或 VM 未暂停。
 ClockJson videoClockBounds(List<ClockJson> rounds, List<ClockJson> timeline) {
   final results = <ClockJson>[];
   for (final round in rounds) {
@@ -37,8 +37,8 @@ ClockJson _roundBounds(ClockJson round, List<ClockJson> timeline) {
     if (a < 0 || b < a || low < 0 || high - low != 10000) {
       throw StateError('Invalid probe ordering or uptime quantum.');
     }
-    // Expand integer microsecond truncation before intersection. Neither
-    // network symmetry nor a shell-overhead correction is assumed.
+    // 先展开整数微秒截断范围再取交集，不假设网络对称，也不修正 shell 开销。
+    //
     offsets.add((low - b - 1, high - a + 1));
   }
   final (offsetLow, offsetHigh) = _intersection(offsets);
@@ -93,8 +93,8 @@ ClockJson _roundBounds(ClockJson round, List<ClockJson> timeline) {
         complete < received) {
       throw StateError('Samples fall outside calibration brackets.');
     }
-    // B = N + delta and B = H + offset. Preserve both ends and allow
-    // microsecond truncation of the observed PTS and receipt clock.
+    // B = N + delta，B = H + offset；保留两端区间，并容纳所观察 PTS 与接收时钟的微秒截断。
+    //
     final lower = received - pts + offsetLow - deltaHigh - 1;
     final upper = received - pts + offsetHigh - deltaLow + 1;
     final draw = timeline.singleWhere(

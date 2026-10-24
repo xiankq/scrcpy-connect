@@ -131,7 +131,7 @@ Future<void> driveFocus(
       );
   bool inactive(Map<String, dynamic> snapshot) {
     final ids = (snapshot['owned'] as Map).values.toSet();
-    return !((snapshot['core'] as Map?)?['sources'] as List? ?? [])
+    return !((snapshot['audio'] as Map?)?['sources'] as List? ?? [])
         .whereType<Map<Object?, Object?>>()
         .any(
           (s) =>

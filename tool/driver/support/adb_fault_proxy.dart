@@ -3,12 +3,12 @@ import 'dart:io';
 
 enum AdbRecoveryFault { eof, blackhole }
 
-/// A byte-transparent fault point in the controller's actual ADB transport.
+/// 在主控实际 ADB 传输中提供字节透明的故障点。
 ///
-/// Blackhole is application-level consumption and discard on one existing pair.
-/// It does not change network interfaces or simulate a kernel TCP half-open.
-/// Subsequent connections still forward normally. No payload is inspected or
-/// retained; normal forwarding applies backpressure and discarding keeps reading.
+/// 黑洞仅消费并丢弃一对现存连接的应用层数据，
+/// 不修改网络接口，也不模拟内核 TCP 半开。
+/// 后续连接正常转发，不检查或保留载荷；
+/// 正常转发维持背压，丢弃模式持续读取。
 class AdbFaultProxy {
   AdbFaultProxy(this.upstreamPort, {this.listenPort = 25557});
 
@@ -85,9 +85,9 @@ class AdbFaultProxy {
               pair.dropped.update(direction, (count) => count + bytes.length);
             } else {
               destination.add(bytes);
-              // Unblock the read loop if injection occurs while a prior flush
-              // waits for backpressure. At most that already queued chunk can
-              // remain; all subsequent chunks are consumed and discarded.
+              // 先前 flush 等待背压时注入故障，需解除读取循环；最多只保留已排队块，此后各块均被消费并丢弃。
+              //
+              //
               final wake = Completer<void>();
               pair.flushWake[direction] = wake;
               try {
@@ -184,7 +184,7 @@ class AdbFaultProxy {
     'reconnected': reconnected,
   };
 
-  /// Call before shutdown: cleanup must never supply recovery evidence.
+  /// 关闭前调用，清理不能充当恢复证据。
   List<String> recoveryEvidenceErrors() {
     final errors = <String>[];
     final pair = _faultPair;

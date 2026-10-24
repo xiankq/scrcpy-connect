@@ -1,4 +1,4 @@
-// Lab-only raw H264 drain on one explicitly authorized target.
+// 仅实验使用，在一台明确授权的被控设备上排空原始 H264。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';

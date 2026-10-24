@@ -127,7 +127,7 @@ Future<void> main() async {
           'Settings search must expose exactly one real EditText; found ${fields.length}. APP_SEARCH_SETTINGS/search indexing must be prepared on this target.',
         );
       }
-      // Newer AOSP may expose Settings search from its system search package.
+      // 较新 AOSP 可能通过系统搜索包提供设置搜索。
       final package = attribute(fields.single, 'package');
       if (package != 'com.android.settings' &&
           package != 'com.google.android.settings.intelligence' &&
@@ -156,13 +156,13 @@ Future<void> main() async {
       }
       await Future<void>.delayed(const Duration(milliseconds: 700));
     }
-    // Retry to allow the actual Unicode clipboard-paste and search UI to settle.
+    // 允许真实 Unicode 剪贴板粘贴及搜索界面稳定后重试。
     final expected = stage.startsWith('committed-') ? '你好🙂' : '';
     String query(String node) {
       final raw = attribute(node, 'text');
       final hint = RegExp(r'hint="([^"]*)"').firstMatch(node)?.group(1);
-      // This API36 Settings EditText exposes its placeholder as both text and
-      // hint when empty. Committed checkpoints still require the exact raw text.
+      // API36 设置 EditText 为空时同时将占位符暴露为 text 和 hint；已提交检查点仍要求精确原始文本。
+      //
       return expected.isEmpty && hint != null && raw == hint ? '' : raw;
     }
 
@@ -184,8 +184,8 @@ Future<void> main() async {
       );
     }
     if (stage == 'committed-once') {
-      // Establish target pixels first. Accessibility text alone does not prove
-      // that Android has painted, nor that the remote decoder has caught up.
+      // 先建立被控像素证据；仅无障碍文本不能证明 Android 已绘制或远控解码器已跟上。
+      //
       await capture(target, 'target-committed');
       await Future<void>.delayed(const Duration(milliseconds: 750));
       await capture(controller, 'controller-committed');

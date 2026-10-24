@@ -6,8 +6,8 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import 'glass_metrics.dart';
 
-/// Fast real-device performance loop; deliberately does not certify captures or
-/// production interaction behavior. Those remain the full Glass driver scope.
+/// 真实设备的快速性能循环；捕获及产品交互行为由完整 Glass driver 验证。
+///
 Future<void> main() async {
   final directory = Directory(
     Platform.environment['CONNECT_GLASS_CAPTURE_DIR'] ??

@@ -1,4 +1,4 @@
-// Build independent test APKs with the installed Android SDK, without Gradle.
+// 使用已安装 Android SDK 构建独立测试 APK，不依赖 Gradle。
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -83,7 +83,7 @@ Future<void> buildFixture(String fixture, List<String> arguments) async {
   );
   final output = p.normalize(p.absolute(args['output'] as String));
   final api36 = ['notification', 'content-delivery'].contains(fixture);
-  // Resolve existing parent symlinks as pathlib.resolve() did before migration.
+  // 遵循迁移前 pathlib.resolve() 的行为，解析已存在父目录的符号链接。
   var ancestor = Directory(output);
   final suffix = <String>[];
   while (!ancestor.existsSync()) {

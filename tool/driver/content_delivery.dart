@@ -242,8 +242,8 @@ class _AndroidDelivery {
       throw StateError('Independent host SHA256 calculation failed.');
     }
     expectedSha256 = value.group(1);
-    // Claim only these exact fresh paths, so even a failed push or picker can
-    // be cleaned without touching any other fixture, download or app cache.
+    // 仅认领这些新建的精确路径，确保 push 或选择器失败后能清理，同时不触碰其他夹具、下载或应用缓存。
+    //
     sourceOwned = true;
     exportOwned = true;
     final push = await _run(target, ['push', knownFile.path, sourcePath]);
@@ -352,7 +352,7 @@ class _AndroidDelivery {
     await _shell(controller, ['input', 'keyevent', 'KEYCODE_BACK']);
     await _wait(() async {
       if (!(await _ui()).any((node) => node.documentsUi)) return true;
-      // The first BACK may only dismiss the filename keyboard.
+      // 第一次 BACK 可能只关闭文件名键盘。
       await _shell(controller, ['input', 'keyevent', 'KEYCODE_BACK']);
       return false;
     }, 'BACK did not dismiss the actual Android document picker.');
@@ -416,7 +416,7 @@ class _AndroidDelivery {
         await _verifyBytes(controller);
         return true;
       } on StateError {
-        // CREATE_DOCUMENT can publish an empty entry before the Rust copy.
+        // CREATE_DOCUMENT 可能在 Rust 复制前发布空条目。
         return false;
       }
     }, 'The actual DocumentsUI save did not finish the exact Downloads bytes.');
@@ -656,8 +656,8 @@ Future<void> main() async {
   Future<void> finishHost() async {
     finished = true;
     await coordination;
-    // integrationDriver may exit after its callback, so both normal and failure
-    // cleanup must run here as well as from main's finally block.
+    // integrationDriver 可能在回调后退出；正常与失败清理都要在此执行，并保留 main 的 finally 清理。
+    //
     try {
       await fixture.cleanup();
     } catch (error) {
@@ -790,8 +790,8 @@ Future<void> main() async {
                 } catch (captureError) {
                   errors.add('Failure capture unavailable: $captureError');
                 }
-                // Fail the exact run, then keep draining stages so the app's finally
-                // block can obtain its independent file-cleanup acknowledgement.
+                // 标记本次运行失败后继续排空阶段，让应用 finally 能取得独立文件清理回执。
+                //
                 await extension({
                   'runId': fixture.runId,
                   'error': 'Independent Android delivery evidence failed',

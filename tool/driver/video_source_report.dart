@@ -1,7 +1,7 @@
 import 'video_clock_bounds.dart';
 
-/// Checks every actual key, including pause/resume inputs and counter wraps.
-/// The fixture logs the first draw of each sequence; it is not GPU completion.
+/// 检查全部实际键，包括暂停/恢复输入及计数器回绕；夹具记录序列首次绘制，不代表 GPU 完成。
+///
 ClockJson videoSourceReport(List<ClockJson> rounds, List<ClockJson> timeline) {
   final issues = <String>[];
   final segments = <ClockJson>[];
@@ -76,9 +76,9 @@ ClockJson videoSourceReport(List<ClockJson> rounds, List<ClockJson> timeline) {
     'targetTimelineComplete': issues.isEmpty && segments.isNotEmpty,
     'targetTimelineIssues': issues,
     'targetDrawSegments': segments,
-    // valid/complete here qualifies draw bounds. PTS compatibility remains a
-    // separate conditional observation; the synthetic repeated-frame PTS of a
-    // capture must never silently become a physical presentation timestamp.
+    // 此处 valid/complete 仅限定绘制区间；PTS 兼容性是独立条件观察，捕获时合成的重复帧 PTS 不得静默充当物理显示时间戳。
+    //
+    //
     'clockBounds': bounds,
   };
 }

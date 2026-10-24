@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:integration_test/integration_test_driver.dart';
 import 'package:path/path.dart' as p;
 
-/// Host driver for the ordinary main/bootstrap regression, with a distinct
-/// receipt directory so it cannot replace media replay or product evidence.
+/// 普通 main/bootstrap 回归的宿主 driver，使用独立回执目录，避免覆盖媒体回放或产品证据。
+///
 Future<void> main() => integrationDriver(
   writeResponseOnFailure: true,
   responseDataCallback: (data) async {

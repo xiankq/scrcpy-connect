@@ -8,7 +8,7 @@ import android.view.KeyEvent;
 import android.view.WindowManager;
 import android.widget.TextView;
 
-/** Opt-in test receiver, never a product dependency or target capability. */
+/** 需显式启用的测试接收器，不属于产品依赖或被控能力。 */
 public final class InputReceiverActivity extends Activity {
     private String runId = "invalid";
     private String sessionId = "invalid";
@@ -61,8 +61,8 @@ public final class InputReceiverActivity extends Activity {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             if (event.getRepeatCount() > 0) {
                 repeats++;
-                // Keep the held UI stable so UiAutomation can take an idle
-                // snapshot. The next UP publishes the actual repeat count.
+                // 按键保持期间维持界面稳定，便于 UiAutomation 取得空闲快照；下一次 UP 发布实际重复次数。
+                //
                 return true;
             }
             if (pressed) duplicateDowns++;

@@ -59,14 +59,19 @@ void main() {
     for (final name in [
       'libflutter.so',
       if (!kernel) 'libapp.so',
-      if (includeRust) 'libinterop_bridge.so',
+      if (includeRust) ...[
+        'libinterop_adb_bridge.so',
+        'libinterop_scrcpy_bridge.so',
+      ],
     ]) {
       final header = List<int>.filled(20, 0);
       header.setRange(0, 6, [0x7f, 0x45, 0x4c, 0x46, 2, 1]);
-      header[18] = wrongMachine && name == 'libinterop_bridge.so' ? 40 : 183;
+      header[18] = wrongMachine && name == 'libinterop_scrcpy_bridge.so'
+          ? 40
+          : 183;
       entry('lib/arm64-v8a/$name', [
         ...header,
-        if (embedServer && name == 'libinterop_bridge.so')
+        if (embedServer && name == 'libinterop_scrcpy_bridge.so')
           ...File(
             p.join(android.root.path, 'servers/vendor/scrcpy-server-v5.0.1'),
           ).readAsBytesSync(),
@@ -74,11 +79,11 @@ void main() {
     }
     if (includeServers) {
       final servers = Directory(
-        p.join(android.root.path, 'packages/device_runtime/assets/servers'),
+        p.join(android.root.path, 'app/assets/servers'),
       );
       for (final file in servers.listSync().whereType<File>()) {
         final name =
-            'assets/flutter_assets/packages/device_runtime/assets/servers/${p.basename(file.path)}';
+            'assets/flutter_assets/assets/servers/${p.basename(file.path)}';
         final bytes = file.readAsBytesSync();
         if (corruptServer && file.path.endsWith('scrcpy.zlib')) bytes[0] ^= 1;
         entry(name, bytes);
@@ -127,10 +132,44 @@ void main() {
     },
   );
 
+  test('APK requires both capability libraries and rejects the removed application bridge', () {
+    for (final missing in [
+      'libinterop_adb_bridge.so',
+      'libinterop_scrcpy_bridge.so',
+    ]) {
+      final archive = Archive();
+      for (final entry in ZipDecoder().decodeBytes(apk()).files) {
+        if (!entry.name.endsWith('/$missing')) archive.addFile(entry);
+      }
+      expect(
+        () => android.verifyApkArchive(ZipEncoder().encode(archive)),
+        throwsStateError,
+      );
+    }
+    final archive = ZipDecoder().decodeBytes(apk());
+    archive.addFile(
+      ArchiveFile.noCompress('lib/arm64-v8a/libinterop_bridge.so', 3, [
+        1,
+        2,
+        3,
+      ]),
+    );
+    expect(
+      () => android.verifyApkArchive(ZipEncoder().encode(archive)),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('removed application bridge'),
+        ),
+      ),
+    );
+  });
+
   test('APK CRC verification rejects corrupt stored data', () {
     final bytes = apk();
-    // The first local header is followed by the required manifest's stored
-    // payload. Its fixed CRC must no longer match after mutation.
+    // 首个本地头之后是必要 manifest 的存储载荷；修改后固定 CRC 应不再匹配。
+    //
     final nameLength = bytes[26] | bytes[27] << 8;
     final extraLength = bytes[28] | bytes[29] << 8;
     bytes[30 + nameLength + extraLength] ^= 1;
@@ -165,8 +204,8 @@ void main() {
         content.length,
         content,
       );
-      // Archive.addFile deduplicates by name. Rename after insertion so the
-      // encoder writes two real entries, each with its own correct CRC.
+      // Archive.addFile 按名称去重；插入后再改名，使编码器写出两个各自 CRC 正确的真实条目。
+      //
       archive.addFile(duplicate);
       duplicate.name = original.name;
       final bytes = ZipEncoder().encode(archive);

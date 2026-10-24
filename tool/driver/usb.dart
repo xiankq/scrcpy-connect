@@ -16,9 +16,9 @@ class _Node {
   String operator [](String key) => attributes[key] ?? '';
 }
 
-/// The caller owns USBIP/adbd preparation and teardown. This driver only reads
-/// the controller and taps its real USB permission dialog; it never grants a
-/// permission using pm, appops, a mock channel or the fixture's transport.
+/// 调用方拥有 USBIP/adbd 的准备与清理；driver 只读取主控并点击真实 USB 权限对话框，不用 pm、appops、模拟通道或夹具传输代为授权。
+///
+///
 class _UsbPermissionUi {
   _UsbPermissionUi(this.adb, this.controller);
   final String adb;
@@ -91,9 +91,9 @@ class _UsbPermissionUi {
     final deadline = DateTime.now().add(const Duration(seconds: 35));
     while (DateTime.now().isBefore(deadline)) {
       final current = await nodes();
-      // Require the expected USB device in the genuine SystemUI prompt before
-      // selecting a unique, enabled system button. Never tap by coordinates
-      // guessed from a screenshot or accept unrelated runtime/ADB dialogs.
+      // 先在真实 SystemUI 提示中确认预期 USB 设备，再选择唯一启用的系统按钮；不猜截图坐标，也不接受无关运行权限或 ADB 对话框。
+      //
+      //
       final titles = current
           .where(
             (node) =>

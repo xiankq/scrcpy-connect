@@ -1,7 +1,7 @@
 package dev.scrcpyconnect.inputfixture;
 
-/** Host-only shell fixture; never called by or packaged with the product.
- * Setting the database key alone does not update ActivityManager's runtime flag.
+/** 仅宿主使用的 shell 夹具，产品不调用也不打包。
+ * 只修改数据库键不会更新 ActivityManager 的运行标志。
  */
 public final class ActivityLifecycle {
     public static void main(String[] args) throws Exception {

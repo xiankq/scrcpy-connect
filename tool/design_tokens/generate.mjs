@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const defaultSource = resolve(root, 'designs/design.md');
 const defaultOutput = resolve(root, 'packages/design_system/lib/src/design_tokens.g.dart');
 const consumer = resolve(root, 'packages/design_system/lib/design_system.dart');
-// Explicit supported extensions to DESIGN.md's standard component properties.
+// 显式声明 DESIGN.md 标准组件属性之外支持的扩展。
 const componentProperties = new Set([
   'backgroundColor', 'textColor', 'typography', 'rounded', 'padding', 'size',
   'height', 'width', 'maxWidth', 'borderColor', 'blur', 'shadowBlur', 'shadowOffset', 'angle',
@@ -33,8 +33,8 @@ function number(value, path) {
 }
 
 function dimension(value, path) {
-  // This project defines DESIGN.md px as Flutter logical pixels. Other CSS
-  // units need a layout/font context and must never be silently stripped.
+  // 项目把 DESIGN.md 的 px 定义为 Flutter 逻辑像素；其他 CSS 单位需要布局或字体上下文，不能静默去除单位。
+  //
   if (value.unit !== 'px') throw new Error(`Unsupported unit '${value.unit}' at ${path}; expected px`);
   return number(value.value, path);
 }
@@ -75,8 +75,8 @@ function literal(value, path) {
   if (value?.type === 'dimension') return dimension(value, path);
   if (value?.type === 'typography') {
     const fields = typography(value, path);
-    // Font families describe the design draft only; runtime styles inherit
-    // Flutter's defaults on each platform.
+    // 字体族仅描述设计稿；运行时样式继承各平台 Flutter 默认字体。
+    //
     delete fields.fontFamily;
     return `TextStyle(${Object.entries(fields).map(([key, field]) => `${key === 'lineHeight' ? 'height' : key}: ${field}`).join(', ')})`;
   }

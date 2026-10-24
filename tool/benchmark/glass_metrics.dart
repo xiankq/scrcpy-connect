@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
-/// Summarizes real FrameTimings; screenshots and widget-test pump durations are
-/// deliberately not performance inputs. Debug runs never certify a budget.
+/// 汇总真实 FrameTimings；截图和 widget 测试 pump 时长不作为性能输入，Debug 运行不证明达到性能预算。
+///
 Map<String, Object?> summarizeGlassPerformance(Map<String, dynamic> report) {
   final windows = (report['performance'] as List).cast<Map<String, dynamic>>();
   final summaries = <Map<String, Object?>>[];

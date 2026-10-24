@@ -1,4 +1,4 @@
-// Target callback correlation. This is not encoder CPU or presentation time.
+// 关联被控回调，不等同于编码器 CPU 时间或显示时间。
 import 'dart:io';
 
 import '../support.dart';

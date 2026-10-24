@@ -6,8 +6,8 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
 
-// Host-only fixture: the Android virtual modem supplies one isolated incoming
-// call. Only the production CallsPage may request opening the actual call UI.
+// 仅宿主使用的夹具，由 Android 虚拟调制解调器产生一通隔离来电；只有产品 CallsPage 可以请求真实通话界面。
+//
 Future<void> main() async {
   final adb = Platform.environment['CONNECT_E2E_ADB'];
   final target = Platform.environment['CONNECT_E2E_TARGET'];
@@ -28,8 +28,8 @@ Future<void> main() async {
     throw StateError('Current call UI evidence must stay under /tmp.');
   }
   final directory = await Directory(path).create(recursive: true);
-  // A dedicated number is never passed to calls.action or any global end-call
-  // command. Cleanup addresses exactly the virtual-modem call created here.
+  // 专用号码不会传给 calls.action 或全局挂断命令；清理仅定位本次创建的虚拟来电。
+  //
   const number = '5550101246';
   var callOwned = false;
   var targetRestored = false;
@@ -97,9 +97,9 @@ Future<void> main() async {
             .where((n) => n.isNotEmpty)
             .toList();
     if (ringing) {
-      // Emulator 37.2.12 answers gsm list with only OK, even during a call.
-      // Inspect the live Telecom call plus the exact Telephony incoming number;
-      // never treat that empty console response as evidence of an idle modem.
+      // Emulator 37.2.12 即使通话中也可能只对 gsm list 返回 OK；核验实时 Telecom 通话和精确来电号码，不把空控制台响应当成空闲证据。
+      //
+      //
       if (actualCalls.length != 1 ||
           actualCalls.single[2] != 'RINGING' ||
           incomingNumbers.length != 1 ||
@@ -198,11 +198,10 @@ Future<void> main() async {
   Future<Map<String, Object?>> inspect(String stage) async {
     Map<String, Object?> evidence;
     if (stage == 'prepare-ringing-settings') {
-      // The idle check happens before taking ownership or creating anything.
+      // 取得所有权或创建任何对象前先检查空闲。
       await modem('initial-idle', ringing: false);
       final initialForeground = await settings();
-      callOwned =
-          true; // Also clean up if the modem request times out after applying.
+      callOwned = true; // 调制解调器已应用请求但回执超时时，也须清理。
       await adbTarget(['emu', 'gsm', 'call', number]);
       evidence = await waitModem(stage, ringing: true);
       evidence['initialForeground'] = initialForeground;
@@ -240,8 +239,8 @@ Future<void> main() async {
       await File('${directory.path}/$stage-activity.txt')
           .writeAsString(await shell(['dumpsys', 'activity', 'activities']));
       await capture(stage);
-      // Recheck after the controller screenshot, so call survival covers the
-      // captured remote frame rather than only the preceding system request.
+      // 主控截图后再次核对，确保通话存活证据覆盖捕获画面，而非仅覆盖此前的系统请求。
+      //
       await modem('after-capture', ringing: true);
     } else if (stage == 'cleanup-target') {
       await cleanupTarget();
@@ -288,8 +287,8 @@ Future<void> main() async {
               try {
                 runId ??= checkpoint['runId'] as String;
                 final stage = checkpoint['name'] as String;
-                // A cleanup checkpoint may follow a failed earlier stage, but no
-                // create/open checkpoint can be replayed or accepted out of order.
+                // 清理检查点可以在前一阶段失败后执行，但创建和打开检查点不可重放或乱序接受。
+                //
                 final cleanup = stage == 'cleanup-target';
                 if (checkpoint['runId'] != runId ||
                     checkpoint['sequence'] != checkpointSequence + 1 ||
@@ -338,7 +337,7 @@ Future<void> main() async {
       responseDataCallback: (data) async {
         finished = true;
         await inspection;
-        // Required even when Flutter aborted before its cleanup checkpoint.
+        // Flutter 在清理检查点前中止时也必须执行。
         try {
           await cleanupTarget();
         } catch (error) {

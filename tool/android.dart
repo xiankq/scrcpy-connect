@@ -1,4 +1,4 @@
-/// Local signing, universal release builds, and independent APK validation.
+/// 本机签名、通用发布构建与独立 APK 校验。
 library;
 
 import 'dart:convert';
@@ -10,7 +10,7 @@ import 'package:args/args.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
-import 'src/core_tooling.dart';
+import 'src/repository_tooling.dart';
 import 'packaged_servers.dart';
 
 final root = repositoryRoot();
@@ -105,7 +105,7 @@ void initializeSigning({Directory? android}) {
       ),
     );
   } on Object {
-    // The exclusive key creation succeeded in this invocation; it owns this key.
+    // 本次调用独占创建密钥成功，因此仅本次调用拥有该密钥。
     key.deleteSync();
     rethrow;
   }
@@ -175,14 +175,14 @@ void initializeSigning({Directory? android}) {
   );
 }
 
-/// Validate archive contents before invoking SDK tools. Kept independently
-/// callable so malformed native libraries fail without requiring an SDK.
+/// 调用 SDK 工具前校验归档；保留独立入口，便于在没有 SDK 时拒绝损坏的原生库。
+///
 List<String> verifyApkArchive(List<int> bytes, [List<String>? expectedAbis]) {
   final decoder = ZipDecoder();
   final archive = decoder.decodeBytes(bytes, verify: true);
-  // archive 4 does not check entry CRCs through decodeBytes(verify: true).
-  // Check raw directory entries before archive.files hides duplicate names,
-  // and verify actual decompressed bytes plus central/local CRC agreement.
+  // archive 4 的 decodeBytes(verify: true) 不校验条目 CRC；在 archive.files 隐藏同名条目前检查原始目录，同时核验解压字节及中央目录/本地头的 CRC。
+  //
+  //
   final names = <String>{};
   for (final header in decoder.directory.fileHeaders) {
     if (!names.add(header.filename)) {
@@ -194,6 +194,11 @@ List<String> verifyApkArchive(List<int> bytes, [List<String>? expectedAbis]) {
     }
   }
   final entries = {for (final entry in archive.files) entry.name: entry};
+  if (entries.keys.any(
+    (name) => p.posix.basename(name) == 'libinterop_bridge.so',
+  )) {
+    throw StateError('APK contains the removed application bridge');
+  }
   for (final required in [
     'AndroidManifest.xml',
     'classes.dex',
@@ -233,7 +238,8 @@ List<String> verifyApkArchive(List<int> bytes, [List<String>? expectedAbis]) {
     for (final library in [
       'libflutter.so',
       'libapp.so',
-      'libinterop_bridge.so',
+      'libinterop_adb_bridge.so',
+      'libinterop_scrcpy_bridge.so',
     ]) {
       final name = 'lib/$abi/$library';
       if (library == 'libapp.so' && !entries.containsKey(name)) {

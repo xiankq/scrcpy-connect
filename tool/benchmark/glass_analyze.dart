@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'glass_metrics.dart';
 
-/// dart run tool/benchmark/glass_analyze.dart /tmp/connect-glass-widgets/result.json
-/// Exits nonzero for missing evidence or a missed profile frame budget.
+/// 运行：dart run tool/benchmark/glass_analyze.dart /tmp/connect-glass-widgets/result.json
+/// 证据缺失或 profile 帧预算未达标时以非零状态退出。
 void main(List<String> arguments) {
   if (arguments.length != 1) {
     stderr.writeln(

@@ -1,5 +1,5 @@
-// Test-only USB/IP import for a rooted, disposable Android AVD. The product app
-// remains unprivileged and obtains its own UsbManager permission and descriptor.
+// 仅测试使用的 USB/IP 导入，面向已 root 的一次性 Android AVD；产品仍无特权，自行取得 UsbManager 权限与描述符。
+//
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -64,9 +64,9 @@ int main(int argc, char **argv) {
     struct addrinfo *addresses = NULL;
     int error = getaddrinfo(argv[1], argv[2], &hints, &addresses);
     if (error) { fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(error)); return 1; }
-    // Stock AVD policy cannot create/connect a kernel-labelled socket in
-    // enforcing mode. Relax policy only for the setup handshake, before any
-    // USB device exists, and restore it before handing the socket to vhci.
+    // 原生 AVD enforcing 策略不允许创建和连接内核标签 socket；仅在 USB 设备存在前的准备握手中放宽策略，将 socket 交给 vhci 前恢复。
+    //
+    //
     int policy = open("/sys/fs/selinux/enforce", O_RDWR | O_CLOEXEC);
     char state;
     if (policy < 0 || read(policy, &state, 1) != 1) fail("read SELinux mode");
@@ -83,8 +83,8 @@ int main(int argc, char **argv) {
     if (sigaction(SIGPIPE, &action, NULL)) fail("SIGPIPE handler");
     if (lseek(policy, 0, SEEK_SET) < 0 || write(policy, "0", 1) != 1) fail("setup SELinux mode");
     close(policy);
-    // The kernel vhci worker, rather than this root setup process, owns I/O.
-    // Label only its socket so the rest of the AVD stays SELinux enforcing.
+    // I/O 由内核 vhci 工作线程拥有，不由 root 准备进程执行；只标记其 socket，其余 AVD 保持 SELinux enforcing。
+    //
     int context = open("/proc/thread-self/attr/sockcreate", O_WRONLY | O_CLOEXEC);
     if (context < 0) fail("open socket context");
     const char label[] = "u:r:kernel:s0";
@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
                         (bus << 16) | device, speed);
     if (write(attach, command, (size_t)size) != size) fail("vhci attach");
     close(attach);
-    close(fd); // vhci retains its own reference to the imported socket.
+    close(fd); // vhci 保留导入套接字的独立引用。
     printf("Imported USB/IP fixture on vhci port %ld\n", port);
     return 0;
 }

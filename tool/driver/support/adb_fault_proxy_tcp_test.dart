@@ -1,5 +1,5 @@
-// Standalone real TCP regression; no Flutter runner or native build is needed.
-// Run from any directory: dart /absolute/path/to/adb_fault_proxy_tcp_test.dart
+// 独立的真实 TCP 回归，不依赖 Flutter runner 或原生构建。
+// 可从任意目录运行：dart /absolute/path/to/adb_fault_proxy_tcp_test.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -113,7 +113,7 @@ Future<void> blackholeDropsAndKeepsNewConnectionsWorking() async {
     final (controller, target) = await network.connect();
     await roundTrip(controller, target);
     proxy.injectFault(AdbRecoveryFault.blackhole);
-    // Enough real data to span multiple socket chunks; no payload is logged.
+    // 使用足以跨多个 socket 块的真实数据，不记录载荷。
     await controller.send(List<int>.filled(256 * 1024, 31));
     await target.send(List<int>.filled(128 * 1024, 41));
     await until(() {

@@ -40,8 +40,8 @@ class _Node {
       this['resource-id'] == '${this['package']}:id/breadcrumb_text';
 }
 
-/// Official-adb fixture for actual DocumentsUI and independently read public
-/// filesystem results. No application platform channel or bridge is replaced.
+/// 基于官方 adb 的真实 DocumentsUI 夹具，独立读取公共文件结果，不替换应用平台通道或桥接。
+///
 class _Fixture {
   _Fixture(this.adb, this.controller, this.target, this.output);
   final String adb, controller, target;
@@ -235,8 +235,8 @@ class _Fixture {
   }
 
   Future<Map<String, String>> prepare() async {
-    // Do not enable debugging, change adbd authorization, or replace an existing
-    // controller identity as a shortcut for this filesystem-only acceptance.
+    // 文件系统验收不以开启调试、改变 adbd 授权或替换已有主控身份作为捷径。
+    //
     if ((await shell(target, ['getprop', 'ro.adb.secure'])).trim() != '0') {
       throw StateError(
         'Use the existing isolated non-auth target AVD for this filesystem fixture.',
@@ -453,9 +453,9 @@ class _Fixture {
       () async {
         final current = await nodes();
         final crumbs = current.where((node) => node.breadcrumb).toList();
-        // The primary-storage tree picker can start without a navigation drawer.
-        // Recognize its actual model breadcrumb and root heading before tapping
-        // the unique Download directory; a same-named file elsewhere is ineligible.
+        // 主存储树选择器可能没有导航抽屉；先识别真实模型面包屑和根标题，再点击唯一 Download 目录，排除其他位置的同名文件。
+        //
+        //
         final primaryRoot =
             crumbs.length == 1 &&
             crumbs.single['text'] == storageLabel &&
@@ -484,8 +484,8 @@ class _Fixture {
           );
           return false;
         }
-        // Later tree pickers may reopen the last selected descendant. Only
-        // navigate through actual breadcrumb nodes belonging to primary storage.
+        // 后续树选择器可能重开上次子目录，只沿属于主存储的真实面包屑导航。
+        //
         if (crumbs.any((node) => node['text'] == storageLabel) &&
             crumbs.length > 1) {
           await tap(
@@ -507,8 +507,8 @@ class _Fixture {
           );
           if (drawerRequested) return false;
         }
-        // Wait for the drawer hierarchy rather than reading its opening frame.
-        // The title must belong to the roots list, not a directory content row.
+        // 等待抽屉层级完成展开；标题必须属于根列表，而非目录内容行。
+        //
         if (!drawerDownloadsSelected) {
           drawerDownloadsSelected = await tap(
             current,
@@ -549,9 +549,9 @@ class _Fixture {
             if (right - left < 200 || bottom <= top) {
               throw StateError('The system breadcrumb strip is too small.');
             }
-            // Reveal the leading model breadcrumb on a reopened deep path. This
-            // scrolls only the identified OS strip; taps still require its exact
-            // model identity and a subsequently confirmed primary-root heading.
+            // 重开深层路径时，仅滚动已识别的系统条以显示首层面包屑；点击仍要求精确模型身份和随后确认的主根标题。
+            //
+            //
             await shell(controller, [
               'input',
               'swipe',

@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 
-// Match the independent fixture's four bit color oracle. Ratios tolerate video
-// range conversion; arbitrary nonempty/black/changed pixels cannot pass.
+// 匹配独立夹具的四位颜色判定；比例容忍视频范围转换，任意非空、黑色或变化像素不足以通过。
+//
 int? pixelPattern(List<int> rgba, int width, int height, {ui.Rect? region}) {
   final bounds =
       region ?? ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());

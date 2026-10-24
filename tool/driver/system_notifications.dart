@@ -13,9 +13,9 @@ const _channel = 'remote_notifications';
 const _genericTitle = '设备有新通知';
 const _genericBody = '请打开邻接查看';
 
-/// The host proves actual Android records, an actual SystemUI tap and cleanup.
-/// Attempted remote command absence is covered by coordinator unit tests; this
-/// real-app run checks source/session and target-foreground outcomes.
+/// 宿主核验真实 Android 记录、SystemUI 点击及清理；协调器单测覆盖未尝试远端命令，本真实应用运行核验来源/会话及被控前台结果。
+///
+///
 void validateSystemNotificationsReport(
   Map<String, dynamic> report, {
   required String runId,
@@ -111,11 +111,11 @@ class _AndroidNotifications {
   );
 
   Future<String> _shell(String serial, List<String> tokens) async {
-    // adb joins shell arguments. Quote every token for the *remote* shell,
-    // including notification keys containing pipes and fixture message text.
+    // adb 会拼接 shell 参数；每个 token 都按远端 shell 规则转义，包括带管道符的通知键和夹具正文。
+    //
     final result = await _run(serial, ['shell', tokens.map(_quote).join(' ')]);
     if (result.exitCode != 0) {
-      // OS output may contain unrelated notification content. Never log it.
+      // 系统输出可能包含无关通知正文，禁止记录。
       throw StateError(
         'Android command ${tokens.first} failed (${result.exitCode}).',
       );
@@ -194,8 +194,8 @@ class _AndroidNotifications {
     final match = RegExp(
       r'(?:mResumedActivity|topResumedActivity)[^\n]*?\bu\d+\s+([^\s}]+)',
     ).firstMatch(state);
-    // A real Activity transition can temporarily have no resumed record.
-    // Absence is neither foreground evidence nor a terminal inspection error.
+    // 真实 Activity 切换可能暂时没有 resumed 记录；缺失不代表前台，也不作为终态检查错误。
+    //
     return match?.group(1);
   }
 
@@ -288,7 +288,7 @@ class _AndroidNotifications {
       final current = await _foreground(controller);
       return current != null && !current.startsWith('$_controllerPackage/');
     }, 'Actual HOME did not background the controller.');
-    // Let the real Activity lifecycle reach Flutter before the new source.
+    // 先让真实 Activity 生命周期到达 Flutter，再发布新来源。
     await Future<void>.delayed(const Duration(seconds: 1));
     receipt.addAll({
       'runId': runId,
@@ -519,8 +519,8 @@ Future<void> main() async {
                   if (action == 'cleanup') return;
                 }
               } catch (error) {
-                // Keep coordinating after failure so the app finally block can
-                // dismiss exact owned sources and await its cleanup acknowledgement.
+                // 失败后继续协调，使应用 finally 能精确移除其来源并等待清理回执。
+                //
                 errors.add('Android stage $stage failed: $error');
                 failed.add(stage);
                 await fixture.returnAfterFailure();
@@ -543,8 +543,8 @@ Future<void> main() async {
       driver: driver,
       writeResponseOnFailure: true,
       responseDataCallback: (data) async {
-        // integrationDriver exits after this callback; cleanup acknowledgements
-        // and host work must finish before returning on success or failure.
+        // integrationDriver 在回调后退出，无论成功失败都须在返回前完成清理回执与宿主工作。
+        //
         await finishHost();
         final report = {...?data}..remove('screenshots');
         report.addAll({

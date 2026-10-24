@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Test-only, non-exported provider: access is exclusively an OS URI read grant. */
+/** 仅测试使用且不导出的 provider，访问仅依赖系统 URI 读取授权。 */
 public final class FixtureProvider extends ContentProvider {
     private static final AtomicInteger opens = new AtomicInteger();
     private static final byte[] PNG = Base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSb8AAAAASUVORK5CYII=", Base64.DEFAULT);
@@ -26,7 +26,7 @@ public final class FixtureProvider extends ContentProvider {
         String path = uri.getPath();
         if (path.contains("stats")) cursor.addRow(new Object[] { "open-count", opens.get() });
         else {
-            // Avoid Java numeric-conditional unboxing of the unknown null size.
+            // 避免 Java 数值条件表达式对未知的 null 大小执行拆箱。
             Long size = null;
             if (path.contains("oversize")) size = 513L * 1024 * 1024;
             else if (!path.contains("slow")) size = (long) (path.contains("image") ? PNG.length : TEXT.length);
@@ -52,8 +52,8 @@ public final class FixtureProvider extends ContentProvider {
     }
     @Override public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
         if (uri.getPath().contains("oversize")) {
-            // Supply an actual readable handle so only the receiver's admission
-            // check, rather than a fixture exception, can reject the metadata.
+            // 提供真实可读句柄，使元数据由接收方准入检查拒绝，而非因夹具异常失败。
+            //
             return new AssetFileDescriptor(openFile(uri, mode), 0, 513L * 1024 * 1024);
         }
         return super.openAssetFile(uri, mode);

@@ -224,7 +224,7 @@ void main() {
         1048576,
         utf8.encode('host::\x00'),
       );
-      // Header and payload arrive in independent USB OUT transfers.
+      // 头与载荷通过独立的 USB OUT 传输到达。
       peer.socket.add(submit(1, 0, 24, payload: outgoing.sublist(0, 24)));
       peer.socket.add(
         submit(2, 0, outgoing.length - 24, payload: outgoing.sublist(24)),
@@ -246,7 +246,7 @@ void main() {
 
       final payload = List<int>.generate(512, (i) => i & 255);
       final incoming = adb('WRTE', 1, 7, payload);
-      // Partial TCP header and payload must be reassembled before USB emission.
+      // USB 输出前须重组分段到达的 TCP 头与载荷。
       target.socket.add(incoming.sublist(0, 11));
       await target.socket.flush();
       target.socket.add(incoming.sublist(11));
@@ -254,7 +254,7 @@ void main() {
         peer.socket.add(submit(seq, 1, length));
       }
       final header = await peer.response();
-      expect(header.$1, 5); // canceled sequence 3 never completes.
+      expect(header.$1, 5); // 已取消的序号 3 不会完成。
       expect(header.$3, incoming.sublist(0, 24));
       expect((await peer.response()).$3, payload);
       final zlp = await peer.response();
@@ -300,7 +300,7 @@ void main() {
       await peer.attach();
       peer.socket.add(submit(1, 1, 65536));
       await peer.close();
-      // EOF is asynchronous; wait for the deterministic disconnect event.
+      // EOF 异步到达，等待确定的断开事件。
       await Future<void>.delayed(const Duration(milliseconds: 30));
       final replacement = Peer(
         await Socket.connect(server.address, server.port),
@@ -333,8 +333,8 @@ void main() {
       for (var seq = 2; seq <= 4; seq++) {
         peer.socket.add(submit(seq, 1, 65536));
       }
-      await peer.response(); // OKAY header.
-      await peer.response(); // WRTE header.
+      await peer.response(); // OKAY 响应头。
+      await peer.response(); // WRTE 响应头。
       expect(
         utf8.decode((await peer.response()).$3),
         'VirtualAndroid\n16\n36\nconnect-usb-fixture\n',

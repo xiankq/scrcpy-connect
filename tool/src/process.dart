@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// Captures both pipes concurrently and reaps the owned child before a timeout
-/// reaches its caller, so fixture cleanup cannot race a still-running command.
+/// 并发捕获双向输出，并在向调用方报告超时前回收自有子进程，避免夹具清理与仍运行的命令竞争。
+///
 Future<ProcessResult> runProcess(
   String executable,
   List<String> arguments, {
@@ -47,8 +47,8 @@ Future<ProcessResult> runProcess(
     );
   } on TimeoutException {
     process.kill(ProcessSignal.sigkill);
-    // Reaping is bounded separately: inability to confirm termination must not
-    // be mistaken for an ordinary command timeout followed by safe cleanup.
+    // 单独限制回收期限；无法确认终止不能当成普通命令超时后已可安全清理。
+    //
     try {
       await process.exitCode.timeout(const Duration(seconds: 5));
     } on TimeoutException {

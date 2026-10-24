@@ -5,8 +5,8 @@ import 'package:xml/xml.dart';
 
 import 'src/host.dart';
 
-/// Compile the actual coordination sources against resolved SDK/compiler inputs,
-/// then exercise their hardware ports on the JVM without framework stubs.
+/// 用已解析的 SDK 和编译器输入编译真实协调源码，再在 JVM 上验证硬件接口，不使用 framework stub。
+///
 Future<void> main(List<String> arguments) async {
   Directory? temporary;
   try {
@@ -175,6 +175,9 @@ Future<void> main(List<String> arguments) async {
         path.join(source, 'NativeLeaseOwnership.kt'),
         path.join(tests, 'NativeOwnershipTest.kt'),
         path.join(tests, 'ActivityLeaseTest.kt'),
+        path.join(source, 'IncomingShareOwner.kt'),
+        path.join(tests, 'IncomingShareOwnerTest.kt'),
+        path.join(source, 'IncomingShares.kt'),
         path.join(source, 'PlatformDocuments.kt'),
         path.join(tests, 'documents/DocumentPickerReplyTest.kt'),
       ]);
@@ -182,6 +185,7 @@ Future<void> main(List<String> arguments) async {
       await execute('BackgroundKeepAliveTest');
       await execute('ActivityLeaseTest');
       await execute('DocumentPickerReplyTest', embedding: true);
+      await execute('IncomingShareOwnerTest');
     }
     if (kind != 'ownership') {
       await compile([

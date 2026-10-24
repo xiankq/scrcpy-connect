@@ -1,5 +1,5 @@
-// Standalone protocol regression; no Flutter runner or native build is needed.
-// Run: dart tool/driver/support/android_screencap_test.dart
+// 独立协议回归，不依赖 Flutter runner 或原生构建。
+// 运行：dart tool/driver/support/android_screencap_test.dart
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -64,7 +64,7 @@ void main() {
     'RGBA order or packed row layout changed.',
   );
 
-  // ADB output may itself be a view into a socket buffer with a nonzero offset.
+  // ADB 输出本身可能是 socket 缓冲的非零偏移视图。
   final backing = Uint8List(bytes.length + 11);
   backing.setRange(5, 5 + bytes.length, bytes);
   final nested = AndroidRgbaScreenshot.parse(
@@ -101,7 +101,7 @@ void main() {
   }
   rejects(Uint8List.sublistView(bytes, 0, bytes.length - 1), 'length');
   rejects(Uint8List.fromList([...bytes, 0]), 'length');
-  // Old Android headers omit the color-space word; never infer that layout.
+  // 旧 Android 头没有色彩空间字段，不根据猜测接受该布局。
   rejects(Uint8List.fromList([...bytes.take(12), ...bytes.skip(16)]), 'length');
   rejects(capture(width: 0), 'dimensions');
   rejects(capture(height: 0), 'dimensions');

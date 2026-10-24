@@ -4,8 +4,8 @@ import 'package:flutter_driver/flutter_driver.dart';
 
 import '../src/process.dart';
 
-/// Uses the actual system picker. The operator selects the paths printed here;
-/// the driver independently reads the resulting public files through official adb.
+/// 使用真实系统选择器，操作者选择此处打印的路径；driver 通过官方 adb 独立读取最终公共文件。
+///
 Future<void> driveDocuments(FlutterDriver driver, Directory captures) async {
   final serial =
       Platform.environment['CONNECT_E2E_DEVICE'] ??

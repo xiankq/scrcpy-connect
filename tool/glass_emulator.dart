@@ -1,5 +1,5 @@
-/// Linux/X11 workaround for Emulator 37.2.12's software GLES translator crash.
-/// See docs/implementation/repository-tooling.md#玻璃宿主 for host constraints.
+/// 绕过 Emulator 37.2.12 在 Linux/X11 下的软件 GLES 转译器崩溃。
+/// 宿主限制见 docs/implementation/repository-tooling.md#玻璃宿主。
 library;
 
 import 'dart:io';

@@ -156,7 +156,7 @@ Future<void> main() async {
 
   try {
     await proxy.start();
-    // Ownership begins before install so a partial/timeout install is cleaned.
+    // 安装前即确立所有权，确保部分安装或超时也能清理。
     fixtureOwned = true;
     if (!(await command(['install', apk])).contains('Success')) {
       throw StateError('Fixture installation not confirmed.');
@@ -199,10 +199,10 @@ Future<void> main() async {
               proxy.injectFault(fault);
               cut = true;
               if (fault == AdbRecoveryFault.blackhole) {
-                // A static encoder need not emit anything during the fault.
-                // Change only our owned fixture through the independent lab
-                // ADB connection, then restore its initial oracle before ack.
-                // Require a real discarded upstream frame, not just a filter.
+                // 静态编码器在故障期间可能没有输出；仅通过独立实验 ADB 修改本次夹具，ACK 前恢复初始判定内容；必须观察实际丢弃的上游帧，不能仅检查过滤器。
+                //
+                //
+                //
                 faultChallenge = {
                   'counterChanged': false,
                   'counterRestored': false,
@@ -246,8 +246,8 @@ Future<void> main() async {
                 .timeout(const Duration(seconds: 10));
           }
         } catch (error) {
-          // integrationDriver closes its driver before invoking our callback.
-          // Record errors without rethrowing from this concurrent task.
+          // integrationDriver 在调用回调前关闭 driver；并发任务只记录错误，不重新抛出。
+          //
           if (!finished &&
               !error.toString().contains('Method not found') &&
               !error.toString().contains('ext.connect.videoRecovery')) {
@@ -279,8 +279,8 @@ Future<void> main() async {
         report['proxyReconnected'] = proxy.reconnected;
         report['proxyFault'] = fault.name;
         report['proxyFaultChallenge'] = faultChallenge;
-        // Snapshot and validate before cleanup: closing the proxy must never
-        // manufacture the old controller's EOF or satisfy recovery acceptance.
+        // 清理前先快照并验证；代理关闭不能制造旧主控 EOF 或满足恢复验收。
+        //
         report['proxyFaultEvidence'] = proxy.faultEvidence;
         final evidenceErrors = proxy.recoveryEvidenceErrors();
         if (fault == AdbRecoveryFault.blackhole &&
@@ -292,9 +292,9 @@ Future<void> main() async {
         }
         report['proxyFaultEvidenceErrors'] = evidenceErrors;
         report['pollingError'] = pollingError?.toString();
-        // Save the failing app result before acceptance checks and cleanup.
+        // 验收检查与清理前先保存失败的应用结果。
         await writeJson('result', report);
-        // integrationDriver exits the VM: finally alone cannot own cleanup.
+        // integrationDriver 会退出 VM，不能仅由 finally 拥有清理责任。
         await cleanUp();
         if (report['videoRecoveryComplete'] != true) {
           throw StateError('Actual video recovery did not complete.');

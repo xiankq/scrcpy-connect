@@ -10,7 +10,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.widget.TextView;
 
-/** Test-only competing app. Uses the real system AudioManager; no product hook. */
+/** 仅测试使用的竞争应用，调用真实 AudioManager，不引入产品钩子。 */
 public final class FocusActivity extends Activity {
     private AudioManager manager;
     private AudioFocusRequest request;

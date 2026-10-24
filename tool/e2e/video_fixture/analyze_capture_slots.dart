@@ -1,4 +1,4 @@
-// Offline acquired BufferQueue slot lifetimes; not the Codec2 work queue.
+// 离线分析已取得的 BufferQueue slot 生命周期，不代表 Codec2 工作队列。
 import 'dart:io';
 
 import '../support.dart';
