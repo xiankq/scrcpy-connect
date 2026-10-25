@@ -1,14 +1,20 @@
 # 架构职责与资源所有权
 
-本文维护必须遵守的依赖、资源所有权与恢复边界，不承担重构完成声明。现存偏差与本轮验证见[重构验收记录](architecture-refactor-validation.md)。领域用语见[词表](../../GLOSSARY.md)，架构取舍见[ADR](../adr/)，产品行为见[产品规格](../../designs/prod/README.md)。
+本文维护必须遵守的依赖、资源所有权与恢复边界，不承担重构完成声明。当前变更与验证见[重构验收记录](code-and-build-refactor-validation.md)。领域用语见[词表](../../GLOSSARY.md)，架构取舍见[ADR](../adr/)，产品行为见[产品规格](../../designs/prod/README.md)。
 
 ## 依赖方向
 
 Flutter 页面通过 `AppDependencies` 调用应用的业务模块；设备连接策略、偏好、文件任务、活动与呈现归 `app/`。`packages/` 仅承载通用设计系统、ADB、scrcpy 和媒体解码，公开参数与行为对应上游概念。应用通过类型化适配组合原生能力，产品命令契约归应用传输层，使用 `ApplicationCommand` 与 `ApplicationCommandException`；这些 Dart 命令不构成应用原生桥。媒体字节不进入 Dart JSON。
 
+`ApplicationSession` 负责组装、准入和生命周期，不作为命令分派器的业务回调目标。`ApplicationBusinessCommands` 借用设备、观察与活动所有者执行聚合业务；`ApplicationCommandDispatcher` 借用文件、偏好和媒体缓存所有者完成传输适配。`PreferenceCommands`、`MediaArtifactCoordinator` 由组装层创建，媒体缓存任务由组装层按依赖顺序关闭。命令在任何准备、取消或文件副作用前完成统一校验；内部执行传递 `ApplicationCommand`，字符串入口只负责解析适配。参数与快照仍沿现有命令契约使用 Map，enum 不代表业务数据已经全面类型化。
+
+`MediaCaptureOperations` 直接借用会话、音源与捕获能力，提供 ready、stop、presentation、source/status 等操作。本机输出调用此捕获接口，不经应用总路由重新返回 `ApplicationSession`；捕获与输出分别保留实际所有权。
+
 `adb` 提供统一 ADB 调用与受控进程生命周期。公开 `AdbHost` 持有服务器、客户端及精确关闭权，实现位于 `packages/adb/lib/src/adb_host.dart`；`adb.dart` 只作为公共导出入口。Android/iOS 使用 `interop-adb`，桌面使用随包分发的官方 platform-tools，通过私有 adb-server 的 smart socket 执行；不接管用户已有的服务器。原生传输不定义产品重连策略。Dart `ConnectionPolicy` 区分产品编排与原生执行参数；重新附着读取存活传输的实际事实，不用新策略重新解释旧传输。`ConnectionSetupCoordinator` 编排配对、USB、转 IP 与取消，`ReconnectionCoordinator` 拥有自动重连计时和前后台决策。USB 离线后等待新的系统授权。
 
 每个 ADB 客户端只有一份 `AdbServices` 操作登记；便捷 shell、push/pull 与显式服务入口使用同一会话及文件 scope 所有者。官方服务器客户端直接持有其 bindings，不嵌套额外的直连客户端。媒体解码器的控制器只借用原生控制地址，平台持有实际输出；销毁确认前保留平台句柄，失败后沿同一控制器重试。
+
+`AdbHost.prepare/restore` 必须接收明确的 bindings，不隐式加载另一个原生库。独立使用 ADB 时先取得 `createNativeAdbApi()`；scrcpy 组合宿主传入同库实现。独立 ADB 的构建资产在 release 链接时按初始化入口可达性裁剪，不因 Dart 类型依赖而强制分发第二份 ADB/TLS/RSA/文件实现；没有可达性信息时保留资产。决定见 [0009](../adr/0009-native-composition-and-host-checks.md)。
 
 直连执行通过 `AdbConnectOptions`、`AdbTcpOptions` 和 `AdbKeepaliveOptions` 传入握手、burst 和 socket 参数；类型归 `adb`，产品取值由 `ConnectionPolicy` 与当次偏好组合。SDK 不接收健康阈值、重连策略或整份应用配置。官方服务器拒绝显式直连选项，USB 不应用 TCP 字段；通用机制默认和输入限制见 [ADB 接口](../../packages/adb/README.md)。
 
@@ -81,13 +87,16 @@ Flutter 与业务组装位于 `app/`；该目录不承载 FRB、其生成代码�
 | DeviceKeepAwakeCoordinator | 同设备窗口共享的保持唤醒意图、精确控制捕获和失败重试；本机关闭与远端退出、恢复证明分别报告 |
 | FileCatalog | 浏览、搜索与图库快照、扫描取消及目录事件 |
 | FileMutationCoordinator | 新增、重命名与批量删除的准入、精确执行批次及可重试回收 |
-| TransferCoordinator | 持久传输任务、冲突、取消、恢复、缓存预留与分享发布 |
+| TransferCoordinator | 持久传输任务、冲突、取消、恢复、缓存预留与托管来源发布交接 |
 | ShareCoordinator / ShareStore | 外部分享导入、授权交接、待处理批次及传输来源保留；产品账本只在应用 Dart |
+| DocumentsCoordinator / DocumentSources | 前者规划系统文档复制及精确资源收尾；后者通过独立来源账本持有暂存内容、页面持有权和传输发布关系 |
 | AdbFileExecutor | 适配通用文件事实查询、字节传输、原子提交与资源租约，保留精确执行回收责任；任务与预览预算归应用协调器，详见[文件所有权](file-ownership.md) |
 | AppMediaCache / DeliveryJournal | 受管目录、字节预算、缓存租约与持久交付回执；准入、交付提交及删除遵守同一 gate → journal 顺序 |
 | interop-adb writer | 普通/优先队列、单流顺序、ACK、burst credit 与有序关闭 |
 | scrcpy MediaSource / media_codec PacketQueue | 捕获源的原生 sink 附着与分离、包所有权交付；解码端约束容量并保存完整 GOP 重放 |
-| ApplicationSession | 组装 Dart 业务所有者、公开 SDK 宿主、本机输出与启动恢复；失败保留精确清理责任 |
+| ApplicationSession | 组装 Dart 业务所有者、公开 SDK 宿主、本机输出与启动恢复；拥有组装资源的关闭次序，失败保留精确清理责任 |
+| ApplicationBusinessCommands / ApplicationCommandDispatcher | 借用业务所有者进行执行和契约适配，不创建资源所有者或接管其关闭权 |
+| MediaCaptureOperations | 直接适配精确捕获操作，借用会话、音源与 SDK，不依赖应用总分派器 |
 | ApplicationEvents / StateRecovery | Dart 业务事件统一排队与水位、文件及平台订阅；观察者失败不影响其他投递，缺口恢复和瞬态通知分别处理 |
 | ApplicationSnapshotReader | 借用各所有者的实际状态，按业务版本栅栏组合快照；不部署助手或启动捕获，保持唤醒证明不覆盖窗口捕获证明 |
 | 应用偏好模块 | 偏好校验、迁移、冲突检测与原子持久化 |
@@ -133,9 +142,11 @@ scrcpy 启动先保存清理责任，再通过 START→PID→RUN 交付运行授
 
 窗口最后一个音频所有者撤销时，在同一登记事务内撤销音源；质量重建的交接租约受原窗口与捕获身份约束，成功、失败、请求取消、设备停止或期限到达都会释放。音频启动上传沿用音源取消令牌，远端临时文件清理等待本机上传结束和关闭发送排序；官方 ADB 的 socket 关闭、协议关闭帧写出与远端服务退出不是同一回执，清理失败保留未核验状态。
 
-分享接收的 `ShareCoordinator` 使用独立于文档交付的稳定复制 scope，`ShareStore` 是分享批次及发布租约的唯一写入者。分享来源只有完整传输引用核对才能回收，未知提交不重放；格式、授权交接及持久性边界见[内容交付](content-delivery.md#外部分享接收与传输来源)。
+分享接收的 `ShareCoordinator` 使用独立于文档交付的稳定复制 scope，`ShareStore` 是分享批次及发布租约的唯一写入者。`DocumentSources` 在独立根目录复用同一账本实现，文档与分享各自保留来源所有权，组合接口只路由发布交接和引用核对。已交接给传输的来源只有完整引用核对才能回收，未知提交不重放；分享格式、授权交接及持久性边界见[内容交付](content-delivery.md#外部分享接收与传输来源)。
 
-`TransferCoordinator` 为每个传输批次保存一份运行状态，统一持有设备归属、准备请求、worker、当前执行任务、缓存租约及编辑准入。任务日志负责持久历史，不能作为在途 worker 的唯一索引；删除最后一条终态记录后，设备停止仍须等待该设备的批次收尾。单项取消只撤销同一任务的执行令牌。准备租约在首条持久提交后才交给批次，释放失败保留原责任；所有运行字段退出后才删除批次登记。
+`TransferCoordinator` 为每个传输批次保存一份运行状态，统一持有设备归属、准备请求、worker、当前执行任务、缓存租约及编辑准入。任务日志负责持久历史，不能作为在途 worker 的唯一索引；删除最后一条终态记录后，设备停止仍须等待该设备的批次收尾。识别托管来源归属的异步查询也先登记为准备责任，设备停止或关闭须撤销并等待其退出；迟到查询结果不能重新发布任务。单项取消只撤销同一任务的执行令牌。准备租约在首条持久提交后才交给批次，释放失败保留原责任；所有运行字段退出后才删除批次登记。
+
+目录传输在入队前共同计算已选与待处理条目，限制为 10,000 项、64 层及源与目标路径合计 16 MiB；枚举只请求剩余额度，不能先展开整棵目录树再检查总量。托管来源回收先固定当次来源覆盖集合，再等待持久写入队列稳定，从完整任务历史筛出引用这些来源的批次；无关历史不占来源证明预算，同批次所有消费者仍共同决定终态。目录来源覆盖其后代文件，覆盖集合以外的新来源不被推断为无人使用。失败、未知或未持久确认的消费者继续保留来源。
 
 ## 连接与屏幕
 
@@ -156,6 +167,12 @@ scrcpy 启动先保存清理责任，再通过 START→PID→RUN 交付运行授
 应用文件模块以版本化、连续序号的任务日志保存传输，串行刷新后才进入下一执行阶段；压缩时先刷新临时文件，再原子替换。旧 Rust 检查点和 journal 只作为迁移输入，成功迁移前不删除。损坏、截断或代际倒退拒绝猜测恢复。`finalizing` 与取消未确认的任务在重启后保留 `result_unknown`，未知写入不自动重放。原生执行层仅提供事实、字节 I/O、原子提交和租约，不再拥有平行任务状态。ADB 的便捷文件上传、下载与显式 SYNC 调用共用 `adb_sync`，不再暴露独立的 `adb_transfer` worker；独立 ADB 库与 scrcpy 组合库使用同一执行契约。
 
 系统文档操作由应用 `DocumentsCoordinator` 及 `DocumentLimits` 规划，独立的通用 `LocalFiles` scope 限定本机路径和描述符资源，不依赖 ADB 连接。复制句柄持有实际源与未发布片段，提交使用原片段身份；取消及关闭先排空复制，再释放平台原始描述符。范围关闭失败保留同一所有者重试，发布结果未知不重试或自动清理。通用层不保存 URI、系统交付账本、产品预算或文档命令。
+
+平台授予的文档暂存及截图库根在使用前固定为同一实际路径，账本与复制使用该根；传入的逻辑路径仅在这些根内按相对路径映射，业务来源与持久交付身份不改变。scope 的恢复名称仍沿用最初平台逻辑路径，二次核验环境不改变它。路径别名不授予共同父目录，也不允许请求访问根内的符号链接或通过父目录穿越。
+
+文档暂存由 `DocumentSources` 在应用内统一计费，默认总预算 8 GiB；单次复制同时受剩余总预算和本次操作预算约束，不能每次导入重新获得完整额度。已知大小的文件在复制前还核对本机剩余空间，保留 32 MiB。旧版没有账本的文档目录继续计入总量，无法完整核验时拒绝新增，不因缺少登记就删除或视为免费空间。
+
+文档复制完成后，页面持有权保存在来源账本中；页面替换结果、关闭或收到迟到结果时归还持有权，清理失败保留原来源供恢复。等待旧来源归还后，再核验页面和操作仍有效才能打开选择器；迟到归还失败保留来源身份及错误。提交传输先分配实际批次身份并绑定持久发布租约，再用同一身份规划和提交任务；不能按同路径的旧完成历史认领新提交。旧版没有批次身份的未知租约继续保护来源。本次取消的未发布证明只核对本次批次，页面归还不解除发布中、未知或已绑定任务的租约。启动先排空旧复制 scope 和平台资源，再归还不可能跨进程存活的页面持有权；传输来源仍按覆盖证明核对后回收，不能按目录年龄或页面消失直接删除。
 
 Android 文档与外部分享资源登记属于进程，Activity 仅持有当前平台附着。Activity 销毁撤销附着和准入，原始 PFD 与迟到返回的描述符仍归同一登记；新 Activity 或 isolate 先确认原生复制排空，再认领并关闭旧平台资源。保留 Dart engine 的 Activity 重建也须经过该栅栏，不以应用 Session 没有重建为由跳过。精确旧操作的关闭不能释放新代次的资源，失败保留同一所有者供重试；进程退出是独立边界。
 
@@ -199,4 +216,4 @@ Android 使用 MediaCodec，Windows 使用 D3D11VA，Linux 使用 VAAPI/NVDEC，
 
 ## 平台交付边界
 
-仓库不配置自动 CI/CD。`tool/check.sh` 执行主机检查，`tool/check.sh --android` 额外核验三 ABI APK；`tool/build_host.dart` 手动构建对应宿主。整包编译、协议夹具、模拟器和物理设备运行是不同证据，详见[验收记录](validation.md)。
+仓库不配置自动 CI/CD。`tool/check.sh` 执行主机检查，`tool/check.sh --android` 额外构建并核验指定单 ABI 调试 APK；三 ABI 发布验证使用 `tool/android.dart build`，`tool/build_host.dart` 手动构建对应宿主。整包编译、协议夹具、模拟器和物理设备运行是不同证据，详见[验收记录](validation.md)。
