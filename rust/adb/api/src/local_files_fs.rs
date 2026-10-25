@@ -78,15 +78,14 @@ fn checked_path(bytes: &[u8]) -> Result<PathBuf> {
     Ok(path)
 }
 fn open_directory(parent: &File, name: &CStr) -> Result<File> {
+    open_directory_with_access(parent, name, libc::O_RDONLY)
+}
+fn open_directory_with_access(parent: &File, name: &CStr, access: i32) -> Result<File> {
     owned(unsafe {
         libc::openat(
             parent.as_raw_fd(),
             name.as_ptr(),
-            libc::O_RDONLY
-                | libc::O_DIRECTORY
-                | libc::O_CLOEXEC
-                | libc::O_NOFOLLOW
-                | libc::O_LARGEFILE,
+            access | libc::O_DIRECTORY | libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_LARGEFILE,
         )
     })
 }
@@ -197,15 +196,25 @@ impl FileScope {
             }
             let mut file = OpenOptions::new()
                 .read(true)
-                .custom_flags(
-                    libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_LARGEFILE,
-                )
+                .custom_flags(libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
                 .open("/")
                 .map_err(io_error)?;
-            for component in resolved.components() {
-                if let Component::Normal(name) = component {
-                    file = open_directory(&file, &c(name.as_bytes())?)?;
-                }
+            let mut components = resolved
+                .components()
+                .filter_map(|component| match component {
+                    Component::Normal(name) => Some(name),
+                    _ => None,
+                })
+                .peekable();
+            while let Some(name) = components.next() {
+                // 祖先只需要搜索权限；Android 的 /data 等目录不能由应用列举。
+                // 最终授予的根仍可读取，供后续 list、fsync 和精确文件操作使用。
+                let access = if components.peek().is_some() {
+                    libc::O_PATH
+                } else {
+                    libc::O_RDONLY
+                };
+                file = open_directory_with_access(&file, &c(name.as_bytes())?, access)?;
             }
             roots.push(Root { path, file });
         }

@@ -30,6 +30,126 @@ fn request(source: &Path, target: &Path) -> LocalFileCopyRequest {
     }
 }
 #[tokio::test]
+async fn authorized_root_under_search_only_ancestor_supports_durable_file_operations() {
+    use std::os::unix::fs::PermissionsExt;
+    let ancestor = tempfile::tempdir().unwrap();
+    struct RestorePermissions<'a>(&'a Path);
+    impl Drop for RestorePermissions<'_> {
+        fn drop(&mut self) {
+            fs::set_permissions(self.0, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+    }
+    let _restore = RestorePermissions(ancestor.path());
+    let root = ancestor.path().join("private-cache");
+    fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    fs::write(&source, b"private app data").unwrap();
+    fs::set_permissions(ancestor.path(), fs::Permissions::from_mode(0o111)).unwrap();
+    assert_eq!(
+        fs::read_dir(ancestor.path()).unwrap_err().kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+    let scope = open_scope(&root).await;
+    adb_local_mkdir(scope.clone(), path(&root.join("output")), true)
+        .await
+        .unwrap();
+    let part = root.join("output/part");
+    let destination = root.join("output/saved");
+    let copy = adb_local_copy_create(scope.clone(), request(&source, &part))
+        .await
+        .unwrap();
+    let result = adb_local_copy_run(copy.clone()).await.unwrap();
+    adb_local_commit(
+        scope.clone(),
+        copy.clone(),
+        path(&destination),
+        result.identity,
+    )
+    .await
+    .unwrap();
+    adb_local_copy_close(copy, 2000).await.unwrap();
+    assert_eq!(fs::read(&destination).unwrap(), b"private app data");
+    let identity = adb_local_stat(scope.clone(), path(&destination))
+        .await
+        .unwrap()
+        .identity;
+    adb_local_remove(scope.clone(), path(&destination), identity)
+        .await
+        .unwrap();
+    adb_local_scope_close(scope, 2000).await.unwrap();
+}
+
+#[tokio::test]
+async fn copy_capacity_is_reserved_before_open_and_released_only_after_confirmed_cleanup() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let scope = open_scope(root.path()).await;
+    let source = root.path().join("source");
+    fs::write(&source, b"bounded ownership").unwrap();
+    let extra = root.path().join("extra");
+    // 打开失败必须归还名额，不能让失败请求耗尽后续正常复制。
+    for _ in 0..40 {
+        assert_eq!(
+            adb_local_copy_create(scope.clone(), request(&root.path().join("missing"), &extra))
+                .await
+                .unwrap_err()
+                .code,
+            LocalFileErrorCode::NotFound
+        );
+    }
+    let mut copies = Vec::new();
+    for index in 0..32 {
+        copies.push(
+            adb_local_copy_create(
+                scope.clone(),
+                request(&source, &root.path().join(format!("part-{index}"))),
+            )
+            .await
+            .unwrap(),
+        );
+    }
+    assert_eq!(
+        adb_local_copy_create(scope.clone(), request(&source, &extra))
+            .await
+            .unwrap_err()
+            .code,
+        LocalFileErrorCode::Busy
+    );
+    assert!(!extra.exists(), "超额请求不能先创建目标文件");
+    fs::set_permissions(root.path(), fs::Permissions::from_mode(0o500)).unwrap();
+    let failed_cleanup = adb_local_copy_close(copies[0].clone(), 2000).await;
+    fs::set_permissions(root.path(), fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(failed_cleanup.is_err());
+    assert_eq!(
+        adb_local_copy_create(scope.clone(), request(&source, &extra))
+            .await
+            .unwrap_err()
+            .code,
+        LocalFileErrorCode::Busy,
+        "未确认清理仍然占有原句柄与容量"
+    );
+    adb_local_copy_close(copies[0].clone(), 2000).await.unwrap();
+    let admitted = adb_local_copy_create(scope.clone(), request(&source, &extra))
+        .await
+        .unwrap();
+    adb_local_copy_close(admitted, 2000).await.unwrap();
+    adb_local_scope_close(scope, 2000).await.unwrap();
+    assert!(!extra.exists());
+}
+
+#[tokio::test]
+async fn scope_root_limit_rejects_before_opening_any_path() {
+    let absent = vec![b"/not-an-existing-capability-root".to_vec(); 17];
+    assert_eq!(
+        adb_local_scope_open(absent, uuid::Uuid::new_v4().to_string(), 2000)
+            .await
+            .unwrap_err()
+            .code,
+        LocalFileErrorCode::InvalidArgument
+    );
+}
+
+#[tokio::test]
 async fn retained_identity_cannot_publish_a_replacement_or_remove_it() {
     let root = tempfile::tempdir().unwrap();
     let scope = open_scope(root.path()).await;

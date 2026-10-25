@@ -5,12 +5,36 @@ use std::{
     sync::{Arc, Mutex, OnceLock, Weak},
     time::Duration,
 };
-use tokio::sync::Notify;
+use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 #[path = "local_files_fs.rs"]
 mod filesystem;
 use filesystem::{FileScope, Resources};
 type Result<T> = std::result::Result<T, LocalFileError>;
+const MAX_ROOTS: usize = 16;
+const MAX_SCOPE_COPIES: usize = 32;
+const MAX_SCOPE_ACTIVITIES: usize = 32;
+struct Budgets {
+    scopes: Arc<Semaphore>,
+    openings: Arc<Semaphore>,
+    copies: Arc<Semaphore>,
+    activities: Arc<Semaphore>,
+}
+fn budgets() -> &'static Budgets {
+    static VALUE: OnceLock<Budgets> = OnceLock::new();
+    VALUE.get_or_init(|| Budgets {
+        scopes: Arc::new(Semaphore::new(64)),
+        openings: Arc::new(Semaphore::new(64)),
+        copies: Arc::new(Semaphore::new(128)),
+        activities: Arc::new(Semaphore::new(256)),
+    })
+}
+fn reserve(capacity: &Arc<Semaphore>, context: &str) -> Result<OwnedSemaphorePermit> {
+    capacity
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| error(LocalFileErrorCode::Busy, format!("{context}数量已达上限。")))
+}
 fn error(code: LocalFileErrorCode, message: impl Into<String>) -> LocalFileError {
     LocalFileError {
         code,
@@ -35,17 +59,24 @@ struct ScopeState {
 }
 struct Scope {
     owner_key: String,
+    capacity: Arc<OwnedSemaphorePermit>,
+    activities: Arc<Semaphore>,
+    copies: Arc<Semaphore>,
     fs: FileScope,
     state: Mutex<ScopeState>,
     stop: CancellationToken,
     changed: Notify,
 }
-struct Lease(Arc<Scope>);
+struct Lease {
+    scope: Arc<Scope>,
+    _activity: OwnedSemaphorePermit,
+    _global_activity: OwnedSemaphorePermit,
+}
 impl Drop for Lease {
     fn drop(&mut self) {
-        let mut state = self.0.state.lock().expect("本机范围状态");
+        let mut state = self.scope.state.lock().expect("本机范围状态");
         state.active -= 1;
-        self.0.changed.notify_waiters();
+        self.scope.changed.notify_waiters();
     }
 }
 impl Scope {
@@ -57,8 +88,14 @@ impl Scope {
                 "本机范围已撤销准入。",
             ));
         }
+        let activity = reserve(&self.activities, "本机范围并发操作")?;
+        let global_activity = reserve(&budgets().activities, "本机并发操作")?;
         state.active += 1;
-        Ok(Lease(self.clone()))
+        Ok(Lease {
+            scope: self.clone(),
+            _activity: activity,
+            _global_activity: global_activity,
+        })
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -78,6 +115,8 @@ struct CopyState {
     cleanup_error: Option<LocalFileError>,
 }
 struct Copy {
+    _capacity: OwnedSemaphorePermit,
+    _scope_capacity: OwnedSemaphorePermit,
     scope_id: String,
     scope: Arc<Scope>,
     stop: CancellationToken,
@@ -135,17 +174,23 @@ async fn execute<T: Send + 'static>(
 }
 pub async fn open(roots: Vec<Vec<u8>>, owner_key: String, close_timeout_ms: u32) -> Result<String> {
     duration(close_timeout_ms)?;
-    if owner_key.is_empty() || owner_key.contains('\0') {
+    if owner_key.is_empty() || owner_key.len() > 4096 || owner_key.contains('\0') {
         return Err(error(
             LocalFileErrorCode::InvalidArgument,
-            "本机范围资源名称不能为空或包含空字符。",
+            "本机范围资源名称须为不含空字符的 1 至 4096 字节。",
         ));
     }
+    if roots.is_empty() || roots.len() > MAX_ROOTS {
+        return Err(error(
+            LocalFileErrorCode::InvalidArgument,
+            format!("本机范围须授予 1 至 {MAX_ROOTS} 个根目录。"),
+        ));
+    }
+    // 包括等待同 key 交接的任务；在任何根目录 FD 打开之前预留。
+    let opening = reserve(&budgets().openings, "本机范围创建")?;
     // 独立任务持有完整交接；旧 isolate 消失后，后继仍可按同一资源名称再次排空。
     tokio::spawn(async move {
-        let fs = tokio::task::spawn_blocking(move || FileScope::open(roots))
-            .await
-            .map_err(join_error)??;
+        let _opening = opening;
         let gate = {
             let mut owner = registry().lock().expect("本机文件登记");
             owner
@@ -162,12 +207,22 @@ pub async fn open(roots: Vec<Vec<u8>>, owner_key: String, close_timeout_ms: u32)
             gate
         };
         let _transition = gate.lock().await;
-        let previous = registry()
-            .lock()
-            .expect("本机文件登记")
-            .keys
-            .get(&owner_key)
-            .cloned();
+        let (previous, capacity) = {
+            let owner = registry().lock().expect("本机文件登记");
+            let previous = owner.keys.get(&owner_key).cloned();
+            // 同 key 的接管共享同一容量，避免满额时连精确恢复也无法执行。
+            let capacity = previous
+                .as_ref()
+                .and_then(|id| owner.scopes.get(id))
+                .map(|scope| scope.capacity.clone())
+                .map(Ok)
+                .unwrap_or_else(|| reserve(&budgets().scopes, "本机范围").map(Arc::new))?;
+            (previous, capacity)
+        };
+        // 新根无效时保留旧范围；交接锁保证同 key 不会并行打开多套根。
+        let fs = tokio::task::spawn_blocking(move || FileScope::open(roots))
+            .await
+            .map_err(join_error)??;
         if let Some(previous) = previous {
             close_scope(previous, close_timeout_ms).await?;
         }
@@ -178,6 +233,9 @@ pub async fn open(roots: Vec<Vec<u8>>, owner_key: String, close_timeout_ms: u32)
             id.clone(),
             Arc::new(Scope {
                 owner_key,
+                capacity,
+                activities: Arc::new(Semaphore::new(MAX_SCOPE_ACTIVITIES)),
+                copies: Arc::new(Semaphore::new(MAX_SCOPE_COPIES)),
                 fs,
                 state: Mutex::new(ScopeState {
                     accepting: true,
@@ -222,6 +280,8 @@ pub async fn create_copy(id: String, request: LocalFileCopyRequest) -> Result<St
     }
     let scope = scope(&id)?;
     let lease = scope.admit()?;
+    let capacity = reserve(&budgets().copies, "本机复制")?;
+    let scope_capacity = reserve(&scope.copies, "本机范围复制")?;
     // FD 在首次挂起前复制；后台等待路径 I/O 时不再借用平台整数句柄。
     let source: Option<File> = request
         .source_fd
@@ -245,6 +305,8 @@ pub async fn create_copy(id: String, request: LocalFileCopyRequest) -> Result<St
         registry().lock().expect("本机文件登记").copies.insert(
             key.clone(),
             Arc::new(Copy {
+                _capacity: capacity,
+                _scope_capacity: scope_capacity,
                 scope_id: id,
                 scope: scope.clone(),
                 stop: scope.stop.child_token(),
@@ -544,6 +606,47 @@ mod tests {
     use super::*;
     use std::os::unix::{ffi::OsStrExt, fs::PermissionsExt};
     type Barrier = (std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>);
+    #[test]
+    fn capacity_reservations_return_on_every_failed_admission() {
+        let capacity = Arc::new(Semaphore::new(2));
+        let first = reserve(&capacity, "测试").unwrap();
+        let second = reserve(&capacity, "测试").unwrap();
+        assert_eq!(
+            reserve(&capacity, "测试").unwrap_err().code,
+            LocalFileErrorCode::Busy
+        );
+        drop(first);
+        let next = reserve(&capacity, "测试").unwrap();
+        drop((second, next));
+        assert_eq!(capacity.available_permits(), 2);
+    }
+    #[tokio::test]
+    async fn scope_activity_budget_does_not_queue_unbounded_blocking_workers() {
+        let directory = tempfile::tempdir().unwrap();
+        let id = open(
+            vec![directory.path().as_os_str().as_bytes().to_vec()],
+            uuid::Uuid::new_v4().to_string(),
+            2000,
+        )
+        .await
+        .unwrap();
+        let owner = scope(&id).unwrap();
+        let mut leases = Vec::new();
+        for _ in 0..MAX_SCOPE_ACTIVITIES {
+            leases.push(owner.admit().unwrap());
+        }
+        assert!(matches!(
+            owner.admit(),
+            Err(LocalFileError {
+                code: LocalFileErrorCode::Busy,
+                ..
+            })
+        ));
+        leases.pop();
+        leases.push(owner.admit().unwrap());
+        drop(leases);
+        close_scope(id, 2000).await.unwrap();
+    }
     fn barriers() -> &'static Mutex<HashMap<String, Barrier>> {
         static VALUE: OnceLock<Mutex<HashMap<String, Barrier>>> = OnceLock::new();
         VALUE.get_or_init(|| Mutex::new(HashMap::new()))
