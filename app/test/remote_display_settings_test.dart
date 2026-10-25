@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/media/remote_display_settings.dart';
+import 'package:scrcpy_connect/models/remote_display_settings.dart';
 
 void main() {
   test('custom ratios reject non-finite and extreme dimensions', () {

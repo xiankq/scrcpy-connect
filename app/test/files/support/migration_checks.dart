@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 
 import 'file_executor_fixture.dart';
 import 'transfer_checks.dart' show withTransfer;

@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:scrcpy_connect/application/application_session.dart';
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/application_session.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

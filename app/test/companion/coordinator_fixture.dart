@@ -5,9 +5,9 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/companion/companion_client.dart';
-import 'package:scrcpy_connect/companion/companion_coordinator.dart';
-import 'package:scrcpy_connect/connection/connection_owner.dart';
+import 'package:scrcpy_connect/stores/companion_client.dart';
+import 'package:scrcpy_connect/stores/companion_coordinator.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 const coordinatorConfig = CompanionConfig(
   startupTimeout: Duration(seconds: 2),

@@ -3,15 +3,15 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/connection/connection_owner.dart';
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/connection/scrcpy_server_queries.dart';
-import 'package:scrcpy_connect/media/capture/app_launch_store.dart';
-import 'package:scrcpy_connect/media/capture/device_audio_source_coordinator.dart';
-import 'package:scrcpy_connect/media/capture/scrcpy_capture_adapter.dart';
-import 'package:scrcpy_connect/media/capture/session_coordinator.dart';
-import 'package:scrcpy_connect/platform/native/bundled_servers.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
+import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';
+import 'package:scrcpy_connect/services/media/scrcpy_capture_adapter.dart';
+import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
+import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
 
 /// 真实媒体测试共同持有的连接与业务所有者；播放器由各测试独立持有。
 /// 不提供产品命令路由，也不替代应用启动与恢复策略。

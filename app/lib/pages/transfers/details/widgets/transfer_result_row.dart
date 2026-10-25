@@ -1,10 +1,10 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_direction_badge.dart';
-import 'package:scrcpy_connect/presentation/transfer_presentation.dart';
+import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
 
 class TransferResultRow extends StatelessWidget {
   const TransferResultRow({

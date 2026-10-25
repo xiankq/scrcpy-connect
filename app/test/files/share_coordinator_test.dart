@@ -5,8 +5,8 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/files/sharing/share_coordinator.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
 
 const shareId = '00000000-0000-4000-8000-000000000001';
 const nextShareId = '00000000-0000-4000-8000-000000000002';

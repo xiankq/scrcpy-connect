@@ -5,14 +5,14 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/connection/connection_owner.dart';
-import 'package:scrcpy_connect/connection/device_coordinator.dart';
-import 'package:scrcpy_connect/connection/device_discovery.dart';
-import 'package:scrcpy_connect/connection/device_reconnection_candidates.dart';
-import 'package:scrcpy_connect/connection/identity_manager.dart';
-import 'package:scrcpy_connect/connection/records/device_record_store.dart';
-import 'package:scrcpy_connect/connection/reconnection_coordinator.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
+import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
+import 'package:scrcpy_connect/services/connection/device_reconnection_candidates.dart';
+import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
+import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/stores/connection/reconnection_coordinator.dart';
 
 void main() {
   late _Fixture fixture;

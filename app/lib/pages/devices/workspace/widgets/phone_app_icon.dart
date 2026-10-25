@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -7,7 +7,7 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 
 /// 图标属于目标设备与包名，不使用主控设备的图标集合。
 class PhoneAppIcon extends HookWidget {

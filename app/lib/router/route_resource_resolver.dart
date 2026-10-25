@@ -1,7 +1,7 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 
 part 'route_resource_resolver.g.dart';
 

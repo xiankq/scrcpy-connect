@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/application/application_session.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/media/capture/app_launch_store.dart';
+import 'package:scrcpy_connect/stores/application_session.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

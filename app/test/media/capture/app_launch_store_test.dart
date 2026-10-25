@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/media/capture/app_launch_store.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
 
 const _first = '00000000-0000-4000-8000-000000000001';
 const _second = '00000000-0000-4000-8000-000000000002';

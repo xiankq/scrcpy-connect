@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/media/session_view_registry.dart';
+import 'package:scrcpy_connect/stores/media/session_view_registry.dart';
 
 void main() {
   test('a retryable quality failure retains the same owner through snapshots and closes exactly', () async {

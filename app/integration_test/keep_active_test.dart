@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -10,8 +10,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 

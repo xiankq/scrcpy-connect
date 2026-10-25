@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/files/sharing/share_store.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/share_store.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 
 import 'support/file_executor_fixture.dart';
 

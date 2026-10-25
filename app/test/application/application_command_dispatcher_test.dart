@@ -6,22 +6,22 @@ import 'package:flutter_test/flutter_test.dart';
 import '../media/cache/support/media_file_fixture.dart';
 
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/files/documents/delivery_journal.dart';
-import 'package:scrcpy_connect/media/cache/app_media_cache.dart';
-import 'package:scrcpy_connect/media/cache/media_artifact_coordinator.dart';
-import 'package:scrcpy_connect/files/sharing/share_coordinator.dart';
-import 'package:scrcpy_connect/application/application_command_dispatcher.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/application/transport/commands_generated.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
-import 'package:scrcpy_connect/files/catalog/file_catalog.dart';
-import 'package:scrcpy_connect/files/mutations/file_mutation_coordinator.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/delivery_journal.dart';
+import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
+import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
+import 'package:scrcpy_connect/services/application_command_dispatcher.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/generated/commands_generated.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/file_catalog.dart';
+import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
 
 import '../files/support/file_executor_fixture.dart';
 
-import 'package:scrcpy_connect/preferences/preference_commands.dart';
-import 'package:scrcpy_connect/preferences/preference_store.dart';
+import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/stores/preference_store.dart';
 
 const _device = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
 

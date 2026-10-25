@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -18,9 +18,9 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_wor
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/connection/connection_validation.dart';
-import 'package:scrcpy_connect/widgets/media_thumbnail.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/media_thumbnail.dart';
 
 import 'product_flow_test.dart' show waitFor;
 

@@ -4,10 +4,10 @@ import 'dart:io';
 
 import 'package:adb/adb.dart' as adb;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/connection/connection_owner.dart';
-import 'package:scrcpy_connect/files/execution/adb_file_executor.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
-import 'package:scrcpy_connect/files/mutations/file_mutation_coordinator.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/services/files/adb_file_executor.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
 
 void main() {
   test('首项关闭期间连接替换，剩余删除仍绑定最初的精确连接', () async {

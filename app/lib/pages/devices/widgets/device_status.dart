@@ -1,6 +1,6 @@
-import 'package:scrcpy_connect/presentation/formatters.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:flutter/material.dart';
 
 class DeviceStatus extends StatelessWidget {

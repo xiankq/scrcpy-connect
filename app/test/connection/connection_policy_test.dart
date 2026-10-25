@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/connection/connection_policy.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
 
 void main() {
   test('QR 与单端点执行预算在创建任何发现或握手前拒绝无效期限', () {

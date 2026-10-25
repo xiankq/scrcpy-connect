@@ -1,19 +1,19 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/widgets/video_preview.dart';
-import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/presentation/file_actions.dart';
-import 'package:scrcpy_connect/media/media_cache_lease.dart';
-import 'package:scrcpy_connect/widgets/cached_file_image.dart';
-import 'package:scrcpy_connect/widgets/media_controls_protection.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
-
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:design_system/design_system.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/widgets/video_preview.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/cached_file_image.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
+import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/services/media/media_cache_lease.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+
+import 'widgets/media_preview_toolbar.dart';
 
 class MediaPreviewPage extends HookWidget {
   const MediaPreviewPage({
@@ -29,10 +29,12 @@ class MediaPreviewPage extends HookWidget {
   Widget build(BuildContext context) {
     final retry = useState(0);
     final request = useMemoized(
-      () => MediaCacheRequest(controller, 'media.preview', {
-        'deviceId': device['id'],
-        'path': file['path'],
-      }),
+      () => MediaCacheRequest(
+        controller.request,
+        controller.execute,
+        'media.preview',
+        {'deviceId': device['id'], 'path': file['path']},
+      ),
       [controller, device['id'], file['path'], retry.value],
     );
     useEffect(() => request.dispose, [request]);
@@ -181,86 +183,16 @@ class MediaPreviewPage extends HookWidget {
               ),
               Align(
                 alignment: Alignment.topCenter,
-                child: MediaControlsProtection(
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                      child: GlassSurfaceGroup(
-                        variant: GlassVariant.clear,
-                        child: Row(
-                          children: [
-                            GlassTooltip(
-                              message: MaterialLocalizations.of(context)
-                                  .backButtonTooltip,
-                              child: GlassIconButton(
-                                semanticLabel: MaterialLocalizations.of(context)
-                                    .backButtonTooltip,
-                                size: DesignTokens.componentIconButtonSize,
-                                iconSize: DesignTokens.componentIconSize,
-                                settings: GlassMaterial.settings(
-                                  context,
-                                  variant: GlassVariant.clear,
-                                ),
-                                quality: GlassMaterial.quality(context),
-                                interactionScale:
-                                    GlassMaterial.reduceMotion(context)
-                                    ? 1
-                                    : DesignTokens
-                                          .componentGlassInteractionScale,
-                                anchorStretch: !GlassMaterial.reduceMotion(
-                                  context,
-                                ),
-                                onPressed: () => closePage<void>(context),
-                                icon: const Icon(LucideIcons.chevronLeft),
-                              ),
-                            ),
-                            const SizedBox(width: DesignTokens.spacingXs),
-                            Expanded(
-                              child: Text(
-                                value(file, 'name'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            const SizedBox(width: DesignTokens.spacingXs),
-                            GlassToolbarGroup(
-                              variant: GlassVariant.clear,
-                              children: [
-                                GlassActionIcon(
-                                  tooltip: '保存原文件',
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface,
-                                  onPressed: () => retrieveFile(
-                                    context,
-                                    controller,
-                                    device,
-                                    file,
-                                  ),
-                                  icon: const Icon(LucideIcons.download),
-                                ),
-                                GlassActionIcon(
-                                  tooltip: '系统分享',
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface,
-                                  onPressed: () => retrieveFile(
-                                    context,
-                                    controller,
-                                    device,
-                                    file,
-                                    share: true,
-                                  ),
-                                  icon: const Icon(LucideIcons.share2),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                child: MediaPreviewToolbar(
+                  title: value(file, 'name'),
+                  onBack: () => closePage<void>(context),
+                  onSave: () => retrieveFile(context, controller, device, file),
+                  onShare: () => retrieveFile(
+                    context,
+                    controller,
+                    device,
+                    file,
+                    share: true,
                   ),
                 ),
               ),

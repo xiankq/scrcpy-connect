@@ -5,10 +5,10 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/connection/connection_owner.dart';
-import 'package:scrcpy_connect/connection/device_details_reader.dart';
-import 'package:scrcpy_connect/connection/records/device_record_store.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/services/connection/device_details_reader.dart';
+import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 
 void main() {
   late Directory directory;

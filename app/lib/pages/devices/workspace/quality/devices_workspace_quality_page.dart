@@ -1,22 +1,24 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:design_system/design_system.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/media/remote_display_settings.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/quality/screen_ratio_picker.dart';
-import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/models/remote_display_settings.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/quality/widgets/screen_ratio_picker.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:design_system/design_system.dart';
+import 'widgets/quality_option_row.dart';
+import 'widgets/quality_options_sheet.dart';
 
 String qualityValueLabel(String field, dynamic input) {
   final raw = input?.toString() ?? '';
@@ -129,50 +131,11 @@ class QualityPage extends HookConsumerWidget {
           ) => showGlassModalSheet<Json>(
             context: context,
             isScrollControlled: true,
-            builder: (context) => SafeArea(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height * .8,
-                  minHeight: options.length > 8
-                      ? MediaQuery.sizeOf(context).height * .8
-                      : 0,
-                ),
-                child: GroupedListView.builder(
-                  shrinkWrap: options.length <= 8,
-                  padding: const EdgeInsets.only(
-                    bottom: DesignTokens.spacingMd,
-                  ),
-                  itemCount: options.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return Padding(
-                        padding: const EdgeInsets.all(DesignTokens.spacingMd),
-                        child: Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      );
-                    }
-                    final item = options[index - 1];
-                    return GlassTooltip(
-                      message: value(item, 'reason'),
-                      child: ListTile(
-                        leading: ListIconBadge(
-                          icon: icon,
-                          backgroundColor: functionalIconColor(icon),
-                        ),
-                        title: Text(value(item, 'label', value(item, 'name'))),
-
-                        enabled: item['available'] == true,
-                        trailing: selected == item['value']
-                            ? const Icon(LucideIcons.check)
-                            : null,
-                        onTap: () => Navigator.pop(context, item),
-                      ),
-                    );
-                  },
-                ),
-              ),
+            builder: (context) => QualityOptionsSheet(
+              title: title,
+              icon: icon,
+              options: options,
+              selected: selected,
             ),
           );
 
@@ -219,200 +182,133 @@ class QualityPage extends HookConsumerWidget {
             }
           }
 
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              ListTile optionRow({
-                required String title,
-                required IconData icon,
-                required String currentValue,
-                required VoidCallback? onTap,
-              }) {
-                final theme = Theme.of(context).textTheme;
-                final titleStyle = theme.bodyLarge!;
-                final valueStyle = theme.bodySmall!;
-                double textWidth(String text, TextStyle style) {
-                  final painter = TextPainter(
-                    text: TextSpan(text: text, style: style),
-                    textDirection: Directionality.of(context),
-                    textScaler: MediaQuery.textScalerOf(context),
-                  )..layout();
-                  final width = painter.width;
-                  painter.dispose();
-                  return width;
-                }
-
-                final stacked =
-                    textWidth(title, titleStyle) +
-                        textWidth(currentValue, valueStyle) >
-                    constraints.maxWidth -
-                        DesignTokens.spacingMd * 4 -
-                        DesignTokens.componentListIconSize -
-                        DesignTokens.spacingSm -
-                        DesignTokens.componentIconSmallSize -
-                        DesignTokens.spacingSm * 2;
-                const chevron = Icon(
-                  LucideIcons.chevronRight,
-                  size: DesignTokens.componentIconSmallSize,
-                );
-                return ListTile(
-                  minTileHeight: DesignTokens.componentRowHeight,
-                  minLeadingWidth: DesignTokens.componentListIconSize,
-                  leading: ListIconBadge(
-                    icon: icon,
-                    backgroundColor: functionalIconColor(icon),
-                  ),
-                  title: Text(title, style: titleStyle),
-                  subtitle: stacked
-                      ? Text(currentValue, style: valueStyle)
-                      : null,
-                  trailing: stacked
-                      ? chevron
-                      : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(currentValue, style: valueStyle),
-                            const SizedBox(width: DesignTokens.spacingSm),
-                            chevron,
-                          ],
-                        ),
-                  onTap: onTap,
-                );
-              }
-
-              return GroupedListView(
-                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+          return GroupedListView(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
+            children: [
+              const SectionTitle('屏幕布局'),
+              SettingsGroup(
                 children: [
-                  const SectionTitle('屏幕布局'),
-                  SettingsGroup(
-                    children: [
-                      ActionRow(
-                        icon: LucideIcons.ratio,
-                        title: '屏幕比例',
-                        trailing: Text(
-                          RemoteDisplaySettings(preferences).label,
-                        ),
-                        onTap: () => chooseScreenRatio(
-                          context,
-                          controller,
-                          value(device, 'id'),
-                          preferences,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (applying.value) const LinearProgressIndicator(),
-                  for (final failure in applicationFailures.value)
-                    StateNote(
-                      '${value(failure, 'name', '画面')}：${value(failure, 'reason', '本次设置未能应用')}',
+                  ActionRow(
+                    icon: LucideIcons.ratio,
+                    title: '屏幕比例',
+                    trailing: Text(RemoteDisplaySettings(preferences).label),
+                    onTap: () => chooseScreenRatio(
+                      context,
+                      controller,
+                      value(device, 'id'),
+                      preferences,
                     ),
-                  const SectionTitle('画面质量'),
-                  SettingsGroup(
-                    children: [
-                      for (final preset in objects(data['presets']))
-                        ChoiceRow<String>(
-                          value: value(preset, 'id'),
-                          groupValue: value(current, 'preset'),
-                          onChanged:
-                              applying.value ||
-                                  !available ||
-                                  preset['available'] != true
-                              ? null
-                              : (v) => apply({'preset': v}),
-                          title: Text(value(preset, 'name')),
-                          leading: ListIconBadge(
-                            icon: LucideIcons.gauge,
-                            backgroundColor: DesignTokens.colorListIconMint,
-                          ),
-                        ),
-                    ],
                   ),
-                  const SectionTitle('详细选项'),
-                  SettingsGroup(
-                    children: [
-                      for (final field in const [
-                        ('maxSize', '分辨率上限'),
-                        ('maxFps', '帧率'),
-                        ('bitRate', '码率'),
-                      ])
-                        optionRow(
-                          title: field.$2,
-                          icon: switch (field.$1) {
-                            'maxSize' => LucideIcons.monitor,
-                            'maxFps' => LucideIcons.gauge,
-                            _ => LucideIcons.network,
-                          },
-                          currentValue: qualityValueLabel(
-                            field.$1,
-                            current[field.$1],
-                          ),
-                          onTap: applying.value
-                              ? null
-                              : () async {
-                                  final options = objects(data[field.$1]);
-                                  if (options.isEmpty) {
-                                    feedback(
-                                      context,
-                                      '当前设备没有返回可选择的${field.$2}选项',
-                                    );
-                                    return;
-                                  }
-                                  final picked = await pick(
-                                    field.$2,
-                                    switch (field.$1) {
-                                      'maxSize' => LucideIcons.monitor,
-                                      'maxFps' => LucideIcons.gauge,
-                                      _ => LucideIcons.network,
-                                    },
-                                    [
-                                      for (final item in options)
-                                        {
-                                          ...item,
-                                          'available':
-                                              available &&
-                                              item['available'] == true,
-                                          if (!available)
-                                            'reason': '请先选择双方可用的编码格式。',
-                                        },
-                                    ],
-                                    current[field.$1],
-                                  );
-                                  if (picked != null && context.mounted) {
-                                    await apply({field.$1: picked['value']});
-                                  }
-                                },
-                        ),
-                      optionRow(
-                        title: '编码格式',
-                        icon: LucideIcons.film,
-                        currentValue: value(codec, 'name', codecId),
-                        onTap: applying.value || codecs.isEmpty
-                            ? null
-                            : chooseCodec,
-                      ),
-                      optionRow(
-                        title: '视频编码器',
-                        icon: LucideIcons.cpu,
-                        currentValue: value(current, 'videoEncoder', '自动'),
-                        onTap: applying.value || codec.isEmpty
-                            ? null
-                            : chooseEncoder,
-                      ),
-                    ],
-                  ),
-                  if (!available || codec['decoderStatus'] != 'available')
-                    StateNote(codecReason(codec)),
-                  const StateNote('同一设备的所有画面共用这些设置。'),
-                  if (objects(data['activeStreams']).isNotEmpty) ...[
-                    const SectionTitle('正在使用的画面'),
-                    for (final stream in objects(data['activeStreams']))
-                      ActionRow(
-                        icon: LucideIcons.monitor,
-                        title: value(stream, 'name', '手机屏幕'),
-                      ),
-                  ],
                 ],
-              );
-            },
+              ),
+              if (applying.value) const LinearProgressIndicator(),
+              for (final failure in applicationFailures.value)
+                StateNote(
+                  '${value(failure, 'name', '画面')}：${value(failure, 'reason', '本次设置未能应用')}',
+                ),
+              const SectionTitle('画面质量'),
+              SettingsGroup(
+                children: [
+                  for (final preset in objects(data['presets']))
+                    ChoiceRow<String>(
+                      value: value(preset, 'id'),
+                      groupValue: value(current, 'preset'),
+                      onChanged:
+                          applying.value ||
+                              !available ||
+                              preset['available'] != true
+                          ? null
+                          : (v) => apply({'preset': v}),
+                      title: Text(value(preset, 'name')),
+                      leading: ListIconBadge(
+                        icon: LucideIcons.gauge,
+                        backgroundColor: DesignTokens.colorListIconMint,
+                      ),
+                    ),
+                ],
+              ),
+              const SectionTitle('详细选项'),
+              SettingsGroup(
+                children: [
+                  for (final field in const [
+                    ('maxSize', '分辨率上限'),
+                    ('maxFps', '帧率'),
+                    ('bitRate', '码率'),
+                  ])
+                    QualityOptionRow(
+                      title: field.$2,
+                      icon: switch (field.$1) {
+                        'maxSize' => LucideIcons.monitor,
+                        'maxFps' => LucideIcons.gauge,
+                        _ => LucideIcons.network,
+                      },
+                      currentValue: qualityValueLabel(
+                        field.$1,
+                        current[field.$1],
+                      ),
+                      onTap: applying.value
+                          ? null
+                          : () async {
+                              final options = objects(data[field.$1]);
+                              if (options.isEmpty) {
+                                feedback(context, '当前设备没有返回可选择的${field.$2}选项');
+                                return;
+                              }
+                              final picked = await pick(
+                                field.$2,
+                                switch (field.$1) {
+                                  'maxSize' => LucideIcons.monitor,
+                                  'maxFps' => LucideIcons.gauge,
+                                  _ => LucideIcons.network,
+                                },
+                                [
+                                  for (final item in options)
+                                    {
+                                      ...item,
+                                      'available':
+                                          available &&
+                                          item['available'] == true,
+                                      if (!available)
+                                        'reason': '请先选择双方可用的编码格式。',
+                                    },
+                                ],
+                                current[field.$1],
+                              );
+                              if (picked != null && context.mounted) {
+                                await apply({field.$1: picked['value']});
+                              }
+                            },
+                    ),
+                  QualityOptionRow(
+                    title: '编码格式',
+                    icon: LucideIcons.film,
+                    currentValue: value(codec, 'name', codecId),
+                    onTap: applying.value || codecs.isEmpty
+                        ? null
+                        : chooseCodec,
+                  ),
+                  QualityOptionRow(
+                    title: '视频编码器',
+                    icon: LucideIcons.cpu,
+                    currentValue: value(current, 'videoEncoder', '自动'),
+                    onTap: applying.value || codec.isEmpty
+                        ? null
+                        : chooseEncoder,
+                  ),
+                ],
+              ),
+              if (!available || codec['decoderStatus'] != 'available')
+                StateNote(codecReason(codec)),
+              const StateNote('同一设备的所有画面共用这些设置。'),
+              if (objects(data['activeStreams']).isNotEmpty) ...[
+                const SectionTitle('正在使用的画面'),
+                for (final stream in objects(data['activeStreams']))
+                  ActionRow(
+                    icon: LucideIcons.monitor,
+                    title: value(stream, 'name', '手机屏幕'),
+                  ),
+              ],
+            ],
           );
         },
       ),

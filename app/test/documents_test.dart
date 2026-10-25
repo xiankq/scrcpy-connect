@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
-import 'package:scrcpy_connect/presentation/document_operation_controller.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/services/files/document_operation_controller.dart';
 
 import 'support/test_controller.dart';
 
@@ -14,6 +14,13 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+DocumentOperationController _documentOperation(ApplicationRequest request) =>
+    DocumentOperationController(
+      request: request,
+      execute: (command, params) => request(command.wire, params),
+      events: const Stream<Json>.empty(),
+    );
+
 void main() {
   for (final hasPrevious in [false, true]) {
     testWidgets(
@@ -21,7 +28,7 @@ void main() {
       (tester) async {
         var imports = 0;
         final releasing = Completer<Json>();
-        final controller = createTestController((
+        final operation = _documentOperation((
           command, [
           params = const {},
         ]) async {
@@ -35,7 +42,6 @@ void main() {
           }
           return {};
         });
-        final operation = DocumentOperationController(controller);
         if (hasPrevious) await operation.run('documents.importDirectory', {});
         final selecting = operation.run('documents.importDirectory', {});
         if (hasPrevious) await tester.pump();
@@ -43,7 +49,6 @@ void main() {
         releasing.complete({});
         await selecting;
         expect(imports, hasPrevious ? 1 : 0);
-        controller.dispose();
       },
     );
   }
@@ -51,7 +56,7 @@ void main() {
     'a failed source release after disposal preserves its source and error',
     (tester) async {
       final releasing = Completer<Json>();
-      final controller = createTestController((
+      final operation = _documentOperation((
         command, [
         params = const {},
       ]) async {
@@ -64,7 +69,6 @@ void main() {
         }
         return {};
       });
-      final operation = DocumentOperationController(controller);
       await operation.run('documents.importDirectory', {});
       final selecting = operation.run('documents.importDirectory', {});
       await tester.pump();
@@ -75,17 +79,13 @@ void main() {
       await selecting;
       expect(operation.result?['managedSourceId'], 'document:first');
       expect(operation.error, contains('来源归还尚未确认'));
-      controller.dispose();
     },
   );
   testWidgets('a failed late-result release retains its managed identity', (
     tester,
   ) async {
     final imported = Completer<Json>();
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final operation = _documentOperation((command, [params = const {}]) async {
       if (command == 'documents.importDirectory') return imported.future;
       if (command == 'documents.cancel' &&
           params['managedSourceId'] is String) {
@@ -93,7 +93,6 @@ void main() {
       }
       return {};
     });
-    final operation = DocumentOperationController(controller);
     final selecting = operation.run('documents.importDirectory', {});
     await tester.pump();
     operation.dispose();
@@ -104,7 +103,6 @@ void main() {
     await selecting;
     expect(operation.result?['managedSourceId'], 'document:late');
     expect(operation.error, contains('迟到来源归还尚未确认'));
-    controller.dispose();
   });
 
   testWidgets(
@@ -112,7 +110,7 @@ void main() {
     (tester) async {
       final reply = Completer<Json>();
       final released = <String>[];
-      final controller = createTestController((
+      final operation = _documentOperation((
         command, [
         params = const {},
       ]) async {
@@ -123,7 +121,6 @@ void main() {
         }
         return {};
       });
-      final operation = DocumentOperationController(controller);
       final importing = operation.run('documents.importDirectory', {});
       await tester.pump();
       operation.dispose();
@@ -133,7 +130,6 @@ void main() {
       });
       await importing;
       expect(released, ['document:late']);
-      controller.dispose();
     },
   );
   testWidgets(

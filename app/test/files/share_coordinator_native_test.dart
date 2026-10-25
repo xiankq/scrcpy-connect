@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/files/sharing/share_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
 
 const _share = '00000000-0000-4000-8000-000000000001';
 

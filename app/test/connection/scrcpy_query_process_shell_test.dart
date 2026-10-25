@@ -6,9 +6,9 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/connection/connection_owner.dart';
-import 'package:scrcpy_connect/connection/scrcpy_query_process.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/services/connection/scrcpy_query_process.dart';
 
 void main() {
   final binary = Platform.environment['INTEROP_MKSH_BINARY'];

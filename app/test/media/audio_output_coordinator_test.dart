@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/media/output/audio_player_port.dart';
-import 'package:scrcpy_connect/media/output/audio_output_coordinator.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/services/media/audio_player_port.dart';
+import 'package:scrcpy_connect/stores/media/audio_output_coordinator.dart';
 
 final _token = List.filled(64, 'a').join();
 AudioJson _stream(String id, [String device = 'device-A']) => {

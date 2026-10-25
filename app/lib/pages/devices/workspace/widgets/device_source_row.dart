@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/presentation/formatters.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

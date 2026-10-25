@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/file_commands.dart';
-import 'package:scrcpy_connect/files/catalog/file_catalog.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
-import 'package:scrcpy_connect/files/mutations/file_mutation_coordinator.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/file_commands.dart';
+import 'package:scrcpy_connect/stores/files/file_catalog.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 
 import '../../files/support/file_executor_fixture.dart';
 

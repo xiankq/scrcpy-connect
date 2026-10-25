@@ -1,31 +1,35 @@
-import 'package:scrcpy_connect/presentation/formatters.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_surface.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_recovery_panel.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_navigation_bar.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
-import 'package:scrcpy_connect/media/session_view_registry.dart';
+import 'package:scrcpy_connect/stores/media/session_view_registry.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart'
     show confirm, glassSnackBar;
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/presentation/remote_failure.dart';
-import 'package:scrcpy_connect/media/remote_display_settings.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/services/media/remote_failure.dart';
+import 'package:scrcpy_connect/models/remote_display_settings.dart';
 import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
 
-import 'remote_connection_recovery.dart';
-import 'remote_input_owner.dart';
-import 'remote_presentation.dart';
-import 'remote_window.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_connection_recovery.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_input_owner.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_window.dart';
+
+import 'remote_display_sizing.dart';
+import 'remote_screen_state.dart';
 
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
-import 'package:media_codec/media_codec.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:design_system/design_system.dart';
@@ -71,82 +75,11 @@ class _RemotePageState extends State<RemotePage>
   bool keepActiveNoticeScheduled = false;
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? remoteNoticeTail;
   late final RemoteDisplaySettings displaySettings;
-  final initialViewport = Completer<Size>();
-  Size? displayViewport;
-  ({int width, int height})? appliedDisplaySize;
-  ({int width, int height})? requestedDisplaySize;
-  ({int width, int height})? scheduledDisplaySize;
-  RemoteBinding? scheduledDisplayBinding;
-  ({int width, int height})? lastRemoteGeometry;
-  bool resizingDisplay = false;
-  Timer? resizeTimer;
-  bool waitingForIme = false;
-  Size? imeRequestedWindowSize;
-  bool autoDisplay = false;
-  Timer? screenStateTimer;
-  bool? screenOn, screenLocked;
+  late final RemoteDisplaySizing displaySizing;
+  late final RemoteScreenState screenState;
   bool waking = false;
   bool converting = false;
-  bool readingScreenState = false;
   Future<void>? newWindowWake;
-  int screenStateGeneration = 0;
-
-  Future<void> refreshScreenState() async {
-    if (!mounted ||
-        presentation.exiting ||
-        !acceptsInput ||
-        presentation.covered ||
-        readingScreenState) {
-      return;
-    }
-    readingScreenState = true;
-    final generation = ++screenStateGeneration;
-    final connection = controller
-        .snapshot()
-        .devices
-        .where((d) => d['id'] == widget.device['id'])
-        .firstOrNull?['connectionId'];
-    try {
-      final result = await controller.request('device.screen.state', {
-        'deviceId': widget.device['id'],
-        'connectionId': ?connection,
-      });
-      if (!mounted ||
-          presentation.exiting ||
-          generation != screenStateGeneration ||
-          !acceptsInput ||
-          presentation.covered) {
-        return;
-      }
-      final currentConnection = controller
-          .snapshot()
-          .devices
-          .where((d) => d['id'] == widget.device['id'])
-          .firstOrNull?['connectionId'];
-      if (connection != currentConnection ||
-          result['deviceId'] != widget.device['id'] ||
-          (connection != null && result['connectionId'] != connection)) {
-        return;
-      }
-      setState(() {
-        screenOn = result['screenOn'] is bool
-            ? result['screenOn'] as bool
-            : null;
-        screenLocked = result['locked'] is bool
-            ? result['locked'] as bool
-            : null;
-      });
-    } catch (_) {
-      if (mounted && generation == screenStateGeneration) {
-        setState(() {
-          screenOn = null;
-          screenLocked = null;
-        });
-      }
-    } finally {
-      readingScreenState = false;
-    }
-  }
 
   Future<void> requestWake() async {
     Object? currentConnection() =>
@@ -175,7 +108,7 @@ class _RemotePageState extends State<RemotePage>
       if (!mounted || presentation.exiting) return;
       // 明确唤醒可以解除启动唤醒失败，但后续通用重试不能自动重放失败请求。
       newWindowWake = Future<void>.value();
-      await refreshScreenState();
+      await screenState.refresh();
       if (mounted && presentation.errorCode == 'device_asleep') await start();
     } catch (failure) {
       if (mounted) {
@@ -311,11 +244,7 @@ class _RemotePageState extends State<RemotePage>
   bool get acceptsInput =>
       WidgetsBinding.instance.lifecycleState == null ||
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-  bool get canSendInput => !resizingDisplay && hasInputAuthority;
-  bool get hasInputAuthority => presentation.canSendInput(
-    foreground: acceptsInput,
-    ownerCurrent: view?.isCurrent == true,
-  );
+  bool get canSendInput => displaySizing.canSendInput;
 
   void showRemoteNotice(String message) {
     final notice = remoteMessenger.currentState?.showSnackBar(
@@ -406,11 +335,23 @@ class _RemotePageState extends State<RemotePage>
       },
       onUnknownLaunch: detachForUnknownAppLaunch,
     );
-    screenStateTimer = Timer.periodic(
-      const Duration(seconds: 3),
-      (_) => unawaited(refreshScreenState()),
+    displaySizing = RemoteDisplaySizing(
+      window: window,
+      inputs: inputs,
+      foreground: () => acceptsInput,
+      onChanged: () {
+        if (mounted) setState(() {});
+      },
+      onFailure: (failure) =>
+          showRemoteNotice('屏幕比例调整未确认：${remoteFailure(failure)}'),
     );
-    unawaited(refreshScreenState());
+    screenState = RemoteScreenState(
+      window: window,
+      foreground: () => acceptsInput,
+      onChanged: () {
+        if (mounted) setState(() {});
+      },
+    )..start();
     displaySettings = RemoteDisplaySettings(
       jsonObject(
         jsonObject(controller.snapshot().settings['deviceSettings'])[value(
@@ -479,7 +420,7 @@ class _RemotePageState extends State<RemotePage>
         return;
       }
       final viewport = displaySettings.mode == 'auto'
-          ? await initialViewport.future
+          ? await displaySizing.initialViewport
           : Size.zero;
       if (!mounted || !presentation.acceptsStart(attempt)) return;
       final dimensions = displaySettings.dimensions(viewport);
@@ -531,15 +472,7 @@ class _RemotePageState extends State<RemotePage>
         'start.return status=${value(result, 'status')} hasTexture=${result['textureId'] != null} boundBefore=${sessionId.isNotEmpty} lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
       );
       setState(() {
-        autoDisplay = result['displayAuto'] == true;
-        final size = jsonObject(result['displaySize']);
-        if (size['width'] is int && size['height'] is int) {
-          appliedDisplaySize = (
-            width: size['width'] as int,
-            height: size['height'] as int,
-          );
-          requestedDisplaySize = appliedDisplaySize;
-        }
+        displaySizing.bind(result);
         presentation.bindStart(
           result,
           retained: retained != null,
@@ -552,7 +485,7 @@ class _RemotePageState extends State<RemotePage>
       if (sessionId.isEmpty || result['textureId'] == null) return;
       window.bind(visible: result['status'] != 'paused');
       consumeKeepActiveNotice(result);
-      unawaited(refreshScreenState());
+      unawaited(screenState.refresh());
       if (retained == null) {
         focusVisibleDevice();
       }
@@ -563,7 +496,7 @@ class _RemotePageState extends State<RemotePage>
         }
       }
       if (presentation.covered) await pauseView();
-      if (displayViewport != null) observeViewport(displayViewport!);
+      displaySizing.reconsider();
       await applyPendingInitialAction();
       if (widget.packageName == null && !presentation.appLaunchUnknown) {
         connectionRecovery.viewed();
@@ -743,11 +676,7 @@ class _RemotePageState extends State<RemotePage>
       if (updated != null &&
           updated['id'] == widget.device['id'] &&
           updated['status'] != 'connected') {
-        screenStateGeneration++;
-        setState(() {
-          screenOn = null;
-          screenLocked = null;
-        });
+        screenState.invalidate();
       }
     }
     if ((event['type'] == 'session.stop.requested' &&
@@ -817,7 +746,7 @@ class _RemotePageState extends State<RemotePage>
           return;
         }
         setState(() {});
-        observeRemoteGeometry();
+        displaySizing.observeGeometry();
         trace(
           'frame.applied paused=${presentation.paused} hasTexture=${presentation.session?['textureId'] != null}',
         );
@@ -861,7 +790,7 @@ class _RemotePageState extends State<RemotePage>
         if (ime) {
           requestImeFocus();
         } else {
-          waitingForIme = false;
+          displaySizing.finishIme();
           inputFocus.unfocus();
         }
     }
@@ -1013,7 +942,7 @@ class _RemotePageState extends State<RemotePage>
     if (state == AppLifecycleState.resumed) {
       showPendingKeepActiveNotice();
       // 短暂 inactive 保留画面流但可能推迟视口调整，恢复时即使无需切换可见性也要继续调整。
-      if (displayViewport != null) observeViewport(displayViewport!);
+      displaySizing.reconsider();
       if (!presentation.lifecycleVisibility(true)) return;
       if (connectionRecovery.pending) {
         recoverConnection();
@@ -1027,29 +956,19 @@ class _RemotePageState extends State<RemotePage>
   }
 
   void requestImeFocus() {
-    // Android 会先显示系统栏再报告键盘边距；过渡两阶段均保留已确认的显示尺寸。
-    waitingForIme = true;
-    imeRequestedWindowSize = MediaQuery.sizeOf(context);
-    resizeTimer?.cancel();
+    displaySizing.requestIme(MediaQuery.sizeOf(context));
     inputFocus.requestFocus();
   }
-
-  bool get imeBlocksDisplaySizing =>
-      waitingForIme || MediaQuery.viewInsetsOf(context).bottom > 0;
 
   void inputFocusChanged() {
     if (!inputFocus.hasFocus) {
       inputs.resetTextInput();
-      if (mounted && waitingForIme) {
-        setState(() => waitingForIme = false);
-      }
+      displaySizing.finishIme();
     }
   }
 
   Future<void> releaseInputs({RemoteBinding? binding}) =>
       inputs.releaseInputs(binding: binding);
-  Future<void> releasePointers({RemoteBinding? binding}) =>
-      inputs.releasePointers(binding: binding);
   Future<void> send(
     ApplicationCommand command,
     Json params, {
@@ -1057,13 +976,6 @@ class _RemotePageState extends State<RemotePage>
   }) => inputs.send(command, params, binding: binding);
   KeyEventResult key(FocusNode node, KeyEvent event) =>
       inputs.key(event, ime: ime);
-  void pointer(PointerEvent event, String action, Size viewport, Size source) =>
-      inputs.pointer(event, action, viewport, source);
-  void hover(PointerHoverEvent event, Size viewport, Size source) =>
-      inputs.hover(event, viewport, source);
-  void scroll(PointerSignalEvent event, Size viewport, Size source) =>
-      inputs.scroll(event, viewport, source);
-
   void pressNavigationKey(int code) {
     if (!canSendInput) return;
     unawaited(
@@ -1076,9 +988,7 @@ class _RemotePageState extends State<RemotePage>
 
   Future<void> leave() async {
     if (presentation.exiting) return;
-    resizeTimer?.cancel();
-    scheduledDisplaySize = null;
-    scheduledDisplayBinding = null;
+    displaySizing.cancel();
     final feedback = ScaffoldMessenger.maybeOf(context);
     final left = Completer<void>();
     final id = sessionId;
@@ -1121,9 +1031,8 @@ class _RemotePageState extends State<RemotePage>
 
   @override
   void dispose() {
-    resizeTimer?.cancel();
-    screenStateTimer?.cancel();
-    if (!initialViewport.isCompleted) initialViewport.complete(Size.zero);
+    displaySizing.dispose();
+    screenState.dispose();
     final release = window.dispose(releaseInputs);
     inputs.dispose(afterInput: release);
     sessionRouteObserver.unsubscribe(this);
@@ -1136,108 +1045,13 @@ class _RemotePageState extends State<RemotePage>
     super.dispose();
   }
 
-  void observeViewport(Size size) {
-    if (imeBlocksDisplaySizing) {
-      resizeTimer?.cancel();
-      return;
-    }
-    if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) return;
-    displayViewport = size;
-    if (!initialViewport.isCompleted) initialViewport.complete(size);
-    if (!autoDisplay || sessionId.isEmpty || !canSendInput || resizingDisplay) {
-      return;
-    }
-    final target = const RemoteDisplaySettings({'remoteAspectRatio': 'auto'})
-        .dimensions(size);
-    if (target == null || target == requestedDisplaySize) {
-      resizeTimer?.cancel();
-      return;
-    }
-    final binding = presentation.binding;
-    // 帧可能比防抖间隔更快重建布局，仅目标尺寸或绑定变化时重置待调整任务。
-    if (resizeTimer?.isActive == true &&
-        scheduledDisplaySize == target &&
-        scheduledDisplayBinding == binding) {
-      return;
-    }
-    resizeTimer?.cancel();
-    scheduledDisplaySize = target;
-    scheduledDisplayBinding = binding;
-    trace('display.scheduled target=$target binding=$binding viewport=$size');
-    resizeTimer = Timer(const Duration(milliseconds: 250), () async {
-      if (!mounted ||
-          !canSendInput ||
-          binding != presentation.binding ||
-          imeBlocksDisplaySizing) {
-        return;
-      }
-      setState(() => resizingDisplay = true);
-      try {
-        await releaseInputs();
-        if (!mounted ||
-            !hasInputAuthority ||
-            binding != presentation.binding ||
-            imeBlocksDisplaySizing) {
-          return;
-        }
-        requestedDisplaySize = target;
-        trace('display.request target=$target binding=$binding');
-        await controller.execute(ApplicationCommand.sessionDisplay, {
-          'sessionId': binding.$1,
-          'displayWidth': target.width,
-          'displayHeight': target.height,
-        });
-        trace(
-          'display.return target=$target current=${presentation.binding} submitted=$binding',
-        );
-        if (mounted && binding == presentation.binding) {
-          appliedDisplaySize = target;
-        }
-      } catch (failure) {
-        trace(
-          'display.failed target=$target binding=$binding failure=$failure',
-        );
-        if (mounted && binding == presentation.binding) {
-          showRemoteNotice('屏幕比例调整未确认：${remoteFailure(failure)}');
-        }
-      } finally {
-        if (mounted) setState(() => resizingDisplay = false);
-        if (mounted && displayViewport != null) {
-          observeViewport(displayViewport!);
-        }
-      }
-    });
-  }
-
-  void observeRemoteGeometry() {
-    if (!autoDisplay || displayViewport == null) return;
-    final width = int.tryParse('${presentation.session?['width']}');
-    final height = int.tryParse('${presentation.session?['height']}');
-    if (width == null || height == null || width <= 0 || height <= 0) return;
-    final geometry = (width: width, height: height);
-    if (geometry == lastRemoteGeometry) return;
-    lastRemoteGeometry = geometry;
-    final target = const RemoteDisplaySettings({'remoteAspectRatio': 'auto'})
-        .dimensions(displayViewport!);
-    if (target != null &&
-        (width / height - target.width / target.height).abs() > .005) {
-      // 手机旋转会改变自然坐标映射，即使主控视口未变化，也要按新几何形状重设一次。
-      requestedDisplaySize = null;
-      observeViewport(displayViewport!);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Scaffold 调整内容区后会移除底部 viewInset；读取路由原始边距，避免输入法重新定义显示尺寸。
-    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
-    if (keyboardVisible ||
-        (waitingForIme &&
-            imeRequestedWindowSize != MediaQuery.sizeOf(context))) {
-      // 硬件键盘未必产生输入法边距；实际宿主尺寸变化仍需适应，同窗口的临时系统栏不能提前结束等待。
-      waitingForIme = false;
-    }
-    if (keyboardVisible || waitingForIme) resizeTimer?.cancel();
+    // 使用路由原始边距，Scaffold 内容区的临时缩小不能重新定义远端尺寸。
+    displaySizing.observeInsets(
+      keyboardVisible: MediaQuery.viewInsetsOf(context).bottom > 0,
+      windowSize: MediaQuery.sizeOf(context),
+    );
     final width = presentation.imageWidth;
     final height = presentation.imageHeight;
     final texture = int.tryParse('${presentation.session?['textureId']}');
@@ -1281,7 +1095,7 @@ class _RemotePageState extends State<RemotePage>
                 resizeToAvoidBottomInset: true,
                 bottomNavigationBar:
                     showNavigationBar && !presentation.connecting
-                    ? _RemoteNavigationBar(
+                    ? RemoteNavigationBar(
                         enabled: canSendInput,
                         onBack: () => pressNavigationKey(4),
                         onHome: () => pressNavigationKey(3),
@@ -1292,56 +1106,11 @@ class _RemotePageState extends State<RemotePage>
                 body: Stack(
                   children: [
                     Positioned.fill(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          if (!keyboardVisible && !waitingForIme) {
-                            observeViewport(constraints.biggest);
-                          }
-                          return Listener(
-                            behavior: HitTestBehavior.opaque,
-                            onPointerHover: (event) => hover(
-                              event,
-                              constraints.biggest,
-                              Size(width, height),
-                            ),
-                            onPointerSignal: (event) => scroll(
-                              event,
-                              constraints.biggest,
-                              Size(width, height),
-                            ),
-                            onPointerDown: (event) => pointer(
-                              event,
-                              'down',
-                              constraints.biggest,
-                              Size(width, height),
-                            ),
-                            onPointerMove: (event) => pointer(
-                              event,
-                              'move',
-                              constraints.biggest,
-                              Size(width, height),
-                            ),
-                            onPointerUp: (event) => pointer(
-                              event,
-                              'up',
-                              constraints.biggest,
-                              Size(width, height),
-                            ),
-                            onPointerCancel: (event) => pointer(
-                              event,
-                              'cancel',
-                              constraints.biggest,
-                              Size(width, height),
-                            ),
-                            child: valid
-                                ? MediaCodecView(
-                                    textureId: texture,
-                                    width: width.round(),
-                                    height: height.round(),
-                                  )
-                                : const SizedBox.expand(),
-                          );
-                        },
+                      child: RemoteSurface(
+                        textureId: texture,
+                        sourceSize: Size(width, height),
+                        inputs: inputs,
+                        onViewport: displaySizing.observeViewport,
                       ),
                     ),
                     if (presentation.connecting)
@@ -1395,158 +1164,23 @@ class _RemotePageState extends State<RemotePage>
                     if (!presentation.connecting &&
                         (presentation.error != null || presentation.paused) &&
                         presentation.errorCode != 'device_asleep')
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final media = MediaQuery.of(context);
-                          final exit = ExitHandle.initialBoundsFor(
-                            constraints.biggest,
-                            media,
-                          );
-                          final belowExit =
-                              exit.bottom + DesignTokens.spacingSm;
-                          final bottom = math.max(
-                            DesignTokens.spacingXl,
-                            media.padding.bottom,
-                          );
-                          final roomBelow =
-                              constraints.maxHeight - belowExit - bottom;
-                          // 较矮的横屏使用退出控件旁边的空间，较高布局则预留顶部区域。
-                          final below =
-                              roomBelow >= DesignTokens.componentRowHeight * 2;
-                          return Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              below
-                                  ? math.max(
-                                      DesignTokens.spacingXl,
-                                      media.padding.left,
-                                    )
-                                  : exit.right + DesignTokens.spacingSm,
-                              below
-                                  ? belowExit
-                                  : math.max(
-                                      DesignTokens.spacingXl,
-                                      media.padding.top,
-                                    ),
-                              math.max(
-                                DesignTokens.spacingXl,
-                                media.padding.right,
-                              ),
-                              bottom,
-                            ),
-                            child: Center(
-                              child: SingleChildScrollView(
-                                key: const ValueKey('remote-recovery-content'),
-                                child: Glass(
-                                  radius: DesignTokens.roundedLg,
-                                  padding: const EdgeInsets.all(
-                                    DesignTokens.spacingLg,
-                                  ),
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 360,
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          presentation.paused
-                                              ? LucideIcons.pause
-                                              : LucideIcons.monitorOff,
-                                          size: DesignTokens
-                                              .componentIconLargeSize,
-                                        ),
-                                        const SizedBox(
-                                          height: DesignTokens.spacingMd,
-                                        ),
-                                        Text(
-                                          presentation.sessionEnded
-                                              ? '控制会话已结束'
-                                              : presentation.qualityRetryable
-                                              ? '画面调整未完成'
-                                              : presentation.appLaunchUnknown
-                                              ? '应用打开结果待核对'
-                                              : presentation.stateUnverified
-                                              ? '正在核验会话状态'
-                                              : presentation.paused
-                                              ? '画面已暂停'
-                                              : '暂时无法打开实时画面',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge,
-                                        ),
-                                        const SizedBox(
-                                          height: DesignTokens.spacingXs,
-                                        ),
-                                        Text(
-                                          presentation.error ?? '等待连接恢复后的首帧。',
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        const SizedBox(
-                                          height: DesignTokens.spacingMd,
-                                        ),
-                                        if (presentation.errorCode ==
-                                            'resource_busy')
-                                          FilledButton(
-                                            onPressed: () =>
-                                                DeviceActivitiesRoute(
-                                                  deviceId: value(
-                                                    widget.device,
-                                                    'id',
-                                                  ),
-                                                ).push<void>(context),
-                                            child: const Text('管理当前活动'),
-                                          ),
-                                        if (widget.packageName != null &&
-                                            presentation.error != null &&
-                                            !presentation.qualityRetryable &&
-                                            !presentation.appLaunchUnknown &&
-                                            !presentation.stateUnverified)
-                                          FilledButton(
-                                            onPressed: presentation.connecting
-                                                ? null
-                                                : continueOnPhoneScreen,
-                                            child: const Text('在手机屏幕继续'),
-                                          ),
-                                        if (presentation.appLaunchUnknown)
-                                          FilledButton(
-                                            onPressed: presentation.connecting
-                                                ? null
-                                                : closeUnknownAppLaunch,
-                                            child: const Text('关闭本次打开记录'),
-                                          ),
-                                        OutlinedButton(
-                                          onPressed: presentation.connecting
-                                              ? null
-                                              : presentation.qualityRetryable
-                                              ? () => QualityRoute(
-                                                  deviceId: value(
-                                                    widget.device,
-                                                    'id',
-                                                  ),
-                                                ).push<void>(context)
-                                              : presentation.appLaunchUnknown
-                                              ? checkAppLaunch
-                                              : (presentation.reconcileOnly
-                                                    ? reconcileState
-                                                    : start),
-                                          child: Text(
-                                            presentation.qualityRetryable
-                                                ? '画面设置'
-                                                : presentation.appLaunchUnknown
-                                                ? '只读检查'
-                                                : presentation.appLaunchClosed
-                                                ? '重新打开'
-                                                : '重新检查',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+                      RemoteRecoveryPanel(
+                        presentation: presentation,
+                        independent: widget.packageName != null,
+                        onManageActivities: () => DeviceActivitiesRoute(
+                          deviceId: value(widget.device, 'id'),
+                        ).push<void>(context),
+                        onContinueOnPhoneScreen: continueOnPhoneScreen,
+                        onCloseUnknownAppLaunch: closeUnknownAppLaunch,
+                        onRetry: presentation.qualityRetryable
+                            ? () => QualityRoute(
+                                deviceId: value(widget.device, 'id'),
+                              ).push<void>(context)
+                            : presentation.appLaunchUnknown
+                            ? checkAppLaunch
+                            : presentation.reconcileOnly
+                            ? reconcileState
+                            : start,
                       ),
                     if (ime)
                       Positioned(
@@ -1579,10 +1213,10 @@ class _RemotePageState extends State<RemotePage>
                           },
                         ),
                       ),
-                    if (screenOn == false ||
-                        screenLocked == true ||
-                        (screenOn == null &&
-                            screenLocked == null &&
+                    if (screenState.screenOn == false ||
+                        screenState.screenLocked == true ||
+                        (screenState.screenOn == null &&
+                            screenState.screenLocked == null &&
                             presentation.errorCode == 'device_asleep'))
                       Positioned(
                         left: 0,
@@ -1638,88 +1272,4 @@ class _RemotePageState extends State<RemotePage>
       },
     );
   }
-}
-
-class _RemoteNavigationBar extends StatelessWidget {
-  const _RemoteNavigationBar({
-    required this.enabled,
-    required this.onBack,
-    required this.onHome,
-    required this.onRecent,
-  });
-
-  final bool enabled;
-  final VoidCallback onBack;
-  final VoidCallback onHome;
-  final VoidCallback onRecent;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final iconColor = enabled
-        ? colors.onSurface
-        : colors.onSurface.withValues(alpha: 0.38);
-    return ColoredBox(
-      color: colors.surface,
-      child: SafeArea(
-        top: false,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: colors.outlineVariant,
-                width: DesignTokens.spacingHairline,
-              ),
-            ),
-          ),
-          child: SizedBox(
-            height: DesignTokens.componentPageHeaderHeight,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _button(
-                  tooltip: '返回',
-                  enabled: enabled,
-                  onPressed: onBack,
-                  icon: Icons.arrow_back,
-                  color: iconColor,
-                ),
-                _button(
-                  tooltip: '主屏幕',
-                  enabled: enabled,
-                  onPressed: onHome,
-                  icon: Icons.circle_outlined,
-                  color: iconColor,
-                ),
-                _button(
-                  tooltip: '最近任务',
-                  enabled: enabled,
-                  onPressed: onRecent,
-                  icon: Icons.crop_square,
-                  color: iconColor,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _button({
-    required String tooltip,
-    required bool enabled,
-    required VoidCallback onPressed,
-    required IconData icon,
-    required Color color,
-  }) => SizedBox(
-    width: 72,
-    height: DesignTokens.componentPageHeaderHeight,
-    child: IconButton(
-      tooltip: tooltip,
-      onPressed: enabled ? onPressed : null,
-      iconSize: DesignTokens.componentIconSize,
-      icon: Icon(icon, color: color),
-    ),
-  );
 }

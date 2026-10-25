@@ -10,8 +10,8 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as application;
 import 'package:scrcpy_connect/pages/startup_error/startup_error_page.dart';
-import 'package:scrcpy_connect/application/app_dependencies.dart';
-import 'package:scrcpy_connect/platform/application_diagnostics.dart';
+import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
+import 'package:scrcpy_connect/services/platform/application_diagnostics.dart';
 
 class _IsolatedPaths extends PathProviderPlatform {
   _IsolatedPaths(this.root);

@@ -1,7 +1,7 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/widgets/media_controls_protection.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/widgets/media_controls_protection.dart';
 
 void main() {
   testWidgets(

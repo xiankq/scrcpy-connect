@@ -1,11 +1,11 @@
-import 'package:scrcpy_connect/presentation/formatters.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
+import 'package:scrcpy_connect/hooks/use_document_operation_controller.dart';
+import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
+import 'package:scrcpy_connect/utils/formatters.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/presentation/document_operation_controller.dart';
-import 'package:scrcpy_connect/media/media_cache_lease.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/widgets/original_file_header.dart';
+import 'package:scrcpy_connect/pages/transfers/details/widgets/original_file_header.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/file_delivery_path.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:design_system/design_system.dart';
@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import 'document_conflict_panel.dart';
+import 'package:scrcpy_connect/pages/transfers/details/widgets/document_conflict_panel.dart';
 
 class DocumentExportForm extends HookWidget {
   const DocumentExportForm({

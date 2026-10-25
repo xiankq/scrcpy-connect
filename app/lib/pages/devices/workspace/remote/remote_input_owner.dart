@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/presentation/remote_failure.dart';
-import 'package:scrcpy_connect/media/source_coordinates.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/services/media/remote_failure.dart';
+import 'package:scrcpy_connect/utils/source_coordinates.dart';
 
-import 'remote_input_queue.dart';
-import 'remote_presentation.dart';
-import 'remote_window.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_input_queue.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_window.dart';
 
 class _HeldKey {
   _HeldKey(this.binding);

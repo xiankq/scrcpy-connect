@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/document_export_form.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 class DocumentExportPage extends StatelessWidget {

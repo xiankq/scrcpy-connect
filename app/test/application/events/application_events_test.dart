@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/events/application_events.dart';
-import 'package:scrcpy_connect/application/events/state_recovery.dart';
+import 'package:scrcpy_connect/stores/application_events.dart';
+import 'package:scrcpy_connect/stores/state_recovery.dart';
 
 ApplicationEvents eventsOwner({
   bool Function(ApplicationEvent)? accept,

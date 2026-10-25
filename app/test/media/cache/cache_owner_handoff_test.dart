@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_journal.dart';
-import 'package:scrcpy_connect/media/cache/app_media_cache.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/transfer_journal.dart';
+import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
 
 void main() {
   test('新缓存 reserve 失败时保留旧所有者；重试先覆盖全部未知任务再释放各代旧租约', () async {

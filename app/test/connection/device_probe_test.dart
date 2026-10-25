@@ -4,10 +4,10 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/connection/connection_owner.dart';
-import 'package:scrcpy_connect/connection/device_probe.dart';
-import 'package:scrcpy_connect/connection/records/device_record.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/services/connection/device_probe.dart';
+import 'package:scrcpy_connect/models/device_record.dart';
 
 const _device = AdbDevice(
   id: 'native-handle',

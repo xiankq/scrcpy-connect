@@ -1,14 +1,14 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/application/application_session.dart';
-import 'package:scrcpy_connect/application/lifecycle/application_host.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/application_session.dart';
+import 'package:scrcpy_connect/stores/application_host.dart';
 
-import 'package:scrcpy_connect/application/app_bootstrap.dart';
-import 'package:scrcpy_connect/application/app_dependencies.dart';
+import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
+import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

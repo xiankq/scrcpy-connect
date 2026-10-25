@@ -1,6 +1,6 @@
 # 应用命令契约
 
-`commands.json` 定义 Dart 应用命令字段及 `requiresVerifiedState`；仅生成 `app/lib/application/transport/commands_generated.dart`。FRB、MethodChannel 和 companion RPC 各自维护。
+`commands.json` 定义 Dart 应用命令字段及 `requiresVerifiedState`；仅生成 `app/lib/models/generated/commands_generated.dart`。FRB、MethodChannel 和 companion RPC 各自维护。
 
 ```sh
 dart tool/protocol_codegen.dart

@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/application/application_session.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/stores/application_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';

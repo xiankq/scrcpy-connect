@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'test_controller.dart';
 
@@ -18,7 +18,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/directory_picker/devices_workspace_files_directory_picker_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 

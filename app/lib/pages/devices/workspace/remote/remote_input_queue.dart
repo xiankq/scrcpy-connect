@@ -1,9 +1,9 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 import 'dart:collection';
 
-import 'remote_presentation.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 typedef RemoteInputDispatch = Future<void> Function(
   String command,

@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/index/transfers_details_index_page.dart';
-import 'package:scrcpy_connect/widgets/media_thumbnail.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/media_thumbnail.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import 'remote_control_intent.dart';
+import 'package:scrcpy_connect/router/remote_control_intent.dart';
 
 import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/router/app_router.dart';

@@ -1,13 +1,13 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/application/app_bootstrap.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/application/app_dependencies.dart';
+import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
 
 final class MediaFileFixture implements FileExecutor, FileReadExecutor {
   @override

@@ -1,16 +1,21 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
-import 'package:scrcpy_connect/connection/adb_identity_validation.dart';
-import 'package:scrcpy_connect/pages/connection/form/connection_identity_fields.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/services/connection/adb_identity_validation.dart';
+import 'package:scrcpy_connect/pages/connection/form/widgets/connection_identity_fields.dart';
 import 'package:scrcpy_connect/pages/connection/form/widgets/connection_ambient_loading.dart';
+
+import 'widgets/connection_mode_selector.dart';
+import 'widgets/connection_address_fields.dart';
+import 'widgets/connection_failure_note.dart';
+
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
 import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
@@ -22,7 +27,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-enum AddDeviceMode { pairing, qr, usb, ip }
+export 'widgets/connection_mode_selector.dart' show AddDeviceMode;
+export 'widgets/connection_failure_note.dart' show ConnectionFailureNote;
 
 class ConnectionFormPage extends HookWidget {
   const ConnectionFormPage({
@@ -51,17 +57,6 @@ class ConnectionFormPage extends HookWidget {
     final mode = useState(
       initialMode ?? (this.pairing ? AddDeviceMode.pairing : AddDeviceMode.ip),
     );
-    final modeKeys = useMemoized(
-      () => {for (final mode in AddDeviceMode.values) mode: GlobalKey()},
-    );
-    useEffect(() {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        final selected = modeKeys[mode.value]?.currentContext;
-        if (selected != null) Scrollable.ensureVisible(selected, alignment: .5);
-      });
-      return null;
-    }, [mode.value]);
     final completingPairing = useState(false);
     final currentDeviceId = useState(deviceId);
     final identityAddress = useRef(address.trim());
@@ -400,139 +395,9 @@ class ConnectionFormPage extends HookWidget {
                                     height: DesignTokens.spacingMd,
                                   ),
                                 ],
-                                ContentPanel(
-                                  padding: EdgeInsets.zero,
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) => SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          for (final entry in const [
-                                            (
-                                              AddDeviceMode.pairing,
-                                              '无线配对码',
-                                              LucideIcons.keyRound,
-                                              ConnectTokens.blue,
-                                            ),
-                                            (
-                                              AddDeviceMode.qr,
-                                              '扫码配对',
-                                              LucideIcons.qrCode,
-                                              ConnectTokens.mint,
-                                            ),
-                                            (
-                                              AddDeviceMode.usb,
-                                              'USB',
-                                              LucideIcons.usb,
-                                              ConnectTokens.amber,
-                                            ),
-                                            (
-                                              AddDeviceMode.ip,
-                                              'IP连接',
-                                              LucideIcons.network,
-                                              ConnectTokens.coral,
-                                            ),
-                                          ])
-                                            Semantics(
-                                              key: modeKeys[entry.$1],
-                                              label: entry.$2,
-                                              button: true,
-                                              selected: mode.value == entry.$1,
-                                              child: InkWell(
-                                                onTap: () =>
-                                                    selectMode(entry.$1),
-                                                child: ConstrainedBox(
-                                                  constraints: BoxConstraints(
-                                                    minWidth:
-                                                        constraints.maxWidth /
-                                                        4,
-                                                    minHeight: DesignTokens
-                                                        .componentNavigationHeight,
-                                                  ),
-                                                  child: Padding(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal:
-                                                              DesignTokens
-                                                                  .spacingXs,
-                                                          vertical: DesignTokens
-                                                              .spacingTight,
-                                                        ),
-                                                    child: Column(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        Icon(
-                                                          entry.$3,
-                                                          size: DesignTokens
-                                                              .componentIconSize,
-                                                          color: entry.$4,
-                                                        ),
-                                                        const SizedBox(
-                                                          height: DesignTokens
-                                                              .spacingXxs,
-                                                        ),
-                                                        Text(
-                                                          entry.$2,
-                                                          style: Theme.of(context)
-                                                              .textTheme
-                                                              .labelSmall
-                                                              ?.copyWith(
-                                                                fontSize:
-                                                                    DesignTokens
-                                                                        .typographyCaptionFontSize,
-                                                                fontWeight:
-                                                                    mode.value ==
-                                                                        entry.$1
-                                                                    ? FontWeight
-                                                                          .w600
-                                                                    : FontWeight
-                                                                          .w400,
-                                                                color:
-                                                                    mode.value ==
-                                                                        entry.$1
-                                                                    ? Theme.of(
-                                                                        context,
-                                                                      ).colorScheme.onSurface
-                                                                    : Theme.of(
-                                                                        context,
-                                                                      ).colorScheme.onSurfaceVariant,
-                                                              ),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: DesignTokens
-                                                              .spacingXxs,
-                                                        ),
-                                                        Container(
-                                                          width: DesignTokens
-                                                              .componentIconSize,
-                                                          height:
-                                                              DesignTokens
-                                                                  .spacingHairline *
-                                                              2,
-                                                          color:
-                                                              mode.value ==
-                                                                  entry.$1
-                                                              ? Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onSurface
-                                                              : Colors
-                                                                    .transparent,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                                ConnectionModeSelector(
+                                  selected: mode.value,
+                                  onChanged: selectMode,
                                 ),
                                 const SizedBox(height: DesignTokens.spacingMd),
                                 ConnectionIdentityFields(
@@ -590,91 +455,22 @@ class ConnectionFormPage extends HookWidget {
                                     },
                                   )
                                 else if (mode.value != AddDeviceMode.usb) ...[
-                                  if (!pairing) ...[
-                                    if (completingPairing.value) ...[
-                                      Text(
-                                        '已配对，尚未连接',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium,
-                                      ),
-                                      const SizedBox(
-                                        height: DesignTokens.spacingXs,
-                                      ),
-                                    ],
-                                    Text(
-                                      legacyTcp
-                                          ? '先通过 USB 授权并允许按地址连接，仅在可信网络使用。'
-                                          : '使用手机无线调试主页面的连接端口。',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall,
-                                    ),
-                                    const SizedBox(
-                                      height: DesignTokens.spacingMd,
-                                    ),
-                                  ],
-                                  TextFormField(
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium,
-                                    controller: host,
-                                    onChanged: (next) {
+                                  ConnectionAddressFields(
+                                    address: host,
+                                    port: activePort,
+                                    pairingCode: code,
+                                    pairing: pairing,
+                                    completingPairing: completingPairing.value,
+                                    legacyTcp: legacyTcp,
+                                    enabled: !busy.value,
+                                    onAddressChanged: (next) {
                                       if (next.trim() !=
                                           identityAddress.value) {
                                         result.value = null;
                                         error.value = null;
                                       }
                                     },
-                                    validator: validateAddress,
-                                    enabled: !busy.value,
-                                    autocorrect: false,
-                                    decoration: const InputDecoration(
-                                      labelText: 'IP 地址或主机名',
-                                      hintText: '192.168.1.8',
-                                    ),
                                   ),
-                                  const SizedBox(
-                                    height: DesignTokens.spacingMd,
-                                  ),
-                                  TextFormField(
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium,
-                                    controller: activePort,
-                                    validator: validatePort,
-                                    enabled: !busy.value,
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      labelText: pairing ? '配对端口' : '连接端口',
-                                      helperText: pairing
-                                          ? '配对窗口中的端口'
-                                          : legacyTcp
-                                          ? null
-                                          : '无线调试主页面中的端口',
-                                    ),
-                                  ),
-                                  if (pairing) ...[
-                                    const SizedBox(
-                                      height: DesignTokens.spacingMd,
-                                    ),
-                                    TextFormField(
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium,
-                                      controller: code,
-                                      enabled: !busy.value,
-                                      keyboardType: TextInputType.number,
-                                      maxLength: 6,
-                                      validator: (s) =>
-                                          RegExp(r'^\d{6}$').hasMatch(s ?? '')
-                                          ? null
-                                          : '请输入六位配对码',
-                                      decoration: const InputDecoration(
-                                        labelText: '配对码',
-                                      ),
-                                    ),
-                                  ],
                                   if (cancellation.value != null)
                                     StateNote(cancellation.value!),
                                   if (error.value != null)
@@ -751,14 +547,18 @@ class ConnectionFormPage extends HookWidget {
                                       !legacyTcp &&
                                       error.value != null &&
                                       (!completingPairing.value ||
-                                          _authorizationRejected(error.value)))
+                                          connectionAuthorizationRejected(
+                                            error.value,
+                                          )))
                                     TextButton(
                                       onPressed: () {
                                         completingPairing.value = false;
                                         selectMode(AddDeviceMode.pairing);
                                       },
                                       child: Text(
-                                        _authorizationRejected(error.value)
+                                        connectionAuthorizationRejected(
+                                              error.value,
+                                            )
                                             ? '重新配对'
                                             : '使用无线配对码',
                                       ),
@@ -822,62 +622,6 @@ class ConnectionFormPage extends HookWidget {
             ),
     );
   }
-}
-
-/// 保留原始请求失败，同时提供可操作的表单反馈。
-class ConnectionFailureNote extends StatelessWidget {
-  const ConnectionFailureNote({
-    super.key,
-    required this.failure,
-    required this.pairing,
-    required this.legacyTcp,
-  });
-
-  final Object failure;
-  final bool pairing;
-  final bool legacyTcp;
-
-  @override
-  Widget build(BuildContext context) => StateNote(
-    _failureMessage(failure, pairing: pairing, legacyTcp: legacyTcp),
-    icon: LucideIcons.circleAlert,
-    color: ConnectTokens.danger,
-  );
-}
-
-bool _authorizationRejected(Object? failure) =>
-    failure is RequestFailure &&
-    (failure.code == 'authorization_required' ||
-        RegExp(
-          r'received fatal alert: (CertificateRequired|BadCertificate|CertificateUnknown|UnknownCA)\b',
-        ).hasMatch(failure.message));
-
-String _failureMessage(
-  Object failure, {
-  required bool pairing,
-  required bool legacyTcp,
-}) {
-  if (!pairing && !legacyTcp && _authorizationRejected(failure)) {
-    return '手机未授权本机，请重新配对。';
-  }
-  if (!pairing && failure is RequestFailure && failure.code == 'timeout') {
-    return '连接超时，请检查地址、连接端口和网络。';
-  }
-  if (pairing &&
-      failure is RequestFailure &&
-      failure.message.toLowerCase().contains('pairing authentication failed')) {
-    return '配对失败，请使用手机当前显示的配对端口和配对码。';
-  }
-  if (pairing &&
-      failure is RequestFailure &&
-      (failure.code == 'disconnected' ||
-          RegExp(
-            r'\b(eof|end of file)\b',
-            caseSensitive: false,
-          ).hasMatch(failure.message))) {
-    return '配对中断，请确认手机配对窗口仍开启，然后重试。';
-  }
-  return '$failure';
 }
 
 String _connectionHelp(AddDeviceMode mode, {required bool legacyTcp}) =>

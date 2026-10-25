@@ -173,7 +173,7 @@ Future<void> main(List<String> arguments) async {
     final check = args['check'] as bool;
     final schema = loadSchema();
     final outputs = {
-      'app/lib/application/transport/commands_generated.dart': await formatted(
+      'app/lib/models/generated/commands_generated.dart': await formatted(
         dartSource(schema),
       ),
     };

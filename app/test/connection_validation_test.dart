@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
-import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';

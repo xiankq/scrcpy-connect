@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/preferences/preference_commands.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/services/preference_commands.dart';
 
 void main() {
   test('导入真实提交回执未知后保留恢复结果，重开核验不重复恢复设备', () async {

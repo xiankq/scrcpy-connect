@@ -1,6 +1,6 @@
 library;
 
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 /// 十月设计调整页面的可选宿主截图工具。在 app/ 中执行 DESIGN_REFINEMENT_CAPTURE_DIR=/tmp/capture flutter test test/design_refinement_capture.dart；它不作黄金图批准，生产控件使用宿主的软件或磨砂材质回退。
 
@@ -20,7 +20,7 @@ import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devi
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_hero.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_launcher.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 
 import 'support/router_test_app.dart';

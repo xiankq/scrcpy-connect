@@ -1,17 +1,24 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:media_codec/media_codec.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/application/app_state.dart';
-import 'package:scrcpy_connect/media/remote_display_settings.dart';
+import 'package:scrcpy_connect/models/app_state.dart';
+import 'package:scrcpy_connect/models/remote_display_settings.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
+
+const _autoWithoutNavigation = {
+  'deviceSettings': {
+    'phone': {'remoteAspectRatio': 'auto', 'showNavigationBar': false},
+  },
+};
 
 void main() {
   testWidgets(
@@ -23,41 +30,32 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final commands = <(String, Json)>[];
-      final controller = createTestController(
-        (command, [params = const {}]) async {
-          commands.add((command, params));
-          if (command == 'session.start') {
-            return {
-              'sessionId': 'screen',
-              'textureId': 1,
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add((command, params));
+        if (command == 'session.start') {
+          return {
+            'sessionId': 'screen',
+            'textureId': 1,
+            'width': params['displayWidth'],
+            'height': params['displayHeight'],
+            'displayAuto': true,
+            'displaySize': {
               'width': params['displayWidth'],
               'height': params['displayHeight'],
-              'displayAuto': true,
-              'displaySize': {
-                'width': params['displayWidth'],
-                'height': params['displayHeight'],
-              },
-            };
-          }
-          if (command == 'session.display') {
-            throw const RequestFailure(
-              'display_resize_failed',
-              'fixture rejected resize',
-            );
-          }
-          return {};
-        },
-        initialState: AppState(
-          settings: const {
-            'deviceSettings': {
-              'phone': {
-                'remoteAspectRatio': 'auto',
-                'showNavigationBar': false,
-              },
             },
-          },
-        ),
-      );
+          };
+        }
+        if (command == 'session.display') {
+          throw const RequestFailure(
+            'display_resize_failed',
+            'fixture rejected resize',
+          );
+        }
+        return {};
+      }, initialState: AppState(settings: _autoWithoutNavigation));
       try {
         await tester.pumpWidget(
           RouterTestApp(
@@ -69,17 +67,25 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        final dynamic state = tester.state(find.byType(RemotePage));
-        final Object? confirmed = state.appliedDisplaySize;
+        final confirmed = tester.widget<MediaCodecView>(
+          find.byType(MediaCodecView),
+        );
         tester.view.physicalSize = const Size(800, 400);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump();
         expect(find.textContaining('fixture rejected resize'), findsOneWidget);
         expect(commands.where((c) => c.$1 == 'session.display'), hasLength(1));
-        expect(state.requestedDisplaySize, isNot(confirmed));
-        expect(state.appliedDisplaySize, confirmed);
-        expect(state.resizingDisplay, isFalse);
+        final current = tester.widget<MediaCodecView>(
+          find.byType(MediaCodecView),
+        );
+        expect(
+          (current.width, current.height),
+          (confirmed.width, confirmed.height),
+        );
+        await tester.tap(find.byType(MediaCodecView));
+        await tester.pump();
+        expect(commands.where((c) => c.$1 == 'session.touch'), hasLength(2));
         await tester.pump(const Duration(seconds: 6));
         expect(
           commands.where((c) => c.$1 == 'session.display'),
@@ -302,30 +308,21 @@ void main() {
           'displayAuto': true,
           'displaySize': {'width': 960, 'height': 1920},
         };
-        final controller = createTestController(
-          (command, [params = const {}]) async {
-            commands.add((command, params));
-            if (command == 'session.resume') {
-              return {
-                ...retained,
-                'status': 'streaming',
-                'firstFrameDecoded': true,
-                'evidence': 'media_codec.decodedFrame',
-              };
-            }
-            return {};
-          },
-          initialState: AppState(
-            settings: const {
-              'deviceSettings': {
-                'phone': {
-                  'remoteAspectRatio': 'auto',
-                  'showNavigationBar': false,
-                },
-              },
-            },
-          ),
-        );
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          commands.add((command, params));
+          if (command == 'session.resume') {
+            return {
+              ...retained,
+              'status': 'streaming',
+              'firstFrameDecoded': true,
+              'evidence': 'media_codec.decodedFrame',
+            };
+          }
+          return {};
+        }, initialState: AppState(settings: _autoWithoutNavigation));
         try {
           await tester.pumpWidget(
             RouterTestApp(
@@ -455,11 +452,7 @@ void main() {
         }).dimensions(const Size(400, 724))!;
         expect(navigation['displayWidth'], withNavigation.width);
         expect(navigation['displayHeight'], withNavigation.height);
-        controller.settings = const {
-          'deviceSettings': {
-            'phone': {'remoteAspectRatio': 'auto', 'showNavigationBar': false},
-          },
-        };
+        controller.settings = _autoWithoutNavigation;
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pumpAndSettle();

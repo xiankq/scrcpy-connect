@@ -1,11 +1,11 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
-import 'package:scrcpy_connect/application/app_state.dart';
+import 'package:scrcpy_connect/models/app_state.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';

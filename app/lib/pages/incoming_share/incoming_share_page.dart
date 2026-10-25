@@ -1,13 +1,13 @@
-import 'package:scrcpy_connect/presentation/formatters.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
-import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
-import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
+import 'widgets/share_device_card.dart';
+
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -297,7 +297,7 @@ class IncomingSharePage extends HookConsumerWidget {
             if (index < devicesStart) return middle[index - middleStart];
             if (index >= trailingStart) return trailing[index - trailingStart];
             final device = devices[index - devicesStart];
-            return _ShareDeviceCard(
+            return ShareDeviceCard(
               key: ValueKey(('incoming-device', value(device, 'id'))),
               device: device,
               selected: deviceId.value == value(device, 'id'),
@@ -306,89 +306,6 @@ class IncomingSharePage extends HookConsumerWidget {
                   : () => deviceId.value = value(device, 'id'),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-class _ShareDeviceCard extends StatelessWidget {
-  const _ShareDeviceCard({
-    super.key,
-    required this.device,
-    required this.selected,
-    required this.onTap,
-  });
-  final Json device;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      checked: selected,
-      inMutuallyExclusiveGroup: true,
-      child: ContentPanel(
-        padding: EdgeInsets.zero,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: DesignTokens.componentDeviceListItemHeight,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: DesignTokens.spacingMd,
-                vertical: DesignTokens.spacingMd,
-              ),
-              child: Row(
-                children: [
-                  DeviceIdentity(device: device),
-                  const SizedBox(width: DesignTokens.spacingMd),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          deviceName(device),
-                          style: theme.textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: DesignTokens.spacingXxs),
-                        Row(
-                          children: [
-                            Icon(
-                              LucideIcons.circleCheck,
-                              size: DesignTokens.componentIconSmallSize,
-                              color: ConnectTokens.mint,
-                            ),
-                            const SizedBox(width: DesignTokens.spacingXxs),
-                            Expanded(
-                              child: Text(
-                                '已连接 · ${deviceTransportLabel(device)}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: DesignTokens.spacingXs),
-                  if (selected)
-                    Icon(
-                      LucideIcons.circleCheck,
-                      color: theme.colorScheme.primary,
-                      size: DesignTokens.componentIconSize,
-                    ),
-                ],
-              ),
-            ),
-          ),
         ),
       ),
     );

@@ -7,10 +7,10 @@ import 'package:scrcpy/scrcpy.dart' show createNativeScrcpyLocalFiles;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/platform/application_platform.dart';
-import 'package:scrcpy_connect/files/documents/document_scope_recovery.dart';
-import 'package:scrcpy_connect/files/documents/document_sources.dart';
-import 'package:scrcpy_connect/files/documents/documents_coordinator.dart';
+import 'package:scrcpy_connect/services/platform/application_platform.dart';
+import 'package:scrcpy_connect/services/files/document_scope_recovery.dart';
+import 'package:scrcpy_connect/stores/files/document_sources.dart';
+import 'package:scrcpy_connect/stores/files/documents_coordinator.dart';
 
 final class _Descriptors {
   final _library = DynamicLibrary.process();

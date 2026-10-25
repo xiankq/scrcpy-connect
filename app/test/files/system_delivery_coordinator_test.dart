@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/files/documents/system_delivery_coordinator.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart'
+import 'package:scrcpy_connect/stores/files/system_delivery_coordinator.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart'
     show ApplicationCommandException;
 
 void main() {

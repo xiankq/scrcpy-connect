@@ -4,10 +4,10 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/platform/diagnostics/diagnostic_log.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/media/output/video_output_coordinator.dart';
-import 'package:scrcpy_connect/media/output/video_player_port.dart';
+import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/media/video_output_coordinator.dart';
+import 'package:scrcpy_connect/services/media/video_player_port.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 final _token = List.filled(64, 'a').join();

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 
 import 'file_executor_fixture.dart';
 

@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/connection/connection_owner.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -6,8 +6,8 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart' as adb;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
-import 'package:scrcpy_connect/files/execution/adb_file_executor.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/services/files/adb_file_executor.dart';
 
 const first = adb.AdbDevice(id: 'original', serial: 'serial', state: 'device');
 const second = adb.AdbDevice(

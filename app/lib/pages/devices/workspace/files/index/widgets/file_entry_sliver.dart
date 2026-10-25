@@ -1,7 +1,7 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/presentation/file_browser_presentation.dart';
+import 'package:scrcpy_connect/models/file_browser.dart';
 
 class FileEntrySliver extends StatelessWidget {
   const FileEntrySliver({

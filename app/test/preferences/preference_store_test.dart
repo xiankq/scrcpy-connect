@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:scrcpy_connect/preferences/preference_store.dart';
-import 'package:scrcpy_connect/preferences/preference_schema.dart';
+import 'package:scrcpy_connect/stores/preference_store.dart';
+import 'package:scrcpy_connect/models/preference_schema.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const firstId = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';

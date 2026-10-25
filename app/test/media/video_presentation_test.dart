@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/services/media/video_output_snapshot.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/media/output/video_presentation.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/media/video_presentation.dart';
 
 void main() {
   test(

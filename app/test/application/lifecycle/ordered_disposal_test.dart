@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/application/lifecycle/ordered_disposal.dart';
+import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

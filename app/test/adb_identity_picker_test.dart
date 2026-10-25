@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -9,8 +9,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/settings/adb_identity/settings_adb_identity_page.dart';
-import 'package:scrcpy_connect/connection/adb_identity_validation.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/services/connection/adb_identity_validation.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';

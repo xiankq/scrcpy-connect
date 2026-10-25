@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/presentation/remote_failure.dart';
-import 'package:scrcpy_connect/media/session_view_registry.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/services/media/remote_failure.dart';
+import 'package:scrcpy_connect/stores/media/session_view_registry.dart';
 
-import 'remote_presentation.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 class RemoteWindowClose {
   const RemoteWindowClose({

@@ -7,10 +7,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:scrcpy_connect/media/output/codec_video_player.dart';
-import 'package:scrcpy_connect/media/output/video_output_coordinator.dart';
-import 'package:scrcpy_connect/media/output/video_player_port.dart';
-import 'package:scrcpy_connect/media/quality/video_quality_policy.dart';
+import 'package:scrcpy_connect/services/media/codec_video_player.dart';
+import 'package:scrcpy_connect/stores/media/video_output_coordinator.dart';
+import 'package:scrcpy_connect/services/media/video_player_port.dart';
+import 'package:scrcpy_connect/services/media/video_quality_policy.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'support/media_owner_fixture.dart';

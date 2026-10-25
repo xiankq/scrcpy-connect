@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/media/quality/device_quality_coordinator.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/media/device_quality_coordinator.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
 
 void main() {
   test(

@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/connection/reconnection_coordinator.dart';
-import 'package:scrcpy_connect/application/events/application_platform_events.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/stores/connection/reconnection_coordinator.dart';
+import 'package:scrcpy_connect/services/application_platform_events.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _PendingTimer implements Timer {

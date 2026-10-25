@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/connection/adb_identity_validation.dart';
+import 'package:scrcpy_connect/services/connection/adb_identity_validation.dart';
 
 // 合成 DER 载荷仅检查文本包装，不验证密码学有效性。
 const envelope =

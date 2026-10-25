@@ -1,6 +1,8 @@
-import 'package:scrcpy_connect/presentation/formatters.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/services/files/file_access.dart';
+import 'package:scrcpy_connect/services/files/file_browser.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -13,16 +15,16 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_breadcrumbs.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_entry_sliver.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_entry_tiles.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_browser_entry.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_selection_bar.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_type_filter_grid.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_view_menu.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/presentation/file_actions.dart';
-import 'package:scrcpy_connect/presentation/file_browser_presentation.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
+import 'package:scrcpy_connect/models/file_browser.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -116,53 +118,29 @@ class FilesPage extends HookConsumerWidget {
       if (submitted == true && context.mounted) revision.value++;
     }
 
-    Future<void> handleEntryAction(String action, Json entry) async {
+    void toggleEntry(Json entry) {
+      if (!fileCanManage(entry)) return;
       final entryPath = value(entry, 'path');
-      final folder = entry['isDirectory'] == true;
-      final manageable = fileCanManage(entry);
-      final openable = fileCanOpen(entry);
+      final next = {...selected.value};
+      next.contains(entryPath) ? next.remove(entryPath) : next.add(entryPath);
+      selected.value = next;
+    }
 
-      void toggle() {
-        if (!manageable) return;
-        final next = {...selected.value};
-        next.contains(entryPath) ? next.remove(entryPath) : next.add(entryPath);
-        selected.value = next;
+    Future<void> renameEntry(Json entry) async {
+      final name = await askText(
+        context,
+        title: '重命名',
+        initial: value(entry, 'name'),
+      );
+      if (name == null || !context.mounted) return;
+      if (name.contains('/') || name == '.' || name == '..') {
+        feedback(context, '名称不能包含路径分隔符');
+        return;
       }
-
-      switch (action) {
-        case 'select':
-          toggle();
-        case 'rename':
-          final name = await askText(
-            context,
-            title: '重命名',
-            initial: value(entry, 'name'),
-          );
-          if (name != null && context.mounted) {
-            if (name.contains('/') || name == '.' || name == '..') {
-              feedback(context, '名称不能包含路径分隔符');
-              return;
-            }
-            await mutate('files.rename', {'path': entryPath, 'name': name});
-          }
-        case 'delete':
-          if (await confirm(
-                context,
-                '删除“${value(entry, 'name')}”？',
-                '将从 ${deviceName(device)} 删除此${folder ? '文件夹及其内容' : '文件'}，无法在本应用撤销。',
-                action: '删除',
-                danger: true,
-              ) &&
-              context.mounted) {
-            await mutate('files.delete', {
-              'paths': [entryPath],
-            });
-          }
-        case 'download':
-          if (openable && context.mounted) {
-            await retrieveFile(context, controller, device, entry);
-          }
-      }
+      await mutate('files.rename', {
+        'path': value(entry, 'path'),
+        'name': name,
+      });
     }
 
     final parentPath = fileParentPath(path.value);
@@ -281,89 +259,6 @@ class FilesPage extends HookConsumerWidget {
                   listing.files.isEmpty &&
                   typeFilter.value != FileTypeFilter.all;
 
-              Widget folderTile(Json folder, {required bool grid}) {
-                final folderPath = value(folder, 'path');
-                final manageable = fileCanManage(folder);
-                final openable = fileCanOpen(folder);
-                void onTap() {
-                  if (selected.value.isNotEmpty) {
-                    if (manageable) {
-                      handleEntryAction('select', folder);
-                    }
-                  } else if (openable) {
-                    openDirectory(folderPath);
-                  }
-                }
-
-                final onLongPress = manageable
-                    ? () => handleEntryAction('select', folder)
-                    : null;
-                final selectedFolder = selected.value.contains(folderPath);
-                return grid
-                    ? FolderGridTile(
-                        key: ValueKey(folderPath),
-                        folder: folder,
-                        selected: selectedFolder,
-                        selectionActive: selected.value.isNotEmpty,
-                        onTap: onTap,
-                        onLongPress: onLongPress,
-                      )
-                    : FolderListTile(
-                        key: ValueKey(folderPath),
-                        folder: folder,
-                        selected: selectedFolder,
-                        selectionActive: selected.value.isNotEmpty,
-                        onTap: onTap,
-                        onLongPress: onLongPress,
-                      );
-              }
-
-              Widget fileTile(Json file, {required bool grid}) {
-                final filePath = value(file, 'path');
-                final manageable = fileCanManage(file);
-                final openable = fileCanOpen(file);
-                void onTap() {
-                  if (selected.value.isNotEmpty) {
-                    if (manageable) {
-                      handleEntryAction('select', file);
-                    }
-                  } else if (openable) {
-                    FileDetailsRoute(
-                      deviceId: value(device, 'id'),
-                      path: filePath,
-                    ).push<void>(context);
-                  }
-                }
-
-                final onLongPress = manageable
-                    ? () => handleEntryAction('select', file)
-                    : null;
-                return grid
-                    ? FileGridTile(
-                        key: ValueKey(filePath),
-                        controller: controller,
-                        device: device,
-                        file: file,
-                        selected: selected.value.contains(filePath),
-                        selectionActive: selected.value.isNotEmpty,
-                        onTap: onTap,
-                        onLongPress: onLongPress,
-                      )
-                    : FileListTile(
-                        key: ValueKey(filePath),
-                        file: file,
-                        selected: selected.value.contains(filePath),
-                        selectionActive: selected.value.isNotEmpty,
-                        onTap: onTap,
-                        onLongPress: onLongPress,
-                      );
-              }
-
-              Widget entryTile(Json entry, {required bool grid}) =>
-                  entry['isDirectory'] == true
-                  ? folderTile(entry, grid: grid)
-                  : fileTile(entry, grid: grid);
-
               return RefreshIndicator(
                 onRefresh: () async {
                   selected.value = {};
@@ -446,7 +341,7 @@ class FilesPage extends HookConsumerWidget {
                         child: FileSelectionBar(
                           count: chosen.length,
                           onRename: chosen.length == 1
-                              ? () => handleEntryAction('rename', chosen.single)
+                              ? () => renameEntry(chosen.single)
                               : null,
                           onRetrieve: retrievable
                               ? () => retrieveSelection(
@@ -508,8 +403,19 @@ class FilesPage extends HookConsumerWidget {
                         sliver: FileEntrySliver(
                           entries: listing.entries,
                           viewMode: viewMode,
-                          builder: (entry, grid) =>
-                              entryTile(entry, grid: grid),
+                          builder: (entry, grid) => FileBrowserEntry(
+                            key: ValueKey(value(entry, 'path')),
+                            controller: controller,
+                            device: device,
+                            entry: entry,
+                            grid: grid,
+                            selected: selected.value.contains(
+                              value(entry, 'path'),
+                            ),
+                            selectionActive: selected.value.isNotEmpty,
+                            onSelect: toggleEntry,
+                            onOpenDirectory: openDirectory,
+                          ),
                         ),
                       ),
                       if (unavailableFiles)

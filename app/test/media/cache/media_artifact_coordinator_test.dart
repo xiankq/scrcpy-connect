@@ -8,11 +8,11 @@ import 'support/media_file_fixture.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
-import 'package:scrcpy_connect/media/cache/app_media_cache.dart';
-import 'package:scrcpy_connect/media/cache/media_artifact_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
+import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
 
 void main() {
   late Directory root;

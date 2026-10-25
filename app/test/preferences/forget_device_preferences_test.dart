@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/preferences/preference_commands.dart';
-import 'package:scrcpy_connect/preferences/preference_store.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/stores/preference_store.dart';
 
 const _forgotten = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
 const _remaining = '8cd3c688-670c-46c1-b605-d140d9d8b4aa';

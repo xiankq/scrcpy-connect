@@ -6,11 +6,11 @@ import 'package:adb/adb.dart';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/platform/application_platform.dart';
-import 'package:scrcpy_connect/files/documents/documents_coordinator.dart';
-import 'package:scrcpy_connect/files/documents/document_sources.dart';
-import 'package:scrcpy_connect/files/documents/document_scope_recovery.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/services/platform/application_platform.dart';
+import 'package:scrcpy_connect/stores/files/documents_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/document_sources.dart';
+import 'package:scrcpy_connect/services/files/document_scope_recovery.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
 
 // 虚拟时钟不会推进可信根解析的真实文件系统回执。等待实际阶段，同时
 // 继续由 pump 驱动协调器，避免把准入耗时误算成 provider/conflict 超时。

@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/files/catalog/file_catalog.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/file_catalog.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
 
 import '../support/file_executor_fixture.dart';
 

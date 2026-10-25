@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'support/test_controller.dart';
 

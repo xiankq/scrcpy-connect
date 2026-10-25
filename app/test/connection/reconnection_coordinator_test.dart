@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/connection/reconnection_coordinator.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/stores/connection/reconnection_coordinator.dart';
 
 Future<void> settle() async {
   for (var i = 0; i < 40; i++) {

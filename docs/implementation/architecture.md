@@ -4,18 +4,22 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| `app/lib/application/` | 业务组装、命令分派、事件与快照；`transport/` 定义应用请求 |
-| `app/lib/connection/` | 设备记录、身份、配对、连接准入、健康检测与重连 |
-| `app/lib/companion/` | 临时服务部署、RPC与观察意图 |
-| `app/lib/files/` | 目录/搜索/图库快照、变更、传输日志与系统交付 |
-| `app/lib/media/` | 逻辑窗口、捕获、本机输出、声音租约、输入及缓存 |
-| `app/lib/preferences/`、`platform/` | 偏好持久化与本机系统适配 |
-| `app/lib/pages/`、`router/`、`presentation/` | 页面、typed route及展示；业务模块不依赖页面或路由 |
+| `app/lib/bootstrap/` | 启动与依赖注入 |
+| `app/lib/stores/` | 跨页面状态、持久账本、共享队列与应用资源所有者 |
+| `app/lib/services/` | 命令执行、协议查询、系统适配、业务计算及可复用操作 |
+| `app/lib/models/` | 值对象、配置和命令契约；生成契约归 `generated/` |
+| `app/lib/utils/` | 无业务语义的 JSON、格式化、坐标及异步工具 |
+| `app/lib/hooks/` | 将状态所有者接入组件生命周期 |
+| `app/lib/pages/`、`widgets/`、`router/` | 页面、组件与 typed route |
 | `packages/` | 通用设计系统、ADB、scrcpy和媒体解码；公开Dart接口，隐藏FRB与生成物 |
 | `rust/<package>/` | 对应能力包的协议、原生资源与媒体执行 |
 | `servers/` | 被控临时执行产物 |
 
 能力包以 `lib/<包名>.dart` 为主入口，手写实现归 `lib/src/`，原生绑定归 `lib/src/native/`，Dart生成物归所属模块的 `generated/`。构建辅助归 `tool/`（含 `tool/cmake/`），Dart及工具测试归 `test/`；原生测试留在对应原生模块的 `tests/`。`hook/`、`native/` 和平台目录按实际能力保留，不创建空目录对齐。
+
+应用按类型组织，默认平铺；连接、文件、媒体等文件较多的部分才在类型目录内分组。模型只依赖模型和工具，工具不依赖业务；业务不依赖页面、组件、路由或 hooks。
+
+页面独占的状态留本页，组件状态随组件持有；公共操作可复用实现，但实例仍由使用者创建和销毁。仅真正跨页面共享的状态使用公共 provider。业务组件放本页 `widgets/`，多个页面共用时放最近公共父级；应用级组件才归顶层 `widgets/`。hooks 只连接组件生命周期，业务所有者负责取消和清理。
 
 `ApplicationSession` 组装所有者，分派器只适配命令。跨包使用公开接口；共享ADB连接使用同库宿主，句柄不能跨动态库。依赖由 `tool/check_architecture.dart` 检查。决定见[ADR](../adr/)，页面约定见[导航](flutter-navigation.md)。
 

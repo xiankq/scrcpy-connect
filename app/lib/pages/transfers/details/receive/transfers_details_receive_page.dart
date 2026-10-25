@@ -1,6 +1,8 @@
-import 'package:scrcpy_connect/presentation/formatters.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
+import 'package:scrcpy_connect/utils/formatters.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
@@ -10,13 +12,12 @@ import 'package:scrcpy_connect/pages/transfers/details/widgets/document_export_f
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/file_delivery_path.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/presentation/transfer_presentation.dart';
-import 'package:scrcpy_connect/media/media_cache_lease.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
-import 'package:scrcpy_connect/widgets/original_file_header.dart';
+import 'package:scrcpy_connect/pages/transfers/details/widgets/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:share_plus/share_plus.dart';
 

@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/companion/observation_coordinator.dart';
-import 'package:scrcpy_connect/connection/records/device_record_store.dart';
+import 'package:scrcpy_connect/stores/observation_coordinator.dart';
+import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 
 import 'coordinator_fixture.dart';
 

@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
@@ -7,7 +7,7 @@ import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/platform/clipboard_coordinator.dart';
+import 'package:scrcpy_connect/stores/clipboard_coordinator.dart';
 
 import 'support/test_controller.dart';
 

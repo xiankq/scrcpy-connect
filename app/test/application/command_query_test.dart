@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/command_query.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/widgets/command_query.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 Future<void> flush() => Future<void>.delayed(Duration.zero);
 

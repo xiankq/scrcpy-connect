@@ -6,6 +6,18 @@ import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
 // 只有可独立复用的能力拥有包；产品规则在应用的职责模块内组合。
+const applicationLayers = {
+  'bootstrap',
+  'models',
+  'stores',
+  'services',
+  'utils',
+  'pages',
+  'widgets',
+  'router',
+  'hooks',
+};
+
 const capabilityDependencies = <String, Set<String>>{
   'design_system': {},
   'adb': {},
@@ -90,6 +102,13 @@ List<String> checkArchitecture(
           content.startsWith('// GENERATED CODE - DO NOT MODIFY BY HAND')) {
         continue;
       }
+      if (package.name == 'scrcpy_connect') {
+        final segments = p.split(p.relative(file.path, from: package.lib));
+        if (segments.length > 1 &&
+            !applicationLayers.contains(segments.first)) {
+          problems.add('${relative(file.path)}: 应用顶层目录须按类型组织');
+        }
+      }
       final parsed = parseString(content: content, path: file.path);
       if (parsed.unit.directives.any(
         (directive) => directive is PartOfDirective,
@@ -139,21 +158,31 @@ List<String> checkArchitecture(
             // typed router 是组装入口，注册页及其加载适配器都会反向引用
             // 导航类型。业务层禁止依赖路由，另在此处明确检查，避免豁免掩盖倒置。
             final appLib = p.join(root.path, 'app', 'lib');
-            if ([
-                  'application',
-                  'connection',
-                  'devices',
-                  'preferences',
-                  'files',
-                  'media',
-                  'platform',
-                ].any((layer) => p.isWithin(p.join(appLib, layer), source)) &&
-                ['pages', 'router', 'widgets', 'presentation'].any(
-                  (layer) => p.isWithin(p.join(appLib, layer), normalized),
-                )) {
-              problems.add(
-                '${relative(source)}: 应用业务模块不得依赖界面或路由 ${relative(normalized)}',
-              );
+            if (package.name == 'scrcpy_connect' &&
+                p.isWithin(appLib, source) &&
+                p.isWithin(appLib, normalized)) {
+              final fromLayer = p.split(p.relative(source, from: appLib)).first;
+              final toLayer = p
+                  .split(p.relative(normalized, from: appLib))
+                  .first;
+              if ({
+                    'bootstrap',
+                    'stores',
+                    'services',
+                    'models',
+                    'utils',
+                  }.contains(fromLayer) &&
+                  {'pages', 'router', 'widgets', 'hooks'}.contains(toLayer)) {
+                problems.add(
+                  '${relative(source)}: 应用业务模块不得依赖界面或路由 ${relative(normalized)}',
+                );
+              } else if ((fromLayer == 'utils' && toLayer != 'utils') ||
+                  (fromLayer == 'models' &&
+                      !{'models', 'utils'}.contains(toLayer))) {
+                problems.add(
+                  '${relative(source)}: 工具与模型不得依赖业务实现 ${relative(normalized)}',
+                );
+              }
             }
             final routerRegistration =
                 relative(source) ==

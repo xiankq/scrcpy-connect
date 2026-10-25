@@ -1,25 +1,24 @@
-import 'package:scrcpy_connect/presentation/formatters.dart';
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'widgets/transfer_export_actions.dart';
+
+import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/transfer_result_row.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/presentation/transfer_presentation.dart';
-import 'package:scrcpy_connect/media/media_cache_lease.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:share_plus/share_plus.dart';
 
 class TransferDetailsPage extends HookWidget {
   const TransferDetailsPage({
@@ -191,91 +190,12 @@ class TransferDetailsPage extends HookWidget {
                     '部分内容因符号链接或特殊文件被跳过，未作为完整原件传输。',
                     icon: LucideIcons.info,
                   ),
-                if (current['canExport'] == true &&
-                    (current['destinationScope'] != 'privateCache' ||
-                        cacheLease.hasData && !cacheLease.hasError) &&
-                    value(current, 'localPath').isNotEmpty) ...[
-                  StateNote(
-                    current['destinationScope'] == 'privateCache'
-                        ? '已取回本机暂存，尚未保存到系统位置。系统可能清理暂存内容。'
-                        : '已保存至 ${value(current, 'localPath')}',
-                  ),
-                  if (Platform.isAndroid &&
-                      current['destinationScope'] == 'privateCache')
-                    FilledButton.icon(
-                      onPressed: () => DocumentExportRoute(
-                        taskId: value(current, 'id', value(task, 'transferId')),
-                        partial: false,
-                      ).push<void>(context),
-                      icon: const Icon(LucideIcons.folderOutput),
-                      label: const Text('保存到系统位置'),
-                    ),
-                  if (current['kind'] == 'directory')
-                    StateNote(
-                      current['destinationScope'] == 'privateCache'
-                          ? '文件夹结构已取回。保存到系统位置后，可在文件应用中查看。'
-                          : '文件夹结构已取回，请在保存位置查看。',
-                    ),
-                  if (current['kind'] != 'directory') ...[
-                    FilledButton.icon(
-                      onPressed: () => perform(
-                        context,
-                        controller,
-                        'files.open',
-                        {'localPath': value(current, 'localPath')},
-                      ),
-                      icon: const Icon(
-                        LucideIcons.externalLink,
-                        size: DesignTokens.componentIconActionSize,
-                      ),
-                      label: const Text('用本机应用打开'),
-                    ),
-                    const SizedBox(height: DesignTokens.spacingSm),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        try {
-                          if (current['destinationScope'] == 'privateCache') {
-                            await controller.execute(
-                              ApplicationCommand.mediaCacheRetain,
-                              {'localPath': value(current, 'localPath')},
-                            );
-                          }
-                          await SharePlus.instance.share(
-                            ShareParams(
-                              files: [XFile(value(current, 'localPath'))],
-                            ),
-                          );
-                        } catch (error) {
-                          if (context.mounted) {
-                            feedback(context, '系统分享失败：$error');
-                          }
-                        }
-                      },
-                      icon: const Icon(
-                        LucideIcons.share2,
-                        size: DesignTokens.componentIconActionSize,
-                      ),
-                      label: const Text('系统分享'),
-                    ),
-                  ],
-                ],
-                if (current['canExportPartial'] == true &&
-                    (current['destinationScope'] != 'privateCache' ||
-                        cacheLease.hasData && !cacheLease.hasError) &&
-                    Platform.isAndroid) ...[
-                  StateNote(
-                    '这是已核验但不完整的本机暂存。系统保存不会补齐失败、变化或跳过的项目。',
-                    icon: LucideIcons.circleAlert,
-                  ),
-                  FilledButton.icon(
-                    onPressed: () => DocumentExportRoute(
-                      taskId: value(current, 'id', value(task, 'transferId')),
-                      partial: true,
-                    ).push<void>(context),
-                    icon: const Icon(LucideIcons.folderOutput),
-                    label: const Text('保存已取回的部分'),
-                  ),
-                ],
+                TransferExportActions(
+                  controller: controller,
+                  current: current,
+                  taskId: value(current, 'id', value(task, 'transferId')),
+                  cacheReady: cacheLease.hasData && !cacheLease.hasError,
+                ),
                 if ([
                   'failed',
                   'partial',

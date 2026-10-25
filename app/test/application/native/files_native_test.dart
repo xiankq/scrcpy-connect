@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/application/application_session.dart';
-import 'package:scrcpy_connect/application/lifecycle/application_host.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/stores/application_session.dart';
+import 'package:scrcpy_connect/stores/application_host.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 

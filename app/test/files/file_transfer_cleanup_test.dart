@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_journal.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/stores/files/transfer_journal.dart';
 
 void main() {
   test('取消失败保留精确执行与缓存，所有取消入口和关闭沿原句柄重试', () async {

@@ -93,10 +93,19 @@ void main() {
 
   test('文件与媒体业务不能经页面倒置依赖', () {
     application({
-      'files/catalog/catalog.dart': "import '../../pages/browser.dart';",
+      'stores/files/catalog.dart': "import '../../pages/browser.dart';",
+      'utils/format.dart': "import '../stores/files/catalog.dart';",
+      'models/file.dart': "import '../services/files.dart';",
+      'services/files.dart': '// 文件执行',
+      'connection/legacy.dart': '// 旧目录',
       'pages/browser.dart': '// 页面',
     });
-    expect(check(), [contains('应用业务模块不得依赖界面或路由')]);
+    expect(check(), [
+      contains('应用顶层目录须按类型组织'),
+      contains('工具与模型不得依赖业务实现'),
+      contains('应用业务模块不得依赖界面或路由'),
+      contains('工具与模型不得依赖业务实现'),
+    ]);
   });
 
   test('相对路径不能绕过包的私有接口', () {
@@ -122,24 +131,17 @@ void main() {
       'router/navigation.dart': "import 'app_router.dart';",
     });
     expect(check(), isEmpty);
-    source(
-      'app/lib/router/app_router.dart',
-      "import '../pages/home_page.dart'; import '../connection/validation.dart';",
-    );
-    source(
-      'app/lib/connection/validation.dart',
-      "import '../router/navigation.dart';",
-    );
-    expect(check(), [contains('应用业务模块不得依赖界面或路由'), contains('模块依赖环')]);
-  });
-
-  test('路由注册豁免不能掩盖应用编排依赖页面', () {
     application({
-      'router/app_router.dart': "import '../pages/home_page.dart';",
-      'pages/home_page.dart': "import '../application/controller.dart';",
-      'application/controller.dart': "import '../router/app_router.dart';",
+      'router/app_router.dart': "import '../pages/home_page.dart'; import '../services/validation.dart';",
+      'services/validation.dart': "import '../router/navigation.dart';",
+      'pages/home_page.dart': "import '../stores/controller.dart';",
+      'stores/controller.dart': "import '../router/app_router.dart';",
     });
-    expect(check(), [contains('应用业务模块不得依赖界面或路由')]);
+    expect(check(), [
+      contains('应用业务模块不得依赖界面或路由'),
+      contains('应用业务模块不得依赖界面或路由'),
+      contains('模块依赖环'),
+    ]);
   });
 
   test('应用生成文件豁免不能容纳 FRB 产物或 Rust 源码', () {
@@ -216,6 +218,7 @@ void main() {
       [
         ...generated.map((path) => 'app/$path: FRB 生成物必须由能力包维护'),
         ...rust.map((path) => 'app/$path: 应用不得包含 Rust 源码'),
+        'app/lib/build/frb_generated.dart: 应用顶层目录须按类型组织',
       ]..sort(),
     );
   });

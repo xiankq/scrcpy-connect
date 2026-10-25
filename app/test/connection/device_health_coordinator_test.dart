@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/connection/connection_owner.dart';
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/connection/device_health_coordinator.dart';
+import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/stores/connection/device_health_coordinator.dart';
 
 void main() {
   late _Fixture f;

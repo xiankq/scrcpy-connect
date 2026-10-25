@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/platform/audio/mixer_audio_focus_registry.dart';
+import 'package:scrcpy_connect/stores/mixer_audio_focus_registry.dart';
 
 void main() {
   test('stale release cannot revoke a new mixed output lease', () async {

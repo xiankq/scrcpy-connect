@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/media/cache/app_media_cache.dart';
+import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
 
 Matcher failure(String code) =>
     isA<MediaCacheFailure>().having((error) => error.code, 'code', code);

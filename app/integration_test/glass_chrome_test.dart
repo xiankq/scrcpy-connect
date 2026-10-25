@@ -11,7 +11,7 @@ import 'package:integration_test/integration_test.dart';
 // 仅使用公共诊断接口，渲染控件全部来自 design_system。
 // ignore: depend_on_referenced_packages
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
-import 'package:scrcpy_connect/application/app_state.dart';
+import 'package:scrcpy_connect/models/app_state.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show glassSnackBar;
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';

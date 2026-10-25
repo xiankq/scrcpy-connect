@@ -1,11 +1,11 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/app_state.dart';
-import 'package:scrcpy_connect/platform/system_notification_coordinator.dart';
+import 'package:scrcpy_connect/models/app_state.dart';
+import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
 
 import '../support/test_controller.dart';
 

@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/media/output/media_output_reconciliation.dart';
-import 'package:scrcpy_connect/application/events/state_recovery.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/services/media/media_output_reconciliation.dart';
+import 'package:scrcpy_connect/stores/state_recovery.dart';
 
 import '../application/events/state_recovery_test.dart' show snapshot;
 

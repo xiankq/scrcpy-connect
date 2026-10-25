@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
-import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 
 import 'support/file_executor_fixture.dart';
 import 'support/transfer_checks.dart' show withTransfer;

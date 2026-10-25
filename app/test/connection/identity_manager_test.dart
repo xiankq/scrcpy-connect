@@ -5,9 +5,9 @@ import 'dart:io';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/connection/identity_manager.dart';
-import 'package:scrcpy_connect/connection/records/device_record_store.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
+import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 
 void main() {
   late Directory root;

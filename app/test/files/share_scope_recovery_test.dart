@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/files/sharing/share_scope_recovery.dart';
+import 'package:scrcpy_connect/services/files/share_scope_recovery.dart';
 
 class ScopeFixture implements NativeLocalFilesApi {
   final calls = <String>[];

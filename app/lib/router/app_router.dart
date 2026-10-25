@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
-import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/application/app_controller.dart';
-import 'package:scrcpy_connect/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver.dart';
 import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';

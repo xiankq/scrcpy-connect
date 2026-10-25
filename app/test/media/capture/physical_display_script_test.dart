@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/media/capture/physical_display_script.dart';
+import 'package:scrcpy_connect/services/media/physical_display_script.dart';
 
 const _owner = '0123456789abcdef0123456789abcdef';
 const _nextOwner = 'fedcba9876543210fedcba9876543210';

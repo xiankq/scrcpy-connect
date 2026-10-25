@@ -1,0 +1,106 @@
+import 'package:scrcpy_connect/services/files/received_directory.dart';
+import 'package:scrcpy_connect/services/files/file_access.dart';
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/widgets/dialogs.dart';
+
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
+
+Future<void> retrieveFile(
+  BuildContext context,
+  AppController controller,
+  Json device,
+  Json file, {
+  bool share = false,
+}) async {
+  if (!fileCanOpen(file)) {
+    feedback(context, fileUnavailableReason(file));
+    return;
+  }
+  String? directory;
+  final privateCache = share || Platform.isAndroid;
+  if (!privateCache) {
+    directory = await FilePicker.getDirectoryPath(dialogTitle: '选择保存位置');
+  }
+  if (!privateCache && directory == null) return;
+  directory ??= (await receivedDirectory()).path;
+  if (!context.mounted) return;
+  final result = await perform(context, controller, 'files.pull', {
+    'deviceId': device['id'],
+    'path': file['path'],
+    'destination': '$directory/${value(file, 'name')}',
+    'conflict': 'ask',
+    'destinationScope': privateCache ? 'privateCache' : 'localPath',
+  });
+  if (result == null || !context.mounted) return;
+  final transferId = value(result, 'transferId');
+  if (privateCache && transferId.isNotEmpty) {
+    ReceiveContentRoute(taskId: transferId, share: share).push<void>(context);
+    return;
+  }
+  final local = value(result, 'localPath', value(result, 'path'));
+  if (share && local.isNotEmpty && result['status'] == 'completed') {
+    try {
+      await controller.execute(ApplicationCommand.mediaCacheRetain, {
+        'localPath': local,
+        'ifManaged': true,
+      });
+      await SharePlus.instance.share(ShareParams(files: [XFile(local)]));
+    } catch (e) {
+      if (context.mounted) feedback(context, '无法交给系统分享：$e');
+    }
+  } else if (result['status'] == 'completed' && local.isNotEmpty) {
+    feedback(context, privateCache ? '已取回本机暂存，尚未保存到系统位置' : '已保存至 $local');
+  } else {
+    feedback(
+      context,
+      share
+          ? '正在取回原文件，完成后请从传输详情分享'
+          : privateCache
+          ? '正在取回本机暂存，完成后可保存到系统位置'
+          : '已建立传输任务，请在传输中心查看实际结果',
+    );
+    TransferCenterRoute().push<void>(context);
+  }
+}
+
+Future<void> retrieveSelection(
+  BuildContext context,
+  AppController controller,
+  Json device,
+  List<Json> files,
+) async {
+  if (files.isEmpty) return;
+  if (files.any((file) => !fileCanOpen(file))) {
+    feedback(context, '所选内容包含无法解析路径的文件，请重新选择可操作的文件。');
+    return;
+  }
+  final privateCache = Platform.isAndroid;
+  final directory = privateCache
+      ? (await receivedDirectory()).path
+      : await FilePicker.getDirectoryPath(
+          dialogTitle: '保存 ${files.length} 项原文件',
+        );
+  if (directory == null || !context.mounted) return;
+  final result = await perform(context, controller, 'files.pull', {
+    'deviceId': device['id'],
+    'items': [
+      for (final file in files)
+        {
+          'path': file['path'],
+          'destination': '$directory/${value(file, 'name')}',
+        },
+    ],
+    'conflict': 'ask',
+    'destinationScope': privateCache ? 'privateCache' : 'localPath',
+  });
+  if (result != null && context.mounted) {
+    TransferCenterRoute().push<void>(context);
+  }
+}

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/application/application_session.dart';
+import 'package:scrcpy_connect/stores/application_session.dart';
 
 // 在隔离私有目录中运行生产桥接和真实 Android 服务；不打开设备、远控页面、捕获或音频输出。
 void main() {

@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/platform/diagnostics/diagnostic_log.dart';
+import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
 
 import 'support/test_controller.dart';
 
-import 'package:scrcpy_connect/application/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 
 void main() {
   late AppController controller;

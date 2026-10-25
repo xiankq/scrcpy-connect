@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/platform/application_background_coordinator.dart';
+import 'package:scrcpy_connect/services/platform/application_background_coordinator.dart';
 
 void main() {
   test('entering the application requests connection background before audio with no device or page', () async {

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:scrcpy_connect/preferences/preference_store.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/preferences/preference_commands.dart';
+import 'package:scrcpy_connect/stores/preference_store.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/services/preference_commands.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 TypeMatcher<ApplicationCommandException> errorCode(String code) =>

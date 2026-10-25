@@ -8,12 +8,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/application/lifecycle/application_host.dart';
-import 'package:scrcpy_connect/application/lifecycle/application_host_record.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
-import 'package:scrcpy_connect/connection/connection_policy.dart';
-import 'package:scrcpy_connect/platform/native/bundled_servers.dart';
-import 'package:scrcpy_connect/platform/usb_lease_recovery.dart';
+import 'package:scrcpy_connect/stores/application_host.dart';
+import 'package:scrcpy_connect/services/application_host_record.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
+import 'package:scrcpy_connect/stores/usb_lease_recovery.dart';
 
 const _policy = ConnectionPolicy(
   tcp: AdbTcpOptions(keepalive: null, userTimeout: null),

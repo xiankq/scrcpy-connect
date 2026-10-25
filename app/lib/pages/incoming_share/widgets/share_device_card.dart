@@ -1,0 +1,90 @@
+import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
+import 'package:flutter/material.dart';
+import 'package:design_system/design_system.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
+
+class ShareDeviceCard extends StatelessWidget {
+  const ShareDeviceCard({
+    super.key,
+    required this.device,
+    required this.selected,
+    required this.onTap,
+  });
+  final Json device;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      checked: selected,
+      inMutuallyExclusiveGroup: true,
+      child: ContentPanel(
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(DesignTokens.roundedLg),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: DesignTokens.componentDeviceListItemHeight,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.spacingMd,
+                vertical: DesignTokens.spacingMd,
+              ),
+              child: Row(
+                children: [
+                  DeviceIdentity(device: device),
+                  const SizedBox(width: DesignTokens.spacingMd),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          deviceName(device),
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: DesignTokens.spacingXxs),
+                        Row(
+                          children: [
+                            Icon(
+                              LucideIcons.circleCheck,
+                              size: DesignTokens.componentIconSmallSize,
+                              color: ConnectTokens.mint,
+                            ),
+                            const SizedBox(width: DesignTokens.spacingXxs),
+                            Expanded(
+                              child: Text(
+                                '已连接 · ${deviceTransportLabel(device)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: DesignTokens.spacingXs),
+                  if (selected)
+                    Icon(
+                      LucideIcons.circleCheck,
+                      color: theme.colorScheme.primary,
+                      size: DesignTokens.componentIconSize,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

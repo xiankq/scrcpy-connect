@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/platform/diagnostics/diagnostic_log.dart';
-import 'package:scrcpy_connect/platform/diagnostics/diagnostic_reporter.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
+import 'package:scrcpy_connect/services/platform/diagnostic_reporter.dart';
+import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
