@@ -135,6 +135,9 @@ final class _Executor extends FixtureExecutor {
 }
 
 final class _Publication implements FilePublicationLeases {
+  @override
+  Future<Set<String>> get sourcePaths async => {};
+
   bool block = false;
   final entered = Completer<void>();
   final _released = Completer<void>();
@@ -146,8 +149,9 @@ final class _Publication implements FilePublicationLeases {
   @override
   Future<Map<String, Object?>?> begin(
     String shareId,
-    Map<String, Object?> request,
-  ) async => null;
+    Map<String, Object?> request, {
+    String? transferId,
+  }) async => null;
 
   @override
   Future<void> finish(
@@ -158,8 +162,9 @@ final class _Publication implements FilePublicationLeases {
 
   @override
   Future<Map<String, Object?>> reconcile(
-    Map<String, Object?> durableReferences,
-  ) async {
+    Map<String, Object?> durableReferences, {
+    Set<String>? coveredSources,
+  }) async {
     if (!entered.isCompleted) entered.complete();
     if (block) await _released.future;
     return {'reconciled': true};

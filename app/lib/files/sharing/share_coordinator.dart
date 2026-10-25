@@ -504,11 +504,12 @@ final class ShareCoordinator implements FilePublicationLeases {
   @override
   Future<Map<String, Object?>?> begin(
     String share,
-    Map<String, Object?> request,
-  ) async {
+    Map<String, Object?> request, {
+    String? transferId,
+  }) async {
     _checkOpen();
     if (_store == null) await configure();
-    return _store!.begin(share, request);
+    return _store!.begin(share, request, transferId: transferId);
   }
 
   @override
@@ -527,12 +528,20 @@ final class ShareCoordinator implements FilePublicationLeases {
   }
 
   @override
-  Future<Map<String, Object?>> reconcile(
-    Map<String, Object?> durableReferences,
-  ) async {
+  Future<Set<String>> get sourcePaths async {
     _checkOpen();
     if (_store == null) await configure();
-    return _store!.reconcile(durableReferences);
+    return _store!.sourcePaths;
+  }
+
+  @override
+  Future<Map<String, Object?>> reconcile(
+    Map<String, Object?> durableReferences, {
+    Set<String>? coveredSources,
+  }) async {
+    _checkOpen();
+    if (_store == null) await configure();
+    return _store!.reconcile(durableReferences, coveredSources: coveredSources);
   }
 
   Future<void> close() {

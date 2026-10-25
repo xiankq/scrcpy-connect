@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/application/transport/application_command_excepti
 import 'package:scrcpy_connect/media/output/video_output_coordinator.dart';
 import 'package:scrcpy_connect/media/output/video_player_port.dart';
 import 'package:scrcpy_connect/media/output/video_presentation.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 final _token = List.filled(64, 'a').join();
 VideoJson _stream(String id, {String device = 'device-A'}) => {
@@ -569,6 +570,102 @@ void main() {
     expect(h.events.any((event) => event['type'] == 'session.frame'), false);
     await h.output.dispose();
   });
+
+  test('真实视频输出回执可恢复页面输入，截图证据不能替代会话首帧', () async {
+    final h = _Harness();
+    addTearDown(h.output.dispose);
+    final started = await h.output.start(_stream('A'));
+    final state = RemotePresentation()
+      ..beginStart()
+      ..bindStart(
+        {...started, 'width': 720, 'height': 1280, 'status': 'streaming'},
+        retained: false,
+        recoveringConnection: false,
+        submittedAppStart: false,
+      );
+    state.beginPause();
+    await h.output.pause('A');
+    final epoch = state.beginResume();
+    final resumed = await h.output.resume('A');
+    for (final unverified in [
+      {...resumed, 'evidence': 'media_codec.snapshot'},
+      {...resumed, 'evidence': 'retained_previous_output'},
+      {...resumed, 'evidence': 'unknown'},
+      {...resumed, 'firstFrameDecoded': false},
+    ]) {
+      expect(
+        state.completeResume(epoch, unverified, ownerCurrent: true),
+        RemoteResumeResult.rendererNotReady,
+      );
+      expect(state.canSendInput(foreground: true, ownerCurrent: true), isFalse);
+    }
+    expect(
+      state.completeResume(epoch, resumed, ownerCurrent: true),
+      RemoteResumeResult.ready,
+    );
+    expect(state.canSendInput(foreground: true, ownerCurrent: true), isTrue);
+    expect(resumed['snapshotReceipts'], 0);
+  });
+
+  for (final readyFirst in [false, true]) {
+    test('真实视频输出与核心就绪回执共同解除画质输入栅栏，readyFirst=$readyFirst', () async {
+      final h = _Harness();
+      addTearDown(h.output.dispose);
+      final initial = {
+        ...await h.output.start(_stream('A')),
+        'width': 720,
+        'height': 1280,
+        'status': 'streaming',
+      };
+      final state = RemotePresentation()
+        ..beginStart()
+        ..bindStart(
+          initial,
+          retained: false,
+          recoveringConnection: false,
+          submittedAppStart: false,
+        );
+      state.updateSession({
+        ...initial,
+        'qualityRebuilding': true,
+        'qualityRebuildTarget': 2,
+      });
+      final output = await h.output.reconfigure({
+        ..._stream('A'),
+        'captureGeneration': 2,
+      });
+      final ready = {
+        ...output,
+        'status': 'streaming',
+        'qualityRebuilding': false,
+        'qualityRebuildOutcome': 'applied',
+      };
+      bool canInput() =>
+          state.canSendInput(foreground: true, ownerCurrent: true);
+      expect(
+        state.output({
+          ...output,
+          'evidence': 'media_codec.snapshot',
+        }, verified: true),
+        isFalse,
+      );
+      if (readyFirst) {
+        state.updateSession(ready);
+      } else {
+        state.output(output, verified: true);
+      }
+      expect(canInput(), isFalse);
+      if (readyFirst) {
+        state.output(output, verified: true);
+      } else {
+        state.updateSession(ready);
+      }
+      expect(state.qualityRebuilding, isFalse);
+      expect(canInput(), isTrue);
+      expect(state.session?['textureId'], output['textureId']);
+      expect(state.session?['captureGeneration'], 2);
+    });
+  }
 
   test('同一借入来源的代际失败与替换只释放各自播放器', () async {
     final h = _Harness();

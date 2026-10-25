@@ -14,13 +14,29 @@ final class DocumentScopeConfiguration {
     this.environment,
     this.cacheDirectory,
     this.roots,
+    this.key,
+    this._logicalRoots,
   );
 
   final Map<String, dynamic> environment;
   final String cacheDirectory;
   final List<String> roots;
 
-  String get key => p.join(p.normalize(cacheDirectory), 'documents');
+  final String key;
+  final List<(String, String)> _logicalRoots;
+
+  /// 只替换平台授予的逻辑根；内部链接和路径穿越仍交给固定 scope 拒绝。
+  /// 调用方保留原始业务路径，只把此结果交给本机文件能力。
+  String pathForScope(String path) {
+    if (!p.isAbsolute(path) || p.split(path).contains('..')) return path;
+    for (final (logical, actual) in _logicalRoots) {
+      if (p.equals(logical, path)) return actual;
+      if (p.isWithin(logical, path)) {
+        return p.join(actual, p.relative(path, from: logical));
+      }
+    }
+    return path;
+  }
 
   static Future<DocumentScopeConfiguration> fromEnvironment(
     Map<String, dynamic> environment,
@@ -33,6 +49,24 @@ final class DocumentScopeConfiguration {
       );
     }
     final filtered = Map<String, dynamic>.from(environment);
+    // 只解析平台明确授予的根。账本返回实际路径，复制也必须使用同一根；
+    // 不解析内部请求的链接，不授予别名与实际根的共同父目录。
+    final cacheRoot =
+        await FileSystemEntity.type(cache) == FileSystemEntityType.directory
+        ? await Directory(cache).resolveSymbolicLinks()
+        : cache;
+    final scopeKey =
+        environment['_documentScopeKey'] ??
+        p.join(p.normalize(cache), 'documents');
+    if (scopeKey is! String ||
+        !p.isAbsolute(scopeKey) ||
+        p.basename(scopeKey) != 'documents') {
+      throw const ApplicationCommandException('cache_unavailable', '文档资源名称无效。');
+    }
+    filtered['cacheDirectory'] = cacheRoot;
+    // 平台适配与协调器都会核验环境。保留最初逻辑名称，避免第二次核验
+    // canonical 环境时改变 key，使恢复无法排空前代 scope。
+    filtered['_documentScopeKey'] = scopeKey;
     final screenshots = environment['screenshotsDirectory'];
     // 可选目录不存在时不创建，也不通过符号链接或上级根扩大访问范围。
     if (screenshots is! String ||
@@ -40,14 +74,34 @@ final class DocumentScopeConfiguration {
         await FileSystemEntity.type(screenshots, followLinks: false) !=
             FileSystemEntityType.directory) {
       filtered.remove('screenshotsDirectory');
+      filtered.remove('_documentScreenshotsRoot');
+    } else {
+      filtered['screenshotsDirectory'] = await Directory(screenshots)
+          .resolveSymbolicLinks();
+      final logicalScreenshots =
+          environment['_documentScreenshotsRoot'] ?? screenshots;
+      if (logicalScreenshots is! String || !p.isAbsolute(logicalScreenshots)) {
+        throw const ApplicationCommandException(
+          'cache_unavailable',
+          '截图库位置无效。',
+        );
+      }
+      filtered['_documentScreenshotsRoot'] = logicalScreenshots;
     }
+    final logicalRoots = <(String, String)>[
+      (p.dirname(scopeKey), cacheRoot),
+      if (filtered['_documentScreenshotsRoot'] case final String logical)
+        (logical, filtered['screenshotsDirectory'] as String),
+    ]..sort((a, b) => b.$1.length.compareTo(a.$1.length));
     return DocumentScopeConfiguration._(
       Map.unmodifiable(filtered),
-      cache,
+      cacheRoot,
       List.unmodifiable([
-        cache,
+        cacheRoot,
         if (filtered['screenshotsDirectory'] case final String path) path,
       ]),
+      scopeKey,
+      List.unmodifiable(logicalRoots),
     );
   }
 

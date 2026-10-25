@@ -243,8 +243,16 @@ void main() {
       'attach:${p.join(fixture.directory.path, 'application-host')}',
       'files.attach',
       'assets',
+      'file.helpers',
       'scrcpy',
     ]);
+    expect(
+      fixture.api.helpers.map((helper) => helper.abi),
+      unorderedEquals(['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86']),
+    );
+    for (final helper in fixture.api.helpers) {
+      expect(helper.bytes, _payload);
+    }
     expect(host.bindings, same(fixture.api));
     expect(host.fileScopeId, 'files-1');
     expect(await fixture.attach(), same(host));
@@ -1177,6 +1185,7 @@ class _Scrcpy implements NativeScrcpyApi, NativeScrcpyConnectionApi {
 class _Api
     implements
         NativeAdbApi,
+        NativeAdbFileApi,
         NativeAdbAdmissionApi,
         NativeAdbFileScopeApi,
         NativeAdbScopedFileScopeApi,
@@ -1185,6 +1194,13 @@ class _Api
         NativeAdbHandshakeApi,
         AdbIdentities {
   final calls = <String>[];
+  List<AdbFileHelper> helpers = [];
+  @override
+  Future<void> initializeFileHelpers(List<AdbFileHelper> value) async {
+    calls.add('file.helpers');
+    helpers = List.of(value);
+  }
+
   final scopes = <String, AdbAdmissionScopeInfo>{};
   final fingerprints = <String, String>{};
   final servers = <AdbServerInfo>[];

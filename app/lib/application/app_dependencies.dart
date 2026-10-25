@@ -14,14 +14,18 @@ part 'app_dependencies.g.dart';
 class AppDependencies {
   AppDependencies({
     required this.request,
+    ApplicationCommandExecutor? execute,
     this.events = const Stream<Json>.empty(),
     this.close,
     this.diagnostics,
     AppState? initialState,
     this.initialize = true,
-  }) : initialState = initialState ?? AppState();
+  }) : execute =
+           execute ?? ((command, params) => request(command.wire, params)),
+       initialState = initialState ?? AppState();
   final DiagnosticLog? diagnostics;
   final ApplicationRequest request;
+  final ApplicationCommandExecutor execute;
   final Stream<Json> events;
   final Future<void> Function()? close;
   final AppState initialState;

@@ -1,6 +1,11 @@
 typedef RemoteData = Map<String, dynamic>;
 typedef RemoteBinding = (String, int);
 
+// 会话首帧由视频输出协调器的解码回执确认；截图像素属于独立操作。
+bool hasDecodedFrameEvidence(RemoteData data) =>
+    data['firstFrameDecoded'] == true &&
+    data['evidence'] == 'media_codec.decodedFrame';
+
 enum RemoteResumeResult { stale, rendererNotReady, ready }
 
 class RemoteStartTicket {
@@ -376,12 +381,7 @@ class RemotePresentation {
         _failQuality(_retainedImage(existing));
       } else if (_qualityRebuilding && existing['qualityRebuilding'] == false) {
         updateSession(existing);
-        output(
-          existing,
-          verified:
-              existing['firstFrameDecoded'] == true &&
-              existing['evidence'] == 'media_codec.snapshot',
-        );
+        output(existing, verified: hasDecodedFrameEvidence(existing));
       } else {
         if (!_qualityRebuilding) _session = _retainedImage(existing);
         if (existing['qualityRebuilding'] == true) {
@@ -535,8 +535,7 @@ class RemotePresentation {
     if (_qualityRebuilding) {
       final incoming = _outputGeneration(data);
       if (!verified ||
-          data['firstFrameDecoded'] != true ||
-          data['evidence'] != 'media_codec.snapshot' ||
+          !hasDecodedFrameEvidence(data) ||
           data['textureId'] == null ||
           data['outputRetained'] == true ||
           incoming == null ||
@@ -682,8 +681,7 @@ class RemotePresentation {
     if (_qualityRebuilding || _qualityFailed || _older(receipt)) {
       return RemoteResumeResult.stale;
     }
-    if (receipt['firstFrameDecoded'] != true ||
-        receipt['evidence'] != 'media_codec.snapshot') {
+    if (!hasDecodedFrameEvidence(receipt)) {
       return RemoteResumeResult.rendererNotReady;
     }
     _session = {...?_session, ...receipt};

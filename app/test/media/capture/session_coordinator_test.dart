@@ -878,6 +878,49 @@ void main() {
     expect(encoders, isNotEmpty);
   });
 
+  test('真实编码器枚举为每种格式返回可选择状态与所属编码器', () async {
+    final options = await f.owner.command('session.quality.options', {
+      'deviceId': 'device',
+    });
+    expect(options['probe'], {'status': 'enumerated'});
+    final codecs = (options['codecs'] as List).cast<Map<String, dynamic>>();
+    final h264 = codecs.singleWhere((codec) => codec['id'] == 'h264');
+    expect(h264['available'], isTrue);
+    expect(h264['status'], 'available');
+    expect(h264['encoders'], [
+      {
+        'codec': 'h264',
+        'name': 'c2.fake.h264',
+        'available': true,
+        'hardware': true,
+      },
+    ]);
+    final h265 = codecs.singleWhere((codec) => codec['id'] == 'h265');
+    expect(h265['available'], isFalse);
+    expect(h265['status'], 'unavailable');
+    expect(h265['encoders'], isEmpty);
+  });
+
+  test('确认成功的空编码器清单不可提供可选格式', () async {
+    f.adb._uploads.encoderOutput = 'List of video encoders:\n';
+    final options = await f.owner.command('session.quality.options', {
+      'deviceId': 'device',
+    });
+    expect(options['probe'], {'status': 'enumerated'});
+    expect(options['encoders'], isEmpty);
+    for (final codec
+        in (options['codecs'] as List).cast<Map<String, dynamic>>()) {
+      expect(codec['available'], isFalse);
+      expect(codec['status'], 'unavailable');
+      expect(codec['encoders'], isEmpty);
+      expect(codec['reason'], isNotEmpty);
+    }
+    await expectLater(
+      f.owner.command('session.quality', {'deviceId': 'device'}),
+      throwsA(_error('encoder_unavailable')),
+    );
+  });
+
   test('查询缺监督终态不能当枚举成功，停止可独立核验原进程并恢复清理', () async {
     f.adb.omitProbeExit = true;
     await expectLater(
@@ -1011,7 +1054,7 @@ final class _Adb implements AdbClient {
         : command == 'cmd activity stack list'
         ? 'RootTask id=42 bounds=[0,0][1080,1920] displayId=11\n  taskId=42: org.example.app/.Main\n'
         : command.contains('list_encoders=true')
-        ? 'List of video encoders:\n --video-codec=h264 --video-encoder=c2.fake.h264 (hw)\n'
+        ? _uploads.encoderOutput
         : '';
     if (output.isNotEmpty) {
       yield AdbShellEvent(
@@ -1044,6 +1087,8 @@ final class _UploadApi implements NativeAdbApi {
   final _execs = <String, _Exec>{};
   void Function(String)? onCommand;
   bool Function()? omitQueryEnd;
+  String encoderOutput =
+      'List of video encoders:\n --video-codec=h264 --video-encoder=c2.fake.h264 (hw)\n';
   void Function()? onDisplayStop;
   int displayStarts = 0, displayStops = 0, displayCloseFailures = 0;
   int displayRecoveries = 0, displayAcknowledgements = 0;
@@ -1117,9 +1162,7 @@ final class _UploadApi implements NativeAdbApi {
         execution.add('\n__INTEROP_QUERY_END_${queryNonce}__:143\n');
         execution.finish();
       } else if (queryNonce != null && text == 'RUN $queryNonce\n') {
-        execution.add(
-          'List of video encoders:\n --video-codec=h264 --video-encoder=c2.fake.h264 (hw)\n',
-        );
+        execution.add(encoderOutput);
         if (omitQueryEnd?.call() != true) {
           execution.add('\n__INTEROP_QUERY_END_${queryNonce}__:0\n');
         }

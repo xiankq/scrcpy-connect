@@ -8,6 +8,10 @@ import 'package:path/path.dart' as p;
 
 import 'document_limits.dart';
 import 'document_scope_recovery.dart';
+import 'document_sources.dart';
+
+import 'package:scrcpy_connect/files/execution/file_executor.dart';
+
 export 'document_limits.dart';
 
 import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
@@ -58,12 +62,14 @@ class DocumentsCoordinator {
     required this._platform,
     bool Function()? isDisposed,
     this.onConflictChanged,
+    this.sources,
   }) : _isDisposed = isDisposed ?? (() => false);
   final Future<LocalFiles> Function() _files;
   final DocumentLimits limits;
   final DocumentsRequest _platform;
   final bool Function() _isDisposed;
   final void Function(DocumentsJson)? onConflictChanged;
+  final DocumentSources? sources;
   final _issued = <String>{};
   _Operation? _active;
   bool _disposed = false;
@@ -117,6 +123,8 @@ class DocumentsCoordinator {
       final op = _active;
       final matches = op != null && op.id == params['operationId'];
       if (matches) await _cancel(op);
+      final source = params['managedSourceId'];
+      if (source is String && sources != null) await sources!.release(source);
       return {'cancelled': matches, 'operationId': params['operationId']};
     }
     if (![
@@ -162,6 +170,7 @@ class DocumentsCoordinator {
       final boundary = await DocumentScopeConfiguration.fromEnvironment(
         environment,
       );
+      op.boundary = boundary;
       op.cache = boundary.cacheDirectory;
       final ownerLease = environment['ownerLeaseId'];
       if (ownerLease is! String || ownerLease.isEmpty) {
@@ -385,6 +394,10 @@ class DocumentsCoordinator {
           );
         }
       }
+      if (!op.sourceCompleted && op.managedSourceId != null) {
+        await sources!.complete(op.managedSourceId!, op.name);
+        op.sourceCompleted = true;
+      }
       if (identical(_active, op)) _active = null;
     } catch (error) {
       throw ApplicationCommandException(
@@ -432,7 +445,8 @@ class DocumentsCoordinator {
     return scope;
   }
 
-  Uint8List _path(String value) => Uint8List.fromList(utf8.encode(value));
+  Uint8List _path(_Operation op, String value) =>
+      Uint8List.fromList(utf8.encode(op.boundary!.pathForScope(value)));
 
   Future<DocumentsJson> _metadata(_Operation op, DocumentsJson document) async {
     op.check(_disposed || _isDisposed());
@@ -482,6 +496,17 @@ class DocumentsCoordinator {
   }
 
   Future<String> _owner(_Operation op) async {
+    if (sources case final owner?) {
+      try {
+        final source = await owner.reserve();
+        op.managedSourceId = source.id;
+        op.importBytes = source.availableBytes;
+        await _mkdir(op, source.path);
+        return source.path;
+      } on FileFailure catch (error) {
+        throw ApplicationCommandException(error.code, error.message);
+      }
+    }
     final base = p.join(op.cache, 'documents');
     await _mkdir(op, base, exclusive: false);
     final path = p.join(base, _id());
@@ -525,11 +550,12 @@ class DocumentsCoordinator {
   }
 
   Future<LocalFileStat> _stat(_Operation op, String path) =>
-      _native(() async => (await _scope(op)).stat(_path(path)));
+      _native(() async => (await _scope(op)).stat(_path(op, path)));
 
   Future<void> _mkdir(_Operation op, String path, {bool exclusive = true}) =>
       _native(
-        () async => (await _scope(op)).mkdir(_path(path), exclusive: exclusive),
+        () async =>
+            (await _scope(op)).mkdir(_path(op, path), exclusive: exclusive),
       );
 
   Future<LocalFileCopy> _copy(
@@ -556,12 +582,14 @@ class DocumentsCoordinator {
         () => scope.copy(
           source: mode == 'r'
               ? LocalFileEndpoint.fd(opened['fd'] as int)
-              : LocalFileEndpoint.path(_path(source!)),
+              : LocalFileEndpoint.path(_path(op, source!)),
           target: mode == 'r'
-              ? LocalFileEndpoint.part(_path(target!))
+              ? LocalFileEndpoint.part(_path(op, target!))
               : LocalFileEndpoint.fd(opened['fd'] as int),
           expectedSource: expectedSource,
-          maxBytes: op.limits.maxBytes - op.bytes,
+          maxBytes:
+              min(op.limits.maxBytes, op.importBytes ?? op.limits.maxBytes) -
+              op.bytes,
           timeout: op.limits.timeout,
         ),
       );
@@ -679,7 +707,8 @@ class DocumentsCoordinator {
       final identity = copy.identity;
       final scope = await _scope(op);
       await _native(
-        () => scope.commit(copy!, _path(target), expectedIdentity: identity),
+        () =>
+            scope.commit(copy!, _path(op, target), expectedIdentity: identity),
       );
       op.check(_disposed || _isDisposed());
       op.files++;
@@ -838,7 +867,7 @@ class DocumentsCoordinator {
       op.directories++;
       final scope = await _scope(op);
       final listing = await _native(
-        () => scope.list(_path(source), maxEntries: op.limits.maxEntries),
+        () => scope.list(_path(op, source), maxEntries: op.limits.maxEntries),
       );
       op.check(_disposed || _isDisposed());
       if (!_sameLocal(before, listing.identity)) {
@@ -972,12 +1001,16 @@ class _Operation {
   DocumentsJson? pendingConflict;
   Completer<String>? conflictReply;
   final DocumentLimits limits;
+  DocumentScopeConfiguration? boundary;
   Future<LocalFileScope>? openingScope;
   Future<void>? closingScope;
   bool scopeClosed = false;
   final finished = Completer<void>();
   String cache = '', name = '';
   String? localPath, uri, ownerLeaseId;
+  String? managedSourceId;
+  int? importBytes;
+  bool sourceCompleted = false;
   bool cancelled = false, timedOut = false, writing = false, started = false;
   Timer? timer;
   final interrupted = Completer<void>();
@@ -1070,6 +1103,7 @@ class _Operation {
 
   DocumentsJson response(String status) => {
     'operationId': id,
+    if (managedSourceId != null) 'managedSourceId': managedSourceId,
     'status': status,
     'localPath': localPath,
     'uri': uri,

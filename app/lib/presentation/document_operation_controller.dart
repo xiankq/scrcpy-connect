@@ -44,6 +44,20 @@ class DocumentOperationController extends ChangeNotifier {
   bool cancelling = false;
   bool disposed = false;
 
+  Future<void> _release(Json? data) async {
+    final source = data?['managedSourceId'];
+    if (source is! String) return;
+    try {
+      await controller.execute(ApplicationCommand.documentsCancel, {
+        'managedSourceId': source,
+      });
+    } catch (failure) {
+      // 退出不代表归还成功。来源账本继续保护未确认内容，保留错误供核对。
+      error = '$failure';
+      rethrow;
+    }
+  }
+
   Future<void> refresh() async {
     if (exportSource == null || disposed || busy) return;
     final generation = ++_readGeneration;
@@ -90,6 +104,7 @@ class DocumentOperationController extends ChangeNotifier {
   }) async {
     if (busy || refreshing || !loaded || result?['status'] == 'pending') return;
     final previousOperation = recordOperationId;
+    final previousResult = result;
     final random = Random.secure();
     final id =
         'documents-${List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
@@ -100,8 +115,12 @@ class DocumentOperationController extends ChangeNotifier {
     error = null;
     busy = true;
     var reread = false;
+    var previousReleased = false;
     notifyListeners();
     try {
+      await _release(previousResult);
+      previousReleased = true;
+      if (disposed || operationId != id) return;
       final data = await controller.request(command, {
         ...params,
         ...?exportSource,
@@ -111,8 +130,15 @@ class DocumentOperationController extends ChangeNotifier {
           'additionalCopyOfOperationId': previousOperation,
         'operationId': id,
       });
-      if (!disposed && operationId == id) result = data;
+      if (!disposed && operationId == id) {
+        result = data;
+      } else {
+        result = data;
+        await _release(data);
+        result = null;
+      }
     } catch (failure) {
+      if (!previousReleased) result = previousResult;
       if (!disposed && operationId == id) {
         reread = exportSource != null;
         error = '$failure';
@@ -161,6 +187,7 @@ class DocumentOperationController extends ChangeNotifier {
   void dispose() {
     disposed = true;
     unawaited(_events?.cancel());
+    _release(result).ignore();
     final id = operationId;
     operationId = null;
     if (id != null) {

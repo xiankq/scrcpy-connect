@@ -9,7 +9,7 @@ const _pixels = <String, dynamic>{
   'width': 200,
   'height': 400,
   'firstFrameDecoded': true,
-  'evidence': 'media_codec.snapshot',
+  'evidence': 'media_codec.decodedFrame',
 };
 
 RemotePresentation _viewed() => RemotePresentation()

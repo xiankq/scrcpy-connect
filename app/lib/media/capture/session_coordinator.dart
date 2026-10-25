@@ -1514,20 +1514,28 @@ extension _SessionQuality on SessionCoordinator {
     final device = _string(params, 'deviceId');
     final encoders = await _serverQueries.encoders(connection, stop);
     final quality = _quality(device, const {});
+    final codecs = <SessionJson>[];
+    for (final codec in ScrcpyVideoCodec.values) {
+      final matching = encoders
+          .where((entry) => entry['codec'] == codec.name)
+          .toList();
+      final available = matching.isNotEmpty;
+      codecs.add({
+        'id': codec.name,
+        'name': codec.name,
+        'mime': _mime(codec.name),
+        'available': available,
+        'status': available ? 'available' : 'unavailable',
+        'reason': available ? '已从这台设备枚举到编码器，实际配置仍需验证。' : '设备未枚举到此格式的编码器。',
+        'encoders': matching,
+      });
+    }
     return {
       'deviceId': device,
       'scope': 'device',
       'probe': {'status': 'enumerated'},
       'current': VideoQualityPolicy.current(quality),
-      'codecs': [
-        for (final codec in ScrcpyVideoCodec.values)
-          {
-            'id': codec.name,
-            'name': codec.name,
-            'mime': _mime(codec.name),
-            'available': encoders.any((entry) => entry['codec'] == codec.name),
-          },
-      ],
+      'codecs': codecs,
       'encoders': encoders,
       'activeStreams': [
         for (final slot in _sessions.values)

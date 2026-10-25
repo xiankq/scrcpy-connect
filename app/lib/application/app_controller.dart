@@ -197,10 +197,17 @@ class AppController extends _$AppController {
   bool isDisposed() => _disposed || !ref.mounted;
   AppState snapshot() => state;
   Stream<Json> eventStream() => _events.stream;
-  Future<Json> execute(ApplicationCommand command, [Json params = const {}]) =>
-      request(command.wire, params);
+  Future<Json> execute(ApplicationCommand command, [Json params = const {}]) {
+    _announceStop(command.wire, params);
+    return _dependencies.execute(command, params);
+  }
 
   Future<Json> request(String command, [Json params = const {}]) {
+    _announceStop(command, params);
+    return _dependencies.request(command, params);
+  }
+
+  void _announceStop(String command, Json params) {
     // 回执前先发布用户停止意图，避免传输失败与停止竞争时页面重建画面；桥接内部清理不走此入口。
     final activity = command == 'activities.stop' ? params['activityId'] : null;
     final sessionStop = command == 'session.stop'
@@ -226,7 +233,6 @@ class AppController extends _$AppController {
         'data': <String, dynamic>{},
       });
     }
-    return _dependencies.request(command, params);
   }
 
   Future<void> initialize() =>

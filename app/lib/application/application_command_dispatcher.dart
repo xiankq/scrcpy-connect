@@ -1,14 +1,15 @@
 import 'package:scrcpy_connect/media/cache/app_media_cache.dart';
 import 'package:scrcpy_connect/media/cache/media_artifact_coordinator.dart';
 import 'package:scrcpy_connect/files/documents/delivery_journal.dart';
-import 'package:scrcpy_connect/files/execution/file_executor.dart';
+import 'package:scrcpy_connect/files/execution/file_executor.dart'
+    show FileFailure;
 import 'package:scrcpy_connect/files/catalog/file_catalog.dart';
 import 'package:scrcpy_connect/files/mutations/file_mutation_coordinator.dart';
 import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
 import 'package:scrcpy_connect/application/transport/file_commands.dart';
 import 'package:scrcpy_connect/files/sharing/share_coordinator.dart';
-import 'package:scrcpy_connect/preferences/preference_store.dart';
 import 'package:scrcpy_connect/application/transport/command_contract.dart';
+import 'package:scrcpy_connect/application/transport/commands_generated.dart';
 import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
 import 'package:scrcpy_connect/media/quality/video_quality_policy.dart';
 import 'package:scrcpy_connect/media/quality/virtual_display_policy.dart';
@@ -18,65 +19,40 @@ import 'package:scrcpy_connect/preferences/preference_commands.dart';
 /// 应用命令的校验、产品偏好和文件流程；各业务所有者通过 Dart 接口执行。
 final class ApplicationCommandDispatcher {
   ApplicationCommandDispatcher({
-    required FileExecutor executor,
     required FileCatalog catalog,
     required FileMutationCoordinator mutations,
     required TransferCoordinator transfers,
-    required PreferenceStore preferences,
+    required this._preferences,
     required this.execute,
-    AppMediaCache? cache,
-    DeliveryJournal? deliveries,
-    ShareCoordinator? sharing,
-    void Function(Map<String, dynamic>)? onMediaEvent,
-    required void Function(Map<String, dynamic>) onSettingsChanged,
-    required Future<void> Function(bool) applyBackgroundPolicy,
+    this._cache,
+    this._deliveries,
+    this._sharing,
+    this._artifacts,
+    this._onMediaEvent,
   }) : _catalog = catalog,
        _mutations = mutations,
-       _transfers = transfers {
-    _fileCommands = FileCommands(
-      catalog: catalog,
-      mutations: mutations,
-      transfers: transfers,
-    );
-    _onMediaEvent = onMediaEvent;
-    _cache = cache;
-    _deliveries = deliveries;
-    _sharing = sharing;
-    _artifacts = cache == null
-        ? null
-        : MediaArtifactCoordinator(
-            cache: cache,
-            executor: executor,
-            request: _request,
-            emit: onMediaEvent,
-          );
-    _preferences = PreferenceCommands(
-      preferences: preferences,
-      request: _request,
-      onChanged: onSettingsChanged,
-      applyBackgroundPolicy: applyBackgroundPolicy,
-    );
-  }
+       _transfers = transfers,
+       _fileCommands = FileCommands(
+         catalog: catalog,
+         mutations: mutations,
+         transfers: transfers,
+       );
+
   final FileCatalog _catalog;
   final FileMutationCoordinator _mutations;
   final TransferCoordinator _transfers;
-  late final FileCommands _fileCommands;
+  final FileCommands _fileCommands;
   final Future<Map<String, dynamic>> Function(
-    String command,
+    ApplicationCommand command,
     Map<String, dynamic> params,
   )
   execute;
-  late final PreferenceCommands _preferences;
-  late final void Function(Map<String, dynamic>)? _onMediaEvent;
-  late final AppMediaCache? _cache;
-  late final DeliveryJournal? _deliveries;
-  late final ShareCoordinator? _sharing;
-  late final MediaArtifactCoordinator? _artifacts;
-  Future<void> closeMediaArtifacts() async => _artifacts?.close();
-
-  /// 连接所有者在撤销连接时调用，覆盖断开、换钥和连接配置替换。
-  Future<void> cancelDeviceArtifacts(String deviceId) async =>
-      _artifacts?.cancelDevice(deviceId);
+  final PreferenceCommands _preferences;
+  final void Function(Map<String, dynamic>)? _onMediaEvent;
+  final AppMediaCache? _cache;
+  final DeliveryJournal? _deliveries;
+  final ShareCoordinator? _sharing;
+  final MediaArtifactCoordinator? _artifacts;
 
   Map<String, dynamic> projectEvent(Map<String, dynamic> event) =>
       _preferences.projectEvent(event);
@@ -84,10 +60,26 @@ final class ApplicationCommandDispatcher {
   Future<Map<String, dynamic>> invoke(
     String command,
     Map<String, dynamic> params,
+  ) async => invokeCommand(validateCommandRequest(command, params), params);
+
+  Future<Map<String, dynamic>> invokeCommand(
+    ApplicationCommand command,
+    Map<String, dynamic> params,
   ) async {
-    if (command == 'settings.update') {
+    validateTypedCommandRequest(command, params);
+    final response = await _invoke(command, params);
+    validateCommandResult(command, response);
+    return response;
+  }
+
+  Future<Map<String, dynamic>> _invoke(
+    ApplicationCommand operation,
+    Map<String, dynamic> params,
+  ) async {
+    final command = operation.wire;
+    if (operation == ApplicationCommand.settingsUpdate) {
       VideoQualityPolicy.validateSettings(params);
-    } else if (command == 'settings.import') {
+    } else if (operation == ApplicationCommand.settingsImport) {
       final metadata = params['metadata'];
       final settings = metadata is Map ? metadata['settings'] : null;
       if (settings is Map) {
@@ -102,7 +94,7 @@ final class ApplicationCommandDispatcher {
       );
     }
     try {
-      if (command == 'activities.stop' &&
+      if (operation == ApplicationCommand.activitiesStop &&
           params['activityId'] is String &&
           (params['activityId'] as String).startsWith('transfer:')) {
         return Map<String, dynamic>.from(
@@ -116,7 +108,9 @@ final class ApplicationCommandDispatcher {
       if (command.startsWith('sharing.')) {
         final sharing = _sharing;
         if (sharing == null) {
-          if (command == 'sharing.pending') return {'shares': <Object?>[]};
+          if (operation == ApplicationCommand.sharingPending) {
+            return {'shares': <Object?>[]};
+          }
           throw const ApplicationCommandException(
             'platform_unavailable',
             '此宿主不支持接收系统分享。',
@@ -134,8 +128,8 @@ final class ApplicationCommandDispatcher {
         final result = Map<String, dynamic>.from(
           await _cache.command(command, params),
         );
-        if (command == 'media.cache.configure' ||
-            command == 'media.cache.clear') {
+        if (operation == ApplicationCommand.mediaCacheConfigure ||
+            operation == ApplicationCommand.mediaCacheClear) {
           _onMediaEvent?.call({'type': 'media.cache.changed', 'data': result});
         }
         return result;
@@ -150,10 +144,10 @@ final class ApplicationCommandDispatcher {
         return await _deliveries.command(command, params);
       }
       if (const [
-        'media.preview',
-        'media.thumbnail',
-        'media.thumbnail.cancel',
-      ].contains(command)) {
+        ApplicationCommand.mediaPreview,
+        ApplicationCommand.mediaThumbnail,
+        ApplicationCommand.mediaThumbnailCancel,
+      ].contains(operation)) {
         if (_artifacts == null) {
           throw const ApplicationCommandException(
             'cache_not_configured',
@@ -168,26 +162,33 @@ final class ApplicationCommandDispatcher {
       throw ApplicationCommandException(error.code, error.message);
     }
     if (const [
-      'session.start',
-      'apps.launch',
-      'session.quality',
-    ].contains(command)) {
-      final settings = await invoke('settings.get', const {});
+      ApplicationCommand.sessionStart,
+      ApplicationCommand.appsLaunch,
+      ApplicationCommand.sessionQuality,
+    ].contains(operation)) {
+      final settings = await invokeCommand(
+        ApplicationCommand.settingsGet,
+        const {},
+      );
       params = {
         ...params,
         ...VideoQualityPolicy.resolve(
           settings,
           params['deviceId'] as String?,
-          command == 'session.quality' ? params : const {},
+          operation == ApplicationCommand.sessionQuality ? params : const {},
         ),
       }..remove('preset');
     }
     params = await VirtualDisplayPolicy.prepare(
       command,
       params,
-      readSessions: (filter) => invoke('session.list', filter),
+      readSessions: (filter) =>
+          invokeCommand(ApplicationCommand.sessionList, filter),
     );
-    if (['devices.disconnect', 'devices.forget'].contains(command)) {
+    if ([
+      ApplicationCommand.devicesDisconnect,
+      ApplicationCommand.devicesForget,
+    ].contains(operation)) {
       await _artifacts?.cancelDevice(params['deviceId'] as String);
       final device = params['deviceId'] as String;
       await Future.wait([
@@ -196,23 +197,23 @@ final class ApplicationCommandDispatcher {
         _transfers.cancelDevice(device),
       ]);
     }
-    final response = await _request(command, params);
-    if (command == 'devices.forget') {
+    final response = await _request(operation, params);
+    if (operation == ApplicationCommand.devicesForget) {
       await _preferences.forgetDevicePreferences(params['deviceId'] as String);
     }
-    final result = command == 'state.snapshot'
+    final result = operation == ApplicationCommand.stateSnapshot
         ? _preferences.projectSnapshot(response)
         : response;
-    if (command == 'session.quality') {
+    if (operation == ApplicationCommand.sessionQuality) {
       await _preferences.saveDeviceQuality(
         params['deviceId'] as String,
         Map<String, dynamic>.from(result['current'] as Map),
       );
     }
-    if (command == 'session.quality.options') {
+    if (operation == ApplicationCommand.sessionQualityOptions) {
       return VideoQualityPolicy.options(
         result,
-        await invoke('settings.get', const {}),
+        await invokeCommand(ApplicationCommand.settingsGet, const {}),
         params['deviceId'] as String?,
       );
     }
@@ -220,12 +221,12 @@ final class ApplicationCommandDispatcher {
   }
 
   Future<Map<String, dynamic>> _request(
-    String command,
+    ApplicationCommand command,
     Map<String, dynamic> params,
   ) async {
-    final contract = validateCommandRequest(command, params);
+    validateTypedCommandRequest(command, params);
     final response = await execute(command, params);
-    validateCommandResult(contract, response);
+    validateCommandResult(command, response);
     return response;
   }
 }

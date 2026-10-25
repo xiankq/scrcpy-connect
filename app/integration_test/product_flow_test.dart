@@ -7,8 +7,6 @@ import 'package:scrcpy_connect/connection/connection_validation.dart';
 
 import 'dart:ui' as ui;
 
-import 'package:design_system/design_system.dart';
-
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
@@ -17,6 +15,7 @@ import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/application/app_controller.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_breadcrumbs.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
 import 'package:flutter/material.dart';
@@ -220,7 +219,13 @@ void main() {
       await waitFor(
         tester,
         () =>
-            find.text('/sdcard').evaluate().isNotEmpty &&
+            find
+                .byWidgetPredicate(
+                  (widget) =>
+                      widget is FileBreadcrumbs && widget.path == '/sdcard',
+                )
+                .evaluate()
+                .isNotEmpty &&
             find
                 .descendant(
                   of: find.byType(FilesPage),
@@ -328,7 +333,7 @@ void main() {
       );
       await tapPageAction(tester, find.byType(QualityPage), find.text('编码格式'));
       await tester.pump(const Duration(milliseconds: 400));
-      final hevc = find.widgetWithText(ListTile, 'H.265');
+      final hevc = find.widgetWithText(ListTile, 'h265');
       expect(hevc, findsOneWidget);
       expect(
         tester.widget<ListTile>(hevc).enabled,
@@ -341,7 +346,7 @@ void main() {
       await waitFor(
         tester,
         () =>
-            find.widgetWithText(ListTile, 'H.265').evaluate().isNotEmpty &&
+            find.widgetWithText(ListTile, 'h265').evaluate().isNotEmpty &&
             find.text('编码格式').evaluate().isNotEmpty &&
             find.byType(BottomSheet).evaluate().isEmpty,
         reason: 'The real screen settings page must persist device-wide H.265.',
@@ -428,11 +433,16 @@ void main() {
         final button = find.descendant(
           of: remote,
           matching: find.byWidgetPredicate(
-            (widget) => widget is GlassActionIcon && widget.tooltip == tooltip,
+            (widget) => widget is IconButton && widget.tooltip == tooltip,
           ),
         );
         expect(button, findsOneWidget);
-        expect(tester.widget<GlassActionIcon>(button).onPressed, isNotNull);
+        await waitFor(
+          tester,
+          () => tester.widget<IconButton>(button).onPressed != null,
+          reason:
+              'The decoded picture must establish input authority before $tooltip.',
+        );
       }
       binding.reportData!['defaultNavigationButtonsPresent'] = true;
       await binding.handlePopRoute();
@@ -477,7 +487,7 @@ void main() {
       );
       expect(session['codec'], 'h265');
       expect(session['firstFrameDecoded'], isTrue);
-      expect(session['evidence'], 'media_codec.snapshot');
+      expect(session['evidence'], 'media_codec.decodedFrame');
       expect(session['capturePaused'], isNot(true));
       binding.reportData!['systemBackRetainsStreamingRemote'] = true;
       binding.reportData!['letterboxTapRetainsStreamingRemote'] = true;
@@ -602,6 +612,19 @@ void main() {
       expect(tester.takeException(), isNull);
     } catch (error) {
       binding.reportData!['failure'] = '$error';
+      binding.reportData!['lifecycle'] = binding.lifecycleState?.name;
+      if (find.byType(ConnectApp).evaluate().isNotEmpty) {
+        final controller = ProviderScope.containerOf(
+          tester.element(find.byType(ConnectApp)),
+        ).read(appControllerProvider.notifier);
+        try {
+          binding.reportData!['failureSessions'] = await controller
+              .request('session.list')
+              .timeout(const Duration(seconds: 5));
+        } catch (stateError) {
+          binding.reportData!['failureStateError'] = '$stateError';
+        }
+      }
       binding.reportData!['failureTexts'] = tester
           .widgetList<Text>(find.byType(Text))
           .map((text) => text.data)

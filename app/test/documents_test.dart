@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/application/transport/application_request.dart';
+import 'package:scrcpy_connect/presentation/document_operation_controller.dart';
 
 import 'support/test_controller.dart';
 
@@ -14,6 +15,159 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final hasPrevious in [false, true]) {
+    testWidgets(
+      'page exit during ${hasPrevious ? 'source release' : 'initial admission'} never starts a later picker',
+      (tester) async {
+        var imports = 0;
+        final releasing = Completer<Json>();
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          if (command == 'documents.importDirectory') {
+            imports++;
+            return {'status': 'imported', 'managedSourceId': 'document:first'};
+          }
+          if (command == 'documents.cancel' &&
+              params['managedSourceId'] is String) {
+            return releasing.future;
+          }
+          return {};
+        });
+        final operation = DocumentOperationController(controller);
+        if (hasPrevious) await operation.run('documents.importDirectory', {});
+        final selecting = operation.run('documents.importDirectory', {});
+        if (hasPrevious) await tester.pump();
+        operation.dispose();
+        releasing.complete({});
+        await selecting;
+        expect(imports, hasPrevious ? 1 : 0);
+        controller.dispose();
+      },
+    );
+  }
+  testWidgets(
+    'a failed source release after disposal preserves its source and error',
+    (tester) async {
+      final releasing = Completer<Json>();
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'documents.importDirectory') {
+          return {'status': 'imported', 'managedSourceId': 'document:first'};
+        }
+        if (command == 'documents.cancel' &&
+            params['managedSourceId'] is String) {
+          return releasing.future;
+        }
+        return {};
+      });
+      final operation = DocumentOperationController(controller);
+      await operation.run('documents.importDirectory', {});
+      final selecting = operation.run('documents.importDirectory', {});
+      await tester.pump();
+      operation.dispose();
+      releasing.completeError(
+        const RequestFailure('release_failed', '来源归还尚未确认'),
+      );
+      await selecting;
+      expect(operation.result?['managedSourceId'], 'document:first');
+      expect(operation.error, contains('来源归还尚未确认'));
+      controller.dispose();
+    },
+  );
+  testWidgets('a failed late-result release retains its managed identity', (
+    tester,
+  ) async {
+    final imported = Completer<Json>();
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      if (command == 'documents.importDirectory') return imported.future;
+      if (command == 'documents.cancel' &&
+          params['managedSourceId'] is String) {
+        throw const RequestFailure('release_failed', '迟到来源归还尚未确认');
+      }
+      return {};
+    });
+    final operation = DocumentOperationController(controller);
+    final selecting = operation.run('documents.importDirectory', {});
+    await tester.pump();
+    operation.dispose();
+    imported.complete({
+      'status': 'imported',
+      'managedSourceId': 'document:late',
+    });
+    await selecting;
+    expect(operation.result?['managedSourceId'], 'document:late');
+    expect(operation.error, contains('迟到来源归还尚未确认'));
+    controller.dispose();
+  });
+  testWidgets('reselection and page disposal return each managed source once', (
+    tester,
+  ) async {
+    final released = <String>[];
+    var imports = 0;
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      if (command == 'documents.cancel' &&
+          params['managedSourceId'] is String) {
+        released.add(params['managedSourceId'] as String);
+      }
+      if (command == 'documents.importDirectory') {
+        imports++;
+        if (imports == 2) expect(released, ['document:first']);
+        return {
+          'managedSourceId': imports == 1
+              ? 'document:first'
+              : 'document:second',
+          'status': 'imported',
+        };
+      }
+      return {};
+    });
+    final operation = DocumentOperationController(controller);
+    await operation.run('documents.importDirectory', {});
+    await operation.run('documents.importDirectory', {});
+    operation.dispose();
+    await tester.pump();
+    expect(released, ['document:first', 'document:second']);
+    controller.dispose();
+  });
+  testWidgets(
+    'a managed import result arriving after page disposal is returned',
+    (tester) async {
+      final reply = Completer<Json>();
+      final released = <String>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'documents.importDirectory') return reply.future;
+        if (command == 'documents.cancel' &&
+            params['managedSourceId'] is String) {
+          released.add(params['managedSourceId'] as String);
+        }
+        return {};
+      });
+      final operation = DocumentOperationController(controller);
+      final importing = operation.run('documents.importDirectory', {});
+      await tester.pump();
+      operation.dispose();
+      reply.complete({
+        'managedSourceId': 'document:late',
+        'status': 'imported',
+      });
+      await importing;
+      expect(released, ['document:late']);
+      controller.dispose();
+    },
+  );
   testWidgets(
     'a rejected admission restores the actual prior operation before review',
     (tester) async {
@@ -347,6 +501,7 @@ void main() {
           return {
             'status': 'partial',
             'localPath': '/private/cache/Docs',
+            'managedSourceId': 'document:source',
             'name': 'Docs',
             'files': 1,
             'directories': 1,
@@ -389,6 +544,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(pushed, {
         'deviceId': 'phone',
+        'shareId': 'document:source',
         'items': [
           {'source': '/private/cache/Docs', 'destination': '/sdcard/Docs'},
         ],

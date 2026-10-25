@@ -9,11 +9,15 @@ import 'support/file_executor_fixture.dart'
     show FixtureExecutor, regular, until;
 
 final class _Publication implements FilePublicationLeases {
+  @override
+  Future<Set<String>> get sourcePaths async => {};
+
   final gate = Completer<void>();
   final started = Completer<void>();
   final finishStarted = Completer<void>();
   Completer<void>? finishing;
   final unpublished = <bool>[];
+  final plannedTransfers = <String?>[];
   int starts = 0;
   int finishes = 0;
   bool fail = false;
@@ -21,9 +25,11 @@ final class _Publication implements FilePublicationLeases {
   @override
   Future<Map<String, Object?>?> begin(
     String share,
-    Map<String, Object?> request,
-  ) async {
+    Map<String, Object?> request, {
+    String? transferId,
+  }) async {
     starts++;
+    plannedTransfers.add(transferId);
     if (!started.isCompleted) started.complete();
     await gate.future;
     if (fail) throw const FileFailure('share_fixture_failure', '提交前失败。');
@@ -44,8 +50,9 @@ final class _Publication implements FilePublicationLeases {
 
   @override
   Future<Map<String, Object?>> reconcile(
-    Map<String, Object?> durableReferences,
-  ) async => {'reconciled': true};
+    Map<String, Object?> durableReferences, {
+    Set<String>? coveredSources,
+  }) async => {'reconciled': true};
 }
 
 void main() {
@@ -113,7 +120,8 @@ void main() {
     publication.gate.complete();
     final receipts = await Future.wait([first, duplicate])
         .timeout(const Duration(seconds: 3));
-    expect(receipts.first['batchId'], isNotNull);
+    expect(publication.plannedTransfers.single, isNotNull);
+    expect(receipts.first['batchId'], publication.plannedTransfers.single);
     expect(receipts.last, receipts.first);
     expect(publication.finishes, 1);
   });

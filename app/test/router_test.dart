@@ -96,7 +96,7 @@ class _Backend {
         return {
           ...session,
           'firstFrameDecoded': true,
-          'evidence': 'media_codec.snapshot',
+          'evidence': 'media_codec.decodedFrame',
         };
       case 'session.stop':
         sessions.removeWhere(

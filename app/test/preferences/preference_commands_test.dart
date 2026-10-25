@@ -43,6 +43,36 @@ void main() {
     await directory.delete(recursive: true);
   });
 
+  test('命名读取等待正在保存和应用的偏好，不绕过原有串行队列', () async {
+    final applying = Completer<void>();
+    final release = Completer<void>();
+    final runtime = PreferenceCommands(
+      preferences: preferences,
+      request: (_, _) async => fail('读取偏好不得调用设备分派器'),
+      onChanged: (_) {},
+      applyBackgroundPolicy: (_) async {
+        applying.complete();
+        await release.future;
+      },
+    );
+    final saving = runtime.invoke('settings.update', {
+      'appearance': 'dark',
+      'backgroundKeepAlive': false,
+    });
+    await applying.future;
+    var returned = false;
+    final reading = runtime.read().then((settings) {
+      returned = true;
+      return settings;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(returned, isFalse);
+    release.complete();
+    await saving;
+    expect((await reading)['appearance'], 'dark');
+    expect(returned, isTrue);
+  });
+
   test('重置后台偏好立即恢复执行策略且不重复应用无关设置', () async {
     await preferences.update({'backgroundKeepAlive': false});
     final applied = <bool>[];

@@ -112,7 +112,7 @@ void main() {
             ...sessions[1],
             'status': 'streaming',
             'firstFrameDecoded': true,
-            'evidence': 'media_codec.snapshot',
+            'evidence': 'media_codec.decodedFrame',
           };
         }
         if (command == 'session.stop') {
@@ -180,7 +180,7 @@ void main() {
             ..._sessions()[1],
             'status': 'streaming',
             'firstFrameDecoded': true,
-            'evidence': 'media_codec.snapshot',
+            'evidence': 'media_codec.decodedFrame',
           };
         }
         return {};
@@ -294,7 +294,7 @@ void main() {
             'sessionId': 'B',
             'textureId': 2,
             'firstFrameDecoded': true,
-            'evidence': 'media_codec.snapshot',
+            'evidence': 'media_codec.decodedFrame',
           },
         });
         await tester.pump();
@@ -309,7 +309,7 @@ void main() {
           'status': 'streaming',
           'capturePaused': false,
           'firstFrameDecoded': true,
-          'evidence': 'media_codec.snapshot',
+          'evidence': 'media_codec.decodedFrame',
         };
         resumed.complete(sessions[1]);
         await tester.pumpAndSettle();

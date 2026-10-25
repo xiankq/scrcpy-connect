@@ -40,6 +40,8 @@ final class PreferenceCommands {
   Map<String, dynamic> get settings => preferences.current.toMap();
   int get revision => preferences.current.revision;
 
+  Future<Map<String, dynamic>> read() => _tail.then((_) => settings);
+
   Map<String, dynamic> projectSnapshot(Map<String, dynamic> native) => {
     ...native,
     'settings': settings,

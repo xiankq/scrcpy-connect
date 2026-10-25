@@ -806,8 +806,7 @@ class _RemotePageState extends State<RemotePage>
       case 'session.output.changed':
       case 'session.output.resumed':
         if (event['type'] != 'session.frame' &&
-            (data['firstFrameDecoded'] != true ||
-                data['evidence'] != 'media_codec.snapshot')) {
+            !hasDecodedFrameEvidence(data)) {
           return;
         }
         showResourceAdjustment();

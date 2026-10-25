@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:adb/adb.dart';
 
@@ -7,14 +8,45 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/platform/application_platform.dart';
 import 'package:scrcpy_connect/files/documents/documents_coordinator.dart';
+import 'package:scrcpy_connect/files/documents/document_sources.dart';
 import 'package:scrcpy_connect/files/documents/document_scope_recovery.dart';
 import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
 
+// 虚拟时钟不会推进可信根解析的真实文件系统回执。等待实际阶段，同时
+// 继续由 pump 驱动协调器，避免把准入耗时误算成 provider/conflict 超时。
+Future<void> documentStage(WidgetTester tester, bool Function() entered) async {
+  final elapsed = Stopwatch()..start();
+  await tester.runAsync(() async {
+    while (!entered()) {
+      if (elapsed.elapsed > const Duration(seconds: 10)) {
+        throw StateError('文档操作未进入预期阶段。');
+      }
+      await Future<void>(() {});
+      await tester.pump();
+    }
+  });
+}
+
+Future<DocumentsJson> documentResult(
+  WidgetTester tester,
+  Future<DocumentsJson> request,
+) async {
+  var complete = false;
+  final result = request.whenComplete(() => complete = true);
+  await documentStage(tester, () => complete);
+  return result;
+}
+
 class Fixture {
+  Fixture({this.cacheDirectory = '/cache', this.sources});
+  final String cacheDirectory;
+  final DocumentSources? sources;
   final calls = <(String, DocumentsJson)>[];
   final nodes = <String, DocumentsJson>{};
   final children = <String, List<String>>{};
   final local = <String, DocumentsJson>{};
+  final conflicts = <DocumentsJson>[];
+  final pickerEntered = Completer<void>();
   List<String> selected = [];
   String choice = 'keepBoth';
   String ownerLeaseId = 'fixture-owner';
@@ -48,6 +80,8 @@ class Fixture {
   late final coordinator = DocumentsCoordinator(
     files: files,
     platform: platform,
+    sources: sources,
+    onConflictChanged: conflicts.add,
   );
   Future<DocumentsJson> platform(String command, DocumentsJson params) async {
     calls.add((command, params));
@@ -59,7 +93,7 @@ class Fixture {
     final id = params['handle'];
     switch (command) {
       case 'documents.platform.environment':
-        return {'cacheDirectory': '/cache', 'ownerLeaseId': ownerLeaseId};
+        return {'cacheDirectory': cacheDirectory, 'ownerLeaseId': ownerLeaseId};
       case 'documents.platform.claim':
         if (params['expectedOwnerLeaseId'] != ownerLeaseId &&
             params['ownerLeaseId'] != ownerLeaseId) {
@@ -71,6 +105,7 @@ class Fixture {
       case 'documents.platform.release':
         return {'released': true};
       case 'documents.platform.picker':
+        if (!pickerEntered.isCompleted) pickerEntered.complete();
         return picker?.future ??
             {
               'status': 'selected',
@@ -149,6 +184,8 @@ class LocalFixture implements NativeLocalFilesApi {
   Future<LocalFileCopyResult> Function(LocalFileCopyRequest)? onRunCopy;
   Future<void> Function(String)? onCloseScope;
   Future<void> Function(String)? onCloseCopy;
+  Future<void> Function(String)? onMkdir;
+  Future<void> Function(String)? onCommit;
   Future<String> Function(List<Uint8List>)? onOpenScope;
   Future<String> Function(String, LocalFileCopyRequest)? onCreateCopy;
   String path(List<int> bytes) => utf8.decode(bytes);
@@ -212,6 +249,7 @@ class LocalFixture implements NativeLocalFilesApi {
       {'path': path(bytes), 'exclusive': exclusive},
     ));
     fixture.local[path(bytes)] = {'kind': 'directory'};
+    await onMkdir?.call(path(bytes));
   }
 
   @override
@@ -300,6 +338,7 @@ class LocalFixture implements NativeLocalFilesApi {
     fixture.calls.add(('local.commit', {'path': path(destination)}));
     final source = path(copies[copyId]!.$2.target.pathBytes!);
     fixture.local[path(destination)] = fixture.local.remove(source)!;
+    await onCommit?.call(path(destination));
     committed.add(copyId);
     return expectedIdentity;
   }
@@ -307,6 +346,51 @@ class LocalFixture implements NativeLocalFilesApi {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('managed imports drain before publication and each copy receives the shared remaining budget', () async {
+    final cache = await Directory.systemTemp.createTemp('documents-managed-');
+    addTearDown(() => cache.delete(recursive: true));
+    final sources = await DocumentSources.open(
+      cacheDirectory: cache,
+      totalBytes: 5,
+    );
+    final f = Fixture(cacheDirectory: cache.path, sources: sources);
+    f.node('root', 'Docs', directory: true);
+    f.node('a', 'a.txt');
+    f.selected = ['root'];
+    f.children['root'] = ['a'];
+    f.nativeFiles.onMkdir = (path) async {
+      await Directory(path).create();
+    };
+    f.nativeFiles.onCommit = (path) async {
+      await File(path).writeAsBytes([1, 2, 3]);
+    };
+    f.nativeFiles.onCloseScope = (_) async {
+      expect((await sources.store.sourcePaths).length, lessThanOrEqualTo(1));
+    };
+    final first = await f.coordinator.request('documents.importDirectory');
+    expect(first['status'], 'imported');
+    expect(first['managedSourceId'], startsWith(DocumentSources.prefix));
+    expect(await sources.store.sourcePaths, hasLength(1));
+    final second = await f.coordinator.request('documents.importDirectory');
+    expect(second['status'], 'partial');
+    expect((second['errors'] as List).single['code'], 'byte_limit');
+    expect(
+      f.calls
+          .where((call) => call.$1 == 'local.copy')
+          .map((call) => (call.$2['request'] as LocalFileCopyRequest).maxBytes),
+      [5, 2],
+    );
+    expect(await Directory(first['localPath'] as String).exists(), isTrue);
+    await f.coordinator.request('documents.cancel', {
+      'managedSourceId': first['managedSourceId'],
+    });
+    await f.coordinator.request('documents.cancel', {
+      'managedSourceId': second['managedSourceId'],
+    });
+    expect(await sources.store.sourcePaths, isEmpty);
+    await f.coordinator.dispose();
+  });
 
   test('同 Dart 会话换 Activity 后精确收尾旧操作，再排空接管后启动新选择器', () async {
     final f = Fixture()..picker = Completer<DocumentsJson>();
@@ -1055,7 +1139,7 @@ void main() {
           'kind': 'directory',
           'name': 'Tree',
         });
-        await tester.pump();
+        await documentStage(tester, () => events.isNotEmpty);
         final first = events.last['pending'] as DocumentsJson;
         expect(first['name'], 'one');
         await coordinator.request('documents.conflict.resolve', {
@@ -1095,7 +1179,10 @@ void main() {
           'kind': 'directory',
           'name': 'Tree',
         });
-        await tester.pump();
+        await documentStage(
+          tester,
+          () => events.last['pending']?['operationId'] == 'next-batch',
+        );
         expect(
           (events.last['pending'] as DocumentsJson)['operationId'],
           'next-batch',
@@ -1117,10 +1204,14 @@ void main() {
       f.node('old', 'Tree', directory: true);
       f.children['parent'] = ['old'];
       f.local['/cache/source'] = {'kind': 'directory'};
+      var conflictEntered = false;
       final coordinator = DocumentsCoordinator(
         files: f.files,
         limits: const DocumentLimits(timeout: Duration(milliseconds: 20)),
         platform: f.platform,
+        onConflictChanged: (event) {
+          if (event['pending'] != null) conflictEntered = true;
+        },
       );
       final job = coordinator.request('documents.export', {
         'operationId': 'timeout-conflict',
@@ -1128,7 +1219,7 @@ void main() {
         'kind': 'directory',
         'name': 'Tree',
       });
-      await tester.pump();
+      await documentStage(tester, () => conflictEntered);
       final pending =
           (await coordinator.request('documents.conflict.get', {
                 'operationId': 'timeout-conflict',
@@ -1167,12 +1258,15 @@ void main() {
       );
       f.children['parent'] = [];
       expect(
-        (await coordinator.request('documents.export', {
-          'operationId': 'healthy-next',
-          'localPath': '/cache/source',
-          'kind': 'directory',
-          'name': 'Tree',
-        }))['status'],
+        (await documentResult(
+          tester,
+          coordinator.request('documents.export', {
+            'operationId': 'healthy-next',
+            'localPath': '/cache/source',
+            'kind': 'directory',
+            'name': 'Tree',
+          }),
+        ))['status'],
         'saved',
       );
       await coordinator.dispose();
@@ -1201,7 +1295,7 @@ void main() {
             'name': 'Tree',
           });
       final oldJob = start('old-operation');
-      await tester.pump();
+      await documentStage(tester, () => events.isNotEmpty);
       final oldPending = events.single['pending'] as DocumentsJson;
       expect(
         (await coordinator.request('documents.conflict.get', {
@@ -1215,7 +1309,10 @@ void main() {
       expect((await oldJob)['status'], 'cancelled');
       expect(events.last, {'operationId': 'old-operation', 'pending': null});
       final newJob = start('new-operation');
-      await tester.pump();
+      await documentStage(
+        tester,
+        () => events.last['pending']?['operationId'] == 'new-operation',
+      );
       final current = events.last['pending'] as DocumentsJson;
       expect(
         await coordinator.request('documents.conflict.resolve', {
@@ -1290,10 +1387,14 @@ void main() {
       final f = Fixture()..selected = ['root'];
       f.node('root', 'Tree', directory: true);
       final pending = Completer<DocumentsJson>();
+      var metadataEntered = false;
       final coordinator = DocumentsCoordinator(
         files: f.files,
         platform: (command, params) {
-          if (command == 'documents.platform.metadata') return pending.future;
+          if (command == 'documents.platform.metadata') {
+            metadataEntered = true;
+            return pending.future;
+          }
           return f.platform(command, params);
         },
       );
@@ -1305,7 +1406,7 @@ void main() {
           .then((value) {
             result = value;
           });
-      await tester.pump();
+      await documentStage(tester, () => metadataEntered);
       await tester.pump(const Duration(seconds: 121));
       await tester.pump();
       expect(
@@ -1320,9 +1421,12 @@ void main() {
       );
       await job;
       f.selected = [];
-      final next = await coordinator.request('documents.importFiles', {
-        'operationId': 'after-timeout',
-      });
+      final next = await documentResult(
+        tester,
+        coordinator.request('documents.importFiles', {
+          'operationId': 'after-timeout',
+        }),
+      );
       expect(next['status'], 'partial');
       expect(
         (next['errors'] as List<Object?>).single,
@@ -1355,7 +1459,7 @@ void main() {
           .then((value) {
             firstResult = value;
           });
-      await tester.pump();
+      await documentStage(tester, () => picks == 1);
       await coordinator.request('documents.cancel', {'operationId': 'old'});
       await tester.pump();
       expect(firstResult?['status'], 'cancelled');
@@ -1365,7 +1469,7 @@ void main() {
           .then((value) {
             secondResult = value;
           });
-      await tester.pump();
+      await documentStage(tester, () => picks == 2);
       first.complete({
         'status': 'selected',
         'documents': [
@@ -1403,11 +1507,12 @@ void main() {
       final f = Fixture()..selected = ['file'];
       f.node('file', 'data.txt');
       final pending = Completer<DocumentsJson>();
-      var blocked = true;
+      var blocked = true, metadataEntered = false;
       final coordinator = DocumentsCoordinator(
         files: f.files,
         platform: (command, params) {
           if (blocked && command == 'documents.platform.metadata') {
+            metadataEntered = true;
             return pending.future;
           }
           return f.platform(command, params);
@@ -1419,7 +1524,7 @@ void main() {
           .then((value) {
             result = value;
           });
-      await tester.pump();
+      await documentStage(tester, () => metadataEntered);
       await coordinator.request('documents.cancel', {
         'operationId': 'cancel-meta',
       });
@@ -1427,9 +1532,12 @@ void main() {
       expect(result?['status'], 'cancelled');
       await job;
       blocked = false;
-      final next = await coordinator.request('documents.importFiles', {
-        'operationId': 'healthy',
-      });
+      final next = await documentResult(
+        tester,
+        coordinator.request('documents.importFiles', {
+          'operationId': 'healthy',
+        }),
+      );
       expect(next['status'], 'imported');
       pending.completeError(
         const ApplicationCommandException('late_metadata', 'late response'),
@@ -1451,11 +1559,16 @@ void main() {
     (tester) async {
       final f = Fixture();
       final pending = Completer<DocumentsJson>();
+      var pickerEntered = false;
       final coordinator = DocumentsCoordinator(
         files: f.files,
-        platform: (command, params) => command == 'documents.platform.picker'
-            ? pending.future
-            : f.platform(command, params),
+        platform: (command, params) {
+          if (command == 'documents.platform.picker') {
+            pickerEntered = true;
+            return pending.future;
+          }
+          return f.platform(command, params);
+        },
       );
       DocumentsJson? result;
       final job = coordinator
@@ -1463,7 +1576,7 @@ void main() {
           .then((value) {
             result = value;
           });
-      await tester.pump();
+      await documentStage(tester, () => pickerEntered);
       await coordinator.dispose();
       await tester.pump();
       expect(result?['status'], 'cancelled');
@@ -1738,7 +1851,7 @@ void main() {
         'kind': 'directory',
         'name': 'Tree',
       });
-      await tester.pump();
+      await documentStage(tester, () => f.conflicts.isNotEmpty);
       final pending =
           (await f.coordinator.request('documents.conflict.get', {
                 'operationId': 'conflicting-tree',
@@ -1896,7 +2009,7 @@ void main() {
       final job = f.coordinator.request('documents.importFiles', {
         'operationId': 'owned',
       });
-      await Future<void>.delayed(Duration.zero);
+      await f.pickerEntered.future;
       expect(
         (await f.coordinator.request('documents.cancel', {
           'operationId': 'other',

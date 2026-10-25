@@ -39,6 +39,23 @@ void main() {
       });
       final device = added['deviceId'] as String;
 
+      // 结构校验先于媒体探测、文件执行和重连意图；不能以类型转换或平台错误代替。
+      for (final (command, params) in <(String, Map<String, dynamic>)>[
+        ('session.start', {'deviceId': device, 'packageName': 7}),
+        ('files.mkdir', {'deviceId': 7, 'path': '/sdcard/invalid'}),
+        ('settings.import', {'metadata': <Object?>[]}),
+      ]) {
+        await expectLater(
+          session.request(command, params),
+          throwsA(_commandFailure('invalid_argument')),
+        );
+      }
+      await expectLater(
+        session.request('devices.disconect', {'deviceId': device}),
+        throwsA(_commandFailure('unknown_command')),
+      );
+      expect((await session.request('transfers.list'))['transfers'], isEmpty);
+
       // 已核验时同一文件命令确实进入连接执行边界，而非未知命令或静态分类。
       await expectLater(
         session.request('files.mkdir', {

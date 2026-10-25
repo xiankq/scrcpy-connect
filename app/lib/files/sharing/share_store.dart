@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/files/execution/file_executor.dart';
 import 'share_limits.dart';
 import 'share_store_format.dart';
 import 'share_store_storage.dart';
+import 'source_tree.dart';
 export 'share_store_storage.dart' show ShareStoreCommit;
 export 'share_limits.dart';
 
@@ -17,13 +18,16 @@ final class SharedSourceFile {
     required this.diskName,
     required this.name,
     required this.size,
+    this.directory = false,
   });
   final String diskName, name;
   final int size;
+  final bool directory;
   Map<String, dynamic> toJson() => {
     'diskName': diskName,
     'name': name,
     'size': size,
+    if (directory) 'directory': true,
   };
 }
 
@@ -37,6 +41,7 @@ final class ShareStore implements FilePublicationLeases {
     this._beforeRemove,
     this._storage,
     this._now,
+    this._directories,
   );
   final Directory root;
   final ShareLimits limits;
@@ -44,6 +49,7 @@ final class ShareStore implements FilePublicationLeases {
   final Future<void> Function(String)? _beforeRemove;
   final ShareStoreStorage _storage;
   final DateTime Function() _now;
+  final bool _directories;
   final _batches = <String, Map<String, dynamic>>{};
   final _leases = <String, Map<String, dynamic>>{};
   bool _uncertain = false;
@@ -59,10 +65,13 @@ final class ShareStore implements FilePublicationLeases {
     Future<void> Function(String)? beforeRemove,
     ShareStoreCommit? commitFile,
     DateTime Function()? now,
+    String directoryName = 'incoming',
+    bool directorySources = false,
   }) async {
     _validateLimits(limits);
     final cache = Directory(await cacheDirectory.resolveSymbolicLinks());
-    final root = Directory(p.join(cache.path, 'incoming'));
+    if (!_safeDisk(directoryName)) _bad('暂存根名称无效。');
+    final root = Directory(p.join(cache.path, directoryName));
     final type = await FileSystemEntity.type(root.path, followLinks: false);
     if (type != FileSystemEntityType.notFound &&
         type != FileSystemEntityType.directory) {
@@ -77,6 +86,7 @@ final class ShareStore implements FilePublicationLeases {
       beforeRemove,
       ShareStoreStorage(root, commitFile),
       now ?? DateTime.now,
+      directorySources,
     );
     await store._exclusive(() async {
       // 同 isolate 后继在旧队列退出后接管；旧对象的迟到写入会被精确拒绝。
@@ -154,6 +164,12 @@ final class ShareStore implements FilePublicationLeases {
   };
   Future<Map<String, dynamic>> pending() => _exclusive(() async => _pending());
   Future<Map<String, dynamic>> sources() => _exclusive(() async => _sources());
+  @override
+  Future<Set<String>> get sourcePaths => _exclusive(
+    () async => Set<String>.unmodifiable([
+      for (final batch in _batches.values) ..._paths(batch),
+    ]),
+  );
   Map<String, dynamic> _sources() => {
     'sourcePaths': [for (final batch in _batches.values) ..._paths(batch)],
     'leases': _leases.values.map(_leaseView).toList(),
@@ -263,10 +279,16 @@ final class ShareStore implements FilePublicationLeases {
         }
         final path = p.join(root.path, id, file.diskName);
         await _storage.directory(id);
-        final stat = await FileStat.stat(path);
-        if (await FileSystemEntity.type(path, followLinks: false) !=
-                FileSystemEntityType.file ||
-            stat.size != file.size) {
+        final type = await FileSystemEntity.type(path, followLinks: false);
+        final size = file.directory && _directories
+            ? await sourceTreeBytes(path, maxBytes: limits.batchBytes)
+            : (await FileStat.stat(path)).size;
+        if (type !=
+                (file.directory && _directories
+                    ? FileSystemEntityType.directory
+                    : FileSystemEntityType.file) ||
+            file.directory && !_directories ||
+            size != file.size) {
           _bad('分享文件已被替换或大小不符。');
         }
         bytes += file.size;
@@ -472,21 +494,35 @@ final class ShareStore implements FilePublicationLeases {
   @override
   Future<Map<String, Object?>?> begin(
     String share,
-    Map<String, Object?> request,
-  ) {
+    Map<String, Object?> request, {
+    String? transferId,
+  }) {
     final captured = _jsonCopy(request);
     return _exclusive(() async {
       _storage.writable();
+      if (transferId != null && !_validId(transferId)) {
+        _bad('发布批次标识无效。');
+      }
       final allowed = _paths(_requireBatch(share)).toSet();
       final items = captured['items'];
       if (items is! List ||
-          items.length != allowed.length ||
+          (!_directories && items.length != allowed.length) ||
+          items.isEmpty ||
+          items.length > 1000 ||
           allowed.isEmpty ||
           items.any((item) => item is! Map || item['source'] is! String) ||
-          !(items
-              .map((item) => (item as Map)['source'])
-              .toSet()
-              .containsAll(allowed))) {
+          (_directories
+              ? items.any(
+                  (item) => !allowed.any(
+                    (root) =>
+                        root == item['source'] ||
+                        p.isWithin(root, item['source'] as String),
+                  ),
+                )
+              : !(items
+                    .map((item) => (item as Map)['source'])
+                    .toSet()
+                    .containsAll(allowed)))) {
         _bad('请完整提交本次分享文件。');
       }
       await _retain(share);
@@ -506,6 +542,7 @@ final class ShareStore implements FilePublicationLeases {
       }
       await _saveLease({
         ...old,
+        'transferId': transferId,
         'request': fingerprint,
         'publication': 'publishing',
       });
@@ -527,11 +564,16 @@ final class ShareStore implements FilePublicationLeases {
             .where((l) => l['shareId'] == share)
             .firstOrNull;
         if (lease == null) return;
-        if (lease['transferId'] != null ||
-            lease['publication'] != 'publishing') {
+        if (lease['receipt'] != null || lease['publication'] != 'publishing') {
           throw const FileFailure('share_submission_unknown', '已有提交仍待核对，不能重置。');
         }
-        await _saveLease({...lease, 'request': null, 'publication': null});
+        await _saveLease({
+          ...lease,
+          'transferId': null,
+          'request': null,
+          'publication': null,
+        });
+        if (_directories) await _release(lease['id'] as String);
       } else {
         await _finished(share, captured);
       }
@@ -563,10 +605,14 @@ final class ShareStore implements FilePublicationLeases {
 
   @override
   Future<Map<String, Object?>> reconcile(
-    Map<String, Object?> durableReferences,
-  ) {
+    Map<String, Object?> durableReferences, {
+    Set<String>? coveredSources,
+  }) {
     final captured = _jsonCopy(durableReferences);
-    return _exclusive(() => _reconcile(captured));
+    final coverage = coveredSources == null
+        ? null
+        : Set<String>.of(coveredSources);
+    return _exclusive(() => _reconcile(captured, coveredSources: coverage));
   }
 
   Map<String, dynamic> _snapshot(
@@ -583,8 +629,19 @@ final class ShareStore implements FilePublicationLeases {
     'unknownBatches': _unknownBatches,
     'needsReview': _uncertain,
   };
-  Future<Map<String, dynamic>> _reconcile(Map<String, dynamic> input) async {
+  Future<Map<String, dynamic>> _reconcile(
+    Map<String, dynamic> input, {
+    Set<String>? coveredSources,
+  }) async {
     _storage.writable();
+    if (coveredSources != null &&
+        (coveredSources.length > limits.totalPaths ||
+            coveredSources.any(
+              (path) =>
+                  utf8.encode(path).length > 16384 || path.runes.length > 4096,
+            ))) {
+      return _snapshot(false, false, 'invalid_snapshot');
+    }
     final rows = input['transfers'];
     if (rows is! List) return _snapshot(false, false, 'invalid_snapshot');
     if (rows.length > limits.references) {
@@ -615,6 +672,9 @@ final class ShareStore implements FilePublicationLeases {
         return _snapshot(false, false, 'invalid_snapshot');
       }
       count += paths.length;
+      if (coveredSources != null && !coveredSources.containsAll(paths)) {
+        return _snapshot(false, false, 'invalid_snapshot');
+      }
       verified &= paths.isNotEmpty;
       valid.add((
         row['id'] as String,
@@ -627,18 +687,17 @@ final class ShareStore implements FilePublicationLeases {
       final batch = _batches[lease['shareId']];
       if (batch == null) continue;
       final paths = _paths(batch).toSet();
+      if (coveredSources != null && !coveredSources.containsAll(paths)) {
+        continue;
+      }
       final matches = valid
           .where((row) => row.$3.intersection(paths).isNotEmpty)
           .toList();
-      final transfer =
-          lease['transferId'] as String? ??
-          (matches.length == 1 ? matches.single.$1 : null);
-      if (transfer != null &&
-          lease['transferId'] == null &&
-          _validId(transfer)) {
-        await _bind(id, transfer);
-      }
+      // 路径只能证明消费者覆盖，不能证明这是哪一次发布。旧的无批次未知
+      // 记录继续保留；新发布在任务落盘前已绑定其唯一批次。
+      final transfer = lease['transferId'] as String?;
       if (matches.length == 1 &&
+          matches.single.$1 == transfer &&
           lease['request'] != null &&
           lease['receipt'] == null &&
           matches.single.$3.containsAll(paths) &&
@@ -668,6 +727,8 @@ final class ShareStore implements FilePublicationLeases {
                 _now().millisecondsSinceEpoch - (batch['created'] as int) >
                     limits.pendingExpiry.inMilliseconds &&
                 batch['status'] != 'importing' &&
+                (coveredSources == null ||
+                    coveredSources.containsAll(_paths(batch))) &&
                 !_leases.values.any(
                   (lease) => lease['shareId'] == batch['id'],
                 ) &&
@@ -680,7 +741,20 @@ final class ShareStore implements FilePublicationLeases {
         await _consume(id);
       }
     }
-    return _snapshot(true, verified, verified ? null : 'incomplete_snapshot');
+    final coverageComplete =
+        coveredSources == null ||
+        _batches.values.every(
+          (batch) => coveredSources.containsAll(_paths(batch)),
+        );
+    return _snapshot(
+      true,
+      verified && coverageComplete,
+      !verified
+          ? 'incomplete_snapshot'
+          : !coverageComplete
+          ? 'source_coverage_changed'
+          : null,
+    );
   }
 
   Future<void> _load() async {
@@ -846,11 +920,18 @@ final class ShareStore implements FilePublicationLeases {
         throw const FormatException('分享来源路径无效。');
       }
       final path = p.join(root.path, id, disk);
-      if (await FileSystemEntity.type(path, followLinks: false) !=
-          FileSystemEntityType.file) {
+      final directory = file['directory'] == true;
+      if (directory && !_directories ||
+          file['directory'] != null && file['directory'] is! bool ||
+          await FileSystemEntity.type(path, followLinks: false) !=
+              (directory
+                  ? FileSystemEntityType.directory
+                  : FileSystemEntityType.file)) {
         throw const FormatException('分享来源不再是普通文件。');
       }
-      file['size'] = (await FileStat.stat(path)).size;
+      file['size'] = directory
+          ? await sourceTreeBytes(path, maxBytes: limits.batchBytes)
+          : (await FileStat.stat(path)).size;
       total += file['size'] as int;
       raw['size'] = file['size'];
     }

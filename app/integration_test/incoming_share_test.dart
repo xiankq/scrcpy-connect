@@ -113,7 +113,7 @@ void main() {
               'no-grant' => '读取授权',
               'self-sentinel' => '本应用的私有内容',
               'too-many' => '最多分享 32',
-              'oversize' => '容量上限',
+              'oversize' => 'share_byte_limit',
               _ => throw StateError('Unknown negative fixture mode'),
             }),
           );

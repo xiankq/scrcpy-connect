@@ -266,6 +266,7 @@ class _Scrcpy implements NativeScrcpyApi {
 class _Api
     implements
         NativeAdbApi,
+        NativeAdbFileApi,
         NativeAdbAdmissionApi,
         NativeAdbScopedFileScopeApi,
         NativeAdbServerApi,
@@ -274,6 +275,8 @@ class _Api
         AdbIdentities {
   AdbAdmissionScopeInfo? scope;
   final fingerprints = <String, String>{};
+  @override
+  Future<void> initializeFileHelpers(List<AdbFileHelper> helpers) async {}
   @override
   Future<AdbAdmissionScopeInfo?> inspectAdmissionScope(String key) async =>
       scope;

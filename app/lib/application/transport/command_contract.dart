@@ -10,9 +10,14 @@ ApplicationCommand validateCommandRequest(
   if (command == null) {
     throw ApplicationCommandException('unknown_command', '未知操作：$name');
   }
-  _validate(params, command.required, command.optional, 'invalid_argument');
+  validateTypedCommandRequest(command, params);
   return command;
 }
+
+void validateTypedCommandRequest(
+  ApplicationCommand command,
+  Map<String, dynamic> params,
+) => _validate(params, command.required, command.optional, 'invalid_argument');
 
 void validateCommandResult(
   ApplicationCommand command,

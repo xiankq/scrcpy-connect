@@ -73,7 +73,7 @@ class PlatformDocuments private constructor(private val context: Context) {
         if (owner.activity() !== activity) {result.error("cancelled", "文档页面已由新 Activity 接管。", null); return true}
         val action = method.removePrefix("documents.platform.")
         if (action == "environment") {
-            // 与 path_provider 和 IncomingShares 保持一致；规范化可能将 Android 的 /data/user/0 别名改成 /data/data，目录未变却破坏共享的词法能力根。
+            // 与 path_provider 和 IncomingShares 共用逻辑根；Dart 固定实际根并映射其内路径，避免 /data/user/0 与 /data/data 的别名破坏词法授权。
             result.success(mapOf("cacheDirectory" to context.cacheDir.absolutePath,
                 "screenshotsDirectory" to File(context.filesDir, "screenshots").absolutePath,
                 "ownerLeaseId" to owner.current(), "ownerReady" to owner.accepts(owner.current())))

@@ -29,6 +29,42 @@ ProviderContainer scope(
 );
 
 void main() {
+  test('类型化调用直接使用执行接口，并在回执前发布精确停止意图', () async {
+    final calls = <ApplicationCommand>[];
+    final receipt = Completer<Json>();
+    final container = ProviderContainer(
+      overrides: [
+        appDependenciesProvider.overrideWithValue(
+          AppDependencies(
+            request: (_, [params = const {}]) =>
+                throw StateError('类型化调用不能退回 wire 分派'),
+            execute: (command, params) {
+              calls.add(command);
+              expect(params, {'sessionId': 'session-owned'});
+              return receipt.future;
+            },
+            initialize: false,
+          ),
+        ),
+      ],
+    );
+    final notifier = container.read(appControllerProvider.notifier);
+    final events = <Json>[];
+    final subscription = notifier.eventStream().listen(events.add);
+    final pending = notifier.execute(ApplicationCommand.sessionStop, {
+      'sessionId': 'session-owned',
+    });
+    expect(calls, [ApplicationCommand.sessionStop]);
+    expect(events.single, {
+      'type': 'session.stop.requested',
+      'data': {'sessionId': 'session-owned'},
+    });
+    receipt.complete({'stopped': true});
+    expect(await pending, {'stopped': true});
+    await subscription.cancel();
+    container.dispose();
+  });
+
   for (final update in ['state.resynced', 'settings.changed']) {
     test('a late saved setting cannot overwrite $update authority', () async {
       final events = StreamController<Json>.broadcast(sync: true);

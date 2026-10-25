@@ -9,6 +9,57 @@ import 'support/transfer_checks.dart' show withTransfer;
 
 void main() {
   test(
+    'queued paths spend the shared byte budget before reading descendants',
+    () async {
+      await withTransfer((owner, executor, root) async {
+        final source = '/${'x' * 3000}';
+        executor.stamps[source] = directory;
+        executor.children[source] = List.generate(
+          6000,
+          (i) => entry('$i', regular),
+        );
+        await expectLater(
+          owner.startTransfer('d', true, [
+            {'source': source, 'destination': '/sdcard/tree'},
+          ]),
+          throwsA(
+            isA<FileFailure>().having((e) => e.code, 'code', 'tree_limit'),
+          ),
+        );
+        expect(executor.calls, ['stat:$source', 'list:$source']);
+        expect(owner.transfers()['transfers'], isEmpty);
+      });
+    },
+  );
+
+  test(
+    'wide directories spend the shared entry budget before enqueueing',
+    () async {
+      final root = await Directory.systemTemp.createTemp('file-tree-width-');
+      final executor = _WideTreeExecutor();
+      final owner = await TransferCoordinator.open(
+        executor: executor,
+        dataDirectory: root,
+      );
+      try {
+        await expectLater(
+          owner.startTransfer('d', true, [
+            {'source': '/wide', 'destination': '/sdcard/wide'},
+          ]),
+          throwsA(
+            isA<FileFailure>().having((e) => e.code, 'code', 'tree_limit'),
+          ),
+        );
+        expect(executor.enumerations, [10000 - 1, 10000 - 6001]);
+        expect(owner.transfers()['transfers'], isEmpty);
+      } finally {
+        await owner.close();
+        await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
     'overlapping source roots reserve only their own selected bytes',
     () async {
       final root = await Directory.systemTemp.createTemp('file-tree-cache-');
@@ -105,6 +156,43 @@ void main() {
       });
     },
   );
+}
+
+/// The second level would enqueue 36 million paths if every one of its 6000
+/// directories were enumerated without reserving the already queued entries.
+class _WideTreeExecutor extends FixtureExecutor {
+  final enumerations = <int>[];
+
+  @override
+  Future<FileStamp> stat(
+    String device,
+    String path, {
+    required bool local,
+    bool followStorageAlias = false,
+    required FileCancellation cancellation,
+  }) async {
+    cancellation.check();
+    return directory;
+  }
+
+  @override
+  Future<DirectoryFacts> list(
+    String device,
+    String path, {
+    required bool local,
+    required int limit,
+    required FileCancellation cancellation,
+  }) async {
+    cancellation.check();
+    enumerations.add(limit);
+    if (enumerations.length > 2) {
+      throw StateError('The first child exceeded the remaining tree budget.');
+    }
+    return DirectoryFacts(
+      List.generate(limit < 6000 ? limit : 6000, (i) => entry('$i', directory)),
+      truncated: limit < 6000,
+    );
+  }
 }
 
 class _Cache implements FileCacheLeases {

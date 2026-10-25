@@ -151,7 +151,7 @@ void main() {
 
   test('only full durable positive completion releases sources; failed and incomplete retain', () async {
     final store = await ready();
-    await store.begin(share, request(store));
+    await store.begin(share, request(store), transferId: transfer);
     await store.command('sharing.consume', {'shareId': share});
     final path = '${store.root.path}/$share/original';
     Map<String, Object?> snapshot(String status, {bool complete = true}) => {
@@ -178,9 +178,65 @@ void main() {
     expect((await store.sources())['leases'], isEmpty);
   });
 
+  test(
+    'source coverage never claims a newly arrived share was checked',
+    () async {
+      final store = await ready();
+      await store.begin(share, request(store));
+      await store.finish(share, {'batchId': transfer, 'status': 'queued'});
+      await store.command('sharing.consume', {'shareId': share});
+      final covered = await store.sourcePaths;
+      final original = covered.single;
+
+      await store.reserve(second);
+      final late = File('${store.root.path}/$second/late');
+      await late.writeAsBytes([4]);
+      await store.complete(second, const [
+        SharedSourceFile(diskName: 'late', name: 'late', size: 1),
+      ]);
+      await store.begin(second, {
+        'items': [
+          {'source': late.path, 'destination': '/sdcard/late'},
+        ],
+      });
+      await store.finish(second, {'batchId': leaseId, 'status': 'queued'});
+      await store.command('sharing.consume', {'shareId': second});
+
+      final invalid = await store.reconcile({
+        'complete': true,
+        'transfers': [
+          {
+            'id': leaseId,
+            'status': 'completed',
+            'sources': [late.path],
+          },
+        ],
+      }, coveredSources: covered);
+      expect(invalid['reason'], 'invalid_snapshot');
+      expect(await File(original).exists(), isTrue);
+      expect(await late.exists(), isTrue);
+
+      final result = await store.reconcile({
+        'complete': true,
+        'transfers': [
+          {
+            'id': transfer,
+            'status': 'completed',
+            'sources': [original],
+          },
+        ],
+      }, coveredSources: covered);
+      expect(result['snapshotComplete'], isFalse);
+      expect(result['reason'], 'source_coverage_changed');
+      expect(await File(original).exists(), isFalse);
+      expect(await late.exists(), isTrue);
+      expect((await store.sources())['leases'], hasLength(1));
+    },
+  );
+
   test('overflow, empty references and additional noncompleted consumers forbid reclamation', () async {
     final store = await ready();
-    await store.begin(share, request(store));
+    await store.begin(share, request(store), transferId: transfer);
     await store.command('sharing.consume', {'shareId': share});
     final path = '${store.root.path}/$share/original';
     final result = await store.reconcile({

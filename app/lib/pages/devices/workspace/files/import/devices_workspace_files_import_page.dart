@@ -249,6 +249,8 @@ class DocumentImportPage extends HookWidget {
                     'files.push',
                     {
                       'deviceId': device['id'],
+                      if (result?['managedSourceId'] is String)
+                        'shareId': result!['managedSourceId'],
                       'items': [
                         {'source': result!['localPath'], 'destination': target},
                       ],

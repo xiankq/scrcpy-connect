@@ -30,7 +30,7 @@ void main() {
       'width': 200,
       'height': 400,
       'firstFrameDecoded': true,
-      'evidence': 'media_codec.snapshot',
+      'evidence': 'media_codec.decodedFrame',
     };
     final controller = createTestController((
       command, [
@@ -93,7 +93,7 @@ void main() {
           'width': 200,
           'height': 400,
           'firstFrameDecoded': true,
-          'evidence': 'media_codec.snapshot',
+          'evidence': 'media_codec.decodedFrame',
         };
         final controller = createTestController((
           command, [
@@ -202,7 +202,7 @@ void main() {
         'height': 400,
         'status': 'ready',
         'firstFrameDecoded': true,
-        'evidence': 'media_codec.snapshot',
+        'evidence': 'media_codec.decodedFrame',
       };
       const unknown = {
         'sessionId': 'unknown-phone-open',
@@ -298,7 +298,7 @@ void main() {
           'height': 400,
           'status': 'ready',
           'firstFrameDecoded': true,
-          'evidence': 'media_codec.snapshot',
+          'evidence': 'media_codec.decodedFrame',
         };
         const unknown = {
           'sessionId': 'held-open-record',
@@ -415,7 +415,7 @@ void main() {
         'height': 400,
         'status': 'ready',
         'firstFrameDecoded': true,
-        'evidence': 'media_codec.snapshot',
+        'evidence': 'media_codec.decodedFrame',
       };
       const unknown = {
         'sessionId': 'late-open-record',
@@ -500,7 +500,7 @@ void main() {
         'height': 400,
         'status': 'ready',
         'firstFrameDecoded': true,
-        'evidence': 'media_codec.snapshot',
+        'evidence': 'media_codec.decodedFrame',
       };
       final controller = createTestController((
         command, [
@@ -794,7 +794,7 @@ void main() {
         'height': 400,
         'status': 'ready',
         'firstFrameDecoded': true,
-        'evidence': 'media_codec.snapshot',
+        'evidence': 'media_codec.decodedFrame',
       };
       final controller = createTestController((
         command, [

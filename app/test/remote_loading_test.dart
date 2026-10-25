@@ -31,7 +31,7 @@ void main() {
           'width': 200,
           'height': 400,
           'firstFrameDecoded': true,
-          'evidence': 'media_codec.snapshot',
+          'evidence': 'media_codec.decodedFrame',
         };
         final controller = createTestController((
           command, [

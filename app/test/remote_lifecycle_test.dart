@@ -128,7 +128,7 @@ void main() {
             'width': 200,
             'height': 400,
             'firstFrameDecoded': true,
-            'evidence': 'media_codec.snapshot',
+            'evidence': 'media_codec.decodedFrame',
           };
         }
         return {};
@@ -316,7 +316,7 @@ void main() {
               'width': 200,
               'height': 400,
               'firstFrameDecoded': true,
-              'evidence': 'media_codec.snapshot',
+              'evidence': 'media_codec.decodedFrame',
             };
           }
           if (command == 'session.resume') {
@@ -449,7 +449,7 @@ void main() {
         'sessionId': 'original',
         'textureId': 2,
         'firstFrameDecoded': true,
-        'evidence': 'media_codec.snapshot',
+        'evidence': 'media_codec.decodedFrame',
       };
       resumed.complete(oldReceipt);
       await tester.pumpAndSettle();
@@ -499,7 +499,7 @@ void main() {
                 'width': 200,
                 'height': 400,
                 'firstFrameDecoded': true,
-                'evidence': 'media_codec.snapshot',
+                'evidence': 'media_codec.decodedFrame',
               }
             : {};
       }, events: events.stream);
@@ -594,7 +594,7 @@ void main() {
               'width': 200,
               'height': 400,
               'firstFrameDecoded': true,
-              'evidence': 'media_codec.snapshot',
+              'evidence': 'media_codec.decodedFrame',
             }
           : {};
     }, events: events.stream);
@@ -777,7 +777,7 @@ void main() {
         'sessionId': 'original',
         'textureId': 2,
         'firstFrameDecoded': true,
-        'evidence': 'media_codec.snapshot',
+        'evidence': 'media_codec.decodedFrame',
       });
       await tester.pumpAndSettle();
       expect(resumes, 2);
@@ -789,7 +789,7 @@ void main() {
         'sessionId': 'original',
         'textureId': 3,
         'firstFrameDecoded': true,
-        'evidence': 'media_codec.snapshot',
+        'evidence': 'media_codec.decodedFrame',
       });
       await tester.pumpAndSettle();
       events.add({
@@ -834,7 +834,7 @@ void main() {
                 'width': 200,
                 'height': 400,
                 'firstFrameDecoded': true,
-                'evidence': 'media_codec.snapshot',
+                'evidence': 'media_codec.decodedFrame',
               }
             : {};
       }, events: events.stream);
@@ -1660,7 +1660,7 @@ void main() {
         'data': {
           'sessionId': 'session',
           'firstFrameDecoded': true,
-          'evidence': 'media_codec.snapshot',
+          'evidence': 'media_codec.decodedFrame',
           'textureId': 1,
           'width': 200,
           'height': 400,
@@ -1673,7 +1673,7 @@ void main() {
       resume.complete({
         'sessionId': 'session',
         'firstFrameDecoded': true,
-        'evidence': 'media_codec.snapshot',
+        'evidence': 'media_codec.decodedFrame',
         'textureId': 1,
       });
       await tester.pumpAndSettle();

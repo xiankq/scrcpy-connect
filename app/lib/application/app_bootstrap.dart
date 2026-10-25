@@ -41,15 +41,20 @@ Future<AppDependencies> _createDependencies(DiagnosticLog? diagnostics) async {
     dataDirectory: await directory.resolveSymbolicLinks(),
     diagnostics: diagnostics,
   );
+  Future<Json> invoke(Future<Json> Function() operation) async {
+    try {
+      return await operation();
+    } on ApplicationCommandException catch (error) {
+      throw RequestFailure(error.code, error.message, error.details);
+    }
+  }
+
   return AppDependencies(
+    execute: (command, params) =>
+        invoke(() => session.execute(command, params)),
     diagnostics: diagnostics,
-    request: (command, [params = const {}]) async {
-      try {
-        return await session.request(command, params);
-      } on ApplicationCommandException catch (error) {
-        throw RequestFailure(error.code, error.message, error.details);
-      }
-    },
+    request: (command, [params = const {}]) =>
+        invoke(() => session.request(command, params)),
     events: session.events,
     close: session.dispose,
   );

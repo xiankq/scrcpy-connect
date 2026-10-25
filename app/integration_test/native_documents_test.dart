@@ -16,7 +16,8 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'product_flow_test.dart' show waitFor;
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  binding.reportData = {'documentsAcceptanceComplete': false};
   final runId = 'interop-documents-${DateTime.now().millisecondsSinceEpoch}';
   var stage = 'starting';
   var prepared = false;
@@ -51,6 +52,9 @@ void main() {
         tester.element(find.byType(ConnectApp)),
       ).read(appControllerProvider.notifier);
       String? activeOperation;
+      String? managedSourceId;
+      String? importedPath;
+      Directory? local;
       Future<Json> request(String command, Json params) async {
         final id = '$runId-${DateTime.now().microsecondsSinceEpoch}';
         activeOperation = id;
@@ -79,9 +83,12 @@ void main() {
           timeout: const Duration(seconds: 45),
           reason: 'Enable CONNECT_E2E_DOCUMENTS=1 on the host driver to prepare actual DocumentsUI files.',
         );
-        final local = await (await getTemporaryDirectory()).createTemp(
-          '$runId-',
-        );
+        final temporary = await getTemporaryDirectory();
+        binding.reportData!['cachePaths'] = {
+          'provided': temporary.path,
+          'resolved': await temporary.resolveSymbolicLinks(),
+        };
+        local = await temporary.createTemp('$runId-');
         final source = File('${local.path}/export-$runId.txt');
         await source.writeAsString('native SAF export $runId\n', flush: true);
         stage = 'export-file';
@@ -92,8 +99,10 @@ void main() {
           'mime': 'text/plain',
           'conflict': 'ask',
         });
-        expect(file['status'], 'saved');
-        expect(value(file, 'uri'), startsWith('content://'));
+        binding.reportData!['fileExportResult'] = file;
+        expect(file['status'], 'saved', reason: '${file['errors']}');
+        expect(file['files'], 1);
+        expect(file['bytes'], await source.length());
         exportedFileName = value(file, 'name');
         expect(exportedFileName, isNotEmpty);
         stage = 'file-saved';
@@ -105,10 +114,23 @@ void main() {
         );
         stage = 'import-directory';
         final imported = await request('documents.importDirectory', {});
-        expect(imported['status'], 'imported');
+        managedSourceId = imported['managedSourceId'] as String?;
+        binding.reportData!['importResult'] = {
+          for (final key in [
+            'status',
+            'files',
+            'directories',
+            'bytes',
+            'errors',
+          ])
+            key: imported[key],
+        };
+        expect(imported['status'], 'imported', reason: '${imported['errors']}');
+        expect(managedSourceId, startsWith('document:'));
         expect(imported['files'], 1);
         expect(imported['directories'], greaterThanOrEqualTo(2));
         final cache = value(imported, 'localPath');
+        importedPath = cache;
         expect(cache, isNotEmpty);
         expect(
           await File('$cache/sub/one.txt').readAsString(),
@@ -122,8 +144,10 @@ void main() {
           'kind': 'directory',
           'conflict': 'ask',
         });
-        expect(directory['status'], 'saved');
-        expect(value(directory, 'uri'), startsWith('content://'));
+        binding.reportData!['directoryExportResult'] = directory;
+        expect(directory['status'], 'saved', reason: '${directory['errors']}');
+        expect(directory['files'], 1);
+        expect(directory['directories'], greaterThanOrEqualTo(2));
         exportedDirectoryName = value(directory, 'name');
         expect(exportedDirectoryName, isNotEmpty);
         stage = 'directory-saved';
@@ -136,13 +160,33 @@ void main() {
         stage = 'complete';
         expect(tester.takeException(), isNull);
       } finally {
-        final id = activeOperation;
-        if (id != null) {
-          await controller
-              .request('documents.cancel', {'operationId': id})
-              .timeout(const Duration(seconds: 10));
+        try {
+          final id = activeOperation;
+          if (id != null) {
+            await controller
+                .request('documents.cancel', {'operationId': id})
+                .timeout(const Duration(seconds: 10));
+          }
+        } finally {
+          try {
+            if (managedSourceId != null) {
+              await controller
+                  .request('documents.cancel', {
+                    'operationId': '$runId-release',
+                    'managedSourceId': managedSourceId,
+                  })
+                  .timeout(const Duration(seconds: 10));
+              if (importedPath != null) {
+                expect(await Directory(importedPath).exists(), isFalse);
+                binding.reportData!['managedSourceReleased'] = true;
+              }
+            }
+          } finally {
+            await local?.delete(recursive: true);
+          }
         }
       }
+      binding.reportData!['documentsAcceptanceComplete'] = true;
     },
     timeout: const Timeout(Duration(minutes: 14)),
   );

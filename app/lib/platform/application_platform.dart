@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:adb/adb.dart' show LocalFiles;
 
 import 'package:scrcpy_connect/files/documents/documents_coordinator.dart';
+import 'package:scrcpy_connect/files/documents/document_sources.dart';
 import 'package:scrcpy_connect/files/documents/document_scope_recovery.dart';
 import 'package:scrcpy_connect/files/sharing/share_coordinator.dart';
 import 'package:scrcpy_connect/files/documents/system_delivery_coordinator.dart';
@@ -20,6 +21,7 @@ final class ApplicationPlatform {
     required this.applicationRequest,
     required this.localFiles,
     this.sharing,
+    this.documentSources,
     required this.emit,
     required this.isDisposed,
     this.usbOwnerLeaseId,
@@ -28,6 +30,7 @@ final class ApplicationPlatform {
   applicationRequest;
   final Future<LocalFiles> Function() localFiles;
   final ShareCoordinator? sharing;
+  final DocumentSources? documentSources;
   final void Function(Map<String, dynamic>) emit;
   final bool Function() isDisposed;
 
@@ -88,6 +91,7 @@ final class ApplicationPlatform {
     files: localFiles,
     platform: request,
     isDisposed: () => _disposed,
+    sources: documentSources,
     onConflictChanged: (data) {
       if (!_disposed) {
         emit({'type': 'documents.conflict.changed', 'data': data});

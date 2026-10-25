@@ -848,6 +848,7 @@ class TransferCoordinator {
     String policy = 'ask',
     String destinationScope = 'localPath',
     String? shareId,
+    String? publicationBatchId,
   }) async {
     _checkTransferAdmission(device);
     if (selections.isEmpty ||
@@ -859,11 +860,34 @@ class TransferCoordinator {
         destinationScope == 'privateCache' && cache == null) {
       throw const FileFailure('cache_unavailable', '私有缓存执行器尚未配置。');
     }
-    final batch = _id(), token = FileCancellation();
+    if (publicationBatchId != null &&
+        (shareId == null ||
+            _batchStates.containsKey(publicationBatchId) ||
+            _tasks.values.any(
+              (task) => task['batchId'] == publicationBatchId,
+            ))) {
+      throw const FileFailure('invalid_argument', '发布必须使用尚未创建的独立批次。');
+    }
+    final batch = publicationBatchId ?? _id(), token = FileCancellation();
     final pending = Queue<(String, String, String?, int)>();
     final selected = <Map<String, Object?>>[];
     final destinations = <String>{};
     var pathBytes = 0;
+    void enqueue(String source, String destination, String? parent, int depth) {
+      final bytes =
+          utf8.encode(source).length + utf8.encode(destination).length;
+      if (selected.length + pending.length >= 10000 ||
+          depth > 64 ||
+          bytes > 16 * 1024 * 1024 - pathBytes) {
+        throw const FileFailure('tree_limit', '选择超过10000项、64层或16MiB路径上限。');
+      }
+      if (!destinations.add(destination)) {
+        throw const FileFailure('duplicate_destination', '任务不能重复写入同一目标。');
+      }
+      pathBytes += bytes;
+      pending.add((source, destination, parent, depth));
+    }
+
     for (final item in selections) {
       final source = item['source']! as String,
           destination = item['destination']! as String;
@@ -878,26 +902,44 @@ class TransferCoordinator {
           throw const FileFailure('invalid_path', '目标必须为本机绝对路径。');
         }
       }
-      pending.add((source, destination, null, 0));
+      enqueue(source, destination, null, 0);
     }
     final timer = Timer(const Duration(seconds: 120), token.cancel);
     final preparation = _TransferPreparation(batch, device, token);
     final state = _batchState(batch, device: device);
     state.preparation = preparation;
     try {
+      // Source lookup is admitted preparation too: stop/close must cancel it
+      // and await its actual exit before allowing a successor connection.
+      if (push &&
+          shareId == null &&
+          publication is ManagedFilePublicationLeases) {
+        final owner = await (publication! as ManagedFilePublicationLeases)
+            .ownerForSources(
+              selections.map((item) => item['source']! as String).toList(),
+            );
+        token.check();
+        _check();
+        if (owner != null) {
+          timer.cancel();
+          return await submitShare(
+            device,
+            selections,
+            shareId: owner,
+            publicationRequest: {
+              'deviceId': device,
+              'items': selections,
+              'conflict': policy,
+              'destinationScope': destinationScope,
+            },
+            policy: policy,
+            destinationScope: destinationScope,
+          );
+        }
+      }
       while (pending.isNotEmpty) {
         token.check();
         final (source, destination, parent, depth) = pending.removeFirst();
-        pathBytes +=
-            utf8.encode(source).length + utf8.encode(destination).length;
-        if (selected.length >= 10000 ||
-            depth > 64 ||
-            pathBytes > 16 * 1024 * 1024) {
-          throw const FileFailure('tree_limit', '选择超过10000项、64层或16MiB路径上限。');
-        }
-        if (!destinations.add(destination)) {
-          throw const FileFailure('duplicate_destination', '任务不能重复写入同一目标。');
-        }
         final stamp = await executor.stat(
           device,
           source,
@@ -932,14 +974,17 @@ class TransferCoordinator {
         };
         selected.add(task);
         if (stamp.isDirectory) {
+          final remaining = 10000 - selected.length - pending.length;
           final children = await executor.list(
             device,
             source,
             local: push,
-            limit: 10000 - selected.length,
+            // At capacity one entry distinguishes an empty directory from an
+            // overflowing tree without an unbounded enumeration.
+            limit: max(1, remaining),
             cancellation: token,
           );
-          if (children.truncated) {
+          if (children.truncated || children.entries.length > remaining) {
             throw const FileFailure('tree_limit', '选中目录超过条目上限。');
           }
           for (final child in children.entries) {
@@ -948,14 +993,14 @@ class TransferCoordinator {
               throw child.error ??
                   const FileFailure('invalid_filename', '目录包含无法安全表示的文件名。');
             }
-            pending.add((
+            enqueue(
               push ? p.join(source, name) : p.posix.join(source, name),
               push
                   ? p.posix.join(destination, name)
                   : p.join(destination, name),
               id,
               depth + 1,
-            ));
+            );
           }
         }
       }
@@ -1623,7 +1668,12 @@ class TransferCoordinator {
     if (leases == null) {
       throw const FileFailure('share_not_configured', '分享来源租约执行器尚未配置。');
     }
-    final previous = await leases.begin(shareId, publicationRequest);
+    final batch = _id();
+    final previous = await leases.begin(
+      shareId,
+      publicationRequest,
+      transferId: batch,
+    );
     if (previous != null) return {...previous, 'reusedTransfer': true};
     try {
       // 停止可能发生在来源登记等待期间；迟到租约只能收尾，不能创建新传输。
@@ -1635,6 +1685,7 @@ class TransferCoordinator {
         policy: policy,
         destinationScope: destinationScope,
         shareId: shareId,
+        publicationBatchId: batch,
       );
       try {
         await leases.finish(shareId, receipt);
@@ -1644,7 +1695,7 @@ class TransferCoordinator {
       return receipt;
     } catch (error, stack) {
       final unpublished = !_tasks.values.any(
-        (task) => task['shareId'] == shareId,
+        (task) => task['batchId'] == batch,
       );
       try {
         await leases.finish(shareId, null, definitelyUnpublished: unpublished);
@@ -1676,20 +1727,42 @@ class TransferCoordinator {
   }
 
   Future<Map<String, Object?>> reconcileShares() async {
-    await _writes;
-    if (publication == null) {
+    final sources = publication;
+    if (sources == null) {
       return {'reconciled': false, 'sourcesRetained': true};
     }
+    final paths = await sources.sourcePaths;
+    // Await the current tail again if another task queued a commit while the
+    // previous tail was flushing. Runtime completion alone is not durable proof.
+    while (true) {
+      final pending = _writes;
+      await pending;
+      if (identical(pending, _writes)) break;
+    }
+    Set<String> rootsFor(Object? source) => source is! String
+        ? {}
+        : {
+            for (final root in paths)
+              if (p.equals(root, source) || p.isWithin(root, source)) root,
+          };
+    // Directory owners cover every descendant, including independently selected
+    // children. All consumers still contribute their whole batch status.
+    // Unrelated history does not spend the source owner's bounded proof budget.
+    final batches = _tasks.values
+        .where(
+          (task) =>
+              task['direction'] == 'push' &&
+              rootsFor(task['source']).isNotEmpty,
+        )
+        .map((task) => task['batchId'] as String? ?? task['id']! as String)
+        .toSet();
     final groups = <String, List<Map<String, Object?>>>{};
     for (final task in _tasks.values.where((t) => t['direction'] == 'push')) {
-      groups
-          .putIfAbsent(
-            task['batchId'] as String? ?? task['id']! as String,
-            () => [],
-          )
-          .add(task);
+      final batch = task['batchId'] as String? ?? task['id']! as String;
+      if (!batches.contains(batch)) continue;
+      groups.putIfAbsent(batch, () => []).add(task);
     }
-    return publication!.reconcile({
+    return sources.reconcile({
       'complete': true,
       'transfers': groups.entries
           .map(
@@ -1698,11 +1771,14 @@ class TransferCoordinator {
               'status': g.value.every((t) => t['status'] == 'completed')
                   ? 'completed'
                   : 'retained',
-              'sources': g.value.map((t) => t['source']).toSet().toList(),
+              'sources': g.value
+                  .expand((t) => rootsFor(t['source']))
+                  .toSet()
+                  .toList(),
             },
           )
           .toList(),
-    });
+    }, coveredSources: paths);
   }
 }
 

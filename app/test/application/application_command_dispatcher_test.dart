@@ -8,8 +8,11 @@ import '../media/cache/support/media_file_fixture.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/files/documents/delivery_journal.dart';
 import 'package:scrcpy_connect/media/cache/app_media_cache.dart';
+import 'package:scrcpy_connect/media/cache/media_artifact_coordinator.dart';
+import 'package:scrcpy_connect/files/sharing/share_coordinator.dart';
 import 'package:scrcpy_connect/application/application_command_dispatcher.dart';
 import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/application/transport/commands_generated.dart';
 import 'package:scrcpy_connect/files/transfers/transfer_coordinator.dart';
 import 'package:scrcpy_connect/files/catalog/file_catalog.dart';
 import 'package:scrcpy_connect/files/mutations/file_mutation_coordinator.dart';
@@ -26,6 +29,7 @@ void main() {
   late Directory directory;
   late PreferenceStore preferences;
   late _FileOwners owners;
+  final artifacts = <MediaArtifactCoordinator>[];
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('command-owner-');
     owners = await _FileOwners.open(
@@ -43,8 +47,112 @@ void main() {
     });
   });
   tearDown(() async {
+    for (final artifact in artifacts) {
+      await artifact.close();
+    }
+    artifacts.clear();
     await owners.close();
     await directory.delete(recursive: true);
+  });
+
+  ApplicationCommandDispatcher buildCommands({
+    required FileExecutor executor,
+    required FileCatalog catalog,
+    required FileMutationCoordinator mutations,
+    required TransferCoordinator transfers,
+    required PreferenceStore preferences,
+    required Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)
+    execute,
+    required void Function(Map<String, dynamic>) onSettingsChanged,
+    required Future<void> Function(bool) applyBackgroundPolicy,
+    AppMediaCache? cache,
+    DeliveryJournal? deliveries,
+    ShareCoordinator? sharing,
+    void Function(Map<String, dynamic>)? onMediaEvent,
+  }) {
+    final media = cache == null
+        ? null
+        : MediaArtifactCoordinator(
+            cache: cache,
+            executor: executor,
+            request: execute,
+            emit: onMediaEvent,
+          );
+    if (media != null) artifacts.add(media);
+    return ApplicationCommandDispatcher(
+      catalog: catalog,
+      mutations: mutations,
+      transfers: transfers,
+      preferences: PreferenceCommands(
+        preferences: preferences,
+        request: execute,
+        onChanged: onSettingsChanged,
+        applyBackgroundPolicy: applyBackgroundPolicy,
+      ),
+      cache: cache,
+      deliveries: deliveries,
+      sharing: sharing,
+      artifacts: media,
+      onMediaEvent: onMediaEvent,
+      execute: (command, params) => execute(command.wire, params),
+    );
+  }
+
+  test('本地文件、偏好和分享命令均在任何所有者副作用前校验', () async {
+    final backendCalls = <String>[];
+    var settingsChanged = false;
+    final commands = buildCommands(
+      executor: owners.executor,
+      catalog: owners.catalog,
+      mutations: owners.mutations,
+      transfers: owners.transfers,
+      preferences: preferences,
+      execute: (command, _) async {
+        backendCalls.add(command);
+        return {};
+      },
+      onSettingsChanged: (_) => settingsChanged = true,
+      applyBackgroundPolicy: (_) async => settingsChanged = true,
+    );
+    final revision = preferences.current.revision;
+    for (final (command, params)
+        in <(ApplicationCommand, Map<String, dynamic>)>[
+          (ApplicationCommand.filesList, {'deviceId': 42}),
+          (
+            ApplicationCommand.filesMkdir,
+            {'deviceId': 42, 'path': '/sdcard/new'},
+          ),
+          (ApplicationCommand.settingsImport, {'metadata': <Object?>[]}),
+          (ApplicationCommand.sharingImport, {'shareId': 42}),
+          (ApplicationCommand.transfersGet, {'transferId': 42}),
+        ]) {
+      await expectLater(
+        commands.invokeCommand(command, params),
+        throwsA(
+          isA<ApplicationCommandException>().having(
+            (error) => error.code,
+            'code',
+            'invalid_argument',
+          ),
+        ),
+        reason: command.wire,
+      );
+    }
+    await expectLater(
+      commands.invoke('files.lsit', {'deviceId': _device}),
+      throwsA(
+        isA<ApplicationCommandException>().having(
+          (error) => error.code,
+          'code',
+          'unknown_command',
+        ),
+      ),
+    );
+    expect(backendCalls, isEmpty);
+    expect((owners.executor as FixtureExecutor).calls, isEmpty);
+    expect(preferences.current.revision, revision);
+    expect(settingsChanged, isFalse);
+    expect(owners.transfers.transfers()['transfers'], isEmpty);
   });
 
   test('生产分发器在应用执行缓存及保存日志命令，不调用原生业务 owner', () async {
@@ -65,7 +173,7 @@ void main() {
       MediaFileFixture(),
       cache: cache,
     );
-    final commands = ApplicationCommandDispatcher(
+    final commands = buildCommands(
       executor: files.executor,
       catalog: files.catalog,
       mutations: files.mutations,
@@ -142,14 +250,13 @@ void main() {
         'saved',
       );
     } finally {
-      await commands.closeMediaArtifacts();
       await files.close();
     }
   });
 
   test('未提供分享所有者时只返回本地空投影，写命令不进入执行器', () async {
     final calls = <String>[];
-    final commands = ApplicationCommandDispatcher(
+    final commands = buildCommands(
       executor: owners.executor,
       catalog: owners.catalog,
       mutations: owners.mutations,
@@ -166,7 +273,7 @@ void main() {
       'shares': <Object?>[],
     });
     await expectLater(
-      commands.invoke('sharing.import', {}),
+      commands.invoke('sharing.import', {'shareId': 'incoming'}),
       throwsA(
         isA<ApplicationCommandException>().having(
           (error) => error.code,
@@ -185,7 +292,7 @@ void main() {
       {'sessionId': 'old', 'launchOutcome': 'unknown'},
     );
     final calls = <(String, Map<String, dynamic>)>[];
-    final commands = ApplicationCommandDispatcher(
+    final commands = buildCommands(
       executor: owners.executor,
       catalog: owners.catalog,
       mutations: owners.mutations,
@@ -237,7 +344,7 @@ void main() {
     ]);
     await executor.copyStarted!.future;
     await until(() => executor.calls.contains('list:/sdcard'));
-    final commands = ApplicationCommandDispatcher(
+    final commands = buildCommands(
       executor: files.executor,
       catalog: files.catalog,
       mutations: files.mutations,
@@ -280,7 +387,7 @@ void main() {
 
   test('遗忘未确认成功时保留持久偏好', () async {
     final calls = <String>[];
-    final commands = ApplicationCommandDispatcher(
+    final commands = buildCommands(
       executor: owners.executor,
       catalog: owners.catalog,
       mutations: owners.mutations,

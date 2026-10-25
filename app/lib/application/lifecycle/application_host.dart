@@ -106,7 +106,7 @@ final class ApplicationHost {
   Future<void> _tail = Future<void>.value();
   Future<void>? _closing;
   bool _closed = false, _hasBindings = false;
-  bool _hasAssets = false, _hasScrcpy = false;
+  bool _hasAssets = false, _hasFileHelpers = false, _hasScrcpy = false;
   bool _preparationFailed = false;
   Directory get _records => Directory(p.join(directory.path, 'process_hosts'));
   String get _scopeKey => p.join(directory.path, 'application-host');
@@ -241,6 +241,7 @@ final class ApplicationHost {
     _hasBindings = true;
     if (bindings is! NativeAdbAdmissionApi ||
         bindings is! NativeAdbScopedFileScopeApi ||
+        bindings is! NativeAdbFileApi ||
         bindings is! NativeAdbHandshakeApi ||
         bindings is! AdbIdentities ||
         (_dependencies.desktop && bindings is! NativeAdbScopedServerApi)) {
@@ -336,6 +337,13 @@ final class ApplicationHost {
     if (!_hasAssets) {
       _assets = await _dependencies.assets(directory);
       _hasAssets = true;
+    }
+    if (!_hasFileHelpers) {
+      await (bindings as NativeAdbFileApi).initializeFileHelpers([
+        for (final entry in _assets.helperArtifacts.entries)
+          AdbFileHelper(entry.key, entry.value),
+      ]);
+      _hasFileHelpers = true;
     }
     if (!_hasScrcpy) {
       scrcpy = await _dependencies.createScrcpy(_assets.scrcpyBytes);

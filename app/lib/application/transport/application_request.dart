@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/application/transport/commands_generated.dart'
+    show ApplicationCommand;
+
 export 'package:scrcpy_connect/application/transport/commands_generated.dart'
     show ApplicationCommand;
 
@@ -17,3 +20,9 @@ typedef ApplicationRequest = Future<Json> Function(
   String command, [
   Json params,
 ]);
+
+/// 应用内执行接口；wire 名称只由入口适配器解析。
+typedef ApplicationCommandExecutor = Future<Json> Function(
+  ApplicationCommand command,
+  Json params,
+);

@@ -3,6 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
+import 'package:scrcpy_connect/application/transport/commands_generated.dart';
+import 'package:scrcpy_connect/application/transport/command_contract.dart';
+import 'package:scrcpy_connect/media/capture/media_capture_operations.dart';
 import 'package:scrcpy_connect/platform/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/media/output/audio_player_port.dart';
 import 'package:scrcpy_connect/media/quality/device_quality_coordinator.dart';
@@ -22,6 +25,9 @@ import 'package:scrcpy_connect/application/lifecycle/ordered_disposal.dart';
 final class MediaCoordinator {
   MediaCoordinator({
     required this.invoke,
+    required this.captures,
+    required this.readSnapshot,
+    required this.readSettings,
     required this.platform,
     required this.emit,
     required this.isDisposed,
@@ -30,8 +36,19 @@ final class MediaCoordinator {
     this.diagnostics,
   });
 
-  final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)
+  final Future<Map<String, dynamic>> Function(
+    ApplicationCommand,
+    Map<String, dynamic>,
+  )
   invoke;
+  final MediaCaptureOperations captures;
+  final Future<Map<String, dynamic>> Function() readSnapshot;
+  final Future<Map<String, dynamic>> Function() readSettings;
+
+  Future<Map<String, dynamic>> _request(
+    String command,
+    Map<String, dynamic> params,
+  ) => invoke(validateCommandRequest(command, params), params);
   final AudioRequest platform;
   final void Function(Map<String, dynamic>) emit;
   final bool Function() isDisposed;
@@ -47,14 +64,14 @@ final class MediaCoordinator {
   final _audioClosings = <String, Future<void>>{};
   final _mediaIntents = MediaIntentRegistry();
   late final _audioOutputs = AudioOutputCoordinator(
-    request: invoke,
+    request: captures.request,
     diagnostics: diagnostics,
     platform: platform,
     emit: _handleAudioOutput,
     isDisposed: () => _disposed,
   );
   late final _deviceQuality = DeviceQualityCoordinator(
-    request: invoke,
+    request: _request,
     applyOutput: (stream) async {
       final id = stream['sessionId'] as String;
       Map<String, dynamic> output;
@@ -66,27 +83,27 @@ final class MediaCoordinator {
       }
       final merged = {...stream, ...output};
       if (_textures.containsKey(id)) _textures[id] = merged;
-      await invoke('session.ready', merged);
+      await captures.readyVideo(merged);
       return merged;
     },
     beginReconfigure: (id) => _videoLifecycle.beginReconfigure(id),
     endReconfigure: (id) => _videoLifecycle.endReconfigure(id),
   );
   late final _videoOutputs = VideoOutputCoordinator(
-    request: invoke,
+    request: captures.request,
     openSource: capture.openSource,
     emit: _handleVideoOutput,
     diagnostics: diagnostics,
     isDisposed: () => _disposed,
   );
   late final _videoPresentation = VideoPresentation(
-    request: invoke,
+    request: captures.request,
     pauseOutput: _videoOutputs.pause,
     resumeOutput: _videoOutputs.resume,
   );
   late final VideoOutputLifecycle _videoLifecycle = VideoOutputLifecycle(
     outputs: _textures,
-    request: invoke,
+    request: captures.request,
     closeOutput: _closeVideo,
     reattachOutput: (id, endpoint) =>
         _videoOutputs.reattach(id, endpoint: endpoint),
@@ -171,10 +188,7 @@ final class MediaCoordinator {
       _mediaIntents.stop(id, audio: true);
       unawaited(() async {
         try {
-          await invoke('audio.stop', {
-            'sourceId': id,
-            'deviceId': source['deviceId'],
-          });
+          await captures.stopAudio(id, source['deviceId'] as String);
         } catch (_) {
           /* 精确源可能已经结束，不能仅按设备停止。 */
         } finally {
@@ -183,10 +197,9 @@ final class MediaCoordinator {
       }());
     } else if (event['type'] == 'audio.presentation') {
       unawaited(
-        invoke(
-          'audio.presentation',
-          data,
-        ).catchError((Object _) => <String, dynamic>{}),
+        captures
+            .presentAudio(data)
+            .catchError((Object _) => <String, dynamic>{}),
       );
     }
   }
@@ -200,22 +213,21 @@ final class MediaCoordinator {
 
   Future<void> retireUnownedAudio() async {
     final known =
-        (await invoke('audio.sources', const {}))['sources'] as List? ??
-        const [];
+        (await captures.audioSources())['sources'] as List? ?? const [];
     for (final source in known.whereType<Map<Object?, Object?>>()) {
       if (source['sourceId'] is String &&
           source['deviceId'] is String &&
           !['stopped', 'failed', 'error'].contains(source['status'])) {
-        await invoke('audio.stop', {
-          'sourceId': source['sourceId'],
-          'deviceId': source['deviceId'],
-        });
+        await captures.stopAudio(
+          source['sourceId'] as String,
+          source['deviceId'] as String,
+        );
       }
     }
   }
 
   Future<void> _ensureVideoDecoder(Map<String, dynamic> params) async {
-    final settings = await invoke('settings.get', const {});
+    final settings = await readSettings();
     final codec = VideoQualityPolicy.resolve(
       settings,
       params['deviceId'] as String?,
@@ -239,7 +251,7 @@ final class MediaCoordinator {
 
   Future<Map<String, dynamic>> snapshot(bool Function() current) =>
       readAndReconcileMediaSnapshot(
-        read: () => invoke('state.snapshot', {}),
+        read: readSnapshot,
         videos: _textures,
         audios: _audioSources,
         closeVideo: _closeVideo,
@@ -305,26 +317,34 @@ final class MediaCoordinator {
   }
 
   Future<Map<String, dynamic>> dispatch(
-    String command,
+    ApplicationCommand operation,
     Map<String, dynamic> params,
     Future<Map<String, dynamic>> Function(
-      String,
+      ApplicationCommand,
       Map<String, dynamic>, {
       MediaIntent? intent,
     })
     next,
   ) async {
+    final command = operation.wire;
     _deviceQuality.beforeRequest(command, params);
-    if (command == 'session.stop' && params['sessionId'] is String) {
+    if (operation == ApplicationCommand.sessionStop &&
+        params['sessionId'] is String) {
       _videoLifecycle.forget(params['sessionId'] as String);
       _mediaIntents.stop(params['sessionId'] as String, audio: false);
-    } else if (command == 'audio.stop' && params['sourceId'] is String) {
+    } else if (operation == ApplicationCommand.audioStop &&
+        params['sourceId'] is String) {
       _mediaIntents.stop(params['sourceId'] as String, audio: true);
-    } else if (command == 'audio.stop' && params['deviceId'] is String) {
+    } else if (operation == ApplicationCommand.audioStop &&
+        params['deviceId'] is String) {
       _mediaIntents.stopAudioDevice(params['deviceId'] as String);
-    } else if (['devices.disconnect', 'devices.forget'].contains(command)) {
+    } else if ([
+      ApplicationCommand.devicesDisconnect,
+      ApplicationCommand.devicesForget,
+    ].contains(operation)) {
       _mediaIntents.stopDevice('${params['deviceId']}');
-    } else if (command == 'activities.stop' && params['activityId'] is String) {
+    } else if (operation == ApplicationCommand.activitiesStop &&
+        params['activityId'] is String) {
       final id = params['activityId'] as String;
       if (id.startsWith('session:')) {
         _mediaIntents.stop(id.substring(8), audio: false);
@@ -334,35 +354,37 @@ final class MediaCoordinator {
       }
     }
     final starts = [
-      'session.start',
-      'apps.launch',
-      'audio.start',
-    ].contains(command);
+      ApplicationCommand.sessionStart,
+      ApplicationCommand.appsLaunch,
+      ApplicationCommand.audioStart,
+    ].contains(operation);
     final intent = starts
         ? _mediaIntents.begin(
             '${params['deviceId']}',
-            audio: command == 'audio.start',
+            audio: operation == ApplicationCommand.audioStart,
           )
         : null;
 
     try {
-      return command == 'session.start' || command == 'apps.launch'
+      return operation == ApplicationCommand.sessionStart ||
+              operation == ApplicationCommand.appsLaunch
           ? await _deviceQuality.open(
               '${params['deviceId']}',
-              () => next(command, params, intent: intent),
+              () => next(operation, params, intent: intent),
             )
-          : await next(command, params, intent: intent);
+          : await next(operation, params, intent: intent);
     } finally {
       if (intent != null) _mediaIntents.finish(intent);
     }
   }
 
   Future<Map<String, dynamic>> execute(
-    String command,
+    ApplicationCommand operation,
     Map<String, dynamic> params, {
     MediaIntent? intent,
   }) async {
-    final stoppingAudioIds = command == 'audio.stop'
+    final command = operation.wire;
+    final stoppingAudioIds = operation == ApplicationCommand.audioStop
         ? _audioSources.keys
               .where(
                 (id) => params['sourceId'] is String
@@ -371,13 +393,14 @@ final class MediaCoordinator {
               )
               .toList()
         : const <String>[];
-    if (command == 'audio.status') {
+    if (operation == ApplicationCommand.audioStatus) {
       return _audioOutputs.status(params['sourceId'] as String?);
     }
-    if (command == 'session.pause' || command == 'session.resume') {
+    if (operation == ApplicationCommand.sessionPause ||
+        operation == ApplicationCommand.sessionResume) {
       final receipt = await _videoPresentation.request(command, params);
       final id = receipt['sessionId'];
-      if (command == 'session.resume' &&
+      if (operation == ApplicationCommand.sessionResume &&
           !_disposed &&
           id is String &&
           _textures.containsKey(id) &&
@@ -391,18 +414,25 @@ final class MediaCoordinator {
       }
       return receipt;
     }
-    if (command == 'video.capabilities') {
+    if (operation == ApplicationCommand.videoCapabilities) {
       return capabilities();
     }
-    if (['session.start', 'apps.launch', 'session.quality'].contains(command)) {
+    if ([
+      ApplicationCommand.sessionStart,
+      ApplicationCommand.appsLaunch,
+      ApplicationCommand.sessionQuality,
+    ].contains(operation)) {
       await _ensureVideoDecoder(
-        command == 'session.quality'
+        operation == ApplicationCommand.sessionQuality
             ? params
             : {'deviceId': params['deviceId']},
       );
     }
-    if (command == 'session.quality') return _deviceQuality.change(params);
-    if (command == 'session.screenshot' && params['sessionId'] is String) {
+    if (operation == ApplicationCommand.sessionQuality) {
+      return _deviceQuality.change(params);
+    }
+    if (operation == ApplicationCommand.sessionScreenshot &&
+        params['sessionId'] is String) {
       final directory = await Directory('$dataDirectory/screenshots')
           .create(recursive: true);
       return _videoOutputs.screenshot(
@@ -410,27 +440,28 @@ final class MediaCoordinator {
         directory: directory.path,
       );
     }
-    if (command == 'audio.volume') {
-      final proposed = await invoke(command, params);
+    if (operation == ApplicationCommand.audioVolume) {
+      final proposed = await captures.execute(operation, params);
       final applied = await _audioOutputs.volume(
         proposed['sourceId'] as String,
         volume: (proposed['volume'] as num).toDouble(),
         muted: proposed['muted'] == true,
       );
-      final updated = await invoke(command, {
+      final updated = await captures.execute(operation, {
         ...params,
         ...proposed,
         ...applied,
       });
       return {...updated, ...applied};
     }
-    if (command == 'audio.pause' || command == 'audio.resume') {
-      final proposed = await invoke(command, params);
+    if (operation == ApplicationCommand.audioPause ||
+        operation == ApplicationCommand.audioResume) {
+      final proposed = await captures.execute(operation, params);
       final id = proposed['sourceId'] as String;
-      final applied = command == 'audio.pause'
+      final applied = operation == ApplicationCommand.audioPause
           ? await _audioOutputs.pause(id)
           : await _audioOutputs.resume(id);
-      final updated = await invoke(command, {
+      final updated = await captures.execute(operation, {
         ...params,
         ...proposed,
         ...applied,
@@ -443,8 +474,8 @@ final class MediaCoordinator {
         '已停止本次打开，不会重新启动画面或声音。',
       );
     }
-    final result = await invoke(command, params);
-    if (command == 'session.quality.options') {
+    final result = await invoke(operation, params);
+    if (operation == ApplicationCommand.sessionQualityOptions) {
       final local = await capabilities();
       final decoders = (local['codecs'] as List? ?? const [])
           .whereType<Map<Object?, Object?>>();
@@ -481,10 +512,10 @@ final class MediaCoordinator {
     if (result['audioSourceId'] is String && result['sourceId'] is String) {
       intent?.bind('${result['sourceId']}');
       if (_disposed || intent?.cancelled == true) {
-        await invoke('audio.stop', {
-          'deviceId': result['deviceId'],
-          'sourceId': result['sourceId'],
-        });
+        await captures.stopAudio(
+          result['sourceId'] as String,
+          result['deviceId'] as String,
+        );
         throw const ApplicationCommandException('cancelled', '已停止本次声音，不会重新启动。');
       }
       final id = result['sourceId'] as String;
@@ -507,7 +538,7 @@ final class MediaCoordinator {
             '声音焦点已结束，请重新打开此设备声音。',
           );
         }
-        final ready = await invoke('audio.ready', {...result, ...playback});
+        final ready = await captures.readyAudio({...result, ...playback});
         if (_disposed || intent?.cancelled == true) {
           throw const ApplicationCommandException(
             'cancelled',
@@ -517,10 +548,7 @@ final class MediaCoordinator {
         return {...ready, ...playback};
       } catch (_) {
         try {
-          await invoke('audio.stop', {
-            'deviceId': result['deviceId'],
-            'sourceId': id,
-          });
+          await captures.stopAudio(id, result['deviceId'] as String);
         } finally {
           await _closeAudio(id);
         }
@@ -532,10 +560,10 @@ final class MediaCoordinator {
       final id = result['sessionId'] as String;
       intent?.bind(id);
       if (_disposed || intent?.cancelled == true) {
-        await invoke('session.stop', {
-          'sessionId': id,
-          if (result['packageName'] is String) 'keepLaunchRecord': true,
-        });
+        await captures.stopVideo(
+          id,
+          keepLaunchRecord: result['packageName'] is String,
+        );
         throw const ApplicationCommandException('cancelled', '已停止本次画面，不会重新启动。');
       }
       try {
@@ -550,7 +578,7 @@ final class MediaCoordinator {
           );
         }
         _textures[id] = {...result, ...texture};
-        await invoke('session.ready', {'sessionId': id, ...texture});
+        await captures.readyVideo({'sessionId': id, ...texture});
         if (_disposed || intent?.cancelled == true) {
           throw const ApplicationCommandException(
             'cancelled',
@@ -562,10 +590,7 @@ final class MediaCoordinator {
       } catch (error) {
         final appLaunch = result['packageName'] is String;
         try {
-          await invoke('session.stop', {
-            'sessionId': id,
-            if (appLaunch) 'keepLaunchRecord': true,
-          });
+          await captures.stopVideo(id, keepLaunchRecord: appLaunch);
         } catch (_) {
           /* 保留原始输出错误。 */
         }
@@ -588,7 +613,8 @@ final class MediaCoordinator {
         rethrow;
       }
     }
-    if (command == 'session.list' && result['sessions'] is List) {
+    if (operation == ApplicationCommand.sessionList &&
+        result['sessions'] is List) {
       return {
         ...result,
         'sessions': [
@@ -600,12 +626,12 @@ final class MediaCoordinator {
         ],
       };
     }
-    if (command == 'session.stop') {
+    if (operation == ApplicationCommand.sessionStop) {
       final id = result['sessionId'];
       if (id is String) _mediaIntents.stop(id, audio: false);
       if (id is String) await _closeVideo(id);
     }
-    if (command == 'audio.stop') {
+    if (operation == ApplicationCommand.audioStop) {
       for (final id in stoppingAudioIds) {
         await _closeAudio(id);
       }
@@ -617,7 +643,7 @@ final class MediaCoordinator {
         await _audioOutputs.stopDevice(device);
       }
     }
-    if (command == 'activities.stop' &&
+    if (operation == ApplicationCommand.activitiesStop &&
         result['status'] == 'stopped' &&
         result['sourceId'] is String &&
         result['deviceId'] is String &&
@@ -632,9 +658,10 @@ final class MediaCoordinator {
     }
     final activity = params['activityId'];
     final deviceId =
-        command == 'devices.disconnect' || command == 'devices.forget'
+        operation == ApplicationCommand.devicesDisconnect ||
+            operation == ApplicationCommand.devicesForget
         ? params['deviceId']
-        : command == 'activities.stop' &&
+        : operation == ApplicationCommand.activitiesStop &&
               activity is String &&
               activity.startsWith('connection:')
         ? activity.substring(11)
@@ -692,7 +719,7 @@ final class MediaCoordinator {
           final device = _audioSources[id]?['deviceId'];
           if (device is String) {
             try {
-              await invoke('audio.stop', {'sourceId': id, 'deviceId': device});
+              await captures.stopAudio(id, device);
             } catch (_) {
               /* 原生源可能已结束，本地输出仍需释放。 */
             }
