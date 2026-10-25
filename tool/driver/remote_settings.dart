@@ -5,6 +5,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 /// 为 remote_settings_test.dart 提供独立 Android 观察，不注入产品 session.start、session.display 或 devices.wake 调用。
 ///
@@ -195,18 +196,33 @@ Future<void> main() async {
       );
     }
 
-    await setting('user_rotation', values[1]);
-    await setting('accelerometer_rotation', values[0]);
+    await withDriverCleanup(
+      () async {},
+      () => {
+        'controller rotation': () => setting('user_rotation', values[1]),
+        'controller rotation mode': () =>
+            setting('accelerometer_rotation', values[0]),
+      },
+    );
   }
 
   Future<void> restoreHost() async {
     if (hostRestored || !baselineTaken) return;
-    await restoreController();
-    final wasAwake = targetBefore!['power']!.contains('mWakefulness=Awake');
-    await shell(target, 'input keyevent ${wasAwake ? 224 : 223}');
-    await until(
-      () async => await awake() == wasAwake,
-      'Original target power state did not return.',
+    await withDriverCleanup(
+      () async {},
+      () => {
+        'controller settings': restoreController,
+        'original target power state': () async {
+          final wasAwake = targetBefore!['power']!.contains(
+            'mWakefulness=Awake',
+          );
+          await shell(target, 'input keyevent ${wasAwake ? 224 : 223}');
+          await until(
+            () async => await awake() == wasAwake,
+            'Original target power state did not return.',
+          );
+        },
+      },
     );
     hostRestored = true;
   }
@@ -458,10 +474,13 @@ Future<void> main() async {
         final deadline = DateTime.now().add(const Duration(minutes: 15));
         while (!finished && DateTime.now().isBefore(deadline)) {
           try {
-            final response = await driver.serviceClient.callServiceExtension(
-              'ext.connect.remoteSettings',
-              isolateId: driver.appIsolate.id,
+            final response = await driverRpc(
+              driver.serviceClient.callServiceExtension(
+                'ext.connect.remoteSettings',
+                isolateId: driver.appIsolate.id,
+              ),
             );
+            if (finished) return;
             final checkpoint = response.json?['checkpoint'];
             if (checkpoint is Map && checkpoint['id'] != previous) {
               final data = Map<String, dynamic>.from(checkpoint);
@@ -472,19 +491,23 @@ Future<void> main() async {
                 result = await inspect(data);
               } catch (failure) {
                 error = failure.toString();
-                inspectionError = failure;
+                inspectionError ??= failure;
               }
-              await driver.serviceClient.callServiceExtension(
-                'ext.connect.remoteSettings',
-                isolateId: driver.appIsolate.id,
-                args: {
-                  'ack': previous,
-                  'error': ?error,
-                  if (result != null) 'result': jsonEncode(result),
-                },
+              if (finished) return;
+              await driverRpc(
+                driver.serviceClient.callServiceExtension(
+                  'ext.connect.remoteSettings',
+                  isolateId: driver.appIsolate.id,
+                  args: {
+                    'ack': previous,
+                    'error': ?error,
+                    if (result != null) 'result': jsonEncode(result),
+                  },
+                ),
               );
             }
           } catch (error) {
+            if (finished) return;
             if (!error.toString().contains('ext.connect.remoteSettings') &&
                 !error.toString().contains('Method not found')) {
               rethrow;
@@ -496,48 +519,64 @@ Future<void> main() async {
           throw StateError('Timed out inspecting real remote settings.');
         }
       }().catchError((Object error) {
-        inspectionError = error;
+        inspectionError ??= error;
       });
-  try {
-    await integrationDriver(
-      driver: driver,
-      writeResponseOnFailure: true,
-      onScreenshot: (name, bytes, [args]) async {
-        await File('${directory.path}/$name.png').writeAsBytes(bytes);
-        return true;
-      },
-      responseDataCallback: (data) async {
+  Object? driverFailure;
+  await withDriverCleanup(
+    () async {
+      try {
+        await integrationDriver(
+          driver: driver,
+          writeResponseOnFailure: true,
+          onScreenshot: (name, bytes, [args]) async {
+            await File('${directory.path}/$name.png').writeAsBytes(bytes);
+            return true;
+          },
+          responseDataCallback: (data) async {
+            finished = true;
+            await inspection;
+            // SDK 会在回调返回后退出；设备恢复不能仅依赖外层收尾。
+            await restoreHost();
+            final result = {...?data}..remove('screenshots');
+            result['independentTargetChecks'] = checks;
+            result['displayCaptures'] = captures;
+            responseResult = result;
+            await File('${directory.path}/result.json')
+                .writeAsString(jsonEncode(result));
+            if (inspectionError != null ||
+                result['remoteSettingsComplete'] != true ||
+                result['topSurfaceGestureAndRemoteBackVerified'] != true ||
+                result['backgroundKeepAliveRestored'] != true ||
+                (result['cleanupErrors'] as List?)?.isEmpty != true) {
+              throw StateError(
+                'Real Flutter remote settings acceptance incomplete: $inspectionError',
+              );
+            }
+          },
+        );
+      } catch (error) {
+        driverFailure = error;
+        rethrow;
+      }
+    },
+    () => {
+      'remote-settings inspection': () async {
         finished = true;
         await inspection;
-        final result = {...?data}..remove('screenshots');
-        result['independentTargetChecks'] = checks;
-        result['displayCaptures'] = captures;
-        responseResult = result;
-        await File('${directory.path}/result.json')
-            .writeAsString(jsonEncode(result));
-        if (inspectionError != null ||
-            result['remoteSettingsComplete'] != true ||
-            result['topSurfaceGestureAndRemoteBackVerified'] != true ||
-            result['backgroundKeepAliveRestored'] != true ||
-            (result['cleanupErrors'] as List?)?.isEmpty != true) {
-          throw StateError(
-            'Real Flutter remote settings acceptance incomplete: $inspectionError',
-          );
-        }
       },
-    );
-  } catch (error) {
-    await File('${directory.path}/result.json').writeAsString(
-      jsonEncode({
-        ...?responseResult,
-        'remoteSettingsComplete': false,
-        'driverFailure': '$error',
-        'independentTargetChecks': checks,
-      }),
-    );
-    rethrow;
-  } finally {
-    finished = true;
-    await restoreHost();
-  }
+      'original controller and target state': restoreHost,
+      'driver connection': () => driverRpc(driver.close()),
+      'failure report': () async {
+        if (driverFailure == null) return;
+        await File('${directory.path}/result.json').writeAsString(
+          jsonEncode({
+            ...?responseResult,
+            'remoteSettingsComplete': false,
+            'driverFailure': '$driverFailure',
+            'independentTargetChecks': checks,
+          }),
+        );
+      },
+    },
+  );
 }

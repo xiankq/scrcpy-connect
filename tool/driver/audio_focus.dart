@@ -6,6 +6,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 const fixturePackage = 'dev.scrcpyconnect.focusfixture';
 
@@ -16,34 +17,53 @@ Future<void> main() async {
   await directory.create(recursive: true);
   final driver = await FlutterDriver.connect();
   var hostFinished = false;
-  final operation = driveFocus(
-    driver,
-    directory,
-    shouldStop: () => hostFinished,
-  );
-  unawaited(
-    operation.catchError((Object error, StackTrace stack) {
-      stderr.writeln('Actual external AudioFocus test failed: $error');
-      exit(1);
-    }),
-  );
-  await integrationDriver(
-    driver: driver,
-    writeResponseOnFailure: true,
-    responseDataCallback: (data) async {
-      hostFinished = true;
-      await operation;
-      final metadata = {...?data}..remove('screenshots');
-      await File('${directory.path}/audio-focus-result.json')
-          .writeAsString(jsonEncode(metadata));
-      if (metadata['audioFocusAcceptanceComplete'] != true) {
-        throw StateError(
-          'The app did not complete external audio focus acceptance.',
-        );
-      }
+  Object? fixtureError;
+  StackTrace? fixtureStack;
+  final operation =
+      driveFocus(driver, directory, shouldStop: () => hostFinished).catchError((
+        Object error,
+        StackTrace stack,
+      ) async {
+        fixtureError = error;
+        fixtureStack = stack;
+        hostFinished = true;
+        try {
+          await driverRpc(driver.close());
+        } catch (closeError) {
+          stderr.writeln('AudioFocus driver shutdown failed: $closeError');
+        }
+      });
+  Future<void> finishFixture() async {
+    hostFinished = true;
+    await operation;
+    if (fixtureError != null) {
+      Error.throwWithStackTrace(fixtureError!, fixtureStack!);
+    }
+  }
+
+  await withDriverCleanup(
+    () async {
+      await integrationDriver(
+        driver: driver,
+        writeResponseOnFailure: true,
+        responseDataCallback: (data) async {
+          await finishFixture();
+          final metadata = {...?data}..remove('screenshots');
+          await File('${directory.path}/audio-focus-result.json')
+              .writeAsString(jsonEncode(metadata));
+          if (metadata['audioFocusAcceptanceComplete'] != true) {
+            throw StateError(
+              'The app did not complete external audio focus acceptance.',
+            );
+          }
+        },
+      );
+    },
+    () => {
+      'audio-focus fixture': finishFixture,
+      'driver connection': () => driverRpc(driver.close()),
     },
   );
-  await operation;
 }
 
 Future<void> driveFocus(
@@ -142,33 +162,46 @@ Future<void> driveFocus(
 
   var installed = false;
   var fixtureActive = false;
+  var foregroundRestoreNeeded = false;
   String? xmlPath;
   Future<void> release() async {
-    if (fixtureActive) {
-      await run([
-        'shell',
-        'am',
-        'start',
-        '-W',
-        '-n',
-        '$fixturePackage/.FocusActivity',
-        '--es',
-        'mode',
-        'release',
-      ]);
-      fixtureActive = false;
-    }
-    await run([
-      'shell',
-      'am',
-      'start',
-      '-W',
-      '-n',
-      'dev.scrcpyconnect.scrcpy_connect/.MainActivity',
-    ]);
+    await withDriverCleanup(
+      () async {},
+      () => {
+        'fixture audio focus': () async {
+          if (!fixtureActive) return;
+          await run([
+            'shell',
+            'am',
+            'start',
+            '-W',
+            '-n',
+            '$fixturePackage/.FocusActivity',
+            '--es',
+            'mode',
+            'release',
+          ]);
+          fixtureActive = false;
+        },
+        'controller foreground': () async {
+          await run([
+            'shell',
+            'am',
+            'start',
+            '-W',
+            '-n',
+            'dev.scrcpyconnect.scrcpy_connect/.MainActivity',
+          ]);
+          foregroundRestoreNeeded = false;
+        },
+      },
+    );
   }
 
   Future<void> acquire(String mode, String runId) async {
+    // 命令回执丢失时，设备也可能已经获得焦点，仍须释放。
+    fixtureActive = true;
+    foregroundRestoreNeeded = true;
     await run([
       'shell',
       'am',
@@ -183,7 +216,6 @@ Future<void> driveFocus(
       'run_id',
       runId,
     ]);
-    fixtureActive = true;
     xmlPath = '/sdcard/Download/$runId.xml';
     await run(['shell', 'uiautomator', 'dump', '--compressed', xmlPath!]);
     final xml = await run(['shell', 'cat', xmlPath!]);
@@ -197,111 +229,122 @@ Future<void> driveFocus(
 
   final seen = <String>{};
   final deadline = DateTime.now().add(const Duration(minutes: 6));
-  try {
-    while (DateTime.now().isBefore(deadline)) {
-      if (shouldStop()) return;
-      Map<String, dynamic> current;
-      try {
-        current = await state();
-      } catch (error) {
+  await withDriverCleanup(
+    () async {
+      while (DateTime.now().isBefore(deadline)) {
         if (shouldStop()) return;
-        if (!error.toString().contains('ext.connect.audioFocus') &&
-            !error.toString().contains('Method not found')) {
-          rethrow;
+        Map<String, dynamic> current;
+        try {
+          current = await state();
+        } catch (error) {
+          if (shouldStop()) return;
+          if (!error.toString().contains('ext.connect.audioFocus') &&
+              !error.toString().contains('Method not found')) {
+            rethrow;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          continue;
         }
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-        continue;
-      }
-      final stage = '${current['stage']}';
-      final runId = '${current['runId']}';
-      if (!RegExp(r'^focus-[0-9]+$').hasMatch(runId)) {
-        throw StateError('Invalid fixture identity.');
-      }
-      if (seen.add(stage)) {
-        switch (stage) {
-          case 'prepare':
-            final existing = await run([
-              'shell',
-              'pm',
-              'list',
-              'packages',
-              fixturePackage,
-            ]);
-            if (existing.split('\n').contains('package:$fixturePackage')) {
-              await run(['uninstall', fixturePackage]);
-            }
-            await run(['install', apk]);
-            installed = true;
-            await state({'ack': stage});
-          case 'transient':
-            await acquire('transient', runId);
-            final first = await until(
-              (s) => ['1', '2'].every((k) {
-                final n = native(s, k);
-                return n['focusPaused'] == true &&
-                    n['backgroundPaused'] == false &&
-                    n['playState'] == 'paused';
-              }),
-              'Both actual shared players must pause for external transient loss',
-            );
-            if (native(first, '1')['manualPaused'] != true ||
-                native(first, '2')['manualPaused'] != false) {
-              throw StateError('Manual and focus pause flags were conflated.');
-            }
-            await Future<void>.delayed(const Duration(milliseconds: 400));
-            final stable = await state({'action': 'status'});
-            await Future<void>.delayed(const Duration(milliseconds: 700));
-            final after = await state({'action': 'status'});
-            for (final k in ['1', '2']) {
-              if (native(after, k)['backend'] != 'media_codec' ||
-                  ((native(after, k)['positionMs'] as int) -
-                              (native(stable, k)['positionMs'] as int))
-                          .abs() >
-                      40) {
+        final stage = '${current['stage']}';
+        final runId = '${current['runId']}';
+        if (!RegExp(r'^focus-[0-9]+$').hasMatch(runId)) {
+          throw StateError('Invalid fixture identity.');
+        }
+        if (seen.add(stage)) {
+          switch (stage) {
+            case 'prepare':
+              final existing = await run([
+                'shell',
+                'pm',
+                'list',
+                'packages',
+                fixturePackage,
+              ]);
+              if (existing.split('\n').contains('package:$fixturePackage')) {
+                await run(['uninstall', fixturePackage]);
+              }
+              installed = true;
+              await run(['install', apk]);
+              await state({'ack': stage});
+            case 'transient':
+              await acquire('transient', runId);
+              final first = await until(
+                (s) => ['1', '2'].every((k) {
+                  final n = native(s, k);
+                  return n['focusPaused'] == true &&
+                      n['backgroundPaused'] == false &&
+                      n['playState'] == 'paused';
+                }),
+                'Both actual shared players must pause for external transient loss',
+              );
+              if (native(first, '1')['manualPaused'] != true ||
+                  native(first, '2')['manualPaused'] != false) {
                 throw StateError(
-                  'Shared playback clock advanced after actual focus pause.',
+                  'Manual and focus pause flags were conflated.',
                 );
               }
-            }
-            await File('${evidence.path}/audio-focus-transient.json')
-                .writeAsString(jsonEncode(after));
-            await release();
-            await until(
-              (s) =>
-                  native(s, '1')['focusPaused'] == false &&
-                  native(s, '1')['playState'] == 'paused' &&
-                  native(s, '2')['playState'] == 'playing',
-              'Focus gain must preserve the manual pause and resume the other source',
-            );
-            await state({'ack': stage});
-          case 'permanent':
-            await acquire('permanent', runId);
-            final lost = await until(
-              inactive,
-              'Permanent focus loss must close both old source identities',
-            );
-            await File('${evidence.path}/audio-focus-permanent.json')
-                .writeAsString(jsonEncode(lost));
-            await release();
-            await Future<void>.delayed(const Duration(seconds: 1));
-            if (!inactive(await state({'action': 'status'}))) {
-              throw StateError(
-                'Old sources revived after abandoning permanent focus.',
+              await Future<void>.delayed(const Duration(milliseconds: 400));
+              final stable = await state({'action': 'status'});
+              await Future<void>.delayed(const Duration(milliseconds: 700));
+              final after = await state({'action': 'status'});
+              for (final k in ['1', '2']) {
+                if (native(after, k)['backend'] != 'media_codec' ||
+                    ((native(after, k)['positionMs'] as int) -
+                                (native(stable, k)['positionMs'] as int))
+                            .abs() >
+                        40) {
+                  throw StateError(
+                    'Shared playback clock advanced after actual focus pause.',
+                  );
+                }
+              }
+              await File('${evidence.path}/audio-focus-transient.json')
+                  .writeAsString(jsonEncode(after));
+              await release();
+              await until(
+                (s) =>
+                    native(s, '1')['focusPaused'] == false &&
+                    native(s, '1')['playState'] == 'paused' &&
+                    native(s, '2')['playState'] == 'playing',
+                'Focus gain must preserve the manual pause and resume the other source',
               );
-            }
-            await state({'ack': stage});
-            stdout.writeln(
-              'Two real device shared audio outputs: transient loss/manual pause/gain/permanent loss verified with independent AudioManager app.',
-            );
-            return;
+              await state({'ack': stage});
+            case 'permanent':
+              await acquire('permanent', runId);
+              final lost = await until(
+                inactive,
+                'Permanent focus loss must close both old source identities',
+              );
+              await File('${evidence.path}/audio-focus-permanent.json')
+                  .writeAsString(jsonEncode(lost));
+              await release();
+              await Future<void>.delayed(const Duration(seconds: 1));
+              if (!inactive(await state({'action': 'status'}))) {
+                throw StateError(
+                  'Old sources revived after abandoning permanent focus.',
+                );
+              }
+              await state({'ack': stage});
+              stdout.writeln(
+                'Two real device shared audio outputs: transient loss/manual pause/gain/permanent loss verified with independent AudioManager app.',
+              );
+              return;
+          }
         }
+        await Future<void>.delayed(const Duration(milliseconds: 150));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 150));
-    }
-    throw StateError('External focus test exceeded its deadline.');
-  } finally {
-    if (fixtureActive) await release();
-    if (xmlPath != null) await run(['shell', 'rm', '-f', xmlPath!]);
-    if (installed) await run(['uninstall', fixturePackage]);
-  }
+      throw StateError('External focus test exceeded its deadline.');
+    },
+    () => {
+      'external audio focus': () async {
+        if (fixtureActive || foregroundRestoreNeeded) await release();
+      },
+      'focus fixture UI dump': () async {
+        if (xmlPath != null) await run(['shell', 'rm', '-f', xmlPath!]);
+      },
+      'focus fixture install': () async {
+        if (installed) await run(['uninstall', fixturePackage]);
+      },
+    },
+  );
 }

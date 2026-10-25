@@ -5,6 +5,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 // 此可执行程序仅用于宿主实验；产品代码不引入 ADB 实验入口。
 Future<void> main() async {
@@ -26,6 +27,7 @@ Future<void> main() async {
   final driver = await FlutterDriver.connect();
   var hostFinished = false;
   Object? hostFailure;
+  StackTrace? hostStack;
   final host =
       driveShareTarget(
         driver,
@@ -38,39 +40,54 @@ Future<void> main() async {
         (value) => value,
         onError: (Object error, StackTrace stack) {
           hostFailure = error;
+          hostStack = stack;
           return <String, Object?>{};
         },
       );
-  await integrationDriver(
-    driver: driver,
-    writeResponseOnFailure: true,
-    responseDataCallback: (data) async {
-      hostFinished = true;
-      final evidence = await host;
-      final metadata = {...?data, 'independentHost': evidence}
-        ..remove('screenshots');
-      final output = Directory('/tmp/connect-e2e/incoming-share-target');
-      await output.create(recursive: true);
-      await File('${output.path}/result.json')
-          .writeAsString(jsonEncode(metadata));
-      if (hostFailure != null) {
-        throw StateError('Independent host failed: $hostFailure');
-      }
-      if (metadata['incomingShareTargetComplete'] != true ||
-          evidence['verified'] != true ||
-          evidence['cleaned'] != true) {
-        throw StateError(
-          'The actual incoming-share target acceptance did not complete.',
-        );
-      }
+  await withDriverCleanup(
+    () async {
+      await integrationDriver(
+        driver: driver,
+        writeResponseOnFailure: true,
+        responseDataCallback: (data) async {
+          hostFinished = true;
+          final evidence = await host;
+          final metadata = {...?data, 'independentHost': evidence}
+            ..remove('screenshots');
+          final output = Directory('/tmp/connect-e2e/incoming-share-target');
+          await output.create(recursive: true);
+          await File('${output.path}/result.json')
+              .writeAsString(jsonEncode(metadata));
+          if (hostFailure != null) {
+            Error.throwWithStackTrace(hostFailure!, hostStack!);
+          }
+          if (metadata['incomingShareTargetComplete'] != true ||
+              evidence['verified'] != true ||
+              evidence['cleaned'] != true) {
+            throw StateError(
+              'The actual incoming-share target acceptance did not complete.',
+            );
+          }
+        },
+        onScreenshot: (name, bytes, [args]) async {
+          final output = Directory('/tmp/connect-e2e/incoming-share-target');
+          await output.create(recursive: true);
+          final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          await File('${output.path}/$safeName.png')
+              .writeAsBytes(bytes, flush: true);
+          return true;
+        },
+      );
     },
-    onScreenshot: (name, bytes, [args]) async {
-      final output = Directory('/tmp/connect-e2e/incoming-share-target');
-      await output.create(recursive: true);
-      final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      await File('${output.path}/$safeName.png')
-          .writeAsBytes(bytes, flush: true);
-      return true;
+    () => {
+      'sharing target fixture': () async {
+        hostFinished = true;
+        await host;
+        if (hostFailure != null) {
+          Error.throwWithStackTrace(hostFailure!, hostStack!);
+        }
+      },
+      'driver connection': () => driverRpc(driver.close()),
     },
   );
 }
@@ -128,17 +145,20 @@ Future<Map<String, Object?>> driveShareTarget(
           .json ??
       {};
 
-  Future<void> cleanup() async {
-    for (final serial in created.keys.toList()) {
-      final path = created[serial]!;
-      await shell(serial, 'rm -rf ${quote(path)}');
-      await shell(serial, 'test ! -e ${quote(path)}');
-      created.remove(serial);
-    }
-  }
+  Future<void> cleanup() => withDriverCleanup(
+    () async {},
+    () => {
+      for (final entry in created.entries)
+        'target ${entry.key}': () async {
+          await shell(entry.key, 'rm -rf ${quote(entry.value)}');
+          await shell(entry.key, 'test ! -e ${quote(entry.value)}');
+          created.remove(entry.key);
+        },
+    },
+  );
 
   final deadline = DateTime.now().add(const Duration(minutes: 6));
-  try {
+  await withDriverCleanup(() async {
     while (!shouldStop() && DateTime.now().isBefore(deadline)) {
       Map<String, dynamic> current;
       try {
@@ -271,8 +291,8 @@ Future<Map<String, Object?>> driveShareTarget(
             await cleanup();
             evidence['cleaned'] = true;
             await state({'action': 'cleaned'});
-            if (failure != null) throw StateError(failure);
-            return evidence;
+            if (failure != null) throw StateError(failure!);
+            return;
         }
       } catch (error) {
         failure ??= 'Independent host failed during $stage: $error';
@@ -287,9 +307,7 @@ Future<Map<String, Object?>> driveShareTarget(
     if (!shouldStop() && !handled.contains('cleanup')) {
       throw StateError('Independent share fixture deadline exceeded.');
     }
-    if (failure != null) throw StateError(failure);
-    return evidence;
-  } finally {
-    await cleanup();
-  }
+    if (failure != null) throw StateError(failure!);
+  }, () => {'created target files': cleanup});
+  return evidence;
 }

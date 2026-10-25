@@ -8,6 +8,7 @@ import 'documents.dart';
 import 'clipboard.dart';
 import 'audio.dart';
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 Future<void> main() async {
   final directory = Directory(
@@ -16,56 +17,74 @@ Future<void> main() async {
   await directory.create(recursive: true);
   final driver = await FlutterDriver.connect();
   var hostFinished = false;
-  Future<void>? audioOperation;
-  if (Platform.environment['CONNECT_E2E_AUDIO_LIFECYCLE'] == '1') {
-    audioOperation = driveAudioLifecycle(
-      driver,
-      shouldStop: () => hostFinished,
+  var driverClosing = false;
+  Object? fixtureError;
+  StackTrace? fixtureStack;
+  final operations = <Future<void>>[];
+  void track(Future<void> operation) {
+    operations.add(
+      operation.catchError((Object error, StackTrace stack) async {
+        fixtureError ??= error;
+        fixtureStack ??= stack;
+        hostFinished = true;
+        stderr.writeln('Actual host fixture failed: $error');
+        if (!driverClosing) {
+          driverClosing = true;
+          try {
+            await driverRpc(driver.close());
+          } catch (closeError) {
+            stderr.writeln('Driver shutdown failed: $closeError');
+          }
+        }
+      }),
     );
-    audioOperation.catchError((Object error, StackTrace stack) {
-      stderr.writeln('Actual audio lifecycle test failed: $error');
-      exit(1);
-    });
+  }
+
+  Future<void> finishFixtures() async {
+    hostFinished = true;
+    await Future.wait(operations);
+    if (fixtureError != null) {
+      Error.throwWithStackTrace(fixtureError!, fixtureStack!);
+    }
+  }
+
+  if (Platform.environment['CONNECT_E2E_AUDIO_LIFECYCLE'] == '1') {
+    track(driveAudioLifecycle(driver, shouldStop: () => hostFinished));
   }
   if (Platform.environment['CONNECT_E2E_CLIPBOARD'] == '1') {
-    driveClipboard(driver).catchError((Object error, StackTrace stack) {
-      stderr.writeln('Actual clipboard test failed: $error');
-      exit(1);
-    });
+    track(driveClipboard(driver, shouldStop: () => hostFinished));
   }
   if (Platform.environment['CONNECT_E2E_DOCUMENTS'] == '1') {
-    driveDocuments(driver, directory).catchError((
-      Object error,
-      StackTrace stack,
-    ) {
-      stderr.writeln('Actual DocumentsUI test failed: $error');
-      exit(1);
-    });
+    track(driveDocuments(driver, directory, shouldStop: () => hostFinished));
   }
   if (Platform.environment['CONNECT_E2E_BACKGROUND'] == '1') {
-    triggerBackground(driver).catchError((Object error, StackTrace stack) {
-      stderr.writeln('Actual background switch failed: $error');
-      exit(1);
-    });
+    track(triggerBackground(driver, shouldStop: () => hostFinished));
   }
-  await integrationDriver(
-    driver: driver,
-    writeResponseOnFailure: true,
-    responseDataCallback: (data) async {
-      // 扩展 integrationDriver 在回调后退出进程；先排空宿主夹具清理，避免中止尚未完成的 finally。
-      //
-      hostFinished = true;
-      await audioOperation;
-      final metadata = {...?data}..remove('screenshots');
-      await File('${directory.path}/result.json')
-          .writeAsString(jsonEncode(metadata));
-      validateAcceptanceReport(metadata, environment: Platform.environment);
+  await withDriverCleanup(
+    () async {
+      await integrationDriver(
+        driver: driver,
+        writeResponseOnFailure: true,
+        responseDataCallback: (data) async {
+          // 扩展 integrationDriver 在回调后退出进程；先排空宿主夹具清理，避免中止尚未完成的 finally。
+          //
+          await finishFixtures();
+          final metadata = {...?data}..remove('screenshots');
+          await File('${directory.path}/result.json')
+              .writeAsString(jsonEncode(metadata));
+          validateAcceptanceReport(metadata, environment: Platform.environment);
+        },
+        onScreenshot: (name, bytes, [args]) async {
+          final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          await File('${directory.path}/$safeName.png')
+              .writeAsBytes(bytes, flush: true);
+          return true;
+        },
+      );
     },
-    onScreenshot: (name, bytes, [args]) async {
-      final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      await File('${directory.path}/$safeName.png')
-          .writeAsBytes(bytes, flush: true);
-      return true;
+    () => {
+      'host fixtures': finishFixtures,
+      'driver connection': () => driverRpc(driver.close()),
     },
   );
 }
@@ -110,7 +129,10 @@ void validateAcceptanceReport(
   }
 }
 
-Future<void> triggerBackground(FlutterDriver driver) async {
+Future<void> triggerBackground(
+  FlutterDriver driver, {
+  bool Function()? shouldStop,
+}) async {
   final serial =
       Platform.environment['CONNECT_E2E_DEVICE'] ??
       Platform.environment['ANDROID_SERIAL'];
@@ -137,16 +159,66 @@ Future<void> triggerBackground(FlutterDriver driver) async {
   }
 
   final deadline = DateTime.now().add(const Duration(minutes: 2));
-  while (DateTime.now().isBefore(deadline)) {
-    try {
-      final response = await driver.serviceClient.callServiceExtension(
-        'ext.connect.background',
-        isolateId: driver.appIsolate.id,
+  var backgrounded = false;
+  await withDriverCleanup(
+    () async {
+      while (DateTime.now().isBefore(deadline)) {
+        if (shouldStop?.call() == true) return;
+        try {
+          final response = await driver.serviceClient
+              .callServiceExtension(
+                'ext.connect.background',
+                isolateId: driver.appIsolate.id,
+              )
+              .timeout(const Duration(seconds: 5));
+          if (shouldStop?.call() == true) return;
+          final state = response.json ?? const <String, dynamic>{};
+          if (state['stage'] == 'ready') {
+            backgrounded = true;
+            await runAdb(['shell', 'input', 'keyevent', 'KEYCODE_HOME']);
+            await Future<void>.delayed(const Duration(seconds: 2));
+            await runAdb([
+              'shell',
+              'am',
+              'start',
+              '-W',
+              '-n',
+              'dev.scrcpyconnect.scrcpy_connect/.MainActivity',
+            ]);
+            backgrounded = false;
+            if (shouldStop?.call() == true) return;
+            await driver.serviceClient
+                .callServiceExtension(
+                  'ext.connect.background',
+                  isolateId: driver.appIsolate.id,
+                  args: {'action': 'returned'},
+                )
+                .timeout(const Duration(seconds: 5));
+            stdout.writeln(
+              jsonEncode({
+                'background': 'actual HOME and Activity restart completed',
+                'device': serial,
+              }),
+            );
+            return;
+          }
+        } catch (error) {
+          if (shouldStop?.call() == true) return;
+          // 测试在 driver 附着后才注册扩展。
+          if (!error.toString().contains('ext.connect.background') &&
+              !error.toString().contains('Method not found')) {
+            rethrow;
+          }
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+      throw StateError(
+        'The test never became ready for an actual background switch.',
       );
-      final state = response.json ?? const <String, dynamic>{};
-      if (state['stage'] == 'ready') {
-        await runAdb(['shell', 'input', 'keyevent', 'KEYCODE_HOME']);
-        await Future<void>.delayed(const Duration(seconds: 2));
+    },
+    () => {
+      'controller foreground': () async {
+        if (!backgrounded) return;
         await runAdb([
           'shell',
           'am',
@@ -155,29 +227,7 @@ Future<void> triggerBackground(FlutterDriver driver) async {
           '-n',
           'dev.scrcpyconnect.scrcpy_connect/.MainActivity',
         ]);
-        await driver.serviceClient.callServiceExtension(
-          'ext.connect.background',
-          isolateId: driver.appIsolate.id,
-          args: {'action': 'returned'},
-        );
-        stdout.writeln(
-          jsonEncode({
-            'background': 'actual HOME and Activity restart completed',
-            'device': serial,
-          }),
-        );
-        return;
-      }
-    } catch (error) {
-      // 测试在 driver 附着后才注册扩展。
-      if (!error.toString().contains('ext.connect.background') &&
-          !error.toString().contains('Method not found')) {
-        rethrow;
-      }
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-  }
-  throw StateError(
-    'The test never became ready for an actual background switch.',
+      },
+    },
   );
 }

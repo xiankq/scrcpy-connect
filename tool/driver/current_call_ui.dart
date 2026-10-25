@@ -5,6 +5,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 // 仅宿主使用的夹具，由 Android 虚拟调制解调器产生一通隔离来电；只有产品 CallsPage 可以请求真实通话界面。
 //
@@ -273,10 +274,13 @@ Future<void> main() async {
         final deadline = DateTime.now().add(const Duration(minutes: 7));
         while (!finished && DateTime.now().isBefore(deadline)) {
           try {
-            final response = await driver.serviceClient.callServiceExtension(
-              'ext.connect.currentCallUi',
-              isolateId: driver.appIsolate.id,
+            final response = await driverRpc(
+              driver.serviceClient.callServiceExtension(
+                'ext.connect.currentCallUi',
+                isolateId: driver.appIsolate.id,
+              ),
             );
+            if (finished) return;
             final checkpoint = response.json?['checkpoint'];
             if (checkpoint is Map<String, dynamic> &&
                 checkpoint['id'] != previousId) {
@@ -304,17 +308,21 @@ Future<void> main() async {
                 error = failure.toString();
                 inspectionError ??= failure;
               }
-              await driver.serviceClient.callServiceExtension(
-                'ext.connect.currentCallUi',
-                isolateId: driver.appIsolate.id,
-                args: {
-                  'ack': checkpointId,
-                  'error': ?error,
-                  if (result != null) 'result': jsonEncode(result),
-                },
+              if (finished) return;
+              await driverRpc(
+                driver.serviceClient.callServiceExtension(
+                  'ext.connect.currentCallUi',
+                  isolateId: driver.appIsolate.id,
+                  args: {
+                    'ack': checkpointId,
+                    'error': ?error,
+                    if (result != null) 'result': jsonEncode(result),
+                  },
+                ),
               );
             }
           } catch (error) {
+            if (finished) return;
             if (!error.toString().contains('ext.connect.currentCallUi') &&
                 !error.toString().contains('Method not found')) {
               rethrow;
@@ -330,61 +338,69 @@ Future<void> main() async {
       }().catchError((Object error) {
         inspectionError ??= error;
       });
-  try {
-    await integrationDriver(
-      driver: driver,
-      writeResponseOnFailure: true,
-      responseDataCallback: (data) async {
+  await withDriverCleanup(
+    () async {
+      await integrationDriver(
+        driver: driver,
+        writeResponseOnFailure: true,
+        responseDataCallback: (data) async {
+          finished = true;
+          await inspection;
+          // Flutter 在清理检查点前中止时也必须执行。
+          try {
+            await cleanupTarget();
+          } catch (error, stack) {
+            inspectionError = DriverCleanupException(inspectionError, null, [
+              DriverCleanupFailure('owned incoming call fixture', error, stack),
+            ]);
+          }
+          final metadata = {...?data}..remove('screenshots');
+          metadata.addAll({
+            'target': target,
+            'controller': controller,
+            'syntheticNumber': number,
+            'runId': runId,
+            'independentCallChecks': checks,
+            'savedScreenshots': screenshots,
+            'targetRestored': targetRestored,
+            'inspectionError': inspectionError?.toString(),
+          });
+          await File('${directory.path}/result.json')
+              .writeAsString(jsonEncode(metadata), flush: true);
+          if (inspectionError != null ||
+              !targetRestored ||
+              checks.map((c) => c['stage']).join(',') != expected.join(',') ||
+              [
+                'currentCallUiComplete',
+                'incomingCallReminderHandled',
+                'formalCallsPageObservedRinging',
+                'formalOpenSystemCallActionVerified',
+                'decodedFrameVerified',
+                'fullRemotePageVerified',
+                'callRemainsRinging',
+                'ownedSessionsStopped',
+                'targetFixtureRestored',
+                'observationRestored',
+                'settingsRestored',
+                'connectionsRestored',
+                'focusRestored',
+                'ownedCleanupComplete',
+              ].any((key) => metadata[key] != true) ||
+              !screenshots.contains('controller-decoded-incall.png')) {
+            throw StateError(
+              'Actual CallsPage → system call UI acceptance did not complete: ${inspectionError ?? 'missing required evidence/cleanup'}',
+            );
+          }
+        },
+      );
+    },
+    () => {
+      'current-call inspection': () async {
         finished = true;
         await inspection;
-        // Flutter 在清理检查点前中止时也必须执行。
-        try {
-          await cleanupTarget();
-        } catch (error) {
-          inspectionError ??= error;
-        }
-        final metadata = {...?data}..remove('screenshots');
-        metadata.addAll({
-          'target': target,
-          'controller': controller,
-          'syntheticNumber': number,
-          'runId': runId,
-          'independentCallChecks': checks,
-          'savedScreenshots': screenshots,
-          'targetRestored': targetRestored,
-          'inspectionError': inspectionError?.toString(),
-        });
-        await File('${directory.path}/result.json')
-            .writeAsString(jsonEncode(metadata), flush: true);
-        if (inspectionError != null ||
-            !targetRestored ||
-            checks.map((c) => c['stage']).join(',') != expected.join(',') ||
-            [
-              'currentCallUiComplete',
-              'incomingCallReminderHandled',
-              'formalCallsPageObservedRinging',
-              'formalOpenSystemCallActionVerified',
-              'decodedFrameVerified',
-              'fullRemotePageVerified',
-              'callRemainsRinging',
-              'ownedSessionsStopped',
-              'targetFixtureRestored',
-              'observationRestored',
-              'settingsRestored',
-              'connectionsRestored',
-              'focusRestored',
-              'ownedCleanupComplete',
-            ].any((key) => metadata[key] != true) ||
-            !screenshots.contains('controller-decoded-incall.png')) {
-          throw StateError(
-            'Actual CallsPage → system call UI acceptance did not complete: ${inspectionError ?? 'missing required evidence/cleanup'}',
-          );
-        }
       },
-    );
-  } finally {
-    finished = true;
-    await inspection;
-    await cleanupTarget();
-  }
+      'owned incoming call': cleanupTarget,
+      'driver connection': () => driverRpc(driver.close()),
+    },
+  );
 }

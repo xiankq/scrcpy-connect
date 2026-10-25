@@ -6,6 +6,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 const fixturePackage = 'dev.scrcpyconnect.inputfixture';
 
@@ -17,39 +18,57 @@ Future<void> main() async {
   final driver = await FlutterDriver.connect();
   var appFinished = false;
   Object? fixtureError;
+  StackTrace? fixtureStack;
   final fixture =
       driveInputRelease(
         driver,
         directory,
         shouldStop: () => appFinished,
-      ).catchError((Object error) {
+      ).catchError((Object error, StackTrace stack) {
         fixtureError = error;
+        fixtureStack = stack;
       });
-  await integrationDriver(
-    driver: driver,
-    writeResponseOnFailure: true,
-    responseDataCallback: (data) async {
-      appFinished = true;
-      // integrationDriver 在回调后退出；在此排空真实 Android 夹具清理，避免终止仍在等待的 finally。
-      //
-      await fixture;
-      final metadata = {...?data}..remove('screenshots');
-      metadata['fixtureCleanupComplete'] = fixtureError == null;
-      metadata['fixtureError'] = fixtureError?.toString();
-      await File('${directory.path}/result.json')
-          .writeAsString(jsonEncode(metadata));
-      if (fixtureError != null ||
-          metadata['nativeInputReleaseComplete'] != true) {
-        throw StateError(
-          'Native input acceptance incomplete: ${fixtureError ?? 'missing app receipt'}',
-        );
-      }
+  Future<void> finishFixture() async {
+    appFinished = true;
+    await fixture;
+    if (fixtureError != null) {
+      Error.throwWithStackTrace(fixtureError!, fixtureStack!);
+    }
+  }
+
+  await withDriverCleanup(
+    () async {
+      await integrationDriver(
+        driver: driver,
+        writeResponseOnFailure: true,
+        responseDataCallback: (data) async {
+          appFinished = true;
+          // integrationDriver 在回调后退出；在此排空真实 Android 夹具清理，避免终止仍在等待的 finally。
+          //
+          await fixture;
+          final metadata = {...?data}..remove('screenshots');
+          metadata['fixtureCleanupComplete'] = fixtureError == null;
+          metadata['fixtureError'] = fixtureError?.toString();
+          await File('${directory.path}/result.json')
+              .writeAsString(jsonEncode(metadata));
+          if (fixtureError != null ||
+              metadata['nativeInputReleaseComplete'] != true) {
+            throw StateError(
+              'Native input acceptance incomplete: ${fixtureError ?? 'missing app receipt'}',
+            );
+          }
+        },
+        onScreenshot: (name, bytes, [args]) async {
+          final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          await File('${directory.path}/$safeName.png')
+              .writeAsBytes(bytes, flush: true);
+          return true;
+        },
+      );
     },
-    onScreenshot: (name, bytes, [args]) async {
-      final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      await File('${directory.path}/$safeName.png')
-          .writeAsBytes(bytes, flush: true);
-      return true;
+    () => {
+      'input fixture': finishFixture,
+      'driver connection': () => driverRpc(driver.close()),
     },
   );
 }
@@ -215,189 +234,198 @@ Future<void> driveInputRelease(
 
   final deadline = DateTime.now().add(const Duration(minutes: 6));
   var lastStage = '';
-  try {
-    while (shouldStop?.call() != true && DateTime.now().isBefore(deadline)) {
-      Map<String, dynamic> current;
-      try {
-        current = await state();
-      } catch (error) {
-        if (!error.toString().contains('ext.connect.inputRelease') &&
-            !error.toString().contains('Method not found')) {
-          rethrow;
+  await withDriverCleanup(
+    () async {
+      while (shouldStop?.call() != true && DateTime.now().isBefore(deadline)) {
+        Map<String, dynamic> current;
+        try {
+          current = await state();
+        } catch (error) {
+          if (!error.toString().contains('ext.connect.inputRelease') &&
+              !error.toString().contains('Method not found')) {
+            rethrow;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          continue;
         }
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-        continue;
-      }
-      final runId = '${current['runId']}';
-      final sessionId = '${current['sessionId']}';
-      if (!RegExp(r'^input-[0-9]+$').hasMatch(runId)) {
-        throw StateError('Invalid input fixture run identity.');
-      }
-      final stage = '${current['stage']}';
-      if (stage != lastStage) {
-        lastStage = stage;
-        stdout.writeln('Actual native input fixture stage: $stage');
-        switch (stage) {
-          case 'prepare':
-            await adbRun(target, [
-              'shell',
-              'input',
-              'keyevent',
-              'KEYCODE_WAKEUP',
-            ]);
-            // 仅移除此测试接收器，包括旧测试签名的安装。
-            final packages =
-                '${(await adbRun(target, ['shell', 'pm', 'list', 'packages', fixturePackage])).stdout}';
-            if (packages
-                .split('\n')
-                .any((line) => line.trim() == 'package:$fixturePackage')) {
+        final runId = '${current['runId']}';
+        final sessionId = '${current['sessionId']}';
+        if (!RegExp(r'^input-[0-9]+$').hasMatch(runId)) {
+          throw StateError('Invalid input fixture run identity.');
+        }
+        final stage = '${current['stage']}';
+        if (stage != lastStage) {
+          lastStage = stage;
+          stdout.writeln('Actual native input fixture stage: $stage');
+          switch (stage) {
+            case 'prepare':
               await adbRun(target, [
                 'shell',
-                'pm',
-                'uninstall',
-                fixturePackage,
+                'input',
+                'keyevent',
+                'KEYCODE_WAKEUP',
               ]);
-            }
-            await adbRun(target, ['install', apk]);
-            installed = true;
-            await adbRun(target, [
-              'shell',
-              'am',
-              'start',
-              '-W',
-              '-n',
-              '$fixturePackage/.InputReceiverActivity',
-              '--es',
-              'run_id',
-              runId,
-              '--es',
-              'session_id',
-              'unbound',
-            ]);
-            await readFixture(runId, 'unbound', 'prepared');
-            await state('prepared');
-          case 'arm':
-            if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(sessionId) ||
-                sessionId == 'null') {
-              throw StateError(
-                'The actual rendered product session must be known before arming.',
+              // 仅移除此测试接收器，包括旧测试签名的安装。
+              final packages =
+                  '${(await adbRun(target, ['shell', 'pm', 'list', 'packages', fixturePackage])).stdout}';
+              if (packages
+                  .split('\n')
+                  .any((line) => line.trim() == 'package:$fixturePackage')) {
+                await adbRun(target, [
+                  'shell',
+                  'pm',
+                  'uninstall',
+                  fixturePackage,
+                ]);
+              }
+              installed = true;
+              await adbRun(target, ['install', apk]);
+              await adbRun(target, [
+                'shell',
+                'am',
+                'start',
+                '-W',
+                '-n',
+                '$fixturePackage/.InputReceiverActivity',
+                '--es',
+                'run_id',
+                runId,
+                '--es',
+                'session_id',
+                'unbound',
+              ]);
+              await readFixture(runId, 'unbound', 'prepared');
+              await state('prepared');
+            case 'arm':
+              if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(sessionId) ||
+                  sessionId == 'null') {
+                throw StateError(
+                  'The actual rendered product session must be known before arming.',
+                );
+              }
+              await adbRun(target, [
+                'shell',
+                'am',
+                'start',
+                '-W',
+                '-n',
+                '$fixturePackage/.InputReceiverActivity',
+                '--es',
+                'run_id',
+                runId,
+                '--es',
+                'session_id',
+                sessionId,
+              ]);
+              final baseline = await readFixture(runId, sessionId, 'armed');
+              if (baseline['INITIAL_DOWN'] != '0' ||
+                  baseline['UP'] != '0' ||
+                  baseline['PRESSED'] != 'false') {
+                throw StateError('Fresh native fixture counters must be zero.');
+              }
+              await state('armed');
+            case 'hold':
+              var held = await readFixture(runId, sessionId, 'before-home');
+              final holdDeadline = DateTime.now().add(
+                const Duration(seconds: 20),
               );
-            }
-            await adbRun(target, [
-              'shell',
-              'am',
-              'start',
-              '-W',
-              '-n',
-              '$fixturePackage/.InputReceiverActivity',
-              '--es',
-              'run_id',
-              runId,
-              '--es',
-              'session_id',
-              sessionId,
-            ]);
-            final baseline = await readFixture(runId, sessionId, 'armed');
-            if (baseline['INITIAL_DOWN'] != '0' ||
-                baseline['UP'] != '0' ||
-                baseline['PRESSED'] != 'false') {
-              throw StateError('Fresh native fixture counters must be zero.');
-            }
-            await state('armed');
-          case 'hold':
-            var held = await readFixture(runId, sessionId, 'before-home');
-            final holdDeadline = DateTime.now().add(
-              const Duration(seconds: 20),
-            );
-            while (held['INITIAL_DOWN'] == '0' &&
-                DateTime.now().isBefore(holdDeadline)) {
-              await Future<void>.delayed(const Duration(milliseconds: 200));
-              held = await readFixture(runId, sessionId, 'before-home');
-            }
-            verify(held, released: false);
-            await adbRun(controllerSerial!, [
-              'shell',
-              'input',
-              'keyevent',
-              'KEYCODE_HOME',
-            ]);
-            backgrounded = true;
-            var released = await readFixture(runId, sessionId, 'after-home');
-            final releaseDeadline = DateTime.now().add(
-              const Duration(seconds: 20),
-            );
-            while (released['UP'] == '0' &&
-                DateTime.now().isBefore(releaseDeadline)) {
-              await Future<void>.delayed(const Duration(milliseconds: 200));
-              released = await readFixture(runId, sessionId, 'after-home');
-            }
-            verify(released, released: true);
-            final background = await state();
-            if (!['hidden', 'paused'].contains(background['lifecycle'])) {
-              throw StateError(
-                'Controller did not actually become hidden/paused after HOME.',
+              while (held['INITIAL_DOWN'] == '0' &&
+                  DateTime.now().isBefore(holdDeadline)) {
+                await Future<void>.delayed(const Duration(milliseconds: 200));
+                held = await readFixture(runId, sessionId, 'before-home');
+              }
+              verify(held, released: false);
+              backgrounded = true;
+              await adbRun(controllerSerial!, [
+                'shell',
+                'input',
+                'keyevent',
+                'KEYCODE_HOME',
+              ]);
+              var released = await readFixture(runId, sessionId, 'after-home');
+              final releaseDeadline = DateTime.now().add(
+                const Duration(seconds: 20),
               );
-            }
-            await Future<void>.delayed(const Duration(seconds: 2));
-            verify(
-              await readFixture(runId, sessionId, 'background-stable'),
-              released: true,
-            );
-            final png = await adbRun(target, [
-              'exec-out',
-              'screencap',
-              '-p',
-            ], binary: true);
-            await File('${captures.path}/input-native-target-released.png')
-                .writeAsBytes(png.stdout as List<int>, flush: true);
-            stdout.writeln(jsonEncode({'actualTargetDispatch': released}));
-            await foreground();
-            await state('returned');
-          case 'verify-exit':
-            final finalState = await readFixture(
-              runId,
-              sessionId,
-              'after-exit',
-            );
-            verify(finalState, released: true);
-            final closeDeadline = DateTime.now().add(
-              const Duration(seconds: 10),
-            );
-            var processRemains = true;
-            do {
-              final listing =
-                  '${(await adbRun(target, ['shell', 'ps', '-A', '-o', 'ARGS'])).stdout}';
-              processRemains = listing.contains(
-                'interop-scrcpy-$sessionId.jar',
+              while (released['UP'] == '0' &&
+                  DateTime.now().isBefore(releaseDeadline)) {
+                await Future<void>.delayed(const Duration(milliseconds: 200));
+                released = await readFixture(runId, sessionId, 'after-home');
+              }
+              verify(released, released: true);
+              final background = await state();
+              if (!['hidden', 'paused'].contains(background['lifecycle'])) {
+                throw StateError(
+                  'Controller did not actually become hidden/paused after HOME.',
+                );
+              }
+              await Future<void>.delayed(const Duration(seconds: 2));
+              verify(
+                await readFixture(runId, sessionId, 'background-stable'),
+                released: true,
               );
-              if (!processRemains) break;
-              await Future<void>.delayed(const Duration(milliseconds: 150));
-            } while (DateTime.now().isBefore(closeDeadline));
-            if (processRemains) {
-              throw StateError(
-                'The explicitly closed window still owns a target scrcpy process.',
+              final png = await adbRun(target, [
+                'exec-out',
+                'screencap',
+                '-p',
+              ], binary: true);
+              await File('${captures.path}/input-native-target-released.png')
+                  .writeAsBytes(png.stdout as List<int>, flush: true);
+              stdout.writeln(jsonEncode({'actualTargetDispatch': released}));
+              await foreground();
+              await state('returned');
+            case 'verify-exit':
+              final finalState = await readFixture(
+                runId,
+                sessionId,
+                'after-exit',
               );
-            }
-            await state('verified');
-            stdout.writeln(
-              'Native target DOWN/UP, actual HOME and retained target task all verified.',
-            );
-            return;
+              verify(finalState, released: true);
+              final closeDeadline = DateTime.now().add(
+                const Duration(seconds: 10),
+              );
+              var processRemains = true;
+              do {
+                final listing =
+                    '${(await adbRun(target, ['shell', 'ps', '-A', '-o', 'ARGS'])).stdout}';
+                processRemains = listing.contains(
+                  'interop-scrcpy-$sessionId.jar',
+                );
+                if (!processRemains) break;
+                await Future<void>.delayed(const Duration(milliseconds: 150));
+              } while (DateTime.now().isBefore(closeDeadline));
+              if (processRemains) {
+                throw StateError(
+                  'The explicitly closed window still owns a target scrcpy process.',
+                );
+              }
+              await state('verified');
+              stdout.writeln(
+                'Native target DOWN/UP, actual HOME and retained target task all verified.',
+              );
+              return;
+          }
         }
+        await Future<void>.delayed(const Duration(milliseconds: 200));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-    throw StateError(
-      'Real native input release test exceeded its bounded deadline.',
-    );
-  } finally {
-    if (backgrounded) await foreground();
-    if (remoteXml != null) {
-      await adbRun(target, ['shell', 'rm', '-f', remoteXml!]);
-    }
-    if (installed &&
-        Platform.environment['CONNECT_E2E_KEEP_INPUT_FIXTURE'] != '1') {
-      await adbRun(target, ['uninstall', fixturePackage]);
-    }
-  }
+      throw StateError(
+        'Real native input release test exceeded its bounded deadline.',
+      );
+    },
+    () => {
+      'controller foreground': () async {
+        if (backgrounded) await foreground();
+      },
+      'target UI dump': () async {
+        if (remoteXml != null) {
+          await adbRun(target, ['shell', 'rm', '-f', remoteXml!]);
+        }
+      },
+      'input fixture install': () async {
+        if (installed &&
+            Platform.environment['CONNECT_E2E_KEEP_INPUT_FIXTURE'] != '1') {
+          await adbRun(target, ['uninstall', fixturePackage]);
+        }
+      },
+    },
+  );
 }

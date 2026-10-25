@@ -5,6 +5,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 Future<void> main() async {
   final adb = Platform.environment['CONNECT_E2E_ADB'];
@@ -229,10 +230,13 @@ Future<void> main() async {
         final deadline = DateTime.now().add(const Duration(minutes: 5));
         while (!finished && DateTime.now().isBefore(deadline)) {
           try {
-            final response = await driver.serviceClient.callServiceExtension(
-              'ext.connect.remoteIme',
-              isolateId: driver.appIsolate.id,
-            );
+            final response = await driver.serviceClient
+                .callServiceExtension(
+                  'ext.connect.remoteIme',
+                  isolateId: driver.appIsolate.id,
+                )
+                .timeout(const Duration(seconds: 5));
+            if (finished) return;
             final checkpoint = response.json?['checkpoint'];
             if (checkpoint is Map && checkpoint['name'] != previous) {
               previous = checkpoint['name'] as String;
@@ -242,19 +246,23 @@ Future<void> main() async {
                 result = await inspect(previous);
               } catch (failure) {
                 error = failure.toString();
-                inspectionError = failure;
+                inspectionError ??= failure;
               }
-              await driver.serviceClient.callServiceExtension(
-                'ext.connect.remoteIme',
-                isolateId: driver.appIsolate.id,
-                args: {
-                  'ack': previous,
-                  'error': ?error,
-                  if (result != null) 'result': jsonEncode(result),
-                },
-              );
+              if (finished) return;
+              await driver.serviceClient
+                  .callServiceExtension(
+                    'ext.connect.remoteIme',
+                    isolateId: driver.appIsolate.id,
+                    args: {
+                      'ack': previous,
+                      'error': ?error,
+                      if (result != null) 'result': jsonEncode(result),
+                    },
+                  )
+                  .timeout(const Duration(seconds: 5));
             }
           } catch (error) {
+            if (finished) return;
             if (!error.toString().contains('ext.connect.remoteIme') &&
                 !error.toString().contains('Method not found')) {
               rethrow;
@@ -268,29 +276,40 @@ Future<void> main() async {
           );
         }
       }().catchError((Object error) {
-        inspectionError = error;
+        inspectionError ??= error;
       });
-  await integrationDriver(
-    driver: driver,
-    writeResponseOnFailure: true,
-    responseDataCallback: (data) async {
-      finished = true;
-      await inspection;
-      final metadata = {...?data}..remove('screenshots');
-      metadata['independentEditTextChecks'] = checks;
-      metadata['displayCaptures'] = captures;
-      metadata['inspectionError'] = inspectionError?.toString();
-      await File('${directory.path}/result.json')
-          .writeAsString(jsonEncode(metadata));
-      if (inspectionError != null ||
-          metadata['remoteImeComplete'] != true ||
-          metadata['targetQueryRestored'] != true ||
-          checks.map((check) => check['stage']).join(',') !=
-              'prepare-settings,focused-empty,composing-no-leak,committed-once,committed-still-once,cleanup-empty') {
-        throw StateError(
-          'Real Android IME acceptance did not complete: ${inspectionError ?? 'missing checkpoints'}',
-        );
-      }
+  await withDriverCleanup(
+    () async {
+      await integrationDriver(
+        driver: driver,
+        writeResponseOnFailure: true,
+        responseDataCallback: (data) async {
+          finished = true;
+          await inspection;
+          final metadata = {...?data}..remove('screenshots');
+          metadata['independentEditTextChecks'] = checks;
+          metadata['displayCaptures'] = captures;
+          metadata['inspectionError'] = inspectionError?.toString();
+          await File('${directory.path}/result.json')
+              .writeAsString(jsonEncode(metadata));
+          if (inspectionError != null ||
+              metadata['remoteImeComplete'] != true ||
+              metadata['targetQueryRestored'] != true ||
+              checks.map((check) => check['stage']).join(',') !=
+                  'prepare-settings,focused-empty,composing-no-leak,committed-once,committed-still-once,cleanup-empty') {
+            throw StateError(
+              'Real Android IME acceptance did not complete: ${inspectionError ?? 'missing checkpoints'}',
+            );
+          }
+        },
+      );
+    },
+    () => {
+      'inspection': () async {
+        finished = true;
+        await inspection;
+      },
+      'driver connection': () => driverRpc(driver.close()),
     },
   );
 }

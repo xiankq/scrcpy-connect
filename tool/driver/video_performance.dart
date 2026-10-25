@@ -5,7 +5,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 import 'package:path/path.dart' as p;
 
-import 'video_clock_bounds.dart';
+import '../src/driver_cleanup.dart';
 import '../src/process.dart';
 
 Future<void> main() async {
@@ -16,10 +16,6 @@ Future<void> main() async {
   final controller = environment['CONNECT_E2E_DEVICE'];
   final apk = environment['CONNECT_E2E_VIDEO_FIXTURE'];
   final fixtureMotion = environment['CONNECT_E2E_VIDEO_MOTION'] == 'true';
-  final timelineEnabled = environment['CONNECT_E2E_VIDEO_TIMELINE'] == 'true';
-  final timelineRun = 'video_${DateTime.now().microsecondsSinceEpoch}_$pid';
-  List<Map<String, dynamic>>? targetTimeline;
-  String? targetTimelineError;
   if (adb == null ||
       target == null ||
       controller == null ||
@@ -76,6 +72,7 @@ Future<void> main() async {
     );
   }
   var installed = false;
+  FlutterDriver? ownedDriver;
   Future<void> capture(String serial, String name) async {
     final result = await runProcess(
       adb,
@@ -92,180 +89,101 @@ Future<void> main() async {
     if (!installed) return;
     final cleanup = <String, Object?>{};
     if (installed) {
-      if (timelineEnabled) {
-        try {
-          final log = await command([
-            'logcat',
-            '-d',
-            '-v',
-            'raw',
-            '-s',
-            'ConnectVideoClock:I',
-            '*:S',
-          ]);
-          final records = <Map<String, dynamic>>[];
-          for (final line in const LineSplitter().convert(log)) {
-            if (!line.startsWith('{')) continue;
-            final record = jsonDecode(line) as Map<String, dynamic>;
-            if (record['run'] == timelineRun) records.add(record);
-          }
-          // 原生提前崩溃也保留部分或空时间线；成功样本在卸载完成后再检查。
-          //
-          targetTimeline = records;
-          await File('${output.path}/target-timeline.json')
-              .writeAsString(jsonEncode(records));
-        } catch (error) {
-          // 观察缺失仍须卸载本次安装的 APK。
-          cleanup['timelineError'] = '$error';
-          targetTimelineError = '$error';
-        }
-      }
       try {
         await capture(target, 'target-final');
       } catch (error) {
         cleanup['captureError'] = '$error';
       }
-      cleanup['uninstalled'] = (await command(['uninstall', package]))
-          .contains('Success');
-      cleanup['absent'] = !await fixtureExists();
-      await command([
-        'shell',
-        'am',
-        'start',
-        '-a',
-        'android.settings.SETTINGS',
-      ]);
-    }
-    await File('${output.path}/cleanup.json')
-        .writeAsString(jsonEncode(cleanup));
-    if (cleanup['uninstalled'] != true || cleanup['absent'] != true) {
-      throw StateError('Independent fixture cleanup not confirmed.');
+      await withDriverCleanup(
+        () async {},
+        () => {
+          'fixture uninstall': () async {
+            if (await fixtureExists()) {
+              cleanup['uninstalled'] = (await command(['uninstall', package]))
+                  .contains('Success');
+            } else {
+              cleanup['uninstalled'] = true;
+            }
+            cleanup['absent'] = !await fixtureExists();
+            if (cleanup['uninstalled'] != true || cleanup['absent'] != true) {
+              throw StateError('Independent fixture cleanup not confirmed.');
+            }
+          },
+          'target foreground': () async {
+            await command([
+              'shell',
+              'am',
+              'start',
+              '-a',
+              'android.settings.SETTINGS',
+            ]);
+          },
+          'cleanup report': () =>
+              File('${output.path}/cleanup.json')
+                  .writeAsString(jsonEncode(cleanup)),
+        },
+      );
     }
     installed = false;
   }
 
-  try {
-    final install = await command(['install', apk]);
-    if (!install.contains('Success')) {
-      throw StateError('Fixture installation not confirmed.');
-    }
-    installed = true;
-    await command([
-      'shell',
-      'am',
-      'start',
-      '-W',
-      '-n',
-      '$package/.VideoPatternActivity',
-      '--ez',
-      'motion',
-      '$fixtureMotion',
-      if (timelineEnabled) ...['--es', 'timelineRun', timelineRun],
-    ]);
-    await capture(target, 'target-initial');
-    final driver = await FlutterDriver.connect();
-    final response = await driver.serviceClient.callServiceExtension(
-      'ext.connect.videoPerformance',
-      isolateId: driver.appIsolate.id,
-      args: {'ready': 'true'},
-    );
-    if (response.json?['ready'] != true) {
-      throw StateError('App did not acknowledge fixture readiness.');
-    }
-    await integrationDriver(
-      driver: driver,
-      writeResponseOnFailure: true,
-      onScreenshot: (name, bytes, [args]) async {
-        final safe = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-        await File('${output.path}/$safe.png').writeAsBytes(bytes);
-        return true;
-      },
-      responseDataCallback: (data) async {
-        // integrationDriver 会退出 VM，不能只依靠 finally 清理。
-        await cleanupFixture();
-        final report = {...?data}..remove('screenshots');
-        report['fixtureCleanupConfirmed'] = true;
-        report['fixtureMotionEnabled'] = fixtureMotion;
-        if (timelineEnabled) {
-          report['targetTimeline'] = targetTimeline;
-          if (targetTimelineError != null) {
-            report['targetTimelineError'] = targetTimelineError;
+  await withDriverCleanup(
+    () async {
+      installed = true;
+      final install = await command(['install', apk]);
+      if (!install.contains('Success')) {
+        throw StateError('Fixture installation not confirmed.');
+      }
+      await command([
+        'shell',
+        'am',
+        'start',
+        '-W',
+        '-n',
+        '$package/.VideoPatternActivity',
+        '--ez',
+        'motion',
+        '$fixtureMotion',
+      ]);
+      await capture(target, 'target-initial');
+      final driver = ownedDriver = await FlutterDriver.connect();
+      final response = await driverRpc(
+        driver.serviceClient.callServiceExtension(
+          'ext.connect.videoPerformance',
+          isolateId: driver.appIsolate.id,
+          args: {'ready': 'true'},
+        ),
+      );
+      if (response.json?['ready'] != true) {
+        throw StateError('App did not acknowledge fixture readiness.');
+      }
+      await integrationDriver(
+        driver: driver,
+        writeResponseOnFailure: true,
+        onScreenshot: (name, bytes, [args]) async {
+          final safe = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          await File('${output.path}/$safe.png').writeAsBytes(bytes);
+          return true;
+        },
+        responseDataCallback: (data) async {
+          // integrationDriver 会退出 VM，不能只依靠 finally 清理。
+          await cleanupFixture();
+          final report = {...?data}..remove('screenshots');
+          report['fixtureCleanupConfirmed'] = true;
+          report['fixtureMotionEnabled'] = fixtureMotion;
+          await File('${output.path}/result.json')
+              .writeAsString(jsonEncode(report));
+          if (report['videoPerformanceComplete'] != true) {
+            throw StateError('Video performance loop incomplete.');
           }
-          final missing = <int>[];
-          final segments = <Map<String, dynamic>>[];
-          for (final round in (report['rounds'] as List? ?? const [])) {
-            for (final sample in [
-              ...round['samples'] as List,
-              ...round['pauseSamples'] as List? ?? const [],
-            ]) {
-              final sequence = sample['fixtureSequence'];
-              // 暂停失败时可能尚未发送下一输入；保留原始错误，不改报后处理失败。
-              //
-              if (sequence is! int) continue;
-              final counter = sample['counter'] ?? sample['expectedCounter'];
-              final inputs = (targetTimeline ?? const <Map<String, dynamic>>[])
-                  .where(
-                    (r) => r['sequence'] == sequence && r['kind'] == 'input',
-                  )
-                  .toList();
-              final draws = (targetTimeline ?? const <Map<String, dynamic>>[])
-                  .where(
-                    (r) => r['sequence'] == sequence && r['kind'] == 'draw',
-                  )
-                  .toList();
-              if (inputs.length != 1 ||
-                  draws.length != 1 ||
-                  inputs.single['counter'] != counter ||
-                  draws.single['counter'] != counter) {
-                missing.add(sequence);
-                continue;
-              }
-              final input = inputs.single, draw = draws.single;
-              final wait =
-                  (draw['drawStartUs'] as int) - (input['nanoUs'] as int);
-              final duration =
-                  (draw['nanoUs'] as int) - (draw['drawStartUs'] as int);
-              if (wait < 0 || duration < 0) missing.add(sequence);
-              segments.add({
-                'sequence': sequence,
-                'counter': counter,
-                'inputToDrawStartUs': wait,
-                'drawCallbackUs': duration,
-              });
-            }
-          }
-          report['targetDrawSegments'] = segments;
-          report['missingTargetSequences'] = missing;
-          report['targetTimelineComplete'] =
-              targetTimelineError == null &&
-              missing.isEmpty &&
-              segments.isNotEmpty;
-        }
-        if (report['clockBracketsRequested'] == true) {
-          report['clockBounds'] = videoClockBounds(
-            (report['rounds'] as List).cast<ClockJson>(),
-            targetTimeline ?? const [],
-          );
-        }
-        await File('${output.path}/result.json')
-            .writeAsString(jsonEncode(report));
-        if (report['videoPerformanceComplete'] != true) {
-          throw StateError('Video performance loop incomplete.');
-        }
-        if (timelineEnabled && report['targetTimelineComplete'] != true) {
-          throw StateError(
-            'Target timeline does not cover every actual input.',
-          );
-        }
-        if (report['clockBracketsRequested'] == true &&
-            (report['clockBounds'] as ClockJson)['complete'] != true) {
-          throw StateError(
-            'Conditional clock bounds are incomplete; see raw probes.',
-          );
-        }
+        },
+      );
+    },
+    () => {
+      'video fixture': cleanupFixture,
+      'driver connection': () async {
+        if (ownedDriver != null) await driverRpc(ownedDriver!.close());
       },
-    );
-  } finally {
-    await cleanupFixture();
-  }
+    },
+  );
 }

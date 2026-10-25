@@ -6,6 +6,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 Future<void> main() async {
   final directory = Directory(
@@ -118,10 +119,13 @@ Future<void> main() async {
         final deadline = DateTime.now().add(const Duration(minutes: 5));
         while (!finished && DateTime.now().isBefore(deadline)) {
           try {
-            final response = await driver.serviceClient.callServiceExtension(
-              'ext.connect.sessions',
-              isolateId: driver.appIsolate.id,
-            );
+            final response = await driver.serviceClient
+                .callServiceExtension(
+                  'ext.connect.sessions',
+                  isolateId: driver.appIsolate.id,
+                )
+                .timeout(const Duration(seconds: 5));
+            if (finished) return;
             final checkpoint = response.json?['checkpoint'];
             if (checkpoint is Map && checkpoint['name'] != previous) {
               final state = Map<String, dynamic>.from(checkpoint);
@@ -131,16 +135,20 @@ Future<void> main() async {
                 await verifyProcesses(state);
               } catch (failure) {
                 error = failure.toString();
-                inspectionError = failure;
+                inspectionError ??= failure;
               }
-              await driver.serviceClient.callServiceExtension(
-                'ext.connect.sessions',
-                isolateId: driver.appIsolate.id,
-                args: {'ack': previous, 'error': ?error},
-              );
+              if (finished) return;
+              await driver.serviceClient
+                  .callServiceExtension(
+                    'ext.connect.sessions',
+                    isolateId: driver.appIsolate.id,
+                    args: {'ack': previous, 'error': ?error},
+                  )
+                  .timeout(const Duration(seconds: 5));
               if (error != null) return;
             }
           } catch (error) {
+            if (finished) return;
             if (!error.toString().contains('ext.connect.sessions') &&
                 !error.toString().contains('Method not found')) {
               rethrow;
@@ -152,36 +160,47 @@ Future<void> main() async {
           throw StateError('Timed out inspecting actual session processes.');
         }
       }().catchError((Object error) {
-        inspectionError = error;
+        inspectionError ??= error;
       });
-  await integrationDriver(
-    driver: driver,
-    writeResponseOnFailure: true,
-    onScreenshot: (name, bytes, [args]) async {
-      await File(
-        '${directory.path}/${name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}.png',
-      ).writeAsBytes(bytes, flush: true);
-      return true;
+  await withDriverCleanup(
+    () async {
+      await integrationDriver(
+        driver: driver,
+        writeResponseOnFailure: true,
+        onScreenshot: (name, bytes, [args]) async {
+          await File(
+            '${directory.path}/${name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}.png',
+          ).writeAsBytes(bytes, flush: true);
+          return true;
+        },
+        responseDataCallback: (data) async {
+          finished = true;
+          await inspection;
+          final metadata = {...?data}..remove('screenshots');
+          metadata['independentProcessChecks'] = processChecks;
+          await File('${directory.path}/result.json')
+              .writeAsString(jsonEncode(metadata));
+          if (inspectionError != null ||
+              metadata['sessionWorkspaceComplete'] != true ||
+              metadata['phoneScreenAppResumed'] != true ||
+              metadata['phoneScreenRenderedApp'] != true ||
+              metadata['releasedWindowsVerified'] != 4 ||
+              (metadata['closedWindowIds'] as List?)?.toSet().length != 4 ||
+              processChecks.map((check) => check['checkpoint']).join(',') !=
+                  'session-main-live,session-closed-1,session-primary-app-live,session-closed-2,session-settings-live,session-closed-3,session-dialer-live,session-closed-4') {
+            throw StateError(
+              'The real multi-session workflow or independent process checks did not complete.',
+            );
+          }
+        },
+      );
     },
-    responseDataCallback: (data) async {
-      finished = true;
-      await inspection;
-      final metadata = {...?data}..remove('screenshots');
-      metadata['independentProcessChecks'] = processChecks;
-      await File('${directory.path}/result.json')
-          .writeAsString(jsonEncode(metadata));
-      if (inspectionError != null ||
-          metadata['sessionWorkspaceComplete'] != true ||
-          metadata['phoneScreenAppResumed'] != true ||
-          metadata['phoneScreenRenderedApp'] != true ||
-          metadata['releasedWindowsVerified'] != 4 ||
-          (metadata['closedWindowIds'] as List?)?.toSet().length != 4 ||
-          processChecks.map((check) => check['checkpoint']).join(',') !=
-              'session-main-live,session-closed-1,session-primary-app-live,session-closed-2,session-settings-live,session-closed-3,session-dialer-live,session-closed-4') {
-        throw StateError(
-          'The real multi-session workflow or independent process checks did not complete.',
-        );
-      }
+    () => {
+      'inspection': () async {
+        finished = true;
+        await inspection;
+      },
+      'driver connection': () => driverRpc(driver.close()),
     },
   );
 }

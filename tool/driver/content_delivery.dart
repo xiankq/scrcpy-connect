@@ -8,6 +8,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../src/process.dart';
+import '../src/driver_cleanup.dart';
 
 const _receiverPackage = 'dev.scrcpyconnect.deliveryfixture';
 const _receiverApk =
@@ -172,94 +173,99 @@ class _AndroidDelivery {
         'This run’s exact source/export filename already exists.',
       );
     }
-    final knownFile = File('${output.path}/$filename');
-    if (kind == 'text') {
-      await knownFile.writeAsBytes(
-        utf8.encode('Connect delivery $runId\n字节核验\n'),
-        flush: true,
-      );
-    } else {
-      final ffmpeg = Platform.environment['CONNECT_E2E_FFMPEG'];
-      if (ffmpeg == null ||
-          !File(ffmpeg).isAbsolute ||
-          !await File(ffmpeg).exists()) {
+    final temporary = await Directory.systemTemp.createTemp(
+      'connect-delivery-source-',
+    );
+    await withDriverCleanup(() async {
+      final knownFile = File('${temporary.path}/$filename');
+      if (kind == 'text') {
+        await knownFile.writeAsBytes(
+          utf8.encode('Connect delivery $runId\n字节核验\n'),
+          flush: true,
+        );
+      } else {
+        final ffmpeg = Platform.environment['CONNECT_E2E_FFMPEG'];
+        if (ffmpeg == null ||
+            !File(ffmpeg).isAbsolute ||
+            !await File(ffmpeg).exists()) {
+          throw StateError(
+            'Media delivery requires an explicit host FFmpeg tool.',
+          );
+        }
+        final result = await runProcess(
+          ffmpeg,
+          [
+            '-v',
+            'error',
+            '-nostdin',
+            '-n',
+            '-f',
+            'lavfi',
+            '-i',
+            'testsrc2=size=320x180:rate=15',
+            if (kind == 'image') ...[
+              '-frames:v',
+              '1',
+              '-c:v',
+              'mjpeg',
+              '-q:v',
+              '3',
+            ] else ...[
+              '-t',
+              '6',
+              '-an',
+              '-c:v',
+              'libx264',
+              '-preset',
+              'ultrafast',
+              '-pix_fmt',
+              'yuv420p',
+              '-movflags',
+              '+faststart',
+            ],
+            knownFile.path,
+          ],
+          timeout: const Duration(seconds: 30),
+          stdoutEncoding: null,
+          stderrEncoding: utf8,
+        );
+        if (result.exitCode != 0) {
+          throw StateError('Host media fixture failed: ${result.stderr}');
+        }
+      }
+      expected = await knownFile.readAsBytes();
+      if (expected.isEmpty || expected.length >= 2 * 1024 * 1024) {
         throw StateError(
-          'Media delivery requires an explicit host FFmpeg tool.',
+          'Delivery fixture exceeds the independent receiver bound.',
         );
       }
-      final result = await runProcess(
-        ffmpeg,
-        [
-          '-v',
-          'error',
-          '-nostdin',
-          '-n',
-          '-f',
-          'lavfi',
-          '-i',
-          'testsrc2=size=320x180:rate=15',
-          if (kind == 'image') ...[
-            '-frames:v',
-            '1',
-            '-c:v',
-            'mjpeg',
-            '-q:v',
-            '3',
-          ] else ...[
-            '-t',
-            '6',
-            '-an',
-            '-c:v',
-            'libx264',
-            '-preset',
-            'ultrafast',
-            '-pix_fmt',
-            'yuv420p',
-            '-movflags',
-            '+faststart',
-          ],
-          knownFile.path,
-        ],
-        timeout: const Duration(seconds: 30),
-        stdoutEncoding: null,
-        stderrEncoding: utf8,
-      );
-      if (result.exitCode != 0) {
-        throw StateError('Host media fixture failed: ${result.stderr}');
+      final hash = await runProcess('sha256sum', [
+        knownFile.path,
+      ], timeout: const Duration(seconds: 10));
+      final value = RegExp(r'^([a-f0-9]{64})\s').firstMatch('${hash.stdout}');
+      if (hash.exitCode != 0 || value == null) {
+        throw StateError('Independent host SHA256 calculation failed.');
       }
-    }
-    expected = await knownFile.readAsBytes();
-    if (expected.isEmpty || expected.length >= 2 * 1024 * 1024) {
-      throw StateError(
-        'Delivery fixture exceeds the independent receiver bound.',
-      );
-    }
-    final hash = await runProcess('sha256sum', [
-      knownFile.path,
-    ], timeout: const Duration(seconds: 10));
-    final value = RegExp(r'^([a-f0-9]{64})\s').firstMatch('${hash.stdout}');
-    if (hash.exitCode != 0 || value == null) {
-      throw StateError('Independent host SHA256 calculation failed.');
-    }
-    expectedSha256 = value.group(1);
-    // 仅认领这些新建的精确路径，确保 push 或选择器失败后能清理，同时不触碰其他夹具、下载或应用缓存。
-    //
-    sourceOwned = true;
-    exportOwned = true;
-    final push = await _run(target, ['push', knownFile.path, sourcePath]);
-    if (push.exitCode != 0) {
-      throw StateError('Pushing the source fixture failed.');
-    }
-    await _verifyBytes(target);
-    receipt.addAll({
-      'runId': runId,
-      'filename': filename,
-      'contentKind': kind,
-      'expectedMime': mime,
-      'expectedBytes': expected.length,
-      'expectedSha256': expectedSha256,
-      'sourceBytesVerified': true,
-    });
+      expectedSha256 = value.group(1);
+      // 仅认领这些新建的精确路径，确保 push 或选择器失败后能清理，同时不触碰其他夹具、下载或应用缓存。
+      //
+      sourceOwned = true;
+      exportOwned = true;
+      final push = await _run(target, ['push', knownFile.path, sourcePath]);
+      if (push.exitCode != 0) {
+        throw StateError('Pushing the source fixture failed.');
+      }
+      await _verifyBytes(target);
+      receipt.addAll({
+        'runId': runId,
+        'filename': filename,
+        'contentKind': kind,
+        'expectedMime': mime,
+        'expectedBytes': expected.length,
+        'expectedSha256': expectedSha256,
+        'sourceBytesVerified': true,
+      });
+    }, () => {'host source fixture': () => temporary.delete(recursive: true)});
   }
 
   Future<void> _verifyBytes(String serial) async {
