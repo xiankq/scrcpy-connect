@@ -289,7 +289,18 @@ impl IdentityDirectory {
         #[cfg(unix)]
         {
             use std::os::fd::{AsRawFd, FromRawFd};
-            let mut file = File::open("/")?;
+            use std::os::unix::fs::OpenOptionsExt;
+            let directory_flags = libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
+            // Android ancestors may permit searching a known path without directory reads.
+            // O_PATH pins each directory without requiring permission to list it.
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            let traversal_flags = libc::O_PATH | directory_flags;
+            #[cfg(not(any(target_os = "linux", target_os = "android")))]
+            let traversal_flags = libc::O_RDONLY | directory_flags;
+            let mut file = OpenOptions::new()
+                .read(true)
+                .custom_flags(traversal_flags)
+                .open("/")?;
             for part in path.components() {
                 let Component::Normal(name) = part else {
                     if matches!(part, Component::RootDir) {
@@ -298,11 +309,20 @@ impl IdentityDirectory {
                     return Err(std::io::Error::other("adb_identity_invalid_parent"));
                 };
                 let name = c_name(name)?;
+                let fd = unsafe { libc::openat(file.as_raw_fd(), name.as_ptr(), traversal_flags) };
+                if fd < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                file = unsafe { File::from_raw_fd(fd) };
+            }
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            {
+                // The owned directory needs a regular descriptor for fsync after publication.
                 let fd = unsafe {
                     libc::openat(
                         file.as_raw_fd(),
-                        name.as_ptr(),
-                        libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                        c".".as_ptr(),
+                        libc::O_RDONLY | directory_flags,
                     )
                 };
                 if fd < 0 {

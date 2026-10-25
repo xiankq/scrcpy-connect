@@ -14,6 +14,45 @@ async fn inspection_does_not_create_a_missing_key() {
     assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 0);
 }
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+#[tokio::test]
+async fn identity_access_needs_only_search_permission_on_ancestors() {
+    use std::os::unix::fs::PermissionsExt;
+
+    struct SearchOnlyAncestor(PathBuf);
+    impl Drop for SearchOnlyAncestor {
+        fn drop(&mut self) {
+            fs::set_permissions(&self.0, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    let ancestor = root.path().canonicalize().unwrap().join("search-only");
+    let owned = ancestor.join("private");
+    fs::create_dir_all(&owned).unwrap();
+    let _restore = SearchOnlyAncestor(ancestor.clone());
+    fs::set_permissions(&ancestor, fs::Permissions::from_mode(0o100)).unwrap();
+    // A sandbox may allow lookup of a known private path but deny listing its ancestors.
+    if fs::read_dir(&ancestor).is_ok() {
+        // Privileged test runners bypass mode bits and cannot reproduce this restriction.
+        return;
+    }
+    let path = owned.join("identity.pem").to_str().unwrap().to_owned();
+    assert!(inspect(path.clone()).await.unwrap().is_none());
+    let first = replace(path.clone(), VALID_ONE.into(), None).await.unwrap();
+    assert_eq!(first.state, IdentityCommitState::Committed);
+    assert_eq!(inspect(path.clone()).await.unwrap(), first.identity);
+    let changed = replace(
+        path.clone(),
+        VALID_TWO.into(),
+        Some(EXPECTED_FINGERPRINT.into()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(changed.state, IdentityCommitState::Committed);
+    assert_eq!(inspect(path).await.unwrap(), changed.identity);
+}
+
 fn path(directory: &tempfile::TempDir) -> std::path::PathBuf {
     directory
         .path()
