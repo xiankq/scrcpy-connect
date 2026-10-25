@@ -36,6 +36,7 @@ void main() {
       await owned?.close();
     });
     final host = await AdbHost.prepare(
+      bindings: await createNativeAdbApi(),
       dataDirectory: root,
       binaryDirectory: File(binary!).parent,
     );

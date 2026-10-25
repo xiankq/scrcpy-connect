@@ -35,6 +35,7 @@ void main() {
         );
         addTearDown(() => root.delete(recursive: true));
         final host = await AdbHost.prepare(
+          bindings: await createNativeAdbApi(),
           dataDirectory: root,
           binaryDirectory: File(binary!).parent,
           oneDevice: 'interop-test-no-usb-device',

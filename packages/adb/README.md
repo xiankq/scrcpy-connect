@@ -2,16 +2,22 @@
 
 One ADB service API over an owned official desktop server or mobile Rust ADB. Device identity, reconnect policy and durable file tasks belong to callers; see [architecture](../../docs/implementation/architecture.md).
 
-`AdbHost.prepare(dataDirectory: ...)` selects the backend. Desktop requires the pinned executable in `adb/` beside the app (`Contents/Resources/adb` on macOS); `binaryDirectory` is a test override. It never falls back to PATH or direct desktop adbd. 独立 SDK 通过本包自己的 FRB 动态库运行，不需要应用提供桥接：
+`AdbHost.prepare(bindings: ..., dataDirectory: ...)` selects the backend. Desktop requires the pinned executable in `adb/` beside the app (`Contents/Resources/adb` on macOS); `binaryDirectory` is a test override. It never falls back to PATH or direct desktop adbd. 独立 SDK 通过本包自己的 FRB 动态库运行，调用方显式选择原生宿主：
 
 ```dart
-final host = await AdbHost.prepare(dataDirectory: dataDirectory);
+final bindings = await createNativeAdbApi();
+final host = await AdbHost.prepare(
+  bindings: bindings,
+  dataDirectory: dataDirectory,
+);
 final devices = await host.client.devices();
 ```
 
 `initializeNativeAdb()` 只初始化桥接，不创建服务器或设备连接。移动端连接与配对会在首次使用时原子创建指定路径的持久身份；`prepareAdbIdentity(absolutePath)` 可提前显式创建或验证。已有损坏身份、符号链接或过宽 Unix 权限会报错，不会覆盖旧密钥。
 
 组合宿主通过 `AdbHost.prepare(bindings: adapter, ...)` 在创建资源前注入同库 `NativeAdbApi`；桌面适配器同时实现 `NativeAdbServerApi` 和 `NativeAdbHandshakeApi`。准备完成后不能更换原生库。`AdbDevice.nativeOwner` 是不可序列化的宿主身份；不同动态库的设备句柄不可混用。需要与 scrcpy 组合时，使用 scrcpy SDK 提供的配套 ADB client，两者在同一动态库内共享连接。
+
+`prepare` 与 `restore` 必须显式提供同库 bindings，不隐式初始化独立 ADB 动态库。发布构建的 link hook 按编译器记录的 `initializeNativeAdb` 可达性保留独立库；只使用组合宿主时不重复打包。没有可达性信息的调试和测试构建保留独立库。
 
 `NativeAdbClient` 另提供 `AdbConnectionClaims.claimConnection(device)`：撤销旧句柄的普通服务、文件及新捕获准入，等待旧操作及未提交文件片段清理，再换发操作与关闭句柄。底层 Client、连接登记及已有 scrcpy 捕获保持不变；后续断开新句柄仍会撤销该连接的捕获 lifetime。旧客户端迟到关闭只触及旧句柄，不能关闭后继；认领失败保留原句柄供重试或断开，期间不恢复普通操作准入。借用登记不能认领。
 
@@ -40,6 +46,8 @@ Desktop services pin the official server's transport ID; reconnect requires a ne
 Push may leave a remote partial. Pull refuses an existing destination and removes its own partial on failure. A stalled streaming producer may delay remote SYNC status; cancellation/deadlines still apply. Byte paths are literal; string paths are UTF-8 without shell expansion.
 
 `createNativeLocalFiles()` 提供无需设备连接的本机文件能力。调用方明确传入允许范围、目录条目上限、复制字节预算和期限；SDK 不安装应用默认值。`LocalFileScope` 通过目录描述符访问范围内路径，返回保真的文件身份和原始名称。复制句柄持有源与独占创建的未发布片段，提交核验原片段且禁止覆盖；关闭先取消并排空，再按精确身份清理未发布片段。提交结果未知时不重试或删除可能已发布的文件。借入的 provider FD 被复制，调用方仍须持有原始租约直到复制完成或关闭确认。Linux/Android 提供该机制，其他宿主明确拒绝，不以普通路径 rename 代替相同安全保证。
+
+本机所有者在打开描述符前预留资源：每进程最多 64 个范围及 64 个在途范围创建，每范围最多 16 个根、32 个复制句柄及 32 个并发操作；全进程最多 128 个复制句柄和 256 个并发操作。达到容量返回 `LocalFileErrorCode.busy`，无效根数量返回 `invalidArgument`。打开失败归还容量，清理未确认继续占有原名额；同 key 接管沿用原范围名额，满额时仍可精确恢复。根目录的祖先只需搜索权限，授权根本身保留可读目录描述符用于列举和同步；Android 私有目录不会因为 `/data` 无法列举而被拒绝。
 
 `capabilities` exposes backend differences: desktop `authorize:false` only reuses an authorized transport; forced TLS requires a discovered secure mDNS fullname. Android mobile alone supports `connectUsbFd`. The API does not wrap every adb CLI command or elevate target permissions.
 

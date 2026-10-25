@@ -15,6 +15,7 @@ void main() {
       addTearDown(() => root.delete(recursive: true));
       await File(key!).copy(p.join(root.path, 'host_identity.pem'));
       final host = await AdbHost.prepare(
+        bindings: await createNativeAdbApi(),
         dataDirectory: root,
         binaryDirectory: File(binary!).parent,
       );

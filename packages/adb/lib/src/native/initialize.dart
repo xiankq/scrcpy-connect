@@ -1,6 +1,7 @@
 import 'dart:ffi';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:meta/meta.dart';
 
 import '../../native_asset_library.dart';
 import '../api.dart';
@@ -20,6 +21,7 @@ const _api = FrbNativeAdbApi();
 external int _adbContentHash();
 
 /// 初始化独立 ADB SDK 动态库；不会创建服务器、连接设备或修改授权身份。
+@RecordUse()
 Future<void> initializeNativeAdb() =>
     // 先登记 Future，再执行可能同步失败的路径解析和 dlopen，失败才能清掉同一次登记。
     _initializing ??= Future<void>.microtask(_initialize);

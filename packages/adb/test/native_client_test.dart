@@ -937,7 +937,11 @@ void main() {
       );
       addTearDown(() => root.delete(recursive: true));
       await expectLater(
-        AdbHost.prepare(dataDirectory: root, binaryDirectory: root),
+        AdbHost.prepare(
+          dataDirectory: root,
+          binaryDirectory: root,
+          bindings: await createNativeAdbApi(),
+        ),
         throwsA(isA<FileSystemException>()),
       );
     },

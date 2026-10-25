@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 
 import 'api.dart';
-import 'native/initialize.dart';
 import 'native_client.dart';
 import 'official_client.dart';
 import 'official_server_readiness.dart';
@@ -49,7 +48,7 @@ class AdbHost {
     Directory? binaryDirectory,
     String? identityPath,
     String? oneDevice,
-    NativeAdbApi? bindings,
+    required NativeAdbApi bindings,
     AdbAdmissionScopeInfo? admissionScope,
     Duration startupTimeout = const Duration(seconds: 15),
   }) async {
@@ -58,7 +57,7 @@ class AdbHost {
         (oneDevice.isEmpty || oneDevice.contains(RegExp(r'[\x00\r\n]')))) {
       throw ArgumentError.value(oneDevice, 'oneDevice');
     }
-    final api = bindings ?? await createNativeAdbApi();
+    final api = bindings;
     final identity = File(
       identityPath ?? p.join(dataDirectory.absolute.path, 'host_identity.pem'),
     ).absolute;
@@ -200,12 +199,12 @@ class AdbHost {
     Map<String, Object?>? nativeConfiguration,
     String? leaseId,
     Directory? binaryDirectory,
-    NativeAdbApi? bindings,
+    required NativeAdbApi bindings,
     AdbAdmissionScopeInfo? admissionScope,
     Duration startupTimeout = const Duration(seconds: 15),
   }) async {
     adbTimeoutMillis(startupTimeout);
-    final api = bindings ?? await createNativeAdbApi();
+    final api = bindings;
     if (api is! NativeAdbServerApi || api is! NativeAdbHandshakeApi) {
       throw const AdbException('owned_server_capability_unavailable');
     }

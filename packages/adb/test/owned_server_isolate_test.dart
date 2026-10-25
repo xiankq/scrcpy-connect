@@ -85,6 +85,7 @@ Future<Map<String, Object?>> _prepareInIsolate(
   String binaryPath,
 ) async {
   final host = await AdbHost.prepare(
+    bindings: await createNativeAdbApi(),
     dataDirectory: Directory(dataPath),
     binaryDirectory: Directory(binaryPath),
   );

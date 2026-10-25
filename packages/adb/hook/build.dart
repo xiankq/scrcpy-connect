@@ -49,7 +49,19 @@ void main(List<String> args) async {
     await FlutterRustBridgeNativeAssetsBuilder(
       cratePath: '../../rust/adb/bridge',
       assetName: 'src/native/generated/frb_generated.io.dart',
+      assetRouting: input.config.linkingEnabled
+          ? [ToLinkHook(input.packageName)]
+          : const [ToAppBundle()],
       extraCargoEnvironmentVariables: environment,
     ).run(input: input, output: output);
+    // Flutter 的 build depfile 只登记直接打包的输出；交给 link hook 的库仍是
+    // 后续链接的必需输入。显式登记后，库文件缺失会重跑构建，不能复用悬空回执。
+    final pending = output.build().assets.encodedAssetsForLinking.values;
+    for (final asset in pending.expand((assets) => assets)) {
+      if (!asset.isCodeAsset) continue;
+      if (asset.asCodeAsset.file case final file?) {
+        output.dependencies.add(file);
+      }
+    }
   });
 }
