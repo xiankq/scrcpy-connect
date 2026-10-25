@@ -32,6 +32,27 @@ cargo fmt --manifest-path rust/media_codec/Cargo.toml --check
 PYTHONPATH=packages/media_codec/tool python3 -B -m unittest discover -s packages/media_codec/test/tool -p 'test_*.py'
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+# 媒体核心是独立 workspace；生成检查已要求对应宿主的固定 FFmpeg 缓存。
+media_rust_target="${CARGO_TARGET_DIR:-$PWD/.dart_tool/media_codec/rust-target}"
+(
+  export MEDIA_CODEC_FFMPEG_ROOT="${MEDIA_CODEC_FFMPEG_ROOT:-$(python3 - <<'PY_HOST'
+import platform
+from pathlib import Path
+host = {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}[platform.system()]
+arch = {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}[platform.machine().lower()]
+print(Path(".dart_tool/media_codec/ffmpeg", f"{host}-{arch}").resolve())
+PY_HOST
+)}"
+  export CARGO_TARGET_DIR="$media_rust_target"
+  cargo clippy --locked --manifest-path rust/media_codec/Cargo.toml --all-targets -- -D warnings
+  cargo test --locked --manifest-path rust/media_codec/Cargo.toml
+)
+case "$(uname -s)" in
+  Linux*) media_native_library=libmedia_codec_native.so ;;
+  Darwin*) media_native_library=libmedia_codec_native.dylib ;;
+  *) media_native_library=media_codec_native.dll ;;
+esac
+export MEDIA_CODEC_TEST_LIBRARY="${MEDIA_CODEC_TEST_LIBRARY:-$media_rust_target/debug/deps/$media_native_library}"
 # 被控助手独立于宿主 workspace；Linux 夹具验证原始路径字节与元数据语义。
 if [[ "$(uname -s)" == Linux* ]]; then
   cargo fmt --manifest-path rust/adb/device_fs_helper/Cargo.toml --check

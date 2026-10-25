@@ -33,15 +33,15 @@
     "cases": 42
   },
   "rust/adb": {
-    "lines": 12400,
+    "lines": 14359,
     "registrations": 274
   },
   "rust/media_codec": {
-    "lines": 0,
+    "lines": 632,
     "registrations": 11
   },
   "rust/scrcpy": {
-    "lines": 1741,
+    "lines": 2518,
     "registrations": 44
   },
   "servers": {
@@ -49,7 +49,7 @@
     "registrations": 0
   },
   "tool": {
-    "lines": 3169,
+    "lines": 3207,
     "registrations": 84
   }
 }

@@ -104,21 +104,21 @@ Future<void> main(List<String> arguments) async {
         ) ||
         RegExp(r'(_tests?\.rs|_test\.dart|\.test\.mjs)$').hasMatch(path) ||
         p.basename(path).startsWith('test_');
-    // Rust 在生产文件内声明测试模块；计入注册数，生产代码不计入测试行数。
+    // Rust 内嵌测试单独计行，不把生产实现计入测试维护量。
     if (!testFile && !(segments.first == 'rust' && path.endsWith('.rs'))) {
       continue;
     }
     final source = file.readAsStringSync();
     final count = registrations.allMatches(source).length;
-    if (!testFile && count == 0) continue;
+    final lines = testFile
+        ? const LineSplitter().convert(source).length
+        : rustTestLines(source);
+    if (!testFile && count == 0 && lines == 0) continue;
     final total = totals.putIfAbsent(
       owner,
       () => {'lines': 0, 'registrations': 0},
     );
-    if (testFile) {
-      total['lines'] =
-          total['lines']! + const LineSplitter().convert(source).length;
-    }
+    total['lines'] = total['lines']! + lines;
     total['registrations'] = total['registrations']! + count;
   }
   if (arguments.isNotEmpty) {
@@ -149,4 +149,180 @@ Future<void> main(List<String> arguments) async {
   } else {
     stdout.writeln('PASS: 测试源码与注册声明均在维护预算内');
   }
+}
+
+/// Count test-only Rust items, including fixtures without test registrations.
+/// Delimiters are matched after removing literals and nested comments.
+int rustTestLines(String source) {
+  final code = _rustCode(source);
+  final tokens = RegExp(r'[A-Za-z_][A-Za-z_0-9]*|[^\s]')
+      .allMatches(code)
+      .toList();
+  final pairs = <int, int>{};
+  final stack = <int>[];
+  String token(int index) => tokens[index][0]!;
+  for (var i = 0; i < tokens.length; i++) {
+    final value = token(i);
+    if ('([{'.contains(value)) {
+      stack.add(i);
+    } else if (')]}'.contains(value) && stack.isNotEmpty) {
+      final opening = stack.removeLast();
+      if ('([{'.indexOf(token(opening)) == ')]}'.indexOf(value)) {
+        pairs[opening] = i;
+      }
+    }
+  }
+  final lines = <int>{};
+  int line(int offset) => '\n'.allMatches(source.substring(0, offset)).length;
+  for (var i = 0; i + 2 < tokens.length; i++) {
+    if (token(i) != '#') continue;
+    final inner = token(i + 1) == '!';
+    final bracket = i + (inner ? 2 : 1);
+    if (token(bracket) != '[' || !pairs.containsKey(bracket)) continue;
+    final close = pairs[bracket]!;
+    final attribute = [for (var j = bracket + 1; j < close; j++) token(j)];
+    final testOnly =
+        attribute.lastOrNull == 'test' ||
+        (attribute.length > 3 &&
+            attribute.first == 'cfg' &&
+            _withoutTest(attribute.sublist(2, attribute.length - 1)) == false);
+    if (!testOnly) continue;
+    if (inner) {
+      final enclosing = pairs.keys
+          .where(
+            (opening) =>
+                token(opening) == '{' && opening < i && pairs[opening]! > close,
+          )
+          .fold<int?>(
+            null,
+            (latest, opening) =>
+                latest == null || opening > latest ? opening : latest,
+          );
+      if (enclosing == null) return const LineSplitter().convert(source).length;
+      for (
+        var number = line(tokens[enclosing].start);
+        number <= line(tokens[pairs[enclosing]!].end);
+        number++
+      ) {
+        lines.add(number);
+      }
+      continue;
+    }
+    var end = close;
+    for (var j = close + 1; j < tokens.length; j++) {
+      final value = token(j);
+      if (value == ';' || value == ',') {
+        end = j;
+        break;
+      }
+      if (value == '{') {
+        end = pairs[j] ?? j;
+        if (end + 1 < tokens.length && token(end + 1) == ';') end++;
+        break;
+      }
+      // Other attributes, visibility, arguments and array types have no body.
+      if (value == '(' || value == '[') j = pairs[j] ?? j;
+    }
+    final startLine = line(tokens[i].start);
+    final endLine = line(tokens[end].end);
+    for (var number = startLine; number <= endLine; number++) {
+      lines.add(number);
+    }
+  }
+  return lines.length;
+}
+
+// Evaluate cfg with test=false; unknown platform/feature predicates stay null.
+// Only a definitely false result makes an item exclusive to the test build.
+bool? _withoutTest(List<String> tokens) {
+  if (tokens.length == 1 && tokens.single == 'test') return false;
+  if (tokens.length < 3 || tokens[1] != '(' || tokens.last != ')') {
+    return null;
+  }
+  final children = <bool?>[];
+  var depth = 0, start = 2;
+  for (var i = 2; i < tokens.length - 1; i++) {
+    if (tokens[i] == '(') depth++;
+    if (tokens[i] == ')') depth--;
+    if (tokens[i] == ',' && depth == 0) {
+      children.add(_withoutTest(tokens.sublist(start, i)));
+      start = i + 1;
+    }
+  }
+  if (start < tokens.length - 1) {
+    children.add(_withoutTest(tokens.sublist(start, tokens.length - 1)));
+  }
+  return switch (tokens.first) {
+    'all' =>
+      children.contains(false)
+          ? false
+          : children.every((value) => value == true)
+          ? true
+          : null,
+    'any' =>
+      children.contains(true)
+          ? true
+          : children.every((value) => value == false)
+          ? false
+          : null,
+    'not' when children.length == 1 =>
+      children.single == null ? null : !children.single!,
+    _ => null,
+  };
+}
+
+String _rustCode(String source) {
+  final units = source.codeUnits.toList();
+  final raw = RegExp(r'(?:b|c)?r(#+)?"');
+  final character = RegExp(
+    r"'(?:\\(?:u\{[0-9a-fA-F_]+\}|x[0-9a-fA-F]{2}|.)|[^'\\\r\n])'",
+    unicode: true,
+  );
+  var i = 0;
+  void erase(int end) {
+    while (i < end) {
+      if (units[i] != 10 && units[i] != 13) units[i] = 32;
+      i++;
+    }
+  }
+
+  while (i < source.length) {
+    if (source.startsWith('//', i)) {
+      final end = source.indexOf('\n', i);
+      erase(end < 0 ? source.length : end);
+    } else if (source.startsWith('/*', i)) {
+      var end = i + 2, depth = 1;
+      while (end < source.length && depth > 0) {
+        if (source.startsWith('/*', end)) {
+          depth++;
+          end += 2;
+        } else if (source.startsWith('*/', end)) {
+          depth--;
+          end += 2;
+        } else {
+          end++;
+        }
+      }
+      erase(end);
+    } else if (raw.matchAsPrefix(source, i) case final match?) {
+      final delimiter = '"${match[1] ?? ''}';
+      final end = source.indexOf(delimiter, match.end);
+      erase(end < 0 ? source.length : end + delimiter.length);
+    } else if (source[i] == '"') {
+      var end = i + 1;
+      while (end < source.length) {
+        if (source[end] == '\\') {
+          end += 2;
+        } else if (source[end++] == '"') {
+          break;
+        }
+      }
+      erase(end.clamp(0, source.length));
+    } else if (character.matchAsPrefix(source, i) case final match?) {
+      erase(match.end);
+    } else {
+      i++;
+    }
+  }
+  return String.fromCharCodes(units);
 }
