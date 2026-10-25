@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
-import '../usb_fixture/usbip_server.dart';
+import '../../e2e/usb_fixture/usbip_server.dart';
 
 Uint8List word(int value) =>
     Uint8List(4)..buffer.asByteData().setUint32(0, value);

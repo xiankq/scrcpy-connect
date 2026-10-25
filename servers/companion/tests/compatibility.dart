@@ -10,31 +10,22 @@ Future<void> main(List<String> arguments) => cli(() async {
     'This host compatibility check accepts no arguments',
   );
   final root = Directory(p.join(repositoryRoot().path, 'servers', 'companion'));
-  final android = p.join(
-    androidSdk().path,
-    'platforms',
-    'android-36',
-    'android.jar',
-  );
+  final sdk = androidSdk();
+  final android = p.join(sdk.path, 'platforms', 'android-36', 'android.jar');
   await withTemporary('companion-compatibility-', (directory) async {
-    await run(javaTool('javac'), [
-      '--release',
-      '8',
-      '-cp',
-      android,
-      '-d',
-      directory.path,
-      ...files(
-        Directory(p.join(root.path, 'src')),
-        '.java',
-      ).map((file) => file.path),
-      p.join(root.path, 'tests', 'CompatibilityTest.java'),
-    ], echo: true);
-    final classes = files(directory, '.class')
+    final classes = await compileJava(
+      work: directory,
+      sources: [
+        ...files(Directory(p.join(root.path, 'src')), '.java'),
+        File(p.join(root.path, 'tests', 'CompatibilityTest.java')),
+      ],
+      sdk: sdk,
+    );
+    final classNames = files(classes, '.class')
         .where((file) => !p.basename(file.path).startsWith('CompatibilityTest'))
         .map(
           (file) => p
-              .withoutExtension(relative(file.path, directory.path))
+              .withoutExtension(relative(file.path, classes.path))
               .replaceAll('/', '.'),
         );
     final bytecode =
@@ -42,8 +33,8 @@ Future<void> main(List<String> arguments) => cli(() async {
               '-c',
               '-p',
               '-classpath',
-              directory.path,
-              ...classes,
+              classes.path,
+              ...classNames,
             ])).stdout
             as String;
     final unsupported = RegExp(
@@ -58,7 +49,7 @@ Future<void> main(List<String> arguments) => cli(() async {
               '-c',
               '-p',
               '-classpath',
-              directory.path,
+              classes.path,
               'com.interop.companion.Thumbnail',
             ])).stdout
             as String;
@@ -73,7 +64,7 @@ Future<void> main(List<String> arguments) => cli(() async {
     );
     await run(javaTool('java'), [
       '-cp',
-      '${directory.path}${Platform.isWindows ? ';' : ':'}$android',
+      '${classes.path}${Platform.isWindows ? ';' : ':'}$android',
       'com.interop.companion.CompatibilityTest',
     ], echo: true);
   });

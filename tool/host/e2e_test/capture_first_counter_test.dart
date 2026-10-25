@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
-import '../video_fixture/capture_first_counter.dart';
+import '../../e2e/video_fixture/capture_first_counter.dart';
 
 void main() {
   test('exact reader retains fragmented and buffered scrcpy bytes', () async {

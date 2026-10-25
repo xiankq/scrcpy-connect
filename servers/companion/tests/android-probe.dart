@@ -18,9 +18,12 @@ class JarProcess {
     lines = StreamIterator(
       process.stdout.transform(utf8.decoder).transform(const LineSplitter()),
     );
-    errors = process.stderr
-        .transform(utf8.decoder)
-        .listen((value) => stderrText += value);
+    errors = process.stderr.transform(utf8.decoder).listen((value) {
+      final tail = '$stderrText$value';
+      stderrText = tail.length > 8192
+          ? tail.substring(tail.length - 8192)
+          : tail;
+    });
     unawaited(
       process.exitCode.then((value) {
         status = value;
@@ -86,6 +89,11 @@ class Probe {
   final bool calls;
   final File fixtureFile;
   final events = <Json>[];
+  void recordEvent(Json event) {
+    require(events.length < 2000, 'Probe event budget exceeded');
+    events.add(event);
+  }
+
   final random = Random.secure();
   final clock = Stopwatch()..start();
   final ownedCalls = <String>{};
@@ -116,15 +124,18 @@ class Probe {
   }
 
   Future<Json> request(String command, [Json params = const {}]) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
     final id = '${++counter}';
     socket!.writeln(
       jsonEncode({'requestId': id, 'command': command, ...params}),
     );
-    await socket!.flush();
+    await socket!.flush().timeout(const Duration(seconds: 15));
     while (true) {
-      final result = await response();
+      final remaining = deadline.difference(DateTime.now());
+      require(remaining > Duration.zero, 'Companion request timed out');
+      final result = await response().timeout(remaining);
       if (result['requestId'] == id) return result;
-      events.add(result);
+      recordEvent(result);
     }
   }
 
@@ -185,7 +196,7 @@ class Probe {
         ready = value;
         break;
       }
-      events.add(value);
+      recordEvent(value);
     }
     require(ready['uid'] == 2000 && ready['protocol'] == 1, ready);
     require(

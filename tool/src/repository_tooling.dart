@@ -2,19 +2,29 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'process.dart';
+
 Directory repositoryRoot([Uri? script]) {
-  var directory = File.fromUri(script ?? Platform.script).absolute.parent;
-  while (true) {
-    if (File(p.join(directory.path, 'pubspec.yaml')).existsSync() &&
-        File(p.join(directory.path, 'Cargo.toml')).existsSync()) {
-      return directory;
+  final entrypoint = script ?? Platform.script;
+  // package:test 的入口可能位于系统临时目录；此时从调用者所在工作区定位。
+  for (final start in [
+    if (entrypoint.scheme == 'file') File.fromUri(entrypoint).absolute.parent,
+    if (script == null) Directory.current.absolute,
+  ]) {
+    var directory = start;
+    while (true) {
+      if (File(p.join(directory.path, 'pubspec.yaml')).existsSync() &&
+          File(p.join(directory.path, 'Cargo.toml')).existsSync()) {
+        return directory;
+      }
+      final parent = directory.parent;
+      if (parent.path == directory.path) break;
+      directory = parent;
     }
-    final parent = directory.parent;
-    if (parent.path == directory.path) {
-      throw StateError('Cannot locate the repository from the script path');
-    }
-    directory = parent;
   }
+  throw StateError(
+    'Cannot locate the repository from the script or working directory',
+  );
 }
 
 /// 唯一 Flutter 应用属于仓库工作区。
@@ -48,24 +58,20 @@ String get dartExecutable =>
 String get userHome =>
     Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'] ?? '';
 
-ProcessResult runTool(
+Future<ProcessResult> runTool(
   List<String> command, {
   Directory? cwd,
   Map<String, String>? environment,
   bool quiet = false,
   bool secret = false,
-}) {
-  final result = Process.runSync(
+  Duration timeout = const Duration(minutes: 2),
+}) async {
+  final result = await runProcess(
     command.first,
     command.skip(1).toList(),
     workingDirectory: cwd?.path,
     environment: environment,
-    runInShell:
-        Platform.isWindows &&
-        const [
-          '.bat',
-          '.cmd',
-        ].contains(p.extension(command.first).toLowerCase()),
+    timeout: timeout,
   );
   if (!quiet && !secret) {
     stdout.write(result.stdout);
@@ -82,6 +88,19 @@ ProcessResult runTool(
   }
   return result;
 }
+
+Future<void> streamTool(
+  List<String> command, {
+  Directory? cwd,
+  Map<String, String>? environment,
+  Duration timeout = const Duration(minutes: 30),
+}) => runStreamingProcess(
+  command.first,
+  command.skip(1).toList(),
+  workingDirectory: cwd?.path,
+  environment: environment,
+  timeout: timeout,
+);
 
 void copyDirectory(
   Directory source,

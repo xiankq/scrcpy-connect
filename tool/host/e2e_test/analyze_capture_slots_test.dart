@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 
-import '../support.dart';
-import '../video_fixture/analyze_capture_slots.dart';
+import '../../e2e/support.dart';
+import '../../e2e/video_fixture/analyze_capture_slots.dart';
 
 Json event(int ts, int slot, String operation, [int? identity]) => {
   'sliceId': identity ?? ts,

@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 
-import '../support.dart';
-import '../video_fixture/analyze_first_counter.dart' as first;
+import '../../e2e/support.dart';
+import '../../e2e/video_fixture/analyze_first_counter.dart' as first;
 
 (Json, List<dynamic>, Json, List<dynamic>) observation() {
   final packets = [

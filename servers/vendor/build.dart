@@ -226,9 +226,9 @@ Uint8List package(File apk) {
 Map<String, String> trackedInputs() => {
   for (final name in [
     '../tooling.dart',
+    '../../tool/src/repository_tooling.dart',
+    '../../tool/src/process.dart',
     'build.dart',
-    'test/ScrcpyApi21Probe.java',
-    'test/build_probe.dart',
     ...licenseFiles,
   ])
     name: digest(File(p.join(here.path, name))),
@@ -368,7 +368,7 @@ Future<void> build(ArgResults options) async {
     await buildFile.writeAsString(
       '${buildFile.readAsStringSync()}$buildAddition',
     );
-    await run(
+    await runBuild(
       gradle.path,
       [
         '--no-daemon',
@@ -379,7 +379,6 @@ Future<void> build(ArgResults options) async {
       ],
       cwd: root,
       environment: {'ANDROID_HOME': sdk.path},
-      echo: true,
     );
     require(
       sameJson(originalSources, javaSources()),

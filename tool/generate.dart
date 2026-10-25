@@ -8,6 +8,7 @@ import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
 
 import 'src/repository_tooling.dart';
+import 'src/generation_workspace.dart';
 
 final root = repositoryRoot();
 const frbVersion = '2.13.0';
@@ -68,12 +69,15 @@ void compareOutputs(Directory original, Directory generated) {
   }
 }
 
-void formatFrbRust(Directory directory, [Iterable<String>? files]) {
+Future<void> formatFrbRust(
+  Directory directory, [
+  Iterable<String>? files,
+]) async {
   final formatter =
       executable('rustfmt') ?? p.join(userHome, '.cargo/bin/rustfmt');
   for (final file in files ?? outputs) {
     final output = File(p.join(directory.path, file));
-    final result = runTool(
+    final result = await runTool(
       [
         formatter,
         '--quiet',
@@ -90,58 +94,67 @@ void formatFrbRust(Directory directory, [Iterable<String>? files]) {
   }
 }
 
-/// 复制全部生成输入至私有目录，防止生成器格式化或新增文件影响原树。
+/// 镜像仅包含 FRB 的 Rust、Dart 包源码与工作区清单，不复制媒体归档、runner 和设备夹具。
 void copyFrbInputs(Directory source, Directory isolated) {
+  final inputs = <String, File>{};
+  void file(String name) {
+    final input = File(p.join(source.path, name));
+    if (input.existsSync()) inputs[p.normalize(name)] = input;
+  }
+
   for (final name in [
     'Cargo.toml',
     'Cargo.lock',
     'rust-toolchain.toml',
     'pubspec.yaml',
     'pubspec.lock',
+    'app/pubspec.yaml',
     for (final module in frbModules) module.config,
+    '.dart_tool/package_config.json',
+    '.dart_tool/package_graph.json',
   ]) {
-    File(p.join(source.path, name)).copySync(p.join(isolated.path, name));
+    file(name);
   }
-  const ignored = {
-    'target',
-    'build',
-    '.git',
-    '.gradle',
-    'ephemeral',
-    'Pods',
-    '.dart_tool',
-    '.cxx',
-  };
-  // 只将应用源码及工作区清单作为生成输入；原生 runner 可能包含本机 SDK 路径或签名凭据。
-  final appManifest = File(p.join(source.path, 'app/pubspec.yaml'));
-  final isolatedManifest = File(p.join(isolated.path, 'app/pubspec.yaml'));
-  isolatedManifest.parent.createSync(recursive: true);
-  appManifest.copySync(isolatedManifest.path);
-  for (final name in [
-    'packages',
-    'app/lib',
-    'rust',
-    'app/assets',
-    'servers',
-    'protocol',
-  ]) {
-    final directory = Directory(p.join(source.path, name));
-    if (directory.existsSync()) {
-      copyDirectory(
-        directory,
-        Directory(p.join(isolated.path, name)),
-        exclude: ignored.contains,
-      );
+  final packages = Directory(p.join(source.path, 'packages'));
+  if (packages.existsSync()) {
+    for (final package in packages.listSync().whereType<Directory>()) {
+      file(p.relative(p.join(package.path, 'pubspec.yaml'), from: source.path));
     }
   }
-  final metadata = Directory(p.join(isolated.path, '.dart_tool'))..createSync();
-  for (final name in ['package_config.json', 'package_graph.json']) {
-    final input = File(p.join(source.path, '.dart_tool', name));
-    if (input.existsSync()) input.copySync(p.join(metadata.path, name));
+  const ignored = {'target', 'build', '.git', '.dart_tool'};
+  void tree(String name) {
+    final directory = Directory(p.join(source.path, name));
+    if (!directory.existsSync()) return;
+    void visit(Directory directory) {
+      for (final entity in directory.listSync(followLinks: false)) {
+        if (ignored.contains(p.basename(entity.path))) continue;
+        if (entity is Directory) {
+          visit(entity);
+        } else if (entity is File) {
+          file(p.relative(entity.path, from: source.path));
+        } else if (entity is Link) {
+          throw FileSystemException(
+            'FRB input must be a private source file',
+            entity.path,
+          );
+        }
+      }
+    }
+
+    visit(directory);
   }
+
+  for (final name in [
+    'rust/adb',
+    'rust/scrcpy',
+    for (final module in frbModules) '${module.directory}/lib',
+  ]) {
+    tree(name);
+  }
+  synchronizeInputs(inputs, isolated);
 }
 
-void generateFrb(bool check) {
+Future<void> generateFrb(bool check) async {
   final generator = executable('flutter_rust_bridge_codegen');
   if (generator == null) {
     throw StateError(
@@ -149,15 +162,19 @@ void generateFrb(bool check) {
     );
   }
   final version =
-      (runTool([generator, '--version'], quiet: true).stdout as String).trim();
+      ((await runTool([generator, '--version'], quiet: true)).stdout as String)
+          .trim();
   if (version != 'flutter_rust_bridge_codegen $frbVersion') {
     throw StateError(
       'Expected flutter_rust_bridge_codegen $frbVersion, got $version',
     );
   }
-  void runGenerators(Directory directory, {Map<String, String>? environment}) {
+  Future<void> runGenerators(
+    Directory directory, {
+    Map<String, String>? environment,
+  }) async {
     for (final module in frbModules) {
-      runTool(
+      await streamTool(
         [generator, 'generate', '--config-file', module.config],
         cwd: directory,
         environment: environment,
@@ -166,22 +183,26 @@ void generateFrb(bool check) {
   }
 
   if (!check) {
-    runGenerators(root);
-    formatFrbRust(root);
+    await runGenerators(root);
+    await formatFrbRust(root);
     return;
   }
-  final isolated = Directory.systemTemp.createTempSync('interop-frb-');
-  try {
-    copyFrbInputs(root, isolated);
-    runGenerators(
-      isolated,
-      environment: {'CARGO_TARGET_DIR': p.join(isolated.path, 'target')},
-    );
-    formatFrbRust(isolated);
-    compareOutputs(root, isolated);
-  } finally {
-    isolated.deleteSync(recursive: true);
-  }
+  await withGenerationWorkspace(
+    Directory(p.join(root.path, '.dart_tool/frb_check')),
+    (isolated, target) async {
+      copyFrbInputs(root, isolated);
+      await runGenerators(
+        isolated,
+        environment: {
+          'CARGO_TARGET_DIR': target.path,
+          'CARGO_INCREMENTAL': '0',
+          'CARGO_PROFILE_DEV_DEBUG': '0',
+        },
+      );
+      await formatFrbRust(isolated);
+      compareOutputs(root, isolated);
+    },
+  );
   stdout.writeln('PASS: FRB $frbVersion Rust/Dart generated outputs');
 }
 
@@ -212,7 +233,7 @@ List<String> builderCommand(Directory directory, bool check) {
   ];
 }
 
-void main(List<String> arguments) {
+Future<void> main(List<String> arguments) async {
   try {
     final parser = ArgParser()
       ..addFlag('check', negatable: false)
@@ -228,18 +249,19 @@ void main(List<String> arguments) {
       throw ArgumentError('Unexpected positional arguments');
     }
     final check = args['check'] as bool;
-    runTool([
+    await streamTool([
       'node',
       'tool/design_tokens/generate.mjs',
       if (check) '--check',
     ], cwd: root);
-    runTool([
+    await streamTool([
       dartExecutable,
+      '--disable-dart-dev',
       'servers/package.dart',
       if (check) '--check',
     ], cwd: root);
-    generateFrb(check);
-    runTool(builderCommand(root, check), cwd: root);
+    await generateFrb(check);
+    await streamTool(builderCommand(root, check), cwd: root);
   } on Object catch (error) {
     stderr.writeln(error);
     exitCode = 1;

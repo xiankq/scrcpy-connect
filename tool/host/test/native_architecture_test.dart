@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 
-import '../src/native_architecture.dart';
+import '../../src/native_architecture.dart';
 
 void main() {
   final root = Directory.systemTemp.absolute;

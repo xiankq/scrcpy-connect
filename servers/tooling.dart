@@ -6,20 +6,9 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 
-Directory repositoryRoot([Uri? script]) {
-  var directory = File.fromUri(script ?? Platform.script).absolute.parent;
-  while (true) {
-    if (File(p.join(directory.path, 'pubspec.yaml')).existsSync() &&
-        File(p.join(directory.path, 'Cargo.toml')).existsSync()) {
-      return directory;
-    }
-    final parent = directory.parent;
-    if (parent.path == directory.path) {
-      throw StateError('Cannot locate repository root from the script path');
-    }
-    directory = parent;
-  }
-}
+import '../tool/src/process.dart';
+
+export '../tool/src/repository_tooling.dart' show repositoryRoot;
 
 String get userHome =>
     Platform.environment['HOME'] ??
@@ -92,13 +81,14 @@ Future<ProcessResult> run(
   Map<String, String>? environment,
   bool echo = false,
   bool check = true,
+  Duration timeout = const Duration(minutes: 2),
 }) async {
-  final result = await Process.run(
+  final result = await runProcess(
     executable,
     arguments,
     workingDirectory: cwd?.path,
     environment: environment,
-    runInShell: Platform.isWindows && executable.endsWith('.bat'),
+    timeout: timeout,
   );
   if (echo || (check && result.exitCode != 0)) {
     stdout.write(result.stdout);
@@ -115,12 +105,77 @@ Future<ProcessResult> run(
   return result;
 }
 
+Future<void> runBuild(
+  String executable,
+  List<String> arguments, {
+  Directory? cwd,
+  Map<String, String>? environment,
+}) => runStreamingProcess(
+  executable,
+  arguments,
+  workingDirectory: cwd?.path,
+  environment: environment,
+);
+
 String javaTool(String name) {
   final javaHome = Platform.environment['JAVA_HOME'];
   final suffix = Platform.isWindows ? '.exe' : '';
   return javaHome == null
       ? '$name$suffix'
       : p.join(javaHome, 'bin', '$name$suffix');
+}
+
+Future<Directory> compileJava({
+  required Directory work,
+  required Iterable<File> sources,
+  required Directory sdk,
+}) async {
+  final javac = javaTool('javac');
+  final version = await run(javac, ['-version']);
+  require(
+    '${version.stdout}${version.stderr}'.startsWith('javac 21.'),
+    'JDK 21 is required for reproducible Java bytecode',
+  );
+  final classes = Directory(p.join(work.path, 'classes'))..createSync();
+  await runBuild(javac, [
+    '--release',
+    '8',
+    '-encoding',
+    'UTF-8',
+    '-cp',
+    p.join(sdk.path, 'platforms', 'android-36', 'android.jar'),
+    '-d',
+    classes.path,
+    ...sources.map((file) => file.path),
+  ]);
+  return classes;
+}
+
+Future<Uint8List> compileDex({
+  required Directory work,
+  required Directory classes,
+  required Directory sdk,
+  int minApi = 21,
+}) async {
+  final dex = Directory(p.join(work.path, 'dex'))..createSync();
+  await runBuild(
+    p.join(
+      sdk.path,
+      'build-tools',
+      '37.0.0',
+      Platform.isWindows ? 'd8.bat' : 'd8',
+    ),
+    [
+      '--min-api',
+      '$minApi',
+      '--lib',
+      p.join(sdk.path, 'platforms', 'android-36', 'android.jar'),
+      '--output',
+      dex.path,
+      ...files(classes, '.class').map((file) => file.path),
+    ],
+  );
+  return File(p.join(dex.path, 'classes.dex')).readAsBytes();
 }
 
 Future<Uint8List> download(String url, String expected) async {

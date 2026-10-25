@@ -1,5 +1,8 @@
 import 'dart:io';
 
+import 'src/process.dart';
+
+import 'package:args/args.dart';
 import 'package:xml/xml.dart';
 
 import 'android.dart' show verifyApk;
@@ -51,15 +54,26 @@ void verifyManifest(String contents) {
   requirePrivateService('AudioPlaybackService', {'mediaPlayback', '2', '0x2'});
 }
 
-void main(List<String> arguments) {
+Future<void> main(List<String> arguments) async {
   try {
+    final parser = ArgParser()
+      ..addMultiOption(
+        'abis',
+        allowed: ['armeabi-v7a', 'arm64-v8a', 'x86_64'],
+        help: 'Require exactly these ABIs; omitted means verify all packaged ABIs.',
+      );
+    final args = parser.parse(arguments);
+    if (args.rest.length > 1) {
+      throw ArgumentError('Expected at most one APK path');
+    }
     final root = repositoryRoot();
     final apk = File(
-      arguments.isEmpty
+      args.rest.isEmpty
           ? '${applicationRoot(root).path}/build/app/outputs/flutter-apk/app-debug.apk'
-          : arguments.single,
+          : args.rest.single,
     ).absolute;
-    verifyApk(apk, ['armeabi-v7a', 'arm64-v8a', 'x86_64']);
+    final expected = args.multiOption('abis');
+    final receipt = await verifyApk(apk, expected.isEmpty ? null : expected);
     final sdk =
         Platform.environment['ANDROID_HOME'] ??
         Platform.environment['ANDROID_SDK_ROOT'];
@@ -68,7 +82,7 @@ void main(List<String> arguments) {
     }
     final analyzer =
         '$sdk/cmdline-tools/latest/bin/apkanalyzer${Platform.isWindows ? '.bat' : ''}';
-    final result = Process.runSync(analyzer, [
+    final result = await runProcess(analyzer, [
       'manifest',
       'print',
       apk.path,
@@ -83,7 +97,7 @@ void main(List<String> arguments) {
     }
     verifyManifest(result.stdout as String);
     stdout.writeln(
-      'PASS: packaged Android manifest and Flutter/Rust ELF libraries for all three ABIs',
+      'PASS: packaged Android manifest and Flutter/Rust/media ELF libraries for ${receipt['abis']}',
     );
   } on Object catch (error) {
     stderr.writeln(error);

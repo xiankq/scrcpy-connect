@@ -7,11 +7,11 @@
 根目录先运行 `flutter pub get`。`--check` 不需要Android SDK；重建需JDK 21、SDK 36和build-tools 37.0.0，其余工具/依赖版本与摘要由脚本锁定。
 
 ```sh
-dart servers/vendor/build.dart --check
+dart --disable-dart-dev servers/vendor/build.dart --check
 # 临时重建并逐字节比较，不改受控产物。
-dart servers/vendor/build.dart --rebuild
+dart --disable-dart-dev servers/vendor/build.dart --rebuild
 # 有意更新输入/产物时使用。
-dart servers/vendor/build.dart --update
+dart --disable-dart-dev servers/vendor/build.dart --update
 ```
 
 `JAVA_HOME`/`ANDROID_HOME` 选择工具链；`--gradle` 可指定同版本安装，`--source` 可指定固定提交的本地源码归档，读取时仍验证固定 SHA-256。`--offline` 使用 Gradle 依赖缓存；配合这两个本地输入可避免下载。不同 JDK 补丁或 SDK 内容可能产生差异，比较会失败。生成与共享打包见[工具链契约](../../docs/implementation/repository-tooling.md)。
@@ -20,8 +20,10 @@ dart servers/vendor/build.dart --update
 
 检查读取DEX定义/接口表，要求函数接口回填与 `min-api:21` 标记实际存在；仅语言lambda脱糖或搜索字符串不足以证明兼容。
 
+探针独立于生产 JAR 构建输入；修改探针无需重建 scrcpy 产物，仍须重新编译并运行对应探针验收。
+
 ```sh
-dart servers/vendor/test/build_probe.dart /tmp/scrcpy-api21-probe.jar
+dart --disable-dart-dev servers/vendor/test/build_probe.dart /tmp/scrcpy-api21-probe.jar
 ```
 
 将server与probe推至已授权目标临时路径，以 `CLASSPATH=<server>:<probe.jar> app_process / ScrcpyApi21Probe` 执行。探针覆盖接口加载、二分搜索和编码器尺寸约束，不启动编码；成功不代表设备编码器或远控可用。设备结果见[验收记录](../../docs/implementation/validation.md)。

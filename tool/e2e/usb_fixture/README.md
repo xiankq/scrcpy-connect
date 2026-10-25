@@ -26,6 +26,6 @@ flutter drive --no-pub -d emulator-5554 \
   --target=integration_test/usb_connection_test.dart
 ```
 
-要求新USB附着、产品无目标记录。用例先Cancel再OK，核对lease释放后真实shell/sync可用，只删除新增记录。它不代替应用授权或连接。协议单测为 `flutter test --no-pub tool/e2e/tests/usbip_server_test.dart`。
+要求新USB附着、产品无目标记录。用例先Cancel再OK，核对lease释放后真实shell/sync可用，只删除新增记录。它不代替应用授权或连接。协议单测为 从仓库根运行 `cd tool/host && dart test e2e_test/usbip_server_test.dart`。
 
 结束Ctrl-C停止prepare，精确移除本轮 `forward --remove tcp:<host-port>`，仅关闭本轮AVD。结果在指定目录 `result.json`；虚拟USB不证明线缆、OTG、OEM HAL或量产设备RSA授权。设备证据见[验收记录](../../../docs/implementation/validation.md)。

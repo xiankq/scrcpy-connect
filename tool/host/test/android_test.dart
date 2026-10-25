@@ -1,10 +1,14 @@
 import 'dart:io';
 
 import 'package:archive/archive.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 
-import '../android.dart' as android;
+import '../../android.dart' as android;
+import '../../src/apk.dart';
+
+List<String> verify(List<int> bytes, [List<String>? abis]) =>
+    inspectApk(bytes, repository: android.root, expectedAbis: abis).abis;
 
 void main() {
   late Directory temporary;
@@ -59,9 +63,10 @@ void main() {
     for (final name in [
       'libflutter.so',
       if (!kernel) 'libapp.so',
+      'libc++_shared.so',
       if (includeRust) ...[
-        'libinterop_adb_bridge.so',
         'libinterop_scrcpy_bridge.so',
+        'libmedia_codec_plugin.so',
       ],
     ]) {
       final header = List<int>.filled(20, 0);
@@ -96,19 +101,11 @@ void main() {
   }
 
   test('APK checks reject mismatched requested and native architectures', () {
-    expect(android.verifyApkArchive(apk(), ['arm64-v8a']), ['arm64-v8a']);
-    expect(android.verifyApkArchive(apk(kernel: true), ['arm64-v8a']), [
-      'arm64-v8a',
-    ]);
-    expect(() => android.verifyApkArchive(apk(), ['x86_64']), throwsStateError);
-    expect(
-      () => android.verifyApkArchive(apk(wrongMachine: true)),
-      throwsStateError,
-    );
-    expect(
-      () => android.verifyApkArchive(apk(includeRust: false)),
-      throwsStateError,
-    );
+    expect(verify(apk(), ['arm64-v8a']), ['arm64-v8a']);
+    expect(verify(apk(kernel: true), ['arm64-v8a']), ['arm64-v8a']);
+    expect(() => verify(apk(), ['x86_64']), throwsStateError);
+    expect(() => verify(apk(wrongMachine: true)), throwsStateError);
+    expect(() => verify(apk(includeRust: false)), throwsStateError);
   });
 
   test(
@@ -120,7 +117,7 @@ void main() {
         if (!file.name.startsWith('lib/')) withoutNative.addFile(file);
       }
       expect(
-        () => android.verifyApkArchive(ZipEncoder().encode(withoutNative)),
+        () => verify(ZipEncoder().encode(withoutNative)),
         throwsA(
           isA<StateError>().having(
             (error) => error.message,
@@ -132,19 +129,17 @@ void main() {
     },
   );
 
-  test('APK requires both capability libraries and rejects the removed application bridge', () {
+  test('APK requires composed capture and media libraries and rejects the removed application bridge', () {
     for (final missing in [
-      'libinterop_adb_bridge.so',
+      'libmedia_codec_plugin.so',
       'libinterop_scrcpy_bridge.so',
+      'libc++_shared.so',
     ]) {
       final archive = Archive();
       for (final entry in ZipDecoder().decodeBytes(apk()).files) {
         if (!entry.name.endsWith('/$missing')) archive.addFile(entry);
       }
-      expect(
-        () => android.verifyApkArchive(ZipEncoder().encode(archive)),
-        throwsStateError,
-      );
+      expect(() => verify(ZipEncoder().encode(archive)), throwsStateError);
     }
     final archive = ZipDecoder().decodeBytes(apk());
     archive.addFile(
@@ -155,7 +150,7 @@ void main() {
       ]),
     );
     expect(
-      () => android.verifyApkArchive(ZipEncoder().encode(archive)),
+      () => verify(ZipEncoder().encode(archive)),
       throwsA(
         isA<StateError>().having(
           (error) => error.message,
@@ -173,22 +168,80 @@ void main() {
     final nameLength = bytes[26] | bytes[27] << 8;
     final extraLength = bytes[28] | bytes[29] << 8;
     bytes[30 + nameLength + extraLength] ^= 1;
-    expect(() => android.verifyApkArchive(bytes), throwsStateError);
+    expect(() => verify(bytes), throwsStateError);
+  });
+
+  test('APK validates additional JNI libraries against their packaged ABI', () {
+    final archive = ZipDecoder().decodeBytes(apk());
+    final header = List<int>.filled(20, 0);
+    header.setRange(0, 6, [0x7f, 0x45, 0x4c, 0x46, 1, 1]);
+    header[18] = 40;
+    archive.addFile(
+      ArchiveFile.noCompress(
+        'lib/arm64-v8a/libdartjni.so',
+        header.length,
+        header,
+      ),
+    );
+    expect(
+      () => verify(ZipEncoder().encode(archive)),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('libdartjni.so'),
+        ),
+      ),
+    );
+  });
+
+  test('release rejects the duplicate standalone ADB runtime', () {
+    final archive = ZipDecoder().decodeBytes(apk());
+    final source = archive.findFile(
+      'lib/arm64-v8a/libinterop_scrcpy_bridge.so',
+    )!;
+    archive.addFile(
+      ArchiveFile.noCompress(
+        'lib/arm64-v8a/libinterop_adb_bridge.so',
+        source.size,
+        source.content,
+      ),
+    );
+    expect(
+      () => verify(ZipEncoder().encode(archive)),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('duplicates ADB'),
+        ),
+      ),
+    );
+  });
+
+  test('size accounting includes ZIP overhead and per ABI payload', () {
+    final bytes = apk();
+    final inspection = inspectApk(bytes, repository: android.root);
+    final json = inspection.toJson();
+    expect(inspection.bytes, bytes.length);
+    expect(inspection.sections['lib/arm64-v8a']!.expanded, 100);
+    expect(
+      inspection.compressedEntryBytes + (json['archiveOverheadBytes']! as int),
+      bytes.length,
+    );
+    expect(
+      inspection.expandedEntryBytes,
+      inspection.sections.values.fold<int>(
+        0,
+        (sum, entry) => sum + entry.expanded,
+      ),
+    );
   });
 
   test('APK rejects missing, corrupt, or duplicated shared server assets', () {
-    expect(
-      () => android.verifyApkArchive(apk(includeServers: false)),
-      throwsStateError,
-    );
-    expect(
-      () => android.verifyApkArchive(apk(corruptServer: true)),
-      throwsStateError,
-    );
-    expect(
-      () => android.verifyApkArchive(apk(duplicateServer: true)),
-      throwsStateError,
-    );
+    expect(() => verify(apk(includeServers: false)), throwsStateError);
+    expect(() => verify(apk(corruptServer: true)), throwsStateError);
+    expect(() => verify(apk(duplicateServer: true)), throwsStateError);
   });
 
   test('APK rejects actual same-name ZIP entries with valid CRCs', () {
@@ -216,7 +269,7 @@ void main() {
       expect(headers, hasLength(2));
       expect(headers.every((header) => header.file!.verifyCrc32()), isTrue);
       expect(
-        () => android.verifyApkArchive(bytes),
+        () => verify(bytes),
         throwsA(
           isA<StateError>().having(
             (error) => error.message,
@@ -229,10 +282,7 @@ void main() {
   });
 
   test('APK rejects server payloads embedded again in native libraries', () {
-    expect(
-      () => android.verifyApkArchive(apk(embedServer: true)),
-      throwsStateError,
-    );
+    expect(() => verify(apk(embedServer: true)), throwsStateError);
   });
 
   test('APK CRC verification includes central directory records', () {
@@ -243,7 +293,7 @@ void main() {
           bytes[index + 2] == 0x01 &&
           bytes[index + 3] == 0x02) {
         bytes[index + 16] ^= 1;
-        expect(() => android.verifyApkArchive(bytes), throwsStateError);
+        expect(() => verify(bytes), throwsStateError);
         return;
       }
     }
@@ -253,7 +303,7 @@ void main() {
   test('APK CRC verification includes local header records', () {
     final bytes = apk();
     bytes[14] ^= 1;
-    expect(() => android.verifyApkArchive(bytes), throwsStateError);
+    expect(() => verify(bytes), throwsStateError);
   });
 
   test('APK CRC verification rejects matching incorrect header CRCs', () {
@@ -265,7 +315,7 @@ void main() {
           bytes[index + 2] == 0x01 &&
           bytes[index + 3] == 0x02) {
         bytes[index + 16] ^= 1;
-        expect(() => android.verifyApkArchive(bytes), throwsStateError);
+        expect(() => verify(bytes), throwsStateError);
         return;
       }
     }

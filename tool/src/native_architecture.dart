@@ -12,7 +12,7 @@ const _nativePackageDependencies = <String, Set<String>>{
 };
 
 /// 读取 Cargo 的实际路径依赖，包含带 target 条件的依赖声明。
-List<String> checkNativeArchitecture(Directory root) {
+Future<List<String>> checkNativeArchitecture(Directory root) async {
   final cargo =
       executable('cargo') ?? p.join(userHome, '.cargo', 'bin', 'cargo');
   final packages = <String, Map<String, dynamic>>{};
@@ -22,7 +22,7 @@ List<String> checkNativeArchitecture(Directory root) {
     'rust/adb/device_fs_helper/Cargo.toml',
   ]) {
     final metadata = jsonDecode(
-      runTool(
+      (await runTool(
             [
               cargo,
               'metadata',
@@ -36,7 +36,7 @@ List<String> checkNativeArchitecture(Directory root) {
             ],
             cwd: root,
             quiet: true,
-          ).stdout
+          )).stdout
           as String,
     ) as Map<String, dynamic>;
     for (final package

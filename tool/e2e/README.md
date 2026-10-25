@@ -1,13 +1,13 @@
 # Host E2E tools
 
-Run root `flutter pub get` first. Host builders/analyzers use the locked Dart workspace; Flutter device tests run from `app/` with `--driver=../tool/driver/<entry>.dart` and `--target=integration_test/<entry>.dart` (benchmarks use `../tool/benchmark/`). See each fixture README for device isolation and required variables.
+Run root `flutter pub get` first. Host builders/analyzers use the locked Dart workspace; pure host tests use the independent `tool/host` package and do not invoke Flutter or native hooks; Flutter device tests run from `app/` with `--driver=../tool/driver/<entry>.dart` and `--target=integration_test/<entry>.dart` (benchmarks use `../tool/benchmark/`). See each fixture README for device isolation and required variables.
 
 ```sh
-dart tool/e2e/build_fixture.dart video
-flutter test --no-pub tool/e2e/tests
+dart --disable-dart-dev tool/e2e/build_fixture.dart video
+(cd tool/host && dart pub get --enforce-lockfile && dart test e2e_test)
 ```
 
-Builder choices are `video`, `audio-focus`, `input`, `share`, `notification` and `content-delivery`. Their local `build.dart` wrappers share `--sdk`/`--output`. APKs and disposable keys default to system temporary storage; notification/content-delivery outputs must remain there. Building never installs a fixture.
+Builder choices are `video`, `audio-focus`, `input`, `share`, `notification` and `content-delivery`. Their local `build.dart` wrappers share `--sdk`/`--output`. Source, SDK/JDK tool and signing-key identities control reuse; a changed or damaged APK is rebuilt. APKs and disposable keys default to system temporary storage; notification/content-delivery outputs must remain there. Building never installs a fixture.
 
 | Analyzer under `video_fixture/` | Purpose |
 | --- | --- |

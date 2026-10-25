@@ -112,13 +112,21 @@ Future<void> main(List<String> arguments) => cli(() async {
     await rejects(() async {
       await vendor.sourceArchive(corruptSource.path);
     }, 'Source archive SHA-256 mismatch');
-    final copy = Directory(p.join(work.path, 'companion'))..createSync();
+    final copy = Directory(p.join(work.path, 'servers', 'companion'))
+      ..createSync(recursive: true);
     final original = Directory(p.join(root.path, 'servers', 'companion'));
-    final common = File(p.join(work.path, 'tooling.dart'));
+    final common = File(p.join(work.path, 'servers', 'tooling.dart'));
     await File(p.join(root.path, 'servers', 'tooling.dart')).copy(common.path);
+    final repositoryTooling = File(
+      p.join(work.path, 'tool', 'src', 'repository_tooling.dart'),
+    );
+    await repositoryTooling.parent.create(recursive: true);
+    await File(p.join(root.path, 'tool', 'src', 'repository_tooling.dart'))
+        .copy(repositoryTooling.path);
+    await File(p.join(root.path, 'tool', 'src', 'process.dart'))
+        .copy(p.join(work.path, 'tool', 'src', 'process.dart'));
     for (final source in [
       File(p.join(original.path, 'build.dart')),
-      File(p.join(original.path, 'build.sh')),
       ...files(Directory(p.join(original.path, 'src')), '.java'),
     ]) {
       final destination = File(
@@ -135,6 +143,20 @@ Future<void> main(List<String> arguments) => cli(() async {
       'artifact': {'sha256': digest(jar), 'size': jar.lengthSync()},
     });
     await companion.verifyManifest(copy);
+    final javaSource = files(
+      Directory(p.join(copy.path, 'src')),
+      '.java',
+    ).first;
+    final javaBytes = javaSource.readAsBytesSync();
+    await javaSource.writeAsString(
+      '// altered source\n',
+      mode: FileMode.append,
+    );
+    await rejects(
+      () => companion.verifyManifest(copy),
+      'sources or build tools changed',
+    );
+    await javaSource.writeAsBytes(javaBytes);
     final buildScript = File(p.join(copy.path, 'build.dart'));
     final sourceBytes = buildScript.readAsBytesSync();
     await buildScript.writeAsString('// altered\n', mode: FileMode.append);
@@ -153,6 +175,16 @@ Future<void> main(List<String> arguments) => cli(() async {
       'sources or build tools changed',
     );
     await common.writeAsBytes(commonBytes);
+    final repositoryToolingBytes = repositoryTooling.readAsBytesSync();
+    await repositoryTooling.writeAsString(
+      '// altered repository locator\n',
+      mode: FileMode.append,
+    );
+    await rejects(
+      () => companion.verifyManifest(copy),
+      'sources or build tools changed',
+    );
+    await repositoryTooling.writeAsBytes(repositoryToolingBytes);
     await jar.writeAsString('altered');
     await rejects(() => companion.verifyManifest(copy), 'JAR differs');
 
@@ -181,6 +213,6 @@ Future<void> main(List<String> arguments) => cli(() async {
     }
   });
   stdout.writeln(
-    'PASS: pinned ZIP bytes, duplicate ZIP/min-api rejection, manifest script/shared-tool/JAR drift, archive traversal and symbolic links',
+    'PASS: pinned ZIP bytes, duplicate ZIP/min-api rejection, manifest script/shared-tool/repository-tool/JAR drift, archive traversal and symbolic links',
   );
 });

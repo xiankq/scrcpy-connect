@@ -32,19 +32,20 @@ Binder 调用使用真实 `com.android.shell` 归因；旧系统仅在已知签�
 先在根目录 `flutter pub get`。构建使用JDK 21、SDK 36、build-tools 37.0.0；完整输入和摘要以 `manifest.json` 为准。
 
 ```sh
-dart servers/companion/build.dart
-dart servers/companion/build.dart --check
-dart servers/companion/tests/compatibility.dart
-dart servers/package.dart
+dart --disable-dart-dev servers/companion/build.dart
+dart --disable-dart-dev servers/companion/build.dart --check
+dart --disable-dart-dev servers/companion/build.dart --rebuild
+dart --disable-dart-dev servers/companion/tests/compatibility.dart
+dart --disable-dart-dev servers/package.dart
 ```
 
-`--check` 校验输入/产物摘要并在临时目录重建逐字节比较。修改源码或构建脚本后提交重建JAR、manifest及共享打包结果，规则见[工具链](../../docs/implementation/repository-tooling.md)。兼容测试检查旧AIDL、进程等待和API 21字节码边界，不证明OEM权限。
+`--check` 离线核对完整 Java 源码、构建脚本及共用工具来源、工具链参数与 JAR 摘要，不需要 Android SDK。`--rebuild` 使用固定工具链在临时目录重建并逐字节比较，不替换 JAR 或 manifest。无参数构建更新 JAR 和 manifest；修改源码或构建脚本后提交实际重建结果及共享打包结果，规则见[工具链](../../docs/implementation/repository-tooling.md)。兼容测试检查旧AIDL、进程等待和API 21字节码边界，不证明OEM权限。
 
 主机协议与应用所有权回归从 `app/` 运行 `flutter test test/companion`，不代表真实 Android Binder 验收。设备探针只使用已授权的隔离 AVD：
 
 ```sh
 bash servers/companion/tests/build-fixture.sh
-dart servers/companion/tests/android-probe.dart \
+dart --disable-dart-dev servers/companion/tests/android-probe.dart \
   --adb "$ANDROID_ADB" --serial emulator-5556 --calls --skip-receiver
 ```
 
@@ -53,7 +54,7 @@ dart servers/companion/tests/android-probe.dart \
 通知快照回归先构建[通知夹具](../../tool/e2e/notification_fixture/README.md)，再运行：
 
 ```sh
-dart servers/companion/tests/notification-snapshot.dart \
+dart --disable-dart-dev servers/companion/tests/notification-snapshot.dart \
   --adb <absolute-adb-path> --serial emulator-5556
 ```
 

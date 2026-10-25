@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 
-import '../src/architecture.dart';
+import '../../src/architecture.dart';
 
 void main() {
   late Directory root;

@@ -33,41 +33,15 @@ Future<void> main(List<String> arguments) => cli(() async {
     'test',
     'ScrcpyApi21Probe.java',
   );
-  final android = p.join(sdk.path, 'platforms', 'android-36', 'android.jar');
   await withTemporary('scrcpy-api21-probe-', (work) async {
-    await run(javaTool('javac'), [
-      '-source',
-      '8',
-      '-target',
-      '8',
-      '-classpath',
-      android,
-      '-d',
-      work.path,
-      source,
-    ], echo: true);
-    await run(
-      p.join(
-        sdk.path,
-        'build-tools',
-        '37.0.0',
-        Platform.isWindows ? 'd8.bat' : 'd8',
-      ),
-      [
-        '--min-api',
-        '21',
-        '--lib',
-        android,
-        '--output',
-        work.path,
-        ...files(work, '.class').map((file) => file.path),
-      ],
-      echo: true,
+    final classes = await compileJava(
+      work: work,
+      sources: [File(source)],
+      sdk: sdk,
     );
+    final dex = await compileDex(work: work, classes: classes, sdk: sdk);
     await output.writeAsBytes(
-      storedZip({
-        'classes.dex': File(p.join(work.path, 'classes.dex')).readAsBytesSync(),
-      }, date: DateTime.utc(1980)),
+      storedZip({'classes.dex': dex}, date: DateTime.utc(1980)),
     );
   });
   stdout.writeln(output.path);

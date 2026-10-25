@@ -42,6 +42,15 @@ void _rejectApplicationBridge(Iterable<File> files) {
   )) {
     throw StateError('Bundle contains the removed application bridge');
   }
+  if (files.any(
+    (file) =>
+        RegExp(r'^(?:lib)?interop_adb_bridge(?:\.|$)')
+            .hasMatch(p.basename(file.path)),
+  )) {
+    throw StateError(
+      'Release bundle duplicates the composed scrcpy ADB runtime',
+    );
+  }
 }
 
 void verifyWindows(Directory bundle) {
@@ -52,7 +61,6 @@ void verifyWindows(Directory bundle) {
   for (final name in [
     'scrcpy_connect.exe',
     'flutter_windows.dll',
-    'interop_adb_bridge.dll',
     'interop_scrcpy_bridge.dll',
     'media_codec_plugin.dll',
     'adb.exe',
@@ -120,13 +128,12 @@ void verifyMedia(Directory bundle) {
   }
 }
 
-void verifyLinux(Directory bundle) {
+Future<void> verifyLinux(Directory bundle) async {
   final files = bundleFiles(bundle).toList();
   _rejectApplicationBridge(files);
   for (final name in [
     'scrcpy_connect',
     'libflutter_linux_gtk.so',
-    'libinterop_adb_bridge.so',
     'libinterop_scrcpy_bridge.so',
     'libmedia_codec_plugin.so',
     'adb',
@@ -161,7 +168,7 @@ void verifyLinux(Directory bundle) {
   for (final file in entries) {
     final canonical = file.resolveSymbolicLinksSync();
     if (resolved.contains(canonical)) continue;
-    final linkage = runTool(
+    final linkage = await runTool(
       ['ldd', file.path],
       quiet: true,
       environment: const {'LD_LIBRARY_PATH': ''},
@@ -209,12 +216,12 @@ void installMediaNotices(Directory bundle, String platform) {
   );
 }
 
-String bundleExecutable(File plist) {
+Future<String> bundleExecutable(File plist) async {
   final bytes = plist.readAsBytesSync();
   if (bytes.length >= 6 &&
       ascii.decode(bytes.take(6).toList(), allowInvalid: true) == 'bplist') {
     // 二进制 plist 属于 Apple 原生构建输出，plutil 同时支持两种编码。
-    final result = runTool([
+    final result = await runTool([
       'plutil',
       '-convert',
       'json',
@@ -237,15 +244,17 @@ String bundleExecutable(File plist) {
   throw const FormatException('Info.plist lacks CFBundleExecutable');
 }
 
-void verifyApple(Directory bundle, String platform) {
+Future<void> verifyApple(Directory bundle, String platform) async {
   final contents = platform == 'macos'
       ? Directory(p.join(bundle.path, 'Contents'))
       : bundle;
-  final name = bundleExecutable(File(p.join(contents.path, 'Info.plist')));
+  final name = await bundleExecutable(
+    File(p.join(contents.path, 'Info.plist')),
+  );
   final binary = platform == 'macos'
       ? p.join(contents.path, 'MacOS', name)
       : p.join(contents.path, name);
-  runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', binary]);
+  await runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', binary]);
   final files = bundleFiles(contents).toList();
   _rejectApplicationBridge(files);
   if (!files.any(
@@ -255,7 +264,7 @@ void verifyApple(Directory bundle, String platform) {
   )) {
     throw StateError('Apple bundle lacks its Flutter engine');
   }
-  for (final name in ['interop_adb_bridge', 'interop_scrcpy_bridge']) {
+  for (final name in ['interop_scrcpy_bridge']) {
     final rust = files
         .where(
           (file) =>
@@ -267,13 +276,17 @@ void verifyApple(Directory bundle, String platform) {
       throw StateError('Apple bundle lacks its Rust capability library: $name');
     }
     for (final library in rust) {
-      runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', library.path]);
+      await runTool(['xcrun', 'lipo', '-verify_arch', 'arm64', library.path]);
     }
   }
   verifyMedia(bundle);
 }
 
-void archiveBundle(Directory bundle, String platform, Directory artifacts) {
+Future<void> archiveBundle(
+  Directory bundle,
+  String platform,
+  Directory artifacts,
+) async {
   artifacts.createSync(recursive: true);
   if (platform == 'windows') {
     final archive = Archive();
@@ -294,7 +307,7 @@ void archiveBundle(Directory bundle, String platform, Directory artifacts) {
   } else {
     // 原生 tar 保留执行权限与 framework 符号链接；不遍历 framework 链接，也不用普通文件字节重建归档。
     //
-    runTool([
+    await streamTool([
       'tar',
       '-czf',
       p.join(artifacts.absolute.path, '$platform-release.tar.gz'),
@@ -305,7 +318,7 @@ void archiveBundle(Directory bundle, String platform, Directory artifacts) {
   }
 }
 
-void main(List<String> arguments) {
+Future<void> main(List<String> arguments) async {
   try {
     final parser = ArgParser()
       ..addFlag('verify-only', negatable: false)
@@ -326,7 +339,7 @@ void main(List<String> arguments) {
     final platform = args.rest.single;
     final application = applicationRoot(root);
     if (!(args['verify-only'] as bool)) {
-      runTool([
+      await streamTool([
         executable('flutter') ?? 'flutter',
         'build',
         platform,
@@ -347,7 +360,7 @@ void main(List<String> arguments) {
         p.join(application.path, 'build/linux/x64/release/bundle'),
       );
       if (!(args['verify-only'] as bool)) installMediaNotices(bundle, platform);
-      verifyLinux(bundle);
+      await verifyLinux(bundle);
     } else {
       final directory = Directory(
         p.join(
@@ -367,9 +380,9 @@ void main(List<String> arguments) {
       }
       bundle = bundles.single;
       if (!(args['verify-only'] as bool)) installMediaNotices(bundle, platform);
-      verifyApple(bundle, platform);
+      await verifyApple(bundle, platform);
     }
-    archiveBundle(
+    await archiveBundle(
       bundle,
       platform,
       Directory(p.join(root.path, 'build/verified')),

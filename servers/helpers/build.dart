@@ -22,6 +22,8 @@ Map<String, String> inputs(Directory root) => {
     'rust/adb/device_fs_helper/src/main.rs',
     'servers/helpers/build.dart',
     'servers/tooling.dart',
+    'tool/src/repository_tooling.dart',
+    'tool/src/process.dart',
   ])
     name: digest(File(p.join(root.path, name))),
 };
@@ -127,7 +129,7 @@ Future<void> main(List<String> arguments) => cli(() async {
       final (target, linker) = entry.value;
       environment['CARGO_TARGET_${target.toUpperCase().replaceAll('-', '_')}_LINKER'] =
           p.join(toolchain, linker);
-      await run(
+      await runBuild(
         cargo,
         [
           '+1.99.1',
@@ -141,7 +143,6 @@ Future<void> main(List<String> arguments) => cli(() async {
         ],
         cwd: root,
         environment: environment,
-        echo: true,
       );
       final candidate = File(
         p.join(

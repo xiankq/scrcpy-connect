@@ -19,9 +19,9 @@ Stdout is one bounded JSON result (`protocol:1`, `ok`, `errno`); paths are not p
 After root `flutter pub get`, use Rust 1.99.1, NDK 30.0.16248370 and Android targets aarch64, armv7, x86_64 and i686. `ANDROID_NDK_HOME` may select another installation of that pinned NDK.
 
 ```sh
-dart servers/helpers/build.dart
-dart servers/helpers/build.dart --check
-dart servers/helpers/build.dart --rebuild
+dart --disable-dart-dev servers/helpers/build.dart
+dart --disable-dart-dev servers/helpers/build.dart --check
+dart --disable-dart-dev servers/helpers/build.dart --rebuild
 cargo +1.99.1 test --locked --manifest-path rust/adb/device_fs_helper/Cargo.toml
 ```
 

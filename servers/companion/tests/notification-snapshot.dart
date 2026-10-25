@@ -62,7 +62,7 @@ class SnapshotProbe extends transport.Probe {
         remaining,
         onTimeout: () => throw StateError('No Binder invalidation for $phase'),
       );
-      events.add(event);
+      recordEvent(event);
       if (event['event'] != 'notifications.changed') continue;
       final snapshot = event['data'] as transport.Json;
       if (snapshot['observationEpoch'] != 1 ||
@@ -84,11 +84,11 @@ class SnapshotProbe extends transport.Probe {
       (existing.stdout as String).trim().isEmpty,
       'Refusing an existing fixture installation',
     );
+    installed = true;
     await adb([
       'install',
       '/tmp/connect-notification-fixture/notification-fixture.apk',
     ]);
-    installed = true;
     await adb([
       'shell',
       'pm',

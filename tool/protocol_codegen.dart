@@ -137,25 +137,25 @@ String dartSource(Map<String, dynamic> schema) {
   return '${lines.join('\n')}\n';
 }
 
-String formatted(String source) {
+Future<String> formatted(String source) async {
   final work = Directory.systemTemp.createTempSync('protocol-format-');
   try {
     final input = File(p.join(work.path, 'generated.dart'))
       ..writeAsStringSync(source);
-    return runTool([
+    return (await runTool([
           dartExecutable,
           'format',
           '--output=show',
           '--summary=none',
           input.path,
-        ], quiet: true).stdout
+        ], quiet: true)).stdout
         as String;
   } finally {
     work.deleteSync(recursive: true);
   }
 }
 
-void main(List<String> arguments) {
+Future<void> main(List<String> arguments) async {
   try {
     final parser = ArgParser()
       ..addFlag('check', negatable: false)
@@ -173,7 +173,7 @@ void main(List<String> arguments) {
     final check = args['check'] as bool;
     final schema = loadSchema();
     final outputs = {
-      'app/lib/application/transport/commands_generated.dart': formatted(
+      'app/lib/application/transport/commands_generated.dart': await formatted(
         dartSource(schema),
       ),
     };

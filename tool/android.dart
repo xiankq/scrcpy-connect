@@ -1,17 +1,16 @@
-/// 本机签名、通用发布构建与独立 APK 校验。
+/// 本机签名、按 ABI 发布构建与独立 APK 校验。
 library;
 
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:archive/archive.dart';
 import 'package:args/args.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import 'src/repository_tooling.dart';
-import 'packaged_servers.dart';
+import 'src/apk.dart';
 
 final root = repositoryRoot();
 const platforms = {
@@ -22,12 +21,18 @@ const platforms = {
     'android-arm,android-arm64,android-x64',
     ['armeabi-v7a', 'arm64-v8a', 'x86_64'],
   ),
+  'split': (
+    'android-arm,android-arm64,android-x64',
+    ['armeabi-v7a', 'arm64-v8a', 'x86_64'],
+  ),
 };
 
-void privateFile(File file, List<int> contents) {
+Future<void> privateFile(File file, List<int> contents) async {
   file.createSync(exclusive: true);
   try {
-    if (!Platform.isWindows) runTool(['chmod', '600', file.path], quiet: true);
+    if (!Platform.isWindows) {
+      await runTool(['chmod', '600', file.path], quiet: true);
+    }
     file.writeAsBytesSync(contents);
   } on Object {
     file.deleteSync();
@@ -35,7 +40,7 @@ void privateFile(File file, List<int> contents) {
   }
 }
 
-void initializeSigning({Directory? android}) {
+Future<void> initializeSigning({Directory? android}) async {
   android ??= Directory(p.join(applicationRoot(root).path, 'android'));
   final properties = File(p.join(android.path, 'key.properties'));
   if (properties.existsSync()) {
@@ -64,7 +69,7 @@ void initializeSigning({Directory? android}) {
   final work = key.parent.createTempSync('signing-');
   try {
     final candidate = File(p.join(work.path, p.basename(key.path)));
-    runTool(
+    await runTool(
       [
         keytool,
         '-genkeypair',
@@ -90,12 +95,12 @@ void initializeSigning({Directory? android}) {
       environment: {'CONNECT_LOCAL_KEY_PASSWORD': password},
       secret: true,
     );
-    privateFile(key, candidate.readAsBytesSync());
+    await privateFile(key, candidate.readAsBytesSync());
   } finally {
     work.deleteSync(recursive: true);
   }
   try {
-    privateFile(
+    await privateFile(
       properties,
       utf8.encode(
         '# Machine-local sideload signing identity. Keep both files backed up privately.\n'
@@ -175,114 +180,35 @@ void initializeSigning({Directory? android}) {
   );
 }
 
-/// 调用 SDK 工具前校验归档；保留独立入口，便于在没有 SDK 时拒绝损坏的原生库。
-///
-List<String> verifyApkArchive(List<int> bytes, [List<String>? expectedAbis]) {
-  final decoder = ZipDecoder();
-  final archive = decoder.decodeBytes(bytes, verify: true);
-  // archive 4 的 decodeBytes(verify: true) 不校验条目 CRC；在 archive.files 隐藏同名条目前检查原始目录，同时核验解压字节及中央目录/本地头的 CRC。
-  //
-  //
-  final names = <String>{};
-  for (final header in decoder.directory.fileHeaders) {
-    if (!names.add(header.filename)) {
-      throw StateError('Duplicate APK entry: ${header.filename}');
-    }
-    final file = header.file;
-    if (file == null || header.crc32 != file.crc32 || !file.verifyCrc32()) {
-      throw StateError('Corrupt APK entry: ${header.filename}');
-    }
-  }
-  final entries = {for (final entry in archive.files) entry.name: entry};
-  if (entries.keys.any(
-    (name) => p.posix.basename(name) == 'libinterop_bridge.so',
-  )) {
-    throw StateError('APK contains the removed application bridge');
-  }
-  for (final required in [
-    'AndroidManifest.xml',
-    'classes.dex',
-    'resources.arsc',
-  ]) {
-    if (!entries.containsKey(required)) {
-      throw StateError(
-        'APK lacks $required; use the final APK, not an intermediate ZIP.',
-      );
-    }
-  }
-  final abis =
-      entries.keys
-          .where((name) => name.startsWith('lib/') && name.endsWith('.so'))
-          .map((name) => name.split('/')[1])
-          .toSet()
-          .toList()
-        ..sort();
-  if (abis.isEmpty) {
-    throw StateError('APK lacks native libraries for any supported ABI.');
-  }
-  if (expectedAbis != null &&
-      (abis.length != expectedAbis.toSet().length ||
-          !abis.toSet().containsAll(expectedAbis))) {
-    throw StateError('APK ABIs $abis differ from requested $expectedAbis.');
-  }
-  const headers = {
-    'armeabi-v7a': (1, 40),
-    'arm64-v8a': (2, 183),
-    'x86_64': (2, 62),
-  };
-  for (final abi in abis) {
-    final expected = headers[abi];
-    if (expected == null) {
-      throw StateError('Unsupported packaged native architecture: $abi');
-    }
-    for (final library in [
-      'libflutter.so',
-      'libapp.so',
-      'libinterop_adb_bridge.so',
-      'libinterop_scrcpy_bridge.so',
-    ]) {
-      final name = 'lib/$abi/$library';
-      if (library == 'libapp.so' && !entries.containsKey(name)) {
-        if (entries.containsKey('assets/flutter_assets/kernel_blob.bin')) {
-          continue;
-        }
-        throw StateError('Release APK lacks its Dart AOT library: $name');
-      }
-      final header = entries[name]?.content.take(20).toList();
-      if (header == null ||
-          header.length != 20 ||
-          header[0] != 0x7f ||
-          header[1] != 0x45 ||
-          header[2] != 0x4c ||
-          header[3] != 0x46 ||
-          header[4] != expected.$1 ||
-          header[5] != 1 ||
-          (header[18] | header[19] << 8) != expected.$2) {
-        throw StateError('Invalid packaged native architecture: $name');
-      }
-    }
-  }
-  verifyPackagedServers(archive, root);
-  return abis;
-}
-
-Map<String, Object> verifyApk(File input, [List<String>? expectedAbis]) {
+Future<Map<String, Object>> verifyApk(
+  File input, [
+  List<String>? expectedAbis,
+]) async {
   final apk = File(input.resolveSymbolicLinksSync());
   final tools = sdkTools();
   final bytes = apk.readAsBytesSync();
-  final abis = verifyApkArchive(bytes, expectedAbis);
+  final inspection = inspectApk(
+    bytes,
+    repository: root,
+    expectedAbis: expectedAbis,
+  );
   final signature =
-      runTool([
+      (await runTool([
             tools.$1,
             'verify',
             '--verbose',
             '--print-certs',
             apk.path,
-          ], quiet: true).stdout
+          ], quiet: true)).stdout
           as String;
-  runTool([tools.$3, '-c', '-P', '16', '-v', '4', apk.path], quiet: true);
+  await runTool([tools.$3, '-c', '-P', '16', '-v', '4', apk.path], quiet: true);
   final badging =
-      runTool([tools.$2, 'dump', 'badging', apk.path], quiet: true).stdout
+      (await runTool([
+            tools.$2,
+            'dump',
+            'badging',
+            apk.path,
+          ], quiet: true)).stdout
           as String;
   final lines = const LineSplitter().convert(badging);
   final package = lines
@@ -298,7 +224,8 @@ Map<String, Object> verifyApk(File input, [List<String>? expectedAbis]) {
     'apk': apk.path,
     'bytes': bytes.length,
     'sha256': sha256.convert(bytes).toString(),
-    'abis': abis,
+    'abis': inspection.abis,
+    'size': inspection.toJson(),
     'package': package,
     'signatureVerified': true,
     'zipIntegrityVerified': true,
@@ -314,13 +241,13 @@ Map<String, Object> verifyApk(File input, [List<String>? expectedAbis]) {
   return receipt;
 }
 
-void buildApk({
+Future<void> buildApk({
   String mode = 'release',
-  String abi = 'universal',
+  String abi = 'split',
   bool noPub = false,
   bool compressNative = true,
   Directory? application,
-}) {
+}) async {
   application ??= applicationRoot(root);
   final android = Directory(p.join(application.path, 'android'));
   if (mode == 'release' &&
@@ -350,29 +277,33 @@ void buildApk({
   final platform = platforms[abi];
   if (platform == null) throw ArgumentError.value(abi, 'abi');
   final watch = Stopwatch()..start();
-  runTool([
+  await streamTool([
     flutter,
     'build',
     'apk',
     '--$mode',
     '--target-platform',
     platform.$1,
+    if (abi == 'split') '--split-per-abi',
     '-Pcompress-native-libs=$compressNative',
     if (noPub) '--no-pub',
   ], cwd: application);
   watch.stop();
-  verifyApk(
-    File(
-      p.join(application.path, 'build/app/outputs/flutter-apk/app-$mode.apk'),
-    ),
-    platform.$2,
-  );
+  for (final architecture in abi == 'split' ? platform.$2 : [null]) {
+    final filename = architecture == null
+        ? 'app-$mode.apk'
+        : 'app-$architecture-$mode.apk';
+    await verifyApk(
+      File(p.join(application.path, 'build/app/outputs/flutter-apk', filename)),
+      architecture == null ? platform.$2 : [architecture],
+    );
+  }
   stdout.writeln(
     'Build wall time: ${(watch.elapsedMicroseconds / 1000000).toStringAsFixed(2)}s. Reuse .dart_tool/hooks_runner and Gradle caches between builds.',
   );
 }
 
-void main(List<String> arguments) {
+Future<void> main(List<String> arguments) async {
   try {
     ArgParser commandParser() =>
         ArgParser()..addFlag('help', abbr: 'h', negatable: false);
@@ -384,7 +315,8 @@ void main(List<String> arguments) {
           ..addOption(
             'abi',
             allowed: platforms.keys.toList(),
-            defaultsTo: 'universal',
+            defaultsTo: 'split',
+            help: 'Build separate installable APKs by default; universal is an explicit compatibility bundle.',
           )
           ..addOption(
             'mode',
@@ -417,12 +349,12 @@ void main(List<String> arguments) {
         if (command.rest.isNotEmpty) {
           throw ArgumentError('init-signing accepts no arguments');
         }
-        initializeSigning();
+        await initializeSigning();
       case 'build':
         if (command.rest.isNotEmpty) {
           throw ArgumentError('build accepts no positional arguments');
         }
-        buildApk(
+        await buildApk(
           mode: command['mode'] as String,
           abi: command['abi'] as String,
           noPub: command['no-pub'] as bool,
@@ -432,7 +364,7 @@ void main(List<String> arguments) {
         if (command.rest.length != 1) {
           throw ArgumentError('verify requires one APK path');
         }
-        verifyApk(File(command.rest.single));
+        await verifyApk(File(command.rest.single));
     }
   } on Object catch (error) {
     stderr.writeln('Android packaging failed: $error');

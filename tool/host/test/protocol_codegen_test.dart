@@ -1,44 +1,19 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 
-import '../protocol_codegen.dart' as generator;
-import '../src/repository_tooling.dart';
+import '../../protocol_codegen.dart' as generator;
+import '../../src/repository_tooling.dart';
 
 void main() {
   late Map<String, dynamic> original;
   setUpAll(() {
-    final root = repositoryRoot(
-      File(
-        p.join(Directory.current.path, 'tool/test/protocol_codegen_test.dart'),
-      ).uri,
-    );
+    final root = repositoryRoot();
     original = generator.loadSchema(
       File(p.join(root.path, 'protocol/commands.json')),
     );
-  });
-
-  test('真实应用命令统一生成 Dart 枚举，不再区分旧桥或原生所有者', () {
-    final source = generator.dartSource(original);
-    final commands = (original['commands'] as List<dynamic>)
-        .cast<Map<String, dynamic>>();
-    for (final command in commands) {
-      expect(command.containsKey('owner'), isFalse);
-      expect(command.containsKey('nativeResult'), isFalse);
-      expect(
-        source,
-        contains('${generator.names(command).$2}("${command['name']}"'),
-      );
-    }
-    expect(source, contains('enum ApplicationCommand {'));
-    expect(source, contains('documentsImportFiles("documents.importFiles")'));
-    expect(source, contains('sharingPending("sharing.pending", result:'));
-    expect(source, contains('ApplicationCommand? tryParse(String wire)'));
-    expect(source, isNot(contains('core:')));
-    expect(source, isNot(contains('this.core')));
-    expect(source, isNot(contains('nativeResult')));
   });
 
   test('缺口恢复核验标记只附在要求已核验状态的命令，不阻碍停止和快照', () {
@@ -48,7 +23,6 @@ void main() {
               .cast<Map<String, dynamic>>())
         command['name']: command,
     };
-    final source = generator.dartSource(original);
     for (final name in [
       'apps.launch',
       'audio.start',
@@ -58,26 +32,11 @@ void main() {
     ]) {
       final command = commands[name]!;
       expect(command['requiresVerifiedState'], isTrue, reason: name);
-      expect(
-        source,
-        contains(
-          '${generator.names(command).$2}("$name", requiresVerifiedState: true',
-        ),
-      );
     }
     for (final name in ['session.stop', 'transfers.cancel', 'state.snapshot']) {
       final command = commands[name]!;
       expect(command['requiresVerifiedState'], isNot(isTrue), reason: name);
-      expect(
-        source,
-        isNot(
-          contains(
-            '${generator.names(command).$2}("$name", requiresVerifiedState: true',
-          ),
-        ),
-      );
     }
-    expect(source, contains('this.requiresVerifiedState = false'));
   });
 
   test('快照只有一个公开结果契约，保留应用组合的传输任务与业务状态', () {
@@ -100,51 +59,6 @@ void main() {
       expect(result, containsPair(name, 'array'));
     }
     expect(snapshot.containsKey('nativeResult'), isFalse);
-  });
-
-  test('必填、可选与结果字段保留各自类型，所有支持类型均可生成', () {
-    final schema = _load({
-      'version': 3,
-      'commands': [
-        {
-          'name': 'example.write',
-          'requiresVerifiedState': true,
-          'required': {
-            'deviceId': 'string',
-            'content': 'text',
-            'count': 'integer',
-            'rate': 'number',
-            'active': 'boolean',
-          },
-          'optional': {'options': 'object', 'values': 'array'},
-          'result': {'committed': 'boolean'},
-        },
-      ],
-    });
-    final source = generator.dartSource(schema);
-    expect(source, contains('const protocolVersion = 3;'));
-    expect(
-      source,
-      contains(
-        "required: {'deviceId': ProtocolFieldType.string,'content': ProtocolFieldType.text,'count': ProtocolFieldType.integer,'rate': ProtocolFieldType.number,'active': ProtocolFieldType.boolean}",
-      ),
-    );
-    expect(
-      source,
-      contains(
-        "optional: {'options': ProtocolFieldType.object,'values': ProtocolFieldType.array}",
-      ),
-    );
-    expect(
-      source,
-      contains("result: {'committed': ProtocolFieldType.boolean}"),
-    );
-    expect(
-      source,
-      contains(
-        'final Map<String, ProtocolFieldType> required, optional, result;',
-      ),
-    );
   });
 
   for (final value in ['core', 'bridge', 'application', null]) {

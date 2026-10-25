@@ -1,7 +1,7 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
-import '../support.dart';
-import '../video_fixture/analyze_codec_trace.dart';
+import '../../e2e/support.dart';
+import '../../e2e/video_fixture/analyze_codec_trace.dart';
 
 void main() {
   late Json receipt;

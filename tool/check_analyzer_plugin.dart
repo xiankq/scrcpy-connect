@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import 'src/host.dart';
+import 'src/process.dart';
 
 const source = '''import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -14,7 +15,7 @@ class InvalidNotifier extends Notifier<int> {
 }
 ''';
 
-void main() {
+Future<void> main() async {
   Directory? temporary;
   try {
     final application = applicationRoot();
@@ -23,11 +24,12 @@ void main() {
         .createTempSync('lint_smoke_');
     final fixture = File(path.join(temporary.path, 'lint_smoke.dart'))
       ..writeAsStringSync(source);
-    final result = Process.runSync(Platform.resolvedExecutable, [
-      'analyze',
-      '--fatal-infos',
-      fixture.path,
-    ], workingDirectory: application.path);
+    final result = await runProcess(
+      Platform.resolvedExecutable,
+      ['analyze', '--fatal-infos', fixture.path],
+      workingDirectory: application.path,
+      timeout: const Duration(minutes: 3),
+    );
     final output = '${result.stdout}\n${result.stderr}';
     if (!output.toLowerCase().contains('avoid_public_notifier_properties')) {
       throw StateError(

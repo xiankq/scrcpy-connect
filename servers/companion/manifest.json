@@ -4,9 +4,10 @@
     "size": 64079
   },
   "sources": {
-    "../tooling.dart": "de4f8837de9e57a9d9d9a81c7169dd653a6c69d2c6c0bb58558928ddf0e1425a",
-    "build.dart": "f89815d014c52789f6108ae0e82b2e9f79ec3854e6c7f9fa089d376a366d4316",
-    "build.sh": "620b1c0fb01bd36ae5b714be11b36f0d1fb4e04aa6937d517fa33cb13096cfeb",
+    "../../tool/src/process.dart": "f5cb0980ecb91c494212bad6fa3bc0b5ea85b6fbe5352a5a8455239a7998ff1b",
+    "../../tool/src/repository_tooling.dart": "05935da803615c7b1ba61df2d4f315bfb8b65c28a8a7101a058137415ff3b20c",
+    "../tooling.dart": "74b65f3f5e59f95cdeb4e0bb9fec12c890c221d4ea3d125abb545ef7bec2cf68",
+    "build.dart": "5ec3e47c21bde7e899e85a9158cb23c083b104818a90d812777ccd38a89d0840",
     "src/com/interop/companion/Apps.java": "f238c2eb58ffce8b76ef49b97df4282f31c73bc0120126b6e20461952d03bd8d",
     "src/com/interop/companion/CallServices.java": "a243408560aa4740c6a4d1c393dc5812ec778d80a7c974e14cbfc8f25091e0f7",
     "src/com/interop/companion/ClipboardAppOps.java": "fa5dadfe94d51db41930ca2903c844bf394fc4e06b335707f056db584b8383a7",

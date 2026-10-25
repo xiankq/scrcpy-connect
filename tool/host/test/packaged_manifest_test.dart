@@ -1,6 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
-import '../check_android.dart';
+import '../../check_android.dart';
 
 const manifest =
     '''<manifest xmlns:android="http://schemas.android.com/apk/res/android">
