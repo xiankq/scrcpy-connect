@@ -1,6 +1,6 @@
 # Android input and lifecycle fixture
 
-`dart tool/e2e/input_fixture/build.dart` writes the independent APK/classes/key to `/tmp/connect-input-fixture`. `InputReceiverActivity` records real input delivery. The same archive's `ActivityLifecycle` shell entrypoint calls ActivityManager `setAlwaysFinish`; changing only the settings database cannot force recreation.
+`dart tool/e2e/input_fixture/build.dart` writes the independent APK/classes/key to `/tmp/connect-input-fixture`. `InputReceiverActivity` records real input delivery. `ActivityLifecycle` calls real `setAlwaysFinish`, not just the settings database.
 
 For a dedicated authorized controller/target, run:
 
@@ -19,4 +19,4 @@ env CONNECT_E2E_DEVICE=emulator-5554 \
   --dart-define=CONNECT_E2E_AUDIO_LIFECYCLE=true
 ```
 
-The driver pushes the archive to a unique target path without installation, checks a new Activity in the same PID/isolate with policy-correct audio clocks/FGS, then restores the prior runtime/database setting and removes the archive. This does not cover process death, Doze or physical speakers.
+The driver restores the original Activity setting and removes its archive. Use a dedicated authorized target; this covers Activity recreation, not process death or audible output.

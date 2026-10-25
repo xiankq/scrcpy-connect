@@ -1,16 +1,12 @@
-# 互联产品设计
+# 产品规格
 
-本目录维护需要随项目长期保存的产品规则：范围、对象归属、默认行为、失败恢复与验收要求。术语见根目录[词表](../../GLOSSARY.md)，视觉与组件语义见 [design.md](../design.md)，设计源稿为 [mobile.pen](../mobile.pen)。
-
-| 文档 | 修改或核对这些内容时阅读 |
+| 文档 | 内容 |
 | --- | --- |
-| [功能取舍](scope.md) | 产品定位、专用功能页与原应用接续、退出范围 |
-| [平台与能力边界](compatibility.md) | 主控与被控条件、局部功能门槛、权限与隐私、当前交付限制 |
-| [信息架构](information-architecture.md) | 全局导航、设备工作台、设置归属与大屏结构 |
-| [设备与连接设计](device-connection.md) | 设备身份、配对与连接、表单校验、两端授权、断开与移除 |
-| [内容与传输](content-and-transfer.md) | 文件与相册范围、搜索、传输冲突、系统保存／分享、原件与暂存保护 |
-| [用户流程与页面对应](user-flows.md) | 任务路径、搜索与相册流程、代表设计状态定位 |
-| [交互规则](interaction-rules.md) | 远控返回与退出、窗口生命周期、声音、剪贴板、提交保护与恢复 |
-| [流程覆盖](coverage.md) | 各流程已有代表状态、缺口及验收边界 |
+| [功能取舍](scope.md) | 专用功能、原应用接续与退出范围 |
+| [平台与能力](compatibility.md) | 功能门槛与当前限制 |
+| [信息架构](information-architecture.md) | 导航、设备工作台与设置归属 |
+| [设备与连接](device-connection.md) | 添加、授权、配置及身份 |
+| [内容与传输](content-and-transfer.md) | 文件、相册、传输及系统交付 |
+| [交互规则](interaction-rules.md) | 远控、声音、剪贴板、通知与恢复 |
 
-现行规则只在责任正文维护；研究与验收记录提供版本证据，不承担产品规范。Pencil Frame 可表示页面、局部状态或授权示意，不与路由一一对应。交付判断见[验收依据](coverage.md#验收依据)。
+术语见[词表](../../GLOSSARY.md)，视觉见 [design.md](../design.md)，源稿为 [mobile.pen](../mobile.pen)。Pencil 定位入口：设备 `lUDPa`、工作台 `nqQEb`、添加 `W3GRn`、远控 `DtZbX`、文件 `MaHXL`、相册 `RqDYL`、通知 `a7A57`、设置 `w6WUAT`；其他状态通过源稿对象查找。Frame 不等于路由，设计状态不等于已交付功能。

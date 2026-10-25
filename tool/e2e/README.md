@@ -1,22 +1,11 @@
-# Host E2E tools
+# 设备夹具
 
-Run root `flutter pub get` first. Host builders/analyzers use the locked Dart workspace; pure host tests use the independent `tool/host` package and do not invoke Flutter or native hooks; Flutter device tests run from `app/` with `--driver=../tool/driver/<entry>.dart` and `--target=integration_test/<entry>.dart` (benchmarks use `../tool/benchmark/`). See each fixture README for device isolation and required variables.
+根目录先 `flutter pub get`；构建不安装 APK。支持 video、audio-focus、input、share、notification、content-delivery：
 
 ```sh
 dart --disable-dart-dev tool/e2e/build_fixture.dart video
-(cd tool/host && dart pub get --enforce-lockfile && dart test e2e_test)
 ```
 
-Builder choices are `video`, `audio-focus`, `input`, `share`, `notification` and `content-delivery`. Their local `build.dart` wrappers share `--sdk`/`--output`. Source, SDK/JDK tool and signing-key identities control reuse; a changed or damaged APK is rebuilt. APKs and disposable keys default to system temporary storage; notification/content-delivery outputs must remain there. Building never installs a fixture.
+`--sdk/--output` 选择工具链与系统临时输出；输入和签名身份决定缓存复用。设备流程从 `app/` 运行，driver/target 成对选择；使用专用授权设备，仅清理本轮安装、文件与转发。
 
-| Analyzer under `video_fixture/` | Purpose |
-| --- | --- |
-| `analyze_codec_trace.dart` | Match raw-drain PTS to target CCodec callbacks |
-| `analyze_capture_slots.dart` | Reconstruct BufferQueue slot lifetimes/occupancy |
-| `analyze_first_counter.dart` | Select the earliest new counter from every raw-drain frame |
-
-Use `--help` for flags. Perfetto analysis requires official `trace_processor query`; counter decoding requires explicit host FFmpeg, microsecond showinfo PTS and exact 64×64 RGBA frames. Missing evidence fails rather than estimating.
-
-`capture_first_counter.dart` is a separate lab H264 drain: explicit `--adb`, `--target`, `--jar`, `--fixture` and new `--out` are required. It installs only an absent fixture on a dedicated authorized target and records cleanup. These raw-drain measurements do not qualify Flutter latency; use the [current benchmark](../../docs/implementation/video-performance.md).
-
-The standalone [Android tone source](audio_fixture/README.md) supplies explicit PCM input through `app_process`; it is separate from the APK builders and does not validate host playback.
+`video_fixture/` 下 trace/slot/counter 分析器使用 `--help`；Perfetto 需要官方 trace_processor，像素分析需要显式 FFmpeg。`capture_first_counter.dart` 是原始 H264 实验，不代表 Flutter 延迟；正式方法见[视频测量](../../docs/implementation/video-performance.md)。[音调夹具](audio_fixture/README.md)仅提供目标端 PCM 输入。

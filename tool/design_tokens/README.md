@@ -1,12 +1,6 @@
 # DESIGN.md → Flutter tokens
 
-`generate.mjs` uses the official `@google/design.md/linter` API at the locked
-version 0.4.0. The official parsed model is the only token input; no YAML parser,
-second token file, or hand-maintained token values are used. The upstream CLI
-does not export Dart, and its DTCG exporter omits component tokens, so this tool
-only supplies the Dart emitter.
-
-From the repository root (Node 18+ and the workspace Dart SDK must be on PATH):
+`generate.mjs` 使用锁定的官方 `@google/design.md/linter` 解析模型，仅补充 Dart emitter；视觉值唯一来自 `designs/design.md`。
 
 ```sh
 npm ci --ignore-scripts --prefix tool/design_tokens
@@ -16,29 +10,6 @@ npm test --prefix tool/design_tokens
 npm run lint --prefix tool/design_tokens
 ```
 
-Edit `designs/design.md`, then regenerate; never edit `design_tokens.g.dart`
-directly. Keep generated output and the npm lockfile with their source changes. `--check` regenerates and formats in memory, compares exact
-bytes, and fails without writing source files when output is missing or stale.
+需要 Node 18+ 与 workspace Dart SDK。修改规范后提交生成输出；`--check` 精确比较且不写文件。支持字段以 emitter 为准，未知键/单位或缺失消费常量会失败。
 
-The emitter supports colors including alpha, typography, spacing, rounding,
-and the explicit component property set in `generate.mjs`. Unknown keys,
-properties, unresolved tokens, unsupported units, missing typography fields,
-and missing constants consumed by `design_system.dart` fail generation.
-DESIGN.md `px` maps to Flutter logical pixels; other CSS units need an explicit
-future mapping. Unitless line heights must be quoted strings because the
-official 0.4.0 parser silently ignores YAML numeric line heights. Numeric
-spacing is rejected for the same reason.
-
-The generated font-family metadata describes the MiSans design draft only.
-Generated `TextStyle` values omit font families, so all runtime code inherits
-the framework and platform defaults as required by the specification's
-Typography section. All rendered font sizes, weights, line heights, and
-tracking come from generated constants.
-
-Official lint warnings remain visible: project optical/layout extensions are
-accepted by the explicit emitter contract, and official orphan-color checks
-only inspect DESIGN.md components rather than Flutter theme references.
-
-The emitter owns token translation only. Material backend selection and startup
-initialization belong to `design_system` and `app/lib/main.dart`; the static Pencil
-shader is not input to this generator. See the [toolchain contract](../../docs/implementation/repository-tooling.md).
+`px` 映射 Flutter 逻辑像素。官方 0.4.0 解析器忽略数值行高，故无单位行高须写带引号字符串；spacing 同样不用裸数值。字体族仅为设计稿元数据，生成 TextStyle 继承运行平台字体。官方 lint 对项目扩展和未引用颜色的警告保留可见。

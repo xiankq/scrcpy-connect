@@ -2,10 +2,8 @@
 status: accepted
 ---
 
-# 明确原生组合与宿主检查环境
+# 显式原生组合与独立工具测试环境
 
-ADB 的 Dart 类型依赖不应隐式选择原生运行时。`AdbHost` 必须接收 bindings；独立用户显式取得独立 ADB 实现，scrcpy 组合宿主使用同库实现。独立 ADB 桥继续作为能力包维护，但发布链接根据初始化入口的真实可达性决定是否分发；缺少可达性信息时保守保留。相比另设产品桥或跨动态库传递 Rust 对象，这保持了能力包的独立性和精确资源身份，同时避免主控应用重复携带 ADB、TLS、认证和文件实现。代价是维护 build/link hooks，并分别验证独立使用及组合使用。
+`AdbHost` 显式接收 bindings：独立用户选择独立实现，scrcpy 宿主使用同库实现，避免重复连接、跨动态库传对象及应用重复携带 ADB 栈。独立桥保留；build/link hooks 按初始化入口可达性决定发布，信息缺失则保留。代价是分别维护独立与组合使用。
 
-纯宿主工具测试使用独立 `tool/host/` Dart 环境与锁文件，不加入 Flutter workspace。现有 Flutter 固定的测试依赖与工具 analyzer 约束无法在同一解析中使用纯 Dart runner；继续使用 `flutter test` 又会编译无关原生 hooks。独立环境允许工具测试只承担 ZIP、生成、进程和主机协议夹具验证，不通过依赖 override 改写 Flutter 的测试契约。实际应用、原生能力和设备测试仍由各自入口负责。
-
-本决定补充 [0008](0008-reusable-packages-and-application-composition.md) 的原生组装及开发工具责任，具体构建规则见[工具链契约](../implementation/repository-tooling.md)。
+工具测试在独立 `tool/host/` Dart 环境及锁文件中运行。Flutter 固定测试依赖与工具 analyzer 不能共用解析，继续用 Flutter runner 会编译无关原生 hooks；隔离环境避免 override 改写应用依赖。构建规则见[工具链](../implementation/repository-tooling.md)。

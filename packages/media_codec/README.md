@@ -1,23 +1,17 @@
 # media_codec
 
-Native packet video decoding and 48kHz stereo signed-16 PCM output for Flutter. Exports `MediaCodecController`, `MediaCodecSource` and `MediaCodecView`; capture/ADB remain source-owned. There is no file player, demuxer, HTTP reader or encoder.
+Flutter 原生视频包解码与 48 kHz 双声道 signed-16 PCM 输出；不负责 ADB、捕获、文件播放或编码。
 
 ```dart
 final controller = MediaCodecController.video();
 await controller.open(source);
 final widget = MediaCodecView.controller(controller);
-// 元数据变化时根据 controller.events 刷新界面。
+// 根据 controller.events 刷新元数据；使用完后：
 await controller.dispose();
 ```
 
-Sources carry process-local IDs, generations and attach/detach capabilities; never persist or log their addresses. Compressed packets stay native. Source ABI v2 transfers packet ownership and producer wakeups; the borrowed v1 ABI remains compatible. Control/status use generated FFI; platform code owns textures, audio devices and destruction.
+来源 ID、代次和地址仅限本进程，不能持久化或写日志。压缩包留在原生通道；来源附着与播放器输出分别拥有生命周期。`dispose()` 等待已受理操作，销毁失败保留同一 controller 重试。
 
-`dispose()` 同步停止控制准入并等待已受理操作；平台销毁失败或明确未确认时，控制器保留原输出句柄，调用方须持有同一控制器重试。创建后的地址校验失败也沿用这份清理责任；销毁确认前不能把失败当成资源已退出。
+先挂载 texture，再等待 `waitForPresentation()`。解码、纹理准备、Flutter 合成与屏幕显示分别取证；硬解可用不表示本次选中硬解。快照是显式 RGBA 复制，PCM 接纳字节不证明声音可闻。单边解码尺寸上限 16384，不限制 scrcpy 协议表达范围。
 
-本机解码与像素转换的单边尺寸上限为 16384。解码器创建和两版来源 ABI 均核验该资源上限；所有权 ABI 拒绝输入时不接管负载。此限制属于本包，不作为 scrcpy 协议或设备显示能力的上限。
-
-System backends use MediaCodec, D3D11VA, VAAPI/CUDA or VideoToolbox with explicit software fallback, including libdav1d. Availability does not prove hardware selection or a copy-free path; reported component/verification describe actual output. Mount the texture before `waitForPresentation()` because import may require raster demand. Decoding, texture preparation, Flutter composition and scanout are distinct signals.
-
-PCM retains partial-write tails and uses actual device clocks for bounded drift correction; pause flushes queues. Accepted bytes do not prove audible output. Snapshots are explicit bounded RGBA copies, never an implicit open/resume readback.
-
-See [architecture](../../docs/implementation/architecture.md), [dependency/build contract](../../docs/implementation/repository-tooling.md), [native test setup](native/tests/README.md), and [platform validation](../../docs/implementation/validation.md).
+依赖与构建见[工具链](../../docs/implementation/repository-tooling.md)，真实原生测试见[native/tests](native/tests/README.md)，受控补丁及对应源码要求见[patches](third_party/patches/README.md)。

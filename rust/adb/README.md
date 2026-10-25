@@ -1,9 +1,6 @@
 # interop-adb
 
-Asynchronous ADB services with two transport backends:
-
-- Mobile connects directly to adbd over TCP or authorized USB.
-- Desktop selects `ConnectOptions::adb_server` or `Client::connect_server` and uses the bundled official server's smart socket. The host owns its process, binaries and identity directory. Device authentication and USB stay with official adb; failures never fall back to direct transport.
+Async ADB services over direct mobile TCP/authorized USB or the official desktop server. Desktop `Client::connect_server` pins transport IDs and never falls back to direct transport; the caller owns the server process and identity directory.
 
 ```rust,no_run
 use interop_adb::{Client, ConnectOptions, Identity, OperationOptions};
@@ -21,47 +18,28 @@ assert_eq!(output.stdout, b"hello");
 # }
 ```
 
-## Ownership and flow control
+## Ownership and protocol
 
-`Client` clones share a connection and multiplex independent streams. Incoming data is acknowledged as consumed. Dropping a stream closes it; dropping all connection/stream owners stops transport tasks. Operations carry deadlines and cancellation. Interrupted writes or failed sync operations close the affected stream; abandon an in-progress sync operation by dropping its sync object.
+`Client` clones share one multiplexed connection. Drop streams and sync objects to abandon their work; retain and close external writers before awaiting connection shutdown. Cancellation signals an operation; it does not itself prove resource release or remote rollback.
 
-Direct transport uses bounded queues: 64 ordinary data frames, 16 priority frames and 128 reader-generated control responses. `AdbStream::set_write_priority` selects the priority writer; ACKs/credit and same-stream ordering still apply. Control responses do not wait for data capacity; overflow closes the connection. Ordered close drains accepted frames, and closed routes reject late OPEN/WRTE. `max_payload` exposes the negotiated limit for batching complete fields, without bypassing flow control.
+Incoming data is acknowledged as consumed. Writes preserve stream order through bounded queues; priority cannot bypass already-sent frames or ACK credit. `burst_mode` defaults off and requires mutual delayed-ACK support. Legacy 1.0.0 retains checksums and negotiated payload bounds, including 4 KiB peers; USB preserves header/payload boundaries and ZLPs.
 
-Legacy ADB 1.0.0 retains checksums and its advertised payload limit, including 4 KiB peers. Modern negotiated frames omit payload checksums. USB preserves header/payload boundaries and required zero-length packets. Explicit authorization may reoffer the same key while a booting daemon's framework becomes ready, within the connection deadline.
-
-`ConnectOptions::burst_mode` defaults to false. Mutual `delayed_ack` support enables experimental byte-credit flow control; `Client::burst_mode()` reports negotiation. Empty OKAY replies are idempotent and do not accumulate future readiness. External connectors may use `from_negotiated_transport_with_burst` only after advertising the feature; the ordinary constructor uses classic framing. Existing connections are not renegotiated when preferences change.
-
-Burst streams reserve a 64 KiB receive window, one maximum-payload overshoot and bounded metadata; a connection caps reservations at 128 MiB. Reservations survive close until the tail is consumed or dropped. Partial reads return byte credit; signed deltas may temporarily make sender credit negative.
-
-## Connection health and diagnostics
-
-`ConnectOptions::tcp` defaults to nodelay, with keepalive and Android/Linux TCP user timeout disabled. These options affect only `connect_tcp`, not caller-supplied transports.
-
-`is_closed()` reports observed closure, not remote responsiveness. Compare `inbound_activity()` only for equality on the same connection: it advances on nonempty reads, including partial frames, and is neither a timestamp nor validated-frame count. Application health probes belong to callers.
-
-`AdbStream::set_read_trace_clock` enables constant-space diagnostics using a quick, non-reentrant monotonic microsecond clock. `read_trace()` retains the latest WRTE's payload-read start/completion, routing and first consumption in that clock domain. Partial reads retain the receipt sequence; several service packets may share it. Receipt timing excludes buffering before the ADB header. Replacing/disabling the clock discards stale metadata without discarding data; an in-flight call may finish on the old clock. With no subscribers, new WRTEs sample no clock and take no additional route lock.
+`is_closed()` is observed closure, not responsiveness. Compare `inbound_activity()` only for equality on the same connection. `tcp` options apply to `connect_tcp`, not supplied transports; keepalive and Android/Linux user timeout default off. Optional read tracing uses the caller's non-reentrant monotonic clock and excludes upstream buffering.
 
 ## Services
 
-| API | Contract |
+| API | Caller-visible contract |
 | --- | --- |
-| `shell` | Byte-preserving stdout/stderr; shell_v2 exit status, absent on legacy shell |
-| `shell_session` | Raw/PTY stdin, close-stdin, resize and cancellation-safe incremental output |
-| `cmd`, `abb`, `abb_exec` | Quoted shell arguments or Binder NUL-separated arguments |
-| `open`, `exec`, `connect_socket`, `reboot` | Raw streams, typed TCP/local/JDWP/vsock destinations and reboot targets |
-| `tcpip`, `usb`, `service_response` | Original bounded response bytes; no reconnect, record update or inferred success |
-| `sync` | Bounded streaming push/pull, 64-bit stat/list v2 and legacy fallbacks; byte paths, never shell interpolation |
-| `jdwp_processes`, `track_jdwp` | Initial or incremental length-framed updates, including empty lists; partial frames survive dropped reads. PIDs are not stable application identities |
+| `shell`, `shell_session` | Binary stdout/stderr and v2 exit/EOF/PTY resize; legacy output is merged with unknown exit |
+| `cmd`, `abb`, `abb_exec` | Shell quoting or Binder NUL-separated arguments |
+| `open`, `exec`, `connect_socket` | Raw streams; no generic stdin half-close |
+| `reboot`, `tcpip`, `usb`, `service_response` | Request/response only; caller handles reconnection |
+| `sync` | Streaming files, byte paths and explicit compression; no shell expansion |
+| `jdwp_processes`, `track_jdwp` | Bounded PID snapshots; PIDs are not app identities |
 
-`lstat` uses no-follow LST2 or legacy STAT. Legacy metadata has 32-bit size/time and cannot distinguish absence from permission failure. V2 errno replies use `Error::RemoteErrno { operation, errno }`. Android SELinux may deny metadata access to shell-created symlinks; such errors remain permission failures.
+Legacy STAT has 32-bit fields and cannot distinguish missing from denied. V2 reports `Error::RemoteErrno`. Compression uses bounded Brotli/LZ4/Zstd workers. An abandoned push does not synthesize DONE and may leave a remote partial. `dev:` is unsuitable for ordinary files: non-pollable FDs can abort adbd's epoll registration.
 
-`push_compressed`/`pull_compressed` use bounded Brotli/LZ4/Zstd workers. Push batches SEND/SND2, DATA and DONE into at most one negotiated-payload buffer and flushes before reading the reply; each DATA record remains at most 64 KiB. Other requests and interactive streams do not wait for batching. Abandonment discards pending bytes without synthesizing DONE.
-
-Generic `open` permits advanced services, but `dev:` is not a general file API: non-pollable descriptors can abort adbd's epoll registration. Use sync for files and low-level serial services only with known pollable devices and platform support.
-
-## Reverse connections
-
-`reverse_forward` creates a device TCP/Unix listener and bridges it to an explicit host TCP address. Port zero returns an allocated device port. Rebind/no-rebind, list and removal use `reverse:`; direct device OPENs are accepted only for random service names registered by this client. Both bridge directions progress under backpressure.
+## Reverse
 
 ```rust,no_run
 use interop_adb::{Client, OperationOptions, ReverseSocket};
@@ -75,35 +53,24 @@ client.reverse_remove(&binding.device, OperationOptions::default()).await?;
 # }
 ```
 
-Dropping `ReverseBinding` metadata does not remove the listener; remove it explicitly or disconnect. `reverse_remove_all` affects adbd's entire listener table, including other hosts.
+Dropping `ReverseBinding` metadata does not remove the listener; remove it or disconnect. `reverse_remove_all` affects all device listeners, including other hosts. The official backend removes only its own mappings on the original transport ID; typed `host:forward` is outside the API.
 
-The official-server backend instead owns bounded loopback listeners and `tcp:port` mappings. Cancellation closes listeners and removes only its matching mappings on the original transport ID. This differs from `host:forward`, which is outside the crate's typed API.
+## USB, TLS and discovery
 
-## USB, authorization and discovery
+The `usb` feature uses nusb. Android `usb::from_authorized_fd` duplicates an authorized FD; retain Java `UsbDeviceConnection` for the connection lifetime. Drivers and entitlements remain platform requirements; iOS supports TCP, not this USB backend.
 
-The default `usb` feature uses nusb's Android/Linux, WinUSB and IOKit backends. `usb::list_devices` and `UsbDevice::open` enumerate/open devices. Android obtains UsbManager permission and passes a `BorrowedFd` to `usb::from_authorized_fd`, which duplicates it; retain the Java UsbDeviceConnection for the connection lifetime. Platform drivers and entitlements still apply. iOS supports TCP and reports USB unavailable.
+For `_adb-tls-connect`, explicitly use `TlsPolicy::Required`; default Optional permits legacy plaintext. Required rejects downgrade before exposing client identity but does not add server certificate pinning. Pairing and connection ports differ. The RustCrypto provider requires explicit experimental opt-in or a reviewed caller-supplied provider; software-RSA timing and provider maturity need release assessment.
 
-`wireless::pair` implements TLS-bound AOSP SPAKE2 pairing. `ConnectOptions::tls` configures STLS/TLS with the same identity but does not require encryption. For `_adb-tls-connect` endpoints, explicitly select `TlsPolicy::Required`: it rejects missing TLS configuration before handshake and plaintext CNXN/AUTH before exposing a signature or public key. Default `Optional` permits legacy plaintext. Required TLS prevents downgrade without adding server certificate pinning to ADB's self-signed model. Pairing and connection ports differ.
+Discovery returns raw mDNS events. Trust, endpoint choice, reconnection and network/multicast permissions belong to callers. Official Required TLS needs a matching discovered service; authorization-disabled background connects reuse already authorized transports only.
 
-The RustCrypto TLS provider is experimental and requires explicit `TlsConfig::experimental_rustcrypto` or a caller-supplied reviewed provider. Software RSA uses blinding; the rsa timing advisory and provider maturity still require release assessment. Discovery exposes raw mDNS events and resolver restart; trust, endpoint selection, reconnect and local-network/multicast permissions belong to callers.
-
-Official-server services pin transport IDs so replacement devices with the same serial cannot receive old work. Shell/sync codecs and cancellation bounds are shared, but WRTE diagnostics are unavailable. Required TLS resolves a matching official `_adb-tls-connect._tcp` service or fails. Authorization-disabled background connections reuse only already authorized official transports.
-
-## Validation and sources
+## Tests and sources
 
 ```sh
 cargo test -p interop-adb
-cargo test -p interop-adb --test wireless_boringssl -- --ignored
 INTEROP_ADBD_ADDRESS=127.0.0.1 INTEROP_ADBD_PORT=15556 \
   cargo test -p interop-adb --test reverse_adbd --test sync_adbd -- --ignored
 ```
 
-Ignored BoringSSL tests require the independently built helper documented in their source. Device tests require an authorized endpoint and use a unique temporary directory without invoking an adb executable. Wire fixtures cover legacy/authenticated transports, credit/backpressure, close, TLS and reverse allowlists; device tests cover reverse/JDWP and sync codec interoperability. These are separate from platform/product validation in [the validation record](../../../docs/implementation/validation.md).
+Device tests need a dedicated authorized endpoint and clean only their temporary resources. BoringSSL interoperability tests require the helper documented in their source; ignored tests are not device evidence.
 
-Protocol sources at fixed AOSP revision `1cf2f017d312f73b3dc53bda85ef2610e35a80e9`:
-[handshake/reverse requests](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/adb.cpp),
-[listeners](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/adb_listeners.cpp),
-[JDWP](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/daemon/jdwp_service.cpp),
-[sync](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/daemon/file_sync_service.cpp).
-
-Typed host forwarding, package management, incremental install and a 5037 compatibility server are outside the API.
+Fixed AOSP protocol source: [`1cf2f017`](https://android.googlesource.com/platform/packages/modules/adb/+/1cf2f017d312f73b3dc53bda85ef2610e35a80e9/). Package management, incremental install and a 5037-compatible server are outside this crate.

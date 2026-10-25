@@ -21,4 +21,4 @@ flutter drive --profile -d windows `
   --dart-define=MEDIA_CODEC_REPLAY_LIBRARY=$library
 ```
 
-No ADB/device is used. Keep fixture, DLL/object/import library and output temporary; the driver writes `<system-temp>/connect-e2e/media-texture-replay/result.json`. This tests software AV1 plus GPU upload/composition, not hardware decoding or scanout. The public-controller migration still requires a Windows run.
+No ADB/device is used. Keep fixture, DLL/object/import library and output temporary; the driver writes `<system-temp>/connect-e2e/media-texture-replay/result.json`. This tests software AV1 plus GPU upload/composition, not hardware decoding or scanout.

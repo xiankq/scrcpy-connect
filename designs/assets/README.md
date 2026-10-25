@@ -2,7 +2,7 @@
 
 ## 示例照片
 
-照片由 Pencil 图片搜索返回，用于相册、手机背景与预览场景；本地保存以使 `.pen` 不依赖远程图片加载。它们是设计示例，不代表已选定应用发布素材。
+照片用于相册、背景及预览示例，随设计稿本地保存；不代表应用发布素材。
 
 | 文件 | 作者 | 原图来源 |
 | --- | --- | --- |
@@ -10,13 +10,13 @@
 | `sample-architecture.jpg` | [anthony mcgee](https://unsplash.com/@tmg) | [Unsplash 图片](https://images.unsplash.com/photo-1502473379243-ba6449c3b6c4) |
 | `sample-forest.jpg` | [Chrissy](https://unsplash.com/@cthecreator) | [Unsplash 图片](https://images.unsplash.com/photo-1663998606502-5d8a320325ca) |
 
-正式分发前应按实际用途核对来源、[Unsplash 许可](https://unsplash.com/license)及可能涉及的其他权利。
+分发须核对 [Unsplash 许可](https://unsplash.com/license)及实际用途涉及的权利。
 
 ## Android 应用任务图标
 
-`android-settings-api36.png` 为 Android API 36 目标设备中 `com.android.settings` 的原始应用图标（96×96），通过该设备的 PackageManager 读取，未按品牌重新绘制。用于工作台中一个已验证仍存在的设置后台任务示例：先启动设置、返回 HOME，再从真实任务列表确认。它是设备内容示例，不代表邻接的功能图标或品牌资产。
+`android-settings-api36.png` 来自 Android API36 `com.android.settings`，由 PackageManager 读取，96×96，作为真实任务内容示例。
 
-全部应用目录另引用以下 API 36 目标手机原始 PackageManager 图标（均为 96×96，保留原图内容）：
+以下图标同由 API36 PackageManager 读取，均为 96×96：
 
 | 素材 | 目标应用包 | 示例名称 |
 | --- | --- | --- |
@@ -28,8 +28,8 @@
 | `com.google.android.apps.photos-api36.png` | `com.google.android.apps.photos` | 相册 |
 | `com.android.camera2-api36.png` | `com.android.camera2` | 相机 |
 
-这些素材只表示目标手机的真实应用内容，不是主控功能图标；明暗外观沿用原始颜色，不按主控主题重绘。
+应用图标保留原色，不作为主控品牌或功能图标。
 
 ## 设计稿字体
 
-`fonts/misans/` 保存小米官方 MiSans 字体及许可，供 `../mobile.pen` 以文档自定义字体的相对路径引用。来源、字重映射与文件摘要见[字体说明](fonts/misans/README.md)。字体只用于设计稿，各端代码的字体规则见[视觉规范](../design.md#typography)。
+MiSans 仅供设计稿，来源、字重、摘要及许可见[字体说明](fonts/misans/README.md)；运行字体见[视觉规范](../design.md#typography)。

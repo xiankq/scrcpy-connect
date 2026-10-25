@@ -1,13 +1,11 @@
-# Triage labels
+# 分诊角色
 
-For local Markdown tickets, write the tracker value in the `Status:` line.
+本地工单Status使用以下值：
 
-| Canonical role | Tracker value | Meaning |
-| --- | --- | --- |
-| `needs-triage` | `needs-triage` | Maintainer evaluation needed |
-| `needs-info` | `needs-info` | Waiting for reporter information |
-| `ready-for-agent` | `ready-for-agent` | Fully specified for agent implementation |
-| `ready-for-human` | `ready-for-human` | Human implementation required |
-| `wontfix` | `wontfix` | Will not be actioned |
-
-When a skill refers to a triage role, use its tracker value above.
+| 值 | 含义 |
+| --- | --- |
+| needs-triage | 待评估 |
+| needs-info | 等待补充 |
+| ready-for-agent | 可由代理实施 |
+| ready-for-human | 需人工实施 |
+| wontfix | 不处理 |

@@ -1,33 +1,15 @@
-# External Android sharing fixture
+# Android 入站分享夹具
 
-Independent APK sends real intents/read grants to Connect through a non-exported provider. Build with `dart tool/e2e/share_fixture/build.dart`; APK/key/intermediates stay in `/tmp/connect-share-fixture`.
-
-On the assigned isolated controller, require `pm path dev.scrcpyconnect.sharefixture` to be empty; never replace an existing install or run alongside another device owner. The driver installs and removes only its own fixture. Manual entry is `.ShareFixtureActivity` with string extra `mode`:
-
-| Mode | Input and expected boundary |
-| --- | --- |
-| `text` | Unicode text → ready text share |
-| `image` | Granted PNG pipe + ClipData → exact bytes/Unicode name |
-| `multi` | Two granted files → one batch |
-| `alias` | Alternate declared authority → accepted foreign provider |
-| `no-grant` | No read flag → reject before open |
-| `self-sentinel` | Own-provider URI → reject without copying |
-| `file-uri` | Nonexistent file URI → OS/product rejects |
-| `too-many` | 33 URIs → reject before copying |
-| `oversize` | Readable pipe declares 513 MiB → Rust rejects before copying |
-| `slow` | One byte/sec, at most 180 sec → cancellation/deadline publishes no partial |
-
-`self-sentinel` is only `content://dev.scrcpyconnect.scrcpy_connect.fileProvider.com.crazecoder.openfile/media/share-trust-sentinel.txt`. An optional known harmless marker may be placed at debug-product `files/media/share-trust-sentinel.txt`; never substitute credentials, identities or user files.
+独立 APK 通过真实 Intent/URI grant 向主控分享文本与文件；包含无授权、私有 URI、超限和慢 provider 等模式，定义见 `ShareFixtureActivity`。
 
 ```sh
+dart tool/e2e/share_fixture/build.dart
 cd app
-env CONNECT_E2E_DEVICE=emulator-5554 \
-  CONNECT_E2E_ADB=/absolute/android-sdk/platform-tools/adb \
-  flutter drive -d emulator-5554 --no-pub \
+CONNECT_E2E_DEVICE=emulator-5554 \
+CONNECT_E2E_ADB=/absolute/android-sdk/platform-tools/adb \
+flutter drive -d emulator-5554 --no-pub \
   --driver=../tool/driver/incoming_share.dart \
   --target=integration_test/incoming_share_test.dart
 ```
 
-Use `--dart-define=CONNECT_SHARE_MODES=text,image` for a subset. The driver uses `CLEAR_TOP|SINGLE_TOP`/`onNewIntent` and validates actual batches, bytes and route, requiring `shareAcceptanceComplete=true`. Reports default to `/tmp/connect-e2e/incoming-share`.
-
-Additional manual boundaries: retain eight pending `slow` batches and confirm the next request creates no files; consume a batch during transfer and verify its source remains until durable reconciliation. See [share trust research](../../../docs/research/android-share-trust.md).
+只用专用主控，拒绝覆盖 `dev.scrcpyconnect.sharefixture`；夹具和输出留系统临时目录。driver 仅卸载本轮安装。`self-sentinel` 只使用指定无害标记，不能替换为用户文件或身份凭据。产品来源契约见[内容交付](../../../docs/implementation/content-delivery.md)。
