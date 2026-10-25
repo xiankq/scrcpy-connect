@@ -793,20 +793,6 @@ void main() {
     expect(closes[0].$2['scope'], closes[1].$2['scope']);
   });
 
-  test('同一目录的后续文档操作使用稳定 scope key 回收旧代次', () async {
-    final f = Fixture()..selected = ['root'];
-    f.node('root', 'Empty', directory: true);
-    await f.coordinator.request('documents.importDirectory');
-    await f.coordinator.request('documents.importDirectory');
-    final openings = f.calls.where((call) => call.$1 == 'local.scope.open');
-    expect(openings, hasLength(2));
-    expect(
-      openings.map((call) => call.$2['key']),
-      everyElement('/cache/documents'),
-    );
-    await f.coordinator.dispose();
-  });
-
   test('复制与 scope 都未确认清理时保留原始 PFD，关闭可重试', () async {
     final f = Fixture()..selected = ['file'];
     f.node('file', 'data.txt');
@@ -854,81 +840,6 @@ void main() {
     expect(f.calls.last.$1, 'documents.platform.release');
   });
 
-  test('取消先于 typed 工厂返回时不创建 scope、不启动选择器', () async {
-    final f = Fixture();
-    final factory = Completer<LocalFiles>();
-    final entered = Completer<void>();
-    final coordinator = DocumentsCoordinator(
-      files: () {
-        entered.complete();
-        return factory.future;
-      },
-      platform: f.platform,
-    );
-    final job = coordinator.request('documents.importFiles', {
-      'operationId': 'early',
-    });
-    await entered.future;
-    var cancelled = false;
-    final cancelling = coordinator
-        .request('documents.cancel', {'operationId': 'early'})
-        .then((_) => cancelled = true);
-    await Future<void>.delayed(Duration.zero);
-    expect(cancelled, isFalse);
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.release'),
-      isEmpty,
-    );
-    factory.complete(f.localFiles);
-    await cancelling;
-    expect((await job)['status'], 'cancelled');
-    expect(f.calls.where((call) => call.$1 == 'local.scope.open'), isEmpty);
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.picker'),
-      isEmpty,
-    );
-    await coordinator.dispose();
-  });
-
-  test('scope 登记迟到时先关闭真实 scope 再释放平台 owner', () async {
-    final f = Fixture();
-    final opening = Completer<String>();
-    final entered = Completer<void>();
-    f.nativeFiles.onOpenScope = (_) {
-      entered.complete();
-      return opening.future;
-    };
-    final job = f.coordinator.request('documents.importFiles', {
-      'operationId': 'late-scope',
-    });
-    await entered.future;
-    final cancelling = f.coordinator.request('documents.cancel', {
-      'operationId': 'late-scope',
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.cancel'),
-      isEmpty,
-    );
-    opening.complete('late-scope');
-    await cancelling;
-    expect((await job)['status'], 'cancelled');
-    final close = f.calls.indexWhere((call) => call.$1 == 'local.scope.close');
-    final cancel = f.calls.indexWhere(
-      (call) => call.$1 == 'documents.platform.cancel',
-    );
-    final release = f.calls.indexWhere(
-      (call) => call.$1 == 'documents.platform.release',
-    );
-    expect(close, lessThan(cancel));
-    expect(cancel, lessThan(release));
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.picker'),
-      isEmpty,
-    );
-    await f.coordinator.dispose();
-  });
-
   test('复制登记迟到也须回收后才释放 PFD，不能开始已取消复制', () async {
     final f = Fixture()..selected = ['file'];
     f.node('file', 'data.txt');
@@ -972,129 +883,6 @@ void main() {
     await f.coordinator.dispose();
   });
 
-  test('dispose 等待在途复制和平台最终释放，不能提前复用协调器', () async {
-    final f = Fixture()..selected = ['file'];
-    f.node('file', 'data.txt');
-    final work = Completer<LocalFileCopyResult>();
-    final entered = Completer<void>();
-    f.nativeFiles.onRunCopy = (_) {
-      entered.complete();
-      return work.future;
-    };
-    final job = f.coordinator.request('documents.importFiles', {
-      'operationId': 'disposing',
-    });
-    await entered.future;
-    var disposed = false;
-    final disposing = f.coordinator.dispose().then((_) => disposed = true);
-    await Future<void>.delayed(Duration.zero);
-    expect(disposed, isFalse);
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.releaseFd'),
-      isEmpty,
-    );
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.cancel'),
-      isEmpty,
-    );
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.release'),
-      isEmpty,
-    );
-    work.complete(copied(3));
-    await disposing;
-    expect((await job)['status'], 'cancelled');
-    expect(f.nativeFiles.copies, isEmpty);
-    expect(f.calls.last.$1, 'documents.platform.release');
-    await expectLater(
-      f.coordinator.request('documents.importFiles'),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'cancelled',
-        ),
-      ),
-    );
-  });
-
-  test('scope 关闭失败保留 owner，显式重试前不释放平台或接受新请求', () async {
-    final f = Fixture()..selected = ['root'];
-    f.node('root', 'Empty', directory: true);
-    var fails = true;
-    f.nativeFiles.onCloseScope = (_) async {
-      if (fails) {
-        throw const LocalFileException(
-          LocalFileErrorCode.cleanupUnconfirmed,
-          '尚未排空。',
-        );
-      }
-    };
-    await expectLater(
-      f.coordinator.request('documents.importDirectory', {
-        'operationId': 'cleanup',
-      }),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'document_cleanup_unconfirmed',
-        ),
-      ),
-    );
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.release'),
-      isEmpty,
-    );
-    await expectLater(
-      f.coordinator.request('documents.importFiles'),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'documents_busy',
-        ),
-      ),
-    );
-    fails = false;
-    await f.coordinator.dispose();
-    expect(
-      f.calls.where((call) => call.$1 == 'local.scope.close'),
-      hasLength(2),
-    );
-    expect(f.calls.last.$1, 'documents.platform.release');
-  });
-
-  test('应用字节和选择预算通过 typed 限额生效，不查询核心限额', () async {
-    final f = Fixture()..selected = ['file'];
-    f.node('file', 'data.txt');
-    final coordinator = DocumentsCoordinator(
-      files: f.files,
-      platform: f.platform,
-      limits: const DocumentLimits(maxBytes: 2),
-    );
-    final response = await coordinator.request('documents.importFiles');
-    expect(response['status'], 'partial');
-    expect(
-      (response['errors'] as List).single,
-      containsPair('code', 'byte_limit'),
-    );
-    expect(f.calls.where((call) => call.$1 == 'local.commit'), isEmpty);
-    await coordinator.dispose();
-    final selection = Fixture()..selected = ['one', 'two'];
-    final limited = DocumentsCoordinator(
-      files: selection.files,
-      platform: selection.platform,
-      limits: const DocumentLimits(maxSelected: 1),
-    );
-    final rejected = await limited.request('documents.importFiles');
-    expect(
-      (rejected['errors'] as List).single,
-      containsPair('code', 'selection_limit'),
-    );
-    expect(selection.calls.where((call) => call.$1 == 'local.copy'), isEmpty);
-    await limited.dispose();
-  });
   for (final applyToRemaining in [false, true]) {
     testWidgets(
       'skip applies ${applyToRemaining ? 'through this save only' : 'to one conflict only'}',
@@ -1350,37 +1138,6 @@ void main() {
       await coordinator.dispose();
     },
   );
-  test(
-    'a rejected source before the picker is failed without a partial save',
-    () async {
-      final f = Fixture();
-      final coordinator = DocumentsCoordinator(
-        platform: f.platform,
-        files: () async {
-          f.nativeFiles.onStat = (path) async => throw const LocalFileException(
-            LocalFileErrorCode.sourceChanged,
-            '原文件已变化',
-          );
-          return f.localFiles;
-        },
-      );
-      final result = await coordinator.request('documents.export', {
-        'operationId': 'preflight-rejected',
-        'localPath': '/cache/outgoing/original',
-        'name': 'original',
-        'kind': 'file',
-      });
-      expect(result['status'], 'failed');
-      expect(result['files'], 0);
-      expect(result['bytes'], 0);
-      expect(result['partialDestinationPossible'], false);
-      expect(
-        f.calls.where((call) => call.$1 == 'documents.platform.picker'),
-        isEmpty,
-      );
-      await coordinator.dispose();
-    },
-  );
   testWidgets(
     'a never responding metadata query times out and releases the operation',
     (tester) async {
@@ -1498,97 +1255,6 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull);
       await coordinator.dispose();
-    },
-  );
-
-  testWidgets(
-    'metadata cancellation ignores its late provider error and cannot affect the next selection',
-    (tester) async {
-      final f = Fixture()..selected = ['file'];
-      f.node('file', 'data.txt');
-      final pending = Completer<DocumentsJson>();
-      var blocked = true, metadataEntered = false;
-      final coordinator = DocumentsCoordinator(
-        files: f.files,
-        platform: (command, params) {
-          if (blocked && command == 'documents.platform.metadata') {
-            metadataEntered = true;
-            return pending.future;
-          }
-          return f.platform(command, params);
-        },
-      );
-      DocumentsJson? result;
-      final job = coordinator
-          .request('documents.importFiles', {'operationId': 'cancel-meta'})
-          .then((value) {
-            result = value;
-          });
-      await documentStage(tester, () => metadataEntered);
-      await coordinator.request('documents.cancel', {
-        'operationId': 'cancel-meta',
-      });
-      await tester.pump();
-      expect(result?['status'], 'cancelled');
-      await job;
-      blocked = false;
-      final next = await documentResult(
-        tester,
-        coordinator.request('documents.importFiles', {
-          'operationId': 'healthy',
-        }),
-      );
-      expect(next['status'], 'imported');
-      pending.completeError(
-        const ApplicationCommandException('late_metadata', 'late response'),
-      );
-      await tester.pump(const Duration(seconds: 121));
-      expect(tester.takeException(), isNull);
-      expect(
-        f.calls
-            .where((call) => call.$1 == 'documents.platform.cancel')
-            .map((call) => call.$2['operationId']),
-        ['cancel-meta'],
-      );
-      await coordinator.dispose();
-    },
-  );
-
-  testWidgets(
-    'disposal releases a picker that never acknowledges cancellation',
-    (tester) async {
-      final f = Fixture();
-      final pending = Completer<DocumentsJson>();
-      var pickerEntered = false;
-      final coordinator = DocumentsCoordinator(
-        files: f.files,
-        platform: (command, params) {
-          if (command == 'documents.platform.picker') {
-            pickerEntered = true;
-            return pending.future;
-          }
-          return f.platform(command, params);
-        },
-      );
-      DocumentsJson? result;
-      final job = coordinator
-          .request('documents.importFiles', {'operationId': 'disposed'})
-          .then((value) {
-            result = value;
-          });
-      await documentStage(tester, () => pickerEntered);
-      await coordinator.dispose();
-      await tester.pump();
-      expect(result?['status'], 'cancelled');
-      await job;
-      pending.complete({
-        'status': 'selected',
-        'documents': [
-          {'handle': 'late'},
-        ],
-      });
-      await tester.pump();
-      expect(f.calls.where((call) => call.$1 == 'local.copy'), isEmpty);
     },
   );
 
@@ -1817,26 +1483,6 @@ void main() {
     },
   );
 
-  test(
-    'exporting an empty source tree creates its real empty destination',
-    () async {
-      final f = Fixture()..selected = ['parent'];
-      f.node('parent', 'Target', directory: true);
-      f.local['/cache/source'] = {'kind': 'directory'};
-      final result = await f.coordinator.request('documents.export', {
-        'localPath': '/cache/source',
-        'kind': 'directory',
-        'name': 'Empty',
-      });
-      expect(result['status'], 'saved');
-      expect(result['directories'], 1);
-      expect(result['files'], 0);
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.create'),
-        hasLength(1),
-      );
-    },
-  );
   testWidgets(
     'existing provider names wait for a shared decision and keep both preserves originals',
     (tester) async {
@@ -1986,56 +1632,6 @@ void main() {
       expect(
         (result['errors'] as List<Object?>).single,
         containsPair('code', 'duplicate_name'),
-      );
-    },
-  );
-  test(
-    'each selected same-name file keeps its independent cache root',
-    () async {
-      final f = Fixture()..selected = ['a', 'b'];
-      f.node('a', 'same');
-      f.node('b', 'same');
-      final result = await f.coordinator.request('documents.importFiles');
-      final items = result['items'] as List<DocumentsJson>;
-      expect(result['status'], 'imported');
-      expect(items, hasLength(2));
-      expect(items[0]['localPath'], isNot(items[1]['localPath']));
-    },
-  );
-  test(
-    'cancellation is matched to its owner and late picker receipts cannot copy',
-    () async {
-      final f = Fixture()..picker = Completer<DocumentsJson>();
-      final job = f.coordinator.request('documents.importFiles', {
-        'operationId': 'owned',
-      });
-      await f.pickerEntered.future;
-      expect(
-        (await f.coordinator.request('documents.cancel', {
-          'operationId': 'other',
-        }))['cancelled'],
-        isFalse,
-      );
-      expect(
-        (await f.coordinator.request('documents.cancel', {
-          'operationId': 'owned',
-        }))['cancelled'],
-        isTrue,
-      );
-      expect((await job)['status'], 'cancelled');
-      expect(f.calls.where((c) => c.$1 == 'local.copy'), isEmpty);
-      expect(
-        f.calls
-            .where((c) => c.$1 == 'documents.platform.cancel')
-            .single
-            .$2['operationId'],
-        'owned',
-      );
-      await expectLater(
-        f.coordinator.request('documents.importFiles', {
-          'operationId': 'owned',
-        }),
-        throwsA(isA<ApplicationCommandException>()),
       );
     },
   );

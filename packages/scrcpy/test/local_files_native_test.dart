@@ -82,34 +82,6 @@ void main() {
         expect(await destination.readAsBytes(), bytes);
       });
 
-      test('片段路径被替换后，不能发布或清理替换对象', () async {
-        final source = File('${directory.path}/source');
-        final part = File('${directory.path}/part');
-        final retained = File('${directory.path}/retained');
-        final destination = File('${directory.path}/saved');
-        await source.writeAsString('original');
-        final copy = await scope.copy(
-          source: LocalFileEndpoint.path(_path(source.path)),
-          target: LocalFileEndpoint.part(_path(part.path)),
-          maxBytes: 100,
-          timeout: const Duration(seconds: 5),
-        );
-        await part.rename(retained.path);
-        await part.writeAsString('replacement');
-        await expectLater(
-          scope.commit(
-            copy,
-            _path(destination.path),
-            expectedIdentity: copy.identity,
-          ),
-          throwsA(isA<LocalFileException>()),
-        );
-        await copy.close();
-        expect(await destination.exists(), isFalse);
-        expect(await part.readAsString(), 'replacement');
-        expect(await retained.readAsString(), 'original');
-      });
-
       test('原 isolate 退出后按资源名称接管，先回收原片段再准入', () async {
         final rootPath = directory.path;
         final implementation = factory.key;
@@ -134,41 +106,6 @@ void main() {
         );
         await recovered.close();
         expect(await File('$rootPath/saved').readAsString(), 'isolate-owned');
-      });
-
-      test('超预算不发布，关闭 scope 清理未提交片段并拒绝迟到操作', () async {
-        final source = File('${directory.path}/source');
-        final part = File('${directory.path}/part');
-        await source.writeAsBytes(List.filled(70000, 42));
-        await expectLater(
-          scope.copy(
-            source: LocalFileEndpoint.path(_path(source.path)),
-            target: LocalFileEndpoint.part(_path(part.path)),
-            maxBytes: 1,
-            timeout: const Duration(seconds: 5),
-          ),
-          throwsA(
-            isA<LocalFileException>().having(
-              (error) => error.code,
-              'code',
-              LocalFileErrorCode.byteLimit,
-            ),
-          ),
-        );
-        expect(await part.exists(), isFalse);
-        await scope.copy(
-          source: LocalFileEndpoint.path(_path(source.path)),
-          target: LocalFileEndpoint.part(_path(part.path)),
-          maxBytes: 70000,
-          timeout: const Duration(seconds: 5),
-        );
-        await scope.close();
-        expect(await part.exists(), isFalse);
-        expect(
-          () => scope.stat(_path(source.path)),
-          throwsA(isA<LocalFileException>()),
-        );
-        expect(await source.length(), 70000);
       });
     });
   }

@@ -8,24 +8,29 @@
     "registrations": 34
   },
   "app/host": {
-    "lines": 54571,
-    "registrations": 1190
+    "lines": 49816,
+    "registrations": 1037,
+    "cases": 1172
   },
   "packages/adb": {
-    "lines": 6521,
-    "registrations": 177
+    "lines": 6052,
+    "registrations": 154,
+    "cases": 175
   },
   "packages/design_system": {
-    "lines": 1195,
-    "registrations": 19
+    "lines": 707,
+    "registrations": 9,
+    "cases": 9
   },
   "packages/media_codec": {
-    "lines": 1510,
-    "registrations": 19
+    "lines": 1402,
+    "registrations": 16,
+    "cases": 14
   },
   "packages/scrcpy": {
-    "lines": 1633,
-    "registrations": 46
+    "lines": 1449,
+    "registrations": 35,
+    "cases": 42
   },
   "rust/adb": {
     "lines": 12400,

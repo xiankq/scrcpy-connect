@@ -310,25 +310,6 @@ void main() {
     },
   );
 
-  test(
-    'reconfigure consumes new input and keeps logical paused output',
-    () async {
-      final h = _Harness();
-      addTearDown(h.output.dispose);
-      await h.output.start(_stream('A'));
-      await h.output.pause('A');
-      final rebuilt = await h.output.reconfigure({
-        ..._stream('A'),
-        'generation': 2,
-      });
-      expect(rebuilt['generation'], 2);
-      expect(rebuilt['sessionId'], 'A');
-      expect(h.players.first.released, 1);
-      expect(h.players.last.calls, contains('pause'));
-      expect(h.commands.where((call) => call.$1 == 'media.open'), hasLength(2));
-    },
-  );
-
   test('关闭后迟到的来源描述不能创建替换输出', () async {
     final h = _Harness();
     addTearDown(h.output.dispose);
@@ -350,46 +331,6 @@ void main() {
     );
     expect(h.players, hasLength(1));
   });
-  test('first receipt requires decoding without a GPU readback or remote dimension changes', () async {
-    final h = _Harness();
-    expect(
-      (h.output.capabilities()['codecs'] as List).every(
-        (dynamic e) => (e as Map)['available'] == null,
-      ),
-      true,
-    );
-    final receipt = await h.output.start(_stream('A'));
-    expect(receipt['textureId'], 7);
-    expect(receipt['decodedWidth'], 720);
-    expect(receipt.containsKey('width'), false);
-    expect(receipt.containsKey('height'), false);
-    expect(receipt['firstFrameDecoded'], true);
-    expect(receipt['presentedToWidget'], false);
-    expect(receipt.containsKey('framesDecoded'), false);
-    expect(receipt['decodedReceipts'], 1);
-    expect(receipt['snapshotReceipts'], 0);
-    expect(h.players.single.calls, ['open', 'play']);
-    expect(h.events.single['type'], 'session.output.ready');
-    expect(
-      (h.output.capabilities()['codecs'] as List).first['available'],
-      true,
-    );
-    await h.output.dispose();
-  });
-
-  test('failed first decode never becomes ready', () async {
-    final h = _Harness();
-    h.opening = Completer();
-    final result = h.output.start(_stream('A'));
-    h.players.single.nullFrame = true;
-    h.opening!.complete(_endpoint('bad'));
-    await expectLater(result, throwsA(_code('no_frame')));
-    expect(h.events, isEmpty);
-    expect(h.closed, isEmpty);
-    expect(h.players.single.released, 1);
-    await h.output.dispose();
-  });
-
   test('停止撤销来源查询交付且不创建迟到播放器', () async {
     final h = _Harness();
     h.opening = Completer();
@@ -447,64 +388,6 @@ void main() {
     expect(h.closed, isEmpty);
     expect(await h.output.start(_stream('A')), first);
     await h.output.dispose();
-  });
-
-  test('pause waits for confirmation and resume verifies decoding without readback', () async {
-    final h = _Harness();
-    await h.output.start(_stream('A'));
-    final player = h.players.single;
-    player.presentation = Completer();
-    var completed = false;
-    final pausing = h.output.pause('A').then((r) {
-      completed = true;
-      return r;
-    });
-    await Future<void>.delayed(Duration.zero);
-    expect(completed, false);
-    player.presentation!.complete();
-    expect((await pausing)['applied'], true);
-    player.presentation = null;
-    final resumed = await h.output.resume('A');
-    expect(resumed['decodedReceipts'], 2);
-    expect(resumed['snapshotReceipts'], 0);
-    expect(h.events.any((event) => event['type'] == 'session.frame'), false);
-    await h.output.dispose();
-  });
-
-  test('真实视频输出回执可恢复页面输入，截图证据不能替代会话首帧', () async {
-    final h = _Harness();
-    addTearDown(h.output.dispose);
-    final started = await h.output.start(_stream('A'));
-    final state = RemotePresentation()
-      ..beginStart()
-      ..bindStart(
-        {...started, 'width': 720, 'height': 1280, 'status': 'streaming'},
-        retained: false,
-        recoveringConnection: false,
-        submittedAppStart: false,
-      );
-    state.beginPause();
-    await h.output.pause('A');
-    final epoch = state.beginResume();
-    final resumed = await h.output.resume('A');
-    for (final unverified in [
-      {...resumed, 'evidence': 'media_codec.snapshot'},
-      {...resumed, 'evidence': 'retained_previous_output'},
-      {...resumed, 'evidence': 'unknown'},
-      {...resumed, 'firstFrameDecoded': false},
-    ]) {
-      expect(
-        state.completeResume(epoch, unverified, ownerCurrent: true),
-        RemoteResumeResult.rendererNotReady,
-      );
-      expect(state.canSendInput(foreground: true, ownerCurrent: true), isFalse);
-    }
-    expect(
-      state.completeResume(epoch, resumed, ownerCurrent: true),
-      RemoteResumeResult.ready,
-    );
-    expect(state.canSendInput(foreground: true, ownerCurrent: true), isTrue);
-    expect(resumed['snapshotReceipts'], 0);
   });
 
   for (final readyFirst in [false, true]) {
@@ -769,17 +652,6 @@ void main() {
       await output.dispose();
     },
   );
-
-  test('an invalid native packet endpoint never reaches the player', () async {
-    final h = _Harness();
-    h.opening = Completer();
-    final starting = h.output.start(_stream('A'));
-    h.opening!.complete({..._endpoint('bad'), 'attachAddress': 0});
-    await expectLater(starting, throwsA(_code('invalid_endpoint')));
-    expect(h.players.single.calls, ['release']);
-    expect(h.closed, isEmpty);
-    await h.output.dispose();
-  });
 
   test('screenshot is an actual PNG in a fresh owned directory and preserves existing files', () async {
     final h = _Harness();

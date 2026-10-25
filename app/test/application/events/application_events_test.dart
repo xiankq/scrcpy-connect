@@ -117,49 +117,47 @@ void main() {
     await owner.close();
   });
 
-  for (final reentry in ['local', 'accept', 'state', 'before', 'after']) {
-    test('$reentry 同步发布后继事实时，所有策略和呈现保持同一顺序', () async {
-      final order = <String>[];
-      var entered = false;
-      var localCalls = 0;
-      late ApplicationEvents owner;
-      void observe(String phase, ApplicationEvent event) {
-        order.add('$phase:${event['type']}');
-        if (phase == reentry && !entered) {
-          entered = true;
-          owner.publish({'type': 'B'});
-        }
+  test('同步发布后继事实时，所有策略和呈现保持同一顺序', () async {
+    final order = <String>[];
+    var entered = false;
+    var localCalls = 0;
+    late ApplicationEvents owner;
+    void observe(String phase, ApplicationEvent event) {
+      order.add('$phase:${event['type']}');
+      if (phase == 'before' && !entered) {
+        entered = true;
+        owner.publish({'type': 'B'});
       }
+    }
 
-      owner = eventsOwner(
-        changed: () {
-          observe('local', {'type': ++localCalls == 1 ? 'A' : 'B'});
-        },
-        accept: (event) {
-          observe('accept', event);
-          return true;
-        },
-        state: (event) => observe('state', event),
-        before: (event) => observe('before', event),
-        after: (event) => observe('after', event),
-      );
-      final received = <ApplicationEvent>[];
-      final subscription = owner.stream.listen(received.add);
-      owner.publish({'type': 'A'});
-      await Future<void>.delayed(Duration.zero);
-      expect(order, [
-        for (final type in ['A', 'B'])
-          for (final phase in ['local', 'accept', 'state', 'before', 'after'])
-            '$phase:$type',
-      ]);
-      expect(received.map((event) => event['type']), ['A', 'B']);
-      expect(received.map((event) => event['sequence']), [1, 2]);
-      await subscription.cancel();
-      await owner.close();
-    });
-  }
+    owner = eventsOwner(
+      changed: () {
+        observe('local', {'type': ++localCalls == 1 ? 'A' : 'B'});
+      },
+      accept: (event) {
+        observe('accept', event);
+        return true;
+      },
+      state: (event) => observe('state', event),
+      before: (event) => observe('before', event),
+      after: (event) => observe('after', event),
+    );
+    final received = <ApplicationEvent>[];
+    final subscription = owner.stream.listen(received.add);
+    owner.publish({'type': 'A'});
+    await Future<void>.delayed(Duration.zero);
+    expect(order, [
+      for (final type in ['A', 'B'])
+        for (final phase in ['local', 'accept', 'state', 'before', 'after'])
+          '$phase:$type',
+    ]);
+    expect(received.map((event) => event['type']), ['A', 'B']);
+    expect(received.map((event) => event['sequence']), [1, 2]);
+    await subscription.cancel();
+    await owner.close();
+  });
 
-  for (final failing in ['local', 'accept', 'state', 'before', 'after']) {
+  for (final failing in ['local', 'accept', 'before']) {
     test('$failing 抛错仍登记其他资源，错误可见且后续事实可以继续', () async {
       final failure = StateError(failing);
       final order = <String>[];

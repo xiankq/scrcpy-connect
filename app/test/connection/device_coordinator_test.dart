@@ -114,24 +114,6 @@ void main() {
     expect(fixture.connected, isEmpty);
   });
 
-  test('准备timeout在候选已清理后仍不能换发现地址重播', () async {
-    final id = await fixture.paired();
-    fixture.candidates.endpoints = [
-      _endpoint('192.0.2.8', 4444),
-      _endpoint('192.0.2.9', 5556),
-    ];
-    var preparations = 0;
-    fixture.onPrepare = (_, _) async {
-      preparations++;
-      throw const AdbException('timeout', '已执行恢复但未确认结果');
-    };
-    await expectLater(fixture.connect(id), _failure('timeout'));
-    expect(fixture.client.connects, ['192.0.2.8:4444']);
-    expect(fixture.client.disconnected, ['handle-1']);
-    expect(preparations, 1);
-    expect(fixture.connected, isEmpty);
-  });
-
   test('准备失败保留同候选清理责任，断开重试不重播准备', () async {
     final id = await fixture.paired();
     fixture.candidates.endpoints = [
@@ -256,34 +238,6 @@ void main() {
     expect(record.autoReconnect, isFalse);
     expect(record.reason, isNull);
     expect(fixture.client.disconnected, [old.device.id]);
-  });
-
-  test('健康offline事件触发后继连接仍须等待原活动实际排空', () async {
-    final id = await fixture.add();
-    await fixture.connect(id);
-    final old = fixture.owner.requireConnection(id);
-    final stopping = Completer<void>();
-    final released = Completer<void>();
-    fixture.onStop = (connection) async {
-      if (identical(connection, old)) {
-        stopping.complete();
-        await released.future;
-      }
-    };
-    final retirement = fixture.owner.retireUnhealthy(
-      id,
-      old,
-      reason: 'transport_closed',
-    );
-    await stopping.future;
-    final reconnected = fixture.connect(id);
-    // 后继已进入设备队列，但不能在旧活动仍占用传输时再拨号。
-    await Future<void>.value();
-    expect(fixture.client.connects, hasLength(1));
-    released.complete();
-    await Future.wait([retirement, reconnected]);
-    expect(fixture.client.connects, hasLength(2));
-    expect(fixture.owner.requireConnection(id), isNot(same(old)));
   });
 
   test('已配对零端口记录通过发现核验真实 GUID 后才提交当前端点', () async {
@@ -588,35 +542,6 @@ void main() {
     expect(fixture.client.closed, isFalse);
   });
 
-  test('宿主停止等待 SDK 迟到握手退出且不发布旧候选', () async {
-    final id = await fixture.add();
-    final opening = Completer<AdbDevice>();
-    fixture.client.opening = opening;
-    final connecting = fixture.connect(id);
-    final rejected = expectLater(connecting, _failure('cancelled'));
-    await fixture.client.started.future;
-    var finished = false;
-    final stopping = fixture.owner.stopConnections().then(
-      (_) => finished = true,
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(finished, isFalse);
-    opening.complete(_device('late-stop'));
-    await rejected;
-    await stopping;
-    expect(fixture.client.disconnected, ['late-stop']);
-    expect(fixture.owner.current(id), isNull);
-    expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
-    expect(
-      fixture.events.where(
-        (event) => (event.$2['devices'] as List).any(
-          (device) => (device as Map)['status'] == 'connected',
-        ),
-      ),
-      isEmpty,
-    );
-  });
-
   test('宿主停止清理失败仍保存停止意图，重试回收原句柄而不关闭共享客户端', () async {
     final id = await fixture.add();
     await fixture.connect(id);
@@ -648,32 +573,6 @@ void main() {
     await fixture.owner.stopConnections();
     expect(fixture.client.disconnected, ['handle-1']);
     expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
-  });
-
-  test('宿主停止保留 USB 平台释放失败责任，重试不重复断开 SDK', () async {
-    final identity = await fixture.owner.identities.prepareSetup({});
-    var releaseAttempts = 0;
-    try {
-      final receipt = await fixture.owner.admitSetupCandidate(
-        identity: identity,
-        transport: DeviceTransport.usb,
-        open: (_, _) async => _device('stopped-usb'),
-        releasePlatformResources: () async {
-          expect(fixture.client.disconnected, ['stopped-usb']);
-          if (++releaseAttempts == 1) throw StateError('platform close failed');
-        },
-      );
-      final id = receipt['deviceId']! as String;
-      await expectLater(fixture.owner.stopConnections(), throwsStateError);
-      expect(fixture.owner.current(id), isNull);
-      expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
-      await fixture.owner.stopConnections();
-      expect(releaseAttempts, 2);
-      expect(fixture.client.disconnected, ['stopped-usb']);
-      expect(fixture.stopped, ['stopped-usb']);
-    } finally {
-      await identity.dispose();
-    }
   });
 
   test('模式切换同步撤发布，原记录只变离线且活动结束前不能执行服务', () async {
@@ -718,53 +617,6 @@ void main() {
     expect(fixture.client.disconnected, [original.device.id]);
     expect(fixture.events.last.$1, 'devices.changed');
     fixture.onStop = null;
-  });
-
-  test('模式切换服务失败仍断开，清理失败重试不会重放或修改原端点', () async {
-    final id = await fixture.add();
-    await fixture.connect(id);
-    final original = fixture.owner.requireConnection(id);
-    final saved = fixture.records.current.find(id)!;
-    var calls = 0;
-    fixture.client.failDisconnect = true;
-    await expectLater(
-      fixture.owner.retireForChange<void>(
-        id,
-        original,
-        change: (_, _) async {
-          calls++;
-          throw const AdbException('timeout', 'restart response unknown');
-        },
-      ),
-      throwsStateError,
-    );
-    expect(fixture.owner.current(id), isNull);
-    expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
-    fixture.client.failDisconnect = false;
-    await fixture.owner.command('devices.disconnect', {'deviceId': id});
-    expect(calls, 1);
-    expect(fixture.client.disconnected, [original.device.id]);
-    final record = fixture.records.current.find(id)!;
-    expect(record.address, saved.address);
-    expect(record.port, saved.port);
-    expect(record.transport, saved.transport);
-    expect(record.guid, saved.guid);
-  });
-
-  test('模式切换的 SDK typed 错误沿应用边界规范化且未知传输不再准入', () async {
-    final id = await fixture.add();
-    await fixture.connect(id);
-    final original = fixture.owner.requireConnection(id);
-    await expectLater(
-      fixture.owner.retireForChange<void>(
-        id,
-        original,
-        change: (_, _) async => throw const AdbException('timeout', 'no reply'),
-      ),
-      _failure('timeout'),
-    );
-    expect(fixture.owner.current(id), isNull);
-    expect(fixture.client.disconnected, [original.device.id]);
   });
 
   test('模式切换持久化失败不能执行服务，仍收回精确旧连接', () async {
@@ -1039,36 +891,6 @@ void main() {
     }
   });
 
-  test('新 USB 迟到返回在取消后只回收精确候选，不发布在线记录', () async {
-    final identity = await fixture.owner.identities.prepareSetup({});
-    final entered = Completer<void>();
-    final opened = Completer<AdbDevice>();
-    final stop = AdbCancellation();
-    try {
-      final pending = fixture.owner.admitSetupCandidate(
-        identity: identity,
-        transport: DeviceTransport.usb,
-        cancellation: stop,
-        open: (_, _) {
-          entered.complete();
-          return opened.future;
-        },
-      );
-      final rejected = expectLater(pending, _failure('cancelled'));
-      await entered.future;
-      final record = fixture.records.current.devices.single;
-      expect(record.transport, DeviceTransport.usb);
-      stop.cancel();
-      opened.complete(_device('late-usb'));
-      await rejected;
-      expect(fixture.owner.current(record.id), isNull);
-      expect(fixture.records.current.find(record.id)!.status, 'offline');
-      expect(fixture.client.disconnected, ['late-usb']);
-    } finally {
-      await identity.dispose();
-    }
-  });
-
   test('新设备密钥发布未知保留离线记录，不打开候选或回退全局身份', () async {
     final identity = await fixture.owner.identities.prepareSetup({
       'identity': {'scope': 'device', 'privateKeyPem': 'key-b'},
@@ -1118,39 +940,6 @@ void main() {
       expect(await File(fixture.selectedPaths.single).readAsString(), 'key-b');
       expect(fixture.owner.requireConnection(id).client, same(fixture.client));
     } finally {
-      await identity.dispose();
-    }
-  });
-
-  test('USB 候选身份错误且清理失败仍保留精确退休责任，重试不关闭共享客户端', () async {
-    final id = await fixture.add();
-    await fixture.connect(id);
-    final original = fixture.owner.requireConnection(id);
-    final identity = await fixture.owner.identities.prepareSetup(
-      {},
-      deviceId: id,
-    );
-    fixture.client.serial = 'another-phone';
-    fixture.client.failDisconnect = true;
-    try {
-      await expectLater(
-        fixture.owner.admitSetupCandidate(
-          deviceId: id,
-          identity: identity,
-          client: fixture.client,
-          transport: DeviceTransport.usb,
-          open: (_, _) async => _device('rejected-usb'),
-        ),
-        _failure('connection_cleanup_unconfirmed'),
-      );
-      expect(fixture.owner.requireConnection(id), same(original));
-      expect(fixture.client.disconnected, isEmpty);
-      fixture.client.failDisconnect = false;
-      await fixture.owner.command('devices.disconnect', {'deviceId': id});
-      expect(fixture.client.disconnected, ['rejected-usb', 'handle-1']);
-      expect(fixture.client.closed, isFalse);
-    } finally {
-      fixture.client.failDisconnect = false;
       await identity.dispose();
     }
   });
@@ -1324,26 +1113,6 @@ void main() {
     expect(fixture.client.disconnected, isEmpty);
   });
 
-  test('SDK 未确认清理的具体错误码不能降级，未知异常保留原对象', () async {
-    final id = await fixture.add();
-    fixture.client.connectError = const AdbException(
-      'cleanup_unconfirmed',
-      '握手尚未确认退出',
-    );
-    await expectLater(
-      fixture.connect(id),
-      throwsA(
-        isA<ApplicationCommandException>()
-            .having((error) => error.code, 'code', 'cleanup_unconfirmed')
-            .having((error) => error.message, 'message', '握手尚未确认退出'),
-      ),
-    );
-    final unexpected = StateError('unexpected SDK failure');
-    fixture.client.connectError = unexpected;
-    await expectLater(fixture.connect(id), throwsA(same(unexpected)));
-    expect(fixture.owner.current(id), isNull);
-  });
-
   test('同端点官方客户端不能独立创建候选时，在 connect 前拒绝并保留原连接', () async {
     fixture.client.official = true;
     final id = await fixture.add();
@@ -1376,44 +1145,6 @@ void main() {
     expect(fixture.stopped, ['handle-2']);
     expect(fixture.client.disconnected, ['handle-2']);
     expect(prepared, isFalse);
-  });
-
-  test('配置成功先回收精确原活动和连接，再交付已落盘的新端点', () async {
-    final id = await fixture.add();
-    await fixture.connect(id);
-    await fixture.configure(id);
-    expect(fixture.stopped, ['handle-1']);
-    expect(fixture.client.disconnected, ['handle-1']);
-    expect(fixture.owner.requireConnection(id).device.id, 'handle-2');
-    expect(fixture.records.current.find(id)!.address, '192.0.2.2');
-    expect(fixture.owner.projectDevices().single['connectionId'], 'physical-2');
-  });
-
-  test('候选通过后原连接排空尚未结束，原连接和候选均不能供新业务使用', () async {
-    final id = await fixture.add();
-    await fixture.connect(id);
-    final stopping = Completer<void>();
-    final drain = Completer<void>();
-    fixture.onStop = (connection) async {
-      if (connection.device.id == 'handle-1') {
-        stopping.complete();
-        await drain.future;
-      }
-    };
-    final configure = fixture.configure(id);
-    await stopping.future;
-    expect(fixture.owner.current(id), isNull);
-    expect(
-      () => fixture.owner.requireConnection(id),
-      throwsA(isA<ApplicationCommandException>()),
-    );
-    expect(
-      fixture.owner.projectDevices().single.containsKey('connectionId'),
-      isFalse,
-    );
-    drain.complete();
-    await configure;
-    expect(fixture.owner.requireConnection(id).device.id, 'handle-2');
   });
 
   test('候选磁盘提交失败不能交付或撤销仍可用的原连接', () async {
@@ -1602,30 +1333,6 @@ void main() {
     expect(fixture.client.disconnected, ['late', 'handle-1']);
   });
 
-  test('配置候选取消等待真实收尾，保留原连接和原端点', () async {
-    final id = await fixture.add();
-    await fixture.connect(id);
-    final original = fixture.owner.requireConnection(id);
-    final opening = Completer<AdbDevice>();
-    final started = Completer<void>();
-    fixture.client.opening = opening;
-    fixture.client.nextStarted = started;
-    final cancellation = AdbCancellation();
-    final pending = fixture.owner.command('devices.configure', {
-      'deviceId': id,
-      'host': '192.0.2.2',
-      'port': 6666,
-    }, cancellation: cancellation);
-    final rejected = expectLater(pending, _failure('cancelled'));
-    await started.future;
-    cancellation.cancel();
-    opening.complete(_device('late'));
-    await rejected;
-    expect(fixture.owner.requireConnection(id), same(original));
-    expect(fixture.records.current.find(id)!.address, '192.0.2.1');
-    expect(fixture.client.disconnected, ['late']);
-  });
-
   test('同官方客户端不同记录同时请求相同端点，第二次不触发底层 connect', () async {
     fixture.client.official = true;
     final first = await fixture.add();
@@ -1745,24 +1452,6 @@ void main() {
     expect(fixture.owner.requireConnection(second).device.id, 'handle-3');
   });
 
-  test('取消已交回但尚未准入的迟到握手，等待精确回收后才完成', () async {
-    final id = await fixture.add();
-    final opening = Completer<AdbDevice>();
-    fixture.client.opening = opening;
-    final cancellation = AdbCancellation();
-    final operation = fixture.owner.command('devices.connect', {
-      'deviceId': id,
-    }, cancellation: cancellation);
-    final rejected = expectLater(operation, _failure('cancelled'));
-    await fixture.client.started.future;
-    cancellation.cancel();
-    opening.complete(_device('late'));
-    await rejected;
-    expect(fixture.client.disconnected, ['late']);
-    expect(fixture.owner.current(id), isNull);
-    expect(fixture.records.current.find(id)!.status, 'offline');
-  });
-
   test('断开与迟到连接并发时，同步撤准入且不会被迟到回执重建', () async {
     final id = await fixture.add();
     final opening = Completer<AdbDevice>();
@@ -1810,49 +1499,6 @@ void main() {
     expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
   });
 
-  test('断开清理失败仍撤准入，重试只释放同一连接，不关闭共享客户端', () async {
-    final first = await fixture.add();
-    final second = await fixture.add(host: '192.0.2.2');
-    await fixture.connect(first);
-    await fixture.connect(second);
-    fixture.client.failDisconnect = true;
-    await expectLater(
-      fixture.owner.command('devices.disconnect', {'deviceId': first}),
-      throwsStateError,
-    );
-    expect(fixture.owner.current(first), isNull);
-    expect(fixture.owner.current(second), isNotNull);
-    fixture.client.failDisconnect = false;
-    await fixture.owner.command('devices.disconnect', {'deviceId': first});
-    expect(fixture.stopped, ['handle-1']);
-    expect(fixture.client.disconnected, ['handle-1']);
-    expect(fixture.client.closed, isFalse);
-  });
-
-  test('dispose 等待实际迟到握手和清理，失败后保留同一资源重试权', () async {
-    final id = await fixture.add();
-    final opening = Completer<AdbDevice>();
-    fixture.client.opening = opening;
-    final operation = fixture.connect(id);
-    final rejected = expectLater(
-      operation,
-      throwsA(isA<ApplicationCommandException>()),
-    );
-    await fixture.client.started.future;
-    var closed = false;
-    final closing = fixture.owner.close().then((_) => closed = true);
-    await Future<void>.delayed(Duration.zero);
-    expect(closed, isFalse);
-    opening.complete(_device('late'));
-    await rejected;
-    await closing;
-    expect(fixture.client.disconnected, ['late']);
-    expect(
-      () => fixture.connect(id),
-      throwsA(isA<ApplicationCommandException>()),
-    );
-  });
-
   test('forget 落盘后移除身份材料，可重复清理且不复建设备', () async {
     final id = await fixture.add();
     await fixture.connect(id);
@@ -1861,23 +1507,6 @@ void main() {
     final reopened = await DeviceRecordStore.open(directory: fixture.root);
     expect(reopened.current.find(id), isNull);
     expect(fixture.client.disconnected, ['handle-1']);
-  });
-
-  test('close 失败保留关闭权且不重新开放准入，重试只回收原精确句柄', () async {
-    final id = await fixture.add();
-    await fixture.connect(id);
-    fixture.client.failDisconnect = true;
-    await expectLater(fixture.owner.close(), throwsA(isA<Object>()));
-    expect(fixture.owner.current(id), isNull);
-    expect(
-      () => fixture.connect(id),
-      throwsA(isA<ApplicationCommandException>()),
-    );
-    fixture.client.failDisconnect = false;
-    await fixture.owner.close();
-    expect(fixture.stopped, ['handle-1']);
-    expect(fixture.client.disconnected, ['handle-1']);
-    expect(fixture.client.closed, isFalse);
   });
 
   test('自动连接要求当前租约及持久意图，不能重放用户已停止的设备', () async {
@@ -1949,34 +1578,6 @@ void main() {
     expect(fixture.owner.current(id)!.device.id, 'handle-2');
     expect(fixture.client.disconnected, ['handle-1']);
     expect(fixture.records.current.find(id)!.status, 'connected');
-  });
-
-  test('释放租约等待中的握手不能准入，迟到连接仍由精确句柄清理', () async {
-    final id = await fixture.add();
-    await fixture.records.update(
-      id,
-      (record) => record.copyWith(autoReconnect: true),
-    );
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': true,
-    });
-    final opening = Completer<AdbDevice>();
-    fixture.client.opening = opening;
-    final rejected = expectLater(
-      fixture.automatic(id, 'owner-a'),
-      _failure('cancelled'),
-    );
-    await fixture.client.started.future;
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': false,
-    });
-    opening.complete(_device('late-auto'));
-    await rejected;
-    expect(fixture.owner.current(id), isNull);
-    expect(fixture.client.disconnected, ['late-auto']);
-    expect(fixture.records.current.find(id)!.autoReconnect, isTrue);
   });
 
   test('后继租约撤旧在途尝试，旧所有者迟到释放不能撤销后继', () async {

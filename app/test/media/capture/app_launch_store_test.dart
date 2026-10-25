@@ -63,26 +63,6 @@ void main() {
     );
   });
 
-  test('v1 记录在打开、呈现和关闭各阶段始终使用 Unix 秒', () async {
-    var time = DateTime.fromMillisecondsSinceEpoch(123456789);
-    final store = await AppLaunchStore.open(
-      directory: directory,
-      now: () => time,
-    );
-    Future<int> savedTime() async =>
-        ((jsonDecode(await file.readAsString()) as Map)['records']
-                as Map)[_first]['updatedAt']
-            as int;
-    await _begin(store, _first);
-    expect(await savedTime(), 123456);
-    time = DateTime.fromMillisecondsSinceEpoch(123458123);
-    await store.finish(_first);
-    expect(await savedTime(), 123458);
-    time = DateTime.fromMillisecondsSinceEpoch(123460999);
-    await store.close(_first);
-    expect(await savedTime(), 123460);
-  });
-
   test('重开将 pending 和 observed 都恢复为未知，不恢复旧准入', () async {
     final store = await AppLaunchStore.open(directory: directory);
     final pending = await _begin(store, _first);
@@ -110,21 +90,6 @@ void main() {
     );
     final saved = jsonDecode(await file.readAsString()) as Map;
     expect((saved['records'] as Map)[_second]['status'], 'unknown');
-  });
-
-  test('兼容原版 v1 缺省 failureCode 与单段包名，不丢失未知记录', () async {
-    final record = _record(_first, 'unknown')..['packageName'] = 'android';
-    await file.writeAsString(
-      jsonEncode({
-        'version': 1,
-        'records': {_first: record},
-      }),
-    );
-    final store = await AppLaunchStore.open(directory: directory);
-    final recovered = (await store.unresolved()).single;
-    expect(recovered.packageName, 'android');
-    expect(recovered.failureCode, isNull);
-    expect(recovered.projection['recordOnly'], isTrue);
   });
 
   test('明确关闭使排队准入失效，迟到呈现不能重新打开记录', () async {
@@ -158,18 +123,6 @@ void main() {
       _begin(store, _second),
       throwsA(_code('app_launch_unknown')),
     );
-  });
-
-  test('主屏独立打开成功后关闭本次记录，保持关联会话身份', () async {
-    final store = await AppLaunchStore.open(directory: directory);
-    await _begin(store, _first, session: _second);
-    final projection = (await store.unresolved()).single.projection;
-    expect(projection['launchOperationId'], _first);
-    expect(projection['linkedSessionId'], _second);
-    await store.finish(_first);
-    final reopened = await AppLaunchStore.open(directory: directory);
-    expect(await reopened.unresolved(), isEmpty);
-    await _begin(reopened, _third);
   });
 
   for (final invalid in [

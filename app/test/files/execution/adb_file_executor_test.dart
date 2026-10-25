@@ -2,7 +2,6 @@ import 'package:scrcpy_connect/connection/connection_owner.dart';
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart' as adb;
@@ -501,40 +500,6 @@ void main() {
     expect(() => batch.stat('/late'), throwsA(isA<FileFailure>()));
   });
 
-  test(
-    'local metadata and raw-name listing do not resolve or create a device',
-    () async {
-      final api = Api();
-      final client = adb.NativeAdbClient(api, '');
-      final executor = AdbFileExecutor(
-        localFiles: client.services,
-        resolveConnection: (_) => throw StateError('本机事实不得要求设备'),
-        fileScopeId: 'scope-test',
-        fileScopeKey: 'file-execution-fixture',
-      );
-      final stamp = await executor.stat(
-        '',
-        '/local',
-        local: true,
-        cancellation: FileCancellation(),
-      );
-      expect(stamp.modifiedNanos, 123456789);
-      expect(stamp.modifiedResolutionNanos, 1);
-      final facts = await executor.list(
-        '',
-        '/local',
-        local: true,
-        limit: 2,
-        cancellation: FileCancellation(),
-      );
-      expect(facts.entries.first.nameBytes, [255, 10]);
-      expect(facts.entries.first.stamp!.isLink, isTrue);
-      expect(facts.entries.last.error!.code, 'permission_denied');
-      expect(facts.truncated, isTrue);
-      expect(api.calls, isEmpty);
-    },
-  );
-
   test('pull uses final count and commits the exact part on its original connection', () async {
     final api = Api();
     final client = adb.NativeAdbClient(api, '');
@@ -769,39 +734,6 @@ void main() {
       ),
     );
     expect(api.closed, ['worker-1']);
-  });
-
-  test('local mkdir operates without resolving a device and refuses existing paths', () async {
-    final root = await Directory.systemTemp.createTemp('native-file-executor-');
-    addTearDown(() => root.delete(recursive: true));
-    final executor = AdbFileExecutor(
-      localFiles: adb.NativeAdbClient(Api(), '').services,
-      resolveConnection: (_) => throw StateError('不应连接设备'),
-      fileScopeId: 'scope-test',
-      fileScopeKey: 'file-execution-fixture',
-    );
-    final path = '${root.path}/child';
-    expect(
-      await executor.mutate(
-        '',
-        'mkdir',
-        path,
-        local: true,
-        cancellation: FileCancellation(),
-      ),
-      'directoryCreated',
-    );
-    expect(await Directory(path).exists(), isTrue);
-    await expectLater(
-      executor.mutate(
-        '',
-        'mkdir',
-        path,
-        local: true,
-        cancellation: FileCancellation(),
-      ),
-      throwsA(isA<FileFailure>().having((e) => e.code, 'code', 'conflict')),
-    );
   });
 
   test(

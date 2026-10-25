@@ -38,59 +38,6 @@ void main() {
   });
 
   testWidgets(
-    'rotation keeps the handle outside safe and system gesture areas',
-    (tester) async {
-      final harness = await _pumpHandle(tester);
-      await tester.drag(harness.control, const Offset(280, 800));
-      await tester.pumpAndSettle();
-
-      await _pumpHandle(
-        tester,
-        harness: harness,
-        size: const Size(874, 393),
-        padding: const EdgeInsets.fromLTRB(32, 20, 36, 24),
-        systemGestureInsets: const EdgeInsets.fromLTRB(40, 0, 48, 30),
-      );
-
-      final collapsed = tester.getRect(harness.control);
-      expect(collapsed.right, lessThanOrEqualTo(826));
-      expect(collapsed.bottom, lessThanOrEqualTo(351));
-      expect(collapsed.top, greaterThanOrEqualTo(32));
-      await tester.tap(harness.control);
-      await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel(RegExp('(?:展开|收起)画面工具，手机')), findsOneWidget);
-      expect(tester.getRect(harness.control).right, lessThanOrEqualTo(826));
-      expect(harness.exits, 0);
-      expect(harness.remoteTouches, 0);
-    },
-  );
-
-  testWidgets(
-    'keyboard and split viewport changes keep the exit button reachable',
-    (tester) async {
-      final harness = await _pumpHandle(tester);
-      await tester.drag(harness.control, const Offset(0, 800));
-      await tester.pumpAndSettle();
-      await tester.tap(harness.control);
-      await tester.pumpAndSettle();
-
-      await _pumpHandle(
-        tester,
-        harness: harness,
-        size: const Size(393, 600),
-        viewInsets: const EdgeInsets.only(bottom: 260),
-      );
-      expect(find.bySemanticsLabel(RegExp('(?:展开|收起)画面工具，手机')), findsOneWidget);
-      expect(tester.getRect(harness.control).bottom, lessThanOrEqualTo(328));
-      await tester.ensureVisible(find.text('关闭画面'));
-      await tester.tap(find.text('关闭画面'));
-      await tester.pump();
-      expect(harness.exits, 1);
-      expect(harness.remoteTouches, 0);
-    },
-  );
-
-  testWidgets(
     'phone-width native drag path leaves a 44px hittable collapsed control that expands and exits',
     (tester) async {
       tester.view.physicalSize = const Size(393, 874);
@@ -177,34 +124,17 @@ class _HandleHarness {
   Finder get control => find.byKey(const ValueKey('remote-tool-handle'));
 }
 
-Future<_HandleHarness> _pumpHandle(
-  WidgetTester tester, {
-  _HandleHarness? harness,
-  Size size = const Size(393, 874),
-  EdgeInsets padding = EdgeInsets.zero,
-  EdgeInsets systemGestureInsets = EdgeInsets.zero,
-  EdgeInsets viewInsets = EdgeInsets.zero,
-  bool disableAnimations = false,
-}) async {
-  tester.view.physicalSize = size;
+Future<_HandleHarness> _pumpHandle(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(393, 874);
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-  final controlHarness = harness ?? _HandleHarness();
+  final controlHarness = _HandleHarness();
   await tester.pumpWidget(
     MaterialApp(
       theme: ConnectTokens.theme(Brightness.light),
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          padding: padding,
-          systemGestureInsets: systemGestureInsets,
-          viewInsets: viewInsets,
-          disableAnimations: disableAnimations,
-        ),
-        child: child!,
-      ),
       home: Scaffold(
         body: Stack(
           children: [

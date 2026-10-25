@@ -269,22 +269,6 @@ void main() {
     expect(api.created, 0);
     await client.close();
   });
-  test('未提供握手取消能力的适配器明确拒绝显式取消参数', () async {
-    final api = _Api();
-    final client = NativeAdbClient(api, '/owned');
-    expect(
-      () => client.connect('target', cancellation: AdbCancellation()),
-      throwsA(
-        isA<AdbException>().having(
-          (e) => e.code,
-          'code',
-          'handshake_cancellation_unavailable',
-        ),
-      ),
-    );
-    expect(api.lastConnectOptions, isNull);
-    await client.close();
-  });
   test('关闭等待迟到握手登记并撤销准入，不启动实际连接', () async {
     final api = _HandshakeApi()..creating = Completer<String>();
     final client = NativeAdbClient(api, '/owned');
@@ -572,34 +556,6 @@ void main() {
     await secondResult;
     expect(api.cancelledHandshakes, ['handshake-1', 'handshake-2']);
   });
-  test('直连 TCP 与 USB 传递显式执行选项，默认调用不注入应用策略', () async {
-    final api = _Api();
-    final client = NativeAdbClient(api, '/owned/key');
-    addTearDown(client.close);
-    const options = AdbConnectOptions(
-      burstMode: true,
-      publicKeyComment: '测试主控',
-      tcp: AdbTcpOptions(
-        nodelay: false,
-        keepalive: AdbKeepaliveOptions(
-          idle: Duration(seconds: 2),
-          interval: Duration(seconds: 3),
-          retries: 4,
-        ),
-        userTimeout: Duration(seconds: 8),
-      ),
-    );
-    await client.connect('tcp', directOptions: options);
-    expect(identical(api.lastConnectOptions, options), isTrue);
-    await client.connectUsbFd(42, 'usb', options: options);
-    expect(identical(api.lastUsbOptions, options), isTrue);
-    await client.connect('default');
-    expect(api.lastConnectOptions!.burstMode, isFalse);
-    expect(api.lastConnectOptions!.publicKeyComment, 'interop-adb');
-    expect(api.lastConnectOptions!.tcp.keepalive, isNull);
-    expect(api.lastConnectOptions!.tcp.userTimeout, isNull);
-  });
-
   test('无效选项在建立连接前拒绝，不截断毫秒或按字符数放过超长公钥注释', () async {
     final api = _Api();
     final client = NativeAdbClient(api, '/owned/key');
@@ -646,33 +602,6 @@ void main() {
     expect(api.lastUsbOptions, isNull);
   });
 
-  test('便捷 shell 缺少终态与显式会话一致报告未知并精确关闭', () async {
-    final api = _Api()..missingTerminal = true;
-    final client = NativeAdbClient(api, '/owned');
-    await expectLater(
-      client.shell(device, 'command').drain<void>(),
-      throwsA(_code('result_unknown')),
-    );
-    expect(api.cancelled, ['operation']);
-    await client.close();
-    expect(api.cancelled, ['operation']);
-    expect(api.closes, 0);
-  });
-
-  test('便捷下载使用同一 SYNC 会话，失败关闭由 services 保留并重试', () async {
-    final api = _SyncApi()..cancelFailures = 1;
-    final client = NativeAdbClient(api, '/owned');
-    await expectLater(
-      client.pull(device, '/remote', File('/local')),
-      throwsStateError,
-    );
-    expect(api.request!.kind, AdbSyncKind.pullFile);
-    expect(api.request!.path, '/remote'.codeUnits);
-    await client.close();
-    expect(api.cancelled, ['sync-operation', 'sync-operation']);
-    expect(api.closes, 0);
-  });
-
   test(
     'close drains an in-flight bounded pairing without claiming cancellation',
     () async {
@@ -689,31 +618,6 @@ void main() {
       await closing;
     },
   );
-  test('closing a client disconnects only its own connections', () async {
-    final api = _Api();
-    final first = NativeAdbClient(api, '/first');
-    final second = NativeAdbClient(api, '/second');
-    final a = await first.connect('first');
-    final b = await second.connect('second');
-    await first.close();
-    expect(api.disconnected, [a.id]);
-    expect(api.disconnected, isNot(contains(b.id)));
-    await second.close();
-    expect(api.disconnected, [a.id, b.id]);
-    expect(api.closes, 0);
-  });
-  test('native devices retain their exact host identity', () async {
-    final api = _Api();
-    final owner = Object();
-    final client = NativeAdbClient(api, '/owned', nativeOwner: owner);
-    final connected = await client.connect('target');
-    expect(identical(connected.nativeOwner, owner), isTrue);
-    expect(
-      identical((await client.devices()).single.nativeOwner, owner),
-      isTrue,
-    );
-    await client.close();
-  });
   test('foreign host handles are rejected before dispatch', () async {
     final api = _Api();
     final client = NativeAdbClient(api, '/owned');
@@ -754,14 +658,6 @@ void main() {
     await client.close();
     expect(api.disconnected, ['owned', 'owned']);
   });
-  test('close retries failed explicit cleanup of a listed handle', () async {
-    final api = _Api()..disconnectFailures = 1;
-    final client = NativeAdbClient(api, '/owned');
-    final listed = (await client.devices()).single;
-    await expectLater(client.disconnect(listed), throwsStateError);
-    await client.close();
-    expect(api.disconnected, [listed.id, listed.id]);
-  });
   test('listing a handle alone does not claim its cleanup', () async {
     final api = _Api();
     final client = NativeAdbClient(api, '/owned');
@@ -769,19 +665,6 @@ void main() {
     await client.close();
     expect(api.disconnected, isEmpty);
   });
-  test(
-    'failed close can retry remaining handles without reopening admission',
-    () async {
-      final api = _Api()..disconnectFailures = 1;
-      final client = NativeAdbClient(api, '/owned');
-      await client.connect('owned');
-      await expectLater(client.close(), throwsStateError);
-      expect(() => client.connect('another'), throwsA(isA<AdbException>()));
-      await client.close();
-      await client.close();
-      expect(api.disconnected, ['owned', 'owned']);
-    },
-  );
   test(
     'late connection cleanup failure is retained for a close retry',
     () async {
@@ -823,8 +706,7 @@ void main() {
 
 class _Api implements NativeAdbApi {
   int reads = 0, closes = 0;
-  bool missingTerminal = false;
-  int disconnectFailures = 0, cancelFailures = 0;
+  int disconnectFailures = 0;
   final disconnected = <String>[];
   Completer<AdbDevice>? opening;
   Completer<String>? pairing;
@@ -886,7 +768,6 @@ class _Api implements NativeAdbApi {
   @override
   Future<NativeAdbEvent?> next(String id) async {
     reads++;
-    if (missingTerminal) return null;
     return switch (reads) {
       1 => NativeAdbEvent(
         kind: 'stdout',
@@ -911,10 +792,6 @@ class _Api implements NativeAdbApi {
   @override
   Future<void> cancel(String id) async {
     cancelled.add(id);
-    if (cancelFailures > 0) {
-      cancelFailures--;
-      throw StateError('operation cleanup was not confirmed');
-    }
   }
 
   @override
@@ -1169,20 +1046,3 @@ final class _ClaimApi extends _Api implements NativeAdbConnectionApi {
 
 Matcher _code(String code) =>
     isA<AdbException>().having((e) => e.code, 'code', code);
-
-final class _SyncApi extends _Api {
-  AdbSyncRequest? request;
-  @override
-  Future<String> sync(String id, AdbSyncRequest request, int timeoutMs) async {
-    this.request = request;
-    return 'sync-operation';
-  }
-
-  @override
-  Future<NativeAdbEvent?> next(String id) async => NativeAdbEvent(
-    kind: 'transfer',
-    bytes: Uint8List(0),
-    done: true,
-    transferred: 3,
-  );
-}

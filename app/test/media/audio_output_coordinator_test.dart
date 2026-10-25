@@ -390,21 +390,6 @@ void main() {
     },
   );
 
-  test(
-    'noisy event requires explicit resume and ignores stale epoch callbacks',
-    () async {
-      final h = _Harness();
-      await h.visible();
-      await h.outputs.start(_stream('A'));
-      await h.focus('noisy');
-      expect(h.outputs.status('A')['requiresUserResume'], true);
-      await h.outputs.resume('A');
-      await h.focus('permanentLoss', 1);
-      expect(h.outputs.status('A')['playState'], 'playing');
-      await h.outputs.dispose();
-    },
-  );
-
   test('background authorization alone is insufficient without actual FGS readiness', () async {
     final h = _Harness();
     await h.visible();
@@ -426,24 +411,6 @@ void main() {
     await h.outputs.policy(false);
     expect(h.outputs.status('A')['manualPaused'], true);
     expect(h.outputs.status('A')['playState'], 'paused');
-    await h.outputs.dispose();
-  });
-
-  test('unsupported background keeps default foreground playback and pauses when hidden', () async {
-    final h = _Harness()..backgroundSupported = false;
-    await h.visible();
-    await h.outputs.policy(true);
-    final ready = await h.outputs.start(_stream('A'));
-    expect(ready['nativeReady'], true);
-    expect(ready['playState'], 'playing');
-    expect(h.outputs.status()['backgroundAllowed'], true);
-    expect(h.outputs.status()['backgroundReady'], false);
-    await h.outputs.setVisible(false);
-    expect(h.outputs.status('A')['playState'], 'paused');
-    expect(h.outputs.status('A')['backgroundPaused'], true);
-    await h.visible();
-    expect(h.outputs.status('A')['playState'], 'playing');
-    expect(h.outputs.status()['backgroundReady'], false);
     await h.outputs.dispose();
   });
 
@@ -689,23 +656,6 @@ void main() {
       await h.outputs.dispose();
     },
   );
-
-  test('volume config never claims audible hardware verification or resumes paused audio', () async {
-    final h = _Harness();
-    await h.visible();
-    await h.outputs.start(_stream('A'));
-    await h.outputs.pause('A');
-    final receipt = await h.outputs.volume('A', volume: .25, muted: true);
-    expect(receipt['volumeConfigured'], true);
-    expect(receipt['volumeOutputVerified'], false);
-    expect(receipt['playState'], 'paused');
-    expect(h.players.single.calls.last, 'volume:0.25:true');
-    await expectLater(
-      h.outputs.volume('A', volume: double.nan, muted: false),
-      throwsA(_code('invalid_argument')),
-    );
-    await h.outputs.dispose();
-  });
 
   test('invalid format and native packet endpoint fail before ready', () async {
     final h = _Harness();

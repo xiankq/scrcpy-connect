@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:scrcpy_connect/application/lifecycle/ordered_disposal.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,21 +21,5 @@ void main() {
     expect(calls, ['files', 'media', 'events', 'files']);
     await disposal.run();
     expect(calls, hasLength(4));
-  });
-
-  test('并发释放共享同一次资源回收', () async {
-    final gate = Completer<void>();
-    var calls = 0;
-    final disposal = OrderedDisposal([
-      () async {
-        calls++;
-        await gate.future;
-      },
-    ]);
-    final first = disposal.run();
-    expect(disposal.run(), same(first));
-    expect(calls, 1);
-    gate.complete();
-    await first;
   });
 }

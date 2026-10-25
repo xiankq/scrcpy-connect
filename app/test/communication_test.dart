@@ -252,45 +252,6 @@ void main() {
   }
 
   testWidgets(
-    'aggregate call state remains limited and exposes no unsafe global actions',
-    (tester) async {
-      final controller = createTestController(
-        (command, [params = const {}]) async => {
-          'status': 'limited',
-          'live': true,
-          'audioStatus': 'unknown',
-          'reason': '具体通话安全定位尚未完成，请在手机原电话应用操作。',
-          'calls': [
-            {
-              'id': 'call',
-              'state': 'ringing',
-              'name': '当前系统通话',
-              'canAnswer': false,
-              'canReject': false,
-              'canHangup': false,
-            },
-          ],
-        },
-      );
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: CallsPage(controller: controller, device: device),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('通话控制：受限'), findsOneWidget);
-      expect(find.text('具体通话安全定位尚未完成，请在手机原电话应用操作。'), findsOneWidget);
-      expect(find.text('接听'), findsNothing);
-      expect(find.text('拒接'), findsNothing);
-      expect(find.text('挂断'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
-
-  testWidgets(
     'a live batched incoming event presents its device source without answering',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);

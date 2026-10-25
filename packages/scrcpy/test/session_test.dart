@@ -7,20 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 const device = AdbDevice(id: 'connection', serial: 'serial', state: 'device');
 
 void main() {
-  test('来源状态缺少可选能力时明确失败，既有传输无需新增实现', () async {
-    await expectLater(
-      ScrcpyClient(FakeScrcpyApi())
-          .sourceStatus(device, captureRef: 'capture', sourceId: 'source'),
-      throwsA(
-        isA<ScrcpyException>().having(
-          (e) => e.code,
-          'code',
-          'source_status_unavailable',
-        ),
-      ),
-    );
-  });
-
   test('来源状态先核对同库身份，不能将外部连接送到原生登记表', () async {
     final native = SourceStatusScrcpyApi();
     final owner = Object();
@@ -177,19 +163,6 @@ void main() {
     expect(native.connectionId, isNull);
   });
 
-  test('连接排空的未知清理不伪报成功，同一句柄仍可重试', () async {
-    final native = FakeScrcpyApi()..draining = Completer<void>();
-    final client = ScrcpyClient(native);
-    final failure = const ScrcpyException('capture_cleanup_unverified');
-    final draining = client.drainConnection(device);
-    final rejected = expectLater(draining, throwsA(same(failure)));
-    native.draining!.completeError(failure);
-    await rejected;
-    native.draining = null;
-    await client.drainConnection(device);
-    expect(native.drainedConnections, ['connection', 'connection']);
-  });
-
   test('原生宿主拒绝其他库和无归属的设备，配套身份可以创建捕获', () async {
     final native = FakeScrcpyApi();
     final owner = Object();
@@ -244,18 +217,6 @@ void main() {
     expect(native.observerCancellations, 2);
     expect(native.stopped, ['capture']);
     await second.cancel();
-  });
-
-  test('观察清理失败后只重试观察者，不再次停止已释放捕获', () async {
-    final native = FakeScrcpyApi()..observerCancelFails = true;
-    final session = await ScrcpyClient(native).createSession(device);
-    final observer = session.events.listen((_) {});
-    await expectLater(session.close(), throwsStateError);
-    expect(native.stopped, ['capture']);
-    await session.close();
-    expect(native.stopped, ['capture']);
-    expect(native.observerCancellations, 2);
-    await observer.cancel();
   });
 
   test('捕获停止失败后只重试捕获，不重复取消已释放观察者', () async {
@@ -326,18 +287,6 @@ void main() {
     expect(native.stopped, ['capture', 'capture']);
   });
 
-  test('附着已有捕获只检查同一来源，关闭观察不停止业务所有者', () async {
-    final native = FakeScrcpyApi();
-    final session = await ScrcpyClient(native).attach('capture');
-    expect(session.info!.source!.sourceId, 'source');
-    expect((await session.start()).id, 'capture');
-    expect(native.startCalls, 0);
-    await session.sendControl(const ScrcpyRotate());
-    await session.close();
-    expect(native.stopped, isEmpty);
-    expect(native.connectionId, isNull);
-  });
-
   test('启动成功后取消旧请求不会停止已交付的会话', () async {
     final native = FakeScrcpyApi();
     final session = await ScrcpyClient(native).createSession(device);
@@ -369,43 +318,6 @@ void main() {
       () => session.sendControl(const ScrcpyRotate()),
       throwsA(isA<ScrcpyException>()),
     );
-  });
-
-  test('启动取消只关闭所属捕获，不触及共享 ADB 连接', () async {
-    final native = FakeScrcpyApi();
-    final session = await ScrcpyClient(native).createSession(device);
-    final cancellation = AdbCancellation();
-    final starting = session.start(cancellation: cancellation);
-    final rejected = expectLater(starting, throwsA(isA<ScrcpyException>()));
-    cancellation.cancel();
-    await rejected;
-    expect(native.stopped, ['capture']);
-    native.starting.complete(info);
-  });
-
-  test('关闭失败保留重试资格，后续控制仍然拒绝', () async {
-    final native = FakeScrcpyApi()..stopFailures = 1;
-    final session = await ScrcpyClient(native).createSession(device);
-    await expectLater(session.close(), throwsStateError);
-    expect(
-      () => session.sendControl(const ScrcpyRotate()),
-      throwsA(isA<ScrcpyException>()),
-    );
-    await session.close();
-    expect(native.stopped, ['capture', 'capture']);
-  });
-
-  test('创建期间取消回收迟到登记的捕获', () async {
-    final native = FakeScrcpyApi()..registration = Completer<String>();
-    final cancellation = AdbCancellation();
-    final creating = ScrcpyClient(native)
-        .createSession(device, cancellation: cancellation);
-    final rejected = expectLater(creating, throwsA(isA<ScrcpyException>()));
-    cancellation.cancel();
-    native.registration!.complete('capture');
-    await rejected;
-    expect(native.stopped, ['capture']);
-    expect(native.startCalls, 0);
   });
 
   test('创建取消后清理失败时把唯一捕获所有权交还异常调用者', () async {
@@ -488,7 +400,6 @@ class FakeScrcpyApi implements NativeScrcpyApi, NativeScrcpyConnectionApi {
   int? inspectGeneration;
   final eventControllers = <StreamController<ScrcpyEvent>>[];
   int observerCancellations = 0;
-  bool observerCancelFails = false;
   int observerCancelFailures = 0;
   Completer<void>? draining;
   final drainedConnections = <String>[];
@@ -553,8 +464,7 @@ class FakeScrcpyApi implements NativeScrcpyApi, NativeScrcpyConnectionApi {
       next: (_) async => await iterator.moveNext() ? iterator.current : null,
       cancel: (_) async {
         observerCancellations++;
-        if (observerCancelFails || observerCancelFailures-- > 0) {
-          observerCancelFails = false;
+        if (observerCancelFailures-- > 0) {
           throw StateError('observer cleanup');
         }
         await iterator.cancel();

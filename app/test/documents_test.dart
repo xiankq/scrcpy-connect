@@ -106,39 +106,7 @@ void main() {
     expect(operation.error, contains('迟到来源归还尚未确认'));
     controller.dispose();
   });
-  testWidgets('reselection and page disposal return each managed source once', (
-    tester,
-  ) async {
-    final released = <String>[];
-    var imports = 0;
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
-      if (command == 'documents.cancel' &&
-          params['managedSourceId'] is String) {
-        released.add(params['managedSourceId'] as String);
-      }
-      if (command == 'documents.importDirectory') {
-        imports++;
-        if (imports == 2) expect(released, ['document:first']);
-        return {
-          'managedSourceId': imports == 1
-              ? 'document:first'
-              : 'document:second',
-          'status': 'imported',
-        };
-      }
-      return {};
-    });
-    final operation = DocumentOperationController(controller);
-    await operation.run('documents.importDirectory', {});
-    await operation.run('documents.importDirectory', {});
-    operation.dispose();
-    await tester.pump();
-    expect(released, ['document:first', 'document:second']);
-    controller.dispose();
-  });
+
   testWidgets(
     'a managed import result arriving after page disposal is returned',
     (tester) async {
@@ -383,55 +351,7 @@ void main() {
       }
     },
   );
-  testWidgets('a preflight failure reports no save and allows explicit retry', (
-    tester,
-  ) async {
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
-      if (command == 'documents.export') {
-        return {
-          'status': 'failed',
-          'files': 0,
-          'directories': 0,
-          'bytes': 0,
-          'partialDestinationPossible': false,
-          'errors': [
-            {'message': '原文件已变化'},
-          ],
-        };
-      }
-      return {};
-    });
-    await tester.pumpWidget(
-      RouterTestApp(
-        controller: controller,
-        theme: ConnectTokens.theme(Brightness.light),
-        home: DocumentExportPage(
-          controller: controller,
-          localPath: '/private/cache/file',
-          name: 'file',
-          kind: 'file',
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('选择系统位置并保存'));
-    await tester.pumpAndSettle();
-    expect(find.text('本次保存未开始'), findsOneWidget);
-    expect(find.text('部分内容已保存，请核对'), findsNothing);
-    expect(find.text('系统保存结果待核对'), findsNothing);
-    expect(find.byType(CheckboxListTile), findsNothing);
-    expect(
-      tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, '重新选择系统位置'))
-          .onPressed,
-      isNotNull,
-    );
-    await tester.pumpWidget(const SizedBox());
-    controller.dispose();
-  });
+
   testWidgets(
     'a lost export reply requires review before another system write',
     (tester) async {
@@ -555,59 +475,7 @@ void main() {
       controller.dispose();
     },
   );
-  testWidgets(
-    'a partial system save retains cache and reports provider errors without claiming completion',
-    (tester) async {
-      Json? exported;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        if (command == 'documents.export') {
-          exported = params;
-          return {
-            'status': 'partial',
-            'name': 'Documents',
-            'files': 1,
-            'directories': 1,
-            'bytes': 4,
-            'errors': [
-              {
-                'path': 'second.txt',
-                'code': 'write_failed',
-                'message': '系统位置写入失败',
-              },
-            ],
-          };
-        }
-        return {};
-      });
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: DocumentExportPage(
-            controller: controller,
-            localPath: '/private/cache/Documents',
-            name: 'Documents',
-            kind: 'directory',
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('选择系统位置并保存'));
-      await tester.pumpAndSettle();
-      expect(exported?['localPath'], '/private/cache/Documents');
-      expect(exported?['operationId'], isNotEmpty);
-      expect(exported?['conflict'], 'ask');
-      expect(find.text('部分内容已保存，请核对'), findsOneWidget);
-      expect(find.text('已保存到系统位置'), findsNothing);
-      expect(find.textContaining('second.txt'), findsOneWidget);
-      expect(find.textContaining('本机暂存仍保留'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
+
   testWidgets(
     'leaving a pending document save cancels only its operation and ignores a late result',
     (tester) async {

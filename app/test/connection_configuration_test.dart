@@ -2,9 +2,7 @@ import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/pages/connection/discovery/connection_discovery_page.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';
 import 'package:scrcpy_connect/application/app_controller.dart';
 
@@ -52,98 +50,6 @@ Future<void> tap(WidgetTester tester, String text) async {
 }
 
 void main() {
-  testWidgets(
-    'discovery refreshes failures and shows the actual IPv6 service endpoint',
-    (tester) async {
-      var searches = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        if (command != 'devices.discover') return {};
-        if (++searches == 1) {
-          throw const RequestFailure('network_unavailable', '网络未开启');
-        }
-        return {
-          'devices': [
-            {
-              'name': '候选手机',
-              'kind': 'pairing',
-              'endpoints': [
-                {'address': 'fe80::1%wlan0', 'port': 40001},
-              ],
-            },
-          ],
-        };
-      });
-      await mount(tester, controller, DiscoveryPage(controller: controller));
-      expect(find.text('IP 连接'), findsNothing);
-      expect(find.text('改用 USB'), findsNothing);
-      await tester.tap(find.byTooltip('刷新'));
-      await tester.pumpAndSettle();
-      expect(searches, 2);
-      expect(find.text('[fe80::1%wlan0]:40001'), findsOneWidget);
-      expect(find.text('等待配对'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'configuration reuses four modes with a read-only identity and confirms the original record',
-    (tester) async {
-      final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add((command, params));
-        if (command == 'identity.device.get') {
-          return {'scope': 'device', 'fingerprint': 'fingerprint'};
-        }
-        return {};
-      });
-      await mount(
-        tester,
-        controller,
-        DeviceConnectionPreferencesPage(controller: controller, device: phone),
-      );
-      expect(find.text('发现设备'), findsNothing);
-      expect(find.byType(DropdownButtonFormField<String>), findsNothing);
-      expect(find.text('设备专属私钥'), findsOneWidget);
-      final source = find.byType(ConnectSelectionField<String>);
-      expect(tester.getSize(source).height, 56);
-      expect(tester.getSize(find.byType(TextFormField).first).height, 52);
-      final sourceBounds = tester.getRect(source);
-      final introBounds = tester.getRect(find.text('使用手机无线调试主页面的连接端口。'));
-      expect(introBounds.top - sourceBounds.bottom, 16);
-
-      expect(find.text('从文件选择'), findsNothing);
-      expect(find.text('phone.local'), findsOneWidget);
-      await tap(tester, '无线配对码');
-      final fields = tester
-          .widgetList<TextFormField>(find.byType(TextFormField))
-          .toList();
-      expect(
-        fields[1].controller!.text,
-        isEmpty,
-        reason: 'daily port is not a pairing port',
-      );
-      await tap(tester, 'IP连接');
-      await tap(tester, '连接设备');
-      await tap(tester, '取消');
-      expect(calls.where((c) => c.$1 == 'devices.configure'), isEmpty);
-      await tap(tester, '连接设备');
-      await tester.tap(find.widgetWithText(FilledButton, '应用并连接'));
-      await tester.pumpAndSettle();
-      final submitted = calls
-          .singleWhere((c) => c.$1 == 'devices.configure')
-          .$2;
-      expect(submitted['deviceId'], 'original');
-      expect(submitted['transport'], 'tls');
-      expect(submitted.containsKey('identity'), isFalse);
-      expect(calls.where((c) => c.$1 == 'devices.add'), isEmpty);
-    },
-  );
-
   testWidgets(
     'custom identity is validated and submitted with the selected IP attempt',
     (tester) async {

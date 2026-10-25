@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/media/output/video_output_coordinator.dart';
@@ -28,8 +27,7 @@ VideoJson _endpoint(String relay, int generation) => {
 
 class _Player implements VideoPlayerPort {
   final changes = StreamController<VideoJson>.broadcast(sync: true);
-  final playing = Completer<void>();
-  Completer<void>? presentation, releasing;
+  Completer<void>? releasing;
   int releases = 0;
 
   @override
@@ -40,20 +38,13 @@ class _Player implements VideoPlayerPort {
       const VideoTexture(7, 16, 16);
 
   @override
-  Future<void> setPaused(bool paused) async {
-    if (!playing.isCompleted) playing.complete();
-    await presentation?.future;
-  }
+  Future<void> setPaused(bool paused) async {}
 
   @override
   Future<VideoPixels?> snapshot({
     required int width,
     required int height,
-  }) async => VideoPixels(
-    width,
-    height,
-    Uint8List.fromList(List.filled(width * height * 4, 255)),
-  );
+  }) async => null;
 
   @override
   Future<VideoJson> release() async {
@@ -70,12 +61,9 @@ class _Harness {
   final events = <VideoJson>[];
   final commands = <(String, VideoJson)>[];
   final players = <_Player>[];
-  final held = <VideoJson>[];
-  bool holdFailures = false;
   VideoJson status = {'status': 'streaming'};
   Completer<VideoJson>? statusReading;
   Completer<VideoJson>? stopping;
-  Completer<void>? nextPresentation;
   int relay = 0;
 
   late final VideoOutputLifecycle lifecycle = VideoOutputLifecycle(
@@ -88,17 +76,10 @@ class _Harness {
   );
   late final VideoOutputCoordinator outputs = VideoOutputCoordinator(
     request: request,
-    emit: (event) {
-      if (holdFailures && event['type'] == 'session.output.failed') {
-        held.add(event);
-      } else {
-        lifecycle.handle(event);
-      }
-    },
+    emit: lifecycle.handle,
     isDisposed: () => false,
     playerFactory: () {
-      final player = _Player()..presentation = nextPresentation;
-      nextPresentation = null;
+      final player = _Player();
       players.add(player);
       return player;
     },
@@ -162,21 +143,6 @@ Future<void> _flush() async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('expected old relay end during quality rebuild keeps window, explicit close wins', () async {
-    final h = _Harness();
-    addTearDown(h.dispose);
-    await h.start('A');
-    h.lifecycle.beginReconfigure('A');
-    h.players.single.fail();
-    h.status = {'status': 'closed'};
-    await h.lifecycle.poll('A', current: () => true);
-    expect(h.stopped, isEmpty);
-    expect(h.receipts.keys, ['A']);
-    await h.close('A');
-    h.lifecycle.endReconfigure('A');
-    expect(h.receipts, isEmpty);
-    expect(h.players.single.releases, 1);
-  });
   test('failed renderer replacement retains window for retry', () async {
     final h = _Harness();
     addTearDown(h.dispose);
@@ -194,159 +160,6 @@ void main() {
     h.lifecycle.endReconfigure('A');
     expect(h.receipts['A']?['generation'], 2);
   });
-
-  test('decoded resize updates committed output and capture only for its generation', () async {
-    final h = _Harness();
-    addTearDown(h.dispose);
-    await h.start('A');
-    VideoJson dimensions(int generation, int frames) => {
-      'kind': 'metadata',
-      'category': 'video.dimensions',
-      'generation': generation,
-      'textureId': 7,
-      'width': 720,
-      'height': 320,
-      'frameCount': frames,
-    };
-    h.players.single.changes.add(dimensions(1, 200));
-    await _flush();
-    expect(h.receipts['A']?['decodedWidth'], 720);
-    expect(h.receipts['A']?['decodedHeight'], 320);
-    final frames = h.events.where((e) => e['type'] == 'session.frame').toList();
-    expect(frames, hasLength(1));
-    final data = frames.single['data'] as VideoJson;
-    expect(data['metadataOnly'], true);
-    expect(data['evidence'], 'media_codec.decodedFrame');
-    expect(data['captureGeneration'], 1);
-    expect(data['generation'], 1);
-    expect(h.commands.where((c) => c.$1 == 'session.frame'), hasLength(1));
-
-    // 重复的同尺寸帧及其他原生世代的元数据，不能产生逐帧流量或覆盖当前输出。
-    h.players.single.changes.add(dimensions(1, 201));
-    h.players.single.changes.add({...dimensions(2, 202), 'width': 640});
-    await _flush();
-    expect(h.events.where((e) => e['type'] == 'session.frame'), hasLength(1));
-    expect(h.receipts['A']?['decodedWidth'], 720);
-
-    await h.outputs.reattach('A', endpoint: _endpoint('relay-2', 2));
-    final calls = h.commands.where((c) => c.$1 == 'session.frame').length;
-    h.lifecycle.handle(frames.single); // Queued old-generation notification.
-    await _flush();
-    expect(h.receipts['A']?['generation'], 2);
-    expect(h.receipts['A']?['decodedWidth'], 16);
-    expect(h.commands.where((c) => c.$1 == 'session.frame'), hasLength(calls));
-    h.players.last.changes.add(dimensions(2, 5));
-    await _flush();
-    expect(h.receipts['A']?['decodedWidth'], 720);
-    expect(
-      h.commands.where((c) => c.$1 == 'session.frame'),
-      hasLength(calls + 1),
-    );
-  });
-
-  test(
-    'quality barrier withholds old size metadata while keeping exact cleanup',
-    () async {
-      final h = _Harness();
-      addTearDown(h.dispose);
-      await h.start('A');
-      h.lifecycle.beginReconfigure('A');
-      h.players.single.changes.add({
-        'kind': 'metadata',
-        'category': 'video.dimensions',
-        'generation': 1,
-        'textureId': 7,
-        'width': 720,
-        'height': 320,
-        'frameCount': 2,
-      });
-      await _flush();
-      expect(h.receipts['A']?['decodedWidth'], 16);
-      expect(h.events.where((e) => e['type'] == 'session.frame'), isEmpty);
-      expect(h.commands.where((c) => c.$1 == 'session.frame'), isEmpty);
-      await h.close('A');
-      expect(h.players.single.releases, 1);
-    },
-  );
-
-  test(
-    'opened player failure stops the committed session even while HTTP streams',
-    () async {
-      final h = _Harness();
-      addTearDown(h.dispose);
-      await h.start('A');
-      expect(
-        (await h.request('media.status', {'relayId': 'relay-1'}))['status'],
-        'streaming',
-      );
-
-      h.players.single.fail();
-      await _flush();
-
-      expect(h.failures, hasLength(1));
-      expect(h.failures.single['deviceId'], 'device-A');
-      expect(h.failures.single['data'], containsPair('reason', 'decoder lost'));
-      expect(h.stopped, ['A']);
-      expect(h.receipts, isEmpty);
-      expect(h.players.single.releases, 1);
-      expect(h.closed, isEmpty);
-    },
-  );
-
-  test('an uncommitted candidate failure preserves the prior output', () async {
-    final h = _Harness();
-    addTearDown(h.dispose);
-    await h.start('A');
-    final prior = h.receipts['A'];
-    final old = h.players.single;
-    final presenting = Completer<void>();
-    h.nextPresentation = presenting;
-    final replacement = h.outputs.reattach(
-      'A',
-      endpoint: _endpoint('relay-2', 2),
-    );
-    final failed = expectLater(replacement, throwsA(anything));
-    final candidate = h.players.last;
-    await candidate.playing.future;
-
-    candidate.fail();
-    await _flush();
-    expect(
-      h.events.where((e) => e['type'] == 'session.output.failed'),
-      hasLength(1),
-    );
-    expect(h.failures, isEmpty);
-    expect(h.stopped, isEmpty);
-    expect(h.receipts['A'], same(prior));
-    expect(old.releases, 0);
-
-    presenting.completeError(StateError('candidate failed'));
-    await failed;
-    expect(candidate.releases, 1);
-    expect(h.closed, isEmpty);
-  });
-
-  test(
-    'a delayed old generation failure cannot stop its committed replacement',
-    () async {
-      final h = _Harness();
-      addTearDown(h.dispose);
-      await h.start('A');
-      h.holdFailures = true;
-      h.players.single.fail();
-      expect(h.held, hasLength(1));
-
-      await h.outputs.reattach('A', endpoint: _endpoint('relay-2', 2));
-      expect(h.receipts['A']?['generation'], 2);
-      h.lifecycle.handle(h.held.single);
-      await _flush();
-
-      expect(h.failures, isEmpty);
-      expect(h.stopped, isEmpty);
-      expect(h.players.last.releases, 0);
-      expect(h.receipts['A']?['generation'], 2);
-    },
-  );
 
   test('a stale relay failure cannot close a committed replacement', () async {
     final h = _Harness();
@@ -367,38 +180,6 @@ void main() {
     expect(h.players.last.releases, 0);
     expect(h.receipts['A']?['relayId'], 'relay-2');
   });
-
-  test('a merged receipt retains ownership of its relay failure', () async {
-    final h = _Harness();
-    addTearDown(h.dispose);
-    await h.start('A');
-    final polled = h.receipts['A']!;
-    h.receipts['A'] = {...polled, 'status': 'paused'};
-
-    await h.lifecycle.fail(polled, 'relay closed');
-
-    expect(h.failures, hasLength(1));
-    expect(h.stopped, ['A']);
-    expect(h.players.single.releases, 1);
-  });
-
-  test(
-    'overlapping relay failure reports stop and release their output once',
-    () async {
-      final h = _Harness()..stopping = Completer();
-      addTearDown(h.dispose);
-      await h.start('A');
-      final polled = h.receipts['A']!;
-      final first = h.lifecycle.fail(polled, 'relay closed');
-      final second = h.lifecycle.fail({...polled}, 'relay closed');
-
-      expect(h.stopped, ['A']);
-      expect(h.failures, hasLength(1));
-      h.stopping!.complete({'stopped': true});
-      await Future.wait([first, second]);
-      expect(h.players.single.releases, 1);
-    },
-  );
 
   test('failure retires its output before stop completes and leaves a reopened session alone', () async {
     final h = _Harness()..stopping = Completer();

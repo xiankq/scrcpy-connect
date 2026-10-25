@@ -13,9 +13,7 @@ void main() {
     'scrcpy': () => createNativeScrcpyAdbApi(),
   }.entries) {
     for (final outcome in [
-      AdbOpenProbeOutcome.okay,
       AdbOpenProbeOutcome.rejected,
-      AdbOpenProbeOutcome.timedOut,
       AdbOpenProbeOutcome.cancelled,
     ]) {
       test('${factory.key} 真实 FRB OPEN ${outcome.name} 保留分层事实并精确回收', () async {

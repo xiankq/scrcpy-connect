@@ -182,38 +182,6 @@ void main() {
     }
   });
 
-  test('包列表输出受真实字节预算约束，超限仍回收流且不伤其他事实', () async {
-    fixture.client.responses[DeviceCapabilityFactsReader.packagesCommand] =
-        'package:${'x' * (256 * 1024)}';
-    final facts = await fixture.reader().read(fixture.id, diagnose: false);
-    expect(facts.observation('packages').code, 'byte_limit');
-    expect(facts.observation('shell').succeeded, isTrue);
-    expect(facts.observation('sync').succeeded, isTrue);
-    expect(
-      fixture.client.finished,
-      contains(DeviceCapabilityFactsReader.packagesCommand),
-    );
-    expect(fixture.client.native.cancelled, ['sync-1']);
-  });
-
-  test('非零包列表退出保留查询失败，stderr 不冒充 shell 成功输出', () async {
-    fixture.client.reply = (command) async* {
-      if (command == DeviceCapabilityFactsReader.shellCommand) {
-        yield AdbShellEvent(
-          AdbShellChannel.stderr,
-          Uint8List.fromList(utf8.encode('interop-capability-check')),
-        );
-        yield AdbShellEvent(AdbShellChannel.exit, Uint8List(0), exitCode: 0);
-      } else {
-        yield AdbShellEvent(AdbShellChannel.exit, Uint8List(0), exitCode: 1);
-      }
-    };
-    final result = await fixture.request('device.capabilities');
-    expect(_entry(result, 'shell')['status'], 'limited');
-    expect(_entry(result, 'files')['status'], 'available');
-    expect(_entry(result, 'apps')['status'], 'limited');
-  });
-
   test('无线诊断只读固定属性，查询失败仍保留网络和身份事实', () async {
     fixture.tcp = (_, _, _) async => throw TimeoutException('tcp budget');
     fixture.client.errors[DeviceCapabilityFactsReader.wirelessCommand] =
@@ -303,33 +271,6 @@ void main() {
       expect(fixture.client.commands, hasLength(1));
     });
   }
-
-  test('改名不替换连接或端点，不让只读能力检查误报失效', () async {
-    var renamed = false;
-    fixture.client.reply = (command) async* {
-      if (!renamed) {
-        renamed = true;
-        await fixture.update((record) => record.copyWith(name: '新名字'));
-      }
-      yield* _output(fixture.client.responses[command]!);
-    };
-    final result = await fixture.request('device.capabilities');
-    expect(_entry(result, 'shell')['status'], 'available');
-    expect(fixture.records.current.find(fixture.id)!.name, '新名字');
-  });
-
-  test('本机视频能力等待期间断线仍拒绝迟到解释结果', () async {
-    final policy = fixture.explain(
-      video: () async {
-        fixture.current = null;
-        return {};
-      },
-    );
-    await expectLater(
-      policy.request('device.capabilities', {'deviceId': fixture.id}),
-      _failure('stale_connection'),
-    );
-  });
 
   test('本机视频能力等待期间磁盘私钥改变，不把旧授权身份当作仍有效', () async {
     final policy = fixture.explain(

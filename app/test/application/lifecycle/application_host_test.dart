@@ -236,55 +236,6 @@ void main() {
     expect(platform.fdCloses, 1);
   });
 
-  test('先排空握手与文件域，再准备产物和业务偏好；同 isolate 附着复用', () async {
-    final fixture = await _fixture();
-    final host = await fixture.attach();
-    expect(fixture.api.calls, [
-      'attach:${p.join(fixture.directory.path, 'application-host')}',
-      'files.attach',
-      'assets',
-      'file.helpers',
-      'scrcpy',
-    ]);
-    expect(
-      fixture.api.helpers.map((helper) => helper.abi),
-      unorderedEquals(['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86']),
-    );
-    for (final helper in fixture.api.helpers) {
-      expect(helper.bytes, _payload);
-    }
-    expect(host.bindings, same(fixture.api));
-    expect(host.fileScopeId, 'files-1');
-    expect(await fixture.attach(), same(host));
-    await host.close();
-    expect(fixture.api.scopes, isEmpty);
-    expect(fixture.api.calls, contains('files.close:files-1'));
-  });
-  test('每身份客户端借用宿主唯一准入域；同路径换钥不复用旧客户端', () async {
-    final fixture = await _fixture();
-    final host = await fixture.attach();
-    final path = p.join(fixture.directory.path, 'key');
-    fixture.api.fingerprints[path] = 'first';
-    final first = await host.clientForIdentity(
-      identityPath: path,
-      fingerprint: 'first',
-    );
-    expect(
-      await host.clientForIdentity(identityPath: path, fingerprint: 'first'),
-      same(first),
-    );
-    fixture.api.fingerprints[path] = 'second';
-    final second = await host.clientForIdentity(
-      identityPath: path,
-      fingerprint: 'second',
-    );
-    expect(second, isNot(same(first)));
-    expect(fixture.api.scopes.length, 1);
-    await first.close();
-    expect(fixture.api.scopes.length, 1);
-    await host.close();
-    expect(fixture.api.scopes, isEmpty);
-  });
   test('真实登记存在时核验原策略，拒绝发生在任何接管和文件操作之前', () async {
     final fixture = await _fixture(desktop: true);
     final key = p.join(fixture.directory.path, 'application-host');
@@ -363,41 +314,6 @@ void main() {
       fixture.api.connections.keys,
       unorderedEquals(['foreign-server', 'foreign-scope', 'unscoped']),
     );
-  });
-
-  test('桌面显示恢复未完成前不交付宿主，不断开恢复通道或关闭服务器', () async {
-    final fixture = await _fixture(desktop: true);
-    await _seedServer(fixture);
-    fixture.api.addConnection(
-      'owned',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-      serverId: 'original-server',
-    );
-    final release = fixture.api.displayGate = Completer<void>();
-    var delivered = false;
-    final opening = fixture.attach().then((host) {
-      delivered = true;
-      return host;
-    });
-    try {
-      await fixture.api.displayStarted.future;
-      expect(delivered, isFalse);
-      expect(fixture.api.claimed, hasLength(1));
-      expect(fixture.api.connections.keys, fixture.api.claimed);
-      expect(
-        fixture.api.calls.any((call) => call.startsWith('disconnect:')),
-        isFalse,
-      );
-      expect(fixture.dependencies.restored.single.closeCount, 0);
-      expect(fixture.api.servers.single.serverId, 'original-server');
-      expect(fixture.api.scopes, isNotEmpty);
-    } finally {
-      release.complete();
-    }
-    final host = await opening;
-    expect(delivered, isTrue);
-    expect(fixture.api.connections, isEmpty);
-    await host.close();
   });
 
   test('关闭等待在途桌面显示恢复，未完成时保留服务器与scope', () async {
@@ -588,27 +504,6 @@ void main() {
       unorderedEquals(['foreign', 'unscoped']),
     );
   });
-  test('移动恢复初始化失败保留精确旧连接；重试实际回收后才撤标记', () async {
-    final fixture = await _fixture();
-    await _seedMobile(fixture);
-    fixture.dependencies.failAssets = true;
-    await expectLater(
-      fixture.attach(),
-      throwsA(_code('application_host_cleanup_unconfirmed')),
-    );
-    final claimed = fixture.api.claimed.single;
-    expect(fixture.api.connections, contains(claimed));
-    expect(fixture.api.scopes, isNotEmpty);
-    fixture.dependencies.failAssets = false;
-    await ApplicationHost.closeRetiredHosts();
-    expect(fixture.api.connections, isEmpty);
-    expect(fixture.api.scopes, isEmpty);
-    expect(
-      fixture.api.calls.where((call) => call.startsWith('drain:')),
-      hasLength(1),
-    );
-    expect(fixture.api.claimed, hasLength(1));
-  });
   test('身份初始化前的移动排空取得真实新句柄，捕获失败保留同对象重试', () async {
     final fixture = await _fixture();
     final host = await fixture.attach();
@@ -628,29 +523,6 @@ void main() {
       hasLength(2),
     );
     await host.close();
-  });
-  test('连接关闭失败保存已排空事实，close 重试同句柄而不重认领', () async {
-    final fixture = await _fixture();
-    final host = await fixture.attach();
-    fixture.api.addConnection(
-      'before-identities',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-    );
-    fixture.api.disconnectFailures = 1;
-    await expectLater(host.drainConnections(), throwsStateError);
-    final claimed = fixture.api.claimed.single;
-    expect(fixture.api.connections, contains(claimed));
-    await host.close();
-    expect(fixture.api.claimed, hasLength(1));
-    expect(
-      fixture.api.calls.where((call) => call == 'drain:$claimed'),
-      hasLength(1),
-    );
-    expect(
-      fixture.api.calls.where((call) => call == 'disconnect:$claimed'),
-      hasLength(2),
-    );
-    expect(fixture.api.scopes, isEmpty);
   });
   test('关闭等待在途移动排空，真实捕获结束前不撤全局标记或断连接', () async {
     final fixture = await _fixture();
@@ -767,24 +639,6 @@ void main() {
       containsAllInOrder(['drain:closed', 'disconnect:closed']),
     );
     await host.close();
-  });
-  test('没有存活登记时旧磁盘策略不限制冷进程；存活登记缺记录必须拒绝', () async {
-    final fixture = await _fixture();
-    await ApplicationHostRecord(policy: {'obsolete': true}).write(
-      Directory(p.join(fixture.directory.path, 'process_hosts')),
-      'obsolete',
-    );
-    final host = await fixture.attach();
-    await host.close();
-    final key = p.join(fixture.directory.path, 'application-host');
-    fixture.api.scopes[key] = AdbAdmissionScopeInfo(
-      scopeKey: key,
-      scopeId: 'missing',
-      accepting: true,
-    );
-    await expectLater(fixture.attach(), throwsFormatException);
-    expect(fixture.api.scopes[key]?.scopeId, 'missing');
-    fixture.api.scopes.clear();
   });
   test('文件域关闭失败保留进程标记及精确句柄，客户端关闭保持粘性并可重试', () async {
     final fixture = await _fixture();

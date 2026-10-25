@@ -40,10 +40,15 @@ if [[ "$(uname -s)" == Linux* ]]; then
 fi
 flutter analyze --no-pub --fatal-infos
 dart --disable-dart-dev tool/check_analyzer_plugin.dart
-(cd app && flutter test --no-pub)
-(cd packages/design_system && flutter test --no-pub)
+test_report="$(mktemp)"
+trap 'rm -f "$test_report"' EXIT
+(cd app && flutter test --no-pub --file-reporter="json:$test_report")
+dart --disable-dart-dev tool/check_test_budget.dart --runtime app/host "$test_report"
+(cd packages/design_system && flutter test --no-pub --file-reporter="json:$test_report")
+dart --disable-dart-dev tool/check_test_budget.dart --runtime packages/design_system "$test_report"
 for capability in adb scrcpy media_codec; do
-  (cd "packages/$capability" && flutter test --no-pub)
+  (cd "packages/$capability" && flutter test --no-pub --file-reporter="json:$test_report")
+  dart --disable-dart-dev tool/check_test_budget.dart --runtime "packages/$capability" "$test_report"
 done
 npm run lint --prefix tool/design_tokens
 if [[ "${1:-}" == "--android" ]]; then

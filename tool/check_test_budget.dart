@@ -6,13 +6,46 @@ import 'package:path/path.dart' as p;
 import 'src/process.dart';
 import 'src/repository_tooling.dart';
 
-// 限制维护量，不推断覆盖率。循环展开的运行用例数由 runner 报告。
+// 同时限制源码维护量与 runner 实际展开的用例数，不推断覆盖率。
 Future<void> main(List<String> arguments) async {
+  final root = repositoryRoot();
+  if (arguments.length == 3 && arguments.first == '--runtime') {
+    final scope = arguments[1];
+    final budgets = jsonDecode(
+      File(p.join(root.path, 'tool/test_budget.json')).readAsStringSync(),
+    ) as Map<String, dynamic>;
+    final budget = budgets[scope] as Map<String, dynamic>?;
+    final limit = budget?['cases'] as int?;
+    final completed = <int>{};
+    var succeeded = false;
+    await for (final line in File(
+      arguments[2],
+    ).openRead().transform(utf8.decoder).transform(const LineSplitter())) {
+      final event = jsonDecode(line) as Map<String, dynamic>;
+      if (event['type'] == 'testDone' && event['hidden'] != true) {
+        completed.add(event['testID'] as int);
+      }
+      if (event['type'] == 'done') succeeded = event['success'] == true;
+    }
+    if (!succeeded || completed.isEmpty) {
+      throw StateError('$scope: 测试报告未完整通过或没有用例');
+    }
+    if (limit == null || completed.length > limit) {
+      stderr.writeln(
+        '$scope: cases=${completed.length}, budget=${limit ?? "missing"}；先去重，独立高风险缺口才人工调整预算。',
+      );
+      exitCode = 1;
+    } else {
+      stdout.writeln('PASS: $scope ${completed.length}/$limit 个用例（含跳过）');
+    }
+    return;
+  }
   if (arguments.length > 1 ||
       (arguments.isNotEmpty && arguments.single != '--report')) {
-    throw ArgumentError('Usage: check_test_budget.dart [--report]');
+    throw ArgumentError(
+      'Usage: check_test_budget.dart [--report | --runtime <scope> <json-report>]',
+    );
   }
-  final root = repositoryRoot();
   final result = await runProcess('git', [
     'ls-files',
     '--cached',

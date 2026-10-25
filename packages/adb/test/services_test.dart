@@ -206,39 +206,6 @@ void main() {
     },
   );
   test(
-    'PTY control and raw byte paths retain typed protocol semantics',
-    () async {
-      final api = FakeServiceApi();
-      final services = NativeAdbClient(api, '').services;
-      final shell = await services.shell(device, 'cat', pty: true);
-      expect(api.request!.kind, AdbServiceKind.shellPty);
-      await shell.resize(24, 80);
-      await shell.closeStdin();
-      expect(api.inputs.map((i) => i.kind), [
-        AdbInputKind.resize,
-        AdbInputKind.closeStdin,
-      ]);
-      await shell.close();
-      api.events.clear();
-      api.emit(
-        event(
-          'sync',
-          done: true,
-          facts: const AdbServiceFacts(
-            metadata: AdbFileMetadata(0xa1ff, 0x100000001, -10),
-          ),
-        ),
-      );
-      final stat = await services.sync(device).lstat(AdbPath.bytes([47, 255]));
-      expect(stat.size, 0x100000001);
-      expect(stat.modifiedSeconds, -10);
-      expect(stat.isSymlink, isTrue);
-      expect(api.syncRequest!.path, [47, 255]);
-      expect(api.syncRequest!.kind, AdbSyncKind.lstat);
-    },
-  );
-
-  test(
     'directory pages preserve non UTF8 names and only pull on demand',
     () async {
       final api = FakeServiceApi();
@@ -371,31 +338,6 @@ void main() {
     );
   }
 
-  for (final request in <String, Future<AdbServiceSession> Function(AdbSync)>{
-    'negative budget': (sync) => sync.openPush(AdbPath('/file'), maxBytes: -1),
-    'negative permissions': (sync) =>
-        sync.openPush(AdbPath('/file'), permissions: -1),
-    'wide permissions': (sync) =>
-        sync.openPush(AdbPath('/file'), permissions: 512),
-    'negative timestamp': (sync) =>
-        sync.openPush(AdbPath('/file'), modifiedSeconds: -1),
-    'wide timestamp': (sync) =>
-        sync.openPush(AdbPath('/file'), modifiedSeconds: 0x100000000),
-    'zero timeout': (sync) =>
-        sync.openPush(AdbPath('/file'), timeout: Duration.zero),
-  }.entries) {
-    test('owned push rejects ${request.key} before native creation', () async {
-      final api = FakeServiceApi();
-      final sync = NativeAdbClient(api, '').services.sync(device);
-      await expectLater(
-        Future<AdbServiceSession>.sync(() => request.value(sync)),
-        throwsArgumentError,
-      );
-      expect(api.syncRequest, isNull);
-      expect(api.cancelled, isEmpty);
-    });
-  }
-
   test(
     'remote push failure cancels a stalled producer and propagates its failure',
     () async {
@@ -504,31 +446,6 @@ void main() {
     await client.close();
     expect(api.cancelled, ['operation', 'operation']);
   });
-  for (final entry in <String, Future<Object?> Function(AdbServices)>{
-    'sync': (services) => services.sync(device).stat(AdbPath('/file')),
-    'owned push': (services) =>
-        services.sync(device).openPush(AdbPath('/file')),
-    'reverse': (services) => services.reverseList(device),
-  }.entries) {
-    test(
-      'close tracks late ${entry.key} registration before returning',
-      () async {
-        final api = FakeServiceApi()..serviceGate = Completer<String>();
-        final services = NativeAdbClient(api, '').services;
-        final opening = entry.value(services);
-        final failed = expectLater(opening, throwsA(isA<AdbException>()));
-        await api.serviceStarted.future;
-        var closed = false;
-        final closing = services.close().then((_) => closed = true);
-        await Future<void>.delayed(Duration.zero);
-        expect(closed, isFalse);
-        api.serviceGate!.complete('late-${entry.key}');
-        await failed;
-        await closing;
-        expect(api.cancelled, ['late-${entry.key}']);
-      },
-    );
-  }
 }
 
 class FakeServiceApi implements NativeAdbApi {

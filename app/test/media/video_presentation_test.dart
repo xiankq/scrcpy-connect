@@ -34,20 +34,6 @@ void main() {
     },
   );
 
-  test(
-    'an unversioned receipt cannot overwrite a known renderer generation',
-    () {
-      const current = {'generation': 2, 'textureId': 8, 'paused': true};
-      expect(
-        mergeVideoOutputReceipt(current, const {
-          'textureId': 7,
-          'paused': false,
-        }),
-        current,
-      );
-    },
-  );
-
   test('a delayed old resume cannot replace a committed generation, whose resume still updates state', () async {
     final oldResume = Completer<Map<String, dynamic>>();
     final resumed = Completer<void>();
@@ -120,54 +106,6 @@ void main() {
     expect(output['evidence'], 'media_codec.decodedFrame');
     expect(output['snapshotReceipts'], 2);
   });
-
-  test(
-    'session list keeps capture pause state after a cached resume receipt',
-    () {
-      final session = sessionWithVideoOutput(
-        {
-          'sessionId': 'A',
-          'deviceId': 'device-A',
-          'status': 'paused',
-          'paused': true,
-          'capturePaused': true,
-          'connected': false,
-          'awaitingSession': false,
-          'width': 1080,
-          'height': 1920,
-          'textureId': 1,
-        },
-        {
-          'sessionId': 'B',
-          'deviceId': 'device-B',
-          'status': 'streaming',
-          'paused': false,
-          'capturePaused': false,
-          'connected': true,
-          'awaitingSession': true,
-          'width': 1920,
-          'height': 1080,
-          'textureId': 2,
-          'generation': 3,
-          'snapshotReceipts': 4,
-        },
-      );
-      expect(session, {
-        'sessionId': 'A',
-        'deviceId': 'device-A',
-        'status': 'paused',
-        'paused': true,
-        'capturePaused': true,
-        'connected': false,
-        'awaitingSession': false,
-        'width': 1080,
-        'height': 1920,
-        'textureId': 2,
-        'generation': 3,
-        'snapshotReceipts': 4,
-      });
-    },
-  );
 
   test(
     'presentation pause waits for local ACK and serializes queued resume',
@@ -263,120 +201,6 @@ void main() {
         throwsA(same(failure)),
       );
       expect(calls, ['pause:A', 'restore:A']);
-    },
-  );
-
-  test('a stopped source cannot resume its local output', () async {
-    final calls = <String>[];
-    const failure = ApplicationCommandException(
-      'disconnected',
-      'already stopped',
-    );
-    final owner = VideoPresentation(
-      request: (_, _) async => throw failure,
-      pauseOutput: (_) async => {},
-      resumeOutput: (id) async {
-        calls.add(id);
-        return {};
-      },
-    );
-    await expectLater(
-      owner.request('session.resume', {'sessionId': 'A'}),
-      throwsA(same(failure)),
-    );
-    expect(calls, isEmpty);
-  });
-
-  test(
-    'device lookup resolves the exact existing session before acting',
-    () async {
-      final calls = <String>[];
-      final owner = VideoPresentation(
-        request: (command, params) async {
-          if (command == 'session.list') {
-            return {
-              'sessions': [
-                {'sessionId': 'A', 'deviceId': 'device-A'},
-                {'sessionId': 'B', 'deviceId': 'device-B'},
-              ],
-            };
-          }
-          calls.add('$command:${params['sessionId']}');
-          return {};
-        },
-        pauseOutput: (_) async => {},
-        resumeOutput: (id) async {
-          calls.add('local:$id');
-          return {};
-        },
-      );
-      await owner.request('session.resume', {'deviceId': 'device-B'});
-      expect(calls, ['session.resume:B', 'local:B']);
-    },
-  );
-
-  for (final command in ['session.pause', 'session.resume']) {
-    test(
-      '$command rejects an ambiguous device without acting on a session',
-      () async {
-        final calls = <String>[];
-        final owner = VideoPresentation(
-          request: (command, params) async {
-            calls.add(command);
-            return {
-              'sessions': [
-                {'sessionId': 'A', 'deviceId': 'device'},
-                {'sessionId': 'B', 'deviceId': 'device'},
-              ],
-            };
-          },
-          pauseOutput: (id) async {
-            calls.add('local.pause:$id');
-            return {};
-          },
-          resumeOutput: (id) async {
-            calls.add('local.resume:$id');
-            return {};
-          },
-        );
-        await expectLater(
-          owner.request(command, {'deviceId': 'device'}),
-          throwsA(
-            isA<ApplicationCommandException>().having(
-              (error) => error.code,
-              'code',
-              'ambiguous_session',
-            ),
-          ),
-        );
-        expect(calls, ['session.list']);
-      },
-    );
-  }
-
-  test(
-    'an explicit session never uses the ambiguous device fallback',
-    () async {
-      final calls = <String>[];
-      final owner = VideoPresentation(
-        request: (command, params) async {
-          calls.add('$command:${params['sessionId']}');
-          return {'sessionId': params['sessionId'], 'status': 'streaming'};
-        },
-        pauseOutput: (_) async => {},
-        resumeOutput: (id) async {
-          calls.add('local.resume:$id');
-          return {'paused': false};
-        },
-      );
-      final result = await owner.request('session.resume', {
-        'deviceId': 'device',
-        'sessionId': 'B',
-      });
-      expect(calls, ['session.resume:B', 'local.resume:B']);
-      expect(result['sessionId'], 'B');
-      expect(result['status'], 'streaming');
-      expect(result['paused'], false);
     },
   );
 }

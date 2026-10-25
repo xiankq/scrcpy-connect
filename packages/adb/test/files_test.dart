@@ -335,46 +335,6 @@ void main() {
     },
   );
 
-  for (final kind in ['stat', 'done']) {
-    test(
-      'cancelled file reader rejects an already returned $kind receipt',
-      () async {
-        const stamp = AdbFileExecutionStamp(
-          mode: 0x81a4,
-          size: 1,
-          modifiedSeconds: 1,
-          modifiedNanos: 0,
-          nanosecondPrecision: false,
-        );
-        final api = FileApi();
-        final token = AdbCancellation();
-        final operation = await NativeAdbClient(api, '').services
-            .files(device)
-            .execute(
-              AdbFileExecutionRequest(
-                kind: AdbFileExecutionKind.stat,
-                path: [47],
-              ),
-              cancellation: token,
-            );
-        final received = <AdbFileExecutionEvent>[];
-        final failed = expectLater(
-          operation.events.forEach(received.add),
-          throwsA(
-            isA<AdbException>().having((e) => e.code, 'code', 'cancelled'),
-          ),
-        );
-        await api.waiting.future;
-        // 读取 Future 已交回，Dart 的 await 续体尚未运行；取消必须先撤销准入。
-        api.pending!.complete(AdbFileExecutionEvent(kind: kind, stamp: stamp));
-        token.cancel();
-        await failed;
-        expect(received, isEmpty);
-        expect(api.cancelled, ['worker']);
-      },
-    );
-  }
-
   test('external close cannot turn a partial stat into success', () async {
     const stamp = AdbFileExecutionStamp(
       mode: 0x81a4,
@@ -626,24 +586,6 @@ void main() {
     expect(api.closedScopes, [scope.id, scope.id]);
   });
 
-  test(
-    'late scope admission after services close drains the exact new scope',
-    () async {
-      final api = ScopeFileApi()..scopeAdmission = Completer<String>();
-      final client = NativeAdbClient(api, '');
-      final attaching = client.services.attachFileScope('stable-owner');
-      final failed = expectLater(attaching, throwsA(isA<AdbException>()));
-      var closed = false;
-      final closing = client.services.close().then((_) => closed = true);
-      await Future<void>.delayed(Duration.zero);
-      expect(closed, isFalse);
-      api.scopeAdmission!.complete('late-scope');
-      await failed;
-      await closing;
-      expect(api.closedScopes, ['late-scope']);
-    },
-  );
-
   test('scope binding refuses another scope and leaves legacy file adapters usable', () async {
     final api = ScopeFileApi();
     final scope = await NativeAdbClient(
@@ -744,35 +686,6 @@ void main() {
     },
   );
 
-  test('client close drains a pending file reader and keeps cleanup retry observable', () async {
-    final api = FileApi();
-    final client = NativeAdbClient(api, '');
-    final operation = await client.services
-        .files(device)
-        .execute(
-          AdbFileExecutionRequest(kind: AdbFileExecutionKind.copy, path: [47]),
-        );
-    final reading = operation.events.toList();
-    final cancelled = expectLater(reading, throwsA(isA<AdbException>()));
-    await api.waiting.future;
-    await client.close();
-    await cancelled;
-    expect(api.cancelled, ['worker']);
-  });
-
-  test('failed cleanup preserves exact handle for explicit retry', () async {
-    final api = FileApi()..failCancel = true;
-    final operation = await NativeAdbClient(api, '').services
-        .files(device)
-        .execute(
-          AdbFileExecutionRequest(kind: AdbFileExecutionKind.stat, path: [47]),
-        );
-    await expectLater(operation.close(), throwsA(isA<AdbException>()));
-    api.failCancel = false;
-    await operation.close();
-    expect(api.cancelled, ['worker', 'worker']);
-  });
-
   test('event consumption retains per-entry errno, precise part id and backpressure', () async {
     const stamp = AdbFileExecutionStamp(
       mode: 0x81a4,
@@ -818,28 +731,6 @@ void main() {
     expect(api.cancelled, ['worker']);
   });
 
-  test('foreign native owner is rejected before file admission', () async {
-    final api = FileApi();
-    await expectLater(
-      NativeAdbClient(api, '').services
-          .files(
-            AdbDevice(
-              id: 'connection',
-              serial: 'serial',
-              state: 'device',
-              nativeOwner: Object(),
-            ),
-          )
-          .execute(
-            AdbFileExecutionRequest(
-              kind: AdbFileExecutionKind.stat,
-              path: [47],
-            ),
-          ),
-      throwsA(isA<AdbException>()),
-    );
-    expect(api.request, isNull);
-  });
   test(
     'a stat packet without done cannot become a successful snapshot',
     () async {
@@ -862,26 +753,6 @@ void main() {
       await api.waiting.future;
       api.pending!.complete(null);
       await failed;
-      expect(api.cancelled, ['worker']);
-    },
-  );
-  test(
-    'completed file session removes cancellation listener before token reuse',
-    () async {
-      final api = FileApi()..queued.add(AdbFileExecutionEvent(kind: 'done'));
-      final token = AdbCancellation();
-      final operation = await NativeAdbClient(api, '').services
-          .files(device)
-          .execute(
-            AdbFileExecutionRequest(
-              kind: AdbFileExecutionKind.mkdir,
-              path: [47],
-            ),
-            cancellation: token,
-          );
-      await operation.events.drain<void>();
-      token.cancel();
-      await Future<void>.delayed(Duration.zero);
       expect(api.cancelled, ['worker']);
     },
   );

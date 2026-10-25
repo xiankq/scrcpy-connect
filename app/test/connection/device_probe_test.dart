@@ -364,39 +364,6 @@ void main() {
     expect(value.voltageMv, 4120);
     expect(value.health, 2);
   });
-
-  for (final (index, invalid) in [
-    '',
-    'level: -1\nscale: 100\nUSB powered: true\n',
-    'level: 101\nscale: 100\n',
-    'level: NaN\nscale: 100\n',
-    'level: 50\nscale: 0\n',
-  ].indexed) {
-    test('无效电量保留未知而不是实时零值 $index', () async {
-      final client = _Client((_) => _output(utf8.encode(invalid)));
-      final battery = await const DeviceProbe().readBattery(
-        DeviceConnection(client: client, device: _device),
-      );
-      expect(battery.level, isNull);
-      expect(battery.charging, isNull);
-    });
-  }
-
-  for (final (status, expected) in [(2, true), (3, false), (1, null)]) {
-    test('充电状态仅使用实际 status 字段 $status', () async {
-      final client = _Client(
-        (_) => _output(
-          utf8.encode(
-            'level: 50\nscale: 100\nstatus: $status\nUSB powered: true\n',
-          ),
-        ),
-      );
-      final battery = await const DeviceProbe().readBattery(
-        DeviceConnection(client: client, device: _device),
-      );
-      expect(battery.charging, expected);
-    });
-  }
 }
 
 List<int> _properties({

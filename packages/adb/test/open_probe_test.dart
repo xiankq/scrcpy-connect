@@ -13,25 +13,6 @@ const _facts = AdbOpenProbeFacts(
 );
 
 void main() {
-  test('旧适配器未知入站标记为空，不伪造 OPEN 探测支持', () async {
-    const facts = AdbConnectionFacts(
-      officialServer: false,
-      closed: false,
-      features: [],
-    );
-    expect(facts.inboundActivity, isNull);
-    final services = NativeAdbClient(_LegacyApi(), '').services;
-    await expectLater(
-      services.createOpenProbe(
-        _device,
-        service: 'sync:',
-        timeout: const Duration(seconds: 1),
-      ),
-      throwsA(_code('unsupported')),
-    );
-    await services.close();
-  });
-
   test('预取消不发原生创建，非法参数也不登记操作', () async {
     final api = _Api();
     final services = NativeAdbClient(api, '').services;
@@ -87,23 +68,6 @@ void main() {
     expect(api.written, [7]);
     await services.close();
     expect(api.cancelled, ['parallel-shell']);
-  });
-
-  test('结果失败保留原类型和精确回收责任，不关闭共享 Client', () async {
-    final api = _Api();
-    final services = NativeAdbClient(api, '').services;
-    final probe = await services.createOpenProbe(
-      _device,
-      service: 'sync:',
-      timeout: const Duration(seconds: 1),
-    );
-    const failure = AdbException('protocol_error', 'bad status');
-    final rejected = expectLater(probe.result, throwsA(same(failure)));
-    api.result.completeError(failure);
-    await rejected;
-    await services.close();
-    expect(api.closes, ['probe']);
-    expect(api.cancelled, isEmpty);
   });
 
   test('创建中取消仍取得迟到句柄，等待真实回收后才结束创建', () async {

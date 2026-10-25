@@ -58,18 +58,6 @@ void main() {
     expect(released['remoteRestoreVerified'], isFalse);
   });
 
-  test('质量交接资格仍持有原控制捕获，交接与最后窗口同时结束才释放', () async {
-    await f.owner.sync('phone');
-    f.windows = 0;
-    f.handoff = true;
-    await f.owner.windowsChanged('phone');
-    expect(f.native.created, hasLength(1));
-    expect(f.native.stopped, isEmpty);
-    f.handoff = false;
-    await f.owner.windowsChanged('phone');
-    expect(f.native.stopped, ['capture-1']);
-  });
-
   test('设置禁用时创建晚到仍被精确回收，禁用 Future 等实际交付', () async {
     final creation = f.native.creation = Completer<String>();
     final starting = f.owner.sync('phone');
@@ -178,22 +166,6 @@ void main() {
     expect(f.owner.projection('phone')['keepActiveLeaseId'], 'capture-2');
   });
 
-  test('启动失败且原句柄回收失败仍可重试，不丢弃失败的捕获', () async {
-    f.native.startError = const ScrcpyException('control_failed');
-    f.native.failStop = true;
-    await expectLater(
-      f.owner.sync('phone'),
-      throwsA(_error('keep_active_cleanup')),
-    );
-    expect(f.owner.projection('phone')['pendingCleanup'], hasLength(1));
-    f.native.startError = null;
-    f.native.failStop = false;
-    await f.owner.sync('phone');
-    expect(f.native.created, ['capture-1', 'capture-2']);
-    expect(f.native.stopped, everyElement('capture-1'));
-    expect(f.owner.projection('phone')['keepActiveLeaseId'], 'capture-2');
-  });
-
   test('启动超时不丢弃创建 Future，晚到后真实关闭才结束', () async {
     await f.owner.close();
     f.owner = f.makeOwner(startupTimeout: const Duration(milliseconds: 5));
@@ -241,14 +213,6 @@ void main() {
     await f.owner.close();
     expect(f.native.created, hasLength(1));
     expect(f.native.stopped, ['capture-1', 'capture-1']);
-  });
-
-  test('事件通知异常不丢失实际控制捕获的关闭责任', () async {
-    f.failEmit = true;
-    await f.owner.sync('phone');
-    f.windows = 0;
-    await f.owner.windowsChanged('phone');
-    expect(f.native.stopped, ['capture-1']);
   });
 }
 

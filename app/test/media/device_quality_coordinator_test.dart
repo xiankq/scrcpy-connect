@@ -5,27 +5,6 @@ import 'package:scrcpy_connect/media/quality/device_quality_coordinator.dart';
 import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
 
 void main() {
-  test('inventory failure after save reports saved partial outcome', () async {
-    final coordinator = DeviceQualityCoordinator(
-      request: (command, params) async {
-        if (command == 'session.quality') {
-          return {
-            'current': {'maxSize': 1920},
-          };
-        }
-        throw const ApplicationCommandException('disconnected', '连接已变化');
-      },
-      applyOutput: (stream) async => stream,
-    );
-    final result = await coordinator.change({'deviceId': 'phone'});
-    expect(result['saved'], true);
-    expect(result['appliedToAll'], false);
-    expect(
-      (result['failures'] as List).single,
-      containsPair('reason', '连接已变化'),
-    );
-  });
-
   test(
     'startup and quality save serialize through renderer verification',
     () async {

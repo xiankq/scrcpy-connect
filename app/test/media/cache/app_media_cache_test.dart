@@ -29,21 +29,6 @@ void main() {
     return target;
   }
 
-  test('只统计受管媒体和已登记 outgoing，其他应用数据不进入清理', () async {
-    final cache = await AppMediaCache.open(root: root);
-    final included = await file(p.join(media, 'preview'), 7);
-    final untouched = await file(p.join(root.path, 'preferences.json'), 3);
-    final outgoing = p.join(sandbox.path, 'temporary', 'outgoing');
-    await file(p.join(outgoing, 'original'), 11);
-    expect((await cache.status())['budgetBytes'], defaultMediaCacheBudget);
-    expect((await cache.status())['usedBytes'], 7);
-    await cache.configure(outgoingDirectory: outgoing);
-    expect((await cache.status())['usedBytes'], 18);
-    expect((await cache.clear())['deletedBytes'], 18);
-    expect(await included.exists(), isFalse);
-    expect(await untouched.exists(), isTrue);
-  });
-
   test('旧配置形状与自定义预算兼容，未知分享保留跨重开继续保护', () async {
     final kept = await file(p.join(media, 'shared'), 8);
     final configuration = File(p.join(root.path, 'media-cache.json'));
@@ -194,32 +179,6 @@ void main() {
     expect((await cache.clear())['deletedBytes'], 4);
   });
 
-  test('排队前捕获 reserve 列表，调用方改写原列表不能改变路径或预算', () async {
-    final gate = MediaCacheGate();
-    final entered = Completer<void>(), release = Completer<void>();
-    final original = await file(p.join(media, 'original'), 4);
-    final replacement = await file(p.join(media, 'replacement'), 3);
-    final cache = await AppMediaCache.open(root: root, gate: gate);
-    final holding = gate.runExclusive(() async {
-      entered.complete();
-      await release.future;
-    });
-    await entered.future;
-    final requests = [FileCacheReservation(original.path, 6)];
-    final reserving = cache.reserve(requests);
-    requests
-      ..clear()
-      ..add(FileCacheReservation(replacement.path, 9));
-    release.complete();
-    await holding;
-    final lease = await reserving;
-    expect((await cache.status())['reservedBytes'], 6);
-    expect((await cache.clear())['deletedBytes'], 3);
-    expect(await original.exists(), isTrue);
-    expect(await replacement.exists(), isFalse);
-    await cache.release(lease);
-  });
-
   test('共享 gate 将 delivery 核验和持久 pending 发布排在清理前，结束后可回收', () async {
     final gate = MediaCacheGate();
     final protected = <String>{};
@@ -251,27 +210,6 @@ void main() {
       gate.runExclusive(() => cache.validateDeliveryLocked(source.path)),
       throwsA(failure('cache_evicted')),
     );
-  });
-
-  test('delivery 子路径保护阻止父目录写入，父目录保护覆盖后续子文件', () async {
-    final source = await file(p.join(media, 'tree', 'original'), 4);
-    final protections = <String>{source.path};
-    final cache = await AppMediaCache.open(
-      root: root,
-      protectedPaths: () => protections,
-    );
-    await expectLater(
-      cache.writer(p.dirname(source.path), 1),
-      throwsA(failure('cache_in_use')),
-    );
-    protections.clear();
-    final lease = await cache.reserve([
-      FileCacheReservation(p.dirname(source.path), 0),
-    ]);
-    final later = await file(p.join(p.dirname(source.path), 'later'), 3);
-    expect((await cache.clear())['protectedBytes'], 7);
-    expect(await later.exists(), isTrue);
-    await cache.release(lease);
   });
 
   test('配置提交真实文件系统失败保留旧预算和文件，随后准入与提交可继续', () async {

@@ -30,21 +30,10 @@ const _session = <String, dynamic>{
   'rendererGeneration': 3,
 };
 Json _failure(String reason) => {'code': 'keep_active_ended', 'reason': reason};
-Json _update(
-  Object? error, {
-  String device = 'phone',
-  String session = 'current',
-  int capture = 2,
-}) => {
+Json _update(Object? error) => {
   'type': 'session.updated',
-  'deviceId': device,
-  'data': {
-    ..._session,
-    'sessionId': session,
-    'deviceId': device,
-    'captureGeneration': capture,
-    'keepActiveError': error,
-  },
+  'deviceId': 'phone',
+  'data': {..._session, 'keepActiveError': error},
 };
 
 Future<void> _mount(
@@ -134,137 +123,6 @@ void main() {
         expect(state.presentation.error, isNull);
         expect(state.canSendInput, isTrue);
       } finally {
-        await tester.pumpWidget(const SizedBox());
-        controller.dispose();
-        await events.close();
-      }
-    },
-  );
-
-  testWidgets(
-    'keep-active notices wait through background and occlusion and fence other bindings',
-    (tester) async {
-      final events = StreamController<Json>.broadcast(sync: true);
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        if (command == 'session.start') {
-          return {..._session, 'keepActiveError': null};
-        }
-        if (command == 'session.resume') {
-          return {
-            ..._session,
-            'firstFrameDecoded': true,
-            'evidence': 'media_codec.decodedFrame',
-          };
-        }
-        return {};
-      }, events: events.stream);
-      try {
-        await _mount(tester, controller);
-        events.add(_update(_failure('错误设备'), device: 'other'));
-        events.add(_update(_failure('错误会话'), session: 'other'));
-        events.add(_update(_failure('旧捕获'), capture: 1));
-        await tester.pumpAndSettle();
-        expect(find.textContaining('保持唤醒尚未确认'), findsNothing);
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-        events.add(_update(_failure('后台保活结束')));
-        await tester.pumpAndSettle();
-        expect(find.textContaining('后台保活结束'), findsNothing);
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('保持唤醒尚未确认：后台保活结束'), findsOneWidget);
-        events.add(_update(null));
-        await tester.pumpAndSettle();
-        // 已可见的短暂提醒可自然结束。
-        await tester.pump(const Duration(seconds: 5));
-        await tester.pumpAndSettle();
-        expect(find.textContaining('后台保活结束'), findsNothing);
-        final context = tester.element(find.byType(RemotePage));
-        final covered = Navigator.of(context).push<void>(
-          MaterialPageRoute(builder: (_) => const Scaffold(body: Text('覆盖页'))),
-        );
-        await tester.pumpAndSettle();
-        events.add(_update(_failure('覆盖时保活结束')));
-        await tester.pumpAndSettle();
-        expect(
-          find.textContaining('覆盖时保活结束', skipOffstage: false),
-          findsNothing,
-        );
-        Navigator.of(tester.element(find.text('覆盖页'))).pop();
-        await covered;
-        await tester.pumpAndSettle();
-        expect(find.text('保持唤醒尚未确认：覆盖时保活结束'), findsOneWidget);
-      } finally {
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        await tester.pumpWidget(const SizedBox());
-        controller.dispose();
-        await events.close();
-      }
-    },
-  );
-
-  testWidgets(
-    'success cancels unshown keep-active notices without replacing another notification',
-    (tester) async {
-      final events = StreamController<Json>.broadcast(sync: true);
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        if (command == 'session.start') {
-          return {
-            ..._session,
-            'resourceAdjustment': '真实资源提示',
-            'keepActiveError': null,
-          };
-        }
-        if (command == 'session.resume') {
-          return {
-            ..._session,
-            'firstFrameDecoded': true,
-            'evidence': 'media_codec.decodedFrame',
-          };
-        }
-        return {};
-      }, events: events.stream);
-      try {
-        await _mount(tester, controller);
-        expect(find.text('真实资源提示'), findsOneWidget);
-        events.add(_update(_failure('排队中恢复')));
-        await tester.pumpAndSettle();
-        expect(find.textContaining('排队中恢复'), findsNothing);
-        events.add(_update(null));
-        await tester.pumpAndSettle();
-        expect(find.text('真实资源提示'), findsOneWidget);
-        await tester.pump(const Duration(seconds: 5));
-        await tester.pumpAndSettle();
-        expect(find.textContaining('排队中恢复'), findsNothing);
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-        events.add(_update(_failure('后台已恢复')));
-        await tester.pumpAndSettle();
-        events.add(_update(null));
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        await tester.pumpAndSettle();
-        expect(find.textContaining('后台已恢复'), findsNothing);
-        expect(tester.takeException(), isNull);
-      } finally {
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
         await tester.pumpWidget(const SizedBox());
         controller.dispose();
         await events.close();

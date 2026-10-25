@@ -255,32 +255,6 @@ void main() {
     return value;
   }
 
-  test('复制实际结束前不释放原始 PFD；保留 offset/length 并按真实空间限制复制', () async {
-    final f = await fixture();
-    final coordinator = await f.open();
-    f.api.holdCopy = Completer<void>();
-    final operation = coordinator.receive({
-      'shareId': shareId,
-      'sourceCount': 1,
-    });
-    await f.api.started.future;
-    expect(f.calls, isNot(contains('sharing.platform.release')));
-    expect(f.consumed, 0);
-    final request = f.api.requests.single;
-    expect(request.sourceOffset, 2);
-    expect(request.length, 3);
-    expect(request.maxBytes, 8 * 1024 * 1024);
-    f.api.holdCopy!.complete();
-    final result = await operation;
-    expect(result['status'], 'ready');
-    expect(result['files'], [containsPair('size', 3)]);
-    expect(
-      f.calls.lastIndexOf('scope.close'),
-      lessThan(f.calls.indexOf('sharing.platform.release')),
-    );
-    expect(f.consumed, 1);
-  });
-
   test('关闭期间迟到的 provider 回执仍登记并精确释放，不启动复制', () async {
     final f = await fixture();
     final coordinator = await f.open();

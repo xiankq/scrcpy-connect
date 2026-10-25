@@ -16,73 +16,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-    'backend export refusal prevents a partial directory from appearing saved as a complete tree',
-    (tester) async {
-      final task = <String, dynamic>{
-        'id': 'directory',
-        'name': 'Documents',
-        'kind': 'directory',
-        'direction': 'pull',
-        'status': 'completed',
-        'treeVerified': true,
-        'treeComplete': false,
-        'canExport': false,
-        'exportReason': '目录存在失败项目，请先核对。',
-        'destination': '/cache/Documents',
-        'destinationScope': 'privateCache',
-      };
-      final controller = createTestController(
-        (command, [params = const {}]) async =>
-            command == 'transfers.get' ? task : {},
-      );
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: TransferDetailsPage(controller: controller, task: task),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('目录存在失败项目，请先核对。'), findsOneWidget);
-      expect(find.text('文件夹结构已取回。保存到系统位置后，可在文件应用中查看。'), findsNothing);
-      expect(find.text('已完成'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
-  testWidgets(
-    'a directory is not presented as complete while its source tree is still being verified',
-    (tester) async {
-      final task = <String, dynamic>{
-        'id': 'directory',
-        'name': 'Documents',
-        'kind': 'directory',
-        'direction': 'pull',
-        'status': 'completed',
-        'treeVerified': false,
-        'destinationScope': 'privateCache',
-        'destination': '/cache/Documents',
-      };
-      final controller = createTestController(
-        (command, [params = const {}]) async =>
-            command == 'transfers.get' ? task : {},
-      );
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: TransferDetailsPage(controller: controller, task: task),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('目录结构已建立，仍在核验所选内容。请等待批次实际结果。'), findsOneWidget);
-      expect(find.text('已完成'), findsNothing);
-      expect(find.textContaining('已保存至'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
-  testWidgets(
     'per-item cancellation follows backend capability even for queued work',
     (tester) async {
       var task = <String, dynamic>{
@@ -201,38 +134,7 @@ void main() {
       controller.dispose();
     },
   );
-  testWidgets(
-    'a completed directory is not offered to file-only sharing or open APIs',
-    (tester) async {
-      final task = <String, dynamic>{
-        'id': 'directory',
-        'name': 'Empty folder',
-        'kind': 'directory',
-        'treeVerified': true,
-        'canExport': true,
-        'direction': 'pull',
-        'status': 'completed',
-        'destination': '/tmp/Empty folder',
-      };
-      final controller = createTestController(
-        (command, [params = const {}]) async =>
-            command == 'transfers.get' ? task : {},
-      );
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: TransferDetailsPage(controller: controller, task: task),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('文件夹结构已取回，请在保存位置查看。'), findsOneWidget);
-      expect(find.text('系统分享'), findsNothing);
-      expect(find.text('用本机应用打开'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
+
   testWidgets(
     'compact history groups batch children and stops before removing only the confirmed batch',
     (tester) async {

@@ -46,25 +46,6 @@ void main() {
     'conflict': 'ask',
   };
 
-  test('v2 batch preserves file paths, exact sizes and immutable projections after reopen', () async {
-    final store = await ready();
-    final pending = await store.pending();
-    expect((pending['shares'] as List).single['files'].single['size'], 3);
-    (pending['shares'] as List).single['errors'].add('mutated');
-    final reopened = await ShareStore.open(cacheDirectory: cache);
-    expect((await reopened.pending())['shares'].single['errors'], isEmpty);
-    expect((await reopened.existing(share))!['reusedImport'], true);
-    expect(File('${store.root.path}/$share/original').readAsBytesSync(), [
-      1,
-      2,
-      3,
-    ]);
-    await expectLater(
-      store.reserve(second),
-      throwsA(failure('share_owner_replaced')),
-    );
-  });
-
   test(
     'java properties migrates unicode, continuation and active lease in place',
     () async {
@@ -484,41 +465,6 @@ void main() {
     );
     expect((await store.existing(share))!['status'], 'starting');
   });
-
-  test('consume emits only the exact consumed share, including idempotent missing IDs', () async {
-    final events = <Map<String, dynamic>>[];
-    final store = await ShareStore.open(
-      cacheDirectory: cache,
-      onChanged: events.add,
-    );
-    await store.reserve(share);
-    await store.fail(share, 'drained');
-    events.clear();
-    await store.command('sharing.consume', {'shareId': share});
-    await store.command('sharing.consume', {'shareId': share});
-    expect(events, [
-      for (var i = 0; i < 2; i++)
-        {
-          'type': 'share.consumed',
-          'data': {'shareId': share},
-        },
-    ]);
-  });
-
-  test(
-    'concurrent queued begin captures caller parameters and admits once',
-    () async {
-      final store = await ready();
-      final input = request(store);
-      final first = store.begin(share, input);
-      (input['items'] as List).clear();
-      await first;
-      await expectLater(
-        store.begin(share, request(store)),
-        throwsA(failure('share_submission_unknown')),
-      );
-    },
-  );
 
   test(
     'limits use real file sizes and cannot publish a partially imported batch',

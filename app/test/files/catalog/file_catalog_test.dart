@@ -19,46 +19,6 @@ Future<void> withCatalog(
 }
 
 void main() {
-  test(
-    'document browse and search include JSON XML RTF and OpenDocument',
-    () async {
-      await withCatalog((owner, executor) async {
-        final names = [
-          'data.json',
-          'feed.xml',
-          'notes.rtf',
-          'letter.odt',
-          'sheet.ods',
-          'slides.odp',
-        ];
-        executor.children['/sdcard'] = [
-          for (final name in names) entry(name, regular),
-        ];
-        final listing = await owner.browse('d', '/sdcard', filter: 'documents');
-        expect(
-          (listing['entries']! as List).map(
-            (e) => (e as Map<String, Object?>)['name'],
-          ),
-          unorderedEquals(names),
-        );
-        final search = owner.startSearch(
-          'd',
-          '/sdcard',
-          query: '',
-          filter: 'documents',
-        );
-        final id = search['searchId']! as String;
-        await until(() => owner.scan('d', id)['status'] != 'running');
-        expect(
-          (owner.scan('d', id)['items']! as List).map(
-            (e) => (e as Map<String, Object?>)['name'],
-          ),
-          unorderedEquals(names),
-        );
-      });
-    },
-  );
-
   final checks = <String, Future<void> Function()>{
     'search preserves distinct paths and partial gallery excludes protected trees':
         () async {

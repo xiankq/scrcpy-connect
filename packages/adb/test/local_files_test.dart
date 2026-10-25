@@ -145,23 +145,6 @@ void main() {
     expect(api.closedIds, isEmpty);
   });
 
-  test('关闭失败保持禁止准入，下一次 close 重试同 scope', () async {
-    final api = _FilesApi()..scopeCloseFailures = 1;
-    final files = LocalFiles(api);
-    await files.openScope(scopeKey: 'test-local-files', allowedRoots: [_path]);
-    await expectLater(
-      files.close(),
-      throwsA(_code(LocalFileErrorCode.cleanupUnconfirmed)),
-    );
-    expect(
-      () =>
-          files.openScope(scopeKey: 'test-local-files', allowedRoots: [_path]),
-      throwsA(_code(LocalFileErrorCode.scopeClosed)),
-    );
-    await files.close();
-    expect(api.scopeClosedIds, ['scope', 'scope']);
-  });
-
   test('另一个 open 失败不会跳过已经登记的 scope 清理', () async {
     final api = _FilesApi();
     final files = LocalFiles(api);

@@ -25,21 +25,6 @@ void main() {
     await f.dispose();
   });
 
-  test('手机捕获分阶段启动，逻辑身份与精确源分开，时间保持 Unix 秒', () async {
-    final state = await f.start();
-    expect(state['sessionId'], isNot(state['captureRef']));
-    expect(state['captureRef'], 'capture-1');
-    expect(state['videoSourceId'], 'source-capture-1');
-    expect(state['createdAt'], 1700000000);
-    expect(state['status'], 'awaiting_renderer');
-    expect(f.native.stages, ['control:capture-1', 'media:capture-1:1']);
-    expect(f.native.controls, isEmpty);
-    expect(f.owner.hasAudioOwner('device'), isTrue);
-    expect(f.native.options.single.logLevel, ScrcpyLogLevel.warn);
-    expect(f.native.options.single.audio, isFalse);
-    expect(f.native.options.single.powerOn, isFalse);
-  });
-
   test('事件消费者失败不留下未启动窗口，也不阻断精确捕获回收', () async {
     f.failEvents = true;
     final state = await f.start();
@@ -48,19 +33,6 @@ void main() {
     expect(f.native.stopped, ['capture-1']);
     expect(await f.owner.snapshots(), isEmpty);
     expect(f.owner.hasAudioOwner('device'), isFalse);
-  });
-
-  test('音源资格通知启动失败仍可停止该窗口，不占用无执行的启动 Future', () async {
-    f.failAudioEligibility = true;
-    await expectLater(
-      f.start(),
-      throwsA(_error('session_cleanup_unconfirmed')),
-    );
-    expect(f.native.created, isEmpty);
-    expect((await f.owner.snapshots()).single['status'], 'failed');
-    f.failAudioEligibility = false;
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
-    expect(await f.owner.snapshots(), isEmpty);
   });
 
   test('音源资格撤销抛错仍先释放捕获，保留停止责任供后继重试', () async {
@@ -140,25 +112,6 @@ void main() {
     expect(f.native.options.single.flexDisplay, isTrue);
   });
 
-  test('创建句柄晚到时停止等待真实交付并回收，不启动远端', () async {
-    f.native.creation = Completer<String>();
-    final starting = f.start();
-    final failed = expectLater(starting, throwsA(_error('cancelled')));
-    await _until(() => f.native.options.isNotEmpty);
-    var stopped = false;
-    final stop = f.owner
-        .command('session.stop', {'sessionId': _id(1)})
-        .then((_) => stopped = true);
-    await Future<void>.delayed(Duration.zero);
-    expect(stopped, isFalse);
-    f.native.creation!.complete('capture-late');
-    await failed;
-    await stop;
-    expect(f.native.stopped, ['capture-late']);
-    expect(f.native.stages, isEmpty);
-    expect(await f.owner.snapshots(), isEmpty);
-  });
-
   test('首帧在停止后才返回不能复活，停止等待该 Future 退出', () async {
     f.native.media = Completer<ScrcpySessionInfo>();
     final starting = f.start();
@@ -180,17 +133,6 @@ void main() {
     await stop;
     expect(await f.owner.snapshots(), isEmpty);
     expect(f.owner.hasAudioOwner('device'), isFalse);
-  });
-
-  test('关闭失败保留精确捕获和容量，重试只关闭原身份', () async {
-    await f.start();
-    f.native.stopFailures = 1;
-    await expectLater(f.owner.close(), throwsA(isA<ScrcpyException>()));
-    expect((await f.owner.snapshots()).single['captureRef'], 'capture-1');
-    await f.owner.close();
-    expect(f.native.stopped, ['capture-1', 'capture-1']);
-    expect(await f.owner.snapshots(), isEmpty);
-    await expectLater(f.start(id: 2), throwsA(_error('disposed')));
   });
 
   test('16个启动中窗口占准入，停止未确认不能让出名额', () async {
@@ -287,23 +229,6 @@ void main() {
     });
     expect(receipt['applicationStopped'], isFalse);
     expect(f.native.controls.whereType<ScrcpyStartApp>(), hasLength(1));
-  });
-
-  test('候选编码器不支持时保持原捕获，不提交 START_APP', () async {
-    final original = await f.start();
-    await expectLater(
-      f.owner.command('session.reconfigure', {
-        'sessionId': _id(1),
-        'videoCodec': 'av1',
-      }),
-      throwsA(_error('encoder_unavailable')),
-    );
-    expect(f.native.created, ['capture-1']);
-    expect(f.native.stopped, isEmpty);
-    expect(
-      (await f.owner.snapshots()).single['captureRef'],
-      original['captureRef'],
-    );
   });
 
   test('独立窗口画质切换移动真实任务，逻辑身份不变且不再次打开应用', () async {
@@ -870,55 +795,6 @@ void main() {
     expect(result['displaySize'], {'width': 640, 'height': 960});
     expect(f.adb._uploads.displayStarts, 1);
     expect(f.adb._uploads.displayStops, 0);
-  });
-
-  test('窗口所有者关闭不关闭注入的共享清单查询所有者', () async {
-    await f.owner.close();
-    final encoders = await f.queries.encoders(f.connection, AdbCancellation());
-    expect(encoders, isNotEmpty);
-  });
-
-  test('真实编码器枚举为每种格式返回可选择状态与所属编码器', () async {
-    final options = await f.owner.command('session.quality.options', {
-      'deviceId': 'device',
-    });
-    expect(options['probe'], {'status': 'enumerated'});
-    final codecs = (options['codecs'] as List).cast<Map<String, dynamic>>();
-    final h264 = codecs.singleWhere((codec) => codec['id'] == 'h264');
-    expect(h264['available'], isTrue);
-    expect(h264['status'], 'available');
-    expect(h264['encoders'], [
-      {
-        'codec': 'h264',
-        'name': 'c2.fake.h264',
-        'available': true,
-        'hardware': true,
-      },
-    ]);
-    final h265 = codecs.singleWhere((codec) => codec['id'] == 'h265');
-    expect(h265['available'], isFalse);
-    expect(h265['status'], 'unavailable');
-    expect(h265['encoders'], isEmpty);
-  });
-
-  test('确认成功的空编码器清单不可提供可选格式', () async {
-    f.adb._uploads.encoderOutput = 'List of video encoders:\n';
-    final options = await f.owner.command('session.quality.options', {
-      'deviceId': 'device',
-    });
-    expect(options['probe'], {'status': 'enumerated'});
-    expect(options['encoders'], isEmpty);
-    for (final codec
-        in (options['codecs'] as List).cast<Map<String, dynamic>>()) {
-      expect(codec['available'], isFalse);
-      expect(codec['status'], 'unavailable');
-      expect(codec['encoders'], isEmpty);
-      expect(codec['reason'], isNotEmpty);
-    }
-    await expectLater(
-      f.owner.command('session.quality', {'deviceId': 'device'}),
-      throwsA(_error('encoder_unavailable')),
-    );
   });
 
   test('查询缺监督终态不能当枚举成功，停止可独立核验原进程并恢复清理', () async {

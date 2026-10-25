@@ -1,4 +1,3 @@
-import 'package:scrcpy_connect/application/transport/json_readers.dart';
 import 'package:scrcpy_connect/application/transport/application_request.dart';
 
 import 'dart:async';
@@ -289,38 +288,6 @@ void main() {
     container.dispose();
     await events.close();
   });
-
-  test(
-    'generated notifier snapshots deeply freeze transport collections',
-    () async {
-      final source = <String, dynamic>{
-        'devices': <Json>[
-          {
-            'id': 'phone',
-            'metadata': <String, dynamic>{
-              'ports': <int>[1, 2],
-            },
-          },
-        ],
-      };
-      final container = scope((command, [params = const {}]) async => source);
-      addTearDown(container.dispose);
-      final notifier = container.read(appControllerProvider.notifier);
-      await notifier.refreshDevices();
-      final snapshot = container.read(appControllerProvider);
-      final device = snapshot.devices.single;
-      final metadata = jsonObject(device['metadata']);
-      final ports = values(metadata['ports']);
-      expect(
-        () => snapshot.devices.add({'id': 'other'}),
-        throwsUnsupportedError,
-      );
-      expect(() => device['id'] = 'changed', throwsUnsupportedError);
-      expect(() => ports.add(3), throwsUnsupportedError);
-      (source['devices'] as List<Json>).single['id'] = 'changed outside';
-      expect(snapshot.devices.single['id'], 'phone');
-    },
-  );
 
   test(
     'older refresh receipts cannot replace the latest device records',

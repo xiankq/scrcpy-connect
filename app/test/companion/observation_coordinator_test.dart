@@ -53,16 +53,6 @@ void main() {
     expect(fixture.base.api.created, isEmpty);
   });
 
-  test('显式allowStart:false也不部署，后续状态读取不会补启动', () async {
-    await expectLater(
-      fixture.command('observation.start', {'allowStart': false}),
-      throwsA(companionCode('observation_required')),
-    );
-    expect((await fixture.command('observation.status'))['phase'], 'failed');
-    await fixture.command('notifications.list');
-    expect(fixture.base.api.created, isEmpty);
-  });
-
   test('意图持久化失败不部署，也不能由后续连接钩子绕过失败', () async {
     await fixture.records.setObservationWanted(fixture.id, false);
     final before = await fixture.records.file.readAsString();

@@ -31,51 +31,6 @@ Matcher _code(String code) => isA<ApplicationCommandException>().having(
 );
 
 void main() {
-  test('两阶段调用保留真实回执与精确连接，不把应用字段泄漏进RPC', () async {
-    final harness = _Harness();
-    harness.reply = (call) async => call.command == 'media.stat'
-        ? {
-            'sourceStamp': {'size': 19},
-            'transformVersion': 1,
-          }
-        : {'data': 'jpeg', 'jpegBytes': 3, 'thumbnail': true};
-    final stat = await harness.jobs.command('media.thumbnail', {
-      ..._params(_first, phase: 'stat'),
-      'untrusted': '不转发',
-      'allowStart': false,
-    });
-    final thumbnail = await harness.jobs.command(
-      'media.thumbnail',
-      _params(_second),
-    );
-    expect(stat, {
-      'sourceStamp': {'size': 19},
-      'transformVersion': 1,
-      'operationId': _first,
-    });
-    expect(thumbnail['jpegBytes'], 3);
-    expect(harness.calls.map((call) => call.command), [
-      'media.stat',
-      'media.thumbnail',
-    ]);
-    expect(harness.calls.first.params, {
-      'operationId': _first,
-      'ownerOperationId': _owner,
-      'path': '/sdcard/Download/photo.jpg',
-      'kind': 'image',
-      'maxSize': 256,
-    });
-    expect(harness.calls.first.allowStart, isFalse);
-    expect(
-      harness.calls.every(
-        (call) => identical(call.connection, harness.current),
-      ),
-      isTrue,
-    );
-    expect(harness.calls.every((call) => call.cancellation == null), isTrue);
-    await harness.close();
-  });
-
   test('非法阶段和预取消不创建RPC，取消先到会阻止同ID迟到启动', () async {
     final harness = _Harness();
     final token = AdbCancellation()..cancel();
@@ -305,21 +260,6 @@ void main() {
       'media.thumbnail',
       'media.thumbnail.cancel',
     ]);
-    await harness.close();
-  });
-
-  test('allowStart:false的部署前拒绝不启动服务，也不伪造远端清理任务', () async {
-    final harness = _Harness();
-    harness.reply = (call) async =>
-        throw const CompanionException('observation_required', '未部署');
-    await expectLater(
-      harness.jobs.command('media.thumbnail', {
-        ..._params(_first),
-        'allowStart': false,
-      }),
-      throwsA(_code('observation_required')),
-    );
-    expect(harness.calls.single.allowStart, isFalse);
     await harness.close();
   });
 

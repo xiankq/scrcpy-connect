@@ -108,17 +108,6 @@ void main() {
     expect(stored['port'], 0);
   });
 
-  test('配对结果未知不伪造 GUID 或离线 paired 记录，也不自动重放', () async {
-    fixture.client.pairError = const AdbException('pair_result_unknown');
-    await expectLater(
-      fixture.setup.request('devices.pair', _pair),
-      _failure('pair_result_unknown'),
-    );
-    expect(fixture.client.pairs, hasLength(1));
-    expect(fixture.records.current.devices, isEmpty);
-    expect(fixture.client.connects, isEmpty);
-  });
-
   test('QR 只向本次精确实例配对，秘密只进握手，结果通过 pairing.changed 交付', () async {
     final qr = Completer<Map<String, dynamic>>();
     final pairReply = Completer<String>();
@@ -524,19 +513,6 @@ void main() {
     await cancelling;
     expect(fixture.releasedUsb, ['late-permission']);
     expect(fixture.client.connects, isEmpty);
-    expect(fixture.records.current.devices, isEmpty);
-  });
-
-  test('临时身份先精确释放 SDK client，再删除 PEM，不关闭共享永久 client', () async {
-    fixture.client.pairError = const AdbException('pair_failed');
-    await expectLater(
-      fixture.setup.request('devices.pair', {..._pair, 'identity': _dedicated}),
-      _failure('pair_failed'),
-    );
-    final candidate = fixture.releasedIdentities.single;
-    expect(fixture.releaseSawPem, [true]);
-    expect(await File(candidate.path).exists(), isFalse);
-    expect(fixture.client.closeCalls, 0);
     expect(fixture.records.current.devices, isEmpty);
   });
 

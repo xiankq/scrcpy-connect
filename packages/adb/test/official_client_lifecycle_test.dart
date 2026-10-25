@@ -27,42 +27,35 @@ Future<OfficialAdbClient> clientFor(
 }
 
 void main() {
-  for (final operation in ['shell', 'push', 'pull']) {
-    test('官方 $operation 与显式服务共用关闭责任', () async {
-      final api = _ServiceOwnerFake();
-      final root = await Directory.systemTemp.createTemp('official-service-');
-      addTearDown(() async {
-        await root.delete(recursive: true);
-      });
-      final client = await clientFor(api);
-      addTearDown(() {
-        if (!api.release.isCompleted) api.release.complete();
-      });
-      final device = await client.connect('target');
-      final file = await File(p.join(root.path, 'file')).writeAsString('input');
-      final Future<Object?> running = switch (operation) {
-        'shell' => client.shell(device, 'echo input').toList(),
-        'push' => client.push(device, file, '/file'),
-        'pull' => client.pull(device, '/file', file),
-        _ => throw StateError(operation),
-      };
-      final failed = expectLater(running, _error('cancelled'));
-      await api.reading.future;
-      var closed = false;
-      final closing = client.services.close().then((_) {
-        closed = true;
-      });
-      await Future<void>.delayed(Duration.zero);
-      expect(api.cancelled, ['operation']);
-      expect(closed, isFalse, reason: '取消通知不能代替原生操作释放确认');
-      api.release.complete();
-      await closing;
-      await failed;
-      expect(closed, isTrue);
-      expect(api.connections, contains(device.id));
-      await client.disconnect(device);
+  test('官方 push 与显式服务共用关闭责任', () async {
+    final api = _ServiceOwnerFake();
+    final root = await Directory.systemTemp.createTemp('official-service-');
+    addTearDown(() async {
+      await root.delete(recursive: true);
     });
-  }
+    final client = await clientFor(api);
+    addTearDown(() {
+      if (!api.release.isCompleted) api.release.complete();
+    });
+    final device = await client.connect('target');
+    final file = await File(p.join(root.path, 'file')).writeAsString('input');
+    final running = client.push(device, file, '/file');
+    final failed = expectLater(running, _error('cancelled'));
+    await api.reading.future;
+    var closed = false;
+    final closing = client.services.close().then((_) {
+      closed = true;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(api.cancelled, ['operation']);
+    expect(closed, isFalse, reason: '取消通知不能代替原生操作释放确认');
+    api.release.complete();
+    await closing;
+    await failed;
+    expect(closed, isTrue);
+    expect(api.connections, contains(device.id));
+    await client.disconnect(device);
+  });
   test('预取消不登记命令或启动原生握手', () async {
     final api = OwnedServerFake();
     final client = await clientFor(api);

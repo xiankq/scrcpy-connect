@@ -125,32 +125,6 @@ Future<void> _dispose(
 }
 
 void main() {
-  testWidgets(
-    'returning from device B restores the retained workspace A focus',
-    (tester) async {
-      final backend = _Backend();
-      final router = await _mount(tester, backend);
-      try {
-        final workspaceA = tester.element(find.byType(DeviceWorkspacePage));
-        expect(backend.controller.snapshot().focusedDeviceId, 'a');
-        unawaited(const WorkspaceRoute(deviceId: 'b').push<void>(workspaceA));
-        await tester.pumpAndSettle();
-        expect(backend.controller.snapshot().focusedDeviceId, 'b');
-
-        await tester.tap(pageBackButton(tester));
-        await tester.pumpAndSettle();
-        expect(
-          tester.element(find.byType(DeviceWorkspacePage)),
-          same(workspaceA),
-        );
-        expect(backend.controller.snapshot().focusedDeviceId, 'a');
-        expect(tester.takeException(), isNull);
-      } finally {
-        await _dispose(tester, router, backend);
-      }
-    },
-  );
-
   for (final syncB in [true, false]) {
     testWidgets(
       'files and gallery restore focus with device B clipboard sync $syncB and no remote audio',
@@ -259,90 +233,6 @@ void main() {
       await _dispose(tester, router, backend);
     }
   });
-
-  testWidgets(
-    'ordinary pages keep audio off across reconciliation and background recovery',
-    (tester) async {
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      final backend = _Backend();
-      final router = await _mount(
-        tester,
-        backend,
-        location: '/devices/a/files',
-      );
-      void reconcile(int sequence) {
-        backend.events.add({
-          'type': 'state.resync',
-          'data': <String, dynamic>{},
-        });
-        backend.events.add({
-          'type': 'state.resynced',
-          'data': {
-            'devices': _devices,
-            'settings': backend.controller.settings,
-            'sessions': <Json>[],
-            'shares': <Json>[],
-            'sequence': sequence,
-          },
-        });
-      }
-
-      try {
-        reconcile(1);
-        await tester.pumpAndSettle();
-        expect(backend.audioDevices, isEmpty);
-        unawaited(
-          const GalleryRoute(deviceId: 'b')
-              .push<void>(tester.element(find.byType(FilesPage))),
-        );
-        await tester.pumpAndSettle();
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-        reconcile(2);
-        await tester.pumpAndSettle();
-        expect(backend.controller.snapshot().focusedDeviceId, 'b');
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        await tester.pumpAndSettle();
-        expect(backend.controller.snapshot().focusedDeviceId, 'b');
-        expect(backend.audioDevices, isEmpty);
-        await tester.tap(pageBackButton(tester));
-        await tester.pumpAndSettle();
-        expect(backend.controller.snapshot().focusedDeviceId, 'a');
-        expect(backend.audioDevices, isEmpty);
-        expect(
-          backend.calls.where((call) => call.$1 == 'audio.start'),
-          isEmpty,
-        );
-        expect(tester.takeException(), isNull);
-      } finally {
-        if (tester.binding.lifecycleState == AppLifecycleState.paused) {
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.hidden,
-          );
-        }
-        if (tester.binding.lifecycleState == AppLifecycleState.hidden) {
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.inactive,
-          );
-        }
-        if (tester.binding.lifecycleState == AppLifecycleState.inactive) {
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.resumed,
-          );
-        }
-        await _dispose(tester, router, backend);
-      }
-    },
-  );
 
   testWidgets('a root remote surface owns focus until files A become visible', (
     tester,

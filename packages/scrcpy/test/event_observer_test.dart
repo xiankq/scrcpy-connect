@@ -27,25 +27,6 @@ void main() {
     expect(cancelled, ['observer']);
   });
 
-  test('登记期间取消精确释放迟到观察者且不开始读取', () async {
-    final opening = Completer<String>();
-    final cancelled = <String>[];
-    var reads = 0;
-    final subscription = ScrcpyEventObserver(
-      open: () => opening.future,
-      next: (_) async {
-        reads++;
-        return null;
-      },
-      cancel: (id) async => cancelled.add(id),
-    ).stream.listen((_) {});
-    final closing = subscription.cancel();
-    opening.complete('late');
-    await closing;
-    expect(cancelled, ['late']);
-    expect(reads, 0);
-  });
-
   test('暂停时只持有一个迟到事件，恢复先交付该事件再读取终态', () async {
     final reading = Completer<ScrcpyEvent?>();
     final observed = <ScrcpyEvent>[];

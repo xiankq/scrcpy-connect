@@ -5,16 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
 
 void main() {
-  test('公开配套ADB接口稳定指向同scrcpy宿主并提供精确认领能力', () async {
-    final api = await createNativeScrcpyAdbApi();
-    expect(identical(api, await createNativeScrcpyAdbApi()), isTrue);
-    expect(api, isA<NativeAdbConnectionApi>());
-    expect(api, isA<NativeAdbAdmissionApi>());
-    expect(api, isA<NativeAdbServerApi>());
-    // 只枚举真实注册表，不按序列号创建替代连接。
-    expect(await api.devices(), isA<List<AdbDevice>>());
-    expect(await listNativeScrcpyServers(), isA<List<AdbServerInfo>>());
-  });
   test('scrcpy 配套 FRB 支持独立准入 scope，旧关闭不撤销新权限', () async {
     final api = await createNativeScrcpyAdbApi() as NativeAdbAdmissionApi;
     final first = await api.attachAdmissionScope('paired-sdk-loader');

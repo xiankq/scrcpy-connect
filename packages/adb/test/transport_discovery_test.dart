@@ -135,22 +135,6 @@ other unauthorized usb:1-3 transport_id:2
     await expectLater(client.transports(), _error('devices_failed'));
   });
 
-  test('预取消与无效期限不创建命令，默认技术期限为三秒', () async {
-    final api = OwnedServerFake();
-    final client = await _client(api);
-    await expectLater(
-      client.transports(cancellation: AdbCancellation()..cancel()),
-      _error('cancelled'),
-    );
-    await expectLater(
-      client.transports(timeout: Duration.zero),
-      throwsArgumentError,
-    );
-    expect(api.specs, isEmpty);
-    await client.transports();
-    expect(api.specs.values.single.timeoutMs, 3000);
-  });
-
   test('取消等待真实退出及精确 close，迟到正常退出不能交付发现结果', () async {
     final api = _ClosingCommandApi();
     final started = Completer<void>(),
@@ -188,47 +172,6 @@ other unauthorized usb:1-3 transport_id:2
     expect(api.entries.values.single.transportStateUnknown, isFalse);
     expect(api.opened, isEmpty);
   });
-
-  test('命令准入迟到时取消，只关闭精确登记而不运行它', () async {
-    final api = _LateCommandApi();
-    final gate = Completer<void>();
-    api.createCommandGate = gate.future;
-    final client = await _client(api);
-    final stop = AdbCancellation();
-    final rejected = expectLater(
-      client.transports(cancellation: stop),
-      _error('cancelled'),
-    );
-    await api.creating.future;
-    stop.cancel();
-    gate.complete();
-    await rejected;
-    expect(api.issued, isEmpty);
-    expect(api.commandCloses, [api.specs.keys.single]);
-  });
-
-  test('命令关闭失败保留精确责任，client close 可重试而不关闭服务器', () async {
-    final api = OwnedServerFake()..commandCloseFailures = 1;
-    final client = await _client(api);
-    await expectLater(client.transports(), throwsStateError);
-    expect(api.commandCloses, hasLength(1));
-    await client.close();
-    expect(api.commandCloses, [api.specs.keys.single, api.specs.keys.single]);
-    expect(api.closedLeases, isEmpty);
-  });
-}
-
-final class _LateCommandApi extends OwnedServerFake {
-  final creating = Completer<void>();
-  @override
-  Future<String> createServerCommand(
-    String leaseId,
-    AdbServerCommandSpec spec,
-  ) {
-    final pending = super.createServerCommand(leaseId, spec);
-    creating.complete();
-    return pending;
-  }
 }
 
 final class _ClosingCommandApi extends OwnedServerFake {

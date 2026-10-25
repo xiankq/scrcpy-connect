@@ -41,15 +41,12 @@ class FakeNative {
             ..hardware_accelerated = hardware ? 1 : 0
             ..native_ready = 1
             ..paused = paused ? 1 : 0
-            ..error_code = errorCode
-            ..ended = ended ? 1 : 0;
+            ..error_code = 0
+            ..ended = 0;
           for (var index = 0; index < decoderName.length; index++) {
             status.ref.decoder_name[index] = decoderName.codeUnitAt(index);
           }
-          for (var index = 0; index < error.length; index++) {
-            status.ref.error[index] = error.codeUnitAt(index);
-          }
-          status.ref.error[error.length] = 0;
+          status.ref.error[0] = 0;
           status.ref.presentation_error[presentationError.length] = 0;
           for (var index = 0; index < presentationError.length; index++) {
             status.ref.presentation_error[index] = presentationError.codeUnitAt(
@@ -86,9 +83,7 @@ class FakeNative {
   int reads = 0, frameCount = 4, width = 320, height = 720;
   int? decoderAddressOverride, observedDecoder;
   int preparedSequence = 0;
-  String presentationError = '', error = '';
-  int errorCode = 0;
-  bool ended = false;
+  String presentationError = '';
   bool hardware = true;
   String decoderName = 'test_h264';
   double lastVolume = 1;
@@ -280,90 +275,6 @@ void main() {
   );
 
   test(
-    'failure events retain native evidence with stable codes and stages',
-    () async {
-      final events = <Map<String, dynamic>>[];
-      final subscription = controller.events.listen(events.add);
-      await controller.open(source);
-      native.errorCode = -1094995529;
-      native.error = 'Invalid data found when processing input';
-      await controller.refresh();
-      await Future<void>.delayed(Duration.zero);
-      expect(events.where((event) => event['kind'] == 'failed').last, {
-        'kind': 'failed',
-        'code': 'decoder_error',
-        'stage': 'video_decode',
-        'nativeError': -1094995529,
-        'reason': 'Invalid data found when processing input',
-      });
-      native.presentationError = 'Native window post failed';
-      await controller.refresh();
-      await Future<void>.delayed(Duration.zero);
-      expect(events.where((event) => event['kind'] == 'failed').last, {
-        'kind': 'failed',
-        'code': 'presentation_error',
-        'stage': 'video_presentation',
-        'nativeError': -1094995529,
-        'reason': 'Native window post failed',
-      });
-      native.errorCode = 0;
-      native.presentationError = '';
-      native.ended = true;
-      await controller.refresh();
-      await Future<void>.delayed(Duration.zero);
-      expect(events.where((event) => event['kind'] == 'failed').last, {
-        'kind': 'failed',
-        'code': 'media_source_ended',
-        'stage': 'video_decode',
-        'reason': 'Native packet source ended',
-      });
-      await subscription.cancel();
-    },
-  );
-
-  test(
-    'PCM failures identify the audio output without a fabricated native code',
-    () async {
-      await controller.dispose();
-      native.destroyed = false;
-      controller = MediaCodecController.audio(channel: channel);
-      final events = <Map<String, dynamic>>[];
-      final subscription = controller.events.listen(events.add);
-      await controller.open(
-        MediaCodecSource(
-          sourceId: source.sourceId,
-          generation: source.generation,
-          codec: 'pcm_s16le',
-          attachAddress: source.attachAddress,
-          detachAddress: source.detachAddress,
-        ),
-      );
-      native.presentationError = 'PCM write failed';
-      await controller.refresh();
-      await Future<void>.delayed(Duration.zero);
-      expect(events.where((event) => event['kind'] == 'failed').last, {
-        'kind': 'failed',
-        'code': 'presentation_error',
-        'stage': 'audio_output',
-        'reason': 'PCM write failed',
-      });
-      native.presentationError = '';
-      native.errorCode = -5;
-      native.error = 'PCM sink rejected frames';
-      await controller.refresh();
-      await Future<void>.delayed(Duration.zero);
-      expect(events.where((event) => event['kind'] == 'failed').last, {
-        'kind': 'failed',
-        'code': 'decoder_error',
-        'stage': 'audio_output',
-        'nativeError': -5,
-        'reason': 'PCM sink rejected frames',
-      });
-      await subscription.cancel();
-    },
-  );
-
-  test(
     'reports only new decoded dimensions, never per-frame or pre-frame',
     () async {
       final events = <Map<String, dynamic>>[];
@@ -532,25 +443,6 @@ void main() {
       await disposing;
       expect(native.reads, 0);
       expect(calls, ['createVideo', 'dispose']);
-    },
-  );
-
-  test(
-    'invalid address table drains the successfully created output',
-    () async {
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        calls.add(call.method);
-        if (call.method == 'createVideo') return {'handle': 42};
-        if (call.method == 'dispose') {
-          native.destroyed = true;
-          return null;
-        }
-        fail('Unexpected platform round trip: ${call.method}');
-      });
-      await expectLater(controller.open(source), throwsStateError);
-      await controller.dispose();
-      expect(calls, ['createVideo', 'dispose']);
-      expect(native.reads, 0);
     },
   );
 

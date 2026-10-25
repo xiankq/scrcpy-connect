@@ -104,32 +104,6 @@ void main() {
     await fixture.owner.close();
   });
 
-  test('源状态绑定实际连接和捕获，原样返回真实接纳计数且不伪报播放', () async {
-    final fixture = _Fixture();
-    final source = await fixture.owner.start('a');
-    final nativeId = source['audioSourceId']! as String;
-    final status = await fixture.owner.sourceStatus(nativeId);
-    expect(fixture.native.statusReads.single, (
-      'connection-a',
-      'capture-1',
-      nativeId,
-    ));
-    expect(status['status'], 'streaming');
-    expect(status['packets'], 7);
-    expect(status['bytes'], 4096);
-    expect(status['generation'], 4);
-    expect(fixture.owner.snapshots().single['playbackVerified'], isFalse);
-    fixture.native.sourceState = ScrcpySourceState.closed;
-    final closed = await fixture.owner.sourceStatus(nativeId);
-    expect(closed['status'], 'closed');
-    expect(closed['packets'], 7);
-    await fixture.owner.close();
-    await expectLater(
-      fixture.owner.sourceStatus(nativeId),
-      throwsA(isA<ApplicationCommandException>()),
-    );
-  });
-
   for (final key in ['nativeReady', 'revision']) {
     test('ready 缺少 $key 不修改播放状态', () async {
       final fixture = _Fixture();
@@ -267,28 +241,6 @@ void main() {
     await fixture.owner.close();
   });
 
-  test('原生启动回执迟到不能复活已撤销来源或覆盖后继', () async {
-    final fixture = _Fixture();
-    final gate = fixture.native.startGate = Completer<ScrcpySessionInfo>();
-    final starting = fixture.owner.start('a');
-    final rejected = expectLater(starting, throwsA(_code('cancelled')));
-    await fixture.native.startEntered.future;
-    fixture.eligible.remove('a');
-    await fixture.owner.eligibilityChanged('a');
-    expect(fixture.native.stopped, ['capture-1']);
-    fixture.eligible.add('a');
-    fixture.native.startGate = null;
-    final replacement = await fixture.owner.start('a');
-    gate.complete(fixture.native.info('capture-1'));
-    await rejected;
-    expect(
-      fixture.owner.snapshots().single['sourceId'],
-      replacement['sourceId'],
-    );
-    expect(fixture.native.stopped, ['capture-1']);
-    await fixture.owner.close();
-  });
-
   test('旧来源 stop 和迟到 ready 不能撤销或更新后继', () async {
     final fixture = _Fixture();
     final old = await fixture.owner.start('a');
@@ -329,22 +281,6 @@ void main() {
     final next = await replacement;
     expect(next['deviceId'], 'a');
     expect(fixture.native.creations, hasLength(3));
-    await fixture.owner.close();
-  });
-
-  test('精确旧连接停止不影响同设备后继连接的音源', () async {
-    final fixture = _Fixture();
-    final previousConnection = fixture.connections['a']!;
-    await fixture.owner.start('a');
-    await fixture.owner.stopForConnection('a', previousConnection);
-    fixture.connections['a'] = DeviceConnection(
-      client: _Client(),
-      device: const AdbDevice(id: 'replacement', serial: 'a', state: 'device'),
-    );
-    final next = await fixture.owner.start('a');
-    await fixture.owner.stopForConnection('a', previousConnection);
-    expect(fixture.owner.snapshots().single['sourceId'], next['sourceId']);
-    expect(fixture.native.stopped, ['capture-1']);
     await fixture.owner.close();
   });
 

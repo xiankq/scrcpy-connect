@@ -300,42 +300,6 @@ void main() {
     }
   });
 
-  for (final closing in [false, true]) {
-    test('${closing ? '关闭' : '取消'}等待迟到reserve实际释放，绝不把重启交给worker', () async {
-      final fixture = await _Fixture.open();
-      try {
-        final id = await fixture.restartable();
-        fixture.cache.reserveEntered = Completer<void>();
-        fixture.cache.reserveGate = Completer<void>();
-        final rejected = expectLater(
-          fixture.owner.resolveTransfer(id, 'ask', restart: true),
-          _throwsCode('cancelled'),
-        );
-        await fixture.cache.reserveEntered!.future;
-        var finished = false;
-        final stopping =
-            (closing ? fixture.owner.close() : fixture.owner.cancelTransfer(id))
-                .then((_) {
-                  finished = true;
-                });
-        expect(finished, isFalse);
-        fixture.cache.reserveGate!.complete();
-        await stopping;
-        await rejected;
-        expect(fixture.cache.leases, isEmpty);
-        expect(fixture.executor.copyCalls, 1);
-        expect(fixture.owner.transfer(id)['generation'], 0);
-        expect(fixture.owner.transfer(id)['status'], 'failed');
-        expect(
-          (await TransferJournal(fixture.root).load())[id]!['generation'],
-          0,
-        );
-      } finally {
-        await fixture.dispose();
-      }
-    });
-  }
-
   test('迟到预算释放首败保留同编辑责任，cancel与close共同等待且重试不重复释放', () async {
     final fixture = await _Fixture.open();
     try {

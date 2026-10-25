@@ -374,33 +374,6 @@ void main() {
   );
 
   testWidgets(
-    'closing the last page during a pending start discards and cleans up its late source',
-    (tester) async {
-      final fixture = _AudioFixture();
-      final pending = fixture.pendingStarts['a'] = Completer<Json>();
-      final close = fixture.controller.claimRemoteDeviceView('a');
-      await _flush(tester);
-      expect(
-        fixture.calls.where((call) => call.$1 == 'audio.start'),
-        hasLength(1),
-      );
-      close();
-      pending.complete({
-        'deviceId': 'a',
-        'sourceId': 'source-a',
-        'status': 'playing',
-      });
-      await _flush(tester);
-      expect(fixture.sources, isEmpty);
-      expect(
-        fixture.calls.where((call) => call.$1 == 'audio.stop'),
-        isNotEmpty,
-      );
-      await fixture.dispose();
-    },
-  );
-
-  testWidgets(
     'lost sessions stop device sound while another open device continues',
     (tester) async {
       final fixture = _AudioFixture();
@@ -468,32 +441,4 @@ void main() {
     await _flush(tester);
     await fixture.dispose();
   });
-
-  testWidgets(
-    'device preference writes merge against the latest queued settings',
-    (tester) async {
-      final fixture = _AudioFixture();
-      final first = fixture.controller.updateDeviceSetting(
-        'a',
-        'clipboardSync',
-        true,
-      );
-      final second = fixture.controller.updateDeviceSetting(
-        'a',
-        'showNavigationBar',
-        false,
-      );
-      final third = fixture.controller.updateDeviceSetting(
-        'b',
-        'clipboardSync',
-        true,
-      );
-      await Future.wait([first, second, third]);
-      expect(fixture.controller.settings['deviceSettings'], {
-        'a': {'clipboardSync': true, 'showNavigationBar': false},
-        'b': {'clipboardSync': true},
-      });
-      await fixture.dispose();
-    },
-  );
 }

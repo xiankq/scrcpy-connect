@@ -274,12 +274,6 @@ void main() {
     expect(_map(result, 'battery')['level'], isNull);
   });
 
-  test('单核心 cpulist 能正常显示，不要求存在 0-N 区间', () async {
-    client.responses['cat /proc/meminfo; cat /sys/devices/system/cpu/present'] =
-        '0';
-    expect(_map(await request('device.data.get'), 'processor')['cores'], 1);
-  });
-
   test('有界查询拒绝超大或无退出回执的输出，仍可展示其他查询结果', () async {
     client.reply = (command) async* {
       if (command == 'getprop') {

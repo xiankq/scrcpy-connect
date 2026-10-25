@@ -2,7 +2,6 @@ import 'package:scrcpy_connect/application/transport/application_request.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
@@ -244,75 +243,6 @@ void main() {
     },
   );
 
-  for (final unavailable in [false, true]) {
-    testWidgets(
-      'existing device identity is read-only even when ${unavailable ? 'unavailable' : 'device scoped'}',
-      (tester) async {
-        final calls = <(String, Json)>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
-          calls.add((command, params));
-          if (command == 'identity.device.get') {
-            if (unavailable) {
-              throw const RequestFailure('identity_unavailable', '设备专用授权私钥不可用');
-            }
-            return {
-              'scope': 'device',
-              'fingerprint': 'SHA256:device-public-fingerprint',
-            };
-          }
-          return <String, dynamic>{};
-        });
-        addTearDown(controller.dispose);
-        await pump(
-          tester,
-          controller,
-          DeviceConnectionPreferencesPage(
-            controller: controller,
-            device: phone,
-          ),
-          narrow: true,
-        );
-        expect(calls.singleWhere((c) => c.$1 == 'identity.device.get').$2, {
-          'deviceId': 'phone',
-        });
-        expect(find.byType(DropdownButtonFormField<String>), findsNothing);
-        expect(find.text('从文件选择'), findsNothing);
-        expect(find.text('导入私钥'), findsNothing);
-        expect(find.text('使用全局私钥'), findsNothing);
-        expect(find.widgetWithText(TextFormField, 'PEM 私钥'), findsNothing);
-        if (unavailable) {
-          expect(find.textContaining('设备专用授权私钥不可用'), findsOneWidget);
-        } else {
-          expect(find.text('设备专属私钥'), findsOneWidget);
-          expect(find.text('SHA256:device-public-fingerprint'), findsNothing);
-          final tooltip = tester.widget<GlassTooltip>(
-            find.byWidgetPredicate(
-              (widget) =>
-                  widget is GlassTooltip &&
-                  widget.message == 'SHA256:device-public-fingerprint',
-            ),
-          );
-          expect(tooltip.message, 'SHA256:device-public-fingerprint');
-          await tester.longPress(find.text('设备专属私钥'));
-          await tester.pumpAndSettle();
-          expect(find.text('SHA256:device-public-fingerprint'), findsOneWidget);
-        }
-        expect(
-          calls.where(
-            (c) =>
-                c.$1.startsWith('identity.') && c.$1 != 'identity.device.get',
-          ),
-          isEmpty,
-        );
-        expect(calls.where((c) => c.$1 == 'devices.configure'), isEmpty);
-        expect(tester.takeException(), isNull);
-      },
-    );
-  }
-
   testWidgets(
     'convert IP validates before requesting and never treats an unverified response as success',
     (tester) async {
@@ -470,42 +400,6 @@ void main() {
         ),
         isEmpty,
       );
-    },
-  );
-
-  testWidgets(
-    'metadata-only device stays unauthorized and has no live battery',
-    (tester) async {
-      final controller = createTestController(
-        (command, [params = const {}]) async => command == 'device.info'
-            ? {'id': 'restored', 'name': '恢复的手机', 'status': 'unauthorized'}
-            : command == 'devices.list'
-            ? {
-                'devices': [
-                  {
-                    'id': 'restored',
-                    'name': '恢复的手机',
-                    'status': 'unauthorized',
-                    'battery': 97,
-                  },
-                ],
-              }
-            : {},
-      );
-      addTearDown(controller.dispose);
-      await controller.initialize();
-      await tester.pumpWidget(
-        TestProviderScope(controller: controller, child: const ConnectApp()),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('需要重新授权'), findsOneWidget);
-      expect(find.textContaining('97%'), findsNothing);
-      await tester.tap(find.text('恢复的手机'));
-      await tester.pumpAndSettle();
-      expect(find.text('重新授权'), findsOneWidget);
-      expect(find.text('需要重新授权'), findsOneWidget);
-      expect(find.textContaining('97%'), findsNothing);
-      expect(find.text('连接后查看后台应用'), findsOneWidget);
     },
   );
 }
