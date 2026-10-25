@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 project(media_codec_core LANGUAGES C CXX)
-include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ffmpeg.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../tool/cmake/ffmpeg.cmake")
 
 find_program(MEDIA_CODEC_CARGO cargo HINTS "$ENV{CARGO_HOME}/bin" "$ENV{HOME}/.cargo/bin" "$ENV{USERPROFILE}/.cargo/bin" REQUIRED)
 set(MEDIA_CODEC_RUST_ROOT "${MEDIA_CODEC_WORKSPACE_ROOT}/rust/media_codec")

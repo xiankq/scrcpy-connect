@@ -4,7 +4,7 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 # 派生 workspace 前，使用与依赖构建器一致的 Python 实现解析，使各宿主复用实际包缓存。
 execute_process(COMMAND "${Python3_EXECUTABLE}" -c
   "from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().as_posix())"
-  "${CMAKE_CURRENT_LIST_DIR}/.."
+  "${CMAKE_CURRENT_LIST_DIR}/../.."
   OUTPUT_VARIABLE MEDIA_CODEC_PACKAGE_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE
   RESULT_VARIABLE MEDIA_CODEC_RESOLVE_RESULT)
 if(NOT MEDIA_CODEC_RESOLVE_RESULT EQUAL 0)

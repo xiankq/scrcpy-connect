@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'design_tokens.g.dart';
+import 'generated/design_tokens.g.dart';
 import 'connect_theme.dart';
 
 class ContentPanel extends StatelessWidget {

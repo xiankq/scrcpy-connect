@@ -1,7 +1,7 @@
 import '../control.dart';
 import '../models.dart';
-import '../native_api.dart';
-import 'native_call.dart';
+import '../api.dart';
+import 'call.dart';
 import '../event_observer.dart';
 import 'generated/third_party/interop_scrcpy_api/api.dart' as native;
 

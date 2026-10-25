@@ -47,7 +47,7 @@ test('design font changes remain metadata without entering runtime text styles',
 test('--check detects source and output drift without writing, generation restores freshness', () => {
   const directory = mkdtempSync(join(tmpdir(), 'design-token-test-'));
   const source = join(directory, 'DESIGN.md');
-  const output = join(directory, 'tokens.g.dart');
+  const output = join(directory, 'generated', 'tokens.g.dart');
   const command = (...args) => spawnSync(process.execPath, [cli, '--source', source, '--output', output, ...args], { encoding: 'utf8' });
   try {
     writeFileSync(source, design);

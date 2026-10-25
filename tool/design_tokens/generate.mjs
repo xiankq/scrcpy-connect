@@ -1,12 +1,12 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { lint } from '@google/design.md/linter';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const defaultSource = resolve(root, 'designs/design.md');
-const defaultOutput = resolve(root, 'packages/design_system/lib/src/design_tokens.g.dart');
+const defaultOutput = resolve(root, 'packages/design_system/lib/src/generated/design_tokens.g.dart');
 const consumer = resolve(root, 'packages/design_system/lib/design_system.dart');
 // 显式声明 DESIGN.md 标准组件属性之外支持的扩展。
 const componentProperties = new Set([
@@ -146,7 +146,10 @@ export function run(args = process.argv.slice(2)) {
     let existing;
     try { existing = readFileSync(output, 'utf8'); } catch { /* Missing output is stale. */ }
     if (existing !== result.source) throw new Error('Design tokens are stale; run node tool/design_tokens/generate.mjs');
-  } else writeFileSync(output, result.source);
+  } else {
+    mkdirSync(dirname(output), { recursive: true });
+    writeFileSync(output, result.source);
+  }
   console.log(`DESIGN.md ${check ? 'checked' : 'generated'} with official 0.4.0 parser: ${result.summary.errors} errors, ${result.summary.warnings} warnings`);
 }
 

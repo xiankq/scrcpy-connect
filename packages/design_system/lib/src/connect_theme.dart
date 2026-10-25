@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
-import 'design_tokens.g.dart';
+import 'generated/design_tokens.g.dart';
 
 /// 直接映射 designs/design.md 的语义值。
 abstract final class ConnectTokens {

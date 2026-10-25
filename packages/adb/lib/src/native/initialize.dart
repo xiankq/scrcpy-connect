@@ -3,11 +3,11 @@ import 'dart:ffi';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:meta/meta.dart';
 
-import '../../native_asset_library.dart';
+import 'library.dart';
 import '../api.dart';
 import '../local_files.dart';
-import 'frb_native_local_files.dart';
-import 'frb_native_adb_api.dart';
+import 'local_files.dart';
+import 'adb_api.dart';
 import 'generated/frb_generated.dart';
 import 'generated/third_party/interop_adb_api/api.dart' as native;
 

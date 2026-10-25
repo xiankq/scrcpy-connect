@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
-import 'design_tokens.g.dart';
+import 'generated/design_tokens.g.dart';
 import 'glass_preferences.dart';
 
 /// 为应用持有手势识别器的控件提供指针反馈。

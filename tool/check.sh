@@ -29,7 +29,7 @@ npm test --prefix tool/design_tokens
 dart format --output=none --set-exit-if-changed app/lib app/test app/integration_test tool servers packages
 cargo fmt --all --check
 cargo fmt --manifest-path rust/media_codec/Cargo.toml --check
-(cd packages/media_codec/tool && python3 -B -m unittest test_build_ffmpeg.py)
+PYTHONPATH=packages/media_codec/tool python3 -B -m unittest discover -s packages/media_codec/test/tool -p 'test_*.py'
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 # 被控助手独立于宿主 workspace；Linux 夹具验证原始路径字节与元数据语义。

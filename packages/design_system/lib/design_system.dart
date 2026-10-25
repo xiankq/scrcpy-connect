@@ -7,7 +7,7 @@ export 'package:liquid_glass_widgets/liquid_glass_widgets.dart'
 
 export 'src/connect_theme.dart';
 export 'src/content.dart';
-export 'src/design_tokens.g.dart';
+export 'src/generated/design_tokens.g.dart';
 export 'src/form_controls.dart';
 export 'src/glass_material.dart';
 export 'src/glass_menu.dart';

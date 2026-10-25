@@ -5,7 +5,7 @@ import 'package:adb/adb.dart';
 import 'control.dart';
 import 'event_observer.dart';
 import 'models.dart';
-import 'native_api.dart';
+import 'api.dart';
 
 /// 用注入的原生传输创建捕获；不拥有或关闭调用方的 ADB 连接。
 final class ScrcpyClient {

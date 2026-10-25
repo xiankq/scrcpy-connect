@@ -1,9 +1,9 @@
 export 'src/control.dart';
 export 'src/models.dart';
-export 'src/native_api.dart';
+export 'src/api.dart';
 export 'src/session.dart';
 
-export 'src/native/native_host.dart'
+export 'src/native/host.dart'
     show
         ScrcpyNativeHost,
         createNativeScrcpy,

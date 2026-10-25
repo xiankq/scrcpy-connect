@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy/src/native/frb_native_scrcpy_api.dart';
+import 'package:scrcpy/src/native/scrcpy_api.dart';
 
 void main() {
   test('调整显示尺寸在FRB窄化前拒绝零、负数及超出u16范围的值', () async {

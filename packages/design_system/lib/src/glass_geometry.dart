@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'design_tokens.g.dart';
+import 'generated/design_tokens.g.dart';
 
 // 先给合成器明确的矩形范围，再执行后端形状及模糊。
 // 保留光学边缘和按压空间，避免采样无界祖先表面。

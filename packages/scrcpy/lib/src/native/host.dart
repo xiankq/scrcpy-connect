@@ -9,10 +9,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
 
 import '../session.dart';
 import '../models.dart';
-import 'frb_native_adb_api.dart';
-import 'frb_native_local_files.dart';
-import 'frb_native_scrcpy_api.dart';
-import 'native_call.dart';
+import 'adb_api.dart';
+import 'local_files.dart';
+import 'scrcpy_api.dart';
+import 'call.dart';
 import 'generated/frb_generated.dart';
 import 'generated/third_party/interop_adb_api/api.dart' as adb_native;
 import 'generated/third_party/interop_scrcpy_api/api.dart' as scrcpy_native;

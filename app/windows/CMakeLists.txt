@@ -92,7 +92,7 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
 # 仅非调试构建安装 AOT 库。
-include("${CMAKE_CURRENT_SOURCE_DIR}/../../packages/adb/cmake/bundle_adb.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../packages/adb/tool/cmake/bundle_adb.cmake")
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)

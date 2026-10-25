@@ -15,6 +15,8 @@
 | `rust/<package>/` | 对应能力包的协议、原生资源与媒体执行 |
 | `servers/` | 被控临时执行产物 |
 
+能力包以 `lib/<包名>.dart` 为主入口，手写实现归 `lib/src/`，原生绑定归 `lib/src/native/`，Dart生成物归所属模块的 `generated/`。构建辅助归 `tool/`（含 `tool/cmake/`），Dart及工具测试归 `test/`；原生测试留在对应原生模块的 `tests/`。`hook/`、`native/` 和平台目录按实际能力保留，不创建空目录对齐。
+
 `ApplicationSession` 组装所有者，分派器只适配命令。跨包使用公开接口；共享ADB连接使用同库宿主，句柄不能跨动态库。依赖由 `tool/check_architecture.dart` 检查。决定见[ADR](../adr/)，页面约定见[导航](flutter-navigation.md)。
 
 ## 状态与资源所有权

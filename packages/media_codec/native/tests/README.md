@@ -1,6 +1,6 @@
 # Native media tests
 
-`lifecycle_test` covers source generations, input bounds, PCM accounting, pause and synchronous detach through the public C ABI. `video_decode_test.cpp` submits all 24 AV1 packets through SinkV1, forces libdav1d, checks frames/nonblank bounded RGBA and detach; no production demuxer is linked. Link against `media_codec_native` and its pinned static dependencies (`/MD` on MSVC).
+`media_codec_core_test` covers source generations, input bounds, PCM accounting, pause and synchronous detach through the public C ABI. `video_decode_test.cpp` submits all 24 AV1 packets through SinkV1, forces libdav1d, checks frames/nonblank bounded RGBA and detach; no production demuxer is linked. Link against `media_codec_native` and its pinned static dependencies (`/MD` on MSVC).
 
 Download the FATE [decode_model.ivf](https://fate-suite.ffmpeg.org/av1/decode_model.ivf) to a system temporary directory and verify SHA-256 `956947f45c96ea1f944fc2aac646d9088a307e436b2afc0477b9ae627babc7cd`. An optional second harness argument (`d3d11va`/`vaapi`) requires actual AV1 hardware frames; RGBA readback alone does not verify Flutter presentation.
 
