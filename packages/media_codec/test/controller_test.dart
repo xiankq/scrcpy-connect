@@ -211,6 +211,25 @@ void main() {
     expect(calls.where((value) => value == 'dispose'), hasLength(1));
   });
 
+  test(
+    'paused event listeners cannot delay native disposal confirmation',
+    () async {
+      final subscription = controller.events.listen((_) {});
+      subscription.pause();
+      try {
+        await controller.open(source);
+        final receipt = await controller.dispose().timeout(
+          const Duration(milliseconds: 100),
+        );
+        expect(native.destroyed, isTrue);
+        expect(receipt['nativeDeleteConfirmed'], isTrue);
+        expect(calls, ['createVideo', 'dispose']);
+      } finally {
+        await subscription.cancel();
+      }
+    },
+  );
+
   test('publishes decoder selection only after actual video output', () async {
     final events = <Map<String, dynamic>>[];
     final subscription = controller.events.listen(events.add);

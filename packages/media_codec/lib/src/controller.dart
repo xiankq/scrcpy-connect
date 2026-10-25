@@ -361,7 +361,8 @@ class MediaCodecController {
       }
       await _operations;
       final receipt = await _releaseOutput();
-      await _events.close();
+      // 暂停的外部订阅可延迟 done，不能延迟已确认的原生释放回执。
+      unawaited(_events.close());
       return receipt;
     } catch (_) {
       _disposing = null;
