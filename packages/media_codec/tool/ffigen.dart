@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:ffigen/ffigen.dart';
 
-void main() {
+Future<void> main() async {
   final root = Platform.script.resolve('../');
-  FfiGenerator(
-    headers: Headers(
+  await FfiGenerator(
+    input: Input(
       entryPoints: [root.resolve('native/media_codec.h')],
       compilerOptions: [
         if (Platform.environment['MEDIA_CODEC_CLANG_RESOURCE_DIR']
@@ -13,34 +13,39 @@ void main() {
           '-resource-dir=$resource',
       ],
     ),
-    functions: Functions(
-      include: (declaration) => const {
-        'mc_get_status',
-        'mc_set_paused',
-        'mc_set_volume',
-        'mc_create',
-        'mc_destroy',
-      }.contains(declaration.originalName),
-      includeTypedef: (_) => true,
-      includeSymbolAddress: (_) => true,
-    ),
-    structs: Structs(
-      include: (declaration) => const {
-        'mc_decoder',
-        'mc_status',
-        'mc_config',
-      }.contains(declaration.originalName),
-    ),
-    typedefs: Typedefs.includeSet({
-      'mc_get_status_call',
-      'mc_set_paused_call',
-      'mc_set_volume_call',
-      'mc_get_status_fn',
-      'mc_set_paused_fn',
-      'mc_set_volume_fn',
-    }),
+    visitors: [
+      Visitor(
+        func: (node) {
+          node.isIncluded = const {
+            'mc_get_status',
+            'mc_set_paused',
+            'mc_set_volume',
+            'mc_create',
+            'mc_destroy',
+          }.contains(node.originalName);
+          node.generateTypedefs = true;
+          node.exposeSymbolAddress = true;
+        },
+        struct: (node) => node.isIncluded = const {
+          'mc_decoder',
+          'mc_status',
+          'mc_config',
+        }.contains(node.originalName),
+        typealias: (node) => node.isIncluded =
+            const {
+              'mc_get_status_call',
+              'mc_set_paused_call',
+              'mc_set_volume_call',
+              'mc_get_status_fn',
+              'mc_set_paused_fn',
+              'mc_set_volume_fn',
+            }.contains(node.originalName)
+            ? TypealiasInclude.always
+            : TypealiasInclude.never,
+      ),
+    ],
     output: Output(
-      dartFile: root.resolve('lib/src/native_bindings.g.dart'),
+      dart: DartOutput(path: root.resolve('lib/src/native_bindings.g.dart')),
       style: const DynamicLibraryBindings(wrapperName: 'MediaCodecNative'),
       preamble:
           '// Project-owned media_codec ABI; uses the project source license.\n'

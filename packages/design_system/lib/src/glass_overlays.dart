@@ -223,7 +223,7 @@ class _GlassOverlayCard extends StatelessWidget {
               ),
             ],
           ),
-          child: liquid.GlassCard(
+          child: liquid.GlassContainer.card(
             shape: liquid.LiquidRoundedSuperellipse(borderRadius: radius),
             padding: padding,
             quality: liquid.GlassQuality.premium,

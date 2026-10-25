@@ -27,7 +27,7 @@ class NavigationSelectionLens extends StatefulWidget {
 }
 
 class _NavigationSelectionLensState extends State<NavigationSelectionLens> {
-  // 1.13.0 在 420 ms 按压窗口及对齐、厚度弹簧尾部保持移动镜片，其公开栏没有稳定回调。
+  // 后端在 420 ms 按压窗口及对齐、厚度弹簧尾部保持移动镜片，其公开栏没有稳定回调。
   // 等待原镜片完成整个释放间隔后再挂载静止镜片，避免释放期间两个光学面重叠。
   static const _releaseInterval = Duration(milliseconds: 1100);
   final _pointers = <int>{};

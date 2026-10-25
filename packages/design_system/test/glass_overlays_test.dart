@@ -132,7 +132,7 @@ void main() {
       );
       await tester.tap(find.text('打开'));
       await tester.pumpAndSettle();
-      expect(find.byType(liquid.GlassCard), findsNothing);
+      expect(find.byType(liquid.GlassContainer), findsNothing);
       expect(find.byType(liquid.AdaptiveGlass), findsNothing);
       expect(find.byType(BackdropFilter), findsNothing);
       final surface = find.byType(Glass);

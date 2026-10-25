@@ -154,7 +154,7 @@ void validateGlassChromeReport(Map<String, dynamic> report) {
   );
   require(
     report['backend'] == 'liquid_glass_widgets' &&
-        report['backendVersion'] == '1.13.0',
+        report['backendVersion'] == '1.15.0',
     'Wrong production renderer.',
   );
   require(
