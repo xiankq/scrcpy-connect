@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 flutter pub get --enforce-lockfile
+dart --disable-dart-dev tool/check_test_budget.dart
 dart --disable-dart-dev tool/check_architecture.dart
 case "$(uname -s)" in
   Linux*)

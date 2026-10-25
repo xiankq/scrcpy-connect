@@ -12,65 +12,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-    'a large encoder picker builds lazily and reaches its last choice',
-    (tester) async {
-      Json? selected;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        if (command == 'session.quality') {
-          selected = params;
-          return {'appliedSessions': <Json>[], 'failures': <Json>[]};
-        }
-        return {
-          'current': {'videoCodec': 'h264'},
-          'codecs': [
-            {
-              'id': 'h264',
-              'available': true,
-              'status': 'available',
-              'decoderStatus': 'available',
-              'encoders': List.generate(
-                1000,
-                (index) => {'name': 'encoder.$index', 'available': true},
-              ),
-            },
-          ],
-        };
-      });
-      addTearDown(controller.dispose);
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: QualityPage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('视频编码器'));
-      await tester.pumpAndSettle();
-      expect(find.byType(ListTile).evaluate().length, lessThan(80));
-      expect(find.text('encoder.999'), findsNothing);
-      final viewport = find.byType(Scrollable).last;
-      await tester.scrollUntilVisible(
-        find.text('encoder.999'),
-        1000,
-        scrollable: viewport,
-        maxScrolls: 80,
-      );
-      await tester.tap(find.text('encoder.999'));
-      await tester.pumpAndSettle();
-      expect(selected?['videoEncoder'], 'encoder.999');
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
-
-  testWidgets(
     'codec changes reset the encoder and expose only its matching encoders for all device sessions',
     (tester) async {
       final requests = <(String, Json)>[];

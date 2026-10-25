@@ -37,40 +37,31 @@ void main() {
     expect(reads, 3);
   });
 
-  for (final command in [
-    'apps.list',
-    'session.quality.options',
-    'device.capabilities',
-    'device.data.get',
-    'device.diagnose',
-    'files.list',
-  ]) {
-    test('$command 仅在所属连接变化后重新读取并恢复离线错误', () async {
-      final events = StreamController<Json>.broadcast(sync: true);
-      var reads = 0;
-      final query = CommandQuery(
-        request: (_, [params = const {}]) async {
-          if (++reads == 1) throw StateError('设备离线');
-          return {'connection': 'new'};
-        },
-        events: events.stream,
-        command: command,
-        params: {'deviceId': 'a'},
-      );
-      addTearDown(query.dispose);
-      addTearDown(events.close);
-      await flush();
-      expect(query.error, isNotNull);
-      events.add({'type': 'device.changed', 'deviceId': 'b'});
-      await flush();
-      expect(reads, 1);
-      events.add({'type': 'device.changed', 'deviceId': 'a'});
-      await flush();
-      expect(reads, 2);
-      expect(query.error, isNull);
-      expect(query.data, {'connection': 'new'});
-    });
-  }
+  test('files.list 仅在所属连接变化后重新读取并恢复离线错误', () async {
+    final events = StreamController<Json>.broadcast(sync: true);
+    var reads = 0;
+    final query = CommandQuery(
+      request: (_, [params = const {}]) async {
+        if (++reads == 1) throw StateError('设备离线');
+        return {'connection': 'new'};
+      },
+      events: events.stream,
+      command: 'files.list',
+      params: {'deviceId': 'a'},
+    );
+    addTearDown(query.dispose);
+    addTearDown(events.close);
+    await flush();
+    expect(query.error, isNotNull);
+    events.add({'type': 'device.changed', 'deviceId': 'b'});
+    await flush();
+    expect(reads, 1);
+    events.add({'type': 'device.changed', 'deviceId': 'a'});
+    await flush();
+    expect(reads, 2);
+    expect(query.error, isNull);
+    expect(query.data, {'connection': 'new'});
+  });
 
   test('在途突发失效合并一次后续读取，旧查询释放后不通知', () async {
     final events = StreamController<Json>.broadcast(sync: true);

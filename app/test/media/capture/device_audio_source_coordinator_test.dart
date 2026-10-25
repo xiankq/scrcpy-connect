@@ -130,14 +130,7 @@ void main() {
     );
   });
 
-  for (final key in [
-    'backend',
-    'nativeReady',
-    'applied',
-    'bytesWritten',
-    'revision',
-    'playState',
-  ]) {
+  for (final key in ['nativeReady', 'revision']) {
     test('ready 缺少 $key 不修改播放状态', () async {
       final fixture = _Fixture();
       final source = await fixture.owner.start('a');

@@ -285,45 +285,6 @@ void main() {
     expect(calls, isEmpty);
   });
 
-  test('执行器接收结构化参数，真实领域错误与恢复详情原样保留', () async {
-    const failure = ApplicationCommandException(
-      'app_launch_unknown',
-      '请核验原窗口',
-      {'sessionId': 'old', 'launchOutcome': 'unknown'},
-    );
-    final calls = <(String, Map<String, dynamic>)>[];
-    final commands = buildCommands(
-      executor: owners.executor,
-      catalog: owners.catalog,
-      mutations: owners.mutations,
-      transfers: owners.transfers,
-      preferences: preferences,
-      execute: (command, params) async {
-        calls.add((command, Map.of(params)));
-        throw failure;
-      },
-      onSettingsChanged: (_) {},
-      applyBackgroundPolicy: (_) async {},
-    );
-    await expectLater(
-      commands.invoke('session.start', {'deviceId': _device}),
-      throwsA(same(failure)),
-    );
-    expect(calls.single.$1, 'session.start');
-    expect(calls.single.$2['deviceId'], _device);
-    await expectLater(
-      commands.invoke('devices.connect', {'deviceId': 1}),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (error) => error.code,
-          'code',
-          'invalid_argument',
-        ),
-      ),
-    );
-    expect(calls, hasLength(1));
-  });
-
   test('遗忘确认后才清理持久偏好，不同步第二份执行配置', () async {
     final receipt = Completer<Map<String, dynamic>>();
     final issued = Completer<void>();

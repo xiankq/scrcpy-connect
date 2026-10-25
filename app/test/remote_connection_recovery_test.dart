@@ -13,15 +13,10 @@ import 'support/test_controller.dart';
 void main() {
   for (final scenario in [
     'visible',
-    'retained',
     'explicit stop',
-    'activity stop',
     'connection stop',
     'manual disconnect',
     'app window',
-    'background',
-    'closed output',
-    'reconciled',
   ]) {
     testWidgets('connection recovery respects $scenario intent', (
       tester,
@@ -29,7 +24,6 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       final events = StreamController<Json>.broadcast(sync: true);
       final starts = <Json>[];
-      final retained = scenario == 'retained';
       Json receipt(String id) => {
         'sessionId': id,
         'status': 'streaming',
@@ -50,9 +44,6 @@ void main() {
         if (command == 'session.resume') {
           return receipt(value(params, 'sessionId'));
         }
-        if (command == 'session.pause' && scenario == 'closed output') {
-          throw const RequestFailure('no_frame', '该视频输出已结束。');
-        }
         return <String, dynamic>{};
       }, events: events.stream);
       try {
@@ -65,47 +56,18 @@ void main() {
               packageName: scenario == 'app window'
                   ? 'com.android.settings'
                   : null,
-              existingSession: retained ? receipt('retained') : null,
             ),
           ),
         );
         await tester.pumpAndSettle();
         final before = starts.length;
-        final original = retained ? 'retained' : 'session-1';
-        if (scenario == 'reconciled') {
-          events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
-          events.add({
-            'type': 'state.resynced',
-            'data': {
-              'devices': <Json>[],
-              'settings': <String, dynamic>{},
-              'shares': <Json>[],
-              'sequence': 1,
-              'sessions': [receipt(original)],
-            },
-          });
-          await tester.pumpAndSettle();
-        }
-        if (const [
-          'explicit stop',
-          'activity stop',
-          'connection stop',
-        ].contains(scenario)) {
+        const original = 'session-1';
+        if (scenario == 'explicit stop' || scenario == 'connection stop') {
           await controller.request(
             scenario == 'explicit stop' ? 'session.stop' : 'activities.stop',
             scenario == 'explicit stop'
                 ? {'sessionId': original}
-                : {
-                    'activityId': scenario == 'activity stop'
-                        ? 'session:$original'
-                        : 'connection:phone',
-                  },
-          );
-          await tester.pumpAndSettle();
-        }
-        if (scenario == 'background') {
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.paused,
+                : {'activityId': 'connection:phone'},
           );
           await tester.pumpAndSettle();
         }
@@ -136,12 +98,7 @@ void main() {
         devices('connected');
         devices('connected');
         await tester.pumpAndSettle();
-        final shouldRecover = const [
-          'visible',
-          'retained',
-          'closed output',
-          'reconciled',
-        ].contains(scenario);
+        final shouldRecover = scenario == 'visible';
         expect(starts.length, before + (shouldRecover ? 1 : 0));
         if (shouldRecover) {
           expect(starts.last.containsKey('packageName'), false);

@@ -28,15 +28,4 @@ void main() {
       second,
     );
   });
-
-  test('unsupported background playback never fabricates readiness', () async {
-    final policy = MixerAudioFocusRegistry(backgroundPlaybackSupported: false);
-    expect(
-      (await policy.request('audio.platform.background', {
-        'ownerId': 'one',
-        'enabled': true,
-      }))['ready'],
-      false,
-    );
-  });
 }

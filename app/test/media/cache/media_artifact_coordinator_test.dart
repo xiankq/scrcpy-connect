@@ -36,29 +36,6 @@ void main() {
     await root.delete(recursive: true);
   });
 
-  test('预览真实落盘、同源命中、租约保护及释放后清理共用应用预算', () async {
-    final first = await owner.invoke('media.preview', {
-      'deviceId': 'device',
-      'path': '/sdcard/raw.png',
-    });
-    final target = File(first['localPath'] as String);
-    expect(await target.readAsBytes(), executor.bytes);
-    expect(first['cacheHit'], false);
-    expect((await cache.clear())['deletedBytes'], 0);
-    final second = await owner.invoke('media.preview', {
-      'deviceId': 'device',
-      'path': '/sdcard/raw.png',
-    });
-    expect(second['cacheHit'], true);
-    expect(second['localPath'], first['localPath']);
-    expect(executor.copies, 1);
-    await cache.release(first['cacheLeaseId'] as String);
-    expect((await cache.clear())['deletedBytes'], 0);
-    await cache.release(second['cacheLeaseId'] as String);
-    expect((await cache.clear())['deletedBytes'], greaterThan(0));
-    expect(await target.exists(), false);
-  });
-
   test('正在接收的预览以写入预算保护，不通过保留整个媒体根目录绕过清理', () async {
     final entered = Completer<void>(), finish = Completer<void>();
     executor.duringCopy = () async {

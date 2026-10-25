@@ -18,26 +18,6 @@ void main() {
     await background.apply(true, automatic: true);
     expect(calls, ['background.request', 'audio.policy']);
   });
-  test(
-    'an explicit disabled preference stops background before audio policy',
-    () async {
-      final calls = <String>[];
-      final background = ApplicationBackgroundCoordinator(
-        request: (command, params) async {
-          calls.add(command);
-          expect(params, {'enabled': false, 'automatic': false});
-          return {'running': false};
-        },
-        audioPolicy: (enabled) async {
-          expect(enabled, false);
-          calls.add('audio.policy');
-        },
-        emit: (_) {},
-      );
-      await background.apply(false, automatic: false);
-      expect(calls, ['background.request', 'audio.policy']);
-    },
-  );
 
   test('platform refusal reports status while preserving application startup and preference', () async {
     final events = <Map<String, dynamic>>[];

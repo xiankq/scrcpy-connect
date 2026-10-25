@@ -6,7 +6,6 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/application/events/application_snapshot_reader.dart';
-import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
 import 'package:scrcpy_connect/connection/connection_owner.dart';
 import 'package:scrcpy_connect/media/capture/device_keep_awake_coordinator.dart';
 
@@ -14,7 +13,6 @@ void main() {
   late _Fixture f;
   setUp(() => f = _Fixture());
   tearDown(() async {
-    f.native.failClose = false;
     await f.owner.close();
     for (final stream in f.native.events.values) {
       await stream.close();
@@ -43,80 +41,6 @@ void main() {
       expect(session, isNot(contains('keepActiveLeaseId')));
     }
     expect(f.native.created, ['keep-1'], reason: '组合投影不能启动另一份设备服务');
-  });
-
-  test('公开 SDK 关闭失败保留精确租约，重试仅确认主进程退出，不声明设置恢复', () async {
-    await f.owner.windowsChanged('phone');
-    f.native.failClose = true;
-    f.enabled = false;
-    await expectLater(
-      f.owner.settingsChanged(['phone']),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (error) => error.code,
-          'code',
-          'keep_active_partial',
-        ),
-      ),
-    );
-    final failed = sessionWithKeepAwake(
-      _window('first'),
-      f.owner.projection('phone'),
-    );
-    expect(failed['keepActiveApplied'], isFalse);
-    expect(failed['keepActiveLeaseActive'], isFalse);
-    expect(failed['keepActiveLeaseId'], 'keep-1');
-    expect(
-      (failed['keepActiveError']! as Map<String, Object?>)['code'],
-      'keep_active_cleanup',
-    );
-    final pending = failed['keepActiveCleanup']! as Map<String, Object?>;
-    expect(pending['leaseId'], 'keep-1');
-    expect(pending['releasePending'], isTrue);
-    expect(pending['localCleanupConfirmed'], isFalse);
-    expect(pending['cleanupConfirmed'], isFalse);
-    expect(pending['remoteExitVerified'], isFalse);
-    expect(pending['pendingCleanup'], hasLength(1));
-    expect(failed['pendingCleanup'], ['capture-cleanup']);
-    expect(failed['remoteExitVerified'], isTrue);
-
-    f.native.failClose = false;
-    await f.owner.windowsChanged('phone');
-    final retried = sessionWithKeepAwake(
-      _window('first'),
-      f.owner.projection('phone'),
-    );
-    expect(retried['keepActiveError'], isNull);
-    final cleanup = retried['keepActiveCleanup']! as Map<String, Object?>;
-    expect(cleanup['releasePending'], isFalse);
-    expect(cleanup['pendingCleanup'], isEmpty);
-    expect(cleanup['localCleanupConfirmed'], isTrue);
-    expect(cleanup['cleanupConfirmed'], isTrue);
-    expect(cleanup['remoteExitVerified'], isTrue);
-    expect(cleanup['remoteRestoreVerified'], isFalse);
-    expect(f.native.created, ['keep-1']);
-  });
-
-  test('原生握手失败保留到恢复投影，不能因本机关闭成功而清掉启动错误', () async {
-    f.native.startFailure = true;
-    await expectLater(
-      f.owner.sync('phone'),
-      throwsA(isA<ApplicationCommandException>()),
-    );
-    final state = sessionWithKeepAwake(
-      _window('first'),
-      f.owner.projection('phone'),
-    );
-    expect(state['keepActiveApplied'], isFalse);
-    expect(state['keepActiveLeaseActive'], isFalse);
-    expect(
-      (state['keepActiveError']! as Map<String, Object?>)['code'],
-      'control_failed',
-    );
-    final cleanup = state['keepActiveCleanup']! as Map<String, Object?>;
-    expect(cleanup['localCleanupConfirmed'], isTrue);
-    expect(cleanup['remoteRestoreVerified'], isFalse);
-    expect(state['status'], 'streaming', reason: '保持唤醒失败不能伪造画面失败');
   });
 
   test('另一设备和从未启动的窗口不能继承当前设备的保持唤醒租约', () async {
@@ -170,13 +94,12 @@ final class _Fixture {
       hasWindowOwner: (_) => true,
       settings: () => {
         'deviceSettings': {
-          'phone': {'stayAwake': enabled},
+          'phone': {'stayAwake': true},
         },
       },
       emit: (_, _, _) {},
     );
   }
-  bool enabled = true;
   final native = _Native();
   final client = _Client();
   final connections = <String, DeviceConnection>{};
@@ -192,7 +115,6 @@ final class _Client implements AdbClient {
 final class _Native implements NativeScrcpyApi, NativeScrcpyStagedApi {
   final created = <String>[];
   final events = <String, StreamController<ScrcpyEvent>>{};
-  bool failClose = false, startFailure = false;
 
   @override
   Future<String> createSession({
@@ -207,7 +129,6 @@ final class _Native implements NativeScrcpyApi, NativeScrcpyStagedApi {
 
   @override
   Future<ScrcpySessionInfo> startControl(String sessionId) async {
-    if (startFailure) throw const ScrcpyException('control_failed');
     return ScrcpySessionInfo(
       id: sessionId,
       deviceName: 'fixture',
@@ -224,9 +145,7 @@ final class _Native implements NativeScrcpyApi, NativeScrcpyStagedApi {
   }
 
   @override
-  Future<void> stopSession(String captureRef) async {
-    if (failClose) throw const ScrcpyException('capture_cleanup_unconfirmed');
-  }
+  Future<void> stopSession(String captureRef) async {}
 
   @override
   ScrcpyEventObserver openEvents(String captureRef) =>

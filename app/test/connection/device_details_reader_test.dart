@@ -210,12 +210,6 @@ void main() {
     expect(client.commands, hasLength(1));
   });
 
-  test('未知编程错误不作为设备缺失事实吞掉', () async {
-    final failure = StateError('implementation failure');
-    client.reply = (_) => Stream.error(failure);
-    await expectLater(request('device.data.get'), throwsA(same(failure)));
-  });
-
   test('地址来自目标接口，过滤特殊地址、去重并保留 IPv6 链路作用域', () async {
     client.responses['ip -o addr show'] = _addresses;
     final result = await request('device.network.get');

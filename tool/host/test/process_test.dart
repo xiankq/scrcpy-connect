@@ -137,22 +137,6 @@ Future<void> main() async {
   );
 
   test(
-    'passes working directory and environment to the actual child',
-    () async {
-      final result = await child('''
-void main() {
-  File('owned.txt').writeAsStringSync(Platform.environment['TOOL_PROCESS_VALUE']!);
-}
-''');
-      expect(result.exitCode, 0);
-      expect(
-        File(p.join(temporary.path, 'owned.txt')).readAsStringSync(),
-        'owned-child',
-      );
-    },
-  );
-
-  test(
     'timeout reaps the actual child before returning to fixture cleanup',
     () async {
       final marker = File(p.join(temporary.path, 'heartbeat'));

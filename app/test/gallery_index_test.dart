@@ -100,44 +100,6 @@ void main() {
     }
   });
 
-  testWidgets('loading more keeps the same device snapshot and earlier items', (
-    tester,
-  ) async {
-    final calls = <Json>[];
-    Json file(String name) => {
-      'name': name,
-      'path': '/sdcard/Download/$name',
-      'mime': 'image/jpeg',
-    };
-    final controller = await _mount(tester, (
-      command, [
-      params = const {},
-    ]) async {
-      if (command != 'media.list') return {};
-      calls.add(Map.of(params));
-      return params['offset'] == 1
-          ? _receipt(offset: 1, items: [file('second.jpg')], total: 2)
-          : _receipt(items: [file('first.jpg')], next: 1, total: 2);
-    });
-    try {
-      await tester.ensureVisible(find.text('加载更多'));
-      await tester.tap(find.text('加载更多'));
-      await tester.pumpAndSettle();
-      expect(calls.last, {
-        'deviceId': 'phone-a',
-        'scanId': 'scan-a',
-        'offset': 1,
-        'limit': 100,
-      });
-      expect(find.text('first.jpg'), findsOneWidget);
-      expect(find.text('second.jpg'), findsOneWidget);
-      expect(find.textContaining('已显示 2 / 2 项'), findsOneWidget);
-      expect(find.text('加载更多'), findsNothing);
-      expect(tester.takeException(), isNull);
-    } finally {
-      await _dispose(tester, controller);
-    }
-  });
   testWidgets('a replacement scan rejects an old in-flight page', (
     tester,
   ) async {

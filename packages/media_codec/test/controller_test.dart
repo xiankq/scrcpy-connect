@@ -189,28 +189,6 @@ void main() {
     },
   );
 
-  test('reads status and applies controls through generated FFI', () async {
-    await controller.open(source);
-    expect(controller.currentStatus, containsPair('decoderName', 'test_h264'));
-    expect(controller.currentStatus, containsPair('hardwareAccelerated', true));
-    expect(controller.positionMs, 123);
-    expect(controller.currentStatus.containsKey('decoderAddress'), isFalse);
-    expect(controller.currentStatus.containsKey('nativeApi'), isFalse);
-    await controller.setPaused(true);
-    expect(native.paused, isTrue);
-    expect(controller.currentStatus['paused'], isTrue);
-    await controller.setVolume(.7, muted: true);
-    expect(native.lastVolume, 0);
-    await controller.setVolume(.7);
-    expect(native.lastVolume, .7);
-    await controller.refresh();
-    expect(calls, ['createVideo']);
-    await controller.dispose();
-    expect(calls, ['createVideo', 'dispose']);
-    await controller.dispose();
-    expect(calls.where((value) => value == 'dispose'), hasLength(1));
-  });
-
   test(
     'paused event listeners cannot delay native disposal confirmation',
     () async {

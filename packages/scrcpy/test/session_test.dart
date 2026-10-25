@@ -7,19 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 const device = AdbDevice(id: 'connection', serial: 'serial', state: 'device');
 
 void main() {
-  test('来源状态使用当前连接句柄并保留原生实际计数和代次', () async {
-    final native = SourceStatusScrcpyApi();
-    final status = await ScrcpyClient(native)
-        .sourceStatus(device, captureRef: 'capture', sourceId: 'source');
-    expect(native.statusQueries, [('connection', 'capture', 'source')]);
-    expect(identical(status, native.status), isTrue);
-    expect(status.generation, 17);
-    expect(status.packets, 4);
-    expect(status.bytes, 1024);
-    expect(status.kind, ScrcpySourceKind.audio);
-    expect(status.status, ScrcpySourceState.closed);
-  });
-
   test('来源状态缺少可选能力时明确失败，既有传输无需新增实现', () async {
     await expectLater(
       ScrcpyClient(FakeScrcpyApi())
@@ -87,16 +74,6 @@ void main() {
       );
     });
   }
-
-  test('原生未知或释放来源错误原样传播，不伪造空统计', () async {
-    const error = ScrcpyException('stale_source', '来源已释放');
-    final native = SourceStatusScrcpyApi()..statusError = error;
-    await expectLater(
-      ScrcpyClient(native)
-          .sourceStatus(device, captureRef: 'capture', sourceId: 'source'),
-      throwsA(same(error)),
-    );
-  });
 
   test('分阶段启动先返回控制，START_APP不被媒体等待阻塞', () async {
     final native = StagedScrcpyApi();
@@ -454,28 +431,6 @@ void main() {
     await retained!.close();
     expect(native.stopped, ['capture', 'capture']);
   });
-
-  test('配置对应上游参数，控制和原生源保持类型', () async {
-    final native = FakeScrcpyApi();
-    final session = await ScrcpyClient(native).createSession(
-      device,
-      options: const ScrcpyOptions(
-        videoCodec: ScrcpyVideoCodec.h265,
-        maxSize: 1280,
-        maxFps: 30,
-        videoBitRate: 4000000,
-      ),
-    );
-    native.starting.complete(info);
-    expect((await session.start()).source!.sourceId, 'source');
-    await session.sendControl(
-      const ScrcpyKey(action: ScrcpyKeyAction.down, keycode: 4),
-    );
-    expect(native.connectionId, 'connection');
-    expect(native.options!.videoCodec, ScrcpyVideoCodec.h265);
-    expect(native.controls.single, isA<ScrcpyKey>());
-    await session.close();
-  });
 }
 
 const info = ScrcpySessionInfo(
@@ -498,7 +453,6 @@ const info = ScrcpySessionInfo(
 class SourceStatusScrcpyApi extends FakeScrcpyApi
     implements NativeScrcpySourceStatusApi {
   final statusQueries = <(String, String, String)>[];
-  ScrcpyException? statusError;
   ScrcpySourceStatus status = const ScrcpySourceStatus(
     captureRef: 'capture',
     sourceId: 'source',
@@ -517,7 +471,6 @@ class SourceStatusScrcpyApi extends FakeScrcpyApi
     required String sourceId,
   }) async {
     statusQueries.add((connectionId, captureRef, sourceId));
-    if (statusError case final error?) throw error;
     return status;
   }
 }

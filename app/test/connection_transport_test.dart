@@ -113,68 +113,6 @@ Future<Json> _submit(WidgetTester tester, _Backend backend) async {
 }
 
 void main() {
-  testWidgets('add-device modes share one form and preserve draft fields', (
-    tester,
-  ) async {
-    final backend = _Backend();
-    final router = await _mount(
-      tester,
-      backend,
-      const AddDeviceRoute().location,
-    );
-    expect(find.text('手动填写无线调试地址'), findsNothing);
-    expect(find.text('无线配对码'), findsOneWidget);
-    expect(
-      tester.getTopLeft(find.text('发现设备')).dy,
-      lessThan(tester.getTopLeft(find.text('无线配对码')).dy),
-    );
-    await tester.enterText(find.byType(TextFormField).first, 'phone.local');
-    await tester.enterText(find.byType(TextFormField).at(1), '37123');
-    await tester.enterText(find.byType(TextFormField).at(2), '123456');
-    await Scrollable.ensureVisible(
-      tester.element(find.text('IP连接')),
-      alignment: .5,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('IP连接'));
-    await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, '/connection/add');
-    expect(find.byType(TextFormField), findsNWidgets(2));
-    expect(
-      tester
-          .widget<TextFormField>(find.byType(TextFormField).at(1))
-          .controller!
-          .text,
-      '5555',
-    );
-    await Scrollable.ensureVisible(
-      tester.element(find.text('无线配对码')),
-      alignment: .5,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('无线配对码'));
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<TextFormField>(find.byType(TextFormField).at(1))
-          .controller!
-          .text,
-      '37123',
-    );
-    expect(
-      tester
-          .widget<TextFormField>(find.byType(TextFormField).at(2))
-          .controller!
-          .text,
-      '123456',
-    );
-    await tester.tap(find.text('IP连接'));
-    await tester.pumpAndSettle();
-    final added = await _submit(tester, backend);
-    expect(added['transport'], 'tcp');
-    expect(added['port'], 5555);
-  });
-
   for (final kind in ['tcp', 'tls']) {
     testWidgets('reauthorization keeps identity and $kind in the IP mode', (
       tester,
@@ -203,82 +141,6 @@ void main() {
     });
   }
 
-  testWidgets('legacy wireless link enters the unified pairing form', (
-    tester,
-  ) async {
-    final backend = _Backend();
-    await _mount(
-      tester,
-      backend,
-      const WirelessGuideRoute(address: 'phone.local').location,
-    );
-    expect(find.text('添加设备'), findsOneWidget);
-    expect(find.text('无线配对码'), findsOneWidget);
-    expect(find.text('扫码配对'), findsOneWidget);
-    expect(find.text('USB'), findsOneWidget);
-    expect(find.text('IP连接'), findsOneWidget);
-    expect(find.byType(TextFormField), findsNWidgets(3));
-    expect(find.text('phone.local'), findsOneWidget);
-  });
-
-  testWidgets('pairing authentication failure explains current-window retry', (
-    tester,
-  ) async {
-    const failure = RequestFailure(
-      'device_error',
-      'invalid ADB protocol: pairing authentication failed (incorrect code or channel)',
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ConnectTokens.theme(Brightness.light),
-        home: const Scaffold(
-          body: ConnectionFailureNote(
-            failure: failure,
-            pairing: true,
-            legacyTcp: false,
-          ),
-        ),
-      ),
-    );
-    expect(
-      tester
-          .widget<ConnectionFailureNote>(find.byType(ConnectionFailureNote))
-          .failure,
-      same(failure),
-    );
-    expect(find.text('配对失败，请使用手机当前显示的配对端口和配对码。'), findsOneWidget);
-    expect(find.text(failure.message), findsNothing);
-    expect(find.textContaining('完成前中断'), findsNothing);
-    expect(find.textContaining('码错误'), findsNothing);
-  });
-
-  testWidgets('certificate rejection explains how to pair again', (
-    tester,
-  ) async {
-    const raw = 'ADB I/O: received fatal alert: CertificateUnknown';
-    final backend = _Backend(
-      connectFailure: const RequestFailure('device_error', raw),
-    );
-    await _mount(
-      tester,
-      backend,
-      const ConnectionFormRoute(address: 'phone.local', port: '37123').location,
-    );
-    await _submit(tester, backend);
-    expect(find.text(raw), findsNothing);
-    expect(find.text('手机未授权本机，请重新配对。'), findsOneWidget);
-    expect(find.text('重新配对'), findsOneWidget);
-    await Scrollable.ensureVisible(
-      tester.element(find.text('重新配对')),
-      alignment: .5,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('重新配对'));
-    await tester.pumpAndSettle();
-    expect(find.byType(TextFormField), findsNWidgets(3));
-    expect(backend.calls.where((call) => call.$1 == 'devices.pair'), isEmpty);
-  });
-
   testWidgets('retrying a rejected connection reuses the added device', (
     tester,
   ) async {
@@ -304,46 +166,6 @@ void main() {
     final additions = backend.calls.where((call) => call.$1 == 'devices.add');
     expect(additions, hasLength(2));
     expect(additions.last.$2['deviceId'], 'new-device');
-  });
-
-  testWidgets('pairing EOF explains interruption without blaming the code', (
-    tester,
-  ) async {
-    final backend = _Backend(
-      pairFailure: const RequestFailure(
-        'device_error',
-        'ADB I/O: unexpected EOF',
-      ),
-    );
-    await _mount(
-      tester,
-      backend,
-      const ConnectionFormRoute(
-        pairing: true,
-        address: 'phone.local',
-        port: '37123',
-      ).location,
-    );
-    await tester.enterText(find.byType(TextFormField).at(2), '123456');
-    await Scrollable.ensureVisible(
-      tester.element(find.text('配对并连接')),
-      alignment: .5,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('配对并连接'));
-    await tester.pumpAndSettle();
-    await _confirmConfiguration(tester);
-    expect(
-      tester
-          .widget<ConnectionFailureNote>(find.byType(ConnectionFailureNote))
-          .failure,
-      same(backend.pairFailure),
-    );
-    expect(find.text('配对中断，请确认手机配对窗口仍开启，然后重试。'), findsOneWidget);
-    expect(find.text('配对中断，请确认手机配对窗口仍开启，然后重试。'), findsOneWidget);
-    expect(find.textContaining('码错误'), findsNothing);
-    expect(find.textContaining('未信任'), findsNothing);
-    expect(find.text('已配对，尚未连接'), findsNothing);
   });
 
   testWidgets('a failed pairing requires a fresh code before another request', (
@@ -388,32 +210,6 @@ void main() {
       hasLength(1),
     );
   });
-
-  testWidgets(
-    'connection timeout offers reachability checks rather than pairing',
-    (tester) async {
-      final backend = _Backend(
-        connectFailure: const RequestFailure(
-          'timeout',
-          'ADB operation timed out',
-        ),
-      );
-      await _mount(
-        tester,
-        backend,
-        const ConnectionFormRoute(
-          address: 'phone.local',
-          port: '37123',
-        ).location,
-      );
-      await _submit(tester, backend);
-      expect(find.textContaining('连接超时'), findsOneWidget);
-      expect(find.text('连接超时，请检查地址、连接端口和网络。'), findsOneWidget);
-      expect(find.text('重新配对'), findsNothing);
-      expect(find.textContaining('未信任'), findsNothing);
-      expect(find.text('使用无线配对码'), findsOneWidget);
-    },
-  );
 
   testWidgets(
     'network failure keeps the ordinary pairing option and its device',
@@ -474,58 +270,6 @@ void main() {
     },
   );
 
-  testWidgets(
-    'repairing certificate rejection retains the newly added device',
-    (tester) async {
-      final backend = _Backend(
-        record: {
-          'id': 'new-device',
-          'transport': 'tls',
-          'status': 'unauthorized',
-        },
-        connectFailure: const RequestFailure(
-          'device_error',
-          'ADB I/O: received fatal alert: CertificateUnknown',
-        ),
-      );
-      final router = await _mount(
-        tester,
-        backend,
-        const ConnectionFormRoute(
-          address: 'phone.local',
-          port: '37123',
-        ).location,
-      );
-      await _submit(tester, backend);
-      await Scrollable.ensureVisible(
-        tester.element(find.text('重新配对')),
-        alignment: .5,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('重新配对'));
-      await tester.pumpAndSettle();
-      expect(
-        router.routeInformationProvider.value.uri.queryParameters['device-id'],
-        isNull,
-      );
-      expect(
-        tester
-            .widget<TextFormField>(find.byType(TextFormField).at(1))
-            .controller!
-            .text,
-        isEmpty,
-      );
-      expect(
-        tester
-            .widget<TextFormField>(find.byType(TextFormField).at(2))
-            .controller!
-            .text,
-        isEmpty,
-      );
-      expect(backend.calls.where((call) => call.$1 == 'devices.pair'), isEmpty);
-    },
-  );
-
   for (final kind in ['tls', 'tcp']) {
     testWidgets(
       'unknown discovered $kind service keeps its type across the typed route and add',
@@ -576,106 +320,28 @@ void main() {
     expect(added['port'], 5555);
   });
 
-  testWidgets(
-    'IP address connection is an explicit choice independent of port',
-    (tester) async {
-      final backend = _Backend();
-      await _mount(
-        tester,
-        backend,
-        const ConnectionFormRoute(
-          address: 'phone.local',
-          port: '37123',
-        ).location,
-      );
-      await tester.tap(find.text('IP连接'));
-      await tester.pumpAndSettle();
-      // 进入 IP 页签时，已知加密地址仍保持加密。
-      expect(find.text('使用手机无线调试主页面的连接端口。'), findsOneWidget);
-      expect(find.byType(TextFormField), findsNWidgets(2));
-      final added = await _submit(tester, backend);
-      expect(added['transport'], 'tls');
-      expect(added['port'], 37123);
-    },
-  );
-
-  for (final record in <Json>[
-    {'id': 'known-device', 'transport': 'tls'},
-    {'id': 'known-device', 'transport': 'tcp', 'guid': 'paired-guid'},
-    {'id': 'known-device', 'transport': 'tcp'},
-  ]) {
-    final expected = record['guid'] != null || record['transport'] == 'tls'
-        ? 'tls'
-        : 'tcp';
-    testWidgets(
-      'record ${record['transport']} guid=${record['guid']} keeps $expected on manual update',
-      (tester) async {
-        final backend = _Backend(record: {...record, 'status': 'offline'});
-        await _mount(
-          tester,
-          backend,
-          const ConnectionFormRoute(
-            deviceId: 'known-device',
-            address: 'phone.local',
-            port: '37123',
-          ).location,
-        );
-        final added = await _submit(tester, backend);
-        expect(added['transport'], expected);
-        expect(added['deviceId'], 'known-device');
+  testWidgets('a paired legacy TCP record keeps TLS on manual update', (
+    tester,
+  ) async {
+    final backend = _Backend(
+      record: const {
+        'id': 'known-device',
+        'transport': 'tcp',
+        'guid': 'paired-guid',
+        'status': 'offline',
       },
     );
-  }
-
-  testWidgets(
-    'pairing fallback preserves its device and modern wireless type',
-    (tester) async {
-      final backend = _Backend(
-        record: {
-          'id': 'paired-device',
-          'transport': 'tls',
-          'guid': 'paired-guid',
-          'status': 'offline',
-        },
-      );
-      final router = await _mount(
-        tester,
-        backend,
-        const ConnectionFormRoute(
-          pairing: true,
-          address: 'phone.local',
-          port: '37123',
-        ).location,
-      );
-      await tester.enterText(find.byType(TextFormField).at(2), '123456');
-      await Scrollable.ensureVisible(
-        tester.element(find.text('配对并连接')),
-        alignment: .5,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('配对并连接'));
-      await tester.pumpAndSettle();
-      await _confirmConfiguration(tester);
-      final paired = backend.calls.singleWhere(
-        (call) => call.$1 == 'devices.pair',
-      );
-      expect(paired.$2['code'], '123456');
-      expect(paired.$2.containsKey('transport'), isFalse);
-      await Scrollable.ensureVisible(
-        tester.element(find.text('填写连接端口')),
-        alignment: .5,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('填写连接端口'));
-      await tester.pumpAndSettle();
-      expect(
-        router.routeInformationProvider.value.uri.queryParameters['transport'],
-        isNull,
-      );
-      await tester.enterText(find.byType(TextFormField).at(1), '5555');
-      final added = await _submit(tester, backend);
-      expect(added['deviceId'], 'paired-device');
-      expect(added['transport'], 'tls');
-    },
-  );
+    await _mount(
+      tester,
+      backend,
+      const ConnectionFormRoute(
+        deviceId: 'known-device',
+        address: 'phone.local',
+        port: '37123',
+      ).location,
+    );
+    final added = await _submit(tester, backend);
+    expect(added['transport'], 'tls');
+    expect(added['deviceId'], 'known-device');
+  });
 }

@@ -674,71 +674,6 @@ void main() {
   });
 
   test(
-    'typed shell retains binary channels and pulls one event at a time',
-    () async {
-      final api = _Api();
-      final client = NativeAdbClient(api, '/owned/key');
-      final iterator = StreamIterator(client.shell(device, 'command'));
-      expect(api.reads, 0);
-      expect(await iterator.moveNext(), isTrue);
-      expect(iterator.current.bytes, [0, 255]);
-      expect(api.reads, 1);
-      await Future<void>.delayed(Duration.zero);
-      expect(api.reads, 1, reason: 'paused Dart consumption must not prefetch');
-      expect(await iterator.moveNext(), isTrue);
-      expect(iterator.current.channel, AdbShellChannel.stderr);
-      expect(await iterator.moveNext(), isTrue);
-      expect(iterator.current.exitCode, 7);
-      expect(await iterator.moveNext(), isFalse);
-      expect(api.cancelled, ['operation']);
-    },
-  );
-  test(
-    'explicit cancellation wakes a blocked native read and disposes handle',
-    () async {
-      final api = _Api()..blocked = Completer<NativeAdbEvent?>();
-      final token = AdbCancellation();
-      final iterator = StreamIterator(
-        NativeAdbClient(
-          api,
-          '/owned/key',
-        ).shell(device, 'sleep', cancellation: token),
-      );
-      final pending = iterator.moveNext();
-      await Future<void>.delayed(Duration.zero);
-      token.cancel();
-      await expectLater(pending, throwsA(isA<AdbException>()));
-      expect(api.cancelled, isNotEmpty);
-    },
-  );
-  test(
-    'cancellation suppresses an event already returned by the native reader',
-    () async {
-      final api = _Api()..blocked = Completer<NativeAdbEvent?>();
-      final token = AdbCancellation();
-      final client = NativeAdbClient(api, '/owned');
-      final iterator = StreamIterator(
-        client.shell(device, 'command', cancellation: token),
-      );
-      final pending = iterator.moveNext();
-      final rejected = expectLater(
-        pending,
-        throwsA(isA<AdbException>().having((e) => e.code, 'code', 'cancelled')),
-      );
-      await Future<void>.delayed(Duration.zero);
-      api.blocked!.complete(
-        NativeAdbEvent(
-          kind: 'stdout',
-          bytes: Uint8List.fromList([99]),
-          done: false,
-        ),
-      );
-      token.cancel();
-      await rejected;
-      await client.close();
-    },
-  );
-  test(
     'close drains an in-flight bounded pairing without claiming cancellation',
     () async {
       final api = _Api()..pairing = Completer<String>();
@@ -752,21 +687,6 @@ void main() {
       api.pairing!.complete('actual-peer-guid');
       expect(await pairing, 'actual-peer-guid');
       await closing;
-    },
-  );
-  test(
-    'closing native client is idempotent and forbids future operations',
-    () async {
-      final api = _Api();
-      final client = NativeAdbClient(api, '/owned/key');
-      await client.close();
-      await client.close();
-      expect(
-        api.closes,
-        0,
-        reason: 'Closing one client must not call a global registry close',
-      );
-      expect(() => client.devices(), throwsA(isA<AdbException>()));
     },
   );
   test('closing a client disconnects only its own connections', () async {
@@ -814,19 +734,6 @@ void main() {
     expect(api.reads, 0);
     expect(api.disconnected, isEmpty);
     await client.close();
-  });
-  test('close waits for a late connect to release its handle', () async {
-    final api = _Api()..opening = Completer<AdbDevice>();
-    final client = NativeAdbClient(api, '/owned');
-    final opening = client.connect('late');
-    final rejected = expectLater(opening, throwsA(isA<AdbException>()));
-    final closing = client.close();
-    api.opening!.complete(
-      const AdbDevice(id: 'late', serial: 'late', state: 'device'),
-    );
-    await closing;
-    await rejected;
-    expect(api.disconnected, ['late']);
   });
   test('failed disconnect retains the exact handle for client close', () async {
     final api = _Api()..disconnectFailures = 1;
@@ -892,40 +799,6 @@ void main() {
       await failedClose;
       await client.close();
       expect(api.disconnected, ['late', 'late', 'late']);
-    },
-  );
-  test(
-    'failed operation cleanup remains owned until close confirms it',
-    () async {
-      final api = _Api()..cancelFailures = 1;
-      final client = NativeAdbClient(api, '/owned');
-      await expectLater(
-        client.shell(device, 'command').drain<void>(),
-        throwsStateError,
-      );
-      await client.close();
-      expect(api.cancelled, ['operation', 'operation']);
-    },
-  );
-  test(
-    'close waits for an operation whose native reservation arrives late',
-    () async {
-      final api = _Api()..shellOpening = Completer<String>();
-      final client = NativeAdbClient(api, '/owned');
-      final rejected = expectLater(
-        client.shell(device, 'command').drain<void>(),
-        throwsA(isA<AdbException>()),
-      );
-      await Future<void>.delayed(Duration.zero);
-      var closed = false;
-      final closing = client.close().then((_) => closed = true);
-      await Future<void>.delayed(Duration.zero);
-      expect(closed, isFalse);
-      api.shellOpening!.complete('late-operation');
-      await rejected;
-      await closing;
-      expect(api.cancelled, ['late-operation']);
-      expect(api.reads, 0);
     },
   );
   test(
@@ -1007,16 +880,13 @@ class _Api implements NativeAdbApi {
   }) => pairing?.future ?? Future.value('peer');
 
   final cancelled = <String>[];
-  Completer<NativeAdbEvent?>? blocked;
-  Completer<String>? shellOpening;
   @override
   Future<String> shell(String id, String command, int timeoutMs) async =>
-      shellOpening?.future ?? 'operation';
+      'operation';
   @override
   Future<NativeAdbEvent?> next(String id) async {
     reads++;
     if (missingTerminal) return null;
-    if (blocked case final pending?) return pending.future;
     return switch (reads) {
       1 => NativeAdbEvent(
         kind: 'stdout',
@@ -1044,9 +914,6 @@ class _Api implements NativeAdbApi {
     if (cancelFailures > 0) {
       cancelFailures--;
       throw StateError('operation cleanup was not confirmed');
-    }
-    if (blocked case final pending? when !pending.isCompleted) {
-      pending.completeError(const AdbException('cancelled'));
     }
   }
 

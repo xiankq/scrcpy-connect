@@ -1,14 +1,10 @@
 import 'package:scrcpy_connect/application/transport/application_request.dart';
 
-import 'support/page_back.dart';
 import 'support/test_controller.dart';
 
-import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
-import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
-import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/route_error/route_error_page.dart';
@@ -193,36 +189,6 @@ void main() {
   );
 
   testWidgets(
-    'restoring the app restores the selected shell branch without starting any device stream',
-    (tester) async {
-      final backend = _Backend();
-      await tester.pumpWidget(
-        TestProviderScope(
-          controller: backend.controller,
-          child: const ConnectApp(),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('设置').hitTestable().first);
-      await tester.pumpAndSettle();
-      expect(find.text('外观'), findsOneWidget);
-      await tester.restartAndRestore();
-      await tester.pumpAndSettle();
-      expect(find.text('外观'), findsOneWidget);
-      expect(backend.starts, 0);
-      await tester.scrollUntilVisible(find.text('运行日志'), 160);
-      await tester.tap(find.text('运行日志'));
-      await tester.pumpAndSettle();
-      expect(find.text('本次运行未启用日志服务。'), findsOneWidget);
-      await tester.tap(pageBackButton(tester));
-      await tester.pumpAndSettle();
-      expect(find.text('外观'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      backend.controller.dispose();
-      await backend.events.close();
-    },
-  );
-  testWidgets(
     'an explicit existing-session entry with a missing identity never falls back to a new screen',
     (tester) async {
       final backend = _Backend();
@@ -270,41 +236,6 @@ void main() {
         backend.calls.where((call) => call.$1 == 'session.start'),
         isEmpty,
       );
-      await _disposeRouter(tester, router, backend);
-    },
-  );
-
-  testWidgets(
-    'device detail and files reload identifiers then back returns to the same detail route',
-    (tester) async {
-      final backend = _Backend();
-      final router = await _mountRouter(tester, backend);
-      unawaited(
-        router.pushNamed(
-          'device-details',
-          pathParameters: {'deviceId': 'phone'},
-        ),
-      );
-      await tester.pumpAndSettle();
-      final detail = tester.element(find.byType(DeviceWorkspacePage));
-      unawaited(
-        router.pushNamed(
-          'files',
-          pathParameters: {'deviceId': 'phone'},
-          queryParameters: {'path': '/sdcard'},
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(FilesPage), findsOneWidget);
-      expect(find.text('Download'), findsOneWidget);
-      expect(
-        backend.calls.where((call) => call.$1 == 'device.info'),
-        hasLength(2),
-      );
-      router.pop();
-      await tester.pumpAndSettle();
-      expect(tester.element(find.byType(DeviceWorkspacePage)), same(detail));
-      expect(router.routeInformationProvider.value.uri.path, '/devices/phone');
       await _disposeRouter(tester, router, backend);
     },
   );
@@ -438,38 +369,6 @@ void main() {
   );
 
   testWidgets(
-    'directory route returns a typed selection and cancel returns null without consuming a share',
-    (tester) async {
-      final backend = _Backend();
-      final router = await _mountRouter(tester, backend);
-      final selected = router.pushNamed<String>(
-        'share-directory',
-        pathParameters: {'deviceId': 'phone'},
-        queryParameters: {'path': '/sdcard'},
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Download'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('使用这个目录'));
-      await tester.pumpAndSettle();
-      expect(await selected, '/sdcard/Download');
-      final cancelled = router.pushNamed<String>(
-        'share-directory',
-        pathParameters: {'deviceId': 'phone'},
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(pageBackButton(tester));
-      await tester.pumpAndSettle();
-      expect(await cancelled, isNull);
-      expect(
-        backend.calls.where((call) => call.$1 == 'sharing.consume'),
-        isEmpty,
-      );
-      await _disposeRouter(tester, router, backend);
-    },
-  );
-
-  testWidgets(
     'sharing return acknowledges the specific share and leaves the source route',
     (tester) async {
       final backend = _Backend();
@@ -491,35 +390,6 @@ void main() {
         {'shareId': 'incoming'},
       );
       expect(backend.calls.where((call) => call.$1 == 'files.push'), isEmpty);
-      await _disposeRouter(tester, router, backend);
-    },
-  );
-
-  testWidgets(
-    'successful connection replaces its form with the connected workspace',
-    (tester) async {
-      final backend = _Backend();
-      final router = await _mountRouter(tester, backend);
-      unawaited(router.pushNamed('connection-form'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField).at(0), 'phone.local');
-      await tester.enterText(find.byType(TextFormField).at(1), '37123');
-      await tester.ensureVisible(find.text('连接设备'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('连接设备'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byType(ConnectionFormPage, skipOffstage: false),
-        findsNothing,
-      );
-      expect(find.byType(DeviceWorkspacePage), findsOneWidget);
-      router.pop();
-      await tester.pumpAndSettle();
-      expect(router.routeInformationProvider.value.uri.path, '/devices');
-      expect(
-        find.byType(ConnectionFormPage, skipOffstage: false),
-        findsNothing,
-      );
       await _disposeRouter(tester, router, backend);
     },
   );

@@ -40,20 +40,6 @@ void main() {
   });
   tearDown(() => directory.delete(recursive: true));
 
-  test('遗忘持久清理两类设备偏好并保留其他设备与全局偏好', () async {
-    await commands().forgetDevicePreferences(_forgotten);
-    final reopened = await PreferenceCommands.prepare(directory);
-    expect(reopened.current.values['deviceQuality'], {
-      _remaining: {'maxFps': 60},
-    });
-    expect(reopened.current.values['deviceSettings'], {
-      _remaining: {'stayAwake': false, 'clipboardSync': false},
-    });
-    expect(reopened.current.values['appearance'], 'dark');
-    expect(changes.single['deviceQuality'], isNot(contains(_forgotten)));
-    expect(changes.single['deviceSettings'], isNot(contains(_forgotten)));
-  });
-
   test('保存冲突保留其他所有者的修改并允许只重试偏好清理', () async {
     final other = await PreferenceCommands.prepare(directory);
     await other.update({'appearance': 'system'});

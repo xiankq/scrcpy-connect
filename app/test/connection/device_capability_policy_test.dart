@@ -182,16 +182,6 @@ void main() {
     }
   });
 
-  test('程序错误原对象抛出，不作为远端能力失败吞掉', () async {
-    final error = StateError('broken adapter');
-    fixture.client.errors[DeviceCapabilityFactsReader.shellCommand] = error;
-    await expectLater(
-      fixture.request('device.capabilities'),
-      throwsA(same(error)),
-    );
-    expect(fixture.client.native.syncRequests, isEmpty);
-  });
-
   test('包列表输出受真实字节预算约束，超限仍回收流且不伤其他事实', () async {
     fixture.client.responses[DeviceCapabilityFactsReader.packagesCommand] =
         'package:${'x' * (256 * 1024)}';

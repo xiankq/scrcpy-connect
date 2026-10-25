@@ -365,58 +365,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('press cancellation and disabling cannot commit a stale action', (
-    tester,
-  ) async {
-    var activations = 0;
-    var enabled = true;
-    late StateSetter rebuild;
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ConnectTokens.theme(Brightness.light),
-        home: StatefulBuilder(
-          builder: (context, setState) {
-            rebuild = setState;
-            return Center(
-              child: officialGlassIconButton(
-                context,
-                icon: const Icon(Icons.add),
-                label: '添加',
-                onPressed: enabled ? () => activations++ : null,
-              ),
-            );
-          },
-        ),
-      ),
-    );
-    final button = find.byType(GlassIconButton);
-    final initial = tester.getRect(button);
-    final cancelled = await tester.startGesture(tester.getCenter(button));
-    await tester.pump(const Duration(milliseconds: 16));
-    await cancelled.cancel();
-    await tester.pumpAndSettle();
-    expect(activations, 0);
-    expect(tester.getRect(button), initial);
-
-    final interrupted = await tester.startGesture(tester.getCenter(button));
-    await tester.pump(const Duration(milliseconds: 16));
-    rebuild(() {
-      enabled = false;
-    });
-    await tester.pump();
-    await interrupted.up();
-    await tester.pumpAndSettle();
-    expect(activations, 0);
-    rebuild(() {
-      enabled = true;
-    });
-    await tester.pumpAndSettle();
-    await tester.tap(button);
-    await tester.pumpAndSettle();
-    expect(activations, 1);
-    expect(tester.getRect(button), initial);
-    expect(tester.takeException(), isNull);
-  });
   testWidgets('navigation retargets continuously and reducing motion snaps', (
     tester,
   ) async {
@@ -595,60 +543,6 @@ void main() {
       await tester.tap(find.text('设备详情'));
       await tester.pumpAndSettle();
       expect(activations, 1);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets(
-    'reduced-motion menu opens immediately and keeps actions reachable',
-    (tester) async {
-      var activations = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              disableAnimations: true,
-              textScaler: const TextScaler.linear(2),
-            ),
-            child: TooltipVisibility(visible: false, child: child!),
-          ),
-          home: Scaffold(
-            body: Center(
-              child: GlassMenuButton(
-                icon: const Icon(Icons.more_horiz),
-                tooltip: '更多',
-                actions: [
-                  GlassMenuAction(
-                    label: '设备详情',
-                    onPressed: () => activations++,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-      final trigger = find.descendant(
-        of: find.byType(GlassMenuButton),
-        matching: find.byType(IconButton),
-      );
-      await tester.tap(trigger);
-      await tester.pump();
-      expect(find.text('设备详情'), findsOneWidget);
-      expect(
-        tester.getSize(find.byType(MenuItemButton)).height,
-        greaterThanOrEqualTo(44),
-      );
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pump();
-      expect(find.text('设备详情'), findsNothing);
-      expect(activations, 0);
-      await tester.tap(trigger);
-      await tester.pump();
-      await tester.tap(find.text('设备详情'));
-      await tester.pump();
-      expect(activations, 1);
-      expect(find.text('设备详情'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

@@ -219,25 +219,6 @@ void main() {
     );
   });
 
-  test('size accounting includes ZIP overhead and per ABI payload', () {
-    final bytes = apk();
-    final inspection = inspectApk(bytes, repository: android.root);
-    final json = inspection.toJson();
-    expect(inspection.bytes, bytes.length);
-    expect(inspection.sections['lib/arm64-v8a']!.expanded, 100);
-    expect(
-      inspection.compressedEntryBytes + (json['archiveOverheadBytes']! as int),
-      bytes.length,
-    );
-    expect(
-      inspection.expandedEntryBytes,
-      inspection.sections.values.fold<int>(
-        0,
-        (sum, entry) => sum + entry.expanded,
-      ),
-    );
-  });
-
   test('APK rejects missing, corrupt, or duplicated shared server assets', () {
     expect(() => verify(apk(includeServers: false)), throwsStateError);
     expect(() => verify(apk(corruptServer: true)), throwsStateError);

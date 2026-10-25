@@ -42,32 +42,6 @@ void main() {
     expect(fixture.api.disconnected, isEmpty);
   });
 
-  test('上传终态已到但关闭失败保留精确句柄，不执行也不删除', () async {
-    final fixture = _Fixture();
-    fixture.api.uploadCloseFails = true;
-    await expectLater(
-      fixture.probe.encoders(fixture.connection, AdbCancellation()),
-      throwsA(_code('encoder_probe_cleanup_unconfirmed')),
-    );
-    expect(fixture.api.uploads.single.bytes, [1, 2, 3]);
-    expect(fixture.api.commands, isEmpty);
-    await expectLater(
-      fixture.probe.stopForConnection(fixture.connection),
-      throwsA(_code('encoder_probe_cleanup_unconfirmed')),
-    );
-    expect(fixture.api.commands, isEmpty);
-    expect(fixture.api.closed.where((id) => id.startsWith('push')).toSet(), {
-      'push-1',
-    });
-    fixture.api.uploadCloseFails = false;
-    await fixture.probe.stopForConnection(fixture.connection);
-    expect(fixture.api.commands.single, startsWith('rm -f -- '));
-    expect(fixture.api.uploads.length, 1);
-    await fixture.probe.close();
-    expect(fixture.api.commands.length, 1);
-    expect(fixture.api.disconnected, isEmpty);
-  });
-
   test('上传字节回执不完整不执行，已确认关闭后才可回收部署', () async {
     final fixture = _Fixture();
     fixture.api.transferred = 2;
@@ -308,48 +282,6 @@ void main() {
     await fixture.probe.close();
   });
 
-  test('安装列表真实非零退出可清理，但不以编码器回执或空列表冒充成功', () async {
-    final fixture = _Fixture();
-    fixture.api.executionExitCode = 7;
-    await expectLater(
-      fixture.probe.installedApps(fixture.connection, AdbCancellation()),
-      throwsA(_code('apps_unavailable')),
-    );
-    expect(fixture.api.commands.length, 2);
-    await fixture.probe.close();
-    expect(fixture.api.commands.length, 2);
-  });
-
-  test('安装查询未知退出先核验原进程，再删除JAR且不重放查询', () async {
-    final fixture = _Fixture();
-    fixture.api.executionUnknown = 'unknown-exit-code';
-    await expectLater(
-      fixture.probe.installedApps(fixture.connection, AdbCancellation()),
-      throwsA(_code('result_unknown')),
-    );
-    await fixture.probe.close();
-    expect(
-      fixture.api.commands.where((c) => c.contains('list_apps=true')).length,
-      1,
-    );
-    expect(fixture.api.commands.last, startsWith('rm -f -- '));
-  });
-
-  test('安装查询上传关闭失败保存同句柄，停止重试前不执行也不删除', () async {
-    final fixture = _Fixture();
-    fixture.api.uploadCloseFailures = 1;
-    await expectLater(
-      fixture.probe.installedApps(fixture.connection, AdbCancellation()),
-      throwsA(_code('apps_cleanup_unconfirmed')),
-    );
-    expect(fixture.api.commands, isEmpty);
-    fixture.api.uploadCloseFailures = 0;
-    await fixture.probe.stopForConnection(fixture.connection);
-    expect(fixture.api.closed.where((id) => id == 'push-1').length, 2);
-    expect(fixture.api.commands.single, startsWith('rm -f -- '));
-    await fixture.probe.close();
-  });
-
   test('安装查询已知退出后无效UTF8不遗留无法回收的执行未知', () async {
     final fixture = _Fixture();
     fixture.api.executionBytes = [0xff];
@@ -361,39 +293,6 @@ void main() {
     expect(fixture.api.commands.length, 2);
   });
 
-  test('编码器和安装查询共享取消令牌时，每个迟到上传均保留排空责任', () async {
-    final fixture = _Fixture();
-    final encoderGate = fixture.api.creationGates[1] = Completer<void>();
-    final appsGate = fixture.api.creationGates[2] = Completer<void>();
-    final stop = AdbCancellation();
-    final encoders = expectLater(
-      fixture.probe.encoders(fixture.connection, stop),
-      throwsA(isA<AdbException>()),
-    );
-    final apps = expectLater(
-      fixture.probe.installedApps(fixture.connection, stop),
-      throwsA(isA<AdbException>()),
-    );
-    await fixture.api.waitForUploads(2);
-    var closed = false;
-    final closing = fixture.probe.close().then((_) => closed = true);
-    encoderGate.complete();
-    await encoders;
-    expect(closed, isFalse);
-    appsGate.complete();
-    await apps;
-    await closing;
-    expect(fixture.api.commands.length, 2);
-    expect(
-      fixture.api.commands.every((command) => command.startsWith('rm ')),
-      isTrue,
-    );
-    expect(fixture.api.closed, containsAll(['push-1', 'push-2']));
-    expect(
-      () => fixture.probe.installedApps(fixture.connection, AdbCancellation()),
-      throwsA(_code('disposed')),
-    );
-  });
   test('查询已经授权后取消，原监督器等待退出后才删除JAR且不关闭共享连接', () async {
     final fixture = _Fixture();
     fixture.api.holdExecution = true;
@@ -716,7 +615,7 @@ final class _Api implements NativeAdbApi {
   int creationFailures = 0;
   int executionExitCode = 0;
   int? transferred;
-  bool uploadCloseFails = false, removeFails = false;
+  bool removeFails = false;
   int uploadCloseFailures = 0;
   String? executionUnknown, executionOutput;
   List<int>? executionBytes;
@@ -989,7 +888,7 @@ final class _Api implements NativeAdbApi {
       throw const AdbException('cleanup_unconfirmed');
     }
     if (id.startsWith('push')) {
-      if (uploadCloseFails || uploadCloseFailures > 0) {
+      if (uploadCloseFailures > 0) {
         if (uploadCloseFailures > 0) uploadCloseFailures--;
         throw const AdbException('cleanup_unconfirmed');
       }

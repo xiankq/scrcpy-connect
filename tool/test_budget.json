@@ -1,0 +1,50 @@
+{
+  "app/native": {
+    "lines": 810,
+    "registrations": 0
+  },
+  "app/device": {
+    "lines": 12291,
+    "registrations": 34
+  },
+  "app/host": {
+    "lines": 54571,
+    "registrations": 1190
+  },
+  "packages/adb": {
+    "lines": 6521,
+    "registrations": 177
+  },
+  "packages/design_system": {
+    "lines": 1195,
+    "registrations": 19
+  },
+  "packages/media_codec": {
+    "lines": 1510,
+    "registrations": 19
+  },
+  "packages/scrcpy": {
+    "lines": 1633,
+    "registrations": 46
+  },
+  "rust/adb": {
+    "lines": 12400,
+    "registrations": 274
+  },
+  "rust/media_codec": {
+    "lines": 0,
+    "registrations": 11
+  },
+  "rust/scrcpy": {
+    "lines": 1741,
+    "registrations": 44
+  },
+  "servers": {
+    "lines": 1521,
+    "registrations": 0
+  },
+  "tool": {
+    "lines": 3169,
+    "registrations": 84
+  }
+}

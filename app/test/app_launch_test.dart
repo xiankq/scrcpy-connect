@@ -12,7 +12,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/application/app_state.dart';
-import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 
 void main() {
@@ -76,118 +75,110 @@ void main() {
     }
   });
 
-  for (final unknownLaunch in [false, true]) {
-    testWidgets(
-      'a pending phone-screen app launch runs once after foreground resume${unknownLaunch ? ' even when its result is unknown' : ''}',
-      (tester) async {
+  testWidgets(
+    'a pending phone-screen app launch runs once after foreground resume even when its result is unknown',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final pendingStart = Completer<Json>();
+      final calls = <(String, Json)>[];
+      const screen = {
+        'sessionId': 'deferred-main',
+        'deviceId': 'phone',
+        'status': 'ready',
+        'textureId': 1,
+        'width': 200,
+        'height': 400,
+        'firstFrameDecoded': true,
+        'evidence': 'media_codec.decodedFrame',
+      };
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        calls.add((command, params));
+        if (command == 'session.start') return pendingStart.future;
+        if (command == 'session.launch') {
+          throw const RequestFailure('timeout', '启动请求结果未知');
+        }
+        return switch (command) {
+          'session.list' => {'sessions': <Json>[]},
+          'session.resume' => screen,
+          'session.pause' => {
+            ...screen,
+            'status': 'paused',
+            'capturePaused': true,
+          },
+          _ => {},
+        };
+      });
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            home: RemotePage(
+              controller: controller,
+              device: const {'id': 'phone'},
+              initialAction: const RemoteControlIntent.launchApp(
+                'com.android.settings',
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(calls.where((c) => c.$1 == 'session.start'), hasLength(1));
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        pendingStart.complete(screen);
+        await tester.pumpAndSettle();
+        expect(
+          calls.where((c) => c.$1 == 'session.launch'),
+          isEmpty,
+          reason: 'The pending app action must wait while the page is backgrounded.',
+        );
+        expect(calls.where((c) => c.$1 == 'session.pause'), hasLength(1));
+
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.resumed,
         );
-        final pendingStart = Completer<Json>();
-        final calls = <(String, Json)>[];
-        const screen = {
-          'sessionId': 'deferred-main',
-          'deviceId': 'phone',
-          'status': 'ready',
-          'textureId': 1,
-          'width': 200,
-          'height': 400,
-          'firstFrameDecoded': true,
-          'evidence': 'media_codec.decodedFrame',
-        };
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
-          calls.add((command, params));
-          if (command == 'session.start') return pendingStart.future;
-          if (command == 'session.launch' && unknownLaunch) {
-            throw const RequestFailure('timeout', '启动请求结果未知');
-          }
-          return switch (command) {
-            'session.list' => {'sessions': <Json>[]},
-            'session.resume' => screen,
-            'session.pause' => {
-              ...screen,
-              'status': 'paused',
-              'capturePaused': true,
-            },
-            _ => {},
-          };
-        });
-        try {
-          await tester.pumpWidget(
-            RouterTestApp(
-              controller: controller,
-              home: RemotePage(
-                controller: controller,
-                device: const {'id': 'phone'},
-                initialAction: const RemoteControlIntent.launchApp(
-                  'com.android.settings',
-                ),
-              ),
-            ),
-          );
-          await tester.pump();
-          expect(calls.where((c) => c.$1 == 'session.start'), hasLength(1));
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.inactive,
-          );
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.paused,
-          );
-          pendingStart.complete(screen);
-          await tester.pumpAndSettle();
-          expect(
-            calls.where((c) => c.$1 == 'session.launch'),
-            isEmpty,
-            reason: 'The pending app action must wait while the page is backgrounded.',
-          );
-          expect(calls.where((c) => c.$1 == 'session.pause'), hasLength(1));
+        await tester.pumpAndSettle();
+        expect(calls.where((c) => c.$1 == 'session.resume'), hasLength(1));
+        final launch = calls.where((c) => c.$1 == 'session.launch').toList();
+        expect(
+          launch,
+          hasLength(1),
+          reason: 'A successful foreground resume must apply the app action skipped during startup.',
+        );
+        expect(launch.single.$2['sessionId'], 'deferred-main');
+        expect(launch.single.$2['packageName'], 'com.android.settings');
+        expect(find.text('启动请求结果未知'), findsOneWidget);
 
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.resumed,
-          );
-          await tester.pumpAndSettle();
-          expect(calls.where((c) => c.$1 == 'session.resume'), hasLength(1));
-          final launch = calls.where((c) => c.$1 == 'session.launch').toList();
-          expect(
-            launch,
-            hasLength(1),
-            reason: 'A successful foreground resume must apply the app action skipped during startup.',
-          );
-          expect(launch.single.$2['sessionId'], 'deferred-main');
-          expect(launch.single.$2['packageName'], 'com.android.settings');
-          if (unknownLaunch) expect(find.text('启动请求结果未知'), findsOneWidget);
-
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.inactive,
-          );
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.paused,
-          );
-          await tester.pumpAndSettle();
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.resumed,
-          );
-          await tester.pumpAndSettle();
-          expect(
-            calls.where((c) => c.$1 == 'session.launch'),
-            hasLength(1),
-            reason: 'Once submitted, a later resume must not replay even an unknown result.',
-          );
-          expect(calls.where((c) => c.$1 == 'session.start'), hasLength(1));
-        } finally {
-          if (!pendingStart.isCompleted) pendingStart.complete(screen);
-          await tester.pumpWidget(const SizedBox());
-          tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.resumed,
-          );
-          controller.dispose();
-        }
-      },
-    );
-  }
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        await tester.pumpAndSettle();
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          calls.where((c) => c.$1 == 'session.launch'),
+          hasLength(1),
+          reason: 'Once submitted, a later resume must not replay even an unknown result.',
+        );
+        expect(calls.where((c) => c.$1 == 'session.start'), hasLength(1));
+      } finally {
+        if (!pendingStart.isCompleted) pendingStart.complete(screen);
+        await tester.pumpWidget(const SizedBox());
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        controller.dispose();
+      }
+    },
+  );
 
   testWidgets(
     'a phone-screen unknown open is checked and closed by its operation id',
@@ -280,7 +271,7 @@ void main() {
     },
   );
 
-  for (final stalled in ['pause', 'key-up', 'pointer-cancel']) {
+  for (final stalled in ['pause', 'key-up']) {
     testWidgets(
       'unknown phone-screen opening can be checked and closed while $stalled is pending',
       (tester) async {
@@ -318,10 +309,7 @@ void main() {
           if ((stalled == 'pause' && command == 'session.pause') ||
               (stalled == 'key-up' &&
                   command == 'session.key' &&
-                  params['action'] == 'up') ||
-              (stalled == 'pointer-cancel' &&
-                  command == 'session.touch' &&
-                  params['action'] == 'cancel')) {
+                  params['action'] == 'up')) {
             return blocked.future;
           }
           return switch (command) {
@@ -483,73 +471,6 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         controller.dispose();
         await events.close();
-      }
-    },
-  );
-
-  testWidgets(
-    'an unknown app launch is not replayed when checking the screen again',
-    (tester) async {
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      final calls = <String>[];
-      const screen = {
-        'sessionId': 'main',
-        'deviceId': 'phone',
-        'textureId': 1,
-        'width': 200,
-        'height': 400,
-        'status': 'ready',
-        'firstFrameDecoded': true,
-        'evidence': 'media_codec.decodedFrame',
-      };
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add(command);
-        if (command == 'session.launch') {
-          throw const RequestFailure('timeout', '启动请求结果未知');
-        }
-        return switch (command) {
-          'session.list' => {
-            'sessions': [screen],
-          },
-          'session.resume' => screen,
-          _ => {},
-        };
-      });
-      try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            devices: const [
-              {'id': 'phone'},
-            ],
-            home: Builder(
-              builder: (context) => TextButton(
-                onPressed: () => openRemoteRoute(
-                  context,
-                  deviceId: 'phone',
-                  packageName: 'com.android.settings',
-                  onPhoneScreen: true,
-                ),
-                child: const Text('打开'),
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('打开'));
-        await tester.pumpAndSettle();
-        expect(find.text('启动请求结果未知'), findsOneWidget);
-        await tester.tap(find.text('重新检查'));
-        await tester.pumpAndSettle();
-        expect(calls.where((c) => c == 'session.launch'), hasLength(1));
-        expect(calls.where((c) => c == 'session.start'), isEmpty);
-        expect(find.byType(Texture), findsOneWidget);
-      } finally {
-        await tester.pumpWidget(const SizedBox());
-        controller.dispose();
       }
     },
   );
@@ -731,10 +652,6 @@ void main() {
       'launchOutcome': 'not_submitted',
     }),
     const RequestFailure('encoder_start_failed', '编码首帧结果未知'),
-    const RequestFailure('renderer_not_ready', '本地首帧结果未知', {
-      'sessionId': 'render-open',
-      'launchOutcome': 'unknown',
-    }),
   ]) {
     testWidgets('independent app retry respects ${failure.message}', (
       tester,

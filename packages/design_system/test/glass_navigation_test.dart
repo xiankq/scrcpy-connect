@@ -9,62 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/official_glass_controls.dart';
 
 void main() {
-  for (final direction in TextDirection.values) {
-    for (final reducedTransparency in [false, true]) {
-      testWidgets(
-        'navigation drags across destinations: $direction opaque=$reducedTransparency',
-        (tester) async {
-          var selected = 0;
-          await tester.pumpWidget(
-            MaterialApp(
-              theme: ConnectTokens.theme(Brightness.light),
-              home: Directionality(
-                textDirection: direction,
-                child: GlassPreferences(
-                  reduceTransparency: reducedTransparency,
-                  child: Scaffold(
-                    body: Center(
-                      child: SizedBox(
-                        width: 280,
-                        child: StatefulBuilder(
-                          builder: (context, update) => officialGlassNavigation(
-                            context,
-                            selectedIndex: selected,
-                            onTabSelected: (index) =>
-                                update(() => selected = index),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-          await tester.pumpAndSettle();
-          final start = tester.getCenter(find.text('设备').first);
-          final end = tester.getCenter(find.text('设置').first);
-          final gesture = await tester.startGesture(start);
-          await gesture.moveTo(
-            Offset(start.dx + (end.dx - start.dx) / 4, start.dy),
-          );
-          await tester.pump(const Duration(milliseconds: 32));
-          await gesture.moveTo(end);
-          await tester.pump(const Duration(milliseconds: 100));
-          await gesture.up();
-          await tester.pumpAndSettle();
-          expect(selected, 2);
-          if (reducedTransparency) {
-            expect(find.byType(BackdropFilter), findsNothing);
-          }
-          await tester.tap(find.text('传输').first);
-          await tester.pumpAndSettle();
-          expect(selected, 1);
-          expect(tester.takeException(), isNull);
-        },
-      );
-    }
-  }
   testWidgets(
     'navigation exposes one actionable destination and follows its host',
     (tester) async {

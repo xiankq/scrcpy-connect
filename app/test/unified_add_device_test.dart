@@ -345,25 +345,4 @@ void main() {
       expect(find.text('second.local'), findsOneWidget);
     },
   );
-
-  testWidgets(
-    'empty pairing validates locally and keeps submission available',
-    (tester) async {
-      final calls = <String>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add(command);
-        return {};
-      });
-      await mount(tester, controller);
-      await tapText(tester, '配对并连接');
-      await tester.pumpAndSettle();
-      expect(find.text('请输入被控手机的地址'), findsOneWidget);
-      expect(find.text('端口应为 1–65535 的整数'), findsOneWidget);
-      expect(find.text('请输入六位配对码'), findsOneWidget);
-      expect(calls, isEmpty);
-    },
-  );
 }

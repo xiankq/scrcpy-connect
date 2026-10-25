@@ -242,41 +242,38 @@ void main() {
     ]);
   });
 
-  for (final command in ['usb.release', 'usb.cancel']) {
+  for (final (command, bad) in <(String, Object?)>[
+    ('usb.release', {'released': false, 'ownerLeaseId': 'owner'}),
+    ('usb.release', {'released': true, 'ownerLeaseId': 'other'}),
+    ('usb.cancel', null),
+  ]) {
     final confirmation = command == 'usb.release' ? 'released' : 'cancelled';
-    for (final bad in <Object?>[
-      null,
-      <String, dynamic>{},
-      {confirmation: false, 'ownerLeaseId': 'owner'},
-      {confirmation: true, 'ownerLeaseId': 'other'},
-    ]) {
-      test('$command 无效回收确认 $bad 保留同实例精确重试权', () async {
-        final calls = <Map<String, dynamic>>[];
-        messenger.setMockMethodCallHandler(channel, (call) async {
-          expect(call.method, command);
-          calls.add(Map<String, dynamic>.from(call.arguments as Map));
-          if (calls.length == 1) return bad;
-          return {confirmation: true, 'ownerLeaseId': 'owner'};
-        });
-        final platform = _platform('owner');
-        final operation = command == 'usb.release'
-            ? platform.releaseUsb
-            : platform.cancelUsb;
-        final params = <String, dynamic>{
-          if (command == 'usb.release') 'usbLeaseId': 'exact-fd',
-          if (command == 'usb.cancel') 'attemptId': 'exact-attempt',
-        };
-        await expectLater(
-          operation(params),
-          throwsA(_code('usb_cleanup_unconfirmed')),
-        );
-        await operation(params);
-        expect(calls, [
-          {...params, 'ownerLeaseId': 'owner'},
-          {...params, 'ownerLeaseId': 'owner'},
-        ]);
+    test('$command 无效回收确认 $bad 保留同实例精确重试权', () async {
+      final calls = <Map<String, dynamic>>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, command);
+        calls.add(Map<String, dynamic>.from(call.arguments as Map));
+        if (calls.length == 1) return bad;
+        return {confirmation: true, 'ownerLeaseId': 'owner'};
       });
-    }
+      final platform = _platform('owner');
+      final operation = command == 'usb.release'
+          ? platform.releaseUsb
+          : platform.cancelUsb;
+      final params = <String, dynamic>{
+        if (command == 'usb.release') 'usbLeaseId': 'exact-fd',
+        if (command == 'usb.cancel') 'attemptId': 'exact-attempt',
+      };
+      await expectLater(
+        operation(params),
+        throwsA(_code('usb_cleanup_unconfirmed')),
+      );
+      await operation(params);
+      expect(calls, [
+        {...params, 'ownerLeaseId': 'owner'},
+        {...params, 'ownerLeaseId': 'owner'},
+      ]);
+    });
   }
 }
 

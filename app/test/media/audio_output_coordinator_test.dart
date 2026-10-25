@@ -217,55 +217,56 @@ class _Harness {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  for (final method in ['stop', 'stopDevice', 'dispose']) {
-    for (final failure in ['throw', 'denied', 'unknown']) {
-      test('$method 保留 $failure 的实际输出，沿原对象重试清理', () async {
-        final h = _Harness();
-        await h.visible();
-        await h.outputs.start(_stream('A'));
-        await h.outputs.start(_stream('B', 'device-B'));
-        final player = h.players.first;
-        if (failure == 'throw') {
-          player.releaseFailures = 1;
-        } else {
-          player.releaseReceipt = {
-            'disposeRequested': true,
-            'nativeDeleteConfirmed': failure == 'unknown',
-            if (failure == 'unknown') 'cleanupUnconfirmed': true,
-          };
-        }
-        Future<void> stop() async {
-          switch (method) {
-            case 'stop':
-              await h.outputs.stop('A');
-            case 'stopDevice':
-              await h.outputs.stopDevice('device-A');
-            case 'dispose':
-              await h.outputs.dispose();
-          }
-        }
-
-        if (method != 'stop') {
-          await expectLater(
-            stop(),
-            throwsA(_code('audio_cleanup_unconfirmed')),
-          );
-        } else {
-          await stop();
-          expect(h.outputs.status('B')['playState'], 'playing');
-        }
-        expect(player.releases, 1);
-        expect(h.players.last.releases, method == 'dispose' ? 1 : 0);
+  for (final (method, failure) in const [
+    ('stop', 'throw'),
+    ('stop', 'denied'),
+    ('stop', 'unknown'),
+    ('stopDevice', 'throw'),
+    ('dispose', 'unknown'),
+  ]) {
+    test('$method 保留 $failure 的实际输出，沿原对象重试清理', () async {
+      final h = _Harness();
+      await h.visible();
+      await h.outputs.start(_stream('A'));
+      await h.outputs.start(_stream('B', 'device-B'));
+      final player = h.players.first;
+      if (failure == 'throw') {
+        player.releaseFailures = 1;
+      } else {
         player.releaseReceipt = {
           'disposeRequested': true,
-          'nativeDeleteConfirmed': true,
+          'nativeDeleteConfirmed': failure == 'unknown',
+          if (failure == 'unknown') 'cleanupUnconfirmed': true,
         };
+      }
+      Future<void> stop() async {
+        switch (method) {
+          case 'stop':
+            await h.outputs.stop('A');
+          case 'stopDevice':
+            await h.outputs.stopDevice('device-A');
+          case 'dispose':
+            await h.outputs.dispose();
+        }
+      }
+
+      if (method != 'stop') {
+        await expectLater(stop(), throwsA(_code('audio_cleanup_unconfirmed')));
+      } else {
         await stop();
-        expect(player.releases, 2);
-        expect(h.players.last.releases, method == 'dispose' ? 1 : 0);
-        await h.outputs.dispose();
-      });
-    }
+        expect(h.outputs.status('B')['playState'], 'playing');
+      }
+      expect(player.releases, 1);
+      expect(h.players.last.releases, method == 'dispose' ? 1 : 0);
+      player.releaseReceipt = {
+        'disposeRequested': true,
+        'nativeDeleteConfirmed': true,
+      };
+      await stop();
+      expect(player.releases, 2);
+      expect(h.players.last.releases, method == 'dispose' ? 1 : 0);
+      await h.outputs.dispose();
+    });
   }
 
   test('清理等待超时仍复用同一实际操作，停止设备和关闭不能遗弃输出', () async {

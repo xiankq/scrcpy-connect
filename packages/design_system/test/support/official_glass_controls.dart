@@ -65,33 +65,3 @@ Widget officialGlassNavigation(
     ),
   );
 }
-
-Widget officialGlassIconButton(
-  BuildContext context, {
-  required Widget icon,
-  required String label,
-  required VoidCallback? onPressed,
-}) {
-  final reducedMotion = GlassMaterial.reduceMotion(context);
-  return liquid.GlassAccessibilityScope(
-    reduceTransparency: GlassMaterial.opaque(context),
-    child: GlassSurfaceGroup(
-      child: GlassTooltip(
-        message: label,
-        child: GlassIconButton(
-          icon: icon,
-          semanticLabel: label,
-          onPressed: onPressed,
-          size: DesignTokens.componentIconButtonSize,
-          iconSize: DesignTokens.componentIconSize,
-          settings: GlassMaterial.settings(context),
-          quality: GlassMaterial.quality(context),
-          interactionScale: reducedMotion
-              ? 1
-              : DesignTokens.componentGlassInteractionScale,
-          anchorStretch: !reducedMotion,
-        ),
-      ),
-    ),
-  );
-}

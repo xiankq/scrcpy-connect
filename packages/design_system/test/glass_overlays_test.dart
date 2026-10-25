@@ -321,7 +321,10 @@ void main() {
       MaterialApp(
         theme: ConnectTokens.theme(Brightness.light),
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          data: MediaQuery.of(context).copyWith(
+            disableAnimations: true,
+            textScaler: const TextScaler.linear(2),
+          ),
           child: TooltipVisibility(visible: false, child: child!),
         ),
         home: Scaffold(

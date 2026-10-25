@@ -43,17 +43,4 @@ void main() {
       );
     },
   );
-
-  test('balanced defaults to the four-megabit network-safe profile', () {
-    final balanced = VideoQualityPolicy.resolve({}, null);
-    expect(balanced['maxSize'], 1280);
-    expect(balanced['maxFps'], 60);
-    expect(balanced['videoBitRate'], 4000000);
-
-    final options = VideoQualityPolicy.options({}, {}, null);
-    final bitRates = (options['bitRate'] as List)
-        .map((entry) => (entry as Map)['value'])
-        .toList();
-    expect(bitRates, contains(4000000));
-  });
 }

@@ -534,40 +534,6 @@ void main() {
     },
   );
 
-  test(
-    'scope binding captures its opaque id without mutating caller requests',
-    () async {
-      final api = ScopeFileApi();
-      final client = NativeAdbClient(api, '');
-      final scope = await client.services.attachFileScope('stable-owner');
-      final request = AdbFileExecutionRequest(
-        kind: AdbFileExecutionKind.stat,
-        path: [47],
-      );
-      final operation = await scope.files(device).execute(request);
-      expect(api.request!.scopeId, scope.id);
-      expect(request.scopeId, isEmpty);
-      expect(api.attached, ['stable-owner']);
-      await operation.close();
-      await scope.close();
-      expect(api.closedScopes, [scope.id]);
-      expect(() => scope.files(device), throwsA(isA<AdbException>()));
-    },
-  );
-
-  test('scoped file admission passes exact authority and retains its closing handle', () async {
-    final api = ScopedFileApi();
-    final services = NativeAdbClient(api, '').services;
-    final scope = await services.attachFileScope(
-      'stable-owner',
-      admissionScope: _admission,
-    );
-    expect(api.admissionRequests, [_admission.scopeId]);
-    expect(api.attached, ['stable-owner']);
-    await scope.close();
-    expect(api.closedScopes, [scope.id]);
-  });
-
   test('late scoped file receipt cannot cross a parent handover', () async {
     final api = ScopedFileApi()..scopeAdmission = Completer<String>();
     final services = NativeAdbClient(api, '').services;

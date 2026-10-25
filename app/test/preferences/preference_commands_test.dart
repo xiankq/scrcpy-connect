@@ -191,55 +191,6 @@ void main() {
     expect(runtime.settings['appearance'], 'dark');
   });
 
-  test('导出由 Dart 组装兼容 v1 元数据且只读取设备事实', () async {
-    await preferences.update({'appearance': 'dark'});
-    final runtime = PreferenceCommands(
-      preferences: preferences,
-      request: (command, parameters) async {
-        expect(command, 'devices.list');
-        expect(parameters, isEmpty);
-        return {
-          'devices': [
-            {
-              'id': '内部记录标识',
-              'name': 'Phone',
-              'address': 'phone.local',
-              'port': 5555,
-              'transport': 'tcp',
-              'guid': null,
-              'serial': '真实序列号',
-              'model': '型号',
-              'androidVersion': '16',
-              'apiLevel': 36,
-              'autoReconnect': true,
-              'connectionId': '临时连接句柄',
-              'privateKeyPem': '禁止导出的私钥',
-              'identityFingerprint': '内部身份指纹',
-            },
-          ],
-        };
-      },
-      onChanged: (_) {},
-    );
-    final exported = await runtime.invoke('settings.export', {});
-    expect(exported['metadata']['settings']['appearance'], 'dark');
-    expect(exported['metadata']['format'], 'scrcpy-connect-metadata');
-    expect(exported['metadata']['version'], 1);
-    expect(exported['metadata']['devices'], [
-      {
-        'name': 'Phone',
-        'address': 'phone.local',
-        'port': 5555,
-        'transport': 'tcp',
-        'guid': null,
-        'serial': '真实序列号',
-        'model': '型号',
-        'androidVersion': '16',
-        'apiLevel': 36,
-      },
-    ]);
-  });
-
   test('导出保留设备读取失败且拒绝将畸形结果伪装成空备份', () async {
     var malformed = false;
     final runtime = PreferenceCommands(

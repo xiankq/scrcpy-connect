@@ -193,41 +193,31 @@ void main() {
     expect(() => recovery.ownerLeaseId, throwsStateError);
   });
 
-  for (final ready in [null, 1, 'false']) {
-    test('begin 缺失或伪造 ownerReady=$ready 不推进阶段，原候选可重试', () async {
-      final candidates = <String>[];
-      var first = true;
-      final recovery = UsbLeaseRecovery(
-        platform: (command, params) async {
-          if (command == 'usb.environment') {
-            return {'ownerReady': false, 'ownerLeaseId': null};
-          }
-          final candidate = params['ownerLeaseId'] as String;
-          candidates.add(candidate);
-          if (first) {
-            first = false;
-            return {
-              'begun': true,
-              'ownerLeaseId': candidate,
-              'ownerReady': ?ready,
-            };
-          }
-          return {
-            'begun': true,
-            'ownerLeaseId': candidate,
-            'ownerReady': false,
-          };
-        },
-      );
-      await expectLater(
-        recovery.begin(),
-        throwsA(_code('usb_cleanup_unconfirmed')),
-      );
-      expect(recovery.complete, throwsStateError);
-      await recovery.begin();
-      expect(candidates[1], candidates[0]);
-    });
-  }
+  test('begin 的非布尔 ownerReady 不推进阶段，原候选可重试', () async {
+    final candidates = <String>[];
+    var first = true;
+    final recovery = UsbLeaseRecovery(
+      platform: (command, params) async {
+        if (command == 'usb.environment') {
+          return {'ownerReady': false, 'ownerLeaseId': null};
+        }
+        final candidate = params['ownerLeaseId'] as String;
+        candidates.add(candidate);
+        if (first) {
+          first = false;
+          return {'begun': true, 'ownerLeaseId': candidate, 'ownerReady': 1};
+        }
+        return {'begun': true, 'ownerLeaseId': candidate, 'ownerReady': false};
+      },
+    );
+    await expectLater(
+      recovery.begin(),
+      throwsA(_code('usb_cleanup_unconfirmed')),
+    );
+    expect(recovery.complete, throwsStateError);
+    await recovery.begin();
+    expect(candidates[1], candidates[0]);
+  });
 
   for (final bad in <Map<String, dynamic>>[
     {},

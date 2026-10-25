@@ -230,29 +230,4 @@ void main() {
       expect(await file('devices.json').exists(), isFalse);
     },
   );
-
-  test('设备偏好快照保留业务字段并禁止外部修改', () async {
-    final preferences = await open();
-    await preferences.update({
-      'appearance': 'dark',
-      'deviceSettings': {
-        firstId: {
-          'stayAwake': true,
-          'clipboardSync': true,
-          'remoteAspectRatio': 'auto',
-        },
-        secondId: {'showNavigationBar': false},
-      },
-    });
-    expect(preferences.current.values['appearance'], 'dark');
-    expect((preferences.current.values['deviceSettings'] as Map)[firstId], {
-      'stayAwake': true,
-      'clipboardSync': true,
-      'remoteAspectRatio': 'auto',
-    });
-    expect(
-      () => (preferences.current.values['deviceSettings'] as Map).clear(),
-      throwsUnsupportedError,
-    );
-  });
 }

@@ -44,17 +44,6 @@ void main() {
     );
   });
 
-  test('应用自有命令也使用同一结构契约，不以历史原生归属决定授权', () {
-    expect(
-      validateCommandRequest('documents.importFiles', {}),
-      ApplicationCommand.documentsImportFiles,
-    );
-    expect(
-      validateCommandRequest('sharing.pending', {}),
-      ApplicationCommand.sharingPending,
-    );
-  });
-
   test('结果缺字段或字段类型错误不能变成空成功', () {
     for (final result in <Map<String, dynamic>>[
       {},

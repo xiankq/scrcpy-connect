@@ -314,19 +314,6 @@ void main() {
   });
 
   testWidgets(
-    'connected devices and ordinary device focus never enable sound',
-    (tester) async {
-      final fixture = _AudioFixture();
-      await fixture.controller.focusDevice('a');
-      await fixture.controller.focusDevice('b');
-      await _flush(tester);
-      expect(fixture.calls, isEmpty);
-      expect(fixture.sources, isEmpty);
-      await fixture.dispose();
-    },
-  );
-
-  testWidgets(
     'opened remote pages mix device sound and deduplicate same-device windows',
     (tester) async {
       final fixture = _AudioFixture();

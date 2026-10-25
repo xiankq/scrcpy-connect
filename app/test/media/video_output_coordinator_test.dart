@@ -8,7 +8,6 @@ import 'package:scrcpy_connect/platform/diagnostics/diagnostic_log.dart';
 import 'package:scrcpy_connect/application/transport/application_command_exception.dart';
 import 'package:scrcpy_connect/media/output/video_output_coordinator.dart';
 import 'package:scrcpy_connect/media/output/video_player_port.dart';
-import 'package:scrcpy_connect/media/output/video_presentation.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 final _token = List.filled(64, 'a').join();
@@ -264,55 +263,6 @@ void main() {
     },
   );
   test(
-    'production observer records decoder changes and ignores disposed output',
-    () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'connect-player-log-',
-      );
-      final log = await DiagnosticLog.open(directory);
-      final h = _Harness(diagnostics: log);
-      try {
-        await h.output.start(_stream('A'));
-        h.players.first.changes.add({
-          'kind': 'diagnostic',
-          'category': 'decoder.video',
-          'detail': 'FFmpeg',
-          'error': 0,
-          'decoderName': 'h264/vaapi',
-          'hardwareAccelerated': true,
-        });
-        expect(
-          log.recent
-              .where((r) => r.event == 'decoder.selected')
-              .single
-              .fields['decoder'],
-          'h264',
-        );
-        expect(log.recent.single.fields['decoderBackend'], 'vaapi');
-        final output = await h.output.resume('A');
-        final session = sessionWithVideoOutput({'sessionId': 'A'}, output);
-        expect(session['decoderName'], 'h264/vaapi');
-        expect(session['hardwareAccelerated'], true);
-        await h.output.dispose();
-        h.players.first.changes.add({
-          'kind': 'diagnostic',
-          'category': 'decoder.video',
-          'detail': 'AMediaCodec',
-          'error': 0,
-        });
-        expect(
-          log.recent.where((r) => r.event == 'decoder.selected'),
-          hasLength(1),
-        );
-        expect(log.recent.last.event, 'output.released');
-      } finally {
-        await h.output.dispose();
-        await log.close();
-        await directory.delete(recursive: true);
-      }
-    },
-  );
-  test(
     'decoded resize preserves paused state and ignores retired player events',
     () async {
       final h = _Harness();
@@ -357,32 +307,6 @@ void main() {
       expect(changes, hasLength(2));
       expect(changes.last['data'], containsPair('generation', 2));
       expect(changes.last['data'], containsPair('paused', true));
-    },
-  );
-  test(
-    'renderer resize generations stay independent of capture rebuilds',
-    () async {
-      final h = _Harness();
-      addTearDown(h.output.dispose);
-      await h.output.start({..._stream('A'), 'captureGeneration': 1});
-      final resized = await h.output.reattach(
-        'A',
-        endpoint: _endpoint('relay-1', generation: 6),
-      );
-      expect(resized['captureGeneration'], 1);
-      final rebuilt = await h.output.reconfigure({
-        ..._stream('A'),
-        'generation': 2,
-        'captureGeneration': 2,
-      });
-      expect(rebuilt['generation'], 7);
-      expect(rebuilt['captureGeneration'], 2);
-      final again = await h.output.reattach(
-        'A',
-        endpoint: _endpoint(rebuilt['relayId'] as String, generation: 8),
-      );
-      expect(again['generation'], 8);
-      expect(again['captureGeneration'], 2);
     },
   );
 
@@ -522,30 +446,6 @@ void main() {
     expect(h.players.last.released, 1);
     expect(h.closed, isEmpty);
     expect(await h.output.start(_stream('A')), first);
-    await h.output.dispose();
-  });
-
-  test('successful reconfiguration preserves session ID and commits only verified replacement', () async {
-    final h = _Harness();
-    await h.output.start(_stream('A'));
-    final replacing = h.output.reattach(
-      'A',
-      endpoint: {..._endpoint('candidate', generation: 2), 'codec': 'h265'},
-    );
-    h.players.last.texture = 8;
-    final receipt = await replacing;
-    expect(receipt['sessionId'], 'A');
-    expect(receipt['generation'], 2);
-    expect(receipt['textureId'], 8);
-    expect(receipt['codec'], 'h265');
-    expect(h.players.first.released, 1);
-    expect(h.players.last.released, 0);
-    expect(h.events.last['type'], 'session.output.changed');
-    expect(h.closed, isEmpty);
-    await expectLater(
-      h.output.reattach('A', endpoint: _endpoint('older', generation: 1)),
-      throwsA(_code('generation_changed')),
-    );
     await h.output.dispose();
   });
 

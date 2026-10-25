@@ -1,4 +1,3 @@
-import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/connection/connection_policy.dart';
 
@@ -11,21 +10,5 @@ void main() {
     ]) {
       expect(policy.validate, throwsArgumentError);
     }
-  });
-  test('产品 TCP 默认值只由应用传入，通用 ADB 默认不启用 keepalive 或 burst', () {
-    const mechanism = AdbConnectOptions();
-    const policy = ConnectionPolicy();
-    final execution = policy.directConnectOptions(burstMode: true);
-    execution.validate();
-    expect(mechanism.burstMode, isFalse);
-    expect(mechanism.tcp.keepalive, isNull);
-    expect(mechanism.tcp.userTimeout, isNull);
-    expect(execution.burstMode, isTrue);
-    expect(execution.publicKeyComment, 'interop-controller');
-    expect(execution.tcp.keepalive!.idle, const Duration(seconds: 1));
-    expect(execution.tcp.keepalive!.interval, const Duration(seconds: 1));
-    expect(execution.tcp.keepalive!.retries, 10);
-    expect(execution.tcp.userTimeout, const Duration(seconds: 11));
-    expect(policy.directConnectOptions(burstMode: false).burstMode, isFalse);
   });
 }

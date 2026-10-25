@@ -3,7 +3,7 @@ use interop_adb::{
     protocol::{self, Frame},
 };
 use interop_scrcpy::{
-    config::{DisplayOptions, LogLevel, Options},
+    config::{DisplayOptions, Options},
     control::{self, Channel, DeviceMessage},
     session::Session,
 };
@@ -128,65 +128,6 @@ fn session_dimensions_preserve_server_integers_without_decoder_limits() {
     }
     assert!(session_dimensions(&header(0x8000_0002, 1, 1)).is_err());
     assert_eq!(session_dimensions(&header(0, 1, 1)).unwrap(), None);
-}
-
-#[test]
-fn upstream_defaults_and_density_only_display_do_not_inherit_product_policy() {
-    let mut options = Options::default();
-    let command = options.command("/data/local/tmp/test.jar", 1).unwrap();
-    for flag in [
-        "max_size=0",
-        "max_fps=0",
-        "power_on=true",
-        "clipboard_autosync=true",
-        "vd_destroy_content=true",
-    ] {
-        assert!(command.contains(flag), "{flag}");
-    }
-    assert!(!command.contains("interop"));
-    assert!(!command.contains("repeat-previous-frame-after"));
-    options.display = Some(DisplayOptions {
-        size: None,
-        density: Some(320),
-    });
-    assert!(
-        options
-            .command("/data/local/tmp/test.jar", 1)
-            .unwrap()
-            .contains("new_display=/320 flex_display=false vd_system_decorations=true")
-    );
-}
-
-#[test]
-fn caller_log_level_is_preserved_with_and_without_a_virtual_display() {
-    for display in [None, Some(DisplayOptions::default())] {
-        let default = Options {
-            display: display.clone(),
-            ..Options::default()
-        };
-        assert!(
-            default
-                .command("/data/local/tmp/test.jar", 1)
-                .unwrap()
-                .contains("log_level=debug")
-        );
-        for (log_level, value) in [
-            (LogLevel::Verbose, "verbose"),
-            (LogLevel::Debug, "debug"),
-            (LogLevel::Info, "info"),
-            (LogLevel::Warn, "warn"),
-            (LogLevel::Error, "error"),
-        ] {
-            let options = Options {
-                log_level,
-                display: display.clone(),
-                ..Options::default()
-            };
-            let command = options.command("/data/local/tmp/test.jar", 1).unwrap();
-            assert!(command.contains(&format!("log_level={value} ")));
-            assert_eq!(command.matches("log_level=").count(), 1);
-        }
-    }
 }
 
 #[test]

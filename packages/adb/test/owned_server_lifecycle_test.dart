@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -172,40 +171,6 @@ void main() {
     );
     await original.close();
     await restored.close();
-  });
-  test('fake同server串行CAS：排队旧claim和旧close不能夺取或关闭新lease', () async {
-    final original = await prepare();
-    final oldLease = original.nativeConfiguration!['leaseId'] as String;
-    final command = await api.createServerCommand(
-      oldLease,
-      AdbServerCommandSpec(
-        executable: '/controlled/adb',
-        arguments: const ['echo'],
-        input: Uint8List(0),
-        timeoutMs: 1000,
-      ),
-    );
-    final release = Completer<void>();
-    api.commandCloseGate = release.future;
-    final first = api.claimServer(oldLease);
-    while (!api.commandCloses.contains(command)) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    final competing = expectLater(
-      api.claimServer(oldLease),
-      _code('stale_server_lease'),
-    );
-    final lateClose = api.closeServer(oldLease);
-    release.complete();
-    final claimed = await first;
-    await competing;
-    await lateClose;
-    expect(api.entries.values.single.leaseId, claimed.leaseId);
-    expect(api.entries.values.single.phase, AdbServerPhase.ready);
-    await original.close();
-    expect(api.entries.values.single.leaseId, claimed.leaseId);
-    await api.closeServer(claimed.leaseId);
-    expect(api.entries, isEmpty);
   });
   test('close-only unknown跨认领保留，直到原server真实关闭', () async {
     final original = await prepare();

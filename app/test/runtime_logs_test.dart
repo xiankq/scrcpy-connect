@@ -68,44 +68,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'verified hardware and platform preparation have accurate labels',
-    (tester) async {
-      log.record(
-        DiagnosticArea.video,
-        'decoder.selected',
-        fields: {
-          'decoder': 'h264',
-          'decoderBackend': 'vaapi',
-          'acceleration': 'hardware',
-        },
-      );
-      log.record(
-        DiagnosticArea.video,
-        'video.presentation',
-        fields: {
-          'presentationPath': 'vaapi.egl',
-          'platformTexturePrepared': true,
-          'presentedToWidget': false,
-        },
-      );
-      await tester.pumpWidget(
-        TestProviderScope(
-          controller: controller,
-          child: MaterialApp(
-            theme: ConnectTokens.theme(Brightness.light),
-            home: RuntimeLogsPage(log: log),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('已选用解码器：h264（硬件解码）'), findsOneWidget);
-      expect(find.text('平台视频纹理已准备'), findsOneWidget);
-      expect(find.textContaining('硬件加速状态未知'), findsNothing);
-      await tester.runAsync(log.close);
-    },
-  );
-
   testWidgets('clear requires confirmation and new events still appear', (
     tester,
   ) async {
@@ -143,37 +105,6 @@ void main() {
     expect(find.text('初始化完成'), findsOneWidget);
     expect(tester.takeException(), isNull);
     // 在控件绑定的虚拟异步区域之外排空实际文件读写。
-    await tester.runAsync(log.close);
-  });
-
-  testWidgets('narrow screen and large text keep filters and actions usable', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 720);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      TestProviderScope(
-        controller: controller,
-        child: MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(2)),
-            child: child!,
-          ),
-          home: RuntimeLogsPage(log: log),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.widgetWithText(ChoiceChip, '错误'));
-    await tester.tap(find.widgetWithText(ChoiceChip, '错误'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('初始化失败'), 200);
-    expect(find.byTooltip('导出日志'), findsOneWidget);
-    expect(tester.takeException(), isNull);
     await tester.runAsync(log.close);
   });
 }

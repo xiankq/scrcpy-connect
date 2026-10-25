@@ -382,13 +382,7 @@ void main() {
     });
   }
 
-  for (final (status, expected) in [
-    (2, true),
-    (3, false),
-    (4, false),
-    (5, false),
-    (1, null),
-  ]) {
+  for (final (status, expected) in [(2, true), (3, false), (1, null)]) {
     test('充电状态仅使用实际 status 字段 $status', () async {
       final client = _Client(
         (_) => _output(

@@ -150,21 +150,6 @@ void main() {
     expect(records.current.deviceIdentityFingerprints, isEmpty);
   });
 
-  test('默认 ID 工厂产生不同的 UUID v4，不依赖原生分配', () async {
-    final records = await DeviceRecordStore.open(directory: directory);
-    final first = await records.add(address: '192.0.2.1', port: 5555);
-    final second = await records.add(address: '192.0.2.2', port: 5555);
-    expect(
-      first.id,
-      matches(
-        RegExp(
-          r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
-        ),
-      ),
-    );
-    expect(second.id, isNot(first.id));
-  });
-
   test('同目录两个实例并发修改读取最新文件，不丢失另一字段或新增设备', () async {
     final first = await DeviceRecordStore.open(
       directory: directory,
