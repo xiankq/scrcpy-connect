@@ -17,6 +17,7 @@ import shlex
 import sys
 import subprocess
 import tarfile
+import tempfile
 import urllib.request
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -56,9 +57,13 @@ def windows_environment(environment, arch, cache):
         raise RuntimeError("Visual Studio C++ build tools are missing")
     target = {"x64": "x64", "arm64": "x64_arm64", "arm": "x64_arm"}[arch]
     cache.mkdir(parents=True, exist_ok=True)
-    script = cache / ("msvc-environment-" + arch + ".cmd")
-    script.write_text('@echo off\ncall "' + str(vcvars) + '" ' + target +
-                      ' >nul\nif errorlevel 1 exit /b %errorlevel%\nset\n')
+    # 不同 prefix 的并行构建不能覆盖或提前删除彼此的 MSVC 环境脚本。
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=cache,
+                                     prefix="msvc-environment-" + arch + "-", suffix=".cmd",
+                                     delete=False) as handle:
+        script = Path(handle.name)
+        handle.write('@echo off\ncall "' + str(vcvars) + '" ' + target +
+                     ' >nul\nif errorlevel 1 exit /b %errorlevel%\nset\n')
     comspec = environment.get("COMSPEC", "C:/Windows/System32/cmd.exe")
     command = '"' + comspec + '" /d /u /s /c ""' + str(script) + '""'
     try:
@@ -205,6 +210,17 @@ def meson_value(value):
     return "'" + str(value).replace("\\", "/").replace("'", "\\'") + "'"
 
 
+def cleanup_work(work):
+    """安装已确认后回收中间输出；暂时锁定不推翻有效安装。"""
+    try:
+        shutil.rmtree(work)
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        print(f"Warning: keeping build work after cleanup failed: {work}: {error}",
+              file=sys.stderr, flush=True)
+
+
 def cross_file(work, args, binaries, flags):
     family = {"x64": "x86_64", "arm64": "aarch64", "arm": "arm"}[args.arch]
     system = "android" if args.platform == "android" else "darwin"
@@ -307,6 +323,9 @@ def build(args, cache, prefix):
                 "platform": args.platform, "arch": args.arch,
                 "api": args.api if args.platform == "android" else None, "sdk": args.sdk,
                 "options": options.copy()}
+    # 锁以安装目录为边界，工作区也必须遵循同一身份；设备与模拟器可同时构建同一架构。
+    prefix_identity = hashlib.sha256(os.fsencode(prefix)).hexdigest()[:16]
+    work = cache / "work" / f"{args.platform}-{args.arch}-{prefix_identity}"
     receipt = prefix / "media-codec-build.json"
     libraries = [prefix / "lib" / (f"{name}.lib" if args.platform == "windows" else f"lib{name}.a")
                  for name in ["avcodec", "avutil", "swscale", "dav1d"]]
@@ -320,6 +339,7 @@ def build(args, cache, prefix):
             (prefix / "include/libavcodec/avcodec.h").is_file() and all(p.is_file() for p in libraries)):
         if json.loads(receipt.read_text()) != identity:
             receipt.write_text(json.dumps(identity, indent=2) + "\n")
+        cleanup_work(work)
         print(prefix, flush=True)
         return
     cache.mkdir(parents=True, exist_ok=True)
@@ -328,14 +348,15 @@ def build(args, cache, prefix):
     source = patched_ffmpeg_source(cache, source_archive("FFmpeg", LOCK, cache))
     dav1d = source_archive("dav1d", DEPENDENCIES["dav1d"], cache)
     nvcodec = source_archive("nv-codec-headers", DEPENDENCIES["nv-codec-headers"], cache) if args.platform == "linux" else None
-    work = cache / "work" / f"{args.platform}-{args.arch}"
     # 仅重新配置会在静态归档中留下旧成员；
     # 完整锁定配置变化时重新构建派生输出目录。
     shutil.rmtree(work, ignore_errors=True)
     shutil.rmtree(prefix, ignore_errors=True)
     work.mkdir(parents=True)
     prefix.mkdir(parents=True)
-    log = work / "build.log"
+    logs = cache / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    log = logs / f"{args.platform}-{args.arch}-{prefix_identity}.log"
     log.write_text("")
     print(f"Building decode-only FFmpeg + dav1d for {args.platform}/{args.arch}; log: {log}", flush=True)
     meson = meson_command(environment)
@@ -387,6 +408,9 @@ def build(args, cache, prefix):
     shutil.copy2(ffmpeg_work / "config.h", licenses / "ffmpeg-config.h")
     shutil.copy2(ffmpeg_work / "config_components.h", licenses / "ffmpeg-components.h")
     receipt.write_text(json.dumps(identity, indent=2) + "\n")
+    # 命中缓存仅使用安装回执；下次真实构建也会从空工作区开始。
+    # 成功后只留安装库、来源归档及日志，失败现场则保留在 work 供诊断。
+    cleanup_work(work)
     print(prefix, flush=True)
 
 
