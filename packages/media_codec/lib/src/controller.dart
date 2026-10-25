@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
-import 'native_controls.dart';
+import 'native/controls.dart';
 
 /// 进程内的原生媒体生产者；负载字节不进入 Dart isolate。
 /// 函数地址和源能力不能持久化或写入日志。
@@ -116,12 +116,18 @@ class MediaCodecController {
     }
     _handle = handle;
     _status = {...?created}
-      ..removeWhere((key, _) => key == 'decoderAddress' || key == 'nativeApi');
+      ..removeWhere(
+        (key, _) => const {
+          'controlId',
+          'nativeLibraryPath',
+          'frbAnchorAddress',
+        }.contains(key),
+      );
     if (_disposed) {
       return; // dispose 会等待本次创建，然后排空输出。
     }
     try {
-      _native = NativeControls(created!);
+      _native = await NativeControls.connect(created!);
     } catch (_) {
       _disposed = true;
       await _releaseOutput();
@@ -371,7 +377,7 @@ class MediaCodecController {
   }
 
   Future<Map<String, dynamic>> _releaseOutput() async {
-    // 停止借用 FFI 后仍保留平台句柄，只有平台销毁确认才能撤销清理责任。
+    // 停止借用 FRB 后仍保留平台句柄，只有平台销毁确认才能撤销清理责任。
     _native?.release();
     _native = null;
     final handle = _handle;

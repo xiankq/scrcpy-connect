@@ -94,7 +94,7 @@ Future<void> main(List<String> args) async {
     final source = Directory(p.join(temporary.path, 'source'))..createSync();
     final isolated = Directory(p.join(temporary.path, 'isolated'))
       ..createSync();
-    for (final name in [
+    final copiedNames = [
       'Cargo.toml',
       'Cargo.lock',
       'rust-toolchain.toml',
@@ -102,21 +102,31 @@ Future<void> main(List<String> args) async {
       'pubspec.lock',
       for (final module in generate.frbModules) module.config,
       'app/pubspec.yaml',
-      'app/lib/main.dart',
-      'app/lib/generated.g.dart',
-      'app/assets/servers/manifest.json',
       'packages/adb/pubspec.yaml',
       'packages/adb/lib/adb.dart',
       'packages/media_codec/pubspec.yaml',
+      'packages/media_codec/native/media_codec.h',
+      'packages/media_codec/third_party/ffmpeg.lock.json',
+      'rust/media_codec/Cargo.lock',
+      'rust/media_codec/src/api.rs',
+      'rust/scrcpy/src/lib.rs',
+    ];
+    final excludedNames = [
+      'app/lib/main.dart',
+      'app/lib/generated.g.dart',
+      'app/assets/servers/manifest.json',
       'packages/media_codec/third_party/ffmpeg.tar.xz',
       'servers/vendor/unused.jar',
-      'rust/scrcpy/src/lib.rs',
       'app/.dart_tool/flutter_build/cache',
       'app/build/app.apk',
       'app/android/local.properties',
       'app/android/key.properties',
-      'rust/adb/src/lib.rs',
       'rust/adb/target/cache',
+    ];
+    for (final name in [
+      ...copiedNames,
+      ...excludedNames,
+      'rust/adb/src/lib.rs',
       '.dart_tool/package_config.json',
     ]) {
       final file = File(p.join(source.path, name));
@@ -124,26 +134,11 @@ Future<void> main(List<String> args) async {
       file.writeAsStringSync(name);
     }
     generate.copyFrbInputs(source, isolated);
-    for (final name in [
-      for (final module in generate.frbModules) module.config,
-      'app/pubspec.yaml',
-      'packages/adb/pubspec.yaml',
-      'packages/adb/lib/adb.dart',
-      'packages/media_codec/pubspec.yaml',
-      'rust/scrcpy/src/lib.rs',
-    ]) {
+    for (final name in copiedNames) {
       expect(File(p.join(isolated.path, name)).readAsStringSync(), name);
     }
-    for (final name in [
-      'app/.dart_tool',
-      'app/build',
-      'app/android',
-      'app/lib',
-      'app/assets',
-      'servers',
-      'packages/media_codec/third_party',
-    ]) {
-      expect(Directory(p.join(isolated.path, name)).existsSync(), isFalse);
+    for (final name in excludedNames) {
+      expect(File(p.join(isolated.path, name)).existsSync(), isFalse);
     }
     final copied = File(p.join(isolated.path, 'rust/adb/src/lib.rs'))
       ..writeAsStringSync('generator edit');

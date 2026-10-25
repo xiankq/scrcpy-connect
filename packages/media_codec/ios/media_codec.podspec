@@ -21,13 +21,16 @@ Pod::Spec.new do |s|
     :shell_path => '/bin/sh',
     :script => '/bin/sh "$PODS_TARGET_SRCROOT/../darwin/build_native.sh" ios'
   }
+  # FRB 由 Dart 动态查找，显式保留同一 framework 内 Rust 静态库的入口。
+  frb_symbols = File.readlines(File.expand_path('../native/frb_symbols.list', __dir__), chomp: true)
+  frb_link_flags = frb_symbols.map { |symbol| "-Wl,-u,_#{symbol}" }.join(' ')
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
+    'OTHER_LDFLAGS' => "$(inherited) #{frb_link_flags}",
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'CLANG_ENABLE_OBJC_ARC' => 'YES',
     'HEADER_SEARCH_PATHS' => "$(inherited) \"#{root}/include\" \"$(PODS_TARGET_SRCROOT)/../native\"",
     'LIBRARY_SEARCH_PATHS' => "$(inherited) \"#{root}/lib\"",
   }
-  # 静态 CocoaPods 也会在最终应用链接阶段解析 FFmpeg 静态库。
   s.user_target_xcconfig = { 'LIBRARY_SEARCH_PATHS' => "$(inherited) \"#{root}/lib\"" }
 end

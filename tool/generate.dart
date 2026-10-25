@@ -2,6 +2,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:args/args.dart';
@@ -18,12 +19,21 @@ const frbModules = [
     directory: 'packages/adb',
     rust: 'rust/adb/bridge',
     dart: 'lib/src/native/generated',
+    edition: '2024',
   ),
   (
     config: 'flutter_rust_bridge.scrcpy.yaml',
     directory: 'packages/scrcpy',
     rust: 'rust/scrcpy/bridge',
     dart: 'lib/src/native/generated',
+    edition: '2024',
+  ),
+  (
+    config: 'flutter_rust_bridge.media_codec.yaml',
+    directory: 'packages/media_codec',
+    rust: 'rust/media_codec',
+    dart: 'lib/src/native/generated',
+    edition: '2021',
   ),
 ];
 final outputs = [
@@ -82,7 +92,9 @@ Future<void> formatFrbRust(
         formatter,
         '--quiet',
         '--edition',
-        '2024',
+        frbModules
+            .firstWhere((module) => file.startsWith('${module.rust}/'))
+            .edition,
         '--emit',
         'stdout',
         output.path,
@@ -112,6 +124,8 @@ void copyFrbInputs(Directory source, Directory isolated) {
     for (final module in frbModules) module.config,
     '.dart_tool/package_config.json',
     '.dart_tool/package_graph.json',
+    'packages/media_codec/native/media_codec.h',
+    'packages/media_codec/third_party/ffmpeg.lock.json',
   ]) {
     file(name);
   }
@@ -147,6 +161,8 @@ void copyFrbInputs(Directory source, Directory isolated) {
   for (final name in [
     'rust/adb',
     'rust/scrcpy',
+    'rust/media_codec',
+    'packages/media_codec/third_party/patches',
     for (final module in frbModules) '${module.directory}/lib',
   ]) {
     tree(name);
@@ -174,10 +190,25 @@ Future<void> generateFrb(bool check) async {
     Map<String, String>? environment,
   }) async {
     for (final module in frbModules) {
+      final mediaEnvironment = <String, String>{};
+      if (module.directory == 'packages/media_codec') {
+        final host = Abi.current().toString().replaceAll('_', '-');
+        final prefix =
+            Platform.environment['MEDIA_CODEC_FFMPEG_ROOT'] ??
+            p.join(root.path, '.dart_tool/media_codec/ffmpeg', host);
+        if (!File(p.join(prefix, 'media-codec-build.json')).existsSync()) {
+          throw StateError(
+            'Prepare the pinned host FFmpeg build before media FRB generation: '
+            'python3 packages/media_codec/tool/build_ffmpeg.py '
+            '--platform ${Platform.operatingSystem} --arch ${host.split('-').last}',
+          );
+        }
+        mediaEnvironment['MEDIA_CODEC_FFMPEG_ROOT'] = p.absolute(prefix);
+      }
       await streamTool(
         [generator, 'generate', '--config-file', module.config],
         cwd: directory,
-        environment: environment,
+        environment: {...?environment, ...mediaEnvironment},
       );
     }
   }

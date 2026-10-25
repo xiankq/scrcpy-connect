@@ -6,7 +6,8 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_codec/media_codec.dart';
-import 'package:media_codec/src/native_bindings.g.dart';
+import 'package:media_codec/src/native/generated/api.dart';
+import 'package:media_codec/src/native/generated/frb_generated.dart';
 
 final source = MediaCodecSource(
   sourceId: 'process-local-source',
@@ -18,93 +19,92 @@ final source = MediaCodecSource(
   height: 720,
 );
 
-class FakeNative {
-  FakeNative() {
-    read =
-        NativeCallable<
-          Void Function(Pointer<mc_decoder>, Pointer<mc_status>)
-        >.isolateLocal((
-          Pointer<mc_decoder> decoder,
-          Pointer<mc_status> status,
-        ) {
-          expect(destroyed, isFalse, reason: 'read after native destroy');
-          observedDecoder = decoder.address;
-          reads++;
-          status.ref
-            ..width = width
-            ..height = height
-            ..frame_count = frameCount
-            ..presented_frame_count = preparedSequence > 0 ? 1 : 0
-            ..presented_sequence = preparedSequence
-            ..bytes_written = 1920
-            ..position_us = 123000
-            ..hardware_accelerated = hardware ? 1 : 0
-            ..native_ready = 1
-            ..paused = paused ? 1 : 0
-            ..error_code = 0
-            ..ended = 0;
-          for (var index = 0; index < decoderName.length; index++) {
-            status.ref.decoder_name[index] = decoderName.codeUnitAt(index);
-          }
-          status.ref.error[0] = 0;
-          status.ref.presentation_error[presentationError.length] = 0;
-          for (var index = 0; index < presentationError.length; index++) {
-            status.ref.presentation_error[index] = presentationError.codeUnitAt(
-              index,
-            );
-          }
-        });
-    pause =
-        NativeCallable<Void Function(Pointer<mc_decoder>, Int32)>.isolateLocal((
-          Pointer<mc_decoder> decoder,
-          int value,
-        ) {
-          expect(destroyed, isFalse, reason: 'control after native destroy');
-          observedDecoder = decoder.address;
-          paused = value != 0;
-        });
-    volume =
-        NativeCallable<Void Function(Pointer<mc_decoder>, Double)>.isolateLocal(
-          (Pointer<mc_decoder> decoder, double value) {
-            expect(destroyed, isFalse, reason: 'volume after native destroy');
-            observedDecoder = decoder.address;
-            lastVolume = value;
-          },
-        );
-  }
-  late final NativeCallable<
-    Void Function(Pointer<mc_decoder>, Pointer<mc_status>)
-  >
-  read;
-  late final NativeCallable<Void Function(Pointer<mc_decoder>, Int32)> pause;
-  late final NativeCallable<Void Function(Pointer<mc_decoder>, Double)> volume;
-  final memory = calloc<Uint8>();
+class FakeNative implements MediaCodecRustLibApi {
   bool destroyed = false, paused = false;
   int reads = 0, frameCount = 4, width = 320, height = 720;
-  int? decoderAddressOverride, observedDecoder;
+  int controlId = 9;
   int preparedSequence = 0;
   String presentationError = '';
   bool hardware = true;
   String decoderName = 'test_h264';
   double lastVolume = 1;
+
+  void observe(int id) {
+    expect(destroyed, isFalse, reason: 'FRB control after native destroy');
+    expect(id, controlId);
+  }
+
+  @override
+  MediaStatus crateApiMediaStatus({required int controlId}) {
+    observe(controlId);
+    reads++;
+    return MediaStatus(
+      width: width,
+      height: height,
+      frameCount: frameCount,
+      presentedFrameCount: preparedSequence > 0 ? 1 : 0,
+      presentedSequence: preparedSequence,
+      presentationPath: '',
+      presentationError: presentationError,
+      audioPlayedFrames: 0,
+      audioQueuedFrames: 0,
+      audioDroppedFrames: 0,
+      bytesWritten: 1920,
+      positionMs: 123,
+      hardwareAccelerated: hardware,
+      backendHardwareFrames: false,
+      hardwareVerification: -1,
+      nativeReady: true,
+      firstFrame: frameCount > 0,
+      paused: paused,
+      ended: false,
+      errorCode: 0,
+      decoderName: decoderName,
+      error: '',
+    );
+  }
+
+  @override
+  void crateApiMediaSetPaused({required int controlId, required bool paused}) {
+    observe(controlId);
+    this.paused = paused;
+  }
+
+  @override
+  void crateApiMediaSetVolume({
+    required int controlId,
+    required double volume,
+  }) {
+    observe(controlId);
+    lastVolume = volume;
+  }
+
   Map<String, Object> get created => {
     'handle': 42,
     'textureId': 7,
     'width': 320,
     'height': 720,
-    'decoderAddress': decoderAddressOverride ?? memory.address,
-    'nativeApi': {
-      'getStatusAddress': read.nativeFunction.address,
-      'setPausedAddress': pause.nativeFunction.address,
-      'setVolumeAddress': volume.nativeFunction.address,
-    },
+    'controlId': controlId,
+    'nativeLibraryPath': '/mock/media_codec_plugin.so',
+    'frbAnchorAddress': 1,
   };
-  void close() {
-    read.close();
-    pause.close();
-    volume.close();
-    calloc.free(memory);
-  }
+}
+
+// Only the platform-owned decoder fixture uses C ABI; all status and controls
+// below go through the generated FRB bridge.
+final class DecoderConfig extends Struct {
+  @Uint32()
+  external int structSize;
+  @Uint32()
+  external int codec;
+  @Uint32()
+  external int width;
+  @Uint32()
+  external int height;
+  @Uint64()
+  external int generation;
+  @Array(9)
+  external Array<Pointer<Void>> callbacks;
 }
 
 void main() {
@@ -118,6 +118,7 @@ void main() {
 
   setUp(() {
     native = FakeNative();
+    MediaCodecRustLib.initMock(api: native);
     calls = [];
     controller = MediaCodecController.video(channel: channel);
     messenger.setMockMethodCallHandler(channel, (call) async {
@@ -135,54 +136,35 @@ void main() {
   tearDown(() async {
     await controller.dispose();
     messenger.setMockMethodCallHandler(channel, null);
-    native.close();
+    MediaCodecRustLib.dispose();
   });
 
   test(
-    'Android arm64 tagged decoder reaches the first frame without detaching',
+    'FRB controls keep the platform decoder identity through disposal',
     () async {
-      // JNI jlong 与 StandardMethodCodec 以负 Dart int 保留该非空指针的位模式。
-      // 原生回调将解码器视为不透明句柄，因此可验证真实 FFI 交接，
-      // 无需在不支持 ARM TBI 的宿主上解引用 TBI 地址。
-      final tagged = native.memory.address | 0xb400000000000000;
-      expect(tagged, isNegative);
-      native.decoderAddressOverride = tagged;
       await controller.open(source);
       final frame = await controller.waitForFrame();
       expect(frame['firstFrame'], true);
-      expect(native.observedDecoder, tagged);
-      expect(calls, ['createVideo']);
-      expect(native.destroyed, false);
       await controller.setPaused(true);
-      expect(native.observedDecoder, tagged);
       expect(native.paused, true);
       await controller.setPaused(false);
-      expect(native.observedDecoder, tagged);
       expect(native.paused, false);
       await controller.setVolume(.4);
-      expect(native.observedDecoder, tagged);
       expect(native.lastVolume, .4);
       await controller.dispose();
       await controller.dispose();
       expect(calls, ['createVideo', 'dispose']);
-      expect(native.destroyed, true);
     },
-    skip: sizeOf<IntPtr>() != 8
-        ? 'Android arm64 pointer-width regression'
-        : false,
   );
 
-  test(
-    'null decoder is rejected and the platform output is released once',
-    () async {
-      native.decoderAddressOverride = 0;
-      await expectLater(controller.open(source), throwsStateError);
-      await controller.dispose();
-      expect(native.reads, 0);
-      expect(native.destroyed, true);
-      expect(calls, ['createVideo', 'dispose']);
-    },
-  );
+  test('invalid FRB control ID releases the platform output once', () async {
+    native.controlId = 0;
+    await expectLater(controller.open(source), throwsStateError);
+    await controller.dispose();
+    expect(native.reads, 0);
+    expect(native.destroyed, true);
+    expect(calls, ['createVideo', 'dispose']);
+  });
 
   test(
     'paused event listeners cannot delay native disposal confirmation',
@@ -365,7 +347,7 @@ void main() {
     });
   }
 
-  test('创建后控制地址无效且清理失败仍保留输出供关闭重试', () async {
+  test('创建后控制句柄无效且清理失败仍保留输出供关闭重试', () async {
     var attempts = 0;
     messenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call.method);
@@ -423,59 +405,71 @@ void main() {
     },
   );
 
-  test(
-    'late create is drained once without dereferencing its decoder',
-    () async {
-      final created = Completer<Map<String, Object>>();
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        calls.add(call.method);
-        if (call.method == 'createVideo') return created.future;
-        if (call.method == 'dispose') {
-          native.destroyed = true;
-          return null;
-        }
-        fail('Unexpected platform round trip: ${call.method}');
-      });
-      final opening = controller.open(source);
-      final disposing = controller.dispose();
-      created.complete(native.created);
-      await opening;
-      await disposing;
-      expect(native.reads, 0);
-      expect(calls, ['createVideo', 'dispose']);
-    },
-  );
+  test('late create is drained once without borrowing FRB controls', () async {
+    final created = Completer<Map<String, Object>>();
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'createVideo') return created.future;
+      if (call.method == 'dispose') {
+        native.destroyed = true;
+        return null;
+      }
+      fail('Unexpected platform round trip: ${call.method}');
+    });
+    final opening = controller.open(source);
+    final disposing = controller.dispose();
+    created.complete(native.created);
+    await opening;
+    await disposing;
+    expect(native.reads, 0);
+    expect(calls, ['createVideo', 'dispose']);
+  });
 
   test(
-    'generated ABI controls an actual Rust decoder',
+    'FRB controls the platform-owned Rust decoder and rejects its stale ID',
     () async {
-      final api = MediaCodecNative(
-        DynamicLibrary.open(Platform.environment['MEDIA_CODEC_TEST_LIBRARY']!),
-      );
-      final config = calloc<mc_config>();
+      MediaCodecRustLib.dispose();
+      final path = Platform.environment['MEDIA_CODEC_TEST_LIBRARY']!;
+      final library = DynamicLibrary.open(path);
+      final create = library
+          .lookupFunction<
+            Pointer<Void> Function(Pointer<DecoderConfig>),
+            Pointer<Void> Function(Pointer<DecoderConfig>)
+          >('mc_create');
+      final destroy = library
+          .lookupFunction<
+            Void Function(Pointer<Void>),
+            void Function(Pointer<Void>)
+          >('mc_destroy');
+      final getControlId = library
+          .lookupFunction<
+            Uint64 Function(Pointer<Void>),
+            int Function(Pointer<Void>)
+          >('mc_control_id');
+      final config = calloc<DecoderConfig>();
       config.ref
-        ..struct_size = sizeOf<mc_config>()
+        ..structSize = sizeOf<DecoderConfig>()
         ..codec = 100
         ..generation = 1;
-      final decoder = api.mc_create(config);
+      final decoder = create(config);
       calloc.free(config);
       expect(decoder.address, isNonZero);
+      final controlId = getControlId(decoder);
       messenger.setMockMethodCallHandler(channel, (call) async {
         calls.add(call.method);
         if (call.method == 'createVideo') {
           return {
             'handle': 42,
             'textureId': -1,
-            'decoderAddress': decoder.address,
-            'nativeApi': {
-              'getStatusAddress': api.addresses.mc_get_status.address,
-              'setPausedAddress': api.addresses.mc_set_paused.address,
-              'setVolumeAddress': api.addresses.mc_set_volume.address,
-            },
+            'controlId': controlId,
+            'nativeLibraryPath': path,
+            'frbAnchorAddress': library
+                .lookup<Void>('frb_get_rust_content_hash')
+                .address,
           };
         }
         if (call.method == 'dispose') {
-          api.mc_destroy(decoder);
+          destroy(decoder);
           return null;
         }
         fail('Unexpected platform round trip: ${call.method}');
@@ -490,9 +484,10 @@ void main() {
       await controller.setVolume(.3);
       await controller.dispose();
       expect(calls, ['createVideo', 'dispose']);
+      expect(() => mediaStatus(controlId: controlId), throwsA(anything));
     },
     skip: Platform.environment['MEDIA_CODEC_TEST_LIBRARY'] == null
-        ? 'Build Rust native core and set MEDIA_CODEC_TEST_LIBRARY for ABI integration.'
+        ? 'Build the Rust native core and set MEDIA_CODEC_TEST_LIBRARY for FRB integration.'
         : false,
   );
 }

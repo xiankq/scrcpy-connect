@@ -11,7 +11,18 @@ set_target_properties(${PLUGIN_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden
   BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
 target_compile_features(${PLUGIN_NAME} PUBLIC cxx_std_17)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
-target_link_options(${PLUGIN_NAME} PRIVATE "-Wl,--exclude-libs,ALL")
+# 导出同一 Rust 核心的 FRB 入口，其余静态依赖保持隐藏。
+target_link_options(${PLUGIN_NAME} PRIVATE
+  "-Wl,-Bsymbolic-functions"
+  "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/media_codec.map")
+set_property(TARGET ${PLUGIN_NAME} APPEND PROPERTY LINK_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/media_codec.map")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/../native/frb_symbols.list")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../native/frb_symbols.list" MEDIA_CODEC_FRB_SYMBOLS)
+foreach(symbol IN LISTS MEDIA_CODEC_FRB_SYMBOLS)
+  target_link_options(${PLUGIN_NAME} PRIVATE "-Wl,--undefined=${symbol}")
+endforeach()
 target_include_directories(${PLUGIN_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter PkgConfig::GTK PkgConfig::MC_EPOXY media_codec_core)
 if(MEDIA_CODEC_BUILD_TESTS)

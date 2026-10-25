@@ -1,5 +1,6 @@
 #include "include/media_codec/media_codec_plugin.h"
 #include "../native/media_codec.h"
+#include "frb_library.h"
 #include "audio.h"
 #include "gpu_texture.h"
 #include <algorithm>
@@ -374,19 +375,19 @@ void method(FlMethodChannel *, FlMethodCall *call, gpointer user) {
       error(call, "attach_failed", "Unable to attach the remote media source");
       return;
     }
+    void* anchor = mc_frb_anchor();
+    const auto library_path = mc_native_library_path(anchor);
+    const uint64_t control_id = mc_control_id(output->decoder);
+    if (library_path.empty() || !control_id) {
+      error(call, "native_library_unavailable", "Unable to resolve the native media control library");
+      return;
+    }
     int64_t handle = plugin->next++;
     g_autoptr(FlValue) result = fl_value_new_map();
     put(result, "handle", fl_value_new_int(handle));
-    put(result, "decoderAddress",
-        fl_value_new_int(reinterpret_cast<intptr_t>(output->decoder)));
-    FlValue *api = fl_value_new_map();
-    put(api, "getStatusAddress",
-        fl_value_new_int(reinterpret_cast<intptr_t>(&mc_get_status)));
-    put(api, "setPausedAddress",
-        fl_value_new_int(reinterpret_cast<intptr_t>(&mc_set_paused)));
-    put(api, "setVolumeAddress",
-        fl_value_new_int(reinterpret_cast<intptr_t>(&mc_set_volume)));
-    put(result, "nativeApi", api);
+    put(result, "controlId", fl_value_new_int(static_cast<int64_t>(control_id)));
+    put(result, "nativeLibraryPath", fl_value_new_string(library_path.c_str()));
+    put(result, "frbAnchorAddress", fl_value_new_int(reinterpret_cast<intptr_t>(anchor)));
     put(result, "textureId",
         fl_value_new_int(output->texture
                              ? fl_texture_get_id(FL_TEXTURE(output->texture))

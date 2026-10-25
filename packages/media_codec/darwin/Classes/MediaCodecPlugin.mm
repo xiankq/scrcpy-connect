@@ -13,6 +13,7 @@
 #include <mutex>
 #include <vector>
 #include "media_codec.h"
+#include "frb_library.h"
 extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/pixfmt.h>
@@ -418,6 +419,12 @@ static uint32_t MCCodec(id value) {
     self.outputs[@(output.handle)] = output;
     dispatch_async(self.worker, ^{
       BOOL ready = [output open:args audio:audio];
+      void* anchor = mc_frb_anchor();
+      const auto library_path = mc_native_library_path(anchor);
+      const uint64_t control_id = ready ? mc_control_id(output->_decoder) : 0;
+      NSString* failure = ready ? @"Unable to resolve the native media control library"
+                                : @"Unable to attach native media output";
+      ready = ready && !library_path.empty() && control_id != 0;
       if (!ready) [output close];
       dispatch_async(dispatch_get_main_queue(), ^{
         if (!ready) {
@@ -425,15 +432,14 @@ static uint32_t MCCodec(id value) {
           if (output.textureId >= 0) {
             [self.textures unregisterTexture:output.textureId]; output.textureId = -1;
           }
-          result([FlutterError errorWithCode:@"media_codec_create" message:@"Unable to attach native media output" details:nil]);
+          result([FlutterError errorWithCode:@"media_codec_create" message:failure details:nil]);
           return;
         }
         result(@{@"handle": @(output.handle), @"textureId": @(output.textureId),
                  @"width": args[@"width"] ?: @0, @"height": args[@"height"] ?: @0,
-                 @"decoderAddress": @((uintptr_t)output->_decoder),
-                 @"nativeApi": @{@"getStatusAddress": @((uintptr_t)&mc_get_status),
-                                  @"setPausedAddress": @((uintptr_t)&mc_set_paused),
-                                  @"setVolumeAddress": @((uintptr_t)&mc_set_volume)}});
+                 @"controlId": @(control_id),
+                 @"nativeLibraryPath": [NSString stringWithUTF8String:library_path.c_str()],
+                 @"frbAnchorAddress": @((uintptr_t)anchor)});
       });
     });
     return;

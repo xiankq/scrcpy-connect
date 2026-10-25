@@ -1,0 +1,12 @@
+frb_get_rust_content_hash
+frb_pde_ffi_dispatcher_primary
+frb_pde_ffi_dispatcher_sync
+frb_dart_fn_deliver_output
+frb_init_frb_dart_api_dl
+frb_free_wire_sync_rust2dart_dco
+frb_free_wire_sync_rust2dart_sse
+frb_create_shutdown_callback
+frb_rust_vec_u8_new
+frb_rust_vec_u8_resize
+frb_rust_vec_u8_free
+store_dart_post_cobject

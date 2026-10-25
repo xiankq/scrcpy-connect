@@ -1,7 +1,10 @@
 //! 仅接收媒体包的 FFmpeg 解码器。Flutter 适配器拥有纹理和音频设备；
 //! 本 crate 拥有包准入、解码、回退及媒体源生命周期。
 
+pub mod api;
 mod backend;
+mod controls;
+mod frb_generated;
 mod image;
 mod pcm;
 
@@ -91,6 +94,7 @@ impl Drop for Shared {
     }
 }
 struct Decoder {
+    control_id: u64,
     config: ff::mc_config,
     #[cfg_attr(target_os = "android", allow(dead_code))]
     requested_device: String,
@@ -524,7 +528,13 @@ pub unsafe extern "C" fn mc_create(config: *const ff::mc_config) -> *mut ff::mc_
     if latest.is_null() {
         return ptr::null_mut();
     }
+    let Some(control_id) = controls::next_id() else {
+        let mut latest = latest;
+        ff::av_frame_free(&mut latest);
+        return ptr::null_mut();
+    };
     let value = Box::new(Decoder {
+        control_id,
         config: *config,
         requested_device: string((*config).hardware_device),
         shared: Mutex::new(Shared {
@@ -560,6 +570,7 @@ pub unsafe extern "C" fn mc_create(config: *const ff::mc_config) -> *mut ff::mc_
     {
         Ok(worker) => {
             *(*pointer).worker.lock().unwrap() = Some(worker);
+            controls::register(control_id, pointer);
             pointer as *mut ff::mc_decoder
         }
         Err(_) => {
@@ -567,6 +578,22 @@ pub unsafe extern "C" fn mc_create(config: *const ff::mc_config) -> *mut ff::mc_
             ptr::null_mut()
         }
     }
+}
+/// # Safety
+/// value 必须为空或指向本库存活的解码器，调用期间不得销毁。
+#[no_mangle]
+pub unsafe extern "C" fn mc_control_id(value: *mut ff::mc_decoder) -> u64 {
+    if value.is_null() {
+        0
+    } else {
+        decoder(value).control_id
+    }
+}
+
+/// 返回同一媒体库中的 FRB 锚点，同时保留静态链接所需的桥接符号。
+#[no_mangle]
+pub extern "C" fn mc_frb_anchor() -> *const c_void {
+    frb_generated::frb_get_rust_content_hash as *const () as *const c_void
 }
 /// # Safety
 /// value 必须是存活的解码器，source 为有效 C 字符串，attach/detach 为匹配 ABI 的函数地址；detach 返回前必须结束全部媒体源回调。
@@ -811,13 +838,15 @@ pub unsafe extern "C" fn mc_image_free(image: *mut ff::mc_image) {
     image::free(image);
 }
 /// # Safety
-/// 非空 value 必须是本库创建且尚未销毁的解码器；只能销毁一次，不得从输出回调调用，也不得与其他解码器操作并发。
+/// 非空 value 必须是本库创建且尚未销毁的解码器；只能销毁一次，不得从输出回调调用。
+/// FRB 控制借用会在释放前排空；其余 C ABI 操作不得与销毁并发。
 #[no_mangle]
 pub unsafe extern "C" fn mc_destroy(value: *mut ff::mc_decoder) {
     if value.is_null() {
         return;
     }
     let decoder = decoder(value);
+    controls::revoke(decoder.control_id);
     if let Some(attachment) = decoder.attachment.lock().unwrap().take() {
         if let Some(detach) = attachment.detach {
             detach(
@@ -1223,7 +1252,7 @@ mod tests {
     }
 
     #[test]
-    fn configuration_does_not_claim_decoded_output() {
+    fn controls_borrow_platform_output_until_revoked() {
         unsafe {
             let mut config: ff::mc_config = std::mem::zeroed();
             config.struct_size = std::mem::size_of::<ff::mc_config>() as u32;
@@ -1232,6 +1261,14 @@ mod tests {
             config.hardware_device = c"none".as_ptr();
             let decoder = mc_create(&config);
             assert!(!decoder.is_null());
+            let control_id = mc_control_id(decoder);
+            assert!(control_id > 0);
+            assert!(api::media_status(control_id).is_ok());
+            api::media_set_paused(control_id, true).unwrap();
+            assert!(api::media_status(control_id).unwrap().paused);
+            api::media_set_paused(control_id, false).unwrap();
+            api::media_set_volume(control_id, 0.25).unwrap();
+            assert!(api::media_set_volume(control_id, f64::NAN).is_err());
             assert_eq!(
                 event(decoder.cast(), 1, 1, 4, 16, 16, ptr::null(), 0, 0, 0),
                 0
@@ -1255,7 +1292,50 @@ mod tests {
             assert_eq!(status.native_ready, 0);
             assert_eq!(status.hardware_accelerated, 0);
             assert_eq!(string(status.decoder_name.as_ptr()), "");
-            mc_destroy(decoder);
+            let (borrowed_tx, borrowed_rx) = std::sync::mpsc::channel();
+            let (release_tx, release_rx) = std::sync::mpsc::channel();
+            let borrowing = thread::spawn(move || {
+                controls::with_decoder(control_id, |_| {
+                    borrowed_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                })
+                .unwrap();
+            });
+            borrowed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            let address = decoder as usize;
+            let (destroyed_tx, destroyed_rx) = std::sync::mpsc::channel();
+            let destroying = thread::spawn(move || {
+                mc_destroy(address as *mut ff::mc_decoder);
+                destroyed_tx.send(()).unwrap();
+            });
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while controls::registry()
+                .lock()
+                .unwrap()
+                .contains_key(&control_id)
+            {
+                assert!(Instant::now() < deadline, "destroy must revoke admission");
+                thread::yield_now();
+            }
+            assert!(api::media_status(control_id).is_err());
+            assert!(
+                destroyed_rx.try_recv().is_err(),
+                "destroy must wait for borrowed controls"
+            );
+            release_tx.send(()).unwrap();
+            borrowing.join().unwrap();
+            destroyed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            destroying.join().unwrap();
+            assert!(api::media_set_paused(control_id, true).is_err());
+            assert!(api::media_set_volume(control_id, 0.5).is_err());
+            let next = mc_create(&config);
+            assert!(!next.is_null());
+            assert!(
+                mc_control_id(next) > control_id,
+                "control IDs must not be reused"
+            );
+            assert!(api::media_status(control_id).is_err());
+            mc_destroy(next);
         }
     }
 

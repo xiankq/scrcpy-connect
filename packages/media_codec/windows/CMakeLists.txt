@@ -10,6 +10,13 @@ target_compile_features(${PLUGIN_NAME} PUBLIC cxx_std_17)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL NOMINMAX)
 target_include_directories(${PLUGIN_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin media_codec_core d3d11 dxgi ole32 uuid)
+# Rust staticlib 的 FRB 入口由最终插件 DLL 导出，不能另建解码器动态库。
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/../native/frb_symbols.list")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../native/frb_symbols.list" MEDIA_CODEC_FRB_SYMBOLS)
+foreach(symbol IN LISTS MEDIA_CODEC_FRB_SYMBOLS)
+  target_link_options(${PLUGIN_NAME} PRIVATE "/INCLUDE:${symbol}" "/EXPORT:${symbol}")
+endforeach()
 # Rust 与固定 C 静态库请求 release DLL CRT；Flutter Debug DLL 应同时从 wrapper 选择的 debug CRT 解析 C 分配接口，
 # 避免同一模块导入两个 CRT 堆。
 target_link_options(${PLUGIN_NAME} PRIVATE

@@ -1,0 +1,8 @@
+{
+  global:
+    media_codec_plugin_register_with_registrar;
+    mc_*;
+    frb_*;
+    store_dart_post_cobject;
+  local: *;
+};

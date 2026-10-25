@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <thread>
 #include "media_codec.h"
+#include "frb_library.h"
 extern "C" {
 #include <libavcodec/jni.h>
 #include <libavutil/frame.h>
@@ -285,12 +286,23 @@ extern "C" JNIEXPORT jlong JNICALL JNI_METHOD(nativeCreate)(JNIEnv* env, jclass,
 }
 extern "C" JNIEXPORT jobject JNICALL JNI_METHOD(nativeBindings)(JNIEnv* env, jclass, jlong handle) {
   if (!handle) return nullptr;
-  jobject value = map(env), api = map(env);
-  integer(env, value, "decoderAddress", reinterpret_cast<uintptr_t>(output(handle)->decoder));
-  integer(env, api, "getStatusAddress", reinterpret_cast<uintptr_t>(&mc_get_status));
-  integer(env, api, "setPausedAddress", reinterpret_cast<uintptr_t>(&mc_set_paused));
-  integer(env, api, "setVolumeAddress", reinterpret_cast<uintptr_t>(&mc_set_volume));
-  put(env, value, "nativeApi", api); return value;
+  void* anchor = mc_frb_anchor();
+  const auto library_path = mc_native_library_path(anchor);
+  const uint64_t control_id = mc_control_id(output(handle)->decoder);
+  if (library_path.empty() || !control_id) {
+    jclass exception = env->FindClass("java/lang/IllegalStateException");
+    if (exception) {
+      env->ThrowNew(exception, "Unable to resolve the native media control library");
+      env->DeleteLocalRef(exception);
+    }
+    return nullptr;
+  }
+  jobject value = map(env);
+  integer(env, value, "controlId", control_id);
+  integer(env, value, "frbAnchorAddress", reinterpret_cast<uintptr_t>(anchor));
+  jstring path = env->NewStringUTF(library_path.c_str());
+  put(env, value, "nativeLibraryPath", path);
+  return value;
 }
 extern "C" JNIEXPORT void JNICALL JNI_METHOD(nativeSetSurface)(JNIEnv* env, jclass, jlong handle, jobject surface) {
   if (!handle) return;

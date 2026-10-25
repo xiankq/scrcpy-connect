@@ -5,6 +5,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LIBCLANG_PATH");
     println!("cargo:rerun-if-env-changed=MEDIA_CODEC_SYSROOT");
     println!("cargo:rerun-if-env-changed=MEDIA_CODEC_CLANG_RESOURCE_DIR");
+    println!("cargo:rerun-if-env-changed=MEDIA_CODEC_CLANG_TARGET");
     println!("cargo:rerun-if-changed=../../packages/media_codec/native/media_codec.h");
     println!("cargo:rerun-if-changed=../../packages/media_codec/third_party/ffmpeg.lock.json");
     println!("cargo:rerun-if-changed=../../packages/media_codec/third_party/patches");
@@ -62,14 +63,17 @@ static const int64_t MC_NO_PTS = AV_NOPTS_VALUE;
             ""
         }
     );
-    let clang_target = match target.as_str() {
-        "aarch64-apple-ios-sim" => "arm64-apple-ios13.0-simulator",
-        "x86_64-apple-ios" => "x86_64-apple-ios13.0-simulator",
-        "aarch64-apple-ios" => "arm64-apple-ios13.0",
-        "aarch64-apple-darwin" => "arm64-apple-macos10.15",
-        "x86_64-apple-darwin" => "x86_64-apple-macos10.15",
-        _ => &target,
-    };
+    let clang_target = env::var("MEDIA_CODEC_CLANG_TARGET").unwrap_or_else(|_| {
+        match target.as_str() {
+            "aarch64-apple-ios-sim" => "arm64-apple-ios13.0-simulator",
+            "x86_64-apple-ios" => "x86_64-apple-ios13.0-simulator",
+            "aarch64-apple-ios" => "arm64-apple-ios13.0",
+            "aarch64-apple-darwin" => "arm64-apple-macos10.15",
+            "x86_64-apple-darwin" => "x86_64-apple-macos10.15",
+            _ => &target,
+        }
+        .to_owned()
+    });
     let mut bindings = bindgen::Builder::default()
         .header_contents("media_codec_bindings.h", &header)
         .clang_arg(format!("-I{}", include.display()))

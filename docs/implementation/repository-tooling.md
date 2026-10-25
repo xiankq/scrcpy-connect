@@ -21,6 +21,8 @@
 
 FFmpeg、dav1d及nv-codec-headers由媒体包锁定并保留对应源码与许可证。构建使用 `packages/media_codec/tool/build_ffmpeg.py`，缓存位于 `.dart_tool/media_codec/`；独立 `rust/media_codec/` workspace需单独format/test。
 
+媒体 FRB 生成先准备宿主 FFmpeg；默认读取该缓存下的 `ffmpeg/<平台>-<架构>`，也可通过 `MEDIA_CODEC_FFMPEG_ROOT` 指定。FRB 编入现有平台插件的 Rust 库，不能另建一份媒体 NativeAssets 库。
+
 桌面ADB来源由 `packages/adb/third_party/platform-tools.lock.json` 固定，准备工具归ADB包；移动端不附带桌面adb。Linux监督器由目标Rust工具链构建嵌入，交叉编译须提供目标linker，不能复用宿主二进制。
 
 Windows需Visual Studio C++桌面工作负载、Windows SDK和ATL。Flutter测试、设备构建与release准备共用插件注册文件，在同一工作区串行执行。

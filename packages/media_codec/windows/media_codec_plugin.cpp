@@ -1,4 +1,5 @@
 #include "../native/media_codec.h"
+#include "frb_library.h"
 #include "include/media_codec/media_codec_plugin_c_api.h"
 #include <Windows.h>
 #include <algorithm>
@@ -619,23 +620,24 @@ private:
                       "Unable to attach the remote media source");
         return;
       }
+      void* anchor = mc_frb_anchor();
+      const auto library_path = mc_native_library_path(anchor);
+      const uint64_t control_id = mc_control_id(output->decoder);
+      if (library_path.empty() || !control_id) {
+        retire(output);
+        result->Error("native_library_unavailable",
+                      "Unable to resolve the native media control library");
+        return;
+      }
       int64_t handle = next_++;
       Map reply{{Value("handle"), Value(handle)},
                 {Value("textureId"), Value(output->texture_id)},
                 {Value("width"), Value(static_cast<int64_t>(config.width))},
-                {Value("height"), Value(static_cast<int64_t>(config.height))}};
-      reply[Value("decoderAddress")] = Value(
-          static_cast<int64_t>(reinterpret_cast<intptr_t>(output->decoder)));
-      reply[Value("nativeApi")] =
-          Value(Map{{Value("getStatusAddress"),
-                     Value(static_cast<int64_t>(
-                         reinterpret_cast<intptr_t>(&mc_get_status)))},
-                    {Value("setPausedAddress"),
-                     Value(static_cast<int64_t>(
-                         reinterpret_cast<intptr_t>(&mc_set_paused)))},
-                    {Value("setVolumeAddress"),
-                     Value(static_cast<int64_t>(
-                         reinterpret_cast<intptr_t>(&mc_set_volume)))}});
+                {Value("height"), Value(static_cast<int64_t>(config.height))},
+                {Value("controlId"), Value(static_cast<int64_t>(control_id))},
+                {Value("nativeLibraryPath"), Value(library_path)},
+                {Value("frbAnchorAddress"),
+                 Value(static_cast<int64_t>(reinterpret_cast<intptr_t>(anchor)))}};
       outputs_[handle] = output;
       result->Success(Value(reply));
       return;

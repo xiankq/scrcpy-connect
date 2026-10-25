@@ -86,12 +86,6 @@ typedef struct mc_status {
   int32_t backend_hardware_frames;
   int32_t hardware_verification; /* -1 未知，0 软件，1 硬件组件。 */
 } mc_status;
-typedef void mc_get_status_call(mc_decoder*, mc_status*);
-typedef void mc_set_paused_call(mc_decoder*, int32_t);
-typedef void mc_set_volume_call(mc_decoder*, double);
-typedef mc_get_status_call* mc_get_status_fn;
-typedef mc_set_paused_call* mc_set_paused_fn;
-typedef mc_set_volume_call* mc_set_volume_fn;
 typedef struct mc_image {
   uint32_t width;
   uint32_t height;
@@ -100,6 +94,10 @@ typedef struct mc_image {
   uint8_t* rgba;
 } mc_image;
 MC_EXPORT mc_decoder* mc_create(const mc_config* config);
+/* FRB 借用同一解码器的控制身份；平台保留唯一销毁权。 */
+MC_EXPORT uint64_t mc_control_id(mc_decoder*);
+/* 返回本插件 FRB 内容摘要函数的地址，用于定位并核对动态模块。 */
+MC_EXPORT void* mc_frb_anchor(void);
 MC_EXPORT int32_t mc_attach(mc_decoder*, const char* source_id,
                             uintptr_t attach_address, uintptr_t detach_address);
 MC_EXPORT void mc_get_status(mc_decoder*, mc_status*);

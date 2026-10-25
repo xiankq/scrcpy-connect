@@ -1,0 +1,8 @@
+rust_input: crate::api
+rust_root: rust/media_codec
+dart_root: packages/media_codec
+dart_output: packages/media_codec/lib/src/native/generated
+dart_entrypoint_class_name: MediaCodecRustLib
+type_64bit_int: true
+web: false
+auto_upgrade_dependency: false

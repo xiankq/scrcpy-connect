@@ -8,6 +8,7 @@ void main(List<String> args) async {
     if (!input.config.buildCodeAssets) return;
     // 监督器由 build.rs 单独调用 rustc 构建；显式登记 Cargo 库 dep-info 之外的输入。
     output.dependencies.addAll([
+      input.packageRoot.resolve('../../rust/scrcpy/bridge/build.rs'),
       for (final source in [
         'build.rs',
         'supervisor/main.rs',
