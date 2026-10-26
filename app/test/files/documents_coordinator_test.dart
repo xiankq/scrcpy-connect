@@ -658,54 +658,56 @@ void main() {
     );
   });
 
-  test('平台 release 未确认不能清除操作，重试关闭成功后才放行', () async {
-    final f = Fixture()..selected = ['root'];
-    f.node('root', 'Empty', directory: true);
-    var released = false;
-    final coordinator = DocumentsCoordinator(
-      files: f.files,
-      platform: (command, params) async {
-        if (command == 'documents.platform.release' && !released) {
-          return {'released': false};
-        }
-        return f.platform(command, params);
-      },
-    );
-    await expectLater(
-      coordinator.request('documents.importDirectory'),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'document_cleanup_unconfirmed',
+  for (final cancelFirst in [false, true]) {
+    test('平台 release 未确认后${cancelFirst ? '取消' : '再次操作'}重试清理并恢复准入', () async {
+      final f = Fixture()..selected = ['root'];
+      f.node('root', 'Empty', directory: true);
+      var released = false;
+      final coordinator = DocumentsCoordinator(
+        files: f.files,
+        platform: (command, params) async {
+          if (command == 'documents.platform.release' && !released) {
+            return {'released': false};
+          }
+          return f.platform(command, params);
+        },
+      );
+      await expectLater(
+        coordinator.request('documents.importDirectory', {
+          'operationId': 'old',
+        }),
+        throwsA(
+          isA<ApplicationCommandException>().having(
+            (e) => e.code,
+            'code',
+            'document_cleanup_unconfirmed',
+          ),
         ),
-      ),
-    );
-    await expectLater(
-      coordinator.request('documents.importFiles'),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'documents_busy',
+      );
+      await expectLater(
+        coordinator.request('documents.importFiles'),
+        throwsA(
+          isA<ApplicationCommandException>().having(
+            (e) => e.code,
+            'code',
+            'document_cleanup_unconfirmed',
+          ),
         ),
-      ),
-    );
-    released = true;
-    await coordinator.dispose();
-    expect(f.calls.last.$1, 'documents.platform.release');
-    expect(
-      f.calls
-          .where(
-            (call) =>
-                call.$1.startsWith('documents.platform.') &&
-                call.$1 != 'documents.platform.environment' &&
-                call.$1 != 'documents.platform.claim',
-          )
-          .map((call) => call.$2['ownerLeaseId']),
-      everyElement('fixture-owner'),
-    );
-  });
+      );
+      released = true;
+      if (cancelFirst) {
+        expect(
+          await coordinator.request('documents.cancel', {'operationId': 'old'}),
+          containsPair('cancelled', true),
+        );
+      }
+      expect(
+        (await coordinator.request('documents.importDirectory'))['status'],
+        'imported',
+      );
+      await coordinator.dispose();
+    });
+  }
 
   test('恢复栅栏确认 scope 排空前不读取缓存，并与文档操作共用 key', () async {
     final f = Fixture()..selected = ['root'];

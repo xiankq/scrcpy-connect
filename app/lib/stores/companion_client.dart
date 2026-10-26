@@ -90,6 +90,9 @@ final class CompanionClient {
   final _lifetime = AdbCancellation();
   final _sessionCancellation = <void Function()>[];
   final _pending = <String, _Request>{};
+  final _mediaOperations = <String, String?>{};
+  final _mediaCancellations = <String, String>{};
+  final _mediaShutdowns = <String>{};
   final _queuedEvents = Queue<Map<String, Object?>>();
   late final StreamController<Map<String, Object?>> _events;
   final _ready = Completer<Map<String, Object?>>();
@@ -105,8 +108,9 @@ final class CompanionClient {
   Object? _eventFailure;
   bool _closed = false, _started = false, _eventsPaused = false;
   bool _launchIssued = false;
-  bool _mediaMayExist = false, _eventsFinished = false;
+  bool _eventsFinished = false;
   bool _detached = false;
+  bool get _mediaMayExist => _mediaOperations.isNotEmpty;
   Stream<Map<String, Object?>> get events => _events.stream;
   CompanionDeploymentIdentity? get deploymentIdentity => _identity;
 
@@ -331,15 +335,45 @@ final class CompanionClient {
     }
     if (message['requestId'] case final String id) {
       final request = _pending[id];
-      if (request == null) return; // 取消或超时后的迟到回执不得回写新请求。
+      if (request == null &&
+          !_mediaOperations.containsKey(id) &&
+          !_mediaCancellations.containsKey(id) &&
+          !_mediaShutdowns.contains(id)) {
+        return;
+      }
       if (message['error'] case final Map<Object?, Object?> error) {
         final code = error['code'], reason = error['message'];
         if (code is! String || reason is! String) {
           throw const CompanionException('protocol_error', '互联服务错误回执无效。');
         }
-        _finish(request, error: CompanionException(code, reason));
+        // 远端媒体错误在回收后发送；唯一保留未知存活事实的错误是此代码。
+        final mediaReaped =
+            _mediaOperations.containsKey(id) && code != 'media_cleanup_unknown';
+        if (mediaReaped) _mediaOperations.remove(id);
+        _mediaCancellations.remove(id);
+        _mediaShutdowns.remove(id);
+        if (request != null) {
+          _finish(
+            request,
+            error: CompanionException(code, reason, mediaReaped: mediaReaped),
+          );
+        }
       } else if (message.containsKey('result')) {
-        _finish(request, result: message['result']);
+        // MediaJobs 仅在子进程已退出后回复成功；迟到回执也能结清原清理责任，
+        // 但不能重新完成已取消的调用或发布旧结果。
+        _mediaOperations.remove(id);
+        final operation = _mediaCancellations.remove(id);
+        final shutdown = _mediaShutdowns.remove(id);
+        if (message['result'] case Map<Object?, Object?> result
+            when result['reaped'] == true) {
+          if (shutdown) {
+            _mediaOperations.clear();
+            _mediaCancellations.clear();
+          } else if (operation != null) {
+            _mediaOperations.removeWhere((_, value) => value == operation);
+          }
+        }
+        if (request != null) _finish(request, result: message['result']);
       } else {
         throw const CompanionException('protocol_error', '互联服务结果回执缺失。');
       }
@@ -405,6 +439,7 @@ final class CompanionClient {
       throw const CompanionException('input_limit', '互联服务请求超过限制。');
     }
     final request = _Request(id, Uint8List.fromList([...bytes, 10]), mutation);
+    final operation = parameters['operationId'];
     _pending[id] = request;
     request.unsubscribe = cancellation?.onCancel(
       () => _abandon(request, 'cancelled'),
@@ -423,8 +458,12 @@ final class CompanionClient {
         return;
       }
       request.sent = true;
-      if (command.startsWith('media.') && command != 'media.shutdown') {
-        _mediaMayExist = true;
+      if (command == 'media.stat' || command == 'media.thumbnail') {
+        _mediaOperations[id] = operation is String ? operation : null;
+      } else if (command == 'media.thumbnail.cancel' && operation is String) {
+        _mediaCancellations[id] = operation;
+      } else if (command == 'media.shutdown') {
+        _mediaShutdowns.add(id);
       }
       try {
         // 单个服务写入上限为 64 KiB；同一帧发出后始终完成它，避免取消制造半帧。
@@ -530,7 +569,8 @@ final class CompanionClient {
             '互联服务子进程尚未确认退出。',
           );
         }
-        _mediaMayExist = false;
+        _mediaOperations.clear();
+        _mediaCancellations.clear();
       } catch (error) {
         if (_socket != null && _failure == null && !_lifetime.isCancelled) {
           // 有效失败回执或未损坏通道上的超时不能夺走下一次确认机会。
@@ -611,7 +651,7 @@ final class CompanionClient {
         _detached && (_launchIssued || _jar != null) && _identity == null) {
       failure ??= const CompanionException(
         'cleanup_unconfirmed',
-        '原部署或媒体子进程退出事实仍未知，不能丢弃原清理责任。',
+        '尚未确认手机上的后台服务或媒体任务已退出，请检查设备连接后重试。',
       );
       trace ??= StackTrace.current;
     }
@@ -620,6 +660,8 @@ final class CompanionClient {
       unsubscribe();
     }
     _sessionCancellation.clear();
+    _mediaCancellations.clear();
+    _mediaShutdowns.clear();
     _eventsFinished = true;
     _flushEvents();
   }

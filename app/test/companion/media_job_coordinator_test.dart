@@ -213,7 +213,7 @@ void main() {
     await harness.close();
   });
 
-  test('close首败保留精确任务供重试，关闭期间不准入新任务', () async {
+  test('关闭时原任务已确认结束，取消通道失败不遗留清理责任', () async {
     final harness = _Harness();
     final original = Completer<Map<String, Object?>>();
     var attempts = 0;
@@ -226,21 +226,15 @@ void main() {
       return {'reaped': true};
     };
     final running = harness.jobs.command('media.thumbnail', _params(_first));
-    final rejected = expectLater(
-      running,
-      throwsA(_code('media_cleanup_unknown')),
-    );
-    await expectLater(
-      harness.jobs.close(),
-      throwsA(_code('media_cleanup_unknown')),
-    );
+    final rejected = expectLater(running, throwsA(_code('cancelled')));
+    await harness.jobs.close();
     await rejected;
     expect(
       () => harness.jobs.command('media.thumbnail', _params(_second)),
       throwsA(_code('disposed')),
     );
     await harness.jobs.close();
-    expect(attempts, 2);
+    expect(attempts, 1);
     expect(harness.client.unexpectedCalls, 0);
   });
 
@@ -428,31 +422,34 @@ void main() {
     expect(fixture.api.disconnected, [originalConnection.device.id]);
   });
 
-  test('真实CompanionCoordinator帧链复用同部署，任务close不关闭共享服务', () async {
+  test('真实RPC媒体错误已确认退出，任务close不再次取消或关闭共享服务', () async {
     final fixture = CoordinatorFixture();
     fixture.api.onRequest = (request) {
       if (request['command'] == 'media.stat') {
-        fixture.reply(request, {
-          'sourceStamp': {'size': 17},
-          'transformVersion': 1,
+        fixture.api.message({
+          'requestId': request['requestId'],
+          'error': {'code': 'thumbnail_api_pending', 'message': '设备不支持抽帧'},
         });
+      } else if (request['command'] == 'media.thumbnail.cancel') {
+        fixture.api.disconnectRpc();
       }
     };
     final jobs = MediaJobCoordinator(
       requireConnection: (_) => fixture.current!,
       request: fixture.companion.request,
     );
-    final result = await jobs.command(
-      'media.thumbnail',
-      _params(_first, phase: 'stat'),
+    await expectLater(
+      jobs.command('media.thumbnail', _params(_first, phase: 'stat')),
+      throwsA(_code('thumbnail_api_pending')),
     );
-    expect(result['sourceStamp'], {'size': 17});
     final frame = fixture.api.receivedCommands.single;
     expect(frame, 'media.stat');
     await jobs.close();
     expect(fixture.companion.hasActive('phone'), isTrue);
     expect(fixture.api.receivedCommands, ['media.stat']);
     expect(fixture.api.live, isNotEmpty);
+    fixture.api.disconnectRpc();
+    await fixture.api.rpcCancelled.future;
     await fixture.companion.close();
     expect(fixture.api.live, isEmpty);
     expect(fixture.api.disconnected, isEmpty);

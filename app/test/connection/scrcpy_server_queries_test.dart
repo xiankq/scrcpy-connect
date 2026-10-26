@@ -10,8 +10,9 @@ import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
 
 void main() {
-  test('真实字节上传与关闭回执先于执行，退出确认后单独删除JAR', () async {
+  test('经典shell真实上传与退出确认后删除JAR，不因缺少协议退出码阻塞', () async {
     final fixture = _Fixture();
+    fixture.api.legacyShell = true;
     final entries = await fixture.probe.encoders(
       fixture.connection,
       AdbCancellation(),
@@ -192,25 +193,36 @@ void main() {
     );
   });
 
-  test('删除失败保留本次部署，关闭重试只重试删除而不重放查询', () async {
-    final fixture = _Fixture();
-    fixture.api.removeFails = true;
-    await expectLater(
-      fixture.probe.encoders(fixture.connection, AdbCancellation()),
-      throwsA(_code('shell_failed')),
-    );
-    fixture.api.removeFails = false;
-    await fixture.probe.close();
-    expect(
-      fixture.api.commands
-          .where((value) => value.contains('list_encoders=true'))
-          .length,
-      1,
-    );
-    expect(
-      fixture.api.commands.where((value) => value.startsWith('rm ')).length,
-      2,
-    );
+  test('删除失败或回执不完整保留本次部署，重试不重放查询', () async {
+    for (final fault in [
+      'nonzero',
+      'missing',
+      'duplicate',
+      'trailing',
+      'eof',
+    ]) {
+      final fixture = _Fixture();
+      fixture.api.removeFault = fault;
+      await expectLater(
+        fixture.probe.encoders(fixture.connection, AdbCancellation()),
+        throwsA(
+          fault == 'eof'
+              ? isA<AdbException>().having(
+                  (error) => error.code,
+                  'code',
+                  'result_unknown',
+                )
+              : _code(fault == 'nonzero' ? 'shell_failed' : 'result_unknown'),
+        ),
+      );
+      fixture.api.removeFault = null;
+      await fixture.probe.close();
+      expect(fixture.api.runCount, 1);
+      expect(
+        fixture.api.commands.where((value) => value.startsWith('rm ')).length,
+        2,
+      );
+    }
   });
 
   test('安装列表保留系统标识、Unicode名称及上游长名称换行格式', () async {
@@ -615,7 +627,8 @@ final class _Api implements NativeAdbApi {
   int creationFailures = 0;
   int executionExitCode = 0;
   int? transferred;
-  bool removeFails = false;
+  bool legacyShell = false;
+  String? removeFault;
   int uploadCloseFailures = 0;
   String? executionUnknown, executionOutput;
   List<int>? executionBytes;
@@ -839,6 +852,27 @@ final class _Api implements NativeAdbApi {
     trace.add(remove ? 'remove' : 'execute');
     final key = 'shell-${++shellCount}';
     final operation = operations[key] = _Operation();
+    if (remove && removeFault != 'missing') {
+      final marker = RegExp(r'__INTEROP_QUERY_REMOVE_[a-f0-9-]+__:')
+          .firstMatch(command)
+          ?.group(0);
+      if (marker != null) {
+        final receipt = '\n$marker${removeFault == 'nonzero' ? 1 : 0}\n';
+        operation.add(
+          NativeAdbEvent(
+            kind: 'stdout',
+            done: false,
+            bytes: Uint8List.fromList(
+              utf8.encode(
+                receipt +
+                    (removeFault == 'duplicate' ? receipt : '') +
+                    (removeFault == 'trailing' ? 'unexpected\n' : ''),
+              ),
+            ),
+          ),
+        );
+      }
+    }
     if (!remove) {
       operation.add(
         NativeAdbEvent(
@@ -856,7 +890,8 @@ final class _Api implements NativeAdbApi {
         ),
       );
     }
-    if (!remove && executionUnknown == 'missing-terminal') {
+    if (remove && removeFault == 'eof' ||
+        !remove && executionUnknown == 'missing-terminal') {
       operation.endWithoutTerminal = true;
     } else {
       operation.add(
@@ -864,9 +899,10 @@ final class _Api implements NativeAdbApi {
           kind: 'exit',
           bytes: Uint8List(0),
           done: true,
-          exitCode: !remove && executionUnknown == 'unknown-exit-code'
+          exitCode:
+              legacyShell || !remove && executionUnknown == 'unknown-exit-code'
               ? null
-              : remove && removeFails
+              : remove && removeFault == 'nonzero'
               ? 1
               : remove
               ? 0

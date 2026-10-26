@@ -37,7 +37,7 @@ void main() {
     expect(await result, {'name': '相机😀'});
     final secondWritten = fixture.api.requests.stream.first;
     final rejected = expectLater(
-      fixture.companion.request('apps.icon', const {}, mutation: false),
+      fixture.companion.request('media.stat', const {}, mutation: false),
       throwsA(_code('permission_denied')),
     );
     final second = await secondWritten;
@@ -46,14 +46,15 @@ void main() {
       'error': {'code': 'permission_denied', 'message': '真实权限错误'},
     });
     await rejected;
+    fixture.api.disconnectRpc();
+    await fixture.api.rpcCancelled.future;
     await fixture.companion.close();
     expect(fixture.api.disconnected, isEmpty);
     expect(fixture.api.live, isEmpty);
   });
 
   test('并发请求按 requestId 对应，已发动作取消为未知，迟到回执不污染后继', () async {
-    final fixture = _Fixture();
-    await fixture.companion.start();
+    final fixture = await _mediaFixture();
     final seen = <Map<String, Object?>>[];
     final both = Completer<void>();
     final subscription = fixture.api.requests.stream.listen((request) {
@@ -63,8 +64,8 @@ void main() {
     final cancellation = AdbCancellation();
     final first = expectLater(
       fixture.companion.request(
-        'notifications.open',
-        const {},
+        'media.thumbnail.cancel',
+        const {'operationId': '00000000-0000-0000-0000-000000000000'},
         mutation: true,
         cancellation: cancellation,
       ),
@@ -78,10 +79,15 @@ void main() {
     await both.future;
     cancellation.cancel();
     await first;
-    fixture.api.message({'requestId': seen[0]['requestId'], 'result': '旧动作迟到'});
+    fixture.api.message({
+      'requestId': seen[0]['requestId'],
+      'result': {'reaped': true},
+    });
     fixture.api.message({'requestId': seen[1]['requestId'], 'result': '当前读取'});
     expect(await second, '当前读取');
     await subscription.cancel();
+    fixture.api.disconnectRpc();
+    await fixture.api.rpcCancelled.future;
     await fixture.companion.close();
   });
 
@@ -309,24 +315,6 @@ void main() {
     expect(fixture.api.disconnected, isEmpty);
   });
 
-  test('关闭先取得媒体子进程 reaped 回执，再结束认证 socket 与原进程', () async {
-    final fixture = _Fixture();
-    await fixture.companion.start();
-    final written = fixture.api.requests.stream.first;
-    final request = fixture.companion.request('media.stat', const {
-      'operationId': '00000000-0000-0000-0000-000000000000',
-    }, mutation: false);
-    final message = await written;
-    fixture.api.message({
-      'requestId': message['requestId'],
-      'result': {'size': 7},
-    });
-    await request;
-    await fixture.companion.close();
-    expect(fixture.api.receivedCommands, ['media.stat', 'media.shutdown']);
-    expect(fixture.api.commands.last, contains('rm -f --'));
-  });
-
   for (final firstReply in <Map<String, Object?>>[
     {
       'result': {'reaped': false},
@@ -362,6 +350,30 @@ void main() {
       expect(fixture.api.commands.last, contains('rm -f --'));
     });
   }
+
+  test('shutdown超时后迟到reaped仍结清媒体责任，断线后可重试关闭', () async {
+    final fixture = await _mediaFixture();
+    fixture.api.replyToShutdown = false;
+    final written = fixture.api.requests.stream.firstWhere(
+      (request) => request['command'] == 'media.shutdown',
+    );
+    final closing = expectLater(
+      fixture.companion.close(),
+      throwsA(_code('cleanup_unconfirmed')),
+    );
+    final shutdown = await written;
+    await closing;
+    fixture.api.message({
+      'requestId': shutdown['requestId'],
+      'result': {'reaped': true},
+    });
+    await Future<void>.delayed(Duration.zero);
+    fixture.api.disconnectRpc();
+    await fixture.api.rpcCancelled.future;
+    await fixture.companion.close();
+    expect(fixture.api.receivedCommands, ['media.stat', 'media.shutdown']);
+    expect(fixture.api.commands.last, contains('rm -f --'));
+  });
 
   test('shutdown期间通道断开仍核验精确主进程，但不把它当子进程reaped', () async {
     final fixture = await _mediaFixture();
@@ -453,15 +465,10 @@ Future<_Fixture> _mediaFixture() async {
   final fixture = _Fixture();
   await fixture.companion.start();
   final written = fixture.api.requests.stream.first;
-  final request = fixture.companion.request('media.stat', const {
+  fixture.companion.request('media.stat', const {
     'operationId': '00000000-0000-0000-0000-000000000000',
-  }, mutation: false);
-  final message = await written;
-  fixture.api.message({
-    'requestId': message['requestId'],
-    'result': {'size': 7},
-  });
-  await request;
+  }, mutation: false).ignore();
+  await written;
   return fixture;
 }
 

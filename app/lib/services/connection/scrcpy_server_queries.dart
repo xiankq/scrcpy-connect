@@ -323,13 +323,28 @@ final class ScrcpyServerQueries {
       }
       job.process = null;
     }
+    // 经典 shell 的正常 EOF 没有协议退出码；固定删除命令另取真实退出回执。
+    // _run 仍等待完整终态与流结束，不能仅凭输出中的成功字样释放部署责任。
+    final marker = '__INTEROP_QUERY_REMOVE_${_uuid()}__:';
     final result = await _run(
       job.connection,
-      'rm -f -- ${_quote(job.remote)}',
+      'rm -f -- ${_quote(job.remote)}; __query_remove_status=\$?; '
+      'printf ${_quote('\n$marker%s\n')} "\$__query_remove_status"; '
+      'exit "\$__query_remove_status"',
       maxBytes: 8192,
     );
-    if (result.exitCode == null) _fail('result_unknown', '临时查询文件删除结果未知。');
-    if (result.exitCode != 0) _fail('shell_failed', '系统未确认临时查询文件已删除。');
+    final output = latin1.decode(result.stdout);
+    final receipt = RegExp('^\n${RegExp.escape(marker)}(0|[1-9][0-9]{0,2})\n\$')
+        .firstMatch(output);
+    final status = receipt == null ? null : int.tryParse(receipt[1]!);
+    if (receipt == null ||
+        receipt.end != output.length ||
+        status == null ||
+        status > 255 ||
+        result.exitCode != null && result.exitCode != status) {
+      _fail('result_unknown', '临时查询文件删除结果未知。');
+    }
+    if (status != 0) _fail('shell_failed', '系统未确认临时查询文件已删除。');
     job.cleaned = true;
     _deployments.remove(job);
   }

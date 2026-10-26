@@ -189,7 +189,7 @@ void main() {
     expect(f.native.options.single.flexDisplay, isTrue);
   });
 
-  test('首帧在停止后才返回不能复活，停止等待该 Future 退出', () async {
+  test('首帧等待中的关闭失败可重试，迟到首帧不能复活', () async {
     f.native.media = Completer<ScrcpySessionInfo>();
     final starting = f.start();
     final failed = expectLater(
@@ -199,15 +199,25 @@ void main() {
     await _until(
       () => f.native.stages.any((value) => value.startsWith('media:')),
     );
-    var stopped = false;
-    final stop = f.owner
-        .command('session.stop', {'sessionId': _id(1)})
-        .then((_) => stopped = true);
-    await _until(() => f.native.stopped.isNotEmpty);
-    expect(stopped, isFalse);
-    f.native.media!.complete(_info('capture-1', 1));
-    await failed;
-    await stop;
+    try {
+      f.native.stopFailures = 1;
+      await expectLater(
+        f.command('session.stop').timeout(const Duration(seconds: 1)),
+        throwsA(_error('capture_cleanup_unconfirmed')),
+      );
+      var stopped = false;
+      final stop = f.command('session.stop').then((_) => stopped = true);
+      await _until(() => f.native.stopped.length == 2);
+      expect(stopped, isFalse);
+      f.native.media!.complete(_info('capture-1', 1));
+      await failed;
+      await stop;
+    } finally {
+      if (!f.native.media!.isCompleted) {
+        f.native.media!.complete(_info('capture-1', 1));
+      }
+      await failed;
+    }
     expect(await f.owner.snapshots(), isEmpty);
     expect(f.owner.hasAudioOwner('device'), isFalse);
   });
@@ -1101,6 +1111,8 @@ final class _Adb implements AdbClient {
   }) async* {
     commands.add(command);
     cancellation?.check();
+    final removal = RegExp(r'__INTEROP_QUERY_REMOVE_[a-f0-9-]+__:')
+        .firstMatch(command)?[0];
     final output = command == 'getprop ro.build.version.sdk'
         ? '$apiLevel\n'
         : command == 'wm size; wm density'
@@ -1109,6 +1121,8 @@ final class _Adb implements AdbClient {
         ? 'RootTask id=42 bounds=[0,0][1080,1920] displayId=11\n  taskId=42: org.example.app/.Main\n'
         : command.contains('list_encoders=true')
         ? _uploads.encoderOutput
+        : removal != null
+        ? '\n${removal}0\n'
         : '';
     if (output.isNotEmpty) {
       yield AdbShellEvent(

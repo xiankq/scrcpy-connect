@@ -122,7 +122,10 @@ class DocumentsCoordinator {
     if (command == 'documents.cancel') {
       final op = _active;
       final matches = op != null && op.id == params['operationId'];
-      if (matches) await _cancel(op);
+      if (matches) {
+        await _cancel(op);
+        if (op.finished.isCompleted) await _finish(op);
+      }
       final source = params['managedSourceId'];
       if (source is String && sources != null) await sources!.release(source);
       return {'cancelled': matches, 'operationId': params['operationId']};
@@ -136,6 +139,13 @@ class DocumentsCoordinator {
     }
     if (_disposed || _isDisposed()) {
       throw const ApplicationCommandException('cancelled', '页面已关闭。');
+    }
+    final previous = _active;
+    if (previous != null && previous.finished.isCompleted) {
+      await _finish(previous);
+      if (_disposed || _isDisposed()) {
+        throw const ApplicationCommandException('cancelled', '页面已关闭。');
+      }
     }
     if (_active != null) {
       throw const ApplicationCommandException(
@@ -335,9 +345,10 @@ class DocumentsCoordinator {
     String command,
     DocumentsJson params, {
     bool cancellable = true,
+    _Operation? operation,
   }) async {
     // 等待前捕获所有者；迟到超时或回复不能取消替换操作。
-    final op = _active;
+    final op = operation ?? _active;
     try {
       final response = _platform(command, {
         ...params,
@@ -379,14 +390,24 @@ class DocumentsCoordinator {
     }).whenComplete(() => op.closingScope = null);
   }
 
-  Future<void> _finish(_Operation op) async {
+  Future<void> _finish(_Operation op) =>
+      op.finishing ??= _finishOperation(op)
+          .catchError((Object error, StackTrace stack) {
+            op.finishing = null;
+            Error.throwWithStackTrace(error, stack);
+          });
+
+  Future<void> _finishOperation(_Operation op) async {
     try {
       await _closeScope(op);
       await op.cancellationRequest;
       if (op.ownerLeaseId != null) {
-        final released = await _platformCall('documents.platform.release', {
-          'operationId': op.id,
-        }, cancellable: false);
+        final released = await _platformCall(
+          'documents.platform.release',
+          {'operationId': op.id},
+          cancellable: false,
+          operation: op,
+        );
         if (released['released'] != true) {
           throw const ApplicationCommandException(
             'document_cleanup_unconfirmed',
@@ -416,9 +437,12 @@ class DocumentsCoordinator {
       // 平台 cancel 也会关闭 PFD，必须先排空复制，不能与 worker 并行关闭原始 FD。
       await _closeScope(op);
       if (op.ownerLeaseId != null) {
-        final cancelled = await _platformCall('documents.platform.cancel', {
-          'operationId': op.id,
-        }, cancellable: false);
+        final cancelled = await _platformCall(
+          'documents.platform.cancel',
+          {'operationId': op.id},
+          cancellable: false,
+          operation: op,
+        );
         if (cancelled['cancelled'] != true) {
           throw const ApplicationCommandException(
             'document_cleanup_unconfirmed',
@@ -1015,6 +1039,7 @@ class _Operation {
   Timer? timer;
   final interrupted = Completer<void>();
   Future<void>? cancellationRequest;
+  Future<void>? finishing;
   Future<T> wait<T>(Future<T> response) => Future.any<T>([
     response,
     interrupted.future.then<T>((_) {

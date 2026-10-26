@@ -86,7 +86,10 @@ final class DesktopDocumentDelivery {
       return {'resolved': true};
     }
     if (command == 'documents.cancel') {
-      if (matches) active!.cancel();
+      if (matches) {
+        active!.cancel();
+        if (active.finished.isCompleted) await _finish(active);
+      }
       return {'cancelled': matches};
     }
     throw const ApplicationCommandException(
@@ -96,6 +99,10 @@ final class DesktopDocumentDelivery {
   }
 
   Future<Json> write(Json params) async {
+    final previous = _active;
+    if (!_closed && previous != null && previous.finished.isCompleted) {
+      await _finish(previous);
+    }
     if (_closed || _active != null) {
       throw const ApplicationCommandException(
         'documents_busy',
@@ -175,8 +182,7 @@ final class DesktopDocumentDelivery {
       op.pending = null;
       emit({'operationId': op.id, 'pending': null});
       try {
-        await op.scope?.close();
-        _active = null;
+        await _finish(op);
       } catch (error) {
         status = 'result_unknown';
         op.errors.add({'message': '桌面复制资源尚未确认关闭：$error'});
@@ -359,14 +365,18 @@ final class DesktopDocumentDelivery {
     return destination;
   }
 
+  Future<void> _finish(_DesktopSave op) async {
+    await op.scope?.close();
+    if (identical(_active, op)) _active = null;
+  }
+
   Future<void> dispose() async {
     _closed = true;
     final op = _active;
     if (op == null) return;
     op.cancel();
     await op.finished.future;
-    await op.scope?.close();
-    _active = null;
+    await _finish(op);
   }
 }
 

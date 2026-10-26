@@ -965,6 +965,9 @@ final class SessionCoordinator {
       unawaited(close.catchError((Object _, StackTrace _) {}));
     }
     final result = () async {
+      // 关闭失败可能无法唤醒首帧或控制等待；先报告失败并释放停止重试入口，
+      // 原操作及捕获仍登记在此窗口，后续停止继续沿原句柄排空。
+      await Future.wait(earlyCloses.values);
       while (slot.operations.isNotEmpty) {
         await Future.wait(slot.operations.toList());
       }

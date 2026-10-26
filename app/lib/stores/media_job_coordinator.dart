@@ -159,16 +159,22 @@ final class MediaJobCoordinator {
   }) async {
     try {
       // 不把页面取消令牌交给 RPC：它可能只结束等待，不能证明帧或远端进程未执行。
-      return _Reply.value(
-        await _request(
-          job.device,
-          command,
-          params,
-          allowStart: allowStart,
-          expectedConnection: job.connection,
-        ),
+      final result = await _request(
+        job.device,
+        command,
+        params,
+        allowStart: allowStart,
+        expectedConnection: job.connection,
       );
+      // 原任务成功同样证明子进程已退出；即使结果已撤销，也保留清理事实。
+      if (command == 'media.stat' || command == 'media.thumbnail') {
+        job.reaped = true;
+      }
+      return _Reply.value(result);
     } catch (error, stack) {
+      if (error is CompanionException && error.mediaReaped) {
+        job.reaped = true;
+      }
       return _Reply.failure(error, stack);
     }
   }
@@ -241,13 +247,20 @@ final class MediaJobCoordinator {
           {'operationId': job.operation},
           allowStart: false,
         );
-        final reply = await cancellation.timeout(cleanupTimeout);
+        final reply = await Future.any<_Reply>([
+          cancellation,
+          job.execution!.then<_Reply>(
+            (reply) => job.reaped ? reply : cancellation,
+          ),
+        ]).timeout(cleanupTimeout);
         if (reply.error != null || reply.value?['reaped'] != true) {
           job.cancelReply = null;
-          throw const ApplicationCommandException(
-            'media_cleanup_unknown',
-            '远端媒体进程尚未确认退出。',
-          );
+          if (!job.reaped) {
+            throw const ApplicationCommandException(
+              'media_cleanup_unknown',
+              '远端媒体进程尚未确认退出。',
+            );
+          }
         }
         job.reaped = true;
       }

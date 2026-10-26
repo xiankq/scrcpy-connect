@@ -129,6 +129,7 @@ class CoordinatorApi implements NativeAdbApi {
   bool sendReady = true;
   bool uploadFailure = false;
   bool disconnectOnShutdown = false;
+  bool replyToShutdown = true;
   String? rpcId;
   Set<String> get live => operations.entries
       .where((entry) => !entry.value.closed)
@@ -144,6 +145,7 @@ class CoordinatorApi implements NativeAdbApi {
   void raw(Uint8List bytes) => operations[rpcId]!.add(
     NativeAdbEvent(kind: 'data', bytes: bytes, done: false),
   );
+  void disconnectRpc() => operations[rpcId]!.close();
   void message(Map<String, Object?> message, {bool split = false}) {
     final bytes = Uint8List.fromList(utf8.encode('${jsonEncode(message)}\n'));
     if (split) {
@@ -242,7 +244,7 @@ class CoordinatorApi implements NativeAdbApi {
           );
           if (disconnectOnShutdown) {
             operations[rpcId]!.close();
-          } else {
+          } else if (replyToShutdown) {
             this.message({
               'requestId': message['requestId'],
               ...shutdownReplies.isEmpty

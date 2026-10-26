@@ -29,28 +29,79 @@ ApplicationRequest _journal({
       };
 };
 
+Fixture _desktopFixture() {
+  final fixture = Fixture();
+  fixture.local.addAll({
+    '/cache/a': {'kind': 'file', 'size': 3},
+    '/target': {'kind': 'directory'},
+  });
+  fixture.nativeFiles.onStat = (path) async {
+    final entry = fixture.local[utf8.decode(path)];
+    if (entry == null) {
+      throw const LocalFileException(LocalFileErrorCode.notFound, 'not found');
+    }
+    return LocalFileStat(
+      identity: identity(entry),
+      freeBytes: BigInt.from(1000000000),
+    );
+  };
+  return fixture;
+}
+
 void main() {
+  for (final cancelFirst in [false, true]) {
+    test(
+      'desktop save ${cancelFirst ? 'cancellation' : 'retry'} recovers failed cleanup before another save',
+      () async {
+        final fixture = _desktopFixture();
+        var failing = true;
+        fixture.nativeFiles.onCloseScope = (_) async {
+          if (failing) {
+            throw const LocalFileException(
+              LocalFileErrorCode.cleanupUnconfirmed,
+              'scope still closing',
+            );
+          }
+        };
+        final desktop = DesktopDocumentDelivery(
+          files: fixture.files,
+          pick: (_, _) async => '/target/a',
+          emit: (_) {},
+        );
+        addTearDown(() async {
+          failing = false;
+          await desktop.dispose();
+        });
+        final params = {
+          'operationId': 'old',
+          'localPath': '/cache/a',
+          'kind': 'file',
+          'name': 'a',
+        };
+        final result = await desktop.write(params);
+        expect(result['status'], 'result_unknown');
+        await expectLater(
+          desktop.write({...params, 'operationId': 'blocked'}),
+          throwsA(isA<LocalFileException>()),
+        );
+        failing = false;
+        if (cancelFirst) {
+          await desktop.request('documents.cancel', {'operationId': 'old'});
+        }
+        fixture.local.remove('/target/a');
+        expect(
+          (await desktop.write({...params, 'operationId': 'new'}))['status'],
+          'saved',
+        );
+        expect(result['status'], 'result_unknown');
+      },
+    );
+  }
+
   test('a full receipt that cannot fit falls back to durable unknown without writing again', () async {
     var receipts = 0;
-    final fixture = Fixture();
-    fixture.local.addAll({
-      '/cache/a': {'kind': 'file', 'size': 3},
-      '/target': {'kind': 'directory'},
-      '/target/a': {'kind': 'file', 'size': 7},
-    });
-    fixture.nativeFiles.onStat = (path) async {
-      final entry = fixture.local[utf8.decode(path)];
-      if (entry == null) {
-        throw const LocalFileException(
-          LocalFileErrorCode.notFound,
-          'not found',
-        );
-      }
-      return LocalFileStat(
-        identity: identity(entry),
-        freeBytes: BigInt.from(1000000000),
-      );
-    };
+    final fixture = _desktopFixture();
+    fixture.local['/target/a'] = {'kind': 'file', 'size': 7};
     late final DesktopDocumentDelivery desktop;
     desktop = DesktopDocumentDelivery(
       files: fixture.files,
