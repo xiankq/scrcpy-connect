@@ -1,9 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:scrcpy_connect/services/files/system_file_share.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
@@ -36,7 +34,8 @@ class TransferExportActions extends StatelessWidget {
               ? '已取回本机暂存，尚未保存到系统位置。系统可能清理暂存内容。'
               : '已保存至 ${value(current, 'localPath')}',
         ),
-        if (Platform.isAndroid && current['destinationScope'] == 'privateCache')
+        if (supportsSystemDocumentSave &&
+            current['destinationScope'] == 'privateCache')
           FilledButton.icon(
             onPressed: () => DocumentExportRoute(
               taskId: taskId,
@@ -63,35 +62,33 @@ class TransferExportActions extends StatelessWidget {
             label: const Text('用本机应用打开'),
           ),
           const SizedBox(height: DesignTokens.spacingSm),
-          OutlinedButton.icon(
-            onPressed: () async {
-              try {
-                if (current['destinationScope'] == 'privateCache') {
-                  await controller.execute(
-                    ApplicationCommand.mediaCacheRetain,
-                    {'localPath': value(current, 'localPath')},
+          if (supportsSystemFileShare)
+            OutlinedButton.icon(
+              onPressed: () async {
+                try {
+                  final result = await sharePreparedFile(
+                    context,
+                    controller,
+                    value(current, 'localPath'),
                   );
+                  if (context.mounted) feedback(context, result);
+                } catch (error) {
+                  if (context.mounted) {
+                    feedback(context, '系统分享失败：$error');
+                  }
                 }
-                await SharePlus.instance.share(
-                  ShareParams(files: [XFile(value(current, 'localPath'))]),
-                );
-              } catch (error) {
-                if (context.mounted) {
-                  feedback(context, '系统分享失败：$error');
-                }
-              }
-            },
-            icon: const Icon(
-              LucideIcons.share2,
-              size: DesignTokens.componentIconActionSize,
+              },
+              icon: const Icon(
+                LucideIcons.share2,
+                size: DesignTokens.componentIconActionSize,
+              ),
+              label: const Text('系统分享'),
             ),
-            label: const Text('系统分享'),
-          ),
         ],
       ],
       if (current['canExportPartial'] == true &&
           (current['destinationScope'] != 'privateCache' || cacheReady) &&
-          Platform.isAndroid) ...[
+          supportsSystemDocumentSave) ...[
         StateNote(
           '这是已核验但不完整的本机暂存。系统保存不会补齐失败、变化或跳过的项目。',
           icon: LucideIcons.circleAlert,

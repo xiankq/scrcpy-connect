@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/pages/transfers/details/widgets/document_export_form.dart';
+import 'package:scrcpy_connect/services/files/system_file_share.dart';
+import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
@@ -24,7 +25,7 @@ class DocumentExportPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PageFrame(
-    title: '保存到系统位置',
+    title: !supportsSystemDocumentSave ? '系统分享原文件' : '保存到系统位置',
     child: DocumentExportForm(
       controller: controller,
       localPath: localPath,

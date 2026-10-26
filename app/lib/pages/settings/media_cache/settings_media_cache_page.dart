@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/router/app_router.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/services/files/system_file_share.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:design_system/design_system.dart';
@@ -41,6 +45,7 @@ class MediaCachePage extends HookWidget {
           final protected = bytes('protectedBytes');
           final reclaimable = bytes('reclaimableBytes');
           final reserved = bytes('reservedBytes');
+          final protectedItems = objects(data['protectedItems']);
           return GroupedListView(
             padding: const EdgeInsets.all(DesignTokens.spacingMd),
             children: [
@@ -61,6 +66,13 @@ class MediaCachePage extends HookWidget {
                       ),
                       const SizedBox(height: DesignTokens.spacingXs),
                       Text('暂存预算 ${_size(budget)}'),
+                      Text(
+                        data['spaceVerified'] == false
+                            ? '当前可用空间待核验'
+                            : '本次可用 ${_size(bytes('availableBytes'))}',
+                      ),
+                      if (data['spaceVerified'] == false)
+                        const StateNote('当前无法核验本机实际空间，新的原件准备暂时停止。'),
                       const SizedBox(height: DesignTokens.spacingMd),
                       Semantics(
                         label: '暂存使用比例',
@@ -109,49 +121,118 @@ class MediaCachePage extends HookWidget {
                 ],
               ),
               const SizedBox(height: DesignTokens.spacingLg),
-              FilledButton.icon(
-                onPressed: busy.value || reclaimable == 0
-                    ? null
-                    : () async {
-                        if (!await confirm(
-                              context,
-                              '清理可回收暂存？',
-                              '正在使用和已交给其他应用的内容会保留。下次查看已清理的内容时，将从手机重新获取。',
-                              action: '清理暂存',
-                            ) ||
-                            !context.mounted) {
-                          return;
-                        }
-                        busy.value = true;
-                        try {
-                          final result = await controller.execute(
-                            ApplicationCommand.mediaCacheClear,
-                          );
-                          if (!context.mounted) return;
-                          final deleted =
-                              (result['deletedBytes'] as num?)?.toInt() ?? 0;
-                          outcome.value = deleted == 0
-                              ? '本次没有可回收内容，使用中的暂存已保留。'
-                              : '已回收 ${_size(deleted)}，受保护内容已保留。';
-                          revision.value++;
-                        } catch (error) {
-                          if (context.mounted) {
-                            feedback(context, '清理未完成：$error');
+              if (reclaimable == 0)
+                const StateNote('当前没有可清理项目。受保护内容仍在使用或等待外部读取，保存到系统位置也不会自动解除保护。'),
+              if (reclaimable > 0)
+                FilledButton.icon(
+                  onPressed: busy.value || reclaimable == 0
+                      ? null
+                      : () async {
+                          if (!await confirm(
+                                context,
+                                '清理可回收暂存？',
+                                '正在使用和已交给其他应用的内容会保留。下次查看已清理的内容时，将从手机重新获取。',
+                                action: '清理暂存',
+                              ) ||
+                              !context.mounted) {
+                            return;
                           }
-                        } finally {
-                          if (context.mounted) busy.value = false;
-                        }
-                      },
-                icon: busy.value
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator.adaptive(
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(LucideIcons.brushCleaning),
-                label: Text(busy.value ? '正在清理' : '清理可回收暂存'),
-              ),
+                          busy.value = true;
+                          try {
+                            final result = await controller.execute(
+                              ApplicationCommand.mediaCacheClear,
+                            );
+                            if (!context.mounted) return;
+                            final deleted =
+                                (result['deletedBytes'] as num?)?.toInt() ?? 0;
+                            outcome.value = deleted == 0
+                                ? '本次没有可回收内容，使用中的暂存已保留。'
+                                : '已回收 ${_size(deleted)}，受保护内容已保留。';
+                            revision.value++;
+                          } catch (error) {
+                            if (context.mounted) {
+                              feedback(context, '清理未完成：$error');
+                            }
+                          } finally {
+                            if (context.mounted) busy.value = false;
+                          }
+                        },
+                  icon: busy.value
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator.adaptive(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(LucideIcons.brushCleaning),
+                  label: Text(busy.value ? '正在清理' : '清理可回收暂存'),
+                ),
+              if (protectedItems.isNotEmpty) const SectionTitle('受保护原件'),
+              for (final item in protectedItems)
+                ContentPanel(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        value(item, 'name', '暂存原件'),
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      Text(
+                        '${_cacheSourceLabel(controller, item)} · ${_size((item['bytes'] as num?)?.toInt() ?? 0)}',
+                      ),
+                      if (value(item, 'sourcePath').isNotEmpty)
+                        Text(value(item, 'sourcePath')),
+                      StateNote(value(item, 'reason', '正在使用，继续保留')),
+                      Wrap(
+                        spacing: DesignTokens.spacingSm,
+                        children: [
+                          if (value(item, 'transferId').isNotEmpty)
+                            TextButton(
+                              onPressed: () => TransferDetailsRoute(
+                                taskId: value(item, 'transferId'),
+                              ).push<void>(context),
+                              child: const Text('查看传输'),
+                            ),
+                          if (supportsSystemDocumentSave &&
+                              item['canExport'] == true &&
+                              value(item, 'transferId').isNotEmpty)
+                            TextButton(
+                              onPressed: () => DocumentExportRoute(
+                                taskId: value(item, 'transferId'),
+                              ).push<void>(context),
+                              child: const Text('保存到系统位置'),
+                            ),
+                          if (supportsSystemFileShare &&
+                              item['canShare'] == true)
+                            TextButton(
+                              onPressed: busy.value
+                                  ? null
+                                  : () async {
+                                      busy.value = true;
+                                      try {
+                                        final result = await sharePreparedFile(
+                                          context,
+                                          controller,
+                                          value(item, 'localPath'),
+                                        );
+                                        if (context.mounted) {
+                                          feedback(context, result);
+                                        }
+                                      } catch (error) {
+                                        if (context.mounted) {
+                                          feedback(context, '系统分享未确认完成：$error');
+                                        }
+                                      } finally {
+                                        if (context.mounted) busy.value = false;
+                                      }
+                                    },
+                              child: const Text('系统分享'),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               if (outcome.value != null) ...[
                 const SizedBox(height: DesignTokens.spacingMd),
                 StateNote(outcome.value!),
@@ -172,4 +253,14 @@ String _size(int bytes) {
   if (bytes < 1024) return '$bytes B';
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
   return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+String _cacheSourceLabel(AppController controller, Json item) {
+  final source = value(item, 'sourceLabel', '来源暂不可核验');
+  final device = controller
+      .snapshot()
+      .devices
+      .where((device) => device['id'] == source)
+      .firstOrNull;
+  return device == null ? source : deviceName(device);
 }

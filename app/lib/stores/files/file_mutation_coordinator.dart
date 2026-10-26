@@ -20,18 +20,27 @@ final class FileMutationCoordinator {
     String device,
     String path, {
     required String destination,
-  }) => _run(device, 'rename', [
-    path,
-  ], destination: FilePaths.remote(destination));
+    required FileStamp expected,
+  }) => _run(
+    device,
+    'rename',
+    [path],
+    destination: FilePaths.remote(destination),
+    expected: {path: expected},
+  );
 
-  Future<void> delete(String device, List<String> paths) =>
-      _run(device, 'delete', paths);
+  Future<void> delete(
+    String device,
+    List<String> paths, {
+    required Map<String, FileStamp> expected,
+  }) => _run(device, 'delete', paths, expected: expected);
 
   Future<void> _run(
     String device,
     String action,
     List<String> paths, {
     String destination = '',
+    Map<String, FileStamp> expected = const {},
   }) async {
     if (_closed) throw const FileFailure('closed', '文件变更已关闭。');
     if (_deviceStops.containsKey(device) ||
@@ -48,6 +57,11 @@ final class FileMutationCoordinator {
       throw const FileFailure('invalid_argument', '文件选择必须为1至1000项。');
     }
     final selected = paths.map(FilePaths.remote).toList(growable: false);
+    final snapshots = Map<String, FileStamp>.unmodifiable(expected);
+    if (action != 'mkdir' &&
+        selected.any((path) => snapshots[path]?.identity == null)) {
+      throw const FileFailure('source_changed', '缺少所选文件的身份，请重新选择。');
+    }
     final job = _MutationWork(device);
     _operations.add(job);
     try {
@@ -59,7 +73,12 @@ final class FileMutationCoordinator {
       job.cancellation.check();
       for (final path in selected) {
         job.cancellation.check();
-        await batch.mutate(action, path, destination: destination);
+        await batch.mutate(
+          action,
+          path,
+          destination: destination,
+          expected: snapshots[path],
+        );
       }
       job.cancellation.check();
     } finally {

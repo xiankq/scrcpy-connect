@@ -3,21 +3,9 @@ use super::*;
 use interop_adb::protocol::{self, Frame};
 
 async fn handshake(requested: AdbConnectOptions, burst: bool, comment: &str) {
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory
-        .path()
-        .join("host.pem")
-        .to_string_lossy()
-        .into_owned();
-    let identity = Identity::generate().unwrap();
+    let (_directory, path) = super::handshake_tests::identity_path().await;
+    let identity = Identity::from_pem(&std::fs::read_to_string(&path).unwrap()).unwrap();
     let expected_key = identity.public_key(comment).unwrap();
-    adb_replace_identity(
-        path.clone(),
-        identity.to_pkcs8_pem().unwrap().to_string(),
-        None,
-    )
-    .await
-    .unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let (release, released) = tokio::sync::oneshot::channel();

@@ -531,6 +531,8 @@ pub enum AdbFileExecutionKind {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AdbFileExecutionStamp {
+    /// Opaque dev/inode/ctime identity, absent for legacy SYNC metadata.
+    pub identity: Option<String>,
     pub mode: u32,
     pub size: u64,
     pub modified_seconds: i64,
@@ -2599,6 +2601,9 @@ mod server_owner_tests;
 #[path = "local_files.rs"]
 mod local_files;
 
+#[path = "local_storage.rs"]
+mod local_storage;
+
 /// 本机文件对象的精确身份；路径与显示名称不授予删除或提交权限。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LocalFileKind {
@@ -2681,6 +2686,11 @@ pub struct LocalFileCopyResult {
     pub identity: LocalFileIdentity,
     pub source_identity: LocalFileIdentity,
 }
+/// 查询现存绝对目录所在文件系统对当前调用方可用的容量；不创建目录或文件范围。
+pub async fn adb_local_storage_free_bytes(path: String) -> Result<u64, LocalFileError> {
+    local_storage::free_bytes(path).await
+}
+
 pub async fn adb_local_scope_open(
     roots: Vec<Vec<u8>>,
     owner_key: String,

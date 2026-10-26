@@ -3,30 +3,9 @@ use super::*;
 use interop_adb::protocol::{self, Frame};
 use tokio::io::AsyncReadExt;
 
-async fn prepared_identity() -> (tempfile::TempDir, String) {
-    static PEM: OnceLock<String> = OnceLock::new();
-    let pem = PEM.get_or_init(|| {
-        Identity::generate()
-            .unwrap()
-            .to_pkcs8_pem()
-            .unwrap()
-            .to_string()
-    });
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory
-        .path()
-        .join("host.pem")
-        .to_string_lossy()
-        .into_owned();
-    adb_replace_identity(path.clone(), pem.clone(), None)
-        .await
-        .unwrap();
-    (directory, path)
-}
-
 #[tokio::test]
 async fn closed_tcp_port_is_explicitly_refused_for_connect_and_pair() {
-    let (_directory, path) = prepared_identity().await;
+    let (_directory, path) = super::handshake_tests::identity_path().await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap().to_string();
     drop(listener);
@@ -120,7 +99,7 @@ async fn cancelled_official_handshake_is_confirmed_after_its_real_socket_closes(
 
 #[tokio::test]
 async fn accepted_tcp_waiting_for_cnxn_has_a_handshake_timeout_and_releases_socket() {
-    let (_directory, path) = prepared_identity().await;
+    let (_directory, path) = super::handshake_tests::identity_path().await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap().to_string();
     let worker = tokio::spawn(connect_tcp(

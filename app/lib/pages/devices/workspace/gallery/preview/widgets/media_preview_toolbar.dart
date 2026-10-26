@@ -1,6 +1,7 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:scrcpy_connect/services/files/system_file_share.dart';
 
 import 'media_controls_protection.dart';
 
@@ -68,12 +69,13 @@ class MediaPreviewToolbar extends StatelessWidget {
                       onPressed: onSave,
                       icon: const Icon(LucideIcons.download),
                     ),
-                    GlassActionIcon(
-                      tooltip: '系统分享',
-                      color: Theme.of(context).colorScheme.onSurface,
-                      onPressed: onShare,
-                      icon: const Icon(LucideIcons.share2),
-                    ),
+                    if (supportsSystemFileShare)
+                      GlassActionIcon(
+                        tooltip: '系统分享',
+                        color: Theme.of(context).colorScheme.onSurface,
+                        onPressed: onShare,
+                        icon: const Icon(LucideIcons.share2),
+                      ),
                   ],
                 ),
               ],

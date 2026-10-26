@@ -2,7 +2,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'support/test_controller.dart';
 
-import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/files/import/devices_workspace_files_import_page.dart';
 
 import 'support/router_test_app.dart';
 
@@ -40,16 +40,14 @@ void main() {
         RouterTestApp(
           controller: controller,
           theme: ConnectTokens.theme(Brightness.light),
-          home: FilesPage(
+          home: DocumentImportPage(
             controller: controller,
             device: const {'id': 'phone'},
+            destination: '/sdcard',
+            onSubmitted: () {},
           ),
         ),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('发送到手机'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('发送本机文件夹'));
       await tester.pumpAndSettle();
       expect(find.text('发送到手机'), findsOneWidget);
       expect(find.text('准备发送一个文件夹'), findsOneWidget);

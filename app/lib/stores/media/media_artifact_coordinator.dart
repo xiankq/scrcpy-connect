@@ -273,7 +273,13 @@ final class MediaArtifactCoordinator {
     final directory = Directory(
       p.join(cache.root.path, 'media', '$key-$version'),
     );
-    final lookup = await cache.writer(directory.path, 0);
+    final lookup = await cache.writer(
+      directory.path,
+      0,
+      name: p.posix.basename(path),
+      sourceLabel: device,
+      sourcePath: path,
+    );
     task.writers.add(lookup);
     try {
       final metadata = await _metadata(directory);
@@ -286,7 +292,13 @@ final class MediaArtifactCoordinator {
               metadata['sha256'],
             )) {
           final lease = await cache.reserve([
-            FileCacheReservation(directory.path, 0),
+            FileCacheReservation(
+              directory.path,
+              0,
+              name: p.posix.basename(path),
+              sourceLabel: device,
+              sourcePath: path,
+            ),
           ]);
           task.resultLease = lease;
           return {
@@ -304,7 +316,13 @@ final class MediaArtifactCoordinator {
       await lookup.close();
       task.writers.remove(lookup);
     }
-    final writer = await cache.writer(directory.path, source.size + 4096);
+    final writer = await cache.writer(
+      directory.path,
+      source.size + 4096,
+      name: p.posix.basename(path),
+      sourceLabel: device,
+      sourcePath: path,
+    );
     task.writers.add(writer);
     final extension = p.posix.extension(path).replaceFirst('.', '');
     final suffix = RegExp(r'^[a-zA-Z0-9]{1,12}$').hasMatch(extension)
@@ -341,7 +359,13 @@ final class MediaArtifactCoordinator {
     });
     task.check();
     final lease = await cache.reserve([
-      FileCacheReservation(directory.path, 0),
+      FileCacheReservation(
+        directory.path,
+        0,
+        name: p.posix.basename(path),
+        sourceLabel: device,
+        sourcePath: path,
+      ),
     ]);
     task.resultLease = lease;
     return {
@@ -396,7 +420,13 @@ final class MediaArtifactCoordinator {
     final directory = Directory(
       p.join(cache.root.path, 'media', 'thumbnails', '$key-$version'),
     );
-    final lookup = await cache.writer(directory.path, 0);
+    final lookup = await cache.writer(
+      directory.path,
+      0,
+      name: p.posix.basename(path),
+      sourceLabel: device,
+      sourcePath: path,
+    );
     task.writers.add(lookup);
     try {
       final metadata = await _metadata(directory);
@@ -418,7 +448,13 @@ final class MediaArtifactCoordinator {
               dimensions.$1 <= maxSize &&
               dimensions.$2 <= maxSize) {
             final lease = await cache.reserve([
-              FileCacheReservation(directory.path, 0),
+              FileCacheReservation(
+                directory.path,
+                0,
+                name: p.posix.basename(path),
+                sourceLabel: device,
+                sourcePath: path,
+              ),
             ]);
             task.resultLease = lease;
             return _thumbnailReceipt(
@@ -437,7 +473,13 @@ final class MediaArtifactCoordinator {
       await lookup.close();
       task.writers.remove(lookup);
     }
-    final writer = await cache.writer(directory.path, _maxThumbnail + 4096);
+    final writer = await cache.writer(
+      directory.path,
+      _maxThumbnail + 4096,
+      name: p.posix.basename(path),
+      sourceLabel: device,
+      sourcePath: path,
+    );
     task.writers.add(writer);
     final response = await _rpc('thumbnail', params, task);
     transferred += _count(response['rpcBytesReceived']);
@@ -498,7 +540,13 @@ final class MediaArtifactCoordinator {
     });
     task.check();
     final lease = await cache.reserve([
-      FileCacheReservation(directory.path, 0),
+      FileCacheReservation(
+        directory.path,
+        0,
+        name: p.posix.basename(path),
+        sourceLabel: device,
+        sourcePath: path,
+      ),
     ]);
     task.resultLease = lease;
     return {

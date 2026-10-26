@@ -35,6 +35,13 @@ void main() {
                   {
                     'name': 'literal�.txt',
                     'path': '/sdcard/literal�.txt',
+                    'sourceIdentity': '1-2-3-4',
+                    'sourceStamp': {
+                      'identity': '1-2-3-4',
+                      'mode': 0x8000,
+                      'size': 4,
+                      'modifiedSeconds': 1,
+                    },
                     'canOpen': true,
                     'canManage': true,
                   },
@@ -42,6 +49,9 @@ void main() {
               }
             : {};
       });
+      controller.devices = [
+        {'id': 'phone', 'status': 'connected'},
+      ];
       await tester.pumpWidget(
         RouterTestApp(
           controller: controller,
@@ -58,7 +68,7 @@ void main() {
       await tester.longPress(find.text('broken�.txt'));
       await tester.pumpAndSettle();
       expect(find.byType(FileDetailsPage), findsNothing);
-      expect(find.byTooltip('删除所选'), findsNothing);
+      expect(find.widgetWithText(TextButton, '删除'), findsNothing);
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
       await mouse.moveTo(tester.getCenter(find.text('literal�.txt')));
@@ -77,11 +87,15 @@ void main() {
       await tester.tap(find.text('broken�.txt'));
       await tester.pumpAndSettle();
       expect(find.text('已选择 1 项'), findsOneWidget);
-      await tester.tap(find.byTooltip('删除所选'));
+      await tester.tap(find.widgetWithText(TextButton, '删除'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('删除'));
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
       await tester.pumpAndSettle();
       expect(deletes.single['paths'], ['/sdcard/literal�.txt']);
+      expect(
+        (deletes.single['expectedStamps'] as Map)['/sdcard/literal�.txt'],
+        containsPair('identity', '1-2-3-4'),
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();

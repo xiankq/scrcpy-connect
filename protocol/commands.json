@@ -328,7 +328,8 @@
     {
       "name": "files.delete",
       "required": {
-        "deviceId": "string"
+        "deviceId": "string",
+        "expectedStamps": "object"
       },
       "requiresVerifiedState": true
     },
@@ -362,7 +363,8 @@
     {
       "name": "files.rename",
       "required": {
-        "deviceId": "string"
+        "deviceId": "string",
+        "expectedStamp": "object"
       },
       "requiresVerifiedState": true
     },

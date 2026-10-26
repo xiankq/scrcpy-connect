@@ -27,6 +27,23 @@ final class FileCommands {
       null => '',
       _ => throw const FileFailure('invalid_argument', '设备标识必须为字符串。'),
     };
+    FileStamp stamp(Object? value) {
+      if (value is! Map) {
+        throw const FileFailure('source_changed', '缺少所选文件快照，请重新选择。');
+      }
+      try {
+        final result = FileStamp.fromJson(Map<String, Object?>.from(value));
+        if (result.identity == null || result.identity!.isEmpty) {
+          throw const FileFailure('source_changed', '缺少所选文件身份，请重新选择。');
+        }
+        return result;
+      } on TypeError {
+        throw const FileFailure('invalid_argument', '所选文件快照无效。');
+      } on FormatException {
+        throw const FileFailure('invalid_argument', '所选文件快照无效。');
+      }
+    }
+
     switch (command) {
       case 'media.cache.acquire':
         return {
@@ -147,6 +164,7 @@ final class FileCommands {
         await mutations.rename(
           device(),
           path,
+          expected: stamp(params['expectedStamp']),
           destination:
               params['destination'] as String? ??
               params['newPath'] as String? ??
@@ -162,6 +180,10 @@ final class FileCommands {
         await mutations.delete(
           device(),
           (params['paths']! as List).cast<String>(),
+          expected: {
+            for (final path in (params['paths']! as List).cast<String>())
+              path: stamp((params['expectedStamps'] as Map?)?[path]),
+          },
         );
         return {'ok': true};
       default:

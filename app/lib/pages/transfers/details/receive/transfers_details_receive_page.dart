@@ -8,18 +8,23 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/pages/transfers/details/widgets/document_export_form.dart';
+import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
-import 'package:scrcpy_connect/pages/transfers/details/widgets/file_delivery_path.dart';
+import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
-import 'package:scrcpy_connect/pages/transfers/details/widgets/original_file_header.dart';
+import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
+
+import 'dart:async';
+import 'dart:io';
+
+import 'package:scrcpy_connect/services/files/system_file_share.dart';
 
 /// 准备原件时任务身份保持不变，缓存下载完成后才作为明确系统交付的来源。
 class ReceiveContentPage extends HookWidget {
@@ -37,9 +42,11 @@ class ReceiveContentPage extends HookWidget {
   Widget build(BuildContext context) {
     final busy = useState(false);
     final shareResult = useState<String?>(null);
+    final shareReviewed = useState(false);
     final taskId = value(task, 'id', value(task, 'transferId'));
+    final autoShareAttempted = useMemoized(() => <String>{}, [taskId]);
     return PageFrame(
-      title: share ? '分享原文件' : '保存原文件',
+      title: share && supportsSystemFileShare ? '分享原文件' : '保存原文件',
       child: CommandView(
         controller: controller,
         command: 'transfers.get',
@@ -68,6 +75,53 @@ class ReceiveContentPage extends HookWidget {
                   !cacheLease.hasError &&
                   value(current, 'localPath').isNotEmpty;
               final localPath = value(current, 'localPath');
+              Future<void> deliverShare() async {
+                if (busy.value || !ready || current['kind'] == 'directory') {
+                  return;
+                }
+                busy.value = true;
+                shareReviewed.value = false;
+                try {
+                  final result = await sharePreparedFile(
+                    context,
+                    controller,
+                    localPath,
+                  );
+                  if (context.mounted) shareResult.value = result;
+                } catch (error) {
+                  if (context.mounted) shareResult.value = '系统分享未确认完成：$error';
+                } finally {
+                  if (context.mounted) busy.value = false;
+                }
+              }
+
+              final route = ModalRoute.of(context);
+              final owned =
+                  value(data, 'id', value(data, 'transferId')) == taskId &&
+                  data['deviceId'] == task['deviceId'] &&
+                  data['direction'] == 'pull' &&
+                  data['destinationScope'] == 'privateCache';
+              useEffect(() {
+                if (!owned ||
+                    !ready ||
+                    (!share || !supportsSystemFileShare) ||
+                    current['kind'] == 'directory' ||
+                    route?.isCurrent == false ||
+                    autoShareAttempted.contains(taskId)) {
+                  return null;
+                }
+                var active = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!active ||
+                      !context.mounted ||
+                      route?.isCurrent == false ||
+                      !autoShareAttempted.add(taskId)) {
+                    return;
+                  }
+                  unawaited(deliverShare());
+                });
+                return () => active = false;
+              }, [owned, ready, share, taskId, route?.isCurrent]);
               if (value(data, 'id', value(data, 'transferId')) != taskId ||
                   data['deviceId'] != task['deviceId'] ||
                   data['direction'] != 'pull' ||
@@ -78,7 +132,9 @@ class ReceiveContentPage extends HookWidget {
                   message: '当前记录不是这次取回的本机暂存。请返回原设备重新选择。',
                 );
               }
-              if (ready && !share) {
+              if (ready &&
+                  supportsSystemDocumentSave &&
+                  (!share || !supportsSystemFileShare)) {
                 return DocumentExportForm(
                   key: ValueKey('$taskId:$localPath'),
                   controller: controller,
@@ -130,7 +186,11 @@ class ReceiveContentPage extends HookWidget {
                         const SizedBox(height: DesignTokens.spacingSm),
                         FileDeliveryPath(
                           sourceLabel: value(current, 'sourceLabel', '被控设备'),
-                          systemLabel: share ? '接收应用' : '系统副本',
+                          systemLabel:
+                              share && supportsSystemFileShare ||
+                                  !supportsSystemDocumentSave
+                              ? '接收应用'
+                              : '系统副本',
                           staged: ready,
                           systemState: switch (status) {
                             'failed' ||
@@ -223,48 +283,48 @@ class ReceiveContentPage extends HookWidget {
                               ),
                             ),
                     ),
-                  if (ready && share && current['kind'] != 'directory') ...[
+                  if (!pending &&
+                      !ready &&
+                      isMediaCacheAdmissionFailure(value(current, 'errorCode')))
+                    MediaCacheBlocker(controller: controller),
+                  if (ready && !share && !supportsSystemDocumentSave)
+                    const StateNote('原文件已取回本机暂存；此主控当前通过系统分享交给其他应用保存。'),
+                  if (ready &&
+                      supportsSystemFileShare &&
+                      (share || !supportsSystemDocumentSave) &&
+                      current['kind'] != 'directory') ...[
                     const StateNote('将原文件副本交给系统选择的应用。分享面板返回不代表接收应用已经发送或保存。'),
                     if (shareResult.value != null)
                       StateNote(shareResult.value!),
+                    if (shareResult.value != null)
+                      CheckboxListTile(
+                        value: shareReviewed.value,
+                        onChanged: busy.value
+                            ? null
+                            : (value) => shareReviewed.value = value == true,
+                        title: const Text('我已在接收应用核对，仍需再次分享'),
+                      ),
                     FilledButton.icon(
-                      onPressed: busy.value
+                      onPressed:
+                          busy.value ||
+                              shareResult.value != null && !shareReviewed.value
                           ? null
-                          : () async {
-                              busy.value = true;
-                              try {
-                                await controller.execute(
-                                  ApplicationCommand.mediaCacheRetain,
-                                  {'localPath': localPath},
-                                );
-                                final result = await SharePlus.instance.share(
-                                  ShareParams(files: [XFile(localPath)]),
-                                );
-                                if (!context.mounted) return;
-                                shareResult.value = switch (result.status) {
-                                  ShareResultStatus.success =>
-                                    '已交给系统选择的应用，请在接收应用核对。',
-                                  ShareResultStatus.dismissed =>
-                                    '已关闭系统分享，原文件暂存仍保留。',
-                                  ShareResultStatus.unavailable =>
-                                    '系统没有提供分享结果，请在接收应用核对；不会自动重复分享。',
-                                };
-                              } catch (error) {
-                                if (context.mounted) {
-                                  shareResult.value = '系统分享未确认完成：$error';
-                                }
-                              } finally {
-                                if (context.mounted) busy.value = false;
-                              }
-                            },
+                          : deliverShare,
                       icon: const Icon(LucideIcons.share2),
                       label: Text(
                         shareResult.value == null ? '交给系统分享' : '重新打开系统分享',
                       ),
                     ),
                   ],
-                  if (ready && share && current['kind'] == 'directory')
-                    const StateNote('文件夹请先保存到系统位置，再从文件应用中选择需要分享的内容。'),
+                  if (ready &&
+                      supportsSystemFileShare &&
+                      (share || !supportsSystemDocumentSave) &&
+                      current['kind'] == 'directory')
+                    StateNote(
+                      Platform.isAndroid
+                          ? '文件夹请先保存到系统位置，再从文件应用中选择需要分享的内容。'
+                          : '当前主控尚不支持将暂存文件夹保存到系统位置，请在手机上处理或从文件页选择其他传输方式。',
+                    ),
                   const SizedBox(height: DesignTokens.spacingMd),
                   TextButton(
                     onPressed: () =>

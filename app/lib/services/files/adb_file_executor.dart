@@ -113,6 +113,7 @@ final class AdbFileExecutor
   }
 
   FileStamp _stamp(adb.AdbFileExecutionStamp value) => FileStamp(
+    identity: value.identity,
     mode: value.mode,
     size: value.size,
     modifiedSeconds: value.modifiedSeconds,
@@ -538,7 +539,12 @@ final class _AdbMutationBatch implements FileMutationBatch {
   bool _closed = false;
 
   @override
-  Future<String> mutate(String action, String path, {String destination = ''}) {
+  Future<String> mutate(
+    String action,
+    String path, {
+    String destination = '',
+    FileStamp? expected,
+  }) {
     cancellation.check();
     if (_closed) throw const FileFailure('cancelled', '文件变更已停止。');
     if (_executing != null) {
@@ -549,7 +555,7 @@ final class _AdbMutationBatch implements FileMutationBatch {
     _executing = finished.future;
     unawaited(() async {
       try {
-        result.complete(await _mutate(action, path, destination));
+        result.complete(await _mutate(action, path, destination, expected));
       } catch (error, stack) {
         result.completeError(error, stack);
       } finally {
@@ -560,19 +566,44 @@ final class _AdbMutationBatch implements FileMutationBatch {
     return result.future;
   }
 
-  Future<String> _mutate(String action, String path, String destination) async {
+  Future<String> _mutate(
+    String action,
+    String path,
+    String destination,
+    FileStamp? expected,
+  ) async {
     final kind = switch (action) {
       'mkdir' => adb.AdbFileExecutionKind.mkdir,
       'rename' => adb.AdbFileExecutionKind.rename,
       'delete' => adb.AdbFileExecutionKind.delete,
       _ => throw const FileFailure('unsupported', '不支持的文件变更。'),
     };
+    if (action != 'mkdir' && expected?.identity == null) {
+      throw const FileFailure('source_changed', '缺少所选文件的身份，请重新选择。');
+    }
     adb.AdbFileSession? session;
     try {
       // 不把取消交给创建后的检查：迟到句柄必须先由本批登记，关闭失败才能精确重试。
       session = await connection.client.services
           .files(connection.device)
-          .execute(executor._request(kind, path, destination: destination));
+          .execute(
+            executor._request(
+              kind,
+              path,
+              destination: destination,
+              expected: expected == null
+                  ? null
+                  : adb.AdbFileExecutionStamp(
+                      identity: expected.identity,
+                      mode: expected.mode,
+                      size: expected.size,
+                      modifiedSeconds: expected.modifiedSeconds,
+                      modifiedNanos: expected.modifiedNanos,
+                      nanosecondPrecision:
+                          expected.modifiedResolutionNanos == 1,
+                    ),
+            ),
+          );
       _sessions.add(session);
       cancellation.check();
       if (_closed) throw const FileFailure('cancelled', '文件变更已停止。');

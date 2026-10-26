@@ -133,6 +133,24 @@ final class DeliveryJournal {
     ],
   );
 
+  /// 已有保护记录的只读呈现，不创建新交付或重新获得系统授权。
+  Future<List<Map<String, Object?>>> get protectedSources => _serial(
+    () async => [
+      for (final record in _records.values)
+        if (record['status'] == 'pending' ||
+            record['status'] == 'result_unknown' ||
+            (record['result'] as _Json?)?['partialDestinationPossible'] == true)
+          {
+            'path': record['localPath'],
+            'name': record['name'],
+            'sourceLabel': record['sourceId'] == 'local' ? '本机原件' : '取回的手机原件',
+            'reason': record['status'] == 'pending'
+                ? '系统保存仍在执行'
+                : '系统保存结果待核对，原件继续保留',
+          },
+    ],
+  );
+
   Future<Map<String, dynamic>> command(
     String command,
     Map<String, dynamic> params,

@@ -207,7 +207,10 @@ enum ApplicationCommand {
   filesDelete(
     "files.delete",
     requiresVerifiedState: true,
-    required: {'deviceId': ProtocolFieldType.string},
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'expectedStamps': ProtocolFieldType.object,
+    },
   ),
   filesList("files.list", required: {'deviceId': ProtocolFieldType.string}),
   filesMkdir(
@@ -221,7 +224,10 @@ enum ApplicationCommand {
   filesRename(
     "files.rename",
     requiresVerifiedState: true,
-    required: {'deviceId': ProtocolFieldType.string},
+    required: {
+      'deviceId': ProtocolFieldType.string,
+      'expectedStamp': ProtocolFieldType.object,
+    },
   ),
   filesSearchCancel(
     "files.search.cancel",

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/platform/application_platform.dart';
 import 'package:scrcpy_connect/services/files/document_scope_recovery.dart';
+import 'package:scrcpy_connect/services/files/desktop_document_delivery.dart';
 import 'package:scrcpy_connect/stores/files/document_sources.dart';
 import 'package:scrcpy_connect/stores/files/documents_coordinator.dart';
 
@@ -285,8 +286,8 @@ void main() {
     }
   }, skip: !Platform.isLinux);
 
-  if (!Platform.isAndroid) {
-    test('非 Android 启动恢复不打开 SDK 或访问文档平台 channel', () async {
+  if (Platform.isLinux) {
+    test('非 Android 恢复不访问文档 channel，Linux 同 owner 排空旧复制', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
             channel,
@@ -296,9 +297,32 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, null);
       });
-      await ApplicationPlatform.recoverDocuments(
-        localFiles: () async => throw StateError('不应创建本机 scope。'),
-      );
+      final root = await Directory.systemTemp.createTemp('desktop-recovery-');
+      final files = await createNativeScrcpyLocalFiles();
+      try {
+        final source = await File(p.join(root.path, 'source'))
+            .writeAsBytes([1, 2, 3]);
+        final part = p.join(root.path, '.old-isolate.part');
+        final scope = await files.openScope(
+          scopeKey: DesktopDocumentDelivery.scopeKey,
+          allowedRoots: [utf8.encode(root.path)],
+        );
+        await scope.copy(
+          source: LocalFileEndpoint.path(utf8.encode(source.path)),
+          target: LocalFileEndpoint.part(utf8.encode(part)),
+          maxBytes: 3,
+          timeout: const Duration(seconds: 5),
+        );
+        expect(await File(part).exists(), isTrue);
+        await ApplicationPlatform.recoverDocuments(
+          localFiles: createNativeScrcpyLocalFiles,
+        );
+        expect(await File(part).exists(), isFalse);
+        expect(await source.readAsBytes(), [1, 2, 3]);
+      } finally {
+        await files.close();
+        await root.delete(recursive: true);
+      }
     });
   }
 

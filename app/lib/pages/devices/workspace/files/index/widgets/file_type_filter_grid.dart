@@ -11,7 +11,7 @@ class FileTypeFilterGrid extends StatelessWidget {
   });
 
   final FileTypeFilter selected;
-  final ValueChanged<FileTypeFilter> onSelected;
+  final ValueChanged<FileTypeFilter>? onSelected;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -54,9 +54,11 @@ class FileTypeFilterGrid extends StatelessWidget {
               icon: entry.$3,
               color: entry.$4,
               selected: selected == entry.$1,
-              onTap: () => onSelected(
-                selected == entry.$1 ? FileTypeFilter.all : entry.$1,
-              ),
+              onTap: onSelected == null
+                  ? null
+                  : () => onSelected!(
+                      selected == entry.$1 ? FileTypeFilter.all : entry.$1,
+                    ),
             ),
         ],
       );
@@ -81,7 +83,7 @@ class _FileTypeTile extends StatelessWidget {
   final IconData icon;
   final Color color;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

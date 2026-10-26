@@ -14,19 +14,29 @@ class GalleryScanSummary extends StatelessWidget {
     required this.scan,
     required this.device,
     required this.onRestart,
+    this.onUpdate,
   });
 
   final GalleryScanController scan;
   final Json device;
   final VoidCallback onRestart;
+  final VoidCallback? onUpdate;
 
   @override
   Widget build(BuildContext context) {
     final data = scan.result ?? <String, dynamic>{};
     final status = value(data, 'status');
+    final progress = scan.progress;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (scan.showingPrevious)
+          Text(
+            '上次检查结果 · ${value(data, 'checkedAt', value(data, 'startedAt', '检查时间未记录'))}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        if (scan.hasUpdate)
+          TextButton(onPressed: onUpdate, child: const Text('更新照片')),
         Text(
           scan.scanning
               ? '正在检查手机中的照片与视频'
@@ -45,7 +55,7 @@ class GalleryScanSummary extends StatelessWidget {
           builder: (context, constraints) {
             final details = Text(
               scan.scanning
-                  ? '已检查 ${data['visitedDirectories'] ?? 0} 个文件夹、${data['visitedEntries'] ?? 0} 项'
+                  ? '已检查 ${progress['visitedDirectories'] ?? 0} 个文件夹、${progress['visitedEntries'] ?? 0} 项'
                   : '已显示 ${scan.items.length} / ${data['total'] ?? 0} 项 · 按文件修改时间排列',
               style: Theme.of(context).textTheme.bodySmall,
             );

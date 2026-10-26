@@ -70,6 +70,7 @@ fn request(kind: Kind, path: &[u8], scope: &str) -> AdbFileExecutionRequest {
 }
 fn stamp() -> AdbFileExecutionStamp {
     AdbFileExecutionStamp {
+        identity: None,
         mode: 0o100644,
         size: 7,
         modified_seconds: -1,

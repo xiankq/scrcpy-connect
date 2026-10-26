@@ -100,52 +100,87 @@ void main() {
     }
   });
 
-  testWidgets('a replacement scan rejects an old in-flight page', (
-    tester,
-  ) async {
-    final latePage = Completer<Json>();
-    final cancellations = <String>[];
-    var starts = 0;
-    Json file(String name) => {
-      'name': name,
-      'path': '/sdcard/$name',
-      'mime': 'image/jpeg',
-    };
-    final controller = await _mount(tester, (
-      command, [
-      params = const {},
-    ]) async {
-      if (command == 'media.scan.cancel') {
-        cancellations.add(value(params, 'scanId'));
-        return {};
+  testWidgets(
+    'a replacement scan retains the visible collection until explicit adoption and rejects an old page',
+    (tester) async {
+      final latePage = Completer<Json>();
+      final cancellations = <String>[];
+      var starts = 0;
+      var pages = 0;
+      Json file(String name) => {
+        'name': name,
+        'path': '/sdcard/$name',
+        'mime': 'image/jpeg',
+      };
+      final controller = await _mount(tester, (
+        command, [
+        params = const {},
+      ]) async {
+        if (command == 'media.scan.cancel') {
+          cancellations.add(value(params, 'scanId'));
+          return {};
+        }
+        if (command != 'media.list') return {};
+        if (params['scanId'] != null) {
+          pages++;
+          if (pages == 1) return latePage.future;
+          final offset = params['offset']! as int;
+          return _receipt(
+            offset: offset,
+            items: [file(offset == 1 ? 'remaining.jpg' : 'last.jpg')],
+            next: offset == 1 ? 2 : null,
+            total: 3,
+          );
+        }
+        starts++;
+        if (starts == 3) {
+          throw const RequestFailure('offline', '后台检查启动失败');
+        }
+        return starts == 1
+            ? _receipt(items: [file('old.jpg')], next: 1, total: 3)
+            : _receipt(id: 'new-scan', items: [file('new.jpg')]);
+      });
+      try {
+        await tester.ensureVisible(find.text('加载更多'));
+        await tester.tap(find.text('加载更多'));
+        await tester.pump();
+        await tester.tap(find.byTooltip('重新检查相册'));
+        await tester.pumpAndSettle();
+        latePage.complete(
+          _receipt(offset: 1, items: [file('late.jpg')], total: 2),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('old.jpg'), findsOneWidget);
+        expect(find.text('new.jpg'), findsNothing);
+        expect(find.text('更新照片'), findsOneWidget);
+        await tester.tap(find.byTooltip('重新检查相册'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('后台检查启动失败'), findsOneWidget);
+        await tester.ensureVisible(find.text('加载更多'));
+        await tester.tap(find.text('加载更多'));
+        await tester.pumpAndSettle();
+        expect(find.text('remaining.jpg'), findsOneWidget);
+        expect(find.textContaining('后台检查启动失败'), findsOneWidget);
+        await tester.tap(find.byTooltip('重新检查相册'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('加载更多'));
+        await tester.tap(find.text('加载更多'));
+        await tester.pumpAndSettle();
+        expect(find.text('last.jpg'), findsOneWidget);
+        expect(find.text('更新照片'), findsOneWidget);
+        await tester.tap(find.text('更新照片'));
+        await tester.pumpAndSettle();
+        expect(find.text('new.jpg'), findsOneWidget);
+        expect(find.text('old.jpg'), findsNothing);
+        expect(find.text('late.jpg'), findsNothing);
+        expect(cancellations, contains('scan-a'));
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!latePage.isCompleted) latePage.complete(_receipt());
+        await _dispose(tester, controller);
       }
-      if (command != 'media.list') return {};
-      if (params['scanId'] != null) return latePage.future;
-      starts++;
-      return starts == 1
-          ? _receipt(items: [file('old.jpg')], next: 1, total: 2)
-          : _receipt(id: 'new-scan', items: [file('new.jpg')]);
-    });
-    try {
-      await tester.ensureVisible(find.text('加载更多'));
-      await tester.tap(find.text('加载更多'));
-      await tester.pump();
-      await tester.tap(find.byTooltip('重新检查相册'));
-      await tester.pumpAndSettle();
-      latePage.complete(
-        _receipt(offset: 1, items: [file('late.jpg')], total: 2),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('new.jpg'), findsOneWidget);
-      expect(find.text('old.jpg'), findsNothing);
-      expect(find.text('late.jpg'), findsNothing);
-      expect(cancellations, contains('scan-a'));
-      expect(tester.takeException(), isNull);
-    } finally {
-      if (!latePage.isCompleted) latePage.complete(_receipt());
-      await _dispose(tester, controller);
-    }
-  });
+    },
+  );
 
   testWidgets('leaving before scan admission retires the exact late scan', (
     tester,
@@ -206,56 +241,82 @@ void main() {
       await _dispose(tester, controller);
     }
   });
-  testWidgets('changing device clears the old album selection', (tester) async {
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
-      if (command != 'media.list') return {};
-      return {
-        ..._receipt(
-          id: 'scan-${params['deviceId']}',
-          items: [
-            {
-              'name': 'same.jpg',
-              'path': '/sdcard/same.jpg',
-              'mime': 'image/jpeg',
-            },
-          ],
-        ),
-        'deviceId': params['deviceId'],
-      };
-    });
-    Future<void> show(String id) async {
-      await tester.pumpWidget(
-        TestProviderScope(
-          controller: controller,
-          child: MaterialApp(
-            theme: ConnectTokens.theme(Brightness.light),
-            home: GalleryPage(
-              controller: controller,
-              device: {'id': id, 'name': id},
+  testWidgets(
+    'changing device isolates album selection and restores its own scroll',
+    (tester) async {
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        if (command != 'media.list') return {};
+        return {
+          ..._receipt(
+            id: 'scan-${params['deviceId']}',
+            items: [
+              {
+                'name': 'same.jpg',
+                'path': '/sdcard/same.jpg',
+                'mime': 'image/jpeg',
+              },
+              for (var index = 0; index < 80; index++)
+                {
+                  'name': 'image-$index.jpg',
+                  'path': '/sdcard/image-$index.jpg',
+                  'mime': 'image/jpeg',
+                },
+            ],
+          ),
+          'deviceId': params['deviceId'],
+        };
+      });
+      Future<void> show(String id) async {
+        await tester.pumpWidget(
+          TestProviderScope(
+            controller: controller,
+            child: MaterialApp(
+              theme: ConnectTokens.theme(Brightness.light),
+              home: GalleryPage(
+                controller: controller,
+                device: {'id': id, 'name': id},
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-    }
+        );
+        await tester.pumpAndSettle();
+      }
 
-    try {
-      await show('phone-a');
-      await tester.tap(find.byTooltip('选择照片'));
-      await tester.pump();
-      await tester.tap(find.text('same.jpg'));
-      await tester.pumpAndSettle();
-      expect(find.text('已选择 1 项'), findsOneWidget);
-      await show('phone-b');
-      expect(find.text('已选择 1 项'), findsNothing);
-      expect(find.text('保存原文件'), findsNothing);
-      expect(find.byTooltip('选择照片'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    } finally {
-      await _dispose(tester, controller);
-    }
-  });
+      try {
+        await show('phone-a');
+        await tester.tap(find.byTooltip('选择照片'));
+        await tester.pump();
+        await tester.tap(find.text('same.jpg'));
+        await tester.pumpAndSettle();
+        expect(find.text('已选择 1 项'), findsOneWidget);
+        final firstScroll = tester
+            .widget<CustomScrollView>(find.byType(CustomScrollView))
+            .controller!;
+        firstScroll.jumpTo(800);
+        await tester.pump();
+        await show('phone-b');
+        final secondScroll = tester
+            .widget<CustomScrollView>(find.byType(CustomScrollView))
+            .controller!;
+        expect(secondScroll.offset, 0);
+        expect(find.text('已选择 1 项'), findsNothing);
+        expect(find.text('保存原文件'), findsNothing);
+        expect(find.byTooltip('选择照片'), findsOneWidget);
+        await show('phone-a');
+        expect(
+          tester
+              .widget<CustomScrollView>(find.byType(CustomScrollView))
+              .controller!
+              .offset,
+          800,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _dispose(tester, controller);
+      }
+    },
+  );
 }

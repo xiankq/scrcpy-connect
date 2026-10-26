@@ -33,6 +33,9 @@ final class MediaCacheGate {
 }
 
 typedef CacheProtectedPaths = FutureOr<Iterable<String>> Function();
+typedef CacheProtectionDetails =
+    FutureOr<List<Map<String, Object?>>> Function();
+typedef CacheFreeBytes = Future<int?> Function(String root);
 typedef CacheConfigurationCommit = Future<void> Function(
   File temporary,
   File destination,
@@ -59,11 +62,15 @@ final class AppMediaCache implements FileCacheLeases {
     this.gate,
     this._protectedPaths,
     this._commitConfiguration,
+    this._freeBytes,
+    this._protectionDetails,
   );
   final Directory root;
   final MediaCacheGate gate;
   final CacheProtectedPaths _protectedPaths;
   final CacheConfigurationCommit _commitConfiguration;
+  final CacheFreeBytes? _freeBytes;
+  final CacheProtectionDetails? _protectionDetails;
   late _Configuration _configuration;
   List<int>? _storedConfigurationBytes;
   bool _storageUnknown = false;
@@ -79,6 +86,8 @@ final class AppMediaCache implements FileCacheLeases {
     MediaCacheGate? gate,
     CacheProtectedPaths? protectedPaths,
     CacheConfigurationCommit? commitConfiguration,
+    CacheFreeBytes? freeBytes,
+    CacheProtectionDetails? protectionDetails,
   }) async {
     await _plainPath(root.path);
     await root.create(recursive: true);
@@ -90,6 +99,8 @@ final class AppMediaCache implements FileCacheLeases {
           (temporary, destination) async {
             await temporary.rename(destination.path);
           },
+      freeBytes,
+      protectionDetails,
     );
     await owner.gate.runExclusive(() async {
       final file = owner._configurationFile;
@@ -225,7 +236,15 @@ final class AppMediaCache implements FileCacheLeases {
           );
         }
         requested = _add(requested, reservation.bytes);
-        records.add(_Reservation(path, reservation.bytes));
+        records.add(
+          _Reservation(
+            path,
+            reservation.bytes,
+            reservation.name,
+            reservation.sourceLabel,
+            reservation.sourcePath,
+          ),
+        );
       }
       final snapshot = requested > 0 ? await _snapshot() : null;
       // 读取已有内容只检查选中子树，不为了建立只读租约遍历和驱逐全部缓存。
@@ -263,8 +282,24 @@ final class AppMediaCache implements FileCacheLeases {
     return _leases.remove(lease) != null;
   }
 
-  Future<CacheWriter> writer(String path, int bytes) async =>
-      CacheWriter._(this, await reserve([FileCacheReservation(path, bytes)]));
+  Future<CacheWriter> writer(
+    String path,
+    int bytes, {
+    String? name,
+    String? sourceLabel,
+    String? sourcePath,
+  }) async => CacheWriter._(
+    this,
+    await reserve([
+      FileCacheReservation(
+        path,
+        bytes,
+        name: name,
+        sourceLabel: sourceLabel,
+        sourcePath: sourcePath,
+      ),
+    ]),
+  );
 
   /// DeliveryJournal 持有同一个 gate 后调用，再在 gate 内提交 pending 记录。
   /// 此方法不排队；protectedPaths 回调也必须遵循 gate → journal 的锁顺序。
@@ -378,14 +413,110 @@ final class AppMediaCache implements FileCacheLeases {
     return _Snapshot(files, protected, reserved);
   }
 
+  Future<int?> _readFreeBytes() async {
+    if (_freeBytes == null) return null;
+    try {
+      final free = await _freeBytes(root.path);
+      return free != null && free >= 0 ? free : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, Object?>> _statusLocked() async {
     final snapshot = await _snapshot();
+    final details = [
+      ...?await _protectionDetails?.call(),
+      for (final record in _leases.values.expand((records) => records))
+        if (record.name != null)
+          {
+            'path': record.path,
+            'name': record.name,
+            'sourceLabel': record.sourceLabel,
+            'sourcePath': record.sourcePath,
+          },
+    ];
+    final free = await _readFreeBytes();
+    final budgetAvailable = max(
+      0,
+      _configuration.budget - snapshot.protectedBytes - snapshot.reserved,
+    );
+    final roots = snapshot.protected.toList()
+      ..sort((a, b) => a.length.compareTo(b.length));
+    final groups = <String>[];
+    for (final path in roots) {
+      if (!groups.any((parent) => _contains(parent, path))) groups.add(path);
+    }
+    final items = <Map<String, Object?>>[];
+    for (final path in groups) {
+      final files = snapshot.files
+          .where((file) => _contains(path, file.path))
+          .toList();
+      if (files.isEmpty) continue;
+      final matching = details
+          .where(
+            (detail) =>
+                detail['path'] is String &&
+                (_contains(path, detail['path'] as String) ||
+                    _contains(detail['path'] as String, path)),
+          )
+          .toList();
+      final source = matching.isEmpty
+          ? const <String, Object?>{}
+          : matching.first;
+      final external = _configuration.retained.any(
+        (retained) => _overlaps(retained, path),
+      );
+      items.add({
+        'localPath': path,
+        'name': source['name'] ?? p.basename(path),
+        'sourceLabel': source['sourceLabel'] ?? '来源暂不可核验',
+        'sourcePath': source['sourcePath'],
+        'transferId': source['transferId'],
+        'bytes': files.fold<int>(0, (total, file) => _add(total, file.bytes)),
+        'reason': external
+            ? '系统分享或打开后的读取寿命未知，继续保留原件'
+            : matching
+                  .map((item) => item['reason'])
+                  .whereType<String>()
+                  .toSet()
+                  .join('；')
+                  .isNotEmpty
+            ? matching
+                  .map((item) => item['reason'])
+                  .whereType<String>()
+                  .toSet()
+                  .join('；')
+            : '预览、传输或准备仍在使用',
+        'canExport': source['canExport'] == true,
+        'canShare':
+            source['canExport'] == true &&
+            FileSystemEntity.typeSync(path, followLinks: false) ==
+                FileSystemEntityType.file,
+        'externalLifetimeUnknown': external,
+      });
+    }
     return {
       'budgetBytes': _configuration.budget,
       'usedBytes': snapshot.used,
       'protectedBytes': snapshot.protectedBytes,
       'reclaimableBytes': snapshot.used - snapshot.protectedBytes,
       'reservedBytes': snapshot.reserved,
+      'freeBytes': free,
+      'availableBytes': free == null
+          ? budgetAvailable
+          : min(
+              budgetAvailable,
+              max(
+                0,
+                free +
+                    snapshot.used -
+                    snapshot.protectedBytes -
+                    snapshot.reserved,
+              ),
+            ),
+      'spaceVerified': _freeBytes == null || free != null,
+      'protectedItems': items,
       'retainedShareCount': _configuration.retained.length,
       'retentionReason': _configuration.retained.isEmpty
           ? null
@@ -394,21 +525,54 @@ final class AppMediaCache implements FileCacheLeases {
   }
 
   Future<void> _admit(_Snapshot snapshot, int bytes) async {
-    final required = _add(_add(snapshot.used, snapshot.reserved), bytes);
-    if (required <= _configuration.budget) return;
-    if (_add(_add(snapshot.protectedBytes, snapshot.reserved), bytes) >
-        _configuration.budget) {
-      throw const MediaCacheFailure(
-        'cache_budget_exceeded',
-        '媒体缓存空间不足；正在使用、保存或系统分享的内容会继续保留。',
+    final budgetAvailable = max(
+      0,
+      _configuration.budget - snapshot.protectedBytes - snapshot.reserved,
+    );
+    final free = await _readFreeBytes();
+    if (_freeBytes != null && free == null) {
+      throw MediaCacheFailure(
+        'cache_space_unknown',
+        '需要 ${_storageSize(bytes)}，当前无法核验本机可用空间，请检查存储后重试。',
       );
     }
-    await _delete(snapshot, required - _configuration.budget);
-    final after = await _snapshot();
-    if (_add(_add(after.used, after.reserved), bytes) > _configuration.budget) {
-      throw const MediaCacheFailure(
+    final reclaimable = snapshot.used - snapshot.protectedBytes;
+    final available = free == null
+        ? budgetAvailable
+        : min(budgetAvailable, max(0, free + reclaimable - snapshot.reserved));
+    if (bytes > available) {
+      throw MediaCacheFailure(
         'cache_budget_exceeded',
-        '媒体缓存空间不足；未覆盖仍在使用的内容。',
+        '需要 ${_storageSize(bytes)}，当前可用 ${_storageSize(available)}。${reclaimable > 0 ? '可清理 ${_storageSize(reclaimable)} 的可回收暂存，或减少选择后重试。' : '当前没有可清理项目；可减少选择、在原手机打开，或使用已有的其他传输方式。'}受保护原件会继续保留。',
+      );
+    }
+    final required = _add(_add(snapshot.used, snapshot.reserved), bytes);
+    final needed = max(
+      0,
+      max(
+        required - _configuration.budget,
+        free == null ? 0 : bytes + snapshot.reserved - free,
+      ),
+    );
+    if (needed > 0) await _delete(snapshot, needed);
+    final after = await _snapshot();
+    final remainingFree = await _readFreeBytes();
+    if (_freeBytes != null && remainingFree == null) {
+      throw MediaCacheFailure(
+        'cache_space_unknown',
+        '需要 ${_storageSize(bytes)}，当前无法核验本机可用空间，请检查存储后重试。',
+      );
+    }
+    if (_add(_add(after.used, after.reserved), bytes) > _configuration.budget ||
+        _freeBytes != null &&
+            (remainingFree == null || bytes + after.reserved > remainingFree)) {
+      final remaining = min(
+        max(0, _configuration.budget - after.used - after.reserved),
+        remainingFree == null ? 0 : max(0, remainingFree - after.reserved),
+      );
+      throw MediaCacheFailure(
+        'cache_budget_exceeded',
+        '需要 ${_storageSize(bytes)}，当前可用 ${_storageSize(remaining)}。暂存空间已变化，请减少选择或在手机上打开。',
       );
     }
   }
@@ -546,9 +710,16 @@ final class _Configuration {
 }
 
 final class _Reservation {
-  _Reservation(this.path, this.bytes);
+  _Reservation(
+    this.path,
+    this.bytes,
+    this.name,
+    this.sourceLabel,
+    this.sourcePath,
+  );
   final String path;
   final int bytes;
+  final String? name, sourceLabel, sourcePath;
   int baseline = 0;
 }
 
@@ -698,3 +869,9 @@ bool _equalBytes(List<int>? first, List<int>? second) {
   }
   return true;
 }
+
+String _storageSize(int bytes) => bytes >= 1024 * 1024
+    ? '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MiB'
+    : bytes >= 1024
+    ? '${(bytes / 1024).toStringAsFixed(2)} KiB'
+    : '$bytes B';

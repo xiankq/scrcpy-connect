@@ -841,6 +841,26 @@ class TransferCoordinator {
     return _batches().firstWhere((value) => value['batchId'] == batch);
   }
 
+  /// 暂存呈现只读取现有任务，不改变其进度、授权或保护寿命。
+  List<Map<String, Object?>> get cacheSources => [
+    for (final task in _tasks.values)
+      if (task['direction'] == 'pull' &&
+          task['destinationScope'] == 'privateCache')
+        {
+          'path': task['destination'],
+          'name': task['name'],
+          'sourceLabel': task['deviceId'],
+          'sourcePath': task['source'],
+          'transferId': task['id'],
+          'canExport': _project(task)['canExport'],
+          'reason':
+              task['errorCode'] == 'result_unknown' ||
+                  task['partialDestinationPossible'] == true
+              ? '原件取回结果待核对'
+              : '预览、传输或准备仍在使用',
+        },
+  ];
+
   Future<Map<String, Object?>> startTransfer(
     String device,
     bool push,

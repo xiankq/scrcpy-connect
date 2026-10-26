@@ -35,15 +35,10 @@ class FolderListTile extends StatelessWidget {
         horizontal: DesignTokens.spacingMd,
       ),
       selected: selected,
-      leading: selectionActive
-          ? Checkbox(
-              value: selected,
-              onChanged: manageable ? (_) => onTap() : null,
-            )
-          : const ListIconBadge(
-              icon: LucideIcons.folder,
-              backgroundColor: DesignTokens.colorListIconAmber,
-            ),
+      leading: const ListIconBadge(
+        icon: LucideIcons.folder,
+        backgroundColor: DesignTokens.colorListIconAmber,
+      ),
       title: Text(
         value(folder, 'name'),
         maxLines: 2,
@@ -57,10 +52,17 @@ class FolderListTile extends StatelessWidget {
             Text(date, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(width: DesignTokens.spacingXs),
           ],
-          Icon(
-            LucideIcons.chevronRight,
-            size: DesignTokens.componentIconSmallSize,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          SizedBox.square(
+            dimension: DesignTokens.spacingLg,
+            child: Center(
+              child: selectionActive
+                  ? _FileSelectionMark(selected: selected, enabled: manageable)
+                  : Icon(
+                      LucideIcons.chevronRight,
+                      size: DesignTokens.componentIconSmallSize,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+            ),
           ),
         ],
       ),
@@ -121,23 +123,15 @@ class FolderGridTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (selected)
-                      const ColoredBox(
-                        color: Colors.black38,
-                        child: Center(
-                          child: Icon(
-                            LucideIcons.circleCheck,
-                            color: Colors.white,
-                            size: DesignTokens.componentIconLargeSize,
-                          ),
-                        ),
-                      ),
+                    if (selectionActive && manageable)
+                      Center(child: _FileSelectionMark(selected: selected)),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: DesignTokens.spacingXs),
             GlassTooltip(
+              triggerMode: TooltipTriggerMode.manual,
               message: value(folder, 'path'),
               child: SizedBox(
                 width: double.infinity,
@@ -258,23 +252,15 @@ class FileGridTile extends StatelessWidget {
                           size: DesignTokens.componentIconActionSize,
                         ),
                       ),
-                    if (selected)
-                      ColoredBox(
-                        color: Colors.black38,
-                        child: Center(
-                          child: Icon(
-                            LucideIcons.circleCheck,
-                            color: Colors.white,
-                            size: DesignTokens.componentIconLargeSize,
-                          ),
-                        ),
-                      ),
+                    if (selectionActive && manageable)
+                      Center(child: _FileSelectionMark(selected: selected)),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: DesignTokens.spacingXs),
             GlassTooltip(
+              triggerMode: TooltipTriggerMode.manual,
               message: value(file, 'path', fileUnavailableReason(file)),
               child: SizedBox(
                 width: double.infinity,
@@ -411,16 +397,12 @@ class FileListTile extends StatelessWidget {
         horizontal: DesignTokens.spacingMd,
       ),
       selected: selected,
-      leading: selectionActive
-          ? Checkbox(
-              value: selected,
-              onChanged: manageable ? (_) => onTap() : null,
-            )
-          : ListIconBadge(
-              icon: fileKindIcon(kind),
-              backgroundColor: fileKindColor(kind),
-            ),
+      leading: ListIconBadge(
+        icon: fileKindIcon(kind),
+        backgroundColor: fileKindColor(kind),
+      ),
       title: GlassTooltip(
+        triggerMode: TooltipTriggerMode.manual,
         message: value(file, 'path'),
         child: Text(
           value(file, 'name'),
@@ -445,15 +427,54 @@ class FileListTile extends StatelessWidget {
             Text(detail, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(width: DesignTokens.spacingXs),
           ],
-          Icon(
-            LucideIcons.chevronRight,
-            size: DesignTokens.componentIconSmallSize,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          SizedBox.square(
+            dimension: DesignTokens.spacingLg,
+            child: Center(
+              child: selectionActive
+                  ? _FileSelectionMark(selected: selected, enabled: manageable)
+                  : Icon(
+                      LucideIcons.chevronRight,
+                      size: DesignTokens.componentIconSmallSize,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+            ),
           ),
         ],
       ),
       onTap: openable || selectionActive ? onTap : null,
       onLongPress: onLongPress,
+    );
+  }
+}
+
+class _FileSelectionMark extends StatelessWidget {
+  const _FileSelectionMark({required this.selected, this.enabled = true});
+  final bool selected, enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Opacity(
+      opacity: enabled ? 1 : .4,
+      child: Container(
+        width: DesignTokens.roundedLg,
+        height: DesignTokens.roundedLg,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected ? colors.primary : colors.surface,
+          border: Border.all(
+            color: selected ? colors.primary : colors.outline,
+            width: 1.5,
+          ),
+        ),
+        child: selected
+            ? Icon(
+                LucideIcons.check,
+                size: DesignTokens.roundedMd,
+                color: colors.onPrimary,
+              )
+            : null,
+      ),
     );
   }
 }

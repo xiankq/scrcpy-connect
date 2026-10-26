@@ -61,3 +61,18 @@ Future<LocalFiles> createNativeLocalFiles() async {
   await initializeNativeAdb();
   return LocalFiles(const FrbNativeLocalFiles());
 }
+
+/// 查询现存绝对目录对调用方可用的字节数；不创建目录、范围或设备连接。
+Future<BigInt> readNativeLocalStorageFreeBytes(String path) async {
+  try {
+    await initializeNativeAdb();
+    return await native.adbLocalStorageFreeBytes(path: path);
+  } on native.LocalFileError catch (error) {
+    throw LocalFileException(
+      LocalFileErrorCode.values.byName(error.code.name),
+      error.message,
+    );
+  } catch (error) {
+    throw LocalFileException(LocalFileErrorCode.io, error.toString());
+  }
+}

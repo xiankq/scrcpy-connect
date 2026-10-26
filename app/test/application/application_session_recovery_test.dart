@@ -142,12 +142,18 @@ Future<void> _expectNewActionsBlocked(
       {
         ...common,
         'paths': ['/sdcard/old-file'],
+        'expectedStamps': <String, Object?>{},
       },
     ),
     ('files.mkdir', {...common, 'path': '/sdcard/new-directory'}),
     (
       'files.rename',
-      {...common, 'path': '/sdcard/old-file', 'name': 'new-file'},
+      {
+        ...common,
+        'path': '/sdcard/old-file',
+        'name': 'new-file',
+        'expectedStamp': <String, Object?>{},
+      },
     ),
     (
       'files.push',

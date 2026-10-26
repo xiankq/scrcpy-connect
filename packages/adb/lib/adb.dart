@@ -9,6 +9,7 @@ export 'src/native/initialize.dart'
         createNativeAdbApi,
         initializeNativeAdb,
         prepareAdbIdentity,
-        createNativeLocalFiles;
+        createNativeLocalFiles,
+        readNativeLocalStorageFreeBytes;
 export 'src/native_client.dart'
     show NativeAdbClient, NativeAdbConnectionAttempt;

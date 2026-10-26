@@ -49,8 +49,10 @@ class FileStamp {
     required this.modifiedSeconds,
     this.modifiedNanos = 0,
     this.modifiedResolutionNanos = 1,
+    this.identity,
   });
   final int mode, size, modifiedSeconds, modifiedNanos;
+  final String? identity;
 
   /// 可观察时间分辨率：1 为纳秒、1000 为微秒、1e9 为秒；旧日志按纳秒保守核对。
   final int modifiedResolutionNanos;
@@ -65,6 +67,7 @@ class FileStamp {
       ? 'symlink'
       : 'unsupported';
   Map<String, Object?> toJson() => {
+    if (identity != null) 'identity': identity,
     'mode': mode,
     'size': size,
     'modifiedSeconds': modifiedSeconds,
@@ -72,6 +75,7 @@ class FileStamp {
     'modifiedResolutionNanos': modifiedResolutionNanos,
   };
   factory FileStamp.fromJson(Map<String, Object?> value) => FileStamp(
+    identity: value['identity'] as String?,
     mode: value['mode']! as int,
     size: value['size']! as int,
     modifiedSeconds: value['modifiedSeconds']! as int,
@@ -89,6 +93,7 @@ class FileStamp {
   @override
   bool operator ==(Object other) =>
       other is FileStamp &&
+      identity == other.identity &&
       mode == other.mode &&
       size == other.size &&
       modifiedSeconds == other.modifiedSeconds &&
@@ -96,6 +101,7 @@ class FileStamp {
       modifiedResolutionNanos == other.modifiedResolutionNanos;
   @override
   int get hashCode => Object.hash(
+    identity,
     mode,
     size,
     modifiedSeconds,
@@ -188,7 +194,12 @@ abstract interface class FileMutationExecutor {
 
 /// 保留本批已创建的精确执行句柄；关闭失败时必须保留本对象供重试。
 abstract interface class FileMutationBatch {
-  Future<String> mutate(String action, String path, {String destination = ''});
+  Future<String> mutate(
+    String action,
+    String path, {
+    String destination = '',
+    FileStamp? expected,
+  });
 
   /// 撤销本批准入，并等待已创建或迟到交付的执行资源实际释放。
   Future<void> close();
@@ -228,9 +239,16 @@ abstract interface class FileReadBatch implements FileExecutionResource {
 }
 
 class FileCacheReservation {
-  const FileCacheReservation(this.path, this.bytes);
+  const FileCacheReservation(
+    this.path,
+    this.bytes, {
+    this.name,
+    this.sourceLabel,
+    this.sourcePath,
+  });
   final String path;
   final int bytes;
+  final String? name, sourceLabel, sourcePath;
 }
 
 /// 本机缓存预算准入与路径租约，不另建任务状态所有者。

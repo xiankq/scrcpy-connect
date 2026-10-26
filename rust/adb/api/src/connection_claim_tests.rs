@@ -2,6 +2,21 @@
 use super::*;
 use interop_adb::protocol;
 
+fn hold_operation(op: Arc<Operation>, release: &CancellationToken) -> tokio::task::JoinHandle<()> {
+    let held = release.clone();
+    tokio::spawn(async move {
+        let _finished = Completion(op.finished.clone());
+        let stream = op
+            .client
+            .open("shell:held", OperationOptions::default())
+            .await
+            .unwrap();
+        op.stop.cancelled().await;
+        held.cancelled().await;
+        drop(stream);
+    })
+}
+
 #[tokio::test]
 async fn failed_claim_preserves_the_client_and_retry_drains_a_real_stream() {
     let (old, client, socket, writes) = cleanup_tests::connection_with_ownership(true);
@@ -83,18 +98,7 @@ async fn queued_old_disconnect_and_second_claim_do_not_take_the_successor() {
     let (id, op, _events) = operation(old.clone()).unwrap();
     let stop = op.stop.clone();
     let release = CancellationToken::new();
-    let held = release.clone();
-    let worker = tokio::spawn(async move {
-        let _finished = Completion(op.finished.clone());
-        let stream = op
-            .client
-            .open("shell:held", OperationOptions::default())
-            .await
-            .unwrap();
-        op.stop.cancelled().await;
-        held.cancelled().await;
-        drop(stream);
-    });
+    let worker = hold_operation(op, &release);
     assert_eq!(notices.recv().await, Some(protocol::OPEN));
     let claiming = tokio::spawn(adb_claim_connection(old.clone()));
     stop.cancelled().await;
@@ -167,18 +171,7 @@ fn global_close_cannot_be_escaped_by_an_inflight_claim() {
         let (_, op, _events) = operation(old.clone()).unwrap();
         let stop = op.stop.clone();
         let release = CancellationToken::new();
-        let held = release.clone();
-        let worker = tokio::spawn(async move {
-            let _finished = Completion(op.finished.clone());
-            let stream = op
-                .client
-                .open("shell:held", OperationOptions::default())
-                .await
-                .unwrap();
-            op.stop.cancelled().await;
-            held.cancelled().await;
-            drop(stream);
-        });
+        let worker = hold_operation(op, &release);
         assert_eq!(notices.recv().await, Some(protocol::OPEN));
         let claiming = tokio::spawn(adb_claim_connection(old.clone()));
         stop.cancelled().await;

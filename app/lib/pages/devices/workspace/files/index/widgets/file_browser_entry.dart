@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/files/file_access.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
@@ -18,14 +19,17 @@ class FileBrowserEntry extends StatelessWidget {
     required this.selected,
     required this.selectionActive,
     required this.onSelect,
+    required this.onBeginSelect,
     required this.onOpenDirectory,
+    this.enabled = true,
   });
 
   final AppController controller;
   final Json device;
   final Json entry;
   final bool grid, selected, selectionActive;
-  final ValueChanged<Json> onSelect;
+  final bool enabled;
+  final ValueChanged<Json> onSelect, onBeginSelect;
   final ValueChanged<String> onOpenDirectory;
 
   @override
@@ -41,7 +45,7 @@ class FileBrowserEntry extends StatelessWidget {
     void open() {
       if (selectionActive) {
         select();
-      } else if (openable) {
+      } else if (enabled && openable) {
         if (folder) {
           onOpenDirectory(path);
         } else {
@@ -53,9 +57,10 @@ class FileBrowserEntry extends StatelessWidget {
       }
     }
 
-    final onLongPress = manageable ? select : null;
+    final onLongPress = manageable ? () => onBeginSelect(entry) : null;
+    final Widget tile;
     if (folder) {
-      return grid
+      tile = grid
           ? FolderGridTile(
               folder: entry,
               selected: selected,
@@ -70,23 +75,34 @@ class FileBrowserEntry extends StatelessWidget {
               onTap: open,
               onLongPress: onLongPress,
             );
+    } else {
+      tile = grid
+          ? FileGridTile(
+              controller: controller,
+              device: device,
+              file: entry,
+              selected: selected,
+              selectionActive: selectionActive,
+              onTap: open,
+              onLongPress: onLongPress,
+            )
+          : FileListTile(
+              file: entry,
+              selected: selected,
+              selectionActive: selectionActive,
+              onTap: open,
+              onLongPress: onLongPress,
+            );
     }
-    return grid
-        ? FileGridTile(
-            controller: controller,
-            device: device,
-            file: entry,
-            selected: selected,
-            selectionActive: selectionActive,
-            onTap: open,
-            onLongPress: onLongPress,
-          )
-        : FileListTile(
-            file: entry,
-            selected: selected,
-            selectionActive: selectionActive,
-            onTap: open,
-            onLongPress: onLongPress,
-          );
+    return Semantics(
+      selected: selectionActive ? selected : null,
+      customSemanticsActions: manageable
+          ? {
+              const CustomSemanticsAction(label: '选择此项'): () =>
+                  onBeginSelect(entry),
+            }
+          : null,
+      child: GestureDetector(onSecondaryTap: onLongPress, child: tile),
+    );
   }
 }

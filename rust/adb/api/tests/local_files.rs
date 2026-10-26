@@ -16,6 +16,24 @@ async fn open_scope(root: &Path) -> String {
         .await
         .unwrap()
 }
+async fn private_scope() -> (tempfile::TempDir, String) {
+    let root = tempfile::tempdir().unwrap();
+    let scope = open_scope(root.path()).await;
+    (root, scope)
+}
+fn pipe(flags: i32) -> (OwnedFd, OwnedFd) {
+    let mut descriptors = [-1; 2];
+    assert_eq!(
+        unsafe { libc::pipe2(descriptors.as_mut_ptr(), libc::O_CLOEXEC | flags) },
+        0
+    );
+    unsafe {
+        (
+            OwnedFd::from_raw_fd(descriptors[0]),
+            OwnedFd::from_raw_fd(descriptors[1]),
+        )
+    }
+}
 fn request(source: &Path, target: &Path) -> LocalFileCopyRequest {
     LocalFileCopyRequest {
         source_path: Some(path(source)),
@@ -82,8 +100,7 @@ async fn authorized_root_under_search_only_ancestor_supports_durable_file_operat
 #[tokio::test]
 async fn copy_capacity_is_reserved_before_open_and_released_only_after_confirmed_cleanup() {
     use std::os::unix::fs::PermissionsExt;
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let source = root.path().join("source");
     fs::write(&source, b"bounded ownership").unwrap();
     let extra = root.path().join("extra");
@@ -151,8 +168,7 @@ async fn scope_root_limit_rejects_before_opening_any_path() {
 
 #[tokio::test]
 async fn retained_identity_cannot_publish_a_replacement_or_remove_it() {
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let source = root.path().join("source");
     let part = root.path().join("part");
     let target = root.path().join("target");
@@ -191,8 +207,7 @@ async fn retained_identity_cannot_publish_a_replacement_or_remove_it() {
 }
 #[tokio::test]
 async fn source_fd_is_duplicated_before_return_and_respects_its_exact_range() {
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let source = root.path().join("source");
     let part = root.path().join("part");
     fs::write(&source, b"prefix-CONTENT-suffix").unwrap();
@@ -214,8 +229,7 @@ async fn source_fd_is_duplicated_before_return_and_respects_its_exact_range() {
 #[tokio::test]
 async fn independent_ranges_of_one_source_descriptor_do_not_share_or_change_its_cursor() {
     use std::io::{Seek, SeekFrom};
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let source = root.path().join("source");
     let first_part = root.path().join("first-part");
     let second_part = root.path().join("second-part");
@@ -253,8 +267,7 @@ async fn sparse_source_above_four_gib_retains_its_size_and_exact_high_offset_ran
         io::{Seek, SeekFrom},
         os::unix::fs::{FileExt, MetadataExt},
     };
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let directory = root.path().join("large");
     fs::create_dir(&directory).unwrap();
     let source = directory.join("source");
@@ -313,17 +326,10 @@ async fn sparse_source_above_four_gib_retains_its_size_and_exact_high_offset_ran
 }
 #[tokio::test]
 async fn provider_pipe_target_is_explicitly_unsupported_without_writing_or_closing_it() {
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let source = root.path().join("source");
     fs::write(&source, b"must not be written").unwrap();
-    let mut descriptors = [-1; 2];
-    assert_eq!(
-        unsafe { libc::pipe2(descriptors.as_mut_ptr(), libc::O_CLOEXEC | libc::O_NONBLOCK) },
-        0
-    );
-    let read = unsafe { OwnedFd::from_raw_fd(descriptors[0]) };
-    let write = unsafe { OwnedFd::from_raw_fd(descriptors[1]) };
+    let (read, write) = pipe(libc::O_NONBLOCK);
     let mut options = request(&source, &root.path().join("unused"));
     options.target_path = None;
     options.target_fd = Some(write.as_raw_fd());
@@ -345,15 +351,8 @@ async fn provider_pipe_target_is_explicitly_unsupported_without_writing_or_closi
 }
 #[tokio::test]
 async fn cancellation_drains_a_real_pipe_without_closing_the_platform_descriptor() {
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
-    let mut descriptors = [-1; 2];
-    assert_eq!(
-        unsafe { libc::pipe2(descriptors.as_mut_ptr(), libc::O_CLOEXEC) },
-        0
-    );
-    let read = unsafe { OwnedFd::from_raw_fd(descriptors[0]) };
-    let write = unsafe { OwnedFd::from_raw_fd(descriptors[1]) };
+    let (root, scope) = private_scope().await;
+    let (read, write) = pipe(0);
     let part = root.path().join("part");
     let mut options = request(&root.path().join("unused"), &part);
     options.source_path = None;
@@ -380,8 +379,7 @@ fn cleanup_timeout_retains_handles_and_scope_admission_until_actual_worker_relea
         .build()
         .unwrap();
     runtime.block_on(async {
-        let root = tempfile::tempdir().unwrap();
-        let scope = open_scope(root.path()).await;
+        let (root, scope) = private_scope().await;
         let source = root.path().join("source");
         let part = root.path().join("part");
         fs::write(&source, b"queued").unwrap();
@@ -432,8 +430,7 @@ fn cleanup_timeout_retains_handles_and_scope_admission_until_actual_worker_relea
 #[tokio::test]
 async fn raw_names_limits_and_directory_roots_remain_exact() {
     use std::os::unix::ffi::OsStringExt;
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let directory = root.path().join("directory");
     fs::create_dir(&directory).unwrap();
     fs::write(
@@ -477,8 +474,7 @@ async fn raw_names_limits_and_directory_roots_remain_exact() {
 }
 #[tokio::test]
 async fn provider_is_never_truncated_and_scope_close_reclaims_only_its_own_parts() {
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let other = open_scope(root.path()).await;
     let source = root.path().join("source");
     let provider = root.path().join("provider");
@@ -525,8 +521,7 @@ async fn provider_is_never_truncated_and_scope_close_reclaims_only_its_own_parts
 }
 #[tokio::test]
 async fn closed_reservations_cannot_run_or_publish_and_conflicts_remain_retryable() {
-    let root = tempfile::tempdir().unwrap();
-    let scope = open_scope(root.path()).await;
+    let (root, scope) = private_scope().await;
     let source = root.path().join("source");
     let part = root.path().join("part");
     fs::write(&source, b"bytes").unwrap();
@@ -647,13 +642,7 @@ async fn one_scope_blocked_on_a_pipe_does_not_lock_another_scope() {
     let root = tempfile::tempdir().unwrap();
     let first = open_scope(root.path()).await;
     let second = open_scope(root.path()).await;
-    let mut descriptors = [-1; 2];
-    assert_eq!(
-        unsafe { libc::pipe2(descriptors.as_mut_ptr(), libc::O_CLOEXEC) },
-        0
-    );
-    let read = unsafe { OwnedFd::from_raw_fd(descriptors[0]) };
-    let _write = unsafe { OwnedFd::from_raw_fd(descriptors[1]) };
+    let (read, _write) = pipe(0);
     let mut options = request(&root.path().join("unused"), &root.path().join("part"));
     options.source_path = None;
     options.source_fd = Some(read.as_raw_fd());
@@ -772,8 +761,7 @@ fn no_hardlink_permission_is_needed_for_no_replace_commit() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let root = tempfile::tempdir().unwrap();
-        let scope = open_scope(root.path()).await;
+        let (root, scope) = private_scope().await;
         let source = root.path().join("source");
         let part = root.path().join("part");
         let target = root.path().join("target");
@@ -805,8 +793,7 @@ fn post_rename_sync_failure_consumes_publication_right_and_close_preserves_both_
         .build()
         .unwrap();
     runtime.block_on(async {
-        let root = tempfile::tempdir().unwrap();
-        let scope = open_scope(root.path()).await;
+        let (root, scope) = private_scope().await;
         let source = root.path().join("source");
         let part = root.path().join("part");
         let target = root.path().join("target");
@@ -870,7 +857,15 @@ async fn authorized_root_alias_is_resolved_once_and_cannot_redirect_the_anchor()
     fs::write(second.join("item"), b"second").unwrap();
     let alias = parent.path().join("authorized");
     std::os::unix::fs::symlink(&first, &alias).unwrap();
-    let scope = adb_local_scope_open(vec![path(&alias)], uuid::Uuid::new_v4().to_string(), 2000)
+    let scope = open_scope(&alias).await;
+    assert_eq!(
+        adb_local_stat(scope.clone(), path(&alias))
+            .await
+            .unwrap_err()
+            .code,
+        LocalFileErrorCode::InvalidArgument
+    );
+    adb_local_storage_free_bytes(alias.to_str().unwrap().into())
         .await
         .unwrap();
     let identity = adb_local_stat(scope.clone(), path(&alias.join("item")))
@@ -900,6 +895,9 @@ async fn authorized_root_alias_is_resolved_once_and_cannot_redirect_the_anchor()
     adb_local_scope_close(scope, 2000).await.unwrap();
     let root_alias = parent.path().join("filesystem-root");
     std::os::unix::fs::symlink("/", &root_alias).unwrap();
+    adb_local_storage_free_bytes(root_alias.to_str().unwrap().into())
+        .await
+        .unwrap();
     assert_eq!(
         adb_local_scope_open(
             vec![path(&root_alias)],

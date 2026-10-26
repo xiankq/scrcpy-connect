@@ -22,12 +22,14 @@ enum AdbFileExecutionKind {
 /// 不将秒级设备时间伪装成纳秒精度；比较快照时也必须比较精度标志。
 final class AdbFileExecutionStamp {
   const AdbFileExecutionStamp({
+    this.identity,
     required this.mode,
     required this.size,
     required this.modifiedSeconds,
     required this.modifiedNanos,
     required this.nanosecondPrecision,
   });
+  final String? identity;
   final int mode, size, modifiedSeconds, modifiedNanos;
   final bool nanosecondPrecision;
 }

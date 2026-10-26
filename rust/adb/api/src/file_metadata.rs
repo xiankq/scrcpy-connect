@@ -47,6 +47,7 @@ pub(crate) fn alias(path: &[u8], follow: bool) -> Vec<u8> {
 }
 pub(crate) fn stamp(stat: FileStat) -> AdbFileExecutionStamp {
     AdbFileExecutionStamp {
+        identity: None,
         mode: stat.mode,
         size: stat.size,
         modified_seconds: stat.modified_seconds,
@@ -63,6 +64,13 @@ pub(crate) fn local_stamp(metadata: &std::fs::Metadata) -> FileResult<AdbFileExe
     {
         use std::os::unix::fs::MetadataExt;
         Ok(AdbFileExecutionStamp {
+            identity: Some(format!(
+                "{:x}-{:x}-{:x}-{:x}",
+                metadata.dev(),
+                metadata.ino(),
+                metadata.ctime(),
+                metadata.ctime_nsec()
+            )),
             mode: metadata.mode(),
             size: metadata.len(),
             modified_seconds: metadata.mtime(),
@@ -102,6 +110,7 @@ pub(crate) fn local_stamp(metadata: &std::fs::Metadata) -> FileResult<AdbFileExe
             0
         };
         Ok(AdbFileExecutionStamp {
+            identity: None,
             mode,
             size: metadata.len(),
             modified_seconds: seconds,
@@ -146,6 +155,7 @@ fn invalid() -> FileError {
 }
 fn from_value(value: &Value) -> FileResult<AdbFileExecutionStamp> {
     Ok(AdbFileExecutionStamp {
+        identity: value["identity"].as_str().map(str::to_owned),
         mode: value["mode"]
             .as_u64()
             .and_then(|v| v.try_into().ok())

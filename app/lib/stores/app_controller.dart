@@ -1,5 +1,6 @@
 import 'package:scrcpy_connect/stores/media/device_audio_view_coordinator.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/stores/files/gallery_history.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
@@ -15,6 +16,7 @@ part 'app_controller.g.dart';
 
 @Riverpod(keepAlive: true)
 class AppController extends _$AppController {
+  final galleryHistory = GalleryHistory();
   late AppDependencies _dependencies;
   late StreamController<Json> _events;
   late SessionViewRegistry _sessionViewRegistry;
@@ -80,6 +82,7 @@ class AppController extends _$AppController {
   @override
   AppState build() {
     final dependencies = ref.watch(appDependenciesProvider);
+    galleryHistory.clear();
     _dependencies = dependencies;
     _sessionViewRegistry = SessionViewRegistry(dependencies.request);
     _controlPages = ControlPageRegistry();

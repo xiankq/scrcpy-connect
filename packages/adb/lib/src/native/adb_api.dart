@@ -570,6 +570,7 @@ final class FrbNativeAdbApi
         modifiedSeconds: PlatformInt64Util.from(value.modifiedSeconds),
         modifiedNanos: value.modifiedNanos,
         nanosecondPrecision: value.nanosecondPrecision,
+        identity: value.identity,
       );
   AdbFileExecutionStamp _fileStamp(native.AdbFileExecutionStamp value) =>
       AdbFileExecutionStamp(
@@ -578,6 +579,7 @@ final class FrbNativeAdbApi
         modifiedSeconds: value.modifiedSeconds.toInt(),
         modifiedNanos: value.modifiedNanos,
         nanosecondPrecision: value.nanosecondPrecision,
+        identity: value.identity,
       );
   @override
   Future<void> initializeFileHelpers(List<AdbFileHelper> helpers) =>

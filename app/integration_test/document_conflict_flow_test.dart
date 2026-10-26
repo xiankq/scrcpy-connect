@@ -14,7 +14,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/transfers/details/export/transfers_details_export_page.dart';
-import 'package:scrcpy_connect/pages/transfers/details/widgets/document_conflict_panel.dart';
+import 'package:scrcpy_connect/widgets/documents/document_conflict_panel.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/services/connection/connection_validation.dart';

@@ -325,100 +325,75 @@ async fn fixture_execution(
 
 #[cfg(unix)]
 #[tokio::test]
-async fn verified_helper_runs_without_remote_hash_utilities() {
-    let (output, receipt) =
-        fixture_execution(FIXTURE_HELPER, FIXTURE_HELPER, LaunchFixture::Normal, 1024).await;
-    assert_eq!(output.unwrap(), br#"{"protocol":1,"ok":true,"errno":0}"#);
-    assert_eq!(receipt.unwrap(), b"private-'$\n\xff");
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn changed_or_oversized_artifacts_are_never_authorized() {
-    let mut changed = FIXTURE_HELPER.to_vec();
+async fn helper_authorization_and_receipts_follow_the_verified_artifact() {
+    use LaunchFixture::*;
+    let helper = FIXTURE_HELPER;
+    let mut changed = helper.to_vec();
     let last = changed.len() - 2;
     changed[last] = b' ';
-    for actual in [
-        changed,
-        [FIXTURE_HELPER, b"extra"].concat(),
-        [FIXTURE_HELPER, b"__INTEROP_VERIFIED__\n"].concat(),
+    let appended = [helper, b"extra"].concat();
+    let forged_marker = [helper, b"__INTEROP_VERIFIED__\n"].concat();
+    // These cases share a complete shell/ADB fixture; each retains its distinct
+    // authorization, executable-inode, interruption or output-bound assertion.
+    for (actual, variant, limit, expected) in [
+        (helper, Normal, 1024, "completed"),
+        (helper, ReplacePath, 1024, "completed"),
+        (helper, WrongAuthorization, 1024, "withheld"),
+        (helper, CancelVerification, 1024, "cancelled"),
+        (helper, Normal, 8, "helper_protocol"),
+        (&helper[..helper.len() - 2], Normal, 1024, "truncated"),
+        (changed.as_slice(), Normal, 1024, "helper_integrity"),
+        (appended.as_slice(), Normal, 1024, "helper_integrity"),
+        (forged_marker.as_slice(), Normal, 1024, "helper_integrity"),
     ] {
-        let (output, receipt) =
-            fixture_execution(&actual, FIXTURE_HELPER, LaunchFixture::Normal, 1024).await;
-        assert_eq!(output.unwrap_err().code, "helper_integrity");
-        assert!(
-            receipt.is_none(),
-            "verification failure cannot execute the helper"
-        );
+        let (output, receipt) = fixture_execution(actual, helper, variant, limit).await;
+        match expected {
+            "completed" => {
+                assert_eq!(output.unwrap(), br#"{"protocol":1,"ok":true,"errno":0}"#);
+                assert_eq!(receipt.unwrap(), b"private-'$\n\xff");
+            }
+            "withheld" => {
+                assert!(output.unwrap().is_empty());
+                assert!(receipt.is_none());
+            }
+            "truncated" => {
+                assert!(output.is_err());
+                assert!(receipt.is_none());
+            }
+            code => {
+                assert_eq!(output.unwrap_err().code, code);
+                if code != "helper_protocol" {
+                    assert!(receipt.is_none(), "an unauthorized helper cannot execute");
+                }
+            }
+        }
     }
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn truncated_artifact_cannot_execute_helper() {
-    let (output, receipt) = fixture_execution(
-        &FIXTURE_HELPER[..FIXTURE_HELPER.len() / 2],
-        FIXTURE_HELPER,
-        LaunchFixture::Normal,
-        1024,
-    )
-    .await;
-    assert!(output.is_err());
-    assert!(receipt.is_none());
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn wrong_authorization_cannot_execute_the_verified_helper() {
-    let (output, receipt) = fixture_execution(
-        FIXTURE_HELPER,
-        FIXTURE_HELPER,
-        LaunchFixture::WrongAuthorization,
-        1024,
-    )
-    .await;
-    assert!(output.unwrap().is_empty());
-    assert!(receipt.is_none());
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn exec_uses_the_verified_inode_after_pathname_replacement() {
-    let (output, receipt) = fixture_execution(
-        FIXTURE_HELPER,
-        FIXTURE_HELPER,
-        LaunchFixture::ReplacePath,
-        1024,
-    )
-    .await;
-    assert_eq!(output.unwrap(), br#"{"protocol":1,"ok":true,"errno":0}"#);
-    assert_eq!(receipt.unwrap(), b"private-'$\n\xff");
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn cancellation_before_authorization_cannot_execute_helper() {
-    let (output, receipt) = fixture_execution(
-        FIXTURE_HELPER,
-        FIXTURE_HELPER,
-        LaunchFixture::CancelVerification,
-        1024,
-    )
-    .await;
-    assert_eq!(output.unwrap_err().code, "cancelled");
-    assert!(receipt.is_none());
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn verified_helper_response_remains_bounded() {
-    let (output, _) =
-        fixture_execution(FIXTURE_HELPER, FIXTURE_HELPER, LaunchFixture::Normal, 8).await;
-    assert_eq!(output.unwrap_err().code, "helper_protocol");
 }
 
 #[test]
 fn metadata_errno_and_envelopes_are_checked_before_use() {
+    let preserved = parse_result(
+        br#"{"protocol":1,"ok":false,"errno":116,"recoveryPathHex":"2f7364636172642f6974656d"}"#,
+        b"",
+        false,
+    )
+    .unwrap_err();
+    assert_eq!(preserved.code, "source_changed");
+    assert!(preserved.message.contains("/sdcard/item"));
+    assert_eq!(
+        preserved.details["recoveryPathHex"],
+        "2f7364636172642f6974656d"
+    );
+    assert_eq!(
+        parse_result(
+            br#"{"protocol":1,"ok":false,"errno":116,"recoveryPathHex":"z"}"#,
+            b"",
+            false
+        )
+        .unwrap_err()
+        .code,
+        "result_unknown"
+    );
     assert_eq!(
         parse_metadata(
             br#"{"protocol":1,"ok":true,"errno":0,"mode":33188,"size":5,"modifiedSeconds":123}"#

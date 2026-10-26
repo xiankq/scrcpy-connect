@@ -9,6 +9,18 @@ import 'package:scrcpy_connect/services/files/adb_file_executor.dart';
 import 'package:scrcpy_connect/services/files/file_executor.dart';
 import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
 
+const _selected = FileStamp(
+  mode: 0x8000,
+  size: 4,
+  modifiedSeconds: 1,
+  identity: '1-2-3-4',
+);
+const _expected = {
+  '/sdcard/first': _selected,
+  '/sdcard/second': _selected,
+  '/sdcard/never': _selected,
+};
+
 void main() {
   test('首项关闭期间连接替换，剩余删除仍绑定最初的精确连接', () async {
     final fixture = await _Fixture.open();
@@ -17,12 +29,16 @@ void main() {
     final deleting = fixture.owner.delete('device', [
       '/sdcard/first',
       '/sdcard/second',
-    ]);
+    ], expected: _expected);
     await fixture.api.firstClosing.future;
     fixture.current = fixture.replacement;
     fixture.api.closeGate!.complete();
     await deleting;
     expect(fixture.resolutions, 1);
+    expect(
+      fixture.api.requests.map((entry) => entry.$2.expected?.identity),
+      everyElement(_selected.identity),
+    );
     expect(fixture.api.requests.map((request) => request.$1), [
       'original',
       'original',
@@ -41,7 +57,7 @@ void main() {
     final deleting = fixture.owner.delete('device', [
       '/sdcard/first',
       '/sdcard/never',
-    ]);
+    ], expected: _expected);
     final cancelled = expectLater(deleting, throwsA(_failure('cancelled')));
     await fixture.api.firstCreated.future;
     var stopped = false;
@@ -76,7 +92,7 @@ void main() {
       final deleting = fixture.owner.delete('device', [
         '/sdcard/first',
         '/sdcard/never',
-      ]);
+      ], expected: _expected);
       final cancelled = expectLater(deleting, throwsA(_failure('cancelled')));
       await fixture.api.firstReading.future;
       var stopped = false;
@@ -106,6 +122,7 @@ void main() {
         'device',
         '/sdcard/first',
         destination: '/sdcard/changed',
+        expected: _selected,
       ),
       throwsA(_failure('mutation_cleanup_unconfirmed')),
     );
@@ -138,7 +155,10 @@ void main() {
     addTearDown(fixture.close);
     fixture.api.missingReceipt = true;
     await expectLater(
-      fixture.owner.delete('device', ['/sdcard/first', '/sdcard/never']),
+      fixture.owner.delete('device', [
+        '/sdcard/first',
+        '/sdcard/never',
+      ], expected: _expected),
       throwsA(_failure('result_unknown')),
     );
     await fixture.owner.cancelDevice('device');

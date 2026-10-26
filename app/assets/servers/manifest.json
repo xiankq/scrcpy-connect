@@ -16,26 +16,26 @@
     {
       "id": "arm64-v8a",
       "file": "arm64-v8a.zlib",
-      "sha256": "3924825f2cc577e05b6e8c7c56eff335e6b30c6a9c30f8f65236a65cd258ea9d",
-      "size": 274776
+      "sha256": "0948d8fe5f5d6086f0baf98644a7dd69c89e38ebfbac80eb5ca7dd2feb6fe386",
+      "size": 285256
     },
     {
       "id": "armeabi-v7a",
       "file": "armeabi-v7a.zlib",
-      "sha256": "1273a2e856f6dd1ca9a366bc8e068bb091568b5a2fd8cd11df7e02f0483aa16f",
-      "size": 207836
+      "sha256": "2dd55fa02e0d80eba0af7f1e8a3dda979c7798671eef5bfbf43fa8f7734b4cd0",
+      "size": 214020
     },
     {
       "id": "x86_64",
       "file": "x86_64.zlib",
-      "sha256": "36904671ff8afacd93f97c6fabb385c655dfe2e2788c9d6201d2045d091904f2",
-      "size": 303480
+      "sha256": "008782f29b81c09ae431e1756ec4bf2acc34ef416eed55d33233cbf19cd780d5",
+      "size": 314984
     },
     {
       "id": "x86",
       "file": "x86.zlib",
-      "sha256": "0f4d32205871496fae0a3dec7f4e9cacb06b7a0e53c57d225dbc519890c4949a",
-      "size": 306888
+      "sha256": "3be1e1d6966527a3f5536d9cd59e33d07b032f48b6f75a016abadad866271182",
+      "size": 318664
     }
   ]
 }

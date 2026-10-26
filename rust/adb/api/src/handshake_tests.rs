@@ -3,7 +3,7 @@ use super::*;
 use interop_adb::protocol::{self, Frame};
 use tokio::io::AsyncReadExt;
 
-async fn identity_path() -> (tempfile::TempDir, String) {
+pub(super) async fn identity_path() -> (tempfile::TempDir, String) {
     static PEM: OnceLock<String> = OnceLock::new();
     let pem = PEM.get_or_init(|| {
         Identity::generate()
@@ -22,6 +22,30 @@ async fn identity_path() -> (tempfile::TempDir, String) {
         .await
         .unwrap();
     (directory, path)
+}
+
+async fn connect_direct(
+    address: String,
+    path: String,
+    handshake: Option<String>,
+) -> Result<AdbDeviceInfo, AdbConnectionError> {
+    connect_tcp(
+        address,
+        path,
+        false,
+        true,
+        60_000,
+        AdbConnectOptions::default(),
+        handshake,
+    )
+    .await
+}
+
+async fn read_server_request(peer: &mut tokio::net::TcpStream) {
+    let mut header = [0; 4];
+    peer.read_exact(&mut header).await.unwrap();
+    let length = usize::from_str_radix(std::str::from_utf8(&header).unwrap(), 16).unwrap();
+    peer.read_exact(&mut vec![0; length]).await.unwrap();
 }
 
 async fn eof(peer: &mut tokio::net::TcpStream) {
@@ -78,13 +102,9 @@ async fn stalled_direct(auth: bool) {
     let (_directory, path) = identity_path().await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let id = adb_handshake_create().await.unwrap();
-    let mut connecting = tokio::spawn(connect_tcp(
+    let mut connecting = tokio::spawn(connect_direct(
         listener.local_addr().unwrap().to_string(),
         path,
-        false,
-        true,
-        60_000,
-        AdbConnectOptions::default(),
         Some(id.clone()),
     ));
     let (mut peer, _) = tokio::select! {
@@ -132,10 +152,7 @@ async fn cancelling_one_official_server_handshake_preserves_another() {
         Some(first.clone()),
     ));
     let (mut first_peer, _) = listener.accept().await.unwrap();
-    let mut request = [0; 4];
-    first_peer.read_exact(&mut request).await.unwrap();
-    let length = usize::from_str_radix(std::str::from_utf8(&request).unwrap(), 16).unwrap();
-    first_peer.read_exact(&mut vec![0; length]).await.unwrap();
+    read_server_request(&mut first_peer).await;
     let other = tokio::spawn(adb_connect_server(
         address,
         "second".into(),
@@ -143,9 +160,7 @@ async fn cancelling_one_official_server_handshake_preserves_another() {
         Some(second.clone()),
     ));
     let (mut second_peer, _) = listener.accept().await.unwrap();
-    second_peer.read_exact(&mut request).await.unwrap();
-    let length = usize::from_str_radix(std::str::from_utf8(&request).unwrap(), 16).unwrap();
-    second_peer.read_exact(&mut vec![0; length]).await.unwrap();
+    read_server_request(&mut second_peer).await;
     adb_handshake_close(first).await.unwrap();
     assert!(connecting.await.unwrap().is_err());
     eof(&mut first_peer).await;
@@ -213,17 +228,9 @@ async fn closing_a_completed_handshake_does_not_cancel_the_handed_off_client() {
         eof(&mut peer).await;
     });
     let id = adb_handshake_create().await.unwrap();
-    let connected = connect_tcp(
-        address,
-        path,
-        false,
-        true,
-        60_000,
-        AdbConnectOptions::default(),
-        Some(id.clone()),
-    )
-    .await
-    .unwrap();
+    let connected = connect_direct(address, path, Some(id.clone()))
+        .await
+        .unwrap();
     adb_handshake_cancel(id.clone()).await.unwrap();
     adb_handshake_close(id).await.unwrap();
     let client = device(&connected.id).unwrap();
@@ -344,27 +351,10 @@ fn host_close_drains_anonymous_handshake() {
     if std::env::var_os(CHILD).is_some() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime.block_on(async {
-            let directory = tempfile::tempdir().unwrap();
-            let path = directory.path().join("host.pem");
-            let identity = Identity::generate().unwrap();
-            adb_replace_identity(
-                path.to_string_lossy().into_owned(),
-                identity.to_pkcs8_pem().unwrap().to_string(),
-                None,
-            )
-            .await
-            .unwrap();
+            let (_directory, path) = identity_path().await;
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let address = listener.local_addr().unwrap();
-            let connecting = tokio::spawn(connect_tcp(
-                address.to_string(),
-                path.to_string_lossy().into_owned(),
-                false,
-                true,
-                60_000,
-                AdbConnectOptions::default(),
-                None,
-            ));
+            let connecting = tokio::spawn(connect_direct(address.to_string(), path, None));
             let (mut peer, _) = listener.accept().await.unwrap();
             assert_eq!(
                 Frame::read(&mut peer, 4096, false).await.unwrap().command,

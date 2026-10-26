@@ -26,42 +26,57 @@ class FileSearchScopeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SizedBox(
-      height: 48,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
-        ),
-        child: Row(
-          children: [
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked =
+              constraints.maxWidth / MediaQuery.textScalerOf(context).scale(1) <
+              340;
+          final choices = [
             for (final entire in [false, true])
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  selected: entireStorage == entire,
-                  child: Material(
-                    color: entireStorage == entire
-                        ? theme.colorScheme.surface
-                        : Colors.transparent,
-                    shape: const StadiumBorder(),
-                    child: InkWell(
-                      customBorder: const StadiumBorder(),
-                      onTap: () => onChanged(entire),
-                      child: Center(
-                        child: Text(
-                          entire ? '手机内部存储' : '当前目录及子目录',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelLarge,
+              Semantics(
+                button: true,
+                selected: entireStorage == entire,
+                child: Material(
+                  color: entireStorage == entire
+                      ? theme.colorScheme.surface
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
+                    onTap: () => onChanged(entire),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: Padding(
+                        padding: const EdgeInsets.all(DesignTokens.spacingSm),
+                        child: Center(
+                          child: Text(
+                            entire ? '手机内部存储' : '当前目录及子目录',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelLarge,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
+          ];
+          return stacked
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: choices,
+                )
+              : Row(
+                  children: [
+                    for (final choice in choices) Expanded(child: choice),
+                  ],
+                );
+        },
       ),
     );
   }
@@ -85,7 +100,10 @@ class FileSearchTypeField extends StatelessWidget {
       reduceMotion: reduceMotion,
       child: GlassMenu(
         autoAdjustToScreen: true,
-        menuWidth: 180,
+        menuWidth: (180 * MediaQuery.textScalerOf(context).scale(1)).clamp(
+          180,
+          MediaQuery.sizeOf(context).width - 32,
+        ),
         menuPadding: const EdgeInsets.all(DesignTokens.spacingXs),
         menuBorderRadius: DesignTokens.roundedLg,
         itemBorderRadius: DesignTokens.roundedMd,
@@ -98,7 +116,10 @@ class FileSearchTypeField extends StatelessWidget {
             ? 0
             : DesignTokens.componentGlassInteractionStretch,
         morphSpeed: reduceMotion ? MorphSpeed.instant : MorphSpeed.fast,
-        triggerBuilder: (context, toggle) => SizedBox.expand(
+        triggerBuilder: (context, toggle) => ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: DesignTokens.componentRowHeight,
+          ),
           child: Semantics(
             button: true,
             label: '文件类型，当前${fileSearchFilters[value]}',
@@ -111,6 +132,7 @@ class FileSearchTypeField extends StatelessWidget {
                 onTap: toggle,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
+                    vertical: DesignTokens.spacingSm,
                     horizontal:
                         DesignTokens.spacingMd + DesignTokens.spacingXxs,
                   ),
@@ -119,8 +141,6 @@ class FileSearchTypeField extends StatelessWidget {
                       Expanded(
                         child: Text(
                           fileSearchFilters[value] ?? fileSearchFilters['all']!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium,
                         ),
                       ),
@@ -142,7 +162,11 @@ class FileSearchTypeField extends StatelessWidget {
             GlassMenuItem(
               title: entry.value,
               isSelected: value == entry.key,
-              height: DesignTokens.componentIconButtonSize,
+              height:
+                  MediaQuery.textScalerOf(context)
+                          .scale(theme.textTheme.bodyMedium!.fontSize!) *
+                      (theme.textTheme.bodyMedium!.height ?? 1.5) +
+                  DesignTokens.spacingSm * 2,
               titleStyle: theme.textTheme.bodyMedium,
               trailing: value == entry.key
                   ? Icon(

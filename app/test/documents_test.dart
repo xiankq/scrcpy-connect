@@ -1,4 +1,6 @@
 import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/files/document_operation_controller.dart';
 
 import 'support/test_controller.dart';
@@ -21,46 +23,47 @@ DocumentOperationController _documentOperation(ApplicationRequest request) =>
       events: const Stream<Json>.empty(),
     );
 
+Widget _exportPage(
+  AppController controller, {
+  required String localPath,
+  String? transferId,
+}) => RouterTestApp(
+  controller: controller,
+  theme: ConnectTokens.theme(Brightness.light),
+  home: DocumentExportPage(
+    controller: controller,
+    localPath: localPath,
+    name: p.basename(localPath),
+    kind: 'file',
+    transferId: transferId,
+  ),
+);
+
+Json _unknownSave(String operationId) => {
+  'operationId': operationId,
+  'status': 'result_unknown',
+  'result': {'status': 'result_unknown', 'partialDestinationPossible': true},
+};
+
 void main() {
-  for (final hasPrevious in [false, true]) {
-    testWidgets(
-      'page exit during ${hasPrevious ? 'source release' : 'initial admission'} never starts a later picker',
-      (tester) async {
-        var imports = 0;
-        final releasing = Completer<Json>();
-        final operation = _documentOperation((
-          command, [
-          params = const {},
-        ]) async {
-          if (command == 'documents.importDirectory') {
-            imports++;
-            return {'status': 'imported', 'managedSourceId': 'document:first'};
-          }
-          if (command == 'documents.cancel' &&
-              params['managedSourceId'] is String) {
-            return releasing.future;
-          }
-          return {};
-        });
-        if (hasPrevious) await operation.run('documents.importDirectory', {});
-        final selecting = operation.run('documents.importDirectory', {});
-        if (hasPrevious) await tester.pump();
-        operation.dispose();
-        releasing.complete({});
-        await selecting;
-        expect(imports, hasPrevious ? 1 : 0);
-      },
-    );
-  }
-  testWidgets(
-    'a failed source release after disposal preserves its source and error',
-    (tester) async {
+  for (final phase in [
+    'initial admission',
+    'source release',
+    'failed source release',
+  ]) {
+    final hasPrevious = phase != 'initial admission';
+    final releaseFails = phase == 'failed source release';
+    testWidgets('page exit during $phase never starts a later picker', (
+      tester,
+    ) async {
+      var imports = 0;
       final releasing = Completer<Json>();
       final operation = _documentOperation((
         command, [
         params = const {},
       ]) async {
         if (command == 'documents.importDirectory') {
+          imports++;
           return {'status': 'imported', 'managedSourceId': 'document:first'};
         }
         if (command == 'documents.cancel' &&
@@ -69,18 +72,25 @@ void main() {
         }
         return {};
       });
-      await operation.run('documents.importDirectory', {});
+      if (hasPrevious) await operation.run('documents.importDirectory', {});
       final selecting = operation.run('documents.importDirectory', {});
-      await tester.pump();
+      if (hasPrevious) await tester.pump();
       operation.dispose();
-      releasing.completeError(
-        const RequestFailure('release_failed', '来源归还尚未确认'),
-      );
+      if (releaseFails) {
+        releasing.completeError(
+          const RequestFailure('release_failed', '来源归还尚未确认'),
+        );
+      } else {
+        releasing.complete({});
+      }
       await selecting;
-      expect(operation.result?['managedSourceId'], 'document:first');
-      expect(operation.error, contains('来源归还尚未确认'));
-    },
-  );
+      expect(imports, hasPrevious ? 1 : 0);
+      if (releaseFails) {
+        expect(operation.result?['managedSourceId'], 'document:first');
+        expect(operation.error, contains('来源归还尚未确认'));
+      }
+    });
+  }
   testWidgets('a failed late-result release retains its managed identity', (
     tester,
   ) async {
@@ -145,14 +155,7 @@ void main() {
           return {
             'record': submissions == 0
                 ? null
-                : {
-                    'operationId': 'actual-prior-save',
-                    'status': 'result_unknown',
-                    'result': {
-                      'status': 'result_unknown',
-                      'partialDestinationPossible': true,
-                    },
-                  },
+                : _unknownSave('actual-prior-save'),
           };
         }
         if (command == 'documents.export') {
@@ -164,16 +167,7 @@ void main() {
       });
       try {
         await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: DocumentExportPage(
-              controller: controller,
-              transferId: 'task',
-              localPath: '/cache/a',
-              name: 'a',
-              kind: 'file',
-            ),
-          ),
+          _exportPage(controller, localPath: '/cache/a', transferId: 'task'),
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('选择系统位置并保存'));
@@ -219,15 +213,10 @@ void main() {
       });
       try {
         await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: DocumentExportPage(
-              controller: controller,
-              transferId: 'source-task',
-              localPath: '/cache/original.png',
-              name: 'original.png',
-              kind: 'file',
-            ),
+          _exportPage(
+            controller,
+            localPath: '/cache/original.png',
+            transferId: 'source-task',
           ),
         );
         await tester.pumpAndSettle();
@@ -263,15 +252,7 @@ void main() {
     });
     try {
       await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          home: DocumentExportPage(
-            controller: controller,
-            localPath: '/cache/original',
-            name: 'original',
-            kind: 'file',
-          ),
-        ),
+        _exportPage(controller, localPath: '/cache/original'),
       );
       await tester.pumpAndSettle();
       expect(find.textContaining('尚未核验上次系统保存结果'), findsOneWidget);
@@ -301,14 +282,7 @@ void main() {
           return {
             'record': writes == 0
                 ? null
-                : {
-                    'operationId': 'previous-system-write',
-                    'status': 'result_unknown',
-                    'result': {
-                      'status': 'result_unknown',
-                      'partialDestinationPossible': true,
-                    },
-                  },
+                : _unknownSave('previous-system-write'),
           };
         }
         if (command == 'documents.export') {
@@ -317,19 +291,13 @@ void main() {
         }
         return {};
       });
-      Widget page() => RouterTestApp(
-        controller: controller,
-        home: DocumentExportPage(
-          controller: controller,
-          transferId: 'original-task',
-          localPath: '/private/cache/original.png',
-          name: 'original.png',
-          kind: 'file',
-        ),
+      Widget page() => _exportPage(
+        controller,
+        localPath: '/private/cache/original.png',
+        transferId: 'original-task',
       );
       try {
         await tester.pumpWidget(page());
-        await tester.pumpAndSettle();
         await tester.pumpAndSettle();
         await tester.tap(find.text('选择系统位置并保存'));
         await tester.pumpAndSettle();
@@ -340,6 +308,10 @@ void main() {
         expect(find.text('系统保存结果待核对'), findsOneWidget);
         final retry = find.widgetWithText(FilledButton, '重新选择系统位置');
         expect(tester.widget<FilledButton>(retry).onPressed, isNull);
+        await tester.ensureVisible(find.byType(CheckboxListTile));
+        await tester.tap(find.byType(CheckboxListTile));
+        await tester.pumpAndSettle();
+        expect(tester.widget<FilledButton>(retry).onPressed, isNotNull);
         expect(writes, 1);
       } finally {
         await tester.pumpWidget(const SizedBox());
@@ -348,62 +320,6 @@ void main() {
     },
   );
 
-  testWidgets(
-    'a lost export reply requires review before another system write',
-    (tester) async {
-      var writes = 0;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        if (command == 'documents.export') {
-          writes++;
-          throw StateError('reply lost after provider write');
-        }
-        if (command == 'delivery.get') {
-          return {
-            'record': writes == 0
-                ? null
-                : {
-                    'operationId': 'lost-reply',
-                    'status': 'result_unknown',
-                    'result': {
-                      'status': 'result_unknown',
-                      'partialDestinationPossible': true,
-                    },
-                  },
-          };
-        }
-        return {};
-      });
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: DocumentExportPage(
-            controller: controller,
-            localPath: '/private/cache/original.png',
-            name: 'original.png',
-            kind: 'file',
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('选择系统位置并保存'));
-      await tester.pumpAndSettle();
-      expect(find.text('系统保存结果待核对'), findsOneWidget);
-      expect(find.text('已保存到系统位置'), findsNothing);
-      final retry = find.widgetWithText(FilledButton, '重新选择系统位置');
-      expect(tester.widget<FilledButton>(retry).onPressed, isNull);
-      await tester.ensureVisible(find.byType(CheckboxListTile));
-      await tester.tap(find.byType(CheckboxListTile));
-      await tester.pumpAndSettle();
-      expect(tester.widget<FilledButton>(retry).onPressed, isNotNull);
-      expect(writes, 1);
-      await tester.pumpWidget(const SizedBox());
-      controller.dispose();
-    },
-  );
   testWidgets(
     'partial directory import requires review before sending its cached subset as one batch',
     (tester) async {
@@ -490,16 +406,7 @@ void main() {
         return {};
       });
       await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: DocumentExportPage(
-            controller: controller,
-            localPath: '/private/cache/file',
-            name: 'file',
-            kind: 'file',
-          ),
-        ),
+        _exportPage(controller, localPath: '/private/cache/file'),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('选择系统位置并保存'));

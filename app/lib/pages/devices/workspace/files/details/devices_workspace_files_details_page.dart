@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/services/files/file_access.dart';
+import 'package:scrcpy_connect/services/files/system_file_share.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
@@ -131,22 +132,23 @@ class FileDetailsPage extends StatelessWidget {
             label: const Text('取回原文件'),
           ),
           const SizedBox(height: DesignTokens.spacingSm),
-          OutlinedButton.icon(
-            onPressed: fileCanOpen(file)
-                ? () => retrieveFile(
-                    context,
-                    controller,
-                    device,
-                    file,
-                    share: true,
-                  )
-                : null,
-            icon: const Icon(
-              LucideIcons.share2,
-              size: DesignTokens.componentIconActionSize,
+          if (supportsSystemFileShare)
+            OutlinedButton.icon(
+              onPressed: fileCanOpen(file)
+                  ? () => retrieveFile(
+                      context,
+                      controller,
+                      device,
+                      file,
+                      share: true,
+                    )
+                  : null,
+              icon: const Icon(
+                LucideIcons.share2,
+                size: DesignTokens.componentIconActionSize,
+              ),
+              label: const Text('交给系统分享'),
             ),
-            label: const Text('交给系统分享'),
-          ),
           const StateNote('取回后可在本机编辑副本；修改后需要主动重新发送，不会自动回写手机。'),
         ],
       ),

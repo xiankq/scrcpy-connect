@@ -466,4 +466,71 @@ void main() {
       isFalse,
     );
   });
+  test('真实空间不足和无法核验均在准入前拒绝并报告所需可用量', () async {
+    var free = 3;
+    var unavailable = false;
+    final cache = await AppMediaCache.open(
+      root: root,
+      freeBytes: (_) async {
+        if (unavailable) throw const FileSystemException('space query failed');
+        return free;
+      },
+    );
+    await cache.configure(budgetBytes: 20);
+    await expectLater(
+      cache.reserve([FileCacheReservation(p.join(media, 'incoming'), 4)]),
+      throwsA(
+        isA<MediaCacheFailure>().having(
+          (error) => error.message,
+          'message',
+          contains('需要 4 B，当前可用 3 B'),
+        ),
+      ),
+    );
+    expect((await cache.status())['reservedBytes'], 0);
+    free = 10;
+    final lease = await cache.reserve([
+      FileCacheReservation(p.join(media, 'incoming'), 4),
+    ]);
+    expect((await cache.status())['availableBytes'], 6);
+    unavailable = true;
+    await expectLater(
+      cache.reserve([FileCacheReservation(p.join(media, 'another'), 1)]),
+      throwsA(failure('cache_space_unknown')),
+    );
+    expect((await cache.status())['spaceVerified'], isFalse);
+    await cache.release(lease);
+  });
+
+  test('保护项目按实际占用去重并呈现真实来源与未知分享原因', () async {
+    final original = await file(p.join(media, 'receive', 'original.jpg'), 8);
+    final cache = await AppMediaCache.open(
+      root: root,
+      protectionDetails: () => [
+        {
+          'path': original.path,
+          'name': '原照片.jpg',
+          'sourceLabel': '来源手机',
+          'sourcePath': '/sdcard/DCIM/原照片.jpg',
+          'transferId': 'receive-task',
+          'canExport': true,
+        },
+      ],
+    );
+    final lease = await cache.reserve([
+      FileCacheReservation(original.parent.path, 0),
+    ]);
+    await cache.retain(original.path);
+    final status = await cache.status();
+    final items = status['protectedItems']! as List;
+    expect(items, hasLength(1));
+    expect((items.single as Map)['bytes'], 8);
+    expect((items.single as Map)['name'], '原照片.jpg');
+    expect((items.single as Map)['sourceLabel'], '来源手机');
+    expect((items.single as Map)['externalLifetimeUnknown'], isTrue);
+    expect((items.single as Map)['reason'], contains('读取寿命未知'));
+    await cache.release(lease);
+    expect((await cache.clear())['deletedBytes'], 0);
+    expect(await original.exists(), isTrue);
+  });
 }

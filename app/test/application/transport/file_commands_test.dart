@@ -10,6 +10,13 @@ import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 
 import '../../files/support/file_executor_fixture.dart';
 
+const _selected = FileStamp(
+  mode: 0x8000,
+  size: 4,
+  modifiedSeconds: 1,
+  identity: '1-2-3-4',
+);
+
 void main() {
   late Directory root;
   late _Executor executor;
@@ -63,6 +70,7 @@ void main() {
         'deviceId': 'device',
         'path': '/sdcard/old',
         'name': 'renamed',
+        'expectedStamp': _selected.toJson(),
       }),
       {'ok': true},
     );
@@ -70,6 +78,10 @@ void main() {
       await commands.invoke('files.delete', {
         'deviceId': 'other',
         'paths': ['/sdcard/a', '/sdcard/b'],
+        'expectedStamps': {
+          '/sdcard/a': _selected.toJson(),
+          '/sdcard/b': _selected.toJson(),
+        },
       }),
       {'ok': true},
     );
@@ -124,7 +136,11 @@ void main() {
     executor.copyStarted = Completer<void>();
     executor.stamps['/source'] = regular;
     catalog.startSearch('device', '/sdcard', query: 'pending');
-    final changing = mutations.delete('device', ['/sdcard/old']);
+    final changing = mutations.delete(
+      'device',
+      ['/sdcard/old'],
+      expected: {'/sdcard/old': _selected},
+    );
     final changeCancelled = expectLater(
       changing,
       throwsA(isA<FileFailure>().having((e) => e.code, 'code', 'cancelled')),
@@ -183,6 +199,7 @@ final class _Batch implements FileMutationBatch {
     String action,
     String path, {
     String destination = '',
+    FileStamp? expected,
   }) async {
     cancellation.check();
     executor.mutations.add((device, action, path, destination));

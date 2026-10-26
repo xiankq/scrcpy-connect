@@ -84,6 +84,34 @@ elif mode=='exit':sys.exit(7)
         let reserved = adb_server_create(self.launch.clone()).await.unwrap();
         adb_server_start(reserved.lease_id, 5000).await.unwrap()
     }
+    async fn connect(&self, server: &AdbServerInfo) -> AdbDeviceInfo {
+        let handshake = adb_server_handshake_create(server.lease_id.clone())
+            .await
+            .unwrap();
+        let connected = adb_connect_server(
+            self.launch.endpoint.clone(),
+            "device".into(),
+            5000,
+            Some(handshake.clone()),
+        )
+        .await
+        .unwrap();
+        adb_handshake_close(handshake).await.unwrap();
+        connected
+    }
+    async fn create_command(
+        &self,
+        server: &AdbServerInfo,
+        mode: &str,
+        may_create_transport: bool,
+    ) -> String {
+        adb_server_command_create(
+            server.lease_id.clone(),
+            self.command(mode, may_create_transport),
+        )
+        .await
+        .unwrap()
+    }
     fn command(&self, mode: &str, may_create_transport: bool) -> AdbServerCommandSpec {
         AdbServerCommandSpec {
             executable: self.launch.executable.clone(),
@@ -95,6 +123,27 @@ elif mode=='exit':sys.exit(7)
         }
     }
 }
+async fn find_server(id: &str) -> Option<AdbServerInfo> {
+    adb_server_list()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|entry| entry.server_id == id)
+}
+
+async fn wait_for_child(server: &AdbServerInfo) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !find_server(&server.server_id)
+            .await
+            .is_some_and(|entry| entry.pid.is_some())
+        {
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
 async fn issued(path: &std::path::Path) {
     tokio::time::timeout(Duration::from_secs(5), async {
         while !path.exists() {
@@ -147,18 +196,7 @@ async fn exact_ack_claim_and_connection_lifetime_are_independent_of_control_leas
             .is_err(),
         "未标记握手不能绕过原生服务器归属"
     );
-    let handshake = adb_server_handshake_create(server.lease_id.clone())
-        .await
-        .unwrap();
-    let device = adb_connect_server(
-        fixture.launch.endpoint.clone(),
-        "device".into(),
-        5000,
-        Some(handshake.clone()),
-    )
-    .await
-    .unwrap();
-    adb_handshake_close(handshake).await.unwrap();
+    let device = fixture.connect(&server).await;
     let client = super::device(&device.id).unwrap();
     let lifetime = admit_capture(&device.id, |_, lifetime, _| Ok(lifetime)).unwrap();
     let facts = adb_connection_facts(device.id.clone()).unwrap();
@@ -204,9 +242,7 @@ async fn real_commands_preserve_stdin_and_bound_output_and_timeout() {
     assert_eq!(result.stderr, b"error-bytes");
     adb_server_command_confirm(id.clone()).await.unwrap();
     adb_server_command_close(id).await.unwrap();
-    let id = adb_server_command_create(server.lease_id.clone(), fixture.command("flood", false))
-        .await
-        .unwrap();
+    let id = fixture.create_command(&server, "flood", false).await;
     let result = adb_server_command_run(id.clone()).await.unwrap();
     assert_eq!(result.status, AdbServerCommandStatus::OutputLimit);
     assert!(result.stdout.len() + result.stderr.len() <= 1024 * 1024);
@@ -230,9 +266,7 @@ async fn real_commands_preserve_stdin_and_bound_output_and_timeout() {
 async fn dropped_waiter_and_claim_drain_actual_command_and_keep_transport_unknown() {
     let fixture = Fixture::new();
     let server = fixture.ready().await;
-    let id = adb_server_command_create(server.lease_id.clone(), fixture.command("stall", true))
-        .await
-        .unwrap();
+    let id = fixture.create_command(&server, "stall", true).await;
     let waiting = tokio::spawn(adb_server_command_run(id.clone()));
     issued(&fixture.marker).await;
     waiting.abort();
@@ -265,17 +299,13 @@ async fn dropped_waiter_and_claim_drain_actual_command_and_keep_transport_unknow
 async fn unconfirmed_mutation_is_sticky_but_explicit_confirmation_is_preserved() {
     let fixture = Fixture::new();
     let server = fixture.ready().await;
-    let id = adb_server_command_create(server.lease_id.clone(), fixture.command("echo", true))
-        .await
-        .unwrap();
+    let id = fixture.create_command(&server, "echo", true).await;
     adb_server_command_run(id.clone()).await.unwrap();
     adb_server_command_confirm(id.clone()).await.unwrap();
     adb_server_command_close(id).await.unwrap();
     let claimed = adb_server_claim(server.lease_id).await.unwrap();
     assert!(!claimed.transport_state_unknown);
-    let id = adb_server_command_create(claimed.lease_id.clone(), fixture.command("echo", true))
-        .await
-        .unwrap();
+    let id = fixture.create_command(&claimed, "echo", true).await;
     adb_server_command_run(id.clone()).await.unwrap();
     adb_server_command_close(id).await.unwrap();
     let claimed = adb_server_claim(claimed.lease_id).await.unwrap();
@@ -310,13 +340,7 @@ async fn cleanup_timeout_keeps_server_and_handshake_for_exact_retry() {
             .code,
         AdbServerErrorCode::CleanupUnconfirmed
     );
-    assert!(
-        adb_server_list()
-            .await
-            .unwrap()
-            .iter()
-            .any(|entry| entry.server_id == server.server_id)
-    );
+    assert!(find_server(&server.server_id).await.is_some());
     assert!(registry().lock().unwrap().handshakes.contains_key(&id));
     let version = interop_adb::server::query(
         fixture.launch.endpoint.parse().unwrap(),
@@ -349,13 +373,7 @@ async fn invalid_ack_and_occupied_endpoint_never_adopt_an_unrelated_listener() {
             .is_err()
     );
     assert_eq!(
-        adb_server_list()
-            .await
-            .unwrap()
-            .into_iter()
-            .find(|entry| entry.server_id == server.server_id)
-            .unwrap()
-            .phase,
+        find_server(&server.server_id).await.unwrap().phase,
         AdbServerPhase::Exited
     );
     adb_server_close(server.lease_id).await.unwrap();
@@ -490,9 +508,7 @@ fn host_close_revokes_servers_before_draining_and_prevents_late_start() {
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let fixture = Fixture::new();
         let server = fixture.ready().await;
-        let id = adb_server_command_create(server.lease_id.clone(), fixture.command("stall", true))
-            .await
-            .unwrap();
+        let id = fixture.create_command(&server, "stall", true).await;
         let command = tokio::spawn(adb_server_command_run(id.clone()));
         issued(&fixture.marker).await;
         let pending = adb_server_handshake_create(server.lease_id.clone())
@@ -522,9 +538,7 @@ fn host_close_revokes_servers_before_draining_and_prevents_late_start() {
 async fn command_failed_cleanup_keeps_the_same_id_and_retries_the_same_child() {
     let fixture = Fixture::new();
     let server = fixture.ready().await;
-    let id = adb_server_command_create(server.lease_id.clone(), fixture.command("stall", false))
-        .await
-        .unwrap();
+    let id = fixture.create_command(&server, "stall", false).await;
     server_owner::command::fail_terminations_for_test(&id, 2);
     let waiting = tokio::spawn(adb_server_command_run(id.clone()));
     issued(&fixture.marker).await;
@@ -554,18 +568,7 @@ async fn close_during_startup_prevents_late_ack_from_reopening_admission() {
         .insert("FIXTURE_DELAY_ACK".into(), "1".into());
     let server = adb_server_create(fixture.launch.clone()).await.unwrap();
     let starting = tokio::spawn(adb_server_start(server.lease_id.clone(), 60_000));
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while !adb_server_list()
-            .await
-            .unwrap()
-            .iter()
-            .any(|entry| entry.server_id == server.server_id && entry.pid.is_some())
-        {
-            tokio::time::sleep(Duration::from_millis(2)).await;
-        }
-    })
-    .await
-    .unwrap();
+    wait_for_child(&server).await;
     adb_server_close(server.lease_id.clone()).await.unwrap();
     assert!(starting.await.unwrap().is_err());
     assert!(adb_server_handshake_create(server.lease_id).await.is_err());
@@ -578,18 +581,7 @@ async fn actual_server_exit_revokes_its_clients_and_preserves_a_different_server
     let server = fixture.ready().await;
     let other_fixture = Fixture::new();
     let other = other_fixture.ready().await;
-    let handshake = adb_server_handshake_create(server.lease_id.clone())
-        .await
-        .unwrap();
-    let connected = adb_connect_server(
-        fixture.launch.endpoint.clone(),
-        "device".into(),
-        5000,
-        Some(handshake.clone()),
-    )
-    .await
-    .unwrap();
-    adb_handshake_close(handshake).await.unwrap();
+    let connected = fixture.connect(&server).await;
     let client = device(&connected.id).unwrap();
     let borrowed = insert_connection(client.clone(), "borrowed".into(), false).unwrap();
     assert_eq!(
@@ -614,10 +606,7 @@ async fn actual_server_exit_revokes_its_clients_and_preserves_a_different_server
     .await
     .unwrap();
     assert!(client.is_closed());
-    let other_command =
-        adb_server_command_create(other.lease_id.clone(), other_fixture.command("echo", false))
-            .await
-            .unwrap();
+    let other_command = other_fixture.create_command(&other, "echo", false).await;
     assert_eq!(
         adb_server_command_run(other_command.clone())
             .await
@@ -665,13 +654,7 @@ async fn scoped_reservation_rejects_late_create_and_drains_accepted_preparation(
             .server_commands
             .contains_key(&command)
     );
-    assert!(
-        !adb_server_list()
-            .await
-            .unwrap()
-            .iter()
-            .any(|entry| entry.server_id == server.server_id)
-    );
+    assert!(!find_server(&server.server_id).await.is_some());
     assert!(adb_server_start(server.lease_id, 5000).await.is_err());
     assert_eq!(
         adb_server_create_scoped(fixture.launch.clone(), first.scope_id)
@@ -704,29 +687,12 @@ async fn scoped_takeover_stops_blocked_startup_before_handing_out_successor() {
         .await
         .unwrap();
     let starting = tokio::spawn(adb_server_start(server.lease_id.clone(), 60_000));
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while !adb_server_list()
-            .await
-            .unwrap()
-            .iter()
-            .any(|entry| entry.server_id == server.server_id && entry.pid.is_some())
-        {
-            tokio::time::sleep(Duration::from_millis(2)).await;
-        }
-    })
-    .await
-    .unwrap();
+    wait_for_child(&server).await;
     let next = adb_admission_scope_attach(first.scope_key, Some(first.scope_id), 5000)
         .await
         .unwrap();
     assert!(starting.await.unwrap().is_err());
-    assert!(
-        !adb_server_list()
-            .await
-            .unwrap()
-            .iter()
-            .any(|entry| entry.server_id == server.server_id)
-    );
+    assert!(!find_server(&server.server_id).await.is_some());
     assert!(
         tokio::net::TcpStream::connect(&fixture.launch.endpoint)
             .await
@@ -751,18 +717,7 @@ async fn scoped_confirmed_server_preserves_connection_and_requires_current_scope
     adb_server_confirm_scoped(server.lease_id.clone(), first.scope_id.clone())
         .await
         .unwrap();
-    let handshake = adb_server_handshake_create(server.lease_id.clone())
-        .await
-        .unwrap();
-    let connection = adb_connect_server(
-        fixture.launch.endpoint.clone(),
-        "device".into(),
-        5000,
-        Some(handshake.clone()),
-    )
-    .await
-    .unwrap();
-    adb_handshake_close(handshake).await.unwrap();
+    let connection = fixture.connect(&server).await;
     let client = device(&connection.id).unwrap();
     let lifetime = admit_capture(&connection.id, |_, lifetime, _| Ok(lifetime)).unwrap();
     let next =
@@ -771,16 +726,7 @@ async fn scoped_confirmed_server_preserves_connection_and_requires_current_scope
             .unwrap();
     assert!(!client.is_closed());
     assert!(!lifetime.is_cancelled());
-    assert_eq!(
-        adb_server_list()
-            .await
-            .unwrap()
-            .into_iter()
-            .find(|entry| entry.server_id == server.server_id)
-            .unwrap()
-            .pid,
-        ready.pid
-    );
+    assert_eq!(find_server(&server.server_id).await.unwrap().pid, ready.pid);
     assert!(
         adb_server_claim(server.lease_id.clone()).await.is_err(),
         "无 scope 不能认领有 scope 的资源"
@@ -855,26 +801,14 @@ async fn scoped_unconfirmed_claim_retains_failed_cleanup_for_scope_retry() {
         .unwrap();
     assert!(!retained.accepting);
     assert_eq!(retained.scope_id, first.scope_id);
-    assert!(
-        adb_server_list()
-            .await
-            .unwrap()
-            .iter()
-            .any(|entry| entry.server_id == server.server_id)
-    );
+    assert!(find_server(&server.server_id).await.is_some());
     release.cancel();
     worker.await.unwrap().unwrap();
     assert!(claiming.await.unwrap().is_err());
     let next = adb_admission_scope_attach(first.scope_key, Some(first.scope_id), 5000)
         .await
         .unwrap();
-    assert!(
-        !adb_server_list()
-            .await
-            .unwrap()
-            .iter()
-            .any(|entry| entry.server_id == server.server_id)
-    );
+    assert!(!find_server(&server.server_id).await.is_some());
     adb_admission_scope_close(next.scope_id, 5000)
         .await
         .unwrap();

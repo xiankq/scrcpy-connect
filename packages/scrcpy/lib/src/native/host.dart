@@ -174,3 +174,18 @@ Future<LocalFiles> createNativeScrcpyLocalFiles({String? libraryPath}) async {
   await ensureScrcpyBindings(libraryPath: libraryPath);
   return LocalFiles(const FrbNativeLocalFiles());
 }
+
+/// 同库查询本机现存绝对目录的可用字节数；不初始化捕获或设备连接。
+Future<BigInt> readNativeScrcpyLocalStorageFreeBytes(String path) async {
+  try {
+    await ensureScrcpyBindings();
+    return await adb_native.adbLocalStorageFreeBytes(path: path);
+  } on adb_native.LocalFileError catch (error) {
+    throw LocalFileException(
+      LocalFileErrorCode.values.byName(error.code.name),
+      error.message,
+    );
+  } catch (error) {
+    throw LocalFileException(LocalFileErrorCode.io, error.toString());
+  }
+}

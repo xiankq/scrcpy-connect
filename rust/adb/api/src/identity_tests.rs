@@ -1,5 +1,9 @@
 use super::*;
 
+async fn replace_first(path: String, pem: &str) -> Result<IdentityCommitReceipt, String> {
+    replace(path, pem.into(), Some(EXPECTED_FINGERPRINT.into())).await
+}
+
 #[tokio::test]
 async fn inspection_does_not_create_a_missing_key() {
     let directory = tempfile::tempdir().unwrap();
@@ -42,13 +46,7 @@ async fn identity_access_needs_only_search_permission_on_ancestors() {
     let first = replace(path.clone(), VALID_ONE.into(), None).await.unwrap();
     assert_eq!(first.state, IdentityCommitState::Committed);
     assert_eq!(inspect(path.clone()).await.unwrap(), first.identity);
-    let changed = replace(
-        path.clone(),
-        VALID_TWO.into(),
-        Some(EXPECTED_FINGERPRINT.into()),
-    )
-    .await
-    .unwrap();
+    let changed = replace_first(path.clone(), VALID_TWO).await.unwrap();
     assert_eq!(changed.state, IdentityCommitState::Committed);
     assert_eq!(inspect(path).await.unwrap(), changed.identity);
 }
@@ -110,23 +108,11 @@ async fn installation_is_explicit_and_replacement_compares_the_previous_fingerpr
     assert_eq!(conflict.state, IdentityCommitState::Unchanged);
     assert_eq!(conflict.error.as_deref(), Some("adb_identity_conflict"));
     assert_eq!(fs::read(&path).unwrap(), before);
-    let same = replace(
-        name.clone(),
-        VALID_ONE_PKCS1.into(),
-        Some(EXPECTED_FINGERPRINT.into()),
-    )
-    .await
-    .unwrap();
+    let same = replace_first(name.clone(), VALID_ONE_PKCS1).await.unwrap();
     assert_eq!(same.state, IdentityCommitState::Unchanged);
     assert!(same.error.is_none());
     assert_eq!(fs::read(&path).unwrap(), before);
-    let changed = replace(
-        name.clone(),
-        VALID_TWO.into(),
-        Some(EXPECTED_FINGERPRINT.into()),
-    )
-    .await
-    .unwrap();
+    let changed = replace_first(name.clone(), VALID_TWO).await.unwrap();
     assert_eq!(changed.state, IdentityCommitState::Committed);
     assert_eq!(changed.identity, Some(validate(VALID_TWO).unwrap()));
     assert_eq!(inspect(name).await.unwrap(), changed.identity);
@@ -145,16 +131,8 @@ async fn competing_replacements_do_not_both_commit_from_the_same_baseline() {
     let path = path(&directory).to_str().unwrap().to_owned();
     replace(path.clone(), VALID_ONE.into(), None).await.unwrap();
     let (first, second) = tokio::join!(
-        replace(
-            path.clone(),
-            VALID_TWO.into(),
-            Some(EXPECTED_FINGERPRINT.into())
-        ),
-        replace(
-            path.clone(),
-            VALID_TWO.into(),
-            Some(EXPECTED_FINGERPRINT.into())
-        ),
+        replace_first(path.clone(), VALID_TWO),
+        replace_first(path.clone(), VALID_TWO),
     );
     let states = [first.unwrap().state, second.unwrap().state];
     assert_eq!(
@@ -398,13 +376,9 @@ async fn inspection_and_import_refuse_links_and_keep_mode_0600() {
     symlink(&path, &linked).unwrap();
     assert!(inspect(linked.to_str().unwrap().into()).await.is_err());
     assert!(
-        replace(
-            linked.to_str().unwrap().into(),
-            VALID_TWO.into(),
-            Some(EXPECTED_FINGERPRINT.into())
-        )
-        .await
-        .is_err()
+        replace_first(linked.to_str().unwrap().into(), VALID_TWO)
+            .await
+            .is_err()
     );
     assert_eq!(
         fs::metadata(&path).unwrap().permissions().mode() & 0o777,
@@ -417,9 +391,7 @@ async fn inspection_and_import_refuse_links_and_keep_mode_0600() {
         "adb_identity_permissions"
     );
     assert_eq!(
-        replace(name, VALID_TWO.into(), Some(EXPECTED_FINGERPRINT.into()))
-            .await
-            .unwrap_err(),
+        replace_first(name, VALID_TWO).await.unwrap_err(),
         "adb_identity_permissions"
     );
     assert_eq!(fs::read(&path).unwrap(), before);

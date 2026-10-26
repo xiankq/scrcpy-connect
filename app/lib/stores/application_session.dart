@@ -1,5 +1,7 @@
 library;
 
+import 'package:scrcpy_connect/services/files/cache_storage_space.dart';
+
 import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
 import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
 import 'package:scrcpy_connect/services/preference_commands.dart';
@@ -682,6 +684,7 @@ class ApplicationSession {
       try {
         final gate = MediaCacheGate();
         late final AppMediaCache cache;
+        TransferCoordinator? cacheTransfers;
         final deliveries = await DeliveryJournal.open(
           Directory(dataDirectory),
           cacheGate: gate,
@@ -691,6 +694,20 @@ class ApplicationSession {
           root: Directory(dataDirectory),
           gate: gate,
           protectedPaths: () => deliveries.protectedPaths,
+          freeBytes: cacheStorageFreeBytes,
+          protectionDetails: () async => [
+            for (final source
+                in cacheTransfers?.cacheSources ?? <Map<String, Object?>>[])
+              {
+                ...source,
+                'sourceLabel':
+                    records.current
+                        .find(source['sourceLabel'] as String)
+                        ?.name ??
+                    source['sourceLabel'],
+              },
+            ...await deliveries.protectedSources,
+          ],
         );
         final fileExecutor = AdbFileExecutor(
           localFiles: defaultClient.services,
@@ -709,6 +726,7 @@ class ApplicationSession {
                 ),
           dataDirectory: Directory(dataDirectory),
         );
+        cacheTransfers = transfers;
         final session = ApplicationSession._(
           dataDirectory,
           policy,

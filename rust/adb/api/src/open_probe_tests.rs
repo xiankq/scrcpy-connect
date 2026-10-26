@@ -3,6 +3,22 @@ use super::*;
 use interop_adb::protocol::{self, Frame};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+async fn probe(connection: &str, timeout: u32) -> (String, AdbOpenProbeFacts) {
+    let id = adb_open_probe_create(connection.into(), "sync:".into(), timeout)
+        .await
+        .unwrap();
+    let facts = adb_open_probe_result(id.clone()).await.unwrap();
+    (id, facts)
+}
+
+async fn disconnect(connection: String, client: &Client) {
+    adb_disconnect(connection).await.unwrap();
+    client
+        .close_and_wait(OperationOptions::default())
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 async fn direct_open_ack_and_close_are_responses_without_waiting_for_service_data() {
     for reply in [protocol::OKAY, protocol::CLSE] {
@@ -30,10 +46,7 @@ async fn direct_open_ack_and_close_are_responses_without_waiting_for_service_dat
             let mut byte = [0];
             assert_eq!(socket.read(&mut byte).await.unwrap(), 0);
         });
-        let id = adb_open_probe_create(connection.clone(), "sync:".into(), 2000)
-            .await
-            .unwrap();
-        let facts = adb_open_probe_result(id.clone()).await.unwrap();
+        let (id, facts) = probe(&connection, 2000).await;
         assert_eq!(facts.layer, AdbOpenProbeLayer::DirectAdb);
         assert!(facts.open_written);
         assert_eq!(
@@ -47,11 +60,7 @@ async fn direct_open_ack_and_close_are_responses_without_waiting_for_service_dat
         assert_ne!(facts.inbound_activity, "0");
         adb_open_probe_close(id, 2000).await.unwrap();
         assert!(!client.is_closed());
-        adb_disconnect(connection).await.unwrap();
-        client
-            .close_and_wait(OperationOptions::default())
-            .await
-            .unwrap();
+        disconnect(connection, &client).await;
         peer.await.unwrap();
     }
 }
@@ -68,10 +77,7 @@ async fn blocked_writer_is_not_a_network_failure_and_cleanup_keeps_the_exact_ret
         .unwrap();
     assert_eq!(notices.recv().await, Some(protocol::OPEN));
     writes.pause();
-    let id = adb_open_probe_create(connection.clone(), "sync:".into(), 30)
-        .await
-        .unwrap();
-    let facts = adb_open_probe_result(id.clone()).await.unwrap();
+    let (id, facts) = probe(&connection, 30).await;
     assert!(!facts.open_written, "进入 writer 队列不是实际写出");
     assert_eq!(facts.outcome, AdbOpenProbeOutcome::NotWritten);
     let error = adb_open_probe_close(id.clone(), 20).await.unwrap_err();
@@ -91,11 +97,7 @@ async fn blocked_writer_is_not_a_network_failure_and_cleanup_keeps_the_exact_ret
         .unwrap();
     assert_eq!(notices.recv().await, Some(protocol::CLSE));
     assert!(client.inbound_activity() >= before);
-    adb_disconnect(connection).await.unwrap();
-    client
-        .close_and_wait(OperationOptions::default())
-        .await
-        .unwrap();
+    disconnect(connection, &client).await;
     peer.await.unwrap();
 }
 
@@ -111,18 +113,11 @@ async fn actually_written_open_without_response_has_a_response_timeout() {
             protocol::CLSE
         );
     });
-    let id = adb_open_probe_create(connection.clone(), "sync:".into(), 100)
-        .await
-        .unwrap();
-    let facts = adb_open_probe_result(id.clone()).await.unwrap();
+    let (id, facts) = probe(&connection, 100).await;
     assert!(facts.open_written);
     assert_eq!(facts.outcome, AdbOpenProbeOutcome::TimedOut);
     adb_open_probe_close(id, 2000).await.unwrap();
-    adb_disconnect(connection).await.unwrap();
-    client
-        .close_and_wait(OperationOptions::default())
-        .await
-        .unwrap();
+    disconnect(connection, &client).await;
     peer.await.unwrap();
 }
 
@@ -141,20 +136,13 @@ async fn local_stream_capacity_is_distinct_and_does_not_close_other_streams() {
         );
         assert_eq!(notices.recv().await, Some(protocol::OPEN));
     }
-    let id = adb_open_probe_create(connection.clone(), "sync:".into(), 2000)
-        .await
-        .unwrap();
-    let facts = adb_open_probe_result(id.clone()).await.unwrap();
+    let (id, facts) = probe(&connection, 2000).await;
     assert_eq!(facts.outcome, AdbOpenProbeOutcome::LocalCapacity);
     assert!(!facts.open_written);
     adb_open_probe_close(id, 2000).await.unwrap();
     assert!(!client.is_closed());
     drop(streams);
-    adb_disconnect(connection).await.unwrap();
-    client
-        .close_and_wait(OperationOptions::default())
-        .await
-        .unwrap();
+    disconnect(connection, &client).await;
     peer.await.unwrap();
 }
 
@@ -175,11 +163,7 @@ async fn close_cancels_a_pending_probe_and_preserves_its_own_result_waiter() {
         Frame::read(&mut socket, 4096, true).await.unwrap().command,
         protocol::CLSE
     );
-    adb_disconnect(connection).await.unwrap();
-    client
-        .close_and_wait(OperationOptions::default())
-        .await
-        .unwrap();
+    disconnect(connection, &client).await;
 }
 
 async fn request(socket: &mut tokio::net::TcpStream) -> Vec<u8> {
@@ -223,10 +207,7 @@ async fn official_server_probe_exposes_smart_socket_response_and_releases_its_so
         let connection = insert_connection(client.clone(), "probe".into(), true)
             .unwrap()
             .id;
-        let id = adb_open_probe_create(connection.clone(), "sync:".into(), 2000)
-            .await
-            .unwrap();
-        let facts = adb_open_probe_result(id.clone()).await.unwrap();
+        let (id, facts) = probe(&connection, 2000).await;
         assert_eq!(facts.layer, AdbOpenProbeLayer::OfficialServer);
         assert_eq!(
             facts.outcome,
@@ -261,9 +242,5 @@ async fn partial_inbound_bytes_advance_the_opaque_snapshot_without_a_complete_fr
     .await
     .unwrap();
     assert!(!adb_connection_facts(connection.clone()).unwrap().closed);
-    adb_disconnect(connection).await.unwrap();
-    client
-        .close_and_wait(OperationOptions::default())
-        .await
-        .unwrap();
+    disconnect(connection, &client).await;
 }

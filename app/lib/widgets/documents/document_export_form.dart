@@ -5,15 +5,17 @@ import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
-import 'package:scrcpy_connect/pages/transfers/details/widgets/original_file_header.dart';
-import 'package:scrcpy_connect/pages/transfers/details/widgets/file_delivery_path.dart';
+import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
+import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart' show confirm;
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import 'package:scrcpy_connect/pages/transfers/details/widgets/document_conflict_panel.dart';
+import 'package:scrcpy_connect/widgets/documents/document_conflict_panel.dart';
+import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
+import 'package:scrcpy_connect/services/files/system_file_share.dart';
 
 class DocumentExportForm extends HookWidget {
   const DocumentExportForm({
@@ -35,6 +37,20 @@ class DocumentExportForm extends HookWidget {
   final String sourceLabel;
   @override
   Widget build(BuildContext context) {
+    if (!supportsSystemDocumentSave) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(DesignTokens.spacingMd),
+        child: SystemFileShareForm(
+          key: ValueKey('$transferId:$localPath'),
+          controller: controller,
+          localPath: localPath,
+          name: name,
+          kind: kind,
+          transferId: transferId,
+          sourceLabel: sourceLabel,
+        ),
+      );
+    }
     final cacheLease = useTransferCacheLease(controller, transferId);
     final operation = useDocumentOperationController(
       controller,

@@ -234,6 +234,7 @@ fn parse_result(output: &[u8], _target: &[u8], replace: bool) -> FileResult<Valu
         ));
     }
     let (code, message) = match errno {
+        116 => ("source_changed", "所选文件已被修改或替换，请重新选择。"),
         17 => ("conflict", "目标名称已存在，未覆盖。"),
         38 | 22 | 95 => (
             "atomic_rename_unavailable",
@@ -251,6 +252,40 @@ fn parse_result(output: &[u8], _target: &[u8], replace: bool) -> FileResult<Valu
     };
     let mut error = FileError::new(code, message);
     error.details = json!({"errno":errno,"atomic":true,"operation":if replace{"publish-replace"}else{"rename-no-replace"}});
+    if let Some(hex) = reply.get("recoveryPathHex") {
+        let hex = hex
+            .as_str()
+            .filter(|hex| {
+                !hex.is_empty()
+                    && hex.len() <= 16384
+                    && hex.len() % 2 == 0
+                    && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+            .ok_or_else(|| {
+                FileError::new(
+                    "result_unknown",
+                    "隔离对象的恢复回执无效，请刷新核对；不会自动重试。",
+                )
+            })?;
+        let bytes = hex
+            .as_bytes()
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| {
+                u8::from_str_radix(std::str::from_utf8(pair).expect("ASCII hex"), 16)
+                    .expect("validated hex")
+            })
+            .collect::<Vec<_>>();
+        let location = match std::str::from_utf8(&bytes) {
+            Ok(path) => format!("{path:?}"),
+            Err(_) => format!("原始路径字节 hex:{hex}"),
+        };
+        error.message = format!(
+            "{message} 无法安全恢复源名称；对象已保留在 {location}，请核对并手动恢复；不会自动重试。"
+        );
+        error.details["recoveryPathHex"] = json!(hex);
+    }
     Err(error)
 }
 
@@ -286,6 +321,61 @@ pub(crate) async fn rename_bytes_with_options(
             FileError::new(
                 "result_unknown",
                 "连接在执行重命名时中断；操作可能已完成，请刷新核对。这个操作不会再次删除源路径。",
+            )
+        } else {
+            error
+        }
+    })
+}
+
+pub(crate) async fn mutate_expected(
+    client: &Client,
+    helpers: &HelperResources,
+    source: &[u8],
+    target: &[u8],
+    delete: bool,
+    identity: &str,
+    options: OperationOptions,
+) -> FileResult<Value> {
+    // This suffix becomes one trusted argv in the verified helper invocation.
+    if identity.is_empty()
+        || identity.len() > 128
+        || !identity
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
+    {
+        return Err(FileError::new(
+            "source_changed",
+            "缺少可核验的所选文件身份，请重新选择。",
+        ));
+    }
+    let operation = format!(
+        "{}:{identity}",
+        if delete {
+            "delete-expected"
+        } else {
+            "rename-expected"
+        }
+    );
+    execute_helper(
+        client,
+        helpers,
+        source,
+        if delete { source } else { target },
+        &operation,
+        32 * 1024,
+        options,
+    )
+    .await
+    .and_then(|output| parse_result(&output, target, false))
+    .map_err(|error| {
+        if matches!(
+            error.code.as_str(),
+            "disconnected" | "timeout" | "cancelled" | "device_error" | "helper_protocol"
+        ) {
+            FileError::new(
+                "result_unknown",
+                "文件变更未取得完整回执，请刷新核对；不会自动重试。",
             )
         } else {
             error

@@ -34,20 +34,55 @@ class GalleryPage extends HookWidget {
     ]);
     useEffect(() => selected.dispose, [selected]);
     useListenable(selected);
+    final previous = useMemoized(() => controller.galleryHistory.read(device), [
+      controller,
+      device['id'],
+    ]);
+    final scroll = useScrollController(
+      initialScrollOffset: previous?.scrollOffset ?? 0,
+      keys: [controller, device['id']],
+      keepScrollOffset: false,
+    );
+    final lastScrollOffset = useMemoized(
+      () => ObjectRef(previous?.scrollOffset ?? 0.0),
+      [controller, device['id']],
+    );
+    useEffect(() {
+      void rememberOffset() {
+        if (scroll.hasClients) lastScrollOffset.value = scroll.offset;
+      }
+
+      scroll.addListener(rememberOffset);
+      return () => scroll.removeListener(rememberOffset);
+    }, [scroll]);
     final scan = useMemoized(
-      () => GalleryScanController(controller.execute, value(device, 'id')),
+      () => GalleryScanController(
+        controller.execute,
+        value(device, 'id'),
+        previous: previous,
+      ),
       [controller, device['id']],
     );
     useListenable(scan);
     useEffect(() {
       scheduleMicrotask(scan.start);
-      return scan.dispose;
+      return () {
+        if (scan.result != null) {
+          controller.galleryHistory.save(
+            device,
+            scan.result!,
+            scan.items,
+            lastScrollOffset.value,
+          );
+        }
+        scan.dispose();
+      };
     }, [scan]);
     final data = scan.result ?? <String, dynamic>{};
     final status = value(data, 'status');
     final media = scan.items;
     Future<void> reload() async {
-      selected.value = {};
+      if (selected.value.isNotEmpty || scan.scanning) return;
       await scan.start();
     }
 
@@ -57,7 +92,7 @@ class GalleryPage extends HookWidget {
       actions: [
         GlassActionIcon(
           tooltip: '重新检查相册',
-          onPressed: reload,
+          onPressed: selected.value.isNotEmpty || scan.scanning ? null : reload,
           icon: const Icon(LucideIcons.refreshCw),
         ),
         GlassActionIcon(
@@ -75,6 +110,8 @@ class GalleryPage extends HookWidget {
       child: RefreshIndicator(
         onRefresh: reload,
         child: CustomScrollView(
+          key: ValueKey((controller, device['id'])),
+          controller: scroll,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             const PageChromeSliver(),
@@ -93,6 +130,13 @@ class GalleryPage extends HookWidget {
                       scan: scan,
                       device: device,
                       onRestart: reload,
+                      onUpdate: selected.value.isNotEmpty
+                          ? null
+                          : () {
+                              scan.applyUpdate();
+                              lastScrollOffset.value = 0;
+                              if (scroll.hasClients) scroll.jumpTo(0);
+                            },
                     ),
                     if (selected.value.isNotEmpty)
                       Row(
@@ -185,7 +229,7 @@ class GalleryPage extends HookWidget {
                 },
               ),
             ),
-            if (scan.nextOffset != null)
+            if (scan.canLoadMore)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(DesignTokens.spacingMd),

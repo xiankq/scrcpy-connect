@@ -10,6 +10,7 @@ export 'src/native/host.dart'
         createNativeScrcpyHost,
         createNativeScrcpyAdbApi,
         createNativeScrcpyLocalFiles,
+        readNativeScrcpyLocalStorageFreeBytes,
         initializeNativeScrcpy,
         listNativeScrcpyServers,
         restoreNativeScrcpyHost;

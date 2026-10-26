@@ -1,22 +1,74 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:adb/adb.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/services/files/desktop_document_delivery.dart';
+
+import 'documents_coordinator_test.dart' show Fixture, identity;
+
 import 'package:scrcpy_connect/stores/files/system_delivery_coordinator.dart';
 import 'package:scrcpy_connect/models/application_command_exception.dart'
     show ApplicationCommandException;
 
+ApplicationRequest _journal({
+  Future<Json>? admission,
+  FutureOr<Json> Function(Json)? finish,
+}) => (command, [params = const {}]) async {
+  if (command == 'delivery.begin') {
+    return admission ??
+        {
+          'record': {'status': 'pending'},
+        };
+  }
+  if (command != 'delivery.finish') throw StateError(command);
+  return finish?.call(params) ??
+      {
+        'record': {'result': params['result']},
+      };
+};
+
 void main() {
   test('a full receipt that cannot fit falls back to durable unknown without writing again', () async {
-    var writes = 0;
     var receipts = 0;
-    final delivery = SystemDeliveryCoordinator(
-      applicationRequest: (command, params) async {
-        if (command == 'delivery.begin') {
-          return {
-            'record': {'status': 'pending'},
-          };
+    final fixture = Fixture();
+    fixture.local.addAll({
+      '/cache/a': {'kind': 'file', 'size': 3},
+      '/target': {'kind': 'directory'},
+      '/target/a': {'kind': 'file', 'size': 7},
+    });
+    fixture.nativeFiles.onStat = (path) async {
+      final entry = fixture.local[utf8.decode(path)];
+      if (entry == null) {
+        throw const LocalFileException(
+          LocalFileErrorCode.notFound,
+          'not found',
+        );
+      }
+      return LocalFileStat(
+        identity: identity(entry),
+        freeBytes: BigInt.from(1000000000),
+      );
+    };
+    late final DesktopDocumentDelivery desktop;
+    desktop = DesktopDocumentDelivery(
+      files: fixture.files,
+      pick: (_, _) async => '/target/a',
+      emit: (event) {
+        if (event['pending'] case final Map<Object?, Object?> pending) {
+          desktop.request('documents.conflict.resolve', {
+            'operationId': event['operationId'],
+            'conflictId': pending['conflictId'],
+            'choice': 'keepBoth',
+          }).ignore();
         }
-        if (command == 'delivery.finish') {
+      },
+    );
+    addTearDown(desktop.dispose);
+    final delivery = SystemDeliveryCoordinator(
+      applicationRequest: _journal(
+        finish: (params) {
           if (++receipts == 1) {
             throw const ApplicationCommandException(
               'delivery_capacity',
@@ -26,13 +78,9 @@ void main() {
           return {
             'record': {'result': params['result']},
           };
-        }
-        throw StateError(command);
-      },
-      write: (_) async {
-        writes++;
-        return {'status': 'saved', 'name': 'a'};
-      },
+        },
+      ),
+      write: desktop.write,
     );
     final result = await delivery.save({
       'sourceId': 'transfer:a',
@@ -43,26 +91,31 @@ void main() {
     });
     expect(result['status'], 'result_unknown');
     expect(result['partialDestinationPossible'], true);
-    expect(writes, 1);
     expect(receipts, 2);
+    expect(fixture.local['/target/a']?['size'], 7);
+    expect(
+      fixture.calls.where((call) => call.$1 == 'local.commit'),
+      hasLength(1),
+    );
+    fixture.nativeFiles.onCommit = (_) async => throw const LocalFileException(
+      LocalFileErrorCode.resultUnknown,
+      'publication receipt lost',
+    );
+    expect(
+      (await desktop.write({
+        'operationId': 'unknown-publish',
+        'localPath': '/cache/a',
+        'kind': 'file',
+        'name': 'a',
+      }))['status'],
+      'result_unknown',
+    );
   });
   test(
     'a coordinator rejection before any provider work is a safe failed attempt',
     () async {
       final delivery = SystemDeliveryCoordinator(
-        applicationRequest: (command, params) async {
-          if (command == 'delivery.begin') {
-            return {
-              'record': {'status': 'pending'},
-            };
-          }
-          if (command == 'delivery.finish') {
-            return {
-              'record': {'result': params['result']},
-            };
-          }
-          throw StateError(command);
-        },
+        applicationRequest: _journal(),
         write: (_) async {
           throw const ApplicationCommandException('documents_busy', '已有系统文档任务');
         },
@@ -85,16 +138,15 @@ void main() {
       var writes = 0;
       Map<String, dynamic>? completed;
       final delivery = SystemDeliveryCoordinator(
-        applicationRequest: (command, params) async {
-          if (command == 'delivery.begin') return admission.future;
-          if (command == 'delivery.finish') {
-            completed = params['result'] as Map<String, dynamic>;
+        applicationRequest: _journal(
+          admission: admission.future,
+          finish: (params) {
+            completed = params['result'] as Json;
             return {
               'record': {'result': completed},
             };
-          }
-          throw StateError(command);
-        },
+          },
+        ),
         write: (_) async {
           writes++;
           return {'status': 'saved'};
@@ -123,11 +175,10 @@ void main() {
     var writes = 0;
     var finished = false;
     final delivery = SystemDeliveryCoordinator(
-      applicationRequest: (command, params) async {
-        if (command == 'delivery.begin') return admission.future;
-        if (command == 'delivery.finish') return receipt.future;
-        throw StateError(command);
-      },
+      applicationRequest: _journal(
+        admission: admission.future,
+        finish: (_) => receipt.future,
+      ),
       write: (params) async {
         writes++;
         return {'status': 'saved', 'name': 'original.txt'};

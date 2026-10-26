@@ -180,7 +180,7 @@ void main() {
         );
       });
     },
-    'gallery freezes ordering and paging until traversal has finished':
+    'gallery exposes discoveries before freezing terminal ordering and paging':
         () async {
           await withCatalog((owner, executor) async {
             executor.children['/sdcard'] = [
@@ -199,6 +199,18 @@ void main() {
                 const FileStamp(mode: 0x8000, size: 4, modifiedSeconds: 8),
               ),
             ];
+            var sawProgressiveMedia = false;
+            final progress = owner.events.listen((event) {
+              final snapshot = owner.scan('d', event['scanId']! as String);
+              if (snapshot['status'] == 'scanning' &&
+                  (snapshot['items']! as List).isNotEmpty) {
+                sawProgressiveMedia = true;
+                require(
+                  snapshot['nextOffset'] == null,
+                  'running scan claimed a stable cursor',
+                );
+              }
+            });
             final started = owner.startSearch(
               'd',
               '/sdcard',
@@ -206,13 +218,17 @@ void main() {
               gallery: true,
             );
             final id = started['scanId']! as String;
-            require(
-              started['status'] == 'scanning' &&
-                  (started['items']! as List).isEmpty,
-              'gallery exposed an unstable page',
-            );
             await until(() => owner.scan('d', id)['status'] != 'scanning');
+            await progress.cancel();
+            require(
+              sawProgressiveMedia,
+              'gallery hid all discoveries until traversal ended',
+            );
             final page = owner.scan('d', id, limit: 2);
+            require(
+              page['checkedAt'] is String,
+              'gallery omitted the check time',
+            );
             require(page['nextOffset'] == 2, 'gallery missing stable cursor');
             final items = page['items']! as List;
             require(

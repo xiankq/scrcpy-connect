@@ -178,6 +178,7 @@ impl Fixture {
             .as_encoded_bytes()
             .to_vec();
         request.expected = Some(AdbFileExecutionStamp {
+            identity: None,
             mode: 0o100644,
             size: 7,
             modified_seconds: -1,

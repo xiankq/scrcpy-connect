@@ -90,46 +90,54 @@ class FileSearchPage extends HookWidget {
                     onChanged: (entire) => entireStorage.value = entire,
                   ),
                   const SizedBox(height: DesignTokens.spacingSm),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: DesignTokens.componentRowHeight,
-                          child: TextField(
-                            controller: query,
-                            maxLength: 256,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: (_) {
-                              if (canSearch && !running) search();
-                            },
-                            decoration: InputDecoration(
-                              hintText: '输入文件名',
-                              errorText: tooLong ? '搜索内容太长，请缩短文件名。' : null,
-                              counterText: '',
-                              prefixIcon: const Icon(
-                                LucideIcons.search,
-                                size: DesignTokens.componentIconActionSize,
-                              ),
-                            ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final field = TextField(
+                        controller: query,
+                        maxLength: 256,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) {
+                          if (canSearch && !running) search();
+                        },
+                        decoration: InputDecoration(
+                          hintText: '输入文件名',
+                          errorText: tooLong ? '搜索内容太长，请缩短文件名。' : null,
+                          counterText: '',
+                          prefixIcon: const Icon(
+                            LucideIcons.search,
+                            size: DesignTokens.componentIconActionSize,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: DesignTokens.spacingSm),
-                      SizedBox(
-                        width: 126,
-                        height: DesignTokens.componentRowHeight,
-                        child: FileSearchTypeField(
-                          value: filter.value,
-                          onChanged: (next) => filter.value = next,
-                        ),
-                      ),
-                    ],
+                      );
+                      final type = FileSearchTypeField(
+                        value: filter.value,
+                        onChanged: (next) => filter.value = next,
+                      );
+                      if (constraints.maxWidth /
+                              MediaQuery.textScalerOf(context).scale(1) <
+                          360) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            field,
+                            const SizedBox(height: DesignTokens.spacingSm),
+                            type,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(flex: 2, child: field),
+                          const SizedBox(width: DesignTokens.spacingSm),
+                          Expanded(child: type),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: DesignTokens.spacingSm),
                   SizedBox(
                     width: double.infinity,
-                    height: DesignTokens.componentButtonPrimaryHeight,
+
                     child: running
                         ? FilledButton(
                             onPressed: operation.stopping

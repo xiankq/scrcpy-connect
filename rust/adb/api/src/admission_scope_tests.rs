@@ -78,23 +78,7 @@ async fn direct_connection(
     tokio::net::TcpStream,
     tempfile::TempDir,
 ) {
-    static PEM: OnceLock<String> = OnceLock::new();
-    let pem = PEM.get_or_init(|| {
-        Identity::generate()
-            .unwrap()
-            .to_pkcs8_pem()
-            .unwrap()
-            .to_string()
-    });
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory
-        .path()
-        .join("key.pem")
-        .to_string_lossy()
-        .into_owned();
-    adb_replace_identity(path.clone(), pem.clone(), None)
-        .await
-        .unwrap();
+    let (directory, path) = super::handshake_tests::identity_path().await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap().to_string();
     let id = adb_scoped_handshake_create(scope.scope_id.clone())

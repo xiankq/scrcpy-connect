@@ -70,7 +70,7 @@ class AdbRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1822443544;
+  int get rustContentHash => 1064384830;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -252,6 +252,10 @@ abstract class AdbRustLibApi extends BaseApi {
   Future<LocalFileStat> interopAdbApiApiAdbLocalStat({
     required String scopeId,
     required List<int> path,
+  });
+
+  Future<BigInt> interopAdbApiApiAdbLocalStorageFreeBytes({
+    required String path,
   });
 
   Future<AdbEvent?> interopAdbApiApiAdbNext({required String operationId});
@@ -1769,6 +1773,39 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
       );
 
   @override
+  Future<BigInt> interopAdbApiApiAdbLocalStorageFreeBytes({
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 40,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_local_file_error,
+        ),
+        constMeta: kInteropAdbApiApiAdbLocalStorageFreeBytesConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kInteropAdbApiApiAdbLocalStorageFreeBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "adb_local_storage_free_bytes",
+        argNames: ["path"],
+      );
+
+  @override
   Future<AdbEvent?> interopAdbApiApiAdbNext({required String operationId}) {
     return handler.executeNormal(
       NormalTask(
@@ -1778,7 +1815,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 41,
             port: port_,
           );
         },
@@ -1810,7 +1847,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 42,
             port: port_,
           );
         },
@@ -1847,7 +1884,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 43,
             port: port_,
           );
         },
@@ -1880,7 +1917,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 44,
             port: port_,
           );
         },
@@ -1921,7 +1958,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 45,
             port: port_,
           );
         },
@@ -1963,7 +2000,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 46,
             port: port_,
           );
         },
@@ -2000,7 +2037,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 47,
             port: port_,
           );
         },
@@ -2034,7 +2071,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 48,
             port: port_,
           );
         },
@@ -2067,7 +2104,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 49,
             port: port_,
           );
         },
@@ -2100,7 +2137,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 49,
+            funcId: 50,
             port: port_,
           );
         },
@@ -2132,7 +2169,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 50,
+            funcId: 51,
             port: port_,
           );
         },
@@ -2163,7 +2200,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 51,
+            funcId: 52,
             port: port_,
           );
         },
@@ -2193,7 +2230,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 52,
+            funcId: 53,
             port: port_,
           );
         },
@@ -2226,7 +2263,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 53,
+            funcId: 54,
             port: port_,
           );
         },
@@ -2259,7 +2296,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 55,
             port: port_,
           );
         },
@@ -2294,7 +2331,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 55,
+            funcId: 56,
             port: port_,
           );
         },
@@ -2327,7 +2364,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 56,
+            funcId: 57,
             port: port_,
           );
         },
@@ -2362,7 +2399,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 57,
+            funcId: 58,
             port: port_,
           );
         },
@@ -2395,7 +2432,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 58,
+            funcId: 59,
             port: port_,
           );
         },
@@ -2427,7 +2464,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 59,
+            funcId: 60,
             port: port_,
           );
         },
@@ -2460,7 +2497,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 60,
+            funcId: 61,
             port: port_,
           );
         },
@@ -2490,7 +2527,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 61,
+            funcId: 62,
             port: port_,
           );
         },
@@ -2522,7 +2559,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 62,
+            funcId: 63,
             port: port_,
           );
         },
@@ -2559,7 +2596,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 63,
+            funcId: 64,
             port: port_,
           );
         },
@@ -2591,7 +2628,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 64,
+            funcId: 65,
             port: port_,
           );
         },
@@ -2628,7 +2665,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 65,
+            funcId: 66,
             port: port_,
           );
         },
@@ -2664,7 +2701,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 66,
+            funcId: 67,
             port: port_,
           );
         },
@@ -2693,7 +2730,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 68,
             port: port_,
           );
         },
@@ -2723,7 +2760,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 68,
+            funcId: 69,
             port: port_,
           );
         },
@@ -2758,7 +2795,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 69,
+            funcId: 70,
             port: port_,
           );
         },
@@ -2787,7 +2824,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 71,
             port: port_,
           );
         },
@@ -3001,14 +3038,15 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
   AdbFileExecutionStamp dco_decode_adb_file_execution_stamp(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return AdbFileExecutionStamp(
-      mode: dco_decode_u_32(arr[0]),
-      size: dco_decode_u_64(arr[1]),
-      modifiedSeconds: dco_decode_i_64(arr[2]),
-      modifiedNanos: dco_decode_u_32(arr[3]),
-      nanosecondPrecision: dco_decode_bool(arr[4]),
+      identity: dco_decode_opt_String(arr[0]),
+      mode: dco_decode_u_32(arr[1]),
+      size: dco_decode_u_64(arr[2]),
+      modifiedSeconds: dco_decode_i_64(arr[3]),
+      modifiedNanos: dco_decode_u_32(arr[4]),
+      nanosecondPrecision: dco_decode_bool(arr[5]),
     );
   }
 
@@ -4119,12 +4157,14 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_identity = sse_decode_opt_String(deserializer);
     var var_mode = sse_decode_u_32(deserializer);
     var var_size = sse_decode_u_64(deserializer);
     var var_modifiedSeconds = sse_decode_i_64(deserializer);
     var var_modifiedNanos = sse_decode_u_32(deserializer);
     var var_nanosecondPrecision = sse_decode_bool(deserializer);
     return AdbFileExecutionStamp(
+      identity: var_identity,
       mode: var_mode,
       size: var_size,
       modifiedSeconds: var_modifiedSeconds,
@@ -5428,6 +5468,7 @@ class AdbRustLibApiImpl extends AdbRustLibApiImplPlatform
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.identity, serializer);
     sse_encode_u_32(self.mode, serializer);
     sse_encode_u_64(self.size, serializer);
     sse_encode_i_64(self.modifiedSeconds, serializer);

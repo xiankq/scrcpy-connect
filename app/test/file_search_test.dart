@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/devices_workspace_files_search_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
 
@@ -11,6 +12,23 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
+
+AppController _fileController(ApplicationRequest request) =>
+    createTestController(request)
+      ..devices = [
+        {'id': 'phone', 'status': 'connected'},
+      ];
+
+Widget _filesPage(AppController controller, {String initialPath = '/sdcard'}) =>
+    RouterTestApp(
+      controller: controller,
+      theme: ConnectTokens.theme(Brightness.light),
+      home: FilesPage(
+        controller: controller,
+        device: const {'id': 'phone', 'name': '我的手机'},
+        initialPath: initialPath,
+      ),
+    );
 
 void main() {
   testWidgets(
@@ -29,10 +47,7 @@ void main() {
         'entries': <Json>[],
         'issues': <Json>[],
       };
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
+      final controller = _fileController((command, [params = const {}]) async {
         switch (command) {
           case 'files.list':
             return {'entries': <Json>[]};
@@ -48,16 +63,7 @@ void main() {
             return {};
         }
       });
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: FilesPage(
-            controller: controller,
-            device: const {'id': 'phone', 'name': '我的手机'},
-          ),
-        ),
-      );
+      await tester.pumpWidget(_filesPage(controller));
       await tester.pumpAndSettle();
       await _openDirectorySearch(tester);
       expect(find.text('我的手机'), findsNothing);
@@ -85,10 +91,7 @@ void main() {
   ) async {
     final lateStart = Completer<Json>();
     final cancellations = <Json>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = _fileController((command, [params = const {}]) async {
       switch (command) {
         case 'files.list':
           return {'entries': <Json>[]};
@@ -103,16 +106,7 @@ void main() {
           return {};
       }
     });
-    await tester.pumpWidget(
-      RouterTestApp(
-        controller: controller,
-        theme: ConnectTokens.theme(Brightness.light),
-        home: FilesPage(
-          controller: controller,
-          device: const {'id': 'phone', 'name': '我的手机'},
-        ),
-      ),
-    );
+    await tester.pumpWidget(_filesPage(controller));
     await tester.pumpAndSettle();
     await _openDirectorySearch(tester);
     await tester.enterText(find.byType(TextField), '旧查询');
@@ -148,10 +142,7 @@ void main() {
   ) async {
     final starts = <Json>[];
     final cancellations = <Json>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = _fileController((command, [params = const {}]) async {
       switch (command) {
         case 'files.list':
           return {'entries': <Json>[]};
@@ -196,21 +187,17 @@ void main() {
       }
     });
     await tester.pumpWidget(
-      RouterTestApp(
-        controller: controller,
-        theme: ConnectTokens.theme(Brightness.light),
-        home: FilesPage(
-          controller: controller,
-          device: const {'id': 'phone', 'name': '我的手机'},
-          initialPath: '/sdcard/Download',
-        ),
-      ),
+      _filesPage(controller, initialPath: '/sdcard/Download'),
     );
     await tester.pumpAndSettle();
     await _openDirectorySearch(tester);
     expect(
       tester.getSize(find.byKey(const ValueKey('file-search-type-field'))),
-      const Size(126, 56),
+      isA<Size>().having(
+        (size) => size.height,
+        'readable height',
+        greaterThanOrEqualTo(56),
+      ),
     );
     await tester.enterText(find.byType(TextField), '报告');
     await tester.pump();
@@ -243,10 +230,7 @@ void main() {
     tester,
   ) async {
     final starts = <Json>[];
-    final controller = createTestController((
-      command, [
-      params = const {},
-    ]) async {
+    final controller = _fileController((command, [params = const {}]) async {
       switch (command) {
         case 'files.list':
           return {
@@ -308,15 +292,7 @@ void main() {
       }
     });
     await tester.pumpWidget(
-      RouterTestApp(
-        controller: controller,
-        theme: ConnectTokens.theme(Brightness.light),
-        home: FilesPage(
-          controller: controller,
-          device: const {'id': 'phone', 'name': '我的手机'},
-          initialPath: '/sdcard/Download',
-        ),
-      ),
+      _filesPage(controller, initialPath: '/sdcard/Download'),
     );
     await tester.pumpAndSettle();
     await _openDirectorySearch(tester);

@@ -791,6 +791,35 @@ async fn mutate(
         }
     }
     crate::file_metadata::remote_path(&request.path)?;
+    if matches!(request.kind, Kind::Rename | Kind::Delete) {
+        if request.path == b"/" {
+            return Err(FileError::new("invalid_path", "不能变更文件系统根路径。"));
+        }
+        if request.kind == Kind::Rename {
+            crate::file_metadata::remote_path(&request.destination)?;
+        }
+        let expected = request
+            .expected
+            .as_ref()
+            .and_then(|stamp| stamp.identity.as_deref())
+            .ok_or_else(|| FileError::new("source_changed", "缺少所选文件的身份，请重新选择。"))?;
+        crate::file_helper::mutate_expected(
+            &op.client,
+            helpers,
+            &request.path,
+            &request.destination,
+            request.kind == Kind::Delete,
+            expected,
+            options,
+        )
+        .await?;
+        return Ok(if request.kind == Kind::Delete {
+            "verified"
+        } else {
+            "atomicRenameNoReplace"
+        }
+        .into());
+    }
     if matches!(request.kind, Kind::Rename | Kind::Commit) {
         crate::file_metadata::remote_path(&request.destination)?;
         crate::file_helper::rename_bytes_with_options(
@@ -950,6 +979,7 @@ mod tests {
     }
     fn stamp() -> AdbFileExecutionStamp {
         AdbFileExecutionStamp {
+            identity: None,
             mode: 0o100644,
             size: 7,
             modified_seconds: -1,

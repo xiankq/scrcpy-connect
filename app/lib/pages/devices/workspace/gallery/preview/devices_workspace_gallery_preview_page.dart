@@ -10,8 +10,10 @@ import 'package:scrcpy_connect/pages/devices/workspace/widgets/cached_file_image
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/services/media/media_cache_lease.dart';
+import 'package:scrcpy_connect/services/files/file_type_policy.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
+import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 
 import 'widgets/media_preview_toolbar.dart';
 
@@ -27,19 +29,30 @@ class MediaPreviewPage extends HookWidget {
   final Json file;
   @override
   Widget build(BuildContext context) {
+    final video = value(
+      file,
+      'mime',
+      FileTypePolicy.mime(value(file, 'path')),
+    ).startsWith('video/');
     final retry = useState(0);
     final request = useMemoized(
-      () => MediaCacheRequest(
-        controller.request,
-        controller.execute,
-        'media.preview',
-        {'deviceId': device['id'], 'path': file['path']},
-      ),
-      [controller, device['id'], file['path'], retry.value],
+      () => video
+          ? null
+          : MediaCacheRequest(
+              controller.request,
+              controller.execute,
+              'media.preview',
+              {'deviceId': device['id'], 'path': file['path']},
+            ),
+      [controller, device['id'], file['path'], video, retry.value],
     );
-    useEffect(() => request.dispose, [request]);
-    final result = useFuture(request.result, preserveState: false);
-    final preview = result.connectionState != ConnectionState.done
+    useEffect(() => request?.dispose, [request]);
+    final result = useFuture(request?.result, preserveState: false);
+    final preview = video
+        ? VideoPreview(
+            fallback: () => retrieveFile(context, controller, device, file),
+          )
+        : result.connectionState != ConnectionState.done
         ? const Center(child: CircularProgressIndicator.adaptive())
         : result.hasError
         ? EmptyContent(
@@ -49,6 +62,8 @@ class MediaPreviewPage extends HookWidget {
             action: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (isMediaCacheAdmissionFailure(result.error))
+                  MediaCacheBlocker(controller: controller),
                 OutlinedButton(
                   onPressed: () => retry.value++,
                   child: const Text('重新预览'),
@@ -83,18 +98,6 @@ class MediaPreviewPage extends HookWidget {
                   ),
                 );
               }
-              if (value(
-                file,
-                'mime',
-                value(data, 'mime'),
-              ).startsWith('video')) {
-                return VideoPreview(
-                  source: source,
-                  cacheLease: request.lease,
-                  fallback: () =>
-                      retrieveFile(context, controller, device, file),
-                );
-              }
               return ColoredBox(
                 color: DesignTokens.colorMediaInk,
                 child: Center(
@@ -113,7 +116,7 @@ class MediaPreviewPage extends HookWidget {
                         : Image(
                             image: CachedFileImage(
                               File(source),
-                              lease: request.lease,
+                              lease: request?.lease,
                             ),
                             fit: BoxFit.contain,
                             errorBuilder: (_, e, _) => Text(
@@ -132,6 +135,7 @@ class MediaPreviewPage extends HookWidget {
       value(result.data ?? {}, 'url'),
     );
     final reserveChrome =
+        video ||
         result.connectionState != ConnectionState.done ||
         result.hasError ||
         mediaSource.isEmpty;
@@ -143,12 +147,14 @@ class MediaPreviewPage extends HookWidget {
                 DesignTokens.typographyBodyLineHeight)
             .clamp(DesignTokens.componentIconButtonSize, double.infinity);
     final inheritedTheme = Theme.of(context);
-    final darkTheme = ConnectTokens.theme(Brightness.dark);
+    final darkTheme = ConnectTokens.theme(
+      Brightness.dark,
+      fontFamily: inheritedTheme.textTheme.bodyMedium?.fontFamily,
+      fontFamilyFallback:
+          inheritedTheme.textTheme.bodyMedium?.fontFamilyFallback,
+    );
     // 媒体只调整材质和对比度，保留应用字体。
     final mediaTheme = darkTheme.copyWith(
-      textTheme: darkTheme.textTheme.apply(
-        fontFamily: inheritedTheme.textTheme.bodyMedium?.fontFamily,
-      ),
       filledButtonTheme: FilledButtonThemeData(
         style: darkTheme.filledButtonTheme.style?.copyWith(
           textStyle: inheritedTheme.filledButtonTheme.style?.textStyle,

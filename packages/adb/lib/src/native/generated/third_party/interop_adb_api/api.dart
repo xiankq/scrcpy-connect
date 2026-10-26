@@ -413,6 +413,12 @@ Future<String> adbShell({
 Future<void> adbCloseAll() =>
     AdbRustLib.instance.api.interopAdbApiApiAdbCloseAll();
 
+/// 查询现存绝对目录所在文件系统对当前调用方可用的容量；不创建目录或文件范围。
+Future<BigInt> adbLocalStorageFreeBytes({required String path}) => AdbRustLib
+    .instance
+    .api
+    .interopAdbApiApiAdbLocalStorageFreeBytes(path: path);
+
 Future<String> adbLocalScopeOpen({
   required List<Uint8List> roots,
   required String ownerKey,
@@ -930,6 +936,8 @@ class AdbFileExecutionRequest {
 }
 
 class AdbFileExecutionStamp {
+  /// Opaque dev/inode/ctime identity, absent for legacy SYNC metadata.
+  final String? identity;
   final int mode;
   final BigInt size;
   final PlatformInt64 modifiedSeconds;
@@ -939,6 +947,7 @@ class AdbFileExecutionStamp {
   final bool nanosecondPrecision;
 
   const AdbFileExecutionStamp({
+    this.identity,
     required this.mode,
     required this.size,
     required this.modifiedSeconds,
@@ -948,6 +957,7 @@ class AdbFileExecutionStamp {
 
   @override
   int get hashCode =>
+      identity.hashCode ^
       mode.hashCode ^
       size.hashCode ^
       modifiedSeconds.hashCode ^
@@ -959,6 +969,7 @@ class AdbFileExecutionStamp {
       identical(this, other) ||
       other is AdbFileExecutionStamp &&
           runtimeType == other.runtimeType &&
+          identity == other.identity &&
           mode == other.mode &&
           size == other.size &&
           modifiedSeconds == other.modifiedSeconds &&

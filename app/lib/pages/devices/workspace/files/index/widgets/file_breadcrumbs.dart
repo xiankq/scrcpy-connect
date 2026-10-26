@@ -13,7 +13,7 @@ class FileBreadcrumbs extends HookWidget {
   });
 
   final String path;
-  final ValueChanged<String> onSelected;
+  final ValueChanged<String>? onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +46,9 @@ class FileBreadcrumbs extends HookWidget {
             _FileBreadcrumbButton(
               crumb: crumbs[index],
               selected: index == crumbs.length - 1,
-              onPressed: () => onSelected(crumbs[index].path),
+              onPressed: onSelected == null
+                  ? null
+                  : () => onSelected!(crumbs[index].path),
             ),
           ],
         ],
@@ -64,7 +66,7 @@ class _FileBreadcrumbButton extends StatelessWidget {
 
   final FileBreadcrumb crumb;
   final bool selected;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

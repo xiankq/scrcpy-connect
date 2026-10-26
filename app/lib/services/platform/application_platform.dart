@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:adb/adb.dart' show LocalFiles;
+import 'package:scrcpy_connect/services/files/desktop_document_delivery.dart';
 
 import 'package:scrcpy_connect/stores/files/documents_coordinator.dart';
 import 'package:scrcpy_connect/stores/files/document_sources.dart';
@@ -47,6 +48,13 @@ final class ApplicationPlatform {
   static Future<void> recoverDocuments({
     required Future<LocalFiles> Function() localFiles,
   }) async {
+    if (Platform.isLinux) {
+      await DesktopDocumentDelivery.recover(
+        localFiles,
+        await Directory.systemTemp.resolveSymbolicLinks(),
+      );
+      return;
+    }
     if (!Platform.isAndroid) return;
     await _confirmDocumentRecovery(localFiles);
   }
@@ -100,11 +108,22 @@ final class ApplicationPlatform {
   );
   late final _systemDelivery = SystemDeliveryCoordinator(
     applicationRequest: applicationRequest,
-    write: (params) => _documents.request('documents.export', params),
-    cancelWrite: (id) =>
-        _documents.request('documents.cancel', {'operationId': id}),
+    write: (params) => Platform.isAndroid
+        ? _documents.request('documents.export', params)
+        : _desktopDocuments.write(params),
+    cancelWrite: (id) => Platform.isAndroid
+        ? _documents.request('documents.cancel', {'operationId': id})
+        : _desktopDocuments.request('documents.cancel', {'operationId': id}),
     onChanged: (source) {
       if (!_disposed) emit({'type': 'delivery.changed', 'data': source});
+    },
+  );
+  late final _desktopDocuments = DesktopDocumentDelivery(
+    files: localFiles,
+    emit: (data) {
+      if (!_disposed) {
+        emit({'type': 'documents.conflict.changed', 'data': data});
+      }
     },
   );
   Future<Map<String, dynamic>> audioRequest(
@@ -162,10 +181,11 @@ final class ApplicationPlatform {
     Map<String, dynamic> params,
   ) async {
     if (command.startsWith('documents.')) {
-      if (!Platform.isAndroid) {
+      final desktop = Platform.isLinux;
+      if (!Platform.isAndroid && !desktop) {
         throw const ApplicationCommandException(
           'platform_unavailable',
-          '此平台请使用系统文件路径选择器。',
+          '此平台尚不支持可核验的系统位置保存，请使用系统文件分享并在接收应用核对。',
         );
       }
       if (command == 'documents.export') return _systemDelivery.save(params);
@@ -175,7 +195,9 @@ final class ApplicationPlatform {
         );
         if (cancelled != null) return cancelled;
       }
-      return _documents.request(command, params);
+      return desktop
+          ? _desktopDocuments.request(command, params)
+          : _documents.request(command, params);
     }
     if (command == 'files.open') {
       final path = params['localPath'];
@@ -195,7 +217,21 @@ final class ApplicationPlatform {
     }
     if (command == 'background.status' || command == 'background.request') {
       if (!Platform.isAndroid) {
-        return {'supported': false, 'reason': '此平台的后台保持尚未完成运行验证。'};
+        return {
+          'supported': false,
+          'canRequest': false,
+          'platform': Platform.operatingSystem,
+          'title': Platform.isIOS
+              ? 'iOS 后台限制'
+              : Platform.isMacOS || Platform.isWindows || Platform.isLinux
+              ? '桌面进程中的活动'
+              : '后台能力尚未确认',
+          'reason': Platform.isIOS
+              ? 'iOS 当前不支持通用持续后台保持。离开 App 后，连接、传输及提醒可能暂停；请返回前台后核对活动。'
+              : Platform.isMacOS || Platform.isWindows || Platform.isLinux
+              ? '连接与传输依赖应用进程继续运行。系统休眠、退出或结束进程后不保证活动继续；再次打开会核对实际状态。'
+              : '当前平台未确认持续后台能力。请保持 App 在前台，并核对活动的实际状态。',
+        };
       }
       return Map<String, dynamic>.from(
         await _channel.invokeMethod<Map<dynamic, dynamic>>(command, params) ??
@@ -308,6 +344,7 @@ final class ApplicationPlatform {
     _systemDelivery.close();
     _disposal ??= OrderedDisposal([
       _documents.dispose,
+      _desktopDocuments.dispose,
       () async {
         if (_documentRecovery != null) await _recoverDocumentOwner();
       },

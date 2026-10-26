@@ -29,6 +29,16 @@ impl Drop for Fixture {
     }
 }
 
+fn identity(metadata: &fs::Metadata) -> String {
+    format!(
+        "{:x}-{:x}-{:x}-{:x}",
+        metadata.dev(),
+        metadata.ino(),
+        metadata.ctime(),
+        metadata.ctime_nsec()
+    )
+}
+
 fn command(operation: &str, path: &Path, limit: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_interop-android-helper"));
     command.args([OsStr::new(operation), path.as_os_str(), OsStr::new(limit)]);
@@ -58,9 +68,10 @@ fn stat_follows_links_and_lstat_preserves_link_and_large_file_size() {
     let metadata = fs::metadata(&path).unwrap();
     assert_eq!(metadata.mtime(), -42);
     let expected = format!(
-        "{{\"protocol\":1,\"ok\":true,\"errno\":0,\"mode\":{},\"size\":4294967315,\"modifiedSeconds\":{}}}\n",
+        "{{\"protocol\":1,\"ok\":true,\"errno\":0,\"mode\":{},\"size\":4294967315,\"modifiedSeconds\":{},\"identity\":\"{}\"}}\n",
         metadata.mode(),
-        metadata.mtime()
+        metadata.mtime(),
+        identity(&metadata)
     );
     assert_eq!(output("stat", &link, "unused"), expected);
     assert_eq!(output("lstat", &path, "unused"), expected);
@@ -68,10 +79,11 @@ fn stat_follows_links_and_lstat_preserves_link_and_large_file_size() {
     assert_eq!(
         output("lstat", &link, "unused"),
         format!(
-            "{{\"protocol\":1,\"ok\":true,\"errno\":0,\"mode\":{},\"size\":{},\"modifiedSeconds\":{}}}\n",
+            "{{\"protocol\":1,\"ok\":true,\"errno\":0,\"mode\":{},\"size\":{},\"modifiedSeconds\":{},\"identity\":\"{}\"}}\n",
             metadata.mode(),
             metadata.size(),
-            metadata.mtime()
+            metadata.mtime(),
+            identity(&metadata)
         )
     );
     assert_eq!(
@@ -81,6 +93,24 @@ fn stat_follows_links_and_lstat_preserves_link_and_large_file_size() {
     let missing = output("lstat", &fixture.path("absent"), "unused");
     assert_eq!(missing, "{\"protocol\":1,\"ok\":false,\"errno\":2}\n");
     assert!(!missing.contains("absent"));
+    // The mutation matrix in main.rs covers stale stamps before and after pin;
+    // retain CLI dispatch and successful no-replace rename/delete coverage here.
+    let target = fixture.path("renamed");
+    let current = identity(&fs::metadata(&path).unwrap());
+    assert!(
+        output(
+            &format!("rename-expected:{current}"),
+            &path,
+            target.to_str().unwrap()
+        )
+        .contains("\"ok\":true")
+    );
+    assert!(!path.exists());
+    let current = identity(&fs::metadata(&target).unwrap());
+    assert!(
+        output(&format!("delete-expected:{current}"), &target, "unused").contains("\"ok\":true")
+    );
+    assert!(!target.exists());
 }
 
 #[test]
@@ -100,8 +130,8 @@ fn list_keeps_raw_names_and_link_metadata_and_reports_exact_truncation() {
     for (name, path) in [("78ff0a", &file), ("6c696e6b", &link)] {
         let stat = fs::symlink_metadata(path).unwrap();
         assert!(listing.contains(&format!(
-            "{{\"nameHex\":\"{name}\",\"mode\":{},\"size\":{},\"modifiedSeconds\":{},\"errno\":0}}",
-            stat.mode(), stat.size(), stat.mtime()
+            "{{\"nameHex\":\"{name}\",\"mode\":{},\"size\":{},\"modifiedSeconds\":{},\"identity\":\"{}\",\"errno\":0}}",
+            stat.mode(), stat.size(), stat.mtime(), identity(&stat)
         )), "{listing}");
     }
     assert!(listing.ends_with("],\"truncated\":false,\"ok\":true,\"errno\":0}\n"));
@@ -145,7 +175,7 @@ fn list_keeps_entries_whose_metadata_is_not_accessible() {
     assert!(result.stderr.is_empty());
     assert_eq!(
         String::from_utf8(result.stdout).unwrap(),
-        "{\"protocol\":1,\"entries\":[{\"nameHex\":\"66696c65\",\"mode\":0,\"size\":0,\"modifiedSeconds\":0,\"errno\":13}],\"truncated\":false,\"ok\":true,\"errno\":0}\n"
+        "{\"protocol\":1,\"entries\":[{\"nameHex\":\"66696c65\",\"mode\":0,\"size\":0,\"modifiedSeconds\":0,\"identity\":\"\",\"errno\":13}],\"truncated\":false,\"ok\":true,\"errno\":0}\n"
     );
 }
 

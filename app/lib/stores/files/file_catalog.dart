@@ -59,6 +59,8 @@ final class FileCatalog {
       'modifiedSeconds': fact.stamp?.modifiedSeconds ?? 0,
       'mime': mime(fact.displayName),
       'mode': fact.stamp?.mode ?? 0,
+      'sourceIdentity': fact.stamp?.identity,
+      if (fact.stamp != null) 'sourceStamp': fact.stamp!.toJson(),
       'selectable':
           name != null &&
           fact.error == null &&
@@ -253,6 +255,19 @@ final class FileCatalog {
             scan.entries.add(entry);
           }
         }
+        if (!_closed &&
+            DateTime.now().difference(scan.lastProgress).inMilliseconds >=
+                200) {
+          scan.lastProgress = DateTime.now();
+          _events.add({
+            'type': scan.gallery
+                ? 'media.scan.changed'
+                : 'files.search.changed',
+            'deviceId': scan.device,
+            'scanId': scan.id,
+            'searchId': scan.id,
+          });
+        }
         if (scan.visited > 50000 ||
             scan.entries.length >= (scan.gallery ? 25000 : 500) ||
             bytes > 8 * 1024 * 1024) {
@@ -274,6 +289,7 @@ final class FileCatalog {
       scan.status = 'failed';
     } finally {
       timer.cancel();
+      scan.checkedAt = DateTime.now();
       if (scan.gallery) {
         scan.entries.sort((a, b) {
           final modified = (b['modified']! as int).compareTo(
@@ -346,6 +362,9 @@ class _Scan {
   final bool gallery;
   final cancellation = FileCancellation();
   final entries = <Map<String, Object?>>[], issues = <Map<String, Object?>>[];
+  final startedAt = DateTime.now();
+  DateTime lastProgress = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime? checkedAt;
   String status = 'running';
   int visited = 0, visitedDirectories = 0;
   String currentDirectory = '';
@@ -359,12 +378,12 @@ class _Scan {
 
   Map<String, Object?> snapshot({int offset = 0, int limit = 500}) {
     final ready = !gallery || status != 'running';
-    final page = ready
-        ? entries.skip(offset).take(limit).toList()
-        : <Map<String, Object?>>[];
-    final total = ready ? entries.length : 0;
+    final page = entries.skip(offset).take(limit).toList();
+    final total = entries.length;
     return {
       'deviceId': device,
+      'startedAt': startedAt.toIso8601String(),
+      'checkedAt': checkedAt?.toIso8601String(),
       'searchId': id,
       'scanId': id,
       'path': root,

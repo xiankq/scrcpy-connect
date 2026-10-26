@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 9324762;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1860430024;
 
 // Section: executor
 
@@ -1568,6 +1568,43 @@ fn wire__interop_adb_api__api__adb_local_stat_impl(
                     (move || async move {
                         let output_ok =
                             interop_adb_api::api::adb_local_stat(api_scope_id, api_path).await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__interop_adb_api__api__adb_local_storage_free_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "adb_local_storage_free_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, interop_adb_api::api::LocalFileError>(
+                    (move || async move {
+                        let output_ok =
+                            interop_adb_api::api::adb_local_storage_free_bytes(api_path).await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -3841,6 +3878,7 @@ const _: fn() = || {
     }
     {
         let AdbFileExecutionStamp = None::<interop_adb_api::api::AdbFileExecutionStamp>.unwrap();
+        let _: Option<String> = AdbFileExecutionStamp.identity;
         let _: u32 = AdbFileExecutionStamp.mode;
         let _: u64 = AdbFileExecutionStamp.size;
         let _: i64 = AdbFileExecutionStamp.modified_seconds;
@@ -4405,12 +4443,14 @@ impl SseDecode for interop_adb_api::api::AdbFileExecutionRequest {
 impl SseDecode for interop_adb_api::api::AdbFileExecutionStamp {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_identity = <Option<String>>::sse_decode(deserializer);
         let mut var_mode = <u32>::sse_decode(deserializer);
         let mut var_size = <u64>::sse_decode(deserializer);
         let mut var_modifiedSeconds = <i64>::sse_decode(deserializer);
         let mut var_modifiedNanos = <u32>::sse_decode(deserializer);
         let mut var_nanosecondPrecision = <bool>::sse_decode(deserializer);
         return interop_adb_api::api::AdbFileExecutionStamp {
+            identity: var_identity,
             mode: var_mode,
             size: var_size,
             modified_seconds: var_modifiedSeconds,
@@ -5975,221 +6015,227 @@ fn pde_ffi_dispatcher_primary_impl(
             wire__interop_adb_api__api__adb_local_scope_open_impl(port, ptr, rust_vec_len, data_len)
         }
         39 => wire__interop_adb_api__api__adb_local_stat_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__interop_adb_api__api__adb_next_impl(port, ptr, rust_vec_len, data_len),
-        41 => {
+        40 => wire__interop_adb_api__api__adb_local_storage_free_bytes_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        41 => wire__interop_adb_api__api__adb_next_impl(port, ptr, rust_vec_len, data_len),
+        42 => {
             wire__interop_adb_api__api__adb_open_probe_close_impl(port, ptr, rust_vec_len, data_len)
         }
-        42 => wire__interop_adb_api__api__adb_open_probe_create_impl(
+        43 => wire__interop_adb_api__api__adb_open_probe_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => wire__interop_adb_api__api__adb_open_probe_result_impl(
+        44 => wire__interop_adb_api__api__adb_open_probe_result_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__interop_adb_api__api__adb_pair_impl(port, ptr, rust_vec_len, data_len),
-        45 => {
+        45 => wire__interop_adb_api__api__adb_pair_impl(port, ptr, rust_vec_len, data_len),
+        46 => {
             wire__interop_adb_api__api__adb_replace_identity_impl(port, ptr, rust_vec_len, data_len)
         }
-        46 => wire__interop_adb_api__api__adb_reverse_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__interop_adb_api__api__adb_scoped_connection_claim_impl(
+        47 => wire__interop_adb_api__api__adb_reverse_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__interop_adb_api__api__adb_scoped_connection_claim_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__interop_adb_api__api__adb_scoped_handshake_create_impl(
+        49 => wire__interop_adb_api__api__adb_scoped_handshake_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__interop_adb_api__api__adb_server_claim_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__interop_adb_api__api__adb_server_claim_scoped_impl(
+        50 => wire__interop_adb_api__api__adb_server_claim_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__interop_adb_api__api__adb_server_claim_scoped_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => wire__interop_adb_api__api__adb_server_close_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__interop_adb_api__api__adb_server_command_cancel_impl(
+        52 => wire__interop_adb_api__api__adb_server_close_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__interop_adb_api__api__adb_server_command_cancel_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__interop_adb_api__api__adb_server_command_close_impl(
+        54 => wire__interop_adb_api__api__adb_server_command_close_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__interop_adb_api__api__adb_server_command_confirm_impl(
+        55 => wire__interop_adb_api__api__adb_server_command_confirm_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__interop_adb_api__api__adb_server_command_create_impl(
+        56 => wire__interop_adb_api__api__adb_server_command_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__interop_adb_api__api__adb_server_command_run_impl(
+        57 => wire__interop_adb_api__api__adb_server_command_run_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__interop_adb_api__api__adb_server_confirm_scoped_impl(
+        58 => wire__interop_adb_api__api__adb_server_confirm_scoped_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__interop_adb_api__api__adb_server_create_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__interop_adb_api__api__adb_server_create_scoped_impl(
+        59 => wire__interop_adb_api__api__adb_server_create_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__interop_adb_api__api__adb_server_create_scoped_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__interop_adb_api__api__adb_server_handshake_create_impl(
+        61 => wire__interop_adb_api__api__adb_server_handshake_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__interop_adb_api__api__adb_server_list_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__interop_adb_api__api__adb_server_start_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__interop_adb_api__api__adb_service_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__interop_adb_api__api__adb_service_next_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__interop_adb_api__api__adb_shell_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__interop_adb_api__api__adb_sync_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__interop_adb_api__api__adb_tcp_options_default_impl(
+        62 => wire__interop_adb_api__api__adb_server_list_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__interop_adb_api__api__adb_server_start_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__interop_adb_api__api__adb_service_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__interop_adb_api__api__adb_service_next_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__interop_adb_api__api__adb_shell_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__interop_adb_api__api__adb_sync_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__interop_adb_api__api__adb_tcp_options_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__interop_adb_api__api__adb_validate_identity_impl(
+        69 => wire__interop_adb_api__api__adb_validate_identity_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__interop_adb_api__api__adb_write_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__init_scrcpy_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__interop_scrcpy_api__api__scrcpy_await_media_impl(
+        70 => wire__interop_adb_api__api__adb_write_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__init_scrcpy_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__interop_scrcpy_api__api__scrcpy_await_media_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => wire__interop_scrcpy_api__api__scrcpy_cancel_events_impl(
+        73 => wire__interop_scrcpy_api__api__scrcpy_cancel_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => {
+        74 => {
             wire__interop_scrcpy_api__api__scrcpy_clipboard_impl(port, ptr, rust_vec_len, data_len)
         }
-        74 => wire__interop_scrcpy_api__api__scrcpy_create_session_impl(
+        75 => wire__interop_scrcpy_api__api__scrcpy_create_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => wire__interop_scrcpy_api__api__scrcpy_drain_connection_impl(
+        76 => wire__interop_scrcpy_api__api__scrcpy_drain_connection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__interop_scrcpy_api__api__scrcpy_get_clipboard_impl(
+        77 => wire__interop_scrcpy_api__api__scrcpy_get_clipboard_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__interop_scrcpy_api__api__scrcpy_initialize_sdk_impl(
+        78 => wire__interop_scrcpy_api__api__scrcpy_initialize_sdk_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        78 => wire__interop_scrcpy_api__api__scrcpy_inspect_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__interop_scrcpy_api__api__scrcpy_key_impl(port, ptr, rust_vec_len, data_len),
-        80 => {
+        79 => wire__interop_scrcpy_api__api__scrcpy_inspect_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__interop_scrcpy_api__api__scrcpy_key_impl(port, ptr, rust_vec_len, data_len),
+        81 => {
             wire__interop_scrcpy_api__api__scrcpy_next_event_impl(port, ptr, rust_vec_len, data_len)
         }
-        81 => wire__interop_scrcpy_api__api__scrcpy_open_events_impl(
+        82 => wire__interop_scrcpy_api__api__scrcpy_open_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => wire__interop_scrcpy_api__api__scrcpy_process_info_impl(
+        83 => wire__interop_scrcpy_api__api__scrcpy_process_info_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__interop_scrcpy_api__api__scrcpy_reset_video_impl(
+        84 => wire__interop_scrcpy_api__api__scrcpy_reset_video_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        84 => wire__interop_scrcpy_api__api__scrcpy_resize_display_impl(
+        85 => wire__interop_scrcpy_api__api__scrcpy_resize_display_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        85 => wire__interop_scrcpy_api__api__scrcpy_rotate_impl(port, ptr, rust_vec_len, data_len),
-        86 => wire__interop_scrcpy_api__api__scrcpy_scroll_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__interop_scrcpy_api__api__scrcpy_set_display_power_impl(
+        86 => wire__interop_scrcpy_api__api__scrcpy_rotate_impl(port, ptr, rust_vec_len, data_len),
+        87 => wire__interop_scrcpy_api__api__scrcpy_scroll_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__interop_scrcpy_api__api__scrcpy_set_display_power_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__interop_scrcpy_api__api__scrcpy_source_status_impl(
+        89 => wire__interop_scrcpy_api__api__scrcpy_source_status_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => {
+        90 => {
             wire__interop_scrcpy_api__api__scrcpy_start_app_impl(port, ptr, rust_vec_len, data_len)
         }
-        90 => wire__interop_scrcpy_api__api__scrcpy_start_control_impl(
+        91 => wire__interop_scrcpy_api__api__scrcpy_start_control_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__interop_scrcpy_api__api__scrcpy_start_session_impl(
+        92 => wire__interop_scrcpy_api__api__scrcpy_start_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__interop_scrcpy_api__api__scrcpy_stop_session_impl(
+        93 => wire__interop_scrcpy_api__api__scrcpy_stop_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__interop_scrcpy_api__api__scrcpy_text_impl(port, ptr, rust_vec_len, data_len),
-        94 => wire__interop_scrcpy_api__api__scrcpy_touch_impl(port, ptr, rust_vec_len, data_len),
+        94 => wire__interop_scrcpy_api__api__scrcpy_text_impl(port, ptr, rust_vec_len, data_len),
+        95 => wire__interop_scrcpy_api__api__scrcpy_touch_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -6546,6 +6592,7 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<interop_adb_api::api::AdbFileE
 impl flutter_rust_bridge::IntoDart for FrbWrapper<interop_adb_api::api::AdbFileExecutionStamp> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.0.identity.into_into_dart().into_dart(),
             self.0.mode.into_into_dart().into_dart(),
             self.0.size.into_into_dart().into_dart(),
             self.0.modified_seconds.into_into_dart().into_dart(),
@@ -8111,6 +8158,7 @@ impl SseEncode for interop_adb_api::api::AdbFileExecutionRequest {
 impl SseEncode for interop_adb_api::api::AdbFileExecutionStamp {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.identity, serializer);
         <u32>::sse_encode(self.mode, serializer);
         <u64>::sse_encode(self.size, serializer);
         <i64>::sse_encode(self.modified_seconds, serializer);

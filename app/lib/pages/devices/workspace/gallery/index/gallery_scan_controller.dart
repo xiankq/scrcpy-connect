@@ -3,14 +3,34 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
+import 'package:scrcpy_connect/stores/files/gallery_history.dart';
+
 import 'package:flutter/foundation.dart';
 
 /// 持有单设备相册页面的加载、轮询及分页状态；实际扫描由 FileCatalog 执行。
 class GalleryScanController extends ChangeNotifier {
-  GalleryScanController(this._execute, this.deviceId);
+  GalleryScanController(
+    this._execute,
+    this.deviceId, {
+    GalleryHistoryEntry? previous,
+  }) {
+    if (previous != null) {
+      result = previous.result;
+      items = previous.items;
+      showingPrevious = true;
+    }
+  }
   final ApplicationCommandExecutor _execute;
   final String deviceId;
   Json? result;
+  Json? _latest;
+  Json? _pendingResult;
+  List<Json>? _pendingItems;
+  bool showingPrevious = false;
+  bool get hasUpdate => _pendingResult != null;
+  Json get progress => _latest ?? result ?? {};
+  String? _activeScanId;
+
   List<Json> items = [];
   String? error;
   bool starting = false;
@@ -19,10 +39,14 @@ class GalleryScanController extends ChangeNotifier {
   bool _disposed = false;
   int _generation = 0;
   int _read = 0;
+  int _pagingRead = 0;
   Timer? _poll;
-  String? get scanId => result?['scanId'] as String?;
-  bool get scanning => starting || result?['status'] == 'scanning';
+  String? get scanId => _activeScanId;
+  bool get scanning => starting || _latest?['status'] == 'scanning';
   int? get nextOffset => result?['nextOffset'] as int?;
+  bool get canLoadMore =>
+      nextOffset != null &&
+      const ['completed', 'partial', 'cancelled'].contains(result?['status']);
   bool _current(int generation) => !_disposed && generation == _generation;
 
   Future<void> start() async {
@@ -34,8 +58,12 @@ class GalleryScanController extends ChangeNotifier {
     starting = true;
     paging = false;
     stopping = false;
-    result = null;
-    items = [];
+    _latest = null;
+    _activeScanId = null;
+    _pendingResult = null;
+    _pendingItems = null;
+    showingPrevious = result != null;
+
     error = null;
     notifyListeners();
     try {
@@ -61,6 +89,7 @@ class GalleryScanController extends ChangeNotifier {
       if (_current(generation)) {
         _generation++;
         starting = false;
+        paging = false;
         error = '相册检查未能开始：$failure';
         notifyListeners();
       }
@@ -73,15 +102,15 @@ class GalleryScanController extends ChangeNotifier {
     final page = objects(next['items']);
     if (id.isEmpty ||
         next['deviceId'] != deviceId ||
-        (scanId != null && scanId != id) ||
+        (append ? (result?['scanId'] != id) : scanId != null && scanId != id) ||
         next['offset'] != offset ||
+        (append && status == 'scanning') ||
         !const [
           'scanning',
           'completed',
           'partial',
           'cancelled',
-        ].contains(status) ||
-        (status == 'scanning' && page.isNotEmpty)) {
+        ].contains(status)) {
       throw const RequestFailure('invalid_data', '相册结果归属或范围无法核验，请重新检查。');
     }
     if (append && items.length != offset) {
@@ -99,8 +128,40 @@ class GalleryScanController extends ChangeNotifier {
     if (paths.length != combined.length || paths.contains('')) {
       throw const RequestFailure('invalid_data', '相册分页包含重复或无效项目，请重新检查。');
     }
-    result = next;
-    items = combined;
+    if (append) {
+      // 分页只扩展当前可见的稳定集合，不接管后台检查或待更新集合。
+      result = next;
+      items = combined;
+      return;
+    }
+    _activeScanId = id;
+    _latest = next;
+    if (showingPrevious) {
+      if (status != 'scanning') {
+        _pendingResult = next;
+        _pendingItems = combined;
+      }
+    } else if (status == 'scanning') {
+      // Discovery appends by path; an already visible object never moves.
+      final seen = items.map((file) => value(file, 'path')).toSet();
+      items = [
+        ...items,
+        ...page.where((file) => seen.add(value(file, 'path'))),
+      ];
+      result = next;
+    } else if (result?['status'] == 'scanning' &&
+        items.isNotEmpty &&
+        !listEquals(
+          items.map((file) => file['path']).toList(),
+          combined.map((file) => file['path']).toList(),
+        )) {
+      showingPrevious = true;
+      _pendingResult = next;
+      _pendingItems = combined;
+    } else {
+      result = next;
+      items = combined;
+    }
     error = null;
   }
 
@@ -120,9 +181,11 @@ class GalleryScanController extends ChangeNotifier {
   }
 
   Future<void> loadMore() async {
-    final id = scanId;
+    final id = result?['scanId'] as String?;
     final offset = nextOffset;
-    if (id == null || offset == null || scanning || paging || stopping) return;
+    if (id == null || offset == null || !canLoadMore || paging || stopping) {
+      return;
+    }
     paging = true;
     notifyListeners();
     await _page(id, offset, append: true);
@@ -130,8 +193,8 @@ class GalleryScanController extends ChangeNotifier {
 
   Future<void> _page(String id, int offset, {required bool append}) async {
     final generation = _generation;
-    final read = ++_read;
-    _poll?.cancel();
+    final read = append ? ++_pagingRead : ++_read;
+    if (!append) _poll?.cancel();
     try {
       final next = await _execute(ApplicationCommand.mediaList, {
         'deviceId': deviceId,
@@ -139,14 +202,16 @@ class GalleryScanController extends ChangeNotifier {
         'offset': offset,
         'limit': 100,
       }).timeout(const Duration(seconds: 15));
-      if (!_current(generation) || read != _read) return;
+      if (!_current(generation) || read != (append ? _pagingRead : _read)) {
+        return;
+      }
       _accept(next, offset: offset, append: append);
-      paging = false;
+      if (append) paging = false;
       notifyListeners();
-      _schedule(generation);
+      if (!append) _schedule(generation);
     } catch (failure) {
-      if (_current(generation) && read == _read) {
-        paging = false;
+      if (_current(generation) && read == (append ? _pagingRead : _read)) {
+        if (append) paging = false;
         error = '相册检查未完成：$failure';
         notifyListeners();
       }
@@ -177,6 +242,18 @@ class GalleryScanController extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  void applyUpdate() {
+    if (_pendingResult == null || _pendingItems == null) return;
+    ++_pagingRead;
+    paging = false;
+    result = _pendingResult;
+    items = _pendingItems!;
+    _pendingResult = null;
+    _pendingItems = null;
+    showingPrevious = false;
+    notifyListeners();
   }
 
   Future<void> _retire(String id) async {
