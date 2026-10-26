@@ -109,7 +109,7 @@ void main() {
     expect(fixture.base.api.receivedCommands, ['observation.set']);
   });
 
-  test('停止持久化false且保留clipboard同一部署，旧代通知事件不复活', () async {
+  test('停止持久化false且保留apps同一部署，旧代通知事件不复活', () async {
     await fixture.command('observation.start');
     final oldEpoch = fixture.epoch;
     final stopped = await fixture.command('observation.stop');
@@ -124,10 +124,11 @@ void main() {
         {'key': 'stale'},
       ],
     );
-    final clipboard = await fixture.base.companion.command('clipboard.get', {
+    final apps = await fixture.base.companion.command('apps.list', {
       'deviceId': fixture.id,
+      'filter': 'running',
     });
-    expect(clipboard['text'], '文字');
+    expect(apps['requested'], isTrue);
     expect(fixture.base.companion.hasActive(fixture.id), isTrue);
     expect(
       fixture.base.api.created.where((id) => id.startsWith('push')).length,
@@ -406,8 +407,6 @@ class _ObservationFixture {
       base.reply(request, section('notifications'));
     } else if (command == 'calls.list') {
       base.reply(request, section('calls'));
-    } else if (command == 'clipboard.get') {
-      base.reply(request, {'text': '文字'});
     } else {
       base.reply(request, {'requested': true});
     }

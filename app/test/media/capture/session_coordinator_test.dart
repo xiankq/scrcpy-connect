@@ -25,6 +25,85 @@ void main() {
     await f.dispose();
   });
 
+  test('scrcpy 剪贴板 ACK 必须读回一致，未知和清理失败保留原会话', () async {
+    final state = await f.start();
+    await f.owner.command('session.ready', {
+      'sessionId': state['sessionId'],
+      'captureGeneration': state['captureGeneration'],
+      'generation': 1,
+      'textureId': 42,
+    });
+    f.native.clipboard = 'different';
+    await expectLater(
+      f.owner.command('clipboard.set', {
+        'deviceId': 'device',
+        'sessionId': state['sessionId'],
+        'text': 'requested',
+      }),
+      throwsA(_error('clipboard_not_applied')),
+    );
+    expect(f.native.controls.whereType<ScrcpyClipboard>(), hasLength(1));
+    expect(f.native.stopped, ['capture-2']);
+    final probeOptions = f.native.options.last;
+    expect(
+      probeOptions.video ||
+          probeOptions.audio ||
+          probeOptions.powerOn ||
+          probeOptions.clipboardAutosync,
+      isFalse,
+    );
+    expect(f.native.options.first.clipboardAutosync, isTrue);
+    for (final closeWindow in [false, true]) {
+      var admitted = true;
+      f.owner.bindClipboardAdmission((_, _, _) => admitted);
+      f.native.media = Completer<ScrcpySessionInfo>();
+      final pending = f.owner.command('clipboard.set', {
+        'deviceId': 'device',
+        'sessionId': state['sessionId'],
+        'text': 'late',
+        'expectedCaptureRef': state['captureRef'],
+        'captureGeneration': state['captureGeneration'],
+        'automatic': true,
+        'clipboardGeneration': 1,
+      });
+      final probe = 'capture-${f.native.created.length + 1}';
+      await _until(() => f.native.stages.contains('media:$probe:1'));
+      if (closeWindow) {
+        await f.owner.command('session.stop', {
+          'sessionId': state['sessionId'],
+        });
+      } else {
+        admitted = false;
+        f.owner.bindClipboardAdmission((_, _, _) => true);
+      }
+      f.native.media!.complete(_info(probe, 1));
+      await expectLater(
+        pending,
+        throwsA(_error(closeWindow ? 'stale_capture' : 'cancelled')),
+      );
+      expect(f.native.controls.whereType<ScrcpyClipboard>(), hasLength(1));
+    }
+    f.native.media = null;
+    f.native.clipboardFailure = true;
+    await expectLater(
+      f.owner.command('clipboard.get', {'deviceId': 'device'}),
+      throwsA(_error('clipboard_result_unknown')),
+    );
+    f.native.clipboardFailure = false;
+    f.native.clipboard = 'requested';
+    f.native.stopFailures = 1;
+    await expectLater(
+      f.owner.command('clipboard.set', {
+        'deviceId': 'device',
+        'text': 'requested',
+      }),
+      throwsA(_error('capture_cleanup_unconfirmed')),
+    );
+    final leaked = f.native.created.last;
+    await f.owner.stopForConnection('device', f.connection);
+    expect(f.native.stopped.where((id) => id == leaked), hasLength(2));
+  });
+
   test('事件消费者失败不留下未启动窗口，也不阻断精确捕获回收', () async {
     f.failEvents = true;
     final state = await f.start();
@@ -1163,7 +1242,21 @@ final class _Exec {
   }
 }
 
-final class _Native implements NativeScrcpyApi, NativeScrcpyStagedApi {
+final class _Native
+    implements
+        NativeScrcpyApi,
+        NativeScrcpyStagedApi,
+        NativeScrcpyClipboardApi {
+  String clipboard = '';
+  bool clipboardFailure = false;
+  @override
+  Future<String> readClipboard(String captureRef) async {
+    if (clipboardFailure) {
+      throw const ScrcpyException('clipboard_result_unknown');
+    }
+    return clipboard;
+  }
+
   final created = <String>[], stopped = <String>[], stages = <String>[];
   final options = <ScrcpyOptions>[];
   final controls = <ScrcpyControlMessage>[];

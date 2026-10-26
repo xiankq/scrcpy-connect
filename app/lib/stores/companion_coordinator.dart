@@ -30,7 +30,6 @@ final class _Deployment {
   final cancellation = AdbCancellation();
   StreamSubscription<Map<String, Object?>>? subscription;
   Map<String, Object?>? ready;
-  Map<String, Object?> clipboard = const {'status': 'unknown', 'live': false};
   bool retired = false;
   Future<void>? releasing;
 }
@@ -62,12 +61,7 @@ final class CompanionCoordinator {
 
   Stream<CompanionUpdate> get updates => _updates.stream;
 
-  bool handles(String name) => const {
-    'apps.list',
-    'apps.icon',
-    'clipboard.get',
-    'clipboard.set',
-  }.contains(name);
+  bool handles(String name) => const {'apps.list', 'apps.icon'}.contains(name);
 
   DeviceConnection? currentConnection(String device) {
     try {
@@ -92,7 +86,6 @@ final class CompanionCoordinator {
       'live': true,
       'protocol': entry.ready!['protocol'],
       'apiLevel': entry.ready!['apiLevel'],
-      'clipboard': entry.clipboard,
     };
   }
 
@@ -261,14 +254,7 @@ final class CompanionCoordinator {
       ...raw,
       'deviceId': entry.device,
     });
-    if (type == 'clipboard.changed' || type == 'clipboard.unavailable') {
-      entry.clipboard = {
-        'status': type == 'clipboard.changed' ? 'available' : 'limited',
-        'live': type == 'clipboard.changed',
-        'reason': ?raw['reason'],
-      };
-      _emitEvent(type, entry.device, data);
-    } else if (type == 'notifications.changed' ||
+    if (type == 'notifications.changed' ||
         type == 'calls.changed' ||
         type == 'calls.incoming') {
       _updates.add(CompanionUpdate(entry.device, entry.connection, type, data));
@@ -374,38 +360,23 @@ final class CompanionCoordinator {
     final entry = await _obtain(device, connection, allowStart);
     _check(entry);
     cancellation?.check();
-    try {
-      final value = await entry.client.request(
-        name,
-        payload,
-        mutation: !const {
-          'apps.list',
-          'apps.icon',
-          'notifications.list',
-          'calls.list',
-          'clipboard.get',
-          'observation.set',
-        }.contains(name),
-        cancellation: cancellation,
-      );
-      _check(entry);
-      if (value is! Map<String, Object?>) {
-        throw const CompanionException('protocol_error', '互联回执不是对象。');
-      }
-      if (name.startsWith('clipboard.')) {
-        entry.clipboard = const {'status': 'available', 'live': true};
-      }
-      return {...value, 'deviceId': device};
-    } on CompanionException catch (error) {
-      if (_current(entry) && name.startsWith('clipboard.')) {
-        entry.clipboard = {
-          'status': 'limited',
-          'live': false,
-          'code': error.code,
-        };
-      }
-      rethrow;
+    final value = await entry.client.request(
+      name,
+      payload,
+      mutation: !const {
+        'apps.list',
+        'apps.icon',
+        'notifications.list',
+        'calls.list',
+        'observation.set',
+      }.contains(name),
+      cancellation: cancellation,
+    );
+    _check(entry);
+    if (value is! Map<String, Object?>) {
+      throw const CompanionException('protocol_error', '互联回执不是对象。');
     }
+    return {...value, 'deviceId': device};
   }
 
   Future<void> stopForConnection(

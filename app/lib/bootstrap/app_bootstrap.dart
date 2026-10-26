@@ -50,6 +50,7 @@ Future<AppDependencies> _createDependencies(DiagnosticLog? diagnostics) async {
   }
 
   return AppDependencies(
+    bindClipboardAdmission: session.bindClipboardAdmission,
     execute: (command, params) =>
         invoke(() => session.execute(command, params)),
     diagnostics: diagnostics,

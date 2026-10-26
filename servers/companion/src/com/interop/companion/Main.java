@@ -1,12 +1,8 @@
 package com.interop.companion;
 
 import android.app.Notification;
-import android.app.AppOpsManager;
-import android.app.KeyguardManager;
 import android.app.PendingIntent;
 import android.content.ComponentName;
-import android.content.ClipData;
-import android.content.pm.PackageManager;
 import android.content.Context;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
@@ -33,11 +29,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class Main {
     private static final String PACKAGE = "com.android.shell";
     private static final int MAX_LINE = 1024 * 1024;
-    private static final int MAX_CLIPBOARD = (1 << 18) - 14;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final MediaJobs media = new MediaJobs(this::send);
     private final AtomicBoolean refreshPending = new AtomicBoolean();
-    private final AtomicBoolean clipboardRefreshPending = new AtomicBoolean();
     private final Map<String, Item> notifications = new LinkedHashMap<>();
     private final Map<String, Item> byKey = new HashMap<>();
     private Object notificationManager, telecom, registry, notificationToken, phoneToken;
@@ -52,8 +46,6 @@ public final class Main {
     private boolean notificationsTruncated;
     private BufferedWriter output;
     private Context shellContext;
-    private Object clipboard, clipboardToken;
-    private boolean clipboardListening;
     private volatile boolean observationEnabled;
     private volatile long observationEpoch;
     private boolean notificationsListening, callsListening;
@@ -93,7 +85,6 @@ public final class Main {
     }
     private Object callback(String descriptor,final Runnable changed) throws Exception {
         final Class<?> api=Class.forName(descriptor);
-        final boolean observationCallback=!descriptor.equals("android.content.IOnPrimaryClipChangedListener");
         final long callbackEpoch=observationEpoch;
         final Set<Integer> phoneStateTransactions=new HashSet<>();
         if(descriptor.equals("com.android.internal.telephony.IPhoneStateListener")) {
@@ -106,7 +97,7 @@ public final class Main {
             @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags) {
                 if(code==IBinder.INTERFACE_TRANSACTION) {if(reply!=null) reply.writeString(descriptor);return true;}
                 data.enforceInterface(descriptor);
-                if(observationCallback && (!observationEnabled || callbackEpoch!=observationEpoch)) {
+                if(!observationEnabled || callbackEpoch!=observationEpoch) {
                     if(reply!=null) reply.writeNoException();return true;
                 }
                 if(phoneStateTransactions.contains(code)) {
@@ -205,84 +196,6 @@ public final class Main {
             callsListening=true;refreshCalls(false);
         } catch(Exception e) {callError=error(e);}
         return observationSnapshot(true);
-    }
-    // 仅接受已知的 AOSP IClipboard 归因参数布局；每次调用使用实际安装的 shell 包，不伪造 android 身份。
-    //
-    private Object clipboardInvoke(String name,Object first) throws Exception {
-        for(Method method:clipboard.getClass().getMethods()) {
-            if(!method.getName().equals(name)) continue;
-            Class<?>[] types=method.getParameterTypes();
-            int offset=first==null?0:1;
-            if(types.length<offset || (first!=null && !types[0].isInstance(first))) continue;
-            int count=types.length-offset;
-            boolean known=count==0 && name.equals("removePrimaryClipChangedListener")
-                || count==1 && types[offset]==String.class
-                || count==2 && types[offset]==String.class && types[offset+1]==int.class
-                || count==3 && types[offset]==String.class && types[offset+1]==String.class && types[offset+2]==int.class
-                || count==4 && types[offset]==String.class && types[offset+1]==String.class && types[offset+2]==int.class && types[offset+3]==int.class;
-            if(!known) continue;
-            List<Object> args=new ArrayList<>();
-            if(first!=null) args.add(first);
-            if(count>=1) args.add(PACKAGE);
-            if(count>=3) args.add(null); // 实际 shell 没有归因标签。
-            if(count>=2) args.add(user.owner());
-            if(count==4) args.add(0); // 使用 Context.DEVICE_ID_DEFAULT，表示默认设备身份。
-            return invoke(clipboard,name,args.toArray());
-        }
-        throw new Failure("clipboard_api_unavailable","Unsupported IClipboard attribution signature: "+name);
-    }
-    private void checkClipboardAccess(boolean writing) throws Exception {
-        user.require();
-        KeyguardManager keyguard=(KeyguardManager)shellContext.getSystemService(Context.KEYGUARD_SERVICE);
-        if(keyguard==null) throw new Failure("clipboard_api_unavailable","Target keyguard state is unavailable");
-        boolean locked=Build.VERSION.SDK_INT>=23?keyguard.isDeviceLocked():keyguard.isKeyguardLocked();
-        if(locked) throw new Failure("clipboard_locked","Unlock the target device before reading or verifying its clipboard");
-        if(Build.VERSION.SDK_INT>=29 && shellContext.checkCallingOrSelfPermission("android.permission.READ_CLIPBOARD_IN_BACKGROUND")!=PackageManager.PERMISSION_GRANTED)
-            throw new Failure("permission_denied","The target shell package lacks background clipboard permission");
-        AppOpsManager ops=(AppOpsManager)shellContext.getSystemService(Context.APP_OPS_SERVICE);
-        if(ops==null || ClipboardAppOps.check(ops,writing,Process.myUid())!=AppOpsManager.MODE_ALLOWED)
-            throw new Failure("permission_denied","The target denies this clipboard AppOp");
-    }
-    private void ensureClipboard() throws Exception {
-        checkClipboardAccess(false);
-        if(clipboard==null) clipboard=service("clipboard","android.content.IClipboard");
-        if(!clipboardListening) {
-            if(clipboardToken==null) clipboardToken=callback("android.content.IOnPrimaryClipChangedListener",this::scheduleClipboardRefresh);
-            clipboardInvoke("addPrimaryClipChangedListener",clipboardToken);
-            clipboardListening=true;
-        }
-    }
-    private JSONObject clipboardGet() throws Exception {
-        ensureClipboard();
-        ClipData clip=(ClipData)clipboardInvoke("getPrimaryClip",null);
-        checkClipboardAccess(false);
-        boolean hasText=false;String value="";
-        if(clip!=null && clip.getItemCount()>0) {
-            CharSequence input=clip.getItemAt(0).getText();
-            if(input==null) throw new Failure("clipboard_not_text","The target clipboard contains non-text content");
-            value=input.toString();hasText=true;
-        }
-        if(value.getBytes(StandardCharsets.UTF_8).length>MAX_CLIPBOARD || JSONObject.quote(value).getBytes(StandardCharsets.UTF_8).length>MAX_LINE-1024) throw new Failure("clipboard_too_large","Clipboard text exceeds the synchronization limit");
-        return new JSONObject().put("text",value).put("hasText",hasText).put("available",true).put("live",clipboardListening).put("source","companion");
-    }
-    private JSONObject clipboardSet(JSONObject request) throws Exception {
-        String value=request.getString("text");
-        if(value.getBytes(StandardCharsets.UTF_8).length>MAX_CLIPBOARD || JSONObject.quote(value).getBytes(StandardCharsets.UTF_8).length>MAX_LINE-1024) throw new Failure("invalid_argument","Clipboard text exceeds the synchronization limit");
-        ensureClipboard();checkClipboardAccess(true);
-        clipboardInvoke("setPrimaryClip",ClipData.newPlainText("跨设备互联",value));
-        JSONObject verified=clipboardGet();
-        if(!verified.getBoolean("hasText") || !value.equals(verified.getString("text"))) throw new Failure("clipboard_not_applied","The target clipboard changed or did not accept the requested text");
-        return new JSONObject().put("applied",true).put("source","companion");
-    }
-    private void scheduleClipboardRefresh() {
-        if(!clipboardRefreshPending.compareAndSet(false,true)) return;
-        try {worker.execute(()-> {
-            clipboardRefreshPending.set(false);
-            try {send(new JSONObject().put("event","clipboard.changed").put("data",clipboardGet()));}
-            catch(Exception e) {
-                try {send(new JSONObject().put("event","clipboard.unavailable").put("data",new JSONObject().put("available",false).put("live",false).put("reason",error(e))));} catch(Exception ignored) {}
-            }
-        });} catch(RejectedExecutionException ignored) {clipboardRefreshPending.set(false);}
     }
     private String notificationAppName(StatusBarNotification notification) {
         try {
@@ -433,8 +346,6 @@ public final class Main {
         if(command.equals("calls.list")) {refreshCalls(false);return callSnapshot();}
         if(command.equals("calls.open")) return openSystemCallUi(request);
         if(command.equals("calls.action")) return callAction(request);
-        if(command.equals("clipboard.get")) return clipboardGet();
-        if(command.equals("clipboard.set")) return clipboardSet(request);
         if(command.equals("apps.list")) {
             try {JSONObject result=Apps.running(shellContext,user.require());user.require();return result;}
             catch(NoSuchMethodException | NoSuchFieldException unavailable) {throw new Failure("apps_running_unavailable","Verified application task metadata is unavailable on this device");}
@@ -477,7 +388,6 @@ public final class Main {
             }
         } finally {
             media.close();
-            try {if(clipboardListening) clipboardInvoke("removePrimaryClipChangedListener",clipboardToken);} catch(Exception ignored) {}
             try {setObservation(new JSONObject().put("enabled",false).put("epoch",observationEpoch+1));} catch(Exception ignored) {}
             watchdog.shutdownNow();worker.shutdownNow();server.close();
         }

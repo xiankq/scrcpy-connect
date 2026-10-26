@@ -21,6 +21,30 @@ class AppController extends _$AppController {
   late ControlPageRegistry _controlPages;
   late DeviceAudioViewCoordinator _deviceAudio;
 
+  ({String device, String session})? _clipboardFocus;
+
+  void Function() bindClipboardAdmission(
+    bool Function(String, String, int) check,
+  ) => _dependencies.bindClipboardAdmission?.call(check) ?? () {};
+
+  String? clipboardSessionFor(String device) =>
+      _clipboardFocus?.device == device ? _clipboardFocus?.session : null;
+
+  /// Only a visible control page owns automatic clipboard admission.
+  void focusClipboardSession(String device, String session, bool focused) {
+    final current = _clipboardFocus;
+    final next = focused
+        ? (device: device, session: session)
+        : current?.device == device && current?.session == session
+        ? null
+        : current;
+    if (_disposed || next == current) return;
+    _clipboardFocus = next;
+    scheduleMicrotask(() {
+      if (!_disposed) _events.add({'type': 'clipboard.focus'});
+    });
+  }
+
   /// 调用者只能释放一次，仅最后一个实际画面可请求锁屏。
   bool Function() claimControlPage(String deviceId, {String? sessionId}) {
     final pages = _controlPages;

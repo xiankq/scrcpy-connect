@@ -135,17 +135,18 @@ class DeviceCapabilityPolicy {
           ? '本机视频呈现尚不可用。'
           : '编码器及厂商输入权限在实际启动时确认。',
     );
-    final clipboard = _object(companion['clipboard']);
     add(
       'clipboard',
       api != null && api < 21
           ? 'unavailable'
           : !connected
           ? 'unknown'
-          : clipboard['status'] as String? ?? 'unknown',
+          : streaming
+          ? 'limited'
+          : 'unknown',
       api != null && api < 21
           ? '互联文本通道需要 Android 5.0 或更新版本。'
-          : clipboard['reason'] as String? ?? '文本通道按实际探测与本机前台权限判断。',
+          : 'scrcpy 文本通道按获焦画面、实际读回与本机前台权限判断。',
     );
     final packages = observed.observation('packages');
     final packageReadable =

@@ -18,11 +18,14 @@ class AppDependencies {
     this.events = const Stream<Json>.empty(),
     this.close,
     this.diagnostics,
+    this.bindClipboardAdmission,
     AppState? initialState,
     this.initialize = true,
   }) : execute =
            execute ?? ((command, params) => request(command.wire, params)),
        initialState = initialState ?? AppState();
+  final void Function() Function(bool Function(String, String, int) check)?
+  bindClipboardAdmission;
   final DiagnosticLog? diagnostics;
   final ApplicationRequest request;
   final ApplicationCommandExecutor execute;

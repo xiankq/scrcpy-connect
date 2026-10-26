@@ -794,11 +794,17 @@ class _RemotePageState extends State<RemotePage>
           inputFocus.unfocus();
         }
     }
+    focusVisibleDevice();
   }
 
   int markStateUnknown({String? reason, Json? initialSession}) {
     trace(
       'reconcile.unknown reason=$reason session=$sessionId visibility=${presentation.visibilityEpoch}',
+    );
+    controller.focusClipboardSession(
+      value(widget.device, 'id'),
+      sessionId,
+      false,
     );
     final epoch = presentation.beginReconciliation(
       initialSession: initialSession,
@@ -895,6 +901,11 @@ class _RemotePageState extends State<RemotePage>
   }
 
   Future<void> pauseView() async {
+    controller.focusClipboardSession(
+      value(widget.device, 'id'),
+      sessionId,
+      false,
+    );
     final operation = window.pause(releaseInputs);
     if (mounted) setState(() {});
     await operation;
@@ -911,9 +922,19 @@ class _RemotePageState extends State<RemotePage>
         presentation.sessionEnded ||
         view?.isCurrent != true ||
         ModalRoute.of(context)?.isCurrent == false) {
+      controller.focusClipboardSession(
+        value(widget.device, 'id'),
+        sessionId,
+        false,
+      );
       return;
     }
     final deviceId = value(widget.device, 'id');
+    controller.focusClipboardSession(
+      deviceId,
+      sessionId,
+      keyboardFocus.hasFocus && canSendInput,
+    );
     if (controller.snapshot().focusedDeviceId == deviceId) {
       return;
     }
@@ -931,6 +952,7 @@ class _RemotePageState extends State<RemotePage>
     if (!mounted) return;
     setState(() {});
     if (outcome != RemoteResumeResult.ready) return;
+    focusVisibleDevice();
     showPendingKeepActiveNotice();
     await applyPendingInitialAction();
   }
@@ -1031,6 +1053,11 @@ class _RemotePageState extends State<RemotePage>
 
   @override
   void dispose() {
+    controller.focusClipboardSession(
+      value(widget.device, 'id'),
+      sessionId,
+      false,
+    );
     displaySizing.dispose();
     screenState.dispose();
     final release = window.dispose(releaseInputs);
@@ -1088,6 +1115,11 @@ class _RemotePageState extends State<RemotePage>
               focusNode: keyboardFocus,
               onKeyEvent: key,
               onFocusChange: (focused) {
+                controller.focusClipboardSession(
+                  value(widget.device, 'id'),
+                  sessionId,
+                  focused && canSendInput && !presentation.covered,
+                );
                 if (!focused) unawaited(releaseInputs());
               },
               child: Scaffold(

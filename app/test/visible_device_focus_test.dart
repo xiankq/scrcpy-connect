@@ -125,86 +125,84 @@ Future<void> _dispose(
 }
 
 void main() {
-  for (final syncB in [true, false]) {
-    testWidgets(
-      'files and gallery restore focus with device B clipboard sync $syncB and no remote audio',
-      (tester) async {
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        var local = 'local baseline';
-        final messenger =
-            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-        messenger.setMockMethodCallHandler(SystemChannels.platform, (
-          call,
-        ) async {
-          if (call.method == 'Clipboard.getData') return {'text': local};
-          if (call.method == 'Clipboard.setData') {
-            local = (call.arguments as Map<Object?, Object?>)['text'] as String;
-          }
-          return null;
-        });
-        final backend = _Backend();
-        backend.controller.settings = {
-          'deviceSettings': {
-            'a': {'clipboardSync': true},
-            'b': {'clipboardSync': syncB},
-            'c': {'clipboardSync': false},
-          },
-        };
-        final router = await _mount(
-          tester,
-          backend,
-          location: '/devices/a/files',
-        );
-        try {
-          testContainer(backend.controller).read(clipboardCoordinatorProvider);
-          await tester.pumpAndSettle();
-          expect(local, 'a baseline');
-          final filesA = tester.element(find.byType(FilesPage));
-          unawaited(const GalleryRoute(deviceId: 'b').push<void>(filesA));
-          await tester.pumpAndSettle();
-          expect(backend.controller.snapshot().focusedDeviceId, 'b');
-          expect(local, syncB ? 'b baseline' : 'a baseline');
-          backend.events.add({
-            'type': 'clipboard.changed',
-            'deviceId': 'b',
-            'data': {'text': 'visible B content'},
-          });
-          await tester.pumpAndSettle();
-          expect(local, syncB ? 'visible B content' : 'a baseline');
-          await tester.tap(pageBackButton(tester));
-          await tester.pumpAndSettle();
-          expect(tester.element(find.byType(FilesPage)), same(filesA));
-          expect(backend.controller.snapshot().focusedDeviceId, 'a');
-          expect(local, 'a baseline');
-          backend.events.add({
-            'type': 'clipboard.changed',
-            'deviceId': 'b',
-            'data': {'text': 'hidden B content'},
-          });
-          await tester.pumpAndSettle();
-          expect(local, 'a baseline');
-          backend.events.add({
-            'type': 'clipboard.changed',
-            'deviceId': 'a',
-            'data': {'text': 'visible A content'},
-          });
-          await tester.pumpAndSettle();
-          expect(local, 'visible A content');
-          expect(
-            backend.calls.where((call) => call.$1 == 'audio.start'),
-            isEmpty,
-          );
-          expect(backend.audioDevices, isEmpty);
-          expect(tester.takeException(), isNull);
-        } finally {
-          await _dispose(tester, router, backend);
-          messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+  testWidgets(
+    'files and gallery restore device focus without clipboard access or remote audio',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      var local = 'local baseline';
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.getData') return {'text': local};
+        if (call.method == 'Clipboard.setData') {
+          local = (call.arguments as Map<Object?, Object?>)['text'] as String;
         }
-      },
-    );
-  }
+        return null;
+      });
+      final backend = _Backend();
+      backend.controller.settings = {
+        'deviceSettings': {
+          'a': {'clipboardSync': true},
+          'b': {'clipboardSync': true},
+          'c': {'clipboardSync': false},
+        },
+      };
+      final router = await _mount(
+        tester,
+        backend,
+        location: '/devices/a/files',
+      );
+      try {
+        testContainer(backend.controller).read(clipboardCoordinatorProvider);
+        await tester.pumpAndSettle();
+        expect(local, 'local baseline');
+        final filesA = tester.element(find.byType(FilesPage));
+        unawaited(const GalleryRoute(deviceId: 'b').push<void>(filesA));
+        await tester.pumpAndSettle();
+        expect(backend.controller.snapshot().focusedDeviceId, 'b');
+        expect(local, 'local baseline');
+        backend.events.add({
+          'type': 'clipboard.changed',
+          'deviceId': 'b',
+          'data': {'text': 'visible B content'},
+        });
+        await tester.pumpAndSettle();
+        expect(local, 'local baseline');
+        await tester.tap(pageBackButton(tester));
+        await tester.pumpAndSettle();
+        expect(tester.element(find.byType(FilesPage)), same(filesA));
+        expect(backend.controller.snapshot().focusedDeviceId, 'a');
+        expect(local, 'local baseline');
+        backend.events.add({
+          'type': 'clipboard.changed',
+          'deviceId': 'b',
+          'data': {'text': 'hidden B content'},
+        });
+        await tester.pumpAndSettle();
+        expect(local, 'local baseline');
+        backend.events.add({
+          'type': 'clipboard.changed',
+          'deviceId': 'a',
+          'data': {'text': 'visible A content'},
+        });
+        await tester.pumpAndSettle();
+        expect(local, 'local baseline');
+        expect(
+          backend.calls.where((call) => call.$1.startsWith('clipboard.')),
+          isEmpty,
+        );
+        expect(
+          backend.calls.where((call) => call.$1 == 'audio.start'),
+          isEmpty,
+        );
+        expect(backend.audioDevices, isEmpty);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _dispose(tester, router, backend);
+        messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+      }
+    },
+  );
 
   testWidgets('a late device lookup cannot override its replacement route', (
     tester,

@@ -328,6 +328,10 @@ class ApplicationSession {
     serverBytes: _host.scrcpyBytes,
     timeout: const Duration(seconds: 15),
   );
+  void Function() bindClipboardAdmission(
+    bool Function(String, String, int) check,
+  ) => _sessions.bindClipboardAdmission(check);
+
   late final SessionCoordinator _sessions = SessionCoordinator(
     scrcpy: _host.scrcpy,
     requireConnection: _devices.requireConnection,

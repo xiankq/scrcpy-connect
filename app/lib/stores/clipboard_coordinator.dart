@@ -13,13 +13,18 @@ import 'package:flutter/widgets.dart';
 
 part 'clipboard_coordinator.g.dart';
 
-/// 仅在前台可访问时同步当前设备，每次激活先用设备剪贴板更新本机。
+/// 当前获焦控制画面只同步基线之后的新复制，恢复不回灌任一端旧值。
 class ClipboardCoordinator with WidgetsBindingObserver {
   ClipboardCoordinator(this.controller) {
     WidgetsBinding.instance.addObserver(this);
     _events = controller.eventStream().listen(_event);
+    _releaseAdmission = controller.bindClipboardAdmission(
+      (device, session, generation) =>
+          session == _sessionId && _active(device, generation),
+    );
   }
   final AppController controller;
+  late final void Function() _releaseAdmission;
   StreamSubscription<Json>? _events;
   Timer? _timer;
   Future<void> _queue = Future<void>.value();
@@ -29,8 +34,13 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     String? connectionId,
     bool connected,
     bool foreground,
+    String? sessionId,
   })?
   _configuration;
+  bool _viewFocused = true;
+  String? _sessionId;
+  String? _captureRef;
+  int? _captureGeneration;
   String? _target;
   String? _connectionId;
   String? _local;
@@ -51,6 +61,9 @@ class ClipboardCoordinator with WidgetsBindingObserver {
       !_reconciling &&
       !controller.snapshot().reconciliationPending &&
       _foreground &&
+      _viewFocused &&
+      _sessionId != null &&
+      controller.clipboardSessionFor(target) == _sessionId &&
       _target == target &&
       _generation == generation &&
       controller.snapshot().focusedDeviceId == target &&
@@ -106,10 +119,14 @@ class ClipboardCoordinator with WidgetsBindingObserver {
       deviceId: candidate,
       connectionId: connectionId,
       connected: connected,
-      foreground: _foreground,
+      foreground: _foreground && _viewFocused,
+      sessionId: candidate == null
+          ? null
+          : controller.clipboardSessionFor(candidate),
     );
     if (_disposed || configuration == _configuration) return;
     _configuration = configuration;
+    _initialized = false;
     final generation = ++_generation;
     _queue = Future<void>.value();
     _pollQueued = false;
@@ -124,13 +141,14 @@ class ClipboardCoordinator with WidgetsBindingObserver {
       _local = null;
       _remote = null;
     }
+    _sessionId = configuration.sessionId;
     _target = target;
     _connectionId = connectionId;
     if (!enabled) {
       controller.updateClipboardState('disabled');
     } else if (target == null) {
       controller.updateClipboardState('waitingDevice');
-    } else if (!_foreground) {
+    } else if (!_foreground || !_viewFocused || _sessionId == null) {
       controller.updateClipboardState('waitingForeground');
     } else {
       controller.updateClipboardState('checking');
@@ -179,15 +197,26 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     if (!_active(target, generation)) return;
     try {
       final result = await controller
-          .execute(ApplicationCommand.clipboardGet, {'deviceId': target})
+          .execute(ApplicationCommand.clipboardGet, {
+            'deviceId': target,
+            'sessionId': _sessionId,
+            'automatic': true,
+            'clipboardGeneration': generation,
+          })
           .timeout(const Duration(seconds: 25));
       if (!_active(target, generation)) return;
       if (result['text'] is! String || result['available'] == false) {
         throw StateError(value(result, 'reason', '尚未获得设备的文字剪贴板。'));
       }
       final remote = result['text'] as String;
-      await _writeLocal(target, generation, remote);
+      final local = await _readLocal(target, generation);
       if (!_active(target, generation)) return;
+      if (local == null) throw StateError('无法读取本机文字剪贴板，自动同步已暂停。');
+      _captureRef = result['captureRef'] as String?;
+      _captureGeneration = result['captureGeneration'] as int?;
+      _remote = remote;
+      _local = local;
+      _pendingRemote = null;
       _initialized = true;
       if (!_active(target, generation) || !_initialized) return;
       _watching();
@@ -234,6 +263,10 @@ class ClipboardCoordinator with WidgetsBindingObserver {
 
   void _event(Json event) {
     if (_disposed) return;
+    if (event['type'] == 'clipboard.focus') {
+      configure();
+      return;
+    }
     if (event['type'] == 'device.disconnect.requested' &&
         event['deviceId'] == _target) {
       _generation++;
@@ -271,10 +304,23 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     final data = event['data'] is Map<Object?, Object?>
         ? jsonObject(event['data'])
         : <String, dynamic>{};
+    if (event['type'] == 'session.updated' &&
+        data['sessionId'] == _sessionId &&
+        (data['captureRef'] != _captureRef ||
+            data['captureGeneration'] != _captureGeneration)) {
+      _configuration = null;
+      configure();
+      return;
+    }
+    if (event['type'] == 'clipboard.changed' &&
+        (data['sessionId'] != _sessionId ||
+            data['captureRef'] != _captureRef ||
+            data['captureGeneration'] != _captureGeneration)) {
+      return;
+    }
     final connectionId = data['connectionId'] ?? event['connectionId'];
     if (connectionId != null && connectionId != _connectionId) return;
     if (event['type'] == 'clipboard.unavailable') {
-      _generation++;
       _failed(StateError(value(data, 'reason', '设备当前不允许访问剪贴板。')));
     } else if (event['type'] == 'clipboard.changed' &&
         data['text'] is String &&
@@ -324,11 +370,16 @@ class ClipboardCoordinator with WidgetsBindingObserver {
   Future<void> _sendLocal(String target, int generation, String text) async {
     if (!_active(target, generation)) return;
     _local = text;
-    _remote = text; // Binder 回声可能早于请求完成。
+    _remote = text; // scrcpy listener 回声可能早于读回确认。
     controller.recordClipboardSend();
     final result = await controller
         .execute(ApplicationCommand.clipboardSet, {
           'deviceId': target,
+          'sessionId': _sessionId,
+          'expectedCaptureRef': _captureRef,
+          'captureGeneration': _captureGeneration,
+          'automatic': true,
+          'clipboardGeneration': generation,
           'text': text,
         })
         .timeout(const Duration(seconds: 25));
@@ -352,6 +403,11 @@ class ClipboardCoordinator with WidgetsBindingObserver {
   void _watching() => controller.updateClipboardState('watching');
 
   void _failed(Object error) {
+    // A UI timeout does not cancel the original native Future. Revoke its admission.
+    _generation++;
+    _queue = Future<void>.value();
+    _pollQueued = false;
+    _remoteQueued = false;
     _timer?.cancel();
     _timer = null;
     _initialized = false;
@@ -374,12 +430,13 @@ class ClipboardCoordinator with WidgetsBindingObserver {
 
   @override
   void didChangeViewFocus(ViewFocusEvent event) {
-    // 桌面失焦仍可能保持 resumed；回到窗口时立即检查外部复制，激活仍遵循远端优先。
-    if (event.state == ViewFocusState.focused) _schedulePoll();
+    _viewFocused = event.state == ViewFocusState.focused;
+    configure();
   }
 
   void dispose() {
     _disposed = true;
+    _releaseAdmission();
     _generation++;
     _timer?.cancel();
     _events?.cancel();

@@ -110,6 +110,20 @@ final class SessionCoordinator {
   final void Function(String deviceId)? onAudioEligibilityChanged;
   final _sessions = <String, _LogicalSession>{};
   final _queries = <_SessionQuery>{};
+  final _clipboardProbes = <ScrcpySession, DeviceConnection>{};
+  final _clipboardTails = <String, Future<void>>{};
+  bool Function(String device, String session, int generation)?
+  _clipboardAdmission;
+
+  void Function() bindClipboardAdmission(
+    bool Function(String, String, int) check,
+  ) {
+    _clipboardAdmission = check;
+    return () {
+      if (identical(_clipboardAdmission, check)) _clipboardAdmission = null;
+    };
+  }
+
   Future<void> _qualityTail = Future.value();
   Future<void>? _closing;
   bool _closed = false;
@@ -127,6 +141,8 @@ final class SessionCoordinator {
 
   bool handles(String command) => const {
     'apps.launch',
+    'clipboard.get',
+    'clipboard.set',
     'session.start',
     'session.stop',
     'session.list',
@@ -197,6 +213,12 @@ final class SessionCoordinator {
       };
     }
     if (_closed) _fail('disposed', '控制窗口所有者已关闭。');
+    if (command == 'clipboard.get' || command == 'clipboard.set') {
+      return _query(
+        _string(params, 'deviceId'),
+        (connection, stop) => _clipboard(command, params, connection, stop),
+      );
+    }
     if (command == 'session.start' || command == 'apps.launch') {
       return _start(params);
     }
@@ -330,6 +352,144 @@ final class SessionCoordinator {
         });
   }
 
+  Future<void> _closeClipboardProbe(ScrcpySession session) async {
+    await session.close();
+    _clipboardProbes.remove(session);
+  }
+
+  Future<SessionJson> _clipboard(
+    String command,
+    SessionJson params,
+    DeviceConnection connection,
+    AdbCancellation stop,
+  ) {
+    final device = _string(params, 'deviceId');
+    final admission = _clipboardAdmission;
+    final slot = params['sessionId'] == null ? null : _select(params);
+    final capture = slot == null ? null : _bound(slot, params);
+    void check() {
+      stop.check();
+      if (_closed || !identical(_requireConnection(device), connection)) {
+        _fail('cancelled', '剪贴板所属连接已停止。');
+      }
+      if (slot != null &&
+          (!identical(_sessions[slot.id], slot) ||
+              !identical(_bound(slot, params), capture) ||
+              slot.state['status'] != 'streaming')) {
+        _fail('stale_capture', '剪贴板所属画面已停止或更换。');
+      }
+      if (params['automatic'] == true &&
+          (slot == null ||
+              params['clipboardGeneration'] is! int ||
+              admission?.call(
+                    device,
+                    slot.id,
+                    params['clipboardGeneration'] as int,
+                  ) !=
+                  true)) {
+        _fail('cancelled', '画面已失焦或自动剪贴板已暂停。');
+      }
+    }
+
+    check();
+    final result = (_clipboardTails[device] ?? Future<void>.value()).then((_) {
+      stop.check();
+      check();
+      return _clipboardProbe(
+        command,
+        params,
+        connection,
+        stop,
+        capture?.sdk,
+        check,
+      );
+    });
+    final tail = result.then<void>((_) {}, onError: (Object _) {});
+    _clipboardTails[device] = tail;
+    unawaited(
+      tail.then((_) {
+        if (identical(_clipboardTails[device], tail)) {
+          _clipboardTails.remove(device);
+        }
+      }),
+    );
+    return result;
+  }
+
+  Future<SessionJson> _clipboardProbe(
+    String command,
+    SessionJson params,
+    DeviceConnection connection,
+    AdbCancellation stop,
+    ScrcpySession? window,
+    void Function() check,
+  ) async {
+    final device = _string(params, 'deviceId');
+    for (final entry in _clipboardProbes.entries.toList()) {
+      if (identical(entry.value, connection)) {
+        await _closeClipboardProbe(entry.key);
+      }
+    }
+    ScrcpySession? probe;
+    void Function()? detach;
+    try {
+      // Upstream suppresses GET_CLIPBOARD when autosync is enabled. Snapshot probes
+      // have no video/audio and never turn on the screen; window captures own listeners.
+      probe = await _scrcpy.createSession(
+        connection.device,
+        options: const ScrcpyOptions(
+          video: false,
+          audio: false,
+          powerOn: false,
+          clipboardAutosync: false,
+        ),
+        cancellation: stop,
+      );
+      _clipboardProbes[probe] = connection;
+      final owned = probe;
+      detach = stop.onCancel(() {
+        unawaited(owned.close().catchError((Object _) {}));
+      });
+      await probe.start(cancellation: stop);
+      check();
+      if (command == 'clipboard.set') {
+        final text = params['text'];
+        if (text is! String) _fail('invalid_argument', '请提供文字剪贴板内容。');
+        final writer = window ?? probe;
+        check();
+        final receipt = await writer.sendControl(ScrcpyClipboard(text));
+        check();
+        if (receipt.completion !=
+            ScrcpyControlCompletion.clipboardAcknowledged) {
+          _fail('clipboard_result_unknown', '设备尚未确认收到剪贴板写入。');
+        }
+        final actual = await probe.readClipboard();
+        check();
+        if (actual != text) {
+          _fail('clipboard_not_applied', '设备剪贴板读回内容不一致，请主动核对。');
+        }
+        return {'deviceId': device, 'source': 'scrcpy', 'applied': true};
+      }
+      final text = await probe.readClipboard();
+      check();
+      final current = _sessions[params['sessionId']]?.current;
+      return {
+        'deviceId': device,
+        'source': 'scrcpy',
+        'text': text,
+        'available': true,
+        if (current != null) 'captureRef': current.sdk.id,
+        if (current != null) 'captureGeneration': current.generation,
+      };
+    } on ScrcpyCreationCleanupFailure catch (failure) {
+      _clipboardProbes[failure.session] = connection;
+      rethrow;
+    } finally {
+      detach?.call();
+      if (probe != null) await _closeClipboardProbe(probe);
+    }
+  }
+
   /// 截止时关闭原捕获唤醒执行，仍等待原 Future；没有逐请求取消的动作结果保持未知。
   Future<T> _native<T>(
     _LogicalSession slot,
@@ -396,6 +556,8 @@ final class SessionCoordinator {
               'captureRef': capture.sdk.id,
               'captureGeneration': capture.generation,
               'text': text,
+              'connectionId': slot.connection.device.id,
+              'source': 'scrcpy',
             });
           case ScrcpyStopped(:final reason):
             if (!capture.expectedStop) {
@@ -613,7 +775,7 @@ final class SessionCoordinator {
           videoBitRate: quality['videoBitRate'] as int,
           display: display,
           powerOn: false,
-          clipboardAutosync: false,
+          clipboardAutosync: true,
           vdDestroyContent: false,
           flexDisplay: true,
           vdSystemDecorations: false,
@@ -881,6 +1043,11 @@ final class SessionCoordinator {
       failure ??= error;
       stack ??= trace;
     }
+    for (final entry in _clipboardProbes.entries.toList()) {
+      if (identical(entry.value, connection)) {
+        await _closeClipboardProbe(entry.key);
+      }
+    }
     if (failure != null) Error.throwWithStackTrace(failure, stack!);
   }
 
@@ -893,6 +1060,9 @@ final class SessionCoordinator {
     final result = () async {
       await Future.wait(_sessions.values.toList().map(_stop));
       await Future.wait(_queries.map((query) => query.settled.future).toList());
+      await Future.wait(
+        _clipboardProbes.keys.toList().map(_closeClipboardProbe),
+      );
     }();
     return _closing = result.catchError((Object error, StackTrace stack) {
       _closing = null;

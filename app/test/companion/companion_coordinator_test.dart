@@ -185,28 +185,27 @@ void main() {
     await fixture.companion.close();
   });
 
-  test('剪贴板权限错误如实呈现，失效连接事件不发布给后继设备', () async {
+  test('应用权限错误如实呈现，失效连接事件不发布给后继设备', () async {
     final fixture = CoordinatorFixture();
     fixture.api.onRequest = (request) => fixture.api.message({
       'requestId': request['requestId'],
-      'error': {'code': 'clipboard_unavailable', 'message': '后台读取受限'},
+      'error': {'code': 'permission_denied', 'message': '应用读取受限'},
     });
     await expectLater(
-      fixture.companion.command('clipboard.get', {'deviceId': 'phone'}),
-      throwsA(companionCode('clipboard_unavailable')),
-    );
-    expect(
-      (fixture.companion.capabilityState('phone')['clipboard']! as Map)['live'],
-      isFalse,
+      fixture.companion.command('apps.list', {
+        'deviceId': 'phone',
+        'filter': 'running',
+      }),
+      throwsA(companionCode('permission_denied')),
     );
     fixture.replaceConnection();
     fixture.api.message({
-      'event': 'clipboard.changed',
-      'data': {'text': '旧秘密'},
+      'event': 'notifications.changed',
+      'data': {'items': <Object?>[]},
     });
     await Future<void>.value();
     expect(
-      fixture.emitted.where((event) => event.type == 'clipboard.changed'),
+      fixture.emitted.where((event) => event.type == 'notifications.changed'),
       isEmpty,
     );
     await fixture.companion.close();
