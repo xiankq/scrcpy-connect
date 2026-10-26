@@ -52,6 +52,7 @@ pub enum Message {
         vertical: f64,
         buttons: u32,
     },
+    GetClipboard,
     Clipboard {
         text: String,
         paste: bool,
@@ -137,6 +138,7 @@ impl Message {
                 }
                 bytes.extend_from_slice(&buttons.to_be_bytes());
             }
+            Self::GetClipboard => bytes.extend_from_slice(&[8, 0]),
             Self::Clipboard {
                 text,
                 paste,

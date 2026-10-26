@@ -104,6 +104,12 @@ Future<ScrcpyControlReceipt> scrcpyScroll({
   buttons: buttons,
 );
 
+/// Reads a text snapshot from a capture with clipboard autosync disabled.
+Future<String> scrcpyGetClipboard({required String captureRef}) => ScrcpyRustLib
+    .instance
+    .api
+    .interopScrcpyApiApiScrcpyGetClipboard(captureRef: captureRef);
+
 Future<ScrcpyControlReceipt> scrcpyClipboard({
   required String captureRef,
   required String text,

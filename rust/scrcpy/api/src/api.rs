@@ -229,6 +229,10 @@ pub async fn scrcpy_scroll(
     )
     .await
 }
+/// Reads a text snapshot from a capture with clipboard autosync disabled.
+pub async fn scrcpy_get_clipboard(capture_ref: String) -> Result<String, String> {
+    sdk::clipboard(&capture_ref).await
+}
 pub async fn scrcpy_clipboard(
     capture_ref: String,
     text: String,

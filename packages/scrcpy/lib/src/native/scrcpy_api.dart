@@ -11,8 +11,13 @@ final class FrbNativeScrcpyApi
         NativeScrcpyApi,
         NativeScrcpyConnectionApi,
         NativeScrcpyStagedApi,
-        NativeScrcpySourceStatusApi {
+        NativeScrcpySourceStatusApi,
+        NativeScrcpyClipboardApi {
   const FrbNativeScrcpyApi();
+
+  @override
+  Future<String> readClipboard(String captureRef) =>
+      nativeScrcpyCall(() => native.scrcpyGetClipboard(captureRef: captureRef));
 
   @override
   Future<ScrcpySourceStatus> sourceStatus({

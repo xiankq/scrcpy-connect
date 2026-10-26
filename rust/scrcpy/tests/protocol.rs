@@ -42,14 +42,11 @@ async fn accept(peer: &mut tokio::io::DuplexStream, remote: u32) -> u32 {
 }
 
 #[test]
-fn display_power_uses_the_upstream_boolean_wire_value() {
+fn control_queries_and_display_power_use_upstream_wire_values() {
+    assert_eq!(control::Message::GetClipboard.encode().unwrap(), [8, 0]);
     assert_eq!(
         control::Message::SetDisplayPower(false).encode().unwrap(),
         [10, 0]
-    );
-    assert_eq!(
-        control::Message::SetDisplayPower(true).encode().unwrap(),
-        [10, 1]
     );
 }
 

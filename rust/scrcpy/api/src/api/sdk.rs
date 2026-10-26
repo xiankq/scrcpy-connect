@@ -276,6 +276,7 @@ struct Capture {
     video_finished: CancellationToken,
     finished: CancellationToken,
     control: Mutex<Option<Channel>>,
+    clipboard_read: tokio::sync::Mutex<()>,
     source: Mutex<Option<Arc<MediaSource>>>,
     info: Mutex<Option<ScrcpySessionInfo>>,
     cleanup_error: Mutex<Option<String>>,
@@ -330,6 +331,7 @@ pub async fn create(connection: &str, options: Options) -> Result<String, String
                 video_finished: CancellationToken::new(),
                 finished: CancellationToken::new(),
                 control: Mutex::default(),
+                clipboard_read: tokio::sync::Mutex::new(()),
                 source: Mutex::default(),
                 info: Mutex::default(),
                 cleanup_error: Mutex::default(),
@@ -852,6 +854,54 @@ pub async fn send(id: &str, message: Message) -> Result<ControlCompletion, Strin
         Completion::ClipboardAcknowledged => ControlCompletion::ClipboardAcknowledged,
     })
 }
+#[flutter_rust_bridge::frb(ignore)]
+pub async fn clipboard(id: &str) -> Result<String, String> {
+    let capture = lookup(id)?;
+    let _read = capture.clipboard_read.lock().await;
+    if capture.cancellation.is_cancelled() {
+        return Err("cancelled".into());
+    }
+    if capture.options.clipboard_autosync {
+        return Err(
+            "clipboard_snapshot_unavailable: Snapshot requires clipboard_autosync=false".into(),
+        );
+    }
+    let channel = capture
+        .control
+        .lock()
+        .expect("SDK 控制器")
+        .clone()
+        .ok_or_else(|| "control_unavailable".to_owned())?;
+    let mut events = channel.subscribe();
+    channel
+        .send(Message::GetClipboard, Duration::from_secs(6))
+        .await
+        .map_err(|error| error.to_string())?;
+    // Upstream has no negative response for empty, non-text or denied clipboard access.
+    let result = tokio::time::timeout(Duration::from_secs(6), async {
+        loop {
+            tokio::select! {
+                biased;
+                _ = capture.cancellation.cancelled() => return Err("cancelled".into()),
+                event = events.recv() => match event {
+                    Ok(DeviceMessage::Clipboard(text)) => return Ok(text),
+                    Ok(_) => {},
+                    Err(_) => return Err("clipboard_result_unknown: Clipboard response was lost".into()),
+                },
+            }
+        }
+    }).await.unwrap_or_else(|_| Err("clipboard_result_unknown: No readable text response; empty, non-text or restricted clipboard".into()));
+    if capture.cancellation.is_cancelled() {
+        return Err("cancelled".into());
+    }
+    // GET has no correlation ID; retire uncertain streams before a late response
+    // could be mistaken for the next snapshot.
+    if result.is_err() {
+        capture.cancellation.cancel();
+    }
+    result
+}
+
 #[flutter_rust_bridge::frb(ignore)]
 pub async fn stop(id: &str) -> Result<(), String> {
     let capture = lookup(id)?;

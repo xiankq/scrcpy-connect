@@ -76,7 +76,7 @@ class ScrcpyRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -438468350;
+  int get rustContentHash => 9324762;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -420,6 +420,10 @@ abstract class ScrcpyRustLibApi extends BaseApi {
 
   Future<void> interopScrcpyApiApiScrcpyDrainConnection({
     required String connectionId,
+  });
+
+  Future<String> interopScrcpyApiApiScrcpyGetClipboard({
+    required String captureRef,
   });
 
   Future<void> interopScrcpyApiApiScrcpyInitializeSdk({
@@ -3109,6 +3113,39 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
       );
 
   @override
+  Future<String> interopScrcpyApiApiScrcpyGetClipboard({
+    required String captureRef,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(captureRef, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 76,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kInteropScrcpyApiApiScrcpyGetClipboardConstMeta,
+        argValues: [captureRef],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kInteropScrcpyApiApiScrcpyGetClipboardConstMeta =>
+      const TaskConstMeta(
+        debugName: "scrcpy_get_clipboard",
+        argNames: ["captureRef"],
+      );
+
+  @override
   Future<void> interopScrcpyApiApiScrcpyInitializeSdk({
     required List<int> serverBytes,
   }) {
@@ -3120,7 +3157,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 77,
             port: port_,
           );
         },
@@ -3155,7 +3192,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 77,
+            funcId: 78,
             port: port_,
           );
         },
@@ -3196,7 +3233,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 79,
             port: port_,
           );
         },
@@ -3229,7 +3266,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 80,
             port: port_,
           );
         },
@@ -3262,7 +3299,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 81,
             port: port_,
           );
         },
@@ -3295,7 +3332,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 82,
             port: port_,
           );
         },
@@ -3328,7 +3365,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 82,
+            funcId: 83,
             port: port_,
           );
         },
@@ -3365,7 +3402,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 83,
+            funcId: 84,
             port: port_,
           );
         },
@@ -3398,7 +3435,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 84,
+            funcId: 85,
             port: port_,
           );
         },
@@ -3442,7 +3479,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 85,
+            funcId: 86,
             port: port_,
           );
         },
@@ -3495,7 +3532,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 86,
+            funcId: 87,
             port: port_,
           );
         },
@@ -3532,7 +3569,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 87,
+            funcId: 88,
             port: port_,
           );
         },
@@ -3567,7 +3604,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 88,
+            funcId: 89,
             port: port_,
           );
         },
@@ -3600,7 +3637,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 89,
+            funcId: 90,
             port: port_,
           );
         },
@@ -3633,7 +3670,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 90,
+            funcId: 91,
             port: port_,
           );
         },
@@ -3666,7 +3703,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 91,
+            funcId: 92,
             port: port_,
           );
         },
@@ -3701,7 +3738,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 92,
+            funcId: 93,
             port: port_,
           );
         },
@@ -3752,7 +3789,7 @@ class ScrcpyRustLibApiImpl extends ScrcpyRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 93,
+            funcId: 94,
             port: port_,
           );
         },

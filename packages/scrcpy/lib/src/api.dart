@@ -51,3 +51,8 @@ abstract interface class NativeScrcpySourceStatusApi {
     required String sourceId,
   });
 }
+
+/// Text snapshots require clipboardAutosync=false; missing text is reported as unknown.
+abstract interface class NativeScrcpyClipboardApi {
+  Future<String> readClipboard(String captureRef);
+}

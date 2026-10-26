@@ -162,6 +162,15 @@ final class ScrcpySession {
     }(), cancellation);
   }
 
+  /// Reads text without synthesizing copy keys. Missing or restricted text stays unknown.
+  Future<String> readClipboard() {
+    _checkOpen();
+    if (_api case final NativeScrcpyClipboardApi native) {
+      return native.readClipboard(id);
+    }
+    throw const ScrcpyException('clipboard_snapshot_unavailable');
+  }
+
   Future<ScrcpyProcessInfo> processInfo() {
     _checkOpen();
     return _staged().processInfo(id);
