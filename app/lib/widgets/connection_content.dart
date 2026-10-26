@@ -79,7 +79,12 @@ Future<bool> confirmConnectionChange(
             FilledButton(
               style: danger
                   ? FilledButton.styleFrom(
-                      backgroundColor: ConnectTokens.danger,
+                      backgroundColor: Theme.of(dialogContext)
+                          .colorScheme
+                          .error,
+                      foregroundColor: Theme.of(dialogContext)
+                          .colorScheme
+                          .onError,
                     )
                   : null,
               onPressed: () => Navigator.pop(dialogContext, true),

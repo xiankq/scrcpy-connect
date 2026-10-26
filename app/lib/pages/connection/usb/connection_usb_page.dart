@@ -135,7 +135,7 @@ class UsbGuidePage extends HookWidget {
             );
     }
     final children = <Widget>[
-      Text('使用支持数据传输的数据线连接手机。', style: Theme.of(context).textTheme.bodySmall),
+      Text('使用支持数据传输的数据线连接手机。', style: Theme.of(context).textTheme.bodyMedium),
       const SizedBox(height: DesignTokens.spacingMd),
       Text('本机：允许访问 USB 设备。', style: Theme.of(context).textTheme.bodyMedium),
       const SizedBox(height: DesignTokens.spacingSm),

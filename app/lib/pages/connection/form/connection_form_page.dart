@@ -1,6 +1,6 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/pages/connection/form/widgets/connection_ambient_loading.dart';
+import 'package:scrcpy_connect/pages/connection/form/widgets/connection_attempt_status.dart';
 
 import 'widgets/connection_mode_selector.dart';
 import 'widgets/connection_address_fields.dart';
@@ -628,7 +628,7 @@ class ConnectionFormPage extends HookWidget {
           ),
           if (attemptPage.value)
             Positioned.fill(
-              child: ConnectionAmbientLoading(
+              child: ConnectionAttemptStatus(
                 busy: busy.value,
                 checking: checking.value,
                 cancelling: cancelling.value,

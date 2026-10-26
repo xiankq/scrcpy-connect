@@ -5841,27 +5841,27 @@
                       "type": "text",
                       "id": "O7HBI",
                       "name": "连接后，允许本应用访问 USB 设备。此权限不要求本机开启调试。",
-                      "fill": "$text",
+                      "fill": "$secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
                       "content": "本机：允许访问 USB 设备。",
-                      "lineHeight": "$line-body",
-                      "fontFamily": "$font-body",
-                      "fontSize": "$size-body",
-                      "fontWeight": "$weight-body"
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
                     },
                     {
                       "type": "text",
                       "id": "m41ZU",
                       "name": "开启开发者选项与 USB 调试，在手机系统弹窗中允许此主控的调试授权。请核对授权对象。",
-                      "fill": "$text",
+                      "fill": "$secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
                       "content": "被控手机：开启 USB 调试，并在系统弹窗中允许调试。",
-                      "lineHeight": "$line-body",
-                      "fontFamily": "$font-body",
-                      "fontSize": "$size-body",
-                      "fontWeight": "$weight-body"
+                      "lineHeight": "$line-caption",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
                     }
                   ]
                 },
@@ -10142,7 +10142,8 @@
                 },
                 "ckMc4/mpPvv": {
                   "content": "删除 2 项",
-                  "fontSize": 30
+                  "fontSize": 30,
+                  "fill": "$on-danger"
                 }
               }
             },
@@ -13548,7 +13549,7 @@
       "x": 4404,
       "y": 2324,
       "name": "页面 / 03 添加设备 / 连接中 · 浅色",
-      "context": "浅深主题规则完全一致：正常连接由流动背景和三球表达，不显示正在连接或验证身份等额外文案，不新增按钮；需要手机操作时只显示必要指引。进入异常立即隐藏三球并暂停背景在当前帧，直接显示原因及适用的文字按钮，无卡片、弹窗或文字底色。重试恢复运动并隐藏异常反馈。既有悬浮展开按钮及其内容不变。",
+      "context": "添加设备使用普通中性等待页：纯色画布与常规进度指示，不使用渐变背景或三球。关闭始终可用；仅在需要手机操作时显示必要指引，真实连接成功进入设备工作台。异常停止进度，原位显示原因及适用操作。读屏播报真实设备与阶段。",
       "theme": {
         "mode": "light"
       },
@@ -13560,205 +13561,60 @@
       "children": [
         {
           "type": "frame",
-          "id": "IuUZc",
+          "id": "L19nZ",
           "x": 0,
           "y": 0,
-          "name": "组件 / 全屏加载 · 渐变与三球",
-          "context": "ScGZP 与 te8k9 共用唯一完整加载场景。浅深主题仅切换 canvas 底色；多色流动渐变和三球共用完全相同的颜色、透明度、位置、尺寸、轨迹、速度及缩放，通过半透明叠加自然适配底色。三球为明亮薄荷绿、珊瑚、紫色，统一32%不透明度。无描边、泛光、反光热点、模糊或投影。正常连接只显示背景和三球，无正在连接等额外字眼；异常隐藏三球并冻结背景当前帧，再启用无背景异常文字和按钮，重试恢复运动；左上角44点关闭始终可用，辅助控件使用标准语义色保证可读。真实设备与阶段同时提供给读屏；长等待不追加重复连接文案，手机授权只在需要操作时显示必要指引。减少动态固定背景与球体；离页、后台及取消停止，真实成功立即离开。 动效参数在两种主题完全共用：球群中心50%×45.3%，轨道52×38点（402宽稿），三球基准直径32／28／22点，初始相位−35°／85°／205°；4.2秒绕行一周，各自2.8／3.4／3.9秒在0.7–1.6倍间平滑缩放。背景三层以16／20／18秒连续漂移，位移≤8%、缩放1–1.12，足够出血避免露边。实际循环见动效预览，静态画布表示同一相位。 请求未提交时取消；已提交时退出等待并保留请求记录，不宣称撤回已执行操作。",
+          "name": "组件 / 普通连接等待",
+          "context": "添加设备及普通连接等待使用纯色背景与常规中性进度环。读屏提供真实设备及阶段，减少动态使用静止进度指示。",
           "reusable": true,
-          "clip": true,
           "width": 402,
           "height": 874,
           "fill": "$canvas",
-          "cornerRadius": "$radius-phone",
           "layout": "none",
           "children": [
             {
-              "type": "rectangle",
-              "id": "yMuRl",
-              "x": 0,
-              "y": 0,
-              "name": "暖粉至雾蓝 · 多色持续流动",
-              "fill": {
-                "type": "gradient",
-                "gradientType": "linear",
-                "enabled": true,
-                "rotation": 180,
-                "size": {
-                  "height": 1
-                },
-                "colors": [
-                  {
-                    "color": "$loading-warm",
-                    "position": 0
-                  },
-                  {
-                    "color": "$transparent",
-                    "position": 0.45
-                  },
-                  {
-                    "color": "$loading-blue",
-                    "position": 1
-                  }
-                ]
-              },
-              "width": 402,
-              "height": 874
-            },
-            {
-              "type": "rectangle",
-              "id": "gW8P2",
-              "x": 0,
-              "y": 0,
-              "name": "薄荷渐变 · 持续流动",
-              "fill": {
-                "type": "gradient",
-                "gradientType": "radial",
-                "enabled": true,
-                "rotation": 0,
-                "size": {
-                  "width": 2.2,
-                  "height": 1.4
-                },
-                "colors": [
-                  {
-                    "color": "$loading-mint",
-                    "position": 0
-                  },
-                  {
-                    "color": "$transparent",
-                    "position": 1
-                  }
-                ],
-                "center": {
-                  "x": 1,
-                  "y": 1
-                }
-              },
-              "width": 402,
-              "height": 874
-            },
-            {
-              "type": "rectangle",
-              "id": "H3JvSs",
-              "x": 0,
-              "y": 0,
-              "name": "浅紫渐变 · 持续流动",
-              "fill": {
-                "type": "gradient",
-                "gradientType": "radial",
-                "enabled": true,
-                "rotation": 0,
-                "size": {
-                  "width": 1.8,
-                  "height": 0.9
-                },
-                "colors": [
-                  {
-                    "color": "$loading-violet",
-                    "position": 0
-                  },
-                  {
-                    "color": "$transparent",
-                    "position": 1
-                  }
-                ],
-                "center": {
-                  "x": 0,
-                  "y": 0.45
-                }
-              },
-              "width": 402,
-              "height": 874
-            },
-            {
               "type": "ellipse",
-              "id": "unQOn",
-              "x": 227.59590630302756,
-              "y": 358.20409541866024,
-              "name": "薄荷绿半透明球",
-              "opacity": "$loading-orb-opacity",
-              "metadata": {
-                "type": "loading-orbit",
-                "phaseDegrees": -35,
-                "orbitSeconds": 4.2,
-                "scaleSeconds": 2.8,
-                "scaleRange": [
-                  0.7,
-                  1.6
-                ],
-                "edge": "no-stroke",
-                "glow": false,
-                "shadow": false
-              },
-              "fill": "$list-icon-mint",
-              "width": 32,
-              "height": 32
+              "id": "RgcHL",
+              "x": 189,
+              "y": 383,
+              "name": "常规中性进度环",
+              "innerRadius": 0.8,
+              "sweepAngle": 275,
+              "fill": "$secondary",
+              "width": 24,
+              "height": 24
             },
             {
-              "type": "ellipse",
-              "id": "pH0FL",
-              "x": 191.5320986228782,
-              "y": 419.85539852748633,
-              "name": "珊瑚半透明球",
-              "opacity": "$loading-orb-opacity",
-              "metadata": {
-                "type": "loading-orbit",
-                "phaseDegrees": 85,
-                "orbitSeconds": 4.2,
-                "scaleSeconds": 3.4,
-                "scaleRange": [
-                  0.7,
-                  1.6
-                ],
-                "edge": "no-stroke",
-                "glow": false,
-                "shadow": false
-              },
-              "fill": "$list-icon-coral",
-              "width": 28,
-              "height": 28
-            },
-            {
-              "type": "ellipse",
-              "id": "juFfO",
-              "x": 142.8719950740942,
-              "y": 368.9405060538534,
-              "name": "浅紫半透明球",
-              "opacity": "$loading-orb-opacity",
-              "metadata": {
-                "type": "loading-orbit",
-                "phaseDegrees": 205,
-                "orbitSeconds": 4.2,
-                "scaleSeconds": 3.9,
-                "scaleRange": [
-                  0.7,
-                  1.6
-                ],
-                "edge": "no-stroke",
-                "glow": false,
-                "shadow": false
-              },
-              "fill": "$list-icon-purple",
-              "width": 22,
-              "height": 22
-            },
-            {
-              "id": "H3zik",
+              "id": "zMY1w",
               "type": "ref",
               "ref": "lufWX",
-              "name": "关闭等待 · 44点命中",
+              "name": "关闭普通连接等待",
               "x": 20,
               "y": 60,
               "width": 44,
               "height": 44,
-              "context": "44点关闭：请求未提交时取消；已提交时退出等待并保留当前设备、请求与活动记录。系统返回使用相同语义。",
               "descendants": {
                 "alBho": {
                   "icon": "x",
                   "fill": "$text"
                 }
               }
+            },
+            {
+              "type": "text",
+              "id": "cXyJp",
+              "x": 32,
+              "y": 428,
+              "name": "普通连接进度说明",
+              "fill": "$secondary",
+              "textGrowth": "fixed-width",
+              "width": 338,
+              "content": "正在连接设备…",
+              "lineHeight": "$line-body",
+              "textAlign": "center",
+              "fontFamily": "$font-body",
+              "fontSize": "$size-body",
+              "fontWeight": "$weight-body"
             }
           ]
         },
@@ -13768,7 +13624,7 @@
           "x": 32,
           "y": 490,
           "name": "组件 / 连接异常 · 无背景文字",
-          "context": "仅在连接失败、授权已结束、身份不符、结果待确认或配对未连接等异常态启用。异常时隐藏三球，背景冻结在进入异常的当前帧；正文和按钮直接放在背景上。正常连接不显示本组件，必需的手机操作指引单独按需显示。大字和低高度时可滚动，避让既有浮动控件。",
+          "context": "连接异常的原位原因及适用操作。普通添加设备等待页使用纯色背景，停止进度后显示；屏幕连接异常可在冻结的渐变背景上复用同一文字组件。大字和低高度时可滚动，避让浮动控件。",
           "reusable": true,
           "enabled": false,
           "width": 338,
@@ -14246,7 +14102,7 @@
       "x": 5368,
       "y": 3438,
       "name": "页面 / 04 手机与应用 / 画面启动 · 等待首帧",
-      "context": "与 ScGZP 共用 IuUZc，深色运行时与浅色相同：正常连接及首帧等待由背景和三球表示，无重复状态标题。异常隐藏三球、暂停背景在当前帧，显示无背景原因文字及适用动作；重新尝试后恢复运动。必要手机操作才显示指引，读屏始终播报真实阶段。既有关闭及悬浮展开控件不变。",
+      "context": "仅打开手机屏幕及等待首帧使用 IuUZc 渐变三球场景，明暗同一动效。异常隐藏三球、背景冻结，直接显示原因和适用动作。真实首帧到达立即显示手机画面，不显示已连接成功提示。",
       "theme": {
         "mode": "dark"
       },
@@ -14257,14 +14113,208 @@
       "layout": "none",
       "children": [
         {
-          "id": "ddIZK",
-          "type": "ref",
-          "ref": "IuUZc",
-          "name": "共享全屏加载 · 等待首帧",
+          "type": "frame",
+          "id": "IuUZc",
           "x": 0,
           "y": 0,
+          "name": "组件 / 屏幕连接加载 · 渐变与三球",
+          "context": "仅用于打开手机屏幕及首帧等待。浅深主题仅切换 canvas 底色；多色流动渐变和三球共用颜色、透明度、位置、尺寸、轨迹、速度及缩放。三球薄荷绿、珊瑚、紫色，统一32%不透明度，无描边、泛光、反光、模糊或投影。异常隐藏三球并冻结背景当前帧，显示无背景原因及适用动作。左上角44点关闭始终可用。读屏提供真实设备与阶段；减少动态固定背景与球体，离页、后台及取消停止，首帧成功立即离开。球群中心50%×45.3%，轨道52×38点，三球基准32／28／22点，初始相位−35°／85°／205°；4.2秒绕行一周，2.8／3.4／3.9秒在0.7–1.6倍平滑缩放；背景16／20／18秒漂移，位移≤8%、缩放1–1.12。",
+          "reusable": true,
+          "clip": true,
           "width": 402,
-          "height": 874
+          "height": 874,
+          "fill": "$canvas",
+          "cornerRadius": "$radius-phone",
+          "layout": "none",
+          "children": [
+            {
+              "type": "rectangle",
+              "id": "yMuRl",
+              "x": 0,
+              "y": 0,
+              "name": "暖粉至雾蓝 · 多色持续流动",
+              "fill": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 180,
+                "size": {
+                  "height": 1
+                },
+                "colors": [
+                  {
+                    "color": "$loading-warm",
+                    "position": 0
+                  },
+                  {
+                    "color": "$transparent",
+                    "position": 0.45
+                  },
+                  {
+                    "color": "$loading-blue",
+                    "position": 1
+                  }
+                ]
+              },
+              "width": 402,
+              "height": 874
+            },
+            {
+              "type": "rectangle",
+              "id": "gW8P2",
+              "x": 0,
+              "y": 0,
+              "name": "薄荷渐变 · 持续流动",
+              "fill": {
+                "type": "gradient",
+                "gradientType": "radial",
+                "enabled": true,
+                "rotation": 0,
+                "size": {
+                  "width": 2.2,
+                  "height": 1.4
+                },
+                "colors": [
+                  {
+                    "color": "$loading-mint",
+                    "position": 0
+                  },
+                  {
+                    "color": "$transparent",
+                    "position": 1
+                  }
+                ],
+                "center": {
+                  "x": 1,
+                  "y": 1
+                }
+              },
+              "width": 402,
+              "height": 874
+            },
+            {
+              "type": "rectangle",
+              "id": "H3JvSs",
+              "x": 0,
+              "y": 0,
+              "name": "浅紫渐变 · 持续流动",
+              "fill": {
+                "type": "gradient",
+                "gradientType": "radial",
+                "enabled": true,
+                "rotation": 0,
+                "size": {
+                  "width": 1.8,
+                  "height": 0.9
+                },
+                "colors": [
+                  {
+                    "color": "$loading-violet",
+                    "position": 0
+                  },
+                  {
+                    "color": "$transparent",
+                    "position": 1
+                  }
+                ],
+                "center": {
+                  "x": 0,
+                  "y": 0.45
+                }
+              },
+              "width": 402,
+              "height": 874
+            },
+            {
+              "type": "ellipse",
+              "id": "unQOn",
+              "x": 227.59590630302756,
+              "y": 358.20409541866024,
+              "name": "薄荷绿半透明球",
+              "opacity": "$loading-orb-opacity",
+              "metadata": {
+                "type": "loading-orbit",
+                "phaseDegrees": -35,
+                "orbitSeconds": 4.2,
+                "scaleSeconds": 2.8,
+                "scaleRange": [
+                  0.7,
+                  1.6
+                ],
+                "edge": "no-stroke",
+                "glow": false,
+                "shadow": false
+              },
+              "fill": "$list-icon-mint",
+              "width": 32,
+              "height": 32
+            },
+            {
+              "type": "ellipse",
+              "id": "pH0FL",
+              "x": 191.5320986228782,
+              "y": 419.85539852748633,
+              "name": "珊瑚半透明球",
+              "opacity": "$loading-orb-opacity",
+              "metadata": {
+                "type": "loading-orbit",
+                "phaseDegrees": 85,
+                "orbitSeconds": 4.2,
+                "scaleSeconds": 3.4,
+                "scaleRange": [
+                  0.7,
+                  1.6
+                ],
+                "edge": "no-stroke",
+                "glow": false,
+                "shadow": false
+              },
+              "fill": "$list-icon-coral",
+              "width": 28,
+              "height": 28
+            },
+            {
+              "type": "ellipse",
+              "id": "juFfO",
+              "x": 142.8719950740942,
+              "y": 368.9405060538534,
+              "name": "浅紫半透明球",
+              "opacity": "$loading-orb-opacity",
+              "metadata": {
+                "type": "loading-orbit",
+                "phaseDegrees": 205,
+                "orbitSeconds": 4.2,
+                "scaleSeconds": 3.9,
+                "scaleRange": [
+                  0.7,
+                  1.6
+                ],
+                "edge": "no-stroke",
+                "glow": false,
+                "shadow": false
+              },
+              "fill": "$list-icon-purple",
+              "width": 22,
+              "height": 22
+            },
+            {
+              "id": "H3zik",
+              "type": "ref",
+              "ref": "lufWX",
+              "name": "关闭等待 · 44点命中",
+              "x": 20,
+              "y": 60,
+              "width": 44,
+              "height": 44,
+              "context": "44点关闭：请求未提交时取消；已提交时退出等待并保留当前设备、请求与活动记录。系统返回使用相同语义。",
+              "descendants": {
+                "alBho": {
+                  "icon": "x",
+                  "fill": "$text"
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -28031,42 +28081,6 @@
               "children": [
                 {
                   "type": "frame",
-                  "id": "LKsiu",
-                  "name": "画质生效范围",
-                  "width": "fill_container",
-                  "gap": 8,
-                  "padding": [
-                    12,
-                    0
-                  ],
-                  "children": [
-                    {
-                      "type": "icon",
-                      "id": "AHbPI",
-                      "name": "提示图标",
-                      "width": 19,
-                      "height": 19,
-                      "icon": "info",
-                      "library": "lucide",
-                      "fill": "$secondary"
-                    },
-                    {
-                      "type": "text",
-                      "id": "g7X3A",
-                      "name": "提示正文",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "我的手机 · 所有画面共用",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
                   "id": "NHben",
                   "name": "控制与屏幕行为",
                   "width": "fill_container",
@@ -30837,7 +30851,8 @@
                           "fill": "$danger"
                         },
                         "ckMc4/mpPvv": {
-                          "content": "移除设备"
+                          "content": "移除设备",
+                          "fill": "$on-danger"
                         }
                       }
                     }
@@ -32578,7 +32593,7 @@
           "id": "qMoYX",
           "name": "状态板使用说明",
           "fill": "$secondary",
-          "content": "完整页 W3GRn / yMlVd / ScGZP；其他 Tab 表单集中于 oOBt8。异常只展示相对原页的文字、动作及冻结背景变化，无额外整页。",
+          "content": "完整页 W3GRn / yMlVd / ScGZP；其他 Tab 表单集中于 oOBt8。添加设备使用纯色背景和普通进度；异常只展示相对原页的文字与动作变化。",
           "fontFamily": "$font-caption",
           "fontSize": "$size-caption",
           "fontWeight": "normal"
@@ -34213,7 +34228,7 @@
               "type": "frame",
               "id": "O1xHPv",
               "name": "局部状态 / 等待手机授权",
-              "context": "仍在等待授权时只显示必要手机操作指引，不显示正在连接、等待授权等重复状态标题，也不新增按钮；三球与背景保持运动。",
+              "context": "普通添加设备等待中的必要手机操作指引，保留纯色画布与常规进度，不使用渐变三球，不新增重复状态标题或按钮。",
               "theme": {
                 "mode": "light"
               },
@@ -34272,7 +34287,7 @@
               "type": "frame",
               "id": "P2736",
               "name": "局部状态 / 设备连接失败 · 浅色",
-              "context": "ScGZP 的异常局部裁片；复用完整加载背景。异常隐藏三球、冻结背景当前帧，再显示无背景原因及动作。不是新增页面或弹窗；原页完整外壳见 ScGZP。",
+              "context": "ScGZP 普通连接等待页的异常局部裁片，纯色背景，进度停止，直接显示原因和适用动作；不是新增页面或弹窗。屏幕启动异常实例可显式启用冻结的屏幕专用渐变背景。",
               "theme": {
                 "mode": "light"
               },
@@ -34292,7 +34307,8 @@
                   "y": -330,
                   "width": 402,
                   "height": 874,
-                  "context": "背景动画 paused，保留异常出现时的渐变相位；三个球隐藏且停止。核对期间维持冻结，重新尝试才恢复。",
+                  "context": "仅屏幕启动异常实例启用；普通添加设备异常不显示此背景。",
+                  "enabled": false,
                   "descendants": {
                     "unQOn": {
                       "enabled": false
@@ -34403,7 +34419,7 @@
               "type": "frame",
               "id": "O98b7",
               "name": "局部状态 / 授权未完成",
-              "context": "ScGZP 的异常局部裁片；明暗同一规则：三球隐藏，流动背景冻结在异常到达的当前帧，原位显示文字及动作，无文字卡片、弹窗或独立底色。静态稿仅表示冻结帧，运行时不得重置渐变。",
+              "context": "ScGZP 普通连接等待的异常局部裁片；纯色画布，停止常规进度后原位显示必要原因与适用动作，不使用渐变三球或文字卡片。",
               "theme": {
                 "mode": "dark"
               },
@@ -34414,29 +34430,6 @@
               "gap": 20,
               "padding": 32,
               "children": [
-                {
-                  "id": "xWBKL",
-                  "type": "ref",
-                  "ref": "IuUZc",
-                  "name": "异常背景 / 当前帧冻结 · 三球隐藏",
-                  "layoutPosition": "absolute",
-                  "x": 0,
-                  "y": -300,
-                  "width": 402,
-                  "height": 874,
-                  "context": "异常状态：三球 enabled=false；背景三层停止在异常发生的当前帧，禁止重置或继续漂移。核对维持暂停；重新发起连接后才恢复。此裁片只是静态冻结帧示意。",
-                  "descendants": {
-                    "unQOn": {
-                      "enabled": false
-                    },
-                    "pH0FL": {
-                      "enabled": false
-                    },
-                    "juFfO": {
-                      "enabled": false
-                    }
-                  }
-                },
                 {
                   "type": "text",
                   "id": "Y5fqf",
@@ -34564,7 +34557,7 @@
               "type": "frame",
               "id": "rQrJV",
               "name": "局部状态 / 设备身份不符",
-              "context": "ScGZP 的异常局部裁片；明暗同一规则：三球隐藏，流动背景冻结在异常到达的当前帧，原位显示文字及动作，无文字卡片、弹窗或独立底色。静态稿仅表示冻结帧，运行时不得重置渐变。",
+              "context": "ScGZP 普通连接等待的异常局部裁片；纯色画布，停止常规进度后原位显示必要原因与适用动作，不使用渐变三球或文字卡片。",
               "theme": {
                 "mode": "light"
               },
@@ -34575,29 +34568,6 @@
               "gap": 20,
               "padding": 32,
               "children": [
-                {
-                  "id": "X5xbK",
-                  "type": "ref",
-                  "ref": "IuUZc",
-                  "name": "异常背景 / 当前帧冻结 · 三球隐藏",
-                  "layoutPosition": "absolute",
-                  "x": 0,
-                  "y": -300,
-                  "width": 402,
-                  "height": 874,
-                  "context": "异常状态：三球 enabled=false；背景三层停止在异常发生的当前帧，禁止重置或继续漂移。核对维持暂停；重新发起连接后才恢复。此裁片只是静态冻结帧示意。",
-                  "descendants": {
-                    "unQOn": {
-                      "enabled": false
-                    },
-                    "pH0FL": {
-                      "enabled": false
-                    },
-                    "juFfO": {
-                      "enabled": false
-                    }
-                  }
-                },
                 {
                   "type": "text",
                   "id": "K8UaDg",
@@ -34714,7 +34684,7 @@
               "type": "frame",
               "id": "Hxh30",
               "name": "局部状态 / 已配对，尚未连接",
-              "context": "ScGZP 的异常局部裁片；明暗同一规则：三球隐藏，流动背景冻结在异常到达的当前帧，原位显示文字及动作，无文字卡片、弹窗或独立底色。静态稿仅表示冻结帧，运行时不得重置渐变。",
+              "context": "ScGZP 普通连接等待的异常局部裁片；纯色画布，停止常规进度后原位显示必要原因与适用动作，不使用渐变三球或文字卡片。",
               "theme": {
                 "mode": "light"
               },
@@ -34725,29 +34695,6 @@
               "gap": 20,
               "padding": 32,
               "children": [
-                {
-                  "id": "lRP1y",
-                  "type": "ref",
-                  "ref": "IuUZc",
-                  "name": "异常背景 / 当前帧冻结 · 三球隐藏",
-                  "layoutPosition": "absolute",
-                  "x": 0,
-                  "y": -300,
-                  "width": 402,
-                  "height": 874,
-                  "context": "异常状态：三球 enabled=false；背景三层停止在异常发生的当前帧，禁止重置或继续漂移。核对维持暂停；重新发起连接后才恢复。此裁片只是静态冻结帧示意。",
-                  "descendants": {
-                    "unQOn": {
-                      "enabled": false
-                    },
-                    "pH0FL": {
-                      "enabled": false
-                    },
-                    "juFfO": {
-                      "enabled": false
-                    }
-                  }
-                },
                 {
                   "type": "text",
                   "id": "SvreW",
@@ -34944,6 +34891,9 @@
                   "context": "同一异常整页布局的 无法打开手机屏幕 实例。异常隐藏三球并冻结背景，直接文字反馈；仅已确认失败可重新尝试，结果未知先核对且不重放请求。正常态、首次等待和长等待均无额外返回按钮。",
                   "width": 402,
                   "descendants": {
+                    "cnzY3": {
+                      "enabled": true
+                    },
                     "mQHwg/J8gEz": {
                       "content": "无法打开手机屏幕"
                     },
@@ -34993,6 +34943,9 @@
                   "context": "同一异常整页布局的 无法打开手机屏幕 实例。异常隐藏三球并冻结背景，直接文字反馈；仅已确认失败可重新尝试，结果未知先核对且不重放请求。正常态、首次等待和长等待均无额外返回按钮。",
                   "width": 402,
                   "descendants": {
+                    "cnzY3": {
+                      "enabled": true
+                    },
                     "mQHwg/J8gEz": {
                       "content": "无法打开手机屏幕"
                     },
@@ -35042,6 +34995,9 @@
                   "context": "同一异常整页布局的 屏幕启动结果待确认 实例。异常隐藏三球并冻结背景，直接文字反馈；仅已确认失败可重新尝试，结果未知先核对且不重放请求。正常态、首次等待和长等待均无额外返回按钮。",
                   "width": 402,
                   "descendants": {
+                    "cnzY3": {
+                      "enabled": true
+                    },
                     "mQHwg/J8gEz": {
                       "content": "屏幕启动结果待确认"
                     },
@@ -36492,7 +36448,8 @@
                           "fill": "$danger"
                         },
                         "ckMc4/mpPvv": {
-                          "content": "删除"
+                          "content": "删除",
+                          "fill": "$on-danger"
                         }
                       }
                     }
@@ -38280,7 +38237,8 @@
                       "fill": "$danger"
                     },
                     "ckMc4/mpPvv": {
-                      "content": "停止并移除"
+                      "content": "停止并移除",
+                      "fill": "$on-danger"
                     }
                   }
                 }
@@ -42004,7 +41962,8 @@
                       "fill": "$danger"
                     },
                     "ckMc4/mpPvv": {
-                      "content": "重置密钥"
+                      "content": "重置密钥",
+                      "fill": "$on-danger"
                     }
                   }
                 }
@@ -44633,54 +44592,15 @@
     },
     "success": {
       "type": "color",
-      "value": [
-        {
-          "value": "#217A3C",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#30D158",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
+      "value": "$list-icon-mint"
     },
     "warning": {
       "type": "color",
-      "value": [
-        {
-          "value": "#925400",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#FF9F0A",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
+      "value": "$list-icon-amber"
     },
     "danger": {
       "type": "color",
-      "value": [
-        {
-          "value": "#C9342A",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#FF453A",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
+      "value": "$list-icon-coral"
     },
     "scrim": {
       "type": "color",
@@ -45201,20 +45121,7 @@
     },
     "accent-coral": {
       "type": "color",
-      "value": [
-        {
-          "value": "#C9342A",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#FF453A",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
+      "value": "$list-icon-coral"
     },
     "accent-coral-soft": {
       "type": "color",
@@ -45235,20 +45142,7 @@
     },
     "accent-amber": {
       "type": "color",
-      "value": [
-        {
-          "value": "#925400",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#FF9F0A",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
+      "value": "$list-icon-amber"
     },
     "accent-amber-soft": {
       "type": "color",
@@ -45269,20 +45163,7 @@
     },
     "accent-mint": {
       "type": "color",
-      "value": [
-        {
-          "value": "#217A3C",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#30D158",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
+      "value": "$list-icon-mint"
     },
     "accent-mint-soft": {
       "type": "color",
@@ -45584,20 +45465,7 @@
     },
     "accent-blue": {
       "type": "color",
-      "value": [
-        {
-          "value": "#0A84FF",
-          "theme": {
-            "mode": "light"
-          }
-        },
-        {
-          "value": "#409CFF",
-          "theme": {
-            "mode": "dark"
-          }
-        }
-      ]
+      "value": "$list-icon-blue"
     },
     "accent-blue-soft": {
       "type": "color",
@@ -45787,6 +45655,10 @@
     "loading-orb-opacity": {
       "type": "number",
       "value": 32
+    },
+    "on-danger": {
+      "type": "color",
+      "value": "#18181A"
     }
   },
   "fileToken": "a093725f-869e-4791-abe1-22c1bab505db",

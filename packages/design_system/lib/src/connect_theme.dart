@@ -111,7 +111,9 @@ abstract final class ConnectTokens {
       onTertiaryFixed: ink,
       onTertiaryFixedVariant: secondary,
       error: dark ? DesignTokens.colorDangerDark : danger,
-      onError: dark ? DesignTokens.colorOnDangerDark : DesignTokens.colorWhite,
+      onError: dark
+          ? DesignTokens.colorOnDangerDark
+          : DesignTokens.colorOnDanger,
       errorContainer: dark
           ? DesignTokens.colorDangerContainerDark
           : DesignTokens.colorDangerContainer,

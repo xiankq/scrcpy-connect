@@ -127,7 +127,7 @@ void main() {
   );
 
   testWidgets(
-    'unknown connection stays on a frozen background and rechecking never resends the request',
+    'unknown connection uses ordinary feedback and rechecking never resends the request',
     (tester) async {
       final calls = <(String, Json)>[];
       final controller = createTestController((
@@ -144,11 +144,7 @@ void main() {
       await tap(tester, 'IP 连接');
       await tester.enterText(find.byType(TextFormField).first, 'phone.local');
       await tap(tester, '连接设备');
-      final field = tester.widget<AmbientLoadingField>(
-        find.byType(AmbientLoadingField),
-      );
-      expect(field.animating, isFalse);
-      expect(field.showParticles, isFalse);
+      expect(find.byType(AmbientLoadingField), findsNothing);
       expect(find.text('连接结果待确认'), findsOneWidget);
       expect(find.text('重试'), findsNothing);
       await tap(tester, '重新核对');

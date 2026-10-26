@@ -146,7 +146,10 @@ Future<bool> confirm(
           ),
           FilledButton(
             style: danger
-                ? FilledButton.styleFrom(backgroundColor: ConnectTokens.danger)
+                ? FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                  )
                 : null,
             onPressed: () => Navigator.pop(context, true),
             child: Text(action),

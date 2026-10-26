@@ -2,10 +2,9 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
 
-class ConnectionAmbientLoading extends StatelessWidget {
-  const ConnectionAmbientLoading({
+class ConnectionAttemptStatus extends StatelessWidget {
+  const ConnectionAttemptStatus({
     super.key,
     required this.busy,
     required this.checking,
@@ -57,12 +56,22 @@ class ConnectionAmbientLoading extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      body: AmbientLoadingField(
-        semanticsLabel: busy ? '正在连接设备 $deviceName' : '$title，$deviceName',
-        animating: busy,
-        showParticles: busy,
-        overlay: Stack(
+      body: Semantics(
+        label: busy ? '正在连接设备 $deviceName' : '$title，$deviceName',
+        liveRegion: true,
+        child: Stack(
           children: [
+            if (busy)
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: DesignTokens.spacingMd),
+                    Text('正在连接设备…', style: text.bodyMedium),
+                  ],
+                ),
+              ),
             if (!busy)
               Positioned.fill(
                 child: SafeArea(

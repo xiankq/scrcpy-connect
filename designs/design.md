@@ -34,32 +34,32 @@ colors:
   glass-shine-dark: '#FFFFFF1F'
   shadow: '#00000014'
   shadow-dark: '#00000066'
-  success: '#217A3C'
-  success-dark: '#30D158'
-  warning: '#925400'
-  warning-dark: '#FF9F0A'
-  danger: '#C9342A'
-  danger-dark: '#FF453A'
+  success: '{colors.list-icon-mint}'
+  success-dark: '{colors.list-icon-mint}'
+  warning: '{colors.list-icon-amber}'
+  warning-dark: '{colors.list-icon-amber}'
+  danger: '{colors.list-icon-coral}'
+  danger-dark: '{colors.list-icon-coral}'
   scrim: '#17171B4D'
   scrim-dark: '#00000080'
   white: '#FFFFFF'
   transparent: '#00000000'
   media-ink: '#111114'
   media-shade: '#00000099'
-  accent-blue: '#0A84FF'
-  accent-blue-dark: '#409CFF'
+  accent-blue: '{colors.list-icon-blue}'
+  accent-blue-dark: '{colors.list-icon-blue}'
   accent-blue-soft: '#E6F2FF'
   accent-blue-soft-dark: '#1A2635'
-  accent-coral: '#C9342A'
-  accent-coral-dark: '#FF453A'
+  accent-coral: '{colors.list-icon-coral}'
+  accent-coral-dark: '{colors.list-icon-coral}'
   accent-coral-soft: '#FFEBEA'
   accent-coral-soft-dark: '#332021'
-  accent-amber: '#925400'
-  accent-amber-dark: '#FF9F0A'
+  accent-amber: '{colors.list-icon-amber}'
+  accent-amber-dark: '{colors.list-icon-amber}'
   accent-amber-soft: '#FFF4E6'
   accent-amber-soft-dark: '#33291C'
-  accent-mint: '#217A3C'
-  accent-mint-dark: '#30D158'
+  accent-mint: '{colors.list-icon-mint}'
+  accent-mint-dark: '{colors.list-icon-mint}'
   accent-mint-soft: '#EBF9EE'
   accent-mint-soft-dark: '#1E2E24'
   on-accent: '#FFFFFF'
@@ -80,6 +80,7 @@ colors:
   glass-action-shine: '#FFFFFF14'
   glass-action-shine-dark: '#FFFFFF1F'
   black: '#000000'
+  on-danger: '#18181A'
   on-danger-dark: '#18181A'
   danger-container: '#FFEBEA'
   danger-container-dark: '#332021'
@@ -410,7 +411,7 @@ components:
     textColor: '{colors.on-danger-container-dark}'
   button-danger:
     backgroundColor: '{colors.danger}'
-    textColor: '{colors.white}'
+    textColor: '{colors.on-danger}'
   button-danger-dark:
     backgroundColor: '{colors.danger-dark}'
     textColor: '{colors.on-danger-dark}'
@@ -628,7 +629,7 @@ frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及
 | Flexibility／灵活 | 系统字体偏好、玻璃外观、减少动态、降低透明度、提高对比度分别适配 |
 | Simplicity／简洁 | 只去掉重复解释，保留设备来源、真实阶段、影响与恢复入口 |
 | Craft／工艺 | 明暗可读、触控可靠、连续可打断反馈；不以昂贵折射牺牲响应 |
-| Delight／愉悦 | 连接与画面启动通过柔和渐变和三球动效建立连续感；装饰运动不代表实际进度 |
+| Delight／愉悦 | 屏幕连接与画面启动通过柔和渐变和三球动效建立连续感；装饰运动不代表实际进度 |
 
 ## Colors
 
@@ -645,7 +646,7 @@ frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及
 | 珊瑚红 | `#FF6B5E` | 设备管理与高影响功能入口图标 |
 | 资料青蓝 | `#5AC8FA` | 普通设置与设备数据功能图标 |
 
-`list-icon` 实色底统一配 `on-accent` 白色 Lucide 图形，浅深色模式一致。彩色图标与色块外的清楚文字标签成组呈现，功能不单靠图形传达；独立无标签控件须另行核验至少 3:1 的图形对比。色块内的说明文字采用深色前景，不复用图标前景 token。普通正文、短标签及线性状态符号使用 text／secondary 或经过对比核验的语义前景，不能把亮橙黄、薄荷绿直接当作浅色背景上的小字颜色。success／warning／danger 是状态前景，不与亮色图标底混用；危险动作文字继续使用 danger，不能仅凭珊瑚色底表达风险。熄屏、关闭画面及断开按真实影响选择样式。品牌色主要进入内容、状态及有意义的动作，不给整条导航染品牌底。空态用 `feature-icon` 淡底。真实应用图标、设备轮廓和缩略图保留自身角色。
+`list-icon` 实色底统一配 `on-accent` 白色 Lucide 图形，浅深色模式一致。彩色图标与色块外的清楚文字标签成组呈现，功能不单靠图形传达；独立无标签控件须另行核验至少 3:1 的图形对比。色块内的说明文字采用深色前景，不复用图标前景 token。success／warning／danger 及 accent-mint／amber／coral／blue 直接引用上述亮色，明暗主题使用相同基色，不再维护另一套偏暗状态色或点缀色。普通正文及状态说明使用 text／secondary；亮色用于状态符号、色块及明确的风险动作，不把亮橙黄、薄荷绿用于浅色背景上的小字。危险实色按钮搭配 on-danger 深色文字，并以文字说明风险。熄屏、关闭画面及断开按真实影响选择样式。品牌色主要进入内容、状态及有意义的动作，不给整条导航染品牌底。空态用 `feature-icon` 淡底。真实应用图标、设备轮廓和缩略图保留自身角色。
 
 `list-icon` 定义尺寸与白色图形，`list-icon-blue` 等定义独立底色层；其中 textColor 是导出器沿用的图形前景字段，不用于文字。`glass-selection` 是叠加在现有内容面上的选中层，`glass-selection-label` 是独立标签；黑色标签需在浅色底合成后检查，不能把透明黑选中层当作不透明黑底。白色图形及实体、透明图层均保留真实色值，不为通过普通文字的4.5:1检查而改暗亮色底。
 
@@ -676,11 +677,11 @@ frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及
 - 后台能力按主控平台呈现；iOS 不展示无效的后台保持开关，不显示“已就绪”的虚假状态。恢复前台后核验连接和活动，不能把未知结果自动当作失败重发。
 - 连接诊断集中真实问题、处理入口及平铺功能检查；检查项左图标、右文字及可用性，与连接状态行一致。设备详情为独立页，设备与系统、电源、显示、网络、内存存储直接展示，不使用折叠栏。当前活动将待核对请求与实际进行中的活动分组，核对和关闭记录不等同于停止手机应用。设置用一个无标题列表组平铺全部入口，含授权密钥、本机运行日志和关于，不设高级折叠区。
 - 截图完成给当前视频帧缩略预览及系统保存／分享；通知清除与应用已读分开，批量清除确认当前设备与范围，当前通知页可见时不重复发系统提醒。导入记录先展示新增数量和偏好影响，保留现有设备设置，不暗示迁移了授权。
-- 连接与画面首帧等待共用全屏渐变与三球背景：持续流动的多色渐变，叠加三颗不同亮色、低透明度的球体；三球持续移动并各自放大缩小，不加描边、泛光、反光热点、模糊或投影。正常连接、身份验证和长等待只用动效表达，不显示“正在连接”等重复标题或说明，不新增返回、重试或诊断按钮；需要手机操作时仅显示必要指引，不加状态标题。异常出现立即隐藏三球、停止球体动画，背景暂停在异常到达的当前帧，保留原渐变；再直接显示原因及适用的无背景文字按钮，无卡片、描边、遮罩或弹窗。标题使用 heading/text，说明使用 body/secondary，动作命中至少44点；身份不符不能直接重试，结果未知先核对，配对成功保留授权。重新发起连接后收起异常反馈，恢复背景和三球运动；核对结果期间保持冻结，不能制造又在连接的假象。明暗主题的状态切换规则一致，正常态以 `ScGZP`／`te8k9` 验证，完整布局以原有连接及首帧等待页为基准；右侧 03、04 状态板用共享背景的局部裁片验证连接及屏幕启动的明暗失败、结果待确认等差异，不重复整页。正文和动作自然向下延展，长文换行，大字或低高度时可滚动且避让既有浮动控件。设备名和真实阶段始终提供给读屏，阶段变化时播报。既有左上角关闭至少44点，悬浮展开按钮及内容不改动；未提交时取消，已提交时退出等待并保留活动记录，系统返回语义相同，不宣称撤回远端请求。成功或可信首帧到达立即离开，不等待动效循环、不编造百分比。
+- 添加、配对及设备连接使用中性页面和标准进度反馈。仅屏幕连接与画面首帧等待使用全屏渐变与三球背景：持续流动的多色渐变，叠加三颗不同亮色、低透明度的球体；三球持续移动并各自放大缩小，不加描边、泛光、反光热点、模糊或投影。正常连接、身份验证和长等待只用动效表达，不显示“正在连接”等重复标题或说明，不新增返回、重试或诊断按钮；需要手机操作时仅显示必要指引，不加状态标题。异常出现立即隐藏三球、停止球体动画，背景暂停在异常到达的当前帧，保留原渐变；再直接显示原因及适用的无背景文字按钮，无卡片、描边、遮罩或弹窗。标题使用 heading/text，说明使用 body/secondary，动作命中至少44点；身份不符不能直接重试，结果未知先核对，配对成功保留授权。重新发起连接后收起异常反馈，恢复背景和三球运动；核对结果期间保持冻结，不能制造又在连接的假象。明暗主题的状态切换规则一致，屏幕等待以 `te8k9` 验证；右侧 03 状态板用中性页面验证设备连接反馈，04 状态板用共享渐变背景的局部裁片验证屏幕启动的明暗失败、结果待确认等差异，不重复整页。正文和动作自然向下延展，长文换行，大字或低高度时可滚动且避让既有浮动控件。设备名和真实阶段始终提供给读屏，阶段变化时播报。既有左上角关闭至少44点，悬浮展开按钮及内容不改动；未提交时取消，已提交时退出等待并保留活动记录，系统返回语义相同，不宣称撤回远端请求。成功或可信首帧到达立即离开，不等待动效循环、不编造百分比。
 
 ### 全屏加载的主题与动效
 
-`ScGZP` 与 `te8k9` 共用唯一 `IuUZc` 背景组件，前者以浅色、后者以深色验证；两种任务运行时均跟随系统主题，颜色不绑定业务阶段。浅深两套只切换 canvas 底色（浅色 #F2F2F7、深色 #000000）。暖粉、雾蓝、薄荷与浅紫的流动渐变共用上述 RGBA 色值；三球使用 list-icon-mint、list-icon-coral、list-icon-purple 三种明亮基色，统一32%不透明度。渐变与三球的颜色、透明度、位置、尺寸、轨迹、速度及缩放在两种主题完全一致，通过半透明叠加自然形成深浅差异，不设深色专用动效覆盖。Pencil 的 loading-orb-opacity 使用百分比数值32。关闭和必要提示沿用标准语义色保持可读。
+`te8k9` 等屏幕连接及首帧等待状态使用唯一 `IuUZc` 背景组件；`ScGZP` 设备连接页使用中性背景和标准进度指示。屏幕等待跟随系统主题，颜色不绑定业务阶段。浅深两套只切换 canvas 底色（浅色 #F2F2F7、深色 #000000）。暖粉、雾蓝、薄荷与浅紫的流动渐变共用上述 RGBA 色值；三球使用 list-icon-mint、list-icon-coral、list-icon-purple 三种明亮基色，统一32%不透明度。渐变与三球的颜色、透明度、位置、尺寸、轨迹、速度及缩放在两种主题完全一致，通过半透明叠加自然形成深浅差异，不设深色专用动效覆盖。Pencil 的 loading-orb-opacity 使用百分比数值32。关闭和必要提示沿用标准语义色保持可读。
 
 以可用视口为坐标，球群中心在横向50%、纵向45.3%；402宽稿的轨道半径为52×38点，绿／珊瑚／紫球基准直径分别32／28／22点，初始相位−35°／85°／205°。三球以4.2秒一周连续绕行，各自按2.8／3.4／3.9秒周期在0.7–1.6倍之间平滑放大缩小，错开相位，不逐圈停顿、回弹或重置；按屏宽收敛轨道，不随文字放大。背景三层渐变分别以16／20／18秒连续漂移，位移不超过各层尺寸8%、缩放1–1.12，预留足够出血，避免露边和亮度脉冲。减少动态同时固定背景与三球，仅真实阶段切换时最多150毫秒淡变。异常立即隐藏三球并停止其动画，背景以 animation-play-state: paused 等等效方式冻结当前帧；不重建渐变层或重置相位。重新连接才恢复，核对阶段继续冻结。取消、切走或进入后台停止循环；恢复时承接当前状态，不重放任务。静态源稿定义外观和轨迹参数，连续运动以动效预览及运行交互核验。
 
