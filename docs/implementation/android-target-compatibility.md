@@ -19,7 +19,7 @@
 
 ADB 1.0.0保留校验和、OPEN尾零及协商分片；AUTH在总期限内响应重复TOKEN。经典shell无可靠退出码，文件变更另取执行回执；回执丢失保留未知，不重放。
 
-缺少stat_v2/ls_v2时使用[原生文件助手](../../servers/helpers/README.md)，保留64位大小、原始名称及errno，不依赖设备自带stat/find/toybox。子项不跟随符号链接，明确共享存储根别名允许解析。
+目录枚举与原子拒绝覆盖使用[原生文件助手](../../servers/helpers/README.md)；缺少stat_v2时也由助手读取元数据。助手保留64位大小、原始名称及errno，不依赖设备自带stat/find/toybox。ls_v2的空DONE不能单独证明目录可读，普通mv -n不能保证并发下不覆盖。子项不跟随符号链接，明确共享存储根别名允许解析。
 
 助手部署到独占目录，回读字节匹配后才授权执行已打开的同一inode。主控EOF触发租约清理。scrcpy与companion由监督器等待自己子进程退出后删除部署文件；删除JAR不作为退出证明。
 

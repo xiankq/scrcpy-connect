@@ -62,6 +62,11 @@ void main() {
       await checkAgain();
       await checkAgain();
       expect(requests, hasLength(2));
+      await tester.scrollUntilVisible(
+        find.text('无线配对码'),
+        -180,
+        scrollable: find.byType(Scrollable).first,
+      );
       await Scrollable.ensureVisible(
         tester.element(find.text('无线配对码')),
         alignment: .5,
