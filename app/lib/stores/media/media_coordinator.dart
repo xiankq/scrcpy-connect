@@ -79,8 +79,9 @@ final class MediaCoordinator {
       Map<String, dynamic> output;
       try {
         output = await _videoOutputs.reconfigure(stream);
-      } catch (_) {
+      } catch (error) {
         _videoLifecycle.retainFailedOutput(id);
+        captures.videoOutputFailed(stream, error);
         rethrow;
       }
       final merged = {...stream, ...output};
@@ -183,8 +184,7 @@ final class MediaCoordinator {
         data['deviceId'] != source['deviceId']) {
       return;
     }
-    if (event['type'] == 'audio.output.failed' ||
-        (event['type'] == 'audio.presentation' && _terminalAudioFocus(data))) {
+    if (event['type'] == 'audio.output.failed') {
       // 等待前先认领精确所有者，防止重复或迟到的焦点事件二次停止或影响其他设备的替换源。
       _audioSources.remove(id);
       _mediaIntents.stop(id, audio: true);
@@ -205,10 +205,6 @@ final class MediaCoordinator {
       );
     }
   }
-
-  bool _terminalAudioFocus(Map<String, dynamic> receipt) =>
-      receipt['requiresUserResume'] == true &&
-      ['permanentLoss', 'noisy'].contains(receipt['focusSignal']);
 
   Future<Map<String, dynamic>> capabilities() async =>
       _videoOutputs.capabilities();
@@ -531,13 +527,6 @@ final class MediaCoordinator {
           throw const ApplicationCommandException(
             'cancelled',
             '已停止本次声音，不会重新启动。',
-          );
-        }
-        if (_terminalAudioFocus(playback)) {
-          // 首次实际播放可能在 ready 回执到达前已丢失焦点，此时仍必须停止原生捕获。
-          throw const ApplicationCommandException(
-            'audio_focus_lost',
-            '声音焦点已结束，请重新打开此设备声音。',
           );
         }
         final ready = await captures.readyAudio({...result, ...playback});

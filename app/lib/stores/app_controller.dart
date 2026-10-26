@@ -47,7 +47,7 @@ class AppController extends _$AppController {
     });
   }
 
-  /// 调用者只能释放一次，仅最后一个实际画面可请求锁屏。
+  /// 调用者只能释放一次，仅最后一个实际画面可请求熄屏。
   bool Function() claimControlPage(String deviceId, {String? sessionId}) {
     final pages = _controlPages;
     final token = pages.claim(deviceId, sessionId: sessionId);
@@ -184,6 +184,7 @@ class AppController extends _$AppController {
           next = _withShare(next, jsonObject(event['data']));
         }
         state = next;
+        ownedAudio.handleEvent(frozen);
         // 绑定页面处理事件前必须先看到校准后的状态。
         events.add(frozen);
         if (value(event, 'type').startsWith('session.') ||
@@ -224,14 +225,25 @@ class AppController extends _$AppController {
   bool isDisposed() => _disposed || !ref.mounted;
   AppState snapshot() => state;
   Stream<Json> eventStream() => _events.stream;
-  Future<Json> execute(ApplicationCommand command, [Json params = const {}]) {
+  Future<Json> execute(
+    ApplicationCommand command, [
+    Json params = const {},
+  ]) async {
     _announceStop(command.wire, params);
-    return _dependencies.execute(command, params);
+    final audio = _deviceAudio;
+    final revision = audio.playbackRequestRevision(command.wire, params);
+    final result = await _dependencies.execute(command, params);
+    audio.playbackSucceeded(command.wire, params, result, revision);
+    return result;
   }
 
-  Future<Json> request(String command, [Json params = const {}]) {
+  Future<Json> request(String command, [Json params = const {}]) async {
     _announceStop(command, params);
-    return _dependencies.request(command, params);
+    final audio = _deviceAudio;
+    final revision = audio.playbackRequestRevision(command, params);
+    final result = await _dependencies.request(command, params);
+    audio.playbackSucceeded(command, params, result, revision);
+    return result;
   }
 
   void _announceStop(String command, Json params) {

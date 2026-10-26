@@ -95,6 +95,10 @@ class CommandQuery extends ChangeNotifier {
             type.startsWith('calls.') ||
             type == 'call.incoming',
       'transfers.list' => connectionChanged || type.startsWith('transfers.'),
+      'audio.sources' =>
+        connectionChanged ||
+            type.startsWith('audio.') ||
+            type.startsWith('session.'),
       'transfers.get' =>
         connectionChanged ||
             (type.startsWith('transfers.') &&

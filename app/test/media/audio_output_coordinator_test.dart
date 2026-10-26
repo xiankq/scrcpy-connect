@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/services/media/audio_player_port.dart';
 import 'package:scrcpy_connect/stores/media/audio_output_coordinator.dart';
+import 'package:scrcpy_connect/stores/media/device_audio_view_coordinator.dart';
 
 final _token = List.filled(64, 'a').join();
 AudioJson _stream(String id, [String device = 'device-A']) => {
@@ -130,6 +131,7 @@ class _Harness {
   final Duration startTimeout, operationTimeout;
   final players = <_Player>[];
   final calls = <(String, AudioJson)>[], events = <AudioJson>[];
+  void Function(AudioJson)? onEvent;
   bool disposed = false, granted = true, backgroundReady = true;
   bool backgroundSupported = true;
   bool focusBusy = false;
@@ -141,7 +143,10 @@ class _Harness {
   late final outputs = AudioOutputCoordinator(
     request: request,
     platform: platform,
-    emit: events.add,
+    emit: (event) {
+      events.add(event);
+      onEvent?.call(event);
+    },
     isDisposed: () => disposed,
     startTimeout: startTimeout,
     operationTimeout: operationTimeout,
@@ -375,7 +380,63 @@ void main() {
       await h.visible();
       await h.outputs.start(_stream('A'));
       await h.outputs.start(_stream('B', 'device-B'));
+      var automaticStarts = 0;
+      final views = DeviceAudioViewCoordinator(
+        request: (command, [params = const {}]) async {
+          final sources = (h.outputs.status()['sources'] as List)
+              .cast<AudioJson>();
+          if (command == 'audio.sources') {
+            return {
+              'sources': [
+                for (final source in sources)
+                  {...source, 'status': source['playState']},
+              ],
+            };
+          }
+          if (command == 'session.list') {
+            return {
+              'sessions': [
+                for (final device in ['device-A', 'device-B'])
+                  {'deviceId': device, 'status': 'streaming'},
+              ],
+            };
+          }
+          if (command == 'audio.start') {
+            automaticStarts++;
+            return h.outputs.start(
+              _stream('unexpected', params['deviceId'] as String),
+            );
+          }
+          if (command == 'audio.stop') {
+            for (final source in sources.where(
+              (source) => source['deviceId'] == params['deviceId'],
+            )) {
+              await h.outputs.stop(source['sourceId'] as String);
+            }
+            return {};
+          }
+          throw StateError(command);
+        },
+        readSnapshot: () => DeviceAudioViewSnapshot(
+          devices: [
+            for (final device in ['device-A', 'device-B'])
+              {'id': device, 'status': 'connected'},
+          ],
+          reconciliationPending: false,
+        ),
+        onError: (_) {},
+      );
+      h.onEvent = views.handleEvent;
+      views.claimView('device-A');
+      views.claimView('device-B');
+      await Future<void>.delayed(Duration.zero);
       await h.focus('permanentLoss');
+      expect(
+        h.events
+            .where((event) => event['type'] == 'audio.resume.required')
+            .map((event) => (event['data'] as Map)['deviceId']),
+        unorderedEquals(['device-A', 'device-B']),
+      );
       await h.focus('granted', 1); // old queued gain is not an authorization.
       expect(h.outputs.status('A')['playState'], 'paused');
       expect(h.outputs.status('A')['requiresUserResume'], true);
@@ -386,6 +447,12 @@ void main() {
       expect(h.outputs.status('B')['requiresUserResume'], true);
       await h.focus('granted', 2);
       expect(h.outputs.status('B')['playState'], 'paused');
+      await h.outputs.stop('B');
+      views.reconcile();
+      await Future<void>.delayed(Duration.zero);
+      expect(automaticStarts, 0);
+      views.dispose();
+      await Future<void>.delayed(Duration.zero);
       await h.outputs.dispose();
     },
   );

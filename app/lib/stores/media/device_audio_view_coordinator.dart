@@ -45,8 +45,39 @@ class DeviceAudioViewCoordinator {
   final _audioStopFailures = <(String, String?), _AudioStopFailure>{};
   final _audioDeviceEpochs = <String, int>{};
   final _audioFailures = <String, String>{};
+  final _resumeRequired = <String, int>{};
+  int _resumeRevision = 0;
   bool _deviceAudioScheduled = false;
   bool _deviceAudioDirty = false;
+
+  void handleEvent(Json event) {
+    if (_disposed || event['type'] != 'audio.resume.required') return;
+    final data = jsonObject(event['data']);
+    final device = value(data, 'deviceId');
+    if (device.isEmpty || data['requiresUserResume'] != true) return;
+    _resumeRequired[device] = ++_resumeRevision;
+  }
+
+  int playbackRequestRevision(String command, Json params) =>
+      _resumeRequired[value(params, 'deviceId')] ?? 0;
+
+  void playbackSucceeded(
+    String command,
+    Json params,
+    Json result,
+    int revision,
+  ) {
+    if (_disposed || !const ['audio.start', 'audio.resume'].contains(command)) {
+      return;
+    }
+    final device = value(result, 'deviceId', value(params, 'deviceId'));
+    if ((_resumeRequired[device] ?? 0) != revision ||
+        result['requiresUserResume'] == true) {
+      return;
+    }
+    _resumeRequired.remove(device);
+    reconcile();
+  }
 
   /// 页面被遮挡时仍持有声音租约，最后一个页面释放后停止该设备的共享音源。
   void Function() claimView(String deviceId) {
@@ -187,6 +218,12 @@ class DeviceAudioViewCoordinator {
       if (!_current(generation) || _readSnapshot().reconciliationPending) {
         return;
       }
+      for (final source in sources) {
+        final device = value(source, 'deviceId');
+        if (device.isNotEmpty && source['requiresUserResume'] == true) {
+          _resumeRequired.putIfAbsent(device, () => ++_resumeRevision);
+        }
+      }
       final liveSources = {
         for (final source in sources)
           if (['playing', 'starting', 'paused'].contains(source['status']))
@@ -248,6 +285,7 @@ class DeviceAudioViewCoordinator {
         }
       }
       for (final device in wanted.difference(active)) {
+        if (_resumeRequired.containsKey(device)) continue;
         if (starting.contains(device) || _audioDeviceWork.containsKey(device)) {
           continue;
         }

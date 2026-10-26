@@ -256,6 +256,26 @@ final class SessionCoordinator {
       if (deviceId == null || slot.deviceId == deviceId) Map.of(slot.state),
   ];
 
+  void rendererFailed(String sessionId, int captureGeneration, Object error) {
+    final slot = _sessions[sessionId];
+    if (_closed ||
+        slot == null ||
+        slot.revoked ||
+        !slot.rebuilding ||
+        slot.current?.generation != captureGeneration) {
+      return;
+    }
+    slot.state.addAll({
+      'status': 'failed',
+      'qualityRebuilding': false,
+      'qualityRebuildOutcome': 'failed',
+      'qualityRetryable': true,
+      'qualityFailureCode': _code(error),
+      'reason': '新画面的本机输出未能完成，请重试画质设置。',
+    });
+    _changed(slot);
+  }
+
   _LogicalSession _select(SessionJson params) {
     final id = params['sessionId'], device = params['deviceId'];
     final candidates = _sessions.values
@@ -897,6 +917,7 @@ final class SessionCoordinator {
 
   void _install(_LogicalSession slot, _Capture capture, SessionJson quality) {
     final info = capture.info!;
+    slot.state.remove('frameCount');
     slot.state.addAll({
       'captureRef': capture.sdk.id,
       'captureGeneration': capture.generation,
@@ -1267,7 +1288,11 @@ extension _SessionCommands on SessionCoordinator {
                 '触控动作无效。',
               ),
             };
-            final point = _point(slot, params);
+            final point = _point(
+              slot,
+              params,
+              cleanup: _releaseInput(command, params),
+            );
             final pressure =
                 (params['pressure'] as num?)?.toDouble() ??
                 (action == ScrcpyTouchAction.up ||
@@ -1368,7 +1393,10 @@ extension _SessionCommands on SessionCoordinator {
     if (generation < (slot.state['generation'] as int)) {
       _fail('stale_renderer', '旧渲染器不能覆盖新绑定。');
     }
-    final target = slot.state['qualityTargetGeneration'];
+    if (generation > (slot.state['generation'] as int)) {
+      slot.state.remove('frameCount');
+    }
+    final target = slot.state['qualityRebuildTarget'];
     if (slot.rebuilding && target != null && capture.generation != target) {
       _fail('stale_capture', '画质重建的目标捕获尚未就绪。');
     }
@@ -1378,7 +1406,8 @@ extension _SessionCommands on SessionCoordinator {
       'status': slot.state['paused'] == true ? 'paused' : 'streaming',
       'awaitingSession': false,
       'qualityRebuilding': false,
-      if (slot.rebuilding) 'qualityOutcome': 'applied',
+      if (slot.rebuilding) 'qualityRebuildOutcome': 'applied',
+      if (slot.rebuilding) 'qualityRetryable': false,
     });
     for (final key in [
       'decoder',
@@ -1407,12 +1436,18 @@ extension _SessionCommands on SessionCoordinator {
         slot.state['textureId'] == null) {
       _fail('stale_renderer', '旧渲染器的帧回执已失效。');
     }
+    final frames = params['frameCount'],
+        previousFrames = slot.state['frameCount'];
+    if (frames is int && previousFrames is int && frames <= previousFrames) {
+      return {'received': false, 'staleFrame': true};
+    }
     slot.state['lastFrameAt'] = _now().millisecondsSinceEpoch ~/ 1000;
     for (final key in ['frameCount', 'framesDecoded', 'presentationTimeUs']) {
       final value = params[key];
       if (value is int && value >= 0) slot.state[key] = value;
     }
-    _decoded(slot, params);
+    final geometryChanged = _decoded(slot, params);
+    if (geometryChanged) _changed(slot);
     _changed(slot, 'session.frame');
     return {'received': true};
   }
@@ -1615,12 +1650,21 @@ SessionJson _receipt(ScrcpyControlReceipt receipt) =>
     };
 ({int x, int y, int width, int height}) _point(
   _LogicalSession slot,
-  SessionJson params,
-) {
+  SessionJson params, {
+  bool cleanup = false,
+}) {
   final width = _integer(params, 'screenWidth', 1, 65535),
       height = _integer(params, 'screenHeight', 1, 65535);
   if (width != slot.state['width'] || height != slot.state['height']) {
-    _fail('stale_capture', '输入尺寸与当前精确捕获不一致。');
+    if (!cleanup) _fail('stale_capture', '输入尺寸与当前精确捕获不一致。');
+    final currentWidth = slot.state['width'] as int;
+    final currentHeight = slot.state['height'] as int;
+    return (
+      x: _integer(params, 'x', 0, width - 1).clamp(0, currentWidth - 1),
+      y: _integer(params, 'y', 0, height - 1).clamp(0, currentHeight - 1),
+      width: currentWidth,
+      height: currentHeight,
+    );
   }
   return (
     x: _integer(params, 'x', 0, width - 1),
@@ -1630,7 +1674,7 @@ SessionJson _receipt(ScrcpyControlReceipt receipt) =>
   );
 }
 
-void _decoded(_LogicalSession slot, SessionJson params) {
+bool _decoded(_LogicalSession slot, SessionJson params) {
   final width = params['decodedWidth'], height = params['decodedHeight'];
   if (width is int &&
       height is int &&
@@ -1639,8 +1683,18 @@ void _decoded(_LogicalSession slot, SessionJson params) {
       width <= 16384 &&
       height <= 16384 &&
       width * height <= 67108864) {
-    slot.state.addAll({'decodedWidth': width, 'decodedHeight': height});
+    final changed =
+        slot.state['width'] != width || slot.state['height'] != height;
+    // 调用者已核验捕获、renderer 与纹理身份；当前解码尺寸才是 scrcpy 输入使用的几何。
+    slot.state.addAll({
+      'width': width,
+      'height': height,
+      'decodedWidth': width,
+      'decodedHeight': height,
+    });
+    return changed;
   }
+  return false;
 }
 
 extension _SessionQuality on SessionCoordinator {
@@ -1794,8 +1848,8 @@ extension _SessionQuality on SessionCoordinator {
         slot.captureReservations.add(generation);
         slot.state.addAll({
           'qualityRebuilding': true,
-          'qualityTargetGeneration': generation,
-          'qualityOutcome': 'rebuilding',
+          'qualityRebuildTarget': generation,
+          'qualityRebuildOutcome': 'rebuilding',
         });
         slot.handoff = Timer(policy.qualityHandoffTimeout, () {
           slot.handoff = null;
@@ -1838,8 +1892,8 @@ extension _SessionQuality on SessionCoordinator {
           _install(slot, candidate, quality);
           slot.state.addAll({
             'qualityRebuilding': true,
-            'qualityTargetGeneration': generation,
-            'qualityOutcome': 'awaiting_renderer',
+            'qualityRebuildTarget': generation,
+            'qualityRebuildOutcome': 'awaiting_renderer',
             'paused': snapshot['paused'] == true,
           });
           _observe(slot, candidate);
@@ -1874,7 +1928,12 @@ extension _SessionQuality on SessionCoordinator {
             ..addAll(snapshot);
           slot.state.addAll({
             'qualityRebuilding': false,
-            'qualityOutcome': 'failed',
+            'qualityRebuildOutcome':
+                old.closed || old.expectedStop || cleanup != null
+                ? 'failed'
+                : 'restored',
+            'qualityRetryable':
+                old.closed || old.expectedStop || cleanup != null,
             'qualityFailureCode': _code(error),
             if (old.closed || old.expectedStop) ...{
               'status': 'failed',

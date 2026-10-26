@@ -37,6 +37,13 @@ final class MediaCaptureOperations {
   Future<Map<String, dynamic>> readyVideo(Map<String, dynamic> receipt) =>
       execute(ApplicationCommand.sessionReady, receipt);
 
+  void videoOutputFailed(Map<String, dynamic> stream, Object error) =>
+      _sessions.rendererFailed(
+        stream['sessionId'] as String,
+        stream['captureGeneration'] as int,
+        error,
+      );
+
   Future<Map<String, dynamic>> stopVideo(
     String sessionId, {
     bool keepLaunchRecord = false,

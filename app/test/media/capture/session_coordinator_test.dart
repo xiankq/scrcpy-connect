@@ -15,6 +15,7 @@ import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
 import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
 import 'package:scrcpy_connect/services/media/session_shell.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 void main() {
   late _Fixture f;
@@ -117,15 +118,12 @@ void main() {
   test('音源资格撤销抛错仍先释放捕获，保留停止责任供后继重试', () async {
     await f.start();
     f.failAudioEligibility = true;
-    await expectLater(
-      f.owner.command('session.stop', {'sessionId': _id(1)}),
-      throwsA(isA<StateError>()),
-    );
+    await expectLater(f.command('session.stop'), throwsA(isA<StateError>()));
     expect(f.native.stopped, ['capture-1']);
     expect((await f.owner.snapshots()).single['status'], 'stopping');
     expect(f.owner.hasAudioOwner('device'), isFalse);
     f.failAudioEligibility = false;
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(f.native.stopped, ['capture-1']);
     expect(await f.owner.snapshots(), isEmpty);
   });
@@ -219,7 +217,7 @@ void main() {
       await f.start(id: index);
     }
     f.native.stopping = Completer<void>();
-    final stopping = f.owner.command('session.stop', {'sessionId': _id(1)});
+    final stopping = f.command('session.stop');
     await _until(() => f.native.stopped.isNotEmpty);
     await expectLater(f.start(id: 17), throwsA(_error('session_capacity')));
     f.native.stopping!.complete();
@@ -232,16 +230,11 @@ void main() {
   test('输入与帧必须匹配捕获和渲染代次，错误尺寸不进入 SDK', () async {
     await f.start();
     await expectLater(
-      f.owner.command('session.key', {
-        'sessionId': _id(1),
-        'captureGeneration': 2,
-        'keyCode': 3,
-      }),
+      f.command('session.key', {'captureGeneration': 2, 'keyCode': 3}),
       throwsA(_error('stale_capture')),
     );
     await expectLater(
-      f.owner.command('session.touch', {
-        'sessionId': _id(1),
+      f.command('session.touch', {
         'captureGeneration': 1,
         'action': 'down',
         'pointerId': 0,
@@ -252,23 +245,20 @@ void main() {
       }),
       throwsA(_error('stale_capture')),
     );
-    await f.owner.command('session.ready', {
-      'sessionId': _id(1),
+    await f.command('session.ready', {
       'captureGeneration': 1,
       'generation': 7,
       'textureId': 42,
     });
     await expectLater(
-      f.owner.command('session.frame', {
-        'sessionId': _id(1),
+      f.command('session.frame', {
         'captureGeneration': 1,
         'generation': 6,
         'textureId': 42,
       }),
       throwsA(_error('stale_renderer')),
     );
-    await f.owner.command('session.frame', {
-      'sessionId': _id(1),
+    await f.command('session.frame', {
       'captureGeneration': 1,
       'generation': 7,
       'textureId': 42,
@@ -287,19 +277,13 @@ void main() {
       }
     };
     await expectLater(
-      f.owner.command('session.launch', {
-        'sessionId': _id(1),
-        'packageName': 'org.example.app',
-      }),
+      f.command('session.launch', {'packageName': 'org.example.app'}),
       throwsA(_error('transport_failed')),
     );
     expect(await f.launches.unresolved(), hasLength(1));
     f.native.onControl = null;
     await expectLater(
-      f.owner.command('session.launch', {
-        'sessionId': _id(1),
-        'packageName': 'org.example.app',
-      }),
+      f.command('session.launch', {'packageName': 'org.example.app'}),
       throwsA(_error('app_launch_unknown')),
     );
     final record = (await f.launches.unresolved()).single;
@@ -312,10 +296,7 @@ void main() {
 
   test('独立窗口画质切换移动真实任务，逻辑身份不变且不再次打开应用', () async {
     await f.start(package: 'org.example.app');
-    final result = await f.owner.command('session.reconfigure', {
-      'sessionId': _id(1),
-      'maxSize': 1920,
-    });
+    final result = await f.command('session.reconfigure', {'maxSize': 1920});
     expect(result['sessionId'], _id(1));
     expect(result['captureRef'], 'capture-2');
     expect(result['captureGeneration'], 2);
@@ -324,15 +305,10 @@ void main() {
     expect(f.native.controls.whereType<ScrcpyStartApp>(), hasLength(1));
     expect(f.native.stopped, ['capture-1']);
     await expectLater(
-      f.owner.command('session.key', {
-        'sessionId': _id(1),
-        'captureGeneration': 1,
-        'keyCode': 3,
-      }),
+      f.command('session.key', {'captureGeneration': 1, 'keyCode': 3}),
       throwsA(_error('stale_capture')),
     );
-    await f.owner.command('session.ready', {
-      'sessionId': _id(1),
+    await f.command('session.ready', {
       'captureGeneration': 2,
       'generation': 2,
       'textureId': 55,
@@ -340,14 +316,131 @@ void main() {
     expect((await f.owner.snapshots()).single['qualityRebuilding'], isFalse);
   });
 
+  test('真实画质事件与渲染回执共同恢复页面输入，失败回滚恢复原画面', () async {
+    final view = await f.startViewed();
+    final replacement = await f.command('session.reconfigure', {
+      'maxSize': 1920,
+    });
+    expect(view.qualityRebuilding, isTrue);
+    final output = {
+      ...replacement,
+      'generation': 2,
+      'textureId': 43,
+      'decodedWidth': 640,
+      'decodedHeight': 480,
+      'firstFrameDecoded': true,
+      'evidence': 'media_codec.decodedFrame',
+    };
+    view.output(output, verified: true);
+    expect(view.canSendInput(foreground: true, ownerCurrent: true), isFalse);
+    await f.owner.command('session.ready', output);
+    expect(view.qualityRebuilding, isFalse);
+    expect(view.canSendInput(foreground: true, ownerCurrent: true), isTrue);
+    f.native.failMediaFor = 'capture-3';
+    await expectLater(
+      f.command('session.reconfigure'),
+      throwsA(_error('encoder_failed')),
+    );
+    expect(view.qualityRebuilding, isFalse);
+    expect(view.canSendInput(foreground: true, ownerCurrent: true), isTrue);
+    expect(view.session?['textureId'], 43);
+    f.native.failMediaFor = null;
+    final failedRenderer = await f.command('session.reconfigure');
+    f.owner.rendererFailed(view.sessionId, 2, StateError('stale renderer'));
+    expect(view.qualityRebuilding, isTrue);
+    f.owner.rendererFailed(
+      view.sessionId,
+      failedRenderer['captureGeneration'] as int,
+      StateError('decoder failed'),
+    );
+    expect(view.qualityRebuilding, isFalse);
+    expect(view.qualityRetryable, isTrue);
+    expect(view.session?['textureId'], 43);
+    expect(view.canSendInput(foreground: true, ownerCurrent: true), isFalse);
+    view.output(output, verified: true);
+    view.updateSession({
+      'status': 'streaming',
+      'captureGeneration': 2,
+      'generation': 2,
+    });
+    expect(view.canSendInput(foreground: true, ownerCurrent: true), isFalse);
+    expect(view.canResume(foreground: true), isFalse);
+    final retry = await f.command('session.reconfigure');
+    final retriedOutput = {
+      ...retry,
+      'textureId': 44,
+      'decodedWidth': 640,
+      'decodedHeight': 480,
+      'firstFrameDecoded': true,
+      'evidence': 'media_codec.decodedFrame',
+    };
+    view.output(retriedOutput, verified: true);
+    await f.owner.command('session.ready', retriedOutput);
+    expect(view.qualityRetryable, isFalse);
+    expect(view.canSendInput(foreground: true, ownerCurrent: true), isTrue);
+  });
+
+  test('同代旋转尺寸经真实帧回执更新输入几何并使旧绑定失效', () async {
+    final view = await f.startViewed(decoded: true);
+    final oldBinding = view.binding;
+    await f.command('session.frame', {
+      'captureGeneration': 1,
+      'generation': 1,
+      'textureId': 42,
+      'frameCount': 2,
+      'decodedWidth': 480,
+      'decodedHeight': 640,
+    });
+    expect(view.imageGeometryReady, isTrue);
+    expect(view.binding, isNot(oldBinding));
+    expect(view.canSendInput(foreground: true, ownerCurrent: true), isTrue);
+    await f.command('session.touch', {
+      'captureGeneration': 1,
+      'action': 'down',
+      'pointerId': 7,
+      'screenWidth': 480,
+      'screenHeight': 640,
+      'x': 479,
+      'y': 639,
+    });
+    // 原几何的清理只释放同一触点，不能重新准入旧坐标的新动作。
+    await f.command('session.touch', {
+      'captureGeneration': 1,
+      'action': 'cancel',
+      'pointerId': 7,
+      'screenWidth': 640,
+      'screenHeight': 480,
+      'x': 639,
+      'y': 479,
+    });
+    expect(f.native.controls.whereType<ScrcpyTouch>(), hasLength(2));
+    await f.command('session.frame', {
+      'captureGeneration': 1,
+      'generation': 1,
+      'textureId': 42,
+      'frameCount': 1,
+      'decodedWidth': 640,
+      'decodedHeight': 480,
+    });
+    expect((await f.owner.snapshots()).single['width'], 480);
+    await expectLater(
+      f.command('session.frame', {
+        'captureGeneration': 1,
+        'generation': 0,
+        'textureId': 42,
+        'decodedWidth': 640,
+        'decodedHeight': 480,
+      }),
+      throwsA(_error('stale_renderer')),
+    );
+    expect((await f.owner.snapshots()).single['width'], 480);
+  });
+
   test('候选首帧失败还原原任务与旧画质，保持原捕获并不重放打开', () async {
     await f.start(package: 'org.example.app');
     f.native.failMediaFor = 'capture-2';
     await expectLater(
-      f.owner.command('session.reconfigure', {
-        'sessionId': _id(1),
-        'maxSize': 1920,
-      }),
+      f.command('session.reconfigure', {'maxSize': 1920}),
       throwsA(_error('encoder_failed')),
     );
     final state = (await f.owner.snapshots()).single;
@@ -367,18 +460,14 @@ void main() {
 
   test('旧 SDK 捕获开始 close 后失败也不能回滚为可用窗口，停止可重试且不重放打开', () async {
     await f.start(package: 'org.example.app');
-    await f.owner.command('session.ready', {
-      'sessionId': _id(1),
+    await f.command('session.ready', {
       'captureGeneration': 1,
       'generation': 1,
       'textureId': 55,
     });
     f.native.failStopFor.add('capture-1');
     await expectLater(
-      f.owner.command('session.reconfigure', {
-        'sessionId': _id(1),
-        'maxSize': 1920,
-      }),
+      f.command('session.reconfigure', {'maxSize': 1920}),
       throwsA(_error('capture_cleanup_unconfirmed')),
     );
     final state = (await f.owner.snapshots()).single;
@@ -386,23 +475,19 @@ void main() {
     expect(f.owner.hasAudioOwner('device'), isFalse);
     final sent = f.native.controls.length;
     await expectLater(
-      f.owner.command('session.key', {
-        'sessionId': _id(1),
-        'captureGeneration': 1,
-        'keyCode': 3,
-      }),
+      f.command('session.key', {'captureGeneration': 1, 'keyCode': 3}),
       throwsA(_error('session_stopped')),
     );
     expect(f.native.controls, hasLength(sent));
     expect(f.native.controls.whereType<ScrcpyStartApp>(), hasLength(1));
     expect(f.native.stopped, ['capture-1', 'capture-2']);
     await expectLater(
-      f.owner.command('session.stop', {'sessionId': _id(1)}),
+      f.command('session.stop'),
       throwsA(_error('capture_cleanup_unconfirmed')),
     );
     expect((await f.owner.snapshots()).single['status'], 'stopping');
     f.native.failStopFor.clear();
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(await f.owner.snapshots(), isEmpty);
     expect(f.native.stopped.where((id) => id == 'capture-2'), hasLength(1));
     expect(f.native.controls.whereType<ScrcpyStartApp>(), hasLength(1));
@@ -413,10 +498,7 @@ void main() {
     f.native.failMediaFor = 'capture-2';
     f.native.failStopFor.add('capture-2');
     await expectLater(
-      f.owner.command('session.reconfigure', {
-        'sessionId': _id(1),
-        'maxSize': 1920,
-      }),
+      f.command('session.reconfigure', {'maxSize': 1920}),
       throwsA(_error('quality_cleanup_unconfirmed')),
     );
     expect((await f.owner.snapshots()).single['captureRef'], 'capture-1');
@@ -426,24 +508,21 @@ void main() {
     expect(f.native.created, hasLength(16));
     for (var attempt = 0; attempt < 3; attempt++) {
       await expectLater(
-        f.owner.command('session.reconfigure', {
-          'sessionId': _id(1),
-          'maxSize': 1920,
-        }),
+        f.command('session.reconfigure', {'maxSize': 1920}),
         throwsA(_error('quality_cleanup_unconfirmed')),
       );
     }
     expect(f.native.created, hasLength(16));
     await expectLater(f.start(id: 16), throwsA(_error('session_capacity')));
     await expectLater(
-      f.owner.command('session.stop', {'sessionId': _id(1)}),
+      f.command('session.stop'),
       throwsA(_error('capture_cleanup_unconfirmed')),
     );
     // 原捕获已关，但候选与尚未完成的逻辑窗口继续保留一个名额。
     await f.start(id: 16);
     await expectLater(f.start(id: 17), throwsA(_error('session_capacity')));
     f.native.failStopFor.clear();
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     await f.start(id: 17);
     await expectLater(f.start(id: 18), throwsA(_error('session_capacity')));
     expect(f.native.controls.whereType<ScrcpyStartApp>(), isEmpty);
@@ -455,10 +534,7 @@ void main() {
     }
     final created = Completer<String>();
     f.native.creation = created;
-    final rebuilding = f.owner.command('session.reconfigure', {
-      'sessionId': _id(1),
-      'maxSize': 1920,
-    });
+    final rebuilding = f.command('session.reconfigure', {'maxSize': 1920});
     await _until(() => f.native.options.length == 15);
     f.native.creation = null;
     await f.start(id: 15);
@@ -571,8 +647,7 @@ void main() {
 
   test('物理尺寸经独立租约确认，只在捕获关闭后恢复', () async {
     await f.start();
-    final result = await f.owner.command('session.display', {
-      'sessionId': _id(1),
+    final result = await f.command('session.display', {
       'displayWidth': 960,
       'displayHeight': 1920,
     });
@@ -580,7 +655,7 @@ void main() {
     expect(f.native.stopped, isEmpty);
     f.adb._uploads.onDisplayStop = () =>
         expect(f.native.stopped, ['capture-1']);
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(f.adb._uploads.displayStops, 1);
     expect(await f.owner.snapshots(), isEmpty);
   });
@@ -595,15 +670,14 @@ void main() {
     });
     expect(initial['displayAuto'], isTrue);
     expect(initial['displaySize'], {'width': 960, 'height': 1920});
-    final replacement = await f.owner.command('session.reconfigure', {
-      'sessionId': _id(1),
+    final replacement = await f.command('session.reconfigure', {
       'maxSize': 720,
     });
     expect(replacement['displayAuto'], isTrue);
     expect(replacement['displaySize'], initial['displaySize']);
     expect(f.adb._uploads.displayStarts, 1);
     expect(f.adb._uploads.displayStops, 0);
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(f.adb._uploads.displayStops, 1);
   });
 
@@ -616,11 +690,11 @@ void main() {
     });
     f.native.stopFailures = 1;
     await expectLater(
-      f.owner.command('session.stop', {'sessionId': _id(1)}),
+      f.command('session.stop'),
       throwsA(_error('capture_cleanup_unconfirmed')),
     );
     expect(f.adb._uploads.displayStops, 0);
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(f.adb._uploads.displayStarts, 1);
     expect(f.adb._uploads.displayStops, 1);
   });
@@ -664,7 +738,7 @@ void main() {
     f.adb._uploads.connectionClosed = true;
     f.adb._uploads.displayCloseFailures = 100;
     await expectLater(
-      f.owner.command('session.stop', {'sessionId': _id(1)}),
+      f.command('session.stop'),
       throwsA(_error('display_close_failed')),
     );
     expect(await f.owner.snapshots(), hasLength(1));
@@ -672,7 +746,7 @@ void main() {
     expect(f.adb._uploads.displayRecoveries, 0);
     expect(f.adb._uploads.displayAcknowledgements, 0);
     f.adb._uploads.displayCloseFailures = 0;
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(await f.owner.snapshots(), isEmpty);
     expect(f.native.stopped, ['capture-1']);
     expect(f.adb._uploads._execs, hasLength(1));
@@ -688,14 +762,14 @@ void main() {
     });
     f.adb._uploads.factsFail = true;
     await expectLater(
-      f.owner.command('session.stop', {'sessionId': _id(1)}),
+      f.command('session.stop'),
       throwsA(_error('connection_facts_unknown')),
     );
     expect(await f.owner.snapshots(), hasLength(1));
     expect(f.adb._uploads.cancelled, isEmpty);
     expect(f.adb._uploads.displayStops, 0);
     f.adb._uploads.factsFail = false;
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(f.adb._uploads.displayStops, 1);
     expect(f.adb._uploads.displayAcknowledgements, 1);
   });
@@ -709,7 +783,7 @@ void main() {
     });
     f.adb._uploads.omitDisplayDone = true;
     f.adb._uploads.onDisplayStop = () => f.adb._uploads.connectionClosed = true;
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(await f.owner.snapshots(), isEmpty);
     expect(f.adb._uploads.displayStops, 1);
     expect(f.adb._uploads.displayRecoveries, 0);
@@ -756,12 +830,12 @@ void main() {
     });
     f.adb._uploads.displayCloseFailures = 2;
     await expectLater(
-      f.owner.command('session.stop', {'sessionId': _id(1)}),
+      f.command('session.stop'),
       throwsA(_error('display_close_failed')),
     );
     expect(await f.owner.snapshots(), hasLength(1));
     f.adb._uploads.displayCloseFailures = 0;
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(f.adb._uploads.displayStarts, 1);
     expect(await f.owner.snapshots(), isEmpty);
   });
@@ -800,13 +874,13 @@ void main() {
     f.adb._uploads.omitDisplayDone = true;
     f.adb._uploads.failDisplayRecovery = true;
     await expectLater(
-      f.owner.command('session.stop', {'sessionId': _id(1)}),
+      f.command('session.stop'),
       throwsA(_error('display_cleanup_unconfirmed')),
     );
     expect(f.adb._uploads.displayRecoveries, 1);
     expect(await f.owner.snapshots(), hasLength(1));
     f.adb._uploads.failDisplayRecovery = false;
-    await f.owner.command('session.stop', {'sessionId': _id(1)});
+    await f.command('session.stop');
     expect(f.adb._uploads.displayRecoveries, 2);
     expect(f.adb._uploads.displayStarts, 1);
     expect(f.native.created, ['capture-1']);
@@ -852,8 +926,7 @@ void main() {
       'displayHeight': 1920,
     });
     f.adb._uploads.holdResize = Completer<void>();
-    final resizing = f.owner.command('session.display', {
-      'sessionId': _id(1),
+    final resizing = f.command('session.display', {
       'displayWidth': 640,
       'displayHeight': 960,
     });
@@ -929,6 +1002,7 @@ final class _Fixture {
       emit: (type, device, data) {
         if (failEvents) throw StateError('event consumer failed');
         events.add(type);
+        if (type == 'session.updated') onSessionEvent?.call(Map.from(data));
       },
       now: () => DateTime.fromMillisecondsSinceEpoch(1700000000000),
       newId: () => _id(++next),
@@ -950,10 +1024,35 @@ final class _Fixture {
   bool allowCleanupFailure = false;
   bool failEvents = false;
   bool failAudioEligibility = false;
+  void Function(Map<String, dynamic>)? onSessionEvent;
   static Future<_Fixture> open() async {
     final directory = await Directory.systemTemp.createTemp('session-owner-');
     return _Fixture(directory, await AppLaunchStore.open(directory: directory));
   }
+
+  Future<RemotePresentation> startViewed({bool decoded = false}) async {
+    await start();
+    await command('session.ready', {
+      'captureGeneration': 1,
+      'generation': 1,
+      'textureId': 42,
+      if (decoded) ...{'decodedWidth': 640, 'decodedHeight': 480},
+    });
+    final view = RemotePresentation()..beginStart();
+    view.bindStart(
+      (await owner.snapshots()).single,
+      retained: false,
+      recoveringConnection: false,
+      submittedAppStart: false,
+    );
+    onSessionEvent = view.updateSession;
+    return view;
+  }
+
+  Future<Map<String, dynamic>> command(
+    String command, [
+    Map<String, dynamic> params = const {},
+  ]) => owner.command(command, {'sessionId': _id(1), ...params});
 
   Future<Map<String, dynamic>> start({int id = 1, String? package}) =>
       owner.command('session.start', {

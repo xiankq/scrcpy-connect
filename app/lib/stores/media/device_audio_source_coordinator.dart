@@ -581,8 +581,16 @@ void _applyPresentation(AudioSourceJson state, AudioSourceJson params) {
 }
 
 void _copyPauseReasons(AudioSourceJson state, AudioSourceJson params) {
-  for (final key in ['manualPaused', 'focusPaused', 'backgroundPaused']) {
+  for (final key in [
+    'manualPaused',
+    'focusPaused',
+    'backgroundPaused',
+    'requiresUserResume',
+  ]) {
     if (params[key] is bool) state[key] = params[key];
+  }
+  if (params['focusSignal'] is String) {
+    state['focusSignal'] = params['focusSignal'];
   }
 }
 

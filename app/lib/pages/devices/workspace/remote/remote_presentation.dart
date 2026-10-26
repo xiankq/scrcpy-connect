@@ -26,6 +26,7 @@ class RemotePresentation {
   String? _error;
   String? _errorCode;
   bool _connecting = true;
+  bool _hasPresentedFrame = false;
   bool _paused = false;
   bool _exiting = false;
   bool _initialActionApplied = false;
@@ -52,6 +53,7 @@ class RemotePresentation {
   String? get error => _error;
   String? get errorCode => _errorCode;
   bool get connecting => _connecting;
+  bool get awaitingFirstFrame => !_hasPresentedFrame;
   bool get paused => _paused;
   bool get exiting => _exiting;
   bool get lifecyclePaused => _lifecyclePaused;
@@ -220,6 +222,15 @@ class RemotePresentation {
     _lifecyclePaused = false;
     _connecting = retained && result['textureId'] != null;
     _paused = result['status'] == 'paused';
+    // 新捕获的 start 回执只在桥接确认解码后交付纹理；恢复快照的旧纹理仍须 resume 核验。
+    if (!retained &&
+        result['textureId'] != null &&
+        result['outputRetained'] != true &&
+        imageWidth > 0 &&
+        imageHeight > 0 &&
+        imageGeometryReady) {
+      _hasPresentedFrame = true;
+    }
     if (result['qualityRebuilding'] == true) _beginQuality(result);
     if (result['outputRetained'] == true &&
         result['captureGeneration'] is int) {
@@ -430,13 +441,23 @@ class RemotePresentation {
   }
 
   void _failQuality(RemoteData data) {
-    _session = data;
+    final previous = _qualityOriginal ?? _session;
+    _session = data['textureId'] == null && previous?['textureId'] != null
+        ? _retainedImage({
+            ...data,
+            for (final key in ['textureId', 'decodedWidth', 'decodedHeight'])
+              if (previous!.containsKey(key)) key: previous[key],
+            'outputRetained': true,
+            'outputCaptureGeneration': _outputGeneration(previous)?.$1,
+            'outputGeneration': _outputGeneration(previous)?.$2,
+          })
+        : data;
     _qualityRebuilding = false;
     _qualityFailed = true;
     _controlAvailable = false;
     _paused = true;
     _connecting = false;
-    _error = data['reason']?.toString() ?? '画面调整未完成，请在画面设置中重试。';
+    _error = data['reason']?.toString() ?? '画面调整未完成，请在画面与控制中重试。';
     _errorCode = 'quality_rebuild_failed';
   }
 
@@ -525,6 +546,7 @@ class RemotePresentation {
         _lifecyclePaused;
     _controlAvailable =
         _session?['textureId'] != null && ready['status'] == 'streaming';
+    _hasPresentedFrame = _hasPresentedFrame || _session?['textureId'] != null;
     _error = null;
     _errorCode = null;
     return true;
@@ -545,8 +567,18 @@ class RemotePresentation {
       _qualityOutput = data;
       return _completeQuality();
     }
+    if (!_hasPresentedFrame && (!verified || !hasDecodedFrameEvidence(data))) {
+      return false;
+    }
     final next = {...?_session, ...data};
+    final firstFrame =
+        !_hasPresentedFrame &&
+        verified &&
+        hasDecodedFrameEvidence(data) &&
+        next['textureId'] != null &&
+        next['outputRetained'] != true;
     if (!_paused &&
+        !firstFrame &&
         _error == null &&
         _generation(next) == _generation(_session) &&
         next['width'] == _session?['width'] &&
@@ -557,6 +589,10 @@ class RemotePresentation {
       return false;
     }
     _session = next;
+    if (firstFrame) {
+      _hasPresentedFrame = true;
+      _connecting = false;
+    }
     if (next['textureId'] != null &&
         _visibility == _Visibility.visible &&
         !_covered) {
@@ -623,8 +659,13 @@ class RemotePresentation {
     }
     if (_qualityFailed) return false;
     final previousGeometryReady = imageGeometryReady;
+    final previousWidth = _session?['width'];
+    final previousHeight = _session?['height'];
     _session = {...?_session, ...data};
-    final geometryChanged = previousGeometryReady && !imageGeometryReady;
+    final geometryChanged =
+        (previousGeometryReady && !imageGeometryReady) ||
+        (previousWidth != null && previousWidth != _session?['width']) ||
+        (previousHeight != null && previousHeight != _session?['height']);
     if (geometryChanged) _bindingGeneration++;
     if (data['status'] == 'streaming' && data['connected'] != false) {
       _controlAvailable = true;
@@ -689,6 +730,7 @@ class RemotePresentation {
     _visibility = _Visibility.visible;
     _connecting = false;
     _controlAvailable = _session?['textureId'] != null;
+    _hasPresentedFrame = _hasPresentedFrame || _session?['textureId'] != null;
     _error = null;
     return RemoteResumeResult.ready;
   }

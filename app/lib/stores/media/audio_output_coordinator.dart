@@ -420,6 +420,13 @@ class AudioOutputCoordinator {
       _focusGeneration++;
       for (final entry in _entries.values) {
         entry.requiresUserResume = true;
+        // 启动尚未取得播放证据也必须保留用户恢复要求；超时清理不能让页面自动重开。
+        _emit('audio.resume.required', entry, {
+          'sourceId': entry.id,
+          'deviceId': entry.device,
+          'requiresUserResume': true,
+          'focusSignal': signal,
+        });
       }
       await _reconcile(signal);
       await _releaseEpoch(epoch);
