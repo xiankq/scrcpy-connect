@@ -141,13 +141,16 @@ class TransferHistoryRow extends HookWidget {
                   ),
                   if (active) ...[
                     const SizedBox(height: DesignTokens.spacingXxs),
-                    LinearProgressIndicator(
-                      value: progress,
-                      minHeight: DesignTokens.spacingMicro,
-                      borderRadius: BorderRadius.circular(
-                        DesignTokens.roundedFull,
+                    if (progress == null)
+                      const ContentLoadingIndicator()
+                    else
+                      LinearProgressIndicator(
+                        value: progress,
+                        minHeight: DesignTokens.spacingMicro,
+                        borderRadius: BorderRadius.circular(
+                          DesignTokens.roundedFull,
+                        ),
                       ),
-                    ),
                   ],
                 ],
               ),

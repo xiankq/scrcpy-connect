@@ -103,7 +103,7 @@ class DevicesPage extends HookConsumerWidget {
                             padding: EdgeInsets.only(
                               top: DesignTokens.spacingMd,
                             ),
-                            child: LinearProgressIndicator(minHeight: 2),
+                            child: ContentLoadingIndicator(),
                           ),
                         if (appDeviceError != null)
                           StateNote(

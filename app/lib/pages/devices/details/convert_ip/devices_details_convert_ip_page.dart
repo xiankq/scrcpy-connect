@@ -208,7 +208,7 @@ class DeviceConvertIpPage extends HookWidget {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: DesignTokens.spacingMd),
-                    if (loading.value) const LinearProgressIndicator(),
+                    if (loading.value) const ContentLoadingIndicator(),
                     DropdownButtonFormField<String>(
                       key: ValueKey(
                         '${addresses.value.map((a) => a['address']).join(',')}:${selected.value}',

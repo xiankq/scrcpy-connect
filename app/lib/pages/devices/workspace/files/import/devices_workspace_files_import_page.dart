@@ -184,7 +184,7 @@ class DocumentImportPage extends HookWidget {
       ),
       const SizedBox(height: DesignTokens.spacingMd),
       if (operation.busy) ...[
-        const LinearProgressIndicator(),
+        const ContentLoadingIndicator(),
         const StateNote('正在等待系统选择或读取实际内容…'),
         TextButton(
           onPressed: operation.cancelling ? null : operation.cancel,

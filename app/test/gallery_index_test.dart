@@ -196,7 +196,7 @@ void main() {
       return {};
     }, settle: false);
     try {
-      expect(find.text('正在检查手机中的照片与视频'), findsOneWidget);
+      expect(find.byType(ContentLoadingIndicator), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       admission.complete(_receipt(status: 'scanning'));
       await tester.pump();

@@ -47,7 +47,7 @@ class MediaCacheBlocker extends HookWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (status.connectionState != ConnectionState.done)
-          const LinearProgressIndicator(),
+          const ContentLoadingIndicator(),
         if (status.hasError)
           const StateNote('暂时无法核验可回收项，未执行清理。可检查存储后重试，或在原手机处理。'),
         if (status.hasData && reclaimable == 0)

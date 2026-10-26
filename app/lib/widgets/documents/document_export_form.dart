@@ -114,7 +114,7 @@ class DocumentExportForm extends HookWidget {
       const Text('选择系统位置保存一份。只有系统确认写入完成后，才显示保存成功。本机暂存仍保留。'),
       const SizedBox(height: DesignTokens.spacingLg),
       if (waiting) ...[
-        const LinearProgressIndicator(),
+        const ContentLoadingIndicator(),
         const StateNote('正在等待系统选择或实际写入结果…'),
         TextButton(
           onPressed: operation.cancelling ? null : operation.cancel,

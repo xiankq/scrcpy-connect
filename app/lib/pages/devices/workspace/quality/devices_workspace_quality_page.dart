@@ -245,7 +245,7 @@ class QualityPage extends HookConsumerWidget {
                   physics: const NeverScrollableScrollPhysics(),
                   padding: EdgeInsets.zero,
                   children: [
-                    if (applying.value) const LinearProgressIndicator(),
+                    if (applying.value) const ContentLoadingIndicator(),
                     for (final failure in applicationFailures.value)
                       StateNote(
                         '${value(failure, 'name', '画面')}：${value(failure, 'reason', '本次设置未能应用')}',

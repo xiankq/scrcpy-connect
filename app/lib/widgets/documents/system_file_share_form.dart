@@ -47,7 +47,7 @@ class SystemFileShareForm extends HookWidget {
           const StateNote('当前系统分享不支持直接交付文件夹，请返回手机选择单个文件或使用已有传输方式。')
         else ...[
           if (lease.hasError) StateNote('无法保留这份暂存：${lease.error}'),
-          if (!ready && !lease.hasError) const LinearProgressIndicator(),
+          if (!ready && !lease.hasError) const ContentLoadingIndicator(),
           if (outcome.value != null) StateNote(outcome.value!),
           if (attempted.value && !busy.value)
             CheckboxListTile(

@@ -668,9 +668,7 @@ class FilesPage extends HookConsumerWidget {
                                       const SizedBox(
                                         height: DesignTokens.spacingSm,
                                       ),
-                                      const LinearProgressIndicator(
-                                        minHeight: 2,
-                                      ),
+                                      const ContentLoadingIndicator(),
                                     ],
                                   ],
                                 ),

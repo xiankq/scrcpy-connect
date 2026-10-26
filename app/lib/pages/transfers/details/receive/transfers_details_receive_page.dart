@@ -210,11 +210,12 @@ class ReceiveContentPage extends HookWidget {
                   ),
                   if (pending) ...[
                     const SizedBox(height: DesignTokens.spacingMd),
-                    LinearProgressIndicator(
-                      value: total > 0
-                          ? (completed / total).clamp(0, 1).toDouble()
-                          : null,
-                    ),
+                    if (total > 0)
+                      LinearProgressIndicator(
+                        value: (completed / total).clamp(0, 1).toDouble(),
+                      )
+                    else
+                      const ContentLoadingIndicator(),
                     const SizedBox(height: DesignTokens.spacingXs),
                     Text(
                       '${bytes(completed)} / ${total > 0 ? bytes(total) : '大小待核验'}',

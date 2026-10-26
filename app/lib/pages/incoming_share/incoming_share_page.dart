@@ -157,7 +157,7 @@ class IncomingSharePage extends HookConsumerWidget {
     final leading = <Widget>[
       const StateNote('选择设备后确认保存目录；提交时固定来源和目标，切换页面不改目标。'),
       if (importing) ...[
-        const LinearProgressIndicator(),
+        const ContentLoadingIndicator(),
         const StateNote('正在读取分享内容，完成后即可发送。你也可以取消本次分享。'),
       ],
     ];
@@ -239,7 +239,7 @@ class IncomingSharePage extends HookConsumerWidget {
       if (busy.value)
         const Padding(
           padding: EdgeInsets.all(DesignTokens.spacingMd),
-          child: LinearProgressIndicator(),
+          child: ContentLoadingIndicator(),
         ),
     ];
     final errorsStart = leading.length;

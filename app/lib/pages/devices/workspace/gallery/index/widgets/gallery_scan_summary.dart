@@ -114,7 +114,7 @@ class GalleryScanSummary extends StatelessWidget {
         ),
         if (scan.scanning) ...[
           const SizedBox(height: DesignTokens.spacingSm),
-          const LinearProgressIndicator(minHeight: 2),
+          const ContentLoadingIndicator(),
           TextButton(
             onPressed: scan.scanId == null || scan.stopping
                 ? null

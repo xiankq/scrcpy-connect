@@ -1,7 +1,25 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'generated/design_tokens.g.dart';
 import 'connect_theme.dart';
+
+class ContentLoadingIndicator extends StatelessWidget {
+  const ContentLoadingIndicator({super.key});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '正在加载',
+    child: Center(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: CupertinoActivityIndicator(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        animating: !MediaQuery.disableAnimationsOf(context),
+      ),
+    ),
+  );
+}
 
 class ContentPanel extends StatelessWidget {
   const ContentPanel({
