@@ -215,7 +215,13 @@ impl Connection {
                 &mut socket,
                 format!("host:transport-id:{}", self.transport_id).as_bytes(),
             )
-            .await?;
+            .await
+            .map_err(|error| match error {
+                // 此阶段选择的是已固定的精确 transport，而非打开 sync 服务。
+                // 明确 FAIL 证明该 transport 已不可用；普通 I/O/超时仍保留原语义。
+                Error::Remote(_) | Error::AuthorizationRequired => Error::Closed,
+                error => error,
+            })?;
             socket
                 .write_all(format!("{:04x}", service.len()).as_bytes())
                 .await?;

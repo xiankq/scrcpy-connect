@@ -1,5 +1,5 @@
 //! 官方 smart-socket 夹具，不使用直连 adbd 协议或认证。
-use interop_adb::{Client, HandshakeKind, OperationOptions};
+use interop_adb::{Client, HandshakeKind, OpenProbeOutcome, OperationOptions};
 use std::time::Duration;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -109,12 +109,12 @@ async fn stale_official_transport_never_reselects_by_serial_or_connects_to_adbd(
     let client = Client::connect_server(address, "fixture", OperationOptions::default())
         .await
         .unwrap();
-    assert!(
-        client
-            .open("exec:alive", OperationOptions::default())
-            .await
-            .is_err()
-    );
+    let probe = client
+        .probe_service_open("sync:", OperationOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(probe.outcome, OpenProbeOutcome::TransportClosed);
+    assert!(!probe.open_written);
     client.close();
     fixture.await.unwrap();
 }
