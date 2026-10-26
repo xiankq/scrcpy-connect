@@ -14,10 +14,11 @@ $library = "$env:TEMP/media_texture_replay.dll"
 cl /nologo /W4 /WX /MD /std:c++17 /EHsc /LD `
   packages/media_codec/native/tests/texture_replay_source.cpp `
   /Fe:$library /Fo:"$env:TEMP/media_texture_replay.obj"
+$env:CONNECT_E2E_CAPTURE_DIR = "$env:TEMP/connect-e2e/media-texture-replay"
 Set-Location app
 flutter drive --profile -d windows `
   --target=integration_test/media_texture_replay_test.dart `
-  --driver=../tool/driver/media_texture_replay.dart `
+  --driver=../test/driver/capture.dart `
   --dart-define=MEDIA_CODEC_REPLAY_LIBRARY=$library
 ```
 

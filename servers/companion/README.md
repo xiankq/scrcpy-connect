@@ -12,16 +12,15 @@
 协议为认证 socket 上的 v1 JSON line，以 requestId 关联响应。token 与通知动作只存内存；消息上限、签名兼容及字段以源码为准。`observation.set(enabled, epoch)` 显式启停 listener，启动 helper 不自动观察。socket 关闭后注销并退出，调用方须等待进程收尾再删 JAR。
 
 ```sh
-dart --disable-dart-dev servers/companion/build.dart
-dart --disable-dart-dev servers/companion/build.dart --check
-dart --disable-dart-dev servers/companion/build.dart --rebuild
+dart --disable-dart-dev servers/build.dart --update companion assets
+dart --disable-dart-dev servers/build.dart --check companion
+dart --disable-dart-dev servers/build.dart --rebuild companion
 dart --disable-dart-dev servers/companion/tests/compatibility.dart
-dart --disable-dart-dev servers/package.dart
 ```
 
-根目录先 `flutter pub get`；重建使用 JDK 21、SDK 36、build-tools 37.0.0。`--check` 离线核对，`--rebuild` 比较而不替换，无参数更新 JAR/manifest。文本剪贴板走 scrcpy 控制协议，不由 companion 实现。
+根目录先 `flutter pub get`；重建使用 JDK 21、SDK 36、build-tools 37.0.0。`--check` 离线核对，`--rebuild` 比较而不替换，`--update companion assets` 更新 JAR、manifest 与共享资源。文本剪贴板走 scrcpy 控制协议，不由 companion 实现。
 
-真实通知回归先构建[通知夹具](../../tool/e2e/notification_fixture/README.md)，再运行：
+真实通知回归先构建[通知夹具](../../test/fixtures/notification_fixture/README.md)，再运行：
 
 ```sh
 dart --disable-dart-dev servers/companion/tests/notification-snapshot.dart \

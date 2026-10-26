@@ -19,7 +19,7 @@ import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 import 'product_flow_test.dart'
     show expectHealthyRemote, tapPageAction, waitFor;
 
-// 仅配合 tool/driver/current_call_ui.dart 的隔离虚拟调制解调器运行；生产 CallsPage 拥有观察和 calls.open，本验收流程必须实际点击产品动作，不能以运行时调用替代。
+// 仅配合 test/driver/current_call_ui.dart 的隔离虚拟调制解调器运行；生产 CallsPage 拥有观察和 calls.open，本验收流程必须实际点击产品动作，不能以运行时调用替代。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');

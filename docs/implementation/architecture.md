@@ -15,13 +15,13 @@
 | `rust/<package>/` | 对应能力包的协议、原生资源与媒体执行 |
 | `servers/` | 被控临时执行产物 |
 
-能力包以 `lib/<包名>.dart` 为主入口，手写实现归 `lib/src/`，原生绑定归 `lib/src/native/`，Dart生成物归所属模块的 `generated/`。构建辅助归 `tool/`（含 `tool/cmake/`），Dart及工具测试归 `test/`；原生测试留在对应原生模块的 `tests/`。`hook/`、`native/` 和平台目录按实际能力保留，不创建空目录对齐。
+能力包以 `lib/<包名>.dart` 为主入口，手写实现归 `lib/src/`，原生绑定归 `lib/src/native/`，Dart生成物归所属模块的 `generated/`。仓库自动化入口归 `scripts/`，包内构建辅助归所属包的 `tool/`（含 `tool/cmake/`）；仓库级工具测试、设备 driver 和夹具归根 `test/`，应用与能力包用例归各自 `test/` 或 `integration_test/`；原生测试留在对应原生模块的 `tests/`。`hook/`、`native/` 和平台目录按实际能力保留，不创建空目录对齐。
 
 应用按类型组织，默认平铺；连接、文件、媒体等文件较多的部分才在类型目录内分组。模型只依赖模型和工具，工具不依赖业务；业务不依赖页面、组件、路由或 hooks。
 
 页面独占的状态留本页，组件状态随组件持有；公共操作可复用实现，但实例仍由使用者创建和销毁。仅真正跨页面共享的状态使用公共 provider。业务组件放本页 `widgets/`，多个页面共用时放最近公共父级；应用级组件才归顶层 `widgets/`。hooks 只连接组件生命周期，业务所有者负责取消和清理。
 
-`ApplicationSession` 组装所有者，分派器只适配命令。跨包使用公开接口；共享ADB连接使用同库宿主，句柄不能跨动态库。依赖由 `tool/check_architecture.dart` 检查。决定见[ADR](../adr/)，页面约定见[导航](flutter-navigation.md)。
+`ApplicationSession` 组装所有者，分派器只适配命令。跨包使用公开接口；共享ADB连接使用同库宿主，句柄不能跨动态库。依赖由 `scripts/check_architecture.dart` 检查。决定见[ADR](../adr/)，页面约定见[导航](flutter-navigation.md)。
 
 ## 状态与资源所有权
 

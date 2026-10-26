@@ -22,7 +22,7 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 
-import '../../tool/src/driver_cleanup.dart';
+import '../../test/driver/support/cleanup.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

@@ -1,6 +1,6 @@
 # 产品与视觉设计
 
-产品行为见 [prod/README.md](prod/README.md)；视觉数值与材料用途见 [design.md](design.md)。Flutter token 由[生成工具](../tool/design_tokens/README.md)生成，Pencil 变量沿用同一数值。
+产品行为见 [prod/README.md](prod/README.md)；视觉数值与材料用途见 [design.md](design.md)。Flutter token 由[生成工具](../scripts/design_tokens/README.md)生成，Pencil 变量沿用同一数值。
 
 `mobile.pen` 是唯一源稿，使用 Pencil MCP 或 `pen interactive` 对象 API 编辑，不按文本修改。共享组件改母组件，页面实例只覆盖业务内容和明确变体；同步核对受影响实例。
 

@@ -13,9 +13,9 @@ interop-rename list PATH LIMIT
 参数保留原始路径字节；stdout 为有界 JSON，不输出路径。rename 使用原子系统调用，无 copy/delete 回退；`lstat/list` 不跟随末端 symlink，列表错误不冒充完整成功，`nameHex` 保留原始名称。
 
 ```sh
-dart --disable-dart-dev servers/helpers/build.dart
-dart --disable-dart-dev servers/helpers/build.dart --check
-dart --disable-dart-dev servers/helpers/build.dart --rebuild
+dart --disable-dart-dev servers/build.dart --update helpers assets
+dart --disable-dart-dev servers/build.dart --check helpers
+dart --disable-dart-dev servers/build.dart --rebuild helpers
 cargo +1.99.1 test --locked --manifest-path rust/adb/device_fs_helper/Cargo.toml
 ```
 

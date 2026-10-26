@@ -611,9 +611,9 @@ components:
 
 ## Overview
 
-以设备身份、真实画面与用户内容为视觉中心，瓷白／炭黑内容层上悬浮克制的玻璃控制。产品行为见[产品规格](prod/README.md)。数值以 frontmatter token 为准，Flutter 常量由[工具](../tool/design_tokens/README.md)生成；`px` 对应逻辑像素。
+以设备身份、真实画面与用户内容为视觉中心，瓷白／炭黑内容层上悬浮克制的玻璃控制。产品行为见[产品规格](prod/README.md)。数值以 frontmatter token 为准，Flutter 常量由[工具](../scripts/design_tokens/README.md)生成；`px` 对应逻辑像素。
 
-frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及玻璃光学属性属于项目扩展。生成与正式 lint 共用项目 schema，检查扩展类型、单位及取值范围，并保留官方的未知属性、断引用、对比度和未引用颜色检查。校验入口见[工具说明](../tool/design_tokens/README.md)。颜色引用应对应实际组件或绘制层，透明层与图标的可读性按真实叠加关系核验。
+frontmatter 的 maxWidth、gap、verticalPadding、opacity、scale、stretch 及玻璃光学属性属于项目扩展。生成与正式 lint 共用项目 schema，检查扩展类型、单位及取值范围，并保留官方的未知属性、断引用、对比度和未引用颜色检查。校验入口见[工具说明](../scripts/design_tokens/README.md)。颜色引用应对应实际组件或绘制层，透明层与图标的可读性按真实叠加关系核验。
 
 ## 设计依据与原则
 

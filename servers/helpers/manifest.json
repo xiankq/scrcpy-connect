@@ -37,9 +37,10 @@
     "rust/adb/device_fs_helper/Cargo.lock": "aa326d3139dd21535ccd3c663496390c6a83abd29d444f94b1cfbd6a6f0d1470",
     "rust/adb/device_fs_helper/Cargo.toml": "726ac26cce9aeef6e21854ee10bb363c8362d6bf8ee96bbdabe465be977a42d5",
     "rust/adb/device_fs_helper/src/main.rs": "a1132eebf315573e841e0489a3ab10ee98b372a5ced28f88e7359fa9f0de4e0e",
-    "servers/helpers/build.dart": "8f50f98bd6843e4d16779d2c4f45c9db3ebe59148c1540438b1e54a92c0bad6a",
-    "servers/tooling.dart": "74b65f3f5e59f95cdeb4e0bb9fec12c890c221d4ea3d125abb545ef7bec2cf68",
-    "tool/src/process.dart": "f5cb0980ecb91c494212bad6fa3bc0b5ea85b6fbe5352a5a8455239a7998ff1b",
-    "tool/src/repository_tooling.dart": "05935da803615c7b1ba61df2d4f315bfb8b65c28a8a7101a058137415ff3b20c"
+    "scripts/src/process.dart": "f5cb0980ecb91c494212bad6fa3bc0b5ea85b6fbe5352a5a8455239a7998ff1b",
+    "scripts/src/repository_tooling.dart": "05935da803615c7b1ba61df2d4f315bfb8b65c28a8a7101a058137415ff3b20c",
+    "servers/build.dart": "1ade9ec86106f3ffd60a9e8b330646f12b94b4549085c1b6c0d0fe233760a95a",
+    "servers/helpers/build.dart": "0c8ac23becd4c6b4ae97dde368d3646203984c49f0c037159876c7f984f3e73f",
+    "servers/tooling.dart": "02d37405dc87c249fe7466bf802c85cdb222364ae92151d82cd3bb8c6f975a13"
   }
 }

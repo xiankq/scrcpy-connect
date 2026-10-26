@@ -15,7 +15,7 @@ import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-// 配合 tool/driver/integration_test.dart 和 CONNECT_E2E_ACCEPTANCE=media 运行。失败及关闭竞争由 device_quality_coordinator_test.dart、video_output_coordinator_test.dart 和 quality_reconfiguration_android.rs 覆盖；本测试提供真实 Flutter/MDK 双输出证据，不模拟渲染器、伪造就绪回执或逐窗口修改画质。
+// 配合 test/driver/integration_test.dart 和 CONNECT_E2E_ACCEPTANCE=media 运行。失败及关闭竞争由 device_quality_coordinator_test.dart、video_output_coordinator_test.dart 和 quality_reconfiguration_android.rs 覆盖；本测试提供真实 Flutter/MDK 双输出证据，不模拟渲染器、伪造就绪回执或逐窗口修改画质。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');

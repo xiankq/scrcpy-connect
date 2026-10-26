@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
 
 import '../tooling.dart';
@@ -16,8 +15,9 @@ const tools = <String, Object>{
 Map<String, String> inputs(Directory root) {
   final paths = [
     File(p.join(root.parent.path, 'tooling.dart')),
-    File(p.join(root.path, '../../tool/src/repository_tooling.dart')),
-    File(p.join(root.path, '../../tool/src/process.dart')),
+    File(p.join(root.parent.path, 'build.dart')),
+    File(p.join(root.path, '../../scripts/src/repository_tooling.dart')),
+    File(p.join(root.path, '../../scripts/src/process.dart')),
     File(p.join(root.path, 'build.dart')),
     ...files(Directory(p.join(root.path, 'src')), '.java'),
   ]..sort((a, b) => a.path.compareTo(b.path));
@@ -32,14 +32,11 @@ Future<void> verifyManifest(Directory root) async {
   require(
     sameJson(manifest['tools'], tools) &&
         sameJson(manifest['sources'], inputs(root)),
-    'Companion sources or build tools changed; rebuild servers/companion/build.dart',
+    'Companion sources or build tools changed; run dart servers/build.dart --update companion',
   );
   final jar = File(p.join(root.path, 'companion.jar'));
   require(
-    sameJson(manifest['artifact'], {
-      'sha256': digest(jar),
-      'size': jar.lengthSync(),
-    }),
+    sameJson(manifest['artifact'], artifactDigest(jar)),
     'Companion JAR differs from its build manifest',
   );
 }
@@ -72,39 +69,17 @@ Future<void> build(File destination, {Directory? sourceRoot}) async {
   });
 }
 
-Future<void> main(List<String> arguments) => cli(() async {
-  final parser = ArgParser()
-    ..addFlag('check', negatable: false)
-    ..addFlag('rebuild', negatable: false)
-    ..addFlag('help', abbr: 'h', negatable: false);
-  final options = parser.parse(arguments);
-  require(
-    options.rest.isEmpty &&
-        !(options['check'] as bool && options['rebuild'] as bool),
-    'Choose --check or --rebuild, or neither to update',
-  );
-  if (options['help'] as bool) {
-    stdout.writeln(
-      'Build the companion DEX JAR deterministically.\n${parser.usage}',
-    );
-    return;
-  }
-  final root = Directory(p.join(repositoryRoot().path, 'servers', 'companion'));
-  final check = options['check'] as bool;
-  if (check) {
-    await verifyManifest(root);
-    stdout.writeln('PASS: companion sources, build tools and artifact hash');
-    return;
-  }
+Future<void> update(Directory repository, {bool compare = false}) async {
+  final root = Directory(p.join(repository.path, 'servers', 'companion'));
   await withTemporary('companion-output-', (work) async {
     final candidate = File(p.join(work.path, 'companion.jar'));
     await build(candidate, sourceRoot: root);
     final jar = File(p.join(root.path, 'companion.jar'));
-    if (options['rebuild'] as bool) {
-      require(
-        digest(candidate) == digest(jar) &&
-            candidate.lengthSync() == jar.lengthSync(),
-        'Companion JAR is stale; run dart servers/companion/build.dart',
+    if (compare) {
+      verifySameFile(
+        candidate,
+        jar,
+        'Companion JAR is stale; run dart servers/build.dart --update companion',
       );
       stdout.writeln(
         'PASS: rebuilt companion DEX JAR is byte-for-byte identical',
@@ -114,11 +89,8 @@ Future<void> main(List<String> arguments) => cli(() async {
       writeJson(File(p.join(root.path, 'manifest.json')), {
         'tools': tools,
         'sources': inputs(root),
-        'artifact': {
-          'sha256': digest(candidate),
-          'size': candidate.lengthSync(),
-        },
+        'artifact': artifactDigest(candidate),
       });
     }
   });
-});
+}

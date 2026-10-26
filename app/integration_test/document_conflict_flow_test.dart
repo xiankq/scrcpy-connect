@@ -21,7 +21,7 @@ import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-/// 配合 tool/driver/document_conflict.dart 运行；宿主仅控制真实 Android 选择器和隔离公共文件，产品动作全部经过 app.main。
+/// 配合 test/driver/document_conflict.dart 运行；宿主仅控制真实 Android 选择器和隔离公共文件，产品动作全部经过 app.main。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   var stage = 'waiting-fixture';

@@ -22,4 +22,4 @@ pages按业务父子关系组织，有子页的入口放index。文件名使用p
 
 appDependenciesProvider注入真实请求、事件及关闭接口，AppController发布不可变快照，销毁时取消订阅。SessionViewRegistry通过独立lease管理窗口，帧事件只发往所属页面。
 
-生成及插件检查见[工具入口](../../tool/README.md)，产品返回与关闭规则见[交互规则](../../designs/prod/interaction-rules.md)。
+生成及插件检查见[工具入口](../../scripts/README.md)，产品返回与关闭规则见[交互规则](../../designs/prod/interaction-rules.md)。

@@ -3,9 +3,9 @@
 仓库根运行，需Flutter、JDK21及Android SDK：
 
 ```sh
-dart --disable-dart-dev tool/android.dart init-signing
-dart --disable-dart-dev tool/android.dart build
-dart --disable-dart-dev tool/android.dart verify app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+dart --disable-dart-dev scripts/android.dart init-signing
+dart --disable-dart-dev scripts/android.dart build
+dart --disable-dart-dev scripts/android.dart verify app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
 默认生成三个独立ABI包；`build --abi arm64` 只构建指定架构，`--abi universal` 生成通用包。APK位于 `app/build/app/outputs/flutter-apk/`。

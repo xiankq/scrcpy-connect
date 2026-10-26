@@ -23,7 +23,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.da
 
 import 'product_flow_test.dart' show waitFor, tapPageAction;
 
-/// 可选运行：tool/driver/remote_settings.dart 拥有隔离独立目标。产品动作使用真实控件与生产传输；直接请求仅用于夹具准备、观察与最终清理。
+/// 可选运行：test/driver/remote_settings.dart 拥有隔离独立目标。产品动作使用真实控件与生产传输；直接请求仅用于夹具准备、观察与最终清理。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');

@@ -16,7 +16,7 @@ gradle.taskGraph.whenReady {
     if (allTasks.any { it.project == project && it.name.endsWith("Release") }) {
         check(releaseKeyFile.isFile) {
             "Release signing is not configured. From the repository root run: " +
-                "dart tool/android.dart init-signing (local sideload key), " +
+                "dart scripts/android.dart init-signing (local sideload key), " +
                 "or provide app/android/key.properties with your release key."
         }
     }

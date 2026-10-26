@@ -19,7 +19,7 @@ import 'package:scrcpy_connect/services/connection/connection_validation.dart';
 import 'product_flow_test.dart'
     show expectHealthyRemote, tapPageAction, waitFor;
 
-// 配合 tool/driver/remote_ime.dart 运行，仅注入 Flutter 输入法编辑值，不声称覆盖 Gboard 中文候选界面。
+// 配合 test/driver/remote_ime.dart 运行，仅注入 Flutter 输入法编辑值，不声称覆盖 Gboard 中文候选界面。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');

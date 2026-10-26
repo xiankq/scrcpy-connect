@@ -8,12 +8,12 @@
 
 ```sh
 flutter pub get --enforce-lockfile
-npm ci --ignore-scripts --prefix tool/design_tokens
+npm ci --ignore-scripts --prefix scripts/design_tokens
 cd app
 flutter run -d <device>
 ```
 
-完整检查在仓库根运行 `./tool/check.sh`。发布见[Android打包](docs/implementation/android-packaging.md)及[桌面构建](tool/README.md)。
+完整检查在仓库根运行 `./scripts/check.sh`。发布见[Android打包](docs/implementation/android-packaging.md)及[桌面构建](scripts/README.md)。
 
 ## 工作区
 
@@ -24,6 +24,6 @@ flutter run -d <device>
 | `servers/` | 被控临时执行产物及来源 |
 | `protocol/` | 应用命令契约 |
 | `designs/` | 产品、视觉规范及Pencil源稿 |
-| `tool/` | 生成、检查、构建与设备驱动 |
+| `scripts/` | 生成、检查、构建与设备驱动 |
 
 入口：[产品](designs/prod/README.md) · [视觉](designs/design.md) · [架构](docs/implementation/architecture.md) · [工具链](docs/implementation/repository-tooling.md) · [词表](GLOSSARY.md) · [ADR](docs/adr/)。

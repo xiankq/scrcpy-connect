@@ -6,9 +6,9 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 
-import '../tool/src/process.dart';
+import '../scripts/src/process.dart';
 
-export '../tool/src/repository_tooling.dart' show repositoryRoot;
+export '../scripts/src/repository_tooling.dart' show repositoryRoot;
 
 String get userHome =>
     Platform.environment['HOME'] ??
@@ -28,6 +28,17 @@ void require(bool condition, Object message) {
 
 String sha256(List<int> bytes) => crypto.sha256.convert(bytes).toString();
 String digest(File file) => sha256(file.readAsBytesSync());
+
+Map<String, Object> artifactDigest(File file) => {
+  'sha256': digest(file),
+  'size': file.lengthSync(),
+};
+
+void verifySameFile(File candidate, File pinned, String message) => require(
+  candidate.lengthSync() == pinned.lengthSync() &&
+      digest(candidate) == digest(pinned),
+  message,
+);
 
 String relative(String path, String root) =>
     p.relative(path, from: root).split(p.separator).join('/');

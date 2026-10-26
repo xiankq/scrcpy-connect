@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
 
 import '../tooling.dart';
@@ -21,9 +20,10 @@ Map<String, String> inputs(Directory root) => {
     'rust/adb/device_fs_helper/Cargo.lock',
     'rust/adb/device_fs_helper/src/main.rs',
     'servers/helpers/build.dart',
+    'servers/build.dart',
     'servers/tooling.dart',
-    'tool/src/repository_tooling.dart',
-    'tool/src/process.dart',
+    'scripts/src/repository_tooling.dart',
+    'scripts/src/process.dart',
   ])
     name: digest(File(p.join(root.path, name))),
 };
@@ -69,32 +69,7 @@ void check(Directory root) {
   );
 }
 
-Future<void> main(List<String> arguments) => cli(() async {
-  final parser = ArgParser()
-    ..addFlag('check', negatable: false)
-    ..addFlag(
-      'rebuild',
-      negatable: false,
-      help: 'Build all ABIs and compare without changing artifacts',
-    )
-    ..addFlag('help', abbr: 'h', negatable: false);
-  final options = parser.parse(arguments);
-  if (options['help'] as bool) {
-    stdout.writeln(
-      'Rebuild Android helpers with pinned Rust/NDK.\n${parser.usage}',
-    );
-    return;
-  }
-  require(
-    options.rest.isEmpty &&
-        !(options['check'] as bool && options['rebuild'] as bool),
-    'Choose --check or --rebuild, or neither to update',
-  );
-  final root = repositoryRoot();
-  if (options['check'] as bool) {
-    check(root);
-    return;
-  }
+Future<void> update(Directory root, {bool compare = false}) async {
   final here = Directory(p.join(root.path, 'servers', 'helpers'));
   final crate = Directory(p.join(root.path, 'rust', 'adb', 'device_fs_helper'));
   final ndk = Directory(
@@ -161,17 +136,17 @@ Future<void> main(List<String> arguments) => cli(() async {
         'abi': entry.key,
         'target': target,
         'file': name,
-        'sha256': digest(temporary),
-        'size': temporary.lengthSync(),
+        ...artifactDigest(temporary),
       });
-      if (options['rebuild'] as bool) {
-        require(
-          digest(temporary) == digest(File(p.join(here.path, name))),
+      if (compare) {
+        verifySameFile(
+          temporary,
+          File(p.join(here.path, name)),
           'Rebuilt helper differs: ${entry.key}',
         );
       }
     }
-    if (options['rebuild'] as bool) {
+    if (compare) {
       stdout.writeln('PASS: rebuilt helpers are identical for all four ABIs');
       return;
     }
@@ -191,4 +166,4 @@ Future<void> main(List<String> arguments) => cli(() async {
       'artifacts': artifacts,
     });
   });
-});
+}

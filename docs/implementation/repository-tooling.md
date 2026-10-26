@@ -2,7 +2,7 @@
 
 ## 工作区与生成
 
-根Dart workspace共用锁文件和.dart_tool，应用在app运行，能力包测试在各包运行。纯宿主工具测试使用独立的 `tool/host/`，不触发Flutter原生hooks。生成入口见[tool/README](../../tool/README.md)。
+根Dart workspace共用锁文件和.dart_tool，应用在app运行，能力包测试在各包运行。纯宿主工具测试使用独立的 `test/host/`，不触发Flutter原生hooks。生成入口见[scripts/README](../../scripts/README.md)。
 
 - `protocol/commands.json` 生成应用Dart命令契约。
 - 根FRB配置生成各能力包内部绑定，app只用公开接口。
@@ -13,7 +13,7 @@
 
 ## 被控执行产物的共享打包
 
-[servers](../../servers/README.md)维护固定源码、许可证、产物与manifest。修改来源后重建，再运行 `dart --disable-dart-dev servers/package.dart` 同步app/assets/servers。
+[servers](../../servers/README.md)维护固定源码、许可证、产物与manifest。修改来源后重建，再运行 `dart --disable-dart-dev servers/build.dart --update assets` 同步app/assets/servers。
 
 应用校验并还原共享资源，把明确字节注入同库能力；Rust不另嵌一套JAR或读取应用assets。文件助手按被控ABI选择，主控ABI裁剪不影响共享资源。
 
@@ -33,10 +33,10 @@ Windows需Visual Studio C++桌面工作负载、Windows SDK和ATL。Flutter测�
 - 同一风险在责任层详细验证；桥接和页面只保留各自接线风险。相同分支的枚举、别名和入口选代表，不做参数笛卡尔积。
 - 常量、简单透传、getter/copy、低风险布局、框架/第三方行为、生成源码外形不常驻。视觉用代表截图，生成物用漂移检查。
 - 保留真实协议、损坏/越界、未知副作用、跨代所有权及清理重试；这些名称本身不豁免重复审查。
-- `tool/check_test_budget.dart` 按 `tool/test_budget.json` 限制各域源码行数及注册标记，含新文件和专属fixture；Rust内嵌的测试专属模块、函数及fixture也计行，生产代码不计入。完整门禁还核验应用与能力包循环展开后的用例数，跳过也计入预算。`--report` 只读；超限先去重，确有新风险才说明理由并人工改预算。
+- `scripts/check_test_budget.dart` 按 `test/budget.json` 限制各域源码行数及注册标记，含新文件和专属fixture；Rust内嵌的测试专属模块、函数及fixture也计行，生产代码不计入。完整门禁还核验应用与能力包循环展开后的用例数，跳过也计入预算。`--report` 只读；超限先去重，确有新风险才说明理由并人工改预算。
 - 不以用例数或覆盖率为目标，也不合并无关场景、挤压格式或移出默认测试集绕过预算。删除时一起清理孤立fixture与入口。
 
-调试按改动范围运行检查，完整门禁用 `tool/check.sh`；`--android` 额外构建单ABI调试包。设备结果注明主控、被控、ABI与连接方式，环境跳过不计通过。
+调试按改动范围运行检查，完整门禁用 `scripts/check.sh`；`--android` 额外构建单ABI调试包。设备结果注明主控、被控、ABI与连接方式，环境跳过不计通过。
 
 ## 构建与产物边界
 

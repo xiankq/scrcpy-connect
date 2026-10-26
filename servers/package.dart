@@ -106,12 +106,3 @@ void packageServers(Directory root, {bool check = false}) {
   }
   stdout.writeln('Generated shared compressed server assets');
 }
-
-Future<void> main(List<String> arguments) => cli(() async {
-  require(
-    arguments.isEmpty ||
-        (arguments.length == 1 && arguments.single == '--check'),
-    'Usage: dart servers/package.dart [--check]',
-  );
-  packageServers(repositoryRoot(), check: arguments.contains('--check'));
-});

@@ -4,10 +4,11 @@
     "size": 58435
   },
   "sources": {
-    "../../tool/src/process.dart": "f5cb0980ecb91c494212bad6fa3bc0b5ea85b6fbe5352a5a8455239a7998ff1b",
-    "../../tool/src/repository_tooling.dart": "05935da803615c7b1ba61df2d4f315bfb8b65c28a8a7101a058137415ff3b20c",
-    "../tooling.dart": "74b65f3f5e59f95cdeb4e0bb9fec12c890c221d4ea3d125abb545ef7bec2cf68",
-    "build.dart": "5ec3e47c21bde7e899e85a9158cb23c083b104818a90d812777ccd38a89d0840",
+    "../../scripts/src/process.dart": "f5cb0980ecb91c494212bad6fa3bc0b5ea85b6fbe5352a5a8455239a7998ff1b",
+    "../../scripts/src/repository_tooling.dart": "05935da803615c7b1ba61df2d4f315bfb8b65c28a8a7101a058137415ff3b20c",
+    "../build.dart": "1ade9ec86106f3ffd60a9e8b330646f12b94b4549085c1b6c0d0fe233760a95a",
+    "../tooling.dart": "02d37405dc87c249fe7466bf802c85cdb222364ae92151d82cd3bb8c6f975a13",
+    "build.dart": "1528ef0e8b105875dda2adb5fc6393e65cbcad83964e6f1b07b5b62ae21381e4",
     "src/com/interop/companion/Apps.java": "f238c2eb58ffce8b76ef49b97df4282f31c73bc0120126b6e20461952d03bd8d",
     "src/com/interop/companion/CallServices.java": "a243408560aa4740c6a4d1c393dc5812ec778d80a7c974e14cbfc8f25091e0f7",
     "src/com/interop/companion/CurrentUser.java": "a90a88f800c2eb9f4041bb1171317dcf009a99b9179d01d59ad8e04bcdeeecbe",

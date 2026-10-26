@@ -1,9 +1,9 @@
 # 视频测量
 
-固定入口为 `video_performance_test.dart` 与 `tool/driver/video_performance.dart`，使用独立目标夹具。从仓库根构建夹具：
+固定入口为 `video_performance_test.dart` 与 `test/driver/video_performance.dart`，使用独立目标夹具。从仓库根构建夹具：
 
 ```sh
-dart --disable-dart-dev tool/e2e/video_fixture/build.dart --output /tmp/connect-video-fixture
+dart --disable-dart-dev scripts/build_fixture.dart video --output /tmp/connect-video-fixture
 ```
 
 从app运行：
@@ -14,7 +14,7 @@ CONNECT_E2E_DEVICE=<主控serial> CONNECT_E2E_TARGET=<目标serial> \
 CONNECT_E2E_VIDEO_FIXTURE=/tmp/connect-video-fixture/video-fixture.apk \
 CONNECT_E2E_CAPTURE_DIR=/tmp/connect-video-measurement \
 flutter drive -d <主控serial> \
-  --driver=../tool/driver/video_performance.dart \
+  --driver=../test/driver/video_performance.dart \
   --target=integration_test/video_performance_test.dart \
   --dart-define=CONNECT_E2E_ADDRESS=<目标IP> \
   --dart-define=CONNECT_E2E_PORT=<目标端口>

@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:args/args.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 
@@ -226,8 +225,9 @@ Uint8List package(File apk) {
 Map<String, String> trackedInputs() => {
   for (final name in [
     '../tooling.dart',
-    '../../tool/src/repository_tooling.dart',
-    '../../tool/src/process.dart',
+    '../build.dart',
+    '../../scripts/src/repository_tooling.dart',
+    '../../scripts/src/process.dart',
     'build.dart',
     ...licenseFiles,
   ])
@@ -271,8 +271,7 @@ void check() {
   );
 }
 
-Future<File> getGradle(ArgResults options, Directory temporary) async {
-  final override = options['gradle'] as String?;
+Future<File> getGradle(String? override, Directory temporary) async {
   final File executable;
   if (override != null) {
     executable = File(override).absolute;
@@ -307,8 +306,19 @@ Future<Uint8List> sourceArchive(String? localPath) async {
   return bytes;
 }
 
-Future<void> build(ArgResults options) async {
-  final sdk = androidSdk(options['sdk'] as String?);
+Future<void> build({
+  String? sdkPath,
+  String? gradlePath,
+  String? sourcePath,
+  bool offline = false,
+  bool compare = false,
+  List<String> gradleArguments = const [],
+}) async {
+  require(
+    digest(File(p.join(here.path, desugarSourceName))) == desugarSourceSha,
+    'Corresponding source archive missing/changed',
+  );
+  final sdk = androidSdk(sdkPath);
   require(
     Platform.environment['JAVA_HOME'] != null &&
         File(javaTool('javac')).existsSync(),
@@ -336,8 +346,8 @@ Future<void> build(ArgResults options) async {
     'Install Android build-tools 37.0.0',
   );
   await withTemporary('scrcpy-vendor-build-', (temporary) async {
-    final gradle = await getGradle(options, temporary);
-    final source = await sourceArchive(options['source'] as String?);
+    final gradle = await getGradle(gradlePath, temporary);
+    final source = await sourceArchive(sourcePath);
     await extractArchive(
       TarDecoder().decodeBytes(GZipDecoder().decodeBytes(source, verify: true)),
       temporary,
@@ -374,8 +384,8 @@ Future<void> build(ArgResults options) async {
         '--no-daemon',
         '--max-workers=2',
         ':server:assembleRelease',
-        if (options['offline'] as bool) '--offline',
-        ...options['gradle-arg'] as List<String>,
+        if (offline) '--offline',
+        ...gradleArguments,
       ],
       cwd: root,
       environment: {'ANDROID_HOME': sdk.path},
@@ -419,9 +429,10 @@ Future<void> build(ArgResults options) async {
       ),
     );
     final dex = verifyArtifact(bytes);
-    if (options['rebuild'] as bool) {
+    if (compare) {
       require(
-        sameJson(bytes, artifact.readAsBytesSync()),
+        sha256(bytes) == digest(artifact) &&
+            bytes.length == artifact.lengthSync(),
         'Clean build differs: ${sha256(bytes)} != ${digest(artifact)}',
       );
       stdout.writeln('OK clean source rebuild is byte-for-byte identical');
@@ -496,42 +507,3 @@ Future<void> build(ArgResults options) async {
     check();
   });
 }
-
-Future<void> main(List<String> arguments) => cli(() async {
-  final parser = ArgParser()
-    ..addFlag('check', negatable: false)
-    ..addFlag('rebuild', negatable: false)
-    ..addFlag('update', negatable: false)
-    ..addOption('sdk')
-    ..addOption('gradle')
-    ..addOption('source', help: 'Local pinned scrcpy source archive')
-    ..addFlag('offline', negatable: false)
-    ..addMultiOption('gradle-arg', splitCommas: false)
-    ..addFlag('help', abbr: 'h', negatable: false);
-  final options = parser.parse(arguments);
-  if (options['help'] as bool) {
-    stdout.writeln(
-      'Build pinned, unmodified scrcpy sources. Choose --check, --rebuild or --update.\n${parser.usage}',
-    );
-    return;
-  }
-  require(
-    options.rest.isEmpty &&
-        [
-              'check',
-              'rebuild',
-              'update',
-            ].where((name) => options[name] as bool).length ==
-            1,
-    'Choose exactly one of --check, --rebuild or --update',
-  );
-  if (options['check'] as bool) {
-    check();
-  } else {
-    require(
-      digest(File(p.join(here.path, desugarSourceName))) == desugarSourceSha,
-      'Corresponding source archive missing/changed',
-    );
-    await build(options);
-  }
-});

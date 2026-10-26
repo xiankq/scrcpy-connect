@@ -40,15 +40,16 @@
     }
   },
   "inputs": {
-    "../../tool/src/process.dart": "f5cb0980ecb91c494212bad6fa3bc0b5ea85b6fbe5352a5a8455239a7998ff1b",
-    "../../tool/src/repository_tooling.dart": "05935da803615c7b1ba61df2d4f315bfb8b65c28a8a7101a058137415ff3b20c",
-    "../tooling.dart": "74b65f3f5e59f95cdeb4e0bb9fec12c890c221d4ea3d125abb545ef7bec2cf68",
+    "../../scripts/src/process.dart": "f5cb0980ecb91c494212bad6fa3bc0b5ea85b6fbe5352a5a8455239a7998ff1b",
+    "../../scripts/src/repository_tooling.dart": "05935da803615c7b1ba61df2d4f315bfb8b65c28a8a7101a058137415ff3b20c",
+    "../build.dart": "1ade9ec86106f3ffd60a9e8b330646f12b94b4549085c1b6c0d0fe233760a95a",
+    "../tooling.dart": "02d37405dc87c249fe7466bf802c85cdb222364ae92151d82cd3bb8c6f975a13",
     "ADDITIONAL_LICENSE_INFO-desugar_jdk_libs": "a69bce275ba7a3570af6579cb0f55682cd75fedfcd49e0e8e9022270c447c916",
     "ASSEMBLY_EXCEPTION-desugar_jdk_libs": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb",
     "LICENSE-desugar_jdk_libs": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726",
     "LICENSE-desugar_jdk_libs_configuration": "68834f116f8ff545f05d14753357b620748156d60ee36b26beab4cb3f317efe4",
     "LICENSE-scrcpy": "01c12035bf35af37241298dc7ad538eb2a07e5c940437bc6876feeaa9d1951d0",
-    "build.dart": "654ca204625795991ecefcac9689b70411378a7873b932b85502b8251672b580"
+    "build.dart": "e552e9403fbd373121c610774f2b17667ae95ec52d6ef571ee170767cbd30516"
   },
   "kind": "source-built-core-library-desugared",
   "officialRelease": {

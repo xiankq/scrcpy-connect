@@ -115,16 +115,18 @@ Future<void> main(List<String> arguments) => cli(() async {
     final copy = Directory(p.join(work.path, 'servers', 'companion'))
       ..createSync(recursive: true);
     final original = Directory(p.join(root.path, 'servers', 'companion'));
+    await File(p.join(root.path, 'servers', 'build.dart'))
+        .copy(p.join(work.path, 'servers', 'build.dart'));
     final common = File(p.join(work.path, 'servers', 'tooling.dart'));
     await File(p.join(root.path, 'servers', 'tooling.dart')).copy(common.path);
     final repositoryTooling = File(
-      p.join(work.path, 'tool', 'src', 'repository_tooling.dart'),
+      p.join(work.path, 'scripts', 'src', 'repository_tooling.dart'),
     );
     await repositoryTooling.parent.create(recursive: true);
-    await File(p.join(root.path, 'tool', 'src', 'repository_tooling.dart'))
+    await File(p.join(root.path, 'scripts', 'src', 'repository_tooling.dart'))
         .copy(repositoryTooling.path);
-    await File(p.join(root.path, 'tool', 'src', 'process.dart'))
-        .copy(p.join(work.path, 'tool', 'src', 'process.dart'));
+    await File(p.join(root.path, 'scripts', 'src', 'process.dart'))
+        .copy(p.join(work.path, 'scripts', 'src', 'process.dart'));
     for (final source in [
       File(p.join(original.path, 'build.dart')),
       ...files(Directory(p.join(original.path, 'src')), '.java'),

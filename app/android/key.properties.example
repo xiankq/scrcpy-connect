@@ -1,5 +1,5 @@
 # 复制为 key.properties 并填写自己的发布身份，或从仓库根目录执行：
-# dart tool/android.dart init-signing
+# dart scripts/android.dart init-signing
 # storeFile 的相对路径以 app/android 为基准。
 storeFile=keystores/your-release-key.jks
 keyAlias=your-release-alias

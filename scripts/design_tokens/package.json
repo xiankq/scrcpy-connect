@@ -1,0 +1,14 @@
+{
+  "name": "interconnect-design-tokens",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "check": "node generate.mjs --check",
+    "test": "node --test ../../test/design_tokens/generate.test.mjs",
+    "lint": "node lint.mjs"
+  },
+  "dependencies": {
+    "@google/design.md": "0.4.0"
+  }
+}

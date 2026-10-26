@@ -225,7 +225,7 @@
 			name = "Bundle remote-control resources";
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$PROJECT_DIR/../../tool/apple_bundle_resources.sh\"\n";
+			shellScript = "/bin/sh \"$PROJECT_DIR/../../scripts/apple_bundle_resources.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
