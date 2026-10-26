@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
+import 'package:scrcpy_connect/services/connection/device_query.dart';
 import 'package:adb/adb.dart';
-
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
@@ -26,33 +25,14 @@ final class SessionShell {
     bool requireExitCode = true,
     bool requireSuccess = true,
   }) async {
-    final stdout = BytesBuilder(copy: false),
-        stderr = BytesBuilder(copy: false);
-    var count = 0, terminal = false;
-    int? exitCode;
-    await for (final event in connection.client.shell(
-      connection.device,
+    final result = await readDeviceShell(
+      connection,
       command,
       cancellation: cancellation,
       timeout: timeout,
-    )) {
-      cancellation?.check();
-      if (terminal) _fail('invalid_data', '设备命令在终态后继续返回数据。');
-      count += event.bytes.length;
-      if (count > maxBytes) _fail('byte_limit', '设备命令输出超过本次限额。');
-      switch (event.channel) {
-        case AdbShellChannel.stdout:
-          stdout.add(event.bytes);
-        case AdbShellChannel.stderr:
-          stderr.add(event.bytes);
-        case AdbShellChannel.exit:
-          if (event.bytes.isNotEmpty) _fail('invalid_data', '设备退出回执包含无效字节。');
-          terminal = true;
-          exitCode = event.exitCode;
-      }
-    }
-    cancellation?.check();
-    if (!terminal) _fail('result_unknown', '设备命令没有返回完整终态，请先核对结果。');
+      maxBytes: maxBytes,
+    );
+    final exitCode = result.exitCode;
     if (requireSuccess && exitCode != null && exitCode != 0) {
       _fail('shell_failed', '系统报告设备命令执行失败。');
     }
@@ -63,8 +43,8 @@ final class SessionShell {
     }
     try {
       return SessionShellResult(
-        utf8.decode(stdout.takeBytes()),
-        utf8.decode(stderr.takeBytes()),
+        utf8.decode(result.stdout),
+        utf8.decode(result.stderr),
         exitCode,
       );
     } on FormatException {
@@ -145,11 +125,6 @@ final class SessionShell {
     );
     if (result.stderr.isNotEmpty) _fail('task_move_failed', '系统未确认原应用任务迁移。');
   }
-}
-
-String quoteShell(String value) {
-  if (value.contains('\x00')) _fail('invalid_argument', 'Shell 参数包含无效字符。');
-  return "'${value.replaceAll("'", "'\\''")}'";
 }
 
 int scaledDisplayDensity(

@@ -4,10 +4,10 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:uuid/uuid.dart';
 import 'package:adb/adb.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/files/file_executor.dart';
-
 import 'package:scrcpy_connect/services/files/share_scope_recovery.dart';
 import 'package:scrcpy_connect/stores/files/share_store.dart';
 
@@ -22,7 +22,6 @@ final class ShareCoordinator implements FilePublicationLeases {
   final void Function(Map<String, dynamic>)? _emit;
   final _events = StreamController<Map<String, dynamic>>.broadcast();
   final _jobs = <String, _ImportJob>{};
-  final _pending = <String, Future<Map<String, dynamic>>>{};
   final _intents = <String, _ImportIntent>{};
   final _stoppingShares = <String>{};
   Future<void> _tail = Future<void>.value();
@@ -185,18 +184,16 @@ final class ShareCoordinator implements FilePublicationLeases {
     if (_stoppingShares.contains(id)) {
       throw const FileFailure('cancelled', '此分享正在停止或移除。');
     }
-    if (_pending[id] case final running?) return running;
-    if (_pending.length >= limits.pending) {
+    if (_intents[id] case final running?) return running.result.future;
+    if (_intents.length >= limits.pending) {
       throw const FileFailure('share_cache_busy', '分享导入队列已满，请稍后重试。');
     }
     final captured = Map<String, dynamic>.from(share);
     final intent = _ImportIntent();
     _intents[id] = intent;
-    _pending[id] = intent.result.future;
     void retire() {
       if (identical(_intents[id], intent)) {
         _intents.remove(id);
-        _pending.remove(id);
       }
     }
 
@@ -275,7 +272,7 @@ final class ShareCoordinator implements FilePublicationLeases {
       final deadline = DateTime.now().add(limits.timeout);
       for (var index = 0; index < count; index++) {
         job.cancellation.check();
-        final openId = '${job.id}:${_newId()}';
+        final openId = '${job.id}:${const Uuid().v4()}';
         job.openIds.add(openId);
         final descriptor = await _request('sharing.platform.open', {
           'shareId': id,
@@ -318,7 +315,7 @@ final class ShareCoordinator implements FilePublicationLeases {
         if (remaining <= Duration.zero) {
           throw const FileFailure('timeout', '分享导入超时。');
         }
-        final diskName = _newId();
+        final diskName = const Uuid().v4();
         final copy = await job.scope!.copy(
           source: LocalFileEndpoint.fd(fd),
           target: LocalFileEndpoint.part(
@@ -478,7 +475,7 @@ final class ShareCoordinator implements FilePublicationLeases {
           );
         }
         await _cancelAndDrain(id);
-        final pending = _pending[id];
+        final pending = _intents[id]?.result.future;
         if (pending != null) {
           try {
             await pending;
@@ -618,16 +615,6 @@ bool _cancelled(Object error) => switch (error) {
 };
 
 Uint8List _path(String value) => Uint8List.fromList(utf8.encode(value));
-final _random = Random.secure();
-String _newId() {
-  final bytes = List.generate(16, (_) => _random.nextInt(256));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  final hex = bytes
-      .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-      .join();
-  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
-}
 
 String _displayName(Object? value) {
   if (value is! String) return '共享文件';

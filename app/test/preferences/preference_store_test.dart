@@ -222,16 +222,18 @@ void main() {
         firstId: {'com.example.phone': 'phone'},
       },
     });
-    await preferences.importSettings({
-      'appearance': 'dark',
-      'audioMode': 'fixed',
-      'deviceSettings': {
-        firstId: {'stayAwake': true, 'clipboardSync': true},
-      },
-      'deviceQuality': {
-        firstId: {'maxFps': 30},
-      },
-    });
+    await preferences.update(
+      preferences.schema.importSettings({
+        'appearance': 'dark',
+        'audioMode': 'fixed',
+        'deviceSettings': {
+          firstId: {'stayAwake': true, 'clipboardSync': true},
+        },
+        'deviceQuality': {
+          firstId: {'maxFps': 30},
+        },
+      }),
+    );
     expect(preferences.current.values['appearance'], 'dark');
     expect(preferences.current.values['deviceSettings'], {
       firstId: {'stayAwake': false},

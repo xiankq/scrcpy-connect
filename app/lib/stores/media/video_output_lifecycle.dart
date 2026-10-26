@@ -2,6 +2,9 @@ import 'package:scrcpy_connect/services/media/video_output_snapshot.dart';
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:scrcpy_connect/models/application_command_exception.dart';
+
 import 'package:scrcpy_connect/services/media/video_player_port.dart';
 
 /// 将本地输出观察关联到已提交核心会话；候选输出在变更回执到达前仍归 VideoOutputCoordinator 持有。
@@ -18,28 +21,33 @@ class VideoOutputLifecycle {
   final Map<String, VideoJson> outputs;
   final VideoRequest request;
 
-  /// 第一次异步等待前回收本地输出及监视器，允许后续会话在旧原生清理期间打开。
-  final Future<void> Function(String) closeOutput;
+  /// 播放器保留未确认释放的原生输出及其重试责任。
+  final Future<void> Function(String, {ApplicationCommandException? failure})
+  closeOutput;
   final Future<VideoJson> Function(String, VideoJson) reattachOutput;
   final void Function(VideoJson) emit;
   final bool Function() isDisposed;
 
-  final _reconfiguring = <String>{};
-  final _retained = <String>{};
+  final _monitors = <String, Timer>{};
+  final _polling = <String>{};
+  final _reconfigurations = <String, _Reconfiguration>{};
   final _dimensionFrames = <String, (int, int)>{};
   void beginReconfigure(String id) {
-    _retained.remove(id);
-    _reconfiguring.add(id);
+    _reconfigurations[id] = _Reconfiguration.changing;
   }
 
-  void retainFailedOutput(String id) => _retained.add(id);
+  void retainFailedOutput(String id) =>
+      _reconfigurations[id] = _Reconfiguration.failed;
   void forget(String id) {
-    _retained.remove(id);
-    _reconfiguring.remove(id);
+    _reconfigurations.remove(id);
     _dimensionFrames.remove(id);
   }
 
-  void endReconfigure(String id) => _reconfiguring.remove(id);
+  void endReconfigure(String id) {
+    if (_reconfigurations[id] == _Reconfiguration.changing) {
+      _reconfigurations.remove(id);
+    }
+  }
 
   bool _owns(VideoJson output) {
     final current = outputs[output['sessionId']];
@@ -53,9 +61,33 @@ class VideoOutputLifecycle {
         ].every((key) => output[key] != null && output[key] == current[key]);
   }
 
-  Future<void> poll(String id, {required bool Function() current}) async {
+  void monitor(String id) {
+    _monitors.remove(id)?.cancel();
+    final timer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (!_polling.add(id)) return;
+      unawaited(poll(id).whenComplete(() => _polling.remove(id)));
+    });
+    _monitors[id] = timer;
+  }
+
+  /// 先撤销本地绑定与监视，再等待播放器释放；失败的原生清理由播放器所有者保留。
+  Future<void> close(String id, {ApplicationCommandException? failure}) async {
+    forget(id);
+    if (const bool.fromEnvironment('CONNECT_DIAGNOSTICS')) {
+      debugPrint(
+        '[connect.video] close session=$id from=${StackTrace.current}',
+      );
+    }
+    _monitors.remove(id)?.cancel();
+    outputs.remove(id);
+    await closeOutput(id, failure: failure);
+  }
+
+  Future<void> poll(String id) async {
+    final monitor = _monitors[id];
+    bool current() => !isDisposed() && identical(_monitors[id], monitor);
     final output = outputs[id];
-    if ((_reconfiguring.contains(id) || _retained.contains(id)) ||
+    if (_reconfigurations.containsKey(id) ||
         !current() ||
         output == null ||
         !_owns(output)) {
@@ -84,9 +116,7 @@ class VideoOutputLifecycle {
 
   Future<void> fail(VideoJson output, String reason) async {
     final id = output['sessionId'];
-    if (id is! String ||
-        (_reconfiguring.contains(id) || _retained.contains(id)) ||
-        !_owns(output)) {
+    if (id is! String || _reconfigurations.containsKey(id) || !_owns(output)) {
       return;
     }
     // 同步认领精确的已提交输出，防止重复失败或迟到轮询二次停止。
@@ -104,7 +134,7 @@ class VideoOutputLifecycle {
 
   Future<void> _close(String id) async {
     try {
-      await closeOutput(id);
+      await close(id);
     } catch (_) {
       // 即使原生释放无法确认，失败仍保持终态。
     }
@@ -123,8 +153,7 @@ class VideoOutputLifecycle {
     final output = outputs[id];
     if (id is! String ||
         output == null ||
-        _reconfiguring.contains(id) ||
-        _retained.contains(id) ||
+        _reconfigurations.containsKey(id) ||
         event['deviceId'] != output['deviceId'] ||
         !_owns(output) ||
         !const [
@@ -177,8 +206,7 @@ class VideoOutputLifecycle {
     }
     if (event['type'] == 'session.output.failed' &&
         eventData is Map &&
-        (_reconfiguring.contains(eventData['sessionId']) ||
-            _retained.contains(eventData['sessionId']))) {
+        _reconfigurations.containsKey(eventData['sessionId'])) {
       return;
     }
     emit(event);
@@ -210,3 +238,5 @@ class VideoOutputLifecycle {
     );
   }
 }
+
+enum _Reconfiguration { changing, failed }

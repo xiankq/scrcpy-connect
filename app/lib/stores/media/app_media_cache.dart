@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/files/file_executor.dart'
     show FileCacheReservation, FileCacheLeases;
@@ -263,7 +264,7 @@ final class AppMediaCache implements FileCacheLeases {
         snapshot.protected.addAll(records.map((record) => record.path));
         await _admit(snapshot, requested);
       }
-      final id = _id();
+      final id = const Uuid().v4();
       _leases[id] = records;
       return id;
     });
@@ -826,14 +827,6 @@ String _string(Map<String, Object?> params, String key) {
     throw MediaCacheFailure('invalid_argument', '缺少缓存字段：$key。');
   }
   return value;
-}
-
-String _id() {
-  final bytes = List.generate(16, (_) => _random.nextInt(256));
-  bytes[6] = (bytes[6] & 15) | 64;
-  bytes[8] = (bytes[8] & 63) | 128;
-  final hex = bytes.map((v) => v.toRadixString(16).padLeft(2, '0')).join();
-  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }
 
 Future<List<int>> _boundedRead(File file) async {

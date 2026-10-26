@@ -10,7 +10,7 @@
   "app/host": {
     "lines": 49906,
     "registrations": 1037,
-    "cases": 1172
+    "cases": 1173
   },
   "packages/adb": {
     "lines": 6052,

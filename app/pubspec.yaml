@@ -11,6 +11,7 @@ dependencies:
   scrcpy:
     path: ../packages/scrcpy
   crypto: 3.0.7
+  uuid: 4.6.0
   multicast_dns: ^0.3.3+1
   open_filex: ^5.0.0
   flutter:

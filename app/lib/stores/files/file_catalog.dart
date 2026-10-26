@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:math';
 
+import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
-
 import 'package:scrcpy_connect/services/files/file_executor.dart';
 import 'package:scrcpy_connect/services/files/file_type_policy.dart';
 import 'package:scrcpy_connect/services/files/file_paths.dart';
@@ -22,13 +21,6 @@ final class FileCatalog {
   }
 
   static String mime(String path) => FileTypePolicy.mime(path);
-  static String _id() {
-    final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
-    bytes[6] = bytes[6] & 15 | 64;
-    bytes[8] = bytes[8] & 63 | 128;
-    final text = bytes.map((n) => n.toRadixString(16).padLeft(2, '0')).join();
-    return '${text.substring(0, 8)}-${text.substring(8, 12)}-${text.substring(12, 16)}-${text.substring(16, 20)}-${text.substring(20)}';
-  }
 
   static bool _matches(Map<String, Object?> entry, String filter) =>
       switch (filter) {
@@ -154,7 +146,7 @@ final class FileCatalog {
       _scans.remove(old.key);
     }
     final scan = _Scan(
-      _id(),
+      const Uuid().v4(),
       device,
       root,
       query.toLowerCase(),

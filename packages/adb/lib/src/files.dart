@@ -143,9 +143,8 @@ abstract interface class NativeAdbScopedFileScopeApi
 
 /// 以稳定拥有者名称重新附着时，原生先撤销旧代，再排空其 worker 与本机流。
 /// 成功返回新句柄后才可清理旧暂存目录；不关闭设备 Client，也不证明远端操作回滚。
-final class AdbFileScope {
-  AdbFileScope._(this._services, this._api, this.id, this._ownerKey);
-  final AdbServices _services;
+final class AdbFileScope extends _AdbResource {
+  AdbFileScope._(super._owner, this._api, this.id, this._ownerKey);
   final NativeAdbFileScopeApi _api;
   final String id;
   final String _ownerKey;
@@ -153,23 +152,24 @@ final class AdbFileScope {
   Future<void>? _closing;
 
   void _checkOpen() {
-    _services._checkOpen();
+    _owner._checkOpen();
     if (_closed) throw const AdbException('file_scope_closed');
   }
 
   AdbFiles files(AdbDevice device) {
     _checkOpen();
-    return AdbFiles._(_services, device, this);
+    return AdbFiles._(_owner, device, this);
   }
 
   /// 清理失败后保持撤销状态并保留精确句柄，显式再次 close 可重试。
+  @override
   Future<void> close() => _closing ??= _close();
   Future<void> _close() async {
     _closed = true;
     try {
       await _api.fileScopeClose(id);
       _released = true;
-      _services._fileScopes.remove(this);
+      _onClosed();
     } catch (_) {
       _closing = null;
       rethrow;
@@ -179,18 +179,17 @@ final class AdbFileScope {
 
 /// 一个文件 worker 的取消所有权。事件单订阅且按消费拉取，暂停不会无限缓存。
 /// close 排空本机 worker/流，不能证明远端变更回滚或远端进程已经退出。
-final class AdbFileSession {
+final class AdbFileSession extends _AdbOperation {
   AdbFileSession._(
     this._api,
     this.id,
-    this._onClosed,
+    super._owner,
     this._connectionId,
     this._request,
     this._scope,
   );
   final NativeAdbFileApi _api;
   final String id;
-  final void Function() _onClosed;
   final String _connectionId;
   final AdbFileExecutionRequest _request;
   final AdbFileScope? _scope;
@@ -199,7 +198,6 @@ final class AdbFileSession {
   bool _releaseConfirmed = false, _restartRelease = false;
   bool _reading = false, _closed = false;
   Future<void>? _closing;
-  void Function()? _unsubscribe;
 
   Stream<AdbFileExecutionEvent> get events async* {
     if (_reading) throw const AdbException('file_operation_has_a_reader');
@@ -231,6 +229,7 @@ final class AdbFileSession {
   }
 
   /// 失败保留所有权和重试入口，不把未确认的回收当成已关闭。
+  @override
   Future<void> close() => _closing ??= _close();
   Future<void> _close() async {
     _closed = true;

@@ -100,17 +100,6 @@ final class PreferenceStore {
     );
   }
 
-  Future<PreferenceSnapshot> importSettings(
-    Object? settings, {
-    int? expectedRevision,
-  }) {
-    final imported = schema.importSettings(settings);
-    return _commit(
-      (current) => schema.merge(current, imported),
-      expectedRevision: expectedRevision,
-    );
-  }
-
   Future<PreferenceSnapshot> _commit(
     Map<String, Object?> Function(Map<String, Object?>) change, {
     required int? expectedRevision,

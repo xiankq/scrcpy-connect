@@ -522,21 +522,16 @@ final class AdbFileExecutor
 }
 
 final class _AdbMutationBatch implements FileMutationBatch {
-  _AdbMutationBatch(this.executor, this.connection, this.cancellation) {
-    _unlisten = cancellation.onCancel(() {
-      unawaited(
-        close().then<void>((_) {}, onError: (Object _, StackTrace _) {}),
-      );
-    });
-  }
+  _AdbMutationBatch(
+    this.executor,
+    DeviceConnection connection,
+    this.cancellation,
+  ) : _owner = _AdbExecutionOwner(connection);
 
   final AdbFileExecutor executor;
-  final DeviceConnection connection;
   final FileCancellation cancellation;
-  final _sessions = <adb.AdbFileSession>{};
-  Future<void>? _executing, _closing;
-  late final void Function() _unlisten;
-  bool _closed = false;
+  final _AdbExecutionOwner _owner;
+  bool _executing = false;
 
   @override
   Future<String> mutate(
@@ -546,24 +541,14 @@ final class _AdbMutationBatch implements FileMutationBatch {
     FileStamp? expected,
   }) {
     cancellation.check();
-    if (_closed) throw const FileFailure('cancelled', '文件变更已停止。');
-    if (_executing != null) {
+    _owner.checkOpen();
+    if (_executing) {
       throw const FileFailure('busy', '同一批文件变更必须逐项执行。');
     }
-    final result = Completer<String>();
-    final finished = Completer<void>();
-    _executing = finished.future;
-    unawaited(() async {
-      try {
-        result.complete(await _mutate(action, path, destination, expected));
-      } catch (error, stack) {
-        result.completeError(error, stack);
-      } finally {
-        _executing = null;
-        finished.complete();
-      }
-    }());
-    return result.future;
+    _executing = true;
+    return _mutate(action, path, destination, expected).whenComplete(() {
+      _executing = false;
+    });
   }
 
   Future<String> _mutate(
@@ -581,89 +566,44 @@ final class _AdbMutationBatch implements FileMutationBatch {
     if (action != 'mkdir' && expected?.identity == null) {
       throw const FileFailure('source_changed', '缺少所选文件的身份，请重新选择。');
     }
-    adb.AdbFileSession? session;
     try {
-      // 不把取消交给创建后的检查：迟到句柄必须先由本批登记，关闭失败才能精确重试。
-      session = await connection.client.services
-          .files(connection.device)
-          .execute(
-            executor._request(
-              kind,
-              path,
-              destination: destination,
-              expected: expected == null
-                  ? null
-                  : adb.AdbFileExecutionStamp(
-                      identity: expected.identity,
-                      mode: expected.mode,
-                      size: expected.size,
-                      modifiedSeconds: expected.modifiedSeconds,
-                      modifiedNanos: expected.modifiedNanos,
-                      nanosecondPrecision:
-                          expected.modifiedResolutionNanos == 1,
-                    ),
-            ),
-          );
-      _sessions.add(session);
-      cancellation.check();
-      if (_closed) throw const FileFailure('cancelled', '文件变更已停止。');
       String? receipt;
-      await for (final event in session.events) {
-        cancellation.check();
+      await for (final event in _owner.execute(
+        executor._request(
+          kind,
+          path,
+          destination: destination,
+          expected: expected == null
+              ? null
+              : adb.AdbFileExecutionStamp(
+                  identity: expected.identity,
+                  mode: expected.mode,
+                  size: expected.size,
+                  modifiedSeconds: expected.modifiedSeconds,
+                  modifiedNanos: expected.modifiedNanos,
+                  nanosecondPrecision: expected.modifiedResolutionNanos == 1,
+                ),
+        ),
+        cancellation,
+      )) {
         if (event.kind == 'done') receipt = event.saveMode;
       }
-      cancellation.check();
       if (receipt == null) {
         throw const FileFailure('result_unknown', '未取得变更回执，请核对目标，不会自动重放。');
       }
       return receipt;
-    } on adb.AdbException catch (error) {
-      throw executor._failure(error);
-    } finally {
-      if (session != null) await _release(session);
-    }
-  }
-
-  Future<void> _release(adb.AdbFileSession session) async {
-    try {
-      await session.close();
-      _sessions.remove(session);
-    } catch (error) {
+    } on FileExecutionCleanupFailure catch (error) {
       throw FileFailure('mutation_cleanup_unconfirmed', '文件变更资源尚未确认释放：$error');
     }
   }
 
   @override
-  Future<void> close() {
-    _closed = true;
-    _unlisten();
-    return _closing ??= _close().whenComplete(() {
-      _closing = null;
-    });
-  }
-
-  Future<void> _close() async {
-    // 先关闭已交付句柄唤醒读取，再等待创建或执行交出迟到资源；不关闭共享 services。
-    final running = _executing;
-    Object? failure;
-    for (final session in _sessions.toList()) {
-      try {
-        await _release(session);
-      } catch (error) {
-        failure = error;
-      }
+  Future<void> close() async {
+    try {
+      await _owner.close();
+    } catch (error) {
+      throw FileFailure('mutation_cleanup_unconfirmed', '文件变更资源尚未确认释放：$error');
     }
-    // 原生取消失败时读取可能仍阻塞；保留同一句柄并立即报告，不能永远等待读取终态。
-    if (failure != null) throw failure;
-    await running;
-    for (final session in _sessions.toList()) {
-      try {
-        await _release(session);
-      } catch (error) {
-        failure = error;
-      }
-    }
-    if (_sessions.isNotEmpty && failure != null) throw failure;
   }
 }
 
@@ -678,13 +618,17 @@ final class _AdbExecutionOwner implements FileExecutionResource {
   bool _closed = false;
   Future<void>? _closing;
 
+  void checkOpen() {
+    if (_closed) throw const FileFailure('cancelled', '文件执行已停止。');
+  }
+
   Stream<adb.AdbFileExecutionEvent> execute(
     adb.AdbFileExecutionRequest request,
     FileCancellation cancellation, {
     bool cleanup = false,
   }) async* {
     cancellation.check();
-    if (_closed && !cleanup) throw const FileFailure('cancelled', '文件执行已停止。');
+    if (!cleanup) checkOpen();
     final finished = Completer<void>();
     _pending.add(finished.future);
     adb.AdbFileSession? session;
@@ -710,7 +654,7 @@ final class _AdbExecutionOwner implements FileExecutionResource {
           .execute(request);
       _sessions.add(session);
       cancellation.check();
-      if (_closed && !cleanup) throw const FileFailure('cancelled', '文件执行已停止。');
+      if (!cleanup) checkOpen();
       final reader = _readers[session] = _AdbExecutionReader(session.events);
       unawaited(
         cancellationCleanupFailed.future.then<void>((error) {

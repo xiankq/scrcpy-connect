@@ -52,7 +52,7 @@ final class DeviceCoordinator {
     _connections = ConnectionOwner(
       stopActivities: stopActivities,
       onDisconnected: (_, connection) {
-        _officialConnections.remove(connection);
+        _officialEndpoints.release(connection);
         _facts.remove(connection);
       },
     );
@@ -96,10 +96,7 @@ final class DeviceCoordinator {
         ({String deviceId, Future<void> Function() retry})
       >.identity();
   final _connecting = <String, int>{};
-  final _officialDialing = Map<AdbClient, Map<String, Object>>.identity();
-
-  // 绑定实际拨号端点和精确连接，撤准入、编辑记录或清理失败均不提前释放。
-  final _officialConnections = Map<DeviceConnection, String>.identity();
+  final _officialEndpoints = _OfficialEndpoints();
   final _pending = <Future<Object?>>{};
   final _setupCreated = <String>{};
   Future<void> _setupTail = Future.value();
@@ -615,7 +612,7 @@ final class DeviceCoordinator {
     if (params['candidateSource'] == 'discovery' && !discover) {
       _fail('discovery_unavailable', '只有已保存可信 GUID 的无线设备可使用发现候选。');
     }
-    var target = setup != null
+    final target = setup != null
         ? saved.copyWith(
             address: setup.address,
             port: setup.port,
@@ -684,38 +681,19 @@ final class DeviceCoordinator {
     AdbConnectionFacts? verifiedFacts;
     String? observedSerial;
     var preparationFailed = false;
-    AdbClient? dialClient;
-    Object? dialToken;
+    void Function()? releaseDialing;
     DeviceRecord? previousEndpoint;
-    List<AdbDiscoveryEndpoint>? discovered;
-    AdbDiscoveryEndpoint? endpoint;
-    var candidateIndex = 0;
-    var cachedAttempted = false;
-    var discoveryAttempted = false;
-    String? dialAddress;
+    final candidates = _ConnectionCandidates(
+      saved: saved,
+      target: target,
+      discover: discover,
+      resolver: reconnectionCandidates,
+      discoveryOnly: params['candidateSource'] == 'discovery',
+    );
     final updatesEndpoint = configure || discover;
     void checkCandidate() {
       setup?.checkCandidate?.call();
-      if (endpoint case final selected?) {
-        if (!reconnectionCandidates!.isCurrent(selected)) {
-          _fail('discovery_changed', '发现端点已变化，请重新核验。');
-        }
-      }
-    }
-
-    void releaseDialing() {
-      if (dialClient case final client?) {
-        final dialing = _officialDialing[client];
-        if (dialing != null) {
-          if (identical(dialing[dialAddress], dialToken)) {
-            dialing.remove(dialAddress);
-          }
-          if (dialing.isEmpty) _officialDialing.remove(client);
-        }
-      }
-      dialClient = null;
-      dialToken = null;
-      dialAddress = null;
+      candidates.checkCurrent();
     }
 
     try {
@@ -744,60 +722,17 @@ final class DeviceCoordinator {
         _check(id, generation, cancellation);
         await identities.validateSelection(selection, deviceId: id);
         stop.check();
-        if (discover) {
-          final guid = saved.guid;
-          if (guid == null) {
-            _fail('device_identity_unverified', '无线发现需要已保存的配对 GUID。');
-          }
-          if (!cachedAttempted &&
-              !discoveryAttempted &&
-              client.capabilities.forceTlsWithoutMdns &&
-              saved.port > 0 &&
-              saved.address.isNotEmpty &&
-              params['candidateSource'] != 'discovery') {
-            // 明确缓存端点仍可跨网直连；授权、真实 GUID 和本次应用代次必须独立核验。
-            cachedAttempted = true;
-            target = saved.copyWith(transport: DeviceTransport.tls);
-          } else {
-            discoveryAttempted = true;
-            final resolver = reconnectionCandidates;
-            if (resolver == null) _fail('discovery_unavailable', '无线发现尚未配置。');
-            discovered ??= await resolver.resolve(guid, cancellation: stop);
-            stop.check();
-            _check(id, generation, cancellation);
-            if (discovered!.isEmpty) {
-              _fail('discovery_pending', '尚未发现这台已配对设备的当前连接端点。');
-            }
-            final selected = endpoint = discovered![candidateIndex];
-            if (selected.kind != AdbDiscoveryKind.tlsConnect ||
-                !DeviceDiscovery.matchesGuid(selected.instance, guid)) {
-              _fail('device_identity_mismatch', '发现候选不是原设备的 TLS 服务。');
-            }
-            target = saved.copyWith(
-              address: selected.address,
-              port: selected.port,
-              transport: DeviceTransport.tls,
-            );
-          }
-        }
+        await candidates.resolve(client, stop);
+        stop.check();
+        _check(id, generation, cancellation);
+        candidates.chooseEndpoint();
         checkCandidate();
         if (client.capabilities.officialServer &&
-            target.transport != DeviceTransport.usb) {
-          final address = _address(target);
-          final occupied = _officialConnections.entries.any(
-            (entry) =>
-                identical(entry.key.client, client) && entry.value == address,
+            candidates.target.transport != DeviceTransport.usb) {
+          releaseDialing = _officialEndpoints.reserve(
+            client,
+            _address(candidates.target),
           );
-          final dialing = _officialDialing.putIfAbsent(client, () => {});
-          if (occupied || dialing.containsKey(address)) {
-            _fail(
-              'independent_connection_required',
-              '同一官方 ADB 客户端的端点仍在使用，不能独立创建候选。',
-            );
-          }
-          dialClient = client;
-          dialAddress = address;
-          dialing[address] = dialToken = Object();
         }
         // open 成功后只包装精确资源并交回所有者，不在登记前等待或检查取消。
         // 迟到候选的取消和核验失败均由 ConnectionOwner 先断开传输、后回收平台租约。
@@ -807,15 +742,16 @@ final class DeviceCoordinator {
           device: setup != null
               ? await setup.open(client, stop)
               : await client.connect(
-                  endpoint != null && !client.capabilities.forceTlsWithoutMdns
-                      ? endpoint!.serviceName.replaceFirst(
+                  candidates.endpoint != null &&
+                          !client.capabilities.forceTlsWithoutMdns
+                      ? candidates.endpoint!.serviceName.replaceFirst(
                           RegExp(r'\.local\.?$'),
                           '',
                         )
-                      : _address(target),
+                      : _address(candidates.target),
                   requireTls:
-                      target.transport == DeviceTransport.tls ||
-                      target.guid != null,
+                      candidates.target.transport == DeviceTransport.tls ||
+                      candidates.target.guid != null,
                   authorize: policy.requestAuthorization,
                   timeout: discover
                       ? policy.endpointTimeout
@@ -827,8 +763,8 @@ final class DeviceCoordinator {
                 ),
         );
         if (client.capabilities.officialServer &&
-            target.transport != DeviceTransport.usb) {
-          _officialConnections[connection] = _address(target);
+            candidates.target.transport != DeviceTransport.usb) {
+          _officialEndpoints.register(connection, _address(candidates.target));
         }
         return connection;
       }
@@ -856,7 +792,7 @@ final class DeviceCoordinator {
             _fail('device_identity_mismatch', 'TLS 候选没有返回本次配对的真实 GUID。');
           }
         }
-        if (target.transport == DeviceTransport.tls &&
+        if (candidates.target.transport == DeviceTransport.tls &&
             saved.guid != null &&
             observed.guid != saved.guid) {
           _fail('device_identity_mismatch', 'TLS 候选没有返回原设备的真实 GUID。');
@@ -887,10 +823,12 @@ final class DeviceCoordinator {
           }
           return (updatesEndpoint
                   ? record.copyWith(
-                      address: target.address,
-                      port: target.port,
-                      transport: target.transport,
-                      guid: setup != null ? target.guid : record.guid,
+                      address: candidates.target.address,
+                      port: candidates.target.port,
+                      transport: candidates.target.transport,
+                      guid: setup != null
+                          ? candidates.target.guid
+                          : record.guid,
                     )
                   : record)
               .copyWith(
@@ -923,10 +861,10 @@ final class DeviceCoordinator {
         final unchanged = Object();
         try {
           await records.update(id, (latest) {
-            if (latest.address != target.address ||
-                latest.port != target.port ||
-                latest.transport != target.transport ||
-                setup != null && latest.guid != target.guid) {
+            if (latest.address != candidates.target.address ||
+                latest.port != candidates.target.port ||
+                latest.transport != candidates.target.transport ||
+                setup != null && latest.guid != candidates.target.guid) {
               // Store 的普通 update 即使值不变也会提交；在其串行读取内退出，
               // 避免原提交失败或端点已被别人修改时再发起一次无意义写入。
               throw unchanged;
@@ -1012,21 +950,11 @@ final class DeviceCoordinator {
           if (!retryable && code != 'auth_failed') rethrow;
           _check(id, generation, cancellation);
           checkCandidate();
-          final discoverAfterCache =
-              cachedAttempted &&
-              !discoveryAttempted &&
-              reconnectionCandidates != null;
-          if (!discover ||
-              !retryable ||
-              !discoverAfterCache &&
-                  (discovered == null ||
-                      candidateIndex + 1 >= discovered!.length)) {
-            rethrow;
-          }
+          if (!retryable || !candidates.hasNext) rethrow;
           // 所有者已经确认候选退出；未知清理不在重试集合中，不能换址重放。
-          releaseDialing();
-          endpoint = null;
-          if (!discoverAfterCache) candidateIndex++;
+          releaseDialing?.call();
+          releaseDialing = null;
+          candidates.advance();
           verifiedFacts = null;
         }
       }
@@ -1097,7 +1025,7 @@ final class DeviceCoordinator {
       if (_connecting[id] == generation) {
         _connecting.remove(id);
       }
-      releaseDialing();
+      releaseDialing?.call();
       if (alias is String && _operations[alias] == id) {
         _operations.remove(alias);
       }
@@ -1311,6 +1239,122 @@ final class DeviceCoordinator {
   void _changed() {
     if (!_closed) emit?.call('devices.changed', {'devices': projectDevices()});
   }
+}
+
+/// 单次连接尝试的候选游标；只选择端点，不持有连接或修改设备记录。
+final class _ConnectionCandidates {
+  _ConnectionCandidates({
+    required this.saved,
+    required this.target,
+    required this.discover,
+    required this.resolver,
+    required this.discoveryOnly,
+  });
+
+  final DeviceRecord saved;
+  DeviceRecord target;
+  final bool discover;
+  final DeviceReconnectionCandidates? resolver;
+  final bool discoveryOnly;
+  List<AdbDiscoveryEndpoint>? _discovered;
+  AdbDiscoveryEndpoint? endpoint;
+  int _index = 0;
+  bool _cachedAttempted = false;
+  bool _discoveryAttempted = false;
+
+  Future<void> resolve(AdbClient client, AdbCancellation stop) async {
+    if (!discover) return;
+    final guid = saved.guid;
+    if (guid == null) {
+      _fail('device_identity_unverified', '无线发现需要已保存的配对 GUID。');
+    }
+    if (!_cachedAttempted &&
+        !_discoveryAttempted &&
+        client.capabilities.forceTlsWithoutMdns &&
+        saved.port > 0 &&
+        saved.address.isNotEmpty &&
+        !discoveryOnly) {
+      // 缓存端点可以跨网直连；授权、真实 GUID 和应用代次仍须独立核验。
+      _cachedAttempted = true;
+      target = saved.copyWith(transport: DeviceTransport.tls);
+      return;
+    }
+    _discoveryAttempted = true;
+    final discovery = resolver;
+    if (discovery == null) _fail('discovery_unavailable', '无线发现尚未配置。');
+    _discovered ??= await discovery.resolve(guid, cancellation: stop);
+  }
+
+  /// 调用方先检查取消与代次，再让发现结果决定下一次拨号目标。
+  void chooseEndpoint() {
+    if (!_discoveryAttempted) return;
+    if (_discovered!.isEmpty) {
+      _fail('discovery_pending', '尚未发现这台已配对设备的当前连接端点。');
+    }
+    final selected = endpoint = _discovered![_index];
+    if (selected.kind != AdbDiscoveryKind.tlsConnect ||
+        !DeviceDiscovery.matchesGuid(selected.instance, saved.guid!)) {
+      _fail('device_identity_mismatch', '发现候选不是原设备的 TLS 服务。');
+    }
+    target = saved.copyWith(
+      address: selected.address,
+      port: selected.port,
+      transport: DeviceTransport.tls,
+    );
+  }
+
+  void checkCurrent() {
+    if (endpoint case final selected?) {
+      if (!resolver!.isCurrent(selected)) {
+        _fail('discovery_changed', '发现端点已变化，请重新核验。');
+      }
+    }
+  }
+
+  bool get _discoverAfterCache =>
+      _cachedAttempted && !_discoveryAttempted && resolver != null;
+
+  bool get hasNext =>
+      discover &&
+      (_discoverAfterCache ||
+          _discovered != null && _index + 1 < _discovered!.length);
+
+  /// 只在所有者确认本候选已回收、且主流程确认错误可重试后推进。
+  void advance() {
+    endpoint = null;
+    if (!_discoverAfterCache) _index++;
+  }
+}
+
+/// 官方客户端按端点复用底层资源；拨号与已交付连接必须共用占用账本。
+final class _OfficialEndpoints {
+  final _dialing = Map<AdbClient, Map<String, Object>>.identity();
+  final _connections = Map<DeviceConnection, String>.identity();
+
+  void Function() reserve(AdbClient client, String address) {
+    final occupied = _connections.entries.any(
+      (entry) => identical(entry.key.client, client) && entry.value == address,
+    );
+    final dialing = _dialing.putIfAbsent(client, () => {});
+    if (occupied || dialing.containsKey(address)) {
+      _fail('independent_connection_required', '同一官方 ADB 客户端的端点仍在使用，不能独立创建候选。');
+    }
+    final token = Object();
+    dialing[address] = token;
+    return () {
+      // 迟到清理只能释放本次占用，不能移除后继拨号。
+      if (identical(dialing[address], token)) dialing.remove(address);
+      if (dialing.isEmpty && identical(_dialing[client], dialing)) {
+        _dialing.remove(client);
+      }
+    };
+  }
+
+  void register(DeviceConnection connection, String address) =>
+      _connections[connection] = address;
+
+  // 撤准入或编辑记录不释放占用；只由实际断开成功的回执移除。
+  void release(DeviceConnection connection) => _connections.remove(connection);
 }
 
 final class _ReconnectLease {

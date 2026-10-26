@@ -1,5 +1,5 @@
 //! 真实 ADB 帧与受控本机背压：协议响应、发送完成及关闭回执分别验证。
-use super::*;
+use super::{handshake_tests::read_server_request, *};
 use interop_adb::protocol::{self, Frame};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -166,15 +166,6 @@ async fn close_cancels_a_pending_probe_and_preserves_its_own_result_waiter() {
     disconnect(connection, &client).await;
 }
 
-async fn request(socket: &mut tokio::net::TcpStream) -> Vec<u8> {
-    let mut length = [0; 4];
-    socket.read_exact(&mut length).await.unwrap();
-    let length = usize::from_str_radix(std::str::from_utf8(&length).unwrap(), 16).unwrap();
-    let mut bytes = vec![0; length];
-    socket.read_exact(&mut bytes).await.unwrap();
-    bytes
-}
-
 #[tokio::test]
 async fn official_server_probe_exposes_smart_socket_response_and_releases_its_socket() {
     for reply in [b"OKAY", b"FAIL"] {
@@ -182,21 +173,27 @@ async fn official_server_probe_exposes_smart_socket_response_and_releases_its_so
         let address = listener.local_addr().unwrap();
         let peer = tokio::spawn(async move {
             let (mut transport, _) = listener.accept().await.unwrap();
-            assert_eq!(request(&mut transport).await, b"host:tport:serial:probe");
+            assert_eq!(
+                read_server_request(&mut transport).await,
+                b"host:tport:serial:probe"
+            );
             transport.write_all(b"OKAY").await.unwrap();
             transport.write_all(&7u64.to_le_bytes()).await.unwrap();
             drop(transport);
             let (mut features, _) = listener.accept().await.unwrap();
             assert_eq!(
-                request(&mut features).await,
+                read_server_request(&mut features).await,
                 b"host-transport-id:7:features"
             );
             features.write_all(b"OKAY0000").await.unwrap();
             drop(features);
             let (mut service, _) = listener.accept().await.unwrap();
-            assert_eq!(request(&mut service).await, b"host:transport-id:7");
+            assert_eq!(
+                read_server_request(&mut service).await,
+                b"host:transport-id:7"
+            );
             service.write_all(b"OKAY").await.unwrap();
-            assert_eq!(request(&mut service).await, b"sync:");
+            assert_eq!(read_server_request(&mut service).await, b"sync:");
             service.write_all(reply).await.unwrap();
             // FAIL 不需要额外正文就能证明服务器已有明确拒绝响应。
             assert_eq!(service.read(&mut [0]).await.unwrap(), 0);

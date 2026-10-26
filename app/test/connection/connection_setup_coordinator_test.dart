@@ -14,6 +14,8 @@ import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
 import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 
+import 'support/disk_identities.dart';
+
 const _guid = 'adb-phone-guid';
 const _policy = ConnectionPolicy(
   setupLeaseTimeout: Duration(seconds: 30),
@@ -631,7 +633,7 @@ final class _Fixture {
   late final DeviceDiscovery discovery;
   late final ConnectionSetupCoordinator setup;
   final client = _Client();
-  final identityApi = _Identities();
+  final identityApi = DiskIdentities(conflictError: null);
   final events = <Map<String, dynamic>>[];
   final changed = <String, Completer<Map<String, dynamic>>>{};
   final answers = <String, List<ResourceRecord>>{};
@@ -1046,47 +1048,4 @@ final class _Socket implements RawDatagramSocket {
   void close() => closed = true;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-final class _Identities implements AdbIdentities {
-  AdbIdentityInfo info(String pem) => AdbIdentityInfo(
-    fingerprint: (pem == 'key-a' ? 'a' : 'b') * 64,
-    fingerprintAlgorithm: 'sha256',
-    fingerprintInput: 'adb-public-key-interop-v1',
-    bits: 2048,
-    exponent: 65537,
-  );
-  @override
-  Future<void> prepareIdentity(String path) async {
-    final file = File(path);
-    if (!await file.exists()) await file.writeAsString('key-a', flush: true);
-  }
-
-  @override
-  Future<AdbIdentityInfo?> inspectIdentity(String path) async {
-    final file = File(path);
-    return await file.exists() ? info(await file.readAsString()) : null;
-  }
-
-  @override
-  Future<AdbIdentityInfo> validateIdentity(String pem) async => info(pem);
-  @override
-  Future<AdbIdentityCommitReceipt> replaceIdentity(
-    String path,
-    String pem, {
-    String? expectedFingerprint,
-  }) async {
-    if ((await inspectIdentity(path))?.fingerprint != expectedFingerprint) {
-      return const AdbIdentityCommitReceipt(
-        state: AdbIdentityCommitState.unchanged,
-      );
-    }
-    final staging = File('$path.tmp');
-    await staging.writeAsString(pem, flush: true);
-    await staging.rename(path);
-    return AdbIdentityCommitReceipt(
-      state: AdbIdentityCommitState.committed,
-      identity: info(pem),
-    );
-  }
 }

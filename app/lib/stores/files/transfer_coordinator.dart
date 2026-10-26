@@ -4,10 +4,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
-
 import 'package:scrcpy_connect/services/files/file_executor.dart';
-
 import 'package:scrcpy_connect/stores/files/transfer_journal.dart';
 import 'package:scrcpy_connect/services/files/file_paths.dart';
 
@@ -185,14 +184,6 @@ class TransferCoordinator {
     }
     _leaseHandoffs.remove(owner._directoryKey);
     return owner;
-  }
-
-  static String _id() {
-    final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
-    bytes[6] = bytes[6] & 15 | 64;
-    bytes[8] = bytes[8] & 63 | 128;
-    final text = bytes.map((n) => n.toRadixString(16).padLeft(2, '0')).join();
-    return '${text.substring(0, 8)}-${text.substring(8, 12)}-${text.substring(12, 16)}-${text.substring(16, 20)}-${text.substring(20)}';
   }
 
   void _check() {
@@ -888,7 +879,8 @@ class TransferCoordinator {
             ))) {
       throw const FileFailure('invalid_argument', '发布必须使用尚未创建的独立批次。');
     }
-    final batch = publicationBatchId ?? _id(), token = FileCancellation();
+    final batch = publicationBatchId ?? const Uuid().v4(),
+        token = FileCancellation();
     final pending = Queue<(String, String, String?, int)>();
     final selected = <Map<String, Object?>>[];
     final destinations = <String>{};
@@ -967,7 +959,7 @@ class TransferCoordinator {
           followStorageAlias: !push && parent == null,
           cancellation: token,
         );
-        final id = _id();
+        final id = const Uuid().v4();
         final task = <String, Object?>{
           'id': id,
           'shareId': ?shareId,
@@ -1688,7 +1680,7 @@ class TransferCoordinator {
     if (leases == null) {
       throw const FileFailure('share_not_configured', '分享来源租约执行器尚未配置。');
     }
-    final batch = _id();
+    final batch = const Uuid().v4();
     final previous = await leases.begin(
       shareId,
       publicationRequest,

@@ -58,8 +58,8 @@ final class AdbOpenProbeCleanupFailure implements Exception {
 }
 
 /// 单次可取消的 OPEN；调用方必须显式关闭，不能用 [result] 终态代替回收确认。
-final class AdbOpenProbe {
-  AdbOpenProbe._(this._api, this.id, this._onClosed) {
+final class AdbOpenProbe extends _AdbOperation {
+  AdbOpenProbe._(this._api, this.id, super._owner) {
     result = Future.sync(() => _api.openProbeResult(id));
     // 调用方可以先关闭再读取结果；保留原 Future 的错误，同时避免迟到错误无人观察。
     unawaited(result.then<void>((_) {}, onError: (Object _, StackTrace _) {}));
@@ -67,13 +67,12 @@ final class AdbOpenProbe {
 
   final NativeAdbOpenProbeApi _api;
   final String id;
-  final void Function() _onClosed;
   late final Future<AdbOpenProbeFacts> result;
   Future<void>? _closing;
   bool _released = false;
-  void Function()? _unsubscribe;
 
   /// 只回收本次探针，不关闭共享 Client；关闭失败时保持原句柄并允许重试。
+  @override
   Future<void> close({Duration timeout = const Duration(seconds: 7)}) {
     final timeoutMs = adbTimeoutMillis(timeout);
     if (_released) return Future.value();

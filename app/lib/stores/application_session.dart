@@ -76,22 +76,22 @@ import 'package:scrcpy_connect/stores/media/device_keep_awake_coordinator.dart';
 
 /// 按应用生命周期组装独立设备能力；ADB 传输与媒体解码由各自的包负责。
 class ApplicationSession {
-  ApplicationSession._(
-    this._dataDirectory,
-    this._connectionPolicy,
-    this._host,
-    this._records,
-    this._identities,
-    this._launches,
-    this._defaultClient,
-    this.diagnostics,
-    this._transfers,
-    this._fileExecutor,
-    this._cache,
-    this._deliveries,
-    this._sharing,
-    this._documentSources,
-  );
+  ApplicationSession._({
+    required this._dataDirectory,
+    required this._connectionPolicy,
+    required this._host,
+    required this._records,
+    required this._identities,
+    required this._launches,
+    required this._defaultClient,
+    required this.diagnostics,
+    required this._transfers,
+    required this._fileExecutor,
+    required this._cache,
+    required this._deliveries,
+    required this._sharing,
+    required this._documentSources,
+  });
 
   final ApplicationHost _host;
   final DeviceRecordStore _records;
@@ -119,8 +119,9 @@ class ApplicationSession {
   );
   late final _preferences = PreferenceCommands(
     preferences: _host.preferences,
-    request: (command, params) =>
-        _business.execute(validateCommandRequest(command, params), params),
+    records: _records,
+    onDevicesImported: (receipt) =>
+        _events.publish({'type': 'devices.changed', 'data': receipt.toJson()}),
     applyBackgroundPolicy: (enabled) =>
         _background.apply(enabled, automatic: false),
     onChanged: (settings) {
@@ -157,7 +158,6 @@ class ApplicationSession {
     scrcpy: _host.scrcpy,
   );
   late final _business = ApplicationBusinessCommands(
-    records: _records,
     devices: _devices,
     power: _power,
     audio: _audio,
@@ -167,7 +167,6 @@ class ApplicationSession {
     companion: _companion,
     serverQueries: _serverQueries,
     state: _state,
-    publish: _events.publish,
     isDisposed: () => _disposed,
   );
 
@@ -625,15 +624,7 @@ class ApplicationSession {
       // 新附着必须先等待旧协调器的原生释放，不能提前接管重试所有权。
       await previous.dispose();
     }
-    final unfinished = _startingSharing;
-    if (unfinished != null) {
-      await unfinished.close();
-      _startingSharing = null;
-    }
-    if (_startingHost case final unfinishedHost?) {
-      await unfinishedHost.close();
-      _startingHost = null;
-    }
+    await _closeStartingResources();
     final host = await ApplicationHost.attach(
       dataDirectory: dataDirectory,
       connectionPolicy: policy,
@@ -641,190 +632,184 @@ class ApplicationSession {
     );
     _startingHost = host;
     try {
-      // 旧 isolate 的句柄先真实排空，再打开唯一的 Dart 设备与身份所有者。
-      await host.recoverConnections();
-      final records = await DeviceRecordStore.open(directory: host.directory);
-      DeviceCoordinator? devices;
-      final identities = await IdentityManager.open(
-        directory: host.directory,
-        records: records,
-        identities: host.identities,
-        invalidate: (ids, {required global}) =>
-            devices?.invalidate(ids) ?? host.drainConnections(),
-      );
-      final identity = await identities.selectForDevice();
-      final defaultClient = await host.clientForIdentity(
-        identityPath: identity.path,
-        fingerprint: identity.fingerprint,
-      );
-      final launches = await AppLaunchStore.open(directory: host.directory);
-      // 读取或清理缓存前先排空旧 isolate 的文档复制，避免与恢复产生并发写入。
-      await ApplicationPlatform.recoverDocuments(
-        localFiles: createNativeScrcpyLocalFiles,
-      );
-      final documentSources = Platform.isAndroid
-          ? await DocumentSources.open(
-              cacheDirectory: Directory(
-                (await DocumentScopeConfiguration.fromEnvironment(
-                  await ApplicationPlatform.requestPlatform(
-                    'documents.platform.environment',
-                    const {},
-                  ),
-                )).cacheDirectory,
-              ),
-            )
-          : null;
-      final sharing = Platform.isAndroid
-          ? await ShareCoordinator.open(
-              files: createNativeScrcpyLocalFiles,
-              platform: ApplicationPlatform.requestPlatform,
-            )
-          : null;
-      _startingSharing = sharing;
+      final session = await _assemble(host, dataDirectory, policy, diagnostics);
+      // 此后所有资源交由会话关闭；启动活动失败也必须通过同一会话重试清理。
+      _startingHost = null;
+      _startingSharing = null;
       try {
-        final gate = MediaCacheGate();
-        late final AppMediaCache cache;
-        TransferCoordinator? cacheTransfers;
-        final deliveries = await DeliveryJournal.open(
-          Directory(dataDirectory),
-          cacheGate: gate,
-          validateSource: (path) => cache.validateDeliveryLocked(path),
-        );
-        cache = await AppMediaCache.open(
-          root: Directory(dataDirectory),
-          gate: gate,
-          protectedPaths: () => deliveries.protectedPaths,
-          freeBytes: cacheStorageFreeBytes,
-          protectionDetails: () async => [
-            for (final source
-                in cacheTransfers?.cacheSources ?? <Map<String, Object?>>[])
-              {
-                ...source,
-                'sourceLabel':
-                    records.current
-                        .find(source['sourceLabel'] as String)
-                        ?.name ??
-                    source['sourceLabel'],
-              },
-            ...await deliveries.protectedSources,
-          ],
-        );
-        final fileExecutor = AdbFileExecutor(
-          localFiles: defaultClient.services,
-          resolveConnection: (id) async => devices!.requireConnection(id),
-          fileScopeId: host.fileScopeId,
-          fileScopeKey: host.fileScopeKey,
-        );
-        final transfers = await TransferCoordinator.open(
-          executor: fileExecutor,
-          cache: cache,
-          publication: documentSources == null
-              ? sharing
-              : CompositePublicationLeases(
-                  sharing: sharing,
-                  documents: documentSources,
-                ),
-          dataDirectory: Directory(dataDirectory),
-        );
-        cacheTransfers = transfers;
-        final session = ApplicationSession._(
-          dataDirectory,
-          policy,
-          host,
-          records,
-          identities,
-          launches,
-          defaultClient,
-          diagnostics,
-          transfers,
-          fileExecutor,
-          cache,
-          deliveries,
-          sharing,
-          documentSources,
-        );
-        devices = session._devices;
-        // 事件可能由 helper 同步交付，先建立观察所有者后再附着界面。
-        session._observations;
-        _startingHost = null;
-        _startingSharing = null;
-        try {
-          await transfers.reconcileShares();
-          await session._events.attach(
-            files: [transfers.events, session._fileCatalog.events],
-            sharing: sharing?.events,
-            platform: Platform.isAndroid ? session._platform.events : null,
-          );
-          if (Platform.isAndroid) {
-            final state = await session._platform.request(
-              'audio.platform.state',
-              const {},
-            );
-            await session._media.setVisible(state['visible'] == true);
-            session._reconnections.setVisible(state['visible'] == true);
-            await session._platform.attachShare();
-          }
-          // isolate 重启会丢失播放器及一次性媒体流；回收孤立捕获，不能接管未经核验的播放。
-          await session._media.retireUnownedAudio();
-          final settings = await session._commands.invoke(
-            'settings.get',
-            const {},
-          );
-          final backgroundStatus = await session._background.apply(
-            settings['backgroundKeepAlive'] == true,
-            automatic: true,
-          );
-          // 恢复快照安排连接前先应用宿主的显式或系统停止状态，之后仍允许手动连接。
-          if (backgroundStatus?['stopped'] == true) {
-            session._reconnections.stopAutomaticConnections();
-          }
-          await session._lifecycle.attach();
-          // 可信快照先建立屏幕偏好和旧连接身份，再允许第一次自动重连。
-          await session._stateRecovery.refresh();
-          await session._reconnections.start();
-          _active = session;
-          return session;
-        } catch (error, stack) {
-          // 初始化失败也保留同一会话的清理责任，后继不能绕过未完成释放。
-          _active = session;
-          try {
-            await session.dispose();
-          } catch (_) {
-            // 失败所有者留给下一次附着重试，原始启动异常仍是本次失败原因。
-          }
-          Error.throwWithStackTrace(error, stack);
-        }
+        await session._activate();
+        _active = session;
+        return session;
       } catch (error, stack) {
-        if (sharing != null && identical(_startingSharing, sharing)) {
-          try {
-            await sharing.close();
-            _startingSharing = null;
-          } catch (_) {
-            // 保留原实例，后继启动在创建新所有者之前继续收尾。
-          }
+        _active = session;
+        try {
+          await session.dispose();
+        } catch (_) {
+          // 失败所有者留给下一次附着重试，原始启动异常仍是本次失败原因。
         }
         Error.throwWithStackTrace(error, stack);
       }
     } catch (error, stack) {
-      // 尚未交付给会话的资源也立即清理；失败保留原对象，禁止后继绕过收尾。
-      if (_startingSharing case final pending?) {
-        try {
-          await pending.close();
-          _startingSharing = null;
-        } catch (_) {
-          // 分享仍持有原生复制时，不能先关闭承载宿主。
-        }
-      }
-      if (_startingSharing == null && identical(_startingHost, host)) {
-        try {
-          await host.close();
-          _startingHost = null;
-        } catch (_) {
-          // 原宿主仍由静态登记持有，下一次初始化先重试。
-        }
+      try {
+        await _closeStartingResources();
+      } catch (_) {
+        // 未确认关闭的原实例仍在静态登记中，后继启动必须先完成收尾。
       }
       Error.throwWithStackTrace(error, stack);
     }
+  }
+
+  /// 先关闭分享复制，再关闭承载宿主；失败时保留原登记供下次重试。
+  static Future<void> _closeStartingResources() async {
+    if (_startingSharing case final sharing?) {
+      await sharing.close();
+      _startingSharing = null;
+    }
+    if (_startingHost case final host?) {
+      await host.close();
+      _startingHost = null;
+    }
+  }
+
+  static Future<ApplicationSession> _assemble(
+    ApplicationHost host,
+    String dataDirectory,
+    ConnectionPolicy policy,
+    DiagnosticLog? diagnostics,
+  ) async {
+    // 旧 isolate 的句柄先真实排空，再打开唯一的 Dart 设备与身份所有者。
+    await host.recoverConnections();
+    final records = await DeviceRecordStore.open(directory: host.directory);
+    DeviceCoordinator? devices;
+    final identities = await IdentityManager.open(
+      directory: host.directory,
+      records: records,
+      identities: host.identities,
+      invalidate: (ids, {required global}) =>
+          devices?.invalidate(ids) ?? host.drainConnections(),
+    );
+    final identity = await identities.selectForDevice();
+    final defaultClient = await host.clientForIdentity(
+      identityPath: identity.path,
+      fingerprint: identity.fingerprint,
+    );
+    final launches = await AppLaunchStore.open(directory: host.directory);
+    // 读取或清理缓存前先排空旧 isolate 的文档复制，避免与恢复产生并发写入。
+    await ApplicationPlatform.recoverDocuments(
+      localFiles: createNativeScrcpyLocalFiles,
+    );
+    final documentSources = Platform.isAndroid
+        ? await DocumentSources.open(
+            cacheDirectory: Directory(
+              (await DocumentScopeConfiguration.fromEnvironment(
+                await ApplicationPlatform.requestPlatform(
+                  'documents.platform.environment',
+                  const {},
+                ),
+              )).cacheDirectory,
+            ),
+          )
+        : null;
+    final sharing = Platform.isAndroid
+        ? await ShareCoordinator.open(
+            files: createNativeScrcpyLocalFiles,
+            platform: ApplicationPlatform.requestPlatform,
+          )
+        : null;
+    _startingSharing = sharing;
+    final gate = MediaCacheGate();
+    late final AppMediaCache cache;
+    TransferCoordinator? cacheTransfers;
+    final deliveries = await DeliveryJournal.open(
+      Directory(dataDirectory),
+      cacheGate: gate,
+      validateSource: (path) => cache.validateDeliveryLocked(path),
+    );
+    cache = await AppMediaCache.open(
+      root: Directory(dataDirectory),
+      gate: gate,
+      protectedPaths: () => deliveries.protectedPaths,
+      freeBytes: cacheStorageFreeBytes,
+      protectionDetails: () async => [
+        for (final source
+            in cacheTransfers?.cacheSources ?? <Map<String, Object?>>[])
+          {
+            ...source,
+            'sourceLabel':
+                records.current.find(source['sourceLabel'] as String)?.name ??
+                source['sourceLabel'],
+          },
+        ...await deliveries.protectedSources,
+      ],
+    );
+    final fileExecutor = AdbFileExecutor(
+      localFiles: defaultClient.services,
+      resolveConnection: (id) async => devices!.requireConnection(id),
+      fileScopeId: host.fileScopeId,
+      fileScopeKey: host.fileScopeKey,
+    );
+    final transfers = await TransferCoordinator.open(
+      executor: fileExecutor,
+      cache: cache,
+      publication: documentSources == null
+          ? sharing
+          : CompositePublicationLeases(
+              sharing: sharing,
+              documents: documentSources,
+            ),
+      dataDirectory: Directory(dataDirectory),
+    );
+    cacheTransfers = transfers;
+    final session = ApplicationSession._(
+      dataDirectory: dataDirectory,
+      connectionPolicy: policy,
+      host: host,
+      records: records,
+      identities: identities,
+      launches: launches,
+      defaultClient: defaultClient,
+      diagnostics: diagnostics,
+      transfers: transfers,
+      fileExecutor: fileExecutor,
+      cache: cache,
+      deliveries: deliveries,
+      sharing: sharing,
+      documentSources: documentSources,
+    );
+    devices = session._devices;
+    // 事件可能由 helper 同步交付，先建立观察所有者后再附着界面。
+    session._observations;
+    return session;
+  }
+
+  Future<void> _activate() async {
+    await _transfers.reconcileShares();
+    await _events.attach(
+      files: [_transfers.events, _fileCatalog.events],
+      sharing: _sharing?.events,
+      platform: Platform.isAndroid ? _platform.events : null,
+    );
+    if (Platform.isAndroid) {
+      final state = await _platform.request('audio.platform.state', const {});
+      await _media.setVisible(state['visible'] == true);
+      _reconnections.setVisible(state['visible'] == true);
+      await _platform.attachShare();
+    }
+    // isolate 重启会丢失播放器及一次性媒体流；回收孤立捕获，不能接管未经核验的播放。
+    await _media.retireUnownedAudio();
+    final settings = await _commands.invoke('settings.get', const {});
+    final backgroundStatus = await _background.apply(
+      settings['backgroundKeepAlive'] == true,
+      automatic: true,
+    );
+    // 恢复快照安排连接前先应用宿主的显式或系统停止状态，之后仍允许手动连接。
+    if (backgroundStatus?['stopped'] == true) {
+      _reconnections.stopAutomaticConnections();
+    }
+    await _lifecycle.attach();
+    // 可信快照先建立屏幕偏好和旧连接身份，再允许第一次自动重连。
+    await _stateRecovery.refresh();
+    await _reconnections.start();
   }
 
   Stream<Map<String, dynamic>> get events => _events.stream;

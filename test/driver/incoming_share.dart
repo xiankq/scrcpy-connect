@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'support/capture.dart';
+
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
@@ -54,14 +56,11 @@ Future<void> main() async {
             );
           }
         },
-        onScreenshot: (name, bytes, [args]) async {
-          final output = Directory('/tmp/connect-e2e/incoming-share');
-          await output.create(recursive: true);
-          final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-          await File('${output.path}/$safeName.png')
-              .writeAsBytes(bytes, flush: true);
-          return true;
-        },
+        onScreenshot: (name, bytes, [args]) => saveScreenshot(
+          Directory('/tmp/connect-e2e/incoming-share'),
+          name,
+          bytes,
+        ),
       );
     },
     () => {

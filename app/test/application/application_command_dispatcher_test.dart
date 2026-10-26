@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -28,6 +30,7 @@ const _device = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
 void main() {
   late Directory directory;
   late PreferenceStore preferences;
+  late DeviceRecordStore records;
   late _FileOwners owners;
   final artifacts = <MediaArtifactCoordinator>[];
   setUp(() async {
@@ -37,6 +40,7 @@ void main() {
       FixtureExecutor(),
     );
     preferences = await PreferenceCommands.prepare(directory);
+    records = await DeviceRecordStore.open(directory: directory);
     await preferences.update({
       'deviceQuality': {
         _device: {'maxFps': 30},
@@ -85,7 +89,8 @@ void main() {
       transfers: transfers,
       preferences: PreferenceCommands(
         preferences: preferences,
-        request: execute,
+        records: records,
+        onDevicesImported: (_) => fail('此测试不应导入设备'),
         onChanged: onSettingsChanged,
         applyBackgroundPolicy: applyBackgroundPolicy,
       ),

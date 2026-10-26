@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:uuid/uuid.dart';
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
-
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/media/video_quality_policy.dart';
@@ -91,7 +91,7 @@ final class SessionCoordinator {
   }) : _emitEvent = emit,
        _settings = settings ?? (() => <String, dynamic>{}),
        _now = now ?? DateTime.now,
-       _newId = newId ?? _uuid {
+       _newId = newId ?? const Uuid().v4 {
     policy.validate();
   }
 
@@ -1977,14 +1977,3 @@ String _mime(String codec) => switch (codec) {
   'vp9' => 'video/x-vnd.on2.vp9',
   _ => throw const ApplicationCommandException('invalid_argument', '视频格式无效。'),
 };
-
-final _random = math.Random.secure();
-String _uuid() {
-  final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
-  bytes[6] = (bytes[6] & 15) | 64;
-  bytes[8] = (bytes[8] & 63) | 128;
-  final hex = bytes
-      .map((value) => value.toRadixString(16).padLeft(2, '0'))
-      .join();
-  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
-}

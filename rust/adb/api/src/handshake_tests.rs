@@ -41,11 +41,13 @@ async fn connect_direct(
     .await
 }
 
-async fn read_server_request(peer: &mut tokio::net::TcpStream) {
+pub(super) async fn read_server_request(peer: &mut tokio::net::TcpStream) -> Vec<u8> {
     let mut header = [0; 4];
     peer.read_exact(&mut header).await.unwrap();
     let length = usize::from_str_radix(std::str::from_utf8(&header).unwrap(), 16).unwrap();
-    peer.read_exact(&mut vec![0; length]).await.unwrap();
+    let mut request = vec![0; length];
+    peer.read_exact(&mut request).await.unwrap();
+    request
 }
 
 async fn eof(peer: &mut tokio::net::TcpStream) {

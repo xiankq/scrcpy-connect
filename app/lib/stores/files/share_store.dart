@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/files/file_executor.dart';
-
 import 'package:scrcpy_connect/models/share_limits.dart';
 import 'package:scrcpy_connect/services/files/share_store_format.dart';
 import 'package:scrcpy_connect/services/files/share_store_storage.dart';
 import 'package:scrcpy_connect/services/files/source_tree.dart';
+
 export 'package:scrcpy_connect/services/files/share_store_storage.dart'
     show ShareStoreCommit;
 export 'package:scrcpy_connect/models/share_limits.dart';
@@ -57,7 +58,6 @@ final class ShareStore implements FilePublicationLeases {
   int _unknownBatches = 0;
   static final _queues = <String, Future<void>>{};
   static final _owners = <String, WeakReference<ShareStore>>{};
-  static final _random = Random.secure();
 
   static Future<ShareStore> open({
     required Directory cacheDirectory,
@@ -444,7 +444,7 @@ final class ShareStore implements FilePublicationLeases {
     }
     final lease = <String, dynamic>{
       'version': 2,
-      'id': _newId(),
+      'id': const Uuid().v4(),
       'shareId': id,
       'transferId': null,
       'request': null,
@@ -969,13 +969,6 @@ Map<String, dynamic> _receipt(Map<String, dynamic> value) => {
 };
 String _string(Map<String, dynamic> value, String key) =>
     value[key] is String ? value[key] as String : _bad('缺少参数 $key。');
-String _newId() {
-  final bytes = List.generate(16, (_) => ShareStore._random.nextInt(256));
-  bytes[6] = (bytes[6] & 15) | 64;
-  bytes[8] = (bytes[8] & 63) | 128;
-  final hex = bytes.map((v) => v.toRadixString(16).padLeft(2, '0')).join();
-  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
-}
 
 void _validateLimits(ShareLimits limits) {
   if (limits.pending <= 0 ||

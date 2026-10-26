@@ -82,50 +82,22 @@ extension ControllerFixture on AppController {
   set pendingShares(List<Json> next) =>
       (this as _TestController).seed(snapshot().copyWith(pendingShares: next));
   Json? get lastEvent => snapshot().lastEvent;
-  set lastEvent(Json? next) => (this as _TestController).seed(
-    snapshot().copyWith(lastEvent: () => next),
-  );
   int get eventRevision => snapshot().eventRevision;
-  set eventRevision(int next) =>
-      (this as _TestController).seed(snapshot().copyWith(eventRevision: next));
   bool get loading => snapshot().loading;
   set loading(bool next) =>
       (this as _TestController).seed(snapshot().copyWith(loading: next));
   String? get deviceError => snapshot().deviceError;
-  set deviceError(String? next) => (this as _TestController).seed(
-    snapshot().copyWith(deviceError: () => next),
-  );
   String? get settingsError => snapshot().settingsError;
-  set settingsError(String? next) => (this as _TestController).seed(
-    snapshot().copyWith(settingsError: () => next),
-  );
   String? get audioError => snapshot().audioError;
-  set audioError(String? next) => (this as _TestController).seed(
-    snapshot().copyWith(audioError: () => next),
-  );
   String? get focusedDeviceId => snapshot().focusedDeviceId;
   set focusedDeviceId(String? next) => (this as _TestController).seed(
     snapshot().copyWith(focusedDeviceId: () => next),
   );
   String get clipboardState => snapshot().clipboardState;
-  set clipboardState(String next) =>
-      (this as _TestController).seed(snapshot().copyWith(clipboardState: next));
   String? get clipboardError => snapshot().clipboardError;
-  set clipboardError(String? next) => (this as _TestController).seed(
-    snapshot().copyWith(clipboardError: () => next),
-  );
   int get clipboardReadCount => snapshot().clipboardReadCount;
-  set clipboardReadCount(int next) => (this as _TestController).seed(
-    snapshot().copyWith(clipboardReadCount: next),
-  );
   int get clipboardWriteCount => snapshot().clipboardWriteCount;
-  set clipboardWriteCount(int next) => (this as _TestController).seed(
-    snapshot().copyWith(clipboardWriteCount: next),
-  );
   int get clipboardSendCount => snapshot().clipboardSendCount;
-  set clipboardSendCount(int next) => (this as _TestController).seed(
-    snapshot().copyWith(clipboardSendCount: next),
-  );
 }
 
 final _recordDevices = Expando<List<Json>>();

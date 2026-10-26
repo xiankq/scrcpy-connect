@@ -37,11 +37,49 @@ Future<DocumentsJson> documentResult(
   return result;
 }
 
+Matcher documentFailure(String code) => throwsA(
+  isA<ApplicationCommandException>().having(
+    (error) => error.code,
+    'code',
+    code,
+  ),
+);
+
 class Fixture {
   Fixture({this.cacheDirectory = '/cache', this.sources});
   final String cacheDirectory;
   final DocumentSources? sources;
+  bool ownerReady = true;
+
+  void mockPlatformChannel() {
+    const channel = MethodChannel('dev.scrcpyconnect/platform');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      final response = await platform(
+        call.method,
+        Map<String, dynamic>.from(call.arguments as Map),
+      );
+      return {
+        ...response,
+        if (call.method == 'documents.platform.environment')
+          'ownerReady': ownerReady,
+      };
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+  }
+
+  ApplicationPlatform applicationPlatform() => ApplicationPlatform(
+    applicationRequest: (_, _) async => {},
+    localFiles: files,
+    emit: (_) {},
+    isDisposed: () => false,
+  );
+
   final calls = <(String, DocumentsJson)>[];
+  Iterable<(String, DocumentsJson)> callsFor(String command) =>
+      calls.where((call) => call.$1 == command);
+
   final nodes = <String, DocumentsJson>{};
   final children = <String, List<String>>{};
   final local = <String, DocumentsJson>{};
@@ -53,6 +91,11 @@ class Fixture {
   Future<DocumentsJson> Function(DocumentsJson)? onClaim;
   bool mutateSource = false, loseCreate = false, failClose = false;
   Completer<DocumentsJson>? picker;
+  void select(String id, String name, {bool directory = false, int size = 3}) {
+    selected = [id];
+    node(id, name, directory: directory, size: size);
+  }
+
   DocumentsJson node(
     String id,
     String name, {
@@ -100,6 +143,7 @@ class Fixture {
           throw const ApplicationCommandException('cancelled', '旧平台代次。');
         }
         ownerLeaseId = params['ownerLeaseId'] as String;
+        ownerReady = true;
         if (onClaim case final hook?) return hook(params);
         return {'claimed': true, 'ownerLeaseId': ownerLeaseId};
       case 'documents.platform.release':
@@ -376,8 +420,8 @@ void main() {
     expect(second['status'], 'partial');
     expect((second['errors'] as List).single['code'], 'byte_limit');
     expect(
-      f.calls
-          .where((call) => call.$1 == 'local.copy')
+      f
+          .callsFor('local.copy')
           .map((call) => (call.$2['request'] as LocalFileCopyRequest).maxBytes),
       [5, 2],
     );
@@ -394,28 +438,9 @@ void main() {
 
   test('同 Dart 会话换 Activity 后精确收尾旧操作，再排空接管后启动新选择器', () async {
     final f = Fixture()..picker = Completer<DocumentsJson>();
-    var ready = true;
     final oldPicker = Completer<void>();
-    const channel = MethodChannel('dev.scrcpyconnect/platform');
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      final params = Map<String, dynamic>.from(call.arguments as Map);
-      final response = await f.platform(call.method, params);
-      if (call.method == 'documents.platform.claim') ready = true;
-      return {
-        ...response,
-        if (call.method == 'documents.platform.environment')
-          'ownerReady': ready,
-      };
-    });
-    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
-    final platform = ApplicationPlatform(
-      applicationRequest: (_, _) async => {},
-      localFiles: f.files,
-      emit: (_) {},
-      isDisposed: () => false,
-    );
+    f.mockPlatformChannel();
+    final platform = f.applicationPlatform();
     final coordinator = DocumentsCoordinator(
       files: f.files,
       platform: (command, params) {
@@ -430,7 +455,7 @@ void main() {
       'operationId': 'old-activity',
     });
     await oldPicker.future;
-    ready = false;
+    f.ownerReady = false;
     await coordinator.request('documents.cancel', {
       'operationId': 'old-activity',
     });
@@ -467,9 +492,7 @@ void main() {
     expect(claimIndex, lessThan(newPickerIndex));
     expect(f.calls[newPickerIndex].$2['ownerLeaseId'], f.ownerLeaseId);
     expect(f.ownerLeaseId, isNot('fixture-owner'));
-    final keys = f.calls
-        .where((call) => call.$1 == 'local.scope.open')
-        .map((call) => call.$2['key']);
+    final keys = f.callsFor('local.scope.open').map((call) => call.$2['key']);
     expect(keys, everyElement('/cache/documents'));
     expect(keys, hasLength(3));
     await coordinator.dispose();
@@ -477,17 +500,13 @@ void main() {
   });
 
   test('claim 已提交但回执丢失时先确认同候选，再次换代仍重新排空 scope', () async {
-    final f = Fixture()..selected = ['root'];
-    f.node('root', 'Empty', directory: true);
-    var ready = false;
+    final f = Fixture()..select('root', 'Empty', directory: true);
+    f.ownerReady = false;
     var attempts = 0;
     final confirming = Completer<void>();
     final confirm = Completer<void>();
-    const channel = MethodChannel('dev.scrcpyconnect/platform');
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     f.onClaim = (_) async {
-      ready = true;
+      f.ownerReady = true;
       attempts++;
       if (attempts == 1) {
         throw PlatformException(code: 'reply_lost', message: '接管已完成但回执丢失。');
@@ -498,24 +517,8 @@ void main() {
       }
       return {'claimed': true, 'ownerLeaseId': f.ownerLeaseId};
     };
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      final response = await f.platform(
-        call.method,
-        Map<String, dynamic>.from(call.arguments as Map),
-      );
-      return {
-        ...response,
-        if (call.method == 'documents.platform.environment')
-          'ownerReady': ready,
-      };
-    });
-    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
-    final platform = ApplicationPlatform(
-      applicationRequest: (_, _) async => {},
-      localFiles: f.files,
-      emit: (_) {},
-      isDisposed: () => false,
-    );
+    f.mockPlatformChannel();
+    final platform = f.applicationPlatform();
     final coordinator = DocumentsCoordinator(
       files: f.files,
       platform: platform.request,
@@ -524,14 +527,9 @@ void main() {
       'operationId': 'lost-reply',
     });
     expect(first['status'], 'failed');
-    expect(ready, isTrue);
+    expect(f.ownerReady, isTrue);
     // 新实例也必须遵守共享 pending，不能仅查看自己的恢复标记。
-    final nextPlatform = ApplicationPlatform(
-      applicationRequest: (_, _) async => {},
-      localFiles: f.files,
-      emit: (_) {},
-      isDisposed: () => false,
-    );
+    final nextPlatform = f.applicationPlatform();
     final nextCoordinator = DocumentsCoordinator(
       files: f.files,
       platform: nextPlatform.request,
@@ -540,23 +538,15 @@ void main() {
       'operationId': 'confirmed',
     });
     await confirming.future;
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.picker'),
-      isEmpty,
-    );
-    final firstClaims = f.calls
-        .where((call) => call.$1 == 'documents.platform.claim')
-        .toList();
+    expect(f.callsFor('documents.platform.picker'), isEmpty);
+    final firstClaims = f.callsFor('documents.platform.claim').toList();
     expect(firstClaims, hasLength(2));
     expect(firstClaims[0].$2, firstClaims[1].$2);
-    expect(
-      f.calls.where((call) => call.$1 == 'local.scope.open'),
-      hasLength(1),
-    );
+    expect(f.callsFor('local.scope.open'), hasLength(1));
     confirm.complete();
     expect((await second)['status'], 'imported');
     final previousEnd = f.calls.length;
-    ready = false;
+    f.ownerReady = false;
     expect(
       (await nextCoordinator.request('documents.importDirectory', {
         'operationId': 'next-activity',
@@ -586,7 +576,7 @@ void main() {
     await platform.dispose();
   });
 
-  LocalFileCopyResult copied(int bytes) => LocalFileCopyResult(
+  LocalFileCopyResult copiedResult(int bytes) => LocalFileCopyResult(
     bytes: bytes,
     identity: identity({'kind': 'file', 'size': bytes}),
     sourceIdentity: identity({'kind': 'file', 'size': bytes}),
@@ -641,27 +631,18 @@ void main() {
       recovery.recover(),
       throwsA(isA<ApplicationCommandException>()),
     );
-    expect(
-      f.calls.where((call) => call.$1 == 'local.scope.open'),
-      hasLength(1),
-    );
+    expect(f.callsFor('local.scope.open'), hasLength(1));
     fails = false;
     await recovery.recover();
-    final claims = f.calls
-        .where((call) => call.$1 == 'documents.platform.claim')
-        .toList();
+    final claims = f.callsFor('documents.platform.claim').toList();
     expect(claims, hasLength(2));
     expect(claims[0].$2, claims[1].$2);
-    expect(
-      f.calls.where((call) => call.$1 == 'local.scope.open'),
-      hasLength(1),
-    );
+    expect(f.callsFor('local.scope.open'), hasLength(1));
   });
 
   for (final cancelFirst in [false, true]) {
     test('平台 release 未确认后${cancelFirst ? '取消' : '再次操作'}重试清理并恢复准入', () async {
-      final f = Fixture()..selected = ['root'];
-      f.node('root', 'Empty', directory: true);
+      final f = Fixture()..select('root', 'Empty', directory: true);
       var released = false;
       final coordinator = DocumentsCoordinator(
         files: f.files,
@@ -676,23 +657,11 @@ void main() {
         coordinator.request('documents.importDirectory', {
           'operationId': 'old',
         }),
-        throwsA(
-          isA<ApplicationCommandException>().having(
-            (e) => e.code,
-            'code',
-            'document_cleanup_unconfirmed',
-          ),
-        ),
+        documentFailure('document_cleanup_unconfirmed'),
       );
       await expectLater(
         coordinator.request('documents.importFiles'),
-        throwsA(
-          isA<ApplicationCommandException>().having(
-            (e) => e.code,
-            'code',
-            'document_cleanup_unconfirmed',
-          ),
-        ),
+        documentFailure('document_cleanup_unconfirmed'),
       );
       released = true;
       if (cancelFirst) {
@@ -710,8 +679,7 @@ void main() {
   }
 
   test('恢复栅栏确认 scope 排空前不读取缓存，并与文档操作共用 key', () async {
-    final f = Fixture()..selected = ['root'];
-    f.node('root', 'Empty', directory: true);
+    final f = Fixture()..select('root', 'Empty', directory: true);
     final closing = Completer<void>();
     final entered = Completer<void>();
     f.nativeFiles.onCloseScope = (_) {
@@ -735,9 +703,7 @@ void main() {
     expect(cacheReads, 1);
     f.nativeFiles.onCloseScope = null;
     await f.coordinator.request('documents.importDirectory');
-    final openings = f.calls
-        .where((call) => call.$1 == 'local.scope.open')
-        .toList();
+    final openings = f.callsFor('local.scope.open').toList();
     expect(openings, hasLength(2));
     expect(openings[0].$2['key'], openings[1].$2['key']);
     expect(openings[0].$2['key'], '/cache/documents');
@@ -774,30 +740,18 @@ void main() {
 
     await expectLater(restore(), throwsA(isA<LocalFileException>()));
     expect(cacheReads, 0);
-    expect(
-      f.calls.where((call) => call.$1 == 'local.scope.open'),
-      hasLength(1),
-    );
+    expect(f.callsFor('local.scope.open'), hasLength(1));
     fails = false;
     await restore();
     expect(cacheReads, 1);
-    expect(
-      f.calls.where((call) => call.$1 == 'local.scope.open'),
-      hasLength(1),
-    );
-    expect(
-      f.calls.where((call) => call.$1 == 'local.scope.close'),
-      hasLength(2),
-    );
-    final closes = f.calls
-        .where((call) => call.$1 == 'local.scope.close')
-        .toList();
+    expect(f.callsFor('local.scope.open'), hasLength(1));
+    expect(f.callsFor('local.scope.close'), hasLength(2));
+    final closes = f.callsFor('local.scope.close').toList();
     expect(closes[0].$2['scope'], closes[1].$2['scope']);
   });
 
   test('复制与 scope 都未确认清理时保留原始 PFD，关闭可重试', () async {
-    final f = Fixture()..selected = ['file'];
-    f.node('file', 'data.txt');
+    final f = Fixture()..select('file', 'data.txt');
     var fails = true;
     f.nativeFiles.onRunCopy = (_) async =>
         throw const LocalFileException(LocalFileErrorCode.io, '复制失败。');
@@ -814,23 +768,11 @@ void main() {
     f.nativeFiles.onCloseScope = unconfirmed;
     await expectLater(
       f.coordinator.request('documents.importFiles'),
-      throwsA(
-        isA<ApplicationCommandException>().having(
-          (e) => e.code,
-          'code',
-          'document_cleanup_unconfirmed',
-        ),
-      ),
+      documentFailure('document_cleanup_unconfirmed'),
     );
     expect(f.nativeFiles.copies, hasLength(1));
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.releaseFd'),
-      isEmpty,
-    );
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.release'),
-      isEmpty,
-    );
+    expect(f.callsFor('documents.platform.releaseFd'), isEmpty);
+    expect(f.callsFor('documents.platform.release'), isEmpty);
     fails = false;
     await f.coordinator.dispose();
     expect(f.nativeFiles.copies, isEmpty);
@@ -843,8 +785,7 @@ void main() {
   });
 
   test('复制登记迟到也须回收后才释放 PFD，不能开始已取消复制', () async {
-    final f = Fixture()..selected = ['file'];
-    f.node('file', 'data.txt');
+    final f = Fixture()..select('file', 'data.txt');
     final creating = Completer<String>();
     final entered = Completer<void>();
     f.nativeFiles.onCreateCopy = (_, request) {
@@ -854,7 +795,7 @@ void main() {
     var ran = false;
     f.nativeFiles.onRunCopy = (_) async {
       ran = true;
-      return copied(3);
+      return copiedResult(3);
     };
     final job = f.coordinator.request('documents.importFiles', {
       'operationId': 'late-copy',
@@ -864,14 +805,8 @@ void main() {
       'operationId': 'late-copy',
     });
     await Future<void>.delayed(Duration.zero);
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.releaseFd'),
-      isEmpty,
-    );
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.cancel'),
-      isEmpty,
-    );
+    expect(f.callsFor('documents.platform.releaseFd'), isEmpty);
+    expect(f.callsFor('documents.platform.cancel'), isEmpty);
     creating.complete('late-copy');
     await cancelling;
     expect((await job)['status'], 'cancelled');
@@ -889,8 +824,7 @@ void main() {
     testWidgets(
       'skip applies ${applyToRemaining ? 'through this save only' : 'to one conflict only'}',
       (tester) async {
-        final f = Fixture()..selected = ['parent'];
-        f.node('parent', 'Target', directory: true);
+        final f = Fixture()..select('parent', 'Target', directory: true);
         f.local['/cache/source'] = {'kind': 'directory'};
         final events = <DocumentsJson>[];
         final coordinator = DocumentsCoordinator(
@@ -989,8 +923,7 @@ void main() {
   testWidgets(
     'an unanswered shared conflict expires and cannot hold the next save',
     (tester) async {
-      final f = Fixture()..selected = ['parent'];
-      f.node('parent', 'Target', directory: true);
+      final f = Fixture()..select('parent', 'Target', directory: true);
       f.node('old', 'Tree', directory: true);
       f.children['parent'] = ['old'];
       f.local['/cache/source'] = {'kind': 'directory'};
@@ -1042,10 +975,7 @@ void main() {
         }),
         {'resolved': false},
       );
-      expect(
-        f.calls.where((call) => call.$1 == 'documents.platform.create'),
-        isEmpty,
-      );
+      expect(f.callsFor('documents.platform.create'), isEmpty);
       f.children['parent'] = [];
       expect(
         (await documentResult(
@@ -1066,8 +996,7 @@ void main() {
   testWidgets(
     'conflict cancellation clears its event and stale decisions cannot resolve another operation',
     (tester) async {
-      final f = Fixture()..selected = ['parent'];
-      f.node('parent', 'Target', directory: true);
+      final f = Fixture()..select('parent', 'Target', directory: true);
       f.node('old', 'Tree', directory: true);
       f.children['parent'] = ['old'];
       f.local['/cache/source'] = {'kind': 'directory'};
@@ -1127,10 +1056,7 @@ void main() {
         }))['pending'],
         current,
       );
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.create'),
-        isEmpty,
-      );
+      expect(f.callsFor('documents.platform.create'), isEmpty);
       await coordinator.request('documents.conflict.resolve', {
         'operationId': 'new-operation',
         'conflictId': current['conflictId'],
@@ -1143,8 +1069,7 @@ void main() {
   testWidgets(
     'a never responding metadata query times out and releases the operation',
     (tester) async {
-      final f = Fixture()..selected = ['root'];
-      f.node('root', 'Tree', directory: true);
+      final f = Fixture()..select('root', 'Tree', directory: true);
       final pending = Completer<DocumentsJson>();
       var metadataEntered = false;
       final coordinator = DocumentsCoordinator(
@@ -1237,10 +1162,10 @@ void main() {
       });
       await tester.pump(const Duration(seconds: 121));
       expect(secondResult, isNull);
-      expect(f.calls.where((call) => call.$1 == 'local.copy'), isEmpty);
+      expect(f.callsFor('local.copy'), isEmpty);
       expect(
-        f.calls
-            .where((call) => call.$1 == 'documents.platform.cancel')
+        f
+            .callsFor('documents.platform.cancel')
             .map((call) => call.$2['operationId']),
         ['old'],
       );
@@ -1263,8 +1188,7 @@ void main() {
   test(
     'a completed save confirms provider success before reporting saved',
     () async {
-      final f = Fixture()..selected = ['file'];
-      f.node('file', 'saved.txt', size: 0);
+      final f = Fixture()..select('file', 'saved.txt', size: 0);
       f.local['/cache/source'] = {'kind': 'file', 'size': 3};
       final coordinator = DocumentsCoordinator(
         files: f.files,
@@ -1287,13 +1211,9 @@ void main() {
       expect(result['files'], 1);
       expect(result['uri'], 'content://fixture/file');
       expect(result['bytes'], 3);
+      expect(f.callsFor('documents.platform.releaseFd'), hasLength(1));
       expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.releaseFd'),
-        hasLength(1),
-      );
-      expect(
-        f.calls.singleWhere((c) => c.$1 == 'local.copy').$2['request']
-            as LocalFileCopyRequest,
+        f.callsFor('local.copy').single.$2['request'] as LocalFileCopyRequest,
         isA<LocalFileCopyRequest>().having(
           (request) => request.expectedSource?.size,
           'source size',
@@ -1308,25 +1228,19 @@ void main() {
     'a failed write aborts its provider lease and preserves the write error',
     () async {
       final f = Fixture()
-        ..selected = ['file']
+        ..select('file', 'saved.txt', size: 0)
         ..failClose = true;
-      f.node('file', 'saved.txt', size: 0);
       f.local['/cache/source'] = {'kind': 'file', 'size': 3};
-      final coordinator = DocumentsCoordinator(
-        files: () async {
-          f.nativeFiles.onRunCopy = (request) async {
-            f.nodes['file']!['size'] = 1;
-            throw const LocalFileException(
-              LocalFileErrorCode.io,
-              'provider stopped',
-              bytesCopied: 1,
-              partialDestinationPossible: true,
-            );
-          };
-          return f.localFiles;
-        },
-        platform: f.platform,
-      );
+      f.nativeFiles.onRunCopy = (request) async {
+        f.nodes['file']!['size'] = 1;
+        throw const LocalFileException(
+          LocalFileErrorCode.io,
+          'provider stopped',
+          bytesCopied: 1,
+          partialDestinationPossible: true,
+        );
+      };
+      final coordinator = f.coordinator;
       final result = await coordinator.request('documents.export', {
         'localPath': '/cache/source',
         'kind': 'file',
@@ -1340,16 +1254,11 @@ void main() {
         containsPair('code', 'document_io'),
       );
       expect(
-        f.calls
-            .singleWhere((call) => call.$1 == 'documents.platform.releaseFd')
-            .$2['outcome'],
+        f.callsFor('documents.platform.releaseFd').single.$2['outcome'],
         'abort',
       );
-      expect(f.calls.where((call) => call.$1 == 'local.copy'), hasLength(1));
-      expect(
-        f.calls.where((call) => call.$1 == 'documents.platform.delete'),
-        isEmpty,
-      );
+      expect(f.callsFor('local.copy'), hasLength(1));
+      expect(f.callsFor('documents.platform.delete'), isEmpty);
       await coordinator.dispose();
     },
   );
@@ -1358,22 +1267,16 @@ void main() {
     'cancelling a write retains possible output without reporting it saved',
     () async {
       final f = Fixture()
-        ..selected = ['file']
+        ..select('file', 'saved.txt', size: 0)
         ..failClose = true;
-      f.node('file', 'saved.txt', size: 0);
       f.local['/cache/source'] = {'kind': 'file', 'size': 3};
       final copying = Completer<void>();
       final copied = Completer<LocalFileCopyResult>();
-      final coordinator = DocumentsCoordinator(
-        files: () async {
-          f.nativeFiles.onRunCopy = (request) {
-            copying.complete();
-            return copied.future;
-          };
-          return f.localFiles;
-        },
-        platform: f.platform,
-      );
+      f.nativeFiles.onRunCopy = (request) {
+        copying.complete();
+        return copied.future;
+      };
+      final coordinator = f.coordinator;
       final job = coordinator.request('documents.export', {
         'operationId': 'cancel-write',
         'localPath': '/cache/source',
@@ -1385,13 +1288,7 @@ void main() {
       });
       // 取消先于复制回执到达时，字节可能已发送至提供方，但保存尚未确认。
       f.nodes['file']!['size'] = 3;
-      copied.complete(
-        LocalFileCopyResult(
-          bytes: 3,
-          identity: identity({'kind': 'file', 'size': 3}),
-          sourceIdentity: identity({'kind': 'file', 'size': 3}),
-        ),
-      );
+      copied.complete(copiedResult(3));
       await cancelling;
       final result = await job;
       expect(result['status'], 'cancelled');
@@ -1405,23 +1302,17 @@ void main() {
         containsPair('code', 'cancelled'),
       );
       expect(
-        f.calls
-            .singleWhere((call) => call.$1 == 'documents.platform.releaseFd')
-            .$2['outcome'],
+        f.callsFor('documents.platform.releaseFd').single.$2['outcome'],
         'abort',
       );
-      expect(f.calls.where((call) => call.$1 == 'local.copy'), hasLength(1));
-      expect(
-        f.calls.where((call) => call.$1 == 'documents.platform.delete'),
-        isEmpty,
-      );
+      expect(f.callsFor('local.copy'), hasLength(1));
+      expect(f.callsFor('documents.platform.delete'), isEmpty);
       await coordinator.dispose();
     },
   );
 
   test('a missing provider lease leaves the save result unknown', () async {
-    final f = Fixture()..selected = ['file'];
-    f.node('file', 'saved.txt', size: 0);
+    final f = Fixture()..select('file', 'saved.txt', size: 0);
     f.local['/cache/source'] = {'kind': 'file', 'size': 3};
     final coordinator = DocumentsCoordinator(
       files: f.files,
@@ -1441,11 +1332,8 @@ void main() {
     expect(result['partialDestinationPossible'], isTrue);
     expect(result['cacheRetained'], isTrue);
     expect(result['uri'], 'content://fixture/file');
-    expect(f.calls.where((call) => call.$1 == 'local.copy'), hasLength(1));
-    expect(
-      f.calls.where((call) => call.$1 == 'documents.platform.delete'),
-      isEmpty,
-    );
+    expect(f.callsFor('local.copy'), hasLength(1));
+    expect(f.callsFor('documents.platform.delete'), isEmpty);
     await coordinator.dispose();
   });
 
@@ -1453,9 +1341,8 @@ void main() {
     'provider close failure leaves write receipt unknown and never retries',
     () async {
       final f = Fixture()
-        ..selected = ['file']
+        ..select('file', 'saved.txt', size: 0)
         ..failClose = true;
-      f.node('file', 'saved.txt', size: 0);
       f.local['/cache/source'] = {'kind': 'file', 'size': 3};
       final result = await f.coordinator.request('documents.export', {
         'localPath': '/cache/source',
@@ -1463,33 +1350,28 @@ void main() {
       });
       expect(result['status'], 'resultUnknown');
       expect(result['files'], 0);
-      expect(f.calls.where((c) => c.$1 == 'local.copy'), hasLength(1));
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.delete'),
-        isEmpty,
-      );
+      expect(f.callsFor('local.copy'), hasLength(1));
+      expect(f.callsFor('documents.platform.delete'), isEmpty);
     },
   );
   test(
     'read descriptor close failure removes only its unpublished cache part',
     () async {
       final f = Fixture()
-        ..selected = ['file']
+        ..select('file', 'data.txt')
         ..failClose = true;
-      f.node('file', 'data.txt');
       final result = await f.coordinator.request('documents.importFiles');
       expect(result['status'], 'partial');
       expect(result['items'], isEmpty);
-      expect(f.calls.where((c) => c.$1 == 'local.commit'), isEmpty);
-      expect(f.calls.where((c) => c.$1 == 'local.part.remove'), hasLength(1));
+      expect(f.callsFor('local.commit'), isEmpty);
+      expect(f.callsFor('local.part.remove'), hasLength(1));
     },
   );
 
   testWidgets(
     'existing provider names wait for a shared decision and keep both preserves originals',
     (tester) async {
-      final f = Fixture()..selected = ['parent'];
-      f.node('parent', 'Target', directory: true);
+      final f = Fixture()..select('parent', 'Target', directory: true);
       f.node('old', 'Tree', directory: true);
       f.children['parent'] = ['old'];
       f.local['/cache/source'] = {'kind': 'directory'};
@@ -1508,10 +1390,7 @@ void main() {
       expect(pending['name'], 'Tree');
       expect(pending['choices'], ['keepBoth', 'skip', 'cancel']);
       expect(pending['replacementSupported'], false);
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.create'),
-        isEmpty,
-      );
+      expect(f.callsFor('documents.platform.create'), isEmpty);
       expect(
         await f.coordinator.request('documents.conflict.resolve', {
           'operationId': 'conflicting-tree',
@@ -1523,15 +1402,9 @@ void main() {
       final result = await job;
       expect(result['status'], 'saved');
       expect(f.nodes['old']!['name'], 'Tree');
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.conflict'),
-        isEmpty,
-      );
+      expect(f.callsFor('documents.platform.conflict'), isEmpty);
       expect((result['renamed'] as List<Object?>), hasLength(1));
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.delete'),
-        isEmpty,
-      );
+      expect(f.callsFor('documents.platform.delete'), isEmpty);
     },
   );
 
@@ -1549,15 +1422,10 @@ void main() {
         'line\nname',
         'a' * 256,
       ]) {
-        final f = Fixture()..selected = ['bad'];
-        f.node('bad', name);
+        final f = Fixture()..select('bad', name);
         final response = await f.coordinator.request('documents.importFiles');
         expect(response['status'], 'partial', reason: name);
-        expect(
-          f.calls.where((c) => c.$1 == 'local.copy'),
-          isEmpty,
-          reason: name,
-        );
+        expect(f.callsFor('local.copy'), isEmpty, reason: name);
       }
       for (final name in [
         '中文 empty',
@@ -1565,8 +1433,7 @@ void main() {
         '.hidden',
         'name with spaces',
       ]) {
-        final f = Fixture()..selected = ['good'];
-        f.node('good', name);
+        final f = Fixture()..select('good', name);
         expect(
           (await f.coordinator.request('documents.importFiles'))['status'],
           'imported',
@@ -1578,8 +1445,7 @@ void main() {
   test(
     'shared import plans files and empty directories; all owned FDs release',
     () async {
-      final f = Fixture()..selected = ['root'];
-      f.node('root', 'Tree', directory: true);
+      final f = Fixture()..select('root', 'Tree', directory: true);
       f.node('empty', 'Empty', directory: true);
       f.node('file', 'data.txt');
       f.children['root'] = ['empty', 'file'];
@@ -1592,10 +1458,7 @@ void main() {
       expect(result['bytes'], 3);
       expect(f.local.keys.any((path) => path.endsWith('/Tree/Empty')), isTrue);
       expect(
-        f.calls
-            .where((c) => c.$1 == 'documents.platform.releaseFd')
-            .single
-            .$2['fdLeaseId'],
+        f.callsFor('documents.platform.releaseFd').single.$2['fdLeaseId'],
         'lease-file',
       );
       expect(f.calls.last.$1, 'documents.platform.release');
@@ -1605,26 +1468,21 @@ void main() {
     'provider source changes never publish an unverified cache file',
     () async {
       final f = Fixture()
-        ..selected = ['file']
+        ..select('file', 'data.txt')
         ..mutateSource = true;
-      f.node('file', 'data.txt');
       final result = await f.coordinator.request('documents.importFiles');
       expect(result['status'], 'partial');
       expect(result['files'], 0);
       expect(result['items'], isEmpty);
-      expect(f.calls.where((c) => c.$1 == 'local.commit'), isEmpty);
-      expect(f.calls.where((c) => c.$1 == 'local.part.remove'), hasLength(1));
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.releaseFd'),
-        hasLength(1),
-      );
+      expect(f.callsFor('local.commit'), isEmpty);
+      expect(f.callsFor('local.part.remove'), hasLength(1));
+      expect(f.callsFor('documents.platform.releaseFd'), hasLength(1));
     },
   );
   test(
     'duplicate provider names remain partial and are never silently merged',
     () async {
-      final f = Fixture()..selected = ['root'];
-      f.node('root', 'Tree', directory: true);
+      final f = Fixture()..select('root', 'Tree', directory: true);
       f.node('a', 'same');
       f.node('b', 'same');
       f.children['root'] = ['a', 'b'];
@@ -1641,9 +1499,8 @@ void main() {
     'uncertain provider create never retries or deletes an existing document',
     () async {
       final f = Fixture()
-        ..selected = ['parent']
+        ..select('parent', 'Destination', directory: true)
         ..loseCreate = true;
-      f.node('parent', 'Destination', directory: true);
       f.local['/cache/source'] = {'kind': 'directory'};
       final result = await f.coordinator.request('documents.export', {
         'localPath': '/cache/source',
@@ -1652,14 +1509,8 @@ void main() {
       });
       expect(result['status'], 'resultUnknown');
       expect(result['partialDestinationPossible'], isTrue);
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.create'),
-        hasLength(1),
-      );
-      expect(
-        f.calls.where((c) => c.$1 == 'documents.platform.delete'),
-        isEmpty,
-      );
+      expect(f.callsFor('documents.platform.create'), hasLength(1));
+      expect(f.callsFor('documents.platform.delete'), isEmpty);
     },
   );
 }

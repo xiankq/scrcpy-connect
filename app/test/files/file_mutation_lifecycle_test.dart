@@ -165,6 +165,38 @@ void main() {
     expect(fixture.api.requests, hasLength(1));
     expect(fixture.api.closed, ['worker-1']);
   });
+
+  test('阻塞变更取消关闭失败及时报错，保留原next供同批次重试回收', () async {
+    final fixture = await _Fixture.open();
+    addTearDown(fixture.close);
+    fixture.api.readGate = Completer<void>();
+    fixture.api.rejectClose = true;
+    final deleting = fixture.owner.delete('device', [
+      '/sdcard/first',
+      '/sdcard/never',
+    ], expected: _expected);
+    final failed = expectLater(
+      deleting,
+      throwsA(_failure('mutation_cleanup_unconfirmed')),
+    );
+    await fixture.api.firstReading.future;
+    await expectLater(
+      fixture.owner.cancelDevice('device'),
+      throwsA(_failure('mutation_cleanup_unconfirmed')),
+    );
+    await failed;
+    expect(fixture.api.workers['worker-1']!.cancelled.isCompleted, isFalse);
+    expect(fixture.api.requests, hasLength(1));
+    await expectLater(
+      fixture.owner.createDirectory('device', '/blocked'),
+      throwsA(_failure('mutation_cleanup_unconfirmed')),
+    );
+    fixture.api.rejectClose = false;
+    await fixture.owner.cancelDevice('device');
+    expect(fixture.api.closed, ['worker-1']);
+    expect(fixture.api.requests, hasLength(1));
+    expect(fixture.api.cancelAttempts, everyElement('worker-1'));
+  });
 }
 
 Matcher _failure(String code) =>

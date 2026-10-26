@@ -1,15 +1,27 @@
 part of 'api.dart';
 
+abstract base class _AdbResource {
+  _AdbResource(this._owner);
+  final AdbServices _owner;
+
+  void _onClosed() => _owner._resources.remove(this);
+  Future<void> close();
+}
+
+abstract base class _AdbOperation extends _AdbResource {
+  _AdbOperation(super._owner);
+
+  void Function()? _unsubscribe;
+}
+
 /// 单个原生操作；事件采用单订阅和拉取模式。
 /// 最多允许一个在途写入且每次至多 64 KiB，读写独立推进；close 取消并排空本操作，不关闭连接。
-final class AdbServiceSession {
-  AdbServiceSession._(this._api, this.id, this._onClosed);
+final class AdbServiceSession extends _AdbOperation {
+  AdbServiceSession._(this._api, this.id, super._owner);
   final NativeAdbApi _api;
   final String id;
-  final void Function() _onClosed;
   bool _reading = false, _writing = false, _closed = false;
   Future<void>? _closing;
-  void Function()? _unsubscribe;
   StreamIterator<List<int>>? _input;
   Stream<NativeAdbEvent> get events async* {
     if (_reading) throw const AdbException('service_has_a_reader');
@@ -82,6 +94,7 @@ final class AdbServiceSession {
 
   /// 完成流式 SYNC push 的输入文件；原始 ADB 操作没有通用半关闭，shell 使用 closeStdin。
   Future<void> finish() => _send(AdbServiceInput(AdbInputKind.finish));
+  @override
   Future<void> close() => _closing ??= _close();
   Future<void> _close() async {
     _closed = true;
@@ -106,10 +119,9 @@ final class AdbServices {
   final NativeAdbApi Function() _bindings;
   final Future<AdbDevice> Function(AdbDevice) _resolve;
   final void Function() _check;
-  final Set<AdbServiceSession> _sessions = {};
-  final Set<AdbOpenProbe> _openProbes = {};
-  final Set<AdbFileSession> _fileSessions = {};
-  final Set<AdbFileScope> _fileScopes = {};
+  final Set<_AdbResource> _resources = {};
+  Iterable<AdbFileScope> get _fileScopes =>
+      _resources.whereType<AdbFileScope>();
   final Map<String, Future<void>> _fileScopeTransitions = {};
   final Set<Future<Object?>> _starting = {};
   bool _closed = false;
@@ -130,33 +142,44 @@ final class AdbServices {
     return opening;
   }
 
-  Future<AdbServiceSession> _own(
-    NativeAdbApi api,
-    String id,
-    AdbCancellation? cancellation,
-  ) async {
-    late final AdbServiceSession session;
-    session = AdbServiceSession._(api, id, () => _sessions.remove(session));
-    _sessions.add(session);
+  Future<T> _own<T extends _AdbOperation>(
+    T operation,
+    AdbCancellation? cancellation, {
+    void Function()? checkScope,
+    Object Function(Object)? cleanupFailure,
+  }) async {
+    // 先登记关闭权；失败的回收不能丢失于迟到创建的异常路径。
+    _resources.add(operation);
     try {
       _checkOpen();
+      checkScope?.call();
       cancellation?.check();
     } catch (_) {
-      // 先登记关闭权；失败的回收不能丢失于迟到创建的异常路径。
-      await session.close();
+      try {
+        await operation.close();
+      } catch (error) {
+        if (cleanupFailure != null) throw cleanupFailure(error);
+        rethrow;
+      }
       rethrow;
     }
     if (cancellation != null) {
-      session._unsubscribe = cancellation.onCancel(() {
+      operation._unsubscribe = cancellation.onCancel(() {
         unawaited(
-          session.close().catchError((Object _) {
+          operation.close().catchError((Object _) {
             // 所有权仍在集合中，由显式 close 或 facade.close 核对和重试。
           }),
         );
       });
     }
-    return session;
+    return operation;
   }
+
+  Future<AdbServiceSession> _ownService(
+    NativeAdbApi api,
+    String id,
+    AdbCancellation? cancellation,
+  ) => _own(AdbServiceSession._(api, id, this), cancellation);
 
   /// 创建兼容旧版 shell 协议的精确会话；与显式 shell v2/PTY 入口共享关闭责任。
   Future<AdbServiceSession> openShell(
@@ -171,7 +194,7 @@ final class AdbServices {
     _checkOpen();
     cancellation?.check();
     final api = _bindings();
-    return _own(
+    return _ownService(
       api,
       await api.shell(resolved.id, command, timeoutMs),
       cancellation,
@@ -216,36 +239,11 @@ final class AdbServices {
     AdbFileScope? scope,
     String connectionId,
     AdbFileExecutionRequest request,
-  ) async {
-    late final AdbFileSession session;
-    session = AdbFileSession._(
-      api,
-      id,
-      () => _fileSessions.remove(session),
-      connectionId,
-      request,
-      scope,
-    );
-    _fileSessions.add(session);
-    try {
-      _checkOpen();
-      scope?._checkOpen();
-      cancellation?.check();
-    } catch (_) {
-      await session.close();
-      rethrow;
-    }
-    if (cancellation != null) {
-      session._unsubscribe = cancellation.onCancel(() {
-        unawaited(
-          session.close().catchError((Object _) {
-            // 迟到和显式取消共用同一个可重试关闭权。
-          }),
-        );
-      });
-    }
-    return session;
-  }
+  ) => _own(
+    AdbFileSession._(api, id, this, connectionId, request, scope),
+    cancellation,
+    checkScope: scope?._checkOpen,
+  );
 
   /// 释放此 facade 的操作；设备连接仍由调用方持有。
   Future<void> close() => _closing ??= _close();
@@ -263,33 +261,17 @@ final class AdbServices {
     }
 
     try {
-      final sessions = _sessions.toSet();
-      final probes = _openProbes.toSet();
-      final files = _fileSessions.toSet();
-      final scopes = _fileScopes.toSet();
+      final resources = _resources.toSet();
       await Future.wait<void>([
-        ...sessions.map((session) => release(session.close())),
-        ...probes.map((probe) => release(probe.close())),
-        ...files.map((session) => release(session.close())),
-        ...scopes.map((scope) => release(scope.close())),
+        for (final resource in resources) release(resource.close()),
       ]);
       await Future.wait<void>([
         for (final opening in _starting.toList())
           opening.then<void>((_) {}, onError: (Object _) {}),
       ]);
       await Future.wait<void>([
-        ..._sessions
-            .difference(sessions)
-            .map((session) => release(session.close())),
-        ..._openProbes
-            .difference(probes)
-            .map((probe) => release(probe.close())),
-        ..._fileSessions
-            .difference(files)
-            .map((session) => release(session.close())),
-        ..._fileScopes
-            .difference(scopes)
-            .map((scope) => release(scope.close())),
+        for (final resource in _resources.difference(resources))
+          release(resource.close()),
       ]);
       if (failure != null) Error.throwWithStackTrace(failure!, trace!);
     } catch (_) {
@@ -328,30 +310,12 @@ final class AdbServices {
     _checkOpen();
     cancellation?.check();
     final id = await api.createOpenProbe(connection.id, service, timeoutMs);
-    late final AdbOpenProbe probe;
-    probe = AdbOpenProbe._(api, id, () => _openProbes.remove(probe));
-    _openProbes.add(probe);
-    try {
-      _checkOpen();
-      cancellation?.check();
-    } catch (_) {
-      try {
-        await probe.close();
-      } catch (error) {
-        throw AdbOpenProbeCleanupFailure(probe, error);
-      }
-      rethrow;
-    }
-    if (cancellation != null) {
-      probe._unsubscribe = cancellation.onCancel(() {
-        unawaited(
-          probe.close().catchError((Object _) {
-            // 显式 close 或 facade.close 仍持有精确回收权。
-          }),
-        );
-      });
-    }
-    return probe;
+    final probe = AdbOpenProbe._(api, id, this);
+    return _own(
+      probe,
+      cancellation,
+      cleanupFailure: (error) => AdbOpenProbeCleanupFailure(probe, error),
+    );
   });
 
   Future<AdbServiceSession> _service(
@@ -374,7 +338,7 @@ final class AdbServices {
       request,
       adbTimeoutMillis(timeout),
     );
-    return _own(api, id, cancellation);
+    return _ownService(api, id, cancellation);
   });
 
   Future<AdbServiceSession> open(
@@ -638,7 +602,7 @@ final class AdbServices {
             admissionScope.scopeId,
           );
     final scope = AdbFileScope._(this, api, id, ownerKey);
-    _fileScopes.add(scope);
+    _resources.add(scope);
     // 原生确认旧代排空后，才退休本地旧代；新句柄先登记以保留失败关闭权。
     for (final old
         in _fileScopes
@@ -646,7 +610,7 @@ final class AdbServices {
             .toList()) {
       old._closed = true;
       old._released = true;
-      _fileScopes.remove(old);
+      _resources.remove(old);
     }
     try {
       _checkOpen();
@@ -683,7 +647,7 @@ final class AdbServices {
       request,
       adbTimeoutMillis(timeout),
     );
-    final session = await _own(api, id, cancellation);
+    final session = await _ownService(api, id, cancellation);
     await for (final event in session.events) {
       if (event.facts case final value?) return value;
     }
@@ -790,7 +754,7 @@ final class AdbSync {
       request,
       adbTimeoutMillis(timeout),
     );
-    return _services._own(api, id, cancellation);
+    return _services._ownService(api, id, cancellation);
   });
 
   Future<AdbFileMetadata> stat(

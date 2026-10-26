@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:scrcpy_connect/services/connection/device_query.dart';
+import 'package:uuid/uuid.dart';
 import 'package:adb/adb.dart';
 import 'package:scrcpy/scrcpy.dart';
-
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/services/connection/scrcpy_query_process.dart';
@@ -47,7 +47,7 @@ final class ScrcpyServerQueries {
     String Function()? newId,
     required this.timeout,
   }) : _server = Uint8List.fromList(serverBytes),
-       _newId = newId ?? _uuid {
+       _newId = newId ?? const Uuid().v4 {
     adbTimeoutMillis(timeout);
   }
   final Uint8List _server;
@@ -324,14 +324,15 @@ final class ScrcpyServerQueries {
       job.process = null;
     }
     // 经典 shell 的正常 EOF 没有协议退出码；固定删除命令另取真实退出回执。
-    // _run 仍等待完整终态与流结束，不能仅凭输出中的成功字样释放部署责任。
-    final marker = '__INTEROP_QUERY_REMOVE_${_uuid()}__:';
-    final result = await _run(
+    // 等待完整终态与流结束，不能仅凭输出中的成功字样释放部署责任。
+    final marker = '__INTEROP_QUERY_REMOVE_${const Uuid().v4()}__:';
+    final result = await readDeviceShell(
       job.connection,
       'rm -f -- ${_quote(job.remote)}; __query_remove_status=\$?; '
       'printf ${_quote('\n$marker%s\n')} "\$__query_remove_status"; '
       'exit "\$__query_remove_status"',
       maxBytes: 8192,
+      timeout: timeout,
     );
     final output = latin1.decode(result.stdout);
     final receipt = RegExp('^\n${RegExp.escape(marker)}(0|[1-9][0-9]{0,2})\n\$')
@@ -347,47 +348,6 @@ final class ScrcpyServerQueries {
     if (status != 0) _fail('shell_failed', '系统未确认临时查询文件已删除。');
     job.cleaned = true;
     _deployments.remove(job);
-  }
-
-  // 只供固定清单查询及其文件收尾使用，不对外暴露任意远程执行框架。
-  Future<({Uint8List stdout, Uint8List stderr, int? exitCode})> _run(
-    DeviceConnection connection,
-    String command, {
-    AdbCancellation? cancellation,
-    required int maxBytes,
-  }) async {
-    final stdout = BytesBuilder(copy: false),
-        stderr = BytesBuilder(copy: false);
-    var count = 0, terminal = false;
-    int? exitCode;
-    await for (final event in connection.client.shell(
-      connection.device,
-      command,
-      cancellation: cancellation,
-      timeout: timeout,
-    )) {
-      cancellation?.check();
-      if (terminal) _fail('invalid_data', '设备查询在终态后继续返回数据。');
-      count += event.bytes.length;
-      if (count > maxBytes) _fail('byte_limit', '设备查询输出超过本次限额。');
-      switch (event.channel) {
-        case AdbShellChannel.stdout:
-          stdout.add(event.bytes);
-        case AdbShellChannel.stderr:
-          stderr.add(event.bytes);
-        case AdbShellChannel.exit:
-          if (event.bytes.isNotEmpty) _fail('invalid_data', '设备退出回执包含无效字节。');
-          terminal = true;
-          exitCode = event.exitCode;
-      }
-    }
-    cancellation?.check();
-    if (!terminal) _fail('result_unknown', '设备查询没有返回完整终态。');
-    return (
-      stdout: stdout.takeBytes(),
-      stderr: stderr.takeBytes(),
-      exitCode: exitCode,
-    );
   }
 }
 
@@ -437,17 +397,6 @@ List<Map<String, dynamic>> _parseApps(String output) {
 String _quote(String value) {
   if (value.contains('\x00')) _fail('invalid_argument', 'Shell 参数包含无效字符。');
   return "'${value.replaceAll("'", "'\\''")}'";
-}
-
-String _uuid() {
-  final random = Random.secure();
-  final bytes = List.generate(16, (_) => random.nextInt(256));
-  bytes[6] = (bytes[6] & 15) | 64;
-  bytes[8] = (bytes[8] & 63) | 128;
-  final hex = bytes
-      .map((value) => value.toRadixString(16).padLeft(2, '0'))
-      .join();
-  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }
 
 Never _fail(String code, String message) =>

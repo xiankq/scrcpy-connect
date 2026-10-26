@@ -63,6 +63,7 @@ class _Harness {
   final players = <_Player>[];
   VideoJson status = {'status': 'streaming'};
   Completer<VideoJson>? statusReading;
+  void Function()? onStatus;
   Completer<VideoJson>? stopping;
   int relay = 0;
 
@@ -89,6 +90,7 @@ class _Harness {
     commands.add((command, {...params}));
     if (command == 'media.open') return _endpoint('relay-${++relay}', 1);
     if (command == 'media.status') {
+      onStatus?.call();
       return statusReading == null ? status : statusReading!.future;
     }
     if (command == 'session.stop') {
@@ -103,7 +105,7 @@ class _Harness {
     receipts[id] = await outputs.start(_stream(id));
   }
 
-  Future<void> close(String id) async {
+  Future<void> close(String id, {Object? failure}) async {
     receipts.remove(id);
     await outputs.stop(id);
   }
@@ -128,6 +130,9 @@ class _Harness {
         pending.complete();
       }
     }
+    for (final id in receipts.keys.toList()) {
+      await lifecycle.close(id);
+    }
     await outputs.dispose();
     for (final player in players) {
       await player.changes.close();
@@ -143,6 +148,42 @@ Future<void> _flush() async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'monitor replacement keeps one poll and ignores its late failure',
+    () async {
+      final h = _Harness();
+      addTearDown(h.dispose);
+      await h.start('A');
+      final firstRead = Completer<void>();
+      h.onStatus = firstRead.complete;
+      final stale = h.statusReading = Completer();
+      h.lifecycle.monitor('A');
+      await firstRead.future.timeout(const Duration(seconds: 5));
+      int reads() => h.commands.where((c) => c.$1 == 'media.status').length;
+      expect(reads(), 1);
+
+      h.lifecycle.monitor('A');
+      await Future<void>.delayed(const Duration(milliseconds: 550));
+      expect(reads(), 1, reason: '替换监视器仍须等待旧读取，不积累并发轮询。');
+      stale.complete({'status': 'closed', 'reason': 'old poll'});
+      await _flush();
+      expect(h.failures, isEmpty);
+      expect(h.receipts.keys, ['A']);
+
+      final nextRead = Completer<void>();
+      h.onStatus = nextRead.complete;
+      h.statusReading = null;
+      await nextRead.future.timeout(const Duration(seconds: 5));
+      h.onStatus = null;
+      expect(reads(), 2);
+      await h.lifecycle.close('A');
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(reads(), 2, reason: '关闭输出时同步撤销监视器。');
+      expect(h.receipts, isEmpty);
+      expect(h.players.single.releases, 1);
+    },
+  );
+
   test('failed renderer replacement retains window for retry', () async {
     final h = _Harness();
     addTearDown(h.dispose);
@@ -152,7 +193,7 @@ void main() {
     h.lifecycle.endReconfigure('A');
     h.players.single.fail();
     h.status = {'status': 'closed'};
-    await h.lifecycle.poll('A', current: () => true);
+    await h.lifecycle.poll('A');
     expect(h.stopped, isEmpty);
     expect(h.receipts.keys, ['A']);
     h.lifecycle.beginReconfigure('A');
@@ -166,7 +207,7 @@ void main() {
     addTearDown(h.dispose);
     await h.start('A');
     h.statusReading = Completer();
-    final polling = h.lifecycle.poll('A', current: () => true);
+    final polling = h.lifecycle.poll('A');
     await h.outputs.reattach('A', endpoint: _endpoint('relay-2', 2));
 
     h.statusReading!.complete({

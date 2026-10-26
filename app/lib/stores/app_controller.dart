@@ -369,11 +369,13 @@ class AppController extends _$AppController {
     }
   }
 
-  Future<void> updateSettings(Json patch) {
+  Future<void> _updateSettings(Json? Function(Json) changes) {
     final generation = _generation;
     _settingsRequest++;
     final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
       if (!_current(generation)) return;
+      final patch = changes(state.settings);
+      if (patch == null) return;
       final epoch = _settingsEpoch;
       final result = await execute(ApplicationCommand.settingsUpdate, patch);
       if (_current(generation) && epoch == _settingsEpoch) {
@@ -386,35 +388,24 @@ class AppController extends _$AppController {
     return operation;
   }
 
+  Future<void> updateSettings(Json patch) => _updateSettings((_) => patch);
+
   Future<void> updateSetting(String key, Object? next) =>
       updateSettings({key: next});
 
   Future<void> updateDeviceSetting(String deviceId, String key, Object? next) =>
       updateDeviceSettings(deviceId, {key: next});
 
-  Future<void> updateDeviceSettings(String deviceId, Json patch) {
-    final generation = _generation;
-    _settingsRequest++;
-    final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
-      if (!_current(generation)) return;
-      final epoch = _settingsEpoch;
-      final settings = jsonObject(state.settings['deviceSettings']);
-      final devices = <String, dynamic>{
-        ...settings,
-        deviceId: {...jsonObject(settings[deviceId]), ...patch},
-      };
-      final result = await execute(ApplicationCommand.settingsUpdate, {
-        'deviceSettings': devices,
+  Future<void> updateDeviceSettings(String deviceId, Json patch) =>
+      _updateSettings((current) {
+        final devices = jsonObject(current['deviceSettings']);
+        return {
+          'deviceSettings': {
+            ...devices,
+            deviceId: {...jsonObject(devices[deviceId]), ...patch},
+          },
+        };
       });
-      if (_current(generation) && epoch == _settingsEpoch) {
-        state = state.copyWith(
-          settings: {...state.settings, 'deviceSettings': devices, ...result},
-        );
-      }
-    });
-    _settingsQueue = operation;
-    return operation;
-  }
 
   String? appOpenMode(String deviceId, String packageName) {
     final modes = jsonObject(state.settings['appOpenModes']);
@@ -430,29 +421,17 @@ class AppController extends _$AppController {
     if (mode != 'phone' && mode != 'window') {
       throw ArgumentError.value(mode, 'mode');
     }
-    final generation = _generation;
-    _settingsRequest++;
-    final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
-      if (!_current(generation) || appOpenMode(deviceId, packageName) == mode) {
-        return;
-      }
-      final epoch = _settingsEpoch;
-      final previous = jsonObject(state.settings['appOpenModes']);
-      final modes = <String, dynamic>{
-        ...previous,
-        deviceId: {...jsonObject(previous[deviceId]), packageName: mode},
+    return _updateSettings((current) {
+      final previous = jsonObject(current['appOpenModes']);
+      final device = jsonObject(previous[deviceId]);
+      if (device[packageName] == mode) return null;
+      return {
+        'appOpenModes': {
+          ...previous,
+          deviceId: {...device, packageName: mode},
+        },
       };
-      final result = await execute(ApplicationCommand.settingsUpdate, {
-        'appOpenModes': modes,
-      });
-      if (_current(generation) && epoch == _settingsEpoch) {
-        state = state.copyWith(
-          settings: {...state.settings, 'appOpenModes': modes, ...result},
-        );
-      }
     });
-    _settingsQueue = operation;
-    return operation;
   }
 
   void Function()? claimAppOpen(String deviceId, String packageName) {

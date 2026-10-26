@@ -13,7 +13,7 @@ import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('真实 Dart 应用在待分享目录准备失败后可以重试', () async {
+  test('真实 Dart 应用在资源组装或待分享目录准备失败后可以重试', () async {
     final root = await Directory.systemTemp.createTemp('connect-bootstrap-');
     final cache = await Directory.systemTemp.createTemp(
       'connect-bootstrap-cache-',
@@ -61,6 +61,24 @@ void main() {
     }
 
     try {
+      final launches = File('${root.path}/app-opens.json');
+      await launches.writeAsString('corrupt-launches', flush: true);
+      await expectLater(
+        ApplicationSession.initialize(
+          dataDirectory: root.path,
+          adbBinaryDirectory: binaryDirectory,
+        ),
+        throwsA(
+          isA<ApplicationCommandException>().having(
+            (error) => error.code,
+            'code',
+            'app_open_storage_invalid',
+          ),
+        ),
+      );
+      expect(await launches.readAsString(), 'corrupt-launches');
+      await launches.delete();
+
       final failure = FileSystemException('temporary storage unavailable');
       await expectLater(
         bootstrapApplication(

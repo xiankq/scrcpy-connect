@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -11,11 +13,13 @@ const _remaining = '8cd3c688-670c-46c1-b605-d140d9d8b4aa';
 void main() {
   late Directory directory;
   late PreferenceStore preferences;
+  late DeviceRecordStore records;
   final changes = <Map<String, dynamic>>[];
 
   PreferenceCommands commands({bool failApply = false}) => PreferenceCommands(
     preferences: preferences,
-    request: (_, _) async => fail('清理偏好不重放设备遗忘或建立原生镜像'),
+    records: records,
+    onDevicesImported: (_) => fail('清理偏好不重放设备导入'),
     onChanged: (values) {
       changes.add(values);
       if (failApply) throw StateError('应用通知失败');
@@ -26,6 +30,7 @@ void main() {
     changes.clear();
     directory = await Directory.systemTemp.createTemp('forgotten-preferences-');
     preferences = await PreferenceCommands.prepare(directory);
+    records = await DeviceRecordStore.open(directory: directory);
     await preferences.update({
       'appearance': 'dark',
       'appOpenModes': {

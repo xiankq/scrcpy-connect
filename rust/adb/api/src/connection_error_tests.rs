@@ -1,5 +1,5 @@
 //! 类型化错误沿真实 TCP 和已登记 worker 传递；不依赖错误展示文本。
-use super::*;
+use super::{handshake_tests::read_server_request, *};
 use interop_adb::protocol::{self, Frame};
 use tokio::io::AsyncReadExt;
 
@@ -53,12 +53,10 @@ async fn stalled_official_socket(cancel: bool) {
         Some(id.clone()),
     ));
     let (mut peer, _) = listener.accept().await.unwrap();
-    let mut length = [0; 4];
-    peer.read_exact(&mut length).await.unwrap();
-    let length = usize::from_str_radix(std::str::from_utf8(&length).unwrap(), 16).unwrap();
-    let mut request = vec![0; length];
-    peer.read_exact(&mut request).await.unwrap();
-    assert_eq!(request, b"host:tport:serial:device");
+    assert_eq!(
+        read_server_request(&mut peer).await,
+        b"host:tport:serial:device"
+    );
     if cancel {
         adb_handshake_cancel(id.clone()).await.unwrap();
     }

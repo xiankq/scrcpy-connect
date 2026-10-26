@@ -7,14 +7,9 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../../scripts/src/process.dart';
+import 'support/android_ui.dart';
 
 String _quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
-
-class _Node {
-  _Node(this.attributes);
-  final Map<String, String> attributes;
-  String operator [](String key) => attributes[key] ?? '';
-}
 
 /// 调用方拥有 USBIP/adbd 的准备与清理；driver 只读取主控并点击真实 USB 权限对话框，不用 pm、appops、模拟通道或夹具传输代为授权。
 ///
@@ -65,24 +60,10 @@ class _UsbPermissionUi {
     });
   }
 
-  Future<List<_Node>> nodes() async {
+  Future<List<AndroidUiNode>> nodes() async {
     await shell(['uiautomator', 'dump', xmlPath]);
     final xml = await shell(['cat', xmlPath]);
-    String decode(String value) => value
-        .replaceAll('&quot;', '"')
-        .replaceAll('&apos;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&amp;', '&');
-    return [
-      for (final match in RegExp(r'<node\s+[^>]*>').allMatches(xml))
-        _Node({
-          for (final attribute in RegExp(
-            r'([\w-]+)="([^"]*)"',
-          ).allMatches(match[0]!))
-            attribute[1]!: decode(attribute[2]!),
-        }),
-    ];
+    return parseAndroidUi(xml);
   }
 
   Future<void> choose({required bool allow}) async {

@@ -1,7 +1,7 @@
 //! 实际传输协商与公开身份快照；磁盘替换不改变存活连接的事实。
-use super::*;
+use super::{handshake_tests::read_server_request, *};
 use interop_adb::protocol::{self, Frame};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 
 #[tokio::test]
 async fn configured_identity_keeps_the_handshake_snapshot_after_the_key_file_is_replaced() {
@@ -156,12 +156,7 @@ async fn official_server_reports_delegated_handshake_without_an_invented_host_id
     let server = tokio::spawn(async move {
         for expected in ["host:tport:serial:fixture", "host-transport-id:42:features"] {
             let (mut socket, _) = listener.accept().await.unwrap();
-            let mut length = [0; 4];
-            socket.read_exact(&mut length).await.unwrap();
-            let length = usize::from_str_radix(std::str::from_utf8(&length).unwrap(), 16).unwrap();
-            let mut service = vec![0; length];
-            socket.read_exact(&mut service).await.unwrap();
-            assert_eq!(service, expected.as_bytes());
+            assert_eq!(read_server_request(&mut socket).await, expected.as_bytes());
             socket.write_all(b"OKAY").await.unwrap();
             if expected.contains("tport") {
                 socket.write_all(&42u64.to_le_bytes()).await.unwrap();

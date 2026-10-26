@@ -149,44 +149,20 @@ Future<void> main(List<String> arguments) => cli(() async {
       Directory(p.join(copy.path, 'src')),
       '.java',
     ).first;
-    final javaBytes = javaSource.readAsBytesSync();
-    await javaSource.writeAsString(
-      '// altered source\n',
-      mode: FileMode.append,
-    );
-    await rejects(
-      () => companion.verifyManifest(copy),
-      'sources or build tools changed',
-    );
-    await javaSource.writeAsBytes(javaBytes);
-    final buildScript = File(p.join(copy.path, 'build.dart'));
-    final sourceBytes = buildScript.readAsBytesSync();
-    await buildScript.writeAsString('// altered\n', mode: FileMode.append);
-    await rejects(
-      () => companion.verifyManifest(copy),
-      'sources or build tools changed',
-    );
-    await buildScript.writeAsBytes(sourceBytes);
-    final commonBytes = common.readAsBytesSync();
-    await common.writeAsString(
-      '// altered shared ZIP writer\n',
-      mode: FileMode.append,
-    );
-    await rejects(
-      () => companion.verifyManifest(copy),
-      'sources or build tools changed',
-    );
-    await common.writeAsBytes(commonBytes);
-    final repositoryToolingBytes = repositoryTooling.readAsBytesSync();
-    await repositoryTooling.writeAsString(
-      '// altered repository locator\n',
-      mode: FileMode.append,
-    );
-    await rejects(
-      () => companion.verifyManifest(copy),
-      'sources or build tools changed',
-    );
-    await repositoryTooling.writeAsBytes(repositoryToolingBytes);
+    for (final source in [
+      javaSource,
+      File(p.join(copy.path, 'build.dart')),
+      common,
+      repositoryTooling,
+    ]) {
+      final bytes = source.readAsBytesSync();
+      await source.writeAsString('// altered\n', mode: FileMode.append);
+      await rejects(
+        () => companion.verifyManifest(copy),
+        'sources or build tools changed',
+      );
+      await source.writeAsBytes(bytes);
+    }
     await jar.writeAsString('altered');
     await rejects(() => companion.verifyManifest(copy), 'JAR differs');
 

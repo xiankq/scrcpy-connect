@@ -1,9 +1,8 @@
-import 'package:scrcpy_connect/models/application_request.dart';
-
 import 'dart:async';
 import 'dart:collection';
-import 'dart:math';
 
+import 'package:uuid/uuid.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/services/media/media_cache_lease.dart';
@@ -51,7 +50,7 @@ class ThumbnailQueue {
   Future<void> _run(ThumbnailLease lease) async {
     for (var attempt = 0; attempt < 3 && !lease._released; attempt++) {
       try {
-        lease._operationId = _operationId();
+        lease._operationId = const Uuid().v4();
         final result = await controller.execute(
           ApplicationCommand.mediaThumbnail,
           {
@@ -108,16 +107,6 @@ class ThumbnailQueue {
         const RequestFailure('cancelled', '缩略图请求已取消。'),
       );
     }
-  }
-
-  static String _operationId() {
-    final random = Random.secure();
-    final bytes = List.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
-        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
   void dispose() {

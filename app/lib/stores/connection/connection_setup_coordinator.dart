@@ -49,7 +49,6 @@ class ConnectionSetupCoordinator {
   final Random _random;
   final bool Function() _burstMode;
   final _flows = <_SetupFlow>{};
-  final _active = <String, _SetupFlow>{};
   final _stops = <String, int>{};
   bool _disposed = false, _recovering = false;
   int _next = 0, _revision = 0;
@@ -163,7 +162,6 @@ class ConnectionSetupCoordinator {
       _cancel(old);
     }
     _flows.add(flow);
-    _active[attempt] = flow;
     flow.usbRequested = command == 'devices.usb';
     flow.timer = Timer(
       flow.deadline.difference(_now()),
@@ -846,15 +844,12 @@ class ConnectionSetupCoordinator {
     if (flow.expired) {
       throw const ApplicationCommandException('expired', '本次连接流程已到期。');
     }
-    if (_disposed ||
-        flow.cancelled ||
-        !identical(_active[flow.attempt], flow)) {
+    if (_disposed || flow.cancelled) {
       throw const ApplicationCommandException('cancelled', '本次连接流程已停止。');
     }
   }
 
   void _cancel(_SetupFlow flow, {bool expired = false}) {
-    flow.cancelled = true;
     flow.expired |= expired;
     flow.stop.cancel();
     if (flow.usbRequested && cancelUsb != null && flow.usbCancel == null) {
@@ -910,7 +905,6 @@ class ConnectionSetupCoordinator {
       await flow.hold?.call();
       flow.hold = null;
       flow.cleaned = true;
-      if (identical(_active[flow.attempt], flow)) _active.remove(flow.attempt);
       _flows.remove(flow);
     }();
     return flow.cleaning = operation.whenComplete(() {
@@ -974,5 +968,7 @@ final class _SetupFlow {
   Future<void> Function()? hold;
   bool usbRequested = false;
   bool pairingRecorded = false;
-  bool cancelled = false, expired = false, settled = false, cleaned = false;
+  // 后继替换、用户停止和超时都撤销同一个 token；取消先于监听器回调生效。
+  bool get cancelled => stop.isCancelled;
+  bool expired = false, settled = false, cleaned = false;
 }

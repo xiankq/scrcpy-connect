@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/services/files/file_executor.dart';
 import 'package:scrcpy_connect/stores/files/share_store.dart';
@@ -66,13 +67,7 @@ final class DocumentSources {
     if (legacy >= totalBytes) {
       throw const FileFailure('document_cache_full', '文档暂存已满，已有来源保留。');
     }
-    final random = Random.secure();
-    final bytes = List.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 15) | 64;
-    bytes[8] = (bytes[8] & 63) | 128;
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    final id =
-        '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+    final id = const Uuid().v4();
     await store.reserve(id);
     final available = max(0, await store.availableBytes(id) - legacy);
     if (available == 0) {

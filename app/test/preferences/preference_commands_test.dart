@@ -40,37 +40,26 @@ Map<String, dynamic> metadata([
 void main() {
   late Directory directory;
   late PreferenceStore preferences;
+  late DeviceRecordStore records;
   PreferenceCommands commands({
-    PreferenceDeviceRequest? request,
+    DeviceRecordStore? deviceRecords,
+    void Function(DeviceRecordsImport)? onDevicesImported,
     void Function(Map<String, dynamic>)? onChanged,
     Future<void> Function(bool)? applyBackgroundPolicy,
   }) => PreferenceCommands(
     preferences: preferences,
-    request: request ?? (_, _) async => fail('纯偏好操作不得调用设备分派器'),
+    records: deviceRecords ?? records,
+    onDevicesImported: onDevicesImported ?? (_) {},
     onChanged: onChanged ?? (_) {},
     applyBackgroundPolicy: applyBackgroundPolicy,
   );
-
-  PreferenceDeviceRequest importRequest(
-    DeviceRecordStore records, {
-    void Function()? onRequest,
-  }) => (command, params) async {
-    onRequest?.call();
-    if (command == 'settings.import.preview') {
-      return records.previewMetadata(params['metadata']);
-    }
-    return (await records.importMetadata(
-      params['metadata'],
-      expectedFingerprint: params['fingerprint'] as String?,
-      importGlobalPreferences: params['importGlobalPreferences'] == true,
-    )).toJson();
-  };
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp(
       'preferences-runtime-test-',
     );
     preferences = await PreferenceCommands.prepare(directory);
+    records = await DeviceRecordStore.open(directory: directory);
   });
   tearDown(() async {
     await directory.delete(recursive: true);
@@ -171,93 +160,106 @@ void main() {
     expect(applied, [false, false, false, true]);
   });
 
-  test('导出保留设备读取失败且拒绝将畸形结果伪装成空备份', () async {
-    var malformed = false;
-    final runtime = commands(
-      request: (command, _) async {
-        expect(command, 'devices.list');
-        if (malformed) {
-          return {
-            'devices': [null],
-          };
-        }
-        throw const ApplicationCommandException('state_busy', '设备记录正在更新。');
-      },
-      onChanged: (_) => fail('只读导出不应发布偏好变化'),
+  test('导出读取持久设备元数据，损坏账本不能伪装成空备份', () async {
+    final device = await records.add(
+      address: 'phone.local',
+      port: 5555,
+      name: 'Phone',
     );
+    final runtime = commands(onChanged: (_) => fail('只读导出不应发布偏好变化'));
+    final exported = await runtime.invoke('settings.export', {});
+    final document = exported['metadata'] as Map;
+    final saved = (document['devices'] as List).single as Map;
+    expect(saved['name'], 'Phone');
+    expect(saved['address'], 'phone.local');
+    expect(saved, isNot(contains('id')));
+    expect(saved, isNot(contains('status')));
+    expect(saved, isNot(contains('identityFingerprint')));
+    expect(document['settings'], isNot(contains('deviceQuality')));
+    expect(records.current.find(device.id), isNotNull);
+    await records.file.writeAsString('{');
     await expectLater(
       runtime.invoke('settings.export', {}),
-      throwsA(errorCode('state_busy')),
-    );
-    malformed = true;
-    await expectLater(
-      runtime.invoke('settings.export', {}),
-      throwsA(errorCode('invalid_data')),
+      throwsA(errorCode('records_corrupt')),
     );
   });
 
-  test('lost record commit is reconciled from its atomic receipt without appending or applying preferences', () async {
-    var lost = false, allocations = 0;
-    final records = await DeviceRecordStore.open(
-      directory: directory,
-      idFactory: () {
-        allocations++;
-        return '11111111-1111-4111-8111-111111111111';
-      },
-      commitFile: (temporary, destination) async {
-        await temporary.rename(destination.path);
-        if (lost) {
-          throw StateError('commit completed but acknowledgement unavailable');
-        }
+  for (final failure in ['record commit', 'device publication']) {
+    test(
+      'lost $failure is reconciled without appending or applying preferences',
+      () async {
+        var lost = false, allocations = 0, publications = 0;
+        final records = await DeviceRecordStore.open(
+          directory: directory,
+          idFactory: () {
+            allocations++;
+            return '11111111-1111-4111-8111-111111111111';
+          },
+          commitFile: (temporary, destination) async {
+            await temporary.rename(destination.path);
+            if (lost && failure == 'record commit') {
+              throw StateError(
+                'commit completed but acknowledgement unavailable',
+              );
+            }
+          },
+        );
+        final runtime = commands(
+          deviceRecords: records,
+          onDevicesImported: (_) {
+            publications++;
+            if (lost) {
+              throw StateError(
+                'device publication acknowledgement unavailable',
+              );
+            }
+          },
+        );
+        final input = metadata();
+        final preview = await runtime.invoke('settings.import.preview', input);
+        expect(preview['newRecords'], 1);
+        expect(preview['globalChanges'], [
+          {'key': 'appearance', 'current': 'light', 'imported': 'dark'},
+        ]);
+        expect(allocations, 0);
+        lost = true;
+        await expectLater(
+          runtime.invoke('settings.import', input),
+          throwsA(errorCode('preferences_import_unknown')),
+        );
+        expect(preferences.current.values['appearance'], 'light');
+        final reopened = await DeviceRecordStore.open(directory: directory);
+        expect(reopened.current.devices, hasLength(1));
+        final checked = await runtime.invoke('settings.import.preview', input);
+        expect(checked['alreadyImported'], true);
+        expect(checked['newRecords'], 0);
+        expect(checked['preferencesStatus'], 'needsReview');
+        final duplicate = await runtime.invoke('settings.import', input);
+        expect(duplicate['alreadyImported'], true);
+        expect(allocations, 1);
+        expect(preferences.current.values['appearance'], 'light');
+        expect(publications, failure == 'record commit' ? 0 : 1);
       },
     );
-    final runtime = commands(request: importRequest(records));
-    final input = metadata();
-    final preview =
-        await runtime.invoke('settings.import.preview', input) as Map;
-    expect(preview['newRecords'], 1);
-    expect(preview['globalChanges'], [
-      {'key': 'appearance', 'current': 'light', 'imported': 'dark'},
-    ]);
-    expect(allocations, 0);
-    lost = true;
-    await expectLater(
-      runtime.invoke('settings.import', input),
-      throwsA(errorCode('preferences_import_unknown')),
-    );
-    expect(preferences.current.values['appearance'], 'light');
-    final reopened = await DeviceRecordStore.open(directory: directory);
-    expect(reopened.current.devices, hasLength(1));
-    final checked =
-        await runtime.invoke('settings.import.preview', input) as Map;
-    expect(checked['alreadyImported'], true);
-    expect(checked['newRecords'], 0);
-    expect(checked['preferencesStatus'], 'needsReview');
-    final duplicate = await runtime.invoke('settings.import', input) as Map;
-    expect(duplicate['alreadyImported'], true);
-    expect(allocations, 1);
-    expect(preferences.current.values['appearance'], 'light');
-  });
+  }
 
   test('restore with conflicting local save reports partial success without overwriting', () async {
     final other = await PreferenceCommands.prepare(directory);
-    final runtime = commands(
-      request: (command, values) async {
-        expect(command, 'settings.import');
-        expect((values['metadata'] as Map)['settings'], {'appearance': 'dark'});
-        await other.update({'appearance': 'system'});
-        return {
-          'restored': 1,
-          'authorizationRestored': false,
-          'fingerprint': values['fingerprint'],
-          'alreadyImported': false,
-        };
+    var competing = false;
+    final records = await DeviceRecordStore.open(
+      directory: directory,
+      commitFile: (temporary, destination) async {
+        await temporary.rename(destination.path);
+        if (competing) await other.update({'appearance': 'system'});
       },
     );
+    competing = true;
+    final runtime = commands(deviceRecords: records);
     await expectLater(
       runtime.invoke('settings.import', metadata()),
       throwsA(errorCode('preferences_import_partial')),
     );
+    expect(records.current.devices, hasLength(1));
     expect(
       (await PreferenceCommands.prepare(directory))
           .current
@@ -267,26 +269,27 @@ void main() {
   });
 
   test('preview admission preserves local settings by default and only explicit selection applies global changes', () async {
-    final records = await DeviceRecordStore.open(directory: directory);
-    var requests = 0;
-    final runtime = commands(
-      request: importRequest(records, onRequest: () => requests++),
+    var allocations = 0;
+    final records = await DeviceRecordStore.open(
+      directory: directory,
+      idFactory: () =>
+          '00000000-0000-4000-8000-${(++allocations).toString().padLeft(12, '0')}',
     );
+    final runtime = commands(deviceRecords: records);
     await expectLater(
       runtime.invoke('settings.import', metadata({'privateKeyPem': 'secret'})),
       throwsA(errorCode('invalid_argument')),
     );
-    expect(requests, 0);
+    expect(allocations, 0);
     final input = metadata()..remove('importGlobalPreferences');
     await expectLater(
       runtime.invoke('settings.import', {...input, 'fingerprint': 'changed'}),
       throwsA(errorCode('invalid_import_preview')),
     );
-    expect(requests, 0);
-    final preview =
-        await runtime.invoke('settings.import.preview', input) as Map;
+    expect(allocations, 0);
+    final preview = await runtime.invoke('settings.import.preview', input);
     expect(preview['newRecords'], 1);
-    final first = await runtime.invoke('settings.import', input) as Map;
+    final first = await runtime.invoke('settings.import', input);
     expect(first['preferencesStatus'], 'preserved');
     expect(preferences.current.values['appearance'], 'light');
     final second = metadata({'appearance': 'system'});
@@ -297,7 +300,7 @@ void main() {
   test(
     'concurrent quality saves retain both device choices after restart',
     () async {
-      final runtime = commands(request: (_, values) async => values);
+      final runtime = commands();
       const first = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
       const second = '8cd3c688-670c-46c1-b605-d140d9d8b4aa';
       await Future.wait([

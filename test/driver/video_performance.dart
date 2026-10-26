@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'support/capture.dart';
+
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 import 'package:path/path.dart' as p;
@@ -160,11 +162,8 @@ Future<void> main() async {
       await integrationDriver(
         driver: driver,
         writeResponseOnFailure: true,
-        onScreenshot: (name, bytes, [args]) async {
-          final safe = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-          await File('${output.path}/$safe.png').writeAsBytes(bytes);
-          return true;
-        },
+        onScreenshot: (name, bytes, [args]) =>
+            saveScreenshot(output, name, bytes),
         responseDataCallback: (data) async {
           // integrationDriver 会退出 VM，不能只依靠 finally 清理。
           await cleanupFixture();

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'support/capture.dart';
+
 import 'package:flutter_driver/flutter_driver.dart';
 
 import 'package:integration_test/integration_test_driver_extended.dart';
@@ -167,12 +169,8 @@ Future<void> main() async {
       await integrationDriver(
         driver: driver,
         writeResponseOnFailure: true,
-        onScreenshot: (name, bytes, [args]) async {
-          await File(
-            '${directory.path}/${name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}.png',
-          ).writeAsBytes(bytes, flush: true);
-          return true;
-        },
+        onScreenshot: (name, bytes, [args]) =>
+            saveScreenshot(directory, name, bytes),
         responseDataCallback: (data) async {
           finished = true;
           await inspection;

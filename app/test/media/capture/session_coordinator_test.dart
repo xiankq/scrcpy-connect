@@ -671,13 +671,7 @@ void main() {
   });
 
   test('自动比例创建模式与已确认尺寸跨画质捕获交接保留', () async {
-    final initial = await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-      'displayAuto': true,
-    });
+    final initial = await f.startSized(auto: true);
     expect(initial['displayAuto'], isTrue);
     expect(initial['displaySize'], {'width': 960, 'height': 1920});
     final replacement = await f.command('session.reconfigure', {
@@ -692,12 +686,7 @@ void main() {
   });
 
   test('捕获关闭失败不提前恢复手机覆盖，重试沿同租约排空', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.native.stopFailures = 1;
     await expectLater(
       f.command('session.stop'),
@@ -710,19 +699,12 @@ void main() {
   });
 
   test('已RUN的精确连接closed且捕获真正关闭后，只排空本机不发恢复或ACK', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.adb._uploads.connectionClosed = true;
     f.adb._uploads.omitDisplayDone = true;
     f.native.stopping = Completer<void>();
     var stopped = false;
-    final stopping = f.owner
-        .command('session.stop', {'sessionId': _id(1)})
-        .then((_) => stopped = true);
+    final stopping = f.command('session.stop').then((_) => stopped = true);
     await _until(() => f.native.stopped.isNotEmpty);
     expect(stopped, isFalse);
     expect(f.adb._uploads.factQueries, isEmpty);
@@ -739,12 +721,7 @@ void main() {
   });
 
   test('closed连接原流关闭失败仍保留同slot，重试只关同一流不重断捕获', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.adb._uploads.connectionClosed = true;
     f.adb._uploads.displayCloseFailures = 100;
     await expectLater(
@@ -764,12 +741,7 @@ void main() {
   });
 
   test('连接事实未知不能按页面stopping或错误放行本机detach', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.adb._uploads.factsFail = true;
     await expectLater(
       f.command('session.stop'),
@@ -785,12 +757,7 @@ void main() {
   });
 
   test('显示STOP期间才真实断链，重新核验closed后只结清原本机责任', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.adb._uploads.omitDisplayDone = true;
     f.adb._uploads.onDisplayStop = () => f.adb._uploads.connectionClosed = true;
     await f.command('session.stop');
@@ -803,19 +770,12 @@ void main() {
 
   test('closed连接显示句柄迟到也必须等交付后精确关闭，不发START或恢复', () async {
     f.adb._uploads.execCreation = Completer<void>();
-    final starting = f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    final starting = f.startSized();
     final rejected = expectLater(starting, throwsA(_error('cancelled')));
     await _until(() => f.adb._uploads._execs.isNotEmpty);
     f.adb._uploads.connectionClosed = true;
     var stopped = false;
-    final stopping = f.owner
-        .command('session.stop', {'sessionId': _id(1)})
-        .then((_) => stopped = true);
+    final stopping = f.command('session.stop').then((_) => stopped = true);
     await Future<void>.delayed(Duration.zero);
     expect(stopped, isFalse);
     expect(f.adb._uploads.cancelled, isEmpty);
@@ -832,12 +792,7 @@ void main() {
   });
 
   test('显示恢复关闭失败仍持有同窗口，重试不重新修改尺寸', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.adb._uploads.displayCloseFailures = 2;
     await expectLater(
       f.command('session.stop'),
@@ -852,18 +807,11 @@ void main() {
 
   test('显示执行句柄迟到，停止等待交付并回收且不发 START 或创建捕获', () async {
     f.adb._uploads.execCreation = Completer<void>();
-    final starting = f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    final starting = f.startSized();
     final rejected = expectLater(starting, throwsA(_error('cancelled')));
     await _until(() => f.adb._uploads._execs.isNotEmpty);
     var finished = false;
-    final stopping = f.owner
-        .command('session.stop', {'sessionId': _id(1)})
-        .then((_) => finished = true);
+    final stopping = f.command('session.stop').then((_) => finished = true);
     await Future<void>.delayed(Duration.zero);
     expect(finished, isFalse);
     f.adb._uploads.execCreation!.complete();
@@ -875,12 +823,7 @@ void main() {
   });
 
   test('恢复回执丢失通过原owner核验，失败保留窗口重试且不重建捕获', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.adb._uploads.omitDisplayDone = true;
     f.adb._uploads.failDisplayRecovery = true;
     await expectLater(
@@ -898,12 +841,7 @@ void main() {
   });
 
   test('显示监督意外断流撤销原窗口，不能继续投影为可用捕获', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.adb._uploads._execs.values.first.finish();
     await _until(() => f.native.stopped.isNotEmpty);
     await f.owner.close();
@@ -914,27 +852,14 @@ void main() {
 
   test('同一数据包中 READY 后的 DONE 立即撤销，不能作为成功窗口交付', () async {
     f.adb._uploads.endAfterDisplayReady = true;
-    await expectLater(
-      f.owner.command('session.start', {
-        'deviceId': 'device',
-        'sessionId': _id(1),
-        'displayWidth': 960,
-        'displayHeight': 1920,
-      }),
-      throwsA(_error('cancelled')),
-    );
+    await expectLater(f.startSized(), throwsA(_error('cancelled')));
     await f.owner.close();
     expect(f.native.created, isEmpty);
     expect(await f.owner.snapshots(), isEmpty);
   });
 
   test('画质切换先封存尺寸准入并等在途调整，保留最终尺寸事实', () async {
-    await f.owner.command('session.start', {
-      'deviceId': 'device',
-      'sessionId': _id(1),
-      'displayWidth': 960,
-      'displayHeight': 1920,
-    });
+    await f.startSized();
     f.adb._uploads.holdResize = Completer<void>();
     final resizing = f.command('session.display', {
       'displayWidth': 640,
@@ -942,12 +867,10 @@ void main() {
     });
     await _until(() => f.adb._uploads.resizeEntered);
     var replaced = false;
-    final reconfiguring = f.owner
-        .command('session.reconfigure', {'sessionId': _id(1)})
-        .then((value) {
-          replaced = true;
-          return value;
-        });
+    final reconfiguring = f.command('session.reconfigure').then((value) {
+      replaced = true;
+      return value;
+    });
     await Future<void>.delayed(Duration.zero);
     expect(replaced, isFalse);
     expect(f.native.created, ['capture-1']);
@@ -1070,6 +993,15 @@ final class _Fixture {
         'sessionId': _id(id),
         'packageName': ?package,
       });
+  Future<Map<String, dynamic>> startSized({bool auto = false}) =>
+      owner.command('session.start', {
+        'deviceId': 'device',
+        'sessionId': _id(1),
+        'displayWidth': 960,
+        'displayHeight': 1920,
+        if (auto) 'displayAuto': true,
+      });
+
   Future<void> dispose() async {
     if (allowCleanupFailure) {
       try {

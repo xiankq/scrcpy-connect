@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:uuid/uuid.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/services/files/file_paths.dart';
 import 'package:scrcpy_connect/services/files/file_type_policy.dart';
 import 'package:scrcpy_connect/services/files/file_executor.dart';
-
 import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
 
 typedef MediaArtifactRequest = Future<Map<String, dynamic>> Function(
@@ -280,7 +279,7 @@ final class MediaArtifactCoordinator {
       sourceLabel: device,
       sourcePath: path,
     );
-    task.writers.add(lookup);
+    task.writer = lookup;
     try {
       final metadata = await _metadata(directory);
       if (metadata != null && _same(metadata['source'], source.toJson())) {
@@ -314,16 +313,15 @@ final class MediaArtifactCoordinator {
       }
     } finally {
       await lookup.close();
-      task.writers.remove(lookup);
+      task.writer = null;
     }
-    final writer = await cache.writer(
+    task.writer = await cache.writer(
       directory.path,
       source.size + 4096,
       name: p.posix.basename(path),
       sourceLabel: device,
       sourcePath: path,
     );
-    task.writers.add(writer);
     final extension = p.posix.extension(path).replaceFirst('.', '');
     final suffix = RegExp(r'^[a-zA-Z0-9]{1,12}$').hasMatch(extension)
         ? extension
@@ -427,7 +425,7 @@ final class MediaArtifactCoordinator {
       sourceLabel: device,
       sourcePath: path,
     );
-    task.writers.add(lookup);
+    task.writer = lookup;
     try {
       final metadata = await _metadata(directory);
       if (metadata != null &&
@@ -471,16 +469,15 @@ final class MediaArtifactCoordinator {
       }
     } finally {
       await lookup.close();
-      task.writers.remove(lookup);
+      task.writer = null;
     }
-    final writer = await cache.writer(
+    task.writer = await cache.writer(
       directory.path,
       _maxThumbnail + 4096,
       name: p.posix.basename(path),
       sourceLabel: device,
       sourcePath: path,
     );
-    task.writers.add(writer);
     final response = await _rpc('thumbnail', params, task);
     transferred += _count(response['rpcBytesReceived']);
     if (!_same(_source(response['sourceStamp']), source) ||
@@ -774,13 +771,7 @@ final class MediaArtifactCoordinator {
       }
       return value.toLowerCase();
     }
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    bytes[6] = bytes[6] & 15 | 64;
-    bytes[8] = bytes[8] & 63 | 128;
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    // 独立生成操作与产物身份，绝不复用调用方路径或解码回执作为文件名。
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+    return const Uuid().v4();
   }
 }
 
@@ -791,7 +782,7 @@ final class _Operation {
   final done = Completer<void>();
   bool timeout = false;
   FileReadBatch? reader;
-  final writers = <CacheWriter>{};
+  CacheWriter? writer;
   String? resultLease;
   late final void Function() onReleased;
   Future<void>? _releasing;
@@ -804,10 +795,8 @@ final class _Operation {
     try {
       await reader?.close();
       reader = null;
-      for (final writer in writers.toList()) {
-        await writer.close();
-        writers.remove(writer);
-      }
+      await writer?.close();
+      writer = null;
     } catch (error) {
       throw ApplicationCommandException(
         'media_cleanup_unconfirmed',

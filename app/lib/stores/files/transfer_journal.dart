@@ -125,31 +125,10 @@ class TransferJournal {
     }
     await root.create(recursive: true);
     // 在未发布文件内完成迁移；崩溃时保留旧存储。
-    final temporary = File('${file.path}.migration');
-    if (await temporary.exists()) await temporary.delete();
-    await temporary.create(exclusive: true);
-    final handle = await temporary.open(mode: FileMode.writeOnly);
-    try {
-      for (final task in tasks.values) {
-        await handle.writeString(
-          '${jsonEncode({'version': 2, 'sequence': ++sequence, 'task': task})}\n',
-        );
-      }
-      if (tasks.isEmpty) {
-        await handle.writeString(
-          '${jsonEncode({'version': 2, 'sequence': ++sequence, 'migrationComplete': true})}\n',
-        );
-      }
-      await handle.flush();
-    } finally {
-      await handle.close();
-    }
-    await temporary.rename(file.path);
+    await _writeSnapshot(tasks, 'migration');
     _rows.addAll(
       tasks.map((id, task) => MapEntry(id, Map<String, Object?>.from(task))),
     );
-    _records = sequence;
-    _bytes = await file.length();
     return tasks;
   }
 
@@ -193,7 +172,7 @@ class TransferJournal {
       if (_rows.isEmpty ||
           _records > _rows.length + 1024 ||
           _bytes > 4 * 1024 * 1024 && _records > _rows.length + 128) {
-        await _compact();
+        await _writeSnapshot(_rows, 'compact');
       }
     } catch (_) {
       poisoned = true;
@@ -201,19 +180,22 @@ class TransferJournal {
     }
   }
 
-  Future<void> _compact() async {
-    final temporary = File('${file.path}.compact');
+  Future<void> _writeSnapshot(
+    Map<String, Map<String, Object?>> rows,
+    String suffix,
+  ) async {
+    final temporary = File('${file.path}.$suffix');
     if (await temporary.exists()) await temporary.delete();
     await temporary.create(exclusive: true);
     final handle = await temporary.open(mode: FileMode.writeOnly);
     var next = 0;
     try {
-      for (final task in _rows.values) {
+      for (final task in rows.values) {
         await handle.writeString(
           '${jsonEncode({'version': 2, 'sequence': ++next, 'task': task})}\n',
         );
       }
-      if (_rows.isEmpty) {
+      if (rows.isEmpty) {
         await handle.writeString(
           '${jsonEncode({'version': 2, 'sequence': ++next, 'migrationComplete': true})}\n',
         );

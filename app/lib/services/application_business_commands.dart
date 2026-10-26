@@ -7,8 +7,8 @@ import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/services/application_snapshot_reader.dart';
 import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
 import 'package:scrcpy_connect/stores/connection/device_power_coordinator.dart';
-import 'package:scrcpy_connect/models/device_record.dart' show validDeviceId;
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/models/device_record.dart'
+    show validDeviceId, DeviceRecordsFailure;
 import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/stores/companion_client.dart';
 import 'package:scrcpy_connect/stores/companion_coordinator.dart';
@@ -20,7 +20,6 @@ import 'package:scrcpy_connect/services/media/media_capture_operations.dart';
 /// 借用已组装的业务所有者执行命令，不创建资源、不回调应用会话。
 final class ApplicationBusinessCommands {
   ApplicationBusinessCommands({
-    required this._records,
     required this._devices,
     required this._power,
     required this._audio,
@@ -30,11 +29,9 @@ final class ApplicationBusinessCommands {
     required this._companion,
     required this._serverQueries,
     required this._state,
-    required this._publish,
     required this._isDisposed,
   });
 
-  final DeviceRecordStore _records;
   final DeviceCoordinator _devices;
   final DevicePowerCoordinator _power;
   final DeviceAudioSourceCoordinator _audio;
@@ -44,16 +41,10 @@ final class ApplicationBusinessCommands {
   final CompanionCoordinator _companion;
   final ScrcpyServerQueries _serverQueries;
   final ApplicationSnapshotReader _state;
-  final void Function(Map<String, dynamic>) _publish;
   final bool Function() _isDisposed;
   bool get _disposed => _isDisposed();
 
   Future<Map<String, dynamic>> execute(
-    ApplicationCommand command,
-    Map<String, dynamic> params,
-  ) => _execute(command, params);
-
-  Future<Map<String, dynamic>> _execute(
     ApplicationCommand operation,
     Map<String, dynamic> params,
   ) async {
@@ -122,24 +113,6 @@ final class ApplicationBusinessCommands {
             expectedConnection: _devices.requireConnection(id),
           ),
         );
-      }
-      // 偏好导入只追加未授权元数据，不重建密钥、连接或另一份执行配置。
-      if (operation == ApplicationCommand.settingsExport) {
-        return Map.from(_records.exportMetadata());
-      }
-      if (operation == ApplicationCommand.settingsImportPreview) {
-        return Map.from(await _records.previewMetadata(params['metadata']));
-      }
-      if (operation == ApplicationCommand.settingsImport) {
-        final imported = await _records.importMetadata(
-          params['metadata'],
-          expectedFingerprint: params['fingerprint'] as String?,
-          importGlobalPreferences: params['importGlobalPreferences'] == true,
-        );
-        if (!imported.alreadyImported) {
-          _publish({'type': 'devices.changed', 'data': imported.toJson()});
-        }
-        return Map.from(imported.toJson());
       }
       if (_power.handles(command)) {
         return Map.from(await _power.command(command, params));
@@ -223,13 +196,13 @@ final class ApplicationBusinessCommands {
     final target = id.substring(separator + 1);
     switch (id.substring(0, separator)) {
       case 'connection':
-        return _execute(ApplicationCommand.devicesDisconnect, {
+        return execute(ApplicationCommand.devicesDisconnect, {
           'deviceId': target,
         });
       case 'session':
-        return _execute(ApplicationCommand.sessionStop, {'sessionId': target});
+        return execute(ApplicationCommand.sessionStop, {'sessionId': target});
       case 'observation':
-        return _execute(ApplicationCommand.observationStop, {
+        return execute(ApplicationCommand.observationStop, {
           'deviceId': target,
         });
       case 'audio':
@@ -240,7 +213,7 @@ final class ApplicationBusinessCommands {
         if (source == null) {
           throw const ApplicationCommandException('not_found', '这代音源已结束。');
         }
-        return _execute(ApplicationCommand.audioStop, {
+        return execute(ApplicationCommand.audioStop, {
           'deviceId': source['deviceId'],
           'sourceId': target,
         });

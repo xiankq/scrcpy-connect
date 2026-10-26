@@ -8,20 +8,11 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../../scripts/src/process.dart';
+import 'support/android_ui.dart';
 
 String _quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
-String _decodeXml(String value) => value
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&');
 
-class _Node {
-  _Node(this.attributes, this.ancestors);
-  final Map<String, String> attributes;
-  final List<Map<String, String>> ancestors;
-  String operator [](String key) => attributes[key] ?? '';
+extension on AndroidUiNode {
   bool get documentsUi => const [
     'com.google.android.documentsui',
     'com.android.documentsui',
@@ -182,34 +173,22 @@ class _Fixture {
     await File('${output.path}/$label.png').writeAsBytes(bytes, flush: true);
   }
 
-  Future<List<_Node>> nodes() async {
+  Future<List<AndroidUiNode>> nodes() async {
     try {
       await shell(controller, ['uiautomator', 'dump', '--compressed', xmlPath]);
       final xml = await shell(controller, ['cat', xmlPath]);
       await File('${output.path}/last-system-ui.xml')
           .writeAsString(xml, flush: true);
-      final result = <_Node>[];
-      final ancestors = <Map<String, String>>[];
-      for (final match in RegExp(r'<node\b[^>]*>|</node>').allMatches(xml)) {
-        final tag = match[0]!;
-        if (tag == '</node>') {
-          if (ancestors.isNotEmpty) ancestors.removeLast();
-          continue;
-        }
-        final attributes = {
-          for (final attribute in RegExp(r'([\w-]+)="([^"]*)"').allMatches(tag))
-            attribute[1]!: _decodeXml(attribute[2]!),
-        };
-        result.add(_Node(attributes, List.of(ancestors)));
-        if (!tag.endsWith('/>')) ancestors.add(attributes);
-      }
-      return result;
+      return parseAndroidUi(xml);
     } finally {
       await shell(controller, ['rm', '-f', xmlPath]);
     }
   }
 
-  Future<bool> tap(List<_Node> current, bool Function(_Node) matches) async {
+  Future<bool> tap(
+    List<AndroidUiNode> current,
+    bool Function(AndroidUiNode) matches,
+  ) async {
     final candidates = current.where(matches).toList();
     if (candidates.isEmpty) return false;
     if (candidates.length != 1) {

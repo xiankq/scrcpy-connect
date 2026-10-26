@@ -27,23 +27,17 @@ void main() {
       'settings': {'appearance': 'dark'},
     };
     final fingerprint = DeviceMetadata.parse(document).fingerprint;
-    final records = await DeviceRecordStore.open(directory: directory);
+    final records = await DeviceRecordStore.open(
+      directory: directory,
+      idFactory: () {
+        imports++;
+        return '11111111-1111-4111-8111-111111111111';
+      },
+    );
     final commands = PreferenceCommands(
       preferences: preferences,
-      request: (command, values) async {
-        if (command == 'settings.import') {
-          imports++;
-          return (await records.importMetadata(
-            values['metadata'],
-            expectedFingerprint: values['fingerprint'] as String?,
-            importGlobalPreferences: values['importGlobalPreferences'] == true,
-          )).toJson();
-        }
-        if (command == 'settings.import.preview') {
-          return records.previewMetadata(values['metadata']);
-        }
-        fail('偏好核验不重放设备导入或安装原生镜像');
-      },
+      records: records,
+      onDevicesImported: (_) {},
       onChanged: (_) => publications++,
     );
     final faults = _LostPreferenceCommit(

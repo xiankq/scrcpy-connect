@@ -9,6 +9,7 @@ import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../../scripts/src/process.dart';
 import 'support/cleanup.dart';
+import 'support/android_ui.dart';
 
 const _receiverPackage = 'dev.scrcpyconnect.deliveryfixture';
 const _receiverApk =
@@ -16,38 +17,8 @@ const _receiverApk =
 
 String _quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
-class _UiNode {
-  _UiNode(this.attributes, this.ancestors);
-  final Map<String, String> attributes;
-  final List<Map<String, String>> ancestors;
-  String operator [](String key) => attributes[key] ?? '';
+extension on AndroidUiNode {
   bool get documentsUi => this['package'].endsWith('.documentsui');
-}
-
-String _xmlDecode(String value) => value
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&');
-
-List<_UiNode> _parseNodes(String xml) {
-  final nodes = <_UiNode>[];
-  final ancestors = <Map<String, String>>[];
-  for (final match in RegExp(r'<node\b[^>]*>|</node>').allMatches(xml)) {
-    final tag = match.group(0)!;
-    if (tag == '</node>') {
-      if (ancestors.isNotEmpty) ancestors.removeLast();
-      continue;
-    }
-    final attributes = {
-      for (final attr in RegExp(r'([\w-]+)="([^"]*)"').allMatches(tag))
-        attr.group(1)!: _xmlDecode(attr.group(2)!),
-    };
-    nodes.add(_UiNode(attributes, List.of(ancestors)));
-    if (!tag.endsWith('/>')) ancestors.add(attributes);
-  }
-  return nodes;
 }
 
 class _AndroidDelivery {
@@ -299,21 +270,21 @@ class _AndroidDelivery {
         .writeAsBytes(result.stdout as List<int>, flush: true);
   }
 
-  Future<List<_UiNode>> _ui() async {
+  Future<List<AndroidUiNode>> _ui() async {
     final path = '/data/local/tmp/connect-delivery-$runId.xml';
     try {
       await _shell(controller, ['uiautomator', 'dump', '--compressed', path]);
       final xml = await _shell(controller, ['cat', path]);
       await File('${output.path}/last-ui.xml').writeAsString(xml, flush: true);
-      return _parseNodes(xml);
+      return parseAndroidUi(xml);
     } finally {
       await _shell(controller, ['rm', '-f', path]);
     }
   }
 
   Future<bool> _tap(
-    List<_UiNode> nodes,
-    bool Function(_UiNode) predicate,
+    List<AndroidUiNode> nodes,
+    bool Function(AndroidUiNode) predicate,
   ) async {
     final matching = nodes.where(predicate).toList();
     if (matching.isEmpty) return false;
@@ -376,8 +347,7 @@ class _AndroidDelivery {
           (node['content-desc'] == 'Show roots' ||
               node['content-desc'] == 'Open navigation drawer' ||
               node.ancestors.any(
-                (parent) =>
-                    (parent['resource-id'] ?? '').endsWith(':id/roots_toolbar'),
+                (parent) => parent['resource-id'].endsWith(':id/roots_toolbar'),
               )),
     );
     if (opened) nodes = await _ui();

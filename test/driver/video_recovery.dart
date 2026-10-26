@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'support/capture.dart';
+
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
@@ -265,11 +267,8 @@ Future<void> main() async {
     await integrationDriver(
       driver: connected,
       writeResponseOnFailure: true,
-      onScreenshot: (name, bytes, [args]) async {
-        final safe = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-        await File('${output.path}/$safe.png').writeAsBytes(bytes);
-        return true;
-      },
+      onScreenshot: (name, bytes, [args]) =>
+          saveScreenshot(output, name, bytes),
       responseDataCallback: (data) async {
         finished = true;
         await polling;

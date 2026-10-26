@@ -7,6 +7,7 @@ import 'package:flutter_driver/flutter_driver.dart';
 import 'package:integration_test/integration_test_driver_extended.dart';
 
 import '../../scripts/src/process.dart';
+import 'support/android_ui.dart';
 
 String _quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
@@ -55,20 +56,13 @@ class _PairingFixture {
   Future<List<_Node>> nodes() async {
     await shell(['uiautomator', 'dump', xmlPath]);
     final xml = await shell(['cat', xmlPath]);
-    String decode(String value) => value
-        .replaceAll('&quot;', '"')
-        .replaceAll('&apos;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&amp;', '&');
     final result = <_Node>[];
-    for (final match in RegExp(r'<node\s+[^>]*>').allMatches(xml)) {
-      final text = RegExp(r'text="([^"]*)"').firstMatch(match[0]!);
-      final bounds = RegExp(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"')
-          .firstMatch(match[0]!);
-      if (text != null && bounds != null) {
+    for (final node in parseAndroidUi(xml)) {
+      final bounds = RegExp(r'^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$')
+          .firstMatch(node['bounds']);
+      if (bounds != null) {
         result.add(
-          _Node(decode(text[1]!), [
+          _Node(node['text'], [
             for (var i = 1; i <= 4; i++) int.parse(bounds[i]!),
           ]),
         );
