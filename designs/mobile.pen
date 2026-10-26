@@ -42,7 +42,7 @@
           "fill": "$secondary",
           "textGrowth": "fixed-width",
           "width": 1200,
-          "content": "清楚的任务与设备归属、克制的玻璃操作层、系统偏好适配；黑白主调与明亮点缀色共同建立身份。",
+          "content": "清楚的任务与设备归属、可感知连续折射的玻璃操作层、系统偏好适配；黑白主调与明亮点缀色共同建立身份。",
           "lineHeight": "$line-body",
           "fontFamily": "$font-body",
           "fontSize": "$size-body",
@@ -4671,7 +4671,7 @@
                   "ref": "y5TL9",
                   "name": "当前设备舞台",
                   "width": "fill_container",
-                  "context": "点击摘要打开 eWu3m 并展开 XPYvZ 设备信息；不再跳转独立参数页。"
+                  "context": "点击摘要进入独立设备详情页 t5gM3"
                 },
                 {
                   "type": "frame",
@@ -4948,36 +4948,8 @@
                 },
                 {
                   "type": "frame",
-                  "id": "FzMl0",
-                  "name": "分组标题 / 设备设置",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "padding": [
-                    28,
-                    0,
-                    12,
-                    0
-                  ],
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "y03Cm",
-                      "name": "设备设置",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "设备设置",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
                   "id": "EPxks",
-                  "name": "设备设置",
+                  "name": "设备操作 · 无标题统一列表",
                   "context": "固定设置分组，材料与间距使用共享token，行引用共享组件",
                   "reusable": true,
                   "width": "fill_container",
@@ -5093,52 +5065,7 @@
                           "justifyContent": "start"
                         }
                       }
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "gSZBw",
-                  "name": "分组标题 / 连接与能力",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "padding": [
-                    28,
-                    0,
-                    12,
-                    0
-                  ],
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "LFlEL",
-                      "name": "连接与能力",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "诊断与活动",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "aX7Ao",
-                  "name": "连接能力",
-                  "context": "固定设置分组，材料与间距使用共享token，行引用共享组件",
-                  "reusable": true,
-                  "width": "fill_container",
-                  "fill": "$surface",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "padding": [
-                    4,
-                    0
-                  ],
-                  "children": [
+                    },
                     {
                       "id": "ULF9P",
                       "type": "ref",
@@ -5195,52 +5122,7 @@
                           "content": "当前活动"
                         }
                       }
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "gKxLu",
-                  "name": "分组标题 / 设备管理",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "padding": [
-                    28,
-                    0,
-                    12,
-                    0
-                  ],
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "EXMzg",
-                      "name": "设备管理",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "设备管理",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "BBXRS",
-                  "name": "设备管理",
-                  "context": "固定设置分组，材料与间距使用共享token，行引用共享组件",
-                  "reusable": true,
-                  "width": "fill_container",
-                  "fill": "$surface",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "padding": [
-                    4,
-                    0
-                  ],
-                  "children": [
+                    },
                     {
                       "id": "u22Kmj",
                       "type": "ref",
@@ -7714,6 +7596,7 @@
       "x": 0,
       "y": 8304,
       "name": "规范 / 03 材料与交互",
+      "context": "普通玻璃保留背景透视、可感知连续折射与离面层次；明暗实例共用光学变量，实体控制用于降低透明度等辅助偏好。静态稿需结合生产GPU与动态验收。",
       "width": 3200,
       "fill": "$canvas",
       "cornerRadius": "$radius-xl",
@@ -11815,7 +11698,7 @@
               "ref": "JORmP",
               "name": "当前设备连接配置 · 复用添加表单",
               "width": "fill_container",
-              "context": "当前方式主动作校验成功后进入配置应用确认；沿用原设备身份，取消保留原连接与配置",
+              "context": "专用连接表单复用添加设备字段。保存修改原记录；按能力保留转为 IP 连接入口。",
               "descendants": {
                 "jjSlF": {
                   "enabled": false,
@@ -11974,7 +11857,7 @@
               "fill": "$text"
             },
             "aFRxw": {
-              "content": "我的手机 · 连接配置",
+              "content": "连接配置",
               "fontFamily": "$font-heading",
               "fontSize": "$size-heading",
               "fontWeight": "$weight-heading",
@@ -11984,7 +11867,7 @@
               "enabled": false
             },
             "eVp4v": {
-              "enabled": true,
+              "enabled": false,
               "fill": "$transparent",
               "stroke": "$transparent",
               "effect": []
@@ -12012,7 +11895,7 @@
       "x": 4886,
       "y": 1210,
       "name": "页面 / 02 设备工作台 / 连接诊断",
-      "context": "统一故障处理页：先展示真实问题、建议与重新检查；设备信息和功能检查默认折叠。单项能力问题仍在对应操作处直接解释。",
+      "context": "连接检查、处理入口和功能检查直接平铺；设备参数归独立详情页。",
       "theme": {
         "mode": "light"
       },
@@ -12051,13 +11934,6 @@
                 0
               ],
               "children": [
-                {
-                  "id": "VlQXo",
-                  "type": "ref",
-                  "ref": "xofO4",
-                  "name": "当前设备归属",
-                  "width": "fill_container"
-                },
                 {
                   "type": "frame",
                   "id": "xvLT7",
@@ -12113,14 +11989,14 @@
                             "i9kceM": {
                               "width": 28,
                               "height": 28,
-                              "cornerRadius": 0,
-                              "fill": "$transparent"
+                              "cornerRadius": 6,
+                              "fill": "$list-icon-amber"
                             },
                             "n4qgqg": {
                               "icon": "circle-alert",
                               "fill": "$on-accent",
-                              "width": 22,
-                              "height": 22
+                              "width": 20,
+                              "height": 20
                             },
                             "VsAGH": {
                               "strokeWidth": 0
@@ -12180,14 +12056,14 @@
                             "i9kceM": {
                               "width": 28,
                               "height": 28,
-                              "cornerRadius": 0,
-                              "fill": "$transparent"
+                              "cornerRadius": 6,
+                              "fill": "$list-icon-amber"
                             },
                             "n4qgqg": {
                               "icon": "circle-alert",
                               "fill": "$on-accent",
-                              "width": 22,
-                              "height": 22
+                              "width": 20,
+                              "height": 20
                             },
                             "VsAGH": {
                               "strokeWidth": 0
@@ -12274,14 +12150,14 @@
                             "i9kceM": {
                               "width": 28,
                               "height": 28,
-                              "cornerRadius": 0,
-                              "fill": "$transparent"
+                              "cornerRadius": 6,
+                              "fill": "$list-icon-mint"
                             },
                             "n4qgqg": {
                               "icon": "circle-check",
                               "fill": "$on-accent",
-                              "width": 22,
-                              "height": 22
+                              "width": 20,
+                              "height": 20
                             },
                             "VsAGH": {
                               "strokeWidth": 0
@@ -12342,7 +12218,7 @@
                   "context": "地址不可达时打开 q3bM72 编辑同一设备的连接地址，不新建设备；授权、权限等其他原因使用对应可执行入口。",
                   "descendants": {
                     "mpPvv": {
-                      "content": "编辑连接"
+                      "content": "连接配置"
                     }
                   }
                 },
@@ -12372,54 +12248,36 @@
                   "height": 8
                 },
                 {
-                  "id": "srgNp",
-                  "type": "ref",
-                  "ref": "OuAnF",
-                  "name": "设备信息折叠入口",
+                  "type": "frame",
+                  "id": "F0JfTh",
+                  "name": "分组标题 / 功能检查",
                   "width": "fill_container",
-                  "height": 56,
-                  "fill": "$surface",
-                  "cornerRadius": "$radius-lg",
-                  "context": "查看型号、系统、屏幕与存储。点按原位展开 XPYvZ，不跳转路由。",
-                  "descendants": {
-                    "i9kceM": {
-                      "enabled": false
-                    },
-                    "VsAGH": {
-                      "strokeWidth": 0
-                    },
-                    "nyAaN": {
-                      "content": "设备信息"
-                    },
-                    "kb9Ts": {
-                      "icon": "chevron-down"
+                  "padding": [
+                    16,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "UBj5H",
+                      "name": "功能检查标题",
+                      "fill": "$secondary",
+                      "content": "功能检查",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
                     }
-                  }
+                  ]
                 },
                 {
-                  "id": "xRO9k",
+                  "id": "EZB0J",
                   "type": "ref",
-                  "ref": "OuAnF",
-                  "name": "功能检查折叠入口",
+                  "ref": "HWZjc",
+                  "name": "功能检查 · 图标与可用性平铺",
                   "width": "fill_container",
-                  "height": 56,
                   "fill": "$surface",
                   "cornerRadius": "$radius-lg",
-                  "context": "按实际能力检查手机画面、文件与声音。点按原位展开 NVEMy，不跳转路由。",
-                  "descendants": {
-                    "i9kceM": {
-                      "enabled": false
-                    },
-                    "VsAGH": {
-                      "strokeWidth": 0
-                    },
-                    "nyAaN": {
-                      "content": "功能检查"
-                    },
-                    "kb9Ts": {
-                      "icon": "chevron-down"
-                    }
-                  }
+                  "context": "与前方连接检查同行样式，无折叠栏。"
                 }
               ]
             }
@@ -25977,6 +25835,7 @@
       "x": 3440,
       "y": 9008,
       "name": "页面 / 10 偏好与恢复 / 设置",
+      "context": "所有设置入口在同一个无标题列表组内直接显示，无折叠栏。",
       "theme": {
         "mode": "light"
       },
@@ -26018,7 +25877,7 @@
                 {
                   "type": "frame",
                   "id": "ffL81",
-                  "name": "外观",
+                  "name": "全部设置 · 无标题统一列表",
                   "context": "固定设置分组，材料与间距使用共享token，行引用共享组件",
                   "clip": true,
                   "width": "fill_container",
@@ -26057,51 +25916,7 @@
                           "content": "外观"
                         }
                       }
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "evgXU",
-                  "name": "分组标题 / 连接与活动",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "padding": [
-                    28,
-                    0,
-                    12,
-                    0
-                  ],
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "t2yxHm",
-                      "name": "连接与活动",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "后台与安全",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "YANYL",
-                  "name": "连接与活动",
-                  "context": "固定设置分组，材料与间距使用共享token，行引用共享组件",
-                  "width": "fill_container",
-                  "fill": "$surface",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "padding": [
-                    4,
-                    0
-                  ],
-                  "children": [
+                    },
                     {
                       "id": "I7k1UV",
                       "type": "ref",
@@ -26129,51 +25944,7 @@
                           "content": "后台与提醒"
                         }
                       }
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "Ax1Ug",
-                  "name": "分组标题 / 本机数据",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "padding": [
-                    28,
-                    0,
-                    12,
-                    0
-                  ],
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "fnzaf",
-                      "name": "本机数据",
-                      "fill": "$secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "本机数据",
-                      "lineHeight": "$line-caption",
-                      "fontFamily": "$font-caption",
-                      "fontSize": "$size-caption",
-                      "fontWeight": "$weight-caption"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "PSNi9",
-                  "name": "本机数据",
-                  "context": "固定设置分组，材料与间距使用共享token，行引用共享组件",
-                  "width": "fill_container",
-                  "fill": "$surface",
-                  "cornerRadius": "$radius-lg",
-                  "layout": "vertical",
-                  "padding": [
-                    4,
-                    0
-                  ],
-                  "children": [
+                    },
                     {
                       "id": "My14P",
                       "type": "ref",
@@ -26206,7 +25977,7 @@
                       "id": "WjHwn",
                       "type": "ref",
                       "ref": "OuAnF",
-                      "name": "设备记录与恢复",
+                      "name": "本地数据",
                       "width": "fill_container",
                       "height": 56,
                       "descendants": {
@@ -26226,84 +25997,71 @@
                           "strokeWidth": 0
                         },
                         "nyAaN": {
-                          "content": "设备记录与恢复"
+                          "content": "本地数据"
                         }
                       }
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "J0iUnF",
-                  "name": "高级与诊断 · 默认折叠",
-                  "context": "默认仅显示 qdaIW。点按原位展开 g98ex 中的授权密钥和本机运行日志入口，不新增设置页面。",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "gap": 12,
-                  "padding": [
-                    24,
-                    0,
-                    0,
-                    0
-                  ],
-                  "children": [
+                    },
                     {
-                      "id": "qdaIW",
+                      "id": "HUdCz",
                       "type": "ref",
                       "ref": "OuAnF",
-                      "name": "展开高级与诊断",
+                      "name": "授权密钥",
                       "width": "fill_container",
                       "height": 56,
-                      "fill": "$surface",
-                      "cornerRadius": "$radius-lg",
-                      "context": "展开全局授权密钥与本机运行日志，普通使用无需进入。",
+                      "enabled": true,
                       "descendants": {
                         "i9kceM": {
-                          "enabled": false
+                          "fill": "$list-icon-amber"
                         },
-                        "VsAGH": {
-                          "strokeWidth": 0
+                        "n4qgqg": {
+                          "icon": "key-round",
+                          "fill": "$on-accent"
                         },
                         "nyAaN": {
-                          "content": "高级与诊断"
-                        },
-                        "kb9Ts": {
-                          "icon": "chevron-down"
+                          "content": "授权密钥"
                         }
                       }
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "zkHSZ",
-                  "name": "间距",
-                  "width": "fill_container",
-                  "height": 24
-                },
-                {
-                  "type": "frame",
-                  "id": "C8li7V",
-                  "name": "关于邻接文字操作",
-                  "width": "fill_container",
-                  "height": 44,
-                  "layout": "vertical",
-                  "justifyContent": "center",
-                  "alignItems": "center",
-                  "children": [
+                    },
                     {
-                      "type": "text",
-                      "id": "iAVJn",
-                      "name": "关于邻接",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
+                      "id": "LZ88K",
+                      "type": "ref",
+                      "ref": "OuAnF",
+                      "name": "本机运行日志",
                       "width": "fill_container",
-                      "content": "关于邻接",
-                      "lineHeight": "$line-label",
-                      "textAlign": "center",
-                      "fontFamily": "$font-label",
-                      "fontSize": "$size-label",
-                      "fontWeight": "$weight-label"
+                      "height": 56,
+                      "enabled": true,
+                      "descendants": {
+                        "i9kceM": {
+                          "fill": "$list-icon-amber"
+                        },
+                        "n4qgqg": {
+                          "icon": "file-text",
+                          "fill": "$on-accent"
+                        },
+                        "nyAaN": {
+                          "content": "本机运行日志"
+                        }
+                      }
+                    },
+                    {
+                      "id": "l4Bs08",
+                      "type": "ref",
+                      "ref": "OuAnF",
+                      "name": "关于邻接",
+                      "width": "fill_container",
+                      "height": 56,
+                      "descendants": {
+                        "i9kceM": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "n4qgqg": {
+                          "icon": "info",
+                          "fill": "$on-accent"
+                        },
+                        "nyAaN": {
+                          "content": "关于邻接"
+                        }
+                      }
                     }
                   ]
                 }
@@ -28232,7 +27990,7 @@
       "x": 5850,
       "y": 9008,
       "name": "页面 / 10 偏好与恢复 / 画面与控制",
-      "context": "设备统一画质；从详情画质行进入，同设备全部现有和后续画面使用同一配置",
+      "context": "屏幕行为、布局、画面质量、详细画质同级直接显示；导航键与新画面点亮默认开启。",
       "theme": {
         "mode": "light"
       },
@@ -28309,6 +28067,142 @@
                 },
                 {
                   "type": "frame",
+                  "id": "NHben",
+                  "name": "控制与屏幕行为",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    28,
+                    0,
+                    0,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "NPlq0",
+                      "name": "控制与屏幕行为标题",
+                      "fill": "$text",
+                      "content": "画面与手机屏幕",
+                      "fontFamily": "$font-body",
+                      "fontSize": "$size-body",
+                      "fontWeight": "$weight-heading"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "bK23w",
+                      "name": "控制与屏幕行为选项",
+                      "width": "fill_container",
+                      "fill": "$surface",
+                      "cornerRadius": "$radius-lg",
+                      "layout": "vertical",
+                      "padding": [
+                        4,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "id": "pdDH8",
+                          "type": "ref",
+                          "ref": "D11Zj",
+                          "name": "显示底部导航",
+                          "width": "fill_container",
+                          "height": 56,
+                          "descendants": {
+                            "Tvi1D": {
+                              "fill": "$list-icon-slate"
+                            },
+                            "jEyZF": {
+                              "icon": "navigation",
+                              "fill": "$on-accent"
+                            },
+                            "eAJnv": {
+                              "content": "显示导航键"
+                            },
+                            "wQhjE": {
+                              "fill": "$primary-action",
+                              "justifyContent": "end"
+                            }
+                          }
+                        },
+                        {
+                          "id": "D3A2T",
+                          "type": "ref",
+                          "ref": "D11Zj",
+                          "name": "打开画面时点亮屏幕",
+                          "width": "fill_container",
+                          "context": "每个新的整机或独立应用画面成功启动均触发一次点亮，即便已有其他画面；不由ADB连接、重建、重连或遮挡触发",
+                          "descendants": {
+                            "Tvi1D": {
+                              "fill": "$list-icon-amber"
+                            },
+                            "jEyZF": {
+                              "icon": "sun",
+                              "fill": "$on-accent"
+                            },
+                            "eAJnv": {
+                              "content": "新画面启动时点亮屏幕"
+                            },
+                            "wQhjE": {
+                              "fill": "$primary-action",
+                              "justifyContent": "end"
+                            }
+                          }
+                        },
+                        {
+                          "id": "nIKBB",
+                          "type": "ref",
+                          "ref": "D11Zj",
+                          "name": "关闭最后画面时锁屏",
+                          "width": "fill_container",
+                          "context": "发送休眠请求；安全锁定由手机设置决定，不能承诺立即强认证锁定。",
+                          "descendants": {
+                            "Tvi1D": {
+                              "fill": "$list-icon-coral"
+                            },
+                            "jEyZF": {
+                              "icon": "moon",
+                              "fill": "$on-accent"
+                            },
+                            "eAJnv": {
+                              "content": "关闭最后画面时熄屏"
+                            },
+                            "wQhjE": {
+                              "fill": "$muted",
+                              "justifyContent": "start"
+                            }
+                          }
+                        },
+                        {
+                          "id": "mJV1m",
+                          "type": "ref",
+                          "ref": "D11Zj",
+                          "name": "远控期间保持唤醒",
+                          "width": "fill_container",
+                          "descendants": {
+                            "Tvi1D": {
+                              "fill": "$list-icon-amber"
+                            },
+                            "jEyZF": {
+                              "icon": "alarm-clock",
+                              "fill": "$on-accent"
+                            },
+                            "eAJnv": {
+                              "content": "保持手机唤醒"
+                            },
+                            "wQhjE": {
+                              "fill": "$muted",
+                              "justifyContent": "start"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
                   "id": "bHqhe",
                   "name": "显示布局",
                   "width": "fill_container",
@@ -28326,7 +28220,7 @@
                       "id": "Pw4f6",
                       "name": "布局分组标题",
                       "fill": "$secondary",
-                      "content": "显示布局",
+                      "content": "屏幕布局",
                       "fontFamily": "$font-caption",
                       "fontSize": "$size-caption",
                       "fontWeight": "$weight-caption"
@@ -28389,7 +28283,7 @@
                       "id": "g7xLB",
                       "name": "画质预设",
                       "fill": "$secondary",
-                      "content": "画质预设",
+                      "content": "画面质量",
                       "lineHeight": "$line-caption",
                       "fontFamily": "$font-caption",
                       "fontSize": "$size-caption",
@@ -28509,147 +28403,11 @@
                 },
                 {
                   "type": "frame",
-                  "id": "NHben",
-                  "name": "控制与屏幕行为",
-                  "width": "fill_container",
-                  "layout": "vertical",
-                  "gap": 12,
-                  "padding": [
-                    28,
-                    0,
-                    0,
-                    0
-                  ],
-                  "children": [
-                    {
-                      "type": "text",
-                      "id": "NPlq0",
-                      "name": "控制与屏幕行为标题",
-                      "fill": "$text",
-                      "content": "控制与屏幕行为",
-                      "fontFamily": "$font-body",
-                      "fontSize": "$size-body",
-                      "fontWeight": "$weight-heading"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "bK23w",
-                      "name": "控制与屏幕行为选项",
-                      "width": "fill_container",
-                      "fill": "$surface",
-                      "cornerRadius": "$radius-lg",
-                      "layout": "vertical",
-                      "padding": [
-                        4,
-                        0
-                      ],
-                      "children": [
-                        {
-                          "id": "pdDH8",
-                          "type": "ref",
-                          "ref": "D11Zj",
-                          "name": "显示底部导航",
-                          "width": "fill_container",
-                          "height": 56,
-                          "descendants": {
-                            "Tvi1D": {
-                              "fill": "$list-icon-slate"
-                            },
-                            "jEyZF": {
-                              "icon": "navigation",
-                              "fill": "$on-accent"
-                            },
-                            "eAJnv": {
-                              "content": "显示导航键"
-                            },
-                            "wQhjE": {
-                              "fill": "$primary-action",
-                              "justifyContent": "end"
-                            }
-                          }
-                        },
-                        {
-                          "id": "D3A2T",
-                          "type": "ref",
-                          "ref": "D11Zj",
-                          "name": "打开画面时点亮屏幕",
-                          "width": "fill_container",
-                          "context": "每个新的整机或独立应用画面成功启动均触发一次点亮，即便已有其他画面；不由ADB连接、重建、重连或遮挡触发",
-                          "descendants": {
-                            "Tvi1D": {
-                              "fill": "$list-icon-amber"
-                            },
-                            "jEyZF": {
-                              "icon": "sun",
-                              "fill": "$on-accent"
-                            },
-                            "eAJnv": {
-                              "content": "新画面启动时点亮屏幕"
-                            },
-                            "wQhjE": {
-                              "fill": "$muted",
-                              "justifyContent": "start"
-                            }
-                          }
-                        },
-                        {
-                          "id": "nIKBB",
-                          "type": "ref",
-                          "ref": "D11Zj",
-                          "name": "关闭最后画面时锁屏",
-                          "width": "fill_container",
-                          "context": "发送休眠请求；安全锁定由手机设置决定，不能承诺立即强认证锁定。",
-                          "descendants": {
-                            "Tvi1D": {
-                              "fill": "$list-icon-coral"
-                            },
-                            "jEyZF": {
-                              "icon": "moon",
-                              "fill": "$on-accent"
-                            },
-                            "eAJnv": {
-                              "content": "关闭最后画面时熄屏"
-                            },
-                            "wQhjE": {
-                              "fill": "$muted",
-                              "justifyContent": "start"
-                            }
-                          }
-                        },
-                        {
-                          "id": "mJV1m",
-                          "type": "ref",
-                          "ref": "D11Zj",
-                          "name": "远控期间保持唤醒",
-                          "width": "fill_container",
-                          "descendants": {
-                            "Tvi1D": {
-                              "fill": "$list-icon-amber"
-                            },
-                            "jEyZF": {
-                              "icon": "alarm-clock",
-                              "fill": "$on-accent"
-                            },
-                            "eAJnv": {
-                              "content": "保持手机唤醒"
-                            },
-                            "wQhjE": {
-                              "fill": "$muted",
-                              "justifyContent": "start"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
                   "id": "uvLra",
-                  "name": "分组标题 / 详细选项",
-                  "context": "默认折叠。点按展开 SRYvS 中的详细画质设置；仅在此处展开，不跳转新页面。",
+                  "name": "分组标题 / 详细画质",
+                  "context": "与屏幕行为、屏幕布局和画面质量同级，始终直接显示。",
                   "width": "fill_container",
-                  "height": 56,
+                  "height": 44,
                   "padding": [
                     16,
                     0
@@ -28662,21 +28420,202 @@
                       "id": "TWxb8",
                       "name": "详细选项",
                       "fill": "$secondary",
-                      "content": "详细画质选项",
+                      "content": "详细画质",
                       "lineHeight": "$line-caption",
                       "fontFamily": "$font-caption",
                       "fontSize": "$size-caption",
                       "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "h0plfC",
+                  "name": "详细画质 · 直接显示",
+                  "context": "无折叠栏，所有字段直接显示。",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "padding": [
+                    4,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "o2d7S",
+                      "type": "ref",
+                      "ref": "OuAnF",
+                      "name": "分辨率上限",
+                      "width": "fill_container",
+                      "height": 56,
+                      "descendants": {
+                        "i9kceM": {
+                          "enabled": true,
+                          "fill": "$list-icon-purple",
+                          "width": 28,
+                          "height": 28
+                        },
+                        "n4qgqg": {
+                          "enabled": true,
+                          "icon": "maximize",
+                          "fill": "$on-accent",
+                          "width": 20,
+                          "height": 20
+                        },
+                        "VsAGH": {
+                          "stroke": "$transparent",
+                          "strokeWidth": 0
+                        },
+                        "nyAaN": {
+                          "content": "分辨率上限",
+                          "fontWeight": "$weight-body"
+                        },
+                        "kQv79": {
+                          "enabled": true,
+                          "content": "1920 px"
+                        }
+                      }
                     },
                     {
-                      "type": "icon",
-                      "id": "YjsAK",
-                      "name": "展开详细画质选项",
-                      "width": 16,
-                      "height": 16,
-                      "icon": "chevron-down",
-                      "library": "lucide",
-                      "fill": "$secondary"
+                      "id": "cSEbu",
+                      "type": "ref",
+                      "ref": "OuAnF",
+                      "name": "帧率",
+                      "width": "fill_container",
+                      "height": 56,
+                      "descendants": {
+                        "i9kceM": {
+                          "enabled": true,
+                          "fill": "$list-icon-mint",
+                          "width": 28,
+                          "height": 28
+                        },
+                        "n4qgqg": {
+                          "enabled": true,
+                          "icon": "gauge",
+                          "fill": "$on-accent",
+                          "width": 20,
+                          "height": 20
+                        },
+                        "VsAGH": {
+                          "stroke": "$transparent",
+                          "strokeWidth": 0
+                        },
+                        "nyAaN": {
+                          "content": "帧率",
+                          "fontWeight": "$weight-body"
+                        },
+                        "kQv79": {
+                          "enabled": true,
+                          "content": "60 fps"
+                        }
+                      }
+                    },
+                    {
+                      "id": "M2qWF",
+                      "type": "ref",
+                      "ref": "OuAnF",
+                      "name": "码率",
+                      "width": "fill_container",
+                      "height": 56,
+                      "descendants": {
+                        "i9kceM": {
+                          "enabled": true,
+                          "fill": "$list-icon-slate",
+                          "width": 28,
+                          "height": 28
+                        },
+                        "n4qgqg": {
+                          "enabled": true,
+                          "icon": "signal",
+                          "fill": "$on-accent",
+                          "width": 20,
+                          "height": 20
+                        },
+                        "VsAGH": {
+                          "stroke": "$transparent",
+                          "strokeWidth": 0
+                        },
+                        "nyAaN": {
+                          "content": "码率",
+                          "fontWeight": "$weight-body"
+                        },
+                        "kQv79": {
+                          "enabled": true,
+                          "content": "8 Mbps"
+                        }
+                      }
+                    },
+                    {
+                      "id": "ny3ZM",
+                      "type": "ref",
+                      "ref": "OuAnF",
+                      "name": "编码格式",
+                      "width": "fill_container",
+                      "height": 56,
+                      "descendants": {
+                        "i9kceM": {
+                          "enabled": true,
+                          "fill": "$list-icon-purple",
+                          "width": 28,
+                          "height": 28
+                        },
+                        "n4qgqg": {
+                          "enabled": true,
+                          "icon": "film",
+                          "fill": "$on-accent",
+                          "width": 20,
+                          "height": 20
+                        },
+                        "VsAGH": {
+                          "stroke": "$transparent",
+                          "strokeWidth": 0
+                        },
+                        "nyAaN": {
+                          "content": "编码格式",
+                          "fontWeight": "$weight-body"
+                        },
+                        "kQv79": {
+                          "enabled": true,
+                          "content": "H.264"
+                        }
+                      }
+                    },
+                    {
+                      "id": "D6KGn8",
+                      "type": "ref",
+                      "ref": "OuAnF",
+                      "name": "视频编码器",
+                      "width": "fill_container",
+                      "height": 56,
+                      "descendants": {
+                        "i9kceM": {
+                          "enabled": true,
+                          "fill": "$list-icon-amber",
+                          "width": 28,
+                          "height": 28
+                        },
+                        "n4qgqg": {
+                          "enabled": true,
+                          "icon": "cpu",
+                          "fill": "$on-accent",
+                          "width": 20,
+                          "height": 20
+                        },
+                        "VsAGH": {
+                          "stroke": "$transparent",
+                          "strokeWidth": 0
+                        },
+                        "nyAaN": {
+                          "content": "视频编码器",
+                          "fontWeight": "$weight-body"
+                        },
+                        "kQv79": {
+                          "enabled": true,
+                          "content": "自动"
+                        }
+                      }
                     }
                   ]
                 },
@@ -32128,15 +32067,15 @@
         {
           "type": "frame",
           "id": "B0M3a",
-          "name": "连接诊断的按需展开内容",
+          "name": "设备详情与功能检查局部状态",
           "width": "fill_container",
           "gap": 80,
           "children": [
             {
               "type": "frame",
               "id": "XPYvZ",
-              "name": "局部状态 / 连接诊断 · 设备信息展开",
-              "context": "来源 eWu3m 的设备信息折叠区；仅呈现有助兼容判断和当前控制任务的数据，不是独立路由。",
+              "name": "局部状态 / 设备详情 · 离线快照",
+              "context": "来源 t5gM3；独立详情页离线保留上次事实并标明时效，不冒充实时数据。",
               "theme": {
                 "mode": "light"
               },
@@ -32152,7 +32091,7 @@
                   "id": "Zg4OK",
                   "name": "设备信息展开标题",
                   "fill": "$text",
-                  "content": "设备信息",
+                  "content": "设备离线 · 最近记录",
                   "fontFamily": "$font-heading",
                   "fontSize": "$size-heading",
                   "fontWeight": "normal"
@@ -32276,8 +32215,8 @@
             {
               "type": "frame",
               "id": "NVEMy",
-              "name": "局部状态 / 连接诊断 · 功能检查展开",
-              "context": "来源 eWu3m；只读任务能力检查，随诊断统一重新检查，不设独立功能支持页面。",
+              "name": "局部状态 / 连接诊断 · 功能检查受限",
+              "context": "来源 eWu3m；功能检查直接展示，受限原因在项目下方显示。",
               "theme": {
                 "mode": "light"
               },
@@ -32293,7 +32232,7 @@
                   "id": "fHvdP",
                   "name": "功能检查展开标题",
                   "fill": "$text",
-                  "content": "功能检查",
+                  "content": "功能检查 · 部分受限",
                   "fontFamily": "$font-heading",
                   "fontSize": "$size-heading",
                   "fontWeight": "normal"
@@ -32327,12 +32266,13 @@
                           "ref": "OuAnF",
                           "name": "手机屏幕支持状态",
                           "width": "fill_container",
+                          "height": 56,
                           "descendants": {
                             "i9kceM": {
-                              "fill": "$list-icon-purple"
+                              "fill": "$list-icon-mint"
                             },
                             "n4qgqg": {
-                              "icon": "monitor",
+                              "icon": "circle-check",
                               "fill": "$on-accent"
                             },
                             "nyAaN": {
@@ -32353,12 +32293,13 @@
                           "ref": "OuAnF",
                           "name": "文件管理支持状态",
                           "width": "fill_container",
+                          "height": 56,
                           "descendants": {
                             "i9kceM": {
-                              "fill": "$list-icon-amber"
+                              "fill": "$list-icon-mint"
                             },
                             "n4qgqg": {
-                              "icon": "folder",
+                              "icon": "circle-check",
                               "fill": "$on-accent"
                             },
                             "nyAaN": {
@@ -32379,12 +32320,13 @@
                           "ref": "OuAnF",
                           "name": "设备声音支持状态",
                           "width": "fill_container",
+                          "height": 56,
                           "descendants": {
                             "i9kceM": {
-                              "fill": "$list-icon-slate"
+                              "fill": "$list-icon-mint"
                             },
                             "n4qgqg": {
-                              "icon": "volume-2",
+                              "icon": "circle-check",
                               "fill": "$on-accent"
                             },
                             "nyAaN": {
@@ -32392,7 +32334,7 @@
                             },
                             "kQv79": {
                               "enabled": true,
-                              "content": "待检查"
+                              "content": "可用"
                             },
                             "kb9Ts": {
                               "enabled": false
@@ -32405,16 +32347,16 @@
                           "ref": "OuAnF",
                           "name": "电话接力 · 能力需独立验证",
                           "width": "fill_container",
-                          "height": "fit_content",
+                          "height": 56,
                           "descendants": {
                             "t2aiE": {
                               "height": "fit_content"
                             },
                             "i9kceM": {
-                              "fill": "$list-icon-mint"
+                              "fill": "$list-icon-amber"
                             },
                             "n4qgqg": {
-                              "icon": "phone",
+                              "icon": "circle-alert",
                               "fill": "$on-accent"
                             },
                             "VsAGH": {
@@ -32430,6 +32372,168 @@
                             "kQv79": {
                               "enabled": true,
                               "content": "待验证"
+                            },
+                            "kb9Ts": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "Xsteu",
+                          "type": "ref",
+                          "ref": "OuAnF",
+                          "name": "设备授权可用性",
+                          "width": "fill_container",
+                          "height": 56,
+                          "descendants": {
+                            "i9kceM": {
+                              "fill": "$list-icon-mint"
+                            },
+                            "n4qgqg": {
+                              "icon": "circle-check",
+                              "fill": "$on-accent"
+                            },
+                            "nyAaN": {
+                              "content": "设备授权"
+                            },
+                            "kQv79": {
+                              "enabled": true,
+                              "content": "可用"
+                            },
+                            "kb9Ts": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "t9oKiT",
+                          "type": "ref",
+                          "ref": "OuAnF",
+                          "name": "无线连接可用性",
+                          "width": "fill_container",
+                          "height": 56,
+                          "descendants": {
+                            "i9kceM": {
+                              "fill": "$list-icon-mint"
+                            },
+                            "n4qgqg": {
+                              "icon": "circle-check",
+                              "fill": "$on-accent"
+                            },
+                            "nyAaN": {
+                              "content": "无线连接"
+                            },
+                            "kQv79": {
+                              "enabled": true,
+                              "content": "可用"
+                            },
+                            "kb9Ts": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "CgvMW",
+                          "type": "ref",
+                          "ref": "OuAnF",
+                          "name": "文字剪贴板可用性",
+                          "width": "fill_container",
+                          "height": 56,
+                          "descendants": {
+                            "i9kceM": {
+                              "fill": "$list-icon-mint"
+                            },
+                            "n4qgqg": {
+                              "icon": "circle-check",
+                              "fill": "$on-accent"
+                            },
+                            "nyAaN": {
+                              "content": "文字剪贴板"
+                            },
+                            "kQv79": {
+                              "enabled": true,
+                              "content": "可用"
+                            },
+                            "kb9Ts": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "R5xQe9",
+                          "type": "ref",
+                          "ref": "OuAnF",
+                          "name": "手机应用可用性",
+                          "width": "fill_container",
+                          "height": 56,
+                          "descendants": {
+                            "i9kceM": {
+                              "fill": "$list-icon-mint"
+                            },
+                            "n4qgqg": {
+                              "icon": "circle-check",
+                              "fill": "$on-accent"
+                            },
+                            "nyAaN": {
+                              "content": "手机应用"
+                            },
+                            "kQv79": {
+                              "enabled": true,
+                              "content": "可用"
+                            },
+                            "kb9Ts": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "CUr1U",
+                          "type": "ref",
+                          "ref": "OuAnF",
+                          "name": "实时通知可用性",
+                          "width": "fill_container",
+                          "height": 56,
+                          "descendants": {
+                            "i9kceM": {
+                              "fill": "$list-icon-amber"
+                            },
+                            "n4qgqg": {
+                              "icon": "circle-alert",
+                              "fill": "$on-accent"
+                            },
+                            "nyAaN": {
+                              "content": "实时通知"
+                            },
+                            "kQv79": {
+                              "enabled": true,
+                              "content": "需要设置"
+                            },
+                            "kb9Ts": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "IdBKH",
+                          "type": "ref",
+                          "ref": "OuAnF",
+                          "name": "后台保持可用性",
+                          "width": "fill_container",
+                          "height": 56,
+                          "descendants": {
+                            "i9kceM": {
+                              "fill": "$list-icon-mint"
+                            },
+                            "n4qgqg": {
+                              "icon": "circle-check",
+                              "fill": "$on-accent"
+                            },
+                            "nyAaN": {
+                              "content": "后台保持"
+                            },
+                            "kQv79": {
+                              "enabled": true,
+                              "content": "可用"
                             },
                             "kb9Ts": {
                               "enabled": false
@@ -42717,14 +42821,14 @@
         {
           "type": "frame",
           "id": "k3vqua",
-          "name": "画面与控制高级选项展开示意",
+          "name": "设置与画质直接展示规范",
           "width": "fill_container",
           "gap": 80,
           "children": [
             {
               "type": "frame",
               "id": "bpVmG",
-              "name": "局部状态 / 详细画质选项展开",
+              "name": "局部说明 / 详细画质始终展示",
               "width": 402,
               "fill": "$canvas",
               "cornerRadius": "$radius-lg",
@@ -42737,7 +42841,7 @@
                   "id": "iIZRu",
                   "name": "高级画质展开标题",
                   "fill": "$text",
-                  "content": "详细画质选项",
+                  "content": "详细画质 · 与其他区同级",
                   "fontFamily": "$font-heading",
                   "fontSize": "$size-heading",
                   "fontWeight": "normal"
@@ -42746,7 +42850,7 @@
                   "type": "frame",
                   "id": "SRYvS",
                   "name": "详细选项分组",
-                  "context": "详细画质选项展开状态；默认收起，入口 uvLra。",
+                  "context": "来源 XPceX；作为同级分组直接显示，非折叠状态。",
                   "width": 370,
                   "fill": "$surface",
                   "cornerRadius": "$radius-lg",
@@ -42938,7 +43042,7 @@
             {
               "type": "frame",
               "id": "g98ex",
-              "name": "局部状态 / 高级与诊断展开",
+              "name": "局部说明 / 设置统一列表",
               "width": 402,
               "fill": "$canvas",
               "cornerRadius": "$radius-lg",
@@ -42951,7 +43055,7 @@
                   "id": "SPxfa",
                   "name": "全局高级项标题",
                   "fill": "$text",
-                  "content": "高级与诊断",
+                  "content": "授权密钥与本机日志 · 设置中直接显示",
                   "fontFamily": "$font-heading",
                   "fontSize": "$size-heading",
                   "fontWeight": "normal"
@@ -42986,7 +43090,7 @@
                           "fill": "$on-accent"
                         },
                         "nyAaN": {
-                          "content": "ADB 私钥"
+                          "content": "授权密钥"
                         }
                       }
                     },
@@ -43007,7 +43111,7 @@
                           "fill": "$on-accent"
                         },
                         "nyAaN": {
-                          "content": "运行日志"
+                          "content": "本机运行日志"
                         }
                       }
                     }
@@ -43414,6 +43518,940 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "t5gM3",
+      "x": 6332,
+      "y": 1210,
+      "name": "页面 / 02 设备工作台 / 设备详情",
+      "context": "从设备摘要进入的独立详情页；信息全部平铺，局部失败与离线快照独立说明。",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 402,
+      "height": 874,
+      "fill": "$canvas",
+      "cornerRadius": "$radius-phone",
+      "layout": "vertical",
+      "padding": [
+        0,
+        16
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "k88a0",
+          "name": "页面内容 · scroll-viewport",
+          "context": "scroll-viewport；完整高度延伸至顶部与导航背后，保留全部内容和末项安全留白。",
+          "clip": true,
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "NFzJQ",
+              "name": "完整滚动内容",
+              "context": "首屏避让置于滚动内容内部；滚动时正文经过透明页头与玻璃控制背后。",
+              "width": "fill_container",
+              "layout": "vertical",
+              "padding": [
+                126,
+                0,
+                16,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ESX5C",
+                  "name": "数据更新时间",
+                  "fill": "$secondary",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "更新于 2026-10-26 14:30:00",
+                  "fontFamily": "$font-caption",
+                  "fontSize": "$size-caption",
+                  "fontWeight": "$weight-caption"
+                },
+                {
+                  "type": "frame",
+                  "id": "sWKwO",
+                  "name": "分组标题 / 设备与系统",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "padding": [
+                    16,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "EbmfZ",
+                      "name": "设备与系统标题",
+                      "fill": "$secondary",
+                      "content": "设备与系统",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ARd9p",
+                  "name": "设备与系统直接展示列表",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "padding": [
+                    4,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "P2RWt",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "设备型号",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "smartphone",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "设备型号"
+                        },
+                        "FcNLj": {
+                          "content": "Pixel 9"
+                        }
+                      }
+                    },
+                    {
+                      "id": "v1BjD",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "品牌 / 产品",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "tag",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "品牌 / 产品"
+                        },
+                        "FcNLj": {
+                          "content": "Google / tokay"
+                        }
+                      }
+                    },
+                    {
+                      "id": "Bsxfm",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "硬件",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "cpu",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "硬件"
+                        },
+                        "FcNLj": {
+                          "content": "Tensor G4"
+                        }
+                      }
+                    },
+                    {
+                      "id": "qMb9f",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "Android / API",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "layers",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "Android / API"
+                        },
+                        "FcNLj": {
+                          "content": "Android 15 / API 35"
+                        }
+                      }
+                    },
+                    {
+                      "id": "GTglp",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "安全补丁",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "shield-check",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "安全补丁"
+                        },
+                        "FcNLj": {
+                          "content": "2026-10-05"
+                        }
+                      }
+                    },
+                    {
+                      "id": "OFSj5",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "处理器架构",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "binary",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "处理器架构"
+                        },
+                        "FcNLj": {
+                          "content": "arm64-v8a"
+                        }
+                      }
+                    },
+                    {
+                      "id": "VWePR",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "构建版本",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "package",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "构建版本"
+                        },
+                        "FcNLj": {
+                          "content": "AP4A.251005.002"
+                        }
+                      }
+                    },
+                    {
+                      "id": "GIQo7",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "设备序列号",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "fingerprint",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "设备序列号"
+                        },
+                        "FcNLj": {
+                          "content": "设备返回的序列号"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "DrX7d",
+                  "name": "分组标题 / 电池与电源",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "padding": [
+                    16,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "R3JQGQ",
+                      "name": "电池与电源标题",
+                      "fill": "$secondary",
+                      "content": "电池与电源",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZZZgR",
+                  "name": "电池与电源直接展示列表",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "padding": [
+                    4,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "wpBaF",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "当前电量",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "battery",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "当前电量"
+                        },
+                        "FcNLj": {
+                          "content": "78%"
+                        }
+                      }
+                    },
+                    {
+                      "id": "miyaD",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "充电状态",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "battery-charging",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "充电状态"
+                        },
+                        "FcNLj": {
+                          "content": "未充电"
+                        }
+                      }
+                    },
+                    {
+                      "id": "OYgfo",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "电池健康",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "heart",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "电池健康"
+                        },
+                        "FcNLj": {
+                          "content": "良好"
+                        }
+                      }
+                    },
+                    {
+                      "id": "SapMi",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "温度",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "thermometer",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "温度"
+                        },
+                        "FcNLj": {
+                          "content": "31.2 °C"
+                        }
+                      }
+                    },
+                    {
+                      "id": "TW6mj",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "电压",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "zap",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "电压"
+                        },
+                        "FcNLj": {
+                          "content": "4080 mV"
+                        }
+                      }
+                    },
+                    {
+                      "id": "BF2F8",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "实体屏幕",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "sun",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "实体屏幕"
+                        },
+                        "FcNLj": {
+                          "content": "已点亮"
+                        }
+                      }
+                    },
+                    {
+                      "id": "PV7y0",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "锁定状态",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "lock",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "锁定状态"
+                        },
+                        "FcNLj": {
+                          "content": "未锁定"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "JZYqR",
+                  "name": "分组标题 / 屏幕与显示",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "padding": [
+                    16,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Qyt9j",
+                      "name": "屏幕与显示标题",
+                      "fill": "$secondary",
+                      "content": "屏幕与显示",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Hxmsm",
+                  "name": "屏幕与显示直接展示列表",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "padding": [
+                    4,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "Z4ihWI",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "分辨率",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "scan",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "分辨率"
+                        },
+                        "FcNLj": {
+                          "content": "1080 × 2424 px"
+                        }
+                      }
+                    },
+                    {
+                      "id": "KxoHq",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "逻辑密度",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "ruler",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "逻辑密度"
+                        },
+                        "FcNLj": {
+                          "content": "420 dpi"
+                        }
+                      }
+                    },
+                    {
+                      "id": "z6Afg5",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "刷新率",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "gauge",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "刷新率"
+                        },
+                        "FcNLj": {
+                          "content": "120 Hz"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KbmhO",
+                  "name": "分组标题 / 网络与连接",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "padding": [
+                    16,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "QH46E",
+                      "name": "网络与连接标题",
+                      "fill": "$secondary",
+                      "content": "网络与连接",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "vgV4n",
+                  "name": "网络与连接直接展示列表",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "padding": [
+                    4,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "pGIUk",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "当前连接",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "network",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "当前连接"
+                        },
+                        "FcNLj": {
+                          "content": "无线调试"
+                        }
+                      }
+                    },
+                    {
+                      "id": "EZs0s",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "连接地址",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "wifi",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "连接地址"
+                        },
+                        "FcNLj": {
+                          "content": "192.168.1.8"
+                        }
+                      }
+                    },
+                    {
+                      "id": "j06Zh",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "连接端口",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "network",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "连接端口"
+                        },
+                        "FcNLj": {
+                          "content": "37123"
+                        }
+                      }
+                    },
+                    {
+                      "id": "J7lVs",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "wlan0",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "wifi",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "wlan0"
+                        },
+                        "FcNLj": {
+                          "content": "192.168.1.8"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "C01qU",
+                  "name": "分组标题 / 内存与存储",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "padding": [
+                    16,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "stVRk",
+                      "name": "内存与存储标题",
+                      "fill": "$secondary",
+                      "content": "内存与存储",
+                      "fontFamily": "$font-caption",
+                      "fontSize": "$size-caption",
+                      "fontWeight": "$weight-caption"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "hOxtE",
+                  "name": "内存与存储直接展示列表",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-lg",
+                  "layout": "vertical",
+                  "padding": [
+                    4,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "CBVo7",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "运行内存",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "cpu",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "运行内存"
+                        },
+                        "FcNLj": {
+                          "content": "12.0 GB · 可用 6.2 GB"
+                        }
+                      }
+                    },
+                    {
+                      "id": "xDec2",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "共享存储",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "hard-drive",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "共享存储"
+                        },
+                        "FcNLj": {
+                          "content": "128.0 GB · 可用 61.8 GB"
+                        }
+                      }
+                    },
+                    {
+                      "id": "OJOBR",
+                      "type": "ref",
+                      "ref": "e9FOj",
+                      "name": "处理器核心",
+                      "width": "fill_container",
+                      "descendants": {
+                        "QtH15": {
+                          "fill": "$list-icon-slate"
+                        },
+                        "A31Bnu": {
+                          "icon": "cpu",
+                          "fill": "$on-accent"
+                        },
+                        "C7PPP": {
+                          "content": "处理器核心"
+                        },
+                        "FcNLj": {
+                          "content": "8 核"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "c5wQx",
+          "layoutPosition": "absolute",
+          "x": 0,
+          "y": 0,
+          "name": "顶部滚动边缘保护 · 不形成实体栏",
+          "width": 402,
+          "height": 110,
+          "fill": {
+            "type": "gradient",
+            "gradientType": "linear",
+            "enabled": true,
+            "opacity": 0.9,
+            "rotation": 180,
+            "size": {
+              "height": 1
+            },
+            "colors": [
+              {
+                "color": "$canvas",
+                "position": 0
+              },
+              {
+                "color": "$canvas",
+                "position": 0.6
+              },
+              {
+                "color": "$transparent",
+                "position": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "r3z2FQ",
+          "type": "ref",
+          "ref": "nvopW",
+          "name": "系统状态栏",
+          "x": 16,
+          "y": 0,
+          "width": 370,
+          "height": 54,
+          "layoutPosition": "absolute"
+        },
+        {
+          "id": "f7aom",
+          "type": "ref",
+          "ref": "wbM5x",
+          "name": "页面标题",
+          "x": 16,
+          "y": 54,
+          "width": 370,
+          "height": 56,
+          "layoutPosition": "absolute",
+          "context": "透明页头；同一滚动背景经过返回与工具组的regular玻璃。",
+          "descendants": {
+            "yLqsf": {
+              "enabled": true,
+              "fill": {
+                "type": "shader",
+                "enabled": true,
+                "url": "assets/liquid-glass.glsl",
+                "uniforms": {
+                  "u_ior": "$glass-refractionIndex",
+                  "u_refractionWidth": "$glass-refractionWidth",
+                  "u_blur": "$glass-blur",
+                  "u_tint": "$glass",
+                  "u_edgeLight": "$glass-edge",
+                  "u_specularThickness": "$glass-specularThickness",
+                  "u_specularSharpness": "$glass-specularSharpness",
+                  "u_specularAngle": "$glass-angle",
+                  "u_specularSpread": "$glass-specularSpread",
+                  "u_specularIntensity": "$glass-specularIntensity",
+                  "u_specularOppositeIntensity": "$glass-specularOppositeIntensity",
+                  "u_glowThickness": "$glass-glowThickness",
+                  "u_glowAngle": "$glass-glowAngle",
+                  "u_glowSpread": "$glass-glowSpread",
+                  "u_glowIntensity": "$glass-glowIntensity",
+                  "u_glowOppositeIntensity": "$glass-glowOppositeIntensity",
+                  "u_opticalDepth": "$glass-opticalDepth"
+                }
+              },
+              "stroke": "$transparent",
+              "strokeWidth": 0,
+              "strokeAlignment": "inner",
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "$shadow",
+                "offset": {
+                  "x": 0,
+                  "y": "$glass-shadowOffset"
+                },
+                "blur": "$glass-shadowBlur"
+              }
+            },
+            "yLqsf/alBho": {
+              "fill": "$text"
+            },
+            "aFRxw": {
+              "content": "设备详情",
+              "fontFamily": "$font-heading",
+              "fontSize": "$size-heading",
+              "fontWeight": "$weight-heading",
+              "lineHeight": "$line-heading"
+            },
+            "BiHE4": {
+              "enabled": false
+            },
+            "eVp4v": {
+              "enabled": true,
+              "fill": "$transparent",
+              "stroke": "$transparent",
+              "effect": []
+            },
+            "eVp4v/alBho": {
+              "icon": "refresh-cw",
+              "fill": "$text"
+            }
+          }
+        },
+        {
+          "id": "iiOYv",
+          "type": "ref",
+          "ref": "HeXc3",
+          "name": "系统手势指示",
+          "x": 129,
+          "y": 858,
+          "layoutPosition": "absolute"
+        }
+      ]
     }
   ],
   "themes": {
@@ -43546,13 +44584,13 @@
       "type": "color",
       "value": [
         {
-          "value": "#FFFFFFCC",
+          "value": "#FFFFFF80",
           "theme": {
             "mode": "light"
           }
         },
         {
-          "value": "#1C1C1ED9",
+          "value": "#1C1C1E99",
           "theme": {
             "mode": "dark"
           }
@@ -43563,13 +44601,13 @@
       "type": "color",
       "value": [
         {
-          "value": "#FFFFFF40",
+          "value": "#FFFFFF66",
           "theme": {
             "mode": "light"
           }
         },
         {
-          "value": "#FFFFFF1F",
+          "value": "#FFFFFF26",
           "theme": {
             "mode": "dark"
           }
@@ -43747,7 +44785,7 @@
     },
     "size-display": {
       "type": "number",
-      "value": 34
+      "value": 28
     },
     "weight-display": {
       "type": "string",
@@ -44352,11 +45390,11 @@
     },
     "glass-refractionIndex": {
       "type": "number",
-      "value": 1.04
+      "value": 1.1
     },
     "glass-refractionWidth": {
       "type": "number",
-      "value": 12
+      "value": 16
     },
     "glass-dispersion": {
       "type": "number",
@@ -44580,7 +45618,7 @@
     },
     "glass-specularThickness": {
       "type": "number",
-      "value": 1
+      "value": 2
     },
     "glass-specularSharpness": {
       "type": "number",
@@ -44592,11 +45630,11 @@
     },
     "glass-specularIntensity": {
       "type": "number",
-      "value": 0.35
+      "value": 0.75
     },
     "glass-specularOppositeIntensity": {
       "type": "number",
-      "value": 0.25
+      "value": 0.65
     },
     "glass-glowThickness": {
       "type": "number",
@@ -44612,11 +45650,11 @@
     },
     "glass-glowIntensity": {
       "type": "number",
-      "value": 0.08
+      "value": 0.25
     },
     "glass-glowOppositeIntensity": {
       "type": "number",
-      "value": 0.15
+      "value": 0.5
     },
     "glass-clear-blur": {
       "type": "number",
@@ -44648,7 +45686,7 @@
     },
     "glass-opticalDepth": {
       "type": "number",
-      "value": 24
+      "value": 70
     },
     "list-icon-blue": {
       "type": "color",
@@ -44708,15 +45746,15 @@
     },
     "navigation-lens-refractionIndex": {
       "type": "number",
-      "value": 1.04
+      "value": 1.1
     },
     "navigation-lens-opticalDepth": {
       "type": "number",
-      "value": 12
+      "value": 20
     },
     "navigation-lens-specularIntensity": {
       "type": "number",
-      "value": 0.65
+      "value": 2
     },
     "list-icon-slate": {
       "type": "color",

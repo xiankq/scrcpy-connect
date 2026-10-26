@@ -38,7 +38,7 @@
 
 无线发现只提供候选，接纳前核对真实GUID及发现代次；配对端口与连接端口分别使用。授权拒绝停止自动重连，不降级明文。USB平台租约保持到SDK实际断开；Activity/引擎更替先排空旧SDK任务，再释放原始描述符。
 
-`DeviceHealthCoordinator` 解释入站活动和OPEN探针。只有OPEN已写出且之后无入站进展的响应超时才累计沉默；本机排队或容量失败不算对端失活。
+`DeviceHealthCoordinator` 解释入站活动和OPEN探针。只有OPEN已写出且之后无入站进展的响应超时才累计沉默；本机排队或容量失败不算对端失活。官方 ADB 在精确传输选择阶段明确拒绝的结果表示该传输已关闭；普通 I/O 或服务拒绝仍保留原分类。
 
 `PhysicalDisplayLease` 随逻辑手机窗口保持；`PhysicalDisplayRecovery` 在连接交付前恢复遗留覆盖。修改前保存原状态和owner，停止捕获及尺寸worker后按原owner恢复并读回；确认前不交给后继窗口，未知修改不猜测恢复成功。
 
@@ -50,16 +50,16 @@
 
 互联服务传输已确认关闭、没有未知媒体且持有精确部署身份时，先排空本机流，再由 `CompanionRecovery` 持久接收原设备序列号及 PID/starttime/JAR 清理责任。身份核验通过的同设备候选在准入前偿清原部署；明确停止和进程重建保留债务，不据此自动连接。未知启动身份、媒体或本机释放失败仍阻止移交。
 
-文件模块由 `FileCatalog`、`FileMutationCoordinator`、`TransferCoordinator` 分别拥有快照、变更和传输。批次固定原连接；停止等待准备、worker、句柄与预算收尾。finalizing或提交回执丢失保留result_unknown，清理成功不等于提交成功，移除历史不删除文件。
+文件模块由 `FileCatalog`、`FileMutationCoordinator`、`TransferCoordinator` 分别拥有快照、变更和传输。批次固定原连接；删除和重命名携带选择时的对象身份，在设备助手内固定对象并核验后执行，不凭同名路径授权变更。停止等待准备、worker、句柄与预算收尾。finalizing或提交回执丢失保留result_unknown，清理成功不等于提交成功，移除历史不删除文件。
 
 `AppMediaCache` 只清理登记的预览及出站原件树。活动读写、未决交付及外部应用可能仍在读取的来源保持保护；文档与分享各持来源账本，完整传输引用核对后才能回收，见[系统交付](content-delivery.md)。
 
-视频路径为Rust scrcpy packet source → Rust媒体核心 → 裁剪FFmpeg → 平台纹理；PCM直接进入平台输出，媒体字节不经Dart JSON。捕获与播放器分别关闭。画质重建保留逻辑session和真实应用task，只替换捕获，旧捕获/renderer代次的输入与回执失效。
+视频路径为Rust scrcpy packet source → Rust媒体核心 → 裁剪FFmpeg → 平台纹理；PCM直接进入平台输出，媒体字节不经Dart JSON。捕获与播放器分别关闭。画质重建保留逻辑session和真实应用task，只替换捕获，旧捕获/renderer代次的输入与回执失效。画质事件与呈现共用同一目标代次和结果字段，输出失败明确结束重建并等待显式重试；经当前捕获与 renderer 核验的帧尺寸同步为输入几何，迟到帧不得倒退尺寸。
 
-`RemotePresentation` 管理窗口绑定与恢复，`RemoteInputOwner` 管理输入及持键。页面声音租约归 `DeviceAudioViewCoordinator`，同设备共用 `DeviceAudioSourceCoordinator` 的音源。官方JAR的暂停只停止本机呈现，capturePaused=false；恢复通过RESET_VIDEO取新画面。
+`RemotePresentation` 管理窗口绑定与恢复，`RemoteInputOwner` 管理输入及持键。页面声音租约归 `DeviceAudioViewCoordinator`，同设备共用 `DeviceAudioSourceCoordinator` 的音源。永久失焦和音频路由中断的手动恢复栅栏归设备级页面意图所有者，音源释放或重建不清除。官方JAR的暂停只停止本机呈现，capturePaused=false；恢复通过RESET_VIDEO取新画面。
 
 ## 本机集成
 
-Android连接与音频前台服务分别持有通知和资源。系统停止保留停止意图，用户明确恢复后才重新准入。`SystemNotificationCoordinator` 持有本机提醒，点击重验当前设备和观察代次；重连与核验快照形成安静基线。
+Android连接与音频前台服务分别持有通知和资源。系统停止保留停止意图，用户明确恢复后才重新准入。`SystemNotificationCoordinator` 持有本机提醒，点击重验当前设备和观察代次；重连与核验快照形成安静基线。系统撤回失败保留精确提醒 ID 的清理责任，确认撤回前不复用该 ID。
 
 进程级 `DiagnosticLog` 使用白名单字段及加盐标识，保存有界JSONL，不记录私钥、命令参数或异常正文。main初始化日志与GlassMaterial后启动应用；材质与辅助偏好按[视觉规范](../../designs/design.md)实现。
