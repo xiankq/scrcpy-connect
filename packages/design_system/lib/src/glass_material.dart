@@ -25,11 +25,12 @@ abstract final class GlassMaterial {
       'component-owned-navigation-and-local-surface-groups';
 
   static Future<void> initialize() {
-    if (!ImageFilter.isShaderFilterSupported) return Future<void>.value();
     return _initialization ??=
         liquid.LiquidGlassWidgets.initialize(
               enablePerformanceMonitor: false,
-              warmUpMode: liquid.GlassWarmUpMode.always,
+              warmUpMode: ImageFilter.isShaderFilterSupported
+                  ? liquid.GlassWarmUpMode.always
+                  : liquid.GlassWarmUpMode.auto,
             )
             .then((_) {
               _initialized = true;
@@ -57,8 +58,7 @@ abstract final class GlassMaterial {
     );
   }
 
-  static liquid.GlassQuality quality(BuildContext context) =>
-      opaque(context) || !ImageFilter.isShaderFilterSupported
+  static liquid.GlassQuality quality(BuildContext context) => opaque(context)
       ? liquid.GlassQuality.minimal
       : liquid.GlassQuality.premium;
 
@@ -99,6 +99,7 @@ abstract final class GlassMaterial {
       : liquid.AnimatedGlassIndicator.baseIndicatorSettings;
 
   static bool restingNavigationLens(BuildContext context) =>
+      ImageFilter.isShaderFilterSupported &&
       Theme.of(context).brightness == Brightness.light &&
       quality(context) == liquid.GlassQuality.premium;
 
@@ -142,7 +143,7 @@ abstract final class GlassMaterial {
 
 /// 共享单次 SDF 与折射的光学平面。
 /// 同变体组加入外层平面，不同变体分离；作用域限于当前页面，不能跨 Navigator 或保留标签页。
-class GlassSurfaceGroup extends StatelessWidget {
+class GlassSurfaceGroup extends StatefulWidget {
   const GlassSurfaceGroup({
     super.key,
     required this.child,
@@ -167,8 +168,10 @@ class GlassSurfaceGroup extends StatelessWidget {
   final bool _isolated;
 
   @override
-  Widget build(BuildContext context) {
-    if (opaqueGlass(context) || !ImageFilter.isShaderFilterSupported) {
+  State<GlassSurfaceGroup> createState() => _GlassSurfaceGroupState();
+
+  Widget _build(BuildContext context, Widget child) {
+    if (opaqueGlass(context)) {
       return child;
     }
     final enclosing = context.dependOnInheritedWidgetOfExactType<_GlassGroup>();
@@ -193,6 +196,17 @@ class GlassSurfaceGroup extends StatelessWidget {
   }
 }
 
+class _GlassSurfaceGroupState extends State<GlassSurfaceGroup> {
+  // 材料切换会改变包装层级；内容只重挂载，保留焦点、滚动与业务状态。
+  final _contentKey = GlobalKey();
+
+  @override
+  Widget build(BuildContext context) => widget._build(
+    context,
+    KeyedSubtree(key: _contentKey, child: widget.child),
+  );
+}
+
 class _GlassGroup extends InheritedWidget {
   const _GlassGroup({required this.variant, required super.child});
   final GlassVariant variant;
@@ -201,7 +215,7 @@ class _GlassGroup extends InheritedWidget {
       variant != oldWidget.variant;
 }
 
-class Glass extends StatelessWidget {
+class Glass extends StatefulWidget {
   const Glass({
     super.key,
     required this.child,
@@ -219,6 +233,9 @@ class Glass extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final bool solid;
   final GlassVariant variant;
+
+  @override
+  State<Glass> createState() => _GlassState();
 
   /// 后端配置采用项目光学深度、色调和光照 token。
   /// 旧后端的折射带宽度不等同于厚度。
@@ -252,25 +269,27 @@ class Glass extends StatelessWidget {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _build(BuildContext context, GlobalKey contentKey) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final opaque = opaqueGlass(context, solid: solid);
     final style = optics(
       brightness: Theme.of(context).brightness,
       variant: variant,
     );
-    final content = DecoratedBox(
-      decoration: BoxDecoration(
-        color: opaque ? Theme.of(context).colorScheme.surface : null,
-        borderRadius: BorderRadius.circular(radius),
-        border: opaque
-            ? Border.all(color: Theme.of(context).colorScheme.outline)
-            : null,
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: Padding(padding: padding, child: child),
+    final content = KeyedSubtree(
+      key: contentKey,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: opaque ? Theme.of(context).colorScheme.surface : null,
+          borderRadius: BorderRadius.circular(radius),
+          border: opaque
+              ? Border.all(color: Theme.of(context).colorScheme.outline)
+              : null,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     );
     Widget surface;
@@ -279,8 +298,8 @@ class Glass extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         child: content,
       );
-    } else if (ImageFilter.isShaderFilterSupported) {
-      if (!GlassMaterial.isInitialized) {
+    } else {
+      if (ImageFilter.isShaderFilterSupported && !GlassMaterial.isInitialized) {
         throw StateError(
           'Await GlassMaterial.initialize() before mounting glass controls.',
         );
@@ -302,26 +321,6 @@ class Glass extends StatelessWidget {
               child: content,
             );
       surface = boundGlassSampling(surface, expansion: clipExpansion);
-    } else {
-      // Widget 测试及不支持 shader 的后端保留明确的磨砂回退。
-      surface = ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: style.glassColor,
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: dark
-                    ? ConnectTokens.glassEdgeDark
-                    : ConnectTokens.glassEdge,
-              ),
-            ),
-            child: content,
-          ),
-        ),
-      );
     }
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -337,4 +336,11 @@ class Glass extends StatelessWidget {
       child: surface,
     );
   }
+}
+
+class _GlassState extends State<Glass> {
+  final _contentKey = GlobalKey();
+
+  @override
+  Widget build(BuildContext context) => widget._build(context, _contentKey);
 }

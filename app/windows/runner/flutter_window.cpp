@@ -1,8 +1,83 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <flutter/event_channel.h>
+#include <flutter/event_stream_handler_functions.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "utils.h"
+
+class SystemTypography {
+ public:
+  explicit SystemTypography(flutter::BinaryMessenger* messenger)
+      : methods_(messenger, "dev.scrcpyconnect/system_typography",
+                 &flutter::StandardMethodCodec::GetInstance()),
+        events_(messenger, "dev.scrcpyconnect/system_typography/events",
+                &flutter::StandardMethodCodec::GetInstance()) {
+    methods_.SetMethodCallHandler(
+        [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+               std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+          if (call.method_name() != "read") {
+            result->NotImplemented();
+            return;
+          }
+          auto snapshot = Snapshot();
+          if (snapshot) {
+            result->Success(*snapshot);
+          } else {
+            result->Error("unavailable", "System font is unavailable");
+          }
+        });
+    events_.SetStreamHandler(
+        std::make_unique<flutter::StreamHandlerFunctions<flutter::EncodableValue>>(
+            [this](const flutter::EncodableValue*,
+                   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& sink)
+                -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
+              sink_ = std::move(sink);
+              Publish();
+              return nullptr;
+            },
+            [this](const flutter::EncodableValue*)
+                -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
+              sink_.reset();
+              return nullptr;
+            }));
+  }
+
+  ~SystemTypography() {
+    sink_.reset();
+    events_.SetStreamHandler(nullptr);
+    methods_.SetMethodCallHandler(nullptr);
+  }
+
+  void Publish() {
+    if (!sink_) return;
+    auto snapshot = Snapshot();
+    if (snapshot) sink_->Success(*snapshot);
+  }
+
+ private:
+  std::optional<flutter::EncodableValue> Snapshot() {
+    NONCLIENTMETRICSW metrics = {};
+    metrics.cbSize = sizeof(metrics);
+    if (!SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics,
+                               0)) {
+      return std::nullopt;
+    }
+    const std::string family = Utf8FromUtf16(metrics.lfMessageFont.lfFaceName);
+    if (family.empty()) return std::nullopt;
+    return flutter::EncodableValue(flutter::EncodableMap{
+        {flutter::EncodableValue("revision"), flutter::EncodableValue(++revision_)},
+        {flutter::EncodableValue("fontFamily"), flutter::EncodableValue(family)}});
+  }
+
+  flutter::MethodChannel<flutter::EncodableValue> methods_;
+  flutter::EventChannel<flutter::EncodableValue> events_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> sink_;
+  int64_t revision_ = 0;
+};
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -24,6 +99,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  system_typography_ = std::make_unique<SystemTypography>(
+      flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -37,6 +114,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  system_typography_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -48,6 +126,12 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // 先读取真实字族；引擎处理这些消息时可能直接返回。
+  if (flutter_controller_ &&
+      (message == WM_SETTINGCHANGE || message == WM_FONTCHANGE)) {
+    flutter_controller_->engine()->ReloadSystemFonts();
+    if (system_typography_) system_typography_->Publish();
+  }
   // 先让 Flutter 及插件处理窗口消息。
   if (flutter_controller_) {
     std::optional<LRESULT> result =
@@ -56,12 +140,6 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     if (result) {
       return *result;
     }
-  }
-
-  switch (message) {
-    case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
-      break;
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);

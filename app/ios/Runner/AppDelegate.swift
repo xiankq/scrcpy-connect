@@ -14,5 +14,84 @@ import UserNotifications
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SystemVisualPreferences") {
+      SystemVisualPreferences.register(with: registrar)
+    }
   }
+}
+
+private final class SystemVisualPreferences: NSObject, FlutterPlugin, FlutterStreamHandler {
+  private var sink: FlutterEventSink?
+  private var observer: NSObjectProtocol?
+  private var revision: Int64 = 0
+  private var generation: Int64 = 0
+
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let instance = SystemVisualPreferences()
+    let methods = FlutterMethodChannel(
+      name: "dev.scrcpyconnect/visual_preferences", binaryMessenger: registrar.messenger())
+    registrar.addMethodCallDelegate(instance, channel: methods)
+    registrar.publish(instance)
+    let events = FlutterEventChannel(
+      name: "dev.scrcpyconnect/visual_preferences/events", binaryMessenger: registrar.messenger())
+    events.setStreamHandler(instance)
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard call.method == "read" else {
+      result(FlutterMethodNotImplemented)
+      return
+    }
+    DispatchQueue.main.async { result(self.snapshot()) }
+  }
+
+  @MainActor
+  private func snapshot() -> [String: Any] {
+    revision += 1
+    return [
+      "revision": revision,
+      "reduceTransparency": UIAccessibility.isReduceTransparencyEnabled,
+    ]
+  }
+
+  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink)
+    -> FlutterError?
+  {
+    stopObserving()
+    sink = events
+    let listeningGeneration = generation
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self, self.generation == listeningGeneration else { return }
+      // 先注册通知再读取，避免读取和开始监听之间丢失系统变更。
+      self.observer = NotificationCenter.default.addObserver(
+        forName: UIAccessibility.reduceTransparencyStatusDidChangeNotification,
+        object: nil, queue: .main
+      ) { [weak self] _ in
+        DispatchQueue.main.async { [weak self] in
+          guard let self = self, self.generation == listeningGeneration else { return }
+          self.sink?(self.snapshot())
+        }
+      }
+      self.sink?(self.snapshot())
+    }
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    stopObserving()
+    return nil
+  }
+
+  func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    stopObserving()
+  }
+
+  private func stopObserving() {
+    generation += 1
+    if let observer = observer { NotificationCenter.default.removeObserver(observer) }
+    observer = nil
+    sink = nil
+  }
+
+  deinit { stopObserving() }
 }

@@ -8,6 +8,8 @@
 
 #include "win32_window.h"
 
+class SystemTypography;
+
 // 仅承载 Flutter 视图的窗口。
 class FlutterWindow : public Win32Window {
  public:
@@ -28,6 +30,7 @@ class FlutterWindow : public Win32Window {
 
   // 此窗口承载的 Flutter 实例。
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+  std::unique_ptr<SystemTypography> system_typography_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

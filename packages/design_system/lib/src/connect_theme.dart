@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'generated/design_tokens.g.dart';
@@ -48,7 +49,29 @@ abstract final class ConnectTokens {
     };
   }
 
-  static ThemeData theme(Brightness brightness) {
+  static ThemeData theme(
+    Brightness brightness, {
+    String? fontFamily,
+    List<String>? fontFamilyFallback,
+  }) {
+    final platform = defaultTargetPlatform;
+    final family = switch (platform) {
+      TargetPlatform.iOS || TargetPlatform.macOS => null,
+      TargetPlatform.android ||
+      TargetPlatform.linux => fontFamily ?? 'sans-serif',
+      _ => fontFamily,
+    };
+    TextStyle systemStyle(TextStyle style) => style.copyWith(
+      fontFamily: switch (platform) {
+        TargetPlatform.iOS =>
+          (style.fontSize ?? DesignTokens.typographyBodyFontSize) >= 20
+              ? 'CupertinoSystemDisplay'
+              : 'CupertinoSystemText',
+        TargetPlatform.macOS => '.AppleSystemUIFont',
+        _ => family,
+      },
+      fontFamilyFallback: fontFamilyFallback,
+    );
     final dark = brightness == Brightness.dark;
     final foreground = dark ? DesignTokens.colorTextDark : ink;
     final surface = dark
@@ -131,6 +154,9 @@ abstract final class ConnectTokens {
     final text = dark ? DesignTokens.colorTextDark : ink;
     return ThemeData(
       useMaterial3: true,
+      fontFamily: family,
+      // 明确的系统字族优先，不继承 Material 的固定 Linux 候选列表。
+      fontFamilyFallback: fontFamilyFallback ?? const [],
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
@@ -209,61 +235,77 @@ abstract final class ConnectTokens {
         ),
       ),
       textTheme: TextTheme(
-        displaySmall: TextStyle(
-          fontSize: DesignTokens.typographyDisplayFontSize,
-          fontWeight: DesignTokens.typographyDisplayFontWeight,
-          height: DesignTokens.typographyDisplayLineHeight,
-          letterSpacing: DesignTokens.typographyDisplayLetterSpacing,
-          color: text,
+        displaySmall: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyDisplayFontSize,
+            fontWeight: DesignTokens.typographyDisplayFontWeight,
+            height: DesignTokens.typographyDisplayLineHeight,
+            letterSpacing: DesignTokens.typographyDisplayLetterSpacing,
+            color: text,
+          ),
         ),
-        headlineMedium: TextStyle(
-          fontSize: DesignTokens.typographyTitleFontSize,
-          fontWeight: DesignTokens.typographyTitleFontWeight,
-          height: DesignTokens.typographyTitleLineHeight,
-          letterSpacing: DesignTokens.typographyTitleLetterSpacing,
-          color: text,
+        headlineMedium: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyTitleFontSize,
+            fontWeight: DesignTokens.typographyTitleFontWeight,
+            height: DesignTokens.typographyTitleLineHeight,
+            letterSpacing: DesignTokens.typographyTitleLetterSpacing,
+            color: text,
+          ),
         ),
-        titleLarge: TextStyle(
-          fontSize: DesignTokens.typographyHeadingFontSize,
-          fontWeight: DesignTokens.typographyHeadingFontWeight,
-          height: DesignTokens.typographyHeadingLineHeight,
-          letterSpacing: DesignTokens.typographyHeadingLetterSpacing,
-          color: text,
+        titleLarge: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyHeadingFontSize,
+            fontWeight: DesignTokens.typographyHeadingFontWeight,
+            height: DesignTokens.typographyHeadingLineHeight,
+            letterSpacing: DesignTokens.typographyHeadingLetterSpacing,
+            color: text,
+          ),
         ),
-        titleMedium: TextStyle(
-          fontSize: DesignTokens.typographyBodyEmphasisFontSize,
-          fontWeight: DesignTokens.typographyBodyEmphasisFontWeight,
-          height: DesignTokens.typographyBodyEmphasisLineHeight,
-          letterSpacing: DesignTokens.typographyBodyEmphasisLetterSpacing,
-          color: text,
+        titleMedium: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyBodyEmphasisFontSize,
+            fontWeight: DesignTokens.typographyBodyEmphasisFontWeight,
+            height: DesignTokens.typographyBodyEmphasisLineHeight,
+            letterSpacing: DesignTokens.typographyBodyEmphasisLetterSpacing,
+            color: text,
+          ),
         ),
-        bodyLarge: TextStyle(
-          fontSize: DesignTokens.typographyBodyFontSize,
-          fontWeight: DesignTokens.typographyBodyFontWeight,
-          height: DesignTokens.typographyBodyLineHeight,
-          letterSpacing: DesignTokens.typographyBodyLetterSpacing,
-          color: text,
+        bodyLarge: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyBodyFontSize,
+            fontWeight: DesignTokens.typographyBodyFontWeight,
+            height: DesignTokens.typographyBodyLineHeight,
+            letterSpacing: DesignTokens.typographyBodyLetterSpacing,
+            color: text,
+          ),
         ),
-        bodyMedium: TextStyle(
-          fontSize: DesignTokens.typographyBodyCompactFontSize,
-          fontWeight: DesignTokens.typographyBodyCompactFontWeight,
-          height: DesignTokens.typographyBodyCompactLineHeight,
-          letterSpacing: DesignTokens.typographyBodyCompactLetterSpacing,
-          color: text,
+        bodyMedium: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyBodyCompactFontSize,
+            fontWeight: DesignTokens.typographyBodyCompactFontWeight,
+            height: DesignTokens.typographyBodyCompactLineHeight,
+            letterSpacing: DesignTokens.typographyBodyCompactLetterSpacing,
+            color: text,
+          ),
         ),
-        bodySmall: TextStyle(
-          fontSize: DesignTokens.typographyCaptionFontSize,
-          fontWeight: DesignTokens.typographyCaptionFontWeight,
-          height: DesignTokens.typographyCaptionLineHeight,
-          letterSpacing: DesignTokens.typographyCaptionLetterSpacing,
-          color: dark ? DesignTokens.colorSecondaryDark : secondary,
+        bodySmall: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyCaptionFontSize,
+            fontWeight: DesignTokens.typographyCaptionFontWeight,
+            height: DesignTokens.typographyCaptionLineHeight,
+            letterSpacing: DesignTokens.typographyCaptionLetterSpacing,
+            color: dark ? DesignTokens.colorSecondaryDark : secondary,
+          ),
         ),
-        labelLarge: TextStyle(
-          fontSize: DesignTokens.typographyLabelFontSize,
-          fontWeight: DesignTokens.typographyLabelFontWeight,
-          height: DesignTokens.typographyLabelLineHeight,
-          letterSpacing: DesignTokens.typographyLabelLetterSpacing,
-          color: text,
+        labelLarge: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyLabelFontSize,
+            fontWeight: DesignTokens.typographyLabelFontWeight,
+            height: DesignTokens.typographyLabelLineHeight,
+            letterSpacing: DesignTokens.typographyLabelLetterSpacing,
+            color: text,
+          ),
         ),
       ),
       appBarTheme: AppBarTheme(
@@ -294,7 +336,7 @@ abstract final class ConnectTokens {
           backgroundColor: dark
               ? DesignTokens.colorPrimaryActionDark
               : DesignTokens.colorPrimaryAction,
-          textStyle: DesignTokens.componentButtonPrimaryTypography,
+          textStyle: systemStyle(DesignTokens.componentButtonPrimaryTypography),
           shape: const StadiumBorder(),
         ),
       ),
@@ -312,7 +354,9 @@ abstract final class ConnectTokens {
           backgroundColor: dark
               ? DesignTokens.componentButtonSecondaryDarkBackgroundColor
               : DesignTokens.componentButtonSecondaryBackgroundColor,
-          textStyle: DesignTokens.componentButtonSecondaryTypography,
+          textStyle: systemStyle(
+            DesignTokens.componentButtonSecondaryTypography,
+          ),
           shape: const StadiumBorder(),
         ),
       ),
@@ -328,7 +372,7 @@ abstract final class ConnectTokens {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: DesignTokens.componentButtonPrimaryTypography,
+          textStyle: systemStyle(DesignTokens.componentButtonPrimaryTypography),
           minimumSize: const Size(
             DesignTokens.componentIconButtonSize,
             DesignTokens.componentIconButtonSize,
@@ -343,12 +387,14 @@ abstract final class ConnectTokens {
         minLeadingWidth: DesignTokens.componentIconSize,
         horizontalTitleGap: DesignTokens.componentRowGap,
         minVerticalPadding: DesignTokens.componentRowVerticalPadding,
-        titleTextStyle: TextStyle(
-          fontSize: DesignTokens.typographyBodyFontSize,
-          fontWeight: DesignTokens.typographyBodyFontWeight,
-          height: DesignTokens.typographyBodyLineHeight,
-          letterSpacing: DesignTokens.typographyBodyLetterSpacing,
-          color: text,
+        titleTextStyle: systemStyle(
+          TextStyle(
+            fontSize: DesignTokens.typographyBodyFontSize,
+            fontWeight: DesignTokens.typographyBodyFontWeight,
+            height: DesignTokens.typographyBodyLineHeight,
+            letterSpacing: DesignTokens.typographyBodyLetterSpacing,
+            color: text,
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

@@ -9,6 +9,7 @@ class ActionRow extends StatelessWidget {
     required this.title,
     this.onTap,
     this.enabled = true,
+    this.destructive = false,
     this.color,
     this.trailing,
     this.contentPadding = const EdgeInsets.symmetric(
@@ -19,6 +20,7 @@ class ActionRow extends StatelessWidget {
   final String title;
   final VoidCallback? onTap;
   final bool enabled;
+  final bool destructive;
   final Color? color;
   final Widget? trailing;
   final EdgeInsetsGeometry contentPadding;
@@ -35,8 +37,13 @@ class ActionRow extends StatelessWidget {
     ),
     title: Text(
       title,
-      style: Theme.of(context).textTheme.bodyLarge
-          ?.copyWith(color: enabled ? null : Theme.of(context).disabledColor),
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+        color: !enabled
+            ? Theme.of(context).disabledColor
+            : destructive
+            ? Theme.of(context).colorScheme.error
+            : null,
+      ),
     ),
     trailing:
         trailing ??

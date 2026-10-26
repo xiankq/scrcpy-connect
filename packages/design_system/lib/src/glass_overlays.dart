@@ -179,7 +179,7 @@ class _GlassTooltipMaterial extends StatelessWidget {
 
 /// 库卡片持有玻璃表面；Flutter 保留覆盖层布局、焦点和滚动。
 /// GlassCard 不公开 clipExpansion，因此局部图层提供动画纹理余量。
-class _GlassOverlayCard extends StatelessWidget {
+class _GlassOverlayCard extends StatefulWidget {
   const _GlassOverlayCard({
     required this.child,
     required this.radius,
@@ -193,20 +193,32 @@ class _GlassOverlayCard extends StatelessWidget {
   final EdgeInsets clipExpansion;
 
   @override
+  State<_GlassOverlayCard> createState() => _GlassOverlayCardState();
+}
+
+class _GlassOverlayCardState extends State<_GlassOverlayCard> {
+  // 材质包装层随辅助偏好改变，业务内容保留同一份 State。
+  final _contentKey = GlobalKey();
+
+  @override
   Widget build(BuildContext context) => GlassSurfaceGroup.isolated(
-    clipExpansion: clipExpansion,
+    clipExpansion: widget.clipExpansion,
     child: Builder(
       builder: (context) {
-        if (opaqueGlass(context) || !ImageFilter.isShaderFilterSupported) {
+        final content = KeyedSubtree(
+          key: _contentKey,
+          child: Material(type: MaterialType.transparency, child: widget.child),
+        );
+        if (opaqueGlass(context)) {
           return Glass(
-            solid: !ImageFilter.isShaderFilterSupported,
-            radius: radius,
-            padding: padding,
-            clipExpansion: clipExpansion,
-            child: child,
+            radius: widget.radius,
+            padding: widget.padding,
+            clipExpansion: widget.clipExpansion,
+            child: content,
           );
         }
-        if (!GlassMaterial.isInitialized) {
+        if (ImageFilter.isShaderFilterSupported &&
+            !GlassMaterial.isInitialized) {
           throw StateError(
             'Await GlassMaterial.initialize() before mounting glass overlays.',
           );
@@ -214,7 +226,7 @@ class _GlassOverlayCard extends StatelessWidget {
         final dark = Theme.of(context).brightness == Brightness.dark;
         return DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
+            borderRadius: BorderRadius.circular(widget.radius),
             boxShadow: [
               BoxShadow(
                 color: dark ? ConnectTokens.shadowDark : ConnectTokens.shadow,
@@ -224,11 +236,13 @@ class _GlassOverlayCard extends StatelessWidget {
             ],
           ),
           child: liquid.GlassContainer.card(
-            shape: liquid.LiquidRoundedSuperellipse(borderRadius: radius),
-            padding: padding,
+            shape: liquid.LiquidRoundedSuperellipse(
+              borderRadius: widget.radius,
+            ),
+            padding: widget.padding,
             quality: liquid.GlassQuality.premium,
             clipBehavior: Clip.antiAlias,
-            child: Material(type: MaterialType.transparency, child: child),
+            child: content,
           ),
         );
       },
@@ -284,13 +298,13 @@ class GlassAlertDialog extends StatelessWidget {
             children: [
               if (title != null) ...[
                 DefaultTextStyle(
-                  style: Theme.of(context).textTheme.titleLarge!,
+                  style: Theme.of(context).textTheme.headlineMedium!,
                   child: title!,
                 ),
                 const SizedBox(height: DesignTokens.spacingMd),
               ],
               DefaultTextStyle(
-                style: Theme.of(context).textTheme.bodyMedium!,
+                style: Theme.of(context).textTheme.bodyLarge!,
                 child: content,
               ),
               if (actions.isNotEmpty) ...[
@@ -328,6 +342,9 @@ Future<T?> showGlassDialog<T>({
   );
   return Navigator.of(context, rootNavigator: true).push<T>(
     _GlassDialogRoute<T>(
+      barrierColor: Theme.of(context).brightness == Brightness.dark
+          ? DesignTokens.componentModalScrimDarkBackgroundColor
+          : DesignTokens.componentModalScrimBackgroundColor,
       barrierDismissible: barrierDismissible,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       settings: routeSettings,
@@ -363,9 +380,9 @@ class _GlassDialogRoute<T> extends RawDialogRoute<T> {
     required super.barrierDismissible,
     required super.barrierLabel,
     required super.transitionBuilder,
+    required super.barrierColor,
     super.settings,
   }) : super(
-         barrierColor: liquid.GlassDefaults.barrierColor,
          transitionDuration: liquid.GlassDefaults.materializeDuration,
          traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
        );
@@ -389,8 +406,13 @@ Future<T?> showGlassModalSheet<T>({
 }) {
   final reduceTransparency = GlassPreferences.reduced(context);
   final reducedMotion = liquid.GlassAccessibilityData.of(context).reduceMotion;
+  // 每次展示独立持有身份，跨实体和光学包装保留内容及焦点、滚动状态。
+  final contentKey = GlobalKey();
   return showModalBottomSheet<T>(
     context: context,
+    barrierColor: Theme.of(context).brightness == Brightness.dark
+        ? DesignTokens.componentModalScrimDarkBackgroundColor
+        : DesignTokens.componentModalScrimBackgroundColor,
     isScrollControlled: isScrollControlled,
     useSafeArea: useSafeArea,
     constraints: constraints,
@@ -406,9 +428,8 @@ Future<T?> showGlassModalSheet<T>({
       reduceTransparency: reduceTransparency,
       child: Builder(
         builder: (context) {
-          final opaque =
-              opaqueGlass(context) || !ImageFilter.isShaderFilterSupported;
-          final content = Column(
+          final opaque = opaqueGlass(context);
+          final body = Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -443,6 +464,10 @@ Future<T?> showGlassModalSheet<T>({
               Flexible(child: builder(context)),
             ],
           );
+          final content = KeyedSubtree(
+            key: contentKey,
+            child: Material(type: MaterialType.transparency, child: body),
+          );
           if (opaque) {
             const corners = BorderRadius.vertical(
               top: Radius.circular(DesignTokens.componentSheetRounded),
@@ -459,15 +484,13 @@ Future<T?> showGlassModalSheet<T>({
                       color: Theme.of(context).colorScheme.outline,
                     ),
                   ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: content,
-                  ),
+                  child: content,
                 ),
               ),
             );
           }
-          if (!GlassMaterial.isInitialized) {
+          if (ImageFilter.isShaderFilterSupported &&
+              !GlassMaterial.isInitialized) {
             throw StateError(
               'Await GlassMaterial.initialize() before mounting glass overlays.',
             );
@@ -519,10 +542,7 @@ Future<T?> showGlassModalSheet<T>({
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(DesignTokens.componentSheetRounded),
                   ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: content,
-                  ),
+                  child: content,
                 ),
               ],
             ),

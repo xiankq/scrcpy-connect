@@ -11,11 +11,11 @@ const extensions = new Map([
     'verticalPadding', 'specularThickness', 'glowThickness'].map(name => [name, { type: 'dimension', min: 0 }]),
   ['shadowOffset', { type: 'dimension' }],
   ['borderColor', { type: 'color' }],
-  ...['opacity', 'stretch', 'specularSharpness', 'specularSpread', 'specularIntensity',
-    'specularOppositeIntensity', 'glowSpread', 'glowIntensity', 'glowOppositeIntensity']
+  ...['opacity', 'stretch', 'specularSharpness', 'specularSpread', 'glowSpread']
     .map(name => [name, { type: 'number', min: 0, max: 1 }]),
   ...['angle', 'glowAngle'].map(name => [name, { type: 'number' }]),
-  ...['dispersion', 'saturation'].map(name => [name, { type: 'number', min: 0 }]),
+  ...['dispersion', 'saturation', 'specularIntensity', 'specularOppositeIntensity',
+    'glowIntensity', 'glowOppositeIntensity'].map(name => [name, { type: 'number', min: 0 }]),
   ...['scale', 'magnification'].map(name => [name, { type: 'number', min: Number.MIN_VALUE }]),
   ['refractionIndex', { type: 'number', min: 1 }],
 ]);

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 import 'generated/design_tokens.g.dart';
-import 'glass_preferences.dart';
 import 'glass_material.dart';
 import 'glass_overlays.dart';
 import 'glass_press_feedback.dart';
@@ -44,7 +43,6 @@ class GlassMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final opaque = opaqueGlass(context);
     final reducedMotion = liquid.GlassAccessibilityData.of(context)
         .reduceMotion;
     final style = theme.textTheme.labelLarge!;
@@ -72,9 +70,9 @@ class GlassMenuButton extends StatelessWidget {
         ),
       );
     }
-    if (reducedMotion || opaque || !ImageFilter.isShaderFilterSupported) {
+    if (reducedMotion || !ImageFilter.isShaderFilterSupported) {
       // 后端的“瞬时”形变仍使用空间弹簧。
-      // 减少动态效果时采用无动画框架生命周期；回退 renderer 保留相同键盘与关闭语义，并使用明确实体表面。
+      // 减少动态效果或不支持形变时保留框架菜单生命周期，材料仍交给自适应玻璃后端。
       return MenuAnchor(
         animated: !reducedMotion,
         clipBehavior: Clip.none,
@@ -93,7 +91,6 @@ class GlassMenuButton extends StatelessWidget {
           GlassSurfaceGroup.isolated(
             variant: variant,
             child: Glass(
-              solid: !ImageFilter.isShaderFilterSupported,
               variant: variant,
               radius: DesignTokens.roundedLg,
               padding: const EdgeInsets.symmetric(
@@ -159,8 +156,8 @@ class GlassMenuButton extends StatelessWidget {
         menuPadding: const EdgeInsets.all(DesignTokens.spacingMd),
         menuBorderRadius: DesignTokens.roundedLg,
         itemBorderRadius: DesignTokens.roundedMd,
-        settings: Glass.optics(brightness: theme.brightness, variant: variant),
-        quality: liquid.GlassQuality.premium,
+        settings: GlassMaterial.settings(context, variant: variant),
+        quality: GlassMaterial.quality(context),
         stretch: reducedMotion
             ? 0
             : DesignTokens.componentGlassInteractionStretch,

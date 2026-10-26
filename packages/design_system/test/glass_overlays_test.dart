@@ -3,6 +3,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
+Finder ancestors(Finder child, Type type) =>
+    find.ancestor(of: child, matching: find.byType(type));
+
+Future<void> openModal(
+  WidgetTester tester,
+  Future<void> Function(BuildContext) onPressed, {
+  bool reduced = false,
+  ValueNotifier<bool>? highContrast,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: ConnectTokens.theme(Brightness.dark),
+      builder: (context, child) => ListenableBuilder(
+        listenable: Listenable.merge([highContrast]),
+        builder: (context, _) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(reduced ? 2 : 1),
+            highContrast: highContrast?.value ?? false,
+          ),
+          child: child!,
+        ),
+      ),
+      home: GlassPreferences(
+        reduceTransparency: reduced,
+        child: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => onPressed(context),
+              child: const Text('打开'),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('打开'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
     'alert retains arbitrary actions and route-local opaque preferences',
@@ -12,49 +51,27 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       int? result;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ConnectTokens.theme(Brightness.dark),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(2)),
-            child: child!,
-          ),
-          home: GlassPreferences(
-            reduceTransparency: true,
-            child: Builder(
-              builder: (context) => Scaffold(
-                body: TextButton(
-                  onPressed: () async {
-                    result = await showGlassDialog<int>(
-                      context: context,
-                      builder: (context) => GlassAlertDialog(
-                        title: const Text.rich(
-                          TextSpan(
-                            text: '选择操作',
-                            children: [TextSpan(text: '类型')],
-                          ),
-                        ),
-                        content: const Text('保留全部可用操作，文字放大后可滚动访问。'),
-                        actions: [
-                          for (var i = 0; i < 4; i++)
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, i),
-                              child: Text('执行操作 $i'),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                  child: const Text('打开'),
-                ),
+      await openModal(tester, (context) async {
+        result = await showGlassDialog<int>(
+          context: context,
+          builder: (context) => GlassAlertDialog(
+            title: const Text.rich(
+              TextSpan(
+                text: '选择操作',
+                children: [TextSpan(text: '类型')],
               ),
             ),
+            content: const Text('保留全部可用操作，文字放大后可滚动访问。'),
+            actions: [
+              for (var i = 0; i < 4; i++)
+                TextButton(
+                  onPressed: () => Navigator.pop(context, i),
+                  child: Text('执行操作 $i'),
+                ),
+            ],
           ),
-        ),
-      );
-      await tester.tap(find.text('打开'));
-      await tester.pumpAndSettle();
+        );
+      }, reduced: true);
       expect(find.byType(liquid.GlassContainer), findsNothing);
       expect(find.byType(liquid.AdaptiveGlass), findsNothing);
       expect(find.byType(BackdropFilter), findsNothing);
@@ -64,10 +81,7 @@ void main() {
         isTrue,
         reason: 'A modal route must retain the invoking subtree preference.',
       );
-      final plane = find.ancestor(
-        of: surface,
-        matching: find.byType(GlassSurfaceGroup),
-      );
+      final plane = ancestors(surface, GlassSurfaceGroup);
       expect(plane, findsOneWidget);
       expect(tester.getRect(plane), tester.getRect(surface));
       await tester.ensureVisible(find.text('执行操作 3'));
@@ -83,58 +97,63 @@ void main() {
   ) async {
     final controller = ScrollController();
     addTearDown(controller.dispose);
+    final highContrast = ValueNotifier(false);
+    addTearDown(highContrast.dispose);
     int? result;
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ConnectTokens.theme(Brightness.dark),
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () async {
-                result = await showGlassModalSheet<int>(
-                  context: context,
-                  constraints: const BoxConstraints(maxHeight: 260),
-                  builder: (context) => ListView(
-                    controller: controller,
-                    shrinkWrap: true,
-                    children: [
-                      for (var i = 0; i < 8; i++)
-                        ListTile(title: Text('操作 $i')),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, 7),
-                        child: const Text('完成'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              child: const Text('打开'),
+    await openModal(tester, (context) async {
+      result = await showGlassModalSheet<int>(
+        context: context,
+        constraints: const BoxConstraints(maxHeight: 260),
+        builder: (context) => ListView(
+          controller: controller,
+          shrinkWrap: true,
+          children: [
+            for (var i = 0; i < 8; i++) ListTile(title: Text('操作 $i')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 7),
+              child: const Text('完成'),
             ),
-          ),
+          ],
         ),
-      ),
-    );
-    await tester.tap(find.text('打开'));
-    await tester.pumpAndSettle();
+      );
+    }, highContrast: highContrast);
     expect(controller.hasClients, isTrue);
-    expect(find.byType(liquid.GlassSheet), findsNothing);
-    expect(find.byType(BackdropFilter), findsNothing);
+    expect(
+      tester
+          .widget<liquid.AdaptiveGlass>(find.byType(liquid.AdaptiveGlass))
+          .quality,
+      isNot(liquid.GlassQuality.minimal),
+    );
     final sheetClip = tester.widget<ClipRSuperellipse>(
-      find.ancestor(
-        of: find.text('操作 0'),
-        matching: find.byType(ClipRSuperellipse),
-      ),
+      ancestors(find.text('操作 0'), ClipRSuperellipse),
     );
     expect(
       sheetClip.borderRadius,
       const BorderRadius.vertical(
         top: Radius.circular(DesignTokens.componentSheetRounded),
       ),
-      reason:
-          'Opaque fallback keeps the same open bottom edge as native glass.',
+      reason: 'The sheet keeps its rounded top and open bottom edge.',
     );
     controller.jumpTo(controller.position.maxScrollExtent);
     await tester.pump();
+    final scroll = find.byType(Scrollable);
+    final state = tester.state(scroll);
+    final offset = controller.offset;
+    for (final value in [true, false]) {
+      highContrast.value = value;
+      await tester.pumpAndSettle();
+      expect(
+        find.byType(liquid.AdaptiveGlass),
+        value ? findsNothing : findsOneWidget,
+      );
+      expect(tester.state(scroll), same(state));
+      expect(controller.offset, offset);
+      expect(controller.positions, hasLength(1));
+      expect(
+        tester.widget<ListView>(find.byType(ListView)).controller,
+        same(controller),
+      );
+    }
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(result, 7);
@@ -194,24 +213,20 @@ void main() {
       final materialization = tester.widget<liquid.GlassMaterializeTransition>(
         find.byType(liquid.GlassMaterializeTransition),
       );
-      final localPlane = find
-          .ancestor(
-            of: find.byType(Glass),
-            matching: find.byType(GlassSurfaceGroup),
-          )
-          .first;
+      final localPlane = ancestors(
+        find.byType(liquid.GlassContainer),
+        GlassSurfaceGroup,
+      ).first;
       expect(
         tester.getRect(localPlane),
-        tester.getRect(find.byType(Glass)),
+        tester.getRect(find.byType(liquid.GlassContainer)),
         reason: 'A toolbar tooltip must own its overlay sampling plane.',
       );
       final ambientFade = tester.widget<FadeTransition>(
-        find
-            .ancestor(
-              of: find.byType(liquid.GlassMaterializeTransition),
-              matching: find.byType(FadeTransition),
-            )
-            .first,
+        ancestors(
+          find.byType(liquid.GlassMaterializeTransition),
+          FadeTransition,
+        ).first,
       );
       expect(materialization.animation, same(ambientFade.opacity));
       expect(

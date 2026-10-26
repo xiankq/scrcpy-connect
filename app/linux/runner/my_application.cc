@@ -14,6 +14,119 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+namespace {
+
+struct SystemTypography {
+  GtkSettings* settings;
+  FlMethodChannel* methods;
+  FlEventChannel* events;
+  gulong font_changed;
+  gint64 revision = 0;
+  bool listening = false;
+};
+
+FlValue* typography_snapshot(SystemTypography* self) {
+  g_autofree gchar* name = nullptr;
+  g_object_get(self->settings, "gtk-font-name", &name, nullptr);
+  if (name == nullptr || *name == '\0') return nullptr;
+  PangoFontDescription* description = pango_font_description_from_string(name);
+  const gchar* family = pango_font_description_get_family(description);
+  FlValue* snapshot = nullptr;
+  if (family != nullptr && *family != '\0') {
+    snapshot = fl_value_new_map();
+    fl_value_set_string_take(snapshot, "revision",
+                             fl_value_new_int(++self->revision));
+    fl_value_set_string_take(snapshot, "fontFamily", fl_value_new_string(family));
+  }
+  pango_font_description_free(description);
+  return snapshot;
+}
+
+void typography_publish(SystemTypography* self) {
+  if (!self->listening) return;
+  g_autoptr(FlValue) snapshot = typography_snapshot(self);
+  if (snapshot != nullptr) {
+    fl_event_channel_send(self->events, snapshot, nullptr, nullptr);
+  }
+}
+
+void typography_read(FlMethodChannel* channel, FlMethodCall* call,
+                     gpointer user_data) {
+  auto* self = static_cast<SystemTypography*>(user_data);
+  g_autoptr(FlMethodResponse) response = nullptr;
+  if (g_strcmp0(fl_method_call_get_name(call), "read") != 0) {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  } else {
+    g_autoptr(FlValue) snapshot = typography_snapshot(self);
+    response = snapshot != nullptr
+                   ? FL_METHOD_RESPONSE(fl_method_success_response_new(snapshot))
+                   : FL_METHOD_RESPONSE(fl_method_error_response_new(
+                         "unavailable", "System font is unavailable", nullptr));
+  }
+  fl_method_call_respond(call, response, nullptr);
+}
+
+FlMethodErrorResponse* typography_listen(FlEventChannel* channel, FlValue* args,
+                                        gpointer user_data) {
+  auto* self = static_cast<SystemTypography*>(user_data);
+  self->listening = true;
+  typography_publish(self);
+  return nullptr;
+}
+
+FlMethodErrorResponse* typography_cancel(FlEventChannel* channel, FlValue* args,
+                                        gpointer user_data) {
+  static_cast<SystemTypography*>(user_data)->listening = false;
+  return nullptr;
+}
+
+void typography_dispose(gpointer data) {
+  auto* self = static_cast<SystemTypography*>(data);
+  self->listening = false;
+  g_signal_handler_disconnect(self->settings, self->font_changed);
+  fl_event_channel_set_stream_handlers(self->events, nullptr, nullptr, nullptr,
+                                       nullptr);
+  fl_method_channel_set_method_call_handler(self->methods, nullptr, nullptr,
+                                            nullptr);
+  g_object_unref(self->events);
+  g_object_unref(self->methods);
+  g_object_unref(self->settings);
+  delete self;
+}
+
+void register_system_typography(FlView* view) {
+  auto* messenger = fl_engine_get_binary_messenger(fl_view_get_engine(view));
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  auto* self = new SystemTypography{
+      GTK_SETTINGS(g_object_ref(gtk_widget_get_settings(GTK_WIDGET(view)))),
+      fl_method_channel_new(messenger, "dev.scrcpyconnect/system_typography",
+                             FL_METHOD_CODEC(codec)),
+      fl_event_channel_new(messenger,
+                            "dev.scrcpyconnect/system_typography/events",
+                            FL_METHOD_CODEC(codec)),
+      0};
+  fl_method_channel_set_method_call_handler(self->methods, typography_read, self,
+                                            nullptr);
+  fl_event_channel_set_stream_handlers(self->events, typography_listen,
+                                       typography_cancel, self, nullptr);
+  self->font_changed = g_signal_connect(
+      self->settings, "notify::gtk-font-name",
+      G_CALLBACK(+[](GObject*, GParamSpec*, gpointer data) {
+        typography_publish(static_cast<SystemTypography*>(data));
+      }),
+      self);
+  g_object_set_data_full(G_OBJECT(view), "system-typography", self,
+                         typography_dispose);
+  g_signal_connect(
+      view, "destroy", G_CALLBACK(+[](GtkWidget* widget, gpointer) {
+        // 在视图释放引擎之前注销 messenger 与 GTK 回调。
+        g_object_set_data(G_OBJECT(widget), "system-typography", nullptr);
+      }),
+      nullptr);
+}
+
+}  // namespace
+
 // 收到 Flutter 首帧时调用。
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -53,6 +166,7 @@ static void my_application_activate(GApplication* application) {
       project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
+  register_system_typography(view);
   GdkRGBA background_color;
   // 背景默认为黑色；需要透明背景时可改为 #00000000。
   gdk_rgba_parse(&background_color, "#000000");

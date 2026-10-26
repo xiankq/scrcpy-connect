@@ -39,7 +39,7 @@ test('generation fails on lint errors, missing tokens, unsupported units and sil
   assert.throws(() => generate(design.replace('    blur: 12px', '    blur: -1px')), /Invalid project extension.*glass.blur/);
   assert.throws(() => generate(design.replace('    blur: 12px', '    blur: 1rem')), /Invalid project extension.*glass.blur/);
   assert.throws(() => generate(design.replace('    blur: 12px', "    blur: '{spacing.missing}'")), /Reference .* does not resolve/);
-  assert.throws(() => generate(design.replace('    fontSize: 34px', '    fontSize: 34px\n    tracking: 1px')), /Unsupported typography properties/);
+  assert.throws(() => generate(design.replace('    fontSize: 28px', '    fontSize: 28px\n    tracking: 1px')), /Unsupported typography properties/);
   assert.ok(lintDesign(design.replace("  text: '#000000'", "  text: '#FFFFFF'")).findings.some(item => item.rule === 'contrast-ratio'));
   assert.ok(lintDesign(design.replace('colors:\n', "colors:\n  unused-audit-color: '#123456'\n")).findings.some(item => item.rule === 'orphaned-tokens'));
   assert.throws(() => generate(design.replace('colors:\n', 'extension: custom\ncolors:\n')), /Unknown DESIGN.md keys/);
@@ -47,7 +47,7 @@ test('generation fails on lint errors, missing tokens, unsupported units and sil
 });
 
 test('design font changes remain metadata without entering runtime text styles', () => {
-  const { source } = generate(design.replaceAll('fontFamily: MiSans', 'fontFamily: Draft Font'));
+  const { source } = generate(design.replaceAll(/fontFamily: [^\n]+/g, 'fontFamily: Draft Font'));
   assert.match(source, /typographyBodyFontFamily = "Draft Font"/);
   assert.match(source, /componentButtonPrimaryTypography = TextStyle\(/);
   assert.doesNotMatch(source, /fontFamily:/);

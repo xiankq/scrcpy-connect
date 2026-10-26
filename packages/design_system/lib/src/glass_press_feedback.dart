@@ -25,6 +25,7 @@ class GlassPressFeedback extends StatefulWidget {
 
 class _GlassPressFeedbackState extends State<GlassPressFeedback>
     with WidgetsBindingObserver {
+  final _contentKey = GlobalKey();
   final Map<int, Offset> _pointers = {};
   Offset _touch = Offset.zero;
   int _lifecycleEpoch = 0;
@@ -54,6 +55,7 @@ class _GlassPressFeedbackState extends State<GlassPressFeedback>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pointers.clear();
     super.dispose();
   }
 
@@ -86,7 +88,7 @@ class _GlassPressFeedbackState extends State<GlassPressFeedback>
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(widget.radius),
     );
-    Widget content = widget.child;
+    Widget content = KeyedSubtree(key: _contentKey, child: widget.child);
     if (fallback) {
       content = DecoratedBox(
         position: DecorationPosition.foreground,

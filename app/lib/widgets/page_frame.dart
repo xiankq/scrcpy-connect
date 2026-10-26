@@ -16,7 +16,9 @@ class PageFrame extends StatefulWidget {
     this.actions,
     this.trailingAction,
     this.bottom,
+    this.bottomRadius = DesignTokens.roundedLg,
     this.onBack,
+    this.leading,
     this.backgroundColor,
   });
   final String title;
@@ -26,7 +28,9 @@ class PageFrame extends StatefulWidget {
   final List<Widget>? actions;
   final Widget? trailingAction;
   final Widget? bottom;
+  final double bottomRadius;
   final VoidCallback? onBack;
+  final Widget? leading;
   final Color? backgroundColor;
 
   @override
@@ -101,14 +105,15 @@ class _PageFrameState extends State<PageFrame> {
     builder: (context, constraints) {
       final router = GoRouter.maybeOf(context);
       final hasBack =
+          widget.leading != null ||
           !widget.root &&
-          router != null &&
-          (router.canPop() ||
-              ![
-                '/devices',
-                '/transfers',
-                '/settings',
-              ].contains(router.routeInformationProvider.value.uri.path));
+              router != null &&
+              (router.canPop() ||
+                  ![
+                    '/devices',
+                    '/transfers',
+                    '/settings',
+                  ].contains(router.routeInformationProvider.value.uri.path));
       final toolbarHeight = _toolbarHeight(context, constraints);
       final top = MediaQuery.paddingOf(context).top + toolbarHeight;
       final backLabel = MaterialLocalizations.of(context).backButtonTooltip;
@@ -125,29 +130,33 @@ class _PageFrameState extends State<PageFrame> {
         leadingWidth:
             DesignTokens.spacingMd + DesignTokens.componentIconButtonSize,
         titleSpacing: hasBack ? DesignTokens.spacingSm : DesignTokens.spacingMd,
-        leading: hasBack
-            ? Padding(
-                padding: const EdgeInsets.only(left: DesignTokens.spacingMd),
-                child: Center(
-                  child: GlassTooltip(
-                    message: backLabel,
-                    child: GlassIconButton(
-                      semanticLabel: backLabel,
-                      size: DesignTokens.componentIconButtonSize,
-                      iconSize: DesignTokens.componentIconSize,
-                      settings: GlassMaterial.settings(context),
-                      quality: GlassMaterial.quality(context),
-                      interactionScale: reduceMotion
-                          ? 1
-                          : DesignTokens.componentGlassInteractionScale,
-                      anchorStretch: !reduceMotion,
-                      onPressed: onBack,
-                      icon: const Icon(LucideIcons.chevronLeft),
+        leading:
+            widget.leading ??
+            (hasBack
+                ? Padding(
+                    padding: const EdgeInsets.only(
+                      left: DesignTokens.spacingMd,
                     ),
-                  ),
-                ),
-              )
-            : null,
+                    child: Center(
+                      child: GlassTooltip(
+                        message: backLabel,
+                        child: GlassIconButton(
+                          semanticLabel: backLabel,
+                          size: DesignTokens.componentIconButtonSize,
+                          iconSize: DesignTokens.componentIconSize,
+                          settings: GlassMaterial.settings(context),
+                          quality: GlassMaterial.quality(context),
+                          interactionScale: reduceMotion
+                              ? 1
+                              : DesignTokens.componentGlassInteractionScale,
+                          anchorStretch: !reduceMotion,
+                          onPressed: onBack,
+                          icon: const Icon(LucideIcons.chevronLeft),
+                        ),
+                      ),
+                    ),
+                  )
+                : null),
         title:
             widget.titleContent ??
             Text(
@@ -292,6 +301,7 @@ class _PageFrameState extends State<PageFrame> {
                           DesignTokens.spacingMd,
                         ),
                         child: Glass(
+                          radius: widget.bottomRadius,
                           padding: const EdgeInsets.all(DesignTokens.spacingSm),
                           child: SizedBox(
                             width: double.infinity,

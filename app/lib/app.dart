@@ -1,4 +1,6 @@
 import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
+import 'package:scrcpy_connect/services/platform/system_visual_preferences.dart';
+import 'package:scrcpy_connect/services/platform/system_typography.dart';
 
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
@@ -22,13 +24,32 @@ class ConnectApp extends HookConsumerWidget {
       controller,
     ]);
     useEffect(() => router.dispose, [router]);
+    final systemVisualPreferences = useMemoized(SystemVisualPreferences.new);
+    useListenable(systemVisualPreferences);
+    useEffect(() {
+      systemVisualPreferences.start();
+      return systemVisualPreferences.dispose;
+    }, [systemVisualPreferences]);
+    final systemTypography = useMemoized(SystemTypography.new);
+    useListenable(systemTypography);
+    useEffect(() {
+      systemTypography.start();
+      return systemTypography.dispose;
+    }, [systemTypography]);
     final mode = switch (appSettings['appearance']) {
       'dark' => ThemeMode.dark,
       'system' => ThemeMode.system,
       _ => ThemeMode.light,
     };
-    final lightTheme = useMemoized(() => _appTheme(Brightness.light));
-    final darkTheme = useMemoized(() => _appTheme(Brightness.dark));
+    final fontFamily = systemTypography.fontFamily;
+    final lightTheme = useMemoized(
+      () => _appTheme(Brightness.light, fontFamily),
+      [fontFamily],
+    );
+    final darkTheme = useMemoized(
+      () => _appTheme(Brightness.dark, fontFamily),
+      [fontFamily],
+    );
     return MaterialApp.router(
       title: '邻接',
       restorationScopeId: 'connect-app',
@@ -44,6 +65,7 @@ class ConnectApp extends HookConsumerWidget {
           data: GlassMaterial.theme(context),
           child: liquid.GlassAccessibilityScope(
             reduceTransparency:
+                systemVisualPreferences.reduceTransparency ||
                 MediaQuery.highContrastOf(context) ||
                 liquid.GlassAccessibilityData.of(context).reduceTransparency,
             child: child!,
@@ -54,8 +76,8 @@ class ConnectApp extends HookConsumerWidget {
   }
 }
 
-ThemeData _appTheme(Brightness brightness) =>
-    ConnectTokens.theme(brightness).copyWith(
+ThemeData _appTheme(Brightness brightness, String? fontFamily) =>
+    ConnectTokens.theme(brightness, fontFamily: fontFamily).copyWith(
       actionIconTheme: ActionIconThemeData(
         backButtonIconBuilder: (context) => Transform.flip(
           flipX: Directionality.of(context) == TextDirection.rtl,
