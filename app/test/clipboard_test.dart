@@ -11,6 +11,26 @@ import 'package:scrcpy_connect/stores/clipboard_coordinator.dart';
 
 import 'support/test_controller.dart';
 
+Json _enabled(List<String> devices) => {
+  'deviceSettings': {
+    for (final device in devices) device: {'clipboardSync': true},
+  },
+};
+
+Future<void> _drain(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+}
+
+void _windowFocus(WidgetTester tester, ViewFocusState state) =>
+    tester.binding.handleViewFocusChanged(
+      ViewFocusEvent(
+        viewId: tester.view.viewId,
+        state: state,
+        direction: ViewFocusDirection.undefined,
+      ),
+    );
+
 class _ClipboardFixture {
   final events = StreamController<Json>.broadcast(sync: true);
   final sent = <Json>[];
@@ -18,7 +38,8 @@ class _ClipboardFixture {
   final remoteReads = <String>[];
   final remote = <String, String>{'a': 'clipboard a', 'b': 'clipboard b'};
   final pending = <String, Future<Json>>{};
-  String local = 'original local';
+  String? local = 'original local';
+  bool ignoreWrite = false;
   late final controller =
       createTestController((command, [params = const {}]) async {
           final device = value(params, 'deviceId');
@@ -29,11 +50,7 @@ class _ClipboardFixture {
           if (command == 'clipboard.set') {
             sent.add(Map.of(params));
             remote[device] = params['text'] as String;
-            events.add({
-              'type': 'clipboard.changed',
-              'deviceId': device,
-              'data': {'text': remote[device], 'sessionId': 'session-$device'},
-            });
+            changed(device, remote[device]!);
             return {'applied': true};
           }
           return {};
@@ -42,28 +59,25 @@ class _ClipboardFixture {
           {'id': 'a', 'status': 'connected'},
           {'id': 'b', 'status': 'connected'},
         ]
-        ..settings = {
-          'deviceSettings': {
-            'a': {'clipboardSync': true},
-            'b': {'clipboardSync': true},
-          },
-        };
+        ..settings = _enabled(['a', 'b']);
 
   Future<void> start(WidgetTester tester, [String device = 'a']) async {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-          if (call.method == 'Clipboard.getData') return {'text': local};
+          if (call.method == 'Clipboard.getData') {
+            return local == null ? null : {'text': local};
+          }
           if (call.method == 'Clipboard.setData') {
-            local = (call.arguments as Map)['text'] as String;
-            writes.add(local);
+            final text = (call.arguments as Map)['text'] as String;
+            if (!ignoreWrite) local = text;
+            writes.add(text);
           }
           return null;
         });
     await focus(device);
     testContainer(controller).read(clipboardCoordinatorProvider);
-    await tester.pump();
-    await tester.pump();
+    await _drain(tester);
   }
 
   Future<void> focus(String device) async {
@@ -99,11 +113,9 @@ void main() {
     fixture.controller.devices = [
       {'id': 'a', 'status': 'connected', 'connectionId': 'connection-2'},
     ];
-    await tester.pump();
-    await tester.pump();
+    await _drain(tester);
     oldRead.complete({'text': 'stale connection clipboard'});
-    await tester.pump();
-    await tester.pump();
+    await _drain(tester);
     expect(fixture.remoteReads, ['a', 'a']);
     expect(fixture.local, 'original local');
     expect(fixture.writes, isEmpty);
@@ -116,28 +128,26 @@ void main() {
     (tester) async {
       final fixture = _ClipboardFixture();
       await fixture.start(tester);
-      tester.binding.handleViewFocusChanged(
-        ViewFocusEvent(
-          viewId: tester.view.viewId,
-          state: ViewFocusState.unfocused,
-          direction: ViewFocusDirection.undefined,
-        ),
-      );
+      _windowFocus(tester, ViewFocusState.unfocused);
       fixture.local = 'copied in another window';
       fixture.changed('a', 'copied while blurred');
       await tester.pump(const Duration(seconds: 2));
-      tester.binding.handleViewFocusChanged(
-        ViewFocusEvent(
-          viewId: tester.view.viewId,
-          state: ViewFocusState.focused,
-          direction: ViewFocusDirection.undefined,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
+      _windowFocus(tester, ViewFocusState.focused);
+      await _drain(tester);
       expect(fixture.sent, isEmpty);
       expect(fixture.writes, isEmpty);
       expect(fixture.local, 'copied in another window');
+      fixture.local = null;
+      await tester.pump(const Duration(seconds: 2));
+      expect(fixture.controller.clipboardState, 'limited');
+      expect(fixture.controller.clipboardError, contains('无法读取本机文字'));
+      for (final text in ['first update', 'second update']) {
+        fixture.changed('a', text);
+        await _drain(tester);
+      }
+      expect(fixture.writes, isEmpty);
+      expect(fixture.local, isNull);
+      expect(fixture.controller.clipboardState, 'limited');
       await fixture.dispose();
     },
   );
@@ -145,11 +155,7 @@ void main() {
     'automatic sync is opt-in for each device and stops immediately when disabled',
     (tester) async {
       final fixture = _ClipboardFixture();
-      fixture.controller.settings = {
-        'deviceSettings': {
-          'a': {'clipboardSync': true},
-        },
-      };
+      fixture.controller.settings = _enabled(['a']);
       await fixture.start(tester);
       await fixture.focus('b');
       await tester.pump();
@@ -159,8 +165,7 @@ void main() {
       expect(fixture.remoteReads, ['a']);
       expect(fixture.controller.clipboardState, 'disabled');
       await fixture.controller.updateDeviceSetting('b', 'clipboardSync', true);
-      await tester.pump();
-      await tester.pump();
+      await _drain(tester);
       expect(fixture.local, 'original local');
       await fixture.controller.updateDeviceSetting('b', 'clipboardSync', false);
       final reads = fixture.controller.clipboardReadCount;
@@ -191,6 +196,15 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       expect(fixture.sent.single, containsPair('text', 'new local'));
       expect(fixture.controller.clipboardState, 'watching');
+      fixture.ignoreWrite = true;
+      fixture.changed('a', 'silently rejected by local system');
+      await _drain(tester);
+      expect(fixture.controller.clipboardState, 'limited');
+      expect(fixture.controller.clipboardError, contains('核验一致'));
+      final sent = fixture.sent.length;
+      await tester.pump(const Duration(seconds: 2));
+      expect(fixture.sent, hasLength(sent));
+      expect(fixture.local, 'new local');
       await fixture.dispose();
     },
   );

@@ -245,12 +245,14 @@ class ClipboardCoordinator with WidgetsBindingObserver {
       try {
         if (!_active(target, generation) || !_initialized) return;
         final current = await _readLocal(target, generation);
-        if (!_active(target, generation) ||
-            !_initialized ||
-            current == _local) {
+        if (!_active(target, generation) || !_initialized) {
           return;
         }
-        if (current == null || current == _remote) {
+        if (current == null) {
+          throw StateError('无法读取本机文字剪贴板，自动同步已暂停。');
+        }
+        if (current == _local) return;
+        if (current == _remote) {
           _local = current;
           return;
         }
@@ -323,17 +325,12 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     if (event['type'] == 'clipboard.unavailable') {
       _failed(StateError(value(data, 'reason', '设备当前不允许访问剪贴板。')));
     } else if (event['type'] == 'clipboard.changed' &&
+        _initialized &&
         data['text'] is String &&
         data['available'] != false &&
         data['live'] != false) {
       _pendingRemote = data['text'] as String;
-      if (!_initialized && _target != null) {
-        final target = _target!;
-        final generation = _generation;
-        _scheduleActivation(target, generation);
-      } else {
-        _scheduleRemote();
-      }
+      _scheduleRemote();
     }
   }
 
@@ -397,6 +394,14 @@ class ClipboardCoordinator with WidgetsBindingObserver {
     controller.recordClipboardWrite();
     await Clipboard.setData(ClipboardData(text: text));
     if (!_active(target, generation)) return;
+    final confirmed = await _readLocal(target, generation);
+    if (!_active(target, generation)) return;
+    if (confirmed != text) {
+      throw const RequestFailure(
+        'clipboard_write_unverified',
+        '本机剪贴板写入尚未核验一致，已暂停自动同步；请核对系统粘贴权限后重试。',
+      );
+    }
     _watching();
   }
 

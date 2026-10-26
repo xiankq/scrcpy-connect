@@ -167,8 +167,37 @@ class SystemNotificationCoordinator {
   final _nativeStopped = <String>{};
   final _disconnectedAfterStop = <String>{};
   final _deliveries = <String, _Delivery>{};
+  final _withdrawals = <int, _Delivery>{};
+  final _withdrawing = <int>{};
   Future<void> _queue = Future<void>.value();
   bool _foreground = true;
+  final _notificationPages =
+      <Object, ({String deviceId, bool Function() visible})>{};
+
+  /// 当前可见通知页只更新列表；遮挡或后台后恢复系统提醒资格。
+  void Function() claimNotificationPage(
+    String deviceId,
+    bool Function() visible,
+  ) {
+    final token = Object();
+    _notificationPages[token] = (deviceId: deviceId, visible: visible);
+    if (_notificationPageVisible(deviceId)) {
+      for (final key in _deliveries.keys.where((key) {
+        final target = _deliveries[key]!.target;
+        return target.deviceId == deviceId &&
+            target.kind == SystemNotificationKind.notification;
+      }).toList()) {
+        _cancel(key);
+      }
+    }
+    return () => _notificationPages.remove(token);
+  }
+
+  bool _notificationPageVisible(String deviceId) =>
+      _foreground &&
+      _notificationPages.values.any(
+        (page) => page.deviceId == deviceId && page.visible(),
+      );
   bool _disposed = false;
   bool _initialized = false;
   bool _reconciling = false;
@@ -249,6 +278,9 @@ class SystemNotificationCoordinator {
 
   void configure() {
     if (_disposed || controller.isDisposed()) return;
+    for (final delivery in _withdrawals.values.toList()) {
+      _withdraw(delivery);
+    }
     if (controller.snapshot().reconciliationPending) {
       _suspend();
       return;
@@ -526,7 +558,14 @@ class SystemNotificationCoordinator {
       if (displaced != null) _cancel(displaced);
     }
     if (_deliveries.length >= 128) return null;
-    final occupied = _deliveries.values.map((delivery) => delivery.id).toSet();
+    final occupied = {
+      ..._deliveries.values.map((delivery) => delivery.id),
+      ..._withdrawals.keys,
+    };
+    if (occupied.length >=
+        systemNotificationIdMax - systemNotificationIdMin + 1) {
+      return null;
+    }
     while (occupied.contains(_nextId)) {
       _nextId = _nextId == systemNotificationIdMax
           ? systemNotificationIdMin
@@ -542,11 +581,30 @@ class SystemNotificationCoordinator {
 
   void _cancel(String key) {
     final delivery = _deliveries.remove(key);
-    if (delivery != null) {
-      _enqueue(() async {
-        if (delivery.issued) await sink.cancel(delivery.id);
-      });
-    }
+    if (delivery == null) return;
+    _withdrawals[delivery.id] = delivery;
+    _withdraw(delivery);
+  }
+
+  void _withdraw(_Delivery delivery) {
+    if (!_withdrawing.add(delivery.id)) return;
+    _enqueue(() async {
+      try {
+        if (delivery.issued) {
+          for (var attempt = 0; ; attempt++) {
+            try {
+              await sink.cancel(delivery.id);
+              break;
+            } catch (_) {
+              if (attempt == 2) rethrow;
+            }
+          }
+        }
+        _withdrawals.remove(delivery.id);
+      } finally {
+        _withdrawing.remove(delivery.id);
+      }
+    });
   }
 
   void _notifications(
@@ -590,6 +648,7 @@ class SystemNotificationCoordinator {
       }
       if (changed &&
           !baseline &&
+          !_notificationPageVisible(deviceId) &&
           _allowed(SystemNotificationKind.notification)) {
         final target = SystemNotificationTarget(
           kind: SystemNotificationKind.notification,
@@ -605,6 +664,7 @@ class SystemNotificationCoordinator {
           if (_disposed ||
               !_connected(deviceId) ||
               !_allowed(target.kind) ||
+              _notificationPageVisible(deviceId) ||
               _deliveries[localKey] != delivery ||
               delivery.target.encode() != payload) {
             return;
@@ -742,7 +802,11 @@ class SystemNotificationCoordinator {
     if (_disposed) return;
     _disposed = true;
     _clear();
+    for (final delivery in _withdrawals.values.toList()) {
+      _withdraw(delivery);
+    }
     _pending.clear();
+    _notificationPages.clear();
     unawaited(_events.cancel());
     unawaited(_activations.cancel());
     changes.dispose();

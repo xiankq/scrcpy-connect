@@ -4,6 +4,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
 import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
 
@@ -13,6 +14,8 @@ class FakeSink implements SystemNotificationSink {
   final taps = StreamController<String>.broadcast(sync: true);
   final shown = <SystemNotice>[];
   final cancelled = <int>[];
+  final cancellationAttempts = <int>[];
+  int cancellationFailures = 0;
   final showStarted = Completer<void>();
   Future<void>? waitForShow;
   String? launchPayload;
@@ -53,6 +56,8 @@ class FakeSink implements SystemNotificationSink {
 
   @override
   Future<void> cancel(int id) async {
+    cancellationAttempts.add(id);
+    if (cancellationFailures-- > 0) throw StateError('cancel unavailable');
     cancelled.add(id);
   }
 }
@@ -90,37 +95,74 @@ Json observation({
   },
 };
 
+Future<
+  ({
+    SystemNotificationCoordinator coordinator,
+    FakeSink sink,
+    StreamController<Json> events,
+    AppController controller,
+  })
+>
+notificationFixture({
+  FakeSink? targetSink,
+  List<String>? commands,
+  List<Json> devices = const [
+    {'id': 'phone', 'status': 'connected'},
+  ],
+}) async {
+  final events = StreamController<Json>.broadcast(sync: true);
+  final controller = createTestController(
+    (command, [params = const {}]) async {
+      commands?.add(command);
+      return {};
+    },
+    events: events.stream,
+    initialState: AppState(
+      loading: false,
+      devices: devices,
+      settings: {'notificationAlerts': true, 'callAlerts': true},
+    ),
+  );
+  final sink = targetSink ?? FakeSink();
+  final coordinator = SystemNotificationCoordinator(controller, sink);
+  addTearDown(() async {
+    coordinator.dispose();
+    await coordinator.drain();
+    controller.dispose();
+    await events.close();
+    await sink.taps.close();
+  });
+  await coordinator.initialize();
+  return (
+    coordinator: coordinator,
+    sink: sink,
+    events: events,
+    controller: controller,
+  );
+}
+
+void changedNotifications(
+  StreamController<Json> events,
+  List<Json> items, {
+  String deviceId = 'phone',
+}) => events.add({
+  'type': 'notifications.changed',
+  'deviceId': deviceId,
+  'data': section(items),
+});
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test('background source changes publish generic alerts and withdrawal cancels only the owned alert', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('first')]),
-    });
+    changedNotifications(events, [notification('first')]);
     await coordinator.drain();
     expect(sink.shown, hasLength(1));
     expect(sink.shown.single.title, '设备有新通知');
@@ -128,37 +170,26 @@ void main() {
     expect(sink.shown.single.payload, isNot(contains('SECRET')));
     expect(sink.shown.single.payload, isNot(contains('PRIVATE')));
     expect(sink.shown.single.id, isNot(2101));
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([]),
-    });
+    sink.cancellationFailures = 3;
+    changedNotifications(events, []);
     await coordinator.drain();
-    expect(sink.cancelled, [sink.shown.single.id]);
+    expect(sink.cancelled, isEmpty);
+    changedNotifications(events, [notification('replacement')]);
+    await coordinator.drain();
+    expect(sink.shown.last.id, isNot(sink.shown.first.id));
+    await coordinator.refreshStatus();
+    await coordinator.drain();
+    expect(sink.cancelled, [sink.shown.first.id]);
+    expect(sink.cancellationAttempts, everyElement(sink.shown.first.id));
   });
 
   test('foreground notifications keep a quiet first snapshot and deduplicate live changes', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     events.add(observation(notifications: [notification('existing')]));
     await coordinator.drain();
     expect(sink.shown, isEmpty);
@@ -178,50 +209,23 @@ void main() {
       SystemNotificationTarget.decode(sink.shown.single.payload)?.objectId,
       'new',
     );
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('existing')]),
-    });
+    changedNotifications(events, [notification('existing')]);
     await coordinator.drain();
     expect(sink.cancelled, [sink.shown.single.id]);
   });
 
   test('updates retain a local identity and stopping observation rejects queued old generations', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('first')]),
-    });
+    changedNotifications(events, [notification('first')]);
     await coordinator.drain();
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('updated')]),
-    });
+    changedNotifications(events, [notification('updated')]);
     await coordinator.drain();
     expect(sink.shown, hasLength(2));
     expect(sink.shown[1].id, sink.shown[0].id);
@@ -230,42 +234,22 @@ void main() {
       'deviceId': 'phone',
       'data': {'generation': 2, 'wanted': false, 'phase': 'stopped'},
     });
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('late')]),
-    });
+    changedNotifications(events, [notification('late')]);
     await coordinator.drain();
     expect(sink.cancelled, [sink.shown[0].id]);
     expect(sink.shown, hasLength(2));
   });
 
   test('ringing calls alert in background and an active call withdraws that reminder', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
     final commands = <String>[];
-    final controller = createTestController(
-      (command, [params = const {}]) async {
-        commands.add(command);
-        return {};
-      },
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture(
+      commands: commands,
     );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
     coordinator.setForeground(false);
     events.add(observation());
     final call = {
@@ -302,38 +286,18 @@ void main() {
   });
 
   test('OS activations wait for foreground, validate exact current objects and never execute remote commands', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
     final commands = <String>[];
-    final controller = createTestController(
-      (command, [params = const {}]) async {
-        commands.add(command);
-        return {};
-      },
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture(
+      commands: commands,
     );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('first')]),
-    });
+    changedNotifications(events, [notification('first')]);
     await coordinator.drain();
     final payload = sink.shown.single.payload;
     sink.taps.add(payload);
@@ -360,43 +324,20 @@ void main() {
   });
 
   test('a state gap withdraws alerts and authoritative recovery forms a quiet baseline', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('first')]),
-    });
+    changedNotifications(events, [notification('first')]);
     await coordinator.drain();
     events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
     await coordinator.drain();
     expect(sink.cancelled, [sink.shown.single.id]);
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('gap-event')]),
-    });
+    changedNotifications(events, [notification('gap-event')]);
     events.add({
       'type': 'state.resynced',
       'data': {
@@ -420,63 +361,32 @@ void main() {
     });
     await coordinator.drain();
     expect(sink.shown, hasLength(1));
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('new-after-recovery')]),
-    });
+    changedNotifications(events, [notification('new-after-recovery')]);
     await coordinator.drain();
     expect(sink.shown, hasLength(2));
   });
 
   test('changed revisions update the same OS item in both foreground and background', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('same')]),
-    });
+    changedNotifications(events, [notification('same')]);
     await coordinator.drain();
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([
-        {...notification('same'), 'revision': 'revision-2'},
-      ]),
-    });
+    changedNotifications(events, [
+      {...notification('same'), 'revision': 'revision-2'},
+    ]);
     await coordinator.drain();
     expect(sink.shown, hasLength(2));
     expect(sink.shown[0].id, sink.shown[1].id);
     coordinator.setForeground(true);
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([
-        {...notification('same'), 'revision': 'revision-3'},
-      ]),
-    });
+    changedNotifications(events, [
+      {...notification('same'), 'revision': 'revision-3'},
+    ]);
     await coordinator.drain();
     expect(sink.shown, hasLength(3));
     expect(sink.shown.last.id, sink.shown.first.id);
@@ -488,34 +398,15 @@ void main() {
   });
 
   test('truncated snapshots retain missing owners, but unverified snapshots withdraw without replay', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('first')]),
-    });
+    changedNotifications(events, [notification('first')]);
     await coordinator.drain();
     events.add({
       'type': 'notifications.changed',
@@ -531,58 +422,29 @@ void main() {
     });
     await coordinator.drain();
     expect(sink.cancelled, [sink.shown.single.id]);
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('old-after-unverified')]),
-    });
+    changedNotifications(events, [notification('old-after-unverified')]);
     await coordinator.drain();
     expect(sink.shown, hasLength(1));
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('fresh')]),
-    });
+    changedNotifications(events, [notification('fresh')]);
     await coordinator.drain();
     expect(sink.shown, hasLength(2));
   });
 
   test('disposing while an OS publish is pending cancels that owner after publication finishes', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
     final completeShow = Completer<void>();
-    final sink = FakeSink()..waitForShow = completeShow.future;
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture(
+      targetSink: FakeSink()..waitForShow = completeShow.future,
+    );
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('first')]),
-    });
+    changedNotifications(events, [notification('first')]);
     await sink.showStarted.future;
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('queued-update')]),
-    });
+    changedNotifications(events, [notification('queued-update')]);
     coordinator.dispose();
     completeShow.complete();
     await coordinator.drain();
@@ -591,37 +453,17 @@ void main() {
   });
 
   test('large source snapshots bound OS owners and keep every allocated ID in its namespace', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      await coordinator.drain();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([
-        for (var i = 0; i < 160; i++) notification('notice-$i', key: 'key-$i'),
-      ]),
-    });
+    changedNotifications(events, [
+      for (var i = 0; i < 160; i++) notification('notice-$i', key: 'key-$i'),
+    ]);
     await coordinator.drain();
     expect(sink.shown.length, inInclusiveRange(1, 128));
     expect(
@@ -682,38 +524,21 @@ void main() {
   });
 
   test('permissions, channel settings, user intent and known source eligibility remain independent', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture(
+      targetSink: FakeSink()
+        ..permissions = const SystemNotificationStatus(
+          supported: true,
+          permissionGranted: false,
+        ),
     );
-    final sink = FakeSink()
-      ..permissions = const SystemNotificationStatus(
-        supported: true,
-        permissionGranted: false,
-      );
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('denied')]),
-    });
+    changedNotifications(events, [notification('denied')]);
     await coordinator.drain();
     expect(sink.shown, isEmpty);
     sink.permissions = const SystemNotificationStatus(
@@ -721,11 +546,7 @@ void main() {
       permissionGranted: true,
     );
     await coordinator.refreshStatus();
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('allowed')]),
-    });
+    changedNotifications(events, [notification('allowed')]);
     await coordinator.drain();
     expect(sink.shown, hasLength(1));
     sink.permissions = const SystemNotificationStatus(
@@ -738,11 +559,7 @@ void main() {
     expect(sink.cancelled, [sink.shown.single.id]);
     controller.settings = {'notificationAlerts': false, 'callAlerts': true};
     coordinator.configure();
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('disabled-intent')]),
-    });
+    changedNotifications(events, [notification('disabled-intent')]);
     events.add({...observation(), 'deviceId': 'unknown'});
     events.add({
       'type': 'calls.incoming',
@@ -815,34 +632,15 @@ void main() {
   });
 
   test('truncated snapshot metadata eviction cannot strand an older OS notification', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([notification('A', key: 'A')]),
-    });
+    changedNotifications(events, [notification('A', key: 'A')]);
     await coordinator.drain();
     final olderId = sink.shown.single.id;
     events.add({
@@ -858,11 +656,7 @@ void main() {
     });
     await coordinator.drain();
     expect(sink.cancelled, contains(olderId));
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([]),
-    });
+    changedNotifications(events, []);
     await coordinator.drain();
     expect(
       sink.cancelled.toSet(),
@@ -870,53 +664,27 @@ void main() {
     );
   });
   test('group summaries stay available for navigation without duplicating child OS reminders', () async {
-    final events = StreamController<Json>.broadcast(sync: true);
-    final controller = createTestController(
-      (_, [params = const {}]) async => {},
-      events: events.stream,
-      initialState: AppState(
-        loading: false,
-        devices: [
-          {'id': 'phone', 'status': 'connected'},
-        ],
-        settings: {'notificationAlerts': true, 'callAlerts': true},
-      ),
-    );
-    final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
-    addTearDown(() async {
-      coordinator.dispose();
-      controller.dispose();
-      await events.close();
-      await sink.taps.close();
-    });
-    await coordinator.initialize();
+    final (
+      coordinator: coordinator,
+      sink: sink,
+      events: events,
+      controller: controller,
+    ) = await notificationFixture();
     coordinator.setForeground(false);
     events.add(observation());
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([
-        {...notification('summary', key: 'group'), 'groupSummary': true},
-        notification('message', key: 'message'),
-      ]),
-    });
+    changedNotifications(events, [
+      {...notification('summary', key: 'group'), 'groupSummary': true},
+      notification('message', key: 'message'),
+    ]);
     await coordinator.drain();
     expect(sink.shown, hasLength(1));
     expect(
       SystemNotificationTarget.decode(sink.shown.single.payload)!.objectId,
       'message',
     );
-    events.add({
-      'type': 'notifications.changed',
-      'deviceId': 'phone',
-      'data': section([
-        {
-          ...notification('summary-changed', key: 'group'),
-          'groupSummary': true,
-        },
-      ]),
-    });
+    changedNotifications(events, [
+      {...notification('summary-changed', key: 'group'), 'groupSummary': true},
+    ]);
     await coordinator.drain();
     expect(
       sink.shown,
@@ -925,4 +693,62 @@ void main() {
     );
     expect(sink.cancelled, [sink.shown.single.id]);
   });
+  test(
+    'only the visible source notification page suppresses new system alerts',
+    () async {
+      final events = StreamController<Json>.broadcast(sync: true);
+      final controller = createTestController(
+        (_, [params = const {}]) async => {},
+        events: events.stream,
+        initialState: AppState(
+          loading: false,
+          devices: [
+            {'id': 'phone', 'status': 'connected'},
+            {'id': 'other', 'status': 'connected'},
+          ],
+          settings: {'notificationAlerts': true, 'callAlerts': true},
+        ),
+      );
+      final sink = FakeSink();
+      final coordinator = SystemNotificationCoordinator(controller, sink);
+      addTearDown(() async {
+        coordinator.dispose();
+        controller.dispose();
+        await events.close();
+        await sink.taps.close();
+      });
+      await coordinator.initialize();
+      var current = true;
+      final release = coordinator.claimNotificationPage('phone', () => current);
+      events.add(observation());
+      events.add({...observation(), 'deviceId': 'other'});
+      changedNotifications(events, [notification('visible')]);
+      changedNotifications(events, [
+        notification('other-new'),
+      ], deviceId: 'other');
+      await coordinator.drain();
+      expect(sink.shown, hasLength(1));
+      current = false;
+      changedNotifications(events, [
+        notification('visible'),
+        notification('covered'),
+      ]);
+      await coordinator.drain();
+      expect(sink.shown, hasLength(2));
+      current = true;
+      coordinator.setForeground(false);
+      changedNotifications(events, [
+        notification('visible'),
+        notification('covered'),
+        notification('background'),
+      ]);
+      await coordinator.drain();
+      expect(sink.shown, hasLength(3));
+      coordinator.setForeground(true);
+      release();
+      changedNotifications(events, [notification('released')]);
+      await coordinator.drain();
+      expect(sink.shown, hasLength(4));
+    },
+  );
 }
