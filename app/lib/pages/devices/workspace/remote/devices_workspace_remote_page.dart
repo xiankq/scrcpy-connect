@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/widgets/dialogs.dart'
     show confirm, glassSnackBar;
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_audio_control.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/services/media/remote_failure.dart';
@@ -133,7 +134,10 @@ class _RemotePageState extends State<RemotePage>
       if (path.isEmpty) {
         throw const RequestFailure('capture_failed', '没有收到截图保存位置。');
       }
-      showRemoteNotice('截图已保存：$path');
+      await ScreenshotRoute(
+        deviceId: value(widget.device, 'id'),
+        $extra: {...result, 'paused': presentation.paused},
+      ).push<void>(context);
     } catch (failure) {
       if (mounted) {
         showRemoteNotice('截图失败：${remoteFailure(failure)}');
@@ -426,7 +430,7 @@ class _RemotePageState extends State<RemotePage>
       final dimensions = displaySettings.dimensions(viewport);
       if (retained == null &&
           !recoveringConnection &&
-          displaySettings.values['wakeOnConnect'] == true) {
+          displaySettings.values['wakeOnConnect'] != false) {
         // 请求前先消耗新窗口唤醒意图，失败或缺少回执时不能随重建和通用重试重放。
         await (newWindowWake ??= requestWake());
         if (!mounted || !presentation.acceptsStart(attempt)) return;
@@ -1022,7 +1026,7 @@ class _RemotePageState extends State<RemotePage>
         if (feedback?.mounted != true) return;
         if (result.lockFailure case final failure?) {
           feedback!.showSnackBar(
-            glassSnackBar('锁屏尚未确认：${remoteFailure(failure)}'),
+            glassSnackBar('熄屏尚未确认：${remoteFailure(failure)}'),
           );
         }
         if (result.closeFailure case final failure?) {
@@ -1083,9 +1087,55 @@ class _RemotePageState extends State<RemotePage>
     final height = presentation.imageHeight;
     final texture = int.tryParse('${presentation.session?['textureId']}');
     final valid = texture != null && width > 0 && height > 0;
+    final waitingForFirstFrame = presentation.awaitingFirstFrame;
+    final loadingBackdrop = waitingForFirstFrame || presentation.connecting;
+    final abnormal =
+        presentation.error != null ||
+        (presentation.paused && !presentation.connecting) ||
+        presentation.stateUnverified ||
+        presentation.appLaunchUnknown;
+    final loadingStage = abnormal
+        ? presentation.connecting
+              ? '正在核对屏幕启动结果'
+              : presentation.stateUnverified || presentation.appLaunchUnknown
+              ? '屏幕启动结果待核对'
+              : '屏幕启动未完成'
+        : widget.packageName == null
+        ? '正在打开手机屏幕'
+        : '正在打开独立窗口';
+    final recovery = RemoteRecoveryPanel(
+      presentation: presentation,
+      independent: widget.packageName != null,
+      waitingForFirstFrame: waitingForFirstFrame,
+      onReturn: () => unawaited(leave()),
+      onManageActivities: () =>
+          DeviceActivitiesRoute(deviceId: value(widget.device, 'id'))
+              .push<void>(context),
+      onContinueOnPhoneScreen: continueOnPhoneScreen,
+      onCloseUnknownAppLaunch: closeUnknownAppLaunch,
+      onRetry: presentation.qualityRetryable
+          ? () =>
+                QualityRoute(deviceId: value(widget.device, 'id'))
+                    .push<void>(context)
+          : presentation.appLaunchUnknown
+          ? checkAppLaunch
+          : presentation.reconcileOnly
+          ? reconcileState
+          : start,
+    );
     // 应用消息可跨路由显示；远控使用独立消息区域，防止本机页面的结果遮住手机画面。
     return Consumer(
       builder: (context, ref, _) {
+        final currentDevice = ref.watch(
+          appControllerProvider.select(
+            (state) => state.devices
+                .where((device) => device['id'] == widget.device['id'])
+                .firstOrNull,
+          ),
+        );
+        final unverified = ref.watch(
+          appControllerProvider.select((state) => state.reconciliationPending),
+        );
         final showNavigationBar = ref.watch(
           appControllerProvider.select(
             (state) =>
@@ -1104,7 +1154,7 @@ class _RemotePageState extends State<RemotePage>
             canPop: presentation.exiting,
             onPopInvokedWithResult: (popped, _) {
               if (popped) return;
-              if (presentation.connecting) {
+              if (loadingBackdrop) {
                 unawaited(leave());
               } else {
                 pressNavigationKey(4);
@@ -1125,8 +1175,7 @@ class _RemotePageState extends State<RemotePage>
               child: Scaffold(
                 backgroundColor: Colors.black,
                 resizeToAvoidBottomInset: true,
-                bottomNavigationBar:
-                    showNavigationBar && !presentation.connecting
+                bottomNavigationBar: showNavigationBar && !loadingBackdrop
                     ? RemoteNavigationBar(
                         enabled: canSendInput,
                         onBack: () => pressNavigationKey(4),
@@ -1145,39 +1194,18 @@ class _RemotePageState extends State<RemotePage>
                         onViewport: displaySizing.observeViewport,
                       ),
                     ),
-                    if (presentation.connecting)
+                    if (loadingBackdrop)
                       Positioned.fill(
+                        key: const ValueKey('remote-first-frame-wait'),
                         child: AmbientLoadingField(
-                          semanticsLabel: widget.packageName == null
-                              ? '正在打开手机屏幕'
-                              : '正在打开独立窗口',
-                          footer: GlassSurfaceGroup(
-                            child: Glass(
-                              radius: DesignTokens.roundedFull,
-                              child: TextButton.icon(
-                                style: TextButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(
-                                    DesignTokens.componentButtonSecondaryHeight,
-                                  ),
-                                  foregroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface,
-                                ),
-                                onPressed: presentation.exiting
-                                    ? null
-                                    : () => unawaited(leave()),
-                                icon: Icon(
-                                  presentation.exiting
-                                      ? LucideIcons.loaderCircle
-                                      : LucideIcons.x,
-                                  size: DesignTokens.componentIconActionSize,
-                                ),
-                                label: Text(
-                                  presentation.exiting ? '正在关闭…' : '取消打开',
-                                ),
-                              ),
-                            ),
-                          ),
+                          semanticsLabel:
+                              '${deviceName(widget.device)}，$loadingStage',
+                          animating:
+                              !abnormal &&
+                              presentation.connecting &&
+                              !presentation.exiting,
+                          showParticles: !abnormal && !presentation.exiting,
+                          overlay: abnormal ? recovery : null,
                         ),
                       ),
                     if (presentation.qualityRebuilding)
@@ -1193,27 +1221,11 @@ class _RemotePageState extends State<RemotePage>
                           ),
                         ),
                       ),
-                    if (!presentation.connecting &&
+                    if (!loadingBackdrop &&
+                        !presentation.connecting &&
                         (presentation.error != null || presentation.paused) &&
                         presentation.errorCode != 'device_asleep')
-                      RemoteRecoveryPanel(
-                        presentation: presentation,
-                        independent: widget.packageName != null,
-                        onManageActivities: () => DeviceActivitiesRoute(
-                          deviceId: value(widget.device, 'id'),
-                        ).push<void>(context),
-                        onContinueOnPhoneScreen: continueOnPhoneScreen,
-                        onCloseUnknownAppLaunch: closeUnknownAppLaunch,
-                        onRetry: presentation.qualityRetryable
-                            ? () => QualityRoute(
-                                deviceId: value(widget.device, 'id'),
-                              ).push<void>(context)
-                            : presentation.appLaunchUnknown
-                            ? checkAppLaunch
-                            : presentation.reconcileOnly
-                            ? reconcileState
-                            : start,
-                      ),
+                      recovery,
                     if (ime)
                       Positioned(
                         left: 0,
@@ -1260,18 +1272,36 @@ class _RemotePageState extends State<RemotePage>
                           child: GlassActionIcon(
                             tooltip: '点亮屏幕',
                             onPressed: waking ? null : wakeScreen,
-                            icon: const Icon(
+                            icon: Icon(
                               LucideIcons.sun,
-                              color: Colors.white,
+                              color: loadingBackdrop
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Colors.white,
                             ),
                           ),
                         ),
                       ),
-                    if (!presentation.connecting)
+                    if (waitingForFirstFrame)
+                      Positioned(
+                        left: MediaQuery.paddingOf(context).left + 20,
+                        top: MediaQuery.paddingOf(context).top + 12,
+                        child: GlassActionIcon(
+                          key: const ValueKey('remote-first-frame-close'),
+                          tooltip: '关闭等待',
+                          onPressed: presentation.exiting ? null : leave,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 44,
+                            height: 44,
+                          ),
+                          icon: const Icon(LucideIcons.x),
+                        ),
+                      )
+                    else
                       ExitHandle(
+                        key: const ValueKey('remote-exit-handle'),
                         onExit: leave,
                         independent: widget.packageName != null,
-                        onLock: canSendInput
+                        onSleep: canSendInput
                             ? () => pressNavigationKey(223)
                             : null,
                         onConvert:
@@ -1293,7 +1323,14 @@ class _RemotePageState extends State<RemotePage>
                                 send(ApplicationCommand.sessionRotate, {}),
                               )
                             : null,
-                        deviceLabel: deviceName(widget.device),
+                        deviceLabel: deviceName(currentDevice ?? widget.device),
+                        connectionLabel: unverified || currentDevice == null
+                            ? '连接状态待核对'
+                            : deviceStatusText(currentDevice),
+                        soundControl: RemoteAudioControl(
+                          controller: controller,
+                          deviceId: value(widget.device, 'id'),
+                        ),
                       ),
                   ],
                 ),

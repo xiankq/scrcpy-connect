@@ -12,8 +12,6 @@ import 'package:scrcpy_connect/stores/clipboard_coordinator.dart';
 import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
 import 'package:scrcpy_connect/services/display_labels.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 应用根部的外部意图呈现边界；调度与迟到回调必须同时遵循当前前台资格。
 class AppPresentationHost extends HookConsumerWidget {
@@ -189,55 +187,41 @@ class AppPresentationHost extends HookConsumerWidget {
             return;
           }
           final device = matches.first;
-          showGlassModalSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            builder: (context) => SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    DesignTokens.spacingLg,
-                    0,
-                    DesignTokens.spacingLg,
-                    DesignTokens.spacingLg,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const FeatureIcon(
-                        LucideIcons.phoneIncoming,
-                        color: ConnectTokens.mint,
-                        size: 64,
+          if (router.routeInformationProvider.value.uri.path ==
+              CallsRoute(deviceId: value(device, 'id')).location) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              padding: EdgeInsets.zero,
+              duration: const Duration(seconds: 8),
+              content: Glass(
+                padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                child: Row(
+                  children: [
+                    const ListIconBadge(
+                      icon: LucideIcons.phoneIncoming,
+                      backgroundColor: DesignTokens.colorListIconMint,
+                    ),
+                    const SizedBox(width: DesignTokens.spacingSm),
+                    Expanded(
+                      child: Text(
+                        '${deviceName(device)} · ${value(call, 'name', value(call, 'number', '当前来电'))}\n声音仍在手机',
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      const SizedBox(height: DesignTokens.spacingMd),
-                      Text(
-                        value(call, 'name', value(call, 'number', '当前来电')),
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: DesignTokens.spacingTight),
-                      Text('${deviceName(device)} 有来电'),
-                      const SizedBox(height: 20),
-                      FilledButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          CallsRoute(deviceId: value(device, 'id'))
-                              .push<void>(navigator.currentContext!);
-                        },
-                        child: const Text('查看来电与声音'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          openRemoteRoute(
-                            navigator.currentContext!,
-                            deviceId: value(device, 'id'),
-                          );
-                        },
-                        child: const Text('在手机上处理'),
-                      ),
-                      const StateNote('新的来电不会自动接听或抢占现有通话。'),
-                    ],
-                  ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        CallsRoute(deviceId: value(device, 'id'))
+                            .push<void>(context);
+                      },
+                      child: const Text('查看电话'),
+                    ),
+                  ],
                 ),
               ),
             ),

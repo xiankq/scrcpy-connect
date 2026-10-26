@@ -27,12 +27,13 @@ class ContentShortcuts extends StatelessWidget {
                     (DesignTokens.componentAppCellWidth * scale.clamp(1, 2)))
                 .floor()
                 .clamp(1, 4);
+        final balancedColumns = columns == 3 ? 2 : columns;
         return Wrap(
           runSpacing: DesignTokens.spacingMd,
           children: [
             for (final item in [
               (
-                '文件管理',
+                '文件',
                 LucideIcons.folder,
                 DesignTokens.colorListIconAmber,
                 () => FilesRoute(
@@ -41,27 +42,27 @@ class ContentShortcuts extends StatelessWidget {
                 ).push<void>(context),
               ),
               (
-                '手机相册',
+                '相册',
                 LucideIcons.images,
                 DesignTokens.colorListIconPurple,
                 () => GalleryRoute(deviceId: deviceId).push<void>(context),
               ),
               (
-                '实时通知',
+                '通知',
                 LucideIcons.bell,
                 DesignTokens.colorListIconBlue,
                 () =>
                     NotificationsRoute(deviceId: deviceId).push<void>(context),
               ),
               (
-                '来电与通话',
+                '电话',
                 LucideIcons.phone,
                 DesignTokens.colorListIconMint,
                 () => CallsRoute(deviceId: deviceId).push<void>(context),
               ),
             ])
               SizedBox(
-                width: constraints.maxWidth / columns,
+                width: constraints.maxWidth / balancedColumns,
                 child: InkWell(
                   onTap: enabled ? item.$4 : onUnavailable,
                   borderRadius: BorderRadius.circular(DesignTokens.roundedMd),

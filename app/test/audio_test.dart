@@ -3,6 +3,9 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_audio_control.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/test_controller.dart';
@@ -44,6 +47,17 @@ class _AudioFixture {
             };
             return pendingStarts[device]?.future ?? source;
           }
+          if (command == 'audio.volume') {
+            final source = sources[device]!;
+            expect(params['sourceId'], source['sourceId']);
+            source['muted'] = params['muted'];
+            events.add({
+              'type': 'audio.updated',
+              'deviceId': device,
+              'data': source,
+            });
+            return source;
+          }
           if (command == 'audio.stop') {
             final waiting = pendingStop;
             if (waiting != null) {
@@ -67,6 +81,12 @@ class _AudioFixture {
           {'id': 'b', 'status': 'connected'},
         ];
 
+  void sessionChanged() => events.add({
+    'type': 'session.updated',
+    'deviceId': 'a',
+    'data': sessions.first,
+  });
+
   Future<void> dispose() async {
     controller.dispose();
     await events.close();
@@ -79,6 +99,40 @@ Future<void> _flush(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('永久焦点丢失后即使源已清理也不自动重开，明确播放才解除恢复栅栏', (tester) async {
+    final fixture = _AudioFixture();
+    final close = fixture.controller.claimRemoteDeviceView('a');
+    await _flush(tester);
+    fixture.events.add({
+      'type': 'audio.resume.required',
+      'deviceId': 'a',
+      'data': {
+        'deviceId': 'a',
+        'sourceId': 'source-a',
+        'requiresUserResume': true,
+        'focusSignal': 'noisy',
+      },
+    });
+    fixture.sources.clear();
+    for (var i = 0; i < 3; i++) {
+      fixture.sessionChanged();
+      await _flush(tester);
+    }
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.start'),
+      hasLength(1),
+    );
+    await fixture.controller.request('audio.start', {'deviceId': 'a'});
+    await _flush(tester);
+    expect(
+      fixture.calls.where((call) => call.$1 == 'audio.start'),
+      hasLength(2),
+    );
+    close();
+    await _flush(tester);
+    await fixture.dispose();
+  });
+
   testWidgets('最后窗口停止失败后无需外部事件即可有界重试清理精确音源', (tester) async {
     final fixture = _AudioFixture();
     final close = fixture.controller.claimRemoteDeviceView('a');
@@ -142,11 +196,7 @@ void main() {
     );
     expect(fixture.controller.audioError, contains('音源停止回执失败'));
     for (var i = 0; i < 20; i++) {
-      fixture.events.add({
-        'type': 'session.updated',
-        'deviceId': 'a',
-        'data': fixture.sessions.first,
-      });
+      fixture.sessionChanged();
       await _flush(tester);
     }
     expect(
@@ -154,11 +204,7 @@ void main() {
       hasLength(3),
     );
     fixture.sources.clear();
-    fixture.events.add({
-      'type': 'session.updated',
-      'deviceId': 'a',
-      'data': fixture.sessions.first,
-    });
+    fixture.sessionChanged();
     await _flush(tester);
     expect(fixture.controller.audioError, isNull);
     await fixture.dispose();
@@ -170,11 +216,7 @@ void main() {
     final close = fixture.controller.claimRemoteDeviceView('a');
     await _flush(tester);
     final reading = fixture.pendingSources = Completer<Json>();
-    fixture.events.add({
-      'type': 'session.updated',
-      'deviceId': 'a',
-      'data': fixture.sessions.first,
-    });
+    fixture.sessionChanged();
     await _flush(tester);
     close();
     await _flush(tester);
@@ -200,11 +242,7 @@ void main() {
       hasLength(3),
     );
     fixture.sources.clear();
-    fixture.events.add({
-      'type': 'session.updated',
-      'deviceId': 'a',
-      'data': fixture.sessions.first,
-    });
+    fixture.sessionChanged();
     await _flush(tester);
     expect(fixture.controller.audioError, isNull);
     await fixture.dispose();
@@ -247,11 +285,7 @@ void main() {
     final close = fixture.controller.claimRemoteDeviceView('a');
     await _flush(tester);
     for (var i = 0; i < 50; i++) {
-      fixture.events.add({
-        'type': 'session.updated',
-        'deviceId': 'a',
-        'data': fixture.sessions.first,
-      });
+      fixture.sessionChanged();
       await tester.pump();
     }
     expect(
@@ -290,11 +324,7 @@ void main() {
 
     final sources = fixture.pendingSources = Completer<Json>();
     final sessions = fixture.pendingSessions = Completer<Json>();
-    fixture.events.add({
-      'type': 'session.updated',
-      'deviceId': 'a',
-      'data': fixture.sessions.first,
-    });
+    fixture.sessionChanged();
     await _flush(tester);
     fixture.pendingSources = null;
     sources.complete({'sources': <Json>[]});
@@ -327,7 +357,63 @@ void main() {
         hasLength(2),
       );
       await fixture.controller.focusDevice('b');
+      fixture.sources['a'] = {
+        'deviceId': 'a',
+        'sourceId': 'failed-a',
+        'status': 'error',
+        'cleanupError': {'reason': '旧音源清理未确认'},
+      };
+      await tester.pumpWidget(
+        TestProviderScope(
+          controller: fixture.controller,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  for (final id in ['a', 'a', 'b'])
+                    RemoteAudioControl(
+                      controller: fixture.controller,
+                      deviceId: id,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
       await _flush(tester);
+      fixture.stopsToFail = 1;
+      await tester.tap(find.text('重试声音清理').first);
+      await _flush(tester);
+      expect(fixture.calls.where((call) => call.$1 == 'audio.stop').single.$2, {
+        'deviceId': 'a',
+        'sourceId': 'failed-a',
+      });
+      await tester.tap(find.text('重新核对设备声音').first);
+      await _flush(tester);
+      expect(
+        fixture.calls.where((call) => call.$1 == 'audio.stop'),
+        hasLength(1),
+      );
+      final cleanup = fixture.pendingStop = Completer<Json>();
+      await tester.tap(find.text('重试声音清理').first);
+      await _flush(tester);
+      fixture.sources['a'] = {
+        'deviceId': 'a',
+        'sourceId': 'successor-a',
+        'status': 'playing',
+      };
+      cleanup.complete({});
+      await _flush(tester);
+      fixture.sessionChanged();
+      await _flush(tester);
+      expect(fixture.sources['a']?['sourceId'], 'successor-a');
+      expect(fixture.sources['b']?['status'], 'playing');
+      await tester.tap(find.text('静音设备声音').first);
+      await _flush(tester);
+      expect(fixture.sources['a']?['muted'], isTrue);
+      expect(fixture.sources['b']?['muted'], isNot(true));
+      expect(find.text('播放设备声音'), findsNWidgets(2));
       expect(fixture.sources.keys, unorderedEquals(['a', 'b']));
       closeA();
       await _flush(tester);
@@ -336,13 +422,20 @@ void main() {
       closeAppA();
       await _flush(tester);
       expect(fixture.sources.keys, ['b']);
-      expect(fixture.calls.where((call) => call.$1 == 'audio.stop').single.$2, {
-        'deviceId': 'a',
-      });
+      expect(
+        fixture.calls
+            .where(
+              (call) => call.$1 == 'audio.stop' && call.$2['sourceId'] == null,
+            )
+            .single
+            .$2,
+        {'deviceId': 'a'},
+      );
       closeB();
       await _flush(tester);
       expect(fixture.sources, isEmpty);
       expect(fixture.calls.where((call) => call.$1 == 'session.stop'), isEmpty);
+      await tester.pumpWidget(const SizedBox());
       await fixture.dispose();
     },
   );

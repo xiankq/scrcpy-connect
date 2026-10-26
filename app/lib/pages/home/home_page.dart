@@ -32,184 +32,240 @@ class HomePage extends HookConsumerWidget {
       },
       child: child,
     );
+    if (AppNavigationShell.hasSidebar(context)) {
+      return withBack(navigationShell);
+    }
+    const destinations = appDestinations;
+    return withBack(
+      Scaffold(
+        extendBody: true,
+        body: navigationShell,
+        bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom > 0
+            ? null
+            : SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DesignTokens.spacingMd,
+                    DesignTokens.spacingZero,
+                    DesignTokens.spacingMd,
+                    DesignTokens.spacingMd,
+                  ),
+                  child: NavigationSelectionLens(
+                    selectedIndex: tab,
+                    itemCount: destinations.length,
+                    child: liquid.GlassTabBar.bottom(
+                      key: ValueKey(reducedMotion),
+                      tabs: [
+                        for (final destination in destinations)
+                          liquid.GlassTab(
+                            icon: Icon(destination.$1),
+                            label: destination.$2,
+                          ),
+                      ],
+                      indicatorExpansion: reducedMotion
+                          ? EdgeInsets.zero
+                          : const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                      indicatorPinchStrength: reducedMotion ? 0 : 0.4,
+                      magnification: reducedMotion ? 1 : 1.15,
+                      selectedIndex: tab,
+                      onTabSelected: selectTab,
+                      horizontalPadding: 0,
+                      verticalPadding: 0,
+                      barHeight: GlassMaterial.navigationHeight(context),
+                      barBorderRadius: DesignTokens.componentNavigationRounded,
+                      tabPadding: const EdgeInsets.symmetric(
+                        horizontal: DesignTokens.componentNavigationPadding,
+                      ),
+                      iconLabelSpacing: DesignTokens.spacingMicro,
+                      iconSize: DesignTokens.componentIconSize,
+                      labelFontSize: theme.textTheme.labelLarge!.fontSize!,
+                      textStyle: theme.textTheme.labelLarge,
+                      selectedIconColor: theme.colorScheme.primary,
+                      selectedLabelColor: theme.colorScheme.primary,
+                      unselectedIconColor: theme.colorScheme.onSurfaceVariant,
+                      unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                      indicatorColor:
+                          GlassMaterial.restingNavigationLens(context)
+                          ? DesignTokens.colorTransparent
+                          : opaque
+                          ? theme.colorScheme.surfaceContainerHigh
+                          : theme.brightness == Brightness.dark
+                          ? DesignTokens.colorGlassSelectedDark
+                          : DesignTokens.colorGlassSelected,
+                      settings: GlassMaterial.navigationBarSettings(context),
+                      quality: GlassMaterial.quality(context),
+                      indicatorSettings: GlassMaterial.navigationLensSettings(
+                        context,
+                      ),
+                      pressScale: reducedMotion
+                          ? 1
+                          : DesignTokens.componentGlassInteractionScale,
+                      interactionBehavior: reducedMotion
+                          ? liquid.GlassInteractionBehavior.glowOnly
+                          : liquid.GlassInteractionBehavior.full,
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+const appDestinations = [
+  (LucideIcons.smartphone, '设备', '/devices'),
+  (LucideIcons.arrowUpDown, '传输', '/transfers'),
+  (LucideIcons.settings2, '设置', '/settings'),
+];
+
+/// 普通路由共用的导航外壳；沉浸页面位于根 Navigator。
+class AppNavigationShell extends StatelessWidget {
+  const AppNavigationShell({super.key, required this.child, required this.uri});
+  final Widget child;
+  final Uri uri;
+
+  static bool hasSidebar(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_NavigationLayout>()
+          ?.sidebar ??
+      false;
+  static bool isVisible(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_NavigationLayout>()
+          ?.visible ??
+      true;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = ModalRoute.isCurrentOf(context) != false;
+    final tab = uri.path.startsWith('/settings') || uri.path == '/preferences'
+        ? 2
+        : uri.path.startsWith('/transfers') || uri.path.startsWith('/activity')
+        ? 1
+        : 0;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 850;
-        final shortLandscape =
+        final short =
             constraints.maxWidth > constraints.maxHeight &&
             constraints.maxHeight < DesignTokens.componentSheetShortHeight;
-        final destinations = const [
-          (LucideIcons.smartphone, '设备'),
-          (LucideIcons.arrowUpDown, '传输'),
-          (LucideIcons.settings2, '设置'),
-        ];
-        if (wide || shortLandscape) {
-          return withBack(
-            Scaffold(
-              body: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SafeArea(
-                    child: SizedBox(
-                      width: shortLandscape
-                          ? DesignTokens.componentSidebarCompactWidth
-                          : DesignTokens.componentSidebarWidth,
-                      child: Padding(
-                        padding: EdgeInsets.all(
-                          shortLandscape
-                              ? DesignTokens.spacingXs
-                              : DesignTokens.spacingMd,
-                        ),
-                        child: Glass(
-                          padding: const EdgeInsets.all(DesignTokens.spacingXs),
-                          child: SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (!shortLandscape)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: DesignTokens.spacingXl,
-                                      horizontal: DesignTokens.spacingSm,
-                                    ),
-                                    child: Text(
-                                      '邻接',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium,
-                                    ),
-                                  ),
-                                for (var i = 0; i < destinations.length; i++)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: DesignTokens.spacingXs,
-                                    ),
-                                    child: GlassPressFeedback(
-                                      child: ListTile(
-                                        minTileHeight: shortLandscape
-                                            ? DesignTokens
-                                                  .componentIconButtonSize
-                                            : null,
-                                        minVerticalPadding: shortLandscape
-                                            ? 0
-                                            : null,
-                                        contentPadding: shortLandscape
-                                            ? const EdgeInsets.symmetric(
-                                                horizontal:
-                                                    DesignTokens.spacingXs,
-                                              )
-                                            : null,
-                                        horizontalTitleGap: shortLandscape
-                                            ? DesignTokens.spacingXs
-                                            : null,
-                                        shape: const StadiumBorder(),
-                                        selected: tab == i,
-                                        selectedTileColor:
-                                            Theme.of(context).brightness ==
-                                                Brightness.dark
-                                            ? DesignTokens
-                                                  .colorGlassSelectedDark
-                                            : DesignTokens.colorGlassSelected,
-                                        leading: Icon(destinations[i].$1),
-                                        title: Text(destinations[i].$2),
-                                        onTap: () => selectTab(i),
+        final sidebar = constraints.maxWidth >= 850 || short;
+        return _NavigationLayout(
+          sidebar: sidebar,
+          visible: visible,
+          child: !sidebar
+              ? child
+              : Scaffold(
+                  body: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SafeArea(
+                        child: SizedBox(
+                          key: const ValueKey('app-sidebar'),
+                          width: short
+                              ? DesignTokens.componentSidebarCompactWidth
+                              : DesignTokens.componentSidebarWidth,
+                          child: Padding(
+                            padding: EdgeInsets.all(
+                              short
+                                  ? DesignTokens.spacingXs
+                                  : DesignTokens.spacingMd,
+                            ),
+                            child: Glass(
+                              padding: const EdgeInsets.all(
+                                DesignTokens.spacingXs,
+                              ),
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (!short)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: DesignTokens.spacingXl,
+                                          horizontal: DesignTokens.spacingSm,
+                                        ),
+                                        child: Text(
+                                          '邻接',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .headlineMedium,
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                              ],
+                                    for (
+                                      var i = 0;
+                                      i < appDestinations.length;
+                                      i++
+                                    )
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: DesignTokens.spacingXs,
+                                        ),
+                                        child: GlassPressFeedback(
+                                          child: ListTile(
+                                            minTileHeight: short
+                                                ? DesignTokens
+                                                      .componentIconButtonSize
+                                                : null,
+                                            minVerticalPadding: short
+                                                ? 0
+                                                : null,
+                                            contentPadding: short
+                                                ? const EdgeInsets.symmetric(
+                                                    horizontal:
+                                                        DesignTokens.spacingXs,
+                                                  )
+                                                : null,
+                                            horizontalTitleGap: short
+                                                ? DesignTokens.spacingXs
+                                                : null,
+                                            shape: const StadiumBorder(),
+                                            selected: tab == i,
+                                            selectedTileColor:
+                                                Theme.of(context).brightness ==
+                                                    Brightness.dark
+                                                ? DesignTokens
+                                                      .colorGlassSelectedDark
+                                                : DesignTokens
+                                                      .colorGlassSelected,
+                                            leading: Icon(
+                                              appDestinations[i].$1,
+                                            ),
+                                            title: Text(appDestinations[i].$2),
+                                            onTap: () => context.go(
+                                              appDestinations[i].$3,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                      Expanded(child: child),
+                    ],
                   ),
-                  Expanded(child: navigationShell),
-                ],
-              ),
-            ),
-          );
-        }
-        return withBack(
-          Scaffold(
-            extendBody: true,
-            body: navigationShell,
-            bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom > 0
-                ? null
-                : SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DesignTokens.spacingMd,
-                        DesignTokens.spacingZero,
-                        DesignTokens.spacingMd,
-                        DesignTokens.spacingMd,
-                      ),
-                      child: NavigationSelectionLens(
-                        selectedIndex: tab,
-                        itemCount: destinations.length,
-                        child: liquid.GlassTabBar.bottom(
-                          key: ValueKey(reducedMotion),
-                          tabs: [
-                            for (final destination in destinations)
-                              liquid.GlassTab(
-                                icon: Icon(destination.$1),
-                                label: destination.$2,
-                              ),
-                          ],
-                          indicatorExpansion: reducedMotion
-                              ? EdgeInsets.zero
-                              : const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                          indicatorPinchStrength: reducedMotion ? 0 : 0.4,
-                          magnification: reducedMotion ? 1 : 1.15,
-                          selectedIndex: tab,
-                          onTabSelected: selectTab,
-                          horizontalPadding: 0,
-                          verticalPadding: 0,
-                          barHeight: GlassMaterial.navigationHeight(context),
-                          barBorderRadius:
-                              DesignTokens.componentNavigationRounded,
-                          tabPadding: const EdgeInsets.symmetric(
-                            horizontal: DesignTokens.componentNavigationPadding,
-                          ),
-                          iconLabelSpacing: DesignTokens.spacingMicro,
-                          iconSize: DesignTokens.componentIconSize,
-                          labelFontSize: theme.textTheme.labelLarge!.fontSize!,
-                          textStyle: theme.textTheme.labelLarge,
-                          selectedIconColor: theme.colorScheme.primary,
-                          selectedLabelColor: theme.colorScheme.primary,
-                          unselectedIconColor:
-                              theme.colorScheme.onSurfaceVariant,
-                          unselectedLabelColor:
-                              theme.colorScheme.onSurfaceVariant,
-                          indicatorColor:
-                              GlassMaterial.restingNavigationLens(context)
-                              ? DesignTokens.colorTransparent
-                              : opaque
-                              ? theme.colorScheme.surfaceContainerHigh
-                              : theme.brightness == Brightness.dark
-                              ? DesignTokens.colorGlassSelectedDark
-                              : DesignTokens.colorGlassSelected,
-                          settings: GlassMaterial.navigationBarSettings(
-                            context,
-                          ),
-                          quality: GlassMaterial.quality(context),
-                          indicatorSettings:
-                              GlassMaterial.navigationLensSettings(context),
-                          pressScale: reducedMotion
-                              ? 1
-                              : DesignTokens.componentGlassInteractionScale,
-                          interactionBehavior: reducedMotion
-                              ? liquid.GlassInteractionBehavior.glowOnly
-                              : liquid.GlassInteractionBehavior.full,
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
+                ),
         );
       },
     );
   }
+}
+
+class _NavigationLayout extends InheritedWidget {
+  const _NavigationLayout({
+    required this.sidebar,
+    required this.visible,
+    required super.child,
+  });
+  final bool sidebar;
+  final bool visible;
+  @override
+  bool updateShouldNotify(_NavigationLayout oldWidget) =>
+      sidebar != oldWidget.sidebar || visible != oldWidget.visible;
 }

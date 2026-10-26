@@ -70,6 +70,7 @@ class AppController extends _$AppController {
       _deviceAudio.claimView(deviceId);
 
   final _consumedShareIds = <String>{};
+  final _appOpenClaims = <(String, String), Object>{};
   Future<void> _settingsQueue = Future<void>.value();
   bool _disposed = true;
   int _generation = 0;
@@ -102,6 +103,7 @@ class AppController extends _$AppController {
       },
     );
     _consumedShareIds.clear();
+    _appOpenClaims.clear();
     final events = StreamController<Json>.broadcast(sync: true);
     _events = events;
     final subscription = dependencies.events.listen(
@@ -412,6 +414,56 @@ class AppController extends _$AppController {
     });
     _settingsQueue = operation;
     return operation;
+  }
+
+  String? appOpenMode(String deviceId, String packageName) {
+    final modes = jsonObject(state.settings['appOpenModes']);
+    final mode = jsonObject(modes[deviceId])[packageName];
+    return mode == 'phone' || mode == 'window' ? mode as String : null;
+  }
+
+  Future<void> rememberAppOpenMode(
+    String deviceId,
+    String packageName,
+    String mode,
+  ) {
+    if (mode != 'phone' && mode != 'window') {
+      throw ArgumentError.value(mode, 'mode');
+    }
+    final generation = _generation;
+    _settingsRequest++;
+    final operation = _settingsQueue.catchError((Object _) {}).then((_) async {
+      if (!_current(generation) || appOpenMode(deviceId, packageName) == mode) {
+        return;
+      }
+      final epoch = _settingsEpoch;
+      final previous = jsonObject(state.settings['appOpenModes']);
+      final modes = <String, dynamic>{
+        ...previous,
+        deviceId: {...jsonObject(previous[deviceId]), packageName: mode},
+      };
+      final result = await execute(ApplicationCommand.settingsUpdate, {
+        'appOpenModes': modes,
+      });
+      if (_current(generation) && epoch == _settingsEpoch) {
+        state = state.copyWith(
+          settings: {...state.settings, 'appOpenModes': modes, ...result},
+        );
+      }
+    });
+    _settingsQueue = operation;
+    return operation;
+  }
+
+  void Function()? claimAppOpen(String deviceId, String packageName) {
+    if (_disposed) return null;
+    final key = (deviceId, packageName);
+    if (_appOpenClaims.containsKey(key)) return null;
+    final token = Object();
+    _appOpenClaims[key] = token;
+    return () {
+      if (identical(_appOpenClaims[key], token)) _appOpenClaims.remove(key);
+    };
   }
 
   Future<void> focusDevice(String? id) async {

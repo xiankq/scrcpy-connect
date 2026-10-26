@@ -26,7 +26,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(harness.exits, 0);
     expect(harness.remoteTouches, 0);
-    expect(find.bySemanticsLabel('展开画面工具，手机'), findsOneWidget);
+    expect(find.bySemanticsLabel('展开画面工具，手机，连接状态待核对'), findsOneWidget);
 
     await tester.tap(harness.control);
     await tester.pumpAndSettle();
@@ -40,34 +40,8 @@ void main() {
   testWidgets(
     'phone-width native drag path leaves a 44px hittable collapsed control that expands and exits',
     (tester) async {
-      tester.view.physicalSize = const Size(393, 874);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
+      final harness = await _pumpHandle(tester);
       final semantics = tester.ensureSemantics();
-      var exits = 0;
-      var remoteTouches = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          home: Scaffold(
-            body: Stack(
-              children: [
-                Positioned.fill(
-                  child: Listener(
-                    onPointerDown: (_) => remoteTouches++,
-                    behavior: HitTestBehavior.opaque,
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-                ExitHandle(deviceLabel: '手机', onExit: () => exits++),
-              ],
-            ),
-          ),
-        ),
-      );
       final handle = find.byKey(const ValueKey('remote-tool-handle'));
       await tester.drag(handle, const Offset(393 * .72, 100));
       await tester.pump(const Duration(milliseconds: 1200));
@@ -79,32 +53,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       final expanded = find.bySemanticsLabel(RegExp('收起画面工具，'));
       expect(expanded, findsOneWidget);
-      expect(exits, 0);
-      expect(remoteTouches, 0);
+      expect(harness.exits, 0);
+      expect(harness.remoteTouches, 0);
       await tester.ensureVisible(find.text('关闭画面'));
       await tester.tap(find.text('关闭画面'));
       await tester.pump();
-      expect(exits, 1);
+      expect(harness.exits, 1);
       semantics.dispose();
     },
   );
   testWidgets(
     'expanding interrupts an unfinished snap and preserves the expanded position',
     (tester) async {
-      tester.view.physicalSize = const Size(393, 874);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ConnectTokens.theme(Brightness.light),
-          home: Scaffold(
-            body: ExitHandle(deviceLabel: '手机', onExit: () {}),
-          ),
-        ),
-      );
+      await _pumpHandle(tester);
       final handle = find.byKey(const ValueKey('remote-tool-handle'));
       await tester.drag(handle, const Offset(393 * .72, 100));
       await tester.pump(const Duration(milliseconds: 40));

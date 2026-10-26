@@ -10,6 +10,7 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
 import 'package:scrcpy_connect/models/remote_display_settings.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -20,15 +21,73 @@ const _autoWithoutNavigation = {
   },
 };
 
+const _lockOnClose = {
+  'deviceSettings': {
+    'phone': {'lockOnClose': true},
+  },
+};
+
+Json _autoDisplayReceipt(Json params) => {
+  'sessionId': 'screen',
+  'textureId': 1,
+  'width': params['displayWidth'],
+  'height': params['displayHeight'],
+  'displayAuto': true,
+  'displaySize': {
+    'width': params['displayWidth'],
+    'height': params['displayHeight'],
+  },
+};
+
+Future<void> _mountRemote(
+  WidgetTester tester,
+  AppController controller, {
+  Json? existingSession,
+  bool requestKeyboard = false,
+}) => tester.pumpWidget(
+  RouterTestApp(
+    controller: controller,
+    home: RemotePage(
+      controller: controller,
+      device: const {'id': 'phone'},
+      existingSession: existingSession,
+      requestKeyboard: requestKeyboard,
+    ),
+  ),
+);
+
+Future<void> _mountEntry(
+  WidgetTester tester,
+  AppController controller, {
+  required String label,
+  required void Function(BuildContext) open,
+}) => tester.pumpWidget(
+  RouterTestApp(
+    controller: controller,
+    devices: const [
+      {'id': 'phone', 'name': '测试手机'},
+    ],
+    home: Builder(
+      builder: (context) => Scaffold(
+        body: TextButton(onPressed: () => open(context), child: Text(label)),
+      ),
+    ),
+  ),
+);
+
+void _portraitViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 800);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 void main() {
   testWidgets(
     'a rejected viewport resize reports failure and preserves its last confirmed size',
     (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      tester.view.physicalSize = const Size(400, 800);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+      _portraitViewport(tester);
       final commands = <(String, Json)>[];
       final controller = createTestController((
         command, [
@@ -36,17 +95,7 @@ void main() {
       ]) async {
         commands.add((command, params));
         if (command == 'session.start') {
-          return {
-            'sessionId': 'screen',
-            'textureId': 1,
-            'width': params['displayWidth'],
-            'height': params['displayHeight'],
-            'displayAuto': true,
-            'displaySize': {
-              'width': params['displayWidth'],
-              'height': params['displayHeight'],
-            },
-          };
+          return _autoDisplayReceipt(params);
         }
         if (command == 'session.display') {
           throw const RequestFailure(
@@ -57,15 +106,7 @@ void main() {
         return {};
       }, initialState: AppState(settings: _autoWithoutNavigation));
       try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: RemotePage(
-              controller: controller,
-              device: const {'id': 'phone'},
-            ),
-          ),
-        );
+        await _mountRemote(tester, controller);
         await tester.pumpAndSettle();
         final confirmed = tester.widget<MediaCodecView>(
           find.byType(MediaCodecView),
@@ -115,50 +156,34 @@ void main() {
         'width': 400,
         'height': 800,
       };
-      final controller = createTestController(
-        (command, [params = const {}]) async {
-          commands.add((command, params));
-          if (command == 'session.list') {
-            return {
-              'sessions': [app],
-            };
-          }
-          if (command == 'session.resume') {
-            return {
-              ...app,
-              'firstFrameDecoded': true,
-              'evidence': 'media_codec.decodedFrame',
-            };
-          }
-          return {};
-        },
-        initialState: AppState(
-          settings: const {
-            'deviceSettings': {
-              'phone': {'lockOnClose': true},
-            },
-          },
-        ),
-      );
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        commands.add((command, params));
+        if (command == 'session.list') {
+          return {
+            'sessions': [app],
+          };
+        }
+        if (command == 'session.resume') {
+          return {
+            ...app,
+            'firstFrameDecoded': true,
+            'evidence': 'media_codec.decodedFrame',
+          };
+        }
+        return {};
+      }, initialState: AppState(settings: _lockOnClose));
       try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            devices: const [
-              {'id': 'phone', 'name': '测试手机'},
-            ],
-            home: Builder(
-              builder: (context) => Scaffold(
-                body: TextButton(
-                  onPressed: () => const RemoteSessionRoute(
-                    deviceId: 'phone',
-                    sessionId: 'app',
-                  ).push<void>(context),
-                  child: const Text('恢复应用'),
-                ),
-              ),
-            ),
-          ),
+        await _mountEntry(
+          tester,
+          controller,
+          label: '恢复应用',
+          open: (context) => const RemoteSessionRoute(
+            deviceId: 'phone',
+            sessionId: 'app',
+          ).push<void>(context),
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('恢复应用'));
@@ -202,51 +227,34 @@ void main() {
         );
         final semantics = tester.ensureSemantics();
         final commands = <(String, Json)>[];
-        final controller = createTestController(
-          (command, [params = const {}]) async {
-            commands.add((command, params));
-            if (command == 'session.start') {
-              return {
-                'sessionId': 'screen',
-                'captureGeneration': 7,
-                'textureId': 1,
-                'width': 400,
-                'height': 800,
-              };
-            }
-            if (fails && command == 'session.key' && params['keyCode'] == 223) {
-              throw const RequestFailure('disconnected', 'lock failed');
-            }
-            return {};
-          },
-          initialState: AppState(
-            settings: const {
-              'deviceSettings': {
-                'phone': {'lockOnClose': true},
-              },
-            },
-          ),
-        );
+        final controller = createTestController((
+          command, [
+          params = const {},
+        ]) async {
+          commands.add((command, params));
+          if (command == 'session.start') {
+            return {
+              'sessionId': 'screen',
+              'captureGeneration': 7,
+              'textureId': 1,
+              'width': 400,
+              'height': 800,
+            };
+          }
+          if (fails && command == 'session.key' && params['keyCode'] == 223) {
+            throw const RequestFailure('disconnected', 'lock failed');
+          }
+          return {};
+        }, initialState: AppState(settings: _lockOnClose));
         final releaseOtherPage = anotherPhonePage
             ? controller.claimControlPage('phone')
             : null;
         try {
-          await tester.pumpWidget(
-            RouterTestApp(
-              controller: controller,
-              devices: const [
-                {'id': 'phone', 'name': '测试手机'},
-              ],
-              home: Builder(
-                builder: (context) => Scaffold(
-                  body: TextButton(
-                    onPressed: () =>
-                        openRemoteRoute(context, deviceId: 'phone'),
-                    child: const Text('打开'),
-                  ),
-                ),
-              ),
-            ),
+          await _mountEntry(
+            tester,
+            controller,
+            label: '打开',
+            open: (context) => openRemoteRoute(context, deviceId: 'phone'),
           );
           await tester.pumpAndSettle();
           await tester.tap(find.text('打开'));
@@ -269,7 +277,7 @@ void main() {
             expect(commands[sleep].$2['captureGeneration'], 7);
             expect(pause, greaterThan(sleep));
           }
-          if (fails) expect(find.textContaining('锁屏尚未确认'), findsOneWidget);
+          if (fails) expect(find.textContaining('熄屏尚未确认'), findsOneWidget);
         } finally {
           await tester.pumpWidget(const SizedBox());
           releaseOtherPage?.call();
@@ -287,13 +295,10 @@ void main() {
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.resumed,
         );
-        tester.view.physicalSize = const Size(400, 800);
-        tester.view.devicePixelRatio = 1;
+        _portraitViewport(tester);
         // 新路由进入时 Android 可能尚未完成沉浸切换，仍能看到旧状态栏；保留窗口已完成尺寸调整。
         tester.view.padding = const FakeViewPadding(top: 24);
         tester.view.viewPadding = const FakeViewPadding(top: 24);
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
         addTearDown(tester.view.resetPadding);
         addTearDown(tester.view.resetViewPadding);
         addTearDown(tester.view.resetViewInsets);
@@ -324,16 +329,11 @@ void main() {
           return {};
         }, initialState: AppState(settings: _autoWithoutNavigation));
         try {
-          await tester.pumpWidget(
-            RouterTestApp(
-              controller: controller,
-              home: RemotePage(
-                controller: controller,
-                device: const {'id': 'phone'},
-                existingSession: retained,
-                requestKeyboard: true,
-              ),
-            ),
+          await _mountRemote(
+            tester,
+            controller,
+            existingSession: retained,
+            requestKeyboard: true,
           );
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 1500));
@@ -386,12 +386,9 @@ void main() {
       final semantics = tester.ensureSemantics();
       final events = StreamController<Json>.broadcast(sync: true);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      tester.view.physicalSize = const Size(400, 800);
-      tester.view.devicePixelRatio = 1;
+      _portraitViewport(tester);
       tester.view.padding = const FakeViewPadding(top: 24, bottom: 20);
       tester.view.viewPadding = const FakeViewPadding(top: 24, bottom: 20);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPadding);
       addTearDown(tester.view.resetViewPadding);
       addTearDown(tester.view.resetViewInsets);
@@ -400,17 +397,7 @@ void main() {
         (command, [params = const {}]) async {
           commands.add((command, params));
           if (command == 'session.start') {
-            return {
-              'sessionId': 'screen',
-              'textureId': 1,
-              'width': params['displayWidth'],
-              'height': params['displayHeight'],
-              'displayAuto': true,
-              'displaySize': {
-                'width': params['displayWidth'],
-                'height': params['displayHeight'],
-              },
-            };
+            return _autoDisplayReceipt(params);
           }
           return {};
         },
@@ -424,15 +411,7 @@ void main() {
         ),
       );
       try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: RemotePage(
-              controller: controller,
-              device: const {'id': 'phone'},
-            ),
-          ),
-        );
+        await _mountRemote(tester, controller);
         await tester.pumpAndSettle();
         final start = commands.singleWhere((c) => c.$1 == 'session.start').$2;
         // 启动请求在导航栏建立前测量。

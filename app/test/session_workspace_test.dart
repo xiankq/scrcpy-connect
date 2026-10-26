@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/activities/devices_workspace_activities_page.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/screenshot/devices_workspace_screenshot_page.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -46,10 +48,7 @@ List<Json> _sessions() => [
 ];
 
 void main() {
-  for (final oldAddress in [
-    '/devices/phone/sessions',
-    '/devices/phone/tools?session-id=B',
-  ]) {
+  for (final oldAddress in ['/devices/phone/sessions']) {
     testWidgets(
       'old management address redirects to the workspace without replay: $oldAddress',
       (tester) async {
@@ -93,6 +92,90 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'unresolved activity checks and closes the same record without replay',
+    (tester) async {
+      final calls = <(String, Json)>[];
+      var closed = false;
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        calls.add((command, params));
+        final pending = <String, dynamic>{
+          'deviceId': 'phone',
+          'sessionId': 'open-1',
+          'packageName': 'example.a',
+          'name': '待核对应用',
+          'recordOnly': true,
+          'launchOutcome': 'unknown',
+        };
+        if (command == 'activities.list') {
+          return {
+            'activities': closed
+                ? <Json>[]
+                : [
+                    {
+                      'id': 'session:open-1',
+                      'deviceId': 'phone',
+                      'name': '待核对应用',
+                    },
+                  ],
+            'sessions': closed ? <Json>[] : [pending],
+          };
+        }
+        if (command == 'session.list') {
+          return {
+            'sessions': [pending],
+          };
+        }
+        if (command == 'session.stop') closed = true;
+        return {};
+      });
+      try {
+        await tester.pumpWidget(
+          RouterTestApp(
+            controller: controller,
+            devices: const [_phone],
+            home: ActivitiesPage(controller: controller, deviceId: 'phone'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('待核对'), findsOneWidget);
+        expect(find.text('停止'), findsNothing);
+        await tester.tap(find.text('重新核对'));
+        await tester.pumpAndSettle();
+        expect(calls.where((call) => call.$1 == 'session.list'), hasLength(1));
+        await tester.tap(find.text('关闭记录'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, '关闭记录'));
+        await tester.pumpAndSettle();
+        expect(
+          calls
+              .where((call) => call.$1 == 'session.stop')
+              .map((call) => call.$2),
+          [
+            {'deviceId': 'phone', 'sessionId': 'open-1', 'keepTask': true},
+          ],
+        );
+        expect(
+          calls.where(
+            (call) => [
+              'session.start',
+              'session.launch',
+              'apps.launch',
+            ].contains(call.$1),
+          ),
+          isEmpty,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      }
+    },
+  );
 
   testWidgets(
     'closing the current B window releases its resources and preserves A',
@@ -173,7 +256,13 @@ void main() {
         calls.add((command, params));
         if (command == 'session.list') return {'sessions': _sessions()};
         if (command == 'session.screenshot') {
-          return {'localPath': '/tmp/window-b.png'};
+          return {
+            'status': 'completed',
+            'mime': 'image/png',
+            'localPath': '/tmp/window-b.png',
+            'width': 200,
+            'height': 400,
+          };
         }
         if (command == 'session.resume') {
           return {
@@ -203,7 +292,9 @@ void main() {
         await tester.tap(find.bySemanticsLabel(RegExp('展开画面工具，')));
         await tester.pumpAndSettle();
         await tester.tap(find.text('截图'));
-        await tester.pumpAndSettle();
+        for (var frame = 0; frame < 5; frame++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
 
         expect(
           calls
@@ -213,7 +304,17 @@ void main() {
             {'sessionId': 'B'},
           ],
         );
-        expect(find.text('截图已保存：/tmp/window-b.png'), findsOneWidget);
+        expect(find.byType(ScreenshotPage), findsOneWidget);
+
+        expect(
+          tester.widget<ScreenshotPage>(find.byType(ScreenshotPage)).capture,
+          containsPair('localPath', '/tmp/window-b.png'),
+        );
+        expect(
+          tester.widget<ScreenshotPage>(find.byType(ScreenshotPage)).capture,
+          containsPair('paused', false),
+        );
+        expect(calls.where((call) => call.$1 == 'documents.export'), isEmpty);
         expect(calls.where((call) => call.$1 == 'session.start'), isEmpty);
         expect(
           calls.where((call) => call.$1 == 'session.resume'),

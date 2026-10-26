@@ -1,6 +1,7 @@
+import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_summary.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/services/connection/connection_validation.dart';
@@ -9,7 +10,6 @@ import 'dart:ui' as ui;
 
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
@@ -214,7 +214,7 @@ void main() {
       await tapPageAction(
         tester,
         find.byType(DeviceWorkspacePage),
-        find.text('文件管理'),
+        find.text('文件'),
       );
       await waitFor(
         tester,
@@ -319,7 +319,7 @@ void main() {
       await tapPageAction(
         tester,
         find.byType(DeviceWorkspacePage),
-        find.text('画面设置'),
+        find.text('画面与控制'),
       );
       await waitFor(
         tester,

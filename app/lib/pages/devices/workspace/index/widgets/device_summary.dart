@@ -37,7 +37,6 @@ class DeviceSummary extends HookWidget {
     final displayedDevice = connecting
         ? {...device, 'status': 'connecting'}
         : device;
-    final model = value(device, 'model').trim();
     final address = value(device, 'address').trim();
     final port = int.tryParse(value(device, 'port'));
     return Column(
@@ -52,8 +51,6 @@ class DeviceSummary extends HookWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(model.isEmpty ? '型号未获取' : model, style: text.bodyMedium),
-                  const SizedBox(height: DesignTokens.spacingXs),
                   Wrap(
                     spacing: DesignTokens.spacingXs,
                     runSpacing: DesignTokens.spacingXxs,

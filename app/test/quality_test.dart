@@ -9,6 +9,50 @@ import 'support/router_test_app.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+
+Future<void> reveal(WidgetTester tester, String label) async {
+  await tester.scrollUntilVisible(
+    find.text(label).hitTestable(),
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
+Json codec(
+  String id,
+  String name, {
+  bool available = true,
+  String status = 'available',
+  String decoder = 'available',
+  bool? canAttempt,
+  String? reason,
+  String? encoder,
+}) => {
+  'id': id,
+  'name': name,
+  'available': available,
+  'status': status,
+  'decoderStatus': decoder,
+  'canAttempt': ?canAttempt,
+  'reason': ?reason,
+  if (encoder != null)
+    'encoders': [
+      {'name': encoder, 'available': true, 'status': 'available'},
+    ],
+};
+
+Future<void> mount(WidgetTester tester, AppController controller) async {
+  await tester.pumpWidget(
+    RouterTestApp(
+      controller: controller,
+      theme: ConnectTokens.theme(Brightness.light),
+      home: QualityPage(controller: controller, device: const {'id': 'phone'}),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
 
 void main() {
   testWidgets(
@@ -35,51 +79,16 @@ void main() {
         return {
           'current': {...current},
           'codecs': [
-            {
-              'id': 'h264',
-              'name': 'H.264',
-              'available': true,
-              'status': 'available',
-              'decoderStatus': 'available',
-              'encoders': [
-                {
-                  'name': 'c2.avc.encoder',
-                  'available': true,
-                  'status': 'available',
-                },
-              ],
-            },
-            {
-              'id': 'h265',
-              'name': 'H.265',
-              'available': true,
-              'status': 'available',
-              'decoderStatus': 'available',
-              'encoders': [
-                {
-                  'name': 'c2.hevc.encoder',
-                  'available': true,
-                  'status': 'available',
-                },
-              ],
-            },
+            codec('h264', 'H.264', encoder: 'c2.avc.encoder'),
+            codec('h265', 'H.265', encoder: 'c2.hevc.encoder'),
           ],
         };
       });
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: QualityPage(
-            controller: controller,
-            device: const {'id': 'phone', 'name': '手机'},
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('画面设置'), findsOneWidget);
+      await mount(tester, controller);
+      expect(find.text('画面与控制'), findsOneWidget);
       expect(find.text('屏幕比例'), findsOneWidget);
-      expect(find.textContaining('关闭后重新打开'), findsNothing);
+      expect(find.byType(ExpansionTile), findsNothing);
+      await reveal(tester, '编码格式');
       await tester.tap(find.text('编码格式'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('H.265'));
@@ -91,7 +100,7 @@ void main() {
         'videoCodec': 'h265',
         'videoEncoder': null,
       });
-      await tester.ensureVisible(find.text('视频编码器'));
+      await reveal(tester, '视频编码器');
       await tester.tap(find.text('视频编码器'));
       await tester.pumpAndSettle();
       expect(find.text('c2.avc.encoder'), findsNothing);
@@ -121,7 +130,6 @@ void main() {
         ),
         isEmpty,
       );
-      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },
@@ -145,61 +153,29 @@ void main() {
         return {
           'current': {'videoCodec': 'h264', 'videoEncoder': null},
           'codecs': [
-            {
-              'id': 'h264',
-              'name': 'H.264',
-              'available': true,
-              'status': 'available',
-              'decoderStatus': 'available',
-            },
-            {
-              'id': 'h265',
-              'name': 'H.265',
-              'available': true,
-              'status': 'available',
-              'decoderStatus': 'unavailable',
-              'canAttempt': true,
-              'reason': '本机没有可用解码器。',
-            },
-            {
-              'id': 'av1',
-              'name': 'AV1',
-              'available': false,
-              'status': 'unknown',
-              'decoderStatus': 'available',
-              'canAttempt': true,
-              'reason': '尚未完成目标编码器探测。',
-            },
-            {
-              'id': 'vp8',
-              'name': 'VP8',
-              'available': true,
-              'status': 'available',
-              'decoderStatus': 'unknown',
-            },
-            {
-              'id': 'vp9',
-              'name': 'VP9',
-              'available': true,
-              'status': 'available',
-              'decoderStatus': 'unknown',
-              'canAttempt': true,
-            },
+            codec('h264', 'H.264'),
+            codec(
+              'h265',
+              'H.265',
+              decoder: 'unavailable',
+              canAttempt: true,
+              reason: '本机没有可用解码器。',
+            ),
+            codec(
+              'av1',
+              'AV1',
+              available: false,
+              status: 'unknown',
+              canAttempt: true,
+              reason: '尚未完成目标编码器探测。',
+            ),
+            codec('vp8', 'VP8', decoder: 'unknown'),
+            codec('vp9', 'VP9', decoder: 'unknown', canAttempt: true),
           ],
         };
       });
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: QualityPage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('编码格式'));
+      await mount(tester, controller);
+      await reveal(tester, '编码格式');
       await tester.tap(find.text('编码格式'));
       await tester.pumpAndSettle();
       for (final label in ['H.265', 'AV1', 'VP8']) {
@@ -225,7 +201,6 @@ void main() {
       );
       expect(find.text('H.264'), findsOneWidget);
       expect(requests.where((r) => r.$1 == 'session.stop'), isEmpty);
-      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },

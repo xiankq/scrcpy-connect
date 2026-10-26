@@ -47,10 +47,14 @@ void main() {
       await tester.pumpWidget(
         RouterTestApp(
           controller: controller,
-          home: DeviceDataPage(controller: controller, device: first),
+          home: Scaffold(
+            body: DeviceDataPage(controller: controller, device: first),
+          ),
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.text('设备详情'), findsOneWidget);
+      expect(find.byType(ExpansionTile), findsNothing);
       expect(find.text('39%'), findsOneWidget);
       controller.devices = [
         {...first, 'status': 'offline', 'connectionId': null},

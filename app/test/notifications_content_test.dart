@@ -5,10 +5,32 @@ import 'dart:async';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
+import 'package:scrcpy_connect/models/app_state.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
+
+class _DeniedReminderSink extends NoopSystemNotificationSink {
+  var requests = 0;
+  @override
+  Future<SystemNotificationStatus> status() async =>
+      const SystemNotificationStatus(
+        supported: true,
+        permissionGranted: false,
+        canRequest: true,
+        reason: '系统通知权限未获允许',
+      );
+  @override
+  Future<SystemNotificationStatus> requestPermission() {
+    requests++;
+    return status();
+  }
+}
 
 void main() {
   for (final code in ['authentication_required', 'stale_notification']) {
@@ -69,7 +91,7 @@ void main() {
   }
 
   testWidgets(
-    'all read clears only dismissible remote items and retains unknown results',
+    'confirmed bulk clearing only dismisses remote items and retains unknown results',
     (tester) async {
       const device = {'id': 'phone', 'name': '手机', 'status': 'connected'};
       final commands = <(String, Json)>[];
@@ -124,7 +146,18 @@ void main() {
       expect(find.text('仅在本机隐藏'), findsNothing);
       expect(find.text('进入手机原应用'), findsNothing);
       expect(find.byType(ContentPanel), findsNWidgets(3));
-      await tester.tap(find.byTooltip('全部已读'));
+      expect(
+        tester.getSize(find.byKey(const ValueKey('notification-clear'))).height,
+        DesignTokens.componentNotificationCardHeight,
+      );
+      await tester.tap(find.byTooltip('清除全部通知'));
+      await tester.pumpAndSettle();
+      expect(
+        commands.where((call) => call.$1 == 'notifications.dismiss'),
+        isEmpty,
+      );
+      expect(find.textContaining('手机 当前可清除的 2 条通知'), findsOneWidget);
+      await tester.tap(find.text('清除通知').last);
       await tester.pumpAndSettle();
       expect(
         commands
@@ -143,62 +176,60 @@ void main() {
   );
 
   testWidgets(
-    'single read clears on the phone without executing the card action',
+    'notification page requests reminders only on explicit action and preserves call intent after denial',
     (tester) async {
-      const device = {'id': 'phone', 'name': '手机', 'status': 'connected'};
-      final commands = <(String, Json)>[];
-      var present = true;
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        commands.add((command, params));
-        if (command == 'notifications.list') {
-          return {
-            'status': 'available',
-            'live': true,
-            'notifications': [
-              if (present)
-                {
-                  'id': 'message',
-                  'appName': '消息应用',
-                  'title': '收到消息',
-                  'canDismiss': true,
-                },
-            ],
-          };
-        }
-        if (command == 'notifications.dismiss') {
-          present = false;
-          return {'dismissed': true, 'markedRead': false};
-        }
-        return {};
-      });
+      final sink = _DeniedReminderSink();
+      final writes = <Json>[];
+      final dependencies = AppDependencies(
+        initialize: false,
+        events: const Stream.empty(),
+        initialState: AppState(
+          loading: false,
+          settings: {'notificationAlerts': false, 'callAlerts': false},
+        ),
+        request: (command, [params = const {}]) async {
+          if (command == 'settings.update') writes.add(params);
+          return command == 'notifications.list'
+              ? {'status': 'available', 'notifications': <Json>[]}
+              : {};
+        },
+      );
+      late AppController controller;
       await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: NotificationsPage(controller: controller, device: device),
+        ProviderScope(
+          overrides: [
+            appDependenciesProvider.overrideWithValue(dependencies),
+            systemNotificationSinkProvider.overrideWithValue(sink),
+          ],
+          child: Consumer(
+            builder: (context, ref, _) {
+              controller = ref.watch(appControllerProvider.notifier);
+              return MaterialApp(
+                theme: ConnectTokens.theme(Brightness.light),
+                home: NotificationsPage(
+                  controller: controller,
+                  device: const {'id': 'phone', 'name': '手机'},
+                ),
+              );
+            },
+          ),
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .getSize(find.byKey(const ValueKey('notification-message')))
-            .height,
-        DesignTokens.componentNotificationCardHeight,
-      );
-      await tester.tap(find.byTooltip('已读（清除）'));
-      await tester.pumpAndSettle();
-      expect(
-        commands.where((call) => call.$1 == 'notifications.dismiss').single.$2,
-        {'deviceId': 'phone', 'notificationId': 'message'},
-      );
-      expect(commands.any((call) => call.$1 == 'notifications.open'), isFalse);
-      expect(find.text('收到消息'), findsNothing);
+      expect(sink.requests, 0);
+      expect(writes, isEmpty);
       expect(find.text('没有当前通知'), findsOneWidget);
+      await tester.tap(find.text('开启系统提醒'));
+      await tester.pumpAndSettle();
+      expect(sink.requests, 1);
+      expect(writes, [
+        {'notificationAlerts': true},
+      ]);
+      expect(controller.snapshot().settings['callAlerts'], isFalse);
+      expect(find.textContaining('系统通知权限未获允许'), findsOneWidget);
+      expect(find.text('没有当前通知'), findsOneWidget);
+      expect(find.text('开启系统提醒'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
-      controller.dispose();
     },
   );
 
@@ -318,7 +349,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('正在打开的原通知'));
       await tester.pump();
-      await tester.tap(find.byTooltip('已读（清除）'));
+      await tester.tap(find.byTooltip('清除通知'));
       await tester.pumpAndSettle();
       expect(find.text('前一条'), findsNothing);
       expect(find.text('部分通知受限'), findsNothing);

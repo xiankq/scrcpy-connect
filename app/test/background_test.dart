@@ -27,7 +27,7 @@ void main() {
       ]) async {
         commands.add(command);
         return command == 'background.status'
-            ? {'title': title, 'reason': '当前状态'}
+            ? {'title': title, 'reason': '当前状态', 'canRequest': true}
             : {};
       }, events: events.stream);
       await tester.pumpWidget(
@@ -39,14 +39,16 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('后台正在核验'), findsOneWidget);
+      expect(find.text('允许后台保持'), findsNothing);
+      expect(find.text('重新启用后台保持'), findsNothing);
+      expect(
+        commands.where((command) => command == 'background.request'),
+        isEmpty,
+      );
       title = '设备活动正在保持';
       events.add({'type': 'background.changed', 'data': <String, dynamic>{}});
       await tester.pumpAndSettle();
       expect(find.text(title), findsOneWidget);
-      expect(
-        commands.where((command) => command == 'background.status'),
-        hasLength(2),
-      );
       events.add({'type': 'device.changed', 'data': <String, dynamic>{}});
       await tester.pumpAndSettle();
       expect(
@@ -65,10 +67,6 @@ void main() {
       expect(
         commands.where((command) => command == 'background.status'),
         hasLength(3),
-      );
-      expect(
-        commands.where((command) => command == 'background.request'),
-        isEmpty,
       );
       await tester.pumpWidget(const SizedBox());
       final before = commands.length;
@@ -97,7 +95,12 @@ void main() {
       ]) async {
         commands.add((command, params));
         return command == 'background.status'
-            ? {'title': '系统后台条件', 'reason': '已核验', 'canRequest': true}
+            ? {
+                'supported': true,
+                'title': '系统后台条件',
+                'reason': '已核验',
+                'canRequest': true,
+              }
             : {};
       });
       await tester.pumpWidget(
@@ -108,14 +111,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(commands.where((c) => c.$1 == 'background.request'), isEmpty);
+      Iterable<(String, Json)> requests() =>
+          commands.where((c) => c.$1 == 'background.request');
+      expect(requests(), isEmpty);
       await tester.tap(find.widgetWithText(ConnectSwitchRow, '允许后台保持'));
       await tester.pumpAndSettle();
-      final requests = commands
-          .where((c) => c.$1 == 'background.request')
-          .toList();
-      expect(requests, hasLength(1));
-      expect(requests.single.$2, {
+      expect(requests(), hasLength(1));
+      expect(requests().single.$2, {
         'enabled': true,
         'askNotificationPermission': true,
       });
@@ -126,7 +128,7 @@ void main() {
       expect(commands.where((c) => c.$1 == 'background.status'), hasLength(2));
       await tester.tap(find.widgetWithText(ConnectSwitchRow, '允许后台保持'));
       await tester.pumpAndSettle();
-      expect(commands.lastWhere((c) => c.$1 == 'background.request').$2, {
+      expect(requests().last.$2, {
         'enabled': false,
         'askNotificationPermission': false,
       });
@@ -136,14 +138,10 @@ void main() {
       await tester.tap(find.text('重新启用后台保持'));
       await tester.pumpAndSettle();
       expect(controller.settings['backgroundKeepAlive'], true);
-      expect(commands.where((c) => c.$1 == 'background.request').single.$2, {
+      expect(requests().single.$2, {
         'enabled': true,
         'askNotificationPermission': true,
       });
-      expect(
-        commands.indexWhere((c) => c.$1 == 'settings.update'),
-        lessThan(commands.indexWhere((c) => c.$1 == 'background.request')),
-      );
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },

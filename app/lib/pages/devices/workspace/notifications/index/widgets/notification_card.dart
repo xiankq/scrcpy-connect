@@ -27,11 +27,6 @@ class NotificationCard extends HookWidget {
   final VoidCallback onClear;
 
   Future<void> _open(BuildContext context) async {
-    if (notification['canOpen'] == false) {
-      feedback(context, '这条通知没有可接续的原始动作，将打开手机界面。');
-      await openRemoteRoute(context, deviceId: value(device, 'id'));
-      return;
-    }
     try {
       final result = await controller.request('notifications.open', {
         'deviceId': device['id'],
@@ -92,7 +87,7 @@ class NotificationCard extends HookWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: opening.value
+          onTap: opening.value || notification['canOpen'] == false
               ? null
               : () async {
                   opening.value = true;
@@ -168,13 +163,16 @@ class NotificationCard extends HookWidget {
                     const SizedBox(height: DesignTokens.spacingSm),
                     Text(
                       value(notification, 'title'),
-                      style: Theme.of(context).textTheme.bodyMedium
+                      style: Theme.of(context).textTheme.bodyLarge
                           ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ],
                   if (value(notification, 'body').isNotEmpty) ...[
                     const SizedBox(height: DesignTokens.spacingTight),
-                    Text(value(notification, 'body')),
+                    Text(
+                      value(notification, 'body'),
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
                   ],
                   if (value(notification, 'title').isEmpty &&
                       value(notification, 'body').isEmpty) ...[
@@ -185,7 +183,7 @@ class NotificationCard extends HookWidget {
                     ),
                   ],
                   if (notification['canOpen'] == false)
-                    const StateNote('此通知没有可接续的原始动作；点击将仅打开手机界面。'),
+                    const StateNote('此通知的原始动作已不可用，请在手机原应用中处理。'),
                   if (notification['canDismiss'] is bool) ...[
                     const SizedBox(height: DesignTokens.spacingSm),
                     ConstrainedBox(
@@ -202,7 +200,7 @@ class NotificationCard extends HookWidget {
                           children: [
                             if (notification['canDismiss'] == true)
                               GlassTooltip(
-                                message: '已读（清除）',
+                                message: '清除通知',
                                 child: TextButton.icon(
                                   style: TextButton.styleFrom(
                                     minimumSize: const Size(
@@ -215,7 +213,7 @@ class NotificationCard extends HookWidget {
                                     LucideIcons.checkCheck,
                                     size: DesignTokens.componentIconSmallSize,
                                   ),
-                                  label: const Text('已读（清除）'),
+                                  label: const Text('清除通知'),
                                 ),
                               )
                             else if (notification['canDismiss'] == false)

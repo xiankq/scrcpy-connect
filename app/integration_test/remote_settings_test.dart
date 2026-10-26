@@ -134,7 +134,7 @@ void main() {
       }
 
       Future<void> ratio(String label, {String? custom}) async {
-        await tapSetting('画面设置');
+        await tapSetting('画面与控制');
         await waitFor(
           tester,
           () =>
@@ -481,7 +481,7 @@ void main() {
           () => workspace.evaluate().isNotEmpty,
           reason: 'Open the real device settings.',
         );
-        await switchSetting('关闭最后画面时锁屏', false);
+        await switchSetting('关闭最后画面时熄屏', false);
         await switchSetting('保持手机唤醒', false);
         await switchSetting('显示导航键', true);
         await ratio('原始比例');
@@ -624,7 +624,7 @@ void main() {
         expect((await currentSession())['sessionId'], sessionId);
         await leave();
         await host('keep-active-released');
-        await switchSetting('关闭最后画面时锁屏', true);
+        await switchSetting('关闭最后画面时熄屏', true);
         await openPhone();
         await leave();
         await host('exit-asleep');

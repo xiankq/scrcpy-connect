@@ -53,8 +53,8 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text('打开系统通话界面'));
-        await tester.tap(find.text('打开系统通话界面'));
+        await tester.ensureVisible(find.text('在手机画面接听'));
+        await tester.tap(find.text('在手机画面接听'));
         await tester.pump();
         expect(commands.where((entry) => entry.$1 == 'calls.open').single.$2, {
           'deviceId': 'phone',
@@ -86,7 +86,7 @@ void main() {
   }
 
   testWidgets(
-    'a limited partial notification snapshot preserves its items and fallback opens no original action',
+    'a limited partial notification snapshot preserves items and disables unavailable actions',
     (tester) async {
       final commands = <String>[];
       final controller = createTestController((
@@ -122,12 +122,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('当前可用通知'), findsOneWidget);
       expect(find.text('部分通知未同步，请进入手机查看。'), findsOneWidget);
-      expect(find.text('此通知没有可接续的原始动作；点击将仅打开手机界面。'), findsOneWidget);
+      expect(find.text('此通知的原始动作已不可用，请在手机原应用中处理。'), findsOneWidget);
       await tester.ensureVisible(find.text('当前可用通知'));
       await tester.tap(find.text('当前可用通知'));
       await tester.pumpAndSettle();
       expect(commands, isNot(contains('notifications.open')));
-      expect(commands, contains('session.start'));
+      expect(commands, isNot(contains('session.start')));
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },
@@ -150,6 +150,14 @@ void main() {
             if (command == 'observation.start') {
               requested = true;
               return starting.future;
+            }
+            if (command == 'calls.openPhoneApp') {
+              return {
+                'target': 'phoneApp',
+                'acceptedBySystem': true,
+                'uiVisible': null,
+                'callControlled': false,
+              };
             }
             return {
               'status': requested ? 'unknown' : initialStatus,
@@ -243,6 +251,38 @@ void main() {
             commands.every((entry) => !entry.$2.containsKey('allowStart')),
             isTrue,
           );
+          if (!notifications) {
+            await tester.scrollUntilVisible(
+              find.text('打开手机电话界面'),
+              -200,
+              scrollable: find
+                  .descendant(
+                    of: find.byType(ListView),
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            );
+            await tester.tap(find.text('打开手机电话界面'));
+            await tester.pumpAndSettle();
+            expect(
+              commands
+                  .where((entry) => entry.$1 == 'calls.openPhoneApp')
+                  .single
+                  .$2,
+              {'deviceId': 'phone'},
+            );
+            expect(
+              commands.where((entry) => entry.$1 == 'observation.start'),
+              hasLength(1),
+            );
+            expect(
+              commands.where(
+                (entry) =>
+                    entry.$1 == 'calls.action' || entry.$1 == 'calls.open',
+              ),
+              isEmpty,
+            );
+          }
           await tester.pumpWidget(const SizedBox());
           controller.dispose();
           await events.close();
@@ -262,6 +302,7 @@ void main() {
         params = const {},
       ]) async {
         commands.add(command);
+        if (command == 'device.info') return device;
         return command == 'devices.list'
             ? {
                 'devices': [device],
@@ -290,11 +331,14 @@ void main() {
       });
       events.add({'type': 'settings.changed', 'data': <String, dynamic>{}});
       await tester.pumpAndSettle();
-      expect(find.text('来源手机 有来电'), findsOneWidget);
-      expect(find.text('查看来电与声音'), findsOneWidget);
+      expect(find.textContaining('来源手机 ·'), findsOneWidget);
+      expect(find.byType(CallsPage), findsNothing);
+      await tester.tap(find.text('查看电话'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CallsPage), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('来源手机 有来电'), findsNothing);
+      expect(find.textContaining('来源手机 ·'), findsNothing);
       events.add({
         'type': 'calls.incoming',
         'deviceId': 'phone',
@@ -311,7 +355,7 @@ void main() {
         'data': {'live': false, 'id': 'stale-call', 'state': 'ringing'},
       });
       await tester.pumpAndSettle();
-      expect(find.text('来源手机 有来电'), findsNothing);
+      expect(find.textContaining('来源手机 ·'), findsNothing);
       expect(commands, isNot(contains('calls.action')));
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
@@ -363,7 +407,7 @@ void main() {
           tester.binding.handleAppLifecycleStateChanged(state);
         }
         await tester.pumpAndSettle();
-        expect(find.text('来源手机 有来电'), findsNothing);
+        expect(find.textContaining('来源手机 ·'), findsNothing);
         for (final state in [
           AppLifecycleState.hidden,
           AppLifecycleState.inactive,
@@ -377,11 +421,11 @@ void main() {
         }
         await tester.pumpAndSettle();
         if (!freshBeforeFrame) {
-          expect(find.text('来源手机 有来电'), findsNothing);
+          expect(find.textContaining('来源手机 ·'), findsNothing);
           events.add(incoming);
           await tester.pumpAndSettle();
         }
-        expect(find.text('来源手机 有来电'), findsOneWidget);
+        expect(find.textContaining('来源手机 ·'), findsOneWidget);
         expect(commands, isNot(contains('calls.action')));
         await tester.pumpWidget(const SizedBox());
         controller.dispose();
@@ -423,13 +467,13 @@ void main() {
         TestProviderScope(controller: controller, child: const ConnectApp()),
       );
       await tester.pumpAndSettle();
-      expect(find.text('来源手机 有来电'), findsNothing);
+      expect(find.textContaining('来源手机 ·'), findsNothing);
       events.add({
         ...incoming,
         'data': {'live': true, 'id': 'fresh-call', 'state': 'ringing'},
       });
       await tester.pumpAndSettle();
-      expect(find.text('来源手机 有来电'), findsOneWidget);
+      expect(find.textContaining('来源手机 ·'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
       await events.close();

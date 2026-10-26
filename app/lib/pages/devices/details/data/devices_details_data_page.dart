@@ -51,7 +51,7 @@ class DeviceDataPage extends HookConsumerWidget {
     }
 
     return PageFrame(
-      title: '设备数据',
+      title: '设备详情',
       actions: [
         IconButton(
           tooltip: '刷新',
@@ -203,7 +203,7 @@ class DeviceDataPage extends HookConsumerWidget {
                   '${bytes(memory['totalBytes'])} · 可用 ${bytes(memory['availableBytes'])}',
                 ),
                 (
-                  '内部存储',
+                  '共享存储',
                   LucideIcons.hardDrive,
                   '${bytes(storage['totalBytes'])} · 可用 ${bytes(storage['availableBytes'])}',
                 ),

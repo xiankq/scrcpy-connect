@@ -12,10 +12,13 @@ import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
+import 'package:scrcpy_connect/services/display_labels.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-class NotificationsPage extends HookWidget {
+class NotificationsPage extends HookConsumerWidget {
   const NotificationsPage({
     super.key,
     required this.controller,
@@ -24,7 +27,95 @@ class NotificationsPage extends HookWidget {
   final AppController controller;
   final Json device;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final alerts = ref.watch(systemNotificationCoordinatorProvider);
+    useListenable(alerts.changes);
+    final settings = ref.watch(
+      appControllerProvider.select((state) => state.settings),
+    );
+    final enablingAlerts = useState(false);
+    final alertStatus = alerts.status;
+    final showEnableAlerts =
+        settings['notificationAlerts'] != true ||
+        !alertStatus.supported ||
+        alertStatus.permissionGranted != true ||
+        alertStatus.notificationChannelEnabled == false;
+    Future<void> enableAlerts() async {
+      if (enablingAlerts.value) return;
+      enablingAlerts.value = true;
+      try {
+        // 通知页只开启通知意图，来电意图仍由用户单独选择。
+        await controller.updateSetting('notificationAlerts', true);
+        var status = await alerts.refreshStatus();
+        final requested = status.permissionGranted != true && status.canRequest;
+        if (requested) {
+          status = await alerts.requestPermission();
+        }
+        if (!context.mounted) return;
+        if (status.supported &&
+            status.permissionGranted == true &&
+            status.notificationChannelEnabled != false) {
+          feedback(context, '系统通知提醒已开启；当前通知页可见时仅更新列表。');
+        } else if (!requested && status.canOpenSettings) {
+          final opened = await alerts.openSettings();
+          if (context.mounted) {
+            feedback(
+              context,
+              opened
+                  ? '请在系统设置中允许通知提醒；仍可在这里查看当前通知。'
+                  : '暂时无法打开系统通知设置；仍可在这里查看当前通知。',
+            );
+          }
+        } else {
+          feedback(
+            context,
+            '${status.reason.isEmpty ? '系统提醒尚未获准' : status.reason}；仍可在这里查看当前通知。',
+          );
+        }
+      } catch (error) {
+        if (context.mounted) feedback(context, '系统提醒未能确认开启：$error');
+      } finally {
+        if (context.mounted) enablingAlerts.value = false;
+      }
+    }
+
+    final notificationHeader = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DeviceSourceRow(
+          device: device,
+          padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
+        ),
+        if (showEnableAlerts)
+          Padding(
+            padding: const EdgeInsets.only(bottom: DesignTokens.spacingSm),
+            child: OutlinedButton(
+              onPressed: enablingAlerts.value ? null : enableAlerts,
+              child: Text(enablingAlerts.value ? '正在核验系统提醒…' : '开启系统提醒'),
+            ),
+          ),
+      ],
+    );
+    Widget emptyWithHeader(Widget content) => PageChromeBody(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(DesignTokens.spacingMd),
+            child: notificationHeader,
+          ),
+          Expanded(child: content),
+        ],
+      ),
+    );
+    final route = ModalRoute.of(context);
+    final deviceId = value(device, 'id');
+    useEffect(
+      () => alerts.claimNotificationPage(
+        deviceId,
+        () => context.mounted && route?.isCurrent != false,
+      ),
+      [alerts, deviceId, route],
+    );
     final clearing = useState(false);
     final refreshing = useRef<VoidCallback?>(null);
 
@@ -49,6 +140,16 @@ class NotificationsPage extends HookWidget {
         final candidates = objects(current['notifications'])
             .where((item) => item['canDismiss'] == true)
             .toList();
+        if (candidates.isNotEmpty &&
+            (!await confirm(
+                  context,
+                  '清除全部通知？',
+                  '将清除 ${deviceName(device)} 当前可清除的 ${candidates.length} 条通知。常驻通知和无法核验的通知会保留；清除不代表原应用已读。',
+                  action: '清除通知',
+                ) ||
+                !context.mounted)) {
+          return;
+        }
         for (final item in candidates) {
           // 每个不透明引用都在手机再次核验，不本机隐藏项目，也不重试结果未知的命令。
           try {
@@ -89,7 +190,7 @@ class NotificationsPage extends HookWidget {
           liveRegion: true,
           value: clearing.value ? '正在清除通知' : '',
           child: GlassActionIcon(
-            tooltip: '全部已读',
+            tooltip: '清除全部通知',
             onPressed: clearing.value ? null : clearAll,
             icon: const Icon(LucideIcons.checkCheck),
           ),
@@ -133,8 +234,8 @@ class NotificationsPage extends HookWidget {
               .toList();
           final state = value(data, 'status', 'unknown');
           if (notifications.isEmpty && state != 'available') {
-            return PageChromeBody(
-              child: EmptyContent(
+            return emptyWithHeader(
+              EmptyContent(
                 icon: LucideIcons.bellOff,
                 title: switch (state) {
                   'needsSetup' => '通知访问需要设置',
@@ -163,8 +264,8 @@ class NotificationsPage extends HookWidget {
             );
           }
           if (notifications.isEmpty) {
-            return PageChromeBody(
-              child: EmptyContent(
+            return emptyWithHeader(
+              EmptyContent(
                 icon: LucideIcons.bell,
                 title: '没有当前通知',
                 message: '这里只显示仍有效的通知，不建立长期通知档案。',
@@ -193,12 +294,7 @@ class NotificationsPage extends HookWidget {
               findChildIndexCallback: (key) => indices[key],
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return DeviceSourceRow(
-                    device: device,
-                    padding: const EdgeInsets.only(
-                      bottom: DesignTokens.spacingSm,
-                    ),
-                  );
+                  return notificationHeader;
                 }
                 if (hasStatus && index == 1) {
                   return StateNote(

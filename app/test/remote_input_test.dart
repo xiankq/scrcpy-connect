@@ -39,15 +39,7 @@ void main() {
       final commands = <(String, Json)>[];
       final controller = _controller(commands, captureGeneration: 7);
       try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: RemotePage(
-              controller: controller,
-              device: const {'id': 'phone'},
-            ),
-          ),
-        );
+        await _mountRemote(tester, controller);
         await tester.pumpAndSettle();
         await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
         await tester.sendKeyDownEvent(LogicalKeyboardKey.keyA);
@@ -72,25 +64,19 @@ void main() {
         );
         await mouse.up();
         await tester.pumpAndSettle();
-        final keys = commands
-            .where((c) => c.$1 == 'session.key' && c.$2['keyCode'] == 29)
-            .map((c) => c.$2)
-            .toList();
+        final keys = _sent(
+          commands,
+          'session.key',
+        ).where((payload) => payload['keyCode'] == 29).toList();
         expect(keys.map((p) => p['action']), ['down', 'down', 'up']);
         expect(keys.map((p) => p['metaState']), everyElement(0x1000));
         expect(keys[1]['repeat'], 1);
-        final touches = commands
-            .where((c) => c.$1 == 'session.touch')
-            .map((c) => c.$2)
-            .toList();
+        final touches = _sent(commands, 'session.touch');
         expect(touches.map((p) => p['action']), ['hover', 'down', 'up']);
         expect(touches.map((p) => p['mouse']), everyElement(isTrue));
         expect(touches[1]['actionButton'], kSecondaryMouseButton);
         expect(touches.last['pressure'], 0);
-        expect(
-          commands.where((c) => c.$1 == 'session.scroll').single.$2['vscroll'],
-          -1,
-        );
+        expect(_sent(commands, 'session.scroll').single['vscroll'], -1);
         expect(
           commands
               .where(
@@ -146,11 +132,12 @@ void main() {
           await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
           expect(find.byType(RemotePage), findsOneWidget);
-          expect(commands.where((c) => c.$1 == 'session.pause'), isEmpty);
+          expect(_sent(commands, 'session.pause'), isEmpty);
           expect(
-            commands
-                .where((c) => c.$1 == 'session.key')
-                .map((c) => (c.$2['keyCode'], c.$2['action'])),
+            _sent(
+              commands,
+              'session.key',
+            ).map((payload) => (payload['keyCode'], payload['action'])),
             [(4, 'down'), (4, 'up')],
           );
           for (final button in [('返回', 4), ('主屏幕', 3), ('最近任务', 187)]) {
@@ -171,7 +158,7 @@ void main() {
               expect(bar.color, colors.surface);
               await tester.tap(finder);
               await tester.pump();
-              expect(commands.where((c) => c.$1 == 'session.key').last.$2, {
+              expect(_sent(commands, 'session.key').last, {
                 'sessionId': 'original',
                 'keyCode': button.$2,
                 'action': 'up',
@@ -180,7 +167,7 @@ void main() {
           }
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);
           await tester.pump();
-          expect(commands.where((c) => c.$1 == 'session.key').last.$2, {
+          expect(_sent(commands, 'session.key').last, {
             'sessionId': 'original',
             'keyCode': 4,
             'action': 'up',
@@ -191,7 +178,7 @@ void main() {
           await tester.tap(find.text('关闭画面'));
           await tester.pumpAndSettle();
           expect(find.byType(RemotePage), findsNothing);
-          expect(commands.where((c) => c.$1 == 'session.stop'), hasLength(1));
+          expect(_sent(commands, 'session.stop'), hasLength(1));
         } finally {
           await tester.pumpWidget(const SizedBox());
           controller.dispose();
@@ -207,15 +194,7 @@ void main() {
       final commands = <(String, Json)>[];
       final controller = _controller(commands);
       try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: RemotePage(
-              controller: controller,
-              device: const {'id': 'phone'},
-            ),
-          ),
-        );
+        await _mountRemote(tester, controller);
         await tester.pumpAndSettle();
         final frame = tester.getRect(find.byType(Texture));
         await tester.tapAt(Offset(frame.right - 0.01, frame.center.dy));
@@ -228,10 +207,7 @@ void main() {
         await active.up();
         await tester.tapAt(Offset(frame.left - 10, frame.center.dy));
         await tester.pumpAndSettle();
-        final touches = commands
-            .where((c) => c.$1 == 'session.touch')
-            .map((c) => c.$2)
-            .toList();
+        final touches = _sent(commands, 'session.touch');
         expect(touches.map((p) => p['action']), [
           'down',
           'up',
@@ -242,7 +218,7 @@ void main() {
         expect(touches.last['x'], touches[2]['x']);
         expect(touches.last['y'], touches[2]['y']);
         expect(touches.last['pressure'], 0);
-        expect(commands.where((c) => c.$1 == 'session.pause'), isEmpty);
+        expect(_sent(commands, 'session.pause'), isEmpty);
         expect(find.text('画面已暂停'), findsNothing);
       } finally {
         await tester.pumpWidget(const SizedBox());
@@ -263,18 +239,14 @@ void main() {
       return {'sessionId': 'actual-session', 'reason': '设备未提供解码画面'};
     });
     addTearDown(controller.dispose);
-    await tester.pumpWidget(
-      RouterTestApp(
-        controller: controller,
-        theme: ConnectTokens.theme(Brightness.light),
-        home: RemotePage(
-          controller: controller,
-          device: const {'id': 'phone', 'name': '测试手机'},
-        ),
-      ),
+    await _mountRemote(
+      tester,
+      controller,
+      theme: ConnectTokens.theme(Brightness.light),
+      device: const {'id': 'phone', 'name': '测试手机'},
     );
     await tester.pumpAndSettle();
-    expect(find.text('暂时无法打开实时画面'), findsOneWidget);
+    expect(find.text('无法打开手机屏幕'), findsOneWidget);
     expect(find.byType(Texture), findsNothing);
     await tester.tapAt(const Offset(400, 500));
     await tester.pump();
@@ -302,15 +274,10 @@ void main() {
             : {};
       });
       addTearDown(controller.dispose);
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: RemotePage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
+      await _mountRemote(
+        tester,
+        controller,
+        theme: ConnectTokens.theme(Brightness.light),
       );
       await tester.pumpAndSettle();
       final frame = tester.getRect(find.byType(Texture));
@@ -366,3 +333,21 @@ AppController _controller(
   }
   return {};
 });
+
+List<Json> _sent(List<(String, Json)> commands, String command) => [
+  for (final entry in commands)
+    if (entry.$1 == command) entry.$2,
+];
+
+Future<void> _mountRemote(
+  WidgetTester tester,
+  AppController controller, {
+  ThemeData? theme,
+  Json device = const {'id': 'phone'},
+}) => tester.pumpWidget(
+  RouterTestApp(
+    controller: controller,
+    theme: theme,
+    home: RemotePage(controller: controller, device: device),
+  ),
+);

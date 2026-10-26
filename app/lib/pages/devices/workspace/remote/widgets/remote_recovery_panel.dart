@@ -15,6 +15,8 @@ class RemoteRecoveryPanel extends StatelessWidget {
     required this.onContinueOnPhoneScreen,
     required this.onCloseUnknownAppLaunch,
     required this.onRetry,
+    this.waitingForFirstFrame = false,
+    this.onReturn,
   });
 
   final RemotePresentation presentation;
@@ -23,16 +25,116 @@ class RemoteRecoveryPanel extends StatelessWidget {
   final VoidCallback onContinueOnPhoneScreen;
   final VoidCallback onCloseUnknownAppLaunch;
   final VoidCallback onRetry;
+  final bool waitingForFirstFrame;
+  final VoidCallback? onReturn;
+
+  String get _title => presentation.sessionEnded
+      ? '控制会话已结束'
+      : presentation.qualityRetryable
+      ? '画面调整未完成'
+      : presentation.appLaunchUnknown || presentation.stateUnverified
+      ? waitingForFirstFrame
+            ? '屏幕启动结果待确认'
+            : presentation.appLaunchUnknown
+            ? '应用打开结果待核对'
+            : '正在核验会话状态'
+      : waitingForFirstFrame
+      ? independent
+            ? '无法打开独立窗口'
+            : '无法打开手机屏幕'
+      : presentation.paused
+      ? '画面已暂停'
+      : '暂时无法打开实时画面';
+
+  Widget _action(
+    BuildContext context,
+    String label,
+    VoidCallback callback, {
+    bool primary = false,
+  }) {
+    final onPressed = presentation.connecting ? null : callback;
+    if (waitingForFirstFrame) {
+      return TextButton(onPressed: onPressed, child: Text(label));
+    }
+    return primary
+        ? FilledButton(onPressed: onPressed, child: Text(label))
+        : OutlinedButton(onPressed: onPressed, child: Text(label));
+  }
+
+  Widget _content(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 360),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!waitingForFirstFrame) ...[
+          Icon(
+            presentation.paused ? LucideIcons.pause : LucideIcons.monitorOff,
+            size: DesignTokens.componentIconLargeSize,
+          ),
+          const SizedBox(height: DesignTokens.spacingMd),
+        ],
+        Text(
+          _title,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: DesignTokens.spacingXs),
+        Text(
+          presentation.error ?? '等待连接恢复后的首帧。',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyLarge
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: DesignTokens.spacingMd),
+        if (presentation.errorCode == 'resource_busy')
+          _action(context, '管理当前活动', onManageActivities, primary: true),
+        if (independent &&
+            presentation.error != null &&
+            !presentation.qualityRetryable &&
+            !presentation.appLaunchUnknown &&
+            !presentation.stateUnverified)
+          _action(context, '在手机屏幕继续', onContinueOnPhoneScreen, primary: true),
+        if (presentation.appLaunchUnknown)
+          _action(context, '关闭本次打开记录', onCloseUnknownAppLaunch, primary: true),
+        _action(
+          context,
+          presentation.qualityRetryable
+              ? '画面与控制'
+              : waitingForFirstFrame &&
+                    (presentation.appLaunchUnknown ||
+                        presentation.stateUnverified)
+              ? '重新核对'
+              : presentation.appLaunchUnknown
+              ? '只读检查'
+              : presentation.appLaunchClosed
+              ? '重新打开'
+              : waitingForFirstFrame
+              ? '重试'
+              : '重新检查',
+          onRetry,
+        ),
+        if (waitingForFirstFrame && onReturn != null)
+          TextButton(onPressed: onReturn, child: const Text('返回')),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final media = MediaQuery.of(context);
-      final exit = ExitHandle.initialBoundsFor(constraints.biggest, media);
+      final exit = waitingForFirstFrame
+          ? Rect.fromLTWH(
+              media.padding.left + 20,
+              media.padding.top + 12,
+              44,
+              44,
+            )
+          : ExitHandle.initialBoundsFor(constraints.biggest, media);
       final belowExit = exit.bottom + DesignTokens.spacingSm;
       final bottom = math.max(DesignTokens.spacingXl, media.padding.bottom);
       final roomBelow = constraints.maxHeight - belowExit - bottom;
-      // 较矮的横屏使用退出控件旁边的空间，较高布局则预留顶部区域。
       final below = roomBelow >= DesignTokens.componentRowHeight * 2;
       return Padding(
         padding: EdgeInsets.fromLTRB(
@@ -48,80 +150,13 @@ class RemoteRecoveryPanel extends StatelessWidget {
         child: Center(
           child: SingleChildScrollView(
             key: const ValueKey('remote-recovery-content'),
-            child: Glass(
-              radius: DesignTokens.roundedLg,
-              padding: const EdgeInsets.all(DesignTokens.spacingLg),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      presentation.paused
-                          ? LucideIcons.pause
-                          : LucideIcons.monitorOff,
-                      size: DesignTokens.componentIconLargeSize,
-                    ),
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    Text(
-                      presentation.sessionEnded
-                          ? '控制会话已结束'
-                          : presentation.qualityRetryable
-                          ? '画面调整未完成'
-                          : presentation.appLaunchUnknown
-                          ? '应用打开结果待核对'
-                          : presentation.stateUnverified
-                          ? '正在核验会话状态'
-                          : presentation.paused
-                          ? '画面已暂停'
-                          : '暂时无法打开实时画面',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: DesignTokens.spacingXs),
-                    Text(
-                      presentation.error ?? '等待连接恢复后的首帧。',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: DesignTokens.spacingMd),
-                    if (presentation.errorCode == 'resource_busy')
-                      FilledButton(
-                        onPressed: onManageActivities,
-                        child: const Text('管理当前活动'),
-                      ),
-                    if (independent &&
-                        presentation.error != null &&
-                        !presentation.qualityRetryable &&
-                        !presentation.appLaunchUnknown &&
-                        !presentation.stateUnverified)
-                      FilledButton(
-                        onPressed: presentation.connecting
-                            ? null
-                            : onContinueOnPhoneScreen,
-                        child: const Text('在手机屏幕继续'),
-                      ),
-                    if (presentation.appLaunchUnknown)
-                      FilledButton(
-                        onPressed: presentation.connecting
-                            ? null
-                            : onCloseUnknownAppLaunch,
-                        child: const Text('关闭本次打开记录'),
-                      ),
-                    OutlinedButton(
-                      onPressed: presentation.connecting ? null : onRetry,
-                      child: Text(
-                        presentation.qualityRetryable
-                            ? '画面设置'
-                            : presentation.appLaunchUnknown
-                            ? '只读检查'
-                            : presentation.appLaunchClosed
-                            ? '重新打开'
-                            : '重新检查',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            child: waitingForFirstFrame
+                ? _content(context)
+                : Glass(
+                    radius: DesignTokens.roundedLg,
+                    padding: const EdgeInsets.all(DesignTokens.spacingLg),
+                    child: _content(context),
+                  ),
           ),
         ),
       );

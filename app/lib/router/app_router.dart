@@ -1,7 +1,7 @@
+import 'package:scrcpy_connect/pages/devices/workspace/screenshot/devices_workspace_screenshot_page.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
@@ -20,10 +20,10 @@ import 'package:scrcpy_connect/pages/settings/appearance/settings_appearance_pag
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
 import 'package:scrcpy_connect/pages/settings/background/settings_background_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/calls/devices_workspace_calls_page.dart';
-import 'package:scrcpy_connect/pages/devices/details/capabilities/devices_details_capabilities_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/settings/data_preferences/settings_data_preferences_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
@@ -54,6 +54,7 @@ import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_
 part 'app_router.g.dart';
 
 GlobalKey<NavigatorState> _root = GlobalKey<NavigatorState>();
+GlobalKey<NavigatorState> _content = GlobalKey<NavigatorState>();
 AppController _controller(BuildContext context) => ProviderScope.containerOf(
   context,
   listen: false,
@@ -66,7 +67,23 @@ RouteResourceResolver _resources(BuildContext context) =>
 
 List<RouteBase> typedRoutes(GlobalKey<NavigatorState> root) {
   _root = root;
-  return $appRoutes;
+  _content = GlobalKey<NavigatorState>();
+  final routes = $appRoutes;
+  // typed routes retain one source of URL/argument truth; only their navigation
+  // plane differs. The ordinary plane survives root immersive overlays.
+  bool ordinary(RouteBase route) =>
+      route is StatefulShellRoute ||
+      route is GoRoute && route.parentNavigatorKey == _content;
+  return [
+    ShellRoute(
+      navigatorKey: _content,
+      restorationScopeId: 'app-content',
+      builder: (context, state, child) =>
+          AppNavigationShell(uri: state.uri, child: child),
+      routes: routes.where(ordinary).toList(),
+    ),
+    ...routes.where((route) => !ordinary(route)),
+  ];
 }
 
 GoRouter createAppRouter({
@@ -113,7 +130,9 @@ Widget _deviceRecord(
         ? build(context, state, device)
         : VisibleDeviceFocus(
             controller: _controller(context),
-            deviceId: value(device, 'id'),
+            deviceId: AppNavigationShell.isVisible(context)
+                ? value(device, 'id')
+                : '',
             child: build(context, state, device),
           ),
   );
@@ -257,7 +276,7 @@ class RouteErrorRoute extends GoRouteData with $RouteErrorRoute {
 )
 class TransferCenterRoute extends GoRouteData with $TransferCenterRoute {
   const TransferCenterRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -274,7 +293,7 @@ class TransferCenterRoute extends GoRouteData with $TransferCenterRoute {
 @TypedGoRoute<SettingsPageRoute>(path: '/preferences', name: 'settings-page')
 class SettingsPageRoute extends GoRouteData with $SettingsPageRoute {
   const SettingsPageRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -478,7 +497,7 @@ class QrPairRoute extends GoRouteData with $QrPairRoute {
 class WorkspaceRoute extends GoRouteData with $WorkspaceRoute {
   const WorkspaceRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -499,31 +518,31 @@ class WorkspaceRoute extends GoRouteData with $WorkspaceRoute {
 class DeviceDetailsRoute extends GoRouteData with $DeviceDetailsRoute {
   const DeviceDetailsRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
-  @override
-  String redirect(BuildContext context, GoRouterState state) =>
-      WorkspaceRoute(deviceId: deviceId).location;
-}
-
-@TypedGoRoute<DeviceConnectionRoute>(
-  path: '/devices/:deviceId/connection',
-  name: 'device-connection',
-)
-class DeviceConnectionRoute extends GoRouteData with $DeviceConnectionRoute {
-  const DeviceConnectionRoute({required this.deviceId});
-  final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, Json device) =>
-        DeviceConnectionPreferencesPage(controller: controller, device: device);
-    return _deviceRecord(context, state, deviceId, 'device-connection', page);
+        DeviceDataPage(controller: controller, device: device);
+    return _deviceRecord(context, state, deviceId, 'device-details', page);
   }
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) =>
       _page(state, build(context, state));
+}
+
+@TypedGoRoute<DeviceDataRoute>(
+  path: '/devices/:deviceId/data',
+  name: 'device-data',
+)
+class DeviceDataRoute extends GoRouteData with $DeviceDataRoute {
+  const DeviceDataRoute({required this.deviceId});
+  final String deviceId;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  String redirect(BuildContext context, GoRouterState state) =>
+      DeviceDetailsRoute(deviceId: deviceId).location;
 }
 
 @TypedGoRoute<CapabilitiesRoute>(
@@ -533,13 +552,26 @@ class DeviceConnectionRoute extends GoRouteData with $DeviceConnectionRoute {
 class CapabilitiesRoute extends GoRouteData with $CapabilitiesRoute {
   const CapabilitiesRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  String redirect(BuildContext context, GoRouterState state) =>
+      DiagnosticsRoute(deviceId: deviceId).location;
+}
+
+@TypedGoRoute<DeviceConnectionRoute>(
+  path: '/devices/:deviceId/connection',
+  name: 'device-connection',
+)
+class DeviceConnectionRoute extends GoRouteData with $DeviceConnectionRoute {
+  const DeviceConnectionRoute({required this.deviceId});
+  final String deviceId;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
     Widget page(BuildContext _, GoRouterState state, Json device) =>
-        CapabilitiesPage(controller: controller, device: device);
-    return _deviceRecord(context, state, deviceId, 'capabilities', page);
+        DeviceConnectionPreferencesPage(controller: controller, device: device);
+    return _deviceRecord(context, state, deviceId, 'device-connection', page);
   }
 
   @override
@@ -554,7 +586,7 @@ class CapabilitiesRoute extends GoRouteData with $CapabilitiesRoute {
 class DiagnosticsRoute extends GoRouteData with $DiagnosticsRoute {
   const DiagnosticsRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -573,7 +605,7 @@ class FilesRoute extends GoRouteData with $FilesRoute {
   const FilesRoute({required this.deviceId, this.path = '/sdcard'});
   final String deviceId;
   final String path;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -599,7 +631,7 @@ class FileDetailsRoute extends GoRouteData with $FileDetailsRoute {
   const FileDetailsRoute({required this.deviceId, this.path = ''});
   final String deviceId;
   final String path;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -634,7 +666,7 @@ class FileSearchRoute extends GoRouteData with $FileSearchRoute {
   final String deviceId;
   final String path;
   final String query;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     Widget page(BuildContext context, GoRouterState state, Json device) =>
@@ -657,7 +689,7 @@ class FileSearchRoute extends GoRouteData with $FileSearchRoute {
 class AppsRoute extends GoRouteData with $AppsRoute {
   const AppsRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -675,7 +707,7 @@ class AppsRoute extends GoRouteData with $AppsRoute {
 class GalleryRoute extends GoRouteData with $GalleryRoute {
   const GalleryRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -729,7 +761,7 @@ class MediaPreviewRoute extends GoRouteData with $MediaPreviewRoute {
 class NotificationsRoute extends GoRouteData with $NotificationsRoute {
   const NotificationsRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -747,7 +779,7 @@ class NotificationsRoute extends GoRouteData with $NotificationsRoute {
 class CallsRoute extends GoRouteData with $CallsRoute {
   const CallsRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -761,33 +793,11 @@ class CallsRoute extends GoRouteData with $CallsRoute {
       _page(state, build(context, state));
 }
 
-@TypedGoRoute<DeviceDataRoute>(
-  path: '/devices/:deviceId/data',
-  name: 'device-data',
-)
-class DeviceDataRoute extends GoRouteData with $DeviceDataRoute {
-  const DeviceDataRoute({required this.deviceId});
-  final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
-  @override
-  Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
-    context,
-    state,
-    deviceId,
-    'device-data',
-    (_, _, device) =>
-        DeviceDataPage(controller: _controller(context), device: device),
-  );
-  @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      _page(state, build(context, state));
-}
-
 @TypedGoRoute<QualityRoute>(path: '/devices/:deviceId/quality', name: 'quality')
 class QualityRoute extends GoRouteData with $QualityRoute {
   const QualityRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -809,7 +819,7 @@ class SessionToolsRoute extends GoRouteData with $SessionToolsRoute {
   const SessionToolsRoute({required this.deviceId, this.sessionId});
   final String deviceId;
   final String? sessionId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   String redirect(BuildContext context, GoRouterState state) =>
       WorkspaceRoute(deviceId: deviceId).location;
@@ -822,7 +832,7 @@ class SessionToolsRoute extends GoRouteData with $SessionToolsRoute {
 class SessionsRoute extends GoRouteData with $SessionsRoute {
   const SessionsRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   String redirect(BuildContext context, GoRouterState state) =>
       WorkspaceRoute(deviceId: deviceId).location;
@@ -936,7 +946,7 @@ class RemoteSessionRoute extends GoRouteData with $RemoteSessionRoute {
 class TransferDetailsRoute extends GoRouteData with $TransferDetailsRoute {
   const TransferDetailsRoute({required this.taskId});
   final String taskId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -959,6 +969,38 @@ class TransferDetailsRoute extends GoRouteData with $TransferDetailsRoute {
       _page(state, build(context, state));
 }
 
+@TypedGoRoute<ScreenshotRoute>(
+  path: '/devices/:deviceId/screenshot',
+  name: 'screenshot',
+)
+class ScreenshotRoute extends GoRouteData with $ScreenshotRoute {
+  const ScreenshotRoute({required this.deviceId, this.$extra});
+  final String deviceId;
+  final Json? $extra;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    if ($extra == null) {
+      return const RouteErrorPage(message: '本次截图信息已失效，请返回手机画面重新截图。');
+    }
+    return _deviceRecord(
+      context,
+      state,
+      deviceId,
+      'screenshot',
+      (context, state, device) => ScreenshotPage(
+        controller: _controller(context),
+        device: device,
+        capture: $extra!,
+      ),
+    );
+  }
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) =>
+      _page(state, build(context, state));
+}
+
 @TypedGoRoute<DocumentExportRoute>(
   path: '/transfers/:taskId/export',
   name: 'document-export',
@@ -967,7 +1009,7 @@ class DocumentExportRoute extends GoRouteData with $DocumentExportRoute {
   const DocumentExportRoute({required this.taskId, this.partial = false});
   final String taskId;
   final bool partial;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -1022,7 +1064,7 @@ class ReceiveContentRoute extends GoRouteData with $ReceiveContentRoute {
   const ReceiveContentRoute({required this.taskId, this.share = false});
   final String taskId;
   final bool share;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -1051,7 +1093,7 @@ class DocumentImportRoute extends GoRouteData with $DocumentImportRoute {
   });
   final String deviceId;
   final String destination;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -1112,7 +1154,7 @@ class ShareDirectoryRoute extends GoRouteData with $ShareDirectoryRoute {
   const ShareDirectoryRoute({required this.deviceId, this.path = '/sdcard'});
   final String deviceId;
   final String path;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -1133,7 +1175,7 @@ class ShareDirectoryRoute extends GoRouteData with $ShareDirectoryRoute {
 @TypedGoRoute<AppearanceRoute>(path: '/settings/appearance', name: 'appearance')
 class AppearanceRoute extends GoRouteData with $AppearanceRoute {
   const AppearanceRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -1150,7 +1192,7 @@ class AppearanceRoute extends GoRouteData with $AppearanceRoute {
 @TypedGoRoute<BackgroundRoute>(path: '/settings/background', name: 'background')
 class BackgroundRoute extends GoRouteData with $BackgroundRoute {
   const BackgroundRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -1167,7 +1209,7 @@ class BackgroundRoute extends GoRouteData with $BackgroundRoute {
 @TypedGoRoute<ActivitiesRoute>(path: '/settings/activities', name: 'activities')
 class ActivitiesRoute extends GoRouteData with $ActivitiesRoute {
   const ActivitiesRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   String? redirect(BuildContext context, GoRouterState state) =>
       const DevicesRoute().location;
@@ -1179,7 +1221,7 @@ class ActivitiesRoute extends GoRouteData with $ActivitiesRoute {
 )
 class DataPreferencesRoute extends GoRouteData with $DataPreferencesRoute {
   const DataPreferencesRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) {
     final controller = _controller(context);
@@ -1199,7 +1241,7 @@ class DataPreferencesRoute extends GoRouteData with $DataPreferencesRoute {
 )
 class MediaCacheRoute extends GoRouteData with $MediaCacheRoute {
   const MediaCacheRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       MediaCachePage(controller: _controller(context));
@@ -1215,7 +1257,7 @@ class MediaCacheRoute extends GoRouteData with $MediaCacheRoute {
 class DeviceActivitiesRoute extends GoRouteData with $DeviceActivitiesRoute {
   const DeviceActivitiesRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
     context,
@@ -1233,7 +1275,7 @@ class DeviceActivitiesRoute extends GoRouteData with $DeviceActivitiesRoute {
 @TypedGoRoute<AdbIdentityRoute>(path: '/settings/adb-key', name: 'adb-key')
 class AdbIdentityRoute extends GoRouteData with $AdbIdentityRoute {
   const AdbIdentityRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       AdbIdentityPage(controller: _controller(context));
@@ -1249,7 +1291,7 @@ class AdbIdentityRoute extends GoRouteData with $AdbIdentityRoute {
 class DeviceIdentityRoute extends GoRouteData with $DeviceIdentityRoute {
   const DeviceIdentityRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   String redirect(BuildContext context, GoRouterState state) =>
       DeviceConnectionRoute(deviceId: deviceId).location;
@@ -1262,7 +1304,7 @@ class DeviceIdentityRoute extends GoRouteData with $DeviceIdentityRoute {
 class DeviceIpRoute extends GoRouteData with $DeviceIpRoute {
   const DeviceIpRoute({required this.deviceId});
   final String deviceId;
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) => _deviceRecord(
     context,
@@ -1280,7 +1322,7 @@ class DeviceIpRoute extends GoRouteData with $DeviceIpRoute {
 @TypedGoRoute<RuntimeLogsRoute>(path: '/settings/logs', name: 'runtime-logs')
 class RuntimeLogsRoute extends GoRouteData with $RuntimeLogsRoute {
   const RuntimeLogsRoute();
-  static GlobalKey<NavigatorState> get $parentNavigatorKey => _root;
+  static GlobalKey<NavigatorState> get $parentNavigatorKey => _content;
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       const RuntimeLogsPage();

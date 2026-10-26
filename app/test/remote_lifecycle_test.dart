@@ -1,10 +1,12 @@
 import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/stores/app_controller.dart';
 
 import 'support/test_controller.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
+import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
 
 import 'support/router_test_app.dart';
 
@@ -26,26 +28,10 @@ void main() {
         params = const {},
       ]) async {
         commands.add((command, params));
-        return command == 'session.start'
-            ? {
-                'sessionId': 'original',
-                'textureId': 1,
-                'width': 200,
-                'height': 400,
-              }
-            : {};
+        return command == 'session.start' ? _sessionReceipt() : {};
       });
       try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: RemotePage(
-              controller: controller,
-              device: const {'id': 'phone'},
-              requestKeyboard: true,
-            ),
-          ),
-        );
+        await _mountRemote(tester, controller, requestKeyboard: true);
         await tester.pumpAndSettle();
         expect(
           tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
@@ -121,28 +107,16 @@ void main() {
         commands.add((command, params));
         if (command == 'session.start' || command == 'session.resume') {
           if (command == 'session.start') starts++;
-          return {
-            'sessionId': 'session-$starts',
-            'textureId': starts,
-            'width': 200,
-            'height': 400,
-            'firstFrameDecoded': true,
-            'evidence': 'media_codec.decodedFrame',
-          };
+          return _sessionReceipt(
+            id: 'session-$starts',
+            textureId: starts,
+            decoded: true,
+          );
         }
         return {};
       }, events: events.stream);
       try {
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            home: RemotePage(
-              controller: controller,
-              device: const {'id': 'phone'},
-              requestKeyboard: true,
-            ),
-          ),
-        );
+        await _mountRemote(tester, controller, requestKeyboard: true);
         await tester.pumpAndSettle();
         await tester.showKeyboard(find.byType(TextField));
         tester.testTextInput.updateEditingValue(
@@ -226,12 +200,7 @@ void main() {
         ]) async {
           commands.add((command, params));
           if (command == 'session.start') {
-            return {
-              'sessionId': 'original',
-              'textureId': 1,
-              'width': 200,
-              'height': 400,
-            };
+            return _sessionReceipt();
           }
           if (command == 'session.stop') {
             if (hanging) return pending.future;
@@ -308,25 +277,10 @@ void main() {
           return cleanup.future;
         }
         return command == 'session.start' || command == 'session.resume'
-            ? {
-                'sessionId': 'original',
-                'textureId': 1,
-                'width': 200,
-                'height': 400,
-                'firstFrameDecoded': true,
-                'evidence': 'media_codec.decodedFrame',
-              }
+            ? _sessionReceipt(decoded: true)
             : {};
       }, events: events.stream);
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          home: RemotePage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
-      );
+      await _mountRemote(tester, controller);
       await tester.pumpAndSettle();
       await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
       final gesture = await tester.startGesture(
@@ -343,14 +297,7 @@ void main() {
           'shares': <Json>[],
           'sequence': 1,
           'sessions': [
-            {
-              'sessionId': 'original',
-              'status': 'paused',
-              'capturePaused': true,
-              'textureId': 1,
-              'width': 200,
-              'height': 400,
-            },
+            _sessionReceipt(extra: {'status': 'paused', 'capturePaused': true}),
           ],
         },
       });
@@ -404,18 +351,14 @@ void main() {
         commands.add(command);
         return command == 'session.start' ? launched.future : {};
       }, events: events.stream);
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          home: RemotePage(
-            controller: controller,
-            device: const {'id': 'phone'},
-            initialAction: const RemoteControlIntent.key(3),
-          ),
-        ),
+      await _mountRemote(
+        tester,
+        controller,
+        initialAction: const RemoteControlIntent.key(3),
       );
       await tester.pump();
       expect(commands.where((c) => c == 'session.start'), hasLength(1));
+      final waitingState = tester.state(find.byType(AmbientLoadingField));
       events.add({'type': 'state.resync', 'data': <String, dynamic>{}});
       events.add({
         'type': 'state.resynced',
@@ -427,16 +370,20 @@ void main() {
           'sequence': 10,
         },
       });
-      launched.complete({
-        'sessionId': 'late',
-        'textureId': 1,
-        'width': 200,
-        'height': 400,
-      });
+      launched.complete(_sessionReceipt(id: 'late'));
       await tester.pumpAndSettle();
       expect(find.byType(Texture), findsNothing);
       expect(find.text('会话结果尚待核验，请重新检查。'), findsOneWidget);
-      await tester.tap(find.text('重新检查'));
+      expect(
+        tester.state(find.byType(AmbientLoadingField)),
+        same(waitingState),
+      );
+      final waiting = tester.widget<AmbientLoadingField>(
+        find.byType(AmbientLoadingField),
+      );
+      expect(waiting.animating, isFalse);
+      expect(waiting.showParticles, isFalse);
+      await tester.tap(find.text('重新核对'));
       await tester.pumpAndSettle();
       expect(commands.where((c) => c == 'state.reconcile'), hasLength(1));
       expect(
@@ -465,12 +412,7 @@ void main() {
     ]) async {
       commands.add((command, params));
       if (command == 'session.start') {
-        return {
-          'sessionId': 'original',
-          'textureId': 1,
-          'width': 200,
-          'height': 400,
-        };
+        return _sessionReceipt();
       }
       if (command == 'session.key' && params['action'] == 'down') {
         return down.future;
@@ -478,15 +420,7 @@ void main() {
       return {};
     });
     try {
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          home: RemotePage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
-      );
+      await _mountRemote(tester, controller);
       await tester.pumpAndSettle();
       await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
@@ -537,28 +471,14 @@ void main() {
         ]) async {
           commands.add((command, params));
           if (command == 'session.start') {
-            return {
-              'sessionId': code,
-              'textureId': 1,
-              'width': 200,
-              'height': 400,
-            };
+            return _sessionReceipt(id: code);
           }
           if (command == 'session.key' && params['action'] == 'down') {
             throw RequestFailure(code, '按键未完成');
           }
           return {};
         });
-        await tester.pumpWidget(
-          RouterTestApp(
-            controller: controller,
-            key: ValueKey(code),
-            home: RemotePage(
-              controller: controller,
-              device: const {'id': 'phone'},
-            ),
-          ),
-        );
+        await _mountRemote(tester, controller, key: ValueKey(code));
         await tester.pumpAndSettle();
         await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
         await tester.pumpAndSettle();
@@ -583,24 +503,12 @@ void main() {
         params = const {},
       ]) async {
         commands.add((command, params));
-        return command == 'session.start'
-            ? {
-                'sessionId': 'original',
-                'textureId': 1,
-                'width': 200,
-                'height': 400,
-              }
-            : {};
+        return command == 'session.start' ? _sessionReceipt() : {};
       });
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: RemotePage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
+      await _mountRemote(
+        tester,
+        controller,
+        theme: ConnectTokens.theme(Brightness.light),
       );
       await tester.pumpAndSettle();
       await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
@@ -650,27 +558,17 @@ void main() {
       ]) async {
         commands.add((command, params));
         if (command == 'session.start') {
-          return {
-            'sessionId': ++starts == 1 ? 'original' : 'replacement',
-            'textureId': starts,
-            'width': 200,
-            'height': 400,
-          };
+          return _sessionReceipt(
+            id: ++starts == 1 ? 'original' : 'replacement',
+            textureId: starts,
+          );
         }
         if (command == 'session.key' && params['sessionId'] == 'original') {
           return oldKey.future;
         }
         return {};
       }, events: events.stream);
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          home: RemotePage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
-      );
+      await _mountRemote(tester, controller);
       await tester.pumpAndSettle();
       await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
@@ -718,24 +616,12 @@ void main() {
         params = const {},
       ]) async {
         commands.add((command, params));
-        return command == 'session.start'
-            ? {
-                'sessionId': 'session',
-                'textureId': 1,
-                'width': 200,
-                'height': 400,
-              }
-            : {};
+        return command == 'session.start' ? _sessionReceipt(id: 'session') : {};
       });
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: RemotePage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
+      await _mountRemote(
+        tester,
+        controller,
+        theme: ConnectTokens.theme(Brightness.light),
       );
       await tester.pumpAndSettle();
       final active = await tester.startGesture(
@@ -783,24 +669,12 @@ void main() {
       ]) async {
         commands.add((command, params));
         if (command == 'session.resume') return resume.future;
-        return command == 'session.start'
-            ? {
-                'sessionId': 'session',
-                'textureId': 1,
-                'width': 200,
-                'height': 400,
-              }
-            : {};
+        return command == 'session.start' ? _sessionReceipt(id: 'session') : {};
       }, events: events.stream);
-      await tester.pumpWidget(
-        RouterTestApp(
-          controller: controller,
-          theme: ConnectTokens.theme(Brightness.light),
-          home: RemotePage(
-            controller: controller,
-            device: const {'id': 'phone'},
-          ),
-        ),
+      await _mountRemote(
+        tester,
+        controller,
+        theme: ConnectTokens.theme(Brightness.light),
       );
       await tester.pumpAndSettle();
       final active = await tester.startGesture(
@@ -834,14 +708,7 @@ void main() {
       events.add({
         'type': 'session.output.resumed',
         'deviceId': 'phone',
-        'data': {
-          'sessionId': 'session',
-          'firstFrameDecoded': true,
-          'evidence': 'media_codec.decodedFrame',
-          'textureId': 1,
-          'width': 200,
-          'height': 400,
-        },
+        'data': _sessionReceipt(id: 'session', decoded: true),
       });
       await tester.pumpAndSettle();
       await tester.tapAt(const Offset(400, 300));
@@ -870,3 +737,41 @@ void main() {
     },
   );
 }
+
+Json _sessionReceipt({
+  String id = 'original',
+  int textureId = 1,
+  bool decoded = false,
+  Json extra = const {},
+}) => {
+  'sessionId': id,
+  'textureId': textureId,
+  'width': 200,
+  'height': 400,
+  if (decoded) ...{
+    'firstFrameDecoded': true,
+    'evidence': 'media_codec.decodedFrame',
+  },
+  ...extra,
+};
+
+Future<void> _mountRemote(
+  WidgetTester tester,
+  AppController controller, {
+  Key? key,
+  ThemeData? theme,
+  bool requestKeyboard = false,
+  RemoteControlIntent? initialAction,
+}) => tester.pumpWidget(
+  RouterTestApp(
+    key: key,
+    controller: controller,
+    theme: theme,
+    home: RemotePage(
+      controller: controller,
+      device: const {'id': 'phone'},
+      requestKeyboard: requestKeyboard,
+      initialAction: initialAction,
+    ),
+  ),
+);

@@ -9,6 +9,7 @@ import 'package:scrcpy_connect/pages/devices/widgets/device_access.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/content_shortcuts.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_hero.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/running_apps.dart';
+import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/workspace_call_card.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
@@ -43,19 +44,19 @@ class DeviceWorkspacePage extends ConsumerWidget {
     final online = current['status'] == 'connected';
     final canStop = hasDeviceConnectionIntent(current);
     final preferences = jsonObject(jsonObject(settings['deviceSettings'])[id]);
-    final quality = {
-      ...settings,
-      ...jsonObject(jsonObject(settings['deviceQuality'])[id]),
-    };
-    final qualityLabel = switch (quality['qualityPreset']) {
-      'smooth' => '流畅',
-      'balanced' => '均衡',
-      'clear' => '清晰',
-      null || '' => '未获取',
-      _ => '自定义',
-    };
     Future<void> save(String key, bool next) async {
       try {
+        if (key == 'clipboardSync' &&
+            next &&
+            !await confirm(
+              context,
+              '开启自动剪贴板同步？',
+              '在当前可见且获焦的手机画面中，新复制的文字会在两端传送，可能包含密码、验证码或其他敏感内容。系统可能请求粘贴访问；开启只建立基线，不覆盖本机已有内容。',
+              action: '开启同步',
+            )) {
+          return;
+        }
+        if (!context.mounted) return;
         await controller.updateDeviceSetting(id, key, next);
       } catch (error) {
         if (context.mounted) feedback(context, '$error');
@@ -89,6 +90,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
               child: Column(
                 children: [
                   DeviceHero(controller: controller, device: current),
+                  WorkspaceCallCard(controller: controller, device: current),
                   if (audioError != null)
                     StateNote(audioError, icon: LucideIcons.volumeX),
                   const SectionTitle('快捷操作'),
@@ -120,7 +122,6 @@ class DeviceWorkspacePage extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SectionTitle('设备设置'),
                   SettingsGroup(
                     children: [
                       ActionRow(
@@ -152,52 +153,12 @@ class DeviceWorkspacePage extends ConsumerWidget {
                                 .push<void>(context),
                       ),
                       ActionRow(
-                        icon: LucideIcons.radio,
-                        title: '转为 IP 连接',
-                        onTap: () =>
-                            DeviceIpRoute(deviceId: id).push<void>(context),
-                      ),
-                      ActionRow(
                         icon: LucideIcons.slidersHorizontal,
-                        title: '画面设置',
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              qualityLabel,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(width: DesignTokens.spacingXs),
-                            const Icon(
-                              LucideIcons.chevronRight,
-                              size: DesignTokens.componentIconSmallSize,
-                            ),
-                          ],
-                        ),
+                        title: '画面与控制',
                         onTap: () =>
                             QualityRoute(deviceId: id).push<void>(context),
                       ),
                       toggle('自动同步剪贴板', LucideIcons.clipboard, 'clipboardSync'),
-                      toggle(
-                        '显示导航键',
-                        LucideIcons.navigation,
-                        'showNavigationBar',
-                        defaultValue: true,
-                      ),
-                      toggle('新画面启动时点亮屏幕', LucideIcons.sun, 'wakeOnConnect'),
-                      toggle('关闭最后画面时锁屏', LucideIcons.moon, 'lockOnClose'),
-                      toggle('保持手机唤醒', LucideIcons.alarmClock, 'stayAwake'),
-                    ],
-                  ),
-                  const SectionTitle('连接能力'),
-                  SettingsGroup(
-                    children: [
-                      ActionRow(
-                        icon: LucideIcons.shieldCheck,
-                        title: '功能支持状态',
-                        onTap: () =>
-                            CapabilitiesRoute(deviceId: id).push<void>(context),
-                      ),
                       ActionRow(
                         icon: LucideIcons.stethoscope,
                         title: '连接诊断',
@@ -211,11 +172,6 @@ class DeviceWorkspacePage extends ConsumerWidget {
                             DeviceActivitiesRoute(deviceId: id)
                                 .push<void>(context),
                       ),
-                    ],
-                  ),
-                  const SectionTitle('设备管理'),
-                  SettingsGroup(
-                    children: [
                       ActionRow(
                         icon: LucideIcons.unplug,
                         title: online ? '断开设备连接' : '停止连接',
@@ -231,6 +187,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
                       ActionRow(
                         icon: LucideIcons.trash2,
                         title: '移除此设备',
+                        destructive: true,
                         onTap: () async {
                           if (await removeSavedDevice(
                                 context,

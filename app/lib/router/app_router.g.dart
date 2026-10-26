@@ -22,8 +22,9 @@ List<RouteBase> get $appRoutes => [
   $qrPairRoute,
   $workspaceRoute,
   $deviceDetailsRoute,
-  $deviceConnectionRoute,
+  $deviceDataRoute,
   $capabilitiesRoute,
+  $deviceConnectionRoute,
   $diagnosticsRoute,
   $filesRoute,
   $fileDetailsRoute,
@@ -33,7 +34,6 @@ List<RouteBase> get $appRoutes => [
   $mediaPreviewRoute,
   $notificationsRoute,
   $callsRoute,
-  $deviceDataRoute,
   $qualityRoute,
   $sessionToolsRoute,
   $sessionsRoute,
@@ -41,6 +41,7 @@ List<RouteBase> get $appRoutes => [
   $remoteAppRoute,
   $remoteSessionRoute,
   $transferDetailsRoute,
+  $screenshotRoute,
   $documentExportRoute,
   $receiveContentRoute,
   $documentImportRoute,
@@ -614,23 +615,23 @@ mixin $DeviceDetailsRoute on GoRouteData {
   void replace(BuildContext context) => context.replace(location);
 }
 
-RouteBase get $deviceConnectionRoute => GoRouteData.$route(
-  path: '/devices/:deviceId/connection',
-  name: 'device-connection',
+RouteBase get $deviceDataRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/data',
+  name: 'device-data',
   hasOverriddenOnExit: false,
-  parentNavigatorKey: DeviceConnectionRoute.$parentNavigatorKey,
-  factory: $DeviceConnectionRoute._fromState,
+  parentNavigatorKey: DeviceDataRoute.$parentNavigatorKey,
+  factory: $DeviceDataRoute._fromState,
 );
 
-mixin $DeviceConnectionRoute on GoRouteData {
-  static DeviceConnectionRoute _fromState(GoRouterState state) =>
-      DeviceConnectionRoute(deviceId: state.pathParameters['deviceId']!);
+mixin $DeviceDataRoute on GoRouteData {
+  static DeviceDataRoute _fromState(GoRouterState state) =>
+      DeviceDataRoute(deviceId: state.pathParameters['deviceId']!);
 
-  DeviceConnectionRoute get _self => this as DeviceConnectionRoute;
+  DeviceDataRoute get _self => this as DeviceDataRoute;
 
   @override
   String get location => GoRouteData.$location(
-    '/devices/${Uri.encodeComponent(_self.deviceId)}/connection',
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/data',
   );
 
   @override
@@ -664,6 +665,39 @@ mixin $CapabilitiesRoute on GoRouteData {
   @override
   String get location => GoRouteData.$location(
     '/devices/${Uri.encodeComponent(_self.deviceId)}/capabilities',
+  );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $deviceConnectionRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/connection',
+  name: 'device-connection',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: DeviceConnectionRoute.$parentNavigatorKey,
+  factory: $DeviceConnectionRoute._fromState,
+);
+
+mixin $DeviceConnectionRoute on GoRouteData {
+  static DeviceConnectionRoute _fromState(GoRouterState state) =>
+      DeviceConnectionRoute(deviceId: state.pathParameters['deviceId']!);
+
+  DeviceConnectionRoute get _self => this as DeviceConnectionRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/connection',
   );
 
   @override
@@ -993,39 +1027,6 @@ mixin $CallsRoute on GoRouteData {
   void replace(BuildContext context) => context.replace(location);
 }
 
-RouteBase get $deviceDataRoute => GoRouteData.$route(
-  path: '/devices/:deviceId/data',
-  name: 'device-data',
-  hasOverriddenOnExit: false,
-  parentNavigatorKey: DeviceDataRoute.$parentNavigatorKey,
-  factory: $DeviceDataRoute._fromState,
-);
-
-mixin $DeviceDataRoute on GoRouteData {
-  static DeviceDataRoute _fromState(GoRouterState state) =>
-      DeviceDataRoute(deviceId: state.pathParameters['deviceId']!);
-
-  DeviceDataRoute get _self => this as DeviceDataRoute;
-
-  @override
-  String get location => GoRouteData.$location(
-    '/devices/${Uri.encodeComponent(_self.deviceId)}/data',
-  );
-
-  @override
-  void go(BuildContext context) => context.go(location);
-
-  @override
-  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
-
-  @override
-  void pushReplacement(BuildContext context) =>
-      context.pushReplacement(location);
-
-  @override
-  void replace(BuildContext context) => context.replace(location);
-}
-
 RouteBase get $qualityRoute => GoRouteData.$route(
   path: '/devices/:deviceId/quality',
   name: 'quality',
@@ -1302,6 +1303,43 @@ mixin $TransferDetailsRoute on GoRouteData {
 
   @override
   void replace(BuildContext context) => context.replace(location);
+}
+
+RouteBase get $screenshotRoute => GoRouteData.$route(
+  path: '/devices/:deviceId/screenshot',
+  name: 'screenshot',
+  hasOverriddenOnExit: false,
+  parentNavigatorKey: ScreenshotRoute.$parentNavigatorKey,
+  factory: $ScreenshotRoute._fromState,
+);
+
+mixin $ScreenshotRoute on GoRouteData {
+  static ScreenshotRoute _fromState(GoRouterState state) => ScreenshotRoute(
+    deviceId: state.pathParameters['deviceId']!,
+    $extra: state.extra as Map<String, dynamic>?,
+  );
+
+  ScreenshotRoute get _self => this as ScreenshotRoute;
+
+  @override
+  String get location => GoRouteData.$location(
+    '/devices/${Uri.encodeComponent(_self.deviceId)}/screenshot',
+  );
+
+  @override
+  void go(BuildContext context) => context.go(location, extra: _self.$extra);
+
+  @override
+  Future<T?> push<T>(BuildContext context) =>
+      context.push<T>(location, extra: _self.$extra);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location, extra: _self.$extra);
+
+  @override
+  void replace(BuildContext context) =>
+      context.replace(location, extra: _self.$extra);
 }
 
 RouteBase get $documentExportRoute => GoRouteData.$route(

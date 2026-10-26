@@ -23,10 +23,7 @@ final _payload = Uint8List.fromList([1, 2, 3]);
 void main() {
   test('USB begin封印返回前不附着SDK，冷进程complete后才交付host', () async {
     final fixture = await _fixture();
-    final platform = _UsbPlatform(fixture.api.calls);
-    fixture.dependencies.recovery = UsbLeaseRecovery(
-      platform: platform.request,
-    );
+    final platform = fixture.usbRecovery();
     platform.beginGate = Completer<void>();
     var delivered = false;
     final opening = fixture.attach().then((host) {
@@ -61,10 +58,7 @@ void main() {
   test('USB原FD须等待旧SDK域真实排空，attach进入不代表已经释放', () async {
     final fixture = await _fixture();
     await _seedMobile(fixture);
-    final platform = _UsbPlatform(fixture.api.calls);
-    fixture.dependencies.recovery = UsbLeaseRecovery(
-      platform: platform.request,
-    );
+    final platform = fixture.usbRecovery();
     fixture.api.attachGate = Completer<void>();
     final opening = fixture.attach();
     await fixture.api.attachStarted.future;
@@ -149,10 +143,7 @@ void main() {
     final fixture = await _fixture();
     await _seedMobile(fixture);
     fixture.api.addConnection('foreign', scopeKey: '/foreign', serial: 'same');
-    final platform = _UsbPlatform(fixture.api.calls)..beginReplyFailures = 2;
-    fixture.dependencies.recovery = UsbLeaseRecovery(
-      platform: platform.request,
-    );
+    final platform = fixture.usbRecovery()..beginReplyFailures = 2;
     await expectLater(
       fixture.attach(),
       throwsA(_code('application_host_cleanup_unconfirmed')),
@@ -184,10 +175,7 @@ void main() {
   test('USB complete已关闭原FD却丢回执，原candidate重试不重复关闭或重认领', () async {
     final fixture = await _fixture();
     await _seedMobile(fixture);
-    final platform = _UsbPlatform(fixture.api.calls)..completeReplyFailures = 2;
-    fixture.dependencies.recovery = UsbLeaseRecovery(
-      platform: platform.request,
-    );
+    final platform = fixture.usbRecovery()..completeReplyFailures = 2;
     await expectLater(
       fixture.attach(),
       throwsA(_code('application_host_cleanup_unconfirmed')),
@@ -215,10 +203,7 @@ void main() {
     await _seedMobile(fixture);
     fixture.api.addConnection('foreign', scopeKey: '/foreign', serial: 'same');
     fixture.api.addConnection('unscoped', serial: 'same');
-    final platform = _UsbPlatform(fixture.api.calls);
-    fixture.dependencies.recovery = UsbLeaseRecovery(
-      platform: platform.request,
-    );
+    final platform = fixture.usbRecovery();
     fixture.api.attachFailures = 100;
     await expectLater(
       fixture.attach(),
@@ -320,11 +305,7 @@ void main() {
     final fixture = await _fixture(desktop: true);
     await _seedServer(fixture);
     final host = await fixture.attach();
-    fixture.api.addConnection(
-      'late-owned',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-      serverId: 'original-server',
-    );
+    fixture.addDesktopConnection('late-owned');
     final release = fixture.api.displayGate = Completer<void>();
     final draining = expectLater(host.drainConnections(), throwsStateError);
     await fixture.api.displayStarted.future;
@@ -354,11 +335,7 @@ void main() {
   test('桌面显示恢复持续失败保留精确已认领连接，退休宿主重试不重新claim', () async {
     final fixture = await _fixture(desktop: true);
     await _seedServer(fixture);
-    fixture.api.addConnection(
-      'owned',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-      serverId: 'original-server',
-    );
+    fixture.addDesktopConnection('owned');
     fixture.api.displayFailures = 100;
     try {
       await expectLater(
@@ -399,11 +376,7 @@ void main() {
   test('桌面restore初始失败后仍保存扫描责任，重试先恢复旧连接再关闭服务器', () async {
     final fixture = await _fixture(desktop: true);
     await _seedServer(fixture);
-    fixture.api.addConnection(
-      'owned',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-      serverId: 'original-server',
-    );
+    fixture.addDesktopConnection('owned');
     fixture.dependencies.restoreFailure = StateError('尚未取得服务器租约');
     try {
       await expectLater(
@@ -444,11 +417,7 @@ void main() {
   test('显示恢复失败期间精确连接真实closed，只排空本机流后允许宿主收尾', () async {
     final fixture = await _fixture(desktop: true);
     await _seedServer(fixture);
-    fixture.api.addConnection(
-      'owned',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-      serverId: 'original-server',
-    );
+    fixture.addDesktopConnection('owned');
     fixture.api.displayFailures = 1;
     fixture.api.closeDuringDisplayFailure = true;
     final host = await fixture.attach();
@@ -527,10 +496,7 @@ void main() {
   test('关闭等待在途移动排空，真实捕获结束前不撤全局标记或断连接', () async {
     final fixture = await _fixture();
     final host = await fixture.attach();
-    fixture.api.addConnection(
-      'in-flight',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-    );
+    fixture.addScopedConnection('in-flight');
     fixture.api.drainGate = Completer<void>();
     final draining = expectLater(host.drainConnections(), throwsStateError);
     await fixture.api.drainStarted.future;
@@ -552,10 +518,7 @@ void main() {
   test('握手结束失败保留精确登记，重试不把已经关闭的连接重新认领', () async {
     final fixture = await _fixture();
     final host = await fixture.attach();
-    fixture.api.addConnection(
-      'before-identities',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-    );
+    fixture.addScopedConnection('before-identities');
     fixture.api.handshakeCloseFailures = 1;
     await expectLater(host.drainConnections(), throwsStateError);
     final claimed = fixture.api.claimed.single;
@@ -577,10 +540,7 @@ void main() {
   test('认领结果已取得但确认失败，原新句柄保留给真实捕获和连接清理', () async {
     final fixture = await _fixture();
     final host = await fixture.attach();
-    fixture.api.addConnection(
-      'before-identities',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-    );
+    fixture.addScopedConnection('before-identities');
     fixture.api.confirmFailures = 1;
     await expectLater(host.drainConnections(), throwsStateError);
     final claimed = fixture.api.claimed.single;
@@ -627,11 +587,7 @@ void main() {
   test('自然关闭连接仍排空精确捕获，不对已关闭 Client 发起不可完成的认领', () async {
     final fixture = await _fixture();
     final host = await fixture.attach();
-    fixture.api.addConnection(
-      'closed',
-      scopeKey: p.join(fixture.directory.path, 'application-host'),
-      closed: true,
-    );
+    fixture.addScopedConnection('closed', closed: true);
     await host.drainConnections();
     expect(fixture.api.claimed, isEmpty);
     expect(
@@ -896,6 +852,24 @@ class _Fixture {
   final Directory directory;
   final _Api api;
   final _Dependencies dependencies;
+  _UsbPlatform usbRecovery() {
+    final platform = _UsbPlatform(api.calls);
+    dependencies.recovery = UsbLeaseRecovery(platform: platform.request);
+    return platform;
+  }
+
+  void addScopedConnection(String id, {bool closed = false}) =>
+      api.addConnection(
+        id,
+        scopeKey: p.join(directory.path, 'application-host'),
+        closed: closed,
+      );
+  void addDesktopConnection(String id) => api.addConnection(
+    id,
+    scopeKey: p.join(directory.path, 'application-host'),
+    serverId: 'original-server',
+  );
+
   Future<ApplicationHost> attach({ConnectionPolicy policy = _policy}) =>
       ApplicationHost.attach(
         dataDirectory: directory.path,

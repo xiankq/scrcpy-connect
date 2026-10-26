@@ -200,9 +200,17 @@ class RunningApps extends HookWidget {
     key: ValueKey('$id:${value(app, 'userId')}:${value(app, 'packageName')}'),
     borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
     onTap: () async {
-      await openPhoneApp(context, device, app);
+      await openPhoneApp(context, controller, device, app, existingTask: true);
       if (context.mounted) refresh();
     },
+    onLongPress: () => openPhoneApp(
+      context,
+      controller,
+      device,
+      app,
+      changeMode: true,
+      existingTask: true,
+    ),
     child: Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: DesignTokens.spacingXxs,

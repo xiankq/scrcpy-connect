@@ -11,6 +11,7 @@ import 'package:scrcpy_connect/pages/devices/index/widgets/device_card.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/running_apps.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
+import 'package:scrcpy_connect/widgets/grouped_list.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -172,16 +173,16 @@ void main() {
       expect(find.text('信息来自本机记录'), findsOneWidget);
       expect(calls.where((c) => c == 'apps.list' || c == 'apps.icon'), isEmpty);
       await tester.scrollUntilVisible(
-        find.text('文件管理'),
+        find.text('文件'),
         200,
         scrollable: find.byType(Scrollable).first,
       );
       await Scrollable.ensureVisible(
-        tester.element(find.text('文件管理')),
+        tester.element(find.text('文件')),
         alignment: .5,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('文件管理'));
+      await tester.tap(find.text('文件'));
       await tester.pumpAndSettle();
       expect(find.text('设备尚未连接'), findsOneWidget);
       expect(
@@ -207,6 +208,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('移除此设备').hitTestable(), findsOneWidget);
+      expect(find.byType(SettingsGroup), findsOneWidget);
       final stop = tester.widget<ActionRow>(
         find.widgetWithText(ActionRow, '停止连接'),
       );

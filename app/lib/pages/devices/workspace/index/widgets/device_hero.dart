@@ -24,12 +24,12 @@ class DeviceHero extends HookWidget {
         busy.value ||
         ['checking', 'connecting', 'reconnecting'].contains(device['status']);
     final id = value(device, 'id');
-    return ContentPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: () => DeviceDataRoute(deviceId: id).push<void>(context),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ContentPanel(
+          child: InkWell(
+            onTap: () => DeviceDetailsRoute(deviceId: id).push<void>(context),
             borderRadius: BorderRadius.circular(DesignTokens.roundedMd),
             child: Row(
               children: [
@@ -43,46 +43,46 @@ class DeviceHero extends HookWidget {
               ],
             ),
           ),
-          const SizedBox(height: DesignTokens.spacingMd),
-          FilledButton.icon(
-            onPressed: connecting
-                ? null
-                : () async {
-                    if (online) {
-                      await openRemoteRoute(context, deviceId: id);
-                    } else if (device['transport'] == 'usb') {
-                      await UsbGuideRoute(deviceId: id).push<void>(context);
-                    } else if (unauthorized) {
-                      await AddDeviceRoute(deviceId: id).push<void>(context);
-                    } else {
-                      busy.value = true;
-                      await perform(context, controller, 'devices.connect', {
-                        'deviceId': id,
-                      });
-                      await controller.refreshDevices();
-                      if (context.mounted) busy.value = false;
-                    }
-                  },
-            icon: Icon(
-              online
-                  ? LucideIcons.smartphone
-                  : unauthorized
-                  ? LucideIcons.shieldCheck
-                  : LucideIcons.link,
-              size: DesignTokens.componentIconActionSize,
-            ),
-            label: Text(
-              connecting
-                  ? '正在连接'
-                  : online
-                  ? '打开手机屏幕'
-                  : unauthorized
-                  ? '重新授权'
-                  : '连接手机',
-            ),
+        ),
+        const SizedBox(height: DesignTokens.spacingMd),
+        FilledButton.icon(
+          onPressed: connecting
+              ? null
+              : () async {
+                  if (online) {
+                    await openRemoteRoute(context, deviceId: id);
+                  } else if (device['transport'] == 'usb') {
+                    await UsbGuideRoute(deviceId: id).push<void>(context);
+                  } else if (unauthorized) {
+                    await AddDeviceRoute(deviceId: id).push<void>(context);
+                  } else {
+                    busy.value = true;
+                    await perform(context, controller, 'devices.connect', {
+                      'deviceId': id,
+                    });
+                    await controller.refreshDevices();
+                    if (context.mounted) busy.value = false;
+                  }
+                },
+          icon: Icon(
+            online
+                ? LucideIcons.smartphone
+                : unauthorized
+                ? LucideIcons.shieldCheck
+                : LucideIcons.link,
+            size: DesignTokens.componentIconActionSize,
           ),
-        ],
-      ),
+          label: Text(
+            connecting
+                ? '正在连接'
+                : online
+                ? '打开手机屏幕'
+                : unauthorized
+                ? '重新授权'
+                : '连接手机',
+          ),
+        ),
+      ],
     );
   }
 }

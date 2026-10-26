@@ -84,7 +84,7 @@ class BackgroundPage extends HookConsumerWidget {
     }
 
     return PageFrame(
-      title: '后台与连接',
+      title: '后台与提醒',
       child: GroupedListView(
         padding: const EdgeInsets.all(DesignTokens.spacingMd),
         children: [
@@ -92,15 +92,6 @@ class BackgroundPage extends HookConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ConnectSwitchRow(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('允许后台保持'),
-
-                  value: appSettings['backgroundKeepAlive'] == true,
-                  onChanged: changing.value ? null : updateBackground,
-                ),
-                const Divider(height: DesignTokens.spacingHairline),
-                const SizedBox(height: DesignTokens.spacingMd),
                 CommandView(
                   controller: controller,
                   command: 'background.status',
@@ -109,13 +100,37 @@ class BackgroundPage extends HookConsumerWidget {
                   builder: (context, data, refresh) => Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (data['supported'] == true)
+                        ConnectSwitchRow(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('允许后台保持'),
+                          value: appSettings['backgroundKeepAlive'] == true,
+                          onChanged:
+                              changing.value ||
+                                  (data['canRequest'] != true &&
+                                      appSettings['backgroundKeepAlive'] !=
+                                          true)
+                              ? null
+                              : updateBackground,
+                        ),
+                      if (data['supported'] == true) ...[
+                        const Divider(height: DesignTokens.spacingHairline),
+                        const SizedBox(height: DesignTokens.spacingMd),
+                      ],
                       Text(
                         value(data, 'title', '系统后台条件'),
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: DesignTokens.spacingSm),
-                      Text(value(data, 'reason', '后台运行取决于系统授权、电量策略与活动类型。')),
-                      if (data['canRequest'] == true)
+                      Text(
+                        value(
+                          data,
+                          'reason',
+                          '尚未确认本机后台能力。请保持 App 在前台，并核对活动的实际状态。',
+                        ),
+                      ),
+                      if (data['supported'] == true &&
+                          data['canRequest'] == true)
                         TextButton(
                           onPressed: changing.value
                               ? null
@@ -137,7 +152,7 @@ class BackgroundPage extends HookConsumerWidget {
           ConnectSwitchRow(
             title: const Text('远端通知提醒'),
 
-            value: appSettings['notificationAlerts'] != false,
+            value: appSettings['notificationAlerts'] == true,
             onChanged: changing.value
                 ? null
                 : (value) => updateAlert('notificationAlerts', value),
@@ -145,7 +160,7 @@ class BackgroundPage extends HookConsumerWidget {
           ConnectSwitchRow(
             title: const Text('远端来电提醒'),
 
-            value: appSettings['callAlerts'] != false,
+            value: appSettings['callAlerts'] == true,
             onChanged: changing.value
                 ? null
                 : (value) => updateAlert('callAlerts', value),

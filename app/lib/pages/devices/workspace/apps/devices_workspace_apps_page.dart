@@ -104,7 +104,26 @@ class AppsPage extends HookWidget {
                           title: Text(
                             value(app, 'name', value(app, 'packageName')),
                           ),
-                          onTap: () => openPhoneApp(context, device, app),
+                          onTap: () =>
+                              openPhoneApp(context, controller, device, app),
+                          onLongPress: () => openPhoneApp(
+                            context,
+                            controller,
+                            device,
+                            app,
+                            changeMode: true,
+                          ),
+                          trailing: IconButton(
+                            tooltip: '更改打开方式',
+                            icon: const Icon(LucideIcons.ellipsis),
+                            onPressed: () => openPhoneApp(
+                              context,
+                              controller,
+                              device,
+                              app,
+                              changeMode: true,
+                            ),
+                          ),
                         ),
                       );
                     },

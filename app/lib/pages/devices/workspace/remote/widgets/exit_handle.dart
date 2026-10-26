@@ -10,7 +10,9 @@ class ExitHandle extends StatefulWidget {
     super.key,
     required this.onExit,
     required this.deviceLabel,
-    this.onLock,
+    this.connectionLabel = '连接状态待核对',
+    this.soundControl,
+    this.onSleep,
     this.onScreenshot,
     this.onConvert,
     this.onKeyboard,
@@ -19,7 +21,9 @@ class ExitHandle extends StatefulWidget {
   });
   final VoidCallback onExit;
   final String deviceLabel;
-  final VoidCallback? onLock, onScreenshot, onConvert, onKeyboard, onRotate;
+  final String connectionLabel;
+  final Widget? soundControl;
+  final VoidCallback? onSleep, onScreenshot, onConvert, onKeyboard, onRotate;
   final bool independent;
   static const initialOffset = Offset(12, 80);
 
@@ -71,6 +75,7 @@ class _ExitHandleState extends State<ExitHandle>
   Size viewport = Size.zero;
   Rect dragBounds = Rect.zero;
   double collapsedRight = 0;
+
   void activateControl() {
     animation.stop();
     if (!collapsed) {
@@ -129,7 +134,7 @@ class _ExitHandleState extends State<ExitHandle>
   Widget _action(String label, IconData icon, VoidCallback? callback) =>
       ListTile(
         leading: Icon(icon),
-        title: Text(label),
+        title: Text(label, style: Theme.of(context).textTheme.bodyLarge),
         onTap: callback == null
             ? null
             : () {
@@ -175,6 +180,7 @@ class _ExitHandleState extends State<ExitHandle>
         children: [
           if (expanded && !dragging)
             Positioned(
+              key: const ValueKey('remote-tool-panel-position'),
               left: panelLeft,
               top: panelTop,
               width: panelWidth,
@@ -189,7 +195,24 @@ class _ExitHandleState extends State<ExitHandle>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _action('锁屏', LucideIcons.lock, widget.onLock),
+                        Padding(
+                          padding: const EdgeInsets.all(DesignTokens.spacingMd),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                widget.deviceLabel,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              Text(
+                                widget.connectionLabel,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        ?widget.soundControl,
+                        _action('熄屏', LucideIcons.moon, widget.onSleep),
                         _action('截图', LucideIcons.camera, widget.onScreenshot),
                         if (!widget.independent)
                           _action(
@@ -207,6 +230,7 @@ class _ExitHandleState extends State<ExitHandle>
               ),
             ),
           Positioned(
+            key: const ValueKey('remote-tool-handle-position'),
             left: collapsed && right && !dragging ? collapsedRight : dx,
             top: dy,
             width: collapsed && !dragging
@@ -216,10 +240,10 @@ class _ExitHandleState extends State<ExitHandle>
             child: Semantics(
               container: true,
               label: collapsed
-                  ? '展开画面工具，${widget.deviceLabel}'
+                  ? '展开画面工具，${widget.deviceLabel}，${widget.connectionLabel}'
                   : expanded
-                  ? '收起画面工具，${widget.deviceLabel}'
-                  : '展开画面工具，${widget.deviceLabel}',
+                  ? '收起画面工具，${widget.deviceLabel}，${widget.connectionLabel}'
+                  : '展开画面工具，${widget.deviceLabel}，${widget.connectionLabel}',
               button: true,
               child: GlassPressFeedback(
                 child: GestureDetector(

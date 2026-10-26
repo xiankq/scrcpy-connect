@@ -102,38 +102,6 @@ void main() {
     });
   }
 
-  test(
-    'queuing a second setting does not discard the first save receipt',
-    () async {
-      final first = Completer<Json>();
-      final second = Completer<Json>();
-      final requests = <Json>[];
-      final container = scope((command, [params = const {}]) {
-        requests.add(params);
-        return requests.length == 1 ? first.future : second.future;
-      });
-      final notifier = container.read(appControllerProvider.notifier);
-      final savingFirst = notifier.updateSetting('appearance', 'dark');
-      await Future<void>.delayed(Duration.zero);
-      final savingSecond = notifier.updateSetting('backgroundKeepAlive', true);
-      first.complete({'appearance': 'dark'});
-      await savingFirst;
-      expect(notifier.snapshot().settings, {'appearance': 'dark'});
-      await Future<void>.delayed(Duration.zero);
-      expect(requests, [
-        {'appearance': 'dark'},
-        {'backgroundKeepAlive': true},
-      ]);
-      second.complete({'backgroundKeepAlive': true});
-      await savingSecond;
-      expect(notifier.snapshot().settings, {
-        'appearance': 'dark',
-        'backgroundKeepAlive': true,
-      });
-      container.dispose();
-    },
-  );
-
   test('duplicate verified snapshots cannot forget that a view resumed presentation', () async {
     final events = StreamController<Json>.broadcast(sync: true);
     final commands = <String>[];
@@ -390,19 +358,28 @@ void main() {
     'saved settings serialize and stale settings reads cannot undo them',
     () async {
       final oldRead = Completer<Json>();
+      final first = Completer<Json>(), second = Completer<Json>();
       final updates = <Json>[];
       final container = scope((command, [params = const {}]) async {
         if (command == 'settings.get') return oldRead.future;
         updates.add(params);
-        return params;
+        return switch (updates.length) {
+          1 => first.future,
+          2 => second.future,
+          _ => params,
+        };
       });
       addTearDown(container.dispose);
       final notifier = container.read(appControllerProvider.notifier);
       final reading = notifier.loadSettings();
-      await Future.wait([
-        notifier.updateSetting('appearance', 'dark'),
-        notifier.updateSetting('background', true),
-      ]);
+      final saveFirst = notifier.updateSetting('appearance', 'dark');
+      await Future<void>.delayed(Duration.zero);
+      final saveSecond = notifier.updateSetting('background', true);
+      first.complete({'appearance': 'dark'});
+      await saveFirst;
+      expect(notifier.snapshot().settings, {'appearance': 'dark'});
+      second.complete({'background': true});
+      await saveSecond;
       oldRead.complete({'appearance': 'light'});
       await reading;
       expect(updates, [
@@ -413,6 +390,29 @@ void main() {
         'appearance': 'dark',
         'background': true,
       });
+      await Future.wait([
+        notifier.rememberAppOpenMode('phone', 'com.one', 'phone'),
+        notifier.rememberAppOpenMode('phone', 'com.two', 'window'),
+        notifier.rememberAppOpenMode('tablet', 'com.one', 'window'),
+      ]);
+      const modes = {
+        'phone': {'com.one': 'phone', 'com.two': 'window'},
+        'tablet': {'com.one': 'window'},
+      };
+      expect(
+        container.read(appControllerProvider).settings['appOpenModes'],
+        modes,
+      );
+      expect(updates.last['appOpenModes'], modes);
+      final releaseFirst = notifier.claimAppOpen('phone', 'com.one')!;
+      expect(notifier.claimAppOpen('phone', 'com.one'), isNull);
+      final other = notifier.claimAppOpen('phone', 'com.two')!;
+      releaseFirst();
+      final next = notifier.claimAppOpen('phone', 'com.one')!;
+      releaseFirst();
+      expect(notifier.claimAppOpen('phone', 'com.one'), isNull);
+      next();
+      other();
     },
   );
 }
