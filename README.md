@@ -1,6 +1,6 @@
 # 邻接 · Interconnect
 
-通过系统USB/无线调试授权访问Android设备，提供远控、文件、相册与通信入口；被控不安装配套APK。功能门槛见[兼容条件](docs/implementation/android-target-compatibility.md)。
+通过系统USB/无线调试授权访问Android设备，提供远控、文件、相册与通信入口；被控不安装配套APK。功能门槛见[平台与能力](designs/prod/compatibility.md)。
 
 ## 开发
 
