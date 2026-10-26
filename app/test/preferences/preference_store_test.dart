@@ -209,25 +209,40 @@ void main() {
     },
   );
 
-  test(
-    'metadata restore discards old device-bound choices without identities',
-    () async {
-      final preferences = await open();
-      await preferences.importSettings({
-        'appearance': 'dark',
-        'audioMode': 'fixed',
-        'deviceSettings': {
-          firstId: {'stayAwake': true, 'clipboardSync': true},
-        },
-        'deviceQuality': {
-          firstId: {'maxFps': 30},
-        },
-      });
-      expect(preferences.current.values['appearance'], 'dark');
-      expect(preferences.current.values['deviceSettings'], isEmpty);
-      expect(preferences.current.values['deviceQuality'], isEmpty);
-      expect(await file('host_identity.pem').exists(), isFalse);
-      expect(await file('devices.json').exists(), isFalse);
-    },
-  );
+  test('metadata imports global choices while preserving local device preferences and ignoring file bindings', () async {
+    final preferences = await open();
+    await preferences.update({
+      'deviceSettings': {
+        firstId: {'stayAwake': false},
+      },
+      'deviceQuality': {
+        firstId: {'maxFps': 60},
+      },
+      'appOpenModes': {
+        firstId: {'com.example.phone': 'phone'},
+      },
+    });
+    await preferences.importSettings({
+      'appearance': 'dark',
+      'audioMode': 'fixed',
+      'deviceSettings': {
+        firstId: {'stayAwake': true, 'clipboardSync': true},
+      },
+      'deviceQuality': {
+        firstId: {'maxFps': 30},
+      },
+    });
+    expect(preferences.current.values['appearance'], 'dark');
+    expect(preferences.current.values['deviceSettings'], {
+      firstId: {'stayAwake': false},
+    });
+    expect(preferences.current.values['deviceQuality'], {
+      firstId: {'maxFps': 60},
+    });
+    expect(preferences.current.values['appOpenModes'], {
+      firstId: {'com.example.phone': 'phone'},
+    });
+    expect(await file('host_identity.pem').exists(), isFalse);
+    expect(await file('devices.json').exists(), isFalse);
+  });
 }

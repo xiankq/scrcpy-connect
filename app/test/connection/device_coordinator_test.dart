@@ -116,10 +116,7 @@ void main() {
 
   test('准备失败保留同候选清理责任，断开重试不重播准备', () async {
     final id = await fixture.paired();
-    fixture.candidates.endpoints = [
-      _endpoint('192.0.2.8', 4444),
-      _endpoint('192.0.2.9', 5556),
-    ];
+    fixture.candidates.endpoints = _fallbackEndpoints();
     var preparations = 0;
     fixture.onPrepare = (_, _) async {
       preparations++;
@@ -141,10 +138,7 @@ void main() {
 
   test('准备后重新读取精确连接事实，已关闭候选不能交付或切换地址', () async {
     final id = await fixture.paired();
-    fixture.candidates.endpoints = [
-      _endpoint('192.0.2.8', 4444),
-      _endpoint('192.0.2.9', 5556),
-    ];
+    fixture.candidates.endpoints = _fallbackEndpoints();
     fixture.onPrepare = (connection, _) async {
       fixture.client.native.closedConnections.add(connection.device.id);
     };
@@ -310,14 +304,8 @@ void main() {
       }
       return _device('second-service');
     };
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'auto',
-      'active': true,
-    });
-    await fixture.records.update(
-      id,
-      (record) => record.copyWith(autoReconnect: true),
-    );
+    await fixture.reconnectLease('auto', true);
+    await fixture.records.setAutoReconnect(id, true);
     await fixture.automatic(id, 'auto');
     expect(fixture.client.connects, [
       'guid._adb-tls-connect._tcp',
@@ -330,10 +318,7 @@ void main() {
 
   test('授权失败和清理未知都不能换地址重播', () async {
     final id = await fixture.paired();
-    fixture.candidates.endpoints = [
-      _endpoint('192.0.2.8', 4444),
-      _endpoint('192.0.2.9', 5556),
-    ];
+    fixture.candidates.endpoints = _fallbackEndpoints();
     for (final code in [
       'auth_failed',
       'adb_cleanup_unconfirmed',
@@ -351,10 +336,7 @@ void main() {
 
   test('实际 GUID 不符不能接纳或尝试另一候选，失败清理保留可重试资源', () async {
     final id = await fixture.paired();
-    fixture.candidates.endpoints = [
-      _endpoint('192.0.2.8', 4444),
-      _endpoint('192.0.2.9', 5556),
-    ];
+    fixture.candidates.endpoints = _fallbackEndpoints();
     fixture.client.guid = 'other-guid';
     fixture.client.failDisconnect = true;
     await expectLater(
@@ -470,10 +452,7 @@ void main() {
       await fixture.connect(id);
       await finish();
       // 旧租约迟到释放不能撤销新权限；真实断线不等同于用户主动停止。
-      await fixture.owner.command('devices.reconnect.owner', {
-        'ownerId': oldOwner,
-        'active': false,
-      });
+      await fixture.reconnectLease(oldOwner, false);
       await fixture.owner.invalidate([id]);
       await fixture.records.update(
         id,
@@ -609,10 +588,7 @@ void main() {
         second = await fixture.add(host: '192.0.2.2');
     await fixture.connect(first);
     await fixture.connect(second);
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'auto',
-      'active': true,
-    });
+    await fixture.reconnectLease('auto', true);
     final entered = Completer<void>(), release = Completer<void>();
     fixture.onStop = (_) async {
       if (!entered.isCompleted) entered.complete();
@@ -1633,44 +1609,27 @@ void main() {
 
   test('自动连接要求当前租约及持久意图，不能重放用户已停止的设备', () async {
     final id = await fixture.add();
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': true,
-    });
+    await fixture.reconnectLease('owner-a', true);
     await expectLater(fixture.automatic(id, 'owner-a'), _failure('cancelled'));
     await expectLater(
       fixture.automatic(id, 'other'),
       _failure('reconnect_owner_required'),
     );
     expect(fixture.client.connects, isEmpty);
-    await fixture.records.update(
-      id,
-      (record) => record.copyWith(autoReconnect: true),
-    );
+    await fixture.records.setAutoReconnect(id, true);
     expect((await fixture.automatic(id, 'owner-a'))['connected'], isTrue);
     expect(fixture.owner.current(id), isNotNull);
   });
 
   test('交付事件中释放重连租约仍回收已接纳候选，不把活连接隐藏为离线', () async {
     final id = await fixture.add();
-    await fixture.records.update(
-      id,
-      (record) => record.copyWith(autoReconnect: true),
-    );
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': true,
-    });
+    await fixture.records.setAutoReconnect(id, true);
+    await fixture.reconnectLease('owner-a', true);
     fixture.onEmit = (_, data) {
       final devices = data['devices']! as List;
       if ((devices.single as Map)['status'] == 'connected') {
         fixture.onEmit = null;
-        unawaited(
-          fixture.owner.command('devices.reconnect.owner', {
-            'ownerId': 'owner-a',
-            'active': false,
-          }),
-        );
+        unawaited(fixture.reconnectLease('owner-a', false));
       }
     };
     await expectLater(fixture.automatic(id, 'owner-a'), _failure('cancelled'));
@@ -1704,14 +1663,8 @@ void main() {
 
   test('后继租约撤旧在途尝试，旧所有者迟到释放不能撤销后继', () async {
     final id = await fixture.add();
-    await fixture.records.update(
-      id,
-      (record) => record.copyWith(autoReconnect: true),
-    );
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': true,
-    });
+    await fixture.records.setAutoReconnect(id, true);
+    await fixture.reconnectLease('owner-a', true);
     final opening = Completer<AdbDevice>();
     fixture.client.opening = opening;
     final rejected = expectLater(
@@ -1719,17 +1672,11 @@ void main() {
       _failure('cancelled'),
     );
     await fixture.client.started.future;
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-b',
-      'active': true,
+    await fixture.reconnectLease('owner-b', true);
+    expect(await fixture.reconnectLease('owner-a', false), {
+      'ownerId': 'owner-a',
+      'active': false,
     });
-    expect(
-      await fixture.owner.command('devices.reconnect.owner', {
-        'ownerId': 'owner-a',
-        'active': false,
-      }),
-      {'ownerId': 'owner-a', 'active': false},
-    );
     opening.complete(_device('retired-auto'));
     await rejected;
     expect((await fixture.automatic(id, 'owner-b'))['connected'], isTrue);
@@ -1739,20 +1686,11 @@ void main() {
   test('租约释放只取消所属待定自动尝试，不断开已交付或手动连接', () async {
     final first = await fixture.add();
     final second = await fixture.add(host: '192.0.2.2');
-    await fixture.records.update(
-      first,
-      (record) => record.copyWith(autoReconnect: true),
-    );
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': true,
-    });
+    await fixture.records.setAutoReconnect(first, true);
+    await fixture.reconnectLease('owner-a', true);
     await fixture.automatic(first, 'owner-a');
     await fixture.connect(second);
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': false,
-    });
+    await fixture.reconnectLease('owner-a', false);
     expect(fixture.owner.current(first), isNotNull);
     expect(fixture.owner.current(second), isNotNull);
     expect(fixture.client.disconnected, isEmpty);
@@ -1760,14 +1698,8 @@ void main() {
 
   test('同名重复取得租约不取消在途尝试，调用者取消仍能穿透租约链接', () async {
     final id = await fixture.add();
-    await fixture.records.update(
-      id,
-      (record) => record.copyWith(autoReconnect: true),
-    );
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': true,
-    });
+    await fixture.records.setAutoReconnect(id, true);
+    await fixture.reconnectLease('owner-a', true);
     final opening = Completer<AdbDevice>();
     fixture.client.opening = opening;
     final stop = AdbCancellation();
@@ -1780,10 +1712,7 @@ void main() {
       _failure('cancelled'),
     );
     await fixture.client.started.future;
-    await fixture.owner.command('devices.reconnect.owner', {
-      'ownerId': 'owner-a',
-      'active': true,
-    });
+    await fixture.reconnectLease('owner-a', true);
     stop.cancel();
     opening.complete(_device('cancelled-auto'));
     await rejected;
@@ -1861,6 +1790,11 @@ final class _ReconnectTimer implements Timer {
 
 AdbDevice _device(String id) =>
     AdbDevice(id: id, serial: '192.0.2.1:5555', state: 'device');
+
+List<AdbDiscoveryEndpoint> _fallbackEndpoints() => [
+  _endpoint('192.0.2.8', 4444),
+  _endpoint('192.0.2.9', 5556),
+];
 
 AdbDiscoveryEndpoint _endpoint(
   String address,
@@ -1996,6 +1930,11 @@ final class _Fixture {
     return id;
   }
 
+  Future<Map<String, Object?>> reconnectLease(String ownerId, bool active) =>
+      owner.command('devices.reconnect.owner', {
+        'ownerId': ownerId,
+        'active': active,
+      });
   Future<Map<String, Object?>> automatic(String id, String ownerId) =>
       owner.command('devices.connect', {
         'deviceId': id,

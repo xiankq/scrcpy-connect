@@ -30,13 +30,22 @@ class ConnectionAddressFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (pairing) ...[
+          Text(
+            '在手机的“开发者选项 → 无线调试 → 使用配对码配对”中查看配对信息，填写后即可连接。',
+            style: textTheme.bodySmall,
+          ),
+          const SizedBox(height: DesignTokens.spacingMd),
+        ],
         if (!pairing) ...[
           if (completingPairing) ...[
             Text('已配对，尚未连接', style: textTheme.bodyMedium),
             const SizedBox(height: DesignTokens.spacingXs),
           ],
           Text(
-            legacyTcp ? '先通过 USB 授权并允许按地址连接，仅在可信网络使用。' : '使用手机无线调试主页面的连接端口。',
+            legacyTcp
+                ? '已有调试授权：先通过 USB 允许按地址连接，仅在可信网络使用。'
+                : '使用手机无线调试主页面的连接端口。',
             style: textTheme.bodySmall,
           ),
           const SizedBox(height: DesignTokens.spacingMd),

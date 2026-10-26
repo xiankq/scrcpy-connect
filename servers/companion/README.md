@@ -5,7 +5,7 @@
 | 能力 | 当前边界 |
 | --- | --- |
 | 通知 | 动态 listener、快照和原 contentIntent；不提供快捷回复，清除不等于已读 |
-| 通话 | 聚合观察；无法定位具体通话，所有 `calls.action` 返回 `call_targeting_unavailable`，音频 unknown |
+| 通话 | 聚合观察及打开当前系统通话界面；`calls.openPhoneApp` 按当前用户打开无号码的系统电话应用，不依赖观察。无法定位具体通话，所有 `calls.action` 返回 `call_targeting_unavailable`，音频 unknown |
 | 应用 | API 29+ 当前用户标准任务与真实图标，不伪造安装列表 |
 | 缩略图 | 独立有界解码子进程，只传 JPEG；视频 API 27+，取消未确认返回 `media_cleanup_unknown` |
 

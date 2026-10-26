@@ -42,13 +42,13 @@ class ConnectionModeSelector extends HookWidget {
               for (final entry in const [
                 (
                   AddDeviceMode.pairing,
-                  '无线配对码',
+                  '配对码',
                   LucideIcons.keyRound,
                   ConnectTokens.blue,
                 ),
                 (
                   AddDeviceMode.qr,
-                  '扫码配对',
+                  '扫码',
                   LucideIcons.qrCode,
                   ConnectTokens.mint,
                 ),
@@ -60,7 +60,7 @@ class ConnectionModeSelector extends HookWidget {
                 ),
                 (
                   AddDeviceMode.ip,
-                  'IP连接',
+                  'IP 连接',
                   LucideIcons.network,
                   ConnectTokens.coral,
                 ),

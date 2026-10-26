@@ -105,7 +105,10 @@ final class PreferenceStore {
     int? expectedRevision,
   }) {
     final imported = schema.importSettings(settings);
-    return _commit((_) => imported, expectedRevision: expectedRevision);
+    return _commit(
+      (current) => schema.merge(current, imported),
+      expectedRevision: expectedRevision,
+    );
   }
 
   Future<PreferenceSnapshot> _commit(

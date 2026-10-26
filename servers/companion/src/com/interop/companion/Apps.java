@@ -29,7 +29,7 @@ final class Apps {
         return running && activities > 0 && activityType == 1 && taskUser == currentUser;
     }
 
-    private static Context currentUserContext(Context context, int user) throws Exception {
+    static Context currentUserContext(Context context, int user) throws Exception {
         try {
             Class<?> handle = Class.forName("android.os.UserHandle");
             Object identity = handle.getConstructor(int.class).newInstance(user);

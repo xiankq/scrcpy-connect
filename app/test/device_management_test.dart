@@ -87,7 +87,7 @@ void main() {
           controller,
           DeviceWorkspacePage(controller: controller, device: usb),
         );
-        final action = find.text(remoteAction ? '文件管理' : '连接手机');
+        final action = find.text(remoteAction ? '文件' : '连接手机');
         await reveal(tester, action);
         await tester.tap(action);
         await tester.pumpAndSettle();
@@ -349,8 +349,8 @@ void main() {
         controller,
         DeviceWorkspacePage(controller: controller, device: offline),
       );
-      await reveal(tester, find.text('文件管理'));
-      await tester.tap(find.text('文件管理'));
+      await reveal(tester, find.text('文件'));
+      await tester.tap(find.text('文件'));
       await tester.pumpAndSettle();
       expect(
         calls.where((c) => c.$1 == 'files.list' || c.$1 == 'devices.connect'),
@@ -381,10 +381,11 @@ void main() {
       await pump(
         tester,
         controller,
-        DeviceConnectionPreferencesPage(controller: controller, device: phone),
+        DeviceConnectionPreferencesPage(
+          controller: controller,
+          device: {...phone, 'transport': 'usb'},
+        ),
       );
-      await tester.tap(find.text('USB'));
-      await tester.pumpAndSettle();
       await reveal(tester, find.text('检查连接'));
       await tester.tap(find.text('检查连接'));
       await tester.pumpAndSettle();

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:scrcpy_connect/stores/preference_store.dart';
+import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/models/device_metadata.dart';
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/services/preference_commands.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,8 +16,8 @@ TypeMatcher<ApplicationCommandException> errorCode(String code) =>
     );
 Map<String, dynamic> metadata([
   Map<String, Object?> settings = const {'appearance': 'dark'},
-]) => {
-  'metadata': {
+]) {
+  final document = {
     'format': 'scrcpy-connect-metadata',
     'version': 1,
     'devices': [
@@ -27,12 +29,43 @@ Map<String, dynamic> metadata([
       },
     ],
     'settings': settings,
-  },
-};
+  };
+  return {
+    'metadata': document,
+    'fingerprint': DeviceMetadata.parse(document).fingerprint,
+    'importGlobalPreferences': true,
+  };
+}
 
 void main() {
   late Directory directory;
   late PreferenceStore preferences;
+  PreferenceCommands commands({
+    PreferenceDeviceRequest? request,
+    void Function(Map<String, dynamic>)? onChanged,
+    Future<void> Function(bool)? applyBackgroundPolicy,
+  }) => PreferenceCommands(
+    preferences: preferences,
+    request: request ?? (_, _) async => fail('纯偏好操作不得调用设备分派器'),
+    onChanged: onChanged ?? (_) {},
+    applyBackgroundPolicy: applyBackgroundPolicy,
+  );
+
+  PreferenceDeviceRequest importRequest(
+    DeviceRecordStore records, {
+    void Function()? onRequest,
+  }) => (command, params) async {
+    onRequest?.call();
+    if (command == 'settings.import.preview') {
+      return records.previewMetadata(params['metadata']);
+    }
+    return (await records.importMetadata(
+      params['metadata'],
+      expectedFingerprint: params['fingerprint'] as String?,
+      importGlobalPreferences: params['importGlobalPreferences'] == true,
+    )).toJson();
+  };
+
   setUp(() async {
     directory = await Directory.systemTemp.createTemp(
       'preferences-runtime-test-',
@@ -43,13 +76,11 @@ void main() {
     await directory.delete(recursive: true);
   });
 
-  test('命名读取等待正在保存和应用的偏好，不绕过原有串行队列', () async {
-    final applying = Completer<void>();
-    final release = Completer<void>();
-    final runtime = PreferenceCommands(
-      preferences: preferences,
-      request: (_, _) async => fail('读取偏好不得调用设备分派器'),
-      onChanged: (_) {},
+  test('串行保存和读取等待实际后台应用，后继快照不被旧通知覆盖', () async {
+    final applying = Completer<void>(), release = Completer<void>();
+    final changes = <Map<String, dynamic>>[];
+    final runtime = commands(
+      onChanged: changes.add,
       applyBackgroundPolicy: (_) async {
         applying.complete();
         await release.future;
@@ -60,6 +91,7 @@ void main() {
       'backgroundKeepAlive': false,
     });
     await applying.future;
+    final second = runtime.invoke('settings.update', {'appearance': 'system'});
     var returned = false;
     final reading = runtime.read().then((settings) {
       returned = true;
@@ -67,39 +99,22 @@ void main() {
     });
     await Future<void>.delayed(Duration.zero);
     expect(returned, isFalse);
+    expect(changes, hasLength(1));
     release.complete();
-    await saving;
-    expect((await reading)['appearance'], 'dark');
-    expect(returned, isTrue);
-  });
-
-  test('重置后台偏好立即恢复执行策略且不重复应用无关设置', () async {
-    await preferences.update({'backgroundKeepAlive': false});
-    final applied = <bool>[];
-    final runtime = PreferenceCommands(
-      preferences: preferences,
-      request: (_, values) async => values,
-      onChanged: (_) {},
-      applyBackgroundPolicy: (enabled) async => applied.add(enabled),
-    );
-
-    await runtime.invoke('settings.reset', {
-      'keys': ['backgroundKeepAlive'],
-    });
-    expect(runtime.settings['backgroundKeepAlive'], isTrue);
-    expect(applied, [true]);
-    await runtime.invoke('settings.update', {'appearance': 'dark'});
-    expect(applied, [true]);
+    await Future.wait([saving, second]);
+    expect((await reading)['appearance'], 'system');
+    expect(changes.map((value) => value['appearance']), ['dark', 'system']);
   });
 
   test('偏好保存不创建原生镜像，后台回执未知可核验而不改写版本', () async {
-    var rejected = true;
+    var rejected = true, observerRejected = false;
     final applied = <bool>[];
     final changes = <Map<String, dynamic>>[];
-    final runtime = PreferenceCommands(
-      preferences: preferences,
-      request: (_, _) async => fail('保存偏好不得调用设备或原生业务'),
-      onChanged: changes.add,
+    final runtime = commands(
+      onChanged: (settings) {
+        changes.add(settings);
+        if (observerRejected) throw StateError('观察者失败');
+      },
       applyBackgroundPolicy: (enabled) async {
         applied.add(enabled);
         if (rejected) throw TimeoutException('平台回执未知');
@@ -138,63 +153,27 @@ void main() {
     );
     await runtime.invoke('settings.update', {'fileViewMode': 'list'});
     expect(applied, [false, false]);
-  });
-
-  test('串行保存等待实际后台应用，后继快照不被旧通知覆盖', () async {
-    final started = Completer<void>(), barrier = Completer<void>();
-    final changes = <Map<String, dynamic>>[];
-    final runtime = PreferenceCommands(
-      preferences: preferences,
-      request: (_, _) async => fail('保存偏好不得调用设备或原生业务'),
-      applyBackgroundPolicy: (_) async {
-        started.complete();
-        await barrier.future;
-      },
-      onChanged: changes.add,
-    );
-    final first = runtime.invoke('settings.update', {
-      'appearance': 'dark',
-      'backgroundKeepAlive': false,
-    });
-    await started.future;
-    final second = runtime.invoke('settings.update', {'appearance': 'system'});
-    await Future<void>.delayed(Duration.zero);
-    expect(changes, hasLength(1));
-    barrier.complete();
-    await Future.wait([first, second]);
-    expect(changes.map((value) => value['appearance']), ['dark', 'system']);
-    expect(runtime.settings['appearance'], 'system');
-  });
-
-  test('保存后的应用通知异常明确保留持久结果，重新核验只发布当前快照', () async {
-    var rejected = true;
-    final runtime = PreferenceCommands(
-      preferences: preferences,
-      request: (_, _) async => fail('重新核验不重放设备命令'),
-      onChanged: (_) {
-        if (rejected) throw StateError('观察者失败');
-      },
-    );
+    observerRejected = true;
     await expectLater(
-      runtime.invoke('settings.update', {'appearance': 'dark'}),
-      throwsA(
-        errorCode('preferences_apply_unknown').having(
-          (error) => error.details,
-          'details',
-          containsPair('saved', true),
-        ),
-      ),
+      runtime.invoke('settings.update', {'appearance': 'system'}),
+      throwsA(errorCode('preferences_apply_unknown')),
     );
-    expect(preferences.current.values['appearance'], 'dark');
-    rejected = false;
+    expect(preferences.current.values['appearance'], 'system');
+    observerRejected = false;
     await runtime.reconcile();
-    expect(runtime.settings['appearance'], 'dark');
+    expect(runtime.settings['appearance'], 'system');
+    await runtime.invoke('settings.reset', {
+      'keys': ['backgroundKeepAlive'],
+    });
+    expect(runtime.settings['backgroundKeepAlive'], isTrue);
+    expect(applied, [false, false, false, true]);
+    await runtime.invoke('settings.update', {'appearance': 'dark'});
+    expect(applied, [false, false, false, true]);
   });
 
   test('导出保留设备读取失败且拒绝将畸形结果伪装成空备份', () async {
     var malformed = false;
-    final runtime = PreferenceCommands(
-      preferences: preferences,
+    final runtime = commands(
       request: (command, _) async {
         expect(command, 'devices.list');
         if (malformed) {
@@ -217,44 +196,63 @@ void main() {
     );
   });
 
-  test(
-    'unknown device import is not retried and does not activate preferences',
-    () async {
-      var requests = 0;
-      final runtime = PreferenceCommands(
-        preferences: preferences,
-        request: (_, _) async {
-          requests++;
-          throw TimeoutException('unknown');
-        },
-        onChanged: (_) {},
-      );
-      await expectLater(
-        runtime.invoke('settings.import', metadata()),
-        throwsA(errorCode('preferences_import_unknown')),
-      );
-      expect(requests, 1);
-      expect(preferences.current.values['appearance'], 'light');
-      expect(
-        (await PreferenceCommands.prepare(directory))
-            .current
-            .values['appearance'],
-        'light',
-      );
-    },
-  );
+  test('lost record commit is reconciled from its atomic receipt without appending or applying preferences', () async {
+    var lost = false, allocations = 0;
+    final records = await DeviceRecordStore.open(
+      directory: directory,
+      idFactory: () {
+        allocations++;
+        return '11111111-1111-4111-8111-111111111111';
+      },
+      commitFile: (temporary, destination) async {
+        await temporary.rename(destination.path);
+        if (lost) {
+          throw StateError('commit completed but acknowledgement unavailable');
+        }
+      },
+    );
+    final runtime = commands(request: importRequest(records));
+    final input = metadata();
+    final preview =
+        await runtime.invoke('settings.import.preview', input) as Map;
+    expect(preview['newRecords'], 1);
+    expect(preview['globalChanges'], [
+      {'key': 'appearance', 'current': 'light', 'imported': 'dark'},
+    ]);
+    expect(allocations, 0);
+    lost = true;
+    await expectLater(
+      runtime.invoke('settings.import', input),
+      throwsA(errorCode('preferences_import_unknown')),
+    );
+    expect(preferences.current.values['appearance'], 'light');
+    final reopened = await DeviceRecordStore.open(directory: directory);
+    expect(reopened.current.devices, hasLength(1));
+    final checked =
+        await runtime.invoke('settings.import.preview', input) as Map;
+    expect(checked['alreadyImported'], true);
+    expect(checked['newRecords'], 0);
+    expect(checked['preferencesStatus'], 'needsReview');
+    final duplicate = await runtime.invoke('settings.import', input) as Map;
+    expect(duplicate['alreadyImported'], true);
+    expect(allocations, 1);
+    expect(preferences.current.values['appearance'], 'light');
+  });
 
   test('restore with conflicting local save reports partial success without overwriting', () async {
     final other = await PreferenceCommands.prepare(directory);
-    final runtime = PreferenceCommands(
-      preferences: preferences,
+    final runtime = commands(
       request: (command, values) async {
         expect(command, 'settings.import');
-        expect((values['metadata'] as Map)['settings'], isEmpty);
+        expect((values['metadata'] as Map)['settings'], {'appearance': 'dark'});
         await other.update({'appearance': 'system'});
-        return {'restored': 1, 'authorizationRestored': false};
+        return {
+          'restored': 1,
+          'authorizationRestored': false,
+          'fingerprint': values['fingerprint'],
+          'alreadyImported': false,
+        };
       },
-      onChanged: (_) {},
     );
     await expectLater(
       runtime.invoke('settings.import', metadata()),
@@ -268,36 +266,38 @@ void main() {
     );
   });
 
-  test(
-    'restore validates preference data before any device-side command',
-    () async {
-      var requests = 0;
-      final runtime = PreferenceCommands(
-        preferences: preferences,
-        request: (_, _) async {
-          requests++;
-          return {};
-        },
-        onChanged: (_) {},
-      );
-      await expectLater(
-        runtime.invoke(
-          'settings.import',
-          metadata({'privateKeyPem': 'secret'}),
-        ),
-        throwsA(errorCode('invalid_argument')),
-      );
-      expect(requests, 0);
-    },
-  );
+  test('preview admission preserves local settings by default and only explicit selection applies global changes', () async {
+    final records = await DeviceRecordStore.open(directory: directory);
+    var requests = 0;
+    final runtime = commands(
+      request: importRequest(records, onRequest: () => requests++),
+    );
+    await expectLater(
+      runtime.invoke('settings.import', metadata({'privateKeyPem': 'secret'})),
+      throwsA(errorCode('invalid_argument')),
+    );
+    expect(requests, 0);
+    final input = metadata()..remove('importGlobalPreferences');
+    await expectLater(
+      runtime.invoke('settings.import', {...input, 'fingerprint': 'changed'}),
+      throwsA(errorCode('invalid_import_preview')),
+    );
+    expect(requests, 0);
+    final preview =
+        await runtime.invoke('settings.import.preview', input) as Map;
+    expect(preview['newRecords'], 1);
+    final first = await runtime.invoke('settings.import', input) as Map;
+    expect(first['preferencesStatus'], 'preserved');
+    expect(preferences.current.values['appearance'], 'light');
+    final second = metadata({'appearance': 'system'});
+    await runtime.invoke('settings.import', second);
+    expect(preferences.current.values['appearance'], 'system');
+    expect(records.current.devices, hasLength(2));
+  });
   test(
     'concurrent quality saves retain both device choices after restart',
     () async {
-      final runtime = PreferenceCommands(
-        preferences: preferences,
-        request: (_, values) async => values,
-        onChanged: (_) {},
-      );
+      final runtime = commands(request: (_, values) async => values);
       const first = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
       const second = '8cd3c688-670c-46c1-b605-d140d9d8b4aa';
       await Future.wait([

@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/services/preference_commands.dart';
+import 'package:scrcpy_connect/models/device_metadata.dart';
+import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 
 void main() {
   test('导入真实提交回执未知后保留恢复结果，重开核验不重复恢复设备', () async {
@@ -11,14 +13,34 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final preferences = await PreferenceCommands.prepare(directory);
     var imports = 0, publications = 0;
-    const receipt = {'restored': 1, 'authorizationRestored': false};
+    final document = {
+      'format': 'scrcpy-connect-metadata',
+      'version': 1,
+      'devices': [
+        {
+          'name': '恢复设备',
+          'address': '192.0.2.1',
+          'port': 5555,
+          'transport': 'tcp',
+        },
+      ],
+      'settings': {'appearance': 'dark'},
+    };
+    final fingerprint = DeviceMetadata.parse(document).fingerprint;
+    final records = await DeviceRecordStore.open(directory: directory);
     final commands = PreferenceCommands(
       preferences: preferences,
       request: (command, values) async {
         if (command == 'settings.import') {
-          expect((values['metadata'] as Map)['settings'], isEmpty);
           imports++;
-          return receipt;
+          return (await records.importMetadata(
+            values['metadata'],
+            expectedFingerprint: values['fingerprint'] as String?,
+            importGlobalPreferences: values['importGlobalPreferences'] == true,
+          )).toJson();
+        }
+        if (command == 'settings.import.preview') {
+          return records.previewMetadata(values['metadata']);
         }
         fail('偏好核验不重放设备导入或安装原生镜像');
       },
@@ -30,19 +52,9 @@ void main() {
     await IOOverrides.runWithIOOverrides(() async {
       await expectLater(
         commands.invoke('settings.import', {
-          'metadata': {
-            'format': 'scrcpy-connect-metadata',
-            'version': 1,
-            'devices': [
-              {
-                'name': '恢复设备',
-                'address': '192.0.2.1',
-                'port': 5555,
-                'transport': 'tcp',
-              },
-            ],
-            'settings': {'appearance': 'dark'},
-          },
+          'metadata': document,
+          'fingerprint': fingerprint,
+          'importGlobalPreferences': true,
         }),
         throwsA(
           isA<ApplicationCommandException>()
@@ -56,7 +68,7 @@ void main() {
                 'details',
                 allOf(
                   containsPair('preferencesSaved', 'unknown'),
-                  containsPair('devicesRestored', receipt),
+                  containsPair('devicesRestored', containsPair('restored', 1)),
                   containsPair('authorizationRestored', false),
                   containsPair('cause', 'preferences_write_unknown'),
                 ),
@@ -76,6 +88,14 @@ void main() {
     expect(commands.settings['appearance'], 'dark');
     expect(imports, 1);
     expect(publications, 1);
+    final checked = await commands.invoke('settings.import.preview', {
+      'metadata': document,
+    }) as Map;
+    expect(checked['alreadyImported'], true);
+    expect(checked['preferencesStatus'], 'matchesCurrent');
+    expect(checked['newRecords'], 0);
+    expect(records.current.devices, hasLength(1));
+    expect(imports, 1);
   });
 }
 

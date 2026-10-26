@@ -39,8 +39,22 @@ void main() {
   setUp(() async => fixture = await _Fixture.open());
   tearDown(() async => fixture.close());
 
-  test('配对成功后仅拨号匹配 GUID 的 TLS 发现端口，保留实际执行参数', () async {
+  test('配对只拨号匹配 GUID 的 TLS 候选，不可达地址后继续核验下一地址', () async {
     fixture.advertise(_guid, AdbDiscoveryKind.tlsConnect, port: 42000);
+    final expiry = fixture.now
+        .add(const Duration(minutes: 1))
+        .millisecondsSinceEpoch;
+    fixture.answers['$_guid.local/1'] = [
+      for (final address in ['192.0.2.10', '192.0.2.11'])
+        IPAddressResourceRecord(
+          '$_guid.local',
+          expiry,
+          address: InternetAddress(address),
+        ),
+    ];
+    fixture.client.connectFailures.add(
+      const AdbException('connection_refused'),
+    );
     fixture.advertise(
       'another-phone',
       AdbDiscoveryKind.tlsConnect,
@@ -52,11 +66,14 @@ void main() {
     expect(result['paired'], isTrue);
     expect(result['connected'], isTrue);
     expect(fixture.client.pairs.single.address, '192.0.2.10:37001');
-    expect(fixture.client.connects.single.address, '192.0.2.10:42000');
-    expect(fixture.client.connects.single.requireTls, isTrue);
-    expect(fixture.client.connects.single.options!.burstMode, isTrue);
+    expect(fixture.client.connects.map((item) => item.address), [
+      '192.0.2.10:42000',
+      '192.0.2.11:42000',
+    ]);
+    expect(fixture.client.connects.every((item) => item.requireTls), isTrue);
+    expect(fixture.client.connects.last.options!.burstMode, isTrue);
     expect(
-      fixture.client.connects.single.options!.publicKeyComment,
+      fixture.client.connects.last.options!.publicKeyComment,
       _policy.publicKeyComment,
     );
     final record = fixture.records.current.devices.single;
@@ -449,8 +466,19 @@ void main() {
     expect(fixture.records.current.devices, isEmpty);
   });
 
-  test('USB 唯一保存 serial 复用原记录，枚举不创建重复记录', () async {
-    final id = await fixture.savedDevice();
+  test('导入 USB 保留待核验 serial，重新授权复用原记录且拒绝其他设备', () async {
+    final original = await fixture.savedDevice();
+    await fixture.records.update(
+      original,
+      (record) =>
+          record.copyWith(transport: DeviceTransport.usb, address: '', port: 0),
+    );
+    final metadata = fixture.records.exportMetadata()['metadata'];
+    await fixture.records.remove(original);
+    final imported = await fixture.records.importMetadata(metadata);
+    final id = imported.receipt.deviceIds.single;
+    expect(fixture.records.current.find(id)!.status, 'unauthorized');
+    expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
     fixture.client.attached = const [
       AdbTransport(serial: 'hardware-serial', state: 'device', usbPath: '1-2'),
     ];
@@ -459,6 +487,11 @@ void main() {
     expect(result['connected'], isTrue);
     expect(fixture.records.current.devices, hasLength(1));
     expect(fixture.records.current.find(id)!.transport, DeviceTransport.usb);
+    fixture.client.serial = 'another-phone';
+    await expectLater(
+      fixture.setup.request('devices.usb', {'deviceId': id}),
+      _failure('device_identity_mismatch'),
+    );
   });
 
   test('USB 同 serial 多条保存记录要求明确选择，不能任选一条交付', () async {

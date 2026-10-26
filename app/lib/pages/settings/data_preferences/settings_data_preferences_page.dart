@@ -1,4 +1,5 @@
 import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/pages/settings/data_preferences/widgets/metadata_import_preview.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -21,7 +22,7 @@ class DataPreferencesPage extends StatelessWidget {
   final AppController controller;
   @override
   Widget build(BuildContext context) => PageFrame(
-    title: '设备记录与恢复',
+    title: '本地数据',
     child: GroupedListView(
       padding: const EdgeInsets.all(DesignTokens.spacingMd),
       children: [
@@ -33,7 +34,7 @@ class DataPreferencesPage extends StatelessWidget {
           children: [
             ActionRow(
               icon: LucideIcons.fileOutput,
-              title: '导出设备名称与偏好',
+              title: '导出设备记录',
 
               onTap: () async {
                 final result = await perform(
@@ -58,7 +59,7 @@ class DataPreferencesPage extends StatelessWidget {
                       ),
                     );
                     if (saved != null && context.mounted) {
-                      feedback(context, '设备名称与偏好已保存至 $saved');
+                      feedback(context, '设备记录已保存至 $saved');
                     }
                   } catch (e) {
                     if (context.mounted) feedback(context, '保存记录失败：$e');
@@ -68,7 +69,7 @@ class DataPreferencesPage extends StatelessWidget {
             ),
             ActionRow(
               icon: LucideIcons.fileInput,
-              title: '恢复名称与偏好',
+              title: '导入设备记录',
 
               onTap: () async {
                 Json? result;
@@ -92,20 +93,31 @@ class DataPreferencesPage extends StatelessWidget {
                     feedback(context, '此文件不包含有效的设备记录');
                     return;
                   }
-                  if (!await confirm(
-                        context,
-                        '恢复本机设备记录？',
-                        '仅恢复名称与偏好。恢复的设备需要重新在被控手机授权，不会恢复主控身份。',
-                        action: '恢复记录',
-                      ) ||
-                      !context.mounted) {
+                  final preview = await perform(
+                    context,
+                    controller,
+                    'settings.import.preview',
+                    {'metadata': metadata},
+                  );
+                  if (preview == null || !context.mounted) return;
+                  final importGlobal = await showGlassModalSheet<bool>(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (_) => MetadataImportPreview(preview: preview),
+                  );
+                  if (importGlobal == null || !context.mounted) {
                     return;
                   }
                   result = await perform(
                     context,
                     controller,
                     'settings.import',
-                    {'metadata': metadata},
+                    {
+                      'metadata': metadata,
+                      'fingerprint': preview['fingerprint'],
+                      'expectedRevision': preview['expectedRevision'],
+                      'importGlobalPreferences': importGlobal,
+                    },
                   );
                 } catch (e) {
                   if (context.mounted) feedback(context, '无法读取记录文件：$e');
@@ -113,13 +125,22 @@ class DataPreferencesPage extends StatelessWidget {
                 if (result != null) {
                   await controller.loadSettings();
                   await controller.refreshDevices();
-                  if (context.mounted) feedback(context, '记录已读取，请在被控手机重新核验授权');
+                  if (context.mounted) {
+                    feedback(
+                      context,
+                      result['alreadyImported'] == true
+                          ? '此文件已导入，已核对本机记录。'
+                          : '设备记录已导入，请在被控手机重新核验授权。',
+                    );
+                  }
                 }
               },
             ),
           ],
         ),
-        const StateNote('移除设备只删除本机记录。若要撤销调试信任，请到被控手机的开发者选项中操作。'),
+        const StateNote(
+          '导出文件包含设备地址，请妥善保存，仅向信任的人分享。移除设备只删除本机记录；撤销调试信任请到被控手机的开发者选项中操作。',
+        ),
       ],
     ),
   );

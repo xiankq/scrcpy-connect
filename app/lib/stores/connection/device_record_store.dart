@@ -4,11 +4,13 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:scrcpy_connect/models/device_record.dart';
+import 'package:scrcpy_connect/models/device_metadata.dart';
 export 'package:scrcpy_connect/models/device_record.dart'
     show DeviceRecord, DeviceTransport, DeviceRecordsFailure;
 
 const _maximumBytes = 8 * 1024 * 1024;
 const _maximumDevices = 256;
+const _maximumImports = 1024;
 final _queues = <String, Future<void>>{};
 final _random = Random.secure();
 typedef DeviceIdFactory = String Function();
@@ -23,12 +25,15 @@ final class DeviceRecordsSnapshot {
     required this.identityFingerprint,
     required Map<String, String> deviceIdentityFingerprints,
     Map<String, Object?> legacySettings = const {},
-  }) : devices = List.unmodifiable(devices),
+    Map<String, DeviceImportReceipt> imports = const {},
+  }) : imports = Map.unmodifiable(imports),
+       devices = List.unmodifiable(devices),
        deviceIdentityFingerprints = Map.unmodifiable(
          deviceIdentityFingerprints,
        ),
        legacySettings = _freeze(legacySettings) as Map<String, Object?>;
   final List<DeviceRecord> devices;
+  final Map<String, DeviceImportReceipt> imports;
   final String identityFingerprint;
   final Map<String, String> deviceIdentityFingerprints;
 
@@ -37,23 +42,69 @@ final class DeviceRecordsSnapshot {
   DeviceRecord? find(String id) =>
       devices.where((device) => device.id == id).firstOrNull;
   Map<String, Object?> toJson() => {
-    'version': 2,
+    'version': 3,
     'identityFingerprint': identityFingerprint,
     'deviceIdentityFingerprints': deviceIdentityFingerprints,
     'devices': devices.map((record) => record.toJson()).toList(),
+    'imports': {
+      for (final entry in imports.entries) entry.key: entry.value.toJson(),
+    },
     if (legacySettings.isNotEmpty) 'settings': legacySettings,
   };
 }
 
+final class DeviceImportReceipt {
+  DeviceImportReceipt({
+    required Iterable<String> deviceIds,
+    required this.importedAt,
+    required this.importGlobalPreferences,
+  }) : deviceIds = List.unmodifiable(deviceIds);
+  final List<String> deviceIds;
+  final int importedAt;
+  final bool importGlobalPreferences;
+  Map<String, Object?> toJson() => {
+    'deviceIds': deviceIds,
+    'importedAt': importedAt,
+    'importGlobalPreferences': importGlobalPreferences,
+  };
+  factory DeviceImportReceipt.fromJson(Object? input) {
+    final value = recordObject(input);
+    final ids = value['deviceIds'];
+    final stamp = value['importedAt'];
+    if (ids is! List ||
+        ids.length > _maximumDevices ||
+        ids.any((id) => id is! String || !validDeviceId(id)) ||
+        ids.toSet().length != ids.length ||
+        stamp is! int ||
+        stamp < 0 ||
+        value['importGlobalPreferences'] is! bool) {
+      throw const DeviceRecordsFailure('records_corrupt', '导入记录损坏，原文件已保留。');
+    }
+    return DeviceImportReceipt(
+      deviceIds: ids.cast<String>(),
+      importedAt: stamp,
+      importGlobalPreferences: value['importGlobalPreferences']! as bool,
+    );
+  }
+}
+
 final class DeviceRecordsImport {
-  DeviceRecordsImport(Iterable<DeviceRecord> devices)
-    : devices = List.unmodifiable(devices);
-  final List<DeviceRecord> devices;
-  int get restored => devices.length;
+  DeviceRecordsImport(
+    this.fingerprint,
+    this.receipt, {
+    this.alreadyImported = false,
+  });
+  final String fingerprint;
+  final DeviceImportReceipt receipt;
+  final bool alreadyImported;
+  int get restored => receipt.deviceIds.length;
   bool get authorizationRestored => false;
   Map<String, Object?> toJson() => {
+    'fingerprint': fingerprint,
     'restored': restored,
     'authorizationRestored': false,
+    'alreadyImported': alreadyImported,
+    ...receipt.toJson(),
   };
 }
 
@@ -101,7 +152,7 @@ final class DeviceRecordStore {
       );
       // 读取损坏或新格式会在此前失败，绝不覆盖原文件。
       if (saved == null ||
-          saved.version != 2 ||
+          saved.version != 3 ||
           fingerprint != original.identityFingerprint) {
         await owner._write(next);
       }
@@ -268,37 +319,91 @@ final class DeviceRecordStore {
     },
   };
 
-  /// 完整验证全部条目后，一次提交追加新记录；不合并端点、不修改原有信任或重复发送授权动作。
-  Future<DeviceRecordsImport> importMetadata(Object? metadata) async {
-    final document = recordObject(metadata);
-    if (document['format'] != 'scrcpy-connect-metadata' ||
-        document['version'] is! int ||
-        document['version'] != 1) {
-      throw const DeviceRecordsFailure('invalid_data', '设备记录格式或版本不受支持。');
+  /// 只读取同一记录账本；预览不分配 ID，也不保存任何导入意图。
+  Future<Map<String, Object?>> previewMetadata(Object? input) async {
+    final metadata = DeviceMetadata.parse(input);
+    return _exclusive(() async {
+      final saved = await _requiredRead();
+      _current = saved;
+      final receipt = saved.imports[metadata.fingerprint];
+      if (receipt == null) _checkImportCapacity(saved, metadata.devices.length);
+      return {
+        'fingerprint': metadata.fingerprint,
+        'newRecords': receipt == null ? metadata.devices.length : 0,
+        'alreadyImported': receipt != null,
+        if (receipt != null)
+          'receipt': DeviceRecordsImport(
+            metadata.fingerprint,
+            receipt,
+            alreadyImported: true,
+          ).toJson(),
+      };
+    });
+  }
+
+  /// 设备与文件回执原子写入同一快照。任何重试先核对账本，不再分配 ID。
+  Future<DeviceRecordsImport> importMetadata(
+    Object? input, {
+    String? expectedFingerprint,
+    bool importGlobalPreferences = false,
+  }) async {
+    final metadata = DeviceMetadata.parse(input);
+    if (expectedFingerprint != null &&
+        expectedFingerprint != metadata.fingerprint) {
+      throw const DeviceRecordsFailure(
+        'invalid_import_preview',
+        '文件已变化，请重新预览后导入。',
+      );
     }
-    final entries = document['devices'];
-    if (entries is! List || entries.length > _maximumDevices) {
-      throw const DeviceRecordsFailure('invalid_data', '设备列表无效或过长。');
-    }
-    // 临时标识仅用于完整校验，不消耗调用方的 ID 工厂，也不进入提交。
-    final validated = <DeviceRecord>[
-      for (final entry in entries)
-        _importRecord(
-          recordObject(entry),
-          '00000000-0000-4000-8000-000000000000',
-        ),
-    ];
-    final imported = <DeviceRecord>[];
-    await _change((saved) {
+    return _exclusive(() async {
+      final saved = await _requiredRead();
+      final previous = saved.imports[metadata.fingerprint];
+      if (previous != null) {
+        _current = saved;
+        return DeviceRecordsImport(
+          metadata.fingerprint,
+          previous,
+          alreadyImported: true,
+        );
+      }
+      _checkImportCapacity(saved, metadata.devices.length);
       final ids = saved.devices.map((d) => d.id).toSet();
-      for (final entry in validated) {
+      final imported = <DeviceRecord>[];
+      for (final entry in metadata.devices) {
         final id = _allocateId(ids);
         ids.add(id);
         imported.add(DeviceRecord.fromJson({...entry.toJson(), 'id': id}));
       }
-      return _snapshot(saved, devices: [...saved.devices, ...imported]);
+      final receipt = DeviceImportReceipt(
+        deviceIds: imported.map((d) => d.id),
+        importedAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        importGlobalPreferences: importGlobalPreferences,
+      );
+      final next = _snapshot(
+        saved,
+        devices: [...saved.devices, ...imported],
+        imports: {...saved.imports, metadata.fingerprint: receipt},
+      );
+      await _write(next);
+      _current = next;
+      return DeviceRecordsImport(metadata.fingerprint, receipt);
     });
-    return DeviceRecordsImport(imported);
+  }
+
+  void _checkImportCapacity(DeviceRecordsSnapshot saved, int count) {
+    if (saved.devices.length + count > _maximumDevices) {
+      throw const DeviceRecordsFailure(
+        'records_too_large',
+        '新增记录后会超过设备容量，请先整理本机记录。',
+      );
+    }
+    // 回执不能静默淘汰，否则再次选择旧文件会追加相同记录。
+    if (saved.imports.length >= _maximumImports) {
+      throw const DeviceRecordsFailure(
+        'import_history_full',
+        '导入记录已达到本机容量，无法安全追加新文件。',
+      );
+    }
   }
 
   String _allocateId(Set<String> existing) {
@@ -338,10 +443,10 @@ final class DeviceRecordStore {
       }
       final document = recordObject(jsonDecode(utf8.decode(bytes)));
       final version = document['version'];
-      if (version is int && version > 2) {
+      if (version is int && version > 3) {
         throw const DeviceRecordsFailure('storage_version', '设备记录版本较新，请更新应用。');
       }
-      if (version is! int || version != 1 && version != 2) {
+      if (version is! int || version != 1 && version != 2 && version != 3) {
         throw const DeviceRecordsFailure('records_corrupt', '设备记录版本无效，原文件已保留。');
       }
       final devices = document['devices'];
@@ -356,6 +461,9 @@ final class DeviceRecordStore {
       final fingerprints = recordObject(
         document['deviceIdentityFingerprints'] ?? <String, Object?>{},
       ).map((key, value) => MapEntry(key, _fingerprint(value)));
+      if (version == 3 && document['imports'] is! Map) {
+        throw const DeviceRecordsFailure('records_corrupt', '导入账本缺失，原文件已保留。');
+      }
       final settings = document['settings'] == null
           ? <String, Object?>{}
           : recordObject(document['settings']);
@@ -364,6 +472,9 @@ final class DeviceRecordStore {
         identityFingerprint: fingerprint,
         deviceIdentityFingerprints: fingerprints,
         legacySettings: settings,
+        imports: recordObject(document['imports'] ?? <String, Object?>{}).map(
+          (key, value) => MapEntry(key, DeviceImportReceipt.fromJson(value)),
+        ),
       );
       _validateSnapshot(snapshot);
       return (snapshot: snapshot, version: version);
@@ -433,23 +544,6 @@ final class DeviceRecordStore {
   }
 }
 
-DeviceRecord _importRecord(Map<String, Object?> entry, String id) =>
-    DeviceRecord(
-      id: id,
-      name: validateDeviceName(entry['name']),
-      address: entry['address'] is String ? entry['address'] as String : '',
-      port: recordInteger(entry['port'], 'port', 65535),
-      transport:
-          DeviceTransport.values
-              .where((v) => v.name == entry['transport'])
-              .firstOrNull ??
-          (throw const DeviceRecordsFailure(
-            'invalid_transport',
-            '设备记录的连接方式无效。',
-          )),
-      status: 'unauthorized',
-      reason: '此记录来自恢复，请在被控手机重新核验授权。',
-    );
 DeviceRecord _requireDevice(DeviceRecordsSnapshot snapshot, String id) =>
     snapshot.find(id) ??
     (throw const DeviceRecordsFailure('not_found', '这台设备的本机记录已不存在。'));
@@ -458,11 +552,13 @@ DeviceRecordsSnapshot _snapshot(
   Iterable<DeviceRecord>? devices,
   String? identityFingerprint,
   Map<String, String>? fingerprints,
+  Map<String, DeviceImportReceipt>? imports,
 }) => DeviceRecordsSnapshot(
   devices: devices ?? saved.devices,
   identityFingerprint: identityFingerprint ?? saved.identityFingerprint,
   deviceIdentityFingerprints: fingerprints ?? saved.deviceIdentityFingerprints,
   legacySettings: saved.legacySettings,
+  imports: imports ?? saved.imports,
 );
 DeviceRecordsSnapshot _reconcileIdentities(
   DeviceRecordsSnapshot saved,
@@ -487,6 +583,15 @@ DeviceRecordsSnapshot _reconcileIdentities(
   }),
 );
 void _validateSnapshot(DeviceRecordsSnapshot snapshot) {
+  if (snapshot.imports.length > _maximumImports ||
+      snapshot.imports.keys.any(
+        (key) => !RegExp(r'^[a-f0-9]{64}$').hasMatch(key),
+      )) {
+    throw const DeviceRecordsFailure('records_corrupt', '导入账本无效，原文件已保留。');
+  }
+  for (final receipt in snapshot.imports.values) {
+    DeviceImportReceipt.fromJson(receipt.toJson());
+  }
   if (snapshot.identityFingerprint.isNotEmpty) {
     _fingerprint(snapshot.identityFingerprint);
   }

@@ -111,13 +111,34 @@ final class ApplicationBusinessCommands {
       if (operation == ApplicationCommand.activitiesStop) {
         return await _stopActivity(params);
       }
+      if (operation == ApplicationCommand.callsOpenPhoneApp) {
+        final id = _deviceId(params);
+        return Map.from(
+          await _companion.request(
+            id,
+            command,
+            const {},
+            allowStart: true,
+            expectedConnection: _devices.requireConnection(id),
+          ),
+        );
+      }
       // 偏好导入只追加未授权元数据，不重建密钥、连接或另一份执行配置。
       if (operation == ApplicationCommand.settingsExport) {
         return Map.from(_records.exportMetadata());
       }
+      if (operation == ApplicationCommand.settingsImportPreview) {
+        return Map.from(await _records.previewMetadata(params['metadata']));
+      }
       if (operation == ApplicationCommand.settingsImport) {
-        final imported = await _records.importMetadata(params['metadata']);
-        _publish({'type': 'devices.changed', 'data': imported.toJson()});
+        final imported = await _records.importMetadata(
+          params['metadata'],
+          expectedFingerprint: params['fingerprint'] as String?,
+          importGlobalPreferences: params['importGlobalPreferences'] == true,
+        );
+        if (!imported.alreadyImported) {
+          _publish({'type': 'devices.changed', 'data': imported.toJson()});
+        }
         return Map.from(imported.toJson());
       }
       if (_power.handles(command)) {

@@ -12,6 +12,7 @@ import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -32,6 +33,9 @@ class UsbGuidePage extends HookWidget {
   final VoidCallback? onUseWireless;
   @override
   Widget build(BuildContext context) {
+    final usbSupported = kIsWeb
+        ? false
+        : defaultTargetPlatform != TargetPlatform.iOS;
     final state = useState<Json?>(null);
     final busy = useState(false);
     final cancelling = useState(false);
@@ -109,6 +113,27 @@ class UsbGuidePage extends HookWidget {
       }
     }
 
+    if (!usbSupported) {
+      final limited = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('当前主控不支持 USB 设备连接。请使用无线调试配对。'),
+          const SizedBox(height: DesignTokens.spacingMd),
+          FilledButton(
+            onPressed:
+                onUseWireless ??
+                () => const WirelessGuideRoute().pushReplacement(context),
+            child: const Text('使用配对码'),
+          ),
+        ],
+      );
+      return embedded
+          ? SliverToBoxAdapter(child: limited)
+          : PageFrame(
+              title: '添加设备',
+              child: ConnectionContent(child: limited),
+            );
+    }
     final children = <Widget>[
       Text('使用支持数据传输的数据线连接手机。', style: Theme.of(context).textTheme.bodySmall),
       const SizedBox(height: DesignTokens.spacingMd),

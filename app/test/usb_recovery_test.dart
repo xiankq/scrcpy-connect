@@ -63,16 +63,16 @@ void main() {
       await checkAgain();
       expect(requests, hasLength(2));
       await tester.scrollUntilVisible(
-        find.text('无线配对码'),
+        find.text('配对码'),
         -180,
         scrollable: find.byType(Scrollable).first,
       );
       await Scrollable.ensureVisible(
-        tester.element(find.text('无线配对码')),
+        tester.element(find.text('配对码')),
         alignment: .5,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('无线配对码'));
+      await tester.tap(find.text('配对码'));
       await tester.pumpAndSettle();
       expect(find.byType(TextFormField), findsNWidgets(3));
       expect(find.byType(UsbGuidePage), findsNothing);

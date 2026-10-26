@@ -74,6 +74,11 @@ enum ApplicationCommand {
     requiresVerifiedState: true,
     required: {'deviceId': ProtocolFieldType.string},
   ),
+  callsOpenPhoneApp(
+    "calls.openPhoneApp",
+    requiresVerifiedState: true,
+    required: {'deviceId': ProtocolFieldType.string},
+  ),
   clipboardGet(
     "clipboard.get",
     requiresVerifiedState: true,
@@ -558,7 +563,25 @@ enum ApplicationCommand {
   settingsGet("settings.get"),
   settingsImport(
     "settings.import",
+    required: {
+      'metadata': ProtocolFieldType.object,
+      'fingerprint': ProtocolFieldType.string,
+    },
+    optional: {
+      'importGlobalPreferences': ProtocolFieldType.boolean,
+      'expectedRevision': ProtocolFieldType.integer,
+    },
+  ),
+  settingsImportPreview(
+    "settings.import.preview",
     required: {'metadata': ProtocolFieldType.object},
+    result: {
+      'fingerprint': ProtocolFieldType.string,
+      'newRecords': ProtocolFieldType.integer,
+      'alreadyImported': ProtocolFieldType.boolean,
+      'expectedRevision': ProtocolFieldType.integer,
+      'globalChanges': ProtocolFieldType.array,
+    },
   ),
   settingsUpdate("settings.update"),
   sharingBind(

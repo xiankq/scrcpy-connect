@@ -3,13 +3,14 @@ import 'dart:convert';
 const preferenceDefaults = <String, Object?>{
   'appearance': 'light',
   'backgroundKeepAlive': true,
-  'notificationAlerts': true,
-  'callAlerts': true,
+  'notificationAlerts': false,
+  'callAlerts': false,
   'adbBurstMode': true,
   'fileViewMode': 'grid',
   'fileSortKey': 'name',
   'fileSortAscending': true,
   'deviceSettings': <String, Object?>{},
+  'appOpenModes': <String, Object?>{},
   'deviceQuality': <String, Object?>{},
 };
 
@@ -74,6 +75,7 @@ final class PreferenceSchema {
           'type',
         ].contains(value),
         'deviceSettings' => _devices(value, _deviceSetting),
+        'appOpenModes' => _devices(value, _appModes),
         'deviceQuality' => _devices(value, _quality),
         _ => qualityKeys.contains(key) && _qualityValue(key, value),
       };
@@ -90,7 +92,7 @@ final class PreferenceSchema {
   };
 
   Map<String, Object?> migrateLegacy(Object? value, {required int version}) {
-    if (version != 1 && version != 2) {
+    if (version != 1 && version != 2 && version != 3) {
       throw const PreferenceFailure('storage_version', '设备记录版本较新，请更新应用。');
     }
     if (value is! Map || value.keys.any((key) => key is! String)) {
@@ -125,11 +127,20 @@ final class PreferenceSchema {
   }
 
   Map<String, Object?> importSettings(Object? value) {
-    // 元数据不包含 Store 的历史默认版本；移除废弃字段，同时保留显式码率和 burst 值。
-    final imported = migrateLegacy(value, version: 2);
-    imported['deviceQuality'] = <String, Object?>{};
-    imported['deviceSettings'] = <String, Object?>{};
-    return imported;
+    if (value is! Map || value.keys.any((key) => key is! String)) {
+      throw const PreferenceFailure('invalid_argument', '迁移偏好必须是对象。');
+    }
+    final imported = _copy(Map<String, Object?>.from(value));
+    for (final key in {
+      ..._retired,
+      'deviceQuality',
+      'deviceSettings',
+      'appOpenModes',
+    }) {
+      imported.remove(key);
+    }
+    // 仅导入文件明确提供的全局字段；现有每设备偏好由其本机记录拥有。
+    return validate(imported);
   }
 }
 
@@ -147,6 +158,17 @@ bool _devices(Object? value, bool Function(Object?) validate) =>
           entry.key is String &&
           _deviceId(entry.key as String) &&
           validate(entry.value),
+    );
+bool _appModes(Object? value) =>
+    value is Map &&
+    value.length <= 512 &&
+    value.entries.every(
+      (entry) =>
+          entry.key is String &&
+          (entry.key as String).length <= 255 &&
+          RegExp(r'^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$')
+              .hasMatch(entry.key as String) &&
+          const ['phone', 'window'].contains(entry.value),
     );
 bool _quality(Object? value) =>
     value is Map &&

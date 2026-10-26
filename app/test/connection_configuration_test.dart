@@ -1,9 +1,11 @@
 import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';
+import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 
 import 'support/router_test_app.dart';
@@ -18,8 +20,6 @@ const phone = <String, dynamic>{
   'port': 37123,
   'connectionId': 'connection-original',
 };
-const pem = '-----BEGIN PRIVATE KEY-----\nAQID\n-----END PRIVATE KEY-----';
-
 Future<void> mount(
   WidgetTester tester,
   AppController controller,
@@ -51,43 +51,55 @@ Future<void> tap(WidgetTester tester, String text) async {
 
 void main() {
   testWidgets(
-    'custom identity is validated and submitted with the selected IP attempt',
+    'IP conversion follows the current authorized connection and surfaces unsupported reads',
     (tester) async {
-      final calls = <(String, Json)>[];
       final controller = createTestController((
         command, [
         params = const {},
       ]) async {
-        calls.add((command, params));
+        if (command == 'device.network.get') {
+          throw const RequestFailure('unsupported', '当前设备不支持读取网络接口。');
+        }
         return {};
-      });
-      await mount(tester, controller, AddDevicePage(controller: controller));
-      await tap(tester, 'IP连接');
-      await tester.enterText(find.byType(TextFormField).first, 'phone.local');
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('设备专属私钥').last);
-      await tester.pumpAndSettle();
-      await tap(tester, '连接设备');
-      expect(find.text('请输入 PEM 私钥'), findsOneWidget);
-      expect(calls.where((c) => c.$1 == 'devices.add'), isEmpty);
-      await tester.enterText(find.widgetWithText(TextFormField, 'PEM 私钥'), pem);
-      await tap(tester, '连接设备');
-      expect(calls.singleWhere((c) => c.$1 == 'devices.add').$2['identity'], {
-        'scope': 'device',
-        'privateKeyPem': pem,
-      });
-      expect(
-        calls.where(
-          (c) => c.$1.startsWith('identity.') && c.$1 != 'identity.device.get',
-        ),
-        isEmpty,
+      })..devices = [phone];
+      await mount(
+        tester,
+        controller,
+        DeviceConnectionPreferencesPage(controller: controller, device: phone),
       );
+      await tap(tester, '转为 IP 连接');
+      expect(find.textContaining('当前设备不支持读取网络接口'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '切换并连接'))
+            .onPressed,
+        isNull,
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      controller.devices = [
+        {...phone, 'status': 'offline'},
+      ];
+      await tester.pumpAndSettle();
+      expect(find.text('转为 IP 连接'), findsNothing);
+      controller.devices = [
+        {...phone, 'transport': 'usb'},
+      ];
+      await tester.pumpAndSettle();
+      expect(find.text('转为 IP 连接'), findsOneWidget);
+      controller.devices = [
+        {...phone, 'transport': 'tcp'},
+      ];
+      await tester.pumpAndSettle();
+      expect(find.text('转为 IP 连接'), findsNothing);
+      controller.devices = [];
+      await tester.pumpAndSettle();
+      expect(find.text('转为 IP 连接'), findsNothing);
     },
   );
 
   testWidgets(
-    'changing an identity draft cancels an old QR and waits for explicit generation',
+    'new IP attempts use the managed global identity without exposing private keys',
     (tester) async {
       final calls = <(String, Json)>[];
       final controller = createTestController((
@@ -95,31 +107,54 @@ void main() {
         params = const {},
       ]) async {
         calls.add((command, params));
-        if (command == 'devices.pair.qr') {
-          return {
-            'attemptId': 'old-qr',
-            'payload': 'WIFI:T:ADB;S:test;P:secret;;',
-          };
+        return {};
+      });
+      await mount(tester, controller, AddDevicePage(controller: controller));
+      await tap(tester, 'IP 连接');
+      expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+      expect(find.text('PEM 私钥'), findsNothing);
+      await tester.enterText(find.byType(TextFormField).first, 'phone.local');
+      await tap(tester, '连接设备');
+      expect(
+        calls
+            .singleWhere((c) => c.$1 == 'devices.add')
+            .$2
+            .containsKey('identity'),
+        isFalse,
+      );
+      expect(calls.where((c) => c.$1.startsWith('identity.')), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'unknown connection stays on a frozen background and rechecking never resends the request',
+    (tester) async {
+      final calls = <(String, Json)>[];
+      final controller = createTestController((
+        command, [
+        params = const {},
+      ]) async {
+        calls.add((command, params));
+        if (command == 'devices.add') {
+          throw const RequestFailure('result_unknown', '连接回执尚未确认。');
         }
         return {};
       });
       await mount(tester, controller, AddDevicePage(controller: controller));
-      await tap(tester, '扫码配对');
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('设备专属私钥').last);
-      await tester.pumpAndSettle();
-      expect(
-        calls.where((c) => c.$1 == 'devices.cancel').last.$2['attemptId'],
-        'old-qr',
+      await tap(tester, 'IP 连接');
+      await tester.enterText(find.byType(TextFormField).first, 'phone.local');
+      await tap(tester, '连接设备');
+      final field = tester.widget<AmbientLoadingField>(
+        find.byType(AmbientLoadingField),
       );
-      expect(calls.where((c) => c.$1 == 'devices.pair.qr').length, 1);
-      await tester.enterText(find.widgetWithText(TextFormField, 'PEM 私钥'), pem);
-      await tap(tester, '重新生成');
-      final qr = calls.where((c) => c.$1 == 'devices.pair.qr').last;
-      expect(qr.$2['identity'], {'scope': 'device', 'privateKeyPem': pem});
-      expect(find.widgetWithText(FilledButton, '重新生成'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
+      expect(field.animating, isFalse);
+      expect(field.showParticles, isFalse);
+      expect(find.text('连接结果待确认'), findsOneWidget);
+      expect(find.text('重试'), findsNothing);
+      await tap(tester, '重新核对');
+      expect(calls.where((c) => c.$1 == 'devices.add').length, 1);
+      expect(calls.where((c) => c.$1 == 'state.reconcile').length, 1);
+      expect(find.text('连接结果待确认'), findsOneWidget);
     },
   );
 

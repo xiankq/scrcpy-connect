@@ -131,7 +131,7 @@ void main() {
         backend,
         const AddDeviceRoute(deviceId: 'known-device').location,
       );
-      await tester.tap(find.text('IP连接'));
+      await tester.tap(find.text('IP 连接'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextFormField).at(1), '37123');
       final added = await _submit(tester, backend);
@@ -156,12 +156,7 @@ void main() {
       const ConnectionFormRoute(address: 'phone.local', port: '37123').location,
     );
     await _submit(tester, backend);
-    await Scrollable.ensureVisible(
-      tester.element(find.text('连接设备')),
-      alignment: .5,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('连接设备'));
+    await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
     final additions = backend.calls.where((call) => call.$1 == 'devices.add');
     expect(additions, hasLength(2));
@@ -195,6 +190,8 @@ void main() {
     await tester.tap(find.text('配对并连接'));
     await tester.pumpAndSettle();
     await _confirmConfiguration(tester);
+    await tester.tap(find.text('返回修改'));
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<TextFormField>(find.byType(TextFormField).at(2))
@@ -232,18 +229,15 @@ void main() {
       expect(find.text(raw), findsOneWidget);
       expect(find.text('重新配对'), findsNothing);
       expect(find.textContaining('未信任'), findsNothing);
-      await Scrollable.ensureVisible(
-        tester.element(find.text('使用无线配对码')),
-        alignment: .5,
-      );
+      await tester.tap(find.text('返回修改'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('使用无线配对码'));
+      await tester.tap(find.text('配对码'));
       await tester.pumpAndSettle();
       expect(
         router.routeInformationProvider.value.uri.queryParameters['device-id'],
         'known-device',
       );
-      expect(find.text('无线配对码'), findsOneWidget);
+      expect(find.text('配对码'), findsNWidgets(2));
       expect(
         tester
             .widget<TextFormField>(find.byType(TextFormField).at(2))

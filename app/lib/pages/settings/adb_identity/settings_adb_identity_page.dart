@@ -57,7 +57,7 @@ class AdbIdentityPage extends HookWidget {
     }
 
     return PageFrame(
-      title: 'ADB 私钥',
+      title: '授权密钥',
       child: ConnectionContent(
         child: GroupedListView(
           padding: const EdgeInsets.all(DesignTokens.spacingMd),

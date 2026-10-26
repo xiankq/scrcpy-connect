@@ -6,11 +6,16 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 
 import 'support/test_controller.dart';
+
+const original = {
+  'id': 'original',
+  'address': 'original.local',
+  'transport': 'tls',
+};
 
 Future<void> tapText(WidgetTester tester, String text) async {
   await Scrollable.ensureVisible(
@@ -26,6 +31,31 @@ Future<void> tapText(WidgetTester tester, String text) async {
     await tester.pumpAndSettle();
   }
 }
+
+Future<void> pair(WidgetTester tester, String address) async {
+  await tester.enterText(find.byType(TextFormField).at(0), address);
+  await tester.enterText(find.byType(TextFormField).at(1), '37123');
+  await tester.enterText(find.byType(TextFormField).at(2), '123456');
+  await tapText(tester, '配对并连接');
+  await tester.pumpAndSettle();
+}
+
+String fieldText(WidgetTester tester, int index) => tester
+    .widget<TextFormField>(find.byType(TextFormField).at(index))
+    .controller!
+    .text;
+
+AppController recordingController(
+  List<(String, Json)> calls,
+  FutureOr<Json> Function(String, Json) respond, {
+  Stream<Json>? events,
+}) => createTestController((command, [params = const {}]) async {
+  calls.add((command, params));
+  return respond(command, params);
+}, events: events);
+
+Json request(List<(String, Json)> calls, String command) =>
+    calls.singleWhere((call) => call.$1 == command).$2;
 
 Future<GoRouter> mount(
   WidgetTester tester,
@@ -59,20 +89,12 @@ void main() {
     'QR reauthorization carries the original device while new QR pairing has no device selector',
     (tester) async {
       for (final deviceId in ['original', null]) {
-        final calls = <Json>[];
-        final controller = createTestController((
-          command, [
-          params = const {},
-        ]) async {
+        final calls = <(String, Json)>[];
+        final controller = recordingController(calls, (command, params) async {
           if (command == 'device.info') {
-            return {
-              'id': 'original',
-              'address': 'original.local',
-              'transport': 'tls',
-            };
+            return original;
           }
           if (command == 'devices.pair.qr') {
-            calls.add(params);
             return {
               'attemptId': 'qr-original',
               'payload': 'WIFI:T:ADB;S:test;P:123456;;',
@@ -85,10 +107,10 @@ void main() {
           controller,
           location: AddDeviceRoute(deviceId: deviceId).location,
         );
-        await tapText(tester, '扫码配对');
+        await tapText(tester, '扫码');
         if (deviceId != null) await tapText(tester, '重新生成');
         await tester.pumpAndSettle();
-        expect(calls, [
+        expect(calls.where((c) => c.$1 == 'devices.pair.qr').map((c) => c.$2), [
           if (deviceId == null) <String, dynamic>{} else {'deviceId': deviceId},
         ]);
         await tester.pumpWidget(const SizedBox());
@@ -100,17 +122,9 @@ void main() {
     'discovery is a secondary page and returns to the original reauthorization form',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add((command, params));
+      final controller = recordingController(calls, (command, params) async {
         return switch (command) {
-          'device.info' => {
-            'id': 'original',
-            'address': 'original.local',
-            'transport': 'tls',
-          },
+          'device.info' => original,
           'devices.discover' => {
             'devices': [
               {
@@ -143,7 +157,6 @@ void main() {
       await tapText(tester, '发现候选手机');
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/connection/add');
-      expect(find.byType(AddDevicePage, skipOffstage: false), findsOneWidget);
       await tapText(tester, '配对并连接');
       await tester.pumpAndSettle();
       final pair = calls.singleWhere((call) => call.$1 == 'devices.pair').$2;
@@ -154,46 +167,55 @@ void main() {
   );
 
   testWidgets(
-    'pairing then IP keeps TLS, requires a connection port and does not reuse identity for a new host',
+    'unknown paired cleanup blocks return until cancellation succeeds, preserves TLS, and never reuses identity for a new host',
     (tester) async {
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add((command, params));
-        return switch (command) {
-          'devices.pair' => {'deviceId': 'paired', 'connected': false},
-          'devices.add' => {},
-          _ => {},
-        };
+      var cancelConfirmed = false;
+      final controller = recordingController(calls, (command, params) async {
+        if (command == 'devices.cancel' && !cancelConfirmed) {
+          throw const RequestFailure('result_unknown', '取消尚未确认');
+        }
+        return command == 'devices.pair'
+            ? {
+                'deviceId': 'paired',
+                'paired': true,
+                'connected': false,
+                'connectionFailure': {
+                  'code': 'connection_cleanup_unconfirmed',
+                  'message': '候选连接尚未确认释放',
+                },
+              }
+            : {};
       });
       await mount(tester, controller);
-      await tester.enterText(find.byType(TextFormField).at(0), 'phone.local');
-      await tester.enterText(find.byType(TextFormField).at(1), '37123');
-      await tester.enterText(find.byType(TextFormField).at(2), '123456');
-      await tapText(tester, '配对并连接');
-      await tester.pumpAndSettle();
-      await tapText(tester, 'IP连接');
+      await pair(tester, 'phone.local');
+      await tapText(tester, '返回');
+      final attempt = request(calls, 'devices.pair')['attemptId'];
+      expect(request(calls, 'devices.cancel')['attemptId'], attempt);
+      expect(find.text('连接结果待确认'), findsOneWidget);
+      expect(find.text('补充连接端口'), findsNothing);
+      expect(find.byType(TextFormField), findsNothing);
+      expect(calls.where((c) => c.$1 == 'devices.add'), isEmpty);
+      cancelConfirmed = true;
+      await tapText(tester, '返回');
       expect(
-        tester
-            .widget<TextFormField>(find.byType(TextFormField).at(1))
-            .controller!
-            .text,
-        isEmpty,
+        calls
+            .where((c) => c.$1 == 'devices.cancel')
+            .map((c) => c.$2['attemptId']),
+        [attempt, attempt],
       );
+      expect(find.byType(TextFormField), findsNWidgets(2));
+      expect(find.text('连接设备'), findsOneWidget);
+      await tapText(tester, 'IP 连接');
+      expect(fieldText(tester, 1), isEmpty);
       expect(find.text('使用手机无线调试主页面的连接端口。'), findsOneWidget);
       await tester.enterText(find.byType(TextFormField).at(1), '5555');
       await tapText(tester, '连接设备');
       await tester.pumpAndSettle();
-      expect(
-        calls.singleWhere((call) => call.$1 == 'devices.add').$2,
-        containsPair('transport', 'tls'),
-      );
-      expect(
-        calls.singleWhere((call) => call.$1 == 'devices.add').$2,
-        containsPair('deviceId', 'paired'),
-      );
+      final added = calls.singleWhere((call) => call.$1 == 'devices.add').$2;
+      expect(added, containsPair('transport', 'tls'));
+      expect(added, containsPair('deviceId', 'paired'));
+      await tapText(tester, '返回修改');
       await tester.enterText(find.byType(TextFormField).at(0), 'another.local');
       await tapText(tester, '连接设备');
       await tester.pumpAndSettle();
@@ -214,11 +236,7 @@ void main() {
       final usb = Completer<Json>();
       final qr = Completer<Json>();
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add((command, params));
+      final controller = recordingController(calls, (command, params) async {
         if (command == 'devices.usb') return usb.future;
         if (command == 'devices.pair.qr') return qr.future;
         return {};
@@ -229,14 +247,14 @@ void main() {
       final attempt = calls
           .singleWhere((call) => call.$1 == 'devices.usb')
           .$2['attemptId'];
-      await tapText(tester, '扫码配对');
+      await tapText(tester, '扫码');
       expect(
         calls
             .where((call) => call.$1 == 'devices.cancel')
             .any((call) => call.$2['attemptId'] == attempt),
         isTrue,
       );
-      await tapText(tester, 'IP连接');
+      await tapText(tester, 'IP 连接');
       usb.complete({'message': 'stale USB result'});
       qr.complete({
         'attemptId': 'late-qr',
@@ -260,11 +278,7 @@ void main() {
     (tester) async {
       final events = StreamController<Json>.broadcast();
       final calls = <(String, Json)>[];
-      final controller = createTestController((
-        command, [
-        params = const {},
-      ]) async {
-        calls.add((command, params));
+      final controller = recordingController(calls, (command, params) async {
         if (command == 'devices.pair.qr') {
           return {
             'attemptId': 'active-qr',
@@ -275,7 +289,7 @@ void main() {
       }, events: events.stream);
       await mount(tester, controller);
       addTearDown(events.close);
-      await tapText(tester, '扫码配对');
+      await tapText(tester, '扫码');
       await tester.pumpAndSettle();
       events.add({
         'type': 'pairing.changed',
@@ -290,15 +304,9 @@ void main() {
         },
       });
       await tester.pumpAndSettle();
-      await tapText(tester, 'IP连接');
+      await tapText(tester, 'IP 连接');
       expect(find.text('使用手机无线调试主页面的连接端口。'), findsOneWidget);
-      expect(
-        tester
-            .widget<TextFormField>(find.byType(TextFormField).at(1))
-            .controller!
-            .text,
-        isEmpty,
-      );
+      expect(fieldText(tester, 1), isEmpty);
       await tester.enterText(find.byType(TextFormField).at(1), '37123');
       await tapText(tester, '连接设备');
       await tester.pumpAndSettle();
@@ -330,17 +338,16 @@ void main() {
         },
       );
       await mount(tester, controller);
-      await tester.enterText(find.byType(TextFormField).at(0), 'first.local');
-      await tester.enterText(find.byType(TextFormField).at(1), '37123');
-      await tester.enterText(find.byType(TextFormField).at(2), '123456');
-      await tapText(tester, '配对并连接');
+      await pair(tester, 'first.local');
+      expect(find.text('补充连接端口'), findsOneWidget);
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('填写连接端口'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNWidgets(2));
       await tapText(tester, '发现设备');
       await tester.pumpAndSettle();
       await tapText(tester, '另一台手机');
       await tester.pumpAndSettle();
-      expect(find.text('填写连接端口'), findsNothing);
+      expect(find.text('补充连接端口'), findsNothing);
       expect(find.text('已配对，尚未连接'), findsNothing);
       expect(find.text('second.local'), findsOneWidget);
     },

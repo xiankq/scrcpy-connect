@@ -1,7 +1,7 @@
 {
   "artifact": {
-    "sha256": "9586afb719c3b1f6d298fd16e8ca49b9f20df350a56d03ea7fc8368ef6acb4fa",
-    "size": 58435
+    "sha256": "1a9dde2b79657d465b5d1ce162c758822b18c59d3d217178b16b9f9cd00d29fd",
+    "size": 59087
   },
   "sources": {
     "../../scripts/src/process.dart": "f5cb0980ecb91c494212bad6fa3bc0b5ea85b6fbe5352a5a8455239a7998ff1b",
@@ -9,10 +9,10 @@
     "../build.dart": "1ade9ec86106f3ffd60a9e8b330646f12b94b4549085c1b6c0d0fe233760a95a",
     "../tooling.dart": "02d37405dc87c249fe7466bf802c85cdb222364ae92151d82cd3bb8c6f975a13",
     "build.dart": "1528ef0e8b105875dda2adb5fc6393e65cbcad83964e6f1b07b5b62ae21381e4",
-    "src/com/interop/companion/Apps.java": "f238c2eb58ffce8b76ef49b97df4282f31c73bc0120126b6e20461952d03bd8d",
+    "src/com/interop/companion/Apps.java": "17aa51a49378b180f7521bfac0938c5eeb42a3d47e91176f8eb24345495ed6b4",
     "src/com/interop/companion/CallServices.java": "a243408560aa4740c6a4d1c393dc5812ec778d80a7c974e14cbfc8f25091e0f7",
     "src/com/interop/companion/CurrentUser.java": "a90a88f800c2eb9f4041bb1171317dcf009a99b9179d01d59ad8e04bcdeeecbe",
-    "src/com/interop/companion/Main.java": "ab5862e4c77460be434aae3819ebbec8b8f89be0619752248e62d4da14e5dd4e",
+    "src/com/interop/companion/Main.java": "be3f858ac8d8bcb2b8d0f693d8c736b5dde6b95341a155185aae5bf7f80a8650",
     "src/com/interop/companion/MediaJobs.java": "b610c957043206d4aed6755b0a57e57bdf98092c7d5472ead31df6cf6227fc98",
     "src/com/interop/companion/NotificationContent.java": "8a231f271b4c16442ecddd00643d1ac716b3aeb6a698553c5230e547b4754813",
     "src/com/interop/companion/Processes.java": "14443e9ff6b2a14c4161858b89b0146c5b8e559977b524ea80b54e71b663448a",

@@ -52,14 +52,14 @@ public final class CompatibilityTest {
         java.lang.reflect.Field enabled = Main.class.getDeclaredField("observationEnabled");
         enabled.setAccessible(true);
         enabled.setBoolean(companion, true);
-        for (String boundary : new String[]{"notificationSnapshot", "callSnapshot"})
+        for (String boundary : new String[]{"notificationSnapshot", "callSnapshot", "openPhoneApp"})
             userBoundary(companion, boundary, "user_changed");
         int queries = Users.queries;
         if (session.owner() != 10 || Users.queries != queries)
             throw new AssertionError("Cleanup lost the original listener owner");
         Users.denied = true;
         userFailure(session, "user_unavailable");
-        for (String boundary : new String[]{"notificationSnapshot", "callSnapshot"})
+        for (String boundary : new String[]{"notificationSnapshot", "callSnapshot", "openPhoneApp"})
             userBoundary(companion, boundary, "user_unavailable");
         if (session.owner() != 10) throw new AssertionError("Lookup failure replaced the bound user");
         Users.denied = false;

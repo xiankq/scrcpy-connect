@@ -59,9 +59,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(pairParams?['deviceId'], 'restored-id');
       expect(pairParams?['address'], 'phone.local');
-      await tester.ensureVisible(find.text('取消本次尝试'));
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.text('取消本次尝试'));
+      await tester.tap(find.byTooltip('关闭'));
       await tester.pumpAndSettle();
       expect(cancelParams?['attemptId'], pairParams?['attemptId']);
       expect(cancelParams?['attemptId'], isNotEmpty);

@@ -462,42 +462,67 @@ class ConnectionSetupCoordinator {
         )) {
           if (!discovery.isCurrent(candidate)) continue;
           final client = await _client(flow);
-          final connected = await devices.admitSetupCandidate(
-            deviceId: flow.deviceId,
-            identity: flow.identity!,
-            client: client,
-            transport: DeviceTransport.tls,
-            guid: guid,
-            address: candidate.address,
-            port: candidate.port,
-            attemptId: flow.attempt,
-            cancellation: flow.stop,
-            checkCandidate: () {
-              if (!discovery.isCurrent(candidate)) {
-                throw const ApplicationCommandException(
-                  'discovery_changed',
-                  '发现端点已变化，请重新核验。',
+          var opened = false;
+          try {
+            final connected = await devices.admitSetupCandidate(
+              deviceId: flow.deviceId,
+              identity: flow.identity!,
+              client: client,
+              transport: DeviceTransport.tls,
+              guid: guid,
+              address: candidate.address,
+              port: candidate.port,
+              attemptId: flow.attempt,
+              cancellation: flow.stop,
+              checkCandidate: () {
+                if (!discovery.isCurrent(candidate)) {
+                  throw const ApplicationCommandException(
+                    'discovery_changed',
+                    '发现端点已变化，请重新核验。',
+                  );
+                }
+              },
+              open: (client, stop) async {
+                final device = await client.connect(
+                  client.capabilities.forceTlsWithoutMdns
+                      ? _endpoint(candidate.address, candidate.port)
+                      : candidate.serviceName.replaceFirst(
+                          RegExp(r'\.local\.?$'),
+                          '',
+                        ),
+                  requireTls: true,
+                  authorize: policy.requestAuthorization,
+                  timeout: policy.endpointTimeout,
+                  directOptions: client.capabilities.officialServer
+                      ? null
+                      : policy.directConnectOptions(burstMode: _burstMode()),
+                  cancellation: stop,
                 );
-              }
-            },
-            open: (client, stop) => client.connect(
-              client.capabilities.forceTlsWithoutMdns
-                  ? _endpoint(candidate.address, candidate.port)
-                  : candidate.serviceName.replaceFirst(
-                      RegExp(r'\.local\.?$'),
-                      '',
-                    ),
-              requireTls: true,
-              authorize: policy.requestAuthorization,
-              timeout: policy.endpointTimeout,
-              directOptions: client.capabilities.officialServer
-                  ? null
-                  : policy.directConnectOptions(burstMode: _burstMode()),
-              cancellation: stop,
-            ),
-          );
-          return {...receipt, ...connected, 'paired': true};
+                opened = true;
+                return device;
+              },
+            );
+            return {...receipt, ...connected, 'paired': true};
+          } catch (error) {
+            // 仅在拨号未交付连接且已确认回收后换址；核验及准入准备失败不重放。
+            if (opened ||
+                !const {
+                  'unreachable',
+                  'connection_refused',
+                  'host_unreachable',
+                  'network_unreachable',
+                  'connect_timeout',
+                  'handshake_timeout',
+                  'timeout',
+                  'io_error',
+                  'disconnected',
+                }.contains(_code(error))) {
+              rethrow;
+            }
+            failure = error;
+          }
         }
+        if (failure != null) break;
         await _pause(flow, policy.setupPollInterval);
       } catch (error) {
         failure = error;

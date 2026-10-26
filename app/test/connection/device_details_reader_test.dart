@@ -59,9 +59,9 @@ void main() {
       'ip -o addr show': _addresses,
       'cat /proc/meminfo; cat /sys/devices/system/cpu/present':
           'MemTotal: 1024 kB\nMemAvailable: 512 kB\n0-3,6,6-7\n',
-      'df -k /data':
+      'df -k /sdcard':
           'Filesystem 1K-blocks Used Available Use% Mounted on\n'
-          '/dev/block/dm-1 2097152 1048576 1048576 50% /data',
+          '/dev/fuse 2097152 1048576 1048576 50% /storage/emulated',
     });
     final result = await request('device.data.get', connectionId: 'physical-1');
     expect(result['connectionId'], 'physical-1');
@@ -261,7 +261,7 @@ void main() {
           'mSupportedModes=[fps=120]\nPhysical size: 0x1440\n'
           'DisplayInfo{Virtual, displayId 2, renderFrameRate 90,}',
       'cat /proc/meminfo; cat /sys/devices/system/cpu/present': 'MemTotal: 9223372036854775807 kB\nMemAvailable: -1 kB\n0-99999999999',
-      'df -k /data': '/dev/block/dm-1 100 50 50 50% /data/media',
+      'df -k /sdcard': '/dev/block/dm-1 100 50 50 50% /data/media',
       'dumpsys battery': 'status: 2.9\nhealth: NaN\nlevel: 101\nscale: 100',
     });
     final result = await request('device.data.get');

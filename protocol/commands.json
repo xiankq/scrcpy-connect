@@ -119,6 +119,13 @@
       "requiresVerifiedState": true
     },
     {
+      "name": "calls.openPhoneApp",
+      "required": {
+        "deviceId": "string"
+      },
+      "requiresVerifiedState": true
+    },
+    {
       "name": "clipboard.get",
       "required": {
         "deviceId": "string"
@@ -764,7 +771,25 @@
     {
       "name": "settings.import",
       "required": {
+        "metadata": "object",
+        "fingerprint": "string"
+      },
+      "optional": {
+        "importGlobalPreferences": "boolean",
+        "expectedRevision": "integer"
+      }
+    },
+    {
+      "name": "settings.import.preview",
+      "required": {
         "metadata": "object"
+      },
+      "result": {
+        "fingerprint": "string",
+        "newRecords": "integer",
+        "alreadyImported": "boolean",
+        "expectedRevision": "integer",
+        "globalChanges": "array"
       }
     },
     {

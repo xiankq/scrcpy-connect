@@ -207,7 +207,7 @@ final class DeviceDetailsReader {
       'memory',
       'cat /proc/meminfo; cat /sys/devices/system/cpu/present',
     );
-    final storage = await query('storage', 'df -k /data');
+    final storage = await query('storage', 'df -k /sdcard');
     final size = _dimensions(display);
     final disk = _storage(storage);
     return {
@@ -445,7 +445,12 @@ int? _memoryBytes(String text, String key) {
 (int, int)? _storage(String text) {
   for (final line in _lines(text).reversed) {
     final parts = line.trim().split(RegExp(r'\s+'));
-    if (parts.length < 6 || parts.last != '/data') continue;
+    if (parts.length < 6 ||
+        !(parts.last.startsWith('/storage/') ||
+            parts.last.startsWith('/mnt/') ||
+            parts.last == '/sdcard')) {
+      continue;
+    }
     final total = _kib(parts[1]);
     final available = _kib(parts[3]);
     if (total != null && available != null && available <= total) {

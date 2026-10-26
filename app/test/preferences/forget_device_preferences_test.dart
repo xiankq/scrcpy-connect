@@ -28,6 +28,10 @@ void main() {
     preferences = await PreferenceCommands.prepare(directory);
     await preferences.update({
       'appearance': 'dark',
+      'appOpenModes': {
+        _forgotten: {'com.example.app': 'window'},
+        _remaining: {'com.example.app': 'phone'},
+      },
       'deviceQuality': {
         _forgotten: {'maxFps': 30},
         _remaining: {'maxFps': 60},
@@ -145,6 +149,8 @@ void main() {
     await commands().reconcile();
     expect(changes.last['deviceQuality'], isNot(contains(_forgotten)));
     expect(changes.last['deviceSettings'], isNot(contains(_forgotten)));
+    expect(changes.last['appOpenModes'], isNot(contains(_forgotten)));
+    expect(changes.last['appOpenModes'], contains(_remaining));
     expect(changes.last['deviceQuality'], contains(_remaining));
   });
 

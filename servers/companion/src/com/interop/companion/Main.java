@@ -4,6 +4,8 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.os.Binder;
@@ -338,6 +340,18 @@ public final class Main {
         //
         throw new Failure("call_targeting_unavailable","具体通话的安全定位尚未完成，未执行任何接听或挂断；请在手机原电话应用处理。");
     }
+    private JSONObject openPhoneApp() throws Exception {
+        Context current=Apps.currentUserContext(shellContext,user.require());
+        // 固定无号码 DIAL，只打开真实系统电话应用，不拨号或触碰通话控制。
+        Intent intent=new Intent(Intent.ACTION_DIAL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if(current.getPackageManager().resolveActivity(intent,PackageManager.MATCH_DEFAULT_ONLY)==null)
+            throw new Failure("phone_app_unavailable","手机未提供可打开的电话应用，请在手机上继续处理。");
+        user.require();
+        current.startActivity(intent);
+        user.require();
+        return new JSONObject().put("target","phoneApp").put("acceptedBySystem",true)
+            .put("uiVisible",JSONObject.NULL).put("callControlled",false);
+    }
     private JSONObject execute(JSONObject request) throws Exception {
         String command=request.getString("command");
         if(command.equals("observation.set")) return setObservation(request);
@@ -345,6 +359,7 @@ public final class Main {
         if(command.equals("notifications.open") || command.equals("notifications.dismiss")) return notificationAction(command,request);
         if(command.equals("calls.list")) {refreshCalls(false);return callSnapshot();}
         if(command.equals("calls.open")) return openSystemCallUi(request);
+        if(command.equals("calls.openPhoneApp")) return openPhoneApp();
         if(command.equals("calls.action")) return callAction(request);
         if(command.equals("apps.list")) {
             try {JSONObject result=Apps.running(shellContext,user.require());user.require();return result;}

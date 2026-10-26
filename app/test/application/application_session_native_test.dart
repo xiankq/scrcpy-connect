@@ -5,7 +5,6 @@ import 'package:path/path.dart' as p;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:scrcpy_connect/stores/application_session.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/models/application_command_exception.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -65,31 +64,14 @@ void main() {
       final exported = (metadata['devices'] as List).single as Map;
       expect(exported, isNot(contains('id')));
       expect(exported, isNot(contains('privateKeyPem')));
-      await expectLater(
-        session.request('settings.import', {
-          'metadata': <String, dynamic>{
-            ...Map<String, dynamic>.from(metadata),
-            'devices': [
-              <String, dynamic>{
-                ...Map<String, dynamic>.from(exported),
-                'port': -1,
-              },
-            ],
-          },
-        }),
-        throwsA(
-          isA<ApplicationCommandException>().having(
-            (error) => error.code,
-            'code',
-            startsWith('invalid_'),
-          ),
-        ),
-      );
-      expect(
-        (await session.request('state.snapshot'))['devices'],
-        hasLength(1),
-      );
-      await session.request('settings.import', {'metadata': metadata});
+      await session.request('settings.update', {'appearance': 'system'});
+      final preview = await session.request('settings.import.preview', {
+        'metadata': metadata,
+      });
+      await session.request('settings.import', {
+        'metadata': metadata,
+        'fingerprint': preview['fingerprint'],
+      });
       final snapshot = await session.request('state.reconcile');
       expect((snapshot['devices'] as List), hasLength(2));
       final imported = (snapshot['devices'] as List)
@@ -99,7 +81,7 @@ void main() {
       expect(imported['autoReconnect'], isFalse);
       expect((snapshot['sessions'] as List), isEmpty);
       expect((snapshot['sources'] as List), isEmpty);
-      expect((snapshot['settings'] as Map)['appearance'], 'dark');
+      expect((snapshot['settings'] as Map)['appearance'], 'system');
       final activities = await session.request('activities.list');
       expect(
         (activities['activities'] as List).cast<Map<Object?, Object?>>().where(
@@ -130,7 +112,7 @@ void main() {
       );
       final reopened = await session.request('state.snapshot');
       expect((reopened['devices'] as List), hasLength(2));
-      expect((reopened['settings'] as Map)['appearance'], 'dark');
+      expect((reopened['settings'] as Map)['appearance'], 'system');
       expect((reopened['sessions'] as List), isEmpty);
     } finally {
       await session?.shutdown();

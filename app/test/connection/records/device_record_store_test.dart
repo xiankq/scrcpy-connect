@@ -91,7 +91,7 @@ void main() {
       throwsUnsupportedError,
     );
     final stored = jsonDecode(await file.readAsString()) as Map;
-    expect(stored['version'], 2);
+    expect(stored['version'], 3);
     expect(stored['identityFingerprint'], firstFingerprint);
     expect(stored['settings'], {
       'appearance': 'dark',
@@ -313,7 +313,7 @@ void main() {
   test('损坏、较新版本、重复 ID 和悬空指纹绑定均拒绝且原字节不变', () async {
     final examples = <String>[
       '{broken',
-      jsonEncode({'version': 3}),
+      jsonEncode({'version': 4}),
       jsonEncode({
         'version': 2,
         'identityFingerprint': firstFingerprint,
@@ -379,8 +379,8 @@ void main() {
     final restored = records.current.find(secondId)!;
     expect(restored.status, 'unauthorized');
     expect(restored.autoReconnect, isFalse);
-    expect(restored.guid, isNull);
-    expect(restored.serial, isNull);
+    expect(restored.guid, 'not-trusted');
+    expect(restored.serial, 'not-trusted');
     expect(records.current.find(firstId)!.toJson(), original);
     expect(records.current.deviceIdentityFingerprints, {
       firstId: firstFingerprint,
@@ -388,6 +388,21 @@ void main() {
     expect(await file.readAsString(), isNot(contains('not-a-key')));
     final reopened = await DeviceRecordStore.open(directory: directory);
     expect(reopened.current.find(secondId)!.status, 'unauthorized');
+    final preview = await reopened.previewMetadata(
+      metadata([exportedDevice()]),
+    );
+    expect(preview['alreadyImported'], true);
+    expect(preview['newRecords'], 0);
+    final duplicate = await reopened.importMetadata(
+      metadata([exportedDevice()]),
+    );
+    expect(duplicate.alreadyImported, true);
+    expect(duplicate.restored, 1);
+    expect(reopened.current.devices, hasLength(2));
+    await reopened.remove(secondId);
+    final removed = await reopened.importMetadata(metadata([exportedDevice()]));
+    expect(removed.alreadyImported, true);
+    expect(reopened.current.devices, hasLength(1));
   });
 
   test('导入先完整校验所有条目，后续无效时不分配 ID、不提交部分记录', () async {
