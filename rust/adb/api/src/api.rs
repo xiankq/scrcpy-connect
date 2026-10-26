@@ -2332,12 +2332,18 @@ pub async fn adb_shell(
         let _completion = completion;
         let work = async {
             if client.info().features.contains("shell_v2") {
-                let mut shell = client
+                let shell = client
                     .shell_session(&command, ShellMode::Raw, 65536, options.clone())
                     .await
                     .map_err(|e| e.to_string())?;
-                shell.close_stdin().await.map_err(|e| e.to_string())?;
-                while let Some(event) = shell.next_event().await.map_err(|e| e.to_string())? {
+                let (mut reader, mut writer) = shell.into_split();
+                // 快速命令可能已发送 stdout/Exit 并关闭流。写端失败不能污染读端，
+                // Closed 后仍须读取真实 Exit；缺失回执由 reader 报错。
+                match writer.close_stdin().await {
+                    Ok(()) | Err(interop_adb::Error::Closed) => {}
+                    Err(error) => return Err(error.to_string()),
+                }
+                while let Some(event) = reader.next_event().await.map_err(|e| e.to_string())? {
                     let event = match event {
                         ShellEvent::Stdout(bytes) => AdbServiceEvent {
                             kind: "stdout".into(),
@@ -2748,3 +2754,7 @@ mod open_probe_tests;
 #[cfg(test)]
 #[path = "operation_activity_tests.rs"]
 mod operation_activity_tests;
+
+#[cfg(test)]
+#[path = "shell_tests.rs"]
+mod shell_tests;

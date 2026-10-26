@@ -48,6 +48,8 @@
 
 设备记录、偏好、应用打开与传输各有唯一账本写入者，串行刷新后原子提交；损坏或较新格式保留原文件并报错。`AppLaunchStore` 在START_APP前持久化操作身份，pending/observed重建为unknown，同设备同包未决时禁止再打开。检查或关闭匹配本次操作UUID，不强停真实应用任务。
 
+互联服务传输已确认关闭、没有未知媒体且持有精确部署身份时，先排空本机流，再由 `CompanionRecovery` 持久接收原设备序列号及 PID/starttime/JAR 清理责任。身份核验通过的同设备候选在准入前偿清原部署；明确停止和进程重建保留债务，不据此自动连接。未知启动身份、媒体或本机释放失败仍阻止移交。
+
 文件模块由 `FileCatalog`、`FileMutationCoordinator`、`TransferCoordinator` 分别拥有快照、变更和传输。批次固定原连接；停止等待准备、worker、句柄与预算收尾。finalizing或提交回执丢失保留result_unknown，清理成功不等于提交成功，移除历史不删除文件。
 
 `AppMediaCache` 只清理登记的预览及出站原件树。活动读写、未决交付及外部应用可能仍在读取的来源保持保护；文档与分享各持来源账本，完整传输引用核对后才能回收，见[系统交付](content-delivery.md)。

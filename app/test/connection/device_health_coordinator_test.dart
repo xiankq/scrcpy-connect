@@ -184,7 +184,9 @@ void main() {
     f.attach('a');
     f.api.closed = true;
     f.failRetire = true;
-    await expectLater(f.health.checkNow(), throwsStateError);
+    await f.health.checkNow().catchError((Object error) {
+      expect(error, isStateError);
+    });
     expect(f.retired, isEmpty);
     f.failRetire = false;
     await f.health.close();

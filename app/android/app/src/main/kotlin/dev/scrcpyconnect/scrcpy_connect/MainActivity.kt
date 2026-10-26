@@ -88,7 +88,8 @@ class MainActivity : FlutterActivity() {
         acceptIncoming(intent, false)
     }
 
-    override fun provideFlutterEngine(context: Context): FlutterEngine = ProcessFlutterHost.engine(context)
+    override fun provideFlutterEngine(context: Context): FlutterEngine =
+        ProcessFlutterHost.engine(context, flutterShellArgs.toArray())
     override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun onStart() {

@@ -43,7 +43,7 @@ void main() {
 
       try {
         bridge = await ApplicationSession.initialize(
-          dataDirectory: directory.path,
+          dataDirectory: await directory.resolveSymbolicLinks(),
         );
         expect(
           (await bridge.request('settings.get'))['backgroundKeepAlive'],
@@ -69,7 +69,7 @@ void main() {
         // 释放输出和观察者不能终止应用后台连接。
         await waitRunning(true);
         bridge = await ApplicationSession.initialize(
-          dataDirectory: directory.path,
+          dataDirectory: await directory.resolveSymbolicLinks(),
         );
         status = await waitRunning(true);
         expect(status['audioRequested'], false);

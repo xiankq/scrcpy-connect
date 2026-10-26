@@ -3,6 +3,22 @@ import 'package:scrcpy_connect/utils/json_readers.dart';
 
 String deviceName(Json device) =>
     value(device, 'name', value(device, 'model', 'Android 设备'));
+
+bool deviceConnectionInProgress(Json device) =>
+    ['connecting', 'checking', 'reconnecting'].contains(device['status']);
+
+bool hasDeviceConnectionIntent(Json device) =>
+    device['status'] == 'connected' ||
+    deviceConnectionInProgress(device) ||
+    (device['transport'] != 'usb' && device['autoReconnect'] == true);
+
+String deviceStatusText(Json device) {
+  if (device['status'] == 'offline' && device['transport'] != 'usb') {
+    if (device['autoReconnect'] == true) return '等待重连';
+  }
+  return statusText(value(device, 'status', 'offline'));
+}
+
 String statusText(String status) => switch (status) {
   'connected' => '已连接',
   'checking' => '正在检查',

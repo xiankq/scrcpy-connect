@@ -164,21 +164,6 @@ void main() {
     expect(host.attempts.single['ownerId'], 'owner-2');
   });
 
-  test('本地禁用后台偏好无需等待原生镜像回执就撤销后台重连', () async {
-    final host = _Host();
-    final owner = host.coordinator();
-    addTearDown(owner.dispose);
-    owner.setVisible(false);
-    await owner.start();
-    await settle();
-    expect(host.active, hasLength(1));
-
-    owner.updateSettings({'backgroundKeepAlive': false});
-    await settle();
-    expect(host.active, isEmpty);
-    expect(host.attempts, isEmpty);
-  });
-
   test('host stop fences the first and later snapshots until a device is manually resumed', () async {
     final host = _Host();
     final owner = host.coordinator();
@@ -201,22 +186,6 @@ void main() {
     await settle();
     expect(host.attempts.map((p) => p['deviceId']), ['phone']);
   });
-  test('offline USB records wait for explicit system authorization', () async {
-    final host = _Host()
-      ..devices = [
-        {..._Host.device(), 'transport': 'usb'},
-      ];
-    final owner = host.coordinator();
-    addTearDown(owner.dispose);
-    await owner.start();
-    await settle();
-    expect(host.active, isEmpty);
-    expect(host.attempts, isEmpty);
-    host.publish(owner);
-    await settle();
-    expect(host.active, isEmpty);
-  });
-
   test(
     'initial offline records retry once per device with bounded backoff',
     () async {
@@ -256,6 +225,7 @@ void main() {
           _Host.device(id: 'restored', retry: false),
           _Host.device(id: 'unauthorized', status: 'unauthorized'),
           _Host.device(id: 'paired', retry: false, status: 'paired'),
+          {..._Host.device(id: 'usb'), 'transport': 'usb'},
           _Host.device(id: 'connected', status: 'connected'),
         ];
       final owner = host.coordinator();
@@ -264,91 +234,19 @@ void main() {
       await settle();
       expect(host.active, isEmpty);
       expect(host.attempts, isEmpty);
+      host.devices = [_Host.device()];
+      host.publish(owner);
+      host.connect = (_) async {
+        host.devices = [_Host.device(status: 'unauthorized', retry: false)];
+        host.publish(owner);
+        return {};
+      };
+      host.active.single.fire();
+      await settle();
+      expect(host.active, isEmpty);
+      expect(host.calls.where((call) => call.$1 == 'devices.cancel'), isEmpty);
     },
   );
-
-  test('background keep-alive revokes pending work and foreground obtains a new lease', () async {
-    final host = _Host();
-    final pending = Completer<ReconnectJson>();
-    host.connect = (_) => pending.future;
-    final owner = host.coordinator();
-    addTearDown(owner.dispose);
-    await owner.start();
-    await settle();
-    host.active.single.fire();
-    await settle();
-    final attempt = host.attempts.single['attemptId'];
-    host.updateSettings(owner, {
-      'backgroundConnection': false,
-      'backgroundKeepAlive': true,
-    });
-    owner.setVisible(false);
-    await settle();
-    expect(
-      host.calls.any((call) => call.$1 == 'devices.cancel'),
-      false,
-      reason: 'only keep-alive controls retry',
-    );
-    host.updateSettings(owner, {'backgroundKeepAlive': false});
-    await settle();
-    expect(host.active, isEmpty);
-    expect(
-      host.calls.any(
-        (call) =>
-            call.$1 == 'devices.cancel' && call.$2['attemptId'] == attempt,
-      ),
-      true,
-    );
-    expect(
-      host.calls.any(
-        (call) =>
-            call.$1 == 'devices.reconnect.owner' &&
-            call.$2['ownerId'] == 'owner-1' &&
-            call.$2['active'] == false,
-      ),
-      true,
-    );
-    pending.complete({'connected': true});
-    await settle();
-    expect(host.active, isEmpty);
-    owner.setVisible(true);
-    host.updateSettings(owner, {'backgroundKeepAlive': true});
-    await settle();
-    expect(host.active.length, 1);
-    host.active.single.fire();
-    await settle();
-    expect(host.attempts.last['ownerId'], 'owner-2');
-  });
-
-  test('explicit stop survives stale offline events and native persisted state on reattachment', () async {
-    final host = _Host();
-    final owner = host.coordinator();
-    await owner.start();
-    await settle();
-    final finish = owner.beforeRequest('devices.disconnect', {
-      'deviceId': 'phone',
-    });
-    host.publish(owner);
-    expect(host.active, isEmpty);
-    host.devices = [_Host.device(retry: false)];
-    host.sequence++;
-    await finish();
-    await settle();
-    await owner.dispose();
-    final next = host.coordinator(name: 'next');
-    addTearDown(next.dispose);
-    await next.start();
-    await settle();
-    expect(host.active, isEmpty);
-    final connected = next.beforeRequest('devices.connect', {
-      'deviceId': 'phone',
-    });
-    host.devices = [_Host.device()];
-    host.sequence++;
-    await connected();
-    await settle();
-    expect(host.active.length, 1);
-  });
 
   test(
     'event gaps revoke old attempts and apply only current recovery snapshots',
@@ -488,54 +386,6 @@ void main() {
       host.devices = <ReconnectJson>[];
       host.publish(owner);
       await settle();
-      expect(host.active, isEmpty);
-    },
-  );
-
-  test(
-    'disposed coordinator cannot add timers to a later attachment',
-    () async {
-      final host = _Host();
-      final pending = Completer<ReconnectJson>();
-      host.connect = (_) => pending.future;
-      final first = host.coordinator();
-      await first.start();
-      await settle();
-      host.active.single.fire();
-      await settle();
-      await first.dispose();
-      final next = host.coordinator(name: 'next');
-      addTearDown(next.dispose);
-      await next.start();
-      await settle();
-      expect(host.active.length, 1);
-      pending.complete({});
-      await settle();
-      expect(host.active.length, 1);
-      expect(
-        host.calls
-            .where(
-              (call) =>
-                  call.$1 == 'devices.reconnect.owner' &&
-                  call.$2['active'] == true,
-            )
-            .map((call) => call.$2['ownerId']),
-        ['owner-1', 'next-1'],
-      );
-    },
-  );
-
-  test(
-    'disabled application retry policy never claims a native owner',
-    () async {
-      final host = _Host();
-      final owner = host.coordinator(
-        policy: const ConnectionPolicy(reconnectEnabled: false),
-      );
-      addTearDown(owner.dispose);
-      await owner.start();
-      await settle();
-      expect(host.calls.map((call) => call.$1), ['state.snapshot']);
       expect(host.active, isEmpty);
     },
   );

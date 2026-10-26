@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/stores/companion_recovery.dart';
 
 import 'coordinator_fixture.dart';
 
@@ -143,25 +146,42 @@ void main() {
     await fixture.companion.close();
   });
 
-  test('旧部署关闭首败保留重试权，排空成功后才允许后继部署', () async {
-    final fixture = CoordinatorFixture();
+  test('断线先排空本机并持久移交，重建后仅核验同设备原部署再偿清', () async {
+    final root = await Directory.systemTemp.createTemp('companion-recovery-');
+    addTearDown(() => root.delete(recursive: true));
+    final fixture = CoordinatorFixture(recovery: CompanionRecovery(root));
     fixture.api.onRequest = (request) => fixture.reply(request, {'apps': []});
     await fixture.companion.command('apps.list', {
       'filter': 'running',
       'deviceId': 'phone',
     });
-    fixture.api.waitFailures = 1;
+    fixture.api.transportClosed = true;
+    await fixture.companion.stopForConnection('phone', fixture.current!);
+    expect(fixture.api.live, isEmpty);
+    expect(fixture.api.commands, isEmpty);
+    final restored = CompanionRecovery(root);
+    final candidate = fixture.replaceConnection();
     await expectLater(
-      fixture.companion.stopForConnection('phone', fixture.current!),
+      restored.recover('phone', 'other', candidate, AdbCancellation()),
       throwsA(companionCode('cleanup_unconfirmed')),
     );
-    expect(fixture.companion.hasActive('phone'), isFalse);
-    expect(fixture.api.created.where((id) => id.startsWith('push')).length, 1);
-    await fixture.companion.command('apps.list', {
-      'filter': 'running',
-      'deviceId': 'phone',
-    });
-    expect(fixture.api.created.where((id) => id.startsWith('push')).length, 2);
+    fixture.api.wrongIdentity = true;
+    await expectLater(
+      restored.recover('phone', 'serial', candidate, AdbCancellation()),
+      throwsA(companionCode('remote_process_error')),
+    );
+    expect(fixture.api.commands.single, contains('expected=9001'));
+    fixture.api.wrongIdentity = false;
+    await fixture.companion.prepareConnection(
+      'phone',
+      candidate,
+      'serial',
+      AdbCancellation(),
+    );
+    expect(fixture.api.commands.last, contains('rm -f --'));
+    final count = fixture.api.commands.length;
+    await restored.recover('phone', 'serial', candidate, AdbCancellation());
+    expect(fixture.api.commands.length, count);
     await fixture.companion.close();
   });
 

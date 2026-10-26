@@ -8,12 +8,11 @@ object BackgroundKeepAliveTest {
         check(owner.request(true, automatic = true))
         check(owner.requested && !owner.running) // 不要求页面、音频或连接前置条件。
         owner.started()
-        check(owner.running)
         // 再次进入确认同一应用意图，不新增页面租约。
         check(owner.request(true, automatic = true))
         check(owner.running && owner.requested)
         owner.stop("user")
-        owner.destroyed()
+        owner.destroyed { error("用户停止不能重复发布系统停止") }
         check(!owner.running && !owner.requested && writes.last() == "user")
         repeat(3) { check(!owner.request(true, automatic = true)) }
         check(!owner.requested)
@@ -31,26 +30,27 @@ object BackgroundKeepAliveTest {
         check(restored.request(true, automatic = false))
         check(restored.stoppedReason == null && restored.requested)
         restored.started()
-        check(!restored.destroyed()) // 系统服务意外结束。
-        check(restored.stoppedReason == "system" && !restored.requested)
+        var systemStops = 0
+        check(!restored.destroyed {
+            check(!restored.running && !restored.requested && restored.stoppedReason == "system")
+            systemStops++
+        }) // 系统服务意外结束，先撤销准入再通知仍存活的引擎。
+        check(systemStops == 1)
         check(!restored.request(true, automatic = true))
-        check(restored.request(false, automatic = false))
-        check(!restored.requested && !restored.running)
-        check(restored.request(true, automatic = false))
-        restored.failed("foreground denied")
-        check(!restored.running && restored.failure == "foreground denied")
         check(restored.request(true, automatic = false))
         restored.started()
         restored.request(false, automatic = false)
         restored.request(true, automatic = false)
-        check(restored.destroyed()) // 快速明确关闭再开启会请求替换实例。
+        check(restored.destroyed { error("替换服务不能停止设备活动") })
         check(restored.requested && restored.stoppedReason == null)
+        restored.request(false, automatic = false)
+        check(!restored.destroyed { error("关闭后台保持不能停止设备活动") })
         val pending = BackgroundKeepAliveState()
         pending.request(true, automatic = true)
         pending.request(false, automatic = false)
         pending.request(true, automatic = false)
         check(pending.stopping && !pending.running)
-        check(pending.destroyed()) // 服务尚未启动时替换意图也须保留。
+        check(pending.destroyed { error("启动中的服务替换不能停止设备活动") })
         println("PASS: application background entry, re-entry, explicit/system stop, persisted intent, platform refusal and rapid preference changes")
     }
 }

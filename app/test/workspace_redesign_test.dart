@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scrcpy_connect/pages/devices/index/widgets/device_card.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/running_apps.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
@@ -144,7 +145,7 @@ void main() {
   );
 
   testWidgets(
-    'offline workspace keeps management and never queries live applications',
+    'waiting workspace keeps management and can stop reconnection without forgetting',
     (tester) async {
       final calls = <String>[];
       final controller = createTestController((
@@ -155,7 +156,7 @@ void main() {
         return {};
       });
       addTearDown(controller.dispose);
-      final device = {..._device, 'status': 'offline'};
+      final device = {..._device, 'status': 'offline', 'autoReconnect': true};
       await tester.pumpWidget(
         RouterTestApp(
           controller: controller,
@@ -165,6 +166,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('连接手机'), findsOneWidget);
+      expect(find.text('等待重连'), findsOneWidget);
       expect(find.text('我的手机'), findsOneWidget);
       expect(find.text('设备信息'), findsNothing);
       expect(find.text('信息来自本机记录'), findsOneWidget);
@@ -205,12 +207,53 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('移除此设备').hitTestable(), findsOneWidget);
-      final disconnect = tester.widget<ActionRow>(
-        find.widgetWithText(ActionRow, '断开设备连接'),
+      final stop = tester.widget<ActionRow>(
+        find.widgetWithText(ActionRow, '停止连接'),
       );
-      expect(disconnect.enabled, false);
-      expect(disconnect.onTap, isNull);
+      expect(stop.enabled, true);
+      await tester.tap(find.text('停止连接'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('停止连接和自动重连'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, '停止连接'));
+      await tester.pumpAndSettle();
+      expect(calls.where((c) => c == 'devices.disconnect'), hasLength(1));
+      expect(calls, isNot(contains('devices.forget')));
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('connecting device card keeps its stop action available', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    final controller = createTestController((
+      command, [
+      params = const {},
+    ]) async {
+      calls.add(command);
+      return {};
+    });
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ConnectTokens.theme(Brightness.light),
+        home: Scaffold(
+          body: DeviceCard(
+            controller: controller,
+            device: {..._device, 'status': 'connecting'},
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('设备操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('开始连接'), findsNothing);
+    await tester.tap(find.text('停止连接'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '停止连接'));
+    await tester.pumpAndSettle();
+    expect(calls.where((c) => c == 'devices.disconnect'), hasLength(1));
+    expect(calls, isNot(contains('devices.connect')));
+    expect(tester.takeException(), isNull);
+  });
 }

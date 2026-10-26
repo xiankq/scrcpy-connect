@@ -57,9 +57,11 @@ final class DeviceHealthCoordinator {
   }
 
   /// 前台恢复可立即核对；同一连接最多一个任务，不同设备并行。
-  Future<void> checkNow() => Future.wait<void>([
-    for (final entry in _entries.values.toList()) _check(entry),
-  ]);
+  Future<void> checkNow() async {
+    await Future.wait<void>([
+      for (final entry in _entries.values.toList()) _check(entry),
+    ]);
+  }
 
   Future<void> _check(_HealthEntry entry) {
     if (entry.checking case final pending?) return pending;

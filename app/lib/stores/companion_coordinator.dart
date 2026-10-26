@@ -6,6 +6,7 @@ import 'package:adb/adb.dart';
 
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/stores/companion_client.dart';
+import 'package:scrcpy_connect/stores/companion_recovery.dart';
 
 typedef CompanionEmitter = void Function(
   String type,
@@ -31,6 +32,7 @@ final class _Deployment {
   Map<String, Object?>? ready;
   Map<String, Object?> clipboard = const {'status': 'unknown', 'live': false};
   bool retired = false;
+  Future<void>? releasing;
 }
 
 /// 按精确设备连接拥有唯一部署，不拥有设备连接本身。
@@ -41,12 +43,16 @@ final class CompanionCoordinator {
     required Uint8List serverBytes,
     required this.config,
     required this.emit,
+    this.recovery,
+    this.deviceSerial,
   }) : _serverBytes = Uint8List.fromList(serverBytes);
 
   final DeviceConnection Function(String) requireConnection;
   final Uint8List _serverBytes;
   final CompanionConfig config;
   final CompanionEmitter emit;
+  final CompanionRecovery? recovery;
+  final String? Function(String)? deviceSerial;
   final _deployments = <String, _Deployment>{};
   final _retiring = <_Deployment>{};
   final _tails = <String, Future<void>>{};
@@ -117,13 +123,52 @@ final class CompanionCoordinator {
     entry.cancellation.cancel();
   }
 
-  Future<void> _release(_Deployment entry) async {
-    await entry.client.close();
+  Future<void> _release(_Deployment entry) => entry.releasing ??= (() async {
+    final journal = recovery;
+    final connection = entry.connection;
+    Future<bool> closed() async =>
+        journal != null &&
+        (await connection.client.services.connectionFacts(connection.device))
+            .closed;
+    var detached = await closed();
+    if (!detached) {
+      try {
+        await entry.client.close();
+      } catch (_) {
+        if (!await closed()) rethrow;
+        detached = true;
+      }
+    }
+    if (detached) {
+      await entry.client.detachClosedConnection();
+      final identity = entry.client.deploymentIdentity;
+      if (identity != null) {
+        final serial = deviceSerial?.call(entry.device);
+        if (serial == null || serial.isEmpty) {
+          throw const CompanionException(
+            'cleanup_unconfirmed',
+            '缺少原设备身份，不能移交互联服务清理。',
+          );
+        }
+        // 写入成功前原 entry 与 identity 不移除；本机释放不冒充远端已退出。
+        await journal!.remember(entry.device, serial, identity);
+      }
+    }
     await entry.subscription?.cancel();
     _retiring.remove(entry);
     if (identical(_deployments[entry.device], entry)) {
       _deployments.remove(entry.device);
     }
+  })().whenComplete(() => entry.releasing = null);
+
+  /// 候选已核验同设备，但尚未准入；只回收旧部署，不启动观察或重放动作。
+  Future<void> prepareConnection(
+    String device,
+    DeviceConnection connection,
+    String? observedSerial,
+    AdbCancellation cancellation,
+  ) async {
+    await recovery?.recover(device, observedSerial, connection, cancellation);
   }
 
   Future<_Deployment> _obtain(

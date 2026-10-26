@@ -242,9 +242,17 @@ void main() {
 
   test('已配对零端口记录通过发现核验真实 GUID 后才提交当前端点', () async {
     final id = await fixture.paired();
+    await fixture.records.setAutoReconnect(id, true);
+    fixture.candidates.error = const ApplicationCommandException(
+      'discovery_unavailable',
+      '组播暂时不可用',
+    );
+    await expectLater(fixture.connect(id), _failure('discovery_unavailable'));
+    expect(fixture.records.current.find(id)!.autoReconnect, isTrue);
+    fixture.candidates.error = null;
     fixture.candidates.endpoints = [_endpoint('192.0.2.8', 4444)];
     expect((await fixture.connect(id))['connected'], isTrue);
-    expect(fixture.candidates.guids, ['guid']);
+    expect(fixture.candidates.guids, ['guid', 'guid']);
     expect(fixture.client.connects, ['192.0.2.8:4444']);
     expect(fixture.client.requiredTls, [true]);
     final reopened = await DeviceRecordStore.open(directory: fixture.root);
@@ -331,9 +339,11 @@ void main() {
       'adb_cleanup_unconfirmed',
       'official_connect_result_unknown',
     ]) {
+      await fixture.records.setAutoReconnect(id, true);
       fixture.client.connectError = AdbException(code);
       await expectLater(fixture.connect(id), _failure(code));
       expect(fixture.client.connects.last, '192.0.2.8:4444');
+      expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
     }
     expect(fixture.client.connects, hasLength(3));
     expect(fixture.records.current.find(id)!.port, 0);
@@ -487,12 +497,112 @@ void main() {
       await finishStop();
       expect(fixture.owner.current(id), isNull);
       expect(fixture.client.disconnected, ['handle-1', 'handle-2', 'handle-3']);
+      reconnecting.handleEvent({
+        'type': 'device.changed',
+        'sequence': ++sequence,
+        'data': {
+          ...fixture.owner.projectDevices().single,
+          'autoReconnect': true,
+        },
+      });
       expect(timers.where((timer) => timer.isActive), isEmpty);
     } finally {
       fixture.onEmit = null;
       await reconnecting.dispose();
     }
   });
+
+  for (final phase in ['拨号', '准入准备', '关闭应用']) {
+    test('$phase中暂停重连保留持久意图，恢复调度才能重新连接', () async {
+      final id = await fixture.add();
+      await fixture.records.setAutoReconnect(id, true);
+      final timers = <_ReconnectTimer>[];
+      final retired = Completer<void>(), reconnected = Completer<void>();
+      final opening = Completer<AdbDevice>();
+      final prepared = Completer<void>();
+      if (phase == '准入准备') {
+        fixture.onPrepare = (_, cancellation) async {
+          prepared.complete();
+          await opening.future;
+          cancellation.check();
+        };
+      } else {
+        fixture.client.opening = opening;
+      }
+      var sequence = 0, background = true;
+      ReconnectionCoordinator coordinator() => ReconnectionCoordinator(
+        policy: fixture.owner.policy,
+        schedule: (_, run) {
+          final timer = _ReconnectTimer(run);
+          timers.add(timer);
+          return timer;
+        },
+        request: (command, params) async {
+          if (command == 'state.snapshot') {
+            return {
+              'sequence': sequence,
+              'settings': {'backgroundKeepAlive': background},
+              'devices': fixture.owner.projectDevices(),
+            };
+          }
+          try {
+            final result = await fixture.owner.command(command, params);
+            if (command == 'devices.connect') reconnected.complete();
+            return Map<String, dynamic>.from(result);
+          } finally {
+            if (command == 'devices.connect' && !retired.isCompleted) {
+              retired.complete();
+            }
+          }
+        },
+      );
+      var reconnecting = coordinator();
+      fixture.onEmit = (type, data) => reconnecting.handleEvent({
+        'type': type,
+        'sequence': ++sequence,
+        'data': data,
+      });
+      try {
+        await reconnecting.start();
+        await Future<void>.delayed(Duration.zero);
+        timers.single.fire();
+        await (phase == '准入准备'
+            ? prepared.future
+            : fixture.client.started.future);
+        reconnecting.setVisible(false);
+        background = false;
+        reconnecting.updateSettings({'backgroundKeepAlive': background});
+        if (phase == '关闭应用') await reconnecting.dispose();
+        opening.complete(_device('retired-auto'));
+        await retired.future;
+        await reconnecting.refresh();
+        expect(fixture.owner.current(id), isNull);
+        expect(
+          (await fixture.records.reload()).find(id)!.autoReconnect,
+          isTrue,
+        );
+        expect(timers.where((timer) => timer.isActive), isEmpty);
+        fixture.onPrepare = null;
+        if (phase == '关闭应用') {
+          reconnecting = coordinator();
+          await reconnecting.start();
+        } else {
+          reconnecting.setVisible(true);
+        }
+        await Future<void>.delayed(Duration.zero);
+        timers.where((timer) => timer.isActive).single.fire();
+        await reconnected.future;
+        expect(fixture.owner.current(id), isNotNull);
+        expect(fixture.client.disconnected, [
+          phase == '准入准备' ? 'handle-1' : 'retired-auto',
+        ]);
+      } finally {
+        if (!opening.isCompleted) opening.complete(_device('late'));
+        fixture.onEmit = null;
+        await reconnecting.dispose();
+      }
+    });
+  }
 
   test('宿主停止同步撤销所有连接，等待活动后持久停用重连且仍可手动连接', () async {
     final first = await fixture.add(),
@@ -1079,7 +1189,7 @@ void main() {
     final id = await fixture.add();
     await fixture.records.update(
       id,
-      (record) => record.copyWith(serial: 'saved-serial'),
+      (record) => record.copyWith(serial: 'saved-serial', autoReconnect: true),
     );
     await expectLater(
       fixture.connect(id),
@@ -1088,10 +1198,18 @@ void main() {
     expect(fixture.owner.current(id), isNull);
     expect(fixture.client.disconnected, ['handle-1']);
     expect(fixture.records.current.find(id)!.serial, 'saved-serial');
+    expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
   });
 
-  test('SDK 授权失败保留业务错误码和消息，记录真实 unauthorized 且不交付连接', () async {
+  test('首次失败不启用重连，暂时断线保留意图，授权失效停止重连', () async {
     final id = await fixture.add();
+    fixture.client.connectError = const AdbException('connection_refused');
+    await expectLater(fixture.connect(id), _failure('connection_refused'));
+    expect(fixture.records.current.find(id)!.autoReconnect, isFalse);
+    await fixture.records.setAutoReconnect(id, true);
+    fixture.client.connectError = const AdbException('io_error');
+    await expectLater(fixture.connect(id), _failure('io_error'));
+    expect(fixture.records.current.find(id)!.autoReconnect, isTrue);
     fixture.client.connectError = const AdbException(
       'auth_failed',
       '设备拒绝了本次授权',
@@ -1395,6 +1513,10 @@ void main() {
     await expectLater(
       fixture.owner.command('devices.disconnect', {'deviceId': first}),
       throwsStateError,
+    );
+    expect(
+      (await fixture.records.reload()).find(first)!.autoReconnect,
+      isFalse,
     );
     await expectLater(
       fixture.connect(second),
@@ -1835,7 +1957,7 @@ final class _Fixture {
         fixture.selectedPaths.add(selection.path);
         return fixture.client;
       },
-      prepareConnection: (connection, cancellation) async {
+      prepareConnection: (_, connection, _, cancellation) async {
         await fixture.onPrepare?.call(connection, cancellation);
       },
       onConnected: (_, connection) => fixture.connected.add(connection),

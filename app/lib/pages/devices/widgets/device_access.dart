@@ -13,7 +13,7 @@ Future<void> offerDeviceConnection(
   AppController controller,
   Json device,
 ) async {
-  if (['connecting', 'checking', 'reconnecting'].contains(device['status'])) {
+  if (deviceConnectionInProgress(device)) {
     feedback(context, '设备正在连接，请稍后重试。');
     return;
   }
@@ -37,6 +37,28 @@ Future<void> offerDeviceConnection(
     });
     await controller.refreshDevices();
   }
+}
+
+Future<void> stopDeviceConnection(
+  BuildContext context,
+  AppController controller,
+  Json device,
+) async {
+  final current = controller.currentDevice(device);
+  final online = current['status'] == 'connected';
+  if (!await confirmConnectionChange(
+        context,
+        '${online ? '断开' : '停止'}与 ${deviceName(current)} 的连接？',
+        '将停止连接和自动重连，关闭此设备的控制画面；进行中的传输和其他活动可能中断。设备记录与已保存文件保留，可稍后手动连接。',
+        action: online ? '断开连接' : '停止连接',
+      ) ||
+      !context.mounted) {
+    return;
+  }
+  await perform(context, controller, 'devices.disconnect', {
+    'deviceId': current['id'],
+  });
+  await controller.refreshDevices();
 }
 
 Future<bool> removeSavedDevice(

@@ -47,12 +47,15 @@ internal class BackgroundKeepAliveState(
         persistStop(reason)
     }
 
-    fun destroyed(): Boolean {
+    fun destroyed(onSystemStop: () -> Unit = {}): Boolean {
         // 快速关闭再开启可能先于 Android 分发旧服务销毁；仅已确认且明确请求的替换可以重启。
         val replacement = stopping && requested && stoppedReason == null
         running = false
         stopping = false
-        if (requested && !replacement) stop("system")
+        if (requested && !replacement) {
+            stop("system")
+            onSystemStop()
+        }
         return replacement
     }
 }

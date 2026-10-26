@@ -41,6 +41,7 @@ class DeviceWorkspacePage extends ConsumerWidget {
     final current = {...device, ...controller.currentDevice(device)};
     final id = value(current, 'id');
     final online = current['status'] == 'connected';
+    final canStop = hasDeviceConnectionIntent(current);
     final preferences = jsonObject(jsonObject(settings['deviceSettings'])[id]);
     final quality = {
       ...settings,
@@ -217,27 +218,15 @@ class DeviceWorkspacePage extends ConsumerWidget {
                     children: [
                       ActionRow(
                         icon: LucideIcons.unplug,
-                        title: '断开设备连接',
-                        enabled: online,
-                        onTap: !online
+                        title: online ? '断开设备连接' : '停止连接',
+                        enabled: canStop,
+                        onTap: !canStop
                             ? null
-                            : () async {
-                                if (await confirm(
-                                      context,
-                                      '断开 ${deviceName(current)}？',
-                                      '该设备的画面会关闭，未完成传输可能中断。本机设备记录和已保存文件会保留。',
-                                      action: '断开连接',
-                                    ) &&
-                                    context.mounted) {
-                                  await perform(
-                                    context,
-                                    controller,
-                                    'devices.disconnect',
-                                    {'deviceId': id},
-                                  );
-                                  await controller.refreshDevices();
-                                }
-                              },
+                            : () => stopDeviceConnection(
+                                context,
+                                controller,
+                                current,
+                              ),
                       ),
                       ActionRow(
                         icon: LucideIcons.trash2,

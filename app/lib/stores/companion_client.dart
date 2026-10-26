@@ -106,8 +106,17 @@ final class CompanionClient {
   bool _closed = false, _started = false, _eventsPaused = false;
   bool _launchIssued = false;
   bool _mediaMayExist = false, _eventsFinished = false;
+  bool _detached = false;
   Stream<Map<String, Object?>> get events => _events.stream;
   CompanionDeploymentIdentity? get deploymentIdentity => _identity;
+
+  /// 传输已由调用方核实 closed；只排空本机，精确远端身份仍须持久移交。
+  Future<void> detachClosedConnection() async {
+    _detached = true;
+    await _closing?.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    _closing = null;
+    await close();
+  }
 
   static String _randomHex(int bytes) {
     final random = Random.secure();
@@ -473,7 +482,7 @@ final class CompanionClient {
     _flushEvents();
   }
 
-  /// 同步停止新准入；只在全部本机资源和精确远端进程确认退出后成功。
+  /// 同步停止新准入；断线移交保留远端身份，其余关闭须确认精确进程退出。
   Future<void> close() {
     if (_closing case final pending?) return pending;
     _closed = true;
@@ -558,7 +567,7 @@ final class CompanionClient {
       await _shellDrain;
     });
     // 本机流清理失败时不继续删除远端输入，精确对象保留供下次关闭。
-    if (failure == null) {
+    if (failure == null && !_detached) {
       if (_identity case final identity?) {
         await release(() async {
           if (_mediaMayExist) {
@@ -598,10 +607,11 @@ final class CompanionClient {
         });
       }
     }
-    if (_mediaMayExist) {
+    if (_mediaMayExist ||
+        _detached && (_launchIssued || _jar != null) && _identity == null) {
       failure ??= const CompanionException(
         'cleanup_unconfirmed',
-        '原媒体子进程退出事实仍未知；主进程核验不能替代此回执。',
+        '原部署或媒体子进程退出事实仍未知，不能丢弃原清理责任。',
       );
       trace ??= StackTrace.current;
     }

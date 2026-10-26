@@ -88,7 +88,7 @@ void main() {
   );
 
   testWidgets(
-    'explicit background preference requests native permission once after saving and refreshes status',
+    'background switch and explicit recovery save the preference before requesting permission',
     (tester) async {
       final commands = <(String, Json)>[];
       final controller = createTestController((
@@ -130,6 +130,20 @@ void main() {
         'enabled': false,
         'askNotificationPermission': false,
       });
+      expect(controller.settings['backgroundKeepAlive'], false);
+      expect(find.text('检查系统设置'), findsNothing);
+      commands.clear();
+      await tester.tap(find.text('重新启用后台保持'));
+      await tester.pumpAndSettle();
+      expect(controller.settings['backgroundKeepAlive'], true);
+      expect(commands.where((c) => c.$1 == 'background.request').single.$2, {
+        'enabled': true,
+        'askNotificationPermission': true,
+      });
+      expect(
+        commands.indexWhere((c) => c.$1 == 'settings.update'),
+        lessThan(commands.indexWhere((c) => c.$1 == 'background.request')),
+      );
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },

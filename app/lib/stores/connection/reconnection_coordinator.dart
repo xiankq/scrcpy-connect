@@ -267,7 +267,8 @@ class ReconnectionCoordinator {
   void _sync() {
     if (!_allowed) {
       for (final id in _work.keys.toList()) {
-        _cancel(id);
+        // 暂停调度只释放技术租约；devices.cancel 表达用户停止，会清除持久连接意图。
+        _cancel(id, stopConnection: false);
       }
       _releaseOwner();
       return;
@@ -297,7 +298,8 @@ class ReconnectionCoordinator {
           !_stopped.contains(id) &&
           !_commands.containsKey(id);
       if (device == null || (!_eligible(id, device) && !ownsConnecting)) {
-        _cancel(id);
+        // 终止状态由连接层发布；退出调度不能再用主动断开覆盖失败原因。
+        _cancel(id, stopConnection: false);
       }
     }
     for (final entry in _devices.entries) {
@@ -400,10 +402,11 @@ class ReconnectionCoordinator {
     return Duration(milliseconds: min(maximum, milliseconds));
   }
 
-  void _cancel(String id) {
+  void _cancel(String id, {bool stopConnection = true}) {
     final work = _work.remove(id);
     work?.timer?.cancel();
-    if (work?.attemptId case final attempt?) {
+    if (stopConnection && work?.attemptId != null) {
+      final attempt = work!.attemptId!;
       _quiet(request('devices.cancel', {'attemptId': attempt}));
     }
   }

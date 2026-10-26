@@ -7,6 +7,7 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/stores/companion_client.dart';
 import 'package:scrcpy_connect/stores/companion_coordinator.dart';
+import 'package:scrcpy_connect/stores/companion_recovery.dart';
 import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 
 const coordinatorConfig = CompanionConfig(
@@ -17,7 +18,7 @@ const coordinatorConfig = CompanionConfig(
 );
 
 class CoordinatorFixture {
-  CoordinatorFixture() {
+  CoordinatorFixture({CompanionRecovery? recovery}) {
     client = NativeAdbClient(api, '/unused/key');
     replaceConnection();
     companion = CompanionCoordinator(
@@ -26,6 +27,8 @@ class CoordinatorFixture {
       serverBytes: Uint8List.fromList([1, 2, 3]),
       config: coordinatorConfig,
       emit: emit,
+      recovery: recovery,
+      deviceSerial: (_) => 'serial',
     );
   }
   final api = CoordinatorApi();
@@ -89,6 +92,14 @@ class _Operation {
 }
 
 class CoordinatorApi implements NativeAdbApi {
+  bool transportClosed = false;
+  @override
+  Future<AdbConnectionFacts> connectionFacts(String id) async =>
+      AdbConnectionFacts(
+        officialServer: false,
+        closed: transportClosed,
+        features: const [],
+      );
   void Function(Map<String, Object?>)? onRequest;
   final pushBytes = <String, int>{};
   final operations = <String, _Operation>{};

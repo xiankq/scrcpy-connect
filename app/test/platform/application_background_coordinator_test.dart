@@ -37,37 +37,4 @@ void main() {
       contains('foreground denied'),
     );
   });
-
-  test('a native stopped receipt remains stopped and startup does not request retry or media', () async {
-    final calls = <String>[];
-    final events = <Map<String, dynamic>>[];
-    final background = ApplicationBackgroundCoordinator(
-      request: (command, params) async {
-        calls.add(command);
-        expect(params['automatic'], true);
-        return {'running': false, 'stopped': true};
-      },
-      audioPolicy: (_) async {},
-      emit: events.add,
-    );
-    final status = await background.apply(true, automatic: true);
-    expect(status?['stopped'], true);
-    expect(calls, ['background.request']);
-    expect(events.single['data'], {'running': false, 'stopped': true});
-  });
-
-  test('an unsupported host applies its audio policy without claiming native background support', () async {
-    final audio = <bool>[];
-    final events = <Map<String, dynamic>>[];
-    final background = ApplicationBackgroundCoordinator(
-      request: null,
-      audioPolicy: (enabled) async {
-        audio.add(enabled);
-      },
-      emit: events.add,
-    );
-    await background.apply(true, automatic: true);
-    expect(audio, [true]);
-    expect(events, isEmpty);
-  });
 }

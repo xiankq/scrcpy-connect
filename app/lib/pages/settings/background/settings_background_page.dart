@@ -64,6 +64,25 @@ class BackgroundPage extends HookConsumerWidget {
       }
     }
 
+    Future<void> updateBackground(bool enabled) async {
+      if (changing.value) return;
+      changing.value = true;
+      try {
+        await controller.updateSetting('backgroundKeepAlive', enabled);
+        await controller.execute(ApplicationCommand.backgroundRequest, {
+          'enabled': enabled,
+          'askNotificationPermission': enabled,
+        });
+      } catch (error) {
+        if (context.mounted) feedback(context, '$error');
+      } finally {
+        if (context.mounted) {
+          changing.value = false;
+          revision.value++;
+        }
+      }
+    }
+
     return PageFrame(
       title: '后台与连接',
       child: GroupedListView(
@@ -78,28 +97,7 @@ class BackgroundPage extends HookConsumerWidget {
                   title: const Text('允许后台保持'),
 
                   value: appSettings['backgroundKeepAlive'] == true,
-                  onChanged: changing.value
-                      ? null
-                      : (v) async {
-                          changing.value = true;
-                          try {
-                            await controller.updateSetting(
-                              'backgroundKeepAlive',
-                              v,
-                            );
-                            await controller.execute(
-                              ApplicationCommand.backgroundRequest,
-                              {'enabled': v, 'askNotificationPermission': v},
-                            );
-                          } catch (e) {
-                            if (context.mounted) feedback(context, '$e');
-                          } finally {
-                            if (context.mounted) {
-                              changing.value = false;
-                              revision.value++;
-                            }
-                          }
-                        },
+                  onChanged: changing.value ? null : updateBackground,
                 ),
                 const Divider(height: DesignTokens.spacingHairline),
                 const SizedBox(height: DesignTokens.spacingMd),
@@ -119,19 +117,15 @@ class BackgroundPage extends HookConsumerWidget {
                       Text(value(data, 'reason', '后台运行取决于系统授权、电量策略与活动类型。')),
                       if (data['canRequest'] == true)
                         TextButton(
-                          onPressed: () async {
-                            await perform(
-                              context,
-                              controller,
-                              'background.request',
-                              {
-                                'enabled': true,
-                                'askNotificationPermission': true,
-                              },
-                            );
-                            refresh();
-                          },
-                          child: const Text('检查系统设置'),
+                          onPressed: changing.value
+                              ? null
+                              : () => updateBackground(true),
+                          child: Text(
+                            appSettings['backgroundKeepAlive'] == true &&
+                                    data['running'] == true
+                                ? '允许连接通知'
+                                : '重新启用后台保持',
+                          ),
                         ),
                     ],
                   ),

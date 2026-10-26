@@ -35,6 +35,13 @@ final class PhysicalDisplayRecovery {
       try {
         await _recover(connection, entry, stop);
       } catch (error) {
+        // 保留调用方的取消；连接所有者仍须完成 stopForConnection，
+        // 未确认的恢复或流清理会由该屏障继续报告失败。
+        if (cancellation?.isCancelled == true &&
+            error is AdbException &&
+            error.code == 'cancelled') {
+          rethrow;
+        }
         _unknown('物理显示恢复尚未结清：$error');
       } finally {
         detach?.call();

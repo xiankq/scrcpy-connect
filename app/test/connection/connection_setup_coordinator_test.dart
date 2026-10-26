@@ -636,7 +636,7 @@ final class _Fixture {
       records: fixture.records,
       identities: fixture.identities,
       clientForIdentity: (_) => fixture.client,
-      prepareConnection: (_, _) async {},
+      prepareConnection: (_, _, _, _) async {},
       policy: _policy,
       burstMode: () => fixture.burst,
       stopActivities: (_, _) async {},

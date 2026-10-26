@@ -62,6 +62,7 @@ import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 import 'package:scrcpy_connect/services/application_snapshot_reader.dart';
 import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
 import 'package:scrcpy_connect/stores/companion_coordinator.dart';
+import 'package:scrcpy_connect/stores/companion_recovery.dart';
 import 'package:scrcpy_connect/stores/companion_client.dart'
     show CompanionConfig;
 import 'package:scrcpy_connect/stores/observation_coordinator.dart';
@@ -296,8 +297,13 @@ class ApplicationSession {
       fingerprint: identity.fingerprint,
     ),
     stopActivities: _stopConnectionActivities,
-    prepareConnection: (connection, cancellation) =>
-        _host.physicalDisplays.recover(connection, cancellation: cancellation),
+    prepareConnection: (id, connection, serial, cancellation) async {
+      await _companion.prepareConnection(id, connection, serial, cancellation);
+      await _host.physicalDisplays.recover(
+        connection,
+        cancellation: cancellation,
+      );
+    },
     onConnected: (id, connection) => _health.start(id, connection),
     policy: _connectionPolicy,
     burstMode: () => _host.preferences.current.values['adbBurstMode'] == true,
@@ -352,6 +358,8 @@ class ApplicationSession {
   );
   late final CompanionCoordinator _companion = CompanionCoordinator(
     requireConnection: _devices.requireConnection,
+    recovery: CompanionRecovery(Directory(_dataDirectory)),
+    deviceSerial: (id) => _records.current.find(id)?.serial,
     serverBytes: _host.companionBytes,
     config: const CompanionConfig(
       startupTimeout: Duration(seconds: 15),

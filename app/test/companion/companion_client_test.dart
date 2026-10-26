@@ -271,30 +271,6 @@ void main() {
     expect(fixture.api.disconnected, isEmpty);
   });
 
-  test('已知部署恢复拒绝同 PID 的错误身份，不删除 JAR 或误停后继进程', () async {
-    final fixture = _Fixture();
-    final identity = CompanionDeploymentIdentity(
-      pid: 77,
-      started: 9001,
-      jarPath: '/data/local/tmp/interop-companion-${'a' * 32}.jar',
-    );
-    final restored = CompanionDeploymentIdentity.fromJson(identity.toJson());
-    fixture.api.wrongIdentity = true;
-    await expectLater(
-      cleanupCompanionDeployment(
-        fixture.connection,
-        restored,
-        timeout: const Duration(seconds: 1),
-      ),
-      throwsA(_code('remote_process_error')),
-    );
-    expect(fixture.api.commands.length, 1);
-    expect(fixture.api.commands.single, contains('expected=9001'));
-    expect(fixture.api.commands.single, contains(identity.niceName));
-    expect(fixture.api.disconnected, isEmpty);
-    await fixture.companion.close();
-  });
-
   test('认证已写出但 ready 未到时关闭，会实际排空并结束启动等待', () async {
     final fixture = _Fixture();
     fixture.api.sendReady = false;

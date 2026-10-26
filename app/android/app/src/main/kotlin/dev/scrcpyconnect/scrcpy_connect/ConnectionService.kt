@@ -148,7 +148,10 @@ class ConnectionService : Service() {
     }
 
     override fun onDestroy() {
-        val replacement = state(this).destroyed()
+        val replacement = state(this).destroyed {
+            // 引擎仍存活时，系统销毁也必须撤销 Dart 的重连及设备活动准入。
+            ProcessFlutterHost.stopRequested(applicationContext)
+        }
         DiscoveryNetwork.release("background")
         changed(this)
         super.onDestroy()

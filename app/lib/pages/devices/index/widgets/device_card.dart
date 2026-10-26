@@ -8,8 +8,6 @@ import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:scrcpy_connect/widgets/connection_content.dart';
-import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:design_system/design_system.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -27,11 +25,10 @@ class DeviceCard extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final pending = useState(false);
+    final starting = useState(false);
     final current = controller.currentDevice(device);
-    final connecting =
-        pending.value ||
-        ['connecting', 'checking', 'reconnecting'].contains(current['status']);
     final connected = current['status'] == 'connected';
+    final canStop = starting.value || hasDeviceConnectionIntent(current);
     Future<void> run(Future<void> Function() action) async {
       if (pending.value) return;
       pending.value = true;
@@ -63,7 +60,7 @@ class DeviceCard extends HookWidget {
             ),
             child: Row(
               children: [
-                DeviceIdentity(device: device, compact: compact),
+                DeviceIdentity(device: current, compact: compact),
                 const SizedBox(width: DesignTokens.spacingMd),
                 Expanded(
                   child: Column(
@@ -75,7 +72,7 @@ class DeviceCard extends HookWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              deviceName(device),
+                              deviceName(current),
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ),
@@ -88,58 +85,41 @@ class DeviceCard extends HookWidget {
                             ),
                             actions: [
                               GlassMenuAction(
-                                label: connecting
-                                    ? '正在连接…'
-                                    : connected
+                                label: connected
                                     ? '断开连接'
+                                    : canStop
+                                    ? '停止连接'
                                     : '开始连接',
                                 icon: Icon(
-                                  connected
+                                  canStop
                                       ? LucideIcons.unplug
                                       : LucideIcons.plug,
                                 ),
-                                onPressed: connecting
+                                onPressed: pending.value
                                     ? null
-                                    : () => run(() async {
-                                        final target = controller.currentDevice(
+                                    : canStop
+                                    ? () => run(
+                                        () => stopDeviceConnection(
+                                          context,
+                                          controller,
                                           device,
-                                        );
-                                        if (connected) {
-                                          if (target['status'] != 'connected') {
-                                            feedback(
-                                              context,
-                                              '设备已断开，请重新检查当前状态。',
-                                            );
-                                            return;
-                                          }
-                                          if (!await confirmConnectionChange(
-                                                context,
-                                                '断开 ${deviceName(target)}？',
-                                                '将结束此设备的连接、控制画面和进行中的活动。设备记录与已保存文件保留，并停止自动重连。',
-                                                action: '断开连接',
-                                              ) ||
-                                              !context.mounted) {
-                                            return;
-                                          }
-                                          await perform(
-                                            context,
-                                            controller,
-                                            'devices.disconnect',
-                                            {'deviceId': target['id']},
-                                          );
-                                          await controller.refreshDevices();
-                                        } else {
-                                          if (target['status'] == 'connected') {
-                                            feedback(context, '设备已连接。');
-                                            return;
-                                          }
+                                        ),
+                                      )
+                                    : () async {
+                                        if (starting.value) return;
+                                        starting.value = true;
+                                        try {
                                           await offerDeviceConnection(
                                             context,
                                             controller,
-                                            target,
+                                            controller.currentDevice(device),
                                           );
+                                        } finally {
+                                          if (context.mounted) {
+                                            starting.value = false;
+                                          }
                                         }
-                                      }),
+                                      },
                               ),
                               GlassMenuAction(
                                 label: '连接配置',
@@ -173,19 +153,19 @@ class DeviceCard extends HookWidget {
                             ? DesignTokens.spacingXxs
                             : DesignTokens.spacingXs,
                       ),
-                      DeviceStatus(device: device, compact: compact),
-                      if (device['status'] == 'offline') ...[
+                      DeviceStatus(device: current, compact: compact),
+                      if (current['status'] == 'offline') ...[
                         const SizedBox(height: DesignTokens.spacingXxs),
                         Text(
-                          deviceConnectionLabel(device)
+                          deviceConnectionLabel(current)
                               .replaceFirst('离线 · ', ''),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ] else if (!compact &&
-                          value(device, 'model').isNotEmpty) ...[
+                          value(current, 'model').isNotEmpty) ...[
                         const SizedBox(height: DesignTokens.spacingXxs),
                         Text(
-                          value(device, 'model'),
+                          value(current, 'model'),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],

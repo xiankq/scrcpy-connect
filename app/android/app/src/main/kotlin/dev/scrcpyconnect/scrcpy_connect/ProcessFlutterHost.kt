@@ -15,9 +15,10 @@ internal object ProcessFlutterHost {
     private var sink: EventChannel.EventSink? = null
     private val main = Handler(Looper.getMainLooper())
 
-    fun engine(context: Context): FlutterEngine {
+    fun engine(context: Context, shellArgs: Array<String>): FlutterEngine {
         check(Looper.myLooper() == Looper.getMainLooper())
-        return engine ?: FlutterEngine(context.applicationContext).also { created ->
+        // 仅首次创建继承 Flutter 启动参数；Activity 重新附着仍复用原引擎。
+        return engine ?: FlutterEngine(context.applicationContext, shellArgs).also { created ->
             // 构造器仅注册一次生成插件；FlutterActivity 仅首次附着时启动 Dart 入口。
             engine = created
             val audio = NativeAudioRuntime.get(context)

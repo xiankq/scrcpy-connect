@@ -10,9 +10,8 @@ class DeviceStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = value(device, 'status', 'offline');
     return Text(
-      statusText(status),
+      deviceStatusText(device),
       style: compact
           ? Theme.of(context).textTheme.bodySmall
           : Theme.of(context).textTheme.bodyMedium,

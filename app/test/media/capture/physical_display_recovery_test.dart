@@ -140,7 +140,10 @@ void main() {
       f.connection,
       cancellation: cancellation,
     );
-    final failure = expectLater(pending, throwsA(_unknown));
+    final failure = expectLater(
+      pending,
+      throwsA(isA<AdbException>().having((e) => e.code, 'code', 'cancelled')),
+    );
     await f.api.created.future;
     final foreign = await f.connection.client.services.exec(
       AdbDevice(

@@ -13,6 +13,24 @@ import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
 import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
 
+const _transientConnectionErrors = {
+  'connection_refused',
+  'network_unreachable',
+  'host_unreachable',
+  'connect_timeout',
+  'handshake_timeout',
+  'timeout',
+  'connect_failed',
+  'io_error',
+  'disconnected',
+};
+
+String? _connectionErrorCode(Object error) => switch (error) {
+  AdbException() => error.code,
+  ApplicationCommandException() => error.code,
+  _ => null,
+};
+
 /// 设备记录、身份选择与实际连接的业务编排；不拥有 SDK 客户端或服务器。
 /// 事件回调交给应用统一排序；本模块不创建另一条事件序列或持久记录。
 final class DeviceCoordinator {
@@ -46,7 +64,12 @@ final class DeviceCoordinator {
 
   /// 身份已核验、旧连接与活动已退休后恢复候选所需状态；完成后才交付新连接。
   /// 失败不恢复旧活动，调用方须保留未确认恢复的精确责任，不自动重放操作。
-  final Future<void> Function(DeviceConnection, AdbCancellation)
+  final Future<void> Function(
+    String,
+    DeviceConnection,
+    String?,
+    AdbCancellation,
+  )
   prepareConnection;
   final ConnectionPolicy policy;
   final DeviceProbe probe;
@@ -659,6 +682,7 @@ final class DeviceCoordinator {
       }
     });
     AdbConnectionFacts? verifiedFacts;
+    String? observedSerial;
     var preparationFailed = false;
     AdbClient? dialClient;
     Object? dialToken;
@@ -710,11 +734,7 @@ final class DeviceCoordinator {
         _published.remove(id);
         await records.update(id, (record) {
           _check(id, generation, cancellation);
-          return record.copyWith(
-            status: 'connecting',
-            reason: null,
-            autoReconnect: true,
-          );
+          return record.copyWith(status: 'connecting', reason: null);
         });
         _changed();
       }
@@ -855,6 +875,7 @@ final class DeviceCoordinator {
           }
         }
         verifiedFacts = facts;
+        observedSerial = observed.serial;
         // 写入失败时 ConnectionOwner 仍持有候选，负责精确回收；尚未发布业务成功。
         await records.update(id, (record) {
           stop.check();
@@ -939,7 +960,7 @@ final class DeviceCoordinator {
           stop.check();
           _check(id, generation, cancellation);
           checkCandidate();
-          await prepareConnection(connection, stop);
+          await prepareConnection(id, connection, observedSerial, stop);
           stop.check();
           _check(id, generation, cancellation);
           checkCandidate();
@@ -985,21 +1006,8 @@ final class DeviceCoordinator {
           break;
         } catch (error) {
           if (preparationFailed) rethrow;
-          final code = switch (error) {
-            AdbException() => error.code,
-            ApplicationCommandException() => error.code,
-            _ => null,
-          };
-          final retryable = const {
-            'connection_refused',
-            'network_unreachable',
-            'host_unreachable',
-            'connect_timeout',
-            'handshake_timeout',
-            'timeout',
-            'connect_failed',
-            'disconnected',
-          }.contains(code);
+          final code = _connectionErrorCode(error);
+          final retryable = _transientConnectionErrors.contains(code);
           // 未知清理与服务器未知状态必须原样交还，不能被取消或候选失效掩盖。
           if (!retryable && code != 'auth_failed') rethrow;
           _check(id, generation, cancellation);
@@ -1046,24 +1054,26 @@ final class DeviceCoordinator {
       }
       if (_generations[id] == generation && !_closed) {
         if (!configure || _connections.current(id) == null) {
+          final code = _connectionErrorCode(error);
+          final keepIntent =
+              cleanupFailure == null &&
+              (code == 'cancelled' ||
+                  !preparationFailed &&
+                      (_transientConnectionErrors.contains(code) ||
+                          code == 'discovery_pending' ||
+                          code == 'discovery_changed' ||
+                          code == 'discovery_unavailable'));
           _facts.remove(_published.remove(id));
           await records.update(
             id,
             (record) => _generations[id] != generation || _closed
                 ? record
                 : record.copyWith(
-                    status: error is AdbException && error.code == 'auth_failed'
-                        ? 'unauthorized'
-                        : 'offline',
+                    status: code == 'auth_failed' ? 'unauthorized' : 'offline',
                     reason: error.toString(),
-                    // 设置流程只在真实准入后恢复自动重连；候选失败不能撤销
-                    // 转 IP 先停重试的意图，或把旧端点重新交给自动重连。
-                    autoReconnect:
-                        error is AdbException && error.code == 'auth_failed'
-                        ? false
-                        : setup != null
-                        ? saved.autoReconnect
-                        : true,
+                    // 成功交付才启用意图；暂时断线或调度暂停保留原意图，
+                    // 身份冲突及未知清理停止自动尝试，等待用户明确处理。
+                    autoReconnect: keepIntent && saved.autoReconnect,
                   ),
           );
         }
@@ -1105,24 +1115,32 @@ final class DeviceCoordinator {
     String id, {
     bool forget = false,
   }) async {
-    _next(id);
+    final generation = _next(id);
     _facts.remove(_published.remove(id));
-    await _connections.disconnect(id);
-    await _retryHealthRetirements({id});
-    if (records.current.find(id) != null) {
-      if (forget) {
-        await records.remove(id);
-      } else {
+    final drain = _connections.disconnect(id);
+    final projection = () async {
+      if (records.current.find(id) != null) {
         await records.update(
           id,
-          (record) => record.copyWith(
-            status: 'offline',
-            autoReconnect: false,
-            reason: null,
-          ),
+          (record) => _generations[id] == generation
+              ? record.copyWith(
+                  status: 'offline',
+                  autoReconnect: false,
+                  reason: null,
+                )
+              : record,
         );
       }
-    }
+      _changed();
+    }();
+    // 清理失败仍保存停止意图，重启不能复活；持久化失败也不能跳过实际资源回收。
+    await Future.wait<void>([
+      drain,
+      projection,
+      _retryHealthRetirements({id}),
+    ]);
+    if (_generations[id] != generation) _fail('cancelled', '停止已被后继连接操作替换。');
+    if (forget && records.current.find(id) != null) await records.remove(id);
     if (forget) await identities.forgetDevice(id);
     if (forget) _setupCreated.remove(id);
     _changed();
