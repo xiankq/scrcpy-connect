@@ -50,11 +50,14 @@ void main() {
       'stores/files/file_store.dart': 'class FileStore {}',
       'services/actions.dart': 'class FileCopy {} class OtherAction {}',
       'services/controller.dart': 'class FileDelete {}',
+      'stores/focus_store.dart':
+          "import 'package:flutter/widgets.dart'; class FocusStore {}",
     });
     final problems = check();
     expect(problems, contains(contains('扁平目录')));
     expect(problems, contains(contains('一个公开主类')));
     expect(problems, contains(contains('文件名应与主类')));
+    expect(problems, contains(contains('Flutter 视图依赖')));
   });
 
   test('检测多文件循环但不会把正常菱形依赖或 part 当作循环', () {

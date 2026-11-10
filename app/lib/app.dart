@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:scrcpy_connect/widgets/application_lifecycle.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
@@ -20,6 +23,15 @@ class ConnectApp extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(appStoreProvider.notifier);
     final dependencies = ref.watch(appDependenciesProvider);
+    useEffect(() {
+      final lifecycle = ApplicationLifecycle(
+        setVisible: dependencies.setVisible,
+        diagnostics: dependencies.diagnostics,
+        shutdown: dependencies.close,
+      );
+      unawaited(lifecycle.attach());
+      return lifecycle.dispose;
+    }, [dependencies]);
     final views = useMemoized(() => RemoteViews(controller), [
       controller,
       dependencies,

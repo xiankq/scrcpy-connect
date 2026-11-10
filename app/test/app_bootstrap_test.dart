@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+import 'package:scrcpy_connect/widgets/application_lifecycle.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
@@ -11,6 +13,34 @@ import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('应用视图提供可见状态并在退出视图后停止监听', (tester) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final visible = <bool>[];
+    final lifecycle = ApplicationLifecycle(
+      setVisible: (value) async => visible.add(value),
+      shutdown: null,
+    );
+    await lifecycle.attach();
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    lifecycle.dispose();
+    expect(visible, [true, true, false, false, false]);
+    visible.clear();
+    for (final state in [
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    expect(visible, isEmpty);
+  });
 
   for (final failureAt in ['outgoing directory', 'cache configuration']) {
     test(

@@ -114,9 +114,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final coordinator = ProviderScope.containerOf(
-        tester.element(find.byType(ConnectApp)),
-      ).read(systemNotificationsProvider);
+      final coordinator = tester
+          .widget<SystemNotificationsScope>(
+            find.byType(SystemNotificationsScope),
+          )
+          .notifications;
       await coordinator.initialize();
       Json notifications(List<Json> items) => {
         'live': true,

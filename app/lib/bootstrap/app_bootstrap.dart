@@ -43,6 +43,7 @@ Future<AppDependencies> _createDependencies(DiagnosticLog? diagnostics) async {
   return AppDependencies(
     bindClipboardAdmission: session.bindClipboardAdmission,
     completeDocumentSelection: session.completeDocumentSelection,
+    setVisible: session.setVisible,
     execute: session.execute,
     diagnostics: diagnostics,
     request: session.request,

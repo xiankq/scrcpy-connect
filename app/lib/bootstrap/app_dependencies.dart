@@ -19,6 +19,7 @@ class AppDependencies {
     this.diagnostics,
     this.bindClipboardAdmission,
     this.completeDocumentSelection,
+    this.setVisible,
     AppState? initialState,
     this.initialize = true,
   }) : execute =
@@ -26,6 +27,7 @@ class AppDependencies {
        initialState = initialState ?? AppState();
   final void Function() Function(bool Function(String, String, int) check)?
   bindClipboardAdmission;
+  final Future<void> Function(bool)? setVisible;
   final bool Function(String, Json)? completeDocumentSelection;
   final DiagnosticLog? diagnostics;
   final ApplicationRequest request;

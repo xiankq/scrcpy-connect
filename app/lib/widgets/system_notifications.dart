@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/widgets/system_notification_sink.dart';
 export 'package:scrcpy_connect/widgets/system_notification_sink.dart'
     show
@@ -13,7 +15,6 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
@@ -792,12 +793,19 @@ class _Delivery {
 SystemNotificationSink systemNotificationSink(Ref ref) =>
     const NoopSystemNotificationSink();
 
-@Riverpod(keepAlive: true)
-SystemNotifications systemNotifications(Ref ref) {
+/// 界面拥有提醒订阅、展示与销毁；provider 只提供可替换的系统能力。
+SystemNotifications useSystemNotifications(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  final shared = context
+      .dependOnInheritedWidgetOfExactType<SystemNotificationsScope>()
+      ?.notifications;
   final controller = ref.watch(appStoreProvider.notifier);
-  final coordinator = SystemNotifications(
-    controller,
-    ref.watch(systemNotificationSinkProvider),
+  final sink = ref.watch(systemNotificationSinkProvider);
+  final notifications = useMemoized(
+    () => shared ?? SystemNotifications(controller, sink),
+    [shared, controller, sink, controller.generation],
   );
   ref.listen(
     appStoreProvider.select(
@@ -808,9 +816,26 @@ SystemNotifications systemNotifications(Ref ref) {
         state.reconciliationPending,
       ),
     ),
-    (_, next) => coordinator.configure(),
+    (_, next) {
+      if (shared == null) notifications.configure();
+    },
   );
-  ref.onDispose(coordinator.dispose);
-  unawaited(coordinator.initialize());
-  return coordinator;
+  useEffect(() {
+    if (shared != null) return null;
+    unawaited(notifications.initialize());
+    return notifications.dispose;
+  }, [shared, notifications]);
+  return notifications;
+}
+
+class SystemNotificationsScope extends InheritedWidget {
+  const SystemNotificationsScope({
+    super.key,
+    required this.notifications,
+    required super.child,
+  });
+  final SystemNotifications notifications;
+  @override
+  bool updateShouldNotify(SystemNotificationsScope oldWidget) =>
+      notifications != oldWidget.notifications;
 }

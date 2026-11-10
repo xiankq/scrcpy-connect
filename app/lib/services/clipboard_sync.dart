@@ -4,19 +4,16 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'dart:async';
-import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 
 part 'clipboard_sync.g.dart';
 
 /// 当前获焦控制画面只同步基线之后的新复制，恢复不回灌任一端旧值。
-class ClipboardSync with WidgetsBindingObserver {
+class ClipboardSync {
   ClipboardSync(this.controller) {
-    WidgetsBinding.instance.addObserver(this);
     _events = controller.eventStream().listen(_event);
     _releaseAdmission = controller.bindClipboardAdmission(
       (device, session, generation) =>
@@ -53,8 +50,7 @@ class ClipboardSync with WidgetsBindingObserver {
   bool _remoteQueued = false;
   bool _reconciling = false;
   final Set<int> _activations = {};
-  bool get _foreground =>
-      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+  bool _foreground = false;
   bool _active(String target, int generation) =>
       !_disposed &&
       !controller.isDisposed() &&
@@ -430,12 +426,9 @@ class ClipboardSync with WidgetsBindingObserver {
     controller.updateClipboardState('limited', message);
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) => configure();
-
-  @override
-  void didChangeViewFocus(ViewFocusEvent event) {
-    _viewFocused = event.state == ViewFocusState.focused;
+  void setVisibility({bool? foreground, bool? focused}) {
+    if (foreground != null) _foreground = foreground;
+    if (focused != null) _viewFocused = focused;
     configure();
   }
 
@@ -445,7 +438,6 @@ class ClipboardSync with WidgetsBindingObserver {
     _generation++;
     _timer?.cancel();
     _events?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
   }
 }
 

@@ -1,3 +1,4 @@
+import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_notices.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_surface.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_recovery_panel.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_navigation_bar.dart';
@@ -65,12 +66,14 @@ class _RemotePageState extends State<RemotePage>
   RemotePresentation get presentation => window.presentation;
   final connectionRecovery = RemoteConnectionRecovery();
   bool restoringConnection = false;
-  final remoteMessenger = GlobalKey<ScaffoldMessengerState>();
-  RemoteBinding? keepActiveNoticeBinding;
-  (String, String)? keepActiveErrorKey;
-  String? pendingKeepActiveNotice;
-  bool keepActiveNoticeScheduled = false;
-  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? remoteNoticeTail;
+  late final notices = RemoteNotices(
+    presentation: presentation,
+    isVisible: () =>
+        mounted &&
+        acceptsInput &&
+        view?.isCurrent == true &&
+        ModalRoute.of(context)?.isCurrent != false,
+  );
   late final RemoteDisplaySettings displaySettings;
   late final RemoteDisplaySizing displaySizing;
   late final RemoteScreenState screenState;
@@ -109,7 +112,7 @@ class _RemotePageState extends State<RemotePage>
       if (mounted && presentation.errorCode == 'device_asleep') await start();
     } catch (failure) {
       if (mounted) {
-        showRemoteNotice('点亮屏幕尚未确认：${remoteFailure(failure)}');
+        notices.show('点亮屏幕尚未确认：${remoteFailure(failure)}');
       }
     } finally {
       if (mounted) setState(() => waking = false);
@@ -136,7 +139,7 @@ class _RemotePageState extends State<RemotePage>
       ).push<void>(context);
     } catch (failure) {
       if (mounted) {
-        showRemoteNotice('截图失败：${remoteFailure(failure)}');
+        notices.show('截图失败：${remoteFailure(failure)}');
       }
     }
   }
@@ -158,7 +161,7 @@ class _RemotePageState extends State<RemotePage>
       ).pushReplacement(context);
     } catch (failure) {
       if (mounted && !presentation.exiting) {
-        showRemoteNotice('无法转为独立窗口：${remoteFailure(failure)}');
+        notices.show('无法转为独立窗口：${remoteFailure(failure)}');
       }
     } finally {
       if (mounted) setState(() => converting = false);
@@ -183,73 +186,6 @@ class _RemotePageState extends State<RemotePage>
       WidgetsBinding.instance.lifecycleState == null ||
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
   bool get canSendInput => displaySizing.canSendInput;
-
-  void showRemoteNotice(String message) {
-    final notice = remoteMessenger.currentState?.showSnackBar(
-      glassSnackBar(message),
-    );
-    if (notice == null) return;
-    remoteNoticeTail = notice;
-    unawaited(
-      notice.closed.then((_) {
-        if (!mounted) return;
-        if (identical(remoteNoticeTail, notice)) remoteNoticeTail = null;
-        showPendingKeepActiveNotice();
-      }),
-    );
-  }
-
-  void consumeKeepActiveNotice(Json receipt) {
-    if (!receipt.containsKey('keepActiveError') || presentation.exiting) return;
-    final binding = presentation.binding;
-    if (keepActiveNoticeBinding != binding) {
-      keepActiveNoticeBinding = binding;
-      keepActiveErrorKey = null;
-      pendingKeepActiveNotice = null;
-    }
-    if (receipt['keepActiveError'] == null) {
-      keepActiveErrorKey = null;
-      pendingKeepActiveNotice = null;
-      return;
-    }
-    final error = jsonObject(receipt['keepActiveError']);
-    final reason = value(error, 'reason', '保持唤醒服务未能确认。');
-    final key = (value(error, 'code'), reason);
-    if (keepActiveErrorKey == key) return;
-    keepActiveErrorKey = key;
-    pendingKeepActiveNotice = '保持唤醒尚未确认：$reason';
-    showPendingKeepActiveNotice();
-  }
-
-  void showPendingKeepActiveNotice() {
-    if (pendingKeepActiveNotice == null || keepActiveNoticeScheduled) return;
-    keepActiveNoticeScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      keepActiveNoticeScheduled = false;
-      if (!mounted || presentation.exiting) return;
-      if (keepActiveNoticeBinding != presentation.binding) {
-        pendingKeepActiveNotice = null;
-        return;
-      }
-      if (!acceptsInput ||
-          presentation.covered ||
-          presentation.stateUnverified ||
-          presentation.sessionEnded ||
-          view?.isCurrent != true ||
-          ModalRoute.of(context)?.isCurrent == false) {
-        return;
-      }
-      final messenger = remoteMessenger.currentState;
-      final message = pendingKeepActiveNotice;
-      // 排队的 SnackBar 无法单独撤销；先保留提示，前一条结束后重新核对路由与绑定。
-      if (messenger == null || message == null || remoteNoticeTail != null) {
-        return;
-      }
-      pendingKeepActiveNotice = null;
-      showRemoteNotice(message);
-    });
-    WidgetsBinding.instance.scheduleFrame();
-  }
 
   late final RemoteInputOwner inputs;
   TextEditingController get text => inputs.text;
@@ -282,7 +218,7 @@ class _RemotePageState extends State<RemotePage>
         if (mounted) setState(() {});
       },
       onFailure: (failure) =>
-          showRemoteNotice('屏幕比例调整未确认：${remoteFailure(failure)}'),
+          notices.show('屏幕比例调整未确认：${remoteFailure(failure)}'),
     );
     screenState = RemoteScreenState(
       window: window,
@@ -423,7 +359,7 @@ class _RemotePageState extends State<RemotePage>
       if (ime && widget.requestKeyboard) requestImeFocus();
       if (sessionId.isEmpty || result['textureId'] == null) return;
       window.bind(visible: result['status'] != 'paused');
-      consumeKeepActiveNotice(result);
+      notices.consume(result);
       unawaited(screenState.refresh());
       if (retained == null) {
         focusVisibleDevice();
@@ -710,7 +646,7 @@ class _RemotePageState extends State<RemotePage>
             ),
           );
         }
-        if (noticeIsCurrent) consumeKeepActiveNotice(data);
+        if (noticeIsCurrent) notices.consume(data);
         setState(() {});
         trace('updated.applied paused=${presentation.paused}');
       case 'session.disconnected':
@@ -795,7 +731,7 @@ class _RemotePageState extends State<RemotePage>
     adjustmentShown = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !presentation.exiting) {
-        showRemoteNotice(message);
+        notices.show(message);
       }
     });
   }
@@ -819,7 +755,7 @@ class _RemotePageState extends State<RemotePage>
   @override
   void didPopNext() {
     presentation.cover(false);
-    showPendingKeepActiveNotice();
+    notices.flush();
     if (connectionRecovery.pending) {
       recoverConnection();
     } else if (acceptsInput) {
@@ -892,7 +828,7 @@ class _RemotePageState extends State<RemotePage>
     setState(() {});
     if (outcome != RemoteResumeResult.ready) return;
     focusVisibleDevice();
-    showPendingKeepActiveNotice();
+    notices.flush();
     await applyPendingInitialAction();
   }
 
@@ -901,7 +837,7 @@ class _RemotePageState extends State<RemotePage>
     if (state != AppLifecycleState.resumed) unawaited(releaseInputs());
     if (state == AppLifecycleState.inactive || sessionId.isEmpty) return;
     if (state == AppLifecycleState.resumed) {
-      showPendingKeepActiveNotice();
+      notices.flush();
       // 短暂 inactive 保留画面流但可能推迟视口调整，恢复时即使无需切换可见性也要继续调整。
       displaySizing.reconsider();
       if (!presentation.lifecycleVisibility(true)) return;
@@ -992,6 +928,7 @@ class _RemotePageState extends State<RemotePage>
 
   @override
   void dispose() {
+    notices.dispose();
     controller.focusClipboardSession(
       value(widget.device, 'id'),
       sessionId,
@@ -1070,7 +1007,7 @@ class _RemotePageState extends State<RemotePage>
           ),
         );
         return ScaffoldMessenger(
-          key: remoteMessenger,
+          key: notices.messengerKey,
           child: PopScope(
             canPop: presentation.exiting,
             onPopInvokedWithResult: (popped, _) {

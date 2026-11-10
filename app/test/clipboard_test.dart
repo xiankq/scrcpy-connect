@@ -1,3 +1,5 @@
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:scrcpy_connect/widgets/clipboard_visibility.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
@@ -76,7 +78,15 @@ class _ClipboardFixture {
           return null;
         });
     await focus(device);
-    testContainer(controller).read(clipboardSyncProvider);
+    final sync = testContainer(controller).read(clipboardSyncProvider);
+    await tester.pumpWidget(
+      HookBuilder(
+        builder: (context) {
+          useClipboardVisibility(sync);
+          return const SizedBox();
+        },
+      ),
+    );
     await _drain(tester);
   }
 

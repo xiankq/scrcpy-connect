@@ -64,7 +64,11 @@ void main() {
         tester.element(find.byType(ConnectApp)),
       );
       final controller = container.read(appStoreProvider.notifier);
-      final coordinator = container.read(systemNotificationsProvider);
+      final coordinator = tester
+          .widget<SystemNotificationsScope>(
+            find.byType(SystemNotificationsScope),
+          )
+          .notifications;
       await waitFor(
         tester,
         () =>

@@ -96,41 +96,7 @@ void main() {
         cacheDirectory: Directory(environment['cacheDirectory'] as String),
       );
       var pickerCount = 0;
-      coordinator = FileDocumentService(
-        selections: fakeDocumentSelections((command, params) async {
-          switch (command) {
-            case 'documents.platform.environment':
-              return boundary.environment;
-            case 'documents.platform.picker':
-              pickerCount++;
-              return {
-                'status': 'selected',
-                'documents': [
-                  {'handle': 'target'},
-                ],
-              };
-            case 'documents.platform.metadata':
-              return {
-                'handle': 'target',
-                'id': 'target',
-                'authority': 'fixture',
-                'name': 'target',
-                'directory': false,
-                'canWrite': true,
-                'size': await target.length(),
-              };
-            case 'documents.platform.openFd':
-              final fd = descriptors.open(target.path);
-              return {'fd': fd, 'fdLeaseId': '$fd'};
-            case 'documents.platform.releaseFd':
-              descriptors.close(int.parse(params['fdLeaseId'] as String));
-              return {'released': true};
-            case 'documents.platform.release':
-              return {'released': true};
-            default:
-              throw StateError(command);
-          }
-        }),
+      coordinator = testDocuments(
         files: () async => files,
         sources: sources,
         platform: (command, params) async {

@@ -30,7 +30,7 @@ class NotificationsPage extends HookConsumerWidget {
   final Json device;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final alerts = ref.watch(systemNotificationsProvider);
+    final alerts = useSystemNotifications(context, ref);
     useListenable(alerts.changes);
     final settings = ref.watch(
       appStoreProvider.select((state) => state.settings),

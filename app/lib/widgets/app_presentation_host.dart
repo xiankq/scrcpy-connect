@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/widgets/clipboard_visibility.dart';
+
 import 'dart:async';
 
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -34,11 +36,12 @@ class AppPresentationHost extends HookConsumerWidget {
     final appPendingShares = ref.watch(
       appStoreProvider.select((state) => state.pendingShares),
     );
-    ref.watch(clipboardSyncProvider);
+    final clipboard = ref.watch(clipboardSyncProvider);
+    useClipboardVisibility(clipboard);
     final sharing = useRef<Object?>(null);
     final shareCycle = useState(0);
     final lifecycle = useAppLifecycleState();
-    final systemNotifications = ref.watch(systemNotificationsProvider);
+    final systemNotifications = useSystemNotifications(context, ref);
     useListenable(systemNotifications.changes);
     useOnAppLifecycleStateChange((previous, current) {
       // 暂停后可能不再绘制下一帧，因此在生命周期回调中立即更新提醒资格。
@@ -235,6 +238,9 @@ class AppPresentationHost extends HookConsumerWidget {
         unawaited(subscription.cancel());
       };
     }, [controller, navigator]);
-    return child;
+    return SystemNotificationsScope(
+      notifications: systemNotifications,
+      child: child,
+    );
   }
 }

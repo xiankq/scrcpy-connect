@@ -50,7 +50,7 @@ class BackgroundPage extends HookConsumerWidget {
         unawaited(subscription.cancel());
       };
     }, [controller]);
-    final alerts = ref.watch(systemNotificationsProvider);
+    final alerts = useSystemNotifications(context, ref);
     useListenable(alerts.changes);
     final alertStatus = alerts.status;
     Future<void> updateAlert(String key, bool value) async {

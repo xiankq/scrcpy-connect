@@ -161,6 +161,19 @@ List<String> checkArchitecture(
             ),
         ];
         for (final literal in uris) {
+          if (package.name == 'scrcpy_connect' && literal != null) {
+            final layer = p
+                .split(p.relative(file.path, from: package.lib))
+                .first;
+            if ({'stores', 'services'}.contains(layer) &&
+                RegExp(
+                  r'^package:flutter/(widgets|material|cupertino|rendering|gestures|painting)\.dart$',
+                ).hasMatch(literal)) {
+              problems.add(
+                '${relative(file.path)}: store/service 不得持有 Flutter 视图依赖 $literal',
+              );
+            }
+          }
           if (literal == null) continue;
           final uri = Uri.parse(literal);
           String? target;

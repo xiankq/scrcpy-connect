@@ -118,8 +118,7 @@ class Fixture {
   late final nativeFiles = LocalFixture(this);
   late final localFiles = LocalFiles(nativeFiles);
   Future<LocalFiles> files() async => localFiles;
-  late final coordinator = FileDocumentService(
-    selections: fakeDocumentSelections(platform),
+  late final coordinator = testDocuments(
     files: files,
     platform: platform,
     sources: sources,
@@ -437,14 +436,7 @@ void main() {
     final oldPicker = Completer<void>();
     f.mockPlatformChannel();
     final platform = f.applicationPlatform();
-    final coordinator = FileDocumentService(
-      selections: fakeDocumentSelections((command, params) {
-        if (command == 'documents.platform.picker' &&
-            params['operationId'] == 'old-activity') {
-          oldPicker.complete();
-        }
-        return platform.request(command, params);
-      }),
+    final coordinator = testDocuments(
       files: f.files,
       platform: (command, params) {
         if (command == 'documents.platform.picker' &&
@@ -522,8 +514,7 @@ void main() {
     };
     f.mockPlatformChannel();
     final platform = f.applicationPlatform();
-    final coordinator = FileDocumentService(
-      selections: fakeDocumentSelections(platform.request),
+    final coordinator = testDocuments(
       files: f.files,
       platform: platform.request,
     );
@@ -534,8 +525,7 @@ void main() {
     expect(f.ownerReady, isTrue);
     // 新实例也必须遵守共享 pending，不能仅查看自己的恢复标记。
     final nextPlatform = f.applicationPlatform();
-    final nextCoordinator = FileDocumentService(
-      selections: fakeDocumentSelections(nextPlatform.request),
+    final nextCoordinator = testDocuments(
       files: f.files,
       platform: nextPlatform.request,
     );
@@ -640,13 +630,7 @@ void main() {
     test('平台 release 未确认后${cancelFirst ? '取消' : '再次操作'}重试清理并恢复准入', () async {
       final f = Fixture()..select('root', 'Empty', directory: true);
       var released = false;
-      final coordinator = FileDocumentService(
-        selections: fakeDocumentSelections((command, params) async {
-          if (command == 'documents.platform.release' && !released) {
-            return {'released': false};
-          }
-          return f.platform(command, params);
-        }),
+      final coordinator = testDocuments(
         files: f.files,
         platform: (command, params) async {
           if (command == 'documents.platform.release' && !released) {
@@ -823,19 +807,7 @@ void main() {
         final f = Fixture()..select('parent', 'Target', directory: true);
         f.local['/cache/source'] = {'kind': 'directory'};
         final events = <DocumentsJson>[];
-        final coordinator = FileDocumentService(
-          selections: fakeDocumentSelections((command, params) async {
-            final result = await f.platform(command, params);
-            if (command == 'documents.platform.create' &&
-                params['name'] == 'Tree') {
-              // 新根目录出现后，提供方写入者创建同名子项；两者均属于外部文件系统冲突。
-              for (final name in ['one', 'two']) {
-                f.node(name, name, directory: true);
-              }
-              f.children[result['handle'] as String] = ['one', 'two'];
-            }
-            return result;
-          }),
+        final coordinator = testDocuments(
           files: () async {
             f.nativeFiles.onList = (path, maxEntries) async => LocalFileList(
               identity: identity({'kind': 'directory'}),
@@ -936,8 +908,7 @@ void main() {
       f.children['parent'] = ['old'];
       f.local['/cache/source'] = {'kind': 'directory'};
       var conflictEntered = false;
-      final coordinator = FileDocumentService(
-        selections: fakeDocumentSelections(f.platform),
+      final coordinator = testDocuments(
         files: f.files,
         limits: const DocumentLimits(timeout: Duration(milliseconds: 20)),
         platform: f.platform,
@@ -1010,8 +981,7 @@ void main() {
       f.children['parent'] = ['old'];
       f.local['/cache/source'] = {'kind': 'directory'};
       final events = <DocumentsJson>[];
-      final coordinator = FileDocumentService(
-        selections: fakeDocumentSelections(f.platform),
+      final coordinator = testDocuments(
         files: f.files,
         platform: f.platform,
         onConflictChanged: events.add,
@@ -1082,14 +1052,7 @@ void main() {
       final f = Fixture()..select('root', 'Tree', directory: true);
       final pending = Completer<DocumentsJson>();
       var metadataEntered = false;
-      final coordinator = FileDocumentService(
-        selections: fakeDocumentSelections((command, params) {
-          if (command == 'documents.platform.metadata') {
-            metadataEntered = true;
-            return pending.future;
-          }
-          return f.platform(command, params);
-        }),
+      final coordinator = testDocuments(
         files: f.files,
         platform: (command, params) {
           if (command == 'documents.platform.metadata') {
@@ -1145,13 +1108,7 @@ void main() {
       final first = Completer<DocumentsJson>();
       final second = Completer<DocumentsJson>();
       var picks = 0;
-      final coordinator = FileDocumentService(
-        selections: fakeDocumentSelections((command, params) {
-          if (command == 'documents.platform.picker') {
-            return ++picks == 1 ? first.future : second.future;
-          }
-          return f.platform(command, params);
-        }),
+      final coordinator = testDocuments(
         files: f.files,
         platform: (command, params) {
           if (command == 'documents.platform.picker') {
@@ -1210,17 +1167,7 @@ void main() {
     () async {
       final f = Fixture()..select('file', 'saved.txt', size: 0);
       f.local['/cache/source'] = {'kind': 'file', 'size': 3};
-      final coordinator = FileDocumentService(
-        selections: fakeDocumentSelections((command, params) {
-          if (command == 'documents.platform.releaseFd' &&
-              params['outcome'] != 'success') {
-            throw const RequestFailure(
-              'provider_incomplete',
-              'provider did not receive successful completion',
-            );
-          }
-          return f.platform(command, params);
-        }),
+      final coordinator = testDocuments(
         files: f.files,
         platform: (command, params) {
           if (command == 'documents.platform.releaseFd' &&
@@ -1344,13 +1291,7 @@ void main() {
   test('a missing provider lease leaves the save result unknown', () async {
     final f = Fixture()..select('file', 'saved.txt', size: 0);
     f.local['/cache/source'] = {'kind': 'file', 'size': 3};
-    final coordinator = FileDocumentService(
-      selections: fakeDocumentSelections((command, params) async {
-        if (command == 'documents.platform.releaseFd') {
-          return {'released': false};
-        }
-        return f.platform(command, params);
-      }),
+    final coordinator = testDocuments(
       files: f.files,
       platform: (command, params) async {
         if (command == 'documents.platform.releaseFd') {

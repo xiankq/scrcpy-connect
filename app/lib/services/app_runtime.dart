@@ -11,8 +11,6 @@ import 'package:scrcpy_connect/models/media_intent.dart';
 import 'package:scrcpy_connect/models/companion_config.dart';
 import 'package:scrcpy_connect/services/device_connection.dart';
 
-import 'package:scrcpy_connect/services/file_cache_storage_space.dart';
-
 import 'package:scrcpy_connect/stores/media_cache_store.dart';
 import 'package:scrcpy_connect/services/media_preview_service.dart';
 import 'package:scrcpy_connect/services/app_settings.dart';
@@ -21,7 +19,8 @@ import 'package:scrcpy_connect/stores/file_delivery_store.dart';
 import 'package:scrcpy_connect/stores/file_document_store.dart';
 import 'package:scrcpy_connect/services/file_publication_lease_pool.dart';
 
-import 'package:scrcpy/scrcpy.dart' show createNativeScrcpyLocalFiles;
+import 'package:scrcpy/scrcpy.dart'
+    show createNativeScrcpyLocalFiles, readNativeScrcpyLocalStorageFreeBytes;
 
 import 'dart:async';
 import 'dart:convert';
@@ -64,7 +63,6 @@ import 'package:scrcpy_connect/services/application_platform.dart';
 import 'package:scrcpy_connect/services/application_background_policy.dart';
 import 'package:scrcpy_connect/services/application_platform_events.dart';
 import 'package:scrcpy_connect/services/application_events.dart';
-import 'package:scrcpy_connect/services/application_lifecycle.dart';
 import 'package:scrcpy_connect/services/adb_file_executor.dart';
 
 import 'package:scrcpy_connect/models/connection_policy.dart';
@@ -254,12 +252,12 @@ class AppRuntime {
     handlePlatform: (event) => _platformEvents.handle(event),
     isDisposed: () => _disposed,
   );
-  late final _lifecycle = ApplicationLifecycle(
-    isDisposed: () => _disposed,
-    setConnectionsVisible: (visible) => _reconnections.setVisible(visible),
-    setMediaVisible: (visible) => _media.setVisible(visible),
-    shutdown: shutdown,
-  );
+  Future<void> setVisible(bool visible) async {
+    if (_disposed) return;
+    _reconnections.setVisible(visible);
+    if (!Platform.isAndroid) await _media.setVisible(visible);
+  }
+
   bool _disposed = false;
   Future<void>? _shuttingDown;
   late final MediaService _media = MediaService(
@@ -729,7 +727,7 @@ class AppRuntime {
       root: Directory(dataDirectory),
       gate: gate,
       protectedPaths: () => deliveries.protectedPaths,
-      freeBytes: cacheStorageFreeBytes,
+      freeBytes: _cacheStorageFreeBytes,
       protectionDetails: () async => [
         for (final source
             in cacheTransfers?.cacheSources ?? <Map<String, Object?>>[])
@@ -806,7 +804,8 @@ class AppRuntime {
     if (backgroundStatus?['stopped'] == true) {
       _reconnections.stopAutomaticConnections();
     }
-    await _lifecycle.attach();
+    // 由已挂载的应用视图报告可见性，首次报告前不安排自动重连。
+    _reconnections.setVisible(false);
     // 可信快照先建立屏幕偏好和旧连接身份，再允许第一次自动重连。
     await _stateRecovery.refresh();
     await _reconnections.start();
@@ -940,7 +939,6 @@ class AppRuntime {
     _disposed = true;
     _sharing?.stopIntake();
     _media.stopAdmission();
-    _lifecycle.dispose();
     _stateRecovery.dispose();
     return OrderedDisposal([
       () async =>
@@ -1140,4 +1138,13 @@ class AppRuntime {
         throw const RequestFailure('not_found', '此活动已结束或标识无效。');
     }
   }
+}
+
+/// 只读查询暂存所在存储的实际可用量，不申请文件复制作用域。
+Future<int?> _cacheStorageFreeBytes(String root) async {
+  final value = await readNativeScrcpyLocalStorageFreeBytes(root);
+  if (value < BigInt.zero || value > BigInt.from(0x7fffffffffffffff)) {
+    return null;
+  }
+  return value.toInt();
 }
