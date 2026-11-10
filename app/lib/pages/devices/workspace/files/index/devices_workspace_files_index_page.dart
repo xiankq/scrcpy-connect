@@ -56,11 +56,9 @@ class FilesPage extends HookConsumerWidget {
     final ascending = _fileSortAscendingFromSettings(settings);
     final path = useState(initialPath);
     final revision = useState(0);
-    final selected = useState<Set<String>>({});
-    final selectionObjects = useRef<Map<String, Json>>({});
+    final selected = useState<Map<String, Json>>({});
     final selecting = useState(false);
     final selectionMenu = useMemoized(MenuController.new);
-    final loaded = useRef<List<Json>>([]);
     final sourceId = value(device, 'id');
     final live = ref.watch(
       appControllerProvider.select(
@@ -115,9 +113,9 @@ class FilesPage extends HookConsumerWidget {
         for (final entry in objects(query.data?['entries']))
           value(entry, 'path'): entry,
       };
-      return selected.value.every((path) {
+      return selected.value.keys.every((path) {
         final current = observed[path];
-        final previous = selectionObjects.value[path];
+        final previous = selected.value[path];
         return current != null &&
             previous != null &&
             fileCanManage(current) &&
@@ -141,8 +139,6 @@ class FilesPage extends HookConsumerWidget {
 
     useEffect(() {
       selected.value = {};
-      selectionObjects.value = {};
-      loaded.value = [];
       selecting.value = false;
       return null;
     }, [sourceId]);
@@ -172,8 +168,6 @@ class FilesPage extends HookConsumerWidget {
 
     void openDirectory(String next) {
       if (selecting.value || !verified || next == path.value) return;
-      loaded.value = [];
-      selectionObjects.value = {};
       path.value = next;
       typeFilter.value = FileTypeFilter.all;
       selected.value = {};
@@ -245,13 +239,11 @@ class FilesPage extends HookConsumerWidget {
       if (!fileCanManage(entry)) return;
       final entryPath = value(entry, 'path');
       selecting.value = true;
-      final next = {...selected.value};
-      if (next.contains(entryPath)) {
+      final next = Map.of(selected.value);
+      if (next.containsKey(entryPath)) {
         next.remove(entryPath);
-        selectionObjects.value.remove(entryPath);
       } else {
-        next.add(entryPath);
-        selectionObjects.value[entryPath] = Map.of(entry);
+        next[entryPath] = Map.of(entry);
       }
       selected.value = next;
     }
@@ -283,18 +275,52 @@ class FilesPage extends HookConsumerWidget {
       selecting.value = false;
     }
 
-    final chosen = [
-      for (final path in selected.value) ?selectionObjects.value[path],
-    ];
-    final visible = buildDirectoryListing(
-      entries: loaded.value,
-      typeFilter: typeFilter.value,
-      sortKey: sortKey,
-      ascending: ascending,
-    ).entries.where(fileCanManage).toList();
+    final data = query.data;
+
+    void refresh() => unawaited(query.refresh());
+    final all = useMemoized(() => objects(data?['entries']), [data]);
+    useEffect(() {
+      if (!verified || data == null) return null;
+      final observed = {for (final entry in all) value(entry, 'path'): entry};
+      final complete = data['hasMore'] != true && data['truncated'] != true;
+      final invalid = selected.value.keys.where((path) {
+        final entry = observed[path];
+        if (entry == null) return complete;
+        final previous = selected.value[path];
+        return !fileCanManage(entry) ||
+            previous != null && !_sameObservedFile(previous, entry);
+      }).toSet();
+      if (invalid.isNotEmpty) {
+        scheduleMicrotask(() {
+          if (context.mounted) {
+            selected.value = Map.of(selected.value)
+              ..removeWhere((path, _) => invalid.contains(path));
+          }
+        });
+      }
+      return null;
+    }, [all, verified]);
+    final listing = useMemoized(
+      () => buildDirectoryListing(
+        entries: all,
+        typeFilter: typeFilter.value,
+        sortKey: sortKey,
+        ascending: ascending,
+      ),
+      [all, typeFilter.value, sortKey, ascending],
+    );
+    final atStorageRoot = path.value == '/sdcard';
+    final hasFilter = atStorageRoot && typeFilter.value != FileTypeFilter.all;
+    final unavailableFiles =
+        listing.files.isEmpty && typeFilter.value != FileTypeFilter.all;
+
+    final chosen = selected.value.values.toList();
+    final visible = listing.entries.where(fileCanManage).toList();
     final allSelected =
         visible.isNotEmpty &&
-        visible.every((entry) => selected.value.contains(value(entry, 'path')));
+        visible.every(
+          (entry) => selected.value.containsKey(value(entry, 'path')),
+        );
     final retrievable =
         verified &&
         selectionVerified() &&
@@ -340,13 +366,12 @@ class FilesPage extends HookConsumerWidget {
                     GlassActionIcon(
                       tooltip: allSelected ? '取消全选' : '全选',
                       onPressed: () {
-                        selectionObjects.value = allSelected
+                        selected.value = allSelected
                             ? {}
                             : {
                                 for (final entry in visible)
                                   value(entry, 'path'): Map.of(entry),
                               };
-                        selected.value = selectionObjects.value.keys.toSet();
                       },
                       icon: Icon(
                         allSelected
@@ -501,7 +526,7 @@ class FilesPage extends HookConsumerWidget {
                     ),
                   )
                 : null,
-            child: query.data == null
+            child: data == null
                 ? PageChromeBody(
                     child: query.loading
                         ? const Center(
@@ -517,259 +542,199 @@ class FilesPage extends HookConsumerWidget {
                             ),
                           ),
                   )
-                : HookBuilder(
-                    builder: (context) {
-                      final data = query.data!;
-                      void refresh() => unawaited(query.refresh());
-                      final all = useMemoized(() => objects(data['entries']), [
-                        data,
-                      ]);
-                      loaded.value = all;
-                      useEffect(() {
-                        if (!verified) return null;
-                        final observed = {
-                          for (final entry in all) value(entry, 'path'): entry,
-                        };
-                        final complete =
-                            data['hasMore'] != true &&
-                            data['truncated'] != true;
-                        final invalid = selected.value.where((path) {
-                          final entry = observed[path];
-                          if (entry == null) return complete;
-                          final previous = selectionObjects.value[path];
-                          return !fileCanManage(entry) ||
-                              previous != null &&
-                                  !_sameObservedFile(previous, entry);
-                        }).toSet();
-                        if (invalid.isNotEmpty) {
-                          scheduleMicrotask(() {
-                            if (context.mounted) {
-                              selected.value = selected.value.difference(
-                                invalid,
-                              );
-                            }
-                          });
-                        }
-                        return null;
-                      }, [all, verified]);
-                      final listing = useMemoized(
-                        () => buildDirectoryListing(
-                          entries: all,
-                          typeFilter: typeFilter.value,
-                          sortKey: sortKey,
-                          ascending: ascending,
+                : RefreshIndicator(
+                    onRefresh: () async {
+                      if (!selecting.value) refresh();
+                    },
+                    child: CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        const PageChromeSliver(),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              DesignTokens.spacingMd,
+                              DesignTokens.spacingXs,
+                              DesignTokens.spacingMd,
+                              DesignTokens.spacingSm,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                DeviceSourceRow(
+                                  device: currentDevice ?? device,
+                                  padding: const EdgeInsets.only(
+                                    bottom: DesignTokens.spacingSm,
+                                  ),
+                                ),
+                                if (!verified)
+                                  StateNote(
+                                    !connected
+                                        ? '设备已断开，已保留当前目录与选择。重连并核验目录后才能提交操作。'
+                                        : query.error != null
+                                        ? '目录未能重新核验：${query.error}。当前显示上次内容，重新检查后才能提交操作。'
+                                        : '正在重新核验目录，当前内容与选择继续保留…',
+                                  ),
+                                if (verified && !selectionVerified())
+                                  const StateNote(
+                                    '部分所选项未出现在本次已核验范围，已保留选择并暂停批量操作。可重新全选当前已加载范围，或退出选择后刷新核验。',
+                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: FileBreadcrumbs(
+                                        path: path.value,
+                                        onSelected: selecting.value
+                                            ? null
+                                            : openDirectory,
+                                      ),
+                                    ),
+                                    const SizedBox(
+                                      width: DesignTokens.spacingXs,
+                                    ),
+                                    GlassActionIcon(
+                                      tooltip: '刷新目录',
+                                      onPressed: busy.value || selecting.value
+                                          ? null
+                                          : () {
+                                              selected.value = {};
+                                              refresh();
+                                            },
+                                      icon: const Icon(LucideIcons.refreshCw),
+                                      iconSize:
+                                          DesignTokens.componentIconSmallSize +
+                                          DesignTokens.spacingMicro,
+                                      padding: EdgeInsets.zero,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: DesignTokens
+                                                .componentSmallButtonSize,
+                                            height: DesignTokens
+                                                .componentSmallButtonSize,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                                if (atStorageRoot) ...[
+                                  const SizedBox(
+                                    height: DesignTokens.spacingMd,
+                                  ),
+                                  FileTypeFilterGrid(
+                                    selected: typeFilter.value,
+                                    onSelected: selecting.value
+                                        ? null
+                                        : (next) => typeFilter.value = next,
+                                  ),
+                                ],
+                                if (data['hasMore'] == true ||
+                                    data['truncated'] == true)
+                                  StateNote(
+                                    '当前已加载 ${all.length} 项${data['total'] is num ? '，已知共 ${data['total']} 项' : ''}；仅操作已加载范围，未检查内容不纳入全选。',
+                                  ),
+                                if (busy.value) ...[
+                                  const SizedBox(
+                                    height: DesignTokens.spacingSm,
+                                  ),
+                                  const ContentLoadingIndicator(),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                        [all, typeFilter.value, sortKey, ascending],
-                      );
-                      final atStorageRoot = path.value == '/sdcard';
-                      final hasFilter =
-                          atStorageRoot &&
-                          typeFilter.value != FileTypeFilter.all;
-                      final unavailableFiles =
-                          listing.files.isEmpty &&
-                          typeFilter.value != FileTypeFilter.all;
-
-                      return RefreshIndicator(
-                        onRefresh: () async {
-                          if (!selecting.value) refresh();
-                        },
-                        child: CustomScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          slivers: [
-                            const PageChromeSliver(),
+                        if (listing.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: EmptyContent(
+                              icon: hasFilter
+                                  ? LucideIcons.searchX
+                                  : LucideIcons.folderOpen,
+                              title: hasFilter
+                                  ? '当前目录没有匹配内容'
+                                  : all.isEmpty
+                                  ? '这个目录是空的'
+                                  : '目录中没有可显示内容',
+                              message: hasFilter
+                                  ? '文件类型只筛选当前目录中的文件；文件夹仍按原顺序显示。'
+                                  : '发送本机文件到 ${path.value}，或新建文件夹。',
+                              action: TextButton(
+                                onPressed: selecting.value || !verified
+                                    ? null
+                                    : hasFilter
+                                    ? () =>
+                                          typeFilter.value = FileTypeFilter.all
+                                    : upload,
+                                child: Text(hasFilter ? '清除筛选' : '发送文件'),
+                              ),
+                            ),
+                          )
+                        else ...[
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: DesignTokens.spacingMd,
+                            ),
+                            sliver: FileEntrySliver(
+                              entries: listing.entries,
+                              viewMode: viewMode,
+                              builder: (entry, grid) => FileBrowserEntry(
+                                key: ValueKey(value(entry, 'path')),
+                                controller: controller,
+                                device: device,
+                                entry: entry,
+                                grid: grid,
+                                selected: selected.value.containsKey(
+                                  value(entry, 'path'),
+                                ),
+                                selectionActive: selecting.value,
+                                enabled: verified,
+                                onBeginSelect: (entry) {
+                                  selecting.value = true;
+                                  final entryPath = value(entry, 'path');
+                                  selected.value = {
+                                    ...selected.value,
+                                    entryPath:
+                                        selected.value[entryPath] ??
+                                        Map.of(entry),
+                                  };
+                                },
+                                onSelect: toggleEntry,
+                                onOpenDirectory: openDirectory,
+                              ),
+                            ),
+                          ),
+                          if (unavailableFiles)
                             SliverToBoxAdapter(
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(
                                   DesignTokens.spacingMd,
-                                  DesignTokens.spacingXs,
-                                  DesignTokens.spacingMd,
                                   DesignTokens.spacingSm,
+                                  DesignTokens.spacingMd,
+                                  DesignTokens.spacingMd,
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    DeviceSourceRow(
-                                      device: currentDevice ?? device,
-                                      padding: const EdgeInsets.only(
-                                        bottom: DesignTokens.spacingSm,
-                                      ),
-                                    ),
-                                    if (!verified)
-                                      StateNote(
-                                        !connected
-                                            ? '设备已断开，已保留当前目录与选择。重连并核验目录后才能提交操作。'
-                                            : query.error != null
-                                            ? '目录未能重新核验：${query.error}。当前显示上次内容，重新检查后才能提交操作。'
-                                            : '正在重新核验目录，当前内容与选择继续保留…',
-                                      ),
-                                    if (verified && !selectionVerified())
-                                      const StateNote(
-                                        '部分所选项未出现在本次已核验范围，已保留选择并暂停批量操作。可重新全选当前已加载范围，或退出选择后刷新核验。',
-                                      ),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: FileBreadcrumbs(
-                                            path: path.value,
-                                            onSelected: selecting.value
-                                                ? null
-                                                : openDirectory,
-                                          ),
-                                        ),
-                                        const SizedBox(
-                                          width: DesignTokens.spacingXs,
-                                        ),
-                                        GlassActionIcon(
-                                          tooltip: '刷新目录',
-                                          onPressed:
-                                              busy.value || selecting.value
-                                              ? null
-                                              : () {
-                                                  selected.value = {};
-                                                  refresh();
-                                                },
-                                          icon: const Icon(
-                                            LucideIcons.refreshCw,
-                                          ),
-                                          iconSize:
-                                              DesignTokens
-                                                  .componentIconSmallSize +
-                                              DesignTokens.spacingMicro,
-                                          padding: EdgeInsets.zero,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                          constraints:
-                                              const BoxConstraints.tightFor(
-                                                width: DesignTokens
-                                                    .componentSmallButtonSize,
-                                                height: DesignTokens
-                                                    .componentSmallButtonSize,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (atStorageRoot) ...[
-                                      const SizedBox(
-                                        height: DesignTokens.spacingMd,
-                                      ),
-                                      FileTypeFilterGrid(
-                                        selected: typeFilter.value,
-                                        onSelected: selecting.value
-                                            ? null
-                                            : (next) => typeFilter.value = next,
-                                      ),
-                                    ],
-                                    if (data['hasMore'] == true ||
-                                        data['truncated'] == true)
-                                      StateNote(
-                                        '当前已加载 ${all.length} 项${data['total'] is num ? '，已知共 ${data['total']} 项' : ''}；仅操作已加载范围，未检查内容不纳入全选。',
-                                      ),
-                                    if (busy.value) ...[
-                                      const SizedBox(
-                                        height: DesignTokens.spacingSm,
-                                      ),
-                                      const ContentLoadingIndicator(),
-                                    ],
-                                  ],
+                                child: StateNote(
+                                  '当前目录没有${_typeFilterLabel(typeFilter.value)}文件。'
+                                  '文件夹不受文件类型筛选影响。',
+                                  icon: LucideIcons.info,
                                 ),
                               ),
                             ),
-                            if (listing.isEmpty)
-                              SliverFillRemaining(
-                                hasScrollBody: false,
-                                child: EmptyContent(
-                                  icon: hasFilter
-                                      ? LucideIcons.searchX
-                                      : LucideIcons.folderOpen,
-                                  title: hasFilter
-                                      ? '当前目录没有匹配内容'
-                                      : all.isEmpty
-                                      ? '这个目录是空的'
-                                      : '目录中没有可显示内容',
-                                  message: hasFilter
-                                      ? '文件类型只筛选当前目录中的文件；文件夹仍按原顺序显示。'
-                                      : '发送本机文件到 ${path.value}，或新建文件夹。',
-                                  action: TextButton(
-                                    onPressed: selecting.value || !verified
-                                        ? null
-                                        : hasFilter
-                                        ? () => typeFilter.value =
-                                              FileTypeFilter.all
-                                        : upload,
-                                    child: Text(hasFilter ? '清除筛选' : '发送文件'),
-                                  ),
-                                ),
-                              )
-                            else ...[
-                              SliverPadding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: DesignTokens.spacingMd,
-                                ),
-                                sliver: FileEntrySliver(
-                                  entries: listing.entries,
-                                  viewMode: viewMode,
-                                  builder: (entry, grid) => FileBrowserEntry(
-                                    key: ValueKey(value(entry, 'path')),
-                                    controller: controller,
-                                    device: device,
-                                    entry: entry,
-                                    grid: grid,
-                                    selected: selected.value.contains(
-                                      value(entry, 'path'),
-                                    ),
-                                    selectionActive: selecting.value,
-                                    enabled: verified,
-                                    onBeginSelect: (entry) {
-                                      selecting.value = true;
-                                      selectionObjects.value.putIfAbsent(
-                                        value(entry, 'path'),
-                                        () => Map.of(entry),
-                                      );
-                                      selected.value = {
-                                        ...selected.value,
-                                        value(entry, 'path'),
-                                      };
-                                    },
-                                    onSelect: toggleEntry,
-                                    onOpenDirectory: openDirectory,
-                                  ),
-                                ),
-                              ),
-                              if (unavailableFiles)
-                                SliverToBoxAdapter(
-                                  child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      DesignTokens.spacingMd,
-                                      DesignTokens.spacingSm,
-                                      DesignTokens.spacingMd,
-                                      DesignTokens.spacingMd,
-                                    ),
-                                    child: StateNote(
-                                      '当前目录没有${_typeFilterLabel(typeFilter.value)}文件。'
-                                      '文件夹不受文件类型筛选影响。',
-                                      icon: LucideIcons.info,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                            SliverToBoxAdapter(
-                              child: SizedBox(
-                                height: selecting.value
-                                    ? MediaQuery.textScalerOf(context).scale(
-                                            DesignTokens
-                                                .componentNavigationHeight,
-                                          ) +
-                                          DesignTokens.spacingXxl +
-                                          MediaQuery.paddingOf(context).bottom
-                                    : DesignTokens.spacingLg,
-                              ),
-                            ),
-                            const PageChromeBottomSliver(),
-                          ],
+                        ],
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: selecting.value
+                                ? MediaQuery.textScalerOf(context).scale(
+                                        DesignTokens.componentNavigationHeight,
+                                      ) +
+                                      DesignTokens.spacingXxl +
+                                      MediaQuery.paddingOf(context).bottom
+                                : DesignTokens.spacingLg,
+                          ),
                         ),
-                      );
-                    },
+                        const PageChromeBottomSliver(),
+                      ],
+                    ),
                   ),
           ),
         ),

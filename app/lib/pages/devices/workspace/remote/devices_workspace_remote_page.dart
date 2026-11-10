@@ -17,7 +17,6 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/stores/app_controller.dart';
 import 'package:scrcpy_connect/services/media/remote_failure.dart';
 import 'package:scrcpy_connect/models/remote_display_settings.dart';
-import 'package:scrcpy_connect/widgets/ambient_loading_field.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_connection_recovery.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_input_owner.dart';
@@ -28,15 +27,10 @@ import 'remote_display_sizing.dart';
 import 'remote_screen_state.dart';
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
-import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class RemotePage extends StatefulWidget {
   const RemotePage({
@@ -149,78 +143,16 @@ class _RemotePageState extends State<RemotePage>
 
   Future<void> convertToIndependent() async {
     if (converting || widget.packageName != null || !canSendInput) return;
-    final binding = presentation.binding;
-    final owned = view;
-    final id = value(widget.device, 'id');
-    String connectionId() => value(
-      controller.snapshot().devices.where((d) => d['id'] == id).firstOrNull ??
-          widget.device,
-      'connectionId',
-    );
-    final connection = connectionId();
-    if (connection.isEmpty) {
-      showRemoteNotice('尚未确认当前设备连接。');
-      return;
-    }
     setState(() => converting = true);
-    bool current() =>
-        mounted &&
-        !presentation.exiting &&
-        canSendInput &&
-        presentation.binding == binding &&
-        view == owned &&
-        connectionId() == connection;
     try {
-      final foreground = await controller.request('apps.foreground', {
-        'deviceId': id,
-        'connectionId': connection,
-      });
-      if (!current()) return;
-      final package = value(foreground, 'packageName');
-      if (foreground['deviceId'] != id ||
-          foreground['connectionId'] != connection ||
-          foreground['source'] != 'resumedActivity' ||
-          package.isEmpty) {
-        throw const RequestFailure('foreground_unavailable', '无法确认手机当前前台应用。');
-      }
-      final running = await controller.request('apps.list', {
-        'deviceId': id,
-        'filter': 'running',
-      });
-      if (!current()) return;
-      if (running['deviceId'] != id ||
-          running['source'] != 'runningTasks' ||
-          running['live'] != true ||
-          (running['connectionId'] != null &&
-              running['connectionId'] != connection) ||
-          !objects(running['apps'])
-              .any((app) => app['packageName'] == package)) {
-        throw const RequestFailure(
-          'foreground_unavailable',
-          '当前前台内容没有可接续的应用任务。',
-        );
-      }
-      final verified = await controller.request('apps.foreground', {
-        'deviceId': id,
-        'connectionId': connection,
-      });
-      if (!current()) return;
-      if (verified['packageName'] != package ||
-          verified['connectionId'] != connection ||
-          verified['deviceId'] != id ||
-          verified['source'] != 'resumedActivity') {
-        throw const RequestFailure('foreground_unavailable', '手机前台应用已变化，请重试。');
-      }
-      await owned!.close(afterInput: releaseInputs());
-      if (!mounted ||
-          presentation.exiting ||
-          presentation.binding != binding ||
-          connectionId() != connection) {
-        return;
-      }
-      presentation.detachBinding();
+      final package = await window.convertToIndependent(
+        device: widget.device,
+        canSendInput: () => canSendInput,
+        releaseInputs: releaseInputs,
+      );
+      if (!mounted || package == null) return;
       RemoteAppRoute(
-        deviceId: id,
+        deviceId: value(widget.device, 'id'),
         packageName: package,
         $extra: const RemoteLaunchIntent(),
       ).pushReplacement(context);
@@ -1086,30 +1018,16 @@ class _RemotePageState extends State<RemotePage>
       keyboardVisible: MediaQuery.viewInsetsOf(context).bottom > 0,
       windowSize: MediaQuery.sizeOf(context),
     );
-    final width = presentation.imageWidth;
-    final height = presentation.imageHeight;
-    final texture = int.tryParse('${presentation.session?['textureId']}');
-    final valid = texture != null && width > 0 && height > 0;
-    final waitingForFirstFrame = presentation.awaitingFirstFrame;
-    final loadingBackdrop = waitingForFirstFrame || presentation.connecting;
-    final abnormal =
-        presentation.error != null ||
-        (presentation.paused && !presentation.connecting) ||
-        presentation.stateUnverified ||
-        presentation.appLaunchUnknown;
-    final loadingStage = abnormal
-        ? presentation.connecting
-              ? '正在核对屏幕启动结果'
-              : presentation.stateUnverified || presentation.appLaunchUnknown
-              ? '屏幕启动结果待核对'
-              : '屏幕启动未完成'
-        : widget.packageName == null
-        ? '正在打开手机屏幕'
-        : '正在打开独立窗口';
+    final valid =
+        int.tryParse('${presentation.session?['textureId']}') != null &&
+        presentation.imageWidth > 0 &&
+        presentation.imageHeight > 0;
+    final loadingBackdrop =
+        presentation.awaitingFirstFrame || presentation.connecting;
     final recovery = RemoteRecoveryPanel(
       presentation: presentation,
       independent: widget.packageName != null,
-      waitingForFirstFrame: waitingForFirstFrame,
+      waitingForFirstFrame: presentation.awaitingFirstFrame,
       onReturn: () => unawaited(leave()),
       onManageActivities: () =>
           DeviceActivitiesRoute(deviceId: value(widget.device, 'id'))
@@ -1187,155 +1105,57 @@ class _RemotePageState extends State<RemotePage>
                       )
                     : null,
                 // 视频占满可绘制视口，叠加控件自行扣除安全区与系统手势边距。
-                body: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: RemoteSurface(
-                        textureId: texture,
-                        sourceSize: Size(width, height),
-                        inputs: inputs,
-                        onViewport: displaySizing.observeViewport,
-                      ),
+                body: RemoteStage(
+                  presentation: presentation,
+                  inputs: inputs,
+                  onViewport: displaySizing.observeViewport,
+                  deviceLabel: deviceName(widget.device),
+                  independent: widget.packageName != null,
+                  recovery: recovery,
+                  ime: ime,
+                  sensitive: sensitive,
+                  inputFocus: inputFocus,
+                  needsWake:
+                      screenState.screenOn == false ||
+                      screenState.screenLocked == true ||
+                      (screenState.screenOn == null &&
+                          screenState.screenLocked == null &&
+                          presentation.errorCode == 'device_asleep'),
+                  onWake: waking ? null : wakeScreen,
+                  onClose: presentation.exiting ? null : leave,
+                  controls: ExitHandle(
+                    key: const ValueKey('remote-exit-handle'),
+                    onExit: leave,
+                    independent: widget.packageName != null,
+                    onSleep: canSendInput
+                        ? () => pressNavigationKey(223)
+                        : null,
+                    onConvert:
+                        canSendInput &&
+                            !converting &&
+                            (int.tryParse(value(widget.device, 'apiLevel')) ??
+                                    29) >=
+                                29
+                        ? convertToIndependent
+                        : null,
+                    onScreenshot: valid && view?.isCurrent == true
+                        ? screenshot
+                        : null,
+                    onKeyboard: canSendInput ? showKeyboard : null,
+                    onRotate: canSendInput
+                        ? () => unawaited(
+                            send(ApplicationCommand.sessionRotate, {}),
+                          )
+                        : null,
+                    deviceLabel: deviceName(currentDevice ?? widget.device),
+                    connectionLabel: unverified || currentDevice == null
+                        ? '连接状态待核对'
+                        : deviceStatusText(currentDevice),
+                    soundControl: RemoteAudioControl(
+                      controller: controller,
+                      deviceId: value(widget.device, 'id'),
                     ),
-                    if (loadingBackdrop)
-                      Positioned.fill(
-                        key: const ValueKey('remote-first-frame-wait'),
-                        child: AmbientLoadingField(
-                          semanticsLabel:
-                              '${deviceName(widget.device)}，$loadingStage',
-                          animating:
-                              !abnormal &&
-                              presentation.connecting &&
-                              !presentation.exiting,
-                          showParticles: !abnormal && !presentation.exiting,
-                          overlay: abnormal ? recovery : null,
-                        ),
-                      ),
-                    if (presentation.qualityRebuilding)
-                      const Align(
-                        alignment: Alignment.bottomCenter,
-                        child: SafeArea(
-                          child: Padding(
-                            padding: EdgeInsets.all(DesignTokens.spacingMd),
-                            child: Glass(
-                              padding: EdgeInsets.all(DesignTokens.spacingMd),
-                              child: Text('正在调整画面…'),
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (!loadingBackdrop &&
-                        !presentation.connecting &&
-                        (presentation.error != null || presentation.paused) &&
-                        presentation.errorCode != 'device_asleep')
-                      recovery,
-                    if (ime)
-                      Positioned(
-                        left: 0,
-                        bottom: 0,
-                        width: 1,
-                        height: 1,
-                        child: TextField(
-                          focusNode: inputFocus,
-                          controller: text,
-                          autofocus: true,
-                          obscureText: sensitive,
-                          enableSuggestions: !sensitive,
-                          autocorrect: !sensitive,
-                          enableInteractiveSelection: !sensitive,
-                          onSubmitted: (_) {
-                            if (!canSendInput) return;
-                            unawaited(
-                              send(ApplicationCommand.sessionKey, {
-                                'keyCode': 66,
-                                'action': 'down',
-                              }),
-                            );
-                            unawaited(
-                              send(ApplicationCommand.sessionKey, {
-                                'keyCode': 66,
-                                'action': 'up',
-                              }),
-                            );
-                          },
-                        ),
-                      ),
-                    if (screenState.screenOn == false ||
-                        screenState.screenLocked == true ||
-                        (screenState.screenOn == null &&
-                            screenState.screenLocked == null &&
-                            presentation.errorCode == 'device_asleep'))
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom:
-                            math.max(MediaQuery.paddingOf(context).bottom, 24) +
-                            48,
-                        child: Center(
-                          child: GlassActionIcon(
-                            tooltip: '点亮屏幕',
-                            onPressed: waking ? null : wakeScreen,
-                            icon: Icon(
-                              LucideIcons.sun,
-                              color: loadingBackdrop
-                                  ? Theme.of(context).colorScheme.onSurface
-                                  : Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (waitingForFirstFrame)
-                      Positioned(
-                        left: MediaQuery.paddingOf(context).left + 20,
-                        top: MediaQuery.paddingOf(context).top + 12,
-                        child: GlassActionIcon(
-                          key: const ValueKey('remote-first-frame-close'),
-                          tooltip: '关闭等待',
-                          onPressed: presentation.exiting ? null : leave,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 44,
-                            height: 44,
-                          ),
-                          icon: const Icon(LucideIcons.x),
-                        ),
-                      )
-                    else
-                      ExitHandle(
-                        key: const ValueKey('remote-exit-handle'),
-                        onExit: leave,
-                        independent: widget.packageName != null,
-                        onSleep: canSendInput
-                            ? () => pressNavigationKey(223)
-                            : null,
-                        onConvert:
-                            canSendInput &&
-                                !converting &&
-                                (int.tryParse(
-                                          value(widget.device, 'apiLevel'),
-                                        ) ??
-                                        29) >=
-                                    29
-                            ? convertToIndependent
-                            : null,
-                        onScreenshot: valid && view?.isCurrent == true
-                            ? screenshot
-                            : null,
-                        onKeyboard: canSendInput ? showKeyboard : null,
-                        onRotate: canSendInput
-                            ? () => unawaited(
-                                send(ApplicationCommand.sessionRotate, {}),
-                              )
-                            : null,
-                        deviceLabel: deviceName(currentDevice ?? widget.device),
-                        connectionLabel: unverified || currentDevice == null
-                            ? '连接状态待核对'
-                            : deviceStatusText(currentDevice),
-                        soundControl: RemoteAudioControl(
-                          controller: controller,
-                          deviceId: value(widget.device, 'id'),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ),

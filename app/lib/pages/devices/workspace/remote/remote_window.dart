@@ -76,6 +76,77 @@ class RemoteWindow {
     presentation.showUnknownAppLaunch(record);
   }
 
+  Future<String?> convertToIndependent({
+    required Json device,
+    required bool Function() canSendInput,
+    required Future<void> Function() releaseInputs,
+  }) async {
+    final binding = presentation.binding;
+    final owned = view;
+    final id = deviceId;
+    String connectionId() => value(
+      controller.snapshot().devices.where((d) => d['id'] == id).firstOrNull ??
+          device,
+      'connectionId',
+    );
+    final connection = connectionId();
+    if (connection.isEmpty) {
+      throw const RequestFailure('stale_connection', '尚未确认当前设备连接。');
+    }
+    bool current() =>
+        !_disposed &&
+        !presentation.exiting &&
+        canSendInput() &&
+        presentation.binding == binding &&
+        view == owned &&
+        connectionId() == connection;
+    final foreground = await controller.request('apps.foreground', {
+      'deviceId': id,
+      'connectionId': connection,
+    });
+    if (!current()) return null;
+    final package = value(foreground, 'packageName');
+    if (foreground['deviceId'] != id ||
+        foreground['connectionId'] != connection ||
+        foreground['source'] != 'resumedActivity' ||
+        package.isEmpty) {
+      throw const RequestFailure('foreground_unavailable', '无法确认手机当前前台应用。');
+    }
+    final running = await controller.request('apps.list', {
+      'deviceId': id,
+      'filter': 'running',
+    });
+    if (!current()) return null;
+    if (running['deviceId'] != id ||
+        running['source'] != 'runningTasks' ||
+        running['live'] != true ||
+        (running['connectionId'] != null &&
+            running['connectionId'] != connection) ||
+        !objects(running['apps']).any((app) => app['packageName'] == package)) {
+      throw const RequestFailure('foreground_unavailable', '当前前台内容没有可接续的应用任务。');
+    }
+    final verified = await controller.request('apps.foreground', {
+      'deviceId': id,
+      'connectionId': connection,
+    });
+    if (!current()) return null;
+    if (verified['packageName'] != package ||
+        verified['connectionId'] != connection ||
+        verified['deviceId'] != id ||
+        verified['source'] != 'resumedActivity') {
+      throw const RequestFailure('foreground_unavailable', '手机前台应用已变化，请重试。');
+    }
+    await owned!.close(afterInput: releaseInputs());
+    if (_disposed ||
+        presentation.exiting ||
+        presentation.binding != binding ||
+        connectionId() != connection) {
+      return null;
+    }
+    presentation.detachBinding();
+    return package;
+  }
+
   Future<void> pause(Future<void> Function() releaseInputs) async {
     if (presentation.exiting || presentation.appLaunchUnknown) return;
     final owned = _view;
