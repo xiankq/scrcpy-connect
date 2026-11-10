@@ -14,7 +14,7 @@ import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
 import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
 import 'package:scrcpy_connect/services/application_command_dispatcher.dart';
 import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/models/generated/commands_generated.dart';
+import 'package:scrcpy_connect/models/application_command.dart';
 import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 import 'package:scrcpy_connect/stores/files/file_catalog.dart';
 import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';

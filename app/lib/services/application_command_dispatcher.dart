@@ -9,7 +9,7 @@ import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
 import 'package:scrcpy_connect/services/file_commands.dart';
 import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
-import 'package:scrcpy_connect/models/generated/commands_generated.dart';
+import 'package:scrcpy_connect/models/application_command.dart';
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/services/media/video_quality_policy.dart';
 import 'package:scrcpy_connect/services/media/virtual_display_policy.dart';

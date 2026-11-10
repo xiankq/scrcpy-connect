@@ -7,7 +7,6 @@
 | Android 构建与交付校验 | `android.dart build` / `android.dart verify <APK> [--abis ...]`；通用包显式 `--abi universal` |
 | 桌面/Apple 构建 | `build_host.dart` |
 | 生成及漂移检查 | `generate.dart` / `generate.dart --check` |
-| 应用命令 | `protocol_codegen.dart` |
 | 完整门禁 | `check.sh`；`--android` 默认仅 arm64 调试包 |
 | 测试预算 | `check_test_budget.dart`；`--report` 只读 |
 | 测试 APK 构建 | `build_fixture.dart <fixture>`；输入归 [test/fixtures](../test/fixtures/README.md) |

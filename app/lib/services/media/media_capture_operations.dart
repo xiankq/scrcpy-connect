@@ -3,7 +3,7 @@ import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/services/application_snapshot_reader.dart';
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
-import 'package:scrcpy_connect/models/generated/commands_generated.dart';
+import 'package:scrcpy_connect/models/application_command.dart';
 import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
 import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
 import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';

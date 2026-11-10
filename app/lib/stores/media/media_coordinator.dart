@@ -5,7 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:scrcpy_connect/models/application_command_exception.dart';
-import 'package:scrcpy_connect/models/generated/commands_generated.dart';
+import 'package:scrcpy_connect/models/application_command.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
 import 'package:scrcpy_connect/services/media/media_capture_operations.dart';
 import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';

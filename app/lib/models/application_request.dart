@@ -1,7 +1,7 @@
-import 'package:scrcpy_connect/models/generated/commands_generated.dart'
+import 'package:scrcpy_connect/models/application_command.dart'
     show ApplicationCommand;
 
-export 'package:scrcpy_connect/models/generated/commands_generated.dart'
+export 'package:scrcpy_connect/models/application_command.dart'
     show ApplicationCommand;
 
 typedef Json = Map<String, dynamic>;

@@ -22,7 +22,6 @@ flutter run -d <device>
 | `app/` | Flutter应用、业务与平台runner |
 | `packages/`、`rust/` | 同名通用能力包及原生实现 |
 | `servers/` | 被控临时执行产物及来源 |
-| `protocol/` | 应用命令契约 |
 | `designs/` | 产品与视觉规范、pen 只读对照源文件 |
 | `scripts/` | 生成、检查、构建与设备驱动 |
 

@@ -15,7 +15,6 @@ case "$(uname -s)" in
     ;;
 esac
 npm ci --ignore-scripts --prefix scripts/design_tokens
-dart --disable-dart-dev scripts/protocol_codegen.dart --check
 dart --disable-dart-dev servers/build.dart --check vendor companion helpers
 dart --disable-dart-dev scripts/generate.dart --check
 dart --disable-dart-dev servers/companion/tests/compatibility.dart

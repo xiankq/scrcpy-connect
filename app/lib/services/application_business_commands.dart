@@ -2,7 +2,7 @@ import 'package:adb/adb.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, PlatformException;
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:scrcpy_connect/models/generated/commands_generated.dart';
+import 'package:scrcpy_connect/models/application_command.dart';
 import 'package:scrcpy_connect/models/application_command_exception.dart';
 import 'package:scrcpy_connect/services/application_snapshot_reader.dart';
 import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
