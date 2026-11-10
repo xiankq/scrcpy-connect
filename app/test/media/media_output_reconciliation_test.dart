@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/media/media_output_reconciliation.dart';
-import 'package:scrcpy_connect/stores/state_recovery.dart';
+import 'package:scrcpy_connect/services/media_output_reconciliation.dart';
+import 'package:scrcpy_connect/services/state_recovery.dart';
 
 import '../application/events/state_recovery_test.dart' show snapshot;
 

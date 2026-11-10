@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/workspace_call_card.dart';
-import 'package:scrcpy_connect/services/platform/system_visual_preferences.dart';
+import 'package:scrcpy_connect/styles/system_visual_preferences.dart';
 import 'package:scrcpy_connect/app.dart';
 
 import 'support/test_controller.dart';

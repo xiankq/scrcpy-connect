@@ -1,8 +1,11 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/models/file_cache_reservation.dart';
+import 'package:scrcpy_connect/services/file_cache_leases.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
 
 import 'file_executor_fixture.dart';
 import 'transfer_checks.dart' show withTransfer;
@@ -51,14 +54,14 @@ Map<String, Object?> row(
 
 Future<void> seeded(
   List<Map<String, Object?>> rows,
-  Future<void> Function(TransferCoordinator, Directory) check,
+  Future<void> Function(FileTransferService, Directory) check,
 ) async {
   final root = await Directory.systemTemp.createTemp('file-migration-');
   final legacy = File('${root.path}/transfers.json');
   await legacy.writeAsString(jsonEncode(rows));
-  TransferCoordinator? owner;
+  FileTransferService? owner;
   try {
-    owner = await TransferCoordinator.open(
+    owner = await FileTransferService.open(
       executor: FixtureExecutor(),
       dataDirectory: root,
     );
@@ -73,7 +76,7 @@ final migrationChecks = <String, Future<void> Function()>{
   'uncertain cache leases transfer across attachments without gaps or duplicates': () async {
     final root = await Directory.systemTemp.createTemp('file-cache-handoff-');
     final cache = LeaseCache();
-    TransferCoordinator? owner;
+    FileTransferService? owner;
     try {
       await File('${root.path}/transfers.json').writeAsString(
         jsonEncode([
@@ -87,7 +90,7 @@ final migrationChecks = <String, Future<void> Function()>{
         ]),
       );
       for (var i = 0; i < 4; i++) {
-        owner = await TransferCoordinator.open(
+        owner = await FileTransferService.open(
           executor: FixtureExecutor(),
           dataDirectory: root,
           cache: cache,
@@ -102,7 +105,7 @@ final migrationChecks = <String, Future<void> Function()>{
         require(cache.active.length == 1, 'close left an eviction window');
       }
       final replacement = LeaseCache();
-      owner = await TransferCoordinator.open(
+      owner = await FileTransferService.open(
         executor: FixtureExecutor(),
         dataDirectory: root,
         cache: replacement,
@@ -114,7 +117,7 @@ final migrationChecks = <String, Future<void> Function()>{
         'replacement did not establish protection before releasing old owner',
       );
       await owner.close();
-      owner = await TransferCoordinator.open(
+      owner = await FileTransferService.open(
         executor: FixtureExecutor(),
         dataDirectory: root,
         cache: cache,
@@ -129,7 +132,7 @@ final migrationChecks = <String, Future<void> Function()>{
         'explicit history removal leaked final lease',
       );
       await owner.close();
-      owner = await TransferCoordinator.open(
+      owner = await FileTransferService.open(
         executor: FixtureExecutor(),
         dataDirectory: root,
         cache: cache,
@@ -187,7 +190,7 @@ final migrationChecks = <String, Future<void> Function()>{
               await saved.readAsString() == 'user data',
               'removed user data',
             );
-            final restored = await TransferCoordinator.open(
+            final restored = await FileTransferService.open(
               executor: FixtureExecutor(),
               dataDirectory: root,
             );
@@ -275,7 +278,7 @@ final migrationChecks = <String, Future<void> Function()>{
             final original = '${records.map(jsonEncode).join('\n')}\n';
             await journal.writeAsString(original);
             await rejects(
-              () => TransferCoordinator.open(
+              () => FileTransferService.open(
                 executor: FixtureExecutor(),
                 dataDirectory: root,
               ),
@@ -299,7 +302,7 @@ final migrationChecks = <String, Future<void> Function()>{
             }),
           );
           await rejects(
-            () => TransferCoordinator.open(
+            () => FileTransferService.open(
               executor: FixtureExecutor(),
               dataDirectory: root,
             ),
@@ -312,7 +315,7 @@ final migrationChecks = <String, Future<void> Function()>{
   'journal appends only changed records and compaction cannot resurrect removals':
       () async {
         final root = await Directory.systemTemp.createTemp('file-compaction-');
-        TransferCoordinator? owner;
+        FileTransferService? owner;
         try {
           final rows = ['before', 'at', 'after', 'keep'].map(row).toList();
           // 在阈值前构造合法旧历史，避免用上千次独立磁盘刷新代替测试准备。
@@ -330,7 +333,7 @@ final migrationChecks = <String, Future<void> Function()>{
               }),
           ].join('\n');
           await file.writeAsString('$history\n', flush: true);
-          owner = await TransferCoordinator.open(
+          owner = await FileTransferService.open(
             executor: FixtureExecutor(),
             dataDirectory: root,
           );
@@ -351,7 +354,7 @@ final migrationChecks = <String, Future<void> Function()>{
             'compaction did not replace old history',
           );
           await owner.close();
-          owner = await TransferCoordinator.open(
+          owner = await FileTransferService.open(
             executor: FixtureExecutor(),
             dataDirectory: root,
           );
@@ -366,7 +369,7 @@ final migrationChecks = <String, Future<void> Function()>{
           );
           await owner.removeTransfer('after');
           await owner.close();
-          owner = await TransferCoordinator.open(
+          owner = await FileTransferService.open(
             executor: FixtureExecutor(),
             dataDirectory: root,
           );
@@ -383,7 +386,7 @@ final migrationChecks = <String, Future<void> Function()>{
             'empty compaction did not retain its durable migration marker',
           );
           await owner.close();
-          owner = await TransferCoordinator.open(
+          owner = await FileTransferService.open(
             executor: FixtureExecutor(),
             dataDirectory: root,
           );

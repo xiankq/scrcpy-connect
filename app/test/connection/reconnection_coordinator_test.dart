@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/stores/connection/reconnection_coordinator.dart';
+import 'package:scrcpy_connect/services/device_reconnect_service.dart';
 
 Future<void> settle() async {
   for (var i = 0; i < 40; i++) {
@@ -73,10 +73,10 @@ class _Host {
     return {};
   }
 
-  ReconnectionCoordinator coordinator({
+  DeviceReconnectService coordinator({
     ConnectionPolicy policy = const ConnectionPolicy(),
     String name = 'owner',
-  }) => ReconnectionCoordinator(
+  }) => DeviceReconnectService(
     request: request,
     policy: policy,
     ownerPrefix: name,
@@ -91,7 +91,7 @@ class _Host {
       .where((call) => call.$1 == 'devices.connect')
       .map((call) => call.$2)
       .toList();
-  void publish(ReconnectionCoordinator owner) {
+  void publish(DeviceReconnectService owner) {
     sequence++;
     owner.handleEvent({
       'type': 'devices.changed',
@@ -100,7 +100,7 @@ class _Host {
     });
   }
 
-  void updateSettings(ReconnectionCoordinator owner, ReconnectJson value) {
+  void updateSettings(DeviceReconnectService owner, ReconnectJson value) {
     settings = value;
     sequence++;
     owner.handleEvent({

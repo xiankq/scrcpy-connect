@@ -10,7 +10,7 @@ import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
 import 'package:scrcpy_connect/models/remote_display_settings.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -41,7 +41,7 @@ Json _autoDisplayReceipt(Json params) => {
 
 Future<void> _mountRemote(
   WidgetTester tester,
-  AppController controller, {
+  AppStore controller, {
   Json? existingSession,
   bool requestKeyboard = false,
 }) => tester.pumpWidget(
@@ -58,7 +58,7 @@ Future<void> _mountRemote(
 
 Future<void> _mountEntry(
   WidgetTester tester,
-  AppController controller, {
+  AppStore controller, {
   required String label,
   required void Function(BuildContext) open,
 }) => tester.pumpWidget(

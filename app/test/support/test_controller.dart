@@ -6,20 +6,20 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
 
 final _containers = Expando<ProviderContainer>();
 final _views = Expando<RemoteViews>();
 
-class _TestController extends AppController {
+class _TestController extends AppStore {
   void seed(AppState next) {
     state = next;
   }
 }
 
-AppController createTestController(
+AppStore createTestController(
   ApplicationRequest request, {
   Stream<Json>? events,
   AppState? initialState,
@@ -70,21 +70,20 @@ AppController createTestController(
           initialize: false,
         ),
       ),
-      appControllerProvider.overrideWith(_TestController.new),
+      appStoreProvider.overrideWith(_TestController.new),
       routeResourceResolverProvider.overrideWith(
-        (ref) =>
-            _FixtureRouteResources(ref.watch(appControllerProvider.notifier)),
+        (ref) => _FixtureRouteResources(ref.watch(appStoreProvider.notifier)),
       ),
     ],
   );
-  final controller = container.read(appControllerProvider.notifier);
+  final controller = container.read(appStoreProvider.notifier);
   _containers[controller] = container;
   final views = _views[controller] = RemoteViews(controller);
-  container.listen(appControllerProvider, (_, _) => views.reconcile());
+  container.listen(appStoreProvider, (_, _) => views.reconcile());
   return controller;
 }
 
-ProviderContainer testContainer(AppController controller) =>
+ProviderContainer testContainer(AppStore controller) =>
     _containers[controller] ??
     (throw StateError('Use a scoped test controller.'));
 
@@ -94,7 +93,7 @@ class TestProviderScope extends StatelessWidget {
     required this.controller,
     required this.child,
   });
-  final AppController controller;
+  final AppStore controller;
   final Widget child;
   @override
   Widget build(BuildContext context) => UncontrolledProviderScope(
@@ -104,7 +103,7 @@ class TestProviderScope extends StatelessWidget {
 }
 
 /// 夹具注入仅供测试；生产控件消费生成状态和动作，不能经这些辅助方法修改不可变快照。
-extension ControllerFixture on AppController {
+extension ControllerFixture on AppStore {
   RemoteViews get views => _views[this]!;
   void dispose() {
     views.dispose();
@@ -144,7 +143,7 @@ extension ControllerFixture on AppController {
 }
 
 final _recordDevices = Expando<List<Json>>();
-void seedRouteDevices(AppController controller, List<Json> devices) {
+void seedRouteDevices(AppStore controller, List<Json> devices) {
   _recordDevices[controller] = devices;
 }
 

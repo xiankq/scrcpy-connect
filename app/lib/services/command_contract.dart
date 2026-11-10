@@ -113,7 +113,7 @@ void validateTypedCommandRequest(
     case ApplicationCommand.filesDelete:
       _check(params, 'deviceId', _string, 'invalid_argument');
       _check(params, 'expectedStamps', _object, 'invalid_argument');
-    case ApplicationCommand.filesOpen || ApplicationCommand.mediaCacheRetain:
+    case ApplicationCommand.mediaCacheRetain:
       _check(params, 'localPath', _string, 'invalid_argument');
     case ApplicationCommand.filesRename:
       _check(params, 'deviceId', _string, 'invalid_argument');

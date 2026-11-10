@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/stores/application_session.dart';
+import 'package:scrcpy_connect/services/app_runtime.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
+import 'package:scrcpy_connect/stores/app_launch_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -16,14 +16,14 @@ void main() {
       'application-recovery-barrier-',
     );
     final directory = Directory(await temporary.resolveSymbolicLinks());
-    ApplicationSession? session;
+    AppRuntime? session;
     _BlockedSnapshotFile? blockedFile;
     Future<AppLaunchStore>? replacement;
     Future<void>? reconcileFailure;
     StreamSubscription<Map<String, dynamic>>? subscription;
     final received = <Map<String, dynamic>>[];
     try {
-      session = await ApplicationSession.initialize(
+      session = await AppRuntime.initialize(
         dataDirectory: directory.path,
         adbBinaryDirectory: _officialBinaryDirectory(),
         connectionPolicy: const ConnectionPolicy(
@@ -130,10 +130,7 @@ void main() {
   }, skip: !(Platform.isLinux || Platform.isMacOS || Platform.isWindows));
 }
 
-Future<void> _expectNewActionsBlocked(
-  ApplicationSession session,
-  String device,
-) async {
+Future<void> _expectNewActionsBlocked(AppRuntime session, String device) async {
   final common = <String, dynamic>{'deviceId': device};
   final actions = <(String, Map<String, dynamic>)>[
     ('calls.open', {...common, 'callId': 'old-call'}),
@@ -202,7 +199,7 @@ Future<void> _expectNewActionsBlocked(
 }
 
 Future<void> _expectReadsAndCleanupAvailable(
-  ApplicationSession session,
+  AppRuntime session,
   String device,
 ) async {
   expect((await session.request('devices.list'))['devices'], hasLength(1));

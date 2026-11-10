@@ -2,7 +2,7 @@ import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_summary.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +13,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class DeviceHero extends HookWidget {
   const DeviceHero({super.key, required this.controller, required this.device});
-  final AppController controller;
+  final AppStore controller;
   final Json device;
 
   @override

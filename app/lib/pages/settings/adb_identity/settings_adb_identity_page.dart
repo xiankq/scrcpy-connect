@@ -1,24 +1,25 @@
+import 'package:scrcpy_connect/models/adb_private_key_file_failure.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:scrcpy_connect/services/connection/adb_identity_validation.dart';
+import 'package:scrcpy_connect/services/adb_identity_validation.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class AdbIdentityPage extends HookWidget {
   const AdbIdentityPage({super.key, required this.controller});
-  final AppController controller;
+  final AppStore controller;
 
   @override
   Widget build(BuildContext context) {

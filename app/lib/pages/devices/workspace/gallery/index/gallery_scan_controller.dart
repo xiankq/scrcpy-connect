@@ -1,9 +1,8 @@
+import 'package:scrcpy_connect/models/gallery_history_entry.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
-
-import 'package:scrcpy_connect/stores/files/gallery_history.dart';
 
 import 'package:flutter/foundation.dart';
 

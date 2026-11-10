@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/apps/devices_workspace_apps_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_launcher.dart';
 
 const _package = 'com.android.settings';
@@ -32,7 +32,7 @@ List<Json> _sent(List<(String, Json)> calls, String command) => [
     if (call.$1 == command) call.$2,
 ];
 
-AppController _controller(
+AppStore _controller(
   List<(String, Json)> calls,
   Future<Json> Function(String, Json) respond,
 ) => createTestController((command, [params = const {}]) {
@@ -42,7 +42,7 @@ AppController _controller(
 
 Future<void> _showRemote(
   WidgetTester tester,
-  AppController controller, {
+  AppStore controller, {
   Json device = const {'id': 'phone', 'apiLevel': 35},
   String? packageName,
   RemoteControlIntent? action,

@@ -5,7 +5,7 @@ import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
 
 class ShareDeviceCard extends StatelessWidget {

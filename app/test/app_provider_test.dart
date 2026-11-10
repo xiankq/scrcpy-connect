@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
 
@@ -48,7 +48,7 @@ void main() {
         ),
       ],
     );
-    final notifier = container.read(appControllerProvider.notifier);
+    final notifier = container.read(appStoreProvider.notifier);
     final pending = notifier.execute(ApplicationCommand.sessionStop, {
       'sessionId': 'session-owned',
     });
@@ -66,7 +66,7 @@ void main() {
         (command, [params = const {}]) => saving.future,
         events: events.stream,
       );
-      final notifier = container.read(appControllerProvider.notifier);
+      final notifier = container.read(appStoreProvider.notifier);
       final pending = notifier.updateSetting('appearance', 'dark');
       await Future<void>.delayed(Duration.zero);
       const authoritative = <String, dynamic>{
@@ -103,7 +103,7 @@ void main() {
       commands.add(command);
       return {};
     }, events: events.stream);
-    final notifier = container.read(appControllerProvider.notifier);
+    final notifier = container.read(appStoreProvider.notifier);
     final views = RemoteViews(notifier);
     addTearDown(views.dispose);
     final view = views.claimSessionViewLease('live', visible: true);
@@ -142,7 +142,7 @@ void main() {
     }
 
     final container = scope(request, events: oldEvents.stream);
-    final oldController = container.read(appControllerProvider.notifier);
+    final oldController = container.read(appStoreProvider.notifier);
     final views = RemoteViews(oldController);
     addTearDown(views.dispose);
     final oldView = views.claimSessionViewLease('old', visible: true);
@@ -161,7 +161,7 @@ void main() {
         ),
       ),
     ]);
-    final current = container.read(appControllerProvider.notifier);
+    final current = container.read(appStoreProvider.notifier);
     expect(current.snapshot().devices.single['id'], 'new');
     expect(oldView.isCurrent, isFalse);
     oldEvents.add({
@@ -205,7 +205,7 @@ void main() {
         ],
       ),
     );
-    final notifier = container.read(appControllerProvider.notifier);
+    final notifier = container.read(appStoreProvider.notifier);
     final reads = [
       notifier.refreshDevices(),
       notifier.loadSettings(),
@@ -266,7 +266,7 @@ void main() {
             ++requests == 1 ? first.future : second.future,
       );
       addTearDown(container.dispose);
-      final notifier = container.read(appControllerProvider.notifier);
+      final notifier = container.read(appStoreProvider.notifier);
       final old = notifier.refreshDevices();
       final current = notifier.refreshDevices();
       second.complete({
@@ -281,8 +281,8 @@ void main() {
         ],
       });
       await old;
-      expect(container.read(appControllerProvider).devices.single['id'], 'new');
-      expect(container.read(appControllerProvider).loading, isFalse);
+      expect(container.read(appStoreProvider).devices.single['id'], 'new');
+      expect(container.read(appStoreProvider).loading, isFalse);
     },
   );
 
@@ -299,7 +299,7 @@ void main() {
           closes++;
         },
       );
-      final notifier = container.read(appControllerProvider.notifier);
+      final notifier = container.read(appStoreProvider.notifier);
       final work = notifier.refreshDevices();
       expect(events.hasListener, isTrue);
       container.dispose();
@@ -324,12 +324,12 @@ void main() {
         (command, [params = const {}]) async => {},
         events: events.stream,
       );
-      final notifier = container.read(appControllerProvider.notifier);
-      final state = container.read(appControllerProvider);
+      final notifier = container.read(appStoreProvider.notifier);
+      final state = container.read(appStoreProvider);
       final received = <Json>[];
       final session = notifier.eventStream().listen(received.add);
       var changes = 0;
-      final subscription = container.listen(appControllerProvider, (_, next) {
+      final subscription = container.listen(appStoreProvider, (_, next) {
         changes++;
       });
       events.add({
@@ -337,7 +337,7 @@ void main() {
         'data': {'sessionId': 'bound', 'framesDecoded': 1},
       });
       expect(received.single['type'], 'session.frame');
-      expect(identical(container.read(appControllerProvider), state), isTrue);
+      expect(identical(container.read(appStoreProvider), state), isTrue);
       expect(changes, 0);
       events.add({
         'type': 'device.updated',
@@ -368,7 +368,7 @@ void main() {
         };
       });
       addTearDown(container.dispose);
-      final notifier = container.read(appControllerProvider.notifier);
+      final notifier = container.read(appStoreProvider.notifier);
       final reading = notifier.loadSettings();
       final saveFirst = notifier.updateSetting('appearance', 'dark');
       await Future<void>.delayed(Duration.zero);
@@ -384,7 +384,7 @@ void main() {
         {'appearance': 'dark'},
         {'background': true},
       ]);
-      expect(container.read(appControllerProvider).settings, {
+      expect(container.read(appStoreProvider).settings, {
         'appearance': 'dark',
         'background': true,
       });
@@ -397,10 +397,7 @@ void main() {
         'phone': {'com.one': 'phone', 'com.two': 'window'},
         'tablet': {'com.one': 'window'},
       };
-      expect(
-        container.read(appControllerProvider).settings['appOpenModes'],
-        modes,
-      );
+      expect(container.read(appStoreProvider).settings['appOpenModes'], modes);
       expect(updates.last['appOpenModes'], modes);
       final releaseFirst = notifier.claimAppOpen('phone', 'com.one')!;
       expect(notifier.claimAppOpen('phone', 'com.one'), isNull);

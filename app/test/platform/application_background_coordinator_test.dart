@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/platform/application_background_coordinator.dart';
+import 'package:scrcpy_connect/services/application_background_policy.dart';
 
 void main() {
   test('entering the application requests connection background before audio with no device or page', () async {
     final calls = <String>[];
-    final background = ApplicationBackgroundCoordinator(
+    final background = ApplicationBackgroundPolicy(
       request: (command, params) async {
         calls.add(command);
         expect(params, {'enabled': true, 'automatic': true});
@@ -22,7 +22,7 @@ void main() {
   test('platform refusal reports status while preserving application startup and preference', () async {
     final events = <Map<String, dynamic>>[];
     final audio = <bool>[];
-    final background = ApplicationBackgroundCoordinator(
+    final background = ApplicationBackgroundPolicy(
       request: (_, _) async => throw StateError('foreground denied'),
       audioPolicy: (enabled) async {
         audio.add(enabled);

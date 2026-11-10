@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/widgets/documents/document_picker.dart';
+
 import 'dart:async';
 
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'dart:math';
@@ -10,12 +12,13 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 DocumentOperationController useDocumentOperationController(
-  AppController controller, {
+  AppStore controller, {
   Json? exportSource,
 }) {
   final operation = useMemoized(
     () => DocumentOperationController(
       request: controller.request,
+      completeSelection: controller.completeDocumentSelection,
       execute: controller.execute,
       events: controller.eventStream(),
       exportSource: exportSource,
@@ -41,25 +44,50 @@ class DocumentOperationController extends ChangeNotifier {
   DocumentOperationController({
     required this.request,
     required this.execute,
+    this.completeSelection,
     required Stream<Json> events,
     this.exportSource,
   }) : loaded = exportSource == null {
-    if (exportSource != null) {
-      _events = events
-          .where((event) {
-            final data = jsonObject(event['data']);
-            return event['type'] == 'delivery.changed' &&
-                [
-                  'sourceId',
-                  'localPath',
-                  'kind',
-                ].every((field) => data[field] == exportSource![field]);
-          })
-          .listen((_) {
-            if (!busy) unawaited(refresh());
-          });
-    }
+    _events = events.listen((event) {
+      final data = jsonObject(event['data']);
+      if (event['type'] == 'documents.selection.requested' &&
+          data['operationId'] == operationId &&
+          !disposed) {
+        unawaited(_choose(data));
+      }
+      if (exportSource != null &&
+          event['type'] == 'delivery.changed' &&
+          [
+            'sourceId',
+            'localPath',
+            'kind',
+          ].every((field) => data[field] == exportSource![field]) &&
+          !busy) {
+        unawaited(refresh());
+      }
+    });
   }
+
+  Future<void> _choose(Json selection) async {
+    final id = selection['operationId'] as String;
+    Json receipt;
+    try {
+      receipt = await DocumentPicker.choose(selection);
+    } catch (failure) {
+      receipt = {
+        'status': 'failed',
+        'code': failure is RequestFailure ? failure.code : 'selection_failed',
+        'message': '$failure',
+      };
+    }
+    // 退出或取消后拒绝迟到的选择；原任务仍负责回收原生资源。
+    completeSelection?.call(
+      id,
+      disposed || operationId != id ? {'status': 'cancelled'} : receipt,
+    );
+  }
+
+  final bool Function(String, Json)? completeSelection;
   final ApplicationRequest request;
   final ApplicationCommandExecutor execute;
   final Json? exportSource;

@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/models/adb_discovery_endpoint.dart';
+import 'package:scrcpy_connect/models/identity_selection.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -8,11 +11,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/stores/connection/connection_setup_coordinator.dart';
-import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
-import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
-import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/services/device_connection_service.dart';
+import 'package:scrcpy_connect/services/device_service.dart';
+import 'package:scrcpy_connect/services/device_discovery.dart';
+import 'package:scrcpy_connect/services/adb_identity_service.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
 
 import 'support/disk_identities.dart';
 
@@ -622,11 +625,11 @@ Matcher _failure(String code) =>
 final class _Fixture {
   _Fixture(this.root);
   final Directory root;
-  late final DeviceRecordStore records;
-  late final IdentityManager identities;
-  late final DeviceCoordinator devices;
+  late final DeviceStore records;
+  late final AdbIdentityService identities;
+  late final DeviceService devices;
   late final DeviceDiscovery discovery;
-  late final ConnectionSetupCoordinator setup;
+  late final DeviceConnectionService setup;
   final client = _Client();
   final identityApi = DiskIdentities(conflictError: null);
   final events = <Map<String, dynamic>>[];
@@ -649,12 +652,12 @@ final class _Fixture {
     final fixture = _Fixture(
       await Directory.systemTemp.createTemp('setup-typed-'),
     );
-    fixture.records = await DeviceRecordStore.open(
+    fixture.records = await DeviceStore.open(
       directory: fixture.root,
       idFactory: () =>
           '00000000-0000-4000-8000-${(++fixture._nextId).toString().padLeft(12, '0')}',
     );
-    fixture.identities = await IdentityManager.open(
+    fixture.identities = await AdbIdentityService.open(
       directory: fixture.root,
       records: fixture.records,
       identities: fixture.identityApi,
@@ -662,7 +665,7 @@ final class _Fixture {
           ? fixture.devices.invalidate(ids)
           : Future<void>.value(),
     );
-    fixture.devices = DeviceCoordinator(
+    fixture.devices = DeviceService(
       records: fixture.records,
       identities: fixture.identities,
       clientForIdentity: (_) => fixture.client,
@@ -690,7 +693,7 @@ final class _Fixture {
           },
       clientFactory: (factory) => _Mdns(fixture, factory),
     );
-    fixture.setup = ConnectionSetupCoordinator(
+    fixture.setup = DeviceConnectionService(
       devices: fixture.devices,
       discovery: fixture.discovery,
       clientForIdentity: (_) => fixture.client,

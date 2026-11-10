@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/platform/application_platform.dart';
+import 'package:scrcpy_connect/services/application_platform.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

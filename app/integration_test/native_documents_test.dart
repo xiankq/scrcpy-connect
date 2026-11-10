@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -50,7 +50,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(appControllerProvider.notifier);
+      ).read(appStoreProvider.notifier);
       String? activeOperation;
       String? managedSourceId;
       String? importedPath;

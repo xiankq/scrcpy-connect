@@ -7,7 +7,7 @@ import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devi
 import 'package:scrcpy_connect/pages/devices/index/devices_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
 import 'package:scrcpy_connect/pages/settings/adb_identity/settings_adb_identity_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -25,7 +25,7 @@ const phone = <String, dynamic>{
 
 Future<void> pump(
   WidgetTester tester,
-  AppController controller,
+  AppStore controller,
   Widget page, {
   bool narrow = false,
 }) async {

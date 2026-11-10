@@ -5,7 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/details/data/devices_details_data_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -26,7 +26,7 @@ void main() {
       };
       final replacedRead = Completer<Json>();
       final calls = <Json>[];
-      late AppController controller;
+      late AppStore controller;
       controller = createTestController((command, [params = const {}]) async {
         if (command != 'device.data.get') return {};
         calls.add(Map.of(params));

@@ -1,3 +1,7 @@
+import 'document_selection_fixture.dart';
+
+import 'package:scrcpy_connect/services/file_document_scope.dart';
+
 import 'dart:io';
 import 'dart:convert';
 import 'dart:ffi';
@@ -7,11 +11,11 @@ import 'package:scrcpy/scrcpy.dart' show createNativeScrcpyLocalFiles;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/services/platform/application_platform.dart';
-import 'package:scrcpy_connect/services/files/document_scope_recovery.dart';
-import 'package:scrcpy_connect/services/files/desktop_document_delivery.dart';
-import 'package:scrcpy_connect/stores/files/document_sources.dart';
-import 'package:scrcpy_connect/stores/files/documents_coordinator.dart';
+import 'package:scrcpy_connect/services/application_platform.dart';
+import 'package:scrcpy_connect/services/file_document_recovery.dart';
+import 'package:scrcpy_connect/services/file_desktop_delivery.dart';
+import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_document_service.dart';
 
 final class _Descriptors {
   final _library = DynamicLibrary.process();
@@ -71,7 +75,7 @@ void main() {
     );
     final files = await createNativeScrcpyLocalFiles();
     final descriptors = _Descriptors();
-    DocumentsCoordinator? coordinator;
+    FileDocumentService? coordinator;
     try {
       final actual = await Directory(p.join(parent.path, 'actual')).create();
       final logical = Link(p.join(parent.path, 'logical'));
@@ -87,14 +91,46 @@ void main() {
         'ownerLeaseId': 'fixture',
       };
       // 生产平台与协调器分两次核验同一环境。
-      final boundary = await DocumentScopeConfiguration.fromEnvironment(
-        environment,
-      );
-      final sources = await DocumentSources.open(
+      final boundary = await FileDocumentScope.fromEnvironment(environment);
+      final sources = await FileDocumentStore.open(
         cacheDirectory: Directory(environment['cacheDirectory'] as String),
       );
       var pickerCount = 0;
-      coordinator = DocumentsCoordinator(
+      coordinator = FileDocumentService(
+        selections: fakeDocumentSelections((command, params) async {
+          switch (command) {
+            case 'documents.platform.environment':
+              return boundary.environment;
+            case 'documents.platform.picker':
+              pickerCount++;
+              return {
+                'status': 'selected',
+                'documents': [
+                  {'handle': 'target'},
+                ],
+              };
+            case 'documents.platform.metadata':
+              return {
+                'handle': 'target',
+                'id': 'target',
+                'authority': 'fixture',
+                'name': 'target',
+                'directory': false,
+                'canWrite': true,
+                'size': await target.length(),
+              };
+            case 'documents.platform.openFd':
+              final fd = descriptors.open(target.path);
+              return {'fd': fd, 'fdLeaseId': '$fd'};
+            case 'documents.platform.releaseFd':
+              descriptors.close(int.parse(params['fdLeaseId'] as String));
+              return {'released': true};
+            case 'documents.platform.release':
+              return {'released': true};
+            default:
+              throw StateError(command);
+          }
+        }),
         files: () async => files,
         sources: sources,
         platform: (command, params) async {
@@ -191,7 +227,7 @@ void main() {
     final parent = await Directory.systemTemp.createTemp('document-alias-');
     final files = await createNativeScrcpyLocalFiles();
     LocalFileScope? scope;
-    DocumentSources? sources;
+    FileDocumentStore? sources;
     String? managedId;
     try {
       final first = await Directory(p.join(parent.path, 'first')).create();
@@ -202,10 +238,8 @@ void main() {
         'cacheDirectory': alias.path,
         'ownerLeaseId': 'old-owner',
       };
-      final boundary = await DocumentScopeConfiguration.fromEnvironment(
-        original,
-      );
-      sources = await DocumentSources.open(
+      final boundary = await FileDocumentScope.fromEnvironment(original);
+      sources = await FileDocumentStore.open(
         cacheDirectory: Directory(alias.path),
       );
       final source = await sources.reserve();
@@ -216,7 +250,7 @@ void main() {
       final folder = await scope.stat(path(source.path));
       expect(folder.identity.kind, LocalFileKind.directory);
       expect(boundary.key, p.join(alias.path, 'documents'));
-      final filtered = await DocumentScopeConfiguration.fromEnvironment(
+      final filtered = await FileDocumentScope.fromEnvironment(
         boundary.environment,
       );
       expect(filtered.key, boundary.key);
@@ -244,7 +278,7 @@ void main() {
       await inside.delete();
 
       final recoveredCommands = <String>[];
-      final recovery = DocumentScopeRecovery(
+      final recovery = FileDocumentRecovery(
         files: () async => files,
         platform: (command, params) async {
           recoveredCommands.add(command);
@@ -260,9 +294,7 @@ void main() {
         scope.stat(path(source.path)),
         throwsA(isA<LocalFileException>()),
       );
-      final successor = await DocumentScopeConfiguration.fromEnvironment(
-        original,
-      );
+      final successor = await FileDocumentScope.fromEnvironment(original);
       expect(successor.key, boundary.key);
       final next = await successor.open(files);
       try {
@@ -304,7 +336,7 @@ void main() {
             .writeAsBytes([1, 2, 3]);
         final part = p.join(root.path, '.old-isolate.part');
         final scope = await files.openScope(
-          scopeKey: DesktopDocumentDelivery.scopeKey,
+          scopeKey: FileDesktopDelivery.scopeKey,
           allowedRoots: [utf8.encode(root.path)],
         );
         await scope.copy(

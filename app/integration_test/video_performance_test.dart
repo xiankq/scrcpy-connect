@@ -7,9 +7,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:scrcpy_connect/services/media/video_player.dart';
-import 'package:scrcpy_connect/stores/media/video_output_coordinator.dart';
-import 'package:scrcpy_connect/services/media/video_quality_policy.dart';
+import 'package:scrcpy_connect/services/video_player.dart';
+import 'package:scrcpy_connect/services/video_output_service.dart';
+import 'package:scrcpy_connect/services/video_quality_policy.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'support/media_owner_fixture.dart';
@@ -75,16 +75,16 @@ void main() {
     Future<T> real<T>(Future<T> Function() action) async =>
         (await tester.runAsync(action)) as T;
     var disposed = false;
-    late CodecVideoPlayer player;
+    late VideoPlayer player;
     final decoderEvents = <VideoJson>[];
-    final outputs = VideoOutputCoordinator(
+    final outputs = VideoOutputService(
       request: request,
       openSource: (stream, generation) =>
           fixture!.videoSource.openSource(stream, generation),
       emit: (_) {},
       isDisposed: () => disposed,
       playerFactory: () {
-        player = CodecVideoPlayer();
+        player = VideoPlayer();
         player.events.listen((event) {
           if (event['category'] == 'decoder.video') {
             decoderEvents.add({...event});

@@ -4,13 +4,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/media_thumbnail.dart';
 
 import 'support/test_controller.dart';
 
 Widget _gallery(
-  AppController controller, {
+  AppStore controller, {
   int count = 8,
   String device = 'a',
   String? provided,

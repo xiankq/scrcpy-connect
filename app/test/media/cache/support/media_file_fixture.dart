@@ -1,6 +1,13 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/models/file_cancellation.dart';
+import 'package:scrcpy_connect/models/file_stamp.dart';
+import 'package:scrcpy_connect/models/file_directory_facts.dart';
+import 'package:scrcpy_connect/services/file_read_executor.dart';
+import 'package:scrcpy_connect/services/file_read_batch.dart';
+
 import 'dart:io';
 
-import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/services/file_executor.dart';
 
 final class MediaFileFixture implements FileExecutor, FileReadExecutor {
   @override
@@ -78,7 +85,7 @@ final class MediaFileFixture implements FileExecutor, FileReadExecutor {
   }
 
   @override
-  Future<DirectoryFacts> list(
+  Future<FileDirectoryFacts> list(
     String device,
     String path, {
     required bool local,

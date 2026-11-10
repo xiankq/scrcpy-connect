@@ -2,16 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
 
 import 'file_executor_fixture.dart';
 
 Future<void> withTransfer(
-  Future<void> Function(TransferCoordinator, FixtureExecutor, Directory) check,
+  Future<void> Function(FileTransferService, FixtureExecutor, Directory) check,
 ) async {
   final root = await Directory.systemTemp.createTemp('file-owner-');
   final executor = FixtureExecutor();
-  final owner = await TransferCoordinator.open(
+  final owner = await FileTransferService.open(
     executor: executor,
     dataDirectory: root,
   );
@@ -117,7 +117,7 @@ final transferChecks = <String, Future<void> Function()>{
         });
         await legacy.writeAsString(raw, flush: true);
         await File('${root.path}/kept').writeAsString('user data', flush: true);
-        final owner = await TransferCoordinator.open(
+        final owner = await FileTransferService.open(
           executor: FixtureExecutor(),
           dataDirectory: root,
         );

@@ -5,7 +5,7 @@ import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/widgets/notification_card.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -13,8 +13,8 @@ import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
@@ -26,14 +26,14 @@ class NotificationsPage extends HookConsumerWidget {
     required this.controller,
     required this.device,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final alerts = ref.watch(systemNotificationCoordinatorProvider);
+    final alerts = ref.watch(systemNotificationsProvider);
     useListenable(alerts.changes);
     final settings = ref.watch(
-      appControllerProvider.select((state) => state.settings),
+      appStoreProvider.select((state) => state.settings),
     );
     final enablingAlerts = useState(false);
     final alertStatus = alerts.status;

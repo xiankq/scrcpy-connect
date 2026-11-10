@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -7,8 +9,7 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/services/connection/scrcpy_query_process.dart';
+import 'package:scrcpy_connect/services/scrcpy_query_process.dart';
 
 void main() {
   final binary = Platform.environment['INTEROP_MKSH_BINARY'];

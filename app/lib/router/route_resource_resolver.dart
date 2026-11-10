@@ -1,18 +1,18 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 part 'route_resource_resolver.g.dart';
 
 @Riverpod(keepAlive: true)
 RouteResourceResolver routeResourceResolver(Ref ref) =>
-    RouteResourceResolver(ref.watch(appControllerProvider.notifier));
+    RouteResourceResolver(ref.watch(appStoreProvider.notifier));
 
 /// 按路由参数解析并核验当前资源；标识只用于定位，不代表授权或信任。
 class RouteResourceResolver {
   RouteResourceResolver(this.controller);
-  final AppController controller;
+  final AppStore controller;
   Future<Json> device(String id) async {
     if (id.isEmpty) {
       throw const RequestFailure('missing_device', '没有指定设备，请从设备列表重新打开。');

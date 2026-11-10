@@ -8,8 +8,8 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 
 class DeviceConnectionPreferencesPage extends HookConsumerWidget {
   const DeviceConnectionPreferencesPage({
@@ -17,13 +17,13 @@ class DeviceConnectionPreferencesPage extends HookConsumerWidget {
     required this.controller,
     required this.device,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = ref.watch(
-      appControllerProvider.select(
+      appStoreProvider.select(
         (state) => state.devices
             .where((entry) => entry['id'] == device['id'])
             .firstOrNull,

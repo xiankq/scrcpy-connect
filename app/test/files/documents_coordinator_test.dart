@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/models/application_request.dart';
+
+import 'document_selection_fixture.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,11 +10,10 @@ import 'package:adb/adb.dart';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/platform/application_platform.dart';
-import 'package:scrcpy_connect/stores/files/documents_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/document_sources.dart';
-import 'package:scrcpy_connect/services/files/document_scope_recovery.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
+import 'package:scrcpy_connect/services/application_platform.dart';
+import 'package:scrcpy_connect/services/file_document_service.dart';
+import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_document_recovery.dart';
 
 // 虚拟时钟不会推进可信根解析的真实文件系统回执。等待实际阶段，同时
 // 继续由 pump 驱动协调器，避免把准入耗时误算成 provider/conflict 超时。
@@ -43,7 +46,7 @@ Matcher documentFailure(String code) =>
 class Fixture {
   Fixture({this.cacheDirectory = '/cache', this.sources});
   final String cacheDirectory;
-  final DocumentSources? sources;
+  final FileDocumentStore? sources;
   bool ownerReady = true;
 
   void mockPlatformChannel() {
@@ -115,7 +118,8 @@ class Fixture {
   late final nativeFiles = LocalFixture(this);
   late final localFiles = LocalFiles(nativeFiles);
   Future<LocalFiles> files() async => localFiles;
-  late final coordinator = DocumentsCoordinator(
+  late final coordinator = FileDocumentService(
+    selections: fakeDocumentSelections(platform),
     files: files,
     platform: platform,
     sources: sources,
@@ -386,7 +390,7 @@ void main() {
   test('managed imports drain before publication and each copy receives the shared remaining budget', () async {
     final cache = await Directory.systemTemp.createTemp('documents-managed-');
     addTearDown(() => cache.delete(recursive: true));
-    final sources = await DocumentSources.open(
+    final sources = await FileDocumentStore.open(
       cacheDirectory: cache,
       totalBytes: 5,
     );
@@ -406,7 +410,7 @@ void main() {
     };
     final first = await f.coordinator.request('documents.importDirectory');
     expect(first['status'], 'imported');
-    expect(first['managedSourceId'], startsWith(DocumentSources.prefix));
+    expect(first['managedSourceId'], startsWith(FileDocumentStore.prefix));
     expect(await sources.store.sourcePaths, hasLength(1));
     final second = await f.coordinator.request('documents.importDirectory');
     expect(second['status'], 'partial');
@@ -433,7 +437,14 @@ void main() {
     final oldPicker = Completer<void>();
     f.mockPlatformChannel();
     final platform = f.applicationPlatform();
-    final coordinator = DocumentsCoordinator(
+    final coordinator = FileDocumentService(
+      selections: fakeDocumentSelections((command, params) {
+        if (command == 'documents.platform.picker' &&
+            params['operationId'] == 'old-activity') {
+          oldPicker.complete();
+        }
+        return platform.request(command, params);
+      }),
       files: f.files,
       platform: (command, params) {
         if (command == 'documents.platform.picker' &&
@@ -511,7 +522,8 @@ void main() {
     };
     f.mockPlatformChannel();
     final platform = f.applicationPlatform();
-    final coordinator = DocumentsCoordinator(
+    final coordinator = FileDocumentService(
+      selections: fakeDocumentSelections(platform.request),
       files: f.files,
       platform: platform.request,
     );
@@ -522,7 +534,8 @@ void main() {
     expect(f.ownerReady, isTrue);
     // 新实例也必须遵守共享 pending，不能仅查看自己的恢复标记。
     final nextPlatform = f.applicationPlatform();
-    final nextCoordinator = DocumentsCoordinator(
+    final nextCoordinator = FileDocumentService(
+      selections: fakeDocumentSelections(nextPlatform.request),
       files: f.files,
       platform: nextPlatform.request,
     );
@@ -582,10 +595,7 @@ void main() {
       claiming.complete();
       return claimed.future;
     };
-    final recovery = DocumentScopeRecovery(
-      files: f.files,
-      platform: f.platform,
-    );
+    final recovery = FileDocumentRecovery(files: f.files, platform: f.platform);
     var cacheReads = 0;
     final restoring = () async {
       await recovery.recover();
@@ -615,10 +625,7 @@ void main() {
       }
       return {'claimed': true, 'ownerLeaseId': f.ownerLeaseId};
     };
-    final recovery = DocumentScopeRecovery(
-      files: f.files,
-      platform: f.platform,
-    );
+    final recovery = FileDocumentRecovery(files: f.files, platform: f.platform);
     await expectLater(recovery.recover(), throwsA(isA<RequestFailure>()));
     expect(f.callsFor('local.scope.open'), hasLength(1));
     fails = false;
@@ -633,7 +640,13 @@ void main() {
     test('平台 release 未确认后${cancelFirst ? '取消' : '再次操作'}重试清理并恢复准入', () async {
       final f = Fixture()..select('root', 'Empty', directory: true);
       var released = false;
-      final coordinator = DocumentsCoordinator(
+      final coordinator = FileDocumentService(
+        selections: fakeDocumentSelections((command, params) async {
+          if (command == 'documents.platform.release' && !released) {
+            return {'released': false};
+          }
+          return f.platform(command, params);
+        }),
         files: f.files,
         platform: (command, params) async {
           if (command == 'documents.platform.release' && !released) {
@@ -675,10 +688,7 @@ void main() {
       entered.complete();
       return closing.future;
     };
-    final recovery = DocumentScopeRecovery(
-      files: f.files,
-      platform: f.platform,
-    );
+    final recovery = FileDocumentRecovery(files: f.files, platform: f.platform);
     var cacheReads = 0;
     final restoring = () async {
       await recovery.recover();
@@ -717,10 +727,7 @@ void main() {
         );
       }
     };
-    final recovery = DocumentScopeRecovery(
-      files: f.files,
-      platform: f.platform,
-    );
+    final recovery = FileDocumentRecovery(files: f.files, platform: f.platform);
     var cacheReads = 0;
     Future<void> restore() async {
       await recovery.recover();
@@ -816,7 +823,19 @@ void main() {
         final f = Fixture()..select('parent', 'Target', directory: true);
         f.local['/cache/source'] = {'kind': 'directory'};
         final events = <DocumentsJson>[];
-        final coordinator = DocumentsCoordinator(
+        final coordinator = FileDocumentService(
+          selections: fakeDocumentSelections((command, params) async {
+            final result = await f.platform(command, params);
+            if (command == 'documents.platform.create' &&
+                params['name'] == 'Tree') {
+              // 新根目录出现后，提供方写入者创建同名子项；两者均属于外部文件系统冲突。
+              for (final name in ['one', 'two']) {
+                f.node(name, name, directory: true);
+              }
+              f.children[result['handle'] as String] = ['one', 'two'];
+            }
+            return result;
+          }),
           files: () async {
             f.nativeFiles.onList = (path, maxEntries) async => LocalFileList(
               identity: identity({'kind': 'directory'}),
@@ -917,7 +936,8 @@ void main() {
       f.children['parent'] = ['old'];
       f.local['/cache/source'] = {'kind': 'directory'};
       var conflictEntered = false;
-      final coordinator = DocumentsCoordinator(
+      final coordinator = FileDocumentService(
+        selections: fakeDocumentSelections(f.platform),
         files: f.files,
         limits: const DocumentLimits(timeout: Duration(milliseconds: 20)),
         platform: f.platform,
@@ -990,7 +1010,8 @@ void main() {
       f.children['parent'] = ['old'];
       f.local['/cache/source'] = {'kind': 'directory'};
       final events = <DocumentsJson>[];
-      final coordinator = DocumentsCoordinator(
+      final coordinator = FileDocumentService(
+        selections: fakeDocumentSelections(f.platform),
         files: f.files,
         platform: f.platform,
         onConflictChanged: events.add,
@@ -1061,7 +1082,14 @@ void main() {
       final f = Fixture()..select('root', 'Tree', directory: true);
       final pending = Completer<DocumentsJson>();
       var metadataEntered = false;
-      final coordinator = DocumentsCoordinator(
+      final coordinator = FileDocumentService(
+        selections: fakeDocumentSelections((command, params) {
+          if (command == 'documents.platform.metadata') {
+            metadataEntered = true;
+            return pending.future;
+          }
+          return f.platform(command, params);
+        }),
         files: f.files,
         platform: (command, params) {
           if (command == 'documents.platform.metadata') {
@@ -1117,7 +1145,13 @@ void main() {
       final first = Completer<DocumentsJson>();
       final second = Completer<DocumentsJson>();
       var picks = 0;
-      final coordinator = DocumentsCoordinator(
+      final coordinator = FileDocumentService(
+        selections: fakeDocumentSelections((command, params) {
+          if (command == 'documents.platform.picker') {
+            return ++picks == 1 ? first.future : second.future;
+          }
+          return f.platform(command, params);
+        }),
         files: f.files,
         platform: (command, params) {
           if (command == 'documents.platform.picker') {
@@ -1176,7 +1210,17 @@ void main() {
     () async {
       final f = Fixture()..select('file', 'saved.txt', size: 0);
       f.local['/cache/source'] = {'kind': 'file', 'size': 3};
-      final coordinator = DocumentsCoordinator(
+      final coordinator = FileDocumentService(
+        selections: fakeDocumentSelections((command, params) {
+          if (command == 'documents.platform.releaseFd' &&
+              params['outcome'] != 'success') {
+            throw const RequestFailure(
+              'provider_incomplete',
+              'provider did not receive successful completion',
+            );
+          }
+          return f.platform(command, params);
+        }),
         files: f.files,
         platform: (command, params) {
           if (command == 'documents.platform.releaseFd' &&
@@ -1300,7 +1344,13 @@ void main() {
   test('a missing provider lease leaves the save result unknown', () async {
     final f = Fixture()..select('file', 'saved.txt', size: 0);
     f.local['/cache/source'] = {'kind': 'file', 'size': 3};
-    final coordinator = DocumentsCoordinator(
+    final coordinator = FileDocumentService(
+      selections: fakeDocumentSelections((command, params) async {
+        if (command == 'documents.platform.releaseFd') {
+          return {'released': false};
+        }
+        return f.platform(command, params);
+      }),
       files: f.files,
       platform: (command, params) async {
         if (command == 'documents.platform.releaseFd') {

@@ -1,9 +1,11 @@
+import 'package:scrcpy_connect/models/audio_format.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/media/audio_player.dart';
-import 'package:scrcpy_connect/stores/media/audio_output_coordinator.dart';
+import 'package:scrcpy_connect/services/audio_player.dart';
+import 'package:scrcpy_connect/services/audio_output_service.dart';
 import 'package:scrcpy_connect/widgets/remote_audio_views.dart';
 
 final _token = List.filled(64, 'a').join();
@@ -25,7 +27,7 @@ AudioJson _endpoint(String id) => {
 Matcher _code(String code) =>
     isA<RequestFailure>().having((e) => e.code, 'code', code);
 
-class _Player implements AudioPlayerPort {
+class _Player implements AudioPlayer {
   final changes = StreamController<AudioJson>.broadcast(sync: true);
   final calls = <String>[];
   Completer<AudioFormat>? opening;
@@ -140,7 +142,7 @@ class _Harness {
   int epochs = 0, relays = 0, packets = 3;
   Completer<AudioJson>? focusOpening, focusClosing, mediaOpening;
   bool invalidEndpoint = false;
-  late final outputs = AudioOutputCoordinator(
+  late final outputs = AudioOutputService(
     request: request,
     platform: platform,
     emit: (event) {

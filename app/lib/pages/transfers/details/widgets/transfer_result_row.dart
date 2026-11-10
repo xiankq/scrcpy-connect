@@ -5,7 +5,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_direction_badge.dart';
-import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
+import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 
 class TransferResultRow extends StatelessWidget {
   const TransferResultRow({

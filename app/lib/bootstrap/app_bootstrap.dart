@@ -2,11 +2,11 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:io';
 
-import 'package:scrcpy_connect/stores/application_session.dart';
-import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
+import 'package:scrcpy_connect/services/app_runtime.dart';
+import 'package:scrcpy_connect/services/diagnostic_log.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
-import 'package:scrcpy_connect/services/files/local_directories.dart';
+import 'package:scrcpy_connect/services/file_local_directories.dart';
 
 /// 全部启动配置成功前由 bootstrap 拥有应用依赖，返回依赖后交给 provider scope。
 Future<AppDependencies> bootstrapApplication({
@@ -36,12 +36,13 @@ Future<AppDependencies> bootstrapApplication({
 Future<AppDependencies> _createDependencies(DiagnosticLog? diagnostics) async {
   final directory = await getApplicationSupportDirectory();
   await directory.create(recursive: true);
-  final session = await ApplicationSession.initialize(
+  final session = await AppRuntime.initialize(
     dataDirectory: await directory.resolveSymbolicLinks(),
     diagnostics: diagnostics,
   );
   return AppDependencies(
     bindClipboardAdmission: session.bindClipboardAdmission,
+    completeDocumentSelection: session.completeDocumentSelection,
     execute: session.execute,
     diagnostics: diagnostics,
     request: session.request,

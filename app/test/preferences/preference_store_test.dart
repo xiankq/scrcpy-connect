@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:scrcpy_connect/stores/preference_store.dart';
+import 'package:scrcpy_connect/stores/settings_store.dart';
 import 'package:scrcpy_connect/models/preference_schema.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,8 +23,8 @@ Matcher failure(String code) =>
 void main() {
   late Directory directory;
   File file(String name) => File.fromUri(directory.uri.resolve(name));
-  Future<PreferenceStore> open() =>
-      PreferenceStore.open(directory: directory, schema: schema);
+  Future<SettingsStore> open() =>
+      SettingsStore.open(directory: directory, schema: schema);
   setUp(() async {
     directory = await Directory.systemTemp.createTemp(
       'device-preferences-test-',

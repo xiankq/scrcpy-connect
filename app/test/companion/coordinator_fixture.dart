@@ -1,3 +1,8 @@
+import 'package:scrcpy_connect/models/companion_exception.dart';
+
+import 'package:scrcpy_connect/models/companion_config.dart';
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -5,10 +10,8 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/companion_client.dart';
-import 'package:scrcpy_connect/stores/companion_coordinator.dart';
-import 'package:scrcpy_connect/stores/companion_recovery.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/services/companion_service.dart';
+import 'package:scrcpy_connect/services/companion_recovery.dart';
 
 const coordinatorConfig = CompanionConfig(
   startupTimeout: Duration(seconds: 2),
@@ -21,7 +24,7 @@ class CoordinatorFixture {
   CoordinatorFixture({CompanionRecovery? recovery}) {
     client = NativeAdbClient(api, '/unused/key');
     replaceConnection();
-    companion = CompanionCoordinator(
+    companion = CompanionService(
       requireConnection: (_) =>
           current ?? (throw const CompanionException('disconnected', '离线')),
       serverBytes: Uint8List.fromList([1, 2, 3]),
@@ -34,7 +37,7 @@ class CoordinatorFixture {
   final api = CoordinatorApi();
   late final NativeAdbClient client;
   DeviceConnection? current;
-  late final CompanionCoordinator companion;
+  late final CompanionService companion;
   bool rejectStartingEvent = false;
   final emitted =
       <({String type, String? device, Map<String, Object?> data})>[];

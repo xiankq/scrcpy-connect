@@ -9,7 +9,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/remote_display_settings.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/widgets/screen_ratio_picker.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
@@ -46,14 +46,14 @@ class QualityPage extends HookConsumerWidget {
     required this.controller,
     required this.device,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final applying = useState(false);
     final applicationFailures = useState<List<Json>>([]);
     final settings = ref.watch(
-      appControllerProvider.select((state) => state.settings),
+      appStoreProvider.select((state) => state.settings),
     );
     final preferences = jsonObject(
       jsonObject(settings['deviceSettings'])[device['id']],

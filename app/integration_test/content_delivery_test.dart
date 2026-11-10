@@ -18,8 +18,8 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_wor
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/pages/transfers/details/receive/transfers_details_receive_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/media_thumbnail.dart';
 
 import 'product_flow_test.dart' show waitFor;
@@ -80,7 +80,7 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ConnectApp)),
     );
-    final controller = container.read(appControllerProvider.notifier);
+    final controller = container.read(appStoreProvider.notifier);
     await waitFor(
       tester,
       () =>

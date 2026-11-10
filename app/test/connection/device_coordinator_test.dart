@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/adb_discovery_endpoint.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,13 +9,11 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
-import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
-import 'package:scrcpy_connect/services/connection/device_reconnection_candidates.dart';
-import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
-import 'package:scrcpy_connect/stores/connection/reconnection_coordinator.dart';
+import 'package:scrcpy_connect/services/device_service.dart';
+import 'package:scrcpy_connect/services/device_reconnection_candidates.dart';
+import 'package:scrcpy_connect/services/adb_identity_service.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/device_reconnect_service.dart';
 
 import 'support/disk_identities.dart';
 
@@ -248,7 +249,7 @@ void main() {
     expect(fixture.candidates.guids, ['guid', 'guid']);
     expect(fixture.client.connects, ['192.0.2.8:4444']);
     expect(fixture.client.requiredTls, [true]);
-    final reopened = await DeviceRecordStore.open(directory: fixture.root);
+    final reopened = await DeviceStore.open(directory: fixture.root);
     expect(reopened.current.find(id)!.address, '192.0.2.8');
     expect(reopened.current.find(id)!.port, 4444);
     expect(reopened.current.find(id)!.transport, DeviceTransport.tls);
@@ -395,7 +396,7 @@ void main() {
     final cancelledAttempts = <String>[];
     final automatic = Completer<Map<String, Object?>>();
     var sequence = 0;
-    final reconnecting = ReconnectionCoordinator(
+    final reconnecting = DeviceReconnectService(
       policy: fixture.owner.policy,
       ownerPrefix: 'stop-recovery',
       schedule: (_, run) {
@@ -508,7 +509,7 @@ void main() {
         fixture.client.opening = opening;
       }
       var sequence = 0, background = true;
-      ReconnectionCoordinator coordinator() => ReconnectionCoordinator(
+      DeviceReconnectService coordinator() => DeviceReconnectService(
         policy: fixture.owner.policy,
         schedule: (_, run) {
           final timer = _ReconnectTimer(run);
@@ -1114,7 +1115,7 @@ void main() {
     expect(device['model'], '测试手机');
     expect(fixture.owner.requireConnection(id).device.serial, '192.0.2.1:5555');
     expect(fixture.events.last.$1, 'devices.changed');
-    final reopened = await DeviceRecordStore.open(directory: fixture.root);
+    final reopened = await DeviceStore.open(directory: fixture.root);
     expect(reopened.current.find(id)!.serial, 'hardware-serial');
     expect(reopened.current.find(id)!.status, 'connected');
     expect(reopened.current.find(id)!.lastSeen, 1);
@@ -1132,7 +1133,7 @@ void main() {
       'port': 6666,
       'transport': 'tcp',
     });
-    final reopened = await DeviceRecordStore.open(directory: fixture.root);
+    final reopened = await DeviceStore.open(directory: fixture.root);
     final record = reopened.current.find(id)!;
     expect(record.name, '工作手机');
     expect(record.address, '192.0.2.2');
@@ -1194,8 +1195,7 @@ void main() {
             .having((error) => error.message, 'message', '设备拒绝了本次授权'),
       ),
     );
-    final saved = (await DeviceRecordStore.open(directory: fixture.root))
-        .current
+    final saved = (await DeviceStore.open(directory: fixture.root)).current
         .find(id)!;
     expect(saved.status, 'unauthorized');
     expect(saved.autoReconnect, isFalse);
@@ -1249,7 +1249,7 @@ void main() {
     fixture.rejectCommit = false;
     expect(fixture.owner.requireConnection(id), same(original));
     expect(fixture.client.disconnected, ['handle-2']);
-    final reopened = await DeviceRecordStore.open(directory: fixture.root);
+    final reopened = await DeviceStore.open(directory: fixture.root);
     expect(reopened.current.find(id)!.address, '192.0.2.1');
   });
 
@@ -1277,8 +1277,7 @@ void main() {
     await renamed;
     expect(fixture.owner.requireConnection(id), same(original));
     expect(fixture.client.disconnected, ['handle-2']);
-    final record = (await DeviceRecordStore.open(directory: fixture.root))
-        .current
+    final record = (await DeviceStore.open(directory: fixture.root)).current
         .find(id)!;
     expect(record.address, '192.0.2.1');
     expect(record.port, 5555);
@@ -1305,8 +1304,7 @@ void main() {
       commit.resume.complete();
       await rejected;
       await verified;
-      final record = (await DeviceRecordStore.open(directory: fixture.root))
-          .current
+      final record = (await DeviceStore.open(directory: fixture.root)).current
           .find(id)!;
       expect(record.address, successorSucceeds ? '192.0.2.3' : '192.0.2.1');
       expect(record.port, successorSucceeds ? 7777 : 5555);
@@ -1341,7 +1339,7 @@ void main() {
     await rejected;
     await edited;
     await rebound;
-    final reopened = await DeviceRecordStore.open(directory: fixture.root);
+    final reopened = await DeviceStore.open(directory: fixture.root);
     expect(reopened.current.find(id)!.address, '192.0.2.4');
     expect(reopened.current.find(id)!.port, 8888);
     expect(reopened.current.deviceIdentityFingerprints[id], fingerprint);
@@ -1365,7 +1363,7 @@ void main() {
     commit.resume.complete();
     await rejected;
     expect(fixture.owner.requireConnection(id), same(original));
-    final reopened = await DeviceRecordStore.open(directory: fixture.root);
+    final reopened = await DeviceStore.open(directory: fixture.root);
     expect(reopened.current.find(id)!.address, '192.0.2.1');
     expect(fixture.client.disconnected, ['handle-2']);
   });
@@ -1396,8 +1394,7 @@ void main() {
     expect(fixture.client.connects, hasLength(2));
     commit.rejectCompensation = false;
     await fixture.configure(id, host: '192.0.2.3', port: 7777);
-    final record = (await DeviceRecordStore.open(directory: fixture.root))
-        .current
+    final record = (await DeviceStore.open(directory: fixture.root)).current
         .find(id)!;
     expect(record.address, '192.0.2.3');
     expect(record.port, 7777);
@@ -1598,7 +1595,7 @@ void main() {
     await fixture.connect(id);
     await fixture.owner.command('devices.forget', {'deviceId': id});
     await fixture.owner.command('devices.forget', {'deviceId': id});
-    final reopened = await DeviceRecordStore.open(directory: fixture.root);
+    final reopened = await DeviceStore.open(directory: fixture.root);
     expect(reopened.current.find(id), isNull);
     expect(fixture.client.disconnected, ['handle-1']);
   });
@@ -1831,8 +1828,8 @@ final class _Candidates implements DeviceReconnectionCandidates {
 final class _Fixture {
   _Fixture(this.root);
   final Directory root;
-  late DeviceRecordStore records;
-  late DeviceCoordinator owner;
+  late DeviceStore records;
+  late DeviceService owner;
   final client = _Client();
   final candidates = _Candidates();
   final identityApi = DiskIdentities();
@@ -1852,7 +1849,7 @@ final class _Fixture {
     final fixture = _Fixture(
       await Directory.systemTemp.createTemp('device-coordinator-'),
     );
-    fixture.records = await DeviceRecordStore.open(
+    fixture.records = await DeviceStore.open(
       directory: fixture.root,
       idFactory: () =>
           '00000000-0000-4000-8000-${(++fixture._nextId).toString().padLeft(12, '0')}',
@@ -1867,14 +1864,14 @@ final class _Fixture {
         }
       },
     );
-    final identities = await IdentityManager.open(
+    final identities = await AdbIdentityService.open(
       directory: fixture.root,
       records: fixture.records,
       identities: fixture.identityApi,
       invalidate: (ids, {required global}) =>
           fixture._ready ? fixture.owner.invalidate(ids) : Future<void>.value(),
     );
-    fixture.owner = DeviceCoordinator(
+    fixture.owner = DeviceService(
       records: fixture.records,
       identities: identities,
       reconnectionCandidates: fixture.candidates,

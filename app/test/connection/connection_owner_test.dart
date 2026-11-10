@@ -1,9 +1,11 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/services/device_connection_pool.dart';
 
 final class _Client implements AdbClient {
   final disconnected = <String>[];
@@ -36,7 +38,7 @@ void main() {
     final client = _Client();
     final order = <String>[];
     final stopping = Completer<void>(), stopped = Completer<void>();
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, connection) async {
         expect(connection.device.id, 'original');
         stopping.complete();
@@ -82,7 +84,7 @@ void main() {
   ]) {
     test('切换期间 $cancellationKind 取消等待真实服务退出，后继不能提前使用传输', () async {
       final client = _Client();
-      final owner = ConnectionOwner(stopActivities: (_, _) async {});
+      final owner = DeviceConnectionPool(stopActivities: (_, _) async {});
       final original = _connection(client, 'original');
       await owner.replace(
         'record',
@@ -153,7 +155,7 @@ void main() {
     client.disconnecting = (_) async {
       if (disconnectFails) throw StateError('driver still active');
     };
-    final owner = ConnectionOwner(stopActivities: (_, _) async {});
+    final owner = DeviceConnectionPool(stopActivities: (_, _) async {});
     final original = _connection(
       client,
       'original',
@@ -190,7 +192,7 @@ void main() {
 
   test('切换尚未执行便被替换时只清理原连接，不向后继执行服务', () async {
     final client = _Client();
-    final owner = ConnectionOwner(stopActivities: (_, _) async {});
+    final owner = DeviceConnectionPool(stopActivities: (_, _) async {});
     final original = _connection(client, 'original');
     await owner.replace(
       'record',
@@ -227,7 +229,7 @@ void main() {
   test('活动停止失败不执行切换，断开重试只排空活动与原连接', () async {
     final client = _Client();
     var activityFails = true, changes = 0;
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, _) async {
         if (activityFails) throw StateError('activity still active');
       },
@@ -262,7 +264,7 @@ void main() {
       order.add('disconnect');
       if (failDisconnect) throw StateError('driver still active');
     };
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, _) async => order.add('activities'),
       onDisconnected: (_, _) => order.add('released'),
     );
@@ -297,7 +299,7 @@ void main() {
     client.disconnecting = (device) async =>
         order.add('disconnect:${device.id}');
     var failPlatform = true;
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, connection) async =>
           order.add('activities:${connection.device.id}'),
       onDisconnected: (_, connection) =>
@@ -374,7 +376,7 @@ void main() {
       expect(platformReleased, isFalse);
       await stopped.future;
     };
-    final owner = ConnectionOwner(stopActivities: (_, _) async {});
+    final owner = DeviceConnectionPool(stopActivities: (_, _) async {});
     final pending = owner.replace(
       'record',
       open: (_) {
@@ -405,7 +407,7 @@ void main() {
   test('断开通知只在实际断开后触发，覆盖替换退休与最终 close', () async {
     final client = _Client();
     final released = <DeviceConnection>[];
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, _) async {},
       onDisconnected: (id, connection) {
         expect(id, 'record');
@@ -436,7 +438,7 @@ void main() {
   test('内部候选核验失败的精确断开通知不包含仍然准入的原连接', () async {
     final client = _Client();
     final released = <DeviceConnection>[];
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, _) async {},
       onDisconnected: (_, connection) => released.add(connection),
     );
@@ -465,7 +467,7 @@ void main() {
   test('实际断开失败不通知，close 重试成功才通知同一对象一次', () async {
     final client = _Client();
     final released = <DeviceConnection>[];
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, _) async {},
       onDisconnected: (_, connection) => released.add(connection),
     );
@@ -489,7 +491,7 @@ void main() {
     final client = _Client();
     final released = <String>[];
     final notificationFailure = StateError('notification failed');
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, _) async {},
       onDisconnected: (_, connection) {
         released.add(connection.device.id);
@@ -525,7 +527,7 @@ void main() {
 
   test('取消监听同步重入的新请求保留独立代次，外层旧请求不能覆盖或遗失连接', () async {
     final client = _Client();
-    final owner = ConnectionOwner(stopActivities: (_, _) async {});
+    final owner = DeviceConnectionPool(stopActivities: (_, _) async {});
     await owner.replace(
       'record',
       open: (_) async => _connection(client, 'original'),
@@ -572,7 +574,7 @@ void main() {
   for (final action in ['disconnect', 'invalidate', 'close']) {
     test('$action 不让取消监听异常阻断撤准入或遗留资源', () async {
       final client = _Client();
-      final owner = ConnectionOwner(stopActivities: (_, _) async {});
+      final owner = DeviceConnectionPool(stopActivities: (_, _) async {});
       await owner.replace(
         'first',
         open: (_) async => _connection(client, 'original'),
@@ -622,7 +624,7 @@ void main() {
     final client = _Client();
     final releasing = Completer<void>();
     final cleanupStarted = Completer<void>();
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (id, connection) async {
         if (connection.device.id == 'old') {
           cleanupStarted.complete();
@@ -668,7 +670,7 @@ void main() {
     final probeReleased = Completer<void>();
     var verificationExited = false;
     var successorOpened = false;
-    final owner = ConnectionOwner(
+    final owner = DeviceConnectionPool(
       stopActivities: (_, connection) async {
         if (connection.device.id == 'candidate') {
           expect(verificationExited, isTrue);

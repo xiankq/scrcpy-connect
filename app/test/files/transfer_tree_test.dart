@@ -1,8 +1,14 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/models/file_cancellation.dart';
+import 'package:scrcpy_connect/models/file_stamp.dart';
+import 'package:scrcpy_connect/models/file_directory_facts.dart';
+import 'package:scrcpy_connect/models/file_cache_reservation.dart';
+import 'package:scrcpy_connect/services/file_cache_leases.dart';
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
 
 import 'support/file_executor_fixture.dart';
 import 'support/transfer_checks.dart' show withTransfer;
@@ -37,7 +43,7 @@ void main() {
     () async {
       final root = await Directory.systemTemp.createTemp('file-tree-width-');
       final executor = _WideTreeExecutor();
-      final owner = await TransferCoordinator.open(
+      final owner = await FileTransferService.open(
         executor: executor,
         dataDirectory: root,
       );
@@ -65,7 +71,7 @@ void main() {
       final root = await Directory.systemTemp.createTemp('file-tree-cache-');
       final executor = FixtureExecutor();
       final cache = _Cache();
-      final owner = await TransferCoordinator.open(
+      final owner = await FileTransferService.open(
         executor: executor,
         dataDirectory: root,
         cache: cache,
@@ -176,7 +182,7 @@ class _WideTreeExecutor extends FixtureExecutor {
   }
 
   @override
-  Future<DirectoryFacts> list(
+  Future<FileDirectoryFacts> list(
     String device,
     String path, {
     required bool local,
@@ -188,7 +194,7 @@ class _WideTreeExecutor extends FixtureExecutor {
     if (enumerations.length > 2) {
       throw StateError('The first child exceeded the remaining tree budget.');
     }
-    return DirectoryFacts(
+    return FileDirectoryFacts(
       List.generate(limit < 6000 ? limit : 6000, (i) => entry('$i', directory)),
       truncated: limit < 6000,
     );

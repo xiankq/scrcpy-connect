@@ -1,10 +1,10 @@
-import 'package:scrcpy_connect/services/files/local_directories.dart';
-import 'package:scrcpy_connect/services/files/file_browser.dart';
+import 'package:scrcpy_connect/services/file_local_directories.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 import 'package:path/path.dart' as p;
@@ -17,7 +17,7 @@ import 'package:file_picker/file_picker.dart';
 
 Future<void> retrieveFile(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   Json device,
   Json file, {
   bool share = false,
@@ -74,7 +74,7 @@ Future<void> retrieveFile(
 
 Future<void> retrieveSelection(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   Json device,
   List<Json> files, {
   bool Function()? canSubmit,
@@ -112,7 +112,7 @@ Future<void> retrieveSelection(
   }
 }
 
-bool _connected(AppController controller, Json device) {
+bool _connected(AppStore controller, Json device) {
   final state = controller.snapshot();
   final current = state.devices
       .where((item) => item['id'] == device['id'])
@@ -122,7 +122,7 @@ bool _connected(AppController controller, Json device) {
 
 Future<Json?> _pull(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   Json params, {
   bool canReduceSelection = false,
 }) async {

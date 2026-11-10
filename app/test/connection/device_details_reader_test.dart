@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,13 +8,12 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/services/connection/device_details_reader.dart';
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/services/device_details_reader.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
 
 void main() {
   late Directory directory;
-  late DeviceRecordStore records;
+  late DeviceStore records;
   late DeviceRecord record;
   late _Client client;
   late DeviceConnection? current;
@@ -20,7 +21,7 @@ void main() {
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('device-details-');
-    records = await DeviceRecordStore.open(directory: directory);
+    records = await DeviceStore.open(directory: directory);
     record = await records.add(address: '192.0.2.7', port: 5555);
     client = _Client();
     current = DeviceConnection(client: client, device: _device);

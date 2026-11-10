@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/stores/connection/reconnection_coordinator.dart';
+import 'package:scrcpy_connect/services/device_reconnect_service.dart';
 import 'package:scrcpy_connect/services/application_platform_events.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,7 +28,7 @@ void main() {
     var admitted = true;
     var finished = false;
     final calls = <String>[];
-    final reconnections = ReconnectionCoordinator(
+    final reconnections = DeviceReconnectService(
       policy: const ConnectionPolicy(),
       request: (command, params) async {
         calls.add(command);
@@ -100,7 +100,7 @@ void main() {
 
   for (final failConnections in [true, false]) {
     test('停止${failConnections ? '连接' : '媒体'}失败仍等待另一条真实清理', () async {
-      final reconnections = ReconnectionCoordinator(
+      final reconnections = DeviceReconnectService(
         policy: const ConnectionPolicy(),
         request: (_, _) async => {},
       );
@@ -139,7 +139,7 @@ void main() {
   }
 
   test('停止事件呈现回调失败也不跳过连接和媒体回收', () async {
-    final reconnections = ReconnectionCoordinator(
+    final reconnections = DeviceReconnectService(
       policy: const ConnectionPolicy(),
       request: (_, _) async => {},
     );

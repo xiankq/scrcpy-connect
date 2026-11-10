@@ -1,84 +1,12 @@
-import 'package:scrcpy_connect/services/companion_protocol.dart';
+import 'package:scrcpy_connect/utils/shell_quote.dart';
+import 'package:scrcpy_connect/models/companion_exception.dart';
+import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/services/companion_deployment_identity.dart';
 
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-
-String companionQuote(String value) {
-  if (value.contains('\u0000')) throw ArgumentError('shell 参数不能包含 NUL。');
-  return "'${value.replaceAll("'", "'\\''")}'";
-}
-
-/// 可交给应用恢复记录的精确部署身份；不保存认证 token 或产品设备 ID。
-final class CompanionDeploymentIdentity {
-  CompanionDeploymentIdentity({
-    required this.pid,
-    required this.started,
-    required this.jarPath,
-  }) {
-    if (pid <= 1 ||
-        started <= 0 ||
-        !RegExp(r'^/data/local/tmp/interop-companion-[0-9a-f]{32}\.jar$')
-            .hasMatch(jarPath)) {
-      throw ArgumentError('互联服务部署身份无效。');
-    }
-  }
-  final int pid;
-  final int started;
-  final String jarPath;
-  String get niceName => 'interop.companion:$jarPath';
-  Map<String, Object?> toJson() => {
-    'pid': pid,
-    'started': started,
-    'jarPath': jarPath,
-  };
-  factory CompanionDeploymentIdentity.fromJson(Map<String, Object?> value) {
-    if (value['pid'] is! int ||
-        value['started'] is! int ||
-        value['jarPath'] is! String) {
-      throw const FormatException('互联服务部署身份格式无效。');
-    }
-    return CompanionDeploymentIdentity(
-      pid: value['pid'] as int,
-      started: value['started'] as int,
-      jarPath: value['jarPath'] as String,
-    );
-  }
-
-  String get _readIdentity =>
-      '''
-p=$pid
-expected=$started
-if [ ! -e /proc/\$p ]; then print -r -- released:absent; exit 0; fi
-IFS= read -r stat < /proc/\$p/stat || exit 42
-rest=\${stat##*) }
-set -- \$rest
-state=\$1
-shift 19 || exit 42
-case "\$1" in ''|*[!0-9]*) exit 42 ;; esac
-if [ "\$1" != "\$expected" ]; then print -r -- released:replaced; exit 0; fi
-case "\$state" in Z|X|x) print -r -- released:exited; exit 0 ;; esac
-''';
-
-  /// 检查与发信号在同一 shell 中完成；不按名称搜索其他部署。
-  String get terminateCommand =>
-      '''
-$_readIdentity
-IFS= read -r -d '' cmd < /proc/\$p/cmdline || exit 42
-[ "\$cmd" = ${companionQuote(niceName)} ] || { print -r -- identity-mismatch; exit 41; }
-kill -TERM "\$p" || exit 42
-print -r -- signalled
-''';
-  String get waitCommand =>
-      '''
-while :; do
-$_readIdentity
-sleep 0.02 || exit 42
-done
-''';
-}
 
 Future<String> companionShell(
   DeviceConnection connection,
@@ -143,7 +71,7 @@ Future<void> cleanupCompanionDeployment(
   await stopCompanionProcess(connection, identity, timeout: timeout);
   final removed = await companionShell(
     connection,
-    'rm -f -- ${companionQuote(identity.jarPath)} && print -r -- removed',
+    'rm -f -- ${shellQuote(identity.jarPath)} && print -r -- removed',
     timeout: timeout,
   );
   if (removed.trim() != 'removed') {
@@ -160,7 +88,7 @@ IFS= read -r own_stat < /proc/self/stat || exit 40
 own_pid=\${own_stat%% *}
 case "\$own_pid" in ''|*[!0-9]*) exit 40 ;; esac
 kill -STOP "\$own_pid" || exit 40
-CLASSPATH=${companionQuote(jar)} exec app_process / --nice-name=${companionQuote(nice)} com.interop.companion.Main ${companionQuote(socket)} ${companionQuote(token)}
+CLASSPATH=${shellQuote(jar)} exec app_process / --nice-name=${shellQuote(nice)} com.interop.companion.Main ${shellQuote(socket)} ${shellQuote(token)}
 }
 cleanup() {
 result=\$1
@@ -173,7 +101,7 @@ kill -CONT "\$job" 2>/dev/null
 done
 if [ -n "\${child:-}" ]; then wait "\$child" 2>/dev/null; fi
 if [ -n "\${watcher:-}" ]; then wait "\$watcher" 2>/dev/null; fi
-rm -f -- ${companionQuote(jar)}
+rm -f -- ${shellQuote(jar)}
 exit "\$result"
 }
 trap 'cleanup \$?' EXIT

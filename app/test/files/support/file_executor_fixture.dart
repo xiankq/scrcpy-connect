@@ -1,8 +1,14 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/models/file_cancellation.dart';
+import 'package:scrcpy_connect/models/file_stamp.dart';
+import 'package:scrcpy_connect/models/file_entry_fact.dart';
+import 'package:scrcpy_connect/models/file_directory_facts.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/services/file_executor.dart';
 
 void require(bool value, String message) {
   if (!value) throw StateError(message);
@@ -50,7 +56,7 @@ class FixtureExecutor implements FileExecutor {
   }
 
   @override
-  Future<DirectoryFacts> list(
+  Future<FileDirectoryFacts> list(
     String device,
     String path, {
     required bool local,
@@ -67,7 +73,7 @@ class FixtureExecutor implements FileExecutor {
       throw const FileFailure('permission_denied', 'denied');
     }
     final list = children[path] ?? [];
-    return DirectoryFacts(
+    return FileDirectoryFacts(
       list.take(limit).toList(),
       truncated: list.length > limit,
     );

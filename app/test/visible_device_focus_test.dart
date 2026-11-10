@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_wor
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/clipboard_coordinator.dart';
+import 'package:scrcpy_connect/services/clipboard_sync.dart';
 
 import 'support/test_controller.dart';
 
@@ -153,7 +153,7 @@ void main() {
         location: '/devices/a/files',
       );
       try {
-        testContainer(backend.controller).read(clipboardCoordinatorProvider);
+        testContainer(backend.controller).read(clipboardSyncProvider);
         await tester.pumpAndSettle();
         expect(local, 'local baseline');
         final filesA = tester.element(find.byType(FilesPage));

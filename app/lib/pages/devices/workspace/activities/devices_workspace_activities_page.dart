@@ -3,10 +3,10 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/workspace_call_card.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -24,7 +24,7 @@ class ActivitiesPage extends HookWidget {
     required this.controller,
     required this.deviceId,
   });
-  final AppController controller;
+  final AppStore controller;
   final String deviceId;
   @override
   Widget build(BuildContext context) {
@@ -184,7 +184,7 @@ class _PendingLaunch extends HookWidget {
     required this.session,
     required this.refresh,
   });
-  final AppController controller;
+  final AppStore controller;
   final String deviceId;
   final Json session;
   final VoidCallback refresh;

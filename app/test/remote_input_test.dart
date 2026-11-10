@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/source_coordinates.dart';
 
 import 'support/router_test_app.dart';
@@ -312,27 +312,25 @@ void main() {
   );
 }
 
-AppController _controller(
-  List<(String, Json)> commands, {
-  int? captureGeneration,
-}) => createTestController((command, [params = const {}]) async {
-  commands.add((command, params));
-  if (command == 'session.start') {
-    return {
-      'sessionId': 'original',
-      'captureGeneration': ?captureGeneration,
-      'deviceId': 'phone',
-      'textureId': 1,
-      'width': 200,
-      'height': 400,
-    };
-  }
-  if (command == 'session.touch' &&
-      ((params['x'] as int) >= 200 || (params['y'] as int) >= 400)) {
-    throw const RequestFailure('invalid_argument', '触控位置超出画面。');
-  }
-  return {};
-});
+AppStore _controller(List<(String, Json)> commands, {int? captureGeneration}) =>
+    createTestController((command, [params = const {}]) async {
+      commands.add((command, params));
+      if (command == 'session.start') {
+        return {
+          'sessionId': 'original',
+          'captureGeneration': ?captureGeneration,
+          'deviceId': 'phone',
+          'textureId': 1,
+          'width': 200,
+          'height': 400,
+        };
+      }
+      if (command == 'session.touch' &&
+          ((params['x'] as int) >= 200 || (params['y'] as int) >= 400)) {
+        throw const RequestFailure('invalid_argument', '触控位置超出画面。');
+      }
+      return {};
+    });
 
 List<Json> _sent(List<(String, Json)> commands, String command) => [
   for (final entry in commands)
@@ -341,7 +339,7 @@ List<Json> _sent(List<(String, Json)> commands, String command) => [
 
 Future<void> _mountRemote(
   WidgetTester tester,
-  AppController controller, {
+  AppStore controller, {
   ThemeData? theme,
   Json device = const {'id': 'phone'},
 }) => tester.pumpWidget(

@@ -7,7 +7,7 @@ import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/clipboard_coordinator.dart';
+import 'package:scrcpy_connect/services/clipboard_sync.dart';
 
 import 'support/test_controller.dart';
 
@@ -76,7 +76,7 @@ class _ClipboardFixture {
           return null;
         });
     await focus(device);
-    testContainer(controller).read(clipboardCoordinatorProvider);
+    testContainer(controller).read(clipboardSyncProvider);
     await _drain(tester);
   }
 

@@ -1,12 +1,14 @@
+import 'package:scrcpy_connect/stores/media_cache_gate.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
+import 'package:scrcpy_connect/stores/media_cache_store.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/files/delivery_journal.dart';
+import 'package:scrcpy_connect/stores/file_delivery_store.dart';
 
 typedef Json = Map<String, dynamic>;
 const source = <String, dynamic>{
@@ -66,8 +68,8 @@ void main() {
   test('真实日志 pending 提交与缓存清理共用 gate，核验和提交之间不会驱逐原件', () async {
     final gate = MediaCacheGate();
     final entered = Completer<void>(), proceed = Completer<void>();
-    late final AppMediaCache cache;
-    final journal = await DeliveryJournal.open(
+    late final MediaCacheStore cache;
+    final journal = await FileDeliveryStore.open(
       root,
       cacheGate: gate,
       validateSource: (path) async {
@@ -76,7 +78,7 @@ void main() {
         await proceed.future;
       },
     );
-    cache = await AppMediaCache.open(
+    cache = await MediaCacheStore.open(
       root: root,
       gate: gate,
       protectedPaths: () => journal.protectedPaths,
@@ -104,7 +106,7 @@ void main() {
     expect((await clearing)['deletedBytes'], 0);
     expect(
       record(
-        await (await DeliveryJournal.open(root))
+        await (await FileDeliveryStore.open(root))
             .command('delivery.get', identity),
       )['status'],
       'result_unknown',
@@ -112,13 +114,13 @@ void main() {
   });
 
   test('pending 重开可靠转 unknown，保留同次操作且重复重开不改写字节', () async {
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     expect(await journal.command('delivery.get', source), {'record': null});
     expect(await file.exists(), isFalse);
     final pending = await journal.command('delivery.begin', begin('one'));
     expect(record(pending)['status'], 'pending');
     expect(await journal.protectedPaths, [source['localPath']]);
-    final reopened = await DeliveryJournal.open(root);
+    final reopened = await FileDeliveryStore.open(root);
     final receipt = await reopened.command('delivery.get', source);
     expect(record(receipt)['operationId'], 'one');
     expect(record(receipt)['result'], {
@@ -127,7 +129,7 @@ void main() {
       'cacheRetained': true,
     });
     final bytes = await file.readAsBytes();
-    final again = await DeliveryJournal.open(root);
+    final again = await FileDeliveryStore.open(root);
     expect(await again.command('delivery.get', source), receipt);
     expect(await file.readAsBytes(), bytes);
     await expectLater(
@@ -137,7 +139,7 @@ void main() {
   });
 
   test('已保存回执过滤授权信息，终态幂等且迟到及冲突回执被拒绝', () async {
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     await journal.command('delivery.begin', begin('one'));
     final params = finish('one', {
       'status': 'saved',
@@ -168,7 +170,7 @@ void main() {
       journal.command('delivery.finish', finish('one', {'status': 'failed'})),
       throwsA(code('delivery_result_conflict')),
     );
-    final reopened = await DeliveryJournal.open(root);
+    final reopened = await FileDeliveryStore.open(root);
     expect(await reopened.command('delivery.get', source), saved);
     // 调用者不能通过回执对象绕过提交队列改变账本。
     (record(saved)['result'] as Json)['status'] = 'failed';
@@ -180,7 +182,7 @@ void main() {
   });
 
   test('额外副本和未知重试分别要求确认精确旧操作，墓碑跨重开保留', () async {
-    var journal = await DeliveryJournal.open(root);
+    var journal = await FileDeliveryStore.open(root);
     await journal.command('delivery.begin', begin('one'));
     await journal.command(
       'delivery.finish',
@@ -230,7 +232,7 @@ void main() {
         'partialDestinationPossible': false,
       }),
     );
-    journal = await DeliveryJournal.open(root);
+    journal = await FileDeliveryStore.open(root);
     await expectLater(
       journal.command('delivery.begin', begin('one')),
       throwsA(code('delivery_operation_reused')),
@@ -240,7 +242,7 @@ void main() {
   });
 
   test('只有明确无部分目标的失败或取消可直接提交新操作', () async {
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     await journal.command('delivery.begin', begin('one'));
     final receipt = await journal.command(
       'delivery.finish',
@@ -268,7 +270,7 @@ void main() {
   });
 
   test('并发准入只成功一个，路径、来源和种类独立，排队输入与输出均隔离', () async {
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     Future<Object> attempt(String operation) async {
       try {
         return await journal.command('delivery.begin', begin(operation));
@@ -299,7 +301,7 @@ void main() {
   });
 
   test('UTF8 限额按字节且错误截断不切断字符，未知强制保护并删除授权字段', () async {
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     await expectLater(
       journal.command('delivery.begin', begin('one', {'sourceId': '界' * 86})),
       throwsA(code('invalid_argument')),
@@ -350,11 +352,11 @@ void main() {
     expect(utf8.encode(error['code'] as String).length, 256);
     expect(utf8.encode(error['message'] as String).length, 4095);
     expect((error['message'] as String).contains('�'), isFalse);
-    await DeliveryJournal.open(root);
+    await FileDeliveryStore.open(root);
   });
 
   test('参数和结果类型无效不会抹掉已准入记录', () async {
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     for (final field in [
       'sourceId',
       'localPath',
@@ -398,7 +400,7 @@ void main() {
     final row = storedRecord('one');
     final valid = ledger([row], ['one', 'retired-operation']);
     await file.writeAsString(jsonEncode(valid));
-    var journal = await DeliveryJournal.open(root);
+    var journal = await FileDeliveryStore.open(root);
     expect(record(await journal.command('delivery.get', source)), row);
     final cases = <List<int>>[
       utf8.encode('{'),
@@ -442,7 +444,7 @@ void main() {
     for (final bytes in cases) {
       await file.writeAsBytes(bytes);
       await expectLater(
-        DeliveryJournal.open(root),
+        FileDeliveryStore.open(root),
         throwsA(code('delivery_storage_invalid')),
       );
       expect(await file.readAsBytes(), bytes);
@@ -464,7 +466,7 @@ void main() {
         ),
       ),
     );
-    journal = await DeliveryJournal.open(root);
+    journal = await FileDeliveryStore.open(root);
     await expectLater(
       journal.command('delivery.begin', begin('retired-operation')),
       throwsA(code('delivery_operation_reused')),
@@ -472,7 +474,7 @@ void main() {
   });
 
   test('原子替换失败不提交内存、不消耗操作标识，修复后可重试并重开', () async {
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     await Directory(file.path).create();
     await expectLater(
       journal.command('delivery.begin', begin('one')),
@@ -498,7 +500,7 @@ void main() {
     expect(await root.list().length, 2);
     await Directory(file.path).delete();
     await preserved.rename(file.path);
-    final reopened = await DeliveryJournal.open(root);
+    final reopened = await FileDeliveryStore.open(root);
     expect(
       record(await reopened.command('delivery.get', source))['status'],
       'result_unknown',
@@ -523,7 +525,7 @@ void main() {
       extra: {'sourceId': 'source-1'},
     );
     await file.writeAsString(jsonEncode(ledger(rows)));
-    var journal = await DeliveryJournal.open(root);
+    var journal = await FileDeliveryStore.open(root);
     await expectLater(
       journal.command('delivery.begin', begin('overflow')),
       throwsA(code('delivery_capacity')),
@@ -551,7 +553,7 @@ void main() {
         ledger([], List.generate(16384, (index) => 'operation-$index')),
       ),
     );
-    journal = await DeliveryJournal.open(root);
+    journal = await FileDeliveryStore.open(root);
     await expectLater(
       journal.command('delivery.begin', begin('overflow')),
       throwsA(code('delivery_capacity')),
@@ -573,13 +575,13 @@ void main() {
         ),
       ),
     );
-    journal = await DeliveryJournal.open(root);
+    journal = await FileDeliveryStore.open(root);
     await journal.command('delivery.begin', begin('last-operation'));
     await journal.command(
       'delivery.finish',
       finish('last-operation', {'status': 'saved'}),
     );
-    final reopened = await DeliveryJournal.open(root);
+    final reopened = await FileDeliveryStore.open(root);
     expect(
       record(await reopened.command('delivery.get', source))['status'],
       'saved',
@@ -587,7 +589,7 @@ void main() {
   });
 
   test('大回执触及字节上限保留 pending，最小 unknown 可持久化并重开', () async {
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     final errors = List.generate(
       100,
       (_) => {
@@ -623,7 +625,7 @@ void main() {
           'delivery.finish',
           finish('operation-$index', {'status': 'result_unknown'}, identity),
         );
-        final reopened = await DeliveryJournal.open(root);
+        final reopened = await FileDeliveryStore.open(root);
         expect(
           record(
             await reopened.command('delivery.get', {...source, ...identity}),
@@ -675,7 +677,7 @@ void main() {
     final bytes = utf8.encode(jsonEncode(ledger([safe], operations)));
     expect(bytes.length, lessThan(maximum));
     await file.writeAsBytes(bytes);
-    final journal = await DeliveryJournal.open(root);
+    final journal = await FileDeliveryStore.open(root);
     await expectLater(
       journal.command('delivery.begin', begin('new')),
       throwsA(code('delivery_capacity')),

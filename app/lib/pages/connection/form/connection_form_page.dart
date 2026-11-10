@@ -11,8 +11,8 @@ import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
 import 'package:scrcpy_connect/pages/connection/wireless/qr/connection_wireless_qr_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -42,7 +42,7 @@ class ConnectionFormPage extends HookWidget {
     this.configuring = false,
     this.additionalContent,
   });
-  final AppController controller;
+  final AppStore controller;
   final bool pairing;
   final String address;
   final String port;

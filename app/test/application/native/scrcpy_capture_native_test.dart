@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,12 +9,11 @@ import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/utils/ordered_disposal.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
-import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
-import 'package:scrcpy_connect/services/media/scrcpy_capture_adapter.dart';
-import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
-import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
+import 'package:scrcpy_connect/services/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/scrcpy_capture_adapter.dart';
+import 'package:scrcpy_connect/services/screen_capture_service.dart';
+import 'package:scrcpy_connect/services/bundled_servers.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -51,7 +52,7 @@ void main() {
         ),
       );
       ScrcpyServerQueries? queries;
-      SessionCoordinator? sessions;
+      ScreenCaptureService? sessions;
       ScrcpySession? attached;
       ScrcpySession? independent;
       AdbDevice? device;
@@ -63,7 +64,7 @@ void main() {
           timeout: const Duration(seconds: 15),
         );
         final launches = await AppLaunchStore.open(directory: directory);
-        sessions = SessionCoordinator(
+        sessions = ScreenCaptureService(
           scrcpy: host.scrcpy,
           requireConnection: (_) => connection,
           launches: launches,

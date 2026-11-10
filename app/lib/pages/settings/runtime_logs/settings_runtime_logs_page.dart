@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/models/diagnostic_record.dart';
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -7,7 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
+import 'package:scrcpy_connect/services/diagnostic_log.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';

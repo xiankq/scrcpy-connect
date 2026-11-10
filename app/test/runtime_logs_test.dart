@@ -1,18 +1,20 @@
+import 'package:scrcpy_connect/models/diagnostic_record.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
+import 'package:scrcpy_connect/services/diagnostic_log.dart';
 import 'package:scrcpy_connect/pages/settings/runtime_logs/settings_runtime_logs_page.dart';
 
 import 'support/test_controller.dart';
 
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 void main() {
-  late AppController controller;
+  late AppStore controller;
   late Directory directory;
   late DiagnosticLog log;
   setUp(() async {

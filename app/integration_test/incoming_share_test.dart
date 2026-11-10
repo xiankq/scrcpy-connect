@@ -12,7 +12,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
@@ -42,7 +42,7 @@ void main() {
       );
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(appControllerProvider.notifier);
+      ).read(appStoreProvider.notifier);
       Future<Json> request(String command, [Json params = const {}]) async =>
           (await tester.runAsync(() => controller.request(command, params)))!;
       var surfaceConverted = false;

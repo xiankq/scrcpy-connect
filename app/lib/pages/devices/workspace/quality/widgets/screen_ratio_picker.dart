@@ -3,14 +3,14 @@ import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/remote_display_settings.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 
 Future<void> chooseScreenRatio(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   String deviceId,
   Json preferences,
 ) async {

@@ -1,14 +1,14 @@
-import 'package:scrcpy_connect/stores/application_events.dart';
+import 'package:scrcpy_connect/services/application_events.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/device_coordinator.dart';
-import 'package:scrcpy_connect/stores/companion_coordinator.dart';
-import 'package:scrcpy_connect/stores/observation_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
-import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';
-import 'package:scrcpy_connect/stores/media/device_keep_awake_coordinator.dart';
-import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
-import 'package:scrcpy_connect/stores/preference_store.dart';
+import 'package:scrcpy_connect/services/device_service.dart';
+import 'package:scrcpy_connect/services/companion_service.dart';
+import 'package:scrcpy_connect/services/device_observation_service.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
+import 'package:scrcpy_connect/services/file_share_service.dart';
+import 'package:scrcpy_connect/services/device_audio_service.dart';
+import 'package:scrcpy_connect/services/device_wake_service.dart';
+import 'package:scrcpy_connect/services/screen_capture_service.dart';
+import 'package:scrcpy_connect/stores/settings_store.dart';
 
 /// 借用业务所有者组合只读快照；不建立连接、部署助手或取得资源关闭权。
 /// 等待任一异步读取期间业务版本变化时重读，媒体帧不使读取持续饥饿。
@@ -26,15 +26,15 @@ final class ApplicationSnapshotReader {
     this.sharing,
   });
   final ApplicationEvents events;
-  final DeviceCoordinator devices;
-  final SessionCoordinator sessions;
-  final DeviceAudioSourceCoordinator audio;
-  final DeviceKeepAwakeCoordinator keepAwake;
-  final ObservationCoordinator observations;
-  final CompanionCoordinator companion;
-  final TransferCoordinator transfers;
-  final PreferenceStore preferences;
-  final ShareCoordinator? sharing;
+  final DeviceService devices;
+  final ScreenCaptureService sessions;
+  final DeviceAudioService audio;
+  final DeviceWakeService keepAwake;
+  final DeviceObservationService observations;
+  final CompanionService companion;
+  final FileTransferService transfers;
+  final SettingsStore preferences;
+  final FileShareService? sharing;
 
   Future<Map<String, dynamic>> readSnapshot() async {
     for (var attempt = 0; attempt < 4; attempt++) {

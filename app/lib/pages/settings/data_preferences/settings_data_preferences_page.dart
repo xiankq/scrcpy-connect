@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/pages/settings/data_preferences/widgets/metadata_import_preview.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -20,7 +20,7 @@ import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 
 class DataPreferencesPage extends StatelessWidget {
   const DataPreferencesPage({super.key, required this.controller});
-  final AppController controller;
+  final AppStore controller;
   @override
   Widget build(BuildContext context) => PageFrame(
     title: '本地数据',

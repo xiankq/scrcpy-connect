@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:scrcpy_connect/widgets/command_query.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -21,7 +21,7 @@ class CommandView extends HookWidget {
     this.alternative,
     this.refreshKey,
   });
-  final AppController controller;
+  final AppStore controller;
   final String command;
   final Json params;
   final Widget Function(BuildContext, Json, VoidCallback) builder;

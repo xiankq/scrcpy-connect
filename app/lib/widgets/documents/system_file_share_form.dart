@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -21,7 +21,7 @@ class SystemFileShareForm extends HookWidget {
     this.transferId,
     this.sourceLabel = '被控设备',
   });
-  final AppController controller;
+  final AppStore controller;
   final String localPath, name, kind, sourceLabel;
   final String? transferId;
 
@@ -105,7 +105,7 @@ bool get supportsSystemDocumentSave => const {
 /// 完整原件在系统接收应用读取期间继续受到暂存保护。
 Future<String> sharePreparedFile(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   String localPath,
 ) async {
   if (!supportsSystemFileShare) {

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/state_recovery.dart';
+import 'package:scrcpy_connect/services/state_recovery.dart';
 
 StateJson snapshot(int sequence) => {
   'sequence': sequence,

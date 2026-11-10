@@ -13,7 +13,7 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
 import 'package:scrcpy_connect/pages/connection/usb/connection_usb_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_index_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 import 'product_flow_test.dart' show waitFor;
@@ -76,7 +76,7 @@ void main() {
   testWidgets('real USB permission denial, retry and retained connection', (
     tester,
   ) async {
-    AppController? controller;
+    AppStore? controller;
     Set<String>? baselineIds;
     final ownedIds = <String>{};
     final originalHitTestPolicy = WidgetController.hitTestWarningShouldBeFatal;
@@ -151,7 +151,7 @@ void main() {
       );
       controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(appControllerProvider.notifier);
+      ).read(appStoreProvider.notifier);
       baselineIds = (await devices()).map((d) => value(d, 'id')).toSet();
       await hostReady(() => runId != null);
       binding.reportData!['fixtureRunId'] = runId;

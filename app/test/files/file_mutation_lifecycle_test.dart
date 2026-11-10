@@ -1,13 +1,15 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/models/file_stamp.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:adb/adb.dart' as adb;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/services/files/adb_file_executor.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
+import 'package:scrcpy_connect/services/adb_file_executor.dart';
+import 'package:scrcpy_connect/services/file_mutation_service.dart';
 
 const _selected = FileStamp(
   mode: 0x8000,
@@ -228,14 +230,14 @@ final class _Fixture {
     client: client,
     device: const adb.AdbDevice(id: 'other', serial: 'other', state: 'device'),
   );
-  late final FileMutationCoordinator owner;
+  late final FileMutationService owner;
   int resolutions = 0;
 
   static Future<_Fixture> open() async {
     final root = await Directory.systemTemp.createTemp('file-mutation-');
     final api = _Api();
     final fixture = _Fixture(root, api, adb.NativeAdbClient(api, ''));
-    fixture.owner = FileMutationCoordinator(
+    fixture.owner = FileMutationService(
       AdbFileExecutor(
         localFiles: fixture.client.services,
         resolveConnection: (device) async {

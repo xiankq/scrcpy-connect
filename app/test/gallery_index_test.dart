@@ -8,7 +8,7 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/index/devices_workspace_gallery_index_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -48,7 +48,7 @@ Json _receipt({
   'issueCount': status == 'partial' ? 1 : 0,
 };
 
-Future<AppController> _mount(
+Future<AppStore> _mount(
   WidgetTester tester,
   ApplicationRequest request, {
   bool settle = true,
@@ -70,7 +70,7 @@ Future<AppController> _mount(
   return controller;
 }
 
-Future<void> _dispose(WidgetTester tester, AppController controller) async {
+Future<void> _dispose(WidgetTester tester, AppStore controller) async {
   await tester.pumpWidget(const SizedBox());
   controller.dispose();
 }

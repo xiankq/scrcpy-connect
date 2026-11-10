@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/usb_lease_recovery.dart';
+import 'package:scrcpy_connect/services/usb_recovery.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,7 +44,7 @@ void main() {
       }
       throw StateError('意外的平台命令。');
     });
-    final recovery = UsbLeaseRecovery();
+    final recovery = UsbRecovery();
     expect(() => recovery.ownerLeaseId, throwsStateError);
     expect(recovery.complete, throwsStateError);
     await expectLater(recovery.begin(), throwsA(_code('reply_lost')));
@@ -91,7 +91,7 @@ void main() {
         completeReply = Completer<Map<String, dynamic>>();
     final calls = <String>[];
     String? candidate;
-    final recovery = UsbLeaseRecovery(
+    final recovery = UsbRecovery(
       platform: (command, params) async {
         calls.add(command);
         if (command == 'usb.environment') {
@@ -149,7 +149,7 @@ void main() {
   ]) {
     test('拒绝无效环境 $environment，不提交候选准入', () async {
       final calls = <String>[];
-      final recovery = UsbLeaseRecovery(
+      final recovery = UsbRecovery(
         platform: (command, _) async {
           calls.add(command);
           return environment;
@@ -167,7 +167,7 @@ void main() {
   test('begin 回执必须确认本候选，失败重试不重新读取后继环境', () async {
     final candidates = <String>[];
     var environments = 0;
-    final recovery = UsbLeaseRecovery(
+    final recovery = UsbRecovery(
       platform: (command, params) async {
         if (command == 'usb.environment') {
           environments++;
@@ -196,7 +196,7 @@ void main() {
   test('begin 的非布尔 ownerReady 不推进阶段，原候选可重试', () async {
     final candidates = <String>[];
     var first = true;
-    final recovery = UsbLeaseRecovery(
+    final recovery = UsbRecovery(
       platform: (command, params) async {
         if (command == 'usb.environment') {
           return {'ownerReady': false, 'ownerLeaseId': null};
@@ -229,7 +229,7 @@ void main() {
     test('complete 严格拒绝无效确认 $bad，保留同候选重试', () async {
       final candidates = <String>[];
       var first = true;
-      final recovery = UsbLeaseRecovery(
+      final recovery = UsbRecovery(
         platform: (command, params) async {
           if (command == 'usb.environment') {
             return {'ownerReady': false, 'ownerLeaseId': null};

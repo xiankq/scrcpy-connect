@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/companion_recovery.dart';
+import 'package:scrcpy_connect/services/companion_recovery.dart';
 
 import 'coordinator_fixture.dart';
 

@@ -1,12 +1,14 @@
+import 'package:scrcpy_connect/models/device_records_import.dart';
+
 import 'dart:async';
 import 'dart:io';
 
-import 'package:scrcpy_connect/stores/preference_store.dart';
+import 'package:scrcpy_connect/stores/settings_store.dart';
 import 'package:scrcpy_connect/models/device_metadata.dart';
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
 import 'package:scrcpy_connect/models/preference_schema.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/media/video_quality_policy.dart'
+import 'package:scrcpy_connect/services/video_quality_policy.dart'
     show defaultVideoQuality;
 
 const _devicePreferences = {'deviceQuality', 'deviceSettings', 'appOpenModes'};
@@ -21,16 +23,16 @@ final class AppSettings {
     this.applyBackgroundPolicy,
   }) : _appliedBackground =
            preferences.current.values['backgroundKeepAlive'] == true;
-  final PreferenceStore preferences;
-  final DeviceRecordStore records;
+  final SettingsStore preferences;
+  final DeviceStore records;
   final void Function(DeviceRecordsImport) onDevicesImported;
   final void Function(Map<String, dynamic> settings) onChanged;
   final Future<void> Function(bool enabled)? applyBackgroundPolicy;
   bool _appliedBackground;
   Future<void> _tail = Future<void>.value();
 
-  static Future<PreferenceStore> prepare(Directory directory) =>
-      PreferenceStore.open(
+  static Future<SettingsStore> prepare(Directory directory) =>
+      SettingsStore.open(
         directory: directory,
         schema: PreferenceSchema(
           defaults: {...preferenceDefaults, ...defaultVideoQuality},

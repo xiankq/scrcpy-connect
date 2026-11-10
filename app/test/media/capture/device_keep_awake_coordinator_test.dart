@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import '../../support/scrcpy_event_fixture.dart';
 
 import 'dart:async';
@@ -6,8 +8,7 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/stores/media/device_keep_awake_coordinator.dart';
+import 'package:scrcpy_connect/services/device_wake_service.dart';
 
 void main() {
   late _Fixture f;
@@ -239,10 +240,10 @@ final class _Fixture {
   DeviceConnection connection = _connection('connection');
   bool enabled = true, handoff = false, failEmit = false;
   int windows = 1;
-  late DeviceKeepAwakeCoordinator owner;
-  DeviceKeepAwakeCoordinator makeOwner({
+  late DeviceWakeService owner;
+  DeviceWakeService makeOwner({
     Duration startupTimeout = const Duration(seconds: 12),
-  }) => DeviceKeepAwakeCoordinator(
+  }) => DeviceWakeService(
     scrcpy: ScrcpyClient(native),
     requireConnection: (_) => connection,
     hasWindowOwner: (_) => windows > 0 || handoff,

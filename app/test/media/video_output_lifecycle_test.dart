@@ -1,9 +1,12 @@
+import 'package:scrcpy_connect/models/video_texture.dart';
+import 'package:scrcpy_connect/models/video_pixels.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/media/video_output_coordinator.dart';
-import 'package:scrcpy_connect/stores/media/video_output_lifecycle.dart';
-import 'package:scrcpy_connect/services/media/video_player.dart';
+import 'package:scrcpy_connect/services/video_output_service.dart';
+import 'package:scrcpy_connect/services/video_recovery.dart';
+import 'package:scrcpy_connect/services/video_player.dart';
 
 final _token = List.filled(64, 'a').join();
 
@@ -25,7 +28,7 @@ VideoJson _endpoint(String relay, int generation) => {
   'detachAddress': 8192,
 };
 
-class _Player implements VideoPlayerPort {
+class _Player implements VideoPlayer {
   final changes = StreamController<VideoJson>.broadcast(sync: true);
   Completer<void>? releasing;
   int releases = 0;
@@ -67,7 +70,7 @@ class _Harness {
   Completer<VideoJson>? stopping;
   int relay = 0;
 
-  late final VideoOutputLifecycle lifecycle = VideoOutputLifecycle(
+  late final VideoRecovery lifecycle = VideoRecovery(
     outputs: receipts,
     request: request,
     closeOutput: close,
@@ -75,7 +78,7 @@ class _Harness {
     emit: events.add,
     isDisposed: () => false,
   );
-  late final VideoOutputCoordinator outputs = VideoOutputCoordinator(
+  late final VideoOutputService outputs = VideoOutputService(
     request: request,
     emit: lifecycle.handle,
     isDisposed: () => false,

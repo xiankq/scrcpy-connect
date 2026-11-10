@@ -4,7 +4,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/pages/devices/details/diagnostics/devices_details_diagnostics_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/device_summary.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 
 import 'dart:ui' as ui;
 
@@ -12,7 +12,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/index/devices_workspace_i
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_breadcrumbs.dart';
@@ -428,7 +428,7 @@ void main() {
       expectHealthyRemote();
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(appControllerProvider.notifier);
+      ).read(appStoreProvider.notifier);
       for (final tooltip in ['返回', '主屏幕', '最近任务']) {
         final button = find.descendant(
           of: remote,
@@ -616,7 +616,7 @@ void main() {
       if (find.byType(ConnectApp).evaluate().isNotEmpty) {
         final controller = ProviderScope.containerOf(
           tester.element(find.byType(ConnectApp)),
-        ).read(appControllerProvider.notifier);
+        ).read(appStoreProvider.notifier);
         try {
           binding.reportData!['failureSessions'] = await controller
               .request('session.list')

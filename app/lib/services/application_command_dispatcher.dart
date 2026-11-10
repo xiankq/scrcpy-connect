@@ -1,26 +1,30 @@
-import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
-import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/delivery_journal.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart'
-    show FileFailure;
-import 'package:scrcpy_connect/stores/files/file_catalog.dart';
-import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
-import 'package:scrcpy_connect/services/file_commands.dart';
-import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
+import 'package:path/path.dart' as p;
+import 'package:scrcpy_connect/services/file_paths.dart';
+import 'package:scrcpy_connect/models/file_stamp.dart';
+
+import 'package:scrcpy_connect/models/media_cache_failure.dart';
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_preview_service.dart';
+import 'package:scrcpy_connect/stores/file_delivery_store.dart';
+
+import 'package:scrcpy_connect/services/file_catalog.dart';
+import 'package:scrcpy_connect/services/file_mutation_service.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
+import 'package:scrcpy_connect/services/file_share_service.dart';
 import 'package:scrcpy_connect/services/command_contract.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/media/video_quality_policy.dart';
-import 'package:scrcpy_connect/services/media/virtual_display_policy.dart';
+import 'package:scrcpy_connect/services/video_quality_policy.dart';
+import 'package:scrcpy_connect/services/virtual_display_policy.dart';
 
 import 'package:scrcpy_connect/services/app_settings.dart';
 
 /// 应用命令的校验、产品偏好和文件流程；各业务所有者通过 Dart 接口执行。
 final class ApplicationCommandDispatcher {
   ApplicationCommandDispatcher({
-    required FileCatalog catalog,
-    required FileMutationCoordinator mutations,
-    required TransferCoordinator transfers,
+    required this._catalog,
+    required this._mutations,
+    required this._transfers,
     required this._preferences,
     required this.execute,
     this._cache,
@@ -28,19 +32,11 @@ final class ApplicationCommandDispatcher {
     this._sharing,
     this._artifacts,
     this._onMediaEvent,
-  }) : _catalog = catalog,
-       _mutations = mutations,
-       _transfers = transfers,
-       _fileCommands = FileCommands(
-         catalog: catalog,
-         mutations: mutations,
-         transfers: transfers,
-       );
+  });
 
   final FileCatalog _catalog;
-  final FileMutationCoordinator _mutations;
-  final TransferCoordinator _transfers;
-  final FileCommands _fileCommands;
+  final FileMutationService _mutations;
+  final FileTransferService _transfers;
   final Future<Map<String, dynamic>> Function(
     ApplicationCommand command,
     Map<String, dynamic> params,
@@ -48,10 +44,10 @@ final class ApplicationCommandDispatcher {
   execute;
   final AppSettings _preferences;
   final void Function(Map<String, dynamic>)? _onMediaEvent;
-  final AppMediaCache? _cache;
-  final DeliveryJournal? _deliveries;
-  final ShareCoordinator? _sharing;
-  final MediaArtifactCoordinator? _artifacts;
+  final MediaCacheStore? _cache;
+  final FileDeliveryStore? _deliveries;
+  final FileShareService? _sharing;
+  final MediaPreviewService? _artifacts;
 
   Map<String, dynamic> projectEvent(Map<String, dynamic> event) =>
       _preferences.projectEvent(event);
@@ -111,7 +107,7 @@ final class ApplicationCommandDispatcher {
           ),
         );
       }
-      final local = await _fileCommands.invoke(command, params);
+      final local = await _executeFiles(command, params);
       if (local != null) return Map<String, dynamic>.from(local);
       if (command.startsWith('sharing.')) {
         final sharing = _sharing;
@@ -214,5 +210,178 @@ final class ApplicationCommandDispatcher {
       );
     }
     return result;
+  }
+
+  Future<Map<String, Object?>?> _executeFiles(
+    String command,
+    Map<String, Object?> params,
+  ) async {
+    String device() => switch (params['deviceId']) {
+      final String value => value,
+      null => '',
+      _ => throw const FileFailure('invalid_argument', '设备标识必须为字符串。'),
+    };
+    FileStamp stamp(Object? value) {
+      if (value is! Map) {
+        throw const FileFailure('source_changed', '缺少所选文件快照，请重新选择。');
+      }
+      try {
+        final result = FileStamp.fromJson(Map<String, Object?>.from(value));
+        if (result.identity == null || result.identity!.isEmpty) {
+          throw const FileFailure('source_changed', '缺少所选文件身份，请重新选择。');
+        }
+        return result;
+      } on TypeError {
+        throw const FileFailure('invalid_argument', '所选文件快照无效。');
+      } on FormatException {
+        throw const FileFailure('invalid_argument', '所选文件快照无效。');
+      }
+    }
+
+    switch (command) {
+      case 'media.cache.acquire':
+        return {
+          'leaseId': await _transfers.acquireCacheLease(
+            params['transferId']! as String,
+          ),
+        };
+      case 'files.list':
+        return _catalog.browse(
+          device(),
+          params['path'] as String? ?? '/sdcard',
+          filter: params['filter'] as String? ?? 'all',
+          sort: params['sort'] as String? ?? 'name',
+          descending: params['descending'] == true,
+          offset: params['offset'] as int? ?? 0,
+          limit: params['limit'] as int? ?? 10000,
+        );
+      case 'files.search.start':
+        return _catalog.startSearch(
+          device(),
+          params['path']! as String,
+          query: params['query']! as String,
+          filter: params['filter'] as String? ?? 'all',
+        );
+      case 'files.search.get':
+        return _catalog.scan(
+          device(),
+          params['searchId']! as String,
+          offset: params['offset'] as int? ?? 0,
+          limit: params['limit'] as int? ?? 500,
+        );
+      case 'files.search.cancel':
+        return _catalog.cancelScan(device(), params['searchId']! as String);
+      case 'media.list':
+        final id = params['scanId'] as String?;
+        if (id == null || params['refresh'] == true) {
+          return _catalog.startSearch(
+            device(),
+            '/sdcard',
+            query: '',
+            gallery: true,
+          );
+        }
+        return _catalog.scan(
+          device(),
+          id,
+          offset: params['offset'] as int? ?? 0,
+          limit: params['limit'] as int? ?? 100,
+        );
+      case 'media.scan.cancel':
+        return _catalog.cancelScan(device(), params['scanId']! as String);
+      case 'files.push':
+      case 'files.pull':
+        final selections = (params['items'] as List? ?? [params]).map((item) {
+          final selection = Map<String, Object?>.from(item as Map);
+          selection['source'] ??= selection['path'];
+          return selection;
+        }).toList();
+        final policy =
+            params['conflict'] as String? ??
+            params['policy'] as String? ??
+            'ask';
+        final scope = params['destinationScope'] as String? ?? 'localPath';
+        final share = params['shareId'] as String?;
+        if (command == 'files.push' && share != null) {
+          return _transfers.submitShare(
+            device(),
+            selections,
+            shareId: share,
+            publicationRequest: params,
+            policy: policy,
+            destinationScope: scope,
+          );
+        }
+        return _transfers.startTransfer(
+          device(),
+          command == 'files.push',
+          selections,
+          policy: policy,
+          destinationScope: scope,
+          shareId: share,
+        );
+      case 'sharing.reconcile':
+        if (_transfers.publication != null && params['transfers'] == null) {
+          return _transfers.reconcileShares();
+        }
+        return null;
+      case 'transfers.list':
+        return _transfers.transfers();
+      case 'transfers.get':
+        return _transfers.transfer(params['transferId']! as String);
+      case 'transfers.cancel':
+        if (params['batchId'] is String) {
+          return _transfers.cancelBatch(params['batchId']! as String);
+        }
+        return _transfers.cancelTransfer(params['transferId']! as String);
+      case 'transfers.resolve':
+      case 'transfers.resume':
+        final id = params['transferId']! as String;
+        return _transfers.resolveTransfer(
+          id,
+          params['policy'] as String? ??
+              params['conflict'] as String? ??
+              (_transfers.transfer(id)['policy'] as String? ?? 'ask'),
+          restart: params['restart'] == true,
+          applyToAll: params['applyToAll'] == true,
+        );
+      case 'transfers.remove':
+        return _transfers.removeTransfer(
+          (params['batchId'] ?? params['transferId'])! as String,
+          batch: params['batchId'] is String,
+        );
+      case 'files.mkdir':
+        await _mutations.createDirectory(device(), params['path']! as String);
+        return {'ok': true};
+      case 'files.rename':
+        final path = params['path']! as String;
+        await _mutations.rename(
+          device(),
+          path,
+          expected: stamp(params['expectedStamp']),
+          destination:
+              params['destination'] as String? ??
+              params['newPath'] as String? ??
+              (params['name'] is String
+                  ? p.posix.join(
+                      p.posix.dirname(path),
+                      FilePaths.name(params['name']! as String),
+                    )
+                  : ''),
+        );
+        return {'ok': true};
+      case 'files.delete':
+        await _mutations.delete(
+          device(),
+          (params['paths']! as List).cast<String>(),
+          expected: {
+            for (final path in (params['paths']! as List).cast<String>())
+              path: stamp((params['expectedStamps'] as Map?)?[path]),
+          },
+        );
+        return {'ok': true};
+      default:
+        return null;
+    }
   }
 }

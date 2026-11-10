@@ -2,7 +2,7 @@ import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_launcher.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
@@ -15,7 +15,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AppsPage extends HookWidget {
   const AppsPage({super.key, required this.controller, required this.device});
-  final AppController controller;
+  final AppStore controller;
   final Json device;
 
   @override

@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import '../../support/scrcpy_event_fixture.dart';
 
 import 'dart:async';
@@ -6,8 +8,7 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';
+import 'package:scrcpy_connect/services/device_audio_service.dart';
 
 Matcher _code(String code) =>
     isA<RequestFailure>().having((error) => error.code, 'code', code);
@@ -328,7 +329,7 @@ void main() {
 
 final class _Fixture {
   _Fixture() {
-    owner = DeviceAudioSourceCoordinator(
+    owner = DeviceAudioService(
       requireConnection: (device) => connections[device]!,
       scrcpy: ScrcpyClient(native),
       hasAudioOwner: eligible.contains,
@@ -355,7 +356,7 @@ final class _Fixture {
   };
   final emissions = <(String, String, AudioSourceJson)>[];
   void Function(AudioSourceJson)? onEvent;
-  late final DeviceAudioSourceCoordinator owner;
+  late final DeviceAudioService owner;
 }
 
 final class _Client implements AdbClient {

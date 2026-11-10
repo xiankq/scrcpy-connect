@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/choice_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -13,11 +13,11 @@ import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 
 class AppearancePage extends HookConsumerWidget {
   const AppearancePage({super.key, required this.controller});
-  final AppController controller;
+  final AppStore controller;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appSettings = ref.watch(
-      appControllerProvider.select((state) => state.settings),
+      appStoreProvider.select((state) => state.settings),
     );
     Future<void> save(String key, dynamic setting) async {
       try {

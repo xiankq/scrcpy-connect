@@ -7,8 +7,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -18,7 +18,7 @@ import 'package:scrcpy_connect/widgets/state_note.dart';
 
 class CallsPage extends HookWidget {
   const CallsPage({super.key, required this.controller, required this.device});
-  final AppController controller;
+  final AppStore controller;
   final Json device;
 
   @override

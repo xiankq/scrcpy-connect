@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -5,8 +7,8 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/stores/connection/device_power_coordinator.dart';
+import 'package:scrcpy_connect/services/device_connection_pool.dart';
+import 'package:scrcpy_connect/services/device_power_service.dart';
 
 const _id = '00000000-0000-4000-8000-000000000001';
 
@@ -307,7 +309,7 @@ void main() {
     expect(fixture.api.cancelled, ['wake-1']);
   });
 
-  test('精确关闭失败阻止 ConnectionOwner 断开，重试只清理原句柄', () async {
+  test('精确关闭失败阻止 DeviceConnectionPool 断开，重试只清理原句柄', () async {
     fixture.api.failCancel = true;
     await expectLater(fixture.wake(), _failure('wake_cleanup_unconfirmed'));
     await expectLater(
@@ -378,17 +380,17 @@ NativeAdbEvent _event(
 final class _Fixture {
   final api = _Api();
   late final client = _Client(api);
-  late final ConnectionOwner owner;
-  late final DevicePowerCoordinator power;
+  late final DeviceConnectionPool owner;
+  late final DevicePowerService power;
   late DeviceConnection connection;
   int _next = 0;
 
   static Future<_Fixture> open() async {
     final fixture = _Fixture();
-    fixture.power = DevicePowerCoordinator(
+    fixture.power = DevicePowerService(
       requireConnection: (id) => fixture.owner.require(id),
     );
-    fixture.owner = ConnectionOwner(
+    fixture.owner = DeviceConnectionPool(
       stopActivities: fixture.power.stopConnection,
     );
     fixture.connection = await fixture.connect();

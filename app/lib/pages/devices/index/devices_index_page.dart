@@ -1,11 +1,11 @@
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/pages/devices/index/widgets/device_card.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -16,17 +16,17 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class DevicesPage extends HookConsumerWidget {
   const DevicesPage({super.key, required this.controller});
-  final AppController controller;
+  final AppStore controller;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appDevices = ref.watch(
-      appControllerProvider.select((state) => state.devices),
+      appStoreProvider.select((state) => state.devices),
     );
     final appLoading = ref.watch(
-      appControllerProvider.select((state) => state.loading),
+      appStoreProvider.select((state) => state.loading),
     );
     final appDeviceError = ref.watch(
-      appControllerProvider.select((state) => state.deviceError),
+      appStoreProvider.select((state) => state.deviceError),
     );
     final query = useTextEditingController();
     useListenable(query);

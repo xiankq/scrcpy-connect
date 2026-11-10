@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_surface.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_recovery_panel.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_navigation_bar.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
@@ -14,8 +14,8 @@ import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/exit_handle.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/widgets/remote_audio_control.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/media/remote_failure.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/models/remote_display_settings.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_connection_recovery.dart';
@@ -42,7 +42,7 @@ class RemotePage extends StatefulWidget {
     this.requestKeyboard = false,
     this.initialAction,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   final String? packageName;
   final Json? existingSession;
@@ -255,7 +255,7 @@ class _RemotePageState extends State<RemotePage>
   TextEditingController get text => inputs.text;
   Future<void> get inputQueue => inputs.idle;
   StreamSubscription<Json>? eventSubscription;
-  AppController get controller => widget.controller;
+  AppStore get controller => widget.controller;
   String get sessionId => presentation.sessionId;
   @override
   void initState() {
@@ -1048,17 +1048,17 @@ class _RemotePageState extends State<RemotePage>
     return Consumer(
       builder: (context, ref, _) {
         final currentDevice = ref.watch(
-          appControllerProvider.select(
+          appStoreProvider.select(
             (state) => state.devices
                 .where((device) => device['id'] == widget.device['id'])
                 .firstOrNull,
           ),
         );
         final unverified = ref.watch(
-          appControllerProvider.select((state) => state.reconciliationPending),
+          appStoreProvider.select((state) => state.reconciliationPending),
         );
         final showNavigationBar = ref.watch(
-          appControllerProvider.select(
+          appStoreProvider.select(
             (state) =>
                 jsonObject(
                   jsonObject(state.settings['deviceSettings'])[value(

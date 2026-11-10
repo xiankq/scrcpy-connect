@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/connection/index/connection_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/convert_ip/devices_details_convert_ip_page.dart';
 import 'package:scrcpy_connect/pages/devices/details/connection_preferences/devices_details_connection_preferences_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -22,7 +22,7 @@ const phone = <String, dynamic>{
 };
 Future<void> mount(
   WidgetTester tester,
-  AppController controller,
+  AppStore controller,
   Widget page,
 ) async {
   tester.view.physicalSize = const Size(402, 874);

@@ -1,10 +1,20 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/models/file_cancellation.dart';
+import 'package:scrcpy_connect/models/file_stamp.dart';
+import 'package:scrcpy_connect/models/file_directory_facts.dart';
+import 'package:scrcpy_connect/services/scoped_file_executor.dart';
+import 'package:scrcpy_connect/services/file_execution_resource.dart';
+import 'package:scrcpy_connect/services/file_execution_cleanup_failure.dart';
+import 'package:scrcpy_connect/models/file_cache_reservation.dart';
+import 'package:scrcpy_connect/services/file_cache_leases.dart';
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/transfer_journal.dart';
+import 'package:scrcpy_connect/services/file_executor.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
+import 'package:scrcpy_connect/stores/file_transfer_store.dart';
 
 void main() {
   test('取消失败保留精确执行与缓存，所有取消入口和关闭沿原句柄重试', () async {
@@ -26,7 +36,7 @@ void main() {
       expect(task['canRestart'], isFalse);
       expect(task['canCancel'], isTrue);
       expect(fixture.cache.leases, hasLength(1));
-      final saved = (await TransferJournal(fixture.root).load())[id]!;
+      final saved = (await FileTransferStore(fixture.root).load())[id]!;
       expect(saved['cleanupPending'], isTrue);
       expect(saved['errorCode'], 'result_unknown');
       await expectLater(
@@ -236,7 +246,7 @@ void main() {
       expect(fixture.executor.copyCalls, 2);
       expect(fixture.cache.leases, isEmpty);
       expect(
-        (await TransferJournal(fixture.root).load())[id]!['generation'],
+        (await FileTransferStore(fixture.root).load())[id]!['generation'],
         1,
       );
     } finally {
@@ -292,7 +302,7 @@ void main() {
       await removing;
       await rejected;
       expect((fixture.owner.transfers()['transfers']! as List), isEmpty);
-      expect(await TransferJournal(fixture.root).load(), isEmpty);
+      expect(await FileTransferStore(fixture.root).load(), isEmpty);
       expect(fixture.cache.sequence, 1);
       expect(fixture.cache.leases, isEmpty);
     } finally {
@@ -355,7 +365,7 @@ void main() {
         expect(fixture.cache.leases, isEmpty);
         expect(fixture.executor.copyCalls, 0);
         expect(fixture.owner.transfers()['transfers'], isEmpty);
-        expect(await TransferJournal(fixture.root).load(), isEmpty);
+        expect(await FileTransferStore(fixture.root).load(), isEmpty);
         expect(fixture.cache.successfulReleases, ['lease-1']);
       } finally {
         await fixture.dispose();
@@ -392,7 +402,7 @@ void main() {
           _throwsCode('cancelled'),
         );
         await stopping.future;
-        final records = await TransferJournal(fixture.root).load();
+        final records = await FileTransferStore(fixture.root).load();
         expect(records, hasLength(2));
         expect(
           records.values.map((task) => task['status']),
@@ -454,7 +464,7 @@ void main() {
         _throwsCode('file_cleanup_unconfirmed'),
       );
       expect(fixture.owner.transfers()['transfers'], isEmpty);
-      expect(await TransferJournal(fixture.root).load(), isEmpty);
+      expect(await FileTransferStore(fixture.root).load(), isEmpty);
       expect(fixture.cache.leases, {'lease-1'});
       await expectLater(
         fixture.owner.close(),
@@ -475,7 +485,7 @@ void main() {
     test('冷重开清理保护仅接受同技术域已排空换代事实：$variant', () async {
       final fixture = await _Fixture.open();
       final coldRoot = await Directory.systemTemp.createTemp('transfer-cold-');
-      TransferCoordinator? reopened;
+      FileTransferService? reopened;
       try {
         fixture.executor.resource.failures = 100;
         final receipt = await fixture.start();
@@ -496,7 +506,7 @@ void main() {
               : 'transfer-files'
           ..fileScopeId = variant == 'same' ? 'scope-old' : 'scope-new';
         final cache = _Cache();
-        reopened = await TransferCoordinator.open(
+        reopened = await FileTransferService.open(
           executor: executor,
           dataDirectory: coldRoot,
           cache: cache,
@@ -551,13 +561,13 @@ final class _Fixture {
   final Directory root;
   final _Executor executor;
   final _Cache cache;
-  final TransferCoordinator owner;
+  final FileTransferService owner;
 
   static Future<_Fixture> open() async {
     final root = await Directory.systemTemp.createTemp('transfer-cleanup-');
     final executor = _Executor();
     final cache = _Cache();
-    final owner = await TransferCoordinator.open(
+    final owner = await FileTransferService.open(
       executor: executor,
       dataDirectory: root,
       cache: cache,
@@ -670,7 +680,7 @@ final class _Executor implements FileExecutor, ScopedFileExecutor {
   }
 
   @override
-  Future<DirectoryFacts> list(
+  Future<FileDirectoryFacts> list(
     String device,
     String path, {
     required bool local,

@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/models/file_stamp.dart';
+import 'package:scrcpy_connect/models/file_entry_fact.dart';
+
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/files/file_catalog.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/services/file_catalog.dart';
 
 import '../support/file_executor_fixture.dart';
 

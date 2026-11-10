@@ -6,7 +6,7 @@ import 'dart:async';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 跟踪精确的系统保存操作，包含从持久账本恢复的操作。
@@ -17,7 +17,7 @@ class DocumentConflictPanel extends StatefulWidget {
     required this.operationId,
   });
 
-  final AppController controller;
+  final AppStore controller;
   final String operationId;
 
   @override

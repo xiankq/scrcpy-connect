@@ -1,5 +1,7 @@
+import 'package:flutter/services.dart';
+import 'package:scrcpy_connect/stores/file_selection_store.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/widgets/documents/document_operation.dart';
 
@@ -24,7 +26,7 @@ DocumentOperationController _documentOperation(ApplicationRequest request) =>
     );
 
 Widget _exportPage(
-  AppController controller, {
+  AppStore controller, {
   required String localPath,
   String? transferId,
 }) => RouterTestApp(
@@ -46,6 +48,65 @@ Json _unknownSave(String operationId) => {
 };
 
 void main() {
+  for (final leaveWhileChoosing in [false, true]) {
+    testWidgets('文档视图匹配选择任务并处理迟到回执 leave=$leaveWhileChoosing', (tester) async {
+      const channel = MethodChannel('dev.scrcpyconnect/platform');
+      final chosen = Completer<Json>();
+      final events = StreamController<Json>.broadcast(sync: true);
+      var pickerCalls = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expectSync(call.method, 'documents.platform.picker');
+            pickerCalls++;
+            return chosen.future;
+          });
+      final selections = FileSelectionStore(
+        (plan) =>
+            events.add({'type': 'documents.selection.requested', 'data': plan}),
+      );
+      final operation = DocumentOperationController(
+        events: events.stream,
+        completeSelection: selections.complete,
+        execute: (command, params) async {
+          if (command == ApplicationCommand.documentsCancel) {
+            selections.cancel(params['operationId'] as String);
+          }
+          return {'cancelled': true};
+        },
+        request: (command, [params = const {}]) async => selections.request({
+          'operationId': params['operationId'],
+          'mode': 'importFiles',
+        }),
+      );
+      final work = operation.run('documents.importFiles', {});
+      await tester.pump();
+      expect(
+        pickerCalls,
+        1,
+        reason:
+            'error=${operation.error} busy=${operation.busy} id=${operation.operationId}',
+      );
+      events.add({
+        'type': 'documents.selection.requested',
+        'data': {'operationId': 'another-page', 'mode': 'importFiles'},
+      });
+      await tester.pump();
+      expect(pickerCalls, 1);
+      if (leaveWhileChoosing) operation.dispose();
+      chosen.complete({'status': 'selected', 'documents': <Json>[]});
+      await tester.pump();
+      await work;
+      if (!leaveWhileChoosing) {
+        expect(operation.result?['status'], 'selected');
+        operation.dispose();
+      }
+      expect(selections.complete('another-page', {}), isFalse);
+      await events.close();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+  }
+
   for (final phase in [
     'initial admission',
     'source release',

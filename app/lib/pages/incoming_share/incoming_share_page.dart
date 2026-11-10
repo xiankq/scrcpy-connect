@@ -1,13 +1,13 @@
 import 'widgets/share_device_card.dart';
 
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -24,14 +24,14 @@ class IncomingSharePage extends HookConsumerWidget {
     required this.controller,
     required this.share,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json share;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final share =
         ref.watch(
-          appControllerProvider.select(
+          appStoreProvider.select(
             (state) => state.pendingShares
                 .where((item) => item['shareId'] == this.share['shareId'])
                 .firstOrNull,
@@ -39,7 +39,7 @@ class IncomingSharePage extends HookConsumerWidget {
         ) ??
         this.share;
     final appDevices = ref.watch(
-      appControllerProvider.select((state) => state.devices),
+      appStoreProvider.select((state) => state.devices),
     );
     final files = objects(share['files']);
     final text = value(share, 'text');

@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'dart:async';
 
@@ -24,11 +24,8 @@ const _task = {
   'status': 'running',
 };
 
-Future<void> _mount(
-  WidgetTester tester,
-  AppController controller,
-  Widget page,
-) => tester.pumpWidget(RouterTestApp(controller: controller, home: page));
+Future<void> _mount(WidgetTester tester, AppStore controller, Widget page) =>
+    tester.pumpWidget(RouterTestApp(controller: controller, home: page));
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);

@@ -10,12 +10,12 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/main.dart' as app;
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 
 import 'product_flow_test.dart' show waitFor;
 
-// 真实 AppController/MDK 验收；配套宿主驱动独立观察目标进程、任务 ID、电源状态与 userActivity 时间戳。
+// 真实 AppStore/MDK 验收；配套宿主驱动独立观察目标进程、任务 ID、电源状态与 userActivity 时间戳。
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const address = String.fromEnvironment('CONNECT_E2E_ADDRESS');
@@ -47,7 +47,7 @@ void main() {
     );
     final controller = ProviderScope.containerOf(
       tester.element(find.byType(ConnectApp)),
-    ).read(appControllerProvider.notifier);
+    ).read(appStoreProvider.notifier);
     await waitFor(
       tester,
       () =>

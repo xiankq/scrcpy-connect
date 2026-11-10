@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/test_controller.dart';
 
@@ -45,7 +45,7 @@ String fieldText(WidgetTester tester, int index) => tester
     .controller!
     .text;
 
-AppController recordingController(
+AppStore recordingController(
   List<(String, Json)> calls,
   FutureOr<Json> Function(String, Json) respond, {
   Stream<Json>? events,
@@ -59,7 +59,7 @@ Json request(List<(String, Json)> calls, String command) =>
 
 Future<GoRouter> mount(
   WidgetTester tester,
-  AppController controller, {
+  AppStore controller, {
   String? location,
 }) async {
   controller.loading = false;

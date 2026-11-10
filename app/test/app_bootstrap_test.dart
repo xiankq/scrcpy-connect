@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 
 void main() {
@@ -46,7 +46,7 @@ void main() {
         final scope = ProviderContainer(
           overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
         );
-        scope.read(appControllerProvider.notifier);
+        scope.read(appStoreProvider.notifier);
         scope.dispose();
         await Future<void>.delayed(Duration.zero);
         expect(transport.closes, 2);

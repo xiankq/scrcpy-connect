@@ -1,4 +1,6 @@
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/stores/media_cache_gate.dart';
+import 'package:scrcpy_connect/services/file_cache_leases.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -8,30 +10,30 @@ import 'package:flutter_test/flutter_test.dart';
 import '../media/cache/support/media_file_fixture.dart';
 
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/stores/files/delivery_journal.dart';
-import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
-import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
+import 'package:scrcpy_connect/stores/file_delivery_store.dart';
+import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_preview_service.dart';
+import 'package:scrcpy_connect/services/file_share_service.dart';
 import 'package:scrcpy_connect/services/application_command_dispatcher.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/file_catalog.dart';
-import 'package:scrcpy_connect/stores/files/file_mutation_coordinator.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
+import 'package:scrcpy_connect/services/file_catalog.dart';
+import 'package:scrcpy_connect/services/file_mutation_service.dart';
+import 'package:scrcpy_connect/services/file_executor.dart';
 
 import '../files/support/file_executor_fixture.dart';
 
 import 'package:scrcpy_connect/services/app_settings.dart';
-import 'package:scrcpy_connect/stores/preference_store.dart';
+import 'package:scrcpy_connect/stores/settings_store.dart';
 
 const _device = '7b2a4273-cd2e-4aca-b86e-1e6d81170c81';
 
 void main() {
   late Directory directory;
-  late PreferenceStore preferences;
-  late DeviceRecordStore records;
+  late SettingsStore preferences;
+  late DeviceStore records;
   late _FileOwners owners;
-  final artifacts = <MediaArtifactCoordinator>[];
+  final artifacts = <MediaPreviewService>[];
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('command-owner-');
     owners = await _FileOwners.open(
@@ -39,7 +41,7 @@ void main() {
       FixtureExecutor(),
     );
     preferences = await AppSettings.prepare(directory);
-    records = await DeviceRecordStore.open(directory: directory);
+    records = await DeviceStore.open(directory: directory);
     await preferences.update({
       'deviceQuality': {
         _device: {'maxFps': 30},
@@ -61,21 +63,21 @@ void main() {
   ApplicationCommandDispatcher buildCommands({
     required FileExecutor executor,
     required FileCatalog catalog,
-    required FileMutationCoordinator mutations,
-    required TransferCoordinator transfers,
-    required PreferenceStore preferences,
+    required FileMutationService mutations,
+    required FileTransferService transfers,
+    required SettingsStore preferences,
     required Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)
     execute,
     required void Function(Map<String, dynamic>) onSettingsChanged,
     required Future<void> Function(bool) applyBackgroundPolicy,
-    AppMediaCache? cache,
-    DeliveryJournal? deliveries,
-    ShareCoordinator? sharing,
+    MediaCacheStore? cache,
+    FileDeliveryStore? deliveries,
+    FileShareService? sharing,
     void Function(Map<String, dynamic>)? onMediaEvent,
   }) {
     final media = cache == null
         ? null
-        : MediaArtifactCoordinator(
+        : MediaPreviewService(
             cache: cache,
             executor: executor,
             request: execute,
@@ -161,13 +163,13 @@ void main() {
 
   test('生产分发器在应用执行缓存及保存日志命令，不调用原生业务 owner', () async {
     final gate = MediaCacheGate();
-    late final AppMediaCache cache;
-    final journal = await DeliveryJournal.open(
+    late final MediaCacheStore cache;
+    final journal = await FileDeliveryStore.open(
       directory,
       cacheGate: gate,
       validateSource: (path) => cache.validateDeliveryLocked(path),
     );
-    cache = await AppMediaCache.open(
+    cache = await MediaCacheStore.open(
       root: directory,
       gate: gate,
       protectedPaths: () => journal.protectedPaths,
@@ -243,12 +245,12 @@ void main() {
         'saved',
       );
       expect(
-        (await (await AppMediaCache.open(root: directory))
+        (await (await MediaCacheStore.open(root: directory))
             .status())['budgetBytes'],
         8192,
       );
       expect(
-        ((await (await DeliveryJournal.open(directory))
+        ((await (await FileDeliveryStore.open(directory))
                 .command('delivery.get', identity))['record']
             as Map)['status'],
         'saved',
@@ -387,8 +389,8 @@ final class _FileOwners {
   _FileOwners(this.executor, this.catalog, this.mutations, this.transfers);
   final FileExecutor executor;
   final FileCatalog catalog;
-  final FileMutationCoordinator mutations;
-  final TransferCoordinator transfers;
+  final FileMutationService mutations;
+  final FileTransferService transfers;
 
   static Future<_FileOwners> open(
     Directory root,
@@ -399,8 +401,8 @@ final class _FileOwners {
     return _FileOwners(
       executor,
       FileCatalog(executor),
-      FileMutationCoordinator(executor),
-      await TransferCoordinator.open(
+      FileMutationService(executor),
+      await FileTransferService.open(
         executor: executor,
         dataDirectory: root,
         cache: cache,

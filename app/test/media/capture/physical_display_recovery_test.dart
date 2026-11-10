@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -6,8 +8,7 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/stores/media/physical_display_recovery.dart';
+import 'package:scrcpy_connect/services/display_recovery.dart';
 
 const _owner = '0123456789abcdef0123456789abcdef';
 const _successor = 'fedcba9876543210fedcba9876543210';
@@ -245,7 +246,7 @@ final class _Fixture {
     );
   }
   final api = _Api();
-  final recovery = PhysicalDisplayRecovery(timeout: const Duration(seconds: 2));
+  final recovery = DisplayRecovery(timeout: const Duration(seconds: 2));
   late final DeviceConnection connection;
 }
 

@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/router/route_observers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/router/route_resource_resolver.dart';
 import 'package:scrcpy_connect/router/route_resource_view.dart';
 import 'package:scrcpy_connect/router/remote_launch_intent.dart';
@@ -55,10 +55,10 @@ part 'app_router.g.dart';
 
 GlobalKey<NavigatorState> _root = GlobalKey<NavigatorState>();
 GlobalKey<NavigatorState> _content = GlobalKey<NavigatorState>();
-AppController _controller(BuildContext context) => ProviderScope.containerOf(
+AppStore _controller(BuildContext context) => ProviderScope.containerOf(
   context,
   listen: false,
-).read(appControllerProvider.notifier);
+).read(appStoreProvider.notifier);
 RouteResourceResolver _resources(BuildContext context) =>
     ProviderScope.containerOf(
       context,

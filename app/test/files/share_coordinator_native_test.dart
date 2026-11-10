@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
+import 'package:scrcpy_connect/services/file_share_service.dart';
 
 const _share = '00000000-0000-4000-8000-000000000001';
 
@@ -163,7 +163,7 @@ void main() {
   group('Linux 实际动态库的分享导入链', skip: !Platform.isLinux, () {
     late Directory directory;
     late _Descriptors descriptors;
-    ShareCoordinator? coordinator;
+    FileShareService? coordinator;
     setUp(() async {
       directory = await Directory.systemTemp.createTemp('share-native-');
       descriptors = _Descriptors();
@@ -183,7 +183,7 @@ void main() {
         offset: offset,
         length: length,
       );
-      coordinator = await ShareCoordinator.open(
+      coordinator = await FileShareService.open(
         files: createNativeScrcpyLocalFiles,
         platform: platform.request,
         limits: const ShareLimits(timeout: Duration(seconds: 5)),

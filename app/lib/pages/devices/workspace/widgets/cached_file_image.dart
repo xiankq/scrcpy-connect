@@ -1,5 +1,5 @@
 import 'package:flutter/painting.dart';
-import 'package:scrcpy_connect/services/media/media_cache_lease.dart';
+import 'package:scrcpy_connect/widgets/media_cache_lease.dart';
 
 /// Flutter 异步读取和解码图片期间持续保护缓存，包含首帧前页面或网格项已移除的情况。
 class CachedFileImage extends FileImage {

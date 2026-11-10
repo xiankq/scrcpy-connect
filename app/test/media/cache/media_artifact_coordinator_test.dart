@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/models/media_cache_failure.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -8,24 +11,23 @@ import 'support/media_file_fixture.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
-import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
+import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_preview_service.dart';
 
 void main() {
   late Directory root;
-  late AppMediaCache cache;
+  late MediaCacheStore cache;
   late MediaFileFixture executor;
   late _Companion companion;
-  late MediaArtifactCoordinator owner;
+  late MediaPreviewService owner;
   setUp(() async {
     root = await Directory.systemTemp.createTemp('media-artifact-owner-');
-    cache = await AppMediaCache.open(root: root);
+    cache = await MediaCacheStore.open(root: root);
     executor = MediaFileFixture();
     companion = _Companion();
-    owner = MediaArtifactCoordinator(
+    owner = MediaPreviewService(
       cache: cache,
       executor: executor,
       request: companion.request,
@@ -217,7 +219,7 @@ void main() {
   });
 
   test('真实私有 pull 的租约贯穿复制发布，acquire 仅信任任务路径且驱逐撤销导出能力', () async {
-    final files = await TransferCoordinator.open(
+    final files = await FileTransferService.open(
       executor: executor,
       dataDirectory: root,
       cache: cache,

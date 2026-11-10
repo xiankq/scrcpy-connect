@@ -12,8 +12,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/main.dart' as app;
 
 import 'product_flow_test.dart' show waitFor;
@@ -28,7 +28,7 @@ void main() {
   final acknowledged = <String>{};
   final owned = <String, String>{};
   final sourceDevices = <String, String>{};
-  AppController? controller;
+  AppStore? controller;
   Future<Json> request(String command, [Json params = const {}]) =>
       controller!.request(command, params).timeout(const Duration(seconds: 40));
   developer.registerExtension('ext.connect.audioFocus', (_, params) async {
@@ -65,7 +65,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(appControllerProvider.notifier);
+      ).read(appStoreProvider.notifier);
       final original = {...controller!.snapshot().settings};
       final ownedSessions = <String>{};
       NavigatorState? remoteNavigator;

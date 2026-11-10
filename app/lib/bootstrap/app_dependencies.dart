@@ -2,8 +2,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 
 import 'dart:async';
 
-import 'package:scrcpy_connect/services/platform/diagnostic_log.dart'
-    show DiagnosticLog;
+import 'package:scrcpy_connect/services/diagnostic_log.dart' show DiagnosticLog;
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
@@ -19,6 +18,7 @@ class AppDependencies {
     this.close,
     this.diagnostics,
     this.bindClipboardAdmission,
+    this.completeDocumentSelection,
     AppState? initialState,
     this.initialize = true,
   }) : execute =
@@ -26,6 +26,7 @@ class AppDependencies {
        initialState = initialState ?? AppState();
   final void Function() Function(bool Function(String, String, int) check)?
   bindClipboardAdmission;
+  final bool Function(String, Json)? completeDocumentSelection;
   final DiagnosticLog? diagnostics;
   final ApplicationRequest request;
   final ApplicationCommandExecutor execute;

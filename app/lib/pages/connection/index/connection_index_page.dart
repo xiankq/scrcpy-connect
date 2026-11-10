@@ -2,8 +2,8 @@ import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/pages/connection/form/connection_form_page.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 
 class AddDevicePage extends StatelessWidget {
   const AddDevicePage({
@@ -16,7 +16,7 @@ class AddDevicePage extends StatelessWidget {
     this.transport,
     this.deviceId,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json? initialDevice;
   final AddDeviceMode initialMode;
   final String address;

@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/files/local_directories.dart';
+import 'package:scrcpy_connect/services/file_local_directories.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
@@ -19,8 +19,8 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/settings/media_cache/settings_media_cache_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/devices_workspace_gallery_preview_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 
 import '../../test/driver/support/cleanup.dart';
 
@@ -51,7 +51,7 @@ void main() {
       );
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(appControllerProvider.notifier);
+      ).read(appStoreProvider.notifier);
       await waitFor(
         tester,
         () =>

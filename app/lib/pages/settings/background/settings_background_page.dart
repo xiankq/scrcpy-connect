@@ -6,8 +6,8 @@ import 'dart:async';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -23,11 +23,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class BackgroundPage extends HookConsumerWidget {
   const BackgroundPage({super.key, required this.controller});
-  final AppController controller;
+  final AppStore controller;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appSettings = ref.watch(
-      appControllerProvider.select((state) => state.settings),
+      appStoreProvider.select((state) => state.settings),
     );
     final changing = useState(false);
     final revision = useState(0);
@@ -50,7 +50,7 @@ class BackgroundPage extends HookConsumerWidget {
         unawaited(subscription.cancel());
       };
     }, [controller]);
-    final alerts = ref.watch(systemNotificationCoordinatorProvider);
+    final alerts = ref.watch(systemNotificationsProvider);
     useListenable(alerts.changes);
     final alertStatus = alerts.status;
     Future<void> updateAlert(String key, bool value) async {

@@ -6,7 +6,7 @@ import 'package:scrcpy_connect/models/app_state.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/remote_control_intent.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'router_test_app.dart';
 import 'test_controller.dart';
@@ -39,7 +39,7 @@ class RemotePageFixture {
   final FutureOr<Json?> Function(String, Json)? onRequest;
   final events = StreamController<Json>.broadcast(sync: true);
   final calls = <(String, Json)>[];
-  late final AppController controller;
+  late final AppStore controller;
 
   Future<void> show(
     WidgetTester tester, {

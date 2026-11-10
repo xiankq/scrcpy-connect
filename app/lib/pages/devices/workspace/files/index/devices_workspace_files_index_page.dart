@@ -1,5 +1,5 @@
-import 'package:scrcpy_connect/services/files/file_browser.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
@@ -26,7 +26,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/widgets/file_view_menu.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/device_source_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
 import 'package:scrcpy_connect/widgets/command_query.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -42,14 +42,14 @@ class FilesPage extends HookConsumerWidget {
     this.initialPath = '/sdcard',
   });
 
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   final String initialPath;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(
-      appControllerProvider.select((state) => state.settings),
+      appStoreProvider.select((state) => state.settings),
     );
     final viewMode = _fileViewModeFromSettings(settings);
     final sortKey = _fileSortKeyFromSettings(settings);
@@ -61,7 +61,7 @@ class FilesPage extends HookConsumerWidget {
     final selectionMenu = useMemoized(MenuController.new);
     final sourceId = value(device, 'id');
     final live = ref.watch(
-      appControllerProvider.select(
+      appStoreProvider.select(
         (state) => (state.devices, state.reconciliationPending),
       ),
     );

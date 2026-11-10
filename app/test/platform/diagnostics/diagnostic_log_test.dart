@@ -1,9 +1,11 @@
+import 'package:scrcpy_connect/models/diagnostic_record.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
-import 'package:scrcpy_connect/services/platform/diagnostic_reporter.dart';
+import 'package:scrcpy_connect/services/diagnostic_log.dart';
+import 'package:scrcpy_connect/services/diagnostic_reporter.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:path/path.dart' as p;
 

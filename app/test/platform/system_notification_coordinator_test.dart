@@ -4,9 +4,9 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
-import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
 
 import '../support/test_controller.dart';
 
@@ -97,10 +97,10 @@ Json observation({
 
 Future<
   ({
-    SystemNotificationCoordinator coordinator,
+    SystemNotifications coordinator,
     FakeSink sink,
     StreamController<Json> events,
-    AppController controller,
+    AppStore controller,
   })
 >
 notificationFixture({
@@ -124,7 +124,7 @@ notificationFixture({
     ),
   );
   final sink = targetSink ?? FakeSink();
-  final coordinator = SystemNotificationCoordinator(controller, sink);
+  final coordinator = SystemNotifications(controller, sink);
   addTearDown(() async {
     coordinator.dispose();
     await coordinator.drain();
@@ -502,7 +502,7 @@ void main() {
     final sink = FakeSink()
       ..waitForInitialize = gate.future
       ..launchPayload = target.encode();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
+    final coordinator = SystemNotifications(controller, sink);
     addTearDown(() async {
       coordinator.dispose();
       controller.dispose();
@@ -590,7 +590,7 @@ void main() {
       ),
     );
     final sink = FakeSink();
-    final coordinator = SystemNotificationCoordinator(controller, sink);
+    final coordinator = SystemNotifications(controller, sink);
     addTearDown(() async {
       coordinator.dispose();
       controller.dispose();
@@ -710,7 +710,7 @@ void main() {
         ),
       );
       final sink = FakeSink();
-      final coordinator = SystemNotificationCoordinator(controller, sink);
+      final coordinator = SystemNotifications(controller, sink);
       addTearDown(() async {
         coordinator.dispose();
         controller.dispose();

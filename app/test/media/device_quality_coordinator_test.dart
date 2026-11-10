@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/media/device_quality_coordinator.dart';
+import 'package:scrcpy_connect/services/video_quality_service.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
 void main() {
@@ -11,7 +11,7 @@ void main() {
       final initial = Completer<QualityJson>();
       final rebuild = Completer<QualityJson>();
       final calls = <String>[];
-      final coordinator = DeviceQualityCoordinator(
+      final coordinator = VideoQualityService(
         request: (command, params) async {
           calls.add(command);
           if (command == 'session.quality') {
@@ -65,7 +65,7 @@ void main() {
     'saves once then applies every same-device window including paused',
     () async {
       final calls = <(String, QualityJson)>[];
-      final coordinator = DeviceQualityCoordinator(
+      final coordinator = VideoQualityService(
         request: (command, params) async {
           calls.add((command, params));
           if (command == 'session.quality') {
@@ -133,7 +133,7 @@ void main() {
   test(
     'reports actual partial failures and continues remaining windows',
     () async {
-      final coordinator = DeviceQualityCoordinator(
+      final coordinator = VideoQualityService(
         request: (command, params) async {
           if (command == 'session.quality') {
             return {
@@ -175,7 +175,7 @@ void main() {
       final started = Completer<void>();
       final rebuild = Completer<QualityJson>();
       var attaches = 0;
-      final coordinator = DeviceQualityCoordinator(
+      final coordinator = VideoQualityService(
         request: (command, params) async {
           if (command == 'session.quality') {
             return {
@@ -214,7 +214,7 @@ void main() {
     () async {
       final saved = Completer<QualityJson>();
       var lists = 0;
-      final coordinator = DeviceQualityCoordinator(
+      final coordinator = VideoQualityService(
         request: (command, params) async {
           if (command == 'session.quality') return saved.future;
           lists++;

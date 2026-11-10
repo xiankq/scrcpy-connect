@@ -1,9 +1,9 @@
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_access.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_identity.dart';
 import 'package:scrcpy_connect/pages/devices/widgets/device_status.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +20,7 @@ class DeviceCard extends HookWidget {
     required this.device,
     this.compact = false,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   final bool compact;
 

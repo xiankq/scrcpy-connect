@@ -1,7 +1,7 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/stores/media/thumbnail_queue.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/widgets/thumbnail_queue.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/cached_file_image.dart';
 
 import 'dart:io';
@@ -23,7 +23,7 @@ class MediaThumbnail extends HookConsumerWidget {
     this.compact = false,
   });
   final Json file;
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   final bool compact;
   @override

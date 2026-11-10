@@ -1,6 +1,6 @@
 import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -14,8 +14,8 @@ import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
 import 'package:scrcpy_connect/pages/transfers/details/widgets/conflict_panel.dart';
 import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -36,7 +36,7 @@ class ReceiveContentPage extends HookWidget {
     required this.task,
     this.share = false,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json task;
   final bool share;
 

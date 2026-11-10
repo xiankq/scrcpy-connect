@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:scrcpy_connect/stores/application_session.dart';
+import 'package:scrcpy_connect/services/app_runtime.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
 
 void main() {
@@ -27,10 +27,10 @@ void main() {
       healthEnabled: false,
       reconnectEnabled: false,
     );
-    ApplicationSession? session;
+    AppRuntime? session;
     final received = <Map<String, dynamic>>[];
     try {
-      session = await ApplicationSession.initialize(
+      session = await AppRuntime.initialize(
         dataDirectory: directory.path,
         connectionPolicy: policy,
         adbBinaryDirectory: binaryDirectory,
@@ -115,7 +115,7 @@ void main() {
       );
       await subscription.cancel();
       await session.dispose();
-      session = await ApplicationSession.initialize(
+      session = await AppRuntime.initialize(
         dataDirectory: directory.path,
         connectionPolicy: policy,
         adbBinaryDirectory: binaryDirectory,

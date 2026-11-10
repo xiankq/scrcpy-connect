@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/files/file_browser.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 
@@ -12,7 +12,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/widgets/file_search_controls.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/widgets/file_search_result_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/file_search_controller.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -26,7 +26,7 @@ class FileSearchPage extends HookWidget {
     this.initialPath = '/sdcard',
     this.initialQuery = '',
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   final String initialPath;
   final String initialQuery;

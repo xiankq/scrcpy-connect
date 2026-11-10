@@ -6,8 +6,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
@@ -23,7 +23,7 @@ class ScreenshotPage extends HookWidget {
     required this.capture,
   });
 
-  final AppController controller;
+  final AppStore controller;
   final Json device, capture;
 
   @override

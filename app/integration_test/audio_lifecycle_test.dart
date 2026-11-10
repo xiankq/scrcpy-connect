@@ -1,8 +1,8 @@
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/app.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -25,7 +25,7 @@ void main() {
   const lifecycleTest = bool.fromEnvironment('CONNECT_E2E_AUDIO_LIFECYCLE');
   var stage = 'starting';
   final returned = <String>{};
-  AppController? active;
+  AppStore? active;
   String? activeSource;
   developer.registerExtension('ext.connect.audio', (_, params) async {
     if (params['returned'] case final String phase) returned.add(phase);
@@ -47,7 +47,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(appControllerProvider.notifier);
+      ).read(appStoreProvider.notifier);
       active = controller;
       final originalBackground =
           controller.snapshot().settings['backgroundKeepAlive'] == true;

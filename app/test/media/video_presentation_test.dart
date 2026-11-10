@@ -1,10 +1,10 @@
-import 'package:scrcpy_connect/services/media/video_output_snapshot.dart';
+import 'package:scrcpy_connect/services/video_output_snapshot.dart';
 
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/media/video_presentation.dart';
+import 'package:scrcpy_connect/services/video_playback_service.dart';
 
 void main() {
   test(
@@ -40,7 +40,7 @@ void main() {
     final oldResume = Completer<Map<String, dynamic>>();
     final resumed = Completer<void>();
     var calls = 0;
-    final presentation = VideoPresentation(
+    final presentation = VideoPlaybackService(
       request: (_, params) async => {'sessionId': params['sessionId']},
       pauseOutput: (_) async => {},
       resumeOutput: (_) async {
@@ -114,7 +114,7 @@ void main() {
     () async {
       final calls = <String>[];
       final paused = Completer<void>();
-      final owner = VideoPresentation(
+      final owner = VideoPlaybackService(
         request: (command, params) async {
           calls.add('$command:${params['sessionId']}');
           return {
@@ -157,7 +157,7 @@ void main() {
     () async {
       final calls = <String>[];
       const failure = RequestFailure('pause_unconfirmed', 'not confirmed');
-      final owner = VideoPresentation(
+      final owner = VideoPlaybackService(
         request: (command, _) async {
           calls.add(command);
           return {};
@@ -181,7 +181,7 @@ void main() {
     () async {
       final calls = <String>[];
       const failure = RequestFailure('disconnected', 'capture ended');
-      final owner = VideoPresentation(
+      final owner = VideoPlaybackService(
         request: (command, params) async => throw failure,
         pauseOutput: (id) async {
           calls.add('pause:$id');

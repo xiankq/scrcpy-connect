@@ -1,9 +1,11 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/services/file_publication_leases.dart';
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
 
 import 'support/file_executor_fixture.dart'
     show FixtureExecutor, regular, until;
@@ -58,7 +60,7 @@ final class _Publication implements FilePublicationLeases {
 void main() {
   late Directory root;
   late _Publication publication;
-  late TransferCoordinator owner;
+  late FileTransferService owner;
   late FixtureExecutor executor;
   const request = {
     'deviceId': 'device',
@@ -84,7 +86,7 @@ void main() {
     root = await Directory.systemTemp.createTemp('share-submission-');
     publication = _Publication();
     executor = FixtureExecutor()..stamps['/source'] = regular;
-    owner = await TransferCoordinator.open(
+    owner = await FileTransferService.open(
       executor: executor,
       publication: publication,
       dataDirectory: root,

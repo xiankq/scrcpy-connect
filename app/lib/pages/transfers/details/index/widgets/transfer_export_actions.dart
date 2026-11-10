@@ -1,9 +1,10 @@
+import 'package:open_filex/open_filex.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
@@ -17,10 +18,28 @@ class TransferExportActions extends StatelessWidget {
     required this.taskId,
     required this.cacheReady,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json current;
   final String taskId;
   final bool cacheReady;
+
+  Future<void> _open(BuildContext context) async {
+    try {
+      final path = value(current, 'localPath');
+      if (path.isEmpty) throw const RequestFailure('invalid_path', '缺少本机文件位置。');
+      await controller.execute(ApplicationCommand.mediaCacheRetain, {
+        'localPath': path,
+        'ifManaged': true,
+      });
+      if (!context.mounted) return;
+      final opened = await OpenFilex.open(path);
+      if (opened.type != ResultType.done) {
+        throw RequestFailure('open_failed', opened.message);
+      }
+    } catch (error) {
+      if (context.mounted) feedback(context, '$error');
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -52,9 +71,7 @@ class TransferExportActions extends StatelessWidget {
           ),
         if (current['kind'] != 'directory') ...[
           FilledButton.icon(
-            onPressed: () => perform(context, controller, 'files.open', {
-              'localPath': value(current, 'localPath'),
-            }),
+            onPressed: () => _open(context),
             icon: const Icon(
               LucideIcons.externalLink,
               size: DesignTokens.componentIconActionSize,

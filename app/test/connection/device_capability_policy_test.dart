@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,12 +8,11 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/services/connection/device_capability_facts_reader.dart';
-import 'package:scrcpy_connect/services/connection/device_capability_policy.dart';
-import 'package:scrcpy_connect/stores/connection/identity_manager.dart';
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/services/device_capability_facts_reader.dart';
+import 'package:scrcpy_connect/services/device_capability_policy.dart';
+import 'package:scrcpy_connect/services/adb_identity_service.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
 
 void main() {
   late _Fixture fixture;
@@ -323,8 +324,8 @@ Matcher _failure(String code) =>
 final class _Fixture {
   _Fixture(this.directory);
   final Directory directory;
-  late DeviceRecordStore records;
-  late IdentityManager identities;
+  late DeviceStore records;
+  late AdbIdentityService identities;
   final identityApi = _Identities();
   final client = _Client();
   late String id;
@@ -338,10 +339,8 @@ final class _Fixture {
     final fixture = _Fixture(
       await Directory.systemTemp.createTemp('capability-facts-'),
     );
-    fixture.records = await DeviceRecordStore.open(
-      directory: fixture.directory,
-    );
-    fixture.identities = await IdentityManager.open(
+    fixture.records = await DeviceStore.open(directory: fixture.directory);
+    fixture.identities = await AdbIdentityService.open(
       directory: fixture.directory,
       records: fixture.records,
       identities: fixture.identityApi,

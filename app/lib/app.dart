@@ -1,11 +1,11 @@
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/widgets/app_presentation_host.dart';
-import 'package:scrcpy_connect/services/platform/system_visual_preferences.dart';
-import 'package:scrcpy_connect/services/platform/system_typography.dart';
+import 'package:scrcpy_connect/styles/system_visual_preferences.dart';
+import 'package:scrcpy_connect/styles/system_typography.dart';
 
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -18,7 +18,7 @@ class ConnectApp extends HookConsumerWidget {
   const ConnectApp({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(appControllerProvider.notifier);
+    final controller = ref.watch(appStoreProvider.notifier);
     final dependencies = ref.watch(appDependenciesProvider);
     final views = useMemoized(() => RemoteViews(controller), [
       controller,
@@ -26,11 +26,11 @@ class ConnectApp extends HookConsumerWidget {
     ]);
     useEffect(() => views.dispose, [views]);
     ref.listen(
-      appControllerProvider.select((s) => (s.devices, s.reconciliationPending)),
+      appStoreProvider.select((s) => (s.devices, s.reconciliationPending)),
       (_, _) => views.reconcile(),
     );
     final appSettings = ref.watch(
-      appControllerProvider.select((state) => state.settings),
+      appStoreProvider.select((state) => state.settings),
     );
     final navigator = useMemoized(() => GlobalKey<NavigatorState>());
     final router = useMemoized(() => createAppRouter(navigatorKey: navigator), [

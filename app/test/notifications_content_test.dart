@@ -10,8 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 
 import 'support/router_test_app.dart';
@@ -196,7 +196,7 @@ void main() {
               : {};
         },
       );
-      late AppController controller;
+      late AppStore controller;
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -205,7 +205,7 @@ void main() {
           ],
           child: Consumer(
             builder: (context, ref, _) {
-              controller = ref.watch(appControllerProvider.notifier);
+              controller = ref.watch(appStoreProvider.notifier);
               return MaterialApp(
                 theme: ConnectTokens.theme(Brightness.light),
                 home: NotificationsPage(

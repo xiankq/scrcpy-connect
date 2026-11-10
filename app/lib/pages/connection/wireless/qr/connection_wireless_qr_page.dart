@@ -3,8 +3,8 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -28,7 +28,7 @@ class QrPairPage extends HookWidget {
     this.prepareConnection,
     this.autoGenerate = true,
   });
-  final AppController controller;
+  final AppStore controller;
   final String? deviceId;
   final bool embedded;
   final bool autoGenerate;

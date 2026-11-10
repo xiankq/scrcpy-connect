@@ -3,7 +3,7 @@ import 'package:scrcpy_connect/hooks/use_transfer_cache_lease.dart';
 import 'package:scrcpy_connect/utils/formatters.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 import 'package:scrcpy_connect/widgets/documents/original_file_header.dart';
 import 'package:scrcpy_connect/widgets/documents/file_delivery_path.dart';
@@ -28,7 +28,7 @@ class DocumentExportForm extends HookWidget {
     this.partial = false,
     this.sourceLabel = '被控设备',
   });
-  final AppController controller;
+  final AppStore controller;
   final String localPath;
   final String name;
   final String kind;

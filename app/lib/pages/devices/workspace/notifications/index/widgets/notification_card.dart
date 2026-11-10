@@ -8,7 +8,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -22,7 +22,7 @@ class NotificationCard extends HookWidget {
     required this.onClear,
   });
 
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   final Json notification;
   final bool clearing;

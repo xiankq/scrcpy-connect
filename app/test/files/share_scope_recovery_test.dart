@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/files/share_scope_recovery.dart';
+import 'package:scrcpy_connect/services/file_share_recovery.dart';
 
 class ScopeFixture implements NativeLocalFilesApi {
   final calls = <String>[];
@@ -72,14 +72,14 @@ void main() {
     }
 
     Future<LocalFiles> files() async => LocalFiles(api);
-    final first = ShareScopeRecovery.confirm(files: files, platform: platform);
+    final first = FileShareRecovery.confirm(files: files, platform: platform);
     await api.closing.future;
     expect(api.calls, [endsWith('/incoming'), 'close']);
     expect(candidates, isEmpty);
     api.drain!.complete();
     await expectLater(first, throwsStateError);
     loseReply = false;
-    final owner = await ShareScopeRecovery.confirm(
+    final owner = await FileShareRecovery.confirm(
       files: files,
       platform: platform,
     );
@@ -89,7 +89,7 @@ void main() {
     expect(owner.leaseId, lease);
 
     ready = false;
-    await ShareScopeRecovery.confirm(files: files, platform: platform);
+    await FileShareRecovery.confirm(files: files, platform: platform);
     expect(api.calls.where((call) => call.startsWith('open:')), hasLength(2));
     expect(candidates.last, isNot(candidates.first));
   });

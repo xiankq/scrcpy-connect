@@ -1,13 +1,16 @@
+import 'package:scrcpy_connect/models/video_texture.dart';
+import 'package:scrcpy_connect/models/video_pixels.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/platform/diagnostic_log.dart';
+import 'package:scrcpy_connect/services/diagnostic_log.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/media/video_output_coordinator.dart';
-import 'package:scrcpy_connect/services/media/video_player.dart';
+import 'package:scrcpy_connect/services/video_output_service.dart';
+import 'package:scrcpy_connect/services/video_player.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 final _token = List.filled(64, 'a').join();
@@ -34,7 +37,7 @@ VideoJson _endpoint(String id, {int generation = 1}) => {
 Matcher _code(String code) =>
     isA<RequestFailure>().having((e) => e.code, 'code', code);
 
-class _Player implements VideoPlayerPort {
+class _Player implements VideoPlayer {
   final changes = StreamController<VideoJson>.broadcast(sync: true);
   final calls = <String>[];
   Completer<VideoTexture>? opening;
@@ -99,7 +102,7 @@ class _Harness {
   Completer<VideoJson>? opening;
   bool disposed = false;
   int relays = 0;
-  late final output = VideoOutputCoordinator(
+  late final output = VideoOutputService(
     diagnostics: diagnostics,
     request: request,
     emit: events.add,
@@ -627,7 +630,7 @@ void main() {
       final pending = Completer<VideoJson>();
       final closed = <String>[];
       final player = _Player();
-      final output = VideoOutputCoordinator(
+      final output = VideoOutputService(
         request: (command, params) async {
           if (command == 'media.open') return pending.future;
           closed.add(params['relayId'] as String);

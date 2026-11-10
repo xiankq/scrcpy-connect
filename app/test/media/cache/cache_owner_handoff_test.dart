@@ -1,16 +1,20 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/models/file_cache_reservation.dart';
+import 'package:scrcpy_connect/services/file_cache_leases.dart';
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
-import 'package:scrcpy_connect/stores/files/transfer_journal.dart';
-import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
+import 'package:scrcpy_connect/services/file_executor.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
+import 'package:scrcpy_connect/stores/file_transfer_store.dart';
+import 'package:scrcpy_connect/stores/media_cache_store.dart';
 
 void main() {
   test('新缓存 reserve 失败时保留旧所有者；重试先覆盖全部未知任务再释放各代旧租约', () async {
     final root = await Directory.systemTemp.createTemp('cache-owner-handoff-');
-    final journal = TransferJournal(root);
+    final journal = FileTransferStore(root);
     for (final id in ['first', 'second']) {
       final file = File(p.join(root.path, 'media', id, 'original'));
       await file.parent.create(recursive: true);
@@ -32,12 +36,12 @@ void main() {
         'policy': 'ask',
       });
     }
-    final old = _Cache(await AppMediaCache.open(root: root));
-    final failing = _Cache(await AppMediaCache.open(root: root))..failOn = 2;
-    final fresh = _Cache(await AppMediaCache.open(root: root));
-    TransferCoordinator? owner;
+    final old = _Cache(await MediaCacheStore.open(root: root));
+    final failing = _Cache(await MediaCacheStore.open(root: root))..failOn = 2;
+    final fresh = _Cache(await MediaCacheStore.open(root: root));
+    FileTransferService? owner;
     try {
-      owner = await TransferCoordinator.open(
+      owner = await FileTransferService.open(
         executor: _NoExecution(),
         dataDirectory: root,
         cache: old,
@@ -45,7 +49,7 @@ void main() {
       await owner.close();
       expect((await old.owner.clear())['deletedBytes'], 0);
       await expectLater(
-        TransferCoordinator.open(
+        FileTransferService.open(
           executor: _NoExecution(),
           dataDirectory: root,
           cache: failing,
@@ -66,7 +70,7 @@ void main() {
       failing.beforeRelease = () {
         expect(fresh.active, hasLength(2));
       };
-      owner = await TransferCoordinator.open(
+      owner = await FileTransferService.open(
         executor: _NoExecution(),
         dataDirectory: root,
         cache: fresh,
@@ -88,7 +92,7 @@ void main() {
 
 final class _Cache implements FileCacheLeases {
   _Cache(this.owner);
-  final AppMediaCache owner;
+  final MediaCacheStore owner;
   int calls = 0, releases = 0;
   int? failOn;
   final active = <String>{};

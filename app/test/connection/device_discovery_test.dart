@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/models/adb_discovery_endpoint.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -5,7 +7,7 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/device_discovery.dart';
+import 'package:scrcpy_connect/services/device_discovery.dart';
 
 void main() {
   late _Fixture fixture;

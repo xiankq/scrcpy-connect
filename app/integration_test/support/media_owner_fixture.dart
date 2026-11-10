@@ -1,24 +1,25 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
-import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
-import 'package:scrcpy_connect/stores/media/device_audio_source_coordinator.dart';
-import 'package:scrcpy_connect/services/media/scrcpy_capture_adapter.dart';
-import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
-import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
+import 'package:scrcpy_connect/services/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/device_audio_service.dart';
+import 'package:scrcpy_connect/services/scrcpy_capture_adapter.dart';
+import 'package:scrcpy_connect/services/screen_capture_service.dart';
+import 'package:scrcpy_connect/services/bundled_servers.dart';
 
 /// 真实媒体测试共同持有的连接与业务所有者；播放器由各测试独立持有。
 /// 不提供产品命令路由，也不替代应用启动与恢复策略。
 final class MediaOwnerFixture {
   MediaOwnerFixture._(this._host, this._queries, this._launches) {
     videoSource = ScrcpyCaptureAdapter(scrcpy.api);
-    sessions = SessionCoordinator(
+    sessions = ScreenCaptureService(
       scrcpy: scrcpy,
       requireConnection: _requireConnection,
       launches: _launches,
@@ -41,7 +42,7 @@ final class MediaOwnerFixture {
         );
       },
     );
-    audio = DeviceAudioSourceCoordinator(
+    audio = DeviceAudioService(
       requireConnection: _requireConnection,
       scrcpy: scrcpy,
       hasAudioOwner: sessions.hasAudioOwner,
@@ -66,8 +67,8 @@ final class MediaOwnerFixture {
       _connection ??
       (throw const RequestFailure('disconnected', '测试宿主尚未取得真实连接。'));
   ScrcpyClient get scrcpy => _host.scrcpy;
-  late final SessionCoordinator sessions;
-  late final DeviceAudioSourceCoordinator audio;
+  late final ScreenCaptureService sessions;
+  late final DeviceAudioService audio;
   late final ScrcpyCaptureAdapter videoSource;
 
   static Future<MediaOwnerFixture> open({

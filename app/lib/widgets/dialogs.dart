@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_material.dart';
@@ -28,7 +28,7 @@ SnackBar glassSnackBar(String message) => SnackBar(
 );
 Future<Json?> perform(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   String command, [
   Json params = const {},
   String? success,

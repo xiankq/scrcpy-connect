@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/files/file_browser.dart';
+import 'package:scrcpy_connect/widgets/file_browser.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';

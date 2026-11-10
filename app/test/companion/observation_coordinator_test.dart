@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/observation_coordinator.dart';
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/services/device_observation_service.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
 
 import 'coordinator_fixture.dart';
 
@@ -71,7 +71,7 @@ void main() {
     expect(fixture.writes.attempts, commits + 1);
     expect(await fixture.records.file.readAsString(), before);
     expect(
-      (await DeviceRecordStore.open(directory: fixture.directory)).current
+      (await DeviceStore.open(directory: fixture.directory)).current
           .find(fixture.id)!
           .observationWanted,
       isFalse,
@@ -82,7 +82,7 @@ void main() {
     fixture.writes.fail = false;
     expect((await fixture.command('observation.start'))['phase'], 'limited');
     expect(
-      (await DeviceRecordStore.open(directory: fixture.directory)).current
+      (await DeviceStore.open(directory: fixture.directory)).current
           .find(fixture.id)!
           .observationWanted,
       isTrue,
@@ -95,7 +95,7 @@ void main() {
     final result = await fixture.command('observation.start');
     expect(result['phase'], 'limited');
     expect((result['notifications']! as Map)['live'], isFalse);
-    final reopened = await DeviceRecordStore.open(directory: fixture.directory);
+    final reopened = await DeviceStore.open(directory: fixture.directory);
     expect(reopened.current.find(fixture.id)!.observationWanted, isTrue);
     expect(fixture.base.companion.capabilityState(fixture.id)['protocol'], 1);
     expect(fixture.base.companion.capabilityState(fixture.id)['apiLevel'], 35);
@@ -334,7 +334,7 @@ void main() {
 class _ObservationFixture {
   _ObservationFixture(this.directory, this.records, this.id, this.writes) {
     base.api.onRequest = autoReply;
-    observation = ObservationCoordinator(
+    observation = DeviceObservationService(
       companion: base.companion,
       records: records,
       emit: base.emit,
@@ -345,7 +345,7 @@ class _ObservationFixture {
       'companion-observation-',
     );
     final writes = _Writes();
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       commitFile: (temporary, destination) async {
         writes.attempts++;
@@ -363,11 +363,11 @@ class _ObservationFixture {
   }
 
   final Directory directory;
-  final DeviceRecordStore records;
+  final DeviceStore records;
   final String id;
   final _Writes writes;
   final base = CoordinatorFixture();
-  late final ObservationCoordinator observation;
+  late final DeviceObservationService observation;
   int epoch = 0;
   bool enabled = false, notificationsLive = true;
   Map<String, Object?> section(

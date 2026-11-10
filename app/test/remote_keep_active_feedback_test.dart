@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/router_test_app.dart';
 import 'support/test_controller.dart';
@@ -38,7 +38,7 @@ Json _update(Object? error) => {
 
 Future<void> _mount(
   WidgetTester tester,
-  AppController controller, {
+  AppStore controller, {
   bool pushed = false,
 }) async {
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);

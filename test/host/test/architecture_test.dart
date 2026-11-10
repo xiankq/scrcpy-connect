@@ -40,6 +40,23 @@ void main() {
         allowedDependencies: dependencies ?? {'a': {}, 'b': {}},
       );
 
+  test('状态和能力文件保持扁平、单公开类及名称一致', () {
+    application({
+      'stores/file_store.dart': 'class FileStore {} class _Pending {}',
+      'services/file_copy.dart': 'class FileCopy {} void _copy() {}',
+    });
+    expect(check(), isEmpty);
+    application({
+      'stores/files/file_store.dart': 'class FileStore {}',
+      'services/actions.dart': 'class FileCopy {} class OtherAction {}',
+      'services/controller.dart': 'class FileDelete {}',
+    });
+    final problems = check();
+    expect(problems, contains(contains('扁平目录')));
+    expect(problems, contains(contains('一个公开主类')));
+    expect(problems, contains(contains('文件名应与主类')));
+  });
+
   test('检测多文件循环但不会把正常菱形依赖或 part 当作循环', () {
     source('a/lib/a.dart', "import 'src/left.dart'; import 'src/right.dart';");
     source('a/lib/src/left.dart', "import 'shared.dart';");
@@ -93,8 +110,8 @@ void main() {
 
   test('文件与媒体业务不能经页面倒置依赖', () {
     application({
-      'stores/files/catalog.dart': "import '../../pages/browser.dart';",
-      'utils/format.dart': "import '../stores/files/catalog.dart';",
+      'stores/file_catalog.dart': "import '../pages/browser.dart';",
+      'utils/format.dart': "import '../stores/file_catalog.dart';",
       'models/file.dart': "import '../services/files.dart';",
       'services/files.dart': '// 文件执行',
       'connection/legacy.dart': '// 旧目录',

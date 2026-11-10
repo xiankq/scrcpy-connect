@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/device_facts.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -5,8 +8,7 @@ import 'dart:typed_data';
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/services/connection/device_probe.dart';
+import 'package:scrcpy_connect/services/device_probe.dart';
 import 'package:scrcpy_connect/models/device_record.dart';
 
 const _device = AdbDevice(

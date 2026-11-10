@@ -1,14 +1,17 @@
+import 'package:scrcpy_connect/models/application_request.dart';
+
+import 'document_selection_fixture.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:adb/adb.dart';
-import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/files/desktop_document_delivery.dart';
+import 'package:scrcpy_connect/services/file_desktop_delivery.dart';
 
 import 'documents_coordinator_test.dart' show Fixture, identity;
 
-import 'package:scrcpy_connect/stores/files/system_delivery_coordinator.dart';
+import 'package:scrcpy_connect/services/file_export_service.dart';
 
 ApplicationRequest _journal({
   Future<Json>? admission,
@@ -61,9 +64,9 @@ void main() {
             );
           }
         };
-        final desktop = DesktopDocumentDelivery(
+        final desktop = FileDesktopDelivery(
           files: fixture.files,
-          pick: (_, _) async => '/target/a',
+          selections: fakeDesktopSelections((_, _) async => '/target/a'),
           emit: (_) {},
         );
         addTearDown(() async {
@@ -100,10 +103,10 @@ void main() {
     var receipts = 0;
     final fixture = _desktopFixture();
     fixture.local['/target/a'] = {'kind': 'file', 'size': 7};
-    late final DesktopDocumentDelivery desktop;
-    desktop = DesktopDocumentDelivery(
+    late final FileDesktopDelivery desktop;
+    desktop = FileDesktopDelivery(
       files: fixture.files,
-      pick: (_, _) async => '/target/a',
+      selections: fakeDesktopSelections((_, _) async => '/target/a'),
       emit: (event) {
         if (event['pending'] case final Map<Object?, Object?> pending) {
           desktop.request('documents.conflict.resolve', {
@@ -115,7 +118,7 @@ void main() {
       },
     );
     addTearDown(desktop.dispose);
-    final delivery = SystemDeliveryCoordinator(
+    final delivery = FileExportService(
       applicationRequest: _journal(
         finish: (params) {
           if (++receipts == 1) {
@@ -163,7 +166,7 @@ void main() {
   test(
     'a coordinator rejection before any provider work is a safe failed attempt',
     () async {
-      final delivery = SystemDeliveryCoordinator(
+      final delivery = FileExportService(
         applicationRequest: _journal(),
         write: (_) async {
           throw const RequestFailure('documents_busy', '已有系统文档任务');
@@ -186,7 +189,7 @@ void main() {
       final admission = Completer<Map<String, dynamic>>();
       var writes = 0;
       Map<String, dynamic>? completed;
-      final delivery = SystemDeliveryCoordinator(
+      final delivery = FileExportService(
         applicationRequest: _journal(
           admission: admission.future,
           finish: (params) {
@@ -223,7 +226,7 @@ void main() {
     final receipt = Completer<Map<String, dynamic>>();
     var writes = 0;
     var finished = false;
-    final delivery = SystemDeliveryCoordinator(
+    final delivery = FileExportService(
       applicationRequest: _journal(
         admission: admission.future,
         finish: (_) => receipt.future,

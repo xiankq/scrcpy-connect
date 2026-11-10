@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -5,8 +7,7 @@ import 'dart:typed_data';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/files/share_coordinator.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
+import 'package:scrcpy_connect/services/file_share_service.dart';
 
 const shareId = '00000000-0000-4000-8000-000000000001';
 const nextShareId = '00000000-0000-4000-8000-000000000002';
@@ -18,7 +19,7 @@ class Fixture {
   final calls = <String>[];
   late final api = LocalFixture(this);
   late final localFiles = LocalFiles(api);
-  ShareCoordinator? coordinator;
+  FileShareService? coordinator;
   String? lease;
   bool ready = false, failRelease = false, missingReceipt = false;
   int opens = 0, consumed = 0;
@@ -27,10 +28,10 @@ class Fixture {
   Completer<Json>? holdOpen;
   final descriptors = <String, Json>{};
 
-  Future<ShareCoordinator> open({
+  Future<FileShareService> open({
     ShareLimits limits = const ShareLimits(),
   }) async {
-    return coordinator = await ShareCoordinator.open(
+    return coordinator = await FileShareService.open(
       files: () async => localFiles,
       platform: platform,
       limits: limits,

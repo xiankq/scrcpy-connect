@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/services/application_host_dependencies.dart';
+import 'package:scrcpy_connect/models/bundled_server_files.dart';
+
 import 'dart:io';
 import 'dart:isolate';
 
@@ -5,10 +8,10 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/stores/application_host.dart';
+import 'package:scrcpy_connect/services/application_host.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
+import 'package:scrcpy_connect/services/bundled_servers.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

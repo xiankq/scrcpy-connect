@@ -3,7 +3,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
@@ -20,7 +20,7 @@ class ShareDirectoryPickerPage extends HookWidget {
     required this.device,
     required this.initialPath,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   final String initialPath;
   @override

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 
 import 'remote_audio_views.dart';
@@ -31,7 +31,7 @@ class RemoteViews {
     }
   }
 
-  final AppController controller;
+  final AppStore controller;
   final int _generation;
   bool _disposed = false;
   late final SessionViewRegistry _sessionViewRegistry;

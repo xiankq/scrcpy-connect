@@ -1,10 +1,15 @@
+import 'package:scrcpy_connect/models/file_cache_reservation.dart';
+
+import 'package:scrcpy_connect/models/media_cache_failure.dart';
+import 'package:scrcpy_connect/stores/media_cache_gate.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
+import 'package:scrcpy_connect/stores/media_cache_store.dart';
 
 Matcher failure(String code) =>
     isA<MediaCacheFailure>().having((error) => error.code, 'code', code);
@@ -40,7 +45,7 @@ void main() {
       }),
       flush: true,
     );
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     expect((await cache.status())['budgetBytes'], 12);
     expect((await cache.clear())['deletedBytes'], 0);
     expect(await kept.exists(), isTrue);
@@ -52,7 +57,7 @@ void main() {
 
   test('写入按实际增长扣除预算，既有基线不能冒充本次完成量', () async {
     final target = await file(p.join(media, 'receive', 'original'), 4);
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     await cache.configure(budgetBytes: 20);
     final lease = await cache.reserve([FileCacheReservation(target.path, 6)]);
     expect((await cache.status())['reservedBytes'], 6);
@@ -67,7 +72,7 @@ void main() {
   test('同一预留内部重叠写入预算被拒绝，父子保护不误伤兄弟前缀', () async {
     final first = await file(p.join(media, 'a', 'one'), 2);
     final sibling = await file(p.join(media, 'a-copy', 'one'), 3);
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     final lease = await cache.reserve([
       FileCacheReservation(p.dirname(first.path), 0),
     ]);
@@ -95,7 +100,7 @@ void main() {
   test('只读租约可以重叠且超预算时不因读取启动驱逐', () async {
     final target = await file(p.join(media, 'large'), 8);
     final other = await file(p.join(media, 'other'), 5);
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     await cache.configure(budgetBytes: 4);
     final first = await cache.reserve([FileCacheReservation(target.path, 0)]);
     final second = await cache.reserve([FileCacheReservation(target.path, 0)]);
@@ -112,7 +117,7 @@ void main() {
     final first = await file(p.join(media, 'a'), 4, modified: old);
     final second = await file(p.join(media, 'b'), 4, modified: old);
     final latest = await file(p.join(media, 'latest'), 4, modified: newer);
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     await cache.configure(budgetBytes: 14);
     final lease = await cache.reserve([
       FileCacheReservation(p.join(media, 'new'), 6),
@@ -133,7 +138,7 @@ void main() {
   test('无法容纳受保护内容和新预算时拒绝，不先删除无益的可回收文件', () async {
     final kept = await file(p.join(media, 'protected'), 8);
     final free = await file(p.join(media, 'free'), 4);
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     await cache.configure(budgetBytes: 12);
     final lease = await cache.reserve([FileCacheReservation(kept.path, 0)]);
     await expectLater(
@@ -150,7 +155,7 @@ void main() {
     final entered = Completer<void>(), release = Completer<void>();
     var block = true;
     final target = await file(p.join(media, 'pending'), 4);
-    final cache = await AppMediaCache.open(
+    final cache = await MediaCacheStore.open(
       root: root,
       protectedPaths: () async {
         if (block) {
@@ -184,7 +189,7 @@ void main() {
     final protected = <String>{};
     final entered = Completer<void>(), committed = Completer<void>();
     final source = await file(p.join(media, 'original'), 5);
-    final cache = await AppMediaCache.open(
+    final cache = await MediaCacheStore.open(
       root: root,
       gate: gate,
       protectedPaths: () => protected,
@@ -214,7 +219,7 @@ void main() {
 
   test('配置提交真实文件系统失败保留旧预算和文件，随后准入与提交可继续', () async {
     var fail = false;
-    final cache = await AppMediaCache.open(
+    final cache = await MediaCacheStore.open(
       root: root,
       commitConfiguration: (temporary, destination) async {
         if (fail) {
@@ -249,12 +254,12 @@ void main() {
     fail = false;
     await cache.retain(shared.path);
     expect((await cache.status())['retainedShareCount'], 1);
-    final reopened = await AppMediaCache.open(root: root);
+    final reopened = await MediaCacheStore.open(root: root);
     expect((await reopened.clear())['deletedBytes'], 0);
   });
 
   test('配置替换已完成但回执失败时核对已提交字节，不保留旧内存预算', () async {
-    final cache = await AppMediaCache.open(
+    final cache = await MediaCacheStore.open(
       root: root,
       commitConfiguration: (temporary, destination) async {
         await temporary.rename(destination.path);
@@ -263,7 +268,7 @@ void main() {
     );
     await cache.configure(budgetBytes: 9);
     expect((await cache.status())['budgetBytes'], 9);
-    final reopened = await AppMediaCache.open(root: root);
+    final reopened = await MediaCacheStore.open(root: root);
     expect((await reopened.status())['budgetBytes'], 9);
   });
 
@@ -272,7 +277,7 @@ void main() {
     final configuration = File(p.join(root.path, 'media-cache.json'));
     final committed = File(p.join(root.path, 'committed-config'));
     final original = await file(p.join(media, 'original'), 4);
-    final cache = await AppMediaCache.open(
+    final cache = await MediaCacheStore.open(
       root: root,
       commitConfiguration: (temporary, destination) async {
         commits++;
@@ -325,7 +330,7 @@ void main() {
       cache.configure(budgetBytes: 1),
       throwsA(failure('cache_storage_unknown')),
     );
-    final reopened = await AppMediaCache.open(root: root);
+    final reopened = await MediaCacheStore.open(root: root);
     expect((await reopened.status())['budgetBytes'], 20);
     expect((await reopened.status())['retainedShareCount'], 1);
     expect((await reopened.clear())['deletedBytes'], 0);
@@ -336,7 +341,7 @@ void main() {
 
   test('配置 commit 屏障期间后续清理排队，不发布未落盘预算', () async {
     final entered = Completer<void>(), release = Completer<void>();
-    final cache = await AppMediaCache.open(
+    final cache = await MediaCacheStore.open(
       root: root,
       commitConfiguration: (temporary, destination) async {
         entered.complete();
@@ -371,7 +376,7 @@ void main() {
     ]) {
       await configuration.writeAsString(data, flush: true);
       await expectLater(
-        AppMediaCache.open(root: root),
+        MediaCacheStore.open(root: root),
         throwsA(failure('cache_storage_invalid')),
       );
       expect(await configuration.readAsString(), data);
@@ -382,7 +387,7 @@ void main() {
     final external = await file(p.join(sandbox.path, 'outside'), 6);
     final linked = Link(p.join(media, 'linked'));
     await linked.create(external.path);
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     expect((await cache.status())['usedBytes'], 0);
     expect((await cache.clear())['deletedBytes'], 0);
     expect(await external.exists(), isTrue);
@@ -404,7 +409,7 @@ void main() {
     final rootLink = Link(p.join(sandbox.path, 'alias'));
     await rootLink.create(root.path);
     await expectLater(
-      AppMediaCache.open(root: Directory(rootLink.path)),
+      MediaCacheStore.open(root: Directory(rootLink.path)),
       throwsA(failure('invalid_argument')),
     );
     final parentLink = Link(p.join(sandbox.path, 'parent-link'));
@@ -419,14 +424,14 @@ void main() {
     final external = await file(p.join(sandbox.path, 'outside-config'), 5);
     await Link(p.join(root.path, 'media-cache.json')).create(external.path);
     await expectLater(
-      AppMediaCache.open(root: root),
+      MediaCacheStore.open(root: root),
       throwsA(failure('invalid_argument')),
     );
     expect(await external.length(), 5);
   }, skip: Platform.isWindows ? '宿主权限不保证允许创建符号链接' : false);
 
   test('命令参数、容量溢出和未受管分享按真实结果处理', () async {
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     expect(
       await cache.command('media.cache.retain', {
         'localPath': p.join(sandbox.path, 'external'),
@@ -469,7 +474,7 @@ void main() {
   test('真实空间不足和无法核验均在准入前拒绝并报告所需可用量', () async {
     var free = 3;
     var unavailable = false;
-    final cache = await AppMediaCache.open(
+    final cache = await MediaCacheStore.open(
       root: root,
       freeBytes: (_) async {
         if (unavailable) throw const FileSystemException('space query failed');
@@ -504,7 +509,7 @@ void main() {
 
   test('保护项目按实际占用去重并呈现真实来源与未知分享原因', () async {
     final original = await file(p.join(media, 'receive', 'original.jpg'), 8);
-    final cache = await AppMediaCache.open(
+    final cache = await MediaCacheStore.open(
       root: root,
       protectionDetails: () => [
         {

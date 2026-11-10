@@ -1,9 +1,12 @@
+import 'package:scrcpy_connect/models/file_cancellation.dart';
+import 'package:scrcpy_connect/models/file_stamp.dart';
+import 'package:scrcpy_connect/services/file_publication_leases.dart';
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
 
 import 'support/file_executor_fixture.dart'
     show FixtureExecutor, regular, until;
@@ -12,7 +15,7 @@ void main() {
   late Directory root;
   late _Executor executor;
   late _Publication publication;
-  late TransferCoordinator owner;
+  late FileTransferService owner;
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('transfer-batch-');
@@ -20,7 +23,7 @@ void main() {
       ..stamps['/first'] = regular
       ..stamps['/second'] = regular;
     publication = _Publication();
-    owner = await TransferCoordinator.open(
+    owner = await FileTransferService.open(
       executor: executor,
       publication: publication,
       dataDirectory: root,

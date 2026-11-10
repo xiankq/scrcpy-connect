@@ -1,0 +1,1143 @@
+library;
+
+import 'package:scrcpy_connect/models/diagnostic_record.dart';
+
+import 'package:scrcpy_connect/models/companion_exception.dart';
+import 'package:scrcpy_connect/models/device_record.dart';
+
+import 'package:scrcpy_connect/stores/media_cache_gate.dart';
+import 'package:scrcpy_connect/services/file_document_scope.dart';
+import 'package:scrcpy_connect/models/media_intent.dart';
+import 'package:scrcpy_connect/models/companion_config.dart';
+import 'package:scrcpy_connect/services/device_connection.dart';
+
+import 'package:scrcpy_connect/services/file_cache_storage_space.dart';
+
+import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_preview_service.dart';
+import 'package:scrcpy_connect/services/app_settings.dart';
+import 'package:scrcpy_connect/services/command_contract.dart';
+import 'package:scrcpy_connect/stores/file_delivery_store.dart';
+import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_publication_lease_pool.dart';
+
+import 'package:scrcpy/scrcpy.dart' show createNativeScrcpyLocalFiles;
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:adb/adb.dart';
+
+import 'package:scrcpy_connect/services/diagnostic_log.dart';
+import 'package:scrcpy_connect/services/diagnostic_reporter.dart';
+
+import 'package:scrcpy_connect/services/media_capture_operations.dart';
+import 'package:scrcpy_connect/services/scrcpy_capture_adapter.dart';
+
+import 'package:scrcpy_connect/services/media_service.dart';
+import 'package:scrcpy_connect/services/state_recovery.dart';
+
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
+import 'package:scrcpy_connect/services/file_catalog.dart';
+import 'package:scrcpy_connect/services/file_mutation_service.dart';
+import 'package:scrcpy_connect/services/file_share_service.dart';
+import 'package:scrcpy_connect/models/application_request.dart';
+
+import 'package:scrcpy_connect/utils/ordered_disposal.dart';
+import 'package:scrcpy_connect/services/application_host.dart';
+import 'package:scrcpy_connect/services/application_command_dispatcher.dart';
+import 'package:flutter/services.dart'
+    show MissingPluginException, PlatformException;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:scrcpy_connect/services/application_snapshot_reader.dart';
+import 'package:scrcpy_connect/services/device_service.dart';
+import 'package:scrcpy_connect/services/device_power_service.dart';
+import 'package:scrcpy_connect/models/device_record.dart'
+    show validDeviceId, DeviceRecordsFailure;
+import 'package:scrcpy_connect/services/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/services/companion_service.dart';
+import 'package:scrcpy_connect/services/device_observation_service.dart';
+import 'package:scrcpy_connect/services/media_job_service.dart';
+import 'package:scrcpy_connect/services/device_audio_service.dart';
+import 'package:scrcpy_connect/services/application_platform.dart';
+import 'package:scrcpy_connect/services/application_background_policy.dart';
+import 'package:scrcpy_connect/services/application_platform_events.dart';
+import 'package:scrcpy_connect/services/application_events.dart';
+import 'package:scrcpy_connect/services/application_lifecycle.dart';
+import 'package:scrcpy_connect/services/adb_file_executor.dart';
+
+import 'package:scrcpy_connect/models/connection_policy.dart';
+import 'package:scrcpy_connect/services/device_connection_service.dart';
+import 'package:scrcpy_connect/services/device_capability_policy.dart';
+import 'package:scrcpy_connect/services/device_capability_facts_reader.dart';
+import 'package:scrcpy_connect/services/device_reconnection_candidates.dart';
+import 'package:scrcpy_connect/services/device_reconnect_service.dart';
+
+import 'package:scrcpy_connect/services/device_health_service.dart';
+import 'package:scrcpy_connect/services/device_discovery.dart';
+import 'package:scrcpy_connect/services/adb_identity_service.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
+import 'package:scrcpy_connect/services/companion_recovery.dart';
+import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/screen_capture_service.dart';
+import 'package:scrcpy_connect/services/device_wake_service.dart';
+
+/// 按应用生命周期组装独立设备能力；ADB 传输与媒体解码由各自的包负责。
+class AppRuntime {
+  AppRuntime._({
+    required this._dataDirectory,
+    required this._connectionPolicy,
+    required this._host,
+    required this._records,
+    required this._identities,
+    required this._launches,
+    required this._defaultClient,
+    required this.diagnostics,
+    required this._transfers,
+    required this._fileExecutor,
+    required this._cache,
+    required this._deliveries,
+    required this._sharing,
+    required this._documentSources,
+  });
+
+  final ApplicationHost _host;
+  final DeviceStore _records;
+  final AdbIdentityService _identities;
+  final AppLaunchStore _launches;
+  final AdbClient _defaultClient;
+  final FileTransferService _transfers;
+  final AdbFileExecutor _fileExecutor;
+  late final _fileCatalog = FileCatalog(_fileExecutor);
+  late final _fileMutations = FileMutationService(_fileExecutor);
+  final MediaCacheStore _cache;
+  final FileDeliveryStore _deliveries;
+  final FileShareService? _sharing;
+  final FileDocumentStore? _documentSources;
+
+  final DiagnosticLog? diagnostics;
+  Future<AdbClient> get adb => Future.value(_defaultClient);
+  late final _diagnostics = DiagnosticReporter(diagnostics);
+  late final _artifacts = MediaPreviewService(
+    cache: _cache,
+    executor: _fileExecutor,
+    request: (command, params) =>
+        _executeBusiness(validateCommandRequest(command, params), params),
+    emit: _events.emit,
+  );
+  late final _preferences = AppSettings(
+    preferences: _host.preferences,
+    records: _records,
+    onDevicesImported: (receipt) =>
+        _events.publish({'type': 'devices.changed', 'data': receipt.toJson()}),
+    applyBackgroundPolicy: (enabled) =>
+        _background.apply(enabled, automatic: false),
+    onChanged: (settings) {
+      if (_disposed) return;
+      _reconnections.updateSettings(settings);
+      _events.publish({'type': 'settings.changed', 'data': settings});
+      _observeCleanup(
+        _keepAwake.settingsChanged(
+          _records.current.devices.map((record) => record.id),
+        ),
+      );
+    },
+  );
+  late final ApplicationCommandDispatcher _commands =
+      ApplicationCommandDispatcher(
+        catalog: _fileCatalog,
+        mutations: _fileMutations,
+        transfers: _transfers,
+        preferences: _preferences,
+        cache: _cache,
+        deliveries: _deliveries,
+        sharing: _sharing,
+        artifacts: _artifacts,
+        onMediaEvent: _events.emit,
+        execute: _executeBusiness,
+      );
+
+  late final _captures = MediaCaptureOperations(
+    sessions: _sessions,
+    audio: _audio,
+    keepAwake: _keepAwake,
+    devices: _devices,
+    state: _state,
+    scrcpy: _host.scrcpy,
+  );
+
+  final ConnectionPolicy _connectionPolicy;
+  late final _reconnections = DeviceReconnectService(
+    request: _commands.invoke,
+    policy: _connectionPolicy,
+  );
+  late final _discovery = DeviceDiscovery(
+    timeout: _connectionPolicy.discoveryTimeout,
+  );
+  late final _setup = DeviceConnectionService(
+    devices: _devices,
+    discovery: _discovery,
+    burstMode: () => _host.preferences.current.values['adbBurstMode'] == true,
+    clientForIdentity: (identity) => _host.clientForIdentity(
+      identityPath: identity.path,
+      fingerprint: identity.fingerprint,
+    ),
+    releaseIdentityClient: (identity) => _host.releaseIdentityClient(
+      identityPath: identity.path,
+      fingerprint: identity.fingerprint,
+    ),
+    policy: _connectionPolicy,
+    emit: (event) {
+      _events.emit(event);
+    },
+    authorizeUsb: Platform.isAndroid ? _platform.authorizeUsb : null,
+    cancelUsb: Platform.isAndroid ? _platform.cancelUsb : null,
+    releaseUsb: Platform.isAndroid ? _platform.releaseUsb : null,
+    holdDevice: (id) =>
+        _reconnections.beforeRequest('devices.connect', {'deviceId': id}),
+  );
+  late final _capabilities = DeviceCapabilityPolicy(
+    facts: DeviceCapabilityFactsReader(
+      records: _records,
+      identities: _identities,
+      connectionForDevice: _devices.current,
+      policy: _connectionPolicy,
+      companionState: _companion.capabilityState,
+      sessions: _sessions.currentSnapshots,
+      audioSources: () => _audio.snapshots(activeOnly: true),
+    ),
+    burstRequested: () =>
+        _host.preferences.current.values['adbBurstMode'] == true,
+    localVideoCapabilities: _media.capabilities,
+  );
+
+  final String _dataDirectory;
+
+  late final ApplicationBackgroundPolicy _background =
+      ApplicationBackgroundPolicy(
+        request: Platform.isAndroid ? _platform.request : null,
+        audioPolicy: (enabled) async {
+          await _media.policy(enabled);
+        },
+        emit: (event) {
+          _events.emit(event);
+        },
+      );
+
+  late final ApplicationPlatform _platform = ApplicationPlatform(
+    usbOwnerLeaseId: _host.usbOwnerLeaseId,
+    localFiles: createNativeScrcpyLocalFiles,
+    sharing: _sharing,
+    documentSources: _documentSources,
+    applicationRequest: _commands.invoke,
+    emit: (event) {
+      _events.emit(event);
+    },
+    isDisposed: () => _disposed,
+  );
+  late final _platformEvents = ApplicationPlatformEvents(
+    reconnections: _reconnections,
+    isDisposed: () => _disposed,
+    stopConnections: () =>
+        Future.wait([_setup.stopPending(), _devices.stopConnections()]),
+    emit: (event) => _events.emit(event),
+    handleShare: _platform.handleShare,
+    handleMedia: _media.handlePlatformEvent,
+  );
+  late final ApplicationEvents _events = ApplicationEvents(
+    acceptState: (event) => _stateRecovery.accept(event),
+    onState: (event) => _diagnostics.applicationEvent(event),
+    onLocalStateChanged: () => _stateRecovery.noteLocalStateChange(),
+    beforePublish: _handleBusinessEvent,
+    afterState: (event) => _media.handleApplicationEvent(event),
+    handlePlatform: (event) => _platformEvents.handle(event),
+    isDisposed: () => _disposed,
+  );
+  late final _lifecycle = ApplicationLifecycle(
+    isDisposed: () => _disposed,
+    setConnectionsVisible: (visible) => _reconnections.setVisible(visible),
+    setMediaVisible: (visible) => _media.setVisible(visible),
+    shutdown: shutdown,
+  );
+  bool _disposed = false;
+  Future<void>? _shuttingDown;
+  late final MediaService _media = MediaService(
+    invoke: _commands.invokeCommand,
+    captures: _captures,
+    readSnapshot: _state.readSnapshot,
+    readSettings: _preferences.read,
+    platform: _platform.audioRequest,
+    emit: (event) {
+      _events.emit(event);
+    },
+    isDisposed: () => _disposed,
+    dataDirectory: _dataDirectory,
+    capture: ScrcpyCaptureAdapter(_host.scrcpy.api),
+    diagnostics: diagnostics,
+  );
+  late final StateRecovery _stateRecovery = StateRecovery(
+    read: _media.snapshot,
+    emit: (event) {
+      // 恢复回执不是业务变更；直接通知策略，不能重新进入序列核验。
+      _setup.handleEvent(event);
+      _reconnections.handleEvent(event);
+      _events.emit(event);
+    },
+    isDisposed: () => _disposed,
+  );
+  late final DeviceService _devices = DeviceService(
+    records: _records,
+    identities: _identities,
+    reconnectionCandidates: DeviceReconnectionCandidates.mdns(_discovery),
+    clientForIdentity: (identity) => _host.clientForIdentity(
+      identityPath: identity.path,
+      fingerprint: identity.fingerprint,
+    ),
+    stopActivities: _stopConnectionActivities,
+    prepareConnection: (id, connection, serial, cancellation) async {
+      await _companion.prepareConnection(id, connection, serial, cancellation);
+      await _host.physicalDisplays.recover(
+        connection,
+        cancellation: cancellation,
+      );
+    },
+    onConnected: (id, connection) => _health.start(id, connection),
+    policy: _connectionPolicy,
+    burstMode: () => _host.preferences.current.values['adbBurstMode'] == true,
+    emit: (type, data) => _publishBusiness(type, null, data),
+  );
+  late final DeviceHealthService _health = DeviceHealthService(
+    current: _devices.current,
+    retire: _devices.retireUnhealthy,
+    policy: _connectionPolicy,
+    onError: (error, stack) => diagnostics?.record(
+      DiagnosticArea.connection,
+      'health.check.failed',
+      level: LogLevel.error,
+      fields: {'errorType': error.runtimeType.toString()},
+    ),
+  );
+  late final DevicePowerService _power = DevicePowerService(
+    requireConnection: _devices.requireConnection,
+    timeout: _connectionPolicy.probeTimeout,
+  );
+  late final ScrcpyServerQueries _serverQueries = ScrcpyServerQueries(
+    serverBytes: _host.scrcpyBytes,
+    timeout: const Duration(seconds: 15),
+  );
+  bool completeDocumentSelection(String id, Json result) =>
+      _platform.documentSelections.complete(id, result);
+
+  void Function() bindClipboardAdmission(
+    bool Function(String, String, int) check,
+  ) => _sessions.bindClipboardAdmission(check);
+
+  late final ScreenCaptureService _sessions = ScreenCaptureService(
+    scrcpy: _host.scrcpy,
+    requireConnection: _devices.requireConnection,
+    launches: _launches,
+    serverQueries: _serverQueries,
+    settings: () => _host.preferences.current.toMap(),
+    emit: _publishBusiness,
+    onAudioEligibilityChanged: (id) {
+      // 同步撤准入后记录实际排空，回调不等待其他设备，也不丢弃失败所有者。
+      _observeCleanup(_audio.eligibilityChanged(id));
+      _observeCleanup(_keepAwake.windowsChanged(id));
+    },
+  );
+  late final DeviceAudioService _audio = DeviceAudioService(
+    scrcpy: _host.scrcpy,
+    requireConnection: _devices.requireConnection,
+    hasAudioOwner: _sessions.hasAudioOwner,
+    deviceName: (id) => _records.current.find(id)?.name ?? 'Android 设备',
+    apiLevel: (id) => _records.current.find(id)?.apiLevel,
+    emit: _publishBusiness,
+  );
+  late final DeviceWakeService _keepAwake = DeviceWakeService(
+    scrcpy: _host.scrcpy,
+    requireConnection: _devices.requireConnection,
+    hasWindowOwner: _sessions.hasAudioOwner,
+    settings: () => _host.preferences.current.toMap(),
+    emit: _publishBusiness,
+  );
+  late final CompanionService _companion = CompanionService(
+    requireConnection: _devices.requireConnection,
+    recovery: CompanionRecovery(Directory(_dataDirectory)),
+    deviceSerial: (id) => _records.current.find(id)?.serial,
+    serverBytes: _host.companionBytes,
+    config: const CompanionConfig(
+      startupTimeout: Duration(seconds: 15),
+      requestTimeout: Duration(seconds: 10),
+      cleanupTimeout: Duration(seconds: 5),
+      sessionTimeout: Duration(hours: 24),
+    ),
+    emit: _publishBusiness,
+  );
+  late final DeviceObservationService _observations = DeviceObservationService(
+    companion: _companion,
+    records: _records,
+    emit: _publishBusiness,
+  );
+  late final MediaJobService _mediaJobs = MediaJobService(
+    requireConnection: _devices.requireConnection,
+    request: _companion.request,
+  );
+  final _businessTasks = <Future<void>>{};
+  final _observedConnections = <String, DeviceConnection>{};
+  // 当前连接投影可先消失；设备级任务的退休责任保留到精确旧连接排空。
+  final _deviceTaskConnections = <DeviceConnection>{};
+
+  void _observeCleanup(Future<void> work) {
+    _businessTasks.add(work);
+    unawaited(
+      work.then<void>(
+        (_) {
+          _businessTasks.remove(work);
+        },
+        onError: (Object error, StackTrace stack) {
+          _businessTasks.remove(work);
+          _events.emit({
+            'type': 'activity.cleanup.failed',
+            'data': {'reason': '$error'},
+          });
+        },
+      ),
+    );
+  }
+
+  void _publishBusiness(
+    String type,
+    String? device,
+    Map<String, Object?> data,
+  ) {
+    _events.publish({
+      'type': type,
+      'deviceId': ?device,
+      'data':
+          type.startsWith('session.') &&
+              type != 'session.frame' &&
+              data['sessionId'] is String
+          ? _state.projectSession(data)
+          : data,
+    });
+    if (type == 'device.keep_active.updated' && device != null) {
+      _publishKeepAwake(device);
+    }
+  }
+
+  void _publishKeepAwake(String device) {
+    for (final session in _sessions.currentSnapshots(deviceId: device)) {
+      _publishBusiness('session.updated', device, session);
+    }
+  }
+
+  void _handleBusinessEvent(Map<String, dynamic> event) {
+    _setup.handleEvent(event);
+    _reconnections.handleEvent(event);
+    if (event['type'] == 'devices.changed') {
+      final ids = {
+        ..._observedConnections.keys,
+        ..._records.current.devices.map((record) => record.id),
+      };
+      for (final id in ids) {
+        final connection = _devices.current(id);
+        if (identical(_observedConnections[id], connection)) continue;
+        if (connection == null) {
+          _observedConnections.remove(id);
+        } else {
+          _observedConnections[id] = connection;
+          _deviceTaskConnections.add(connection);
+        }
+        _observeCleanup(_observations.connectionChanged(id));
+      }
+    }
+  }
+
+  Future<void> _stopConnectionActivities(
+    String id,
+    DeviceConnection connection,
+  ) async {
+    // 各调用先同步撤销自己创建的资源；所有步骤均运行并保留精确失败供下一轮重试。
+    final stops = [
+      _health.stopConnection(id, connection),
+      _power.stopConnection(id, connection),
+      _sessions.stopForConnection(id, connection),
+      _audio.stopForConnection(id, connection),
+      _keepAwake.stopForConnection(id, connection),
+      _serverQueries.stopForConnection(connection),
+      // 未获接纳的候选也会回收到这里，不能取消原连接仍持有的设备级任务。
+      // 观察投影变化不撤销退休责任；清理失败后仍由同一旧连接重试。
+      if (_deviceTaskConnections.contains(connection)) ...[
+        _transfers.cancelDevice(id),
+        _fileCatalog.cancelDevice(id),
+        _fileMutations.cancelDevice(id),
+        _artifacts.cancelDevice(id),
+      ],
+      _mediaJobs.stopForConnection(id, connection),
+      // 同步撤销普通执行并关闭原 worker，避免目录或传输取消仍在等待阻塞读取。
+      _fileExecutor.stopForConnection(connection),
+    ];
+    // 首个失败立即保留退休责任；其他任务仍归各自所有者，不能断开承载连接。
+    await Future.wait(stops, eagerError: true);
+    final displays = _host.physicalDisplays;
+    if ((await connection.client.services.connectionFacts(connection.device))
+        .closed) {
+      await displays.detachClosedConnection(connection);
+    } else {
+      try {
+        await displays.stopForConnection(connection);
+      } catch (_) {
+        if (!(await connection.client.services.connectionFacts(
+          connection.device,
+        )).closed) {
+          rethrow;
+        }
+        await displays.detachClosedConnection(connection);
+      }
+    }
+    // 远端子任务确认退出后才能关闭承载它们的有序 RPC 部署。
+    await _observations.stopForConnection(id, connection);
+    await _companion.stopForConnection(id, connection);
+    _deviceTaskConnections.remove(connection);
+  }
+
+  late final ApplicationSnapshotReader _state = ApplicationSnapshotReader(
+    events: _events,
+    devices: _devices,
+    sessions: _sessions,
+    audio: _audio,
+    keepAwake: _keepAwake,
+    observations: _observations,
+    companion: _companion,
+    transfers: _transfers,
+    preferences: _host.preferences,
+    sharing: _sharing,
+  );
+
+  Future<void> _closeFiles() async {
+    // 文件协调器先撤销任务；执行器独立排空原 worker，关闭失败不能困住任务等待。
+    await Future.wait([
+      _transfers.close(),
+      _fileCatalog.close(),
+      _fileMutations.close(),
+      _fileExecutor.close(),
+    ], eagerError: true);
+  }
+
+  Future<void> _closeHost() async {
+    // OrderedDisposal 继续清理独立资源；承载执行层必须等全部依赖实际关闭后才退出。
+    await _artifacts.close();
+    await _closeFiles();
+    await _sharing?.close();
+    await _media.dispose();
+    await _health.close();
+    await _power.close();
+    await _devices.close();
+    await _mediaJobs.close();
+    await _sessions.close();
+    await _audio.close();
+    await _keepAwake.close();
+    await _serverQueries.close();
+    await _observations.close();
+    await _companion.close();
+    await Future.wait(_businessTasks.toList());
+    await _host.close();
+  }
+
+  static Future<AppRuntime>? _initializing;
+  static String? _initializingDirectory;
+  static String? _initializingPolicyJson;
+  static String? _initializingBinaryDirectory;
+  static AppRuntime? _active;
+  // 组装尚未交付给 Session 时也保留精确分享所有者，关闭失败由下次启动重试。
+  static FileShareService? _startingSharing;
+  static ApplicationHost? _startingHost;
+
+  static Future<AppRuntime> initialize({
+    required String dataDirectory,
+    Directory? adbBinaryDirectory,
+    ConnectionPolicy connectionPolicy = const ConnectionPolicy(),
+    DiagnosticLog? diagnostics,
+  }) {
+    if (_active case final existing? when !existing._disposed) {
+      return Future.error(
+        const RequestFailure(
+          'application_already_initialized',
+          '此引擎已有应用会话，请复用现有实例。',
+        ),
+      );
+    }
+    if (_initializing != null && _initializingDirectory != dataDirectory) {
+      return Future.error(
+        const RequestFailure(
+          'runtime_directory_mismatch',
+          '应用正在使用另一个私有目录，请重新启动应用。',
+        ),
+      );
+    }
+    final policyJson = jsonEncode(connectionPolicy.toJson());
+    if (_initializing != null && _initializingPolicyJson != policyJson) {
+      return Future.error(
+        const RequestFailure(
+          'runtime_connection_policy_mismatch',
+          '应用正在使用另一套连接策略，请重新启动应用。',
+        ),
+      );
+    }
+    final binaryPath = adbBinaryDirectory?.absolute.path;
+    if (_initializing != null &&
+        binaryPath != null &&
+        binaryPath != _initializingBinaryDirectory) {
+      return Future.error(
+        const RequestFailure(
+          'runtime_adb_binary_mismatch',
+          '应用正在使用另一套 ADB 执行产物初始化。',
+        ),
+      );
+    }
+    _initializingBinaryDirectory ??= binaryPath;
+    _initializingPolicyJson = policyJson;
+    _initializingDirectory = dataDirectory;
+    return _initializing ??=
+        _initialize(
+          dataDirectory,
+          connectionPolicy,
+          diagnostics,
+          adbBinaryDirectory,
+        ).whenComplete(() {
+          _initializing = null;
+          _initializingDirectory = null;
+          _initializingPolicyJson = null;
+          _initializingBinaryDirectory = null;
+        });
+  }
+
+  static Future<AppRuntime> _initialize(
+    String dataDirectory,
+    ConnectionPolicy policy,
+    DiagnosticLog? diagnostics,
+    Directory? adbBinaryDirectory,
+  ) async {
+    final previous = _active;
+    if (previous != null && previous._disposed) {
+      // 新附着必须先等待旧协调器的原生释放，不能提前接管重试所有权。
+      await previous.dispose();
+    }
+    await _closeStartingResources();
+    final host = await ApplicationHost.attach(
+      dataDirectory: dataDirectory,
+      connectionPolicy: policy,
+      adbBinaryDirectory: adbBinaryDirectory,
+    );
+    _startingHost = host;
+    try {
+      final session = await _assemble(host, dataDirectory, policy, diagnostics);
+      // 此后所有资源交由会话关闭；启动活动失败也必须通过同一会话重试清理。
+      _startingHost = null;
+      _startingSharing = null;
+      try {
+        await session._activate();
+        _active = session;
+        return session;
+      } catch (error, stack) {
+        _active = session;
+        try {
+          await session.dispose();
+        } catch (_) {
+          // 失败所有者留给下一次附着重试，原始启动异常仍是本次失败原因。
+        }
+        Error.throwWithStackTrace(error, stack);
+      }
+    } catch (error, stack) {
+      try {
+        await _closeStartingResources();
+      } catch (_) {
+        // 未确认关闭的原实例仍在静态登记中，后继启动必须先完成收尾。
+      }
+      Error.throwWithStackTrace(error, stack);
+    }
+  }
+
+  /// 先关闭分享复制，再关闭承载宿主；失败时保留原登记供下次重试。
+  static Future<void> _closeStartingResources() async {
+    if (_startingSharing case final sharing?) {
+      await sharing.close();
+      _startingSharing = null;
+    }
+    if (_startingHost case final host?) {
+      await host.close();
+      _startingHost = null;
+    }
+  }
+
+  static Future<AppRuntime> _assemble(
+    ApplicationHost host,
+    String dataDirectory,
+    ConnectionPolicy policy,
+    DiagnosticLog? diagnostics,
+  ) async {
+    // 旧 isolate 的句柄先真实排空，再打开唯一的 Dart 设备与身份所有者。
+    await host.recoverConnections();
+    final records = await DeviceStore.open(directory: host.directory);
+    DeviceService? devices;
+    final identities = await AdbIdentityService.open(
+      directory: host.directory,
+      records: records,
+      identities: host.identities,
+      invalidate: (ids, {required global}) =>
+          devices?.invalidate(ids) ?? host.drainConnections(),
+    );
+    final identity = await identities.selectForDevice();
+    final defaultClient = await host.clientForIdentity(
+      identityPath: identity.path,
+      fingerprint: identity.fingerprint,
+    );
+    final launches = await AppLaunchStore.open(directory: host.directory);
+    // 读取或清理缓存前先排空旧 isolate 的文档复制，避免与恢复产生并发写入。
+    await ApplicationPlatform.recoverDocuments(
+      localFiles: createNativeScrcpyLocalFiles,
+    );
+    final documentSources = Platform.isAndroid
+        ? await FileDocumentStore.open(
+            cacheDirectory: Directory(
+              (await FileDocumentScope.fromEnvironment(
+                await ApplicationPlatform.requestPlatform(
+                  'documents.platform.environment',
+                  const {},
+                ),
+              )).cacheDirectory,
+            ),
+          )
+        : null;
+    final sharing = Platform.isAndroid
+        ? await FileShareService.open(
+            files: createNativeScrcpyLocalFiles,
+            platform: ApplicationPlatform.requestPlatform,
+          )
+        : null;
+    _startingSharing = sharing;
+    final gate = MediaCacheGate();
+    late final MediaCacheStore cache;
+    FileTransferService? cacheTransfers;
+    final deliveries = await FileDeliveryStore.open(
+      Directory(dataDirectory),
+      cacheGate: gate,
+      validateSource: (path) => cache.validateDeliveryLocked(path),
+    );
+    cache = await MediaCacheStore.open(
+      root: Directory(dataDirectory),
+      gate: gate,
+      protectedPaths: () => deliveries.protectedPaths,
+      freeBytes: cacheStorageFreeBytes,
+      protectionDetails: () async => [
+        for (final source
+            in cacheTransfers?.cacheSources ?? <Map<String, Object?>>[])
+          {
+            ...source,
+            'sourceLabel':
+                records.current.find(source['sourceLabel'] as String)?.name ??
+                source['sourceLabel'],
+          },
+        ...await deliveries.protectedSources,
+      ],
+    );
+    final fileExecutor = AdbFileExecutor(
+      localFiles: defaultClient.services,
+      resolveConnection: (id) async => devices!.requireConnection(id),
+      fileScopeId: host.fileScopeId,
+      fileScopeKey: host.fileScopeKey,
+    );
+    final transfers = await FileTransferService.open(
+      executor: fileExecutor,
+      cache: cache,
+      publication: documentSources == null
+          ? sharing
+          : FilePublicationLeasePool(
+              sharing: sharing,
+              documents: documentSources,
+            ),
+      dataDirectory: Directory(dataDirectory),
+    );
+    cacheTransfers = transfers;
+    final session = AppRuntime._(
+      dataDirectory: dataDirectory,
+      connectionPolicy: policy,
+      host: host,
+      records: records,
+      identities: identities,
+      launches: launches,
+      defaultClient: defaultClient,
+      diagnostics: diagnostics,
+      transfers: transfers,
+      fileExecutor: fileExecutor,
+      cache: cache,
+      deliveries: deliveries,
+      sharing: sharing,
+      documentSources: documentSources,
+    );
+    devices = session._devices;
+    // 事件可能由 helper 同步交付，先建立观察所有者后再附着界面。
+    session._observations;
+    return session;
+  }
+
+  Future<void> _activate() async {
+    await _transfers.reconcileShares();
+    await _events.attach(
+      files: [_transfers.events, _fileCatalog.events],
+      sharing: _sharing?.events,
+      platform: Platform.isAndroid ? _platform.events : null,
+    );
+    if (Platform.isAndroid) {
+      final state = await _platform.request('audio.platform.state', const {});
+      await _media.setVisible(state['visible'] == true);
+      _reconnections.setVisible(state['visible'] == true);
+      await _platform.attachShare();
+    }
+    // isolate 重启会丢失播放器及一次性媒体流；回收孤立捕获，不能接管未经核验的播放。
+    await _media.retireUnownedAudio();
+    final settings = await _preferences.read();
+    final backgroundStatus = await _background.apply(
+      settings['backgroundKeepAlive'] == true,
+      automatic: true,
+    );
+    // 恢复快照安排连接前先应用宿主的显式或系统停止状态，之后仍允许手动连接。
+    if (backgroundStatus?['stopped'] == true) {
+      _reconnections.stopAutomaticConnections();
+    }
+    await _lifecycle.attach();
+    // 可信快照先建立屏幕偏好和旧连接身份，再允许第一次自动重连。
+    await _stateRecovery.refresh();
+    await _reconnections.start();
+  }
+
+  Stream<Map<String, dynamic>> get events => _events.stream;
+
+  /// wire 请求只在入口解析一次；应用内部保留类型化命令。
+  Future<Map<String, dynamic>> request(
+    String command, [
+    Map<String, dynamic> params = const {},
+  ]) async => execute(validateCommandRequest(command, params), params);
+
+  Future<Map<String, dynamic>> execute(
+    ApplicationCommand operation, [
+    Map<String, dynamic> params = const {},
+  ]) async {
+    final command = operation.wire;
+    if (_disposed) {
+      throw const RequestFailure('disposed', '连接界面已关闭。');
+    }
+    // 拒绝必须早于连接准备与重连意图钩子，未受理命令不能撤销已有尝试。
+    validateTypedCommandRequest(operation, params);
+    _requireVerifiedState(command, params);
+    _announceStop(command, params);
+    await _setup.beforeRequest(command, params);
+    final finishReconnect = _reconnections.beforeRequest(command, params);
+    final watch = Stopwatch()..start();
+    try {
+      final result = _media.handles(operation)
+          ? await _media.dispatch(operation, params, _request)
+          : await _request(operation, params);
+      _diagnostics.command(command, params, watch.elapsedMilliseconds);
+      return result;
+    } catch (error) {
+      _diagnostics.command(
+        command,
+        params,
+        watch.elapsedMilliseconds,
+        error: error,
+      );
+      rethrow;
+    } finally {
+      await finishReconnect();
+    }
+  }
+
+  void _announceStop(String command, Map<String, dynamic> params) {
+    // 回执前先发布用户停止意图，避免传输失败与停止竞争时页面重建画面；桥接内部清理不走此入口。
+    final activity = command == 'activities.stop' ? params['activityId'] : null;
+    final sessionStop = command == 'session.stop'
+        ? params['sessionId']
+        : activity is String && activity.startsWith('session:')
+        ? activity.substring(8)
+        : null;
+    final deviceStop =
+        ['devices.disconnect', 'devices.forget'].contains(command)
+        ? params['deviceId']
+        : activity is String && activity.startsWith('connection:')
+        ? activity.substring(11)
+        : null;
+    if (sessionStop is String) {
+      _events.emit({
+        'type': 'session.stop.requested',
+        'data': {'sessionId': sessionStop},
+      });
+    } else if (deviceStop is String) {
+      _events.emit({
+        'type': 'device.disconnect.requested',
+        'deviceId': deviceStop,
+        'data': <String, dynamic>{},
+      });
+    }
+  }
+
+  void _requireVerifiedState(String command, Map<String, dynamic> params) {
+    if (_stateRecovery.pending && needsVerifiedState(command, params)) {
+      throw const RequestFailure('state_unverified', '正在重新核验设备状态，完成后再操作。');
+    }
+  }
+
+  Future<Map<String, dynamic>> _request(
+    ApplicationCommand operation,
+    Map<String, dynamic> params, {
+    MediaIntent? intent,
+  }) async {
+    final command = operation.wire;
+    if (_disposed || intent?.cancelled == true) {
+      throw const RequestFailure('cancelled', '已停止本次打开，不会重新启动画面或声音。');
+    }
+    if (command == 'state.reconcile') return _stateRecovery.refresh();
+    _requireVerifiedState(command, params);
+    if (_setup.handles(command)) {
+      return _setup.request(command, params);
+    }
+    if (_capabilities.handles(command)) {
+      return _capabilities.request(command, params);
+    }
+    // 缺口恢复时刷新投影不能创建助手；用户明确核验可通过 allowStart=true 选择启动。
+    if (_stateRecovery.hasSnapshot &&
+        const [
+          'notifications.list',
+          'calls.list',
+          'clipboard.get',
+        ].contains(command) &&
+        !params.containsKey('allowStart')) {
+      params = {...params, 'allowStart': false};
+    }
+    final local = await _platform.intercept(command, params);
+    if (local != null) return local;
+    return _media.handles(operation)
+        ? _media.execute(operation, params, intent: intent)
+        : _commands.invokeCommand(operation, params);
+  }
+
+  /// 结束当前应用所有者；关闭失败保留原对象，下一次调用继续排空。
+  Future<void> shutdown() => _shuttingDown ??= dispose().whenComplete(() {
+    _shuttingDown = null;
+  });
+
+  OrderedDisposal? _disposal;
+
+  Future<void> dispose() {
+    _disposal ??= _prepareDisposal();
+    return _disposal!.run().then((_) {
+      if (identical(_active, this)) _active = null;
+    });
+  }
+
+  OrderedDisposal _prepareDisposal() {
+    _disposed = true;
+    _sharing?.stopIntake();
+    _media.stopAdmission();
+    _lifecycle.dispose();
+    _stateRecovery.dispose();
+    return OrderedDisposal([
+      () async =>
+          await Future.wait([_reconnections.dispose(), _setup.dispose()]),
+      _platform.dispose,
+      _artifacts.close,
+      _closeFiles,
+      if (_sharing != null) _sharing.close,
+      _events.detach,
+      _media.dispose,
+      _health.close,
+      _power.close,
+      _devices.close,
+      _mediaJobs.close,
+      _sessions.close,
+      _audio.close,
+      _keepAwake.close,
+      _serverQueries.close,
+      _observations.close,
+      _companion.close,
+      // 依赖资源若尚未关闭，不能释放承载它们的 SDK scope 或服务器。
+      _closeHost,
+      _events.close,
+    ]);
+  }
+
+  Future<Map<String, dynamic>> _executeBusiness(
+    ApplicationCommand operation,
+    Map<String, dynamic> params,
+  ) async {
+    final command = operation.wire;
+    try {
+      if (operation == ApplicationCommand.systemInfo) {
+        // 读取实际安装包元数据，沿用构建时版本，不在 Rust 或 Dart 另存一份版本号。
+        final PackageInfo info;
+        try {
+          info = await PackageInfo.fromPlatform();
+        } on PlatformException catch (error, stack) {
+          Error.throwWithStackTrace(
+            RequestFailure(
+              'application_info_unavailable',
+              '无法读取当前安装包信息，请重新启动应用后重试。',
+              {'platformCode': error.code},
+            ),
+            stack,
+          );
+        } on MissingPluginException catch (_, stack) {
+          Error.throwWithStackTrace(
+            const RequestFailure(
+              'application_info_unavailable',
+              '当前宿主尚未提供安装包信息，请重新启动应用后重试。',
+            ),
+            stack,
+          );
+        }
+        if (_disposed) {
+          throw const RequestFailure('disposed', '应用会话已关闭。');
+        }
+        if (info.version.isEmpty) {
+          throw const RequestFailure(
+            'application_info_unavailable',
+            '当前安装包没有可核实的版本信息。',
+          );
+        }
+        return {
+          'appName': info.appName,
+          'packageName': info.packageName,
+          'version': info.version,
+          'buildNumber': info.buildNumber,
+        };
+      }
+      if (operation == ApplicationCommand.stateSnapshot) {
+        return await _state.readSnapshot();
+      }
+      if (operation == ApplicationCommand.activitiesList) {
+        final snapshot = await _state.readSnapshot();
+        return {
+          'activities': snapshot['activities'],
+          'sessions': snapshot['sessions'],
+        };
+      }
+      if (operation == ApplicationCommand.activitiesStop) {
+        return await _stopActivity(params);
+      }
+      if (operation == ApplicationCommand.callsOpenPhoneApp) {
+        final id = _deviceId(params);
+        return Map.from(
+          await _companion.request(
+            id,
+            command,
+            const {},
+            allowStart: true,
+            expectedConnection: _devices.requireConnection(id),
+          ),
+        );
+      }
+      if (_power.handles(command)) {
+        return Map.from(await _power.command(command, params));
+      }
+      if (_devices.handles(command)) {
+        final result = await _devices.command(command, params);
+        if (operation == ApplicationCommand.devicesForget) {
+          await _observations.forget(_deviceId(params));
+        }
+        return Map.from(result);
+      }
+      if (_captures.handles(operation)) {
+        return await _captures.execute(operation, params);
+      }
+      if (_mediaJobs.handles(command)) {
+        return Map.from(await _mediaJobs.command(command, params));
+      }
+      if (_observations.handles(command)) {
+        return Map.from(await _observations.command(command, params));
+      }
+      if (operation == ApplicationCommand.appsList &&
+          (params['filter'] ?? 'installed') == 'installed') {
+        final id = _deviceId(params);
+        final connection = _devices.requireConnection(id);
+        final result = await _serverQueries.installedApps(
+          connection,
+          AdbCancellation(),
+        );
+        if (!identical(_devices.current(id), connection)) {
+          throw const RequestFailure('cancelled', '设备连接已改变，安装清单不再适用。');
+        }
+        return {'apps': result};
+      }
+      if (_companion.handles(command)) {
+        return Map.from(await _companion.command(command, params));
+      }
+      throw RequestFailure('unknown_command', '应用尚未提供此操作：$command');
+    } on DeviceRecordsFailure catch (error, stack) {
+      Error.throwWithStackTrace(
+        RequestFailure(error.code, error.message, error.details),
+        stack,
+      );
+    } on CompanionException catch (error, stack) {
+      Error.throwWithStackTrace(
+        RequestFailure(error.code, error.message),
+        stack,
+      );
+    } on AdbException catch (error, stack) {
+      Error.throwWithStackTrace(
+        RequestFailure(error.code, error.message),
+        stack,
+      );
+    }
+  }
+
+  String _deviceId(Map<String, dynamic> params) {
+    final id = params['deviceId'];
+    if (id is! String || !validDeviceId(id)) {
+      throw const RequestFailure('invalid_device_id', '设备标识无效。');
+    }
+    return id;
+  }
+
+  Future<Map<String, dynamic>> _stopActivity(
+    Map<String, dynamic> params,
+  ) async {
+    final id = params['activityId'];
+    if (id is! String) {
+      throw const RequestFailure('invalid_argument', '活动标识无效。');
+    }
+    final separator = id.indexOf(':');
+    if (separator < 1 || separator == id.length - 1) {
+      throw const RequestFailure('not_found', '此活动已结束或标识无效。');
+    }
+    final target = id.substring(separator + 1);
+    switch (id.substring(0, separator)) {
+      case 'connection':
+        return _executeBusiness(ApplicationCommand.devicesDisconnect, {
+          'deviceId': target,
+        });
+      case 'session':
+        return _executeBusiness(ApplicationCommand.sessionStop, {
+          'sessionId': target,
+        });
+      case 'observation':
+        return _executeBusiness(ApplicationCommand.observationStop, {
+          'deviceId': target,
+        });
+      case 'audio':
+        final source = _audio
+            .snapshots()
+            .where((source) => source['sourceId'] == target)
+            .firstOrNull;
+        if (source == null) {
+          throw const RequestFailure('not_found', '这代音源已结束。');
+        }
+        return _executeBusiness(ApplicationCommand.audioStop, {
+          'deviceId': source['deviceId'],
+          'sourceId': target,
+        });
+      default:
+        throw const RequestFailure('not_found', '此活动已结束或标识无效。');
+    }
+  }
+}

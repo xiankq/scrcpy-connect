@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
 
 const firstId = '11111111-1111-4111-8111-111111111111';
 const secondId = '22222222-2222-4222-8222-222222222222';
@@ -76,7 +76,7 @@ void main() {
         },
       },
     );
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       identityFingerprint: firstFingerprint,
     );
@@ -111,7 +111,7 @@ void main() {
         'deviceIdentityFingerprints': {secondId: firstFingerprint},
       },
     );
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       identityFingerprint: secondFingerprint,
     );
@@ -128,7 +128,7 @@ void main() {
   });
 
   test('新设备 ID 由 App 注入，修改和遗忘同时维护身份元数据', () async {
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () => firstId,
     );
@@ -151,12 +151,12 @@ void main() {
   });
 
   test('同目录两个实例并发修改读取最新文件，不丢失另一字段或新增设备', () async {
-    final first = await DeviceRecordStore.open(
+    final first = await DeviceStore.open(
       directory: directory,
       idFactory: () => firstId,
     );
     await first.add(address: '192.0.2.1', port: 5555);
-    final second = await DeviceRecordStore.open(
+    final second = await DeviceStore.open(
       directory: directory,
       idFactory: () => secondId,
     );
@@ -172,7 +172,7 @@ void main() {
   });
 
   test('普通打开第二个实例不将存活连接改为离线或改写记录', () async {
-    final first = await DeviceRecordStore.open(
+    final first = await DeviceStore.open(
       directory: directory,
       idFactory: () => firstId,
     );
@@ -182,21 +182,21 @@ void main() {
       (record) => record.copyWith(status: 'connected'),
     );
     final bytes = await file.readAsBytes();
-    final second = await DeviceRecordStore.open(directory: directory);
+    final second = await DeviceStore.open(directory: directory);
     expect(second.current.find(firstId)!.status, 'connected');
     expect(first.current.find(firstId)!.status, 'connected');
     expect(await file.readAsBytes(), bytes);
   });
 
   test('并发打开不静默覆盖原实例已提交的连接阶段', () async {
-    final first = await DeviceRecordStore.open(
+    final first = await DeviceStore.open(
       directory: directory,
       idFactory: () => firstId,
     );
     await first.add(address: '192.0.2.1', port: 5555);
     await Future.wait<Object?>([
       first.update(firstId, (record) => record.copyWith(status: 'connecting')),
-      DeviceRecordStore.open(directory: directory),
+      DeviceStore.open(directory: directory),
     ]);
     expect(first.current.find(firstId)!.status, 'connecting');
     await first.reload();
@@ -210,8 +210,8 @@ void main() {
         device(secondId).copyWith(status: 'unauthorized', reason: '需要重新授权'),
       ],
     );
-    final first = await DeviceRecordStore.open(directory: directory);
-    final second = await DeviceRecordStore.open(directory: directory);
+    final first = await DeviceStore.open(directory: directory);
+    final second = await DeviceStore.open(directory: directory);
     await second.rename(firstId, '其他所有者刚修改的名称');
     await first.markConnectionsOffline();
     expect(first.current.find(firstId)!.status, 'offline');
@@ -219,14 +219,14 @@ void main() {
     expect(first.current.find(firstId)!.name, '其他所有者刚修改的名称');
     expect(first.current.find(secondId)!.status, 'unauthorized');
     expect(first.current.find(secondId)!.reason, '需要重新授权');
-    final reopened = await DeviceRecordStore.open(directory: directory);
+    final reopened = await DeviceStore.open(directory: directory);
     expect(reopened.current.find(firstId)!.status, 'offline');
     expect(reopened.current.find(secondId)!.status, 'unauthorized');
   });
 
   test('替换前真实文件系统失败保留旧内存和旧文件，队列随后仍可提交', () async {
     var fail = false;
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () => firstId,
       commitFile: (temporary, destination) async {
@@ -261,7 +261,7 @@ void main() {
 
   test('替换已完成后文件系统回执失败，通过目标核验发布同一提交', () async {
     var lostReceipt = false;
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () => firstId,
       commitFile: (temporary, destination) async {
@@ -282,7 +282,7 @@ void main() {
   test('阻塞提交完成前不发布新快照，同时串行下一次变更', () async {
     final entered = Completer<void>(), release = Completer<void>();
     var hold = false;
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () => firstId,
       commitFile: (temporary, destination) async {
@@ -329,7 +329,7 @@ void main() {
     for (final source in examples) {
       await file.writeAsString(source, flush: true);
       await expectLater(
-        DeviceRecordStore.open(directory: directory),
+        DeviceStore.open(directory: directory),
         throwsA(isA<DeviceRecordsFailure>()),
       );
       expect(await file.readAsString(), source);
@@ -338,7 +338,7 @@ void main() {
 
   test('打开后文件损坏或消失不会用内存快照覆盖它', () async {
     await legacy();
-    final records = await DeviceRecordStore.open(directory: directory);
+    final records = await DeviceStore.open(directory: directory);
     final current = records.current;
     await file.writeAsString('corrupt', flush: true);
     await expectLater(
@@ -368,7 +368,7 @@ void main() {
         'deviceIdentityFingerprints': {firstId: firstFingerprint},
       },
     );
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () => secondId,
     );
@@ -386,7 +386,7 @@ void main() {
       firstId: firstFingerprint,
     });
     expect(await file.readAsString(), isNot(contains('not-a-key')));
-    final reopened = await DeviceRecordStore.open(directory: directory);
+    final reopened = await DeviceStore.open(directory: directory);
     expect(reopened.current.find(secondId)!.status, 'unauthorized');
     final preview = await reopened.previewMetadata(
       metadata([exportedDevice()]),
@@ -407,7 +407,7 @@ void main() {
 
   test('导入先完整校验所有条目，后续无效时不分配 ID、不提交部分记录', () async {
     var allocations = 0;
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () {
         allocations++;
@@ -430,7 +430,7 @@ void main() {
   });
 
   test('导入多个新 ID 冲突不提交，格式错误不改变已保存记录', () async {
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () => secondId,
     );
@@ -457,7 +457,7 @@ void main() {
         'deviceIdentityFingerprints': {firstId: firstFingerprint},
       },
     );
-    final records = await DeviceRecordStore.open(directory: directory);
+    final records = await DeviceStore.open(directory: directory);
     final exported = records.exportMetadata(settings: {'appearance': 'dark'});
     final data = exported['metadata'] as Map;
     expect(data['format'], 'scrcpy-connect-metadata');
@@ -471,7 +471,7 @@ void main() {
   });
 
   test('容量、版本类型和重复新 ID 失败不覆盖原文件', () async {
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () => firstId,
     );
@@ -503,7 +503,7 @@ void main() {
     });
     await file.writeAsString(invalid, flush: true);
     await expectLater(
-      DeviceRecordStore.open(directory: directory),
+      DeviceStore.open(directory: directory),
       throwsA(failure('records_corrupt')),
     );
     expect(await file.readAsString(), invalid);
@@ -511,7 +511,7 @@ void main() {
 
   test('权威指纹快照不能留下未知设备绑定，验证失败不提交', () async {
     await legacy();
-    final records = await DeviceRecordStore.open(directory: directory);
+    final records = await DeviceStore.open(directory: directory);
     final bytes = await file.readAsBytes();
     await expectLater(
       records.setIdentityFingerprints(
@@ -529,7 +529,7 @@ void main() {
 
   test('排队后调用方修改指纹参数不改变提交内容且重开仍有效', () async {
     await legacy();
-    final records = await DeviceRecordStore.open(directory: directory);
+    final records = await DeviceStore.open(directory: directory);
     final supplied = {firstId: secondFingerprint};
     final saving = records.setIdentityFingerprints(
       global: firstFingerprint,
@@ -537,7 +537,7 @@ void main() {
     );
     supplied[firstId] = '无效指纹';
     await saving;
-    final reopened = await DeviceRecordStore.open(directory: directory);
+    final reopened = await DeviceStore.open(directory: directory);
     expect(reopened.current.deviceIdentityFingerprints, {
       firstId: secondFingerprint,
     });

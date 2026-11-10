@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 import 'support/test_controller.dart';
 
@@ -757,7 +757,7 @@ Json _sessionReceipt({
 
 Future<void> _mountRemote(
   WidgetTester tester,
-  AppController controller, {
+  AppStore controller, {
   Key? key,
   ThemeData? theme,
   bool requestKeyboard = false,

@@ -1,5 +1,5 @@
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/search/devices_workspace_files_search_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/details/devices_workspace_files_details_page.dart';
 
@@ -13,13 +13,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/files/index/devices_workspace_files_index_page.dart';
 
-AppController _fileController(ApplicationRequest request) =>
+AppStore _fileController(ApplicationRequest request) =>
     createTestController(request)
       ..devices = [
         {'id': 'phone', 'status': 'connected'},
       ];
 
-Widget _filesPage(AppController controller, {String initialPath = '/sdcard'}) =>
+Widget _filesPage(AppStore controller, {String initialPath = '/sdcard'}) =>
     RouterTestApp(
       controller: controller,
       theme: ConnectTokens.theme(Brightness.light),

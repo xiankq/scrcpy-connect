@@ -4,7 +4,7 @@ import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
 /// 恢复状态位于正常页面内容流中，保留内容访问和清理操作。
@@ -32,7 +32,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
     setState(() => _retrying = true);
     try {
       await ref
-          .read(appControllerProvider.notifier)
+          .read(appStoreProvider.notifier)
           .execute(ApplicationCommand.stateReconcile);
     } catch (_) {
       // 桥接保持核验门禁，并发布权威失败状态。
@@ -44,7 +44,7 @@ class _RecoveryStatusState extends ConsumerState<RecoveryStatus> {
   @override
   Widget build(BuildContext context) {
     final (pending, error) = ref.watch(
-      appControllerProvider.select(
+      appStoreProvider.select(
         (state) => (state.reconciliationPending, state.reconciliationError),
       ),
     );

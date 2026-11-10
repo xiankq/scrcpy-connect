@@ -15,9 +15,9 @@ import 'package:scrcpy_connect/main.dart' as app;
 import 'package:scrcpy_connect/pages/devices/workspace/notifications/index/devices_workspace_notifications_index_page.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_remote_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/connection/connection_validation.dart';
-import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/services/connection_validation.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 
 import 'product_flow_test.dart' show waitFor;
@@ -63,8 +63,8 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
       );
-      final controller = container.read(appControllerProvider.notifier);
-      final coordinator = container.read(systemNotificationCoordinatorProvider);
+      final controller = container.read(appStoreProvider.notifier);
+      final coordinator = container.read(systemNotificationsProvider);
       await waitFor(
         tester,
         () =>

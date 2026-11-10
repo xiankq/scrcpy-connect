@@ -1,10 +1,10 @@
+import 'package:scrcpy_connect/models/media_cache_failure.dart';
 import 'package:scrcpy_connect/widgets/content.dart';
 import 'package:scrcpy_connect/widgets/glass/glass_overlays.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/state_note.dart';
 
@@ -28,7 +28,7 @@ class MediaCacheBlocker extends HookWidget {
     required this.controller,
     this.onReduceSelection,
   });
-  final AppController controller;
+  final AppStore controller;
   final VoidCallback? onReduceSelection;
 
   @override
@@ -99,7 +99,7 @@ class MediaCacheBlocker extends HookWidget {
 
 Future<void> showMediaCacheAdmissionFailure(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   Object error, {
   bool canReduceSelection = false,
   VoidCallback? onOpenPhone,

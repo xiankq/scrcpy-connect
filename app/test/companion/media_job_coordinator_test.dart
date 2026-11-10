@@ -1,12 +1,13 @@
-import 'package:scrcpy_connect/services/companion_protocol.dart';
+import 'package:scrcpy_connect/models/companion_exception.dart';
+import 'package:scrcpy_connect/services/device_connection.dart';
 
 import 'dart:async';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/media_job_coordinator.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/services/media_job_service.dart';
+import 'package:scrcpy_connect/services/device_connection_pool.dart';
 
 import 'coordinator_fixture.dart';
 
@@ -313,7 +314,7 @@ void main() {
         fixture.reply(original!, {'data': '已取消的迟到结果'});
       }
     };
-    final jobs = MediaJobCoordinator(
+    final jobs = MediaJobService(
       requireConnection: (_) => fixture.current!,
       request: fixture.companion.request,
     );
@@ -342,7 +343,7 @@ void main() {
     expect(fixture.api.disconnected, isEmpty);
   });
 
-  test('ConnectionOwner先撤当前连接，媒体取消仍走原精确部署并等待真实回收', () async {
+  test('DeviceConnectionPool先撤当前连接，媒体取消仍走原精确部署并等待真实回收', () async {
     final fixture = CoordinatorFixture();
     final originalConnection = fixture.current!;
     final issued = fixture.api.requests.stream.firstWhere(
@@ -364,9 +365,9 @@ void main() {
         );
       }
     };
-    late final ConnectionOwner connections;
-    late final MediaJobCoordinator jobs;
-    connections = ConnectionOwner(
+    late final DeviceConnectionPool connections;
+    late final MediaJobService jobs;
+    connections = DeviceConnectionPool(
       stopActivities: (device, exact) async {
         expect(
           connections.current(device),
@@ -383,7 +384,7 @@ void main() {
       open: (_) async => originalConnection,
       verify: (_, _) async {},
     );
-    jobs = MediaJobCoordinator(
+    jobs = MediaJobService(
       requireConnection: connections.require,
       request: fixture.companion.request,
     );
@@ -431,7 +432,7 @@ void main() {
         fixture.api.disconnectRpc();
       }
     };
-    final jobs = MediaJobCoordinator(
+    final jobs = MediaJobService(
       requireConnection: (_) => fixture.current!,
       request: fixture.companion.request,
     );
@@ -483,7 +484,7 @@ final class _Harness {
     Duration cleanupTimeout = const Duration(seconds: 2),
   }) {
     replaceConnection();
-    jobs = MediaJobCoordinator(
+    jobs = MediaJobService(
       requireConnection: (_) => current,
       request: _request,
       operationTimeout: operationTimeout,
@@ -492,7 +493,7 @@ final class _Harness {
   }
   final client = _UnusedClient();
   late DeviceConnection current;
-  late final MediaJobCoordinator jobs;
+  late final MediaJobService jobs;
   final calls = <_Call>[];
   Future<Map<String, Object?>> Function(_Call)? reply;
   DeviceConnection replaceConnection() => current = DeviceConnection(

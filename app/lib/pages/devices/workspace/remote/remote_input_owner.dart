@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/services/media/remote_failure.dart';
+import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/utils/source_coordinates.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_input_queue.dart';

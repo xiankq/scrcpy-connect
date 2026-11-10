@@ -1,3 +1,7 @@
+import 'package:scrcpy_connect/services/application_host_dependencies.dart';
+import 'package:scrcpy_connect/models/application_identity_host.dart';
+import 'package:scrcpy_connect/models/bundled_server_files.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -8,12 +12,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/stores/application_host.dart';
+import 'package:scrcpy_connect/services/application_host.dart';
 import 'package:scrcpy_connect/services/application_host_record.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
-import 'package:scrcpy_connect/stores/usb_lease_recovery.dart';
+import 'package:scrcpy_connect/services/bundled_servers.dart';
+import 'package:scrcpy_connect/services/usb_recovery.dart';
 
 const _policy = ConnectionPolicy(
   tcp: AdbTcpOptions(keepalive: null, userTimeout: null),
@@ -94,7 +98,7 @@ void main() {
         serial: 'same',
       );
       final platform = _UsbPlatform(fixture.api.calls);
-      final recovery = UsbLeaseRecovery(platform: platform.request);
+      final recovery = UsbRecovery(platform: platform.request);
       fixture.dependencies.recovery = recovery;
       final blocked = Completer<void>();
       late Future<void> started;
@@ -851,7 +855,7 @@ class _Fixture {
   final _Dependencies dependencies;
   _UsbPlatform usbRecovery() {
     final platform = _UsbPlatform(api.calls);
-    dependencies.recovery = UsbLeaseRecovery(platform: platform.request);
+    dependencies.recovery = UsbRecovery(platform: platform.request);
     return platform;
   }
 
@@ -881,10 +885,10 @@ class _Dependencies extends ApplicationHostDependencies {
   @override
   final bool desktop;
   bool failAssets = false;
-  UsbLeaseRecovery? recovery;
+  UsbRecovery? recovery;
   int recoveryFactoryCalls = 0;
   @override
-  UsbLeaseRecovery? usbRecovery() {
+  UsbRecovery? usbRecovery() {
     recoveryFactoryCalls++;
     return recovery;
   }

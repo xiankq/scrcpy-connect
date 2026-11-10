@@ -3,8 +3,8 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/application_session.dart';
-import 'package:scrcpy_connect/stores/application_host.dart';
+import 'package:scrcpy_connect/services/app_runtime.dart';
+import 'package:scrcpy_connect/services/application_host.dart';
 
 import 'package:scrcpy_connect/bootstrap/app_bootstrap.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
@@ -29,17 +29,15 @@ void main() {
       '${repository.path}/.dart_tool/adb/${Platform.isMacOS ? 'macos' : Platform.operatingSystem}',
     );
     AppDependencies? owner;
-    final sessions = <ApplicationSession>[];
+    final sessions = <AppRuntime>[];
     Future<AppDependencies> open() async {
-      final pending = ApplicationSession.initialize(
+      final pending = AppRuntime.initialize(
         dataDirectory: root.path,
         adbBinaryDirectory: binaryDirectory,
       );
       if (sessions.isEmpty) {
         await expectLater(
-          ApplicationSession.initialize(
-            dataDirectory: '${root.path}/different',
-          ),
+          AppRuntime.initialize(dataDirectory: '${root.path}/different'),
           throwsA(
             isA<RequestFailure>().having(
               (error) => error.code,
@@ -63,7 +61,7 @@ void main() {
       final launches = File('${root.path}/app-opens.json');
       await launches.writeAsString('corrupt-launches', flush: true);
       await expectLater(
-        ApplicationSession.initialize(
+        AppRuntime.initialize(
           dataDirectory: root.path,
           adbBinaryDirectory: binaryDirectory,
         ),

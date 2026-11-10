@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:scrcpy_connect/stores/application_session.dart';
+import 'package:scrcpy_connect/services/app_runtime.dart';
 
 // 在隔离私有目录中运行生产桥接和真实 Android 服务；不打开设备、远控页面、捕获或音频输出。
 void main() {
@@ -21,7 +21,7 @@ void main() {
       final directory = await Directory.systemTemp.createTemp(
         'background-acceptance-',
       );
-      ApplicationSession? bridge;
+      AppRuntime? bridge;
       Future<Map<String, dynamic>> nativeStatus() async =>
           Map<String, dynamic>.from(
             await platform.invokeMethod<Map<Object?, Object?>>(
@@ -42,7 +42,7 @@ void main() {
       }
 
       try {
-        bridge = await ApplicationSession.initialize(
+        bridge = await AppRuntime.initialize(
           dataDirectory: await directory.resolveSymbolicLinks(),
         );
         expect(
@@ -68,7 +68,7 @@ void main() {
         bridge = null;
         // 释放输出和观察者不能终止应用后台连接。
         await waitRunning(true);
-        bridge = await ApplicationSession.initialize(
+        bridge = await AppRuntime.initialize(
           dataDirectory: await directory.resolveSymbolicLinks(),
         );
         status = await waitRunning(true);

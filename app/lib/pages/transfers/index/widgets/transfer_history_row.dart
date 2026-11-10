@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -8,8 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/transfers/widgets/transfer_direction_badge.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 
 bool transferHistoryActive(Json row) =>
@@ -30,7 +30,7 @@ class TransferHistoryRow extends HookWidget {
     required this.refresh,
     required this.onOpen,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json row;
   final VoidCallback refresh;
   final VoidCallback onOpen;

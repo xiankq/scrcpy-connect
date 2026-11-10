@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/stores/application_session.dart';
+import 'package:scrcpy_connect/services/app_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,7 +17,7 @@ void main() {
     (tester) async {
       final evidence = <String, dynamic>{};
       binding.reportData = {'assembledRotation': evidence};
-      ApplicationSession? runtime;
+      AppRuntime? runtime;
       StreamSubscription<Map<String, dynamic>>? subscription;
       final events = <Map<String, dynamic>>[];
       String? device, session;
@@ -114,7 +114,7 @@ void main() {
       try {
         runtime = await real(() async {
           final support = await getApplicationSupportDirectory();
-          return ApplicationSession.initialize(
+          return AppRuntime.initialize(
             dataDirectory:
                 const String.fromEnvironment('CONNECT_E2E_DATA_DIRECTORY')
                     .isEmpty

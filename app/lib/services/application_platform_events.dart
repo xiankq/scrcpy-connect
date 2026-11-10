@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/stores/connection/reconnection_coordinator.dart';
+import 'package:scrcpy_connect/services/device_reconnect_service.dart';
 
 /// 宿主事实不参与核心事件序列；同步撤销本地准入，再发布事件并交接异步清理。
 class ApplicationPlatformEvents {
@@ -11,7 +11,7 @@ class ApplicationPlatformEvents {
     required this.stopConnections,
   });
 
-  final ReconnectionCoordinator reconnections;
+  final DeviceReconnectService reconnections;
   final bool Function() isDisposed;
   final void Function(Map<String, dynamic>) emit;
   final Future<void> Function(Map<String, dynamic>) handleShare;

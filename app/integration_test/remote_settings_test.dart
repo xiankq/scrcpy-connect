@@ -16,7 +16,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/remote/devices_workspace_
 import 'package:scrcpy_connect/pages/devices/workspace/quality/devices_workspace_quality_page.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/remote_display_settings.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
@@ -63,7 +63,7 @@ void main() {
       );
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(appControllerProvider.notifier);
+      ).read(appStoreProvider.notifier);
       await waitFor(
         tester,
         () =>

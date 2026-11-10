@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 
 import 'support/test_controller.dart';
@@ -26,7 +26,7 @@ void main() {
     addTearDown(first.dispose);
     addTearDown(second.dispose);
 
-    Future<void> show(AppController controller) => tester.pumpWidget(
+    Future<void> show(AppStore controller) => tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: CommandView(

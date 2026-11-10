@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/stores/application_session.dart';
-import 'package:scrcpy_connect/stores/application_host.dart';
+import 'package:scrcpy_connect/services/app_runtime.dart';
+import 'package:scrcpy_connect/services/application_host.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 
 Future<Map<String, dynamic>> settled(
-  ApplicationSession runtime,
+  AppRuntime runtime,
   String id, {
   String? status,
 }) async {
@@ -64,12 +64,12 @@ void main() {
           '${repository.path}/.dart_tool/adb/${Platform.operatingSystem}',
         ),
       );
-      ApplicationSession? runtime;
+      AppRuntime? runtime;
       String? device;
       final remote =
           '/data/local/tmp/assembled-files-${DateTime.now().microsecondsSinceEpoch}';
       try {
-        runtime = await ApplicationSession.initialize(
+        runtime = await AppRuntime.initialize(
           dataDirectory: directory.path,
           connectionPolicy: policy,
           adbBinaryDirectory: Directory(
@@ -164,7 +164,7 @@ void main() {
         });
         expect((await settled(runtime, conflictId))['status'], 'cancelled');
         await runtime.dispose();
-        runtime = await ApplicationSession.initialize(
+        runtime = await AppRuntime.initialize(
           dataDirectory: directory.path,
           connectionPolicy: policy,
           adbBinaryDirectory: Directory(

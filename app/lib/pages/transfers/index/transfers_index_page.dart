@@ -8,8 +8,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/pages/transfers/index/widgets/transfer_history_row.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
-import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
+import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 import 'package:scrcpy_connect/widgets/command_view.dart';
 import 'package:scrcpy_connect/widgets/page_chrome.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -21,7 +21,7 @@ class TransfersPage extends HookWidget {
     required this.controller,
     this.embedded = false,
   });
-  final AppController controller;
+  final AppStore controller;
   final bool embedded;
   @override
   Widget build(BuildContext context) {
@@ -141,7 +141,7 @@ class _TransferGroupHeader extends StatelessWidget {
 }
 
 /// 每次选择在列表出现一次，批次子项放在详情中。
-List<Json> transferHistoryRows(AppController controller, Json data) {
+List<Json> transferHistoryRows(AppStore controller, Json data) {
   final groups = <String, List<Json>>{};
   for (final raw in objects(data['transfers'])) {
     final task = transferView(controller.snapshot().devices, raw);

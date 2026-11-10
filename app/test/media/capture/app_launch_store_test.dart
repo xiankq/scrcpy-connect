@@ -1,9 +1,12 @@
+import 'package:scrcpy_connect/models/app_launch_record.dart';
+import 'package:scrcpy_connect/models/app_launch_permit.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
+import 'package:scrcpy_connect/stores/app_launch_store.dart';
 
 const _first = '00000000-0000-4000-8000-000000000001';
 const _second = '00000000-0000-4000-8000-000000000002';

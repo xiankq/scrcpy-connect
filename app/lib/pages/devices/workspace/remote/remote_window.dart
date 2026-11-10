@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/services/media/remote_failure.dart';
+import 'package:scrcpy_connect/widgets/remote_failure.dart';
 import 'package:scrcpy_connect/widgets/remote_views.dart';
 
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
@@ -30,7 +30,7 @@ class RemoteWindow {
     _releaseDeviceView = views.claimRemoteDeviceView(deviceId);
   }
 
-  final AppController controller;
+  final AppStore controller;
   final RemoteViews views;
   final String deviceId;
   final presentation = RemotePresentation();

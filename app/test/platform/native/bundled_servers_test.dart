@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
+import 'package:scrcpy_connect/services/bundled_servers.dart';
 
 const _prefix = 'assets/servers/';
 const _sources = {

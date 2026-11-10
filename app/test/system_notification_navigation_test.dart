@@ -9,7 +9,7 @@ import 'package:scrcpy_connect/app.dart';
 import 'package:scrcpy_connect/pages/incoming_share/incoming_share_page.dart';
 import 'package:scrcpy_connect/bootstrap/app_dependencies.dart';
 import 'package:scrcpy_connect/models/app_state.dart';
-import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
 
 class _Sink implements SystemNotificationSink {
   final shown = <SystemNotice>[];
@@ -116,7 +116,7 @@ void main() {
       await tester.pumpAndSettle();
       final coordinator = ProviderScope.containerOf(
         tester.element(find.byType(ConnectApp)),
-      ).read(systemNotificationCoordinatorProvider);
+      ).read(systemNotificationsProvider);
       await coordinator.initialize();
       Json notifications(List<Json> items) => {
         'live': true,

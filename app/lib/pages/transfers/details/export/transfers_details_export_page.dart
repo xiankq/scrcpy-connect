@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/widgets/documents/system_file_share_form.dart';
 import 'package:scrcpy_connect/widgets/documents/document_export_form.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
 
 class DocumentExportPage extends StatelessWidget {
@@ -15,7 +15,7 @@ class DocumentExportPage extends StatelessWidget {
     this.partial = false,
     this.sourceLabel = '被控设备',
   });
-  final AppController controller;
+  final AppStore controller;
   final String localPath;
   final String name;
   final String kind;

@@ -11,9 +11,9 @@ import 'package:scrcpy_connect/pages/devices/workspace/gallery/preview/widgets/v
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/cached_file_image.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/file_actions.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/services/media/media_cache_lease.dart';
-import 'package:scrcpy_connect/services/files/file_type_policy.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/widgets/media_cache_lease.dart';
+import 'package:scrcpy_connect/services/file_type_policy.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/widgets/media_cache_blocker.dart';
 
@@ -26,7 +26,7 @@ class MediaPreviewPage extends HookWidget {
     required this.device,
     required this.file,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
   final Json file;
   @override

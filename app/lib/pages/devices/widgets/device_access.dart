@@ -1,16 +1,16 @@
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/connection_content.dart';
 import 'package:flutter/material.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 
 /// 远端操作不可用时提供连接入口，连接后不自动重放该动作。
 Future<void> offerDeviceConnection(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   Json device,
 ) async {
   if (deviceConnectionInProgress(device)) {
@@ -41,7 +41,7 @@ Future<void> offerDeviceConnection(
 
 Future<void> stopDeviceConnection(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   Json device,
 ) async {
   final current = controller.currentDevice(device);
@@ -63,7 +63,7 @@ Future<void> stopDeviceConnection(
 
 Future<bool> removeSavedDevice(
   BuildContext context,
-  AppController controller,
+  AppStore controller,
   Json device,
 ) async {
   if (!await confirmConnectionChange(

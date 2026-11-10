@@ -1,8 +1,10 @@
+import 'package:scrcpy_connect/models/device_records_import.dart';
+
 import 'dart:async';
 import 'dart:io';
 
-import 'package:scrcpy_connect/stores/preference_store.dart';
-import 'package:scrcpy_connect/stores/connection/device_record_store.dart';
+import 'package:scrcpy_connect/stores/settings_store.dart';
+import 'package:scrcpy_connect/stores/device_store.dart';
 import 'package:scrcpy_connect/models/device_metadata.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/services/app_settings.dart';
@@ -35,10 +37,10 @@ Map<String, dynamic> metadata([
 
 void main() {
   late Directory directory;
-  late PreferenceStore preferences;
-  late DeviceRecordStore records;
+  late SettingsStore preferences;
+  late DeviceStore records;
   AppSettings commands({
-    DeviceRecordStore? deviceRecords,
+    DeviceStore? deviceRecords,
     void Function(DeviceRecordsImport)? onDevicesImported,
     void Function(Map<String, dynamic>)? onChanged,
     Future<void> Function(bool)? applyBackgroundPolicy,
@@ -55,7 +57,7 @@ void main() {
       'preferences-runtime-test-',
     );
     preferences = await AppSettings.prepare(directory);
-    records = await DeviceRecordStore.open(directory: directory);
+    records = await DeviceStore.open(directory: directory);
   });
   tearDown(() async {
     await directory.delete(recursive: true);
@@ -180,7 +182,7 @@ void main() {
       'lost $failure is reconciled without appending or applying preferences',
       () async {
         var lost = false, allocations = 0, publications = 0;
-        final records = await DeviceRecordStore.open(
+        final records = await DeviceStore.open(
           directory: directory,
           idFactory: () {
             allocations++;
@@ -219,7 +221,7 @@ void main() {
           throwsA(errorCode('preferences_import_unknown')),
         );
         expect(preferences.current.values['appearance'], 'light');
-        final reopened = await DeviceRecordStore.open(directory: directory);
+        final reopened = await DeviceStore.open(directory: directory);
         expect(reopened.current.devices, hasLength(1));
         final checked = await runtime.previewImport(input);
         expect(checked['alreadyImported'], true);
@@ -237,7 +239,7 @@ void main() {
   test('restore with conflicting local save reports partial success without overwriting', () async {
     final other = await AppSettings.prepare(directory);
     var competing = false;
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       commitFile: (temporary, destination) async {
         await temporary.rename(destination.path);
@@ -259,7 +261,7 @@ void main() {
 
   test('preview admission preserves local settings by default and only explicit selection applies global changes', () async {
     var allocations = 0;
-    final records = await DeviceRecordStore.open(
+    final records = await DeviceStore.open(
       directory: directory,
       idFactory: () =>
           '00000000-0000-4000-8000-${(++allocations).toString().padLeft(12, '0')}',

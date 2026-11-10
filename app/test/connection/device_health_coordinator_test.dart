@@ -1,10 +1,11 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 
 import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
 import 'package:scrcpy_connect/models/connection_policy.dart';
-import 'package:scrcpy_connect/stores/connection/device_health_coordinator.dart';
+import 'package:scrcpy_connect/services/device_health_service.dart';
 
 void main() {
   late _Fixture f;
@@ -201,14 +202,14 @@ final class _Fixture {
   }
   final api = _Api();
   late final _Client client;
-  late DeviceHealthCoordinator health;
+  late DeviceHealthService health;
   final current = <String, DeviceConnection>{};
   final retired = <String>[];
   Duration elapsed = Duration.zero;
   bool failRetire = false;
 
   void createHealth({bool enabled = true}) {
-    health = DeviceHealthCoordinator(
+    health = DeviceHealthService(
       current: (id) => current[id],
       policy: ConnectionPolicy(
         monitorInterval: const Duration(days: 1),
@@ -216,7 +217,7 @@ final class _Fixture {
       ),
       elapsed: () => elapsed,
       retire: (id, connection, {required reason}) async {
-        // 真实组合中 ConnectionOwner.stopActivities 会回到相同监测所有者。
+        // 真实组合中 DeviceConnectionPool.stopActivities 会回到相同监测所有者。
         await health.stopConnection(id, connection);
         if (failRetire) throw StateError('retirement pending');
         if (identical(current[id], connection)) current.remove(id);

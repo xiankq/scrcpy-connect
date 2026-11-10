@@ -1,3 +1,5 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import '../../support/scrcpy_event_fixture.dart';
 
 import 'dart:async';
@@ -10,11 +12,10 @@ import 'package:adb/adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy/scrcpy.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/services/connection/scrcpy_server_queries.dart';
-import 'package:scrcpy_connect/stores/media/app_launch_store.dart';
-import 'package:scrcpy_connect/stores/media/session_coordinator.dart';
-import 'package:scrcpy_connect/services/media/session_shell.dart';
+import 'package:scrcpy_connect/services/scrcpy_server_queries.dart';
+import 'package:scrcpy_connect/stores/app_launch_store.dart';
+import 'package:scrcpy_connect/services/screen_capture_service.dart';
+import 'package:scrcpy_connect/services/session_shell.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/remote/remote_presentation.dart';
 
 void main() {
@@ -920,7 +921,7 @@ final class _Fixture {
       timeout: const SessionPolicy().shellTimeout,
       newId: () => _id(++next),
     );
-    owner = SessionCoordinator(
+    owner = ScreenCaptureService(
       scrcpy: ScrcpyClient(native),
       requireConnection: (device) =>
           additionalConnections[device] ?? connection,
@@ -945,7 +946,7 @@ final class _Fixture {
   final events = <String>[];
   final additionalConnections = <String, DeviceConnection>{};
   late DeviceConnection connection;
-  late SessionCoordinator owner;
+  late ScreenCaptureService owner;
   late ScrcpyServerQueries queries;
   int next = 100;
   bool allowCleanupFailure = false;

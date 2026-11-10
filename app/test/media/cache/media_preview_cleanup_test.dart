@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/services/device_connection.dart';
+import 'package:scrcpy_connect/models/file_failure.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -5,11 +8,9 @@ import 'dart:io';
 import 'package:adb/adb.dart' as adb;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
-import 'package:scrcpy_connect/services/files/adb_file_executor.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/stores/media/app_media_cache.dart';
-import 'package:scrcpy_connect/stores/media/media_artifact_coordinator.dart';
+import 'package:scrcpy_connect/services/adb_file_executor.dart';
+import 'package:scrcpy_connect/stores/media_cache_store.dart';
+import 'package:scrcpy_connect/services/media_preview_service.dart';
 
 void main() {
   test('预览完成回执后反复关闭失败保留原part及预算，重试只收回原连接', () async {
@@ -150,14 +151,14 @@ final _cleanup = isA<RequestFailure>().having(
 final class _Fixture {
   _Fixture(this.root, this.cache, this.api, this.replacementApi);
   final Directory root;
-  final AppMediaCache cache;
+  final MediaCacheStore cache;
   final _Api api, replacementApi;
   late final DeviceConnection replacement;
   late DeviceConnection current;
-  late final MediaArtifactCoordinator owner;
+  late final MediaPreviewService owner;
   static Future<_Fixture> open() async {
     final root = await Directory.systemTemp.createTemp('preview-cleanup-');
-    final cache = await AppMediaCache.open(root: root);
+    final cache = await MediaCacheStore.open(root: root);
     final api = _Api(), other = _Api();
     final fixture = _Fixture(root, cache, api, other);
     final client = adb.NativeAdbClient(api, '/unused/key');
@@ -179,7 +180,7 @@ final class _Fixture {
         nativeOwner: other,
       ),
     );
-    fixture.owner = MediaArtifactCoordinator(
+    fixture.owner = MediaPreviewService(
       cache: cache,
       executor: AdbFileExecutor(
         localFiles: client.services,

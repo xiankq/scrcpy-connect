@@ -1,12 +1,14 @@
+import 'package:scrcpy_connect/models/file_failure.dart';
+import 'package:scrcpy_connect/services/managed_file_publication_leases.dart';
+
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/files/document_sources.dart';
-import 'package:scrcpy_connect/services/files/file_executor.dart';
-import 'package:scrcpy_connect/services/files/composite_publication_leases.dart';
-import 'package:scrcpy_connect/stores/files/transfer_coordinator.dart';
+import 'package:scrcpy_connect/stores/file_document_store.dart';
+import 'package:scrcpy_connect/services/file_publication_lease_pool.dart';
+import 'package:scrcpy_connect/services/file_transfer_service.dart';
 
 import 'support/file_executor_fixture.dart';
 
@@ -27,7 +29,7 @@ void main() {
         () async {
           final publication = _Lookup();
           final executor = FixtureExecutor()..stamps['/source'] = regular;
-          final transfers = await TransferCoordinator.open(
+          final transfers = await FileTransferService.open(
             executor: executor,
             dataDirectory: cache,
             publication: publication,
@@ -71,7 +73,7 @@ void main() {
   }
 
   Future<({String id, String path})> ready(
-    DocumentSources owner, {
+    FileDocumentStore owner, {
     int bytes = 3,
   }) async {
     final source = await owner.reserve();
@@ -82,9 +84,9 @@ void main() {
   }
 
   test('a second publication cannot borrow its first completed batch while planning', () async {
-    final documents = await DocumentSources.open(cacheDirectory: cache);
+    final documents = await FileDocumentStore.open(cacheDirectory: cache);
     final source = await ready(documents);
-    final publication = CompositePublicationLeases(documents: documents);
+    final publication = FilePublicationLeasePool(documents: documents);
     await publication.begin(source.id, {
       'items': [
         {'source': source.path, 'destination': '/sdcard/first'},
@@ -98,7 +100,7 @@ void main() {
     final executor = FixtureExecutor()
       ..stamps[source.path] = directory
       ..blockList = true;
-    final transfers = await TransferCoordinator.open(
+    final transfers = await FileTransferService.open(
       executor: executor,
       dataDirectory: cache,
       publication: publication,
@@ -142,7 +144,7 @@ void main() {
     test(
       'cold recovery keeps a second ${identified ? 'identified' : 'legacy unidentified'} unknown attempt despite old completed history',
       () async {
-        final documents = await DocumentSources.open(cacheDirectory: cache);
+        final documents = await FileDocumentStore.open(cacheDirectory: cache);
         final source = await ready(documents);
         const nextBatch = '33333333-3333-4333-8333-333333333333';
         Map<String, Object?> proof(List<String> ids) => {
@@ -168,7 +170,7 @@ void main() {
             {'source': source.path, 'destination': '/sdcard/second'},
           ],
         }, transferId: identified ? nextBatch : null);
-        final recovered = await DocumentSources.open(cacheDirectory: cache);
+        final recovered = await FileDocumentStore.open(cacheDirectory: cache);
         await recovered.store.reconcile(proof([batch]));
         expect(await Directory(source.path).exists(), isTrue);
         final leases = (await recovered.store.sources())['leases'] as List;
@@ -201,7 +203,7 @@ void main() {
   }
 
   test('page release reclaims an unpublished source and allows reuse of its budget', () async {
-    final owner = await DocumentSources.open(
+    final owner = await FileDocumentStore.open(
       cacheDirectory: cache,
       totalBytes: 5,
     );
@@ -220,7 +222,7 @@ void main() {
       final legacy = File('${cache.path}/documents/old/result');
       await legacy.parent.create(recursive: true);
       await legacy.writeAsBytes(List.filled(4, 1));
-      final owner = await DocumentSources.open(
+      final owner = await FileDocumentStore.open(
         cacheDirectory: cache,
         totalBytes: 5,
       );
@@ -237,7 +239,7 @@ void main() {
       await legacy.create(recursive: true);
       final link = Link('${legacy.path}/outside');
       await link.create(cache.path);
-      final owner = await DocumentSources.open(cacheDirectory: cache);
+      final owner = await FileDocumentStore.open(cacheDirectory: cache);
       await expectLater(owner.reserve(), throwsA(isA<FileFailure>()));
       expect(await link.target(), cache.path);
     },
@@ -246,7 +248,7 @@ void main() {
   test(
     'cold recovery releases vanished pages but preserves unknown publications',
     () async {
-      final first = await DocumentSources.open(cacheDirectory: cache);
+      final first = await FileDocumentStore.open(cacheDirectory: cache);
       final unsubmitted = await ready(first);
       final published = await ready(first);
       await first.begin(published.id, {
@@ -254,7 +256,7 @@ void main() {
           {'source': '${published.path}/a.txt', 'destination': '/sdcard/a.txt'},
         ],
       });
-      final recovered = await DocumentSources.open(cacheDirectory: cache);
+      final recovered = await FileDocumentStore.open(cacheDirectory: cache);
       expect(await Directory(unsubmitted.path).exists(), isFalse);
       expect(await Directory(published.path).exists(), isTrue);
       final result = await recovered.store.sources();
@@ -267,7 +269,7 @@ void main() {
   test(
     'proven unpublished admission releases its marker before page release',
     () async {
-      final owner = await DocumentSources.open(cacheDirectory: cache);
+      final owner = await FileDocumentStore.open(cacheDirectory: cache);
       final source = await ready(owner);
       await owner.begin(source.id, {
         'items': [
@@ -284,9 +286,9 @@ void main() {
     test(
       'directory proof includes independent ${retainedChild ? 'failed' : 'completed'} descendant consumers',
       () async {
-        final documents = await DocumentSources.open(cacheDirectory: cache);
+        final documents = await FileDocumentStore.open(cacheDirectory: cache);
         final source = await ready(documents);
-        final publication = CompositePublicationLeases(documents: documents);
+        final publication = FilePublicationLeasePool(documents: documents);
         await publication.begin(source.id, {
           'items': [
             {'source': source.path, 'destination': '/sdcard/folder'},
@@ -314,7 +316,7 @@ void main() {
           ].join('\n'),
           flush: true,
         );
-        final transfers = await TransferCoordinator.open(
+        final transfers = await FileTransferService.open(
           executor: FixtureExecutor(),
           dataDirectory: cache,
           publication: publication,
@@ -331,15 +333,15 @@ void main() {
   }
 
   test('automatic managed source recognition cannot be bypassed by omitting shareId', () async {
-    final documents = await DocumentSources.open(cacheDirectory: cache);
+    final documents = await FileDocumentStore.open(cacheDirectory: cache);
     final source = await ready(documents);
     final executor = FixtureExecutor()
       ..stamps['${source.path}/a.txt'] = regular
       ..blockCopy = true;
-    final transfers = await TransferCoordinator.open(
+    final transfers = await FileTransferService.open(
       executor: executor,
       dataDirectory: cache,
-      publication: CompositePublicationLeases(documents: documents),
+      publication: FilePublicationLeasePool(documents: documents),
     );
     try {
       final receipt = await transfers.startTransfer('phone', true, [

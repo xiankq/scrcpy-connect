@@ -1,3 +1,6 @@
+import 'package:scrcpy_connect/services/application_host_dependencies.dart';
+import 'package:scrcpy_connect/models/bundled_server_files.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -8,10 +11,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrcpy/scrcpy.dart';
-import 'package:scrcpy_connect/stores/application_host.dart';
+import 'package:scrcpy_connect/services/application_host.dart';
 import 'package:scrcpy_connect/services/application_host_record.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
-import 'package:scrcpy_connect/services/platform/bundled_servers.dart';
+import 'package:scrcpy_connect/services/bundled_servers.dart';
 
 void main() {
   test('临时释放失败也可由宿主关闭重试同一个 owner', () async {

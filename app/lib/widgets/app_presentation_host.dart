@@ -9,11 +9,11 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
-import 'package:scrcpy_connect/stores/clipboard_coordinator.dart';
-import 'package:scrcpy_connect/stores/system_notification_coordinator.dart';
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/services/clipboard_sync.dart';
+import 'package:scrcpy_connect/widgets/system_notifications.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 
 /// 应用根部的外部意图呈现边界；调度与迟到回调必须同时遵循当前前台资格。
@@ -30,17 +30,15 @@ class AppPresentationHost extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(appControllerProvider.notifier);
+    final controller = ref.watch(appStoreProvider.notifier);
     final appPendingShares = ref.watch(
-      appControllerProvider.select((state) => state.pendingShares),
+      appStoreProvider.select((state) => state.pendingShares),
     );
-    ref.watch(clipboardCoordinatorProvider);
+    ref.watch(clipboardSyncProvider);
     final sharing = useRef<Object?>(null);
     final shareCycle = useState(0);
     final lifecycle = useAppLifecycleState();
-    final systemNotifications = ref.watch(
-      systemNotificationCoordinatorProvider,
-    );
+    final systemNotifications = ref.watch(systemNotificationsProvider);
     useListenable(systemNotifications.changes);
     useOnAppLifecycleStateChange((previous, current) {
       // 暂停后可能不再绘制下一帧，因此在生命周期回调中立即更新提醒资格。
@@ -56,7 +54,7 @@ class AppPresentationHost extends HookConsumerWidget {
       return null;
     }, [systemNotifications, lifecycle]);
     final appLoading = ref.watch(
-      appControllerProvider.select(
+      appStoreProvider.select(
         (state) => state.loading || state.reconciliationPending,
       ),
     );

@@ -1,3 +1,8 @@
+import 'package:scrcpy_connect/models/companion_exception.dart';
+
+import 'package:scrcpy_connect/models/companion_config.dart';
+import 'package:scrcpy_connect/services/device_connection.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -6,8 +11,7 @@ import 'package:adb/adb.dart';
 import 'coordinator_fixture.dart' show CoordinatorApi;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/companion_client.dart';
-import 'package:scrcpy_connect/stores/connection/connection_owner.dart';
+import 'package:scrcpy_connect/services/companion_client.dart';
 
 const _config = CompanionConfig(
   startupTimeout: Duration(seconds: 2),

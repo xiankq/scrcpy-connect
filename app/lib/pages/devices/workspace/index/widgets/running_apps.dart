@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_icon.dart';
 import 'package:scrcpy_connect/pages/devices/workspace/widgets/phone_app_launcher.dart';
 import 'package:scrcpy_connect/widgets/section_title.dart';
@@ -21,7 +21,7 @@ class RunningApps extends HookWidget {
     required this.controller,
     required this.device,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
 
   @override

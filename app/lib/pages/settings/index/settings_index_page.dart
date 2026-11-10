@@ -3,7 +3,7 @@ import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/page_frame.dart';
@@ -20,12 +20,12 @@ class SettingsPage extends HookConsumerWidget {
     required this.controller,
     this.embedded = false,
   });
-  final AppController controller;
+  final AppStore controller;
   final bool embedded;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appSettingsError = ref.watch(
-      appControllerProvider.select((state) => state.settingsError),
+      appStoreProvider.select((state) => state.settingsError),
     );
     final body = GroupedListView(
       padding: EdgeInsets.fromLTRB(

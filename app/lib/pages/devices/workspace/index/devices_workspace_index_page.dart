@@ -1,4 +1,4 @@
-import 'package:scrcpy_connect/services/display_labels.dart';
+import 'package:scrcpy_connect/widgets/device_labels.dart';
 import 'package:scrcpy_connect/utils/json_readers.dart';
 import 'package:scrcpy_connect/models/application_request.dart';
 import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
@@ -12,7 +12,7 @@ import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/running_app
 import 'package:scrcpy_connect/pages/devices/workspace/index/widgets/workspace_call_card.dart';
 import 'package:scrcpy_connect/router/app_router.dart';
 import 'package:scrcpy_connect/router/navigation.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 import 'package:scrcpy_connect/widgets/action_row.dart';
 import 'package:scrcpy_connect/widgets/dialogs.dart';
 import 'package:scrcpy_connect/widgets/grouped_list.dart';
@@ -27,17 +27,17 @@ class DeviceWorkspacePage extends ConsumerWidget {
     required this.controller,
     required this.device,
   });
-  final AppController controller;
+  final AppStore controller;
   final Json device;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(appControllerProvider.select((state) => state.devices));
+    ref.watch(appStoreProvider.select((state) => state.devices));
     final settings = ref.watch(
-      appControllerProvider.select((state) => state.settings),
+      appStoreProvider.select((state) => state.settings),
     );
     final audioError = ref.watch(
-      appControllerProvider.select((state) => state.audioError),
+      appStoreProvider.select((state) => state.audioError),
     );
     final current = {...device, ...controller.currentDevice(device)};
     final id = value(current, 'id');

@@ -4,7 +4,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:scrcpy_connect/widgets/list_icon_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/services/files/transfer_presentation.dart';
+import 'package:scrcpy_connect/widgets/file_transfer_labels.dart';
 
 class TransferDirectionBadge extends StatelessWidget {
   const TransferDirectionBadge({super.key, required this.transfer});

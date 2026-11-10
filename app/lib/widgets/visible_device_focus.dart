@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 /// 只有已核验且可交互的设备页面能取得焦点；远控画面另行核对会话所有权。
 class VisibleDeviceFocus extends ConsumerStatefulWidget {
@@ -13,7 +13,7 @@ class VisibleDeviceFocus extends ConsumerStatefulWidget {
     required this.child,
   });
 
-  final AppController controller;
+  final AppStore controller;
   final String deviceId;
   final Widget child;
 
@@ -58,7 +58,7 @@ class _VisibleDeviceFocusState extends ConsumerState<VisibleDeviceFocus>
 
   @override
   Widget build(BuildContext context) {
-    final recovery = appControllerProvider.select(
+    final recovery = appStoreProvider.select(
       (state) => state.reconciliationPending,
     );
     // 即使重同步在下一帧前完成，也要保留核验标记，使同一可见设备重新激活剪贴板。

@@ -9,7 +9,7 @@ import 'support/router_test_app.dart';
 import 'package:scrcpy_connect/styles/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 Future<void> reveal(WidgetTester tester, String label) async {
   await tester.scrollUntilVisible(
@@ -43,7 +43,7 @@ Json codec(
     ],
 };
 
-Future<void> mount(WidgetTester tester, AppController controller) async {
+Future<void> mount(WidgetTester tester, AppStore controller) async {
   await tester.pumpWidget(
     RouterTestApp(
       controller: controller,

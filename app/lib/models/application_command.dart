@@ -56,7 +56,6 @@ enum ApplicationCommand {
   filesDelete('files.delete', requiresVerifiedState: true),
   filesList('files.list'),
   filesMkdir('files.mkdir', requiresVerifiedState: true),
-  filesOpen('files.open'),
   filesPull('files.pull', requiresVerifiedState: true),
   filesPush('files.push', requiresVerifiedState: true),
   filesRename('files.rename', requiresVerifiedState: true),

@@ -7,7 +7,7 @@ import 'package:scrcpy_connect/styles/generated/design_tokens.g.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:scrcpy_connect/stores/app_controller.dart';
+import 'package:scrcpy_connect/stores/app_store.dart';
 
 /// 图标属于目标设备与包名，不使用主控设备的图标集合。
 class PhoneAppIcon extends HookWidget {
@@ -20,7 +20,7 @@ class PhoneAppIcon extends HookWidget {
     this.userId,
     this.size = DesignTokens.componentAppIconSize,
   });
-  final AppController controller;
+  final AppStore controller;
   final String deviceId;
   final String packageName;
   final Object? refreshKey;
